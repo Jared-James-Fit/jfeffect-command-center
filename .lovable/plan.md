@@ -1,84 +1,104 @@
-## Dual Billing Source & Legacy Client Migration Foundation
+## Goal
 
-A large, multi-area feature. Before writing any code I want your sign-off on scope, sequencing, and a few key decisions, because some answers materially change the schema.
+Collapse the overlapping **Overview** and **Account** top-level sections of the admin client profile into a single **Client Profile** section, reorganized into 5 clear sub-tabs with large touch targets and proper mobile/iPad layouts. Preserve every existing field, action, modal, and permission.
 
-### Goal
+## Top-level sections (after change)
 
-Let existing **JF Effect Trainerize** coaching clients use the new JF Effect app **without** touching their existing Stripe subscription. Keep the new JF Effect Stripe account as the sole billing system for new coaching, memberships, website purchases, promos, ambassador/referral codes. Never merge, never double-charge.
+```text
+Client Profile   Training   Nutrition   Communication   Business
+```
 
-### Architecture summary
+`Account` is removed as a top-level tab; all of its functionality lives under Client Profile → Login & Access / Personal Info.
 
-**Two independent concepts, enforced everywhere:**
+## Client Profile sub-tabs
 
-1. `billing_source` — *who collects the money* (`trainerize_legacy`, `jfeffect_stripe`, `manual_external`, `complimentary`, `none`)
-2. `app_access` — *what the client can do in the app* (source, tier, status, dates), independent of any Stripe subscription in the new account
+Rendered as large icon + title + description cards (same visual language as the current top-level `SectionNav`), not small text tabs:
 
-A client can be `app_access = active` with `billing_source = trainerize_legacy` and zero rows in the new Stripe account. That is the central invariant the rest of the work protects.
+1. **Overview** — read-only snapshot + quick actions
+2. **Personal Info** — identity, contact, personal details, address, emergency contact, profile picture
+3. **Goals & Intake** — intake answers, goals, training prefs, injuries, equipment, OpenPowerlifting / best lifts, "anything else"
+4. **Coaching Setup** — coach, status, package, phase, start/renewal dates, payment-status summary, schedule, Drive folder, quick links, billing-source summary
+5. **Login & Access** — everything currently on the Account tab (invite, reset, SMS links, set password, mark setup complete, needs-admin-help, deactivate/reactivate summary)
 
-### Database changes (new migration)
+URL search-param `tab` values stay backward-compatible (existing `summary`, `goals-setup`, `info`, `account` continue to resolve), so deep links from elsewhere in the app keep working. New canonical values: `overview`, `personal`, `goals`, `coaching`, `login`.
 
-Reuse existing tables where possible (`clients`, `app_members`, `member_access`, `purchase_records`, `payment_ledger`). Add only what's missing:
+## Overview redesign
 
-- **Enums:** `billing_source_type`, `access_source_type`, `access_status_type`, `legacy_billing_status`, `migration_review_status`.
-- **`clients.billing_source`** (enum, NOT NULL, default `none`) + `billing_source_locked_at`, `billing_source_set_by`, `billing_source_notes`.
-- **`legacy_billing_records`** — one row per client with `trainerize_customer_ref`, `trainerize_subscription_ref`, `plan_name`, `amount_cents`, `currency`, `interval`, `next_billing_at`, `status`, `last_verified_at`, `notes`. No card data, no secrets.
-- **`client_access_entitlements`** — `access_source`, `access_tier`, `status`, `effective_start`, `effective_end`, `billing_source`, `granted_by`, `last_verified_at`, `notes`. Authoritative for "can this client open the app today?"
-- **`billing_migration_reviews`** — review-only checklist rows; no execution.
-- **`billing_audit_log`** — every billing-source / access change, with admin, client, before/after, reason. Never logs payment credentials.
-- **RLS:** read/write restricted to `admin` (and `coach` where appropriate) via `has_role`. Clients see only their own non-sensitive billing label. Service role for webhooks.
-- **GRANTs** on every new public table.
+- Header strip: avatar, name, email, phone, assigned coach badge, status badge, package, current program, training schedule summary
+- App activity card and profile-completion / missing-info card (re-uses existing `AppActivityCard` + completion data already on `form`)
+- **Quick actions** as 48–52px buttons: Open Client POV · Message Client · Manage Schedule · View Intake · Request Client Update · Assign Program
+- **No editable form fields** here. Where a value is missing, show an action button instead of a dash (e.g. "Add coaching package" → jumps to Coaching Setup; "Assign coach" → opens AssignedCoachSelect inline; "Send setup link" → fires existing `sendSetup`)
 
-### Server functions (`src/lib/billing/*.functions.ts`)
+The current Overview "Profile" giant edit grid (full_name, email, phone, instagram, dates, package, coach, status, payment status, all the call/SMS access switches) moves into the appropriate edit cards under Personal Info, Coaching Setup, and Communication. The switches for call/SMS access stay reachable from Communication (already exists) — Overview only links to them.
 
-All protected via `requireSupabaseAuth` + `has_role('admin')`:
+## Personal Info redesign
 
-- `setClientBillingSourceFn`, `upsertLegacyBillingRecordFn`, `verifyLegacyBillingFn`
-- `grantAppAccessFn`, `pauseAppAccessFn`, `restoreAppAccessFn`, `endAppAccessFn`
-- `inviteLegacyClientFn` (creates app account + access, **never** a Stripe customer/subscription)
-- `listClientsWithBillingFn` (filters + bulk), `bulkMarkTrainerizeLegacyFn`, `bulkSendInvitationsFn`
-- `openMigrationReviewFn`, `updateMigrationChecklistFn` (review-only; no Stripe calls)
-- `getBillingDashboardFn` (revenue split by source, clearly labelled)
+Single column of section cards, each with a large **Edit** button that opens an inline editor (Save / Cancel pinned to the bottom of the card via `sticky bottom-0`, with unsaved-changes guard):
 
-### Webhook hardening (Stripe webhook for new JF Effect Stripe account)
+- **Identity** — first_name, last_name, preferred_name, profile picture (re-uses `ProfilePictureCapture` + `adminUpdatePicture`)
+- **Contact Information** — email, phone (single source of truth — same `form.email` / `form.phone` that everything else reads)
+- **Personal Details** — date_of_birth, height_cm + preferred_height_unit, timezone
+- **Address** — address, city, province, postal_code, country
+- **Emergency Contact** — emergency_contact_name, emergency_contact_phone
+- **Profile-info metadata strip** — last update, updated-by, fields updated, picture updated, timezone confirmed, basic-info completed, "Request Profile Info Update" button (existing `requestUpdate` / `clearUpdateRequest`)
 
-- Match on `stripe_customer_id` only — never on email alone.
-- If the matched client has `billing_source = trainerize_legacy` and no authorized `billing_migration_reviews` row in `completed` state: **log conflict, do not mutate** billing source / access / entitlements.
-- Never deactivate a legacy client because they're absent from the new account.
+This replaces the current `BasicInfoForm` wall and the duplicated email field on the Overview tab. The underlying fields are unchanged; we only re-shell them.
 
-### Checkout / promo safeguards
+## Goals & Intake
 
-- `/membership` and any new-subscription server fn: if target client is `trainerize_legacy`, return a blocking error surface (admin override required). No silent fallback.
-- Promo / ambassador / referral validation: scoped to `jfeffect_stripe` purchases only.
-- Invitation accept flow: pure app onboarding — no checkout redirect, no trial start.
+- Keep the existing `GoalsSetupPanel` (currently `goals-setup` tab) — it already groups intake / goals / training prefs
+- Move `PowerlifterSection` (best squat/bench/deadlift + OpenPowerlifting) here from the Overview right column
+- Top of tab: large buttons — **View Intake Answers** (re-uses `IntakeAnswersBigButton`), **Request Client Update**, **Edit Goals**
 
-### Admin UI
+## Coaching Setup
 
-- **Clients list:** new `Billing` column with badge, filters (billing source + access status), bulk actions with confirmation modal.
-- **Client profile → Billing & Access panel:** status, source badge, legacy details, actions (`Edit Legacy Billing`, `Verify`, `Pause`, `Restore`, `End`, `Prepare Future Migration`).
-- **New page `/admin/legacy-migration`:** import progress board with statuses (Not Started → Access Active / Needs Attention), per-client step-through flow.
-- **New admin action "Add Existing Legacy Client":** wizard with billing source defaulted to `trainerize_legacy` and the explanatory copy verbatim.
-- **Dashboard:** revenue split — *Verified through JF Effect Stripe* vs *Legacy external billing* vs *Manually entered* vs *Not yet verified*.
+Pulled out of the current Overview right column + edit grid:
 
-### Out of scope (explicitly)
+- Assigned coach (`AssignedCoachSelect`)
+- Client status (`STATUSES` select)
+- Coaching package, program phase, start date, renewal date
+- Payment status summary + link to Business → Billing
+- `TrainingScheduleCard` + large **Manage Schedule** button → `/admin/clients/$id/schedule`
+- `ClientQuickLinksCard` (Drive folder + other quick links)
+- Billing & Legacy Migration summary card (existing block at lines 811–850)
 
-- No live Trainerize Stripe API connection.
-- No "Migrate All" button. `Prepare Future Billing Migration` only creates a review row.
-- No card / payment credential storage anywhere.
+Detailed billing/messaging controls stay where they already live (Business / Communication) — we only show summaries here.
 
-### Sequencing
+## Login & Access
 
-1. Migration (schema + enums + RLS + GRANTs + audit) — needs your approval first.
-2. Server functions + webhook guard.
-3. Admin UI (clients list, profile panel, legacy migration page, dashboard split).
-4. Promo/checkout guard rails.
-5. Build fix pass + security scan + publish to jfeffect.com.
-6. Handoff report.
+Direct lift of the current `account` tab content (lines 1127–1175). No functional change — just the new home and a touch-friendly grid for the action buttons (two columns on mobile, four on desktop, all 44px+ tall). `SetupStatusBanner` continues to render above the tabs (unchanged).
 
-### Questions before I start
+## Mobile / iPad layout rules
 
-1. **Coach role access:** should `coach` users see the Billing & Access panel read-only, or is this admin-only?
-2. **Default for clients already in `clients` with no Stripe customer:** mark them `none` and let you classify, or auto-default existing rows with active coaching to `trainerize_legacy` (safer default given your context)?
-3. **Invitation channel:** reuse the existing app invitation/email flow you already have, or do you want a dedicated "legacy invite" template with the explanatory copy baked in?
-4. **Existing `app_members` / `member_access` tables:** I'll extend rather than duplicate. Confirm OK to add columns there instead of a parallel `client_access_entitlements` table if the existing shape fits — I'll decide during exploration unless you have a preference.
+- Sub-tab strip: horizontal scroll-snap row of 5 large cards on phones, 2-column grid on iPad portrait, single-row on iPad landscape and desktop
+- All edit panels use single-column inputs on `< md`, two-column on `md+`
+- Save/Cancel use `sticky bottom-2` inside the editing card with `safe-area-inset-bottom` padding so they stay above the iOS keyboard
+- Inputs get correct `inputMode` / `type` (email, tel, numeric, date)
+- No horizontal scroll: replace existing `md:grid-cols-3` overview grid with a CSS grid that collapses to single column under 768px and verifies no fixed widths
 
-Reply with answers (or "you decide") and I'll proceed with the migration as step 1.
+## Files touched
+
+- `src/routes/_authenticated/admin/clients.$id.tsx` — restructure `SECTIONS`, `TAB_VALUES`, `TAB_TO_SECTION`; replace `summary` / `info` / `account` `TabsContent` blocks with new `overview` / `personal` / `goals` / `coaching` / `login` blocks; keep `training` / `nutrition` / `cardio` / `metrics` / `messages` / `lift-videos` / `documents` / `sessions` / `purchases` / `billing` / `agreements` / `notes` untouched
+- New small components under `src/components/admin/client-profile/`:
+  - `OverviewSnapshot.tsx` — header strip + missing-info actions
+  - `EditableCard.tsx` — shared card shell with view-mode / edit-mode / sticky save / unsaved-changes guard
+  - `IdentityCard.tsx`, `ContactCard.tsx`, `PersonalDetailsCard.tsx`, `AddressCard.tsx`, `EmergencyContactCard.tsx`
+  - `CoachingSetupPanel.tsx` — wraps existing `AssignedCoachSelect`, `TrainingScheduleCard`, `ClientQuickLinksCard`, billing-source block
+  - `LoginAccessPanel.tsx` — extraction of current `account` tab JSX
+- `src/routes/_authenticated/admin/account.tsx` — leave file as-is (it's already a 34-line standalone route, not the top-level tab); top-level admin nav reference to "Account" tab (if any in `clients.$id.tsx` SECTIONS) is removed
+
+## Data-safety guarantees
+
+- No SQL migration, no edge function change, no schema change
+- All reads/writes go through the existing `form` state and existing `save` / `saveAccountInfo` / per-field Supabase update calls
+- Fields shown on the new cards are exactly the existing fields (`first_name`, `last_name`, `preferred_name`, `email`, `phone`, `date_of_birth`, `height_cm`, `preferred_height_unit`, `timezone`, `address`, `city`, `province`, `postal_code`, `country`, `emergency_contact_name`, `emergency_contact_phone`) — single source of truth preserved
+- Existing deep links (`?tab=account`, `?tab=info`, `?tab=summary`, `?tab=goals-setup`) keep working via a redirect map to the new tab values
+- All existing buttons, modals (delete, deactivate, reactivate, set-password, send-reset, send-link-sms, etc.) are preserved
+
+## Verification
+
+After build, drive Playwright at the live preview for one client:
+- Desktop: load `/admin/clients/<id>`, screenshot each of the 5 sub-tabs
+- Mobile (375×812): screenshot each sub-tab + one Edit-mode card with Save/Cancel pinned
+- iPad portrait (834×1194) and landscape (1194×834): screenshot Overview + Personal Info Edit mode
+- Verify console has no errors, no horizontal scroll on mobile

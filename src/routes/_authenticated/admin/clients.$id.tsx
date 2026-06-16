@@ -11,7 +11,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, ExternalLink, Save, Trash2, Mail, Archive, KeyRound, Copy, CheckCircle2, AlertCircle, BellRing, Tag, Dumbbell, MessageSquare, Link2, MoreHorizontal, User as UserIcon, Apple, DollarSign } from "lucide-react";
+import { ArrowLeft, ExternalLink, Save, Trash2, Mail, Archive, KeyRound, Copy, CheckCircle2, AlertCircle, BellRing, Tag, Dumbbell, MessageSquare, Link2, MoreHorizontal, User as UserIcon, Apple, DollarSign, LayoutDashboard, IdCard, Target, Settings2, LogIn, Phone, Calendar, ChevronRight } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { SendBookingLinkDialog } from "@/components/appointments/send-booking-link-dialog";
 import { SendPasswordResetDialog } from "@/components/account/send-password-reset-dialog";
@@ -74,11 +74,12 @@ function TabFallback() {
 }
 
 function SectionNav({ activeTab, onChange }: { activeTab: TabValue; onChange: (v: TabValue) => void }) {
-  const activeSection = TAB_TO_SECTION[activeTab] ?? "overview";
+  const activeSection = TAB_TO_SECTION[activeTab] ?? "client-profile";
   const current = SECTIONS.find((s) => s.id === activeSection)!;
   return (
     <div className="mb-6 space-y-4">
-      <div className="grid grid-cols-2 gap-2 sm:gap-3 md:grid-cols-3 lg:grid-cols-6">
+      {/* Top-level sections — large touch targets, 1 col on phones, 2 on small tablets, 5 across on desktop */}
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 sm:gap-3 lg:grid-cols-5">
         {SECTIONS.map((s) => {
           const Icon = s.icon;
           const isActive = s.id === activeSection;
@@ -88,41 +89,66 @@ function SectionNav({ activeTab, onChange }: { activeTab: TabValue; onChange: (v
               type="button"
               onClick={() => onChange(s.tabs[0].value)}
               className={[
-                "group flex flex-col items-start gap-1.5 rounded-xl border p-3 text-left transition-all",
+                "group flex min-h-[64px] items-center gap-3 rounded-xl border p-3 text-left transition-all sm:flex-col sm:items-start sm:gap-2 sm:p-4",
                 isActive
                   ? "border-primary bg-primary/10 shadow-sm"
-                  : "border-border bg-card hover:border-primary/40 hover:bg-secondary/40",
+                  : "border-border bg-card hover:border-primary/40 hover:bg-secondary/40 active:scale-[0.99]",
               ].join(" ")}
             >
               <div className={[
-                "grid h-9 w-9 shrink-0 place-items-center rounded-lg",
+                "grid h-11 w-11 shrink-0 place-items-center rounded-lg sm:h-10 sm:w-10",
                 isActive ? "bg-primary text-primary-foreground" : "bg-secondary text-foreground/80 group-hover:bg-primary/15 group-hover:text-primary",
               ].join(" ")}>
-                <Icon className="h-4 w-4" />
+                <Icon className="h-5 w-5 sm:h-4 sm:w-4" />
               </div>
-              <div className="min-w-0">
+              <div className="min-w-0 flex-1">
                 <div className={["text-sm font-semibold leading-tight", isActive ? "text-primary" : "text-foreground"].join(" ")}>{s.label}</div>
-                <div className="text-[11px] leading-tight text-muted-foreground line-clamp-2">{s.description}</div>
+                <div className="mt-0.5 text-[11px] leading-tight text-muted-foreground line-clamp-2">{s.description}</div>
               </div>
             </button>
           );
         })}
       </div>
+      {/* Sub-tabs as large icon + title + description cards (single column on mobile, multi-col on iPad/desktop) */}
       {current.tabs.length > 1 && (
-        <div className="flex flex-wrap gap-1.5 rounded-lg border border-border bg-secondary/30 p-1.5">
+        <div className={[
+          "grid gap-2 sm:gap-3",
+          current.tabs.length >= 5
+            ? "grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5"
+            : current.tabs.length === 4
+              ? "grid-cols-1 sm:grid-cols-2 lg:grid-cols-4"
+              : current.tabs.length === 3
+                ? "grid-cols-1 sm:grid-cols-3"
+                : "grid-cols-1 sm:grid-cols-2",
+        ].join(" ")}>
           {current.tabs.map((t) => {
             const isActive = t.value === activeTab;
+            const TIcon = t.icon ?? ChevronRight;
             return (
               <button
                 key={t.value}
                 type="button"
                 onClick={() => onChange(t.value)}
                 className={[
-                  "rounded-md px-3 py-1.5 text-xs font-medium transition-colors",
-                  isActive ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground",
+                  "group flex min-h-[64px] items-start gap-3 rounded-lg border p-3 text-left transition-all sm:min-h-[88px] sm:flex-col sm:gap-2 sm:p-4",
+                  isActive
+                    ? "border-primary bg-primary/15 shadow-sm"
+                    : "border-border bg-card/60 hover:border-primary/40 hover:bg-secondary/40 active:scale-[0.99]",
                 ].join(" ")}
+                aria-pressed={isActive}
               >
-                {t.label}
+                <div className={[
+                  "grid h-10 w-10 shrink-0 place-items-center rounded-md",
+                  isActive ? "bg-primary text-primary-foreground" : "bg-secondary text-foreground/80 group-hover:bg-primary/15 group-hover:text-primary",
+                ].join(" ")}>
+                  <TIcon className="h-5 w-5" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className={["text-sm font-semibold leading-tight", isActive ? "text-primary" : "text-foreground"].join(" ")}>{t.label}</div>
+                  {t.description && (
+                    <div className="mt-0.5 text-[11px] leading-tight text-muted-foreground line-clamp-2">{t.description}</div>
+                  )}
+                </div>
               </button>
             );
           })}
@@ -153,38 +179,38 @@ function AssignedCoachSelect({ value, onChange }: { value: string | null; onChan
   );
 }
 
-const TAB_VALUES = ["summary", "goals-setup", "training", "nutrition", "cardio", "metrics", "messages", "lift-videos", "documents", "sessions", "purchases", "billing", "agreements", "notes", "info", "account"] as const;
+const TAB_VALUES = ["summary", "info", "goals-setup", "coaching", "account", "training", "nutrition", "cardio", "metrics", "messages", "lift-videos", "documents", "sessions", "purchases", "billing", "agreements", "notes"] as const;
 type TabValue = typeof TAB_VALUES[number];
 
-type SectionId = "overview" | "training" | "nutrition" | "communication" | "business" | "account";
-const SECTIONS: { id: SectionId; label: string; description: string; icon: ComponentType<any>; tabs: { value: TabValue; label: string }[] }[] = [
-  { id: "overview", label: "Overview", description: "Snapshot & profile", icon: UserIcon, tabs: [
-    { value: "summary", label: "Snapshot" },
-    { value: "goals-setup", label: "Goals & Setup" },
+type SectionId = "client-profile" | "training" | "nutrition" | "communication" | "business";
+type TabDef = { value: TabValue; label: string; description?: string; icon?: ComponentType<any> };
+const SECTIONS: { id: SectionId; label: string; description: string; icon: ComponentType<any>; tabs: TabDef[] }[] = [
+  { id: "client-profile", label: "Client Profile", description: "Overview, personal info, goals, coaching setup & login", icon: UserIcon, tabs: [
+    { value: "summary", label: "Overview", description: "Snapshot & quick actions", icon: LayoutDashboard },
+    { value: "info", label: "Personal Info", description: "Identity, contact, address & emergency", icon: IdCard },
+    { value: "goals-setup", label: "Goals & Intake", description: "Goals, intake answers & lifting", icon: Target },
+    { value: "coaching", label: "Coaching Setup", description: "Coach, package, schedule & links", icon: Settings2 },
+    { value: "account", label: "Login & Access", description: "Setup link, password & sign-in", icon: LogIn },
   ]},
   { id: "training", label: "Training", description: "Program, metrics, sessions, videos", icon: Dumbbell, tabs: [
-    { value: "training", label: "Training Program" },
-    { value: "metrics", label: "Progress Metrics" },
-    { value: "lift-videos", label: "Lift Videos" },
-    { value: "sessions", label: "Sessions" },
+    { value: "training", label: "Training Program", icon: Dumbbell },
+    { value: "metrics", label: "Progress Metrics", icon: Target },
+    { value: "lift-videos", label: "Lift Videos", icon: Dumbbell },
+    { value: "sessions", label: "Sessions", icon: Calendar },
   ]},
   { id: "nutrition", label: "Nutrition", description: "Targets & cardio", icon: Apple, tabs: [
-    { value: "nutrition", label: "Nutrition Targets" },
-    { value: "cardio", label: "Cardio Targets" },
+    { value: "nutrition", label: "Nutrition Targets", icon: Apple },
+    { value: "cardio", label: "Cardio Targets", icon: Apple },
   ]},
   { id: "communication", label: "Communication", description: "Messages, notes, documents", icon: MessageSquare, tabs: [
-    { value: "messages", label: "Messages" },
-    { value: "notes", label: "Notes" },
-    { value: "documents", label: "Documents & Forms" },
+    { value: "messages", label: "Messages", icon: MessageSquare },
+    { value: "notes", label: "Notes", icon: MessageSquare },
+    { value: "documents", label: "Documents & Forms", icon: MessageSquare },
   ]},
   { id: "business", label: "Business", description: "Purchases, billing, agreements", icon: DollarSign, tabs: [
-    { value: "purchases", label: "Purchases" },
-    { value: "billing", label: "Billing" },
-    { value: "agreements", label: "Agreements" },
-  ]},
-  { id: "account", label: "Account", description: "Login, info & access", icon: KeyRound, tabs: [
-    { value: "info", label: "Account Info" },
-    { value: "account", label: "Login & Access" },
+    { value: "purchases", label: "Purchases", icon: DollarSign },
+    { value: "billing", label: "Billing", icon: DollarSign },
+    { value: "agreements", label: "Agreements", icon: DollarSign },
   ]},
 ];
 const TAB_TO_SECTION: Record<TabValue, SectionId> = SECTIONS.reduce((acc, s) => {
@@ -587,277 +613,171 @@ function ClientDetail() {
         />
 
         <TabsContent value="summary" className="grid gap-6 md:grid-cols-3">
-        <div className="md:col-span-3">
-          <IntakeAnswersBigButton
+          <ClientOverviewSnapshot
+            form={form}
             clientId={id}
-            clientName={form.full_name ?? null}
-            subtitle="See every intake & in-app questionnaire this client filled out"
+            canPov={canPov}
+            onMessage={() => navigate({ to: ".", params: { id }, search: { tab: "messages" }, replace: true })}
+            onPov={() => {
+              if (!form.user_id) {
+                toast.error("Client has no account yet — send a setup link first.");
+                return;
+              }
+              impersonation.start(
+                { id, user_id: form.user_id, full_name: form.full_name },
+                typeof window !== "undefined" ? window.location.pathname + window.location.search : `/admin/clients/${id}`,
+              );
+              navigate({ to: "/portal" });
+            }}
+            onSendSetup={sendSetup}
+            onRequestUpdate={requestUpdate}
+            onGoToTab={(t: TabValue) => navigate({ to: ".", params: { id }, search: { tab: t }, replace: true })}
           />
-        </div>
-        <Card className="border-border bg-card p-6 md:col-span-2 space-y-4">
-          <h3 className="text-xs uppercase tracking-widest text-muted-foreground">Profile</h3>
-          <div className="grid grid-cols-2 gap-3">
-            <div className="col-span-2"><Label>Full name</Label><Input value={form.full_name ?? ""} onChange={(e) => set("full_name", e.target.value)} /></div>
-            <div><Label>Email</Label><Input value={form.email ?? ""} onChange={(e) => set("email", e.target.value)} /></div>
-            <div>
-              <Label>Phone</Label>
-              <Input value={form.phone ?? ""} onChange={(e) => set("phone", e.target.value)} />
-              <label className="mt-2 flex items-center justify-between gap-2 rounded-md border border-border bg-secondary/30 px-3 py-2 text-xs">
-                <span>
-                  <span className="font-semibold">In-app call access</span>
-                  <span className="block text-[10px] text-muted-foreground">
-                    Shows a Call button in chat for admins & the assigned coach.
-                  </span>
-                </span>
-                <Switch
-                  checked={!!form.call_access_enabled}
-                  onCheckedChange={async (v) => {
-                    set("call_access_enabled", v);
-                    const { error } = await supabase
-                      .from("clients")
-                      .update({ call_access_enabled: v })
-                      .eq("id", id);
-                    if (error) {
-                      toast.error(error.message);
-                      set("call_access_enabled", !v);
-                    } else {
-                      toast.success(v ? "Call access enabled" : "Call access disabled");
-                      qc.invalidateQueries({ queryKey: ["client", id] });
-                      qc.invalidateQueries({ queryKey: ["clients-min"] });
-                    }
-                  }}
-                />
-              </label>
-              <label className="mt-2 flex items-center justify-between gap-2 rounded-md border border-border bg-secondary/30 px-3 py-2 text-xs">
-                <span>
-                  <span className="font-semibold">SMS opt-out</span>
-                  <span className="block text-[10px] text-muted-foreground">
-                    When on, this client will not receive any SMS (manual or unread reminders).
-                  </span>
-                </span>
-                <Switch
-                  checked={!!form.sms_opt_out}
-                  onCheckedChange={async (v) => {
-                    set("sms_opt_out", v);
-                    const { error } = await supabase
-                      .from("clients")
-                      .update({ sms_opt_out: v })
-                      .eq("id", id);
-                    if (error) {
-                      toast.error(error.message);
-                      set("sms_opt_out", !v);
-                    } else {
-                      toast.success(v ? "SMS opted out" : "SMS enabled");
-                      qc.invalidateQueries({ queryKey: ["client", id] });
-                    }
-                  }}
-                />
-              </label>
-              <label className="mt-2 flex items-center justify-between gap-2 rounded-md border border-border bg-secondary/30 px-3 py-2 text-xs">
-                <span>
-                  <span className="font-semibold">Client → Coach: call button</span>
-                  <span className="block text-[10px] text-muted-foreground">
-                    Shows a Call button in the client's chat so they can reach their assigned coach for urgent matters.
-                  </span>
-                </span>
-                <Switch
-                  checked={!!form.coach_call_access_enabled}
-                  onCheckedChange={async (v) => {
-                    set("coach_call_access_enabled", v);
-                    const { error } = await supabase
-                      .from("clients")
-                      .update({ coach_call_access_enabled: v } as any)
-                      .eq("id", id);
-                    if (error) {
-                      toast.error(error.message);
-                      set("coach_call_access_enabled", !v);
-                    } else {
-                      toast.success(v ? "Client can call their coach" : "Client can no longer call their coach");
-                      qc.invalidateQueries({ queryKey: ["client", id] });
-                    }
-                  }}
-                />
-              </label>
-              <label className="mt-2 flex items-center justify-between gap-2 rounded-md border border-border bg-secondary/30 px-3 py-2 text-xs">
-                <span>
-                  <span className="font-semibold">Client → Coach: SMS button</span>
-                  <span className="block text-[10px] text-muted-foreground">
-                    Shows a Text button in the client's chat so they can SMS their assigned coach for urgent matters. Off by default.
-                  </span>
-                </span>
-                <Switch
-                  checked={!!form.coach_sms_access_enabled}
-                  onCheckedChange={async (v) => {
-                    set("coach_sms_access_enabled", v);
-                    const { error } = await supabase
-                      .from("clients")
-                      .update({ coach_sms_access_enabled: v } as any)
-                      .eq("id", id);
-                    if (error) {
-                      toast.error(error.message);
-                      set("coach_sms_access_enabled", !v);
-                    } else {
-                      toast.success(v ? "Client can SMS their coach" : "Client can no longer SMS their coach");
-                      qc.invalidateQueries({ queryKey: ["client", id] });
-                    }
-                  }}
-                />
-              </label>
-            </div>
-            <div><Label>Instagram</Label><Input value={form.instagram ?? ""} onChange={(e) => set("instagram", e.target.value)} /></div>
-            <div><Label>Start date</Label><Input type="date" value={form.start_date ?? ""} onChange={(e) => set("start_date", e.target.value || null)} /></div>
-            <div><Label>Renewal date</Label><Input type="date" value={form.renewal_date ?? ""} onChange={(e) => set("renewal_date", e.target.value || null)} /></div>
-            <div><Label>Coaching package</Label><Input value={form.coaching_package ?? ""} onChange={(e) => set("coaching_package", e.target.value)} /></div>
-            <div><Label>Program phase</Label><Input value={form.program_phase ?? ""} onChange={(e) => set("program_phase", e.target.value)} /></div>
-            <div className="col-span-2">
-              <Label>Assigned coach</Label>
-              <AssignedCoachSelect
-                value={form.assigned_coach_id ?? null}
-                onChange={(v) => set("assigned_coach_id", v)}
-              />
-            </div>
-            <div>
-              <Label>Status</Label>
-              <Select value={form.status} onValueChange={(v) => set("status", v)}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>{STATUSES.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label>Payment status</Label>
-              <Select value={form.payment_status ?? "Not Sent"} onValueChange={(v) => set("payment_status", v)}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>{PAY_STATUSES.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent>
-              </Select>
-            </div>
-          </div>
-        </Card>
+        </TabsContent>
 
-        <div className="space-y-6">
-        <AppActivityCard
-          clientId={id}
-          lastSignedInAt={form.last_signed_in_at}
-          lastActiveAt={form.last_active_at}
-          lastActiveRoute={form.last_active_route}
-          complianceStatus={form.compliance_status}
-          homeScreenStatus={form.home_screen_setup_status}
-        />
-        <TrainingScheduleCard client={form} />
-        <div className="flex justify-end">
-          <Button asChild size="sm" variant="outline">
-            <Link to="/admin/clients/$id/schedule" params={{ id }}>
-              Open schedule manager
+        <TabsContent value="coaching" className="grid gap-6 md:grid-cols-3">
+          <Card className="border-border bg-card p-6 md:col-span-2 space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-semibold uppercase tracking-widest text-muted-foreground">Coaching Setup</h3>
+              <Button size="sm" className="min-h-[44px] bg-gradient-primary uppercase font-bold" onClick={save}>
+                <Save className="mr-2 h-4 w-4" />Save
+              </Button>
+            </div>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="sm:col-span-2">
+                <Label>Assigned coach</Label>
+                <AssignedCoachSelect
+                  value={form.assigned_coach_id ?? null}
+                  onChange={(v) => set("assigned_coach_id", v)}
+                />
+              </div>
+              <div>
+                <Label>Client status</Label>
+                <Select value={form.status} onValueChange={(v) => set("status", v)}>
+                  <SelectTrigger className="min-h-[44px]"><SelectValue /></SelectTrigger>
+                  <SelectContent>{STATUSES.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label>Payment status</Label>
+                <Select value={form.payment_status ?? "Not Sent"} onValueChange={(v) => set("payment_status", v)}>
+                  <SelectTrigger className="min-h-[44px]"><SelectValue /></SelectTrigger>
+                  <SelectContent>{PAY_STATUSES.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label>Coaching package</Label>
+                <Input className="min-h-[44px]" value={form.coaching_package ?? ""} onChange={(e) => set("coaching_package", e.target.value)} />
+              </div>
+              <div>
+                <Label>Program phase</Label>
+                <Input className="min-h-[44px]" value={form.program_phase ?? ""} onChange={(e) => set("program_phase", e.target.value)} />
+              </div>
+              <div>
+                <Label>Start date</Label>
+                <Input className="min-h-[44px]" type="date" value={form.start_date ?? ""} onChange={(e) => set("start_date", e.target.value || null)} />
+              </div>
+              <div>
+                <Label>Renewal date</Label>
+                <Input className="min-h-[44px]" type="date" value={form.renewal_date ?? ""} onChange={(e) => set("renewal_date", e.target.value || null)} />
+              </div>
+              <div className="sm:col-span-2">
+                <Label>Instagram</Label>
+                <Input className="min-h-[44px]" value={form.instagram ?? ""} onChange={(e) => set("instagram", e.target.value)} />
+              </div>
+            </div>
+            <p className="text-[11px] text-muted-foreground">Detailed billing controls live under Business. Detailed messaging & call access live under Communication and Personal Info.</p>
+          </Card>
+
+          <div className="space-y-6">
+            <TrainingScheduleCard client={form} />
+            <Link to="/admin/clients/$id/schedule" params={{ id }} className="block">
+              <Button className="min-h-[52px] w-full bg-gradient-primary text-base font-bold uppercase">
+                <Calendar className="mr-2 h-5 w-5" /> Manage Schedule
+              </Button>
             </Link>
-          </Button>
-        </div>
-        <ClientQuickLinksCard
-          clientId={id}
-          driveFolderLink={form.drive_folder_link}
-          onChangeDriveFolderLink={(v) => set("drive_folder_link", v)}
-        />
-        <PowerlifterSection form={form} set={set} />
-        <Card className="border-border bg-card p-6 space-y-3">
-          <div className="flex items-center justify-between">
-            <h3 className="text-xs uppercase tracking-widest text-muted-foreground">Basic Information</h3>
-            <Link to="/admin/clients/$id" params={{ id }} search={{ tab: "info" }}>
-              <Button variant="ghost" size="sm" className="h-7 text-xs">Edit</Button>
-            </Link>
+            <ClientQuickLinksCard
+              clientId={id}
+              driveFolderLink={form.drive_folder_link}
+              onChangeDriveFolderLink={(v) => set("drive_folder_link", v)}
+            />
+            <Card className="border-border bg-card p-6 space-y-3">
+              <h3 className="text-xs uppercase tracking-widest text-muted-foreground">Billing & Access</h3>
+              {(() => {
+                const src = (form as any).billing_source as string | null;
+                const locked = !!(form as any).billing_source_locked;
+                const isLegacy = src === "trainerize_legacy";
+                const label =
+                  src === "trainerize_legacy" ? "Legacy — JF Effect Trainerize"
+                  : src === "jfeffect_stripe" ? "JF Effect Stripe"
+                  : src === "manual_external" ? "External / Manual"
+                  : src === "complimentary" ? "Complimentary"
+                  : "Not connected";
+                const tone =
+                  src === "trainerize_legacy" ? "bg-amber-500/10 text-amber-700 border-amber-500/30"
+                  : src === "jfeffect_stripe" ? "bg-emerald-500/10 text-emerald-700 border-emerald-500/30"
+                  : src === "manual_external" ? "bg-sky-500/10 text-sky-700 border-sky-500/30"
+                  : src === "complimentary" ? "bg-purple-500/10 text-purple-700 border-purple-500/30"
+                  : "bg-muted text-muted-foreground";
+                return (
+                  <>
+                    <div className="flex items-center gap-2">
+                      <span className={`inline-flex items-center rounded-md border px-2 py-0.5 text-[11px] font-medium ${tone}`}>{label}</span>
+                      {locked && <span className="text-[10px] uppercase tracking-wider text-muted-foreground">Locked</span>}
+                    </div>
+                    {isLegacy ? (
+                      <p className="text-[11px] text-muted-foreground">
+                        Billing remains in the legacy Trainerize Stripe account. This app will not create, modify, or duplicate any charge for this client.
+                      </p>
+                    ) : src === "none" || !src ? (
+                      <p className="text-[11px] text-muted-foreground">
+                        No billing source classified. Mark this client to keep webhooks and checkout safe.
+                      </p>
+                    ) : null}
+                    <Link to="/admin/billing-sources">
+                      <Button variant="outline" className="min-h-[44px] w-full justify-start">Open Billing & Legacy Migration</Button>
+                    </Link>
+                  </>
+                );
+              })()}
+            </Card>
           </div>
-          <dl className="grid grid-cols-2 gap-y-1.5 text-xs">
-            {form.preferred_name && (<><dt className="text-muted-foreground">Preferred name</dt><dd className="font-medium">{form.preferred_name}</dd></>)}
-            <dt className="text-muted-foreground">Date of birth</dt>
-            <dd className="font-medium">{form.date_of_birth ? new Date(form.date_of_birth + "T00:00:00").toLocaleDateString() : "—"}</dd>
-            <dt className="text-muted-foreground">Age</dt>
-            <dd className="font-medium">{calcAge(form.date_of_birth) ?? "—"}</dd>
-            <dt className="text-muted-foreground">Height</dt>
-            <dd className="font-medium">{formatHeight(form.height_cm, (form.preferred_height_unit as any) ?? "imperial")}</dd>
-            <dt className="text-muted-foreground">Time zone</dt>
-            <dd className="font-medium">{form.timezone ?? "—"}</dd>
-            <dt className="text-muted-foreground">Mailing address</dt>
-            <dd className="font-medium truncate">
-              {[form.address, form.city, form.province, form.postal_code, form.country].filter(Boolean).join(", ") || "—"}
-            </dd>
-            {(form.emergency_contact_name || form.emergency_contact_phone) && (
-              <>
-                <dt className="text-muted-foreground">Emergency contact</dt>
-                <dd className="font-medium">
-                  {form.emergency_contact_name ?? "—"}
-                  {form.emergency_contact_phone ? ` · ${form.emergency_contact_phone}` : ""}
-                </dd>
-              </>
-            )}
-          </dl>
-        </Card>
-        <Card className="border-border bg-card p-6 space-y-3">
-          <div className="flex items-center justify-between gap-3">
-            <h3 className="text-xs uppercase tracking-widest text-muted-foreground">Social Media</h3>
-            <SocialIcons client={form} size="xs" />
+
+          <div className="md:col-span-3">
+            <ClientDriveFolderPanel clientId={id} />
           </div>
-          <p className="text-[11px] text-muted-foreground">Usernames/handles only — the app auto-links where possible.</p>
-          <SocialHandlesEditor values={form} onChange={(k, v) => set(k, v)} />
-        </Card>
-        <Card className="border-border bg-card p-6 space-y-3">
-          <h3 className="text-xs uppercase tracking-widest text-muted-foreground">Quick Jump</h3>
-          <p className="text-xs text-muted-foreground">Open a management area for this client.</p>
-          <div className="grid gap-2">
-            <Link to="/admin/clients/$id" params={{ id }} search={{ tab: "training" }}><Button variant="outline" size="sm" className="w-full justify-start">Manage Training</Button></Link>
-            <Link to="/admin/clients/$id" params={{ id }} search={{ tab: "nutrition" }}><Button variant="outline" size="sm" className="w-full justify-start">Manage Nutrition Targets</Button></Link>
-            <Link to="/admin/clients/$id" params={{ id }} search={{ tab: "cardio" }}><Button variant="outline" size="sm" className="w-full justify-start">Manage Cardio Targets</Button></Link>
-            <Link to="/admin/clients/$id" params={{ id }} search={{ tab: "documents" }}><Button variant="outline" size="sm" className="w-full justify-start">Manage Documents</Button></Link>
-            <Link to="/admin/clients/$id" params={{ id }} search={{ tab: "sessions" }}><Button variant="outline" size="sm" className="w-full justify-start">Book PT Session</Button></Link>
-            <Link to="/admin/clients/$id" params={{ id }} search={{ tab: "account" }}><Button variant="outline" size="sm" className="w-full justify-start">Account & Access</Button></Link>
-          </div>
-        </Card>
-        <Card className="border-border bg-card p-6 space-y-3">
-          <h3 className="text-xs uppercase tracking-widest text-muted-foreground">Billing & Access</h3>
-          {(() => {
-            const src = (form as any).billing_source as string | null;
-            const locked = !!(form as any).billing_source_locked;
-            const isLegacy = src === "trainerize_legacy";
-            const label =
-              src === "trainerize_legacy" ? "Legacy — JF Effect Trainerize"
-              : src === "jfeffect_stripe" ? "JF Effect Stripe"
-              : src === "manual_external" ? "External / Manual"
-              : src === "complimentary" ? "Complimentary"
-              : "Not connected";
-            const tone =
-              src === "trainerize_legacy" ? "bg-amber-500/10 text-amber-700 border-amber-500/30"
-              : src === "jfeffect_stripe" ? "bg-emerald-500/10 text-emerald-700 border-emerald-500/30"
-              : src === "manual_external" ? "bg-sky-500/10 text-sky-700 border-sky-500/30"
-              : src === "complimentary" ? "bg-purple-500/10 text-purple-700 border-purple-500/30"
-              : "bg-muted text-muted-foreground";
-            return (
-              <>
-                <div className="flex items-center gap-2">
-                  <span className={`inline-flex items-center rounded-md border px-2 py-0.5 text-[11px] font-medium ${tone}`}>{label}</span>
-                  {locked && <span className="text-[10px] uppercase tracking-wider text-muted-foreground">Locked</span>}
-                </div>
-                {isLegacy ? (
-                  <p className="text-[11px] text-muted-foreground">
-                    Billing remains in the legacy Trainerize Stripe account. This app will not create, modify, or duplicate any charge for this client.
-                  </p>
-                ) : src === "none" || !src ? (
-                  <p className="text-[11px] text-muted-foreground">
-                    No billing source classified. Mark this client to keep webhooks and checkout safe.
-                  </p>
-                ) : null}
-                <Link to="/admin/billing-sources">
-                  <Button variant="outline" size="sm" className="w-full justify-start">Open Billing & Legacy Migration</Button>
-                </Link>
-              </>
-            );
-          })()}
-        </Card>
-        <div className="md:col-span-3">
-          <ClientDriveFolderPanel clientId={id} />
-        </div>
-        </div>
         </TabsContent>
 
         <TabsContent value="goals-setup" className="grid gap-6">
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            <IntakeAnswersBigButton
+              clientId={id}
+              clientName={form.full_name ?? null}
+              subtitle="See every intake & in-app questionnaire this client filled out"
+            />
+            <Button
+              variant="outline"
+              className="min-h-[64px] w-full justify-start text-base"
+              onClick={form.info_update_requested ? clearUpdateRequest : requestUpdate}
+            >
+              <BellRing className="mr-3 h-5 w-5" />
+              {form.info_update_requested ? "Clear client update request" : "Request Client Update"}
+            </Button>
+            <Link to="/admin/clients/$id" params={{ id }} search={{ tab: "notes" }} className="block">
+              <Button variant="outline" className="min-h-[64px] w-full justify-start text-base">
+                <MessageSquare className="mr-3 h-5 w-5" /> Edit Coaching Notes
+              </Button>
+            </Link>
+          </div>
           <Suspense fallback={<TabFallback />}>
             <GoalsSetupPanel clientId={id} />
           </Suspense>
+          <PowerlifterSection form={form} set={set} />
+          <div className="flex justify-end">
+            <Button size="sm" className="min-h-[44px] bg-gradient-primary uppercase font-bold" onClick={save}>
+              <Save className="mr-2 h-4 w-4" />Save changes
+            </Button>
+          </div>
         </TabsContent>
 
         <TabsContent value="training" className="grid gap-6 md:grid-cols-3">
@@ -1058,19 +978,19 @@ function ClientDetail() {
         <TabsContent value="info" className="grid gap-6 md:grid-cols-3">
           <Card className="border-border bg-card p-6 md:col-span-2 space-y-4">
             <div className="flex items-center justify-between">
-              <h3 className="text-xs uppercase tracking-widest text-muted-foreground">Basic Information</h3>
+              <h3 className="text-sm font-semibold uppercase tracking-widest text-muted-foreground">Personal Information</h3>
               <div className="flex gap-2">
                 {form.info_update_requested ? (
-                  <Button size="sm" variant="outline" onClick={clearUpdateRequest}>Clear update request</Button>
+                  <Button size="sm" variant="outline" className="min-h-[44px]" onClick={clearUpdateRequest}>Clear update request</Button>
                 ) : (
-                  <Button size="sm" variant="outline" onClick={requestUpdate}><BellRing className="mr-2 h-4 w-4" />Request Profile Info Update</Button>
+                  <Button size="sm" variant="outline" className="min-h-[44px]" onClick={requestUpdate}><BellRing className="mr-2 h-4 w-4" />Request Update</Button>
                 )}
-                <Button size="sm" className="bg-gradient-primary uppercase font-bold" onClick={saveAccountInfo}><Save className="mr-2 h-4 w-4" />Save</Button>
+                <Button size="sm" className="min-h-[44px] bg-gradient-primary uppercase font-bold" onClick={saveAccountInfo}><Save className="mr-2 h-4 w-4" />Save</Button>
               </div>
             </div>
             <div className="md:col-span-2">
               <Label>Email</Label>
-              <Input value={form.email ?? ""} onChange={(e) => set("email", e.target.value)} />
+              <Input className="min-h-[44px]" type="email" inputMode="email" autoComplete="email" value={form.email ?? ""} onChange={(e) => set("email", e.target.value)} />
             </div>
             <Suspense fallback={<TabFallback />}>
               <BasicInfoForm
@@ -1100,7 +1020,7 @@ function ClientDetail() {
               />
             </Suspense>
             <div className="flex flex-wrap items-center gap-2">
-              <Button size="sm" variant="outline" onClick={requestPictureUpdate}>
+              <Button size="sm" variant="outline" className="min-h-[44px]" onClick={requestPictureUpdate}>
                 {form.profile_picture_needs_update ? "Update reminder active" : "Request client to update"}
               </Button>
               <span className="text-[11px] text-muted-foreground">
@@ -1122,12 +1042,77 @@ function ClientDetail() {
               </p>
             )}
           </Card>
+
+          <Card className="border-border bg-card p-6 md:col-span-3 space-y-3">
+            <h3 className="text-sm font-semibold uppercase tracking-widest text-muted-foreground">Communication Preferences</h3>
+            <p className="text-xs text-muted-foreground">In-app call and SMS access for this client. Save is applied immediately.</p>
+            <div className="grid gap-3 md:grid-cols-2">
+              <CommsToggleRow
+                title="In-app call access"
+                description="Shows a Call button in chat for admins & the assigned coach."
+                checked={!!form.call_access_enabled}
+                onChange={async (v: boolean) => {
+                  set("call_access_enabled", v);
+                  const { error } = await supabase.from("clients").update({ call_access_enabled: v }).eq("id", id);
+                  if (error) { toast.error(error.message); set("call_access_enabled", !v); }
+                  else { toast.success(v ? "Call access enabled" : "Call access disabled"); qc.invalidateQueries({ queryKey: ["client", id] }); qc.invalidateQueries({ queryKey: ["clients-min"] }); }
+                }}
+              />
+              <CommsToggleRow
+                title="SMS opt-out"
+                description="When on, this client will not receive any SMS (manual or unread reminders)."
+                checked={!!form.sms_opt_out}
+                onChange={async (v: boolean) => {
+                  set("sms_opt_out", v);
+                  const { error } = await supabase.from("clients").update({ sms_opt_out: v }).eq("id", id);
+                  if (error) { toast.error(error.message); set("sms_opt_out", !v); }
+                  else { toast.success(v ? "SMS opted out" : "SMS enabled"); qc.invalidateQueries({ queryKey: ["client", id] }); }
+                }}
+              />
+              <CommsToggleRow
+                title="Client → Coach: call button"
+                description="Shows a Call button in the client's chat so they can reach their assigned coach for urgent matters."
+                checked={!!form.coach_call_access_enabled}
+                onChange={async (v: boolean) => {
+                  set("coach_call_access_enabled", v);
+                  const { error } = await supabase.from("clients").update({ coach_call_access_enabled: v } as any).eq("id", id);
+                  if (error) { toast.error(error.message); set("coach_call_access_enabled", !v); }
+                  else { toast.success(v ? "Client can call their coach" : "Client can no longer call their coach"); qc.invalidateQueries({ queryKey: ["client", id] }); }
+                }}
+              />
+              <CommsToggleRow
+                title="Client → Coach: SMS button"
+                description="Shows a Text button in the client's chat so they can SMS their assigned coach for urgent matters. Off by default."
+                checked={!!form.coach_sms_access_enabled}
+                onChange={async (v: boolean) => {
+                  set("coach_sms_access_enabled", v);
+                  const { error } = await supabase.from("clients").update({ coach_sms_access_enabled: v } as any).eq("id", id);
+                  if (error) { toast.error(error.message); set("coach_sms_access_enabled", !v); }
+                  else { toast.success(v ? "Client can SMS their coach" : "Client can no longer SMS their coach"); qc.invalidateQueries({ queryKey: ["client", id] }); }
+                }}
+              />
+            </div>
+          </Card>
+
+          <Card className="border-border bg-card p-6 md:col-span-3 space-y-3">
+            <div className="flex items-center justify-between gap-3">
+              <h3 className="text-sm font-semibold uppercase tracking-widest text-muted-foreground">Social Media</h3>
+              <SocialIcons client={form} size="xs" />
+            </div>
+            <p className="text-[11px] text-muted-foreground">Usernames/handles only — the app auto-links where possible.</p>
+            <SocialHandlesEditor values={form} onChange={(k, v) => set(k, v)} />
+            <div className="flex justify-end pt-2">
+              <Button size="sm" className="min-h-[44px] bg-gradient-primary uppercase font-bold" onClick={save}>
+                <Save className="mr-2 h-4 w-4" />Save
+              </Button>
+            </div>
+          </Card>
         </TabsContent>
 
         <TabsContent value="account" className="grid gap-6 md:grid-cols-3">
         <Card className="border-border bg-card p-6 md:col-span-3 space-y-4">
           <div className="flex items-center justify-between">
-            <h3 className="text-xs uppercase tracking-widest text-muted-foreground">Account Access</h3>
+            <h3 className="text-sm font-semibold uppercase tracking-widest text-muted-foreground">Login & Access</h3>
             <AccountStatusBadge status={form.account_status} needsHelp={form.needs_admin_help} />
           </div>
 
@@ -1142,15 +1127,15 @@ function ClientDetail() {
                 <Field label="Linked auth user" value={form.user_id ? "Yes" : "No"} />
               </div>
 
-              <div className="flex flex-wrap gap-2 pt-2">
-                <ActionButton size="sm" variant="outline" onAction={sendSetup} loadingLabel="Sending…" successLabel="Sent" successToast={false} errorToast={false} icon={<Mail className="h-4 w-4" />}>{form.invite_sent_at ? "Resend setup email" : "Send setup email"}</ActionButton>
-                <ActionButton size="sm" variant="outline" onAction={copySetupLink} loadingLabel="Copying…" successLabel="Copied" successToast={false} errorToast={false} icon={<Copy className="h-4 w-4" />}>Copy setup link</ActionButton>
-                <ActionButton size="sm" variant="outline" onAction={sendReset} loadingLabel="Sending…" successLabel="Sent" successToast={false} errorToast={false} icon={<KeyRound className="h-4 w-4" />}>Send password reset</ActionButton>
-                <ActionButton size="sm" variant="outline" onAction={copyResetLink} loadingLabel="Copying…" successLabel="Copied" successToast={false} errorToast={false} icon={<Copy className="h-4 w-4" />}>Copy reset link</ActionButton>
-                <ActionButton size="sm" variant="outline" onAction={smsLink("setup")} loadingLabel="Sending…" successLabel="Sent" successToast={false} errorToast={false} icon={<MessageSquare className="h-4 w-4" />}>SMS setup link</ActionButton>
-                <ActionButton size="sm" variant="outline" onAction={smsLink("magic")} loadingLabel="Sending…" successLabel="Sent" successToast={false} errorToast={false} icon={<MessageSquare className="h-4 w-4" />}>SMS sign-in link</ActionButton>
-                <ActionButton size="sm" variant="outline" onAction={smsLink("reset")} loadingLabel="Sending…" successLabel="Sent" successToast={false} errorToast={false} icon={<MessageSquare className="h-4 w-4" />}>SMS reset link</ActionButton>
-                <Button size="sm" variant="outline" onClick={() => { setPwValue(""); setPwOpen(true); }}>
+              <div className="grid grid-cols-1 gap-2 pt-2 sm:grid-cols-2 lg:grid-cols-3">
+                <ActionButton className="min-h-[48px] justify-start" variant="outline" onAction={sendSetup} loadingLabel="Sending…" successLabel="Sent" successToast={false} errorToast={false} icon={<Mail className="h-4 w-4" />}>{form.invite_sent_at ? "Resend setup email" : "Send setup email"}</ActionButton>
+                <ActionButton className="min-h-[48px] justify-start" variant="outline" onAction={copySetupLink} loadingLabel="Copying…" successLabel="Copied" successToast={false} errorToast={false} icon={<Copy className="h-4 w-4" />}>Copy setup link</ActionButton>
+                <ActionButton className="min-h-[48px] justify-start" variant="outline" onAction={sendReset} loadingLabel="Sending…" successLabel="Sent" successToast={false} errorToast={false} icon={<KeyRound className="h-4 w-4" />}>Send password reset</ActionButton>
+                <ActionButton className="min-h-[48px] justify-start" variant="outline" onAction={copyResetLink} loadingLabel="Copying…" successLabel="Copied" successToast={false} errorToast={false} icon={<Copy className="h-4 w-4" />}>Copy reset link</ActionButton>
+                <ActionButton className="min-h-[48px] justify-start" variant="outline" onAction={smsLink("setup")} loadingLabel="Sending…" successLabel="Sent" successToast={false} errorToast={false} icon={<MessageSquare className="h-4 w-4" />}>SMS setup link</ActionButton>
+                <ActionButton className="min-h-[48px] justify-start" variant="outline" onAction={smsLink("magic")} loadingLabel="Sending…" successLabel="Sent" successToast={false} errorToast={false} icon={<MessageSquare className="h-4 w-4" />}>SMS sign-in link</ActionButton>
+                <ActionButton className="min-h-[48px] justify-start" variant="outline" onAction={smsLink("reset")} loadingLabel="Sending…" successLabel="Sent" successToast={false} errorToast={false} icon={<MessageSquare className="h-4 w-4" />}>SMS reset link</ActionButton>
+                <Button className="min-h-[48px] justify-start" variant="outline" onClick={() => { setPwValue(""); setPwOpen(true); }}>
                   <KeyRound className="mr-2 h-4 w-4" />Set password
                 </Button>
                 <SendPasswordResetDialog
@@ -1159,8 +1144,8 @@ function ClientDetail() {
                   phone={form.phone ?? null}
                   triggerLabel="Secure password reset"
                 />
-                <ActionButton size="sm" variant="outline" onAction={markComplete} loadingLabel="Saving…" successLabel="Done" successToast={false} errorToast={false} icon={<CheckCircle2 className="h-4 w-4" />}>Mark setup complete</ActionButton>
-                <Button size="sm" variant={form.needs_admin_help ? "default" : "outline"} onClick={toggleNeedsHelp}>
+                <ActionButton className="min-h-[48px] justify-start" variant="outline" onAction={markComplete} loadingLabel="Saving…" successLabel="Done" successToast={false} errorToast={false} icon={<CheckCircle2 className="h-4 w-4" />}>Mark setup complete</ActionButton>
+                <Button className="min-h-[48px] justify-start" variant={form.needs_admin_help ? "default" : "outline"} onClick={toggleNeedsHelp}>
                   <AlertCircle className="mr-2 h-4 w-4" />{form.needs_admin_help ? "Clear admin help flag" : "Mark needs admin help"}
                 </Button>
               </div>
@@ -1718,5 +1703,214 @@ function PowerlifterSection({ form, set }: { form: any; set: (k: string, v: any)
       )}
       <p className="text-[11px] text-muted-foreground">Use Save at the top to apply changes.</p>
     </Card>
+  );
+}
+
+function CommsToggleRow({ title, description, checked, onChange }: { title: string; description: string; checked: boolean; onChange: (v: boolean) => void | Promise<void> }) {
+  return (
+    <label className="flex min-h-[64px] items-center justify-between gap-3 rounded-md border border-border bg-secondary/30 px-4 py-3 text-sm">
+      <span className="min-w-0">
+        <span className="block font-semibold">{title}</span>
+        <span className="mt-0.5 block text-[11px] text-muted-foreground">{description}</span>
+      </span>
+      <Switch checked={checked} onCheckedChange={onChange} />
+    </label>
+  );
+}
+
+function ClientOverviewSnapshot({
+  form, clientId, canPov, onMessage, onPov, onSendSetup, onRequestUpdate, onGoToTab,
+}: {
+  form: any;
+  clientId: string;
+  canPov: boolean;
+  onMessage: () => void;
+  onPov: () => void;
+  onSendSetup: () => unknown | Promise<unknown>;
+  onRequestUpdate: () => unknown | Promise<unknown>;
+  onGoToTab: (t: TabValue) => void;
+}) {
+  // Profile completion: count critical fields populated
+  const critical: { key: string; label: string; jumpTo: TabValue; populated: boolean }[] = [
+    { key: "first_name", label: "Name", jumpTo: "info", populated: !!form.first_name || !!form.full_name },
+    { key: "email", label: "Email", jumpTo: "info", populated: !!form.email },
+    { key: "phone", label: "Phone", jumpTo: "info", populated: !!form.phone },
+    { key: "profile_picture_url", label: "Profile picture", jumpTo: "info", populated: !!form.profile_picture_url },
+    { key: "date_of_birth", label: "Date of birth", jumpTo: "info", populated: !!form.date_of_birth },
+    { key: "timezone", label: "Time zone", jumpTo: "info", populated: !!form.timezone },
+    { key: "assigned_coach_id", label: "Assigned coach", jumpTo: "coaching", populated: !!form.assigned_coach_id },
+    { key: "coaching_package", label: "Coaching package", jumpTo: "coaching", populated: !!form.coaching_package },
+    { key: "start_date", label: "Start date", jumpTo: "coaching", populated: !!form.start_date },
+    { key: "user_id", label: "Login account", jumpTo: "account", populated: !!form.user_id },
+  ];
+  const populated = critical.filter((c) => c.populated).length;
+  const pct = Math.round((populated / critical.length) * 100);
+  const missing = critical.filter((c) => !c.populated);
+
+  const initials = (form.full_name ?? "?").split(" ").map((s: string) => s[0]).filter(Boolean).slice(0, 2).join("").toUpperCase();
+
+  return (
+    <div className="md:col-span-3 space-y-6">
+      {/* Header card: identity + key facts */}
+      <Card className="border-border bg-card p-5 md:p-6">
+        <div className="flex flex-col gap-5 md:flex-row md:items-start">
+          <div className="flex items-center gap-4">
+            {form.profile_picture_url ? (
+              <img src={form.profile_picture_url} alt="" className="h-20 w-20 shrink-0 rounded-2xl object-cover ring-1 ring-border" />
+            ) : (
+              <div className="grid h-20 w-20 shrink-0 place-items-center rounded-2xl bg-secondary text-lg font-bold text-muted-foreground ring-1 ring-border">{initials || "?"}</div>
+            )}
+            <div className="min-w-0">
+              <div className="text-xl font-bold leading-tight truncate">{form.full_name ?? "Unnamed client"}</div>
+              <div className="mt-1 flex flex-wrap items-center gap-1.5">
+                {form.status && <Badge variant="outline" className="text-[11px]">{form.status}</Badge>}
+                {form.coaching_package && <Badge variant="outline" className="text-[11px]">{form.coaching_package}</Badge>}
+                {form.is_powerlifter && <PowerlifterBadge label={form.powerlifter_badge_label} size="xs" />}
+              </div>
+            </div>
+          </div>
+          <div className="grid flex-1 grid-cols-1 gap-3 text-sm sm:grid-cols-2 md:grid-cols-3">
+            <SnapshotField label="Email" value={form.email} fallbackAction={form.email ? null : { label: "Add email", onClick: () => onGoToTab("info") }} />
+            <SnapshotField label="Phone" value={form.phone} fallbackAction={form.phone ? null : { label: "Add phone", onClick: () => onGoToTab("info") }} />
+            <SnapshotField label="Assigned coach" value={form.assigned_coach_name ?? (form.assigned_coach_id ? "Assigned" : null)} fallbackAction={form.assigned_coach_id ? null : { label: "Assign coach", onClick: () => onGoToTab("coaching") }} />
+            <SnapshotField label="Coaching package" value={form.coaching_package} fallbackAction={form.coaching_package ? null : { label: "Add package", onClick: () => onGoToTab("coaching") }} />
+            <SnapshotField label="Program phase" value={form.program_phase} fallbackAction={form.program_phase ? null : { label: "Add phase", onClick: () => onGoToTab("coaching") }} />
+            <SnapshotField label="Login" value={form.user_id ? "Account active" : null} fallbackAction={form.user_id ? null : { label: "Send setup link", onClick: () => onSendSetup() }} />
+          </div>
+        </div>
+      </Card>
+
+      {/* Quick actions — 48–52px buttons */}
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
+        {canPov && (
+          <Button onClick={onPov} className="min-h-[52px] justify-start bg-warning/15 text-warning border border-warning/40 hover:bg-warning/25 text-base">
+            <Eye className="mr-3 h-5 w-5" /> Open Client POV
+          </Button>
+        )}
+        <Button onClick={onMessage} variant="outline" className="min-h-[52px] justify-start text-base">
+          <MessageSquare className="mr-3 h-5 w-5" /> Message Client
+        </Button>
+        <Link to="/admin/clients/$id/schedule" params={{ id: clientId }} className="block">
+          <Button variant="outline" className="min-h-[52px] w-full justify-start text-base">
+            <Calendar className="mr-3 h-5 w-5" /> Manage Schedule
+          </Button>
+        </Link>
+        <Button variant="outline" className="min-h-[52px] justify-start text-base" onClick={() => onGoToTab("goals-setup")}>
+          <Target className="mr-3 h-5 w-5" /> View Intake & Goals
+        </Button>
+        <Button variant="outline" className="min-h-[52px] justify-start text-base" onClick={() => onRequestUpdate()}>
+          <BellRing className="mr-3 h-5 w-5" /> {form.info_update_requested ? "Update requested" : "Request Client Update"}
+        </Button>
+        <Link to="/admin/client-programs/$clientId" params={{ clientId }} className="block">
+          <Button variant="outline" className="min-h-[52px] w-full justify-start text-base">
+            <Dumbbell className="mr-3 h-5 w-5" /> Assign Program
+          </Button>
+        </Link>
+      </div>
+
+      <div className="grid gap-6 md:grid-cols-3">
+        <div className="space-y-6 md:col-span-2">
+          <AppActivityCard
+            clientId={clientId}
+            lastSignedInAt={form.last_signed_in_at}
+            lastActiveAt={form.last_active_at}
+            lastActiveRoute={form.last_active_route}
+            complianceStatus={form.compliance_status}
+            homeScreenStatus={form.home_screen_setup_status}
+          />
+          <Card className="border-border bg-card p-6 space-y-3">
+            <h3 className="text-sm font-semibold uppercase tracking-widest text-muted-foreground">Training Schedule</h3>
+            <TrainingScheduleCard client={form} />
+          </Card>
+        </div>
+        <div className="space-y-6">
+          {/* Profile completion */}
+          <Card className="border-border bg-card p-6 space-y-3">
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-semibold uppercase tracking-widest text-muted-foreground">Profile Completion</h3>
+              <span className={["text-xl font-bold", pct === 100 ? "text-success" : pct >= 70 ? "text-primary" : "text-warning"].join(" ")}>{pct}%</span>
+            </div>
+            <div className="h-2 w-full overflow-hidden rounded-full bg-secondary">
+              <div className={["h-full transition-all", pct === 100 ? "bg-success" : pct >= 70 ? "bg-primary" : "bg-warning"].join(" ")} style={{ width: `${pct}%` }} />
+            </div>
+            {missing.length > 0 ? (
+              <div className="space-y-1.5 pt-1">
+                <div className="text-xs font-semibold text-muted-foreground">Missing information</div>
+                <div className="grid gap-1.5">
+                  {missing.map((m) => (
+                    <button
+                      key={m.key}
+                      type="button"
+                      onClick={() => m.key === "user_id" ? onSendSetup() : onGoToTab(m.jumpTo)}
+                      className="flex min-h-[44px] items-center justify-between gap-2 rounded-md border border-border bg-secondary/30 px-3 py-2 text-sm hover:border-primary/40 hover:bg-secondary/60"
+                    >
+                      <span className="flex items-center gap-2"><AlertCircle className="h-4 w-4 text-warning" />{m.label}</span>
+                      <span className="text-xs font-semibold text-primary">{m.key === "user_id" ? "Send setup" : "Add"} →</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ) : (
+              <p className="text-xs text-success">All critical fields complete.</p>
+            )}
+          </Card>
+
+          {/* Personal snapshot, read-only */}
+          <Card className="border-border bg-card p-6 space-y-3">
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-semibold uppercase tracking-widest text-muted-foreground">Personal Snapshot</h3>
+              <Button variant="ghost" size="sm" className="min-h-[40px] text-primary" onClick={() => onGoToTab("info")}>
+                Edit →
+              </Button>
+            </div>
+            <dl className="grid grid-cols-2 gap-y-1.5 text-xs">
+              {form.preferred_name && (<><dt className="text-muted-foreground">Preferred name</dt><dd className="font-medium">{form.preferred_name}</dd></>)}
+              <dt className="text-muted-foreground">Date of birth</dt>
+              <dd className="font-medium">{form.date_of_birth ? new Date(form.date_of_birth + "T00:00:00").toLocaleDateString() : "—"}</dd>
+              <dt className="text-muted-foreground">Age</dt>
+              <dd className="font-medium">{calcAge(form.date_of_birth) ?? "—"}</dd>
+              <dt className="text-muted-foreground">Height</dt>
+              <dd className="font-medium">{formatHeight(form.height_cm, (form.preferred_height_unit as any) ?? "imperial")}</dd>
+              <dt className="text-muted-foreground">Time zone</dt>
+              <dd className="font-medium">{form.timezone ?? "—"}</dd>
+              <dt className="text-muted-foreground">Mailing address</dt>
+              <dd className="font-medium truncate">
+                {[form.address, form.city, form.province, form.postal_code, form.country].filter(Boolean).join(", ") || "—"}
+              </dd>
+              {(form.emergency_contact_name || form.emergency_contact_phone) && (
+                <>
+                  <dt className="text-muted-foreground">Emergency contact</dt>
+                  <dd className="font-medium">
+                    {form.emergency_contact_name ?? "—"}
+                    {form.emergency_contact_phone ? ` · ${form.emergency_contact_phone}` : ""}
+                  </dd>
+                </>
+              )}
+            </dl>
+          </Card>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function SnapshotField({ label, value, fallbackAction }: { label: string; value?: string | null; fallbackAction?: { label: string; onClick: () => void } | null }) {
+  return (
+    <div>
+      <div className="text-[10px] uppercase tracking-widest text-muted-foreground">{label}</div>
+      {value ? (
+        <div className="mt-0.5 font-semibold truncate">{value}</div>
+      ) : fallbackAction ? (
+        <button
+          type="button"
+          onClick={fallbackAction.onClick}
+          className="mt-0.5 inline-flex min-h-[32px] items-center gap-1 rounded-md border border-warning/40 bg-warning/10 px-2 py-0.5 text-xs font-semibold text-warning hover:bg-warning/20"
+        >
+          <AlertCircle className="h-3.5 w-3.5" /> {fallbackAction.label}
+        </button>
+      ) : (
+        <div className="mt-0.5 font-semibold text-muted-foreground">—</div>
+      )}
+    </div>
   );
 }
