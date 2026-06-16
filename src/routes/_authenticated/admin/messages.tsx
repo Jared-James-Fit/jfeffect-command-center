@@ -205,22 +205,17 @@ export function MessagesInbox({
       className={cn(
         "flex flex-col bg-background",
         embedded
-          // Stays inside the workspace shell — no fixed overlay so the
-          // workspace header/tabs remain visible. Uses dvh so iOS Safari's
-          // dynamic toolbar doesn't clip the conversation pane.
-          ? "w-full"
+          // Stays inside the workspace shell — the parent (Communication
+          // workspace) constrains height to the viewport, so we just fill
+          // the remaining space. Avoids landscape/PWA cases where a fixed
+          // dvh calc pushed the message list above the viewport and only
+          // the composer was visible.
+          ? "h-full w-full min-h-0"
           : "fixed inset-x-0 top-0 z-30 md:static md:inset-auto md:z-auto md:h-full md:flex-1",
       )}
       style={
         embedded
-          ? {
-              // Subtract the visible workspace chrome (~ header + tabs ≈ 124px)
-              // and the mobile bottom-nav clearance so the thread is never
-              // hidden behind the fixed nav.
-              height:
-                "calc(100dvh - var(--bottom-nav-clearance, 0px) - 124px)",
-              minHeight: "60vh",
-            }
+          ? undefined
           : { height: "calc(100dvh - var(--bottom-nav-clearance, 0px))" }
       }
     >
