@@ -150,7 +150,7 @@ function ClientLiftVideos() {
     <>
       <PageHeader title="Lift Videos" subtitle="Send lifts for coach review." />
       <UploadGuard />
-      <div className="space-y-4 p-6 pb-32 md:p-8 md:pb-32">
+      <div className="space-y-4 p-4 pb-32 sm:p-6 md:p-8 md:pb-32 min-w-0 max-w-full overflow-x-hidden">
         {!client && (
           <Card className="border-border bg-card p-6 text-sm text-muted-foreground">
             Your coach hasn't set up your profile yet. Uploads will be available once they do.
