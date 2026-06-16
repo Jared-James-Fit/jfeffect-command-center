@@ -25,6 +25,11 @@ import { FinalCta } from "@/components/sales/final-cta";
 import { Reveal } from "@/components/sales/reveal";
 import { ArrowRight, Headphones, CheckCircle2, XCircle, Library, PlayCircle, LineChart as LineChartIcon, BookOpen, Sparkles, Dumbbell, Home as HomeIcon, Flame, Trophy } from "lucide-react";
 import { normalizePhoneToE164 } from "@/lib/phone-e164";
+import appPreviewDashboard from "@/assets/app-preview-dashboard.jpg";
+import appPreviewLogging from "@/assets/app-preview-logging.jpg";
+import appPreviewLibrary from "@/assets/app-preview-library.jpg";
+import appPreviewPrograms from "@/assets/app-preview-programs.jpg";
+import appPreviewProgress from "@/assets/app-preview-progress.jpg";
 
 function HeroSkeleton() {
   return (
@@ -547,11 +552,11 @@ const DEFAULT_NOT_FOR = [
 ];
 
 const DEFAULT_APP_PREVIEWS = [
-  { label: "Dashboard — today's session at a glance" },
-  { label: "Workout logging — tap to log reps, load, RPE" },
-  { label: "Exercise library — every movement, every demo" },
-  { label: "Program library — switch focus anytime" },
-  { label: "Progress tracking — volume, PRs, trends" },
+  { label: "Dashboard — today's session at a glance", url: appPreviewDashboard },
+  { label: "Workout logging — tap to log reps, load, RPE", url: appPreviewLogging },
+  { label: "Exercise library — every movement, every demo", url: appPreviewLibrary },
+  { label: "Program library — switch focus anytime", url: appPreviewPrograms },
+  { label: "Progress tracking — volume, PRs, trends", url: appPreviewProgress },
 ];
 
 const DEFAULT_FAQ = [
