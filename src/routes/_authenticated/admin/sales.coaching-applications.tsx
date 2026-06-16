@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { useEffect, useState } from "react";
 import { PageHeader } from "@/components/app-shell";
-import { listCoachingApplications, updateCoachingApplication } from "@/lib/coaching-applications.functions";
+import { listCoachingApplications, updateCoachingApplication, exportCoachingApplicationsCsv } from "@/lib/coaching-applications.functions";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -27,16 +27,41 @@ function CoachingApplicationsRedirect() {
 export function ApplicationsInbox({ embedded = false }: { embedded?: boolean } = {}) {
   const fetchList = useServerFn(listCoachingApplications);
   const updateApp = useServerFn(updateCoachingApplication);
+  const exportCsv = useServerFn(exportCoachingApplicationsCsv);
   const { data, refetch } = useQuery({ queryKey: ["coaching-applications"], queryFn: () => fetchList(), refetchInterval: 60_000 });
   const [openId, setOpenId] = useState<string | null>(null);
 
   const apps = data?.applications ?? [];
+
+  const downloadCsv = async () => {
+    try {
+      const { csv, count } = await exportCsv();
+      const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `coaching-applications-${new Date().toISOString().slice(0, 10)}.csv`;
+      document.body.appendChild(a); a.click(); a.remove();
+      URL.revokeObjectURL(url);
+      toast.success(`Exported ${count} applications`);
+    } catch (e: any) {
+      toast.error(e?.message ?? "Export failed");
+    }
+  };
 
   return (
     <div className="space-y-5">
       {!embedded && (
         <PageHeader title="Coaching Applications" subtitle="Inbox of submissions from /coaching/apply." />
       )}
+      <div className="flex items-center justify-between gap-2">
+        <div className="text-xs text-muted-foreground">
+          {apps.length} application{apps.length === 1 ? "" : "s"}
+        </div>
+        <Button size="sm" variant="outline" onClick={downloadCsv} disabled={apps.length === 0}>
+          Export CSV
+        </Button>
+      </div>
       <Card className="divide-y divide-border">
         {apps.length === 0 && <div className="p-6 text-sm text-muted-foreground">No applications yet.</div>}
         {apps.map((a: any) => {
