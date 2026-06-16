@@ -39,7 +39,10 @@ export function RecipeForm({ open, onOpenChange, initial, onSaved }: Props) {
 
   const [title, setTitle] = useState("");
   const [category, setCategory] = useState<string>("Breakfast");
-  const [access, setAccess] = useState<RecipeAccessScope>("hidden");
+  // Default to membership-visible so newly authored recipes actually reach
+  // members. The old "hidden" default silently shipped 118 published recipes
+  // that no member could see.
+  const [access, setAccess] = useState<RecipeAccessScope>("app_members");
   const [status, setStatus] = useState<RecipeStatus>("Draft");
   const [body, setBody] = useState("");
   const [videoUrl, setVideoUrl] = useState("");
@@ -62,7 +65,7 @@ export function RecipeForm({ open, onOpenChange, initial, onSaved }: Props) {
     } else {
       setTitle("");
       setCategory("Breakfast");
-      setAccess("hidden");
+      setAccess("app_members");
       setStatus("Draft");
       setBody("");
       setVideoUrl("");
