@@ -28,7 +28,19 @@ Verification: Playwright check of `/manifest.webmanifest`, icon URLs 200, head t
 - Desktop: QR code (qrcode lib) + copy link + short mobile instructions.
 - "Install dismissed" + "Install confirmed" persisted in `app_members` (new columns) so admins can see it.
 
-## Phase 3 — Setup checklist + admin visibility (non-blocking)
+## Phase 3 — Setup checklist + admin visibility (non-blocking) — IN PROGRESS
+
+Done this turn:
+- New `app_members` columns: `notifications_status`, `setup_dismissed_until`, `last_setup_error`, `first_workout_opened_at` (install columns landed in Phase 2).
+- Member home checklist card "Finish setting up JF Effect" with 5 items (profile, install, notifications, pick program, open first workout), progress bar, dismiss-for-now (4h) and remind-tomorrow (24h).
+- Browser notification permission prompt wired through the checklist; result persisted to `app_members.notifications_status`.
+- Admin route `/admin/onboarding` with counts, 7 filters (all / not signed in / not installed / setup incomplete / notifications off / errors / ready), search, paginated rows with status pills and a View action linking to the member detail page.
+- Admin nav entry under Membership group.
+
+Still to do for Phase 3 (will tackle next turn if you want):
+- Email + SMS reminder templates ("Set up your JF Effect app") wired to existing email infra.
+- Admin row actions: Send Reminder, Copy Link, Resend Instructions, Clear Error, Mark Browser-Only.
+- Goals & Setup save bug audit + fix.
 
 - `member_setup_state` table (or columns on `app_members`) tracking: account_created_at, first_signin_at, install_detected_at, install_platform, goals_setup_status, profile_status, notifications_status, first_workout_opened_at, last_reminder_sent_at, last_setup_error.
 - Home checklist card "Finish Setting Up JF Effect" with progress, 5 items, one CTA per item, dismiss-for-now + remind-tomorrow.

@@ -13,6 +13,7 @@ import { Progress } from "@/components/ui/progress";
 import { BookOpen, ClipboardCheck, FolderOpen, Wrench, PlayCircle } from "lucide-react";
 import { Star } from "lucide-react";
 import { UpgradeCTA } from "@/components/upgrade-cta";
+import { SetupChecklist } from "@/components/member/setup-checklist-card";
 
 export const Route = createFileRoute("/_authenticated/m/")({
   component: MemberHome,
@@ -83,6 +84,7 @@ function MemberHome() {
           perks={["Full Plan Library", "Resource Library access", "All in-app tools"]}
         />
       )}
+      <SetupChecklist activeEnrollment={activeEnrollment} />
       {activeEnrollment ? (
         <Card className="p-6">
           <div className="flex items-center justify-between gap-4">
