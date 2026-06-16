@@ -193,8 +193,8 @@ function SignupJf() {
       ) : (
       <MembershipHero
         priceChip={settings?.monthly_price_display ?? "$29/month USD"}
-        headline={"Stop winging it. Start training with a plan."}
-        sub={"The same training systems hundreds of JF Effect members use to get stronger, build muscle, and actually stay consistent\u2014programs, demos, tracking, and education, all in one app. You open it, the plan's already there, and you always know exactly what to do next."}
+        headline={"Every program you need. One system."}
+        sub={"Training built by a national-level coach — strength, muscle, fat loss. Open the app and follow the plan."}
         heroImage={null}
         decisionArea={
           <HeroDecisionArea
@@ -205,7 +205,7 @@ function SignupJf() {
         secondary={
           <MemberHeroGhost onClick={scrollToFeatures}>See What's Included</MemberHeroGhost>
         }
-        trialNote={`${trialDays}-day free trial · Then ${settings?.monthly_price_display ?? "$29/month USD"} · Cancel anytime`}
+        trialNote={`${trialDays}-day free trial · Cancel anytime`}
         detailsLink={<MemberDetailsLink onClick={scrollToFeatures} />}
       />
       )}
