@@ -62,6 +62,17 @@ export function NutritionUpdatePanel() {
     onError: (e: any) => toast.error(e?.message ?? "Submission failed"),
   });
 
+  // Defer PWA updates while the nutrition dialog has unsaved edits or is uploading
+  // photos / submitting. Warn before unload while a photo upload is in flight.
+  const dirty = open && (
+    uploading ||
+    m.isPending ||
+    !!form.current_bodyweight || !!form.avg_bodyweight || !!form.compliance_pct ||
+    !!form.steps_completed || !!form.cardio_completed || !!form.missed_meals || !!form.notes ||
+    form.progress_photo_urls.length > 0
+  );
+  useUnsavedWarning(dirty, { warnOnUnload: uploading || m.isPending });
+
   if (isLoading || !data?.client) return null;
 
   const target = data.target as any;
