@@ -503,7 +503,7 @@ function TemplateCard({ tpl, onPreview, onAssign, onShare, onChanged }: { tpl: a
     <Card className="flex flex-col gap-3 p-4">
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
-          <div className="truncate text-base font-bold leading-tight">{tpl.name}</div>
+          <div className="break-words text-base font-bold leading-tight">{tpl.name}</div>
           <div className="mt-0.5 text-[11px] text-muted-foreground">Updated {updated}</div>
         </div>
         <RowMenu tpl={tpl} onChanged={onChanged} />
