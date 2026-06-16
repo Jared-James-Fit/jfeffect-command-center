@@ -259,6 +259,25 @@ export function GoalsSetupFlow({ clientId, onComplete, compact }: Props) {
         </Card>
       )}
 
+      {stepSaveFailed && !saveFailed && (
+        <div className="flex items-start gap-2 rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-xs text-amber-800 dark:text-amber-200">
+          <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+          <div className="flex-1">
+            <span className="font-semibold">Last save didn't reach the server.</span>{" "}
+            Your answers are kept on this device and will retry on the next step or when you finish.
+          </div>
+          <Button
+            size="sm"
+            variant="ghost"
+            className="h-6 px-2 text-xs"
+            onClick={() => saveAndAdvance()}
+            disabled={upsert.isPending}
+          >
+            <RefreshCw className="mr-1 h-3 w-3" /> Retry now
+          </Button>
+        </div>
+      )}
+
       {/* Sticky bottom bar — mobile-friendly */}
       <div
         className="sticky bottom-0 z-10 -mx-3 border-t border-border bg-background/95 px-3 py-3 backdrop-blur sm:rounded-lg sm:border sm:bg-card"
