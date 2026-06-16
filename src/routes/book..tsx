@@ -12,7 +12,7 @@ import { Calendar as CalendarIcon, Clock, CheckCircle2, Video, Lock } from "luci
 import { toast } from "sonner";
 import { todayLocalISO } from "@/lib/today";
 
-export const Route = createFileRoute("/book/$slug")({
+export const Route = createFileRoute("/book/")({
   component: BookingPage,
   // Accept prefill query params from the coaching application flow.
   validateSearch: (search: Record<string, unknown>) => ({

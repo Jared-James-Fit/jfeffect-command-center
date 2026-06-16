@@ -36,6 +36,7 @@ import { Route as CoachingApplyRouteImport } from './routes/coaching.apply'
 import { Route as BookSlugRouteImport } from './routes/book.$slug'
 import { Route as ApiDriveUploadRouteImport } from './routes/api/drive-upload'
 import { Route as AuthenticatedNotificationsRouteImport } from './routes/_authenticated/notifications'
+import { Route as BookRouteImport } from './routes/book.'
 import { Route as AuthenticatedPortalRouteRouteImport } from './routes/_authenticated/portal/route'
 import { Route as AuthenticatedMediaRouteRouteImport } from './routes/_authenticated/media/route'
 import { Route as AuthenticatedMRouteRouteImport } from './routes/_authenticated/m/route'
@@ -390,6 +391,11 @@ const AuthenticatedNotificationsRoute =
     path: '/notifications',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
+const BookRoute = BookRouteImport.update({
+  id: '/book/',
+  path: '/book/',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AuthenticatedPortalRouteRoute =
   AuthenticatedPortalRouteRouteImport.update({
     id: '/portal',
@@ -1691,6 +1697,7 @@ export interface FileRoutesByFullPath {
   '/m': typeof AuthenticatedMRouteRouteWithChildren
   '/media': typeof AuthenticatedMediaRouteRouteWithChildren
   '/portal': typeof AuthenticatedPortalRouteRouteWithChildren
+  '/book/': typeof BookRoute
   '/notifications': typeof AuthenticatedNotificationsRoute
   '/api/drive-upload': typeof ApiDriveUploadRoute
   '/book/$slug': typeof BookSlugRoute
@@ -1933,6 +1940,7 @@ export interface FileRoutesByTo {
   '/terms': typeof TermsRoute
   '/unsubscribe': typeof UnsubscribeRoute
   '/coach': typeof AuthenticatedCoachRouteRouteWithChildren
+  '/book': typeof BookRoute
   '/notifications': typeof AuthenticatedNotificationsRoute
   '/api/drive-upload': typeof ApiDriveUploadRoute
   '/book/$slug': typeof BookSlugRoute
@@ -2180,6 +2188,7 @@ export interface FileRoutesById {
   '/_authenticated/m': typeof AuthenticatedMRouteRouteWithChildren
   '/_authenticated/media': typeof AuthenticatedMediaRouteRouteWithChildren
   '/_authenticated/portal': typeof AuthenticatedPortalRouteRouteWithChildren
+  '/book/': typeof BookRoute
   '/_authenticated/notifications': typeof AuthenticatedNotificationsRoute
   '/api/drive-upload': typeof ApiDriveUploadRoute
   '/book/$slug': typeof BookSlugRoute
@@ -2428,6 +2437,7 @@ export interface FileRouteTypes {
     | '/m'
     | '/media'
     | '/portal'
+    | '/book/'
     | '/notifications'
     | '/api/drive-upload'
     | '/book/$slug'
@@ -2670,6 +2680,7 @@ export interface FileRouteTypes {
     | '/terms'
     | '/unsubscribe'
     | '/coach'
+    | '/book'
     | '/notifications'
     | '/api/drive-upload'
     | '/book/$slug'
@@ -2916,6 +2927,7 @@ export interface FileRouteTypes {
     | '/_authenticated/m'
     | '/_authenticated/media'
     | '/_authenticated/portal'
+    | '/book/'
     | '/_authenticated/notifications'
     | '/api/drive-upload'
     | '/book/$slug'
@@ -3159,6 +3171,7 @@ export interface RootRouteChildren {
   StaffSetupRoute: typeof StaffSetupRoute
   TermsRoute: typeof TermsRoute
   UnsubscribeRoute: typeof UnsubscribeRoute
+  BookRoute: typeof BookRoute
   ApiDriveUploadRoute: typeof ApiDriveUploadRoute
   BookSlugRoute: typeof BookSlugRoute
   EmailUnsubscribeRoute: typeof EmailUnsubscribeRoute
@@ -3377,6 +3390,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/notifications'
       preLoaderRoute: typeof AuthenticatedNotificationsRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/book/': {
+      id: '/book/'
+      path: '/book'
+      fullPath: '/book/'
+      preLoaderRoute: typeof BookRouteImport
+      parentRoute: typeof rootRouteImport
     }
     '/_authenticated/portal': {
       id: '/_authenticated/portal'
@@ -5650,6 +5670,7 @@ const rootRouteChildren: RootRouteChildren = {
   StaffSetupRoute: StaffSetupRoute,
   TermsRoute: TermsRoute,
   UnsubscribeRoute: UnsubscribeRoute,
+  BookRoute: BookRoute,
   ApiDriveUploadRoute: ApiDriveUploadRoute,
   BookSlugRoute: BookSlugRoute,
   EmailUnsubscribeRoute: EmailUnsubscribeRoute,
