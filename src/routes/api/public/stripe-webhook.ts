@@ -128,6 +128,24 @@ async function captureCheckoutPromo(supabase: any, obj: any, eventId: string) {
  */
 async function syncClientStripeCustomerId(supabase: any, stripeCustomerId: string | null, clientId: string | null) {
   if (!stripeCustomerId || !clientId) return;
+  // Dual-billing guard: never auto-link a new JF Effect Stripe customer onto
+  // a client whose billing source is locked to Trainerize Legacy. Doing so
+  // would create the appearance of dual billing and could lead to duplicate
+  // charges during a future authorized migration.
+  const { data: c } = await supabase
+    .from("clients")
+    .select("billing_source, billing_source_locked")
+    .eq("id", clientId)
+    .maybeSingle();
+  if (c && c.billing_source === "trainerize_legacy") {
+    await supabase.from("billing_audit_log").insert({
+      client_id: clientId,
+      event_type: "webhook_link_blocked_trainerize_legacy",
+      new_value: { stripe_customer_id: stripeCustomerId },
+      reason: "Stripe webhook attempted to auto-link a new Stripe customer to a Trainerize Legacy client.",
+    });
+    return;
+  }
   await supabase
     .from("clients")
     .update({ stripe_customer_id: stripeCustomerId })
