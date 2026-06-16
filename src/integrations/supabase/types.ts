@@ -7645,6 +7645,39 @@ export type Database = {
           },
         ]
       }
+      member_bodyweight_logs: {
+        Row: {
+          created_at: string
+          entry_date: string
+          id: string
+          note: string | null
+          unit: string
+          updated_at: string
+          user_id: string
+          weight: number
+        }
+        Insert: {
+          created_at?: string
+          entry_date?: string
+          id?: string
+          note?: string | null
+          unit?: string
+          updated_at?: string
+          user_id: string
+          weight: number
+        }
+        Update: {
+          created_at?: string
+          entry_date?: string
+          id?: string
+          note?: string | null
+          unit?: string
+          updated_at?: string
+          user_id?: string
+          weight?: number
+        }
+        Relationships: []
+      }
       member_plan_audit: {
         Row: {
           action: string

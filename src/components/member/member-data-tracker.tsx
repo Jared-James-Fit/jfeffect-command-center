@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Flame, Dumbbell, CheckCircle2, TrendingUp } from "lucide-react";
 import { differenceInCalendarDays, format, startOfWeek, endOfWeek } from "date-fns";
+import { MemberBodyweightCard } from "./member-bodyweight-card";
 
 export function MemberDataTracker({ enrollmentId, enrollment }: { enrollmentId: string; enrollment: any }) {
   const { data: completions = [] } = useQuery({
@@ -93,6 +94,8 @@ export function MemberDataTracker({ enrollmentId, enrollment }: { enrollmentId: 
           </div>
         )}
       </Card>
+
+      <MemberBodyweightCard />
     </div>
   );
 }
