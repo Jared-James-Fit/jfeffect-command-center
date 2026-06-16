@@ -97,7 +97,6 @@ export function ClientRow({ r, onArchive }: { r: DirectoryRow; onArchive?: (r: D
             src={r.profile_picture_url}
             name={r.full_name ?? "Client"}
             size={44}
-            expandable={false}
             className="shrink-0"
           />
           <div className="min-w-0">
