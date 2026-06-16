@@ -3575,6 +3575,274 @@ export type Database = {
           },
         ]
       }
+      discount_code_audit_log: {
+        Row: {
+          action: string
+          actor_email: string | null
+          actor_id: string | null
+          code_id: string | null
+          code_public: string | null
+          created_at: string
+          id: string
+          metadata: Json | null
+        }
+        Insert: {
+          action: string
+          actor_email?: string | null
+          actor_id?: string | null
+          code_id?: string | null
+          code_public?: string | null
+          created_at?: string
+          id?: string
+          metadata?: Json | null
+        }
+        Update: {
+          action?: string
+          actor_email?: string | null
+          actor_id?: string | null
+          code_id?: string | null
+          code_public?: string | null
+          created_at?: string
+          id?: string
+          metadata?: Json | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "discount_code_audit_log_code_id_fkey"
+            columns: ["code_id"]
+            isOneToOne: false
+            referencedRelation: "discount_codes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      discount_code_redemptions: {
+        Row: {
+          cancellation_status: string | null
+          checkout_session_id: string | null
+          created_at: string
+          customer_email: string | null
+          customer_id: string | null
+          final_cents: number | null
+          id: string
+          mode: string
+          original_cents: number | null
+          product_id: string | null
+          product_name: string | null
+          promo_code_id: string | null
+          promo_discount_cents: number | null
+          raw: Json | null
+          redeemed_at: string
+          referral_code_id: string | null
+          referral_discount_cents: number | null
+          referring_user_id: string | null
+          refund_status: string | null
+          stripe_customer_id: string | null
+          stripe_sync_status: string | null
+          subscription_id: string | null
+          subscription_status: string | null
+          updated_at: string
+        }
+        Insert: {
+          cancellation_status?: string | null
+          checkout_session_id?: string | null
+          created_at?: string
+          customer_email?: string | null
+          customer_id?: string | null
+          final_cents?: number | null
+          id?: string
+          mode?: string
+          original_cents?: number | null
+          product_id?: string | null
+          product_name?: string | null
+          promo_code_id?: string | null
+          promo_discount_cents?: number | null
+          raw?: Json | null
+          redeemed_at?: string
+          referral_code_id?: string | null
+          referral_discount_cents?: number | null
+          referring_user_id?: string | null
+          refund_status?: string | null
+          stripe_customer_id?: string | null
+          stripe_sync_status?: string | null
+          subscription_id?: string | null
+          subscription_status?: string | null
+          updated_at?: string
+        }
+        Update: {
+          cancellation_status?: string | null
+          checkout_session_id?: string | null
+          created_at?: string
+          customer_email?: string | null
+          customer_id?: string | null
+          final_cents?: number | null
+          id?: string
+          mode?: string
+          original_cents?: number | null
+          product_id?: string | null
+          product_name?: string | null
+          promo_code_id?: string | null
+          promo_discount_cents?: number | null
+          raw?: Json | null
+          redeemed_at?: string
+          referral_code_id?: string | null
+          referral_discount_cents?: number | null
+          referring_user_id?: string | null
+          refund_status?: string | null
+          stripe_customer_id?: string | null
+          stripe_sync_status?: string | null
+          subscription_id?: string | null
+          subscription_status?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "discount_code_redemptions_promo_code_id_fkey"
+            columns: ["promo_code_id"]
+            isOneToOne: false
+            referencedRelation: "discount_codes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "discount_code_redemptions_referral_code_id_fkey"
+            columns: ["referral_code_id"]
+            isOneToOne: false
+            referencedRelation: "discount_codes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      discount_codes: {
+        Row: {
+          applies_to_all_products: boolean
+          category: Database["public"]["Enums"]["discount_code_category"]
+          created_at: string
+          created_by: string | null
+          description: string | null
+          discount_type: Database["public"]["Enums"]["discount_code_type"]
+          discount_value: number
+          duration_months: number | null
+          eligible_product_ids: string[]
+          excluded_code_ids: string[]
+          existing_customers_only: boolean
+          expires_at: string | null
+          id: string
+          internal_name: string
+          linked_ambassador_id: string | null
+          linked_client_id: string | null
+          max_promo_codes: number
+          max_referral_codes: number
+          max_total_codes: number
+          min_purchase_cents: number | null
+          new_customers_only: boolean
+          pairable_category:
+            | Database["public"]["Enums"]["discount_code_category"]
+            | null
+          pairing_allowed: boolean
+          per_customer_limit: number | null
+          public_code: string
+          start_at: string | null
+          status: Database["public"]["Enums"]["discount_code_status"]
+          stripe_coupon_id: string | null
+          stripe_live_mode_synced: boolean
+          stripe_promotion_code_id: string | null
+          stripe_test_mode_synced: boolean
+          subscription_duration: Database["public"]["Enums"]["discount_code_duration"]
+          time_zone: string
+          total_usage_limit: number | null
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          applies_to_all_products?: boolean
+          category: Database["public"]["Enums"]["discount_code_category"]
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          discount_type?: Database["public"]["Enums"]["discount_code_type"]
+          discount_value: number
+          duration_months?: number | null
+          eligible_product_ids?: string[]
+          excluded_code_ids?: string[]
+          existing_customers_only?: boolean
+          expires_at?: string | null
+          id?: string
+          internal_name: string
+          linked_ambassador_id?: string | null
+          linked_client_id?: string | null
+          max_promo_codes?: number
+          max_referral_codes?: number
+          max_total_codes?: number
+          min_purchase_cents?: number | null
+          new_customers_only?: boolean
+          pairable_category?:
+            | Database["public"]["Enums"]["discount_code_category"]
+            | null
+          pairing_allowed?: boolean
+          per_customer_limit?: number | null
+          public_code: string
+          start_at?: string | null
+          status?: Database["public"]["Enums"]["discount_code_status"]
+          stripe_coupon_id?: string | null
+          stripe_live_mode_synced?: boolean
+          stripe_promotion_code_id?: string | null
+          stripe_test_mode_synced?: boolean
+          subscription_duration?: Database["public"]["Enums"]["discount_code_duration"]
+          time_zone?: string
+          total_usage_limit?: number | null
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          applies_to_all_products?: boolean
+          category?: Database["public"]["Enums"]["discount_code_category"]
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          discount_type?: Database["public"]["Enums"]["discount_code_type"]
+          discount_value?: number
+          duration_months?: number | null
+          eligible_product_ids?: string[]
+          excluded_code_ids?: string[]
+          existing_customers_only?: boolean
+          expires_at?: string | null
+          id?: string
+          internal_name?: string
+          linked_ambassador_id?: string | null
+          linked_client_id?: string | null
+          max_promo_codes?: number
+          max_referral_codes?: number
+          max_total_codes?: number
+          min_purchase_cents?: number | null
+          new_customers_only?: boolean
+          pairable_category?:
+            | Database["public"]["Enums"]["discount_code_category"]
+            | null
+          pairing_allowed?: boolean
+          per_customer_limit?: number | null
+          public_code?: string
+          start_at?: string | null
+          status?: Database["public"]["Enums"]["discount_code_status"]
+          stripe_coupon_id?: string | null
+          stripe_live_mode_synced?: boolean
+          stripe_promotion_code_id?: string | null
+          stripe_test_mode_synced?: boolean
+          subscription_duration?: Database["public"]["Enums"]["discount_code_duration"]
+          time_zone?: string
+          total_usage_limit?: number | null
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "discount_codes_linked_client_id_fkey"
+            columns: ["linked_client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       email_send_log: {
         Row: {
           created_at: string
@@ -12683,6 +12951,87 @@ export type Database = {
         }
         Relationships: []
       }
+      referral_attribution: {
+        Row: {
+          attributed_at: string
+          cancellation_status: string | null
+          checkout_session_id: string | null
+          created_at: string
+          customer_email: string | null
+          customer_id: string | null
+          id: string
+          original_cents: number | null
+          product_id: string | null
+          promo_code_id: string | null
+          promo_discount_cents: number | null
+          recurring_discounted_cents: number | null
+          referral_code_id: string | null
+          referral_discount_cents: number | null
+          referring_user_id: string | null
+          refund_status: string | null
+          subscription_id: string | null
+          subscription_status: string | null
+          updated_at: string
+        }
+        Insert: {
+          attributed_at?: string
+          cancellation_status?: string | null
+          checkout_session_id?: string | null
+          created_at?: string
+          customer_email?: string | null
+          customer_id?: string | null
+          id?: string
+          original_cents?: number | null
+          product_id?: string | null
+          promo_code_id?: string | null
+          promo_discount_cents?: number | null
+          recurring_discounted_cents?: number | null
+          referral_code_id?: string | null
+          referral_discount_cents?: number | null
+          referring_user_id?: string | null
+          refund_status?: string | null
+          subscription_id?: string | null
+          subscription_status?: string | null
+          updated_at?: string
+        }
+        Update: {
+          attributed_at?: string
+          cancellation_status?: string | null
+          checkout_session_id?: string | null
+          created_at?: string
+          customer_email?: string | null
+          customer_id?: string | null
+          id?: string
+          original_cents?: number | null
+          product_id?: string | null
+          promo_code_id?: string | null
+          promo_discount_cents?: number | null
+          recurring_discounted_cents?: number | null
+          referral_code_id?: string | null
+          referral_discount_cents?: number | null
+          referring_user_id?: string | null
+          refund_status?: string | null
+          subscription_id?: string | null
+          subscription_status?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "referral_attribution_promo_code_id_fkey"
+            columns: ["promo_code_id"]
+            isOneToOne: false
+            referencedRelation: "discount_codes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "referral_attribution_referral_code_id_fkey"
+            columns: ["referral_code_id"]
+            isOneToOne: false
+            referencedRelation: "discount_codes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       resource_comments: {
         Row: {
           body: string
@@ -15038,6 +15387,10 @@ export type Database = {
         Returns: boolean
       }
       user_is_active: { Args: { _user_id: string }; Returns: boolean }
+      validate_discount_codes: {
+        Args: { _codes: string[]; _customer_id?: string; _product_id?: string }
+        Returns: Json
+      }
     }
     Enums: {
       app_role: "admin" | "client" | "coach" | "media_manager"
@@ -15054,6 +15407,20 @@ export type Database = {
         | "Nutrition Review"
         | "Program Review"
         | "Custom"
+      discount_code_category:
+        | "promotion"
+        | "ambassador"
+        | "client_referral"
+        | "retention"
+        | "manual"
+      discount_code_duration: "once" | "forever" | "repeating"
+      discount_code_status:
+        | "draft"
+        | "scheduled"
+        | "active"
+        | "paused"
+        | "expired"
+      discount_code_type: "percentage" | "fixed"
       event_audience_scope:
         | "selected_clients"
         | "all_coaching"
@@ -15311,6 +15678,22 @@ export const Constants = {
         "Program Review",
         "Custom",
       ],
+      discount_code_category: [
+        "promotion",
+        "ambassador",
+        "client_referral",
+        "retention",
+        "manual",
+      ],
+      discount_code_duration: ["once", "forever", "repeating"],
+      discount_code_status: [
+        "draft",
+        "scheduled",
+        "active",
+        "paused",
+        "expired",
+      ],
+      discount_code_type: ["percentage", "fixed"],
       event_audience_scope: [
         "selected_clients",
         "all_coaching",
