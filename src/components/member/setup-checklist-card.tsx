@@ -11,7 +11,6 @@ import {
 } from "lucide-react";
 import { getMySetupStatus } from "@/lib/member-setup.functions";
 import {
-  dismissSetupChecklist,
   recordNotificationStatus,
 } from "@/lib/onboarding.functions";
 import { supabase } from "@/integrations/supabase/client";
@@ -30,9 +29,24 @@ type Item = {
   disabled?: boolean;
 };
 
+const SNOOZE_KEY = "jf:m-setup-snooze:session";
+
+/**
+ * Session-scoped dismissal: the checklist hides for the rest of this
+ * browser session, but reappears the next time the member opens the app.
+ * Matches the client-portal banner's "pop back every login" behavior.
+ */
+function isSessionSnoozed(): boolean {
+  if (typeof window === "undefined") return false;
+  try { return window.sessionStorage.getItem(SNOOZE_KEY) === "1"; } catch { return false; }
+}
+function setSessionSnoozed() {
+  if (typeof window === "undefined") return;
+  try { window.sessionStorage.setItem(SNOOZE_KEY, "1"); } catch { /* ignore */ }
+}
+
 function useSetupChecklistData() {
   const fetchStatus = useServerFn(getMySetupStatus);
-  const fireDismiss = useServerFn(dismissSetupChecklist);
   const fireNotif = useServerFn(recordNotificationStatus);
   const qc = useQueryClient();
   const install = usePwaInstall();
@@ -52,7 +66,7 @@ function useSetupChecklistData() {
       if (!session?.user || cancel) return;
       const { data } = await supabase
         .from("app_members")
-        .select("id, install_detected_at, notifications_status, setup_dismissed_until, setup_completed_at")
+        .select("id, install_detected_at, notifications_status, setup_completed_at")
         .eq("user_id", session.user.id)
         .maybeSingle();
       if (!cancel) setMe(data);
@@ -60,8 +74,9 @@ function useSetupChecklistData() {
     return () => { cancel = true; };
   }, [status]);
 
-  const dismissedUntil = me?.setup_dismissed_until ? new Date(me.setup_dismissed_until).getTime() : 0;
-  const isDismissed = dismissedUntil > Date.now();
+  const [sessionDismissed, setSessionDismissed] = useState<boolean>(() => isSessionSnoozed());
+  useEffect(() => { setSessionDismissed(isSessionSnoozed()); }, []);
+  const isDismissed = sessionDismissed;
 
   // Sync detected permission to the server when it diverges from stored status.
   useEffect(() => {
@@ -155,11 +170,16 @@ function useSetupChecklistData() {
     },
   ], [setupComplete, isInstalled, notifGranted, notif.denied, notif.unsupported]);
 
-  return { items, isDismissed, setupComplete, isInstalled, dismissChecklist: async (hours: number) => {
-    await fireDismiss({ data: { hours } }).catch(() => {});
-    qc.invalidateQueries({ queryKey: ["m-setup-status"] });
-    toast.success(hours >= 24 ? "We'll remind you tomorrow." : "Hidden for a few hours.");
-  } };
+  return {
+    items,
+    isDismissed,
+    setupComplete,
+    isInstalled,
+    dismissChecklist: () => {
+      setSessionSnoozed();
+      setSessionDismissed(true);
+    },
+  };
 }
 
 export function SetupChecklist({ activeEnrollment }: { activeEnrollment?: any }) {
@@ -187,7 +207,7 @@ export function SetupChecklist({ activeEnrollment }: { activeEnrollment?: any })
         </div>
         <button
           aria-label="Hide setup checklist"
-          onClick={() => data.dismissChecklist(24)}
+          onClick={() => data.dismissChecklist()}
           className="rounded-md p-1 text-muted-foreground transition hover:bg-muted hover:text-foreground"
         >
           <X className="h-4 w-4" />
@@ -235,8 +255,7 @@ export function SetupChecklist({ activeEnrollment }: { activeEnrollment?: any })
         })}
       </ul>
       <div className="mt-3 flex justify-end gap-2">
-        <Button variant="ghost" size="sm" onClick={() => data.dismissChecklist(4)}>Hide for now</Button>
-        <Button variant="ghost" size="sm" onClick={() => data.dismissChecklist(24)}>Remind me tomorrow</Button>
+        <Button variant="ghost" size="sm" onClick={() => data.dismissChecklist()}>Hide for now</Button>
       </div>
     </Card>
   );
