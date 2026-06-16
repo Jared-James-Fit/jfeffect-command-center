@@ -874,6 +874,105 @@ export type Database = {
           },
         ]
       }
+      billing_audit_log: {
+        Row: {
+          admin_id: string | null
+          client_id: string | null
+          created_at: string
+          event_type: string
+          id: string
+          metadata: Json | null
+          new_value: Json | null
+          previous_value: Json | null
+          reason: string | null
+        }
+        Insert: {
+          admin_id?: string | null
+          client_id?: string | null
+          created_at?: string
+          event_type: string
+          id?: string
+          metadata?: Json | null
+          new_value?: Json | null
+          previous_value?: Json | null
+          reason?: string | null
+        }
+        Update: {
+          admin_id?: string | null
+          client_id?: string | null
+          created_at?: string
+          event_type?: string
+          id?: string
+          metadata?: Json | null
+          new_value?: Json | null
+          previous_value?: Json | null
+          reason?: string | null
+        }
+        Relationships: []
+      }
+      billing_migration_reviews: {
+        Row: {
+          authorized_at: string | null
+          authorized_by: string | null
+          checklist: Json
+          client_id: string
+          completed_at: string | null
+          created_at: string
+          created_by: string | null
+          current_amount_cents: number | null
+          current_currency: string | null
+          current_interval: string | null
+          current_next_billing_at: string | null
+          current_plan_name: string | null
+          id: string
+          notes: string | null
+          status: Database["public"]["Enums"]["migration_review_status"]
+          target_price_id: string | null
+          target_product_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          authorized_at?: string | null
+          authorized_by?: string | null
+          checklist?: Json
+          client_id: string
+          completed_at?: string | null
+          created_at?: string
+          created_by?: string | null
+          current_amount_cents?: number | null
+          current_currency?: string | null
+          current_interval?: string | null
+          current_next_billing_at?: string | null
+          current_plan_name?: string | null
+          id?: string
+          notes?: string | null
+          status?: Database["public"]["Enums"]["migration_review_status"]
+          target_price_id?: string | null
+          target_product_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          authorized_at?: string | null
+          authorized_by?: string | null
+          checklist?: Json
+          client_id?: string
+          completed_at?: string | null
+          created_at?: string
+          created_by?: string | null
+          current_amount_cents?: number | null
+          current_currency?: string | null
+          current_interval?: string | null
+          current_next_billing_at?: string | null
+          current_plan_name?: string | null
+          id?: string
+          notes?: string | null
+          status?: Database["public"]["Enums"]["migration_review_status"]
+          target_price_id?: string | null
+          target_product_id?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       booking_link_availability: {
         Row: {
           booking_link_id: string
@@ -1630,6 +1729,57 @@ export type Database = {
           updated_at?: string
           url?: string
           visible_to_client?: boolean
+        }
+        Relationships: []
+      }
+      client_access_entitlements: {
+        Row: {
+          access_source: Database["public"]["Enums"]["access_source_type"]
+          access_tier: string | null
+          billing_source: Database["public"]["Enums"]["billing_source_type"]
+          client_id: string
+          created_at: string
+          effective_end: string | null
+          effective_start: string
+          granted_by: string | null
+          id: string
+          last_verified_at: string | null
+          last_verified_by: string | null
+          notes: string | null
+          status: Database["public"]["Enums"]["access_status_type"]
+          updated_at: string
+        }
+        Insert: {
+          access_source: Database["public"]["Enums"]["access_source_type"]
+          access_tier?: string | null
+          billing_source?: Database["public"]["Enums"]["billing_source_type"]
+          client_id: string
+          created_at?: string
+          effective_end?: string | null
+          effective_start?: string
+          granted_by?: string | null
+          id?: string
+          last_verified_at?: string | null
+          last_verified_by?: string | null
+          notes?: string | null
+          status?: Database["public"]["Enums"]["access_status_type"]
+          updated_at?: string
+        }
+        Update: {
+          access_source?: Database["public"]["Enums"]["access_source_type"]
+          access_tier?: string | null
+          billing_source?: Database["public"]["Enums"]["billing_source_type"]
+          client_id?: string
+          created_at?: string
+          effective_end?: string | null
+          effective_start?: string
+          granted_by?: string | null
+          id?: string
+          last_verified_at?: string | null
+          last_verified_by?: string | null
+          notes?: string | null
+          status?: Database["public"]["Enums"]["access_status_type"]
+          updated_at?: string
         }
         Relationships: []
       }
@@ -2438,6 +2588,11 @@ export type Database = {
           basic_info_update_reason: string | null
           basic_info_update_requested: boolean
           basic_info_update_requested_at: string | null
+          billing_source: Database["public"]["Enums"]["billing_source_type"]
+          billing_source_locked: boolean
+          billing_source_notes: string | null
+          billing_source_set_at: string | null
+          billing_source_set_by: string | null
           bodyweight_goal_set_at: string | null
           bodyweight_goal_type: string | null
           bodyweight_goal_unit: string | null
@@ -2610,6 +2765,11 @@ export type Database = {
           basic_info_update_reason?: string | null
           basic_info_update_requested?: boolean
           basic_info_update_requested_at?: string | null
+          billing_source?: Database["public"]["Enums"]["billing_source_type"]
+          billing_source_locked?: boolean
+          billing_source_notes?: string | null
+          billing_source_set_at?: string | null
+          billing_source_set_by?: string | null
           bodyweight_goal_set_at?: string | null
           bodyweight_goal_type?: string | null
           bodyweight_goal_unit?: string | null
@@ -2782,6 +2942,11 @@ export type Database = {
           basic_info_update_reason?: string | null
           basic_info_update_requested?: boolean
           basic_info_update_requested_at?: string | null
+          billing_source?: Database["public"]["Enums"]["billing_source_type"]
+          billing_source_locked?: boolean
+          billing_source_notes?: string | null
+          billing_source_set_at?: string | null
+          billing_source_set_by?: string | null
           bodyweight_goal_set_at?: string | null
           bodyweight_goal_type?: string | null
           bodyweight_goal_unit?: string | null
@@ -5596,6 +5761,63 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      legacy_billing_records: {
+        Row: {
+          amount_cents: number | null
+          billing_interval: string | null
+          client_id: string
+          created_at: string
+          created_by: string | null
+          currency: string | null
+          id: string
+          last_verified_at: string | null
+          last_verified_by: string | null
+          next_billing_at: string | null
+          notes: string | null
+          plan_name: string | null
+          status: Database["public"]["Enums"]["legacy_billing_status"]
+          trainerize_customer_ref: string | null
+          trainerize_subscription_ref: string | null
+          updated_at: string
+        }
+        Insert: {
+          amount_cents?: number | null
+          billing_interval?: string | null
+          client_id: string
+          created_at?: string
+          created_by?: string | null
+          currency?: string | null
+          id?: string
+          last_verified_at?: string | null
+          last_verified_by?: string | null
+          next_billing_at?: string | null
+          notes?: string | null
+          plan_name?: string | null
+          status?: Database["public"]["Enums"]["legacy_billing_status"]
+          trainerize_customer_ref?: string | null
+          trainerize_subscription_ref?: string | null
+          updated_at?: string
+        }
+        Update: {
+          amount_cents?: number | null
+          billing_interval?: string | null
+          client_id?: string
+          created_at?: string
+          created_by?: string | null
+          currency?: string | null
+          id?: string
+          last_verified_at?: string | null
+          last_verified_by?: string | null
+          next_billing_at?: string | null
+          notes?: string | null
+          plan_name?: string | null
+          status?: Database["public"]["Enums"]["legacy_billing_status"]
+          trainerize_customer_ref?: string | null
+          trainerize_subscription_ref?: string | null
+          updated_at?: string
+        }
+        Relationships: []
       }
       legal_acceptance_requirements: {
         Row: {
@@ -15414,6 +15636,13 @@ export type Database = {
       }
     }
     Enums: {
+      access_source_type:
+        | "legacy_coaching"
+        | "new_stripe_coaching"
+        | "membership"
+        | "complimentary"
+        | "manual_admin"
+      access_status_type: "active" | "paused" | "past_due" | "ending" | "ended"
       app_role: "admin" | "client" | "coach" | "media_manager"
       appointment_source: "manual" | "booking_link" | "external"
       appointment_status: "Scheduled" | "Completed" | "Cancelled" | "NoShow"
@@ -15428,6 +15657,12 @@ export type Database = {
         | "Nutrition Review"
         | "Program Review"
         | "Custom"
+      billing_source_type:
+        | "trainerize_legacy"
+        | "jfeffect_stripe"
+        | "manual_external"
+        | "complimentary"
+        | "none"
       discount_code_category:
         | "promotion"
         | "ambassador"
@@ -15490,6 +15725,12 @@ export type Database = {
         | "disconnected"
       group_member_role: "admin" | "member"
       group_permission_mode: "everyone" | "admins_only" | "read_only"
+      legacy_billing_status:
+        | "active"
+        | "past_due"
+        | "paused"
+        | "cancelled"
+        | "unknown"
       legal_acceptance_context:
         | "onboarding"
         | "account_centre"
@@ -15547,6 +15788,12 @@ export type Database = {
         | "link_only"
       legal_version_status: "draft" | "published" | "archived"
       media_visibility: "private" | "marketing" | "public"
+      migration_review_status:
+        | "draft"
+        | "in_review"
+        | "authorized"
+        | "completed"
+        | "cancelled"
       reminder_audience: "attendee" | "host"
       reminder_status: "pending" | "sent" | "failed" | "skipped"
       review_status:
@@ -15684,6 +15931,14 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
+      access_source_type: [
+        "legacy_coaching",
+        "new_stripe_coaching",
+        "membership",
+        "complimentary",
+        "manual_admin",
+      ],
+      access_status_type: ["active", "paused", "past_due", "ending", "ended"],
       app_role: ["admin", "client", "coach", "media_manager"],
       appointment_source: ["manual", "booking_link", "external"],
       appointment_status: ["Scheduled", "Completed", "Cancelled", "NoShow"],
@@ -15698,6 +15953,13 @@ export const Constants = {
         "Nutrition Review",
         "Program Review",
         "Custom",
+      ],
+      billing_source_type: [
+        "trainerize_legacy",
+        "jfeffect_stripe",
+        "manual_external",
+        "complimentary",
+        "none",
       ],
       discount_code_category: [
         "promotion",
@@ -15768,6 +16030,13 @@ export const Constants = {
       ],
       group_member_role: ["admin", "member"],
       group_permission_mode: ["everyone", "admins_only", "read_only"],
+      legacy_billing_status: [
+        "active",
+        "past_due",
+        "paused",
+        "cancelled",
+        "unknown",
+      ],
       legal_acceptance_context: [
         "onboarding",
         "account_centre",
@@ -15831,6 +16100,13 @@ export const Constants = {
       ],
       legal_version_status: ["draft", "published", "archived"],
       media_visibility: ["private", "marketing", "public"],
+      migration_review_status: [
+        "draft",
+        "in_review",
+        "authorized",
+        "completed",
+        "cancelled",
+      ],
       reminder_audience: ["attendee", "host"],
       reminder_status: ["pending", "sent", "failed", "skipped"],
       review_status: [
