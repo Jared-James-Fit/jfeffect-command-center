@@ -17,7 +17,7 @@ export function MembershipLibraryBadge({
   }
 
   return (
-    <Badge className="gap-1 border-transparent bg-emerald-500 text-white text-[10px] shadow hover:bg-emerald-500/80">
+    <Badge variant="default" className="gap-1">
       <Radio className="h-3 w-3" />
       Membership Live
     </Badge>
