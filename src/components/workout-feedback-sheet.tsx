@@ -73,7 +73,7 @@ export function WorkoutFeedbackSheet({ open, onOpenChange, completionId, clientI
   const [rpe, setRpe] = useState<number | null>(null);
   const [pain, setPain] = useState<boolean | null>(null);
   const [painLevel, setPainLevel] = useState<number | null>(null);
-  const [painArea, setPainArea] = useState<string>("");
+  const [painArea, setPainArea] = useState<string[]>([]);
   const [painNote, setPainNote] = useState<string>("");
   const [note, setNote] = useState<string>("");
   const [submitting, setSubmitting] = useState(false);
