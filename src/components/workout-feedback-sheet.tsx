@@ -314,22 +314,29 @@ export function WorkoutFeedbackSheet({ open, onOpenChange, completionId, clientI
                     Body area
                   </Label>
                   <div className="flex flex-wrap gap-1.5">
-                    {BODY_AREAS.map((a) => (
-                      <button
-                        key={a}
-                        type="button"
-                        onClick={() => setPainArea(a)}
-                        aria-pressed={painArea === a}
-                        className={cn(
-                          "rounded-full border px-3 py-1 text-xs font-bold transition-colors",
-                          painArea === a
-                            ? "border-amber-500 bg-amber-500/20 text-amber-800 dark:text-amber-200"
-                            : "border-border bg-card text-muted-foreground hover:bg-secondary/40",
-                        )}
-                      >
-                        {a}
-                      </button>
-                    ))}
+                    {BODY_AREAS.map((a) => {
+                      const selected = painArea.includes(a);
+                      return (
+                        <button
+                          key={a}
+                          type="button"
+                          onClick={() =>
+                            setPainArea((prev) =>
+                              selected ? prev.filter((x) => x !== a) : [...prev, a]
+                            )
+                          }
+                          aria-pressed={selected}
+                          className={cn(
+                            "rounded-full border px-3 py-1 text-xs font-bold transition-colors",
+                            selected
+                              ? "border-amber-500 bg-amber-500/20 text-amber-800 dark:text-amber-200"
+                              : "border-border bg-card text-muted-foreground hover:bg-secondary/40",
+                          )}
+                        >
+                          {a}
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
 
