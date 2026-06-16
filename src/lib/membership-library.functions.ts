@@ -345,7 +345,7 @@ export const listMembershipLibrary = createServerFn({ method: "GET" })
       supabaseAdmin
         .from("member_plans")
         .select(
-          "id, name, public_title, description, cover_image_url, training_style, difficulty, goal, weeks, days_per_week, workouts_total, est_minutes_per_workout, equipment_needed, required_access_level, audience_mode, allow_full_program, allow_pdf_download, featured, status, membership_status",
+          "id, name, public_title, description, cover_image_url, training_style, difficulty, goal, weeks, days_per_week, workouts_total, est_minutes_per_workout, equipment_needed, tags, required_access_level, audience_mode, allow_full_program, allow_pdf_download, featured, status, membership_status",
         )
         .eq("status", "Published")
         .eq("membership_status", "live"),

@@ -1,19 +1,27 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { listMembershipLibrary, enrollLibraryPlan } from "@/lib/membership-library.functions";
+import { useMemo, useState } from "react";
+import { toast } from "sonner";
 import { PageHeader } from "@/components/app-shell";
 import { Card } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Eye, PlusCircle, Calendar, Clock, Loader2 } from "lucide-react";
-import { useState } from "react";
-import { toast } from "sonner";
+import { Sparkles, ArrowRight, Search as SearchIcon } from "lucide-react";
+import { listMembershipLibrary, enrollLibraryPlan } from "@/lib/membership-library.functions";
+import { getMyGoalsSetupFn } from "@/lib/client-goals/goals.functions";
+import { deriveFacets } from "@/lib/programs/facets";
+import {
+  CATEGORIES, type CategoryId, matchesCategory, groupBySections,
+} from "@/lib/programs/categories";
+import { rankRecommendations, isProfileReady } from "@/lib/programs/recommend";
+import { ProgramCard } from "@/components/programs/program-card";
+import { CategoryRail } from "@/components/programs/category-rail";
+import { FiltersSheet, ActiveFilterChips, type FilterState } from "@/components/programs/filters-sheet";
 
 export const Route = createFileRoute("/_authenticated/m/plans")({ component: PlanLibrary });
 
@@ -28,18 +36,24 @@ type LibraryPlan = {
   days_per_week: number | null;
   est_minutes_per_workout: number | null;
   goal: string | null;
+  tags?: string[] | null;
   featured?: boolean | null;
   allow_full_program?: boolean | null;
 };
 
+const PAGE_SIZE = 24;
+
 function PlanLibrary() {
   const fetchLibrary = useServerFn(listMembershipLibrary);
+  const fetchGoals = useServerFn(getMyGoalsSetupFn);
   const enrollFn = useServerFn(enrollLibraryPlan);
   const navigate = useNavigate();
   const qc = useQueryClient();
+
   const [q, setQ] = useState("");
-  const [style, setStyle] = useState<string>("");
-  const [diff, setDiff] = useState<string>("");
+  const [category, setCategory] = useState<CategoryId>("recommended");
+  const [filters, setFilters] = useState<FilterState>({});
+  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
   const [pendingId, setPendingId] = useState<string | null>(null);
   const [conflictPlan, setConflictPlan] = useState<LibraryPlan | null>(null);
 
@@ -47,15 +61,60 @@ function PlanLibrary() {
     queryKey: ["m-membership-library"],
     queryFn: () => fetchLibrary(),
   });
-  const plans = (data?.plans ?? []) as LibraryPlan[];
-
-  const filtered = plans.filter((p) => {
-    const name = (p.public_title || p.name || "").toLowerCase();
-    if (q && !name.includes(q.toLowerCase())) return false;
-    if (style && p.training_style !== style) return false;
-    if (diff && p.difficulty !== diff) return false;
-    return true;
+  const { data: goalsRes } = useQuery({
+    queryKey: ["m-goals-setup"],
+    queryFn: () => fetchGoals(),
   });
+
+  const plans = (data?.plans ?? []) as LibraryPlan[];
+  const goals = goalsRes?.goals ?? null;
+  const profileReady = isProfileReady(goals);
+
+  // Derive facets once per plans list.
+  const decorated = useMemo(
+    () => plans.map((p) => ({ program: p, facets: deriveFacets(p) })),
+    [plans],
+  );
+
+  // Top picks (only when profile is ready).
+  const topPicks = useMemo(() => {
+    if (!profileReady || !goals) return [];
+    return rankRecommendations(decorated, goals, 5, 3);
+  }, [decorated, goals, profileReady]);
+  const topPickIds = useMemo(() => new Set(topPicks.map((r) => (r.program as LibraryPlan).id)), [topPicks]);
+
+  // If profile isn't ready, default to "all" rather than "recommended".
+  const effectiveCategory: CategoryId =
+    category === "recommended" && !profileReady ? "all" : category;
+
+  // Search + filter + category pipeline.
+  const matched = useMemo(() => {
+    const query = q.trim().toLowerCase();
+    return decorated.filter(({ program, facets }) => {
+      if (!matchesCategory(facets, effectiveCategory)) return false;
+      if (query) {
+        const hay = `${program.public_title ?? ""} ${program.name ?? ""} ${(program.tags ?? []).join(" ")}`.toLowerCase();
+        if (!hay.includes(query)) return false;
+      }
+      if (filters.level && facets.level !== filters.level) return false;
+      if (filters.daysPerWeek && facets.daysPerWeek !== filters.daysPerWeek) return false;
+      if (filters.lengthMax && (facets.lengthMin ?? 99) > filters.lengthMax) return false;
+      if (filters.location && facets.location !== filters.location) return false;
+      if (filters.goal && !facets.goals.includes(filters.goal as any)) return false;
+      if (filters.style && facets.style !== filters.style) return false;
+      return true;
+    });
+  }, [decorated, q, filters, effectiveCategory]);
+
+  // Counts per category for the rail.
+  const counts = useMemo(() => {
+    const out: Partial<Record<CategoryId, number>> = {};
+    for (const cat of CATEGORIES) {
+      if (cat.id === "recommended") { out[cat.id] = topPicks.length; continue; }
+      out[cat.id] = decorated.filter(({ facets }) => matchesCategory(facets, cat.id)).length;
+    }
+    return out;
+  }, [decorated, topPicks.length]);
 
   const addToTraining = async (plan: LibraryPlan, confirmReplace = false) => {
     setPendingId(plan.id);
@@ -69,10 +128,7 @@ function PlanLibrary() {
           confirmReplace,
         },
       });
-      if (res.conflict) {
-        setConflictPlan(plan);
-        return;
-      }
+      if (res.conflict) { setConflictPlan(plan); return; }
       toast.success("Added to your training");
       qc.invalidateQueries({ queryKey: ["m-enrollments"] });
       qc.invalidateQueries({ queryKey: ["m-active"] });
@@ -84,77 +140,157 @@ function PlanLibrary() {
     }
   };
 
+  const sliced = matched.slice(0, visibleCount);
+  const grouped = effectiveCategory === "all" ? groupBySections(sliced) : null;
+
   return (
-    <div className="space-y-6">
-      <PageHeader title="Program Library" subtitle="Browse and add programs included in your membership." />
-      <div className="flex flex-wrap gap-2">
-        <Input placeholder="Search programs" value={q} onChange={(e) => setQ(e.target.value)} className="max-w-xs" />
-        <select className="h-9 rounded-md border bg-background px-3 text-sm" value={style} onChange={(e) => setStyle(e.target.value)}>
-          <option value="">All styles</option>
-          {["powerlifting","bodybuilding","strength","hypertrophy","fat_loss","lifestyle","mobility","hybrid","custom"].map((s) => <option key={s} value={s}>{s}</option>)}
-        </select>
-        <select className="h-9 rounded-md border bg-background px-3 text-sm" value={diff} onChange={(e) => setDiff(e.target.value)}>
-          <option value="">Any difficulty</option>
-          {["Beginner","Intermediate","Advanced","All Levels"].map((d) => <option key={d} value={d}>{d}</option>)}
-        </select>
-      </div>
-      {isLoading ? (
-        <div className="text-sm text-muted-foreground">Loading programs…</div>
-      ) : (
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {filtered.map((p) => (
-            <Card key={p.id} className="flex flex-col overflow-hidden p-5">
-              <div className="flex items-start justify-between gap-2">
-                <div className="min-w-0">
-                  <div className="truncate font-semibold">{p.public_title || p.name}</div>
-                  <div className="mt-0.5 text-xs uppercase tracking-wider text-muted-foreground">
-                    {p.training_style ?? "custom"} · {p.difficulty ?? "All Levels"}
-                  </div>
-                </div>
-                {p.featured && <Badge>Featured</Badge>}
-              </div>
-              <div className="mt-3 flex flex-wrap gap-3 text-xs text-muted-foreground">
-                <span className="inline-flex items-center gap-1">
-                  <Calendar className="h-3.5 w-3.5" />
-                  {p.weeks ?? "—"}w · {p.days_per_week ?? "—"}/wk
-                </span>
-                {p.est_minutes_per_workout && (
-                  <span className="inline-flex items-center gap-1">
-                    <Clock className="h-3.5 w-3.5" />{p.est_minutes_per_workout} min
-                  </span>
-                )}
-              </div>
-              {p.description && (
-                <p className="mt-3 line-clamp-3 text-sm text-muted-foreground">{p.description}</p>
-              )}
-              <div className="mt-auto flex gap-2 pt-4">
-                <Link to="/m/plans/$planId" params={{ planId: p.id }} className="flex-1">
-                  <Button variant="outline" size="sm" className="w-full">
-                    <Eye className="mr-1 h-3.5 w-3.5" /> Preview
-                  </Button>
-                </Link>
-                <Button
-                  size="sm"
-                  className="flex-1"
-                  disabled={pendingId === p.id || p.allow_full_program === false}
-                  onClick={() => addToTraining(p)}
-                  title={p.allow_full_program === false ? "Full program imports disabled" : undefined}
-                >
-                  {pendingId === p.id ? (
-                    <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
-                  ) : (
-                    <PlusCircle className="mr-1 h-3.5 w-3.5" />
-                  )}
-                  Add to My Training
-                </Button>
-              </div>
-            </Card>
-          ))}
-          {filtered.length === 0 && (
-            <div className="text-sm text-muted-foreground sm:col-span-2 lg:col-span-3">
-              No programs match those filters.
+    <div className="space-y-5 pb-24">
+      <PageHeader title="Program Library" subtitle="Find a program built around your goals." />
+
+      {/* Top Picks for You */}
+      {effectiveCategory === "recommended" && (
+        profileReady && topPicks.length > 0 ? (
+          <section className="space-y-3">
+            <div className="flex items-center gap-2">
+              <Sparkles className="h-4 w-4 text-primary" />
+              <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
+                Top Picks for You
+              </h2>
             </div>
-          )}
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              {topPicks.map(({ program, facets, reasons }) => {
+                const p = program as LibraryPlan;
+                return (
+                  <ProgramCard
+                    key={p.id}
+                    id={p.id}
+                    title={p.public_title || p.name}
+                    description={p.description}
+                    facets={facets}
+                    featured={p.featured ?? undefined}
+                    reasons={reasons}
+                    pending={pendingId === p.id}
+                    disabled={p.allow_full_program === false}
+                    previewTo={{ to: "/m/plans/$planId", params: { planId: p.id } }}
+                    onAdd={() => addToTraining(p)}
+                  />
+                );
+              })}
+            </div>
+          </section>
+        ) : !profileReady ? (
+          <Card className="border-dashed bg-primary/5 p-4">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex items-start gap-3">
+                <Sparkles className="mt-0.5 h-5 w-5 shrink-0 text-primary" />
+                <div className="min-w-0">
+                  <div className="font-semibold">Get personalized program recommendations</div>
+                  <p className="text-sm text-muted-foreground">
+                    Complete your Goals &amp; Setup so we can match programs to your goal, schedule, and experience.
+                  </p>
+                </div>
+              </div>
+              <Link to="/portal/goals-setup">
+                <Button size="sm" className="shrink-0">Complete setup <ArrowRight className="ml-1 h-4 w-4" /></Button>
+              </Link>
+            </div>
+          </Card>
+        ) : null
+      )}
+
+      {/* Search + Filters */}
+      <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2 sm:flex sm:flex-wrap">
+        <div className="relative min-w-0 sm:max-w-xs">
+          <SearchIcon className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            placeholder="Search programs"
+            value={q}
+            onChange={(e) => { setQ(e.target.value); setVisibleCount(PAGE_SIZE); }}
+            className="pl-8"
+          />
+        </div>
+        <FiltersSheet
+          value={filters}
+          matchCount={matched.length}
+          onChange={(v) => { setFilters(v); setVisibleCount(PAGE_SIZE); }}
+        />
+      </div>
+
+      <CategoryRail
+        value={effectiveCategory}
+        counts={counts}
+        profileReady={profileReady}
+        onChange={(id) => { setCategory(id); setVisibleCount(PAGE_SIZE); }}
+      />
+
+      <ActiveFilterChips value={filters} onChange={setFilters} />
+
+      <div className="text-xs text-muted-foreground">
+        {isLoading ? "Loading programs…" : `${matched.length} program${matched.length === 1 ? "" : "s"}`}
+      </div>
+
+      {isLoading ? null : matched.length === 0 ? (
+        <Card className="p-6 text-center text-sm text-muted-foreground">
+          No programs match. Try clearing filters or choosing a different category.
+        </Card>
+      ) : grouped ? (
+        <div className="space-y-6">
+          {grouped.map(({ section, items }) => (
+            <GroupedSection
+              key={section.id}
+              label={section.label}
+              items={items}
+              renderCard={({ program, facets }) => {
+                const p = program as LibraryPlan;
+                const reasons = topPickIds.has(p.id) ? topPicks.find((r) => (r.program as LibraryPlan).id === p.id)?.reasons : undefined;
+                return (
+                  <ProgramCard
+                    key={p.id}
+                    id={p.id}
+                    title={p.public_title || p.name}
+                    description={p.description}
+                    facets={facets}
+                    featured={p.featured ?? undefined}
+                    reasons={reasons}
+                    pending={pendingId === p.id}
+                    disabled={p.allow_full_program === false}
+                    previewTo={{ to: "/m/plans/$planId", params: { planId: p.id } }}
+                    onAdd={() => addToTraining(p)}
+                  />
+                );
+              }}
+            />
+          ))}
+        </div>
+      ) : (
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          {sliced.map(({ program, facets }) => {
+            const p = program as LibraryPlan;
+            const reasons = topPickIds.has(p.id) ? topPicks.find((r) => (r.program as LibraryPlan).id === p.id)?.reasons : undefined;
+            return (
+              <ProgramCard
+                key={p.id}
+                id={p.id}
+                title={p.public_title || p.name}
+                description={p.description}
+                facets={facets}
+                featured={p.featured ?? undefined}
+                reasons={reasons}
+                pending={pendingId === p.id}
+                disabled={p.allow_full_program === false}
+                previewTo={{ to: "/m/plans/$planId", params: { planId: p.id } }}
+                onAdd={() => addToTraining(p)}
+              />
+            );
+          })}
+        </div>
+      )}
+
+      {!grouped && matched.length > visibleCount && (
+        <div className="flex justify-center">
+          <Button variant="outline" onClick={() => setVisibleCount((n) => n + PAGE_SIZE)}>
+            Load more ({matched.length - visibleCount} remaining)
+          </Button>
         </div>
       )}
 
@@ -182,5 +318,35 @@ function PlanLibrary() {
         </AlertDialogContent>
       </AlertDialog>
     </div>
+  );
+}
+
+function GroupedSection({
+  label, items, renderCard,
+}: {
+  label: string;
+  items: Array<{ program: unknown; facets: any }>;
+  renderCard: (item: { program: unknown; facets: any }) => React.ReactNode;
+}) {
+  const [showAll, setShowAll] = useState(false);
+  const shown = showAll ? items : items.slice(0, 6);
+  return (
+    <section className="space-y-3">
+      <div className="flex items-center justify-between">
+        <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">{label}</h2>
+        {items.length > 6 && (
+          <button
+            type="button"
+            onClick={() => setShowAll((s) => !s)}
+            className="text-xs font-medium text-primary hover:underline"
+          >
+            {showAll ? "Show less" : `View all (${items.length})`}
+          </button>
+        )}
+      </div>
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        {shown.map((it, i) => <div key={i}>{renderCard(it)}</div>)}
+      </div>
+    </section>
   );
 }
