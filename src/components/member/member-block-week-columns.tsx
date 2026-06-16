@@ -1,3 +1,4 @@
+import { parseLocalDate } from "@/lib/today";
 import { useMemo, useRef, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
@@ -14,7 +15,7 @@ import {
   CalendarClock, ArrowLeftRight, RotateCcw,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { format, startOfDay, parseISO } from "date-fns";
+import { format, startOfDay } from "date-fns";
 import { rescheduleDay, swapDays, resetDaySchedule } from "@/lib/member-plans.functions";
 import { toast } from "sonner";
 
@@ -54,8 +55,8 @@ export function MemberBlockWeekColumns({
   const computed = weeks.map((w) => {
     const days = (w.days ?? []) as any[];
     const dates = days.map((d) => dateFor.get(`${w.week_index}:${d.day_index}`)).filter(Boolean) as string[];
-    const min = dates.length ? parseISO(dates.reduce((a, b) => (a < b ? a : b))) : null;
-    const max = dates.length ? parseISO(dates.reduce((a, b) => (a > b ? a : b))) : null;
+    const min = dates.length ? parseLocalDate(dates.reduce((a, b) => (a < b ? a : b))) : null;
+    const max = dates.length ? parseLocalDate(dates.reduce((a, b) => (a > b ? a : b))) : null;
     const isNow = !!min && !!max && today >= min && today <= max;
     const doneCount = days.filter((d) => doneSet.has(`${w.week_index}:${d.day_index}`)).length;
     return { week: w, days, min, max, isNow, doneCount };
@@ -121,7 +122,7 @@ export function MemberBlockWeekColumns({
                   >
                     <div>
                       <div className="text-sm font-semibold">{d.title || `Day ${d.day_index}`}</div>
-                      <div className="text-xs text-muted-foreground">{date ? format(parseISO(date), "EEE, MMM d") : "—"}</div>
+                      <div className="text-xs text-muted-foreground">{date ? format(parseLocalDate(date), "EEE, MMM d") : "—"}</div>
                     </div>
                     {!isSelf && <ArrowLeftRight className="h-4 w-4 text-primary" />}
                   </button>
@@ -193,7 +194,7 @@ export function MemberBlockWeekColumns({
                 {days.map((d: any) => {
                   const key = `${week.week_index}:${d.day_index}`;
                   const dateStr = dateFor.get(key);
-                  const date = dateStr ? startOfDay(parseISO(dateStr)) : null;
+                  const date = dateStr ? startOfDay(parseLocalDate(dateStr)) : null;
                   const done = doneSet.has(key);
                   const isToday = !!date && date.getTime() === today.getTime();
                   const isPast = !!date && date < today;

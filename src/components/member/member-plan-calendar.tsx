@@ -1,3 +1,4 @@
+import { parseLocalDate } from "@/lib/today";
 import { useMemo, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { Calendar } from "@/components/ui/calendar";
@@ -5,7 +6,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { CheckCircle2, Play, CalendarClock } from "lucide-react";
-import { format, parseISO, startOfDay, isSameDay } from "date-fns";
+import { format, startOfDay, isSameDay } from "date-fns";
 import { cn } from "@/lib/utils";
 import {
   Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetFooter,
@@ -52,15 +53,15 @@ export function MemberPlanCalendar({
   const selDate = selected ? format(selected, "yyyy-MM-dd") : null;
   const entries = selDate ? (byDate.get(selDate) ?? []) : [];
 
-  const scheduledDays = useMemo(() => Array.from(byDate.keys()).map((s) => parseISO(s)), [byDate]);
+  const scheduledDays = useMemo(() => Array.from(byDate.keys()).map((s) => parseLocalDate(s)), [byDate]);
   const doneDays = useMemo(
-    () => schedule.filter((s) => doneSet.has(`${s.week}:${s.day}`)).map((s) => parseISO(s.date)),
+    () => schedule.filter((s) => doneSet.has(`${s.week}:${s.day}`)).map((s) => parseLocalDate(s.date)),
     [schedule, doneSet],
   );
   const missedDays = useMemo(
     () => schedule
-      .filter((s) => !doneSet.has(`${s.week}:${s.day}`) && parseISO(s.date) < today)
-      .map((s) => parseISO(s.date)),
+      .filter((s) => !doneSet.has(`${s.week}:${s.day}`) && parseLocalDate(s.date) < today)
+      .map((s) => parseLocalDate(s.date)),
     [schedule, doneSet, today],
   );
 
@@ -110,7 +111,7 @@ export function MemberPlanCalendar({
         ) : (
           entries.map((e) => {
             const done = doneSet.has(`${e.week}:${e.day}`);
-            const dateObj = parseISO(e.date);
+            const dateObj = parseLocalDate(e.date);
             const isToday = isSameDay(dateObj, today);
             const isPast = dateObj < today && !done;
             return (
