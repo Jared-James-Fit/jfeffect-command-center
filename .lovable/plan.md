@@ -1,97 +1,84 @@
-# Discount / Promo / Ambassador / Referral Code Foundation
+## Dual Billing Source & Legacy Client Migration Foundation
 
-## Scope guardrails (from your brief)
-- **No live Stripe activation** in this step. `FIRSTMONTHFREE` stays in Draft/Test until expiry + Stripe verification.
-- **No duplicate systems.** Extend the existing `promo-codes` admin page, `membership.promo-tools`, `join.tsx`, and stripe-webhook route rather than building parallel ones.
-- **No customer charges, no public messaging, no changes to existing subscriptions.**
-- Server-side validation is the source of truth; client UI is for UX only.
+A large, multi-area feature. Before writing any code I want your sign-off on scope, sequencing, and a few key decisions, because some answers materially change the schema.
 
-## Phase 0 — Inventory (read-only, before any edit)
-Inspect and document the current state of:
-- `src/routes/_authenticated/admin/promo-codes.tsx` and `membership.promo-tools.tsx`
-- `src/routes/_authenticated/admin/sales.index.tsx` (nav surface for Sales → Promotions)
-- `src/routes/join.tsx` (URL code capture)
-- `src/routes/api/public/stripe-webhook.ts` (attribution hooks)
-- Existing DB tables for codes/redemptions/ambassador fields (`promo_code_redemptions` already exists per schema; check `clients`, `coaches`, `app_members` for any referral-code columns)
-- Existing membership checkout component(s)
+### Goal
 
-I'll produce a short "what exists / what's missing" note at the top of the handoff report so the next agent doesn't rediscover it.
+Let existing **JF Effect Trainerize** coaching clients use the new JF Effect app **without** touching their existing Stripe subscription. Keep the new JF Effect Stripe account as the sole billing system for new coaching, memberships, website purchases, promos, ambassador/referral codes. Never merge, never double-charge.
 
-## Phase 1 — Database foundation (single migration, awaits your approval)
-New / extended tables in `public`:
+### Architecture summary
 
-1. **`discount_codes`** — master code record
-   - internal_name, public_code (citext unique), category (enum: promotion|ambassador|client_referral|retention|manual), description
-   - discount_type (percentage|fixed), discount_value, subscription_duration (once|forever|repeating), duration_months
-   - eligible_product_ids (uuid[]), new_customers_only, existing_customers_only, min_purchase_cents
-   - start_at, expires_at, time_zone (default `America/Winnipeg`)
-   - status (draft|scheduled|active|paused|expired)
-   - total_usage_limit, per_customer_limit
-   - pairing_allowed, pairable_category, max_promo_codes (default 1), max_referral_codes (default 1), max_total_codes (default 2), excluded_code_ids
-   - linked_ambassador_id, linked_client_id (nullable FKs)
-   - stripe_coupon_id, stripe_promotion_code_id, stripe_test_mode_synced, stripe_live_mode_synced
-   - created_by, updated_by, timestamps
-2. **`discount_code_redemptions`** — extends/replaces use of existing `promo_code_redemptions` if compatible; otherwise new table with: customer_id, email, promo_code_id, referral_code_id, referring_user_id, product_id, checkout_id, subscription_id, original_cents, promo_discount_cents, referral_discount_cents, final_cents, subscription_status, stripe_sync_status, mode (test|live), redeemed_at
-3. **`discount_code_audit_log`** — actor, action (created/edited/activated/paused/expired/applied/rejected/invalid_pair/redemption_completed/attribution_recorded/admin_override), code_id, metadata jsonb, timestamp. **Never** logs card / secret / token data.
-4. **`referral_attribution`** — separates promo attribution from ambassador attribution so `FIRSTMONTHFREE` never displaces the referring ambassador.
+**Two independent concepts, enforced everywhere:**
 
-Indexes on public_code (unique citext), status, expires_at, linked_ambassador_id, linked_client_id.
+1. `billing_source` — *who collects the money* (`trainerize_legacy`, `jfeffect_stripe`, `manual_external`, `complimentary`, `none`)
+2. `app_access` — *what the client can do in the app* (source, tier, status, dates), independent of any Stripe subscription in the new account
 
-RLS: all tables enabled. Admin-only write via `has_role(auth.uid(),'admin')`. Authenticated SELECT scoped per table (e.g. customers see only their own redemptions). Service role full access for webhook + server fns. Explicit `GRANT`s per public-schema rules.
+A client can be `app_access = active` with `billing_source = trainerize_legacy` and zero rows in the new Stripe account. That is the central invariant the rest of the work protects.
 
-Server-side validation function `public.validate_code_combination(codes text[], customer_id uuid, product_id uuid)` (SECURITY DEFINER) returns structured `{ ok, applied[], rejected[], reason }` enforcing all pairing rules.
+### Database changes (new migration)
 
-## Phase 2 — Server functions
-In `src/lib/discount-codes.functions.ts` (client-safe path):
-- `listDiscountCodes` (admin, paginated, filterable)
-- `getDiscountCode`, `upsertDiscountCode` (admin, audit-logged)
-- `setCodeStatus` (activate/pause/expire/reactivate)
-- `validateCodesForCheckout` — public, calls the RPC above, returns sanitized messages
-- `recordRedemption` — called by stripe-webhook on `invoice.payment_succeeded` / `checkout.session.completed`
-- `listRedemptions`, `getReferralStatsForUser`
+Reuse existing tables where possible (`clients`, `app_members`, `member_access`, `purchase_records`, `payment_ledger`). Add only what's missing:
 
-All admin fns use `requireSupabaseAuth` + role check. Public validation fn is rate-limited and never returns raw DB/Stripe errors.
+- **Enums:** `billing_source_type`, `access_source_type`, `access_status_type`, `legacy_billing_status`, `migration_review_status`.
+- **`clients.billing_source`** (enum, NOT NULL, default `none`) + `billing_source_locked_at`, `billing_source_set_by`, `billing_source_notes`.
+- **`legacy_billing_records`** — one row per client with `trainerize_customer_ref`, `trainerize_subscription_ref`, `plan_name`, `amount_cents`, `currency`, `interval`, `next_billing_at`, `status`, `last_verified_at`, `notes`. No card data, no secrets.
+- **`client_access_entitlements`** — `access_source`, `access_tier`, `status`, `effective_start`, `effective_end`, `billing_source`, `granted_by`, `last_verified_at`, `notes`. Authoritative for "can this client open the app today?"
+- **`billing_migration_reviews`** — review-only checklist rows; no execution.
+- **`billing_audit_log`** — every billing-source / access change, with admin, client, before/after, reason. Never logs payment credentials.
+- **RLS:** read/write restricted to `admin` (and `coach` where appropriate) via `has_role`. Clients see only their own non-sensitive billing label. Service role for webhooks.
+- **GRANTs** on every new public table.
 
-## Phase 3 — Admin UI (extend existing pages)
-- **Sales → Promotions** tabs: Discount Codes (primary), Ambassador & Referral Codes, Redemption History, Promotion Analytics
-- Extend `promo-codes.tsx` into the full table view (filters: All / Active / Draft / Scheduled / Paused / Expired / Promotions / Ambassadors / Client Referrals / Expiring Soon; search by code/name/email)
-- **Create/Edit form** with the exact sections you listed (Basic / Discount / Eligibility / Pairing). No "all products" default — admin must pick.
-- **Expiration controls**: date + time + tz picker (default 11:59 PM America/Winnipeg), Extend / Shorten / Pause / Reactivate / Expire Immediately with confirmation dialogs.
-- **Per-profile panel** "Referral & Discount Code" on ambassador/client admin profiles, with copy code / copy link / paired link / view customers / view redemptions.
+### Server functions (`src/lib/billing/*.functions.ts`)
 
-Mobile-responsive, paginated, no full-Stripe-load on initial render.
+All protected via `requireSupabaseAuth` + `has_role('admin')`:
 
-## Phase 4 — Seed records (data-only, via insert tool, all in test/draft)
-- `FIRSTMONTHFREE` — Promotion, 100%, repeating 1 month, Membership product, new-customer-only, pairable with referral, **status=draft** until expiry chosen.
-- Ambassador/referral codes for existing ambassadors/clients (e.g. `COLBY`, `CEDRIC`) — 5% off membership, repeating, pairable with promotion only. Skip any that already exist; resolve first-name collisions with last-initial suffix.
+- `setClientBillingSourceFn`, `upsertLegacyBillingRecordFn`, `verifyLegacyBillingFn`
+- `grantAppAccessFn`, `pauseAppAccessFn`, `restoreAppAccessFn`, `endAppAccessFn`
+- `inviteLegacyClientFn` (creates app account + access, **never** a Stripe customer/subscription)
+- `listClientsWithBillingFn` (filters + bulk), `bulkMarkTrainerizeLegacyFn`, `bulkSendInvitationsFn`
+- `openMigrationReviewFn`, `updateMigrationChecklistFn` (review-only; no Stripe calls)
+- `getBillingDashboardFn` (revenue split by source, clearly labelled)
 
-No live Stripe coupon created.
+### Webhook hardening (Stripe webhook for new JF Effect Stripe account)
 
-## Phase 5 — Checkout interface (extend existing membership checkout)
-- "Promo or Ambassador Code" section with Apply → applied chips → "Add another eligible code" (max 2, enforced server-side).
-- Friendly messages exactly as you specified for promo-applied / referral-applied / both / invalid second referral / invalid second promo.
-- Calls `validateCodesForCheckout` — UI never claims a Stripe discount was applied unless the server confirms (during this phase, server returns `mode: 'test'` for `FIRSTMONTHFREE` and the UI shows a "Test mode — not yet live" badge in admin preview).
+- Match on `stripe_customer_id` only — never on email alone.
+- If the matched client has `billing_source = trainerize_legacy` and no authorized `billing_migration_reviews` row in `completed` state: **log conflict, do not mutate** billing source / access / entitlements.
+- Never deactivate a legacy client because they're absent from the new account.
 
-## Phase 6 — Shareable links + attribution
-- `join.tsx` accepts `?code=`, `?promo=`, `?ref=`; persists to sessionStorage; preserves across signup / verify / login / checkout / refresh.
-- URL manipulation cannot bypass pairing rules — validation runs server-side at checkout.
-- Stripe webhook handler writes `referral_attribution` separately from promo attribution.
+### Checkout / promo safeguards
 
-## Phase 7 — Build, fix, publish
-- Run typecheck, fix errors, smoke-test admin nav + mobile + checkout-without-codes + checkout-with-codes.
-- Publish to https://jfeffect.com.
+- `/membership` and any new-subscription server fn: if target client is `trainerize_legacy`, return a blocking error surface (admin override required). No silent fallback.
+- Promo / ambassador / referral validation: scoped to `jfeffect_stripe` purchases only.
+- Invitation accept flow: pure app onboarding — no checkout redirect, no trial start.
 
-## Phase 8 — Handoff report
-Concise markdown report covering every item in your section 19, plus the explicit list of files needing Stripe live-mode verification.
+### Admin UI
 
-## What I will NOT do without further confirmation
-- Touch live Stripe (no coupon/promotion_code creation in live mode).
-- Send any customer email or in-app announcement.
-- Modify existing active subscriptions or existing working discount logic.
-- Overwrite ambassador/client codes that already exist.
+- **Clients list:** new `Billing` column with badge, filters (billing source + access status), bulk actions with confirmation modal.
+- **Client profile → Billing & Access panel:** status, source badge, legacy details, actions (`Edit Legacy Billing`, `Verify`, `Pause`, `Restore`, `End`, `Prepare Future Migration`).
+- **New page `/admin/legacy-migration`:** import progress board with statuses (Not Started → Access Active / Needs Attention), per-client step-through flow.
+- **New admin action "Add Existing Legacy Client":** wizard with billing source defaulted to `trainerize_legacy` and the explanatory copy verbatim.
+- **Dashboard:** revenue split — *Verified through JF Effect Stripe* vs *Legacy external billing* vs *Manually entered* vs *Not yet verified*.
 
-## Open questions (please answer before I start — keeps the migration right the first time)
-1. **Reuse vs replace existing `promo_code_redemptions` table?** It has 27 columns and 1 policy already. If it's already wired into a working flow I'll extend it; otherwise I'll add `discount_code_redemptions` and migrate. Do you know which it is, or should I treat it as existing-and-extend?
-2. **Ambassador/client code list beyond COLBY and CEDRIC** — should I auto-generate codes from `clients` / `coaches` rows that have an "ambassador" flag, or only seed the two you named and leave the rest to a separate bulk step?
-3. **`FIRSTMONTHFREE` expiry date** — you said it can't go live without one. Pick a date now (e.g. 2026-12-31 23:59 America/Winnipeg) or leave it null and force the admin to set one in the UI before status can become `active`?
-4. **Membership product ID** — there are `coaching_products`, `member_plans`, and `offers` tables. Which one represents "JF Effect Membership" for `eligible_product_ids`? (I'll inspect and pick if you don't know, but a quick pointer saves a round trip.)
+### Out of scope (explicitly)
+
+- No live Trainerize Stripe API connection.
+- No "Migrate All" button. `Prepare Future Billing Migration` only creates a review row.
+- No card / payment credential storage anywhere.
+
+### Sequencing
+
+1. Migration (schema + enums + RLS + GRANTs + audit) — needs your approval first.
+2. Server functions + webhook guard.
+3. Admin UI (clients list, profile panel, legacy migration page, dashboard split).
+4. Promo/checkout guard rails.
+5. Build fix pass + security scan + publish to jfeffect.com.
+6. Handoff report.
+
+### Questions before I start
+
+1. **Coach role access:** should `coach` users see the Billing & Access panel read-only, or is this admin-only?
+2. **Default for clients already in `clients` with no Stripe customer:** mark them `none` and let you classify, or auto-default existing rows with active coaching to `trainerize_legacy` (safer default given your context)?
+3. **Invitation channel:** reuse the existing app invitation/email flow you already have, or do you want a dedicated "legacy invite" template with the explanatory copy baked in?
+4. **Existing `app_members` / `member_access` tables:** I'll extend rather than duplicate. Confirm OK to add columns there instead of a parallel `client_access_entitlements` table if the existing shape fits — I'll decide during exploration unless you have a preference.
+
+Reply with answers (or "you decide") and I'll proceed with the migration as step 1.
