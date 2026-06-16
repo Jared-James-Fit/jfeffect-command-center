@@ -5,7 +5,7 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { ClipboardList, ExternalLink } from "lucide-react";
-import { Link } from "@tanstack/react-router";
+import { Link, useRouterState } from "@tanstack/react-router";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
 import { buildFilloutUrl } from "@/lib/fillout";
@@ -61,6 +61,15 @@ export function FormPopupGate() {
   const { user } = useAuth();
   const qc = useQueryClient();
   const userId = user?.id ?? null;
+
+  // Never interrupt a workout / message / check-in session — the popup is
+  // a soft nudge only. Show it on Home and other browsing routes.
+  const pathname = useRouterState({ select: (s) => s.location.pathname });
+  const suppressed =
+    pathname.startsWith("/portal/workouts") ||
+    pathname.startsWith("/portal/messages") ||
+    pathname.startsWith("/portal/check-ins") ||
+    pathname.startsWith("/portal/lift-videos");
 
   const { data: client } = useQuery({
     queryKey: ["form-popup-client", userId],
@@ -145,6 +154,7 @@ export function FormPopupGate() {
   }
 
   if (!current) return null;
+  if (suppressed) return null;
 
   const portalHref = `/portal/check-ins/${current.id}`;
   const externalHref =
