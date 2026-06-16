@@ -605,6 +605,9 @@ export function MessageThread({
   const photoInputRef = useRef<HTMLInputElement>(null);
   const recorder = useVoiceRecorder();
   const transcribeFn = useServerFn(transcribeVoiceMessage);
+  // Defer PWA updates while there's an in-flight composer draft. No unload prompt
+  // — chat threads navigate freely and the draft is short-lived.
+  useUnsavedWarning(body.trim().length > 0 || sending || uploading, { warnOnUnload: false });
   const [preview, setPreview] = useState<{
     blob: Blob; url: string; duration: number; peaks: number[];
   } | null>(null);
