@@ -21,7 +21,7 @@ import { listUpcomingForBell, listMyPortalAppointments } from "@/lib/appointment
 import { useIsMobile } from "@/hooks/use-mobile";
 import { cn } from "@/lib/utils";
 
-type BellItem = {
+export type BellItem = {
   kind: "message" | "lift_video" | "agreement" | "exercise_note" | "group_message" | "check_in_review" | "appointment";
   clientId: string;
   groupId?: string;
