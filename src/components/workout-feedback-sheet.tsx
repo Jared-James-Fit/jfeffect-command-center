@@ -257,7 +257,7 @@ export function WorkoutFeedbackSheet({ open, onOpenChange, completionId, clientI
             <div className="grid grid-cols-2 gap-2">
               <button
                 type="button"
-                onClick={() => { setPain(false); setPainLevel(null); setPainArea(""); setPainNote(""); }}
+                onClick={() => { setPain(false); setPainLevel(null); setPainArea([]); setPainNote(""); }}
                 aria-pressed={pain === false}
                 className={cn(
                   "rounded-xl border px-3 py-2.5 text-sm font-bold transition-colors",
