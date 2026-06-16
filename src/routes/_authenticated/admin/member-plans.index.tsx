@@ -7,8 +7,10 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Plus, Star, ArrowUp, ArrowDown, Trash2 } from "lucide-react";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { useState } from "react";
+import { LibrarySection } from "@/components/library-section";
+import { groupPlans } from "@/lib/library-grouping";
+import { Input } from "@/components/ui/input";
 import {
   listFeaturedPlans, addFeaturedPlan, removeFeaturedItem,
   reorderFeaturedItems, updateFeaturedItem,
@@ -18,12 +20,18 @@ import { toast } from "sonner";
 export const Route = createFileRoute("/_authenticated/admin/member-plans/")({ component: MemberPlansAdmin });
 
 function MemberPlansAdmin() {
-  const [tab, setTab] = useState("all");
+  const [q, setQ] = useState("");
   const { data: plans = [] } = useQuery({
     queryKey: ["admin-member-plans"],
     queryFn: async () => (await supabase.from("member_plans").select("*").order("created_at", { ascending: false })).data ?? [],
   });
-  const list = (plans as any[]).filter((p) => tab === "all" ? true : p.status === tab);
+  const ql = q.trim().toLowerCase();
+  const filtered = (plans as any[]).filter((p) =>
+    !ql ||
+    (p.name ?? "").toLowerCase().includes(ql) ||
+    (p.training_style ?? "").toLowerCase().includes(ql),
+  );
+  const sections = groupPlans(filtered as any);
   return (
     <div className="space-y-5">
       <PageHeader
@@ -32,30 +40,37 @@ function MemberPlansAdmin() {
         actions={<Link to="/admin/member-plans/new"><Button><Plus className="mr-2 h-4 w-4" />New Plan</Button></Link>}
       />
       <FeaturedPlansManager plans={plans as any[]} />
-      <Tabs value={tab} onValueChange={setTab}>
-        <TabsList>
-          <TabsTrigger value="all">All</TabsTrigger>
-          <TabsTrigger value="Draft">Drafts</TabsTrigger>
-          <TabsTrigger value="Published">Published</TabsTrigger>
-          <TabsTrigger value="Archived">Archived</TabsTrigger>
-        </TabsList>
-        <TabsContent value={tab}>
-          <Card className="mt-3 divide-y">
-            {list.length === 0 && <div className="p-6 text-sm text-muted-foreground">Nothing here yet.</div>}
-            {list.map((p: any) => (
-              <Link key={p.id} to="/admin/member-plans/$planId" params={{ planId: p.id }} className="block p-4 hover:bg-muted/40">
-                <div className="flex items-center justify-between gap-3">
-                  <div className="min-w-0">
-                    <div className="truncate font-semibold">{p.name}</div>
-                    <div className="truncate text-xs text-muted-foreground">{p.training_style} · {p.difficulty} · {p.weeks}w/{p.days_per_week}d · access: {p.required_access_level}</div>
+      <Input
+        placeholder="Search plans…"
+        value={q}
+        onChange={(e) => setQ(e.target.value)}
+        className="max-w-sm"
+      />
+      <div className="space-y-2">
+        {sections.map((s, i) => (
+          <LibrarySection
+            key={s.id}
+            label={s.label}
+            description={s.description}
+            count={s.items.length}
+            defaultOpen={i < 3 && s.items.length > 0}
+          >
+            <div className="divide-y rounded-md border">
+              {s.items.map((p: any) => (
+                <Link key={p.id} to="/admin/member-plans/$planId" params={{ planId: p.id }} className="block p-3 hover:bg-muted/40">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="truncate font-semibold">{p.name}</div>
+                      <div className="truncate text-xs text-muted-foreground">{p.training_style} · {p.difficulty} · {p.weeks}w/{p.days_per_week}d · access: {p.required_access_level}</div>
+                    </div>
+                    <Badge variant={p.status === "Published" ? "default" : "secondary"}>{p.status}</Badge>
                   </div>
-                  <Badge variant={p.status === "Published" ? "default" : "secondary"}>{p.status}</Badge>
-                </div>
-              </Link>
-            ))}
-          </Card>
-        </TabsContent>
-      </Tabs>
+                </Link>
+              ))}
+            </div>
+          </LibrarySection>
+        ))}
+      </div>
     </div>
   );
 }
