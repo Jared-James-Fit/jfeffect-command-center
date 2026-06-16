@@ -88,11 +88,9 @@ function CoachingPage() {
     { q: "Failed before?", a: "You've never had a real plan and real accountability together. That changes here." },
   ];
   const authority: Array<{ label: string }> = Array.isArray(s.authority) && s.authority.length > 0 ? s.authority : [
-    { label: "Team Canada" },
-    { label: "662.5kg @ 65.9kg" },
-    { label: "9/9 Nationals" },
-    { label: "100+ Clients" },
-    { label: "Since 2019" },
+    { label: "100+ clients coached" },
+    { label: "Coaching since 2019" },
+    { label: "Competitive strength background" },
   ];
 
   return (
@@ -289,7 +287,7 @@ function JaredStory() {
         </div>
         <div className="mt-8 space-y-5 text-sm leading-relaxed text-muted-foreground md:text-base">
           <p>
-            JF Effect was built from the ground up, under real pressure, while competing at the national level. The principle behind it is simple: structure and standards outlast motivation. That's what coaching delivers — a plan, and someone who holds the line.
+            JF Effect was built from the ground up, under real pressure. The same discipline that took my own lifting to the competitive level runs through every plan I write. After years of coaching and 100+ clients, the principle is simple: structure and standards outlast motivation. That's what coaching delivers — a plan, and someone who holds the line.
           </p>
         </div>
       </div>

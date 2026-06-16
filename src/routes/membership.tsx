@@ -51,14 +51,14 @@ export const Route = createFileRoute("/membership")({
   head: () => ({
     meta: [
       { title: "Every Program You Need. One System. | JF Effect Membership" },
-      { name: "description", content: "Training built by a national-level coach — strength, muscle, fat loss. Open the app and follow the plan. Free trial · Cancel anytime." },
+      { name: "description", content: "Training for strength, muscle, and fat loss in one app. Open it and follow the plan. Free trial · Cancel anytime." },
       { property: "og:title", content: "Every Program You Need. One System. | JF Effect Membership" },
-      { property: "og:description", content: "Training built by a national-level coach — strength, muscle, fat loss. Open the app and follow the plan. Free trial · Cancel anytime." },
+      { property: "og:description", content: "Training for strength, muscle, and fat loss in one app. Open it and follow the plan. Free trial · Cancel anytime." },
       { property: "og:type", content: "website" },
       { property: "og:url", content: "https://jfeffect.com/membership" },
       { name: "twitter:card", content: "summary_large_image" },
       { name: "twitter:title", content: "Every Program You Need. One System. | JF Effect Membership" },
-      { name: "twitter:description", content: "Training built by a national-level coach — strength, muscle, fat loss. Open the app and follow the plan. Free trial · Cancel anytime." },
+      { name: "twitter:description", content: "Training for strength, muscle, and fat loss in one app. Open it and follow the plan. Free trial · Cancel anytime." },
     ],
     links: [{ rel: "canonical", href: "https://jfeffect.com/membership" }],
   }),
@@ -194,7 +194,7 @@ function SignupJf() {
       <MembershipHero
         priceChip={settings?.monthly_price_display ?? "$29/month USD"}
         headline={"Every program you need. One system."}
-        sub={"Training built by a national-level coach — strength, muscle, fat loss. Open the app and follow the plan."}
+        sub={"Training for strength, muscle, and fat loss in one app. Open it and follow the plan."}
         heroImage={null}
         decisionArea={
           <HeroDecisionArea
@@ -545,7 +545,7 @@ const DEFAULT_LIBRARY: LibraryCategory[] = [
 ];
 
 const DEFAULT_WHO_FOR = [
-  "Any level. Muscle, fat loss, or strength.",
+  "Any level. Muscle, fat loss, or serious strength.",
   "For people who'll train on their own with the right plan to follow.",
 ];
 
