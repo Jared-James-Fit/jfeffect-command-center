@@ -591,6 +591,14 @@ function WorkoutDay() {
     },
   });
 
+  // Defer PWA updates while the workout has unsaved meta (notes / actual minutes).
+  // No beforeunload prompt — set rows persist via their own autosaves and would
+  // otherwise nag every time the member taps away from the page.
+  useUnsavedWarning(
+    metaSave.state === "saving" || metaSave.state === "offline" || metaSave.state === "error",
+    { warnOnUnload: false },
+  );
+
   const refresh = () => {
     qc.invalidateQueries({ queryKey: ["pl-day-results", dayId] });
     qc.invalidateQueries({ queryKey: ["pl-day-completion", dayId] });
