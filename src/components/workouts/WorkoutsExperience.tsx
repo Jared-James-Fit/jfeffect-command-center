@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, lazy, Suspense } from "react";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import {
@@ -30,7 +30,13 @@ import { localStartOfToday, toLocalISO } from "@/lib/today";
 import { MoveWorkoutSheet } from "@/components/schedule/MoveWorkoutSheet";
 import { ScheduleHistoryDrawer } from "@/components/schedule/ScheduleHistoryDrawer";
 import { ClientBlockView } from "@/components/client-block-view";
-import { TrainingAnalyticsPreviewCard } from "@/components/training-analytics-preview-card";
+// Lazy: this card pulls recharts (~120KB). Defer it so the main Workouts
+// view can render without waiting on the chart bundle.
+const TrainingAnalyticsPreviewCard = lazy(() =>
+  import("@/components/training-analytics-preview-card").then((m) => ({
+    default: m.TrainingAnalyticsPreviewCard,
+  })),
+);
 
 type Mode = "self" | "coach";
 
@@ -171,7 +177,9 @@ export function WorkoutsExperience({
 
       <div className="space-y-4 p-4 pb-32 md:p-6">
         {mode === "self" && (
-          <TrainingAnalyticsPreviewCard clientId={clientId} />
+          <Suspense fallback={null}>
+            <TrainingAnalyticsPreviewCard clientId={clientId} />
+          </Suspense>
         )}
         {inProgress && (
           <ResumeBanner item={inProgress} />
