@@ -254,7 +254,7 @@ function WhatCoachingIncludes() {
     { Icon: Target, title: "A plan built for you", body: "Your body, your schedule, your training." },
     { Icon: ClipboardCheck, title: "Weekly check-ins", body: "Reviewed and adjusted around your progress." },
     { Icon: Utensils, title: "Nutrition that fits your life", body: "Clear targets, made to last." },
-    { Icon: MessageCircle, title: "A coach in your corner", body: "Direct access, always." },
+    { Icon: MessageCircle, title: "A coach in your corner", body: "Your dedicated coach, direct access, always." },
   ];
   return (
     <Section>
