@@ -50,7 +50,19 @@ export const saveGoalsSetupFn = createServerFn({ method: "POST" })
     for (const key of EDITABLE_GOALS_FIELDS) {
       if (key in patch) body[key] = (patch as any)[key];
     }
-    if (completed) body.completed_at = new Date().toISOString();
+    if (completed) {
+      body.completed_at = new Date().toISOString();
+      // Clearing any pending "please update" banner is also handled by the
+      // BEFORE trigger, but set it here too so a stale client cache reflects
+      // the change immediately on refetch.
+      body.update_requested_at = null;
+      body.update_requested_by = null;
+      body.update_request_message = null;
+    }
+
+    // Defence in depth: scrub conditional details when the user said "No".
+    if (body.food_restrictions_has === false) body.food_restrictions_details = null;
+    if (body.injuries_has === false) body.injuries_details = null;
 
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { error } = await supabaseAdmin

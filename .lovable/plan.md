@@ -44,8 +44,15 @@ Done in the latest Phase 3 turn:
 - Admin row actions on `/admin/onboarding`: "Send setup reminder…" dialog (email/SMS toggles, custom note, force override), Copy install link, Clear setup error, Mark/Unmark browser-only.
 - `app_members` gained `last_setup_reminder_at` + `setup_browser_only`; row UI shows "Last reminder: …" and a "Browser only" badge.
 
+Done in this turn (Goals & Setup save bug audit + fix):
+- Trigger `cgs_audit_and_notify` is now `BEFORE INSERT OR UPDATE` and scrubs `food_restrictions_details` / `injuries_details` when the user said "No".
+- Completing setup auto-clears the "please update your answers" banner (trigger + server fn).
+- Coach notification tasks are deduplicated: subsequent step saves within 24h refresh the existing open task instead of spawning a new one per step.
+- Client `GoalsSetupFlow` now persists local edits to `localStorage` (`goals-setup-draft:<clientId>`), survives reloads and network failures, re-hydrates when `clientId` changes, and shows an inline "last save didn't reach the server" amber strip with a Retry-now button (separate from the existing Finish-failed card).
+- Misleading "Saves automatically" badge replaced with "Saves on each step".
+
 Still to do for Phase 3:
-- Goals & Setup save bug audit + fix.
+- (none)
 
 - `member_setup_state` table (or columns on `app_members`) tracking: account_created_at, first_signin_at, install_detected_at, install_platform, goals_setup_status, profile_status, notifications_status, first_workout_opened_at, last_reminder_sent_at, last_setup_error.
 - Home checklist card "Finish Setting Up JF Effect" with progress, 5 items, one CTA per item, dismiss-for-now + remind-tomorrow.
