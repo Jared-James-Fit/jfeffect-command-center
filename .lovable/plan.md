@@ -70,7 +70,20 @@ Still to do for Phase 4:
 - Workout / form draft persistence with idempotency keys.
 - Online/offline banner, retry, no false "saved" confirmations.
 
-## Phase 5 — Polish, audit, future-native scaffolding
+## Phase 5 — Polish, audit, future-native scaffolding — IN PROGRESS
+
+Done this turn:
+- Deep-link router: `_authenticated` guard now redirects unauthenticated users to `/auth?next=<path>`; `/auth` validates the `next` search param and routes the user to their intended destination after sign-in (rejects external/protocol URLs to avoid open-redirect).
+- Platform service abstractions under `src/platform/`: `notifications`, `share`, `haptics`, `camera`, `storage` — all web impls with the same shape Capacitor will swap in. `isStandalone()` helper exported from the index.
+- `useNotificationPermission()` hook + `requestNotificationPermission()` — gated behind explicit user action, respects denial, never auto-prompts.
+- `useUnsavedWarning(when)` hook — wires `beforeunload` and marks `<body data-unsaved="true">` so the existing PWA update toast defers updates while edits are in flight.
+- Global mobile polish: `touch-action: manipulation` + transparent tap highlight on actionable controls, horizontal-overflow guard on phones.
+
+Still to do for Phase 5 (next pass):
+- Apply `useUnsavedWarning` to workout logger, forms, messages, nutrition entry once draft persistence lands.
+- Mobile layout audit sweep (notch, double headers, sticky composers, tap-target ≥44px) across remaining screens.
+- Wire `useNotificationPermission` into the setup checklist's notifications step + value explainer.
+- Capacitor scaffolding (no install yet) — readme + bridge stubs.
 
 - Mobile layout audit pass: notch, home indicator, bottom nav, sticky buttons, keyboard, tap targets ≥44px, no 16px-input zoom, no horizontal overflow, no double headers.
 - Back-button behaviour + unsaved-work confirmation.
