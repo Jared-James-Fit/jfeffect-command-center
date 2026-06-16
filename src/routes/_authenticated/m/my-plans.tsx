@@ -171,14 +171,14 @@ function LibraryTab({ onEnrolled }: { onEnrolled?: () => void }) {
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div className="space-y-3">
-      <div className="text-xs uppercase tracking-wider text-muted-foreground">{title}</div>
-      <div className="grid gap-3 sm:grid-cols-2">{children}</div>
+      <div className="text-xs font-bold uppercase tracking-wider text-muted-foreground">{title}</div>
+      <div className="grid gap-3 md:grid-cols-2">{children}</div>
     </div>
   );
 }
 function Empty({ msg, action }: { msg: string; action?: React.ReactNode }) {
   return (
-    <div className="text-sm text-muted-foreground sm:col-span-2 space-y-2">
+    <div className="space-y-2 text-sm text-muted-foreground md:col-span-2">
       <div>{msg}</div>
       {action}
     </div>
@@ -187,26 +187,26 @@ function Empty({ msg, action }: { msg: string; action?: React.ReactNode }) {
 function EnrollmentCard({ e, primary, onRestart }: { e: any; primary?: boolean; onRestart?: () => void }) {
   const pct = Math.round(((e.workouts_completed ?? 0) / Math.max(e.workouts_total ?? 1, 1)) * 100);
   return (
-    <Card className="p-5">
+    <Card className="p-4 sm:p-5">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <div className="truncate font-semibold">{e.member_plans?.name ?? "Plan"}</div>
+          <div className="truncate text-base font-bold sm:text-lg">{e.member_plans?.name ?? "Plan"}</div>
           <div className="mt-0.5 text-xs text-muted-foreground">
             Week {e.current_week} · {e.workouts_completed}/{e.workouts_total} workouts
           </div>
         </div>
         <Badge variant={e.status === "Completed" ? "default" : e.status === "Active" ? "secondary" : "outline"}>{e.status}</Badge>
       </div>
-      <Progress value={pct} className="mt-3" />
+      <Progress value={pct} className="mt-3 h-2" />
       <div className="mt-4 flex gap-2">
         <Link to="/m/my-plans/$enrollmentId" params={{ enrollmentId: e.id }} className="flex-1">
-          <Button variant={primary ? "default" : "outline"} className="w-full">
-            <PlayCircle className="mr-2 h-4 w-4" />{e.status === "Active" ? "Continue" : "View"}
+          <Button variant={primary ? "default" : "outline"} className="h-12 w-full text-base">
+            <PlayCircle className="mr-2 h-5 w-5" />{e.status === "Active" ? "Continue training" : "View plan"}
           </Button>
         </Link>
         {onRestart && (
-          <Button variant="ghost" size="icon" onClick={onRestart} title="Restart">
-            <RotateCcw className="h-4 w-4" />
+          <Button variant="outline" size="icon" className="h-12 w-12" onClick={onRestart} title="Restart">
+            <RotateCcw className="h-5 w-5" />
           </Button>
         )}
       </div>
