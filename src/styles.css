@@ -332,3 +332,31 @@ mark.gh-mark.gh-flash { animation: ghFlashPulse 1.4s ease-out 2; }
   border-radius: 8px;
   transition: outline-color 1.2s ease-out;
 }
+
+/* ============================================================
+   PWA / mobile safe-area utilities
+   Use on installed-app shells, sticky headers, bottom navs,
+   and any element pinned to the device edges.
+   ============================================================ */
+@supports (padding: max(0px)) {
+  .safe-pt    { padding-top:    max(0.5rem, env(safe-area-inset-top)); }
+  .safe-pb    { padding-bottom: max(0.5rem, env(safe-area-inset-bottom)); }
+  .safe-pl    { padding-left:   max(0.5rem, env(safe-area-inset-left)); }
+  .safe-pr    { padding-right:  max(0.5rem, env(safe-area-inset-right)); }
+  .safe-px    { padding-left:   max(0.5rem, env(safe-area-inset-left));
+                padding-right:  max(0.5rem, env(safe-area-inset-right)); }
+  .safe-py    { padding-top:    max(0.5rem, env(safe-area-inset-top));
+                padding-bottom: max(0.5rem, env(safe-area-inset-bottom)); }
+  .safe-mb    { margin-bottom:  env(safe-area-inset-bottom); }
+  .safe-mt    { margin-top:     env(safe-area-inset-top); }
+  .safe-min-h-screen { min-height: 100svh; }
+}
+
+/* Standalone-only tweaks: hide elements that only make sense in the browser
+   tab (e.g. "Install" prompts) when the user is already in the installed app. */
+@media (display-mode: standalone) {
+  .hide-in-standalone { display: none !important; }
+}
+@media not all and (display-mode: standalone) {
+  .show-only-in-standalone { display: none !important; }
+}
