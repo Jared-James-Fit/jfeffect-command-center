@@ -6,6 +6,7 @@ import {
   listDiscountCodesFn,
   upsertDiscountCodeFn,
   setDiscountCodeStatusFn,
+  syncDiscountCodeToStripeFn,
   type DiscountCode,
 } from "@/lib/discount-codes.functions";
 import { Card } from "@/components/ui/card";
@@ -25,7 +26,7 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Ticket, Plus, Copy, Play, Pause, Square, Pencil, Link2 } from "lucide-react";
+import { Ticket, Plus, Copy, Play, Pause, Square, Pencil, Link2, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/_authenticated/admin/discount-codes")({
@@ -72,6 +73,7 @@ export function DiscountCodesPage({ embedded = false }: { embedded?: boolean } =
   const listFn = useServerFn(listDiscountCodesFn);
   const upsertFn = useServerFn(upsertDiscountCodeFn);
   const statusFn = useServerFn(setDiscountCodeStatusFn);
+  const syncFn = useServerFn(syncDiscountCodeToStripeFn);
 
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState<string>("all");
@@ -209,8 +211,17 @@ export function DiscountCodesPage({ embedded = false }: { embedded?: boolean } =
                   ) : <span className="text-muted-foreground">No expiry</span>}
                 </td>
                 <td className="p-2 text-xs">
-                  <div>Test: {c.stripe_test_mode_synced ? "✓" : "—"}</div>
-                  <div>Live: {c.stripe_live_mode_synced ? "✓" : "—"}</div>
+                  <div className={c.stripe_test_mode_synced ? "text-emerald-600" : "text-muted-foreground"}>
+                    Test: {c.stripe_test_mode_synced ? "✓ synced" : "—"}
+                  </div>
+                  <div className={c.stripe_live_mode_synced ? "text-emerald-600" : "text-muted-foreground"}>
+                    Live: {c.stripe_live_mode_synced ? "✓ synced" : "—"}
+                  </div>
+                  {c.stripe_last_sync_error ? (
+                    <div className="text-rose-600 truncate max-w-[14rem]" title={c.stripe_last_sync_error}>
+                      ⚠ {c.stripe_last_sync_error}
+                    </div>
+                  ) : null}
                 </td>
                 <td className="p-2">
                   <div className="flex flex-wrap gap-1">
@@ -222,6 +233,26 @@ export function DiscountCodesPage({ embedded = false }: { embedded?: boolean } =
                     </Button>
                     <Button size="sm" variant="ghost" title="Copy link" onClick={() => copy(linkFor(c))}>
                       <Link2 className="h-3 w-3" />
+                    </Button>
+                    <Button size="sm" variant="ghost" title="Sync to Stripe (test + live)"
+                      onClick={async () => {
+                        const t = toast.loading(`Syncing ${c.public_code} to Stripe…`);
+                        try {
+                          const res: any = await syncFn({ data: { id: c.id, modes: ["test", "live"] } });
+                          toast.dismiss(t);
+                          if (res?.ok) toast.success(`${c.public_code} synced to Stripe (test + live)`);
+                          else {
+                            const errs = (res?.results ?? []).filter((r: any) => !r.ok)
+                              .map((r: any) => `${r.mode}: ${r.error}`).join(" • ");
+                            toast.error(`Sync completed with issues — ${errs || "see code row for details"}`);
+                          }
+                          qc.invalidateQueries({ queryKey: ["discount-codes"] });
+                        } catch (e: any) {
+                          toast.dismiss(t);
+                          toast.error(e?.message ?? "Sync failed");
+                        }
+                      }}>
+                      <RefreshCw className="h-3 w-3 text-sky-600" />
                     </Button>
                     {c.status !== "active" && (
                       <Button size="sm" variant="ghost" title="Activate"
