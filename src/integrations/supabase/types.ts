@@ -9931,6 +9931,39 @@ export type Database = {
           },
         ]
       }
+      notification_state: {
+        Row: {
+          archived_at: string | null
+          created_at: string
+          id: string
+          kind: string
+          read_at: string | null
+          source_id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          archived_at?: string | null
+          created_at?: string
+          id?: string
+          kind: string
+          read_at?: string | null
+          source_id: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          archived_at?: string | null
+          created_at?: string
+          id?: string
+          kind?: string
+          read_at?: string | null
+          source_id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       nutrition_automation_settings: {
         Row: {
           cadence_interval_days: number | null
@@ -15545,6 +15578,10 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      notif_archive: { Args: { items: Json }; Returns: number }
+      notif_mark_read: { Args: { items: Json }; Returns: number }
+      notif_mark_unread: { Args: { items: Json }; Returns: number }
+      notif_restore: { Args: { items: Json }; Returns: number }
       ping_client_activity: { Args: { _route?: string }; Returns: undefined }
       pl_assign_template_blocks_atomic: {
         Args: {

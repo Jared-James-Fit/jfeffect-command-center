@@ -5,7 +5,6 @@ import { supabase } from "@/integrations/supabase/client";
 import { usePortalUserId } from "@/lib/client-impersonation";
 import { Card } from "@/components/ui/card";
 import { MessageThread } from "@/components/message-thread";
-import { NotificationBell } from "@/components/notification-bell";
 import { useChatPresence, LiveDot } from "@/hooks/use-chat-presence";
 import { GroupChatsPane, useMyGroupSummary } from "@/components/group-chats-pane";
 import { GroupChatErrorBoundary } from "@/components/group-chat-error-boundary";
@@ -127,7 +126,6 @@ function ClientMessages() {
             <MessageSquare className="h-4 w-4" />
           </Button>
         )}
-        <NotificationBell />
       </header>
 
       {/* Coach Chat | Group Chats toggle — only when the client has groups */}

@@ -329,7 +329,7 @@ function PortalHome() {
           .update({ read_at: new Date().toISOString() })
           .eq("id", r.id);
         qc.invalidateQueries({ queryKey: ["portal-coach-updates", client?.id] });
-        qc.invalidateQueries({ queryKey: ["unread-counts"] });
+        qc.invalidateQueries({ queryKey: ["notifications"] });
       },
     });
   }

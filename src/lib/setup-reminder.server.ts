@@ -55,10 +55,19 @@ export async function sendSetupReminderEmail(
     const dedupeKey = `setup_reminder:${member.id}:${day}:email`
 
     if (!opts.force) {
-      const { data: dupe } = await supabaseAdmin
+      // Atomically claim the dedupe slot up front; on conflict skip the send.
+      const { data: claimed, error: claimErr } = await supabaseAdmin
         .from('notification_dedupe')
-        .select('key').eq('key', dedupeKey).eq('channel', 'email').maybeSingle()
-      if (dupe) return { sent: false, reason: 'already_sent_today' }
+        .insert({
+          key: dedupeKey,
+          channel: 'email',
+          member_id: member.id,
+          metadata: { template: 'setup-reminder' },
+        })
+        .select('key')
+      if (claimErr || !claimed || claimed.length === 0) {
+        return { sent: false, reason: 'already_sent_today' }
+      }
     }
 
     const { data: suppressed } = await supabaseAdmin
@@ -135,12 +144,18 @@ export async function sendSetupReminderEmail(
       return { sent: false, reason: 'failed', error: enqueueError.message }
     }
 
-    await supabaseAdmin.from('notification_dedupe').insert({
-      key: dedupeKey,
-      channel: 'email',
-      member_id: member.id,
-      metadata: { template: 'setup-reminder', message_id: messageId },
-    }).then(() => {}, () => {})
+    // Backfill the metadata with the actual message_id (insert above already
+    // claimed the slot). When opts.force was used the slot may not exist yet,
+    // so upsert defensively.
+    await supabaseAdmin
+      .from('notification_dedupe')
+      .upsert({
+        key: dedupeKey,
+        channel: 'email',
+        member_id: member.id,
+        metadata: { template: 'setup-reminder', message_id: messageId },
+      }, { onConflict: 'key' })
+      .then(() => {}, () => {})
 
     return { sent: true, messageId }
   } catch (e: any) {
