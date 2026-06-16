@@ -156,3 +156,17 @@ export const getMyGoalsSetupFn = createServerFn({ method: "GET" })
       .maybeSingle();
     return { goals: goals ?? null };
   });
+
+/** Fetch any client's Goals & Setup row (admin/coach only). Used by the admin program builder to power Recommended-for-Client. */
+export const getClientGoalsSetupFn = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((data) => clientIdInput.parse(data))
+  .handler(async ({ data, context }) => {
+    await assertCoachOrAdmin(context, data.clientId);
+    const { data: goals } = await context.supabase
+      .from("client_goals_setup")
+      .select("main_goal, training_days_per_week, workout_length_minutes, training_experience, training_styles, training_location, equipment, completed_at")
+      .eq("client_id", data.clientId)
+      .maybeSingle();
+    return { goals: goals ?? null };
+  });
