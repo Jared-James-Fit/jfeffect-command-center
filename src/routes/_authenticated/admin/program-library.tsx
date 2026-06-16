@@ -35,6 +35,7 @@ import {
 import { ShareProgramSheet } from "@/components/programs/share-program-sheet";
 import { DestinationBadges } from "@/components/programs/destination-badges";
 import { ProgramStatusBadge } from "@/components/programs/program-status-badge";
+import { MembershipLibraryBadge } from "@/components/programs/membership-library-badge";
 import { listShares, summarizeShares, type TemplateShare } from "@/lib/programs/sharing";
 import { listClientMaxes, upsertClientMax, type ClientMaxRow } from "@/lib/pl-maxes";
 import { notifyMissingMaxesFn } from "@/lib/missing-maxes.functions";
@@ -346,6 +347,8 @@ function TemplateCard({ tpl, onPreview, onAssign, onShare, onChanged }: { tpl: a
       <DestinationBadges summary={shareSummary} ownerRole={tpl.owner_role} compact />
 
       <ProgramStatusBadge template={tpl} />
+
+      <MembershipLibraryBadge summary={shareSummary} />
 
       <div className="flex flex-wrap gap-1 text-[10px]">
         <Badge variant="outline">{TYPE_LABEL[tpl.template_type] ?? tpl.template_type}</Badge>
