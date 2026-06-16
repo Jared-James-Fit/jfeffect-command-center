@@ -2,7 +2,7 @@ import { createFileRoute, Outlet, useNavigate, useLocation } from "@tanstack/rea
 import { useEffect } from "react";
 import { useAuth } from "@/lib/auth";
 import { AppShell } from "@/components/app-shell";
-import { memberNav } from "@/lib/admin-nav";
+import { memberNav, memberBottomNav } from "@/lib/admin-nav";
 import { PovQuickToggle, getPovFlag } from "@/components/pov-quick-toggle";
 import { BroadcastPopupGate } from "@/components/broadcast-popup-gate";
 import { SubscriptionRestrictedBanner } from "@/components/subscription-restricted-banner";
@@ -39,7 +39,7 @@ function MemberLayout() {
   }
   const showToggle = role === "admin" || role === "coach";
   return (
-    <AppShell items={memberNav} title="Member">
+    <AppShell items={memberNav} bottomItems={memberBottomNav} title="Member">
       {showToggle && <PovQuickToggle variant="banner" />}
       {(accountType === "jf_member"
         && (!subscriptionActive
