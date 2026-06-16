@@ -741,7 +741,7 @@ export function MessageThread({
       .on("postgres_changes", { event: "*", schema: "public", table: "messages", filter: `client_id=eq.${clientId}` }, () => {
         qc.invalidateQueries({ queryKey: ["messages", clientId, role] });
         qc.invalidateQueries({ queryKey: ["conversation-states"] });
-        qc.invalidateQueries({ queryKey: ["unread-counts"] });
+        qc.invalidateQueries({ queryKey: ["notifications"] });
       })
       .on("postgres_changes", { event: "*", schema: "public", table: "message_reactions" }, () => {
         qc.invalidateQueries({ queryKey: ["message-reactions", clientId] });
@@ -755,7 +755,7 @@ export function MessageThread({
     if (!clientId || !messages.length) return;
     markRead(clientId, role).then(() => {
       qc.invalidateQueries({ queryKey: ["conversation-states"] });
-      qc.invalidateQueries({ queryKey: ["unread-counts"] });
+      qc.invalidateQueries({ queryKey: ["notifications"] });
     });
   }, [clientId, role, messages.length, qc]);
 
