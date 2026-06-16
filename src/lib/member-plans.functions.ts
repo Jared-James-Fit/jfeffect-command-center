@@ -367,3 +367,115 @@ export const restartPlan = createServerFn({ method: "POST" })
     if (error) throw new Error(error.message);
     return { enrollmentId: row.id };
   });
+/* ---------- member-side: schedule ---------- */
+
+async function getMember(ctx: any) {
+  const { supabase, userId } = ctx;
+  await assertMemberCanReadProtected(supabase, userId);
+  const { data: member } = await supabase.from("app_members").select("id").eq("user_id", userId).maybeSingle();
+  if (!member) throw new Error("Not a member");
+  return { supabase, member };
+}
+
+export const getEnrollmentSchedule = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((i: unknown) => z.object({ enrollmentId: z.string().uuid() }).parse(i))
+  .handler(async ({ data, context }) => {
+    const { supabase, member } = await getMember(context);
+    const { data: enr } = await supabase
+      .from("member_plan_enrollments")
+      .select("id, start_date, started_at, member_plans(days_per_week, weeks, published_payload)")
+      .eq("id", data.enrollmentId).eq("member_id", member.id).maybeSingle();
+    if (!enr) throw new Error("Enrollment not found");
+    const { data: overrides = [] } = await supabase
+      .from("member_plan_day_schedule").select("week_index, day_index, scheduled_date")
+      .eq("enrollment_id", data.enrollmentId);
+    const overrideMap = new Map<string, string>();
+    for (const r of (overrides ?? []) as any[]) overrideMap.set(`${r.week_index}:${r.day_index}`, r.scheduled_date);
+
+    const plan = enr.member_plans as any;
+    const weeks = plan?.published_payload?.weeks_data ?? [];
+    const dpw = plan?.days_per_week ?? 3;
+    const startISO = (enr.start_date as any) || (enr.started_at as any) || new Date().toISOString();
+    const schedule: { week: number; day: number; date: string; isOverride: boolean }[] = [];
+    for (const w of weeks) {
+      for (const d of (w.days ?? [])) {
+        const key = `${w.week_index}:${d.day_index}`;
+        const ov = overrideMap.get(key);
+        schedule.push({
+          week: w.week_index, day: d.day_index,
+          date: ov ?? defaultScheduledDate(typeof startISO === "string" ? startISO : new Date(startISO).toISOString(), w.week_index, d.day_index, dpw),
+          isOverride: !!ov,
+        });
+      }
+    }
+    return { schedule };
+  });
+
+export const rescheduleDay = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((i: unknown) => z.object({
+    enrollmentId: z.string().uuid(),
+    weekIndex: z.number().int().min(1),
+    dayIndex: z.number().int().min(1),
+    scheduledDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  }).parse(i))
+  .handler(async ({ data, context }) => {
+    const { supabase, member } = await getMember(context);
+    const { data: enr } = await supabase.from("member_plan_enrollments")
+      .select("id").eq("id", data.enrollmentId).eq("member_id", member.id).maybeSingle();
+    if (!enr) throw new Error("Enrollment not found");
+    const { error } = await supabase.from("member_plan_day_schedule").upsert({
+      enrollment_id: data.enrollmentId,
+      week_index: data.weekIndex,
+      day_index: data.dayIndex,
+      scheduled_date: data.scheduledDate,
+    }, { onConflict: "enrollment_id,week_index,day_index" });
+    if (error) throw new Error(error.message);
+    return { ok: true };
+  });
+
+export const swapDays = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((i: unknown) => z.object({
+    enrollmentId: z.string().uuid(),
+    a: z.object({ weekIndex: z.number().int().min(1), dayIndex: z.number().int().min(1) }),
+    b: z.object({ weekIndex: z.number().int().min(1), dayIndex: z.number().int().min(1) }),
+  }).parse(i))
+  .handler(async ({ data, context }) => {
+    const { supabase, member } = await getMember(context);
+    const { data: enr } = await supabase.from("member_plan_enrollments")
+      .select("id, start_date, started_at, member_plans(days_per_week)").eq("id", data.enrollmentId).eq("member_id", member.id).maybeSingle();
+    if (!enr) throw new Error("Enrollment not found");
+    const dpw = (enr.member_plans as any)?.days_per_week ?? 3;
+    const startISO = (enr.start_date as any) || (enr.started_at as any) || new Date().toISOString();
+    const startStr = typeof startISO === "string" ? startISO : new Date(startISO).toISOString();
+    const findCur = async (w: number, d: number) => {
+      const { data: r } = await supabase.from("member_plan_day_schedule")
+        .select("scheduled_date").eq("enrollment_id", data.enrollmentId)
+        .eq("week_index", w).eq("day_index", d).maybeSingle();
+      return r?.scheduled_date ?? defaultScheduledDate(startStr, w, d, dpw);
+    };
+    const da = await findCur(data.a.weekIndex, data.a.dayIndex);
+    const db = await findCur(data.b.weekIndex, data.b.dayIndex);
+    const rows = [
+      { enrollment_id: data.enrollmentId, week_index: data.a.weekIndex, day_index: data.a.dayIndex, scheduled_date: db },
+      { enrollment_id: data.enrollmentId, week_index: data.b.weekIndex, day_index: data.b.dayIndex, scheduled_date: da },
+    ];
+    const { error } = await supabase.from("member_plan_day_schedule").upsert(rows, { onConflict: "enrollment_id,week_index,day_index" });
+    if (error) throw new Error(error.message);
+    return { ok: true };
+  });
+
+export const resetDaySchedule = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((i: unknown) => z.object({ enrollmentId: z.string().uuid() }).parse(i))
+  .handler(async ({ data, context }) => {
+    const { supabase, member } = await getMember(context);
+    const { data: enr } = await supabase.from("member_plan_enrollments")
+      .select("id").eq("id", data.enrollmentId).eq("member_id", member.id).maybeSingle();
+    if (!enr) throw new Error("Enrollment not found");
+    const { error } = await supabase.from("member_plan_day_schedule").delete().eq("enrollment_id", data.enrollmentId);
+    if (error) throw new Error(error.message);
+    return { ok: true };
+  });
