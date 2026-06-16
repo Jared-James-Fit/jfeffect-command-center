@@ -10,6 +10,26 @@ async function assertAdmin(ctx: any) {
   if (!data) throw new Error("Admin required");
 }
 
+/** Even-spread of N workout days across a 7-day week (M..S). */
+function dayOffsetsForWeek(daysPerWeek: number): number[] {
+  const presets: Record<number, number[]> = {
+    1: [0], 2: [0, 3], 3: [0, 2, 4], 4: [0, 2, 4, 6],
+    5: [0, 1, 3, 4, 6], 6: [0, 1, 2, 3, 4, 5], 7: [0, 1, 2, 3, 4, 5, 6],
+  };
+  return presets[Math.max(1, Math.min(7, daysPerWeek))] ?? [0, 2, 4];
+}
+
+function defaultScheduledDate(startISO: string, weekIndex: number, dayIndex: number, daysPerWeek: number): string {
+  const start = new Date(startISO);
+  // anchor to start of day, UTC-safe by parsing the date portion
+  const base = new Date(Date.UTC(start.getUTCFullYear(), start.getUTCMonth(), start.getUTCDate()));
+  const offsets = dayOffsetsForWeek(daysPerWeek);
+  const di = Math.max(0, Math.min(offsets.length - 1, dayIndex - 1));
+  const totalDays = (weekIndex - 1) * 7 + offsets[di];
+  base.setUTCDate(base.getUTCDate() + totalDays);
+  return base.toISOString().slice(0, 10);
+}
+
 function countWorkouts(payload: any): number {
   let n = 0;
   const weeks = payload?.weeks_data ?? [];
