@@ -107,6 +107,7 @@ export const coachingAdminNav: NavItem[] = [
   { to: "/admin/chat-gifs", label: "Chat GIF Library", icon: Sparkles, group: "Communication" },
   { to: "/admin/chat-sounds", label: "Chat Sound Library", icon: Sparkles, group: "Communication" },
   // PROGRAMMING (coaching)
+  { to: "/admin/settings/notifications/coaching-applications", label: "Application Alerts", icon: MessageCircle, group: "Communication", keywords: ["application","coaching alerts","notifications","yannick","recipient"] },
   { to: "/admin/program-library", label: "Program Library", icon: BookOpen, group: "Programming" },
   { to: "/admin/exercises", label: "Exercise Library", icon: Dumbbell, group: "Programming" },
   { to: "/admin/cardio-targets", label: "Cardio Targets", icon: Heart, group: "Programming", keywords: ["card", "cardio", "targets", "conditioning", "steps", "hiit", "liss", "zone 2", "heart rate"] },
