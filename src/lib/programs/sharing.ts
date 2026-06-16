@@ -286,19 +286,37 @@ export interface DestinationSummary {
   pendingSubmissions: ShareDestination[];
   rejectedSubmissions: ShareDestination[];
   changesRequested: ShareDestination[];
+  membershipPublished: {
+    version: number | null;
+    hasUpdate: boolean;
+  } | null;
 }
 
 export function summarizeShares(
-  template: { visibility: string },
+  template: { visibility: string; payload_revision?: number | null },
   shares: TemplateShare[],
 ): DestinationSummary {
   const active = shares.filter((s) => s.status !== "removed" && s.status !== "rejected");
+  const membershipShare = active.find(
+    (s) => s.destination === "membership" && s.status === "shared",
+  );
+  const tRev = template.payload_revision ?? null;
+  const membershipPublished = membershipShare
+    ? {
+        version: membershipShare.shared_version,
+        hasUpdate:
+          tRev != null &&
+          membershipShare.shared_version != null &&
+          tRev > membershipShare.shared_version,
+      }
+    : null;
   return {
     visibility: (template.visibility as any) ?? "private",
     coachShareCount: active.filter((s) => s.destination === "coach" && s.status === "shared").length,
     pendingSubmissions: active.filter((s) => s.status === "pending").map((s) => s.destination),
     rejectedSubmissions: shares.filter((s) => s.status === "rejected").map((s) => s.destination),
     changesRequested: active.filter((s) => s.status === "changes_requested").map((s) => s.destination),
+    membershipPublished,
   };
 }
 
