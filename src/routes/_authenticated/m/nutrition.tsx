@@ -192,11 +192,7 @@ function MemberNutrition() {
   const displayRecipes = useMemo(() => {
     if (activeCategory === "Recommended") return recommended.length > 0 ? recommended : visible;
     if (activeCategory === "All Recipes") return visible;
-    return visible.filter((r) =>
-      (RECIPE_CATEGORIES as readonly string[]).includes(r.category)
-        ? r.category === activeCategory
-        : activeCategory === "All Recipes",
-    );
+    return visible.filter((r) => r.category === activeCategory);
   }, [visible, recommended, activeCategory]);
 
   const clearFilters = () => {
