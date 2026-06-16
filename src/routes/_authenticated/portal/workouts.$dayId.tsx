@@ -596,48 +596,21 @@ function WorkoutDay() {
     markInProgress();
   };
 
-  // Post-workout feedback sheet state.
-  const [feedbackOpen, setFeedbackOpen] = useState(false);
-  // Celebratory summary dialog shown right after first feedback submit.
-  const [summaryOpen, setSummaryOpen] = useState(false);
-  // After first feedback submit, gently offer a lift upload. Fully optional.
-  const [liftPromptOpen, setLiftPromptOpen] = useState(false);
-  const [justSubmittedFeedback, setJustSubmittedFeedback] = useState<{ overall_rating: number; session_rpe: number } | null>(null);
-  // When the client clicks "Finish", we stage the completion payload and
-  // open the feedback sheet. The workout is NOT marked complete until the
-  // feedback is actually submitted — feedback is now a hard gate.
-  const [pendingFinalize, setPendingFinalize] = useState<null | {
-    completionId?: string;
-    startedAt: string;
-    durationMin: number;
-    notes: string | null;
-  }>(null);
-  const { data: existingFeedback } = useQuery({
-    queryKey: ["pl-workout-feedback", completion?.id],
-    enabled: !!completion?.id,
-    queryFn: async () =>
-      (await (sb as any)
-        .from("pl_workout_feedback")
-        .select("id, overall_rating, session_rpe, pain, pain_level, pain_area, pain_note, client_note, reviewed_at, reviewed_by")
-        .eq("completion_id", completion!.id)
-        .maybeSingle()).data,
-  });
-  const hasFeedback = !!existingFeedback;
-  const feedbackLocked = !!(existingFeedback?.reviewed_at || existingFeedback?.reviewed_by);
-  // Honor ?review=1 by auto-opening the feedback sheet as soon as we have
-  // a completion row to attach it to. Notification deep-links use this.
+  // Quick "Workout Complete" sheet state. The long review flow has been removed.
+  const navigate = useNavigate();
+  const [completeOpen, setCompleteOpen] = useState(false);
+  const [completeSubmitting, setCompleteSubmitting] = useState(false);
+  // Notifications can deep-link with ?review=1 to nudge the member to finish
+  // an in-progress workout. Auto-open the quick popup once it lands.
   const reviewParam = search.review === 1;
   const autoOpenedReviewRef = useRef(false);
   useEffect(() => {
     if (!reviewParam) { autoOpenedReviewRef.current = false; return; }
     if (autoOpenedReviewRef.current) return;
-    if (!completion?.id) return;
-    if (feedbackLocked) return;
+    if (completion?.completed_at) return;
     autoOpenedReviewRef.current = true;
-    setFeedbackOpen(true);
-  }, [reviewParam, completion?.id, feedbackLocked]);
-  const feedbackSkipped = !!(completion?.id && typeof window !== "undefined"
-    && localStorage.getItem(`lov.wfb.skip:${completion.id}`));
+    setCompleteOpen(true);
+  }, [reviewParam, completion?.completed_at]);
 
   const refreshNotes = () => {
     qc.invalidateQueries({ queryKey: ["pl-day-exercise-notes", dayId] });
