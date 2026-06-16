@@ -331,6 +331,9 @@ export const listMembershipLibrary = createServerFn({ method: "GET" })
     const { supabase, userId } = context;
     await assertMemberCanReadProtected(supabase, userId);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    // Bridge: surface templates shared via pl_template_shares as member_plans
+    // listings if no listing exists yet.
+    try { await syncSharedTemplatesToLibrary(supabaseAdmin); } catch { /* best-effort */ }
     const { data: member } = await supabaseAdmin
       .from("app_members").select("id").eq("user_id", userId).maybeSingle();
     if (!member) return { plans: [] };
