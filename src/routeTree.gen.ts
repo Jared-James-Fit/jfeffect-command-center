@@ -133,6 +133,7 @@ import { Route as AuthenticatedAdminFloatingBarRouteImport } from './routes/_aut
 import { Route as AuthenticatedAdminFilloutSubmissionsRouteImport } from './routes/_authenticated/admin/fillout-submissions'
 import { Route as AuthenticatedAdminFaqsRouteImport } from './routes/_authenticated/admin/faqs'
 import { Route as AuthenticatedAdminExercisesRouteImport } from './routes/_authenticated/admin/exercises'
+import { Route as AuthenticatedAdminDiscountCodesRouteImport } from './routes/_authenticated/admin/discount-codes'
 import { Route as AuthenticatedAdminContentIdeasRouteImport } from './routes/_authenticated/admin/content-ideas'
 import { Route as AuthenticatedAdminContentRouteImport } from './routes/_authenticated/admin/content'
 import { Route as AuthenticatedAdminCommunicationRouteImport } from './routes/_authenticated/admin/communication'
@@ -940,6 +941,12 @@ const AuthenticatedAdminExercisesRoute =
     path: '/exercises',
     getParentRoute: () => AuthenticatedAdminRouteRoute,
   } as any)
+const AuthenticatedAdminDiscountCodesRoute =
+  AuthenticatedAdminDiscountCodesRouteImport.update({
+    id: '/discount-codes',
+    path: '/discount-codes',
+    getParentRoute: () => AuthenticatedAdminRouteRoute,
+  } as any)
 const AuthenticatedAdminContentIdeasRoute =
   AuthenticatedAdminContentIdeasRouteImport.update({
     id: '/content-ideas',
@@ -1673,6 +1680,7 @@ export interface FileRoutesByFullPath {
   '/admin/communication': typeof AuthenticatedAdminCommunicationRoute
   '/admin/content': typeof AuthenticatedAdminContentRoute
   '/admin/content-ideas': typeof AuthenticatedAdminContentIdeasRoute
+  '/admin/discount-codes': typeof AuthenticatedAdminDiscountCodesRoute
   '/admin/exercises': typeof AuthenticatedAdminExercisesRoute
   '/admin/faqs': typeof AuthenticatedAdminFaqsRoute
   '/admin/fillout-submissions': typeof AuthenticatedAdminFilloutSubmissionsRoute
@@ -1908,6 +1916,7 @@ export interface FileRoutesByTo {
   '/admin/communication': typeof AuthenticatedAdminCommunicationRoute
   '/admin/content': typeof AuthenticatedAdminContentRoute
   '/admin/content-ideas': typeof AuthenticatedAdminContentIdeasRoute
+  '/admin/discount-codes': typeof AuthenticatedAdminDiscountCodesRoute
   '/admin/exercises': typeof AuthenticatedAdminExercisesRoute
   '/admin/faqs': typeof AuthenticatedAdminFaqsRoute
   '/admin/fillout-submissions': typeof AuthenticatedAdminFilloutSubmissionsRoute
@@ -2148,6 +2157,7 @@ export interface FileRoutesById {
   '/_authenticated/admin/communication': typeof AuthenticatedAdminCommunicationRoute
   '/_authenticated/admin/content': typeof AuthenticatedAdminContentRoute
   '/_authenticated/admin/content-ideas': typeof AuthenticatedAdminContentIdeasRoute
+  '/_authenticated/admin/discount-codes': typeof AuthenticatedAdminDiscountCodesRoute
   '/_authenticated/admin/exercises': typeof AuthenticatedAdminExercisesRoute
   '/_authenticated/admin/faqs': typeof AuthenticatedAdminFaqsRoute
   '/_authenticated/admin/fillout-submissions': typeof AuthenticatedAdminFilloutSubmissionsRoute
@@ -2389,6 +2399,7 @@ export interface FileRouteTypes {
     | '/admin/communication'
     | '/admin/content'
     | '/admin/content-ideas'
+    | '/admin/discount-codes'
     | '/admin/exercises'
     | '/admin/faqs'
     | '/admin/fillout-submissions'
@@ -2624,6 +2635,7 @@ export interface FileRouteTypes {
     | '/admin/communication'
     | '/admin/content'
     | '/admin/content-ideas'
+    | '/admin/discount-codes'
     | '/admin/exercises'
     | '/admin/faqs'
     | '/admin/fillout-submissions'
@@ -2863,6 +2875,7 @@ export interface FileRouteTypes {
     | '/_authenticated/admin/communication'
     | '/_authenticated/admin/content'
     | '/_authenticated/admin/content-ideas'
+    | '/_authenticated/admin/discount-codes'
     | '/_authenticated/admin/exercises'
     | '/_authenticated/admin/faqs'
     | '/_authenticated/admin/fillout-submissions'
@@ -3967,6 +3980,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAdminExercisesRouteImport
       parentRoute: typeof AuthenticatedAdminRouteRoute
     }
+    '/_authenticated/admin/discount-codes': {
+      id: '/_authenticated/admin/discount-codes'
+      path: '/discount-codes'
+      fullPath: '/admin/discount-codes'
+      preLoaderRoute: typeof AuthenticatedAdminDiscountCodesRouteImport
+      parentRoute: typeof AuthenticatedAdminRouteRoute
+    }
     '/_authenticated/admin/content-ideas': {
       id: '/_authenticated/admin/content-ideas'
       path: '/content-ideas'
@@ -4943,6 +4963,7 @@ interface AuthenticatedAdminRouteRouteChildren {
   AuthenticatedAdminCommunicationRoute: typeof AuthenticatedAdminCommunicationRoute
   AuthenticatedAdminContentRoute: typeof AuthenticatedAdminContentRoute
   AuthenticatedAdminContentIdeasRoute: typeof AuthenticatedAdminContentIdeasRoute
+  AuthenticatedAdminDiscountCodesRoute: typeof AuthenticatedAdminDiscountCodesRoute
   AuthenticatedAdminExercisesRoute: typeof AuthenticatedAdminExercisesRoute
   AuthenticatedAdminFaqsRoute: typeof AuthenticatedAdminFaqsRoute
   AuthenticatedAdminFilloutSubmissionsRoute: typeof AuthenticatedAdminFilloutSubmissionsRoute
@@ -5051,6 +5072,7 @@ const AuthenticatedAdminRouteRouteChildren: AuthenticatedAdminRouteRouteChildren
     AuthenticatedAdminCommunicationRoute: AuthenticatedAdminCommunicationRoute,
     AuthenticatedAdminContentRoute: AuthenticatedAdminContentRoute,
     AuthenticatedAdminContentIdeasRoute: AuthenticatedAdminContentIdeasRoute,
+    AuthenticatedAdminDiscountCodesRoute: AuthenticatedAdminDiscountCodesRoute,
     AuthenticatedAdminExercisesRoute: AuthenticatedAdminExercisesRoute,
     AuthenticatedAdminFaqsRoute: AuthenticatedAdminFaqsRoute,
     AuthenticatedAdminFilloutSubmissionsRoute:
