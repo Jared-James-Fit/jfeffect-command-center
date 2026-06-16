@@ -512,3 +512,162 @@ function SignupJf() {
 function FieldError({ children }: { children: React.ReactNode }) {
   return <p className="mt-1 text-[11px] font-medium text-rose-400">{children}</p>;
 }
+
+/* ---------------- Defaults (CMS-overridable) ---------------- */
+
+const DEFAULT_FEATURES = [
+  { title: "Program Library", body: "Powerlifting, bodybuilding, fat loss, strength, muscle, home workouts. Beginner to advanced. Pick a plan and start training today." },
+  { title: "Exercise Demo Library", body: "Clear technique videos built right into your workouts, so you're never guessing how a lift should look or feel." },
+  { title: "Progress Tracking", body: "Log every set, track your strength, watch your PRs climb, and actually see whether the work is paying off." },
+  { title: "Education", body: "Training, recovery, nutrition, and performance content so you understand the why behind the plan — not just the what." },
+  { title: "Future Updates", body: "New programs, resources, and features added regularly. Your membership gets better while you use it." },
+];
+
+type LibraryCategory = { name: string; icon?: string; subtypes: string[] };
+const DEFAULT_LIBRARY: LibraryCategory[] = [
+  { name: "Powerlifting", icon: "trophy", subtypes: ["Beginner", "Intermediate", "Advanced", "Competition Prep"] },
+  { name: "Bodybuilding", icon: "dumbbell", subtypes: ["Push/Pull/Legs", "Upper/Lower", "Full Body", "Glute Focused"] },
+  { name: "Fat Loss", icon: "flame", subtypes: ["Beginner", "Intermediate", "Advanced"] },
+  { name: "Home / Minimal Equipment", icon: "home", subtypes: ["Bodyweight", "Dumbbells Only", "At-Home Strength"] },
+];
+
+const DEFAULT_WHO_FOR = [
+  "You're driven and you want structure, not a hype video",
+  "You're beginner, intermediate, or advanced — the library covers all of it",
+  "You want to build muscle, lose fat, or get stronger on a real plan",
+  "You're happy to train on your own — you just want the right plan to follow",
+  "You're done restarting and want something that compounds",
+];
+
+const DEFAULT_NOT_FOR = [
+  "You want a one-week quick fix",
+  "You need motivation to carry you every day",
+  "You won't actually follow a plan",
+  "You want someone to do the thinking for you (that's coaching)",
+];
+
+const DEFAULT_APP_PREVIEWS = [
+  { label: "Dashboard — today's session at a glance" },
+  { label: "Workout logging — tap to log reps, load, RPE" },
+  { label: "Exercise library — every movement, every demo" },
+  { label: "Program library — switch focus anytime" },
+  { label: "Progress tracking — volume, PRs, trends" },
+];
+
+const DEFAULT_FAQ = [
+  { q: "Is this coaching?", a: "No. Membership is the self-guided app — proven programs, demos, tracking, and education you run on your own. Coaching is 1:1, built for you, with weekly check-ins and direct access to me. Want that? Apply for coaching." },
+  { q: "Can beginners join?", a: "Absolutely. There are beginner programs in every category, with demos for every movement so you're never lost." },
+  { q: "Can I train at home?", a: "Yes — there's a whole home/minimal-equipment section, from bodyweight to dumbbells-only to at-home strength." },
+  { q: "Can I use this for powerlifting?", a: "Yes. Powerlifting is the founder's sport — beginner through competition prep is in the library." },
+  { q: "Can I use this for bodybuilding?", a: "Yes — PPL, upper/lower, full body, and glute-focused splits are all included." },
+  { q: "How often are new programs added?", a: "Regularly. New programs, resources, and features get added while you're a member — the library keeps growing." },
+  { q: "Can I cancel anytime?", a: "Yes. Cancel anytime from your billing page; access runs to the end of your current period. No games." },
+];
+
+/* ---------------- Sections ---------------- */
+
+function CompareAloneSection() {
+  const left = [
+    "Random workouts pulled from wherever",
+    "Conflicting advice from ten directions",
+    "No real structure week to week",
+    "No way to track if it's working",
+    "Restarting every few weeks",
+  ];
+  const right = [
+    "Proven programs built by a national-level coach",
+    "One organized system, no second-guessing",
+    "Built-in progress tracking",
+    "Exercise demos so form isn't a mystery",
+    "A clear path you can actually stick to",
+  ];
+  return (
+    <Section>
+      <SectionTitle title="The difference is structure." />
+      <div className="grid gap-4 md:grid-cols-2">
+        <Card className="border-border bg-card p-6">
+          <div className="text-xs font-bold uppercase tracking-widest text-muted-foreground mb-3">Figuring it out yourself</div>
+          <ul className="space-y-2 text-sm text-muted-foreground">
+            {left.map((x) => (
+              <li key={x} className="flex items-start gap-2"><XCircle className="mt-0.5 h-4 w-4 shrink-0 text-rose-400/80" />{x}</li>
+            ))}
+          </ul>
+        </Card>
+        <Card className="border-primary/40 bg-primary/5 p-6">
+          <div className="text-xs font-bold uppercase tracking-widest text-primary mb-3">JF Effect Membership</div>
+          <ul className="space-y-2 text-sm">
+            {right.map((x) => (
+              <li key={x} className="flex items-start gap-2"><CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-400" />{x}</li>
+            ))}
+          </ul>
+        </Card>
+      </div>
+      <p className="mx-auto mt-6 max-w-3xl text-center text-sm text-muted-foreground md:text-base">
+        You've already tried winging it. You know where it goes. This is the version where the work compounds instead of resetting.
+      </p>
+    </Section>
+  );
+}
+
+function ProgramLibraryShowcase({ categories, programCount }: { categories: LibraryCategory[]; programCount?: string | number }) {
+  const iconFor = (key?: string) => {
+    switch ((key ?? "").toLowerCase()) {
+      case "trophy": return Trophy;
+      case "dumbbell": return Dumbbell;
+      case "flame": return Flame;
+      case "home": return HomeIcon;
+      default: return Library;
+    }
+  };
+  const count = (programCount ?? "").toString().trim();
+  return (
+    <Section>
+      <SectionTitle
+        eyebrow="The full library"
+        title="Pick your goal. The plan's already built."
+        sub={count ? `${count}+ programs across every goal and level, all included — switch anytime.` : "Programs across every goal and level, all included — switch anytime."}
+      />
+      <div className="grid gap-3 sm:grid-cols-2">
+        {categories.map((c) => {
+          const Icon = iconFor(c.icon);
+          return (
+            <div key={c.name} className="rounded-2xl border border-border bg-card p-5 transition hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-lg hover:shadow-primary/10">
+              <div className="flex items-center gap-3">
+                <div className="grid h-10 w-10 place-items-center rounded-xl border border-primary/35 bg-primary/15 text-primary">
+                  <Icon className="h-5 w-5" />
+                </div>
+                <div className="text-base font-black tracking-tight">{c.name}</div>
+              </div>
+              <div className="mt-4 flex flex-wrap gap-2">
+                {c.subtypes.map((s) => (
+                  <span key={s} className="rounded-full border border-border bg-muted/40 px-2.5 py-1 text-[11px] font-semibold text-foreground/85">
+                    {s}
+                  </span>
+                ))}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </Section>
+  );
+}
+
+function WhyStickSection() {
+  return (
+    <Section>
+      <div className="mx-auto max-w-3xl text-center">
+        <div className="text-[11px] font-bold uppercase tracking-[0.18em] text-primary">Why this works when nothing else did</div>
+        <h2 className="mt-2 text-3xl font-black tracking-tight md:text-4xl">
+          You don't have a willpower problem. You have a structure problem.
+        </h2>
+        <p className="mt-5 text-base text-muted-foreground md:text-lg">
+          Most people don't fail because they're lazy. They fail because they jump between programs, follow random advice, and never run anything long enough for it to work. So they restart. Again.
+        </p>
+        <p className="mt-4 text-base text-muted-foreground md:text-lg">
+          The membership kills that loop. One organized system, a clear plan every session, tracking that shows progress, and a library deep enough that you never need to go hunting for the next thing. You just keep showing up — and for once, it adds up.
+        </p>
+      </div>
+    </Section>
+  );
+}
