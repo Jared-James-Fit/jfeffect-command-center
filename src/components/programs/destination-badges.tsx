@@ -1,5 +1,5 @@
 import { Badge } from "@/components/ui/badge";
-import { Lock, Users, Send, AlertTriangle, CheckCircle2, XCircle } from "lucide-react";
+import { Lock, Users, Send, AlertTriangle, CheckCircle2, XCircle, Radio } from "lucide-react";
 import type { DestinationSummary } from "@/lib/programs/sharing";
 import { destinationLabel } from "@/lib/programs/sharing";
 
@@ -22,6 +22,18 @@ export function DestinationBadges({
     items.push({ key: "private", label: "Private", tone: "muted", icon: <Lock className="h-3 w-3" /> });
   } else if (summary.visibility === "team") {
     items.push({ key: "team", label: "Team Live", tone: "live", icon: <Users className="h-3 w-3" /> });
+  }
+
+  if (summary.membershipPublished) {
+    const { version, hasUpdate } = summary.membershipPublished;
+    items.push({
+      key: "membership-published",
+      label: hasUpdate
+        ? `Membership Update Available${version != null ? ` (v${version})` : ""}`
+        : `Published to Membership${version != null ? ` v${version}` : ""}`,
+      tone: hasUpdate ? "warn" : "live",
+      icon: <Radio className="h-3 w-3" />,
+    });
   }
 
   if (summary.coachShareCount > 0) {
