@@ -773,6 +773,7 @@ export type Database = {
       }
       appointments: {
         Row: {
+          application_id: string | null
           appointment_type: Database["public"]["Enums"]["appointment_type"]
           attendee_notes: string | null
           booking_link_id: string | null
@@ -801,6 +802,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          application_id?: string | null
           appointment_type?: Database["public"]["Enums"]["appointment_type"]
           attendee_notes?: string | null
           booking_link_id?: string | null
@@ -829,6 +831,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          application_id?: string | null
           appointment_type?: Database["public"]["Enums"]["appointment_type"]
           attendee_notes?: string | null
           booking_link_id?: string | null
@@ -857,6 +860,13 @@ export type Database = {
           updated_at?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "appointments_application_id_fkey"
+            columns: ["application_id"]
+            isOneToOne: false
+            referencedRelation: "coaching_applications"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "appointments_booking_link_id_fkey"
             columns: ["booking_link_id"]
@@ -3411,26 +3421,88 @@ export type Database = {
         }
         Relationships: []
       }
+      coaching_app_notification_recipients: {
+        Row: {
+          created_at: string
+          email: string | null
+          email_verified_at: string | null
+          id: string
+          name: string
+          paused: boolean
+          phone: string | null
+          phone_verified_at: string | null
+          priority_only: boolean
+          receive_application_email: boolean
+          receive_application_sms: boolean
+          receive_booking_email: boolean
+          receive_booking_sms: boolean
+          role: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          email?: string | null
+          email_verified_at?: string | null
+          id?: string
+          name: string
+          paused?: boolean
+          phone?: string | null
+          phone_verified_at?: string | null
+          priority_only?: boolean
+          receive_application_email?: boolean
+          receive_application_sms?: boolean
+          receive_booking_email?: boolean
+          receive_booking_sms?: boolean
+          role?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          email?: string | null
+          email_verified_at?: string | null
+          id?: string
+          name?: string
+          paused?: boolean
+          phone?: string | null
+          phone_verified_at?: string | null
+          priority_only?: boolean
+          receive_application_email?: boolean
+          receive_application_sms?: boolean
+          receive_booking_email?: boolean
+          receive_booking_sms?: boolean
+          role?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       coaching_applications: {
         Row: {
+          application_source: string | null
           application_status: string | null
           appointment_id: string | null
+          assigned_to: string | null
+          best_time: string | null
           biggest_struggle: string | null
           booking_link_slug: string | null
           budget_range: string | null
+          call_status: string | null
           can_follow_plan: boolean | null
           client_id: string | null
+          coaching_interest: string | null
+          consent_contact_at: string | null
           created_at: string
           current_weight: string | null
           days_per_week: number | null
           email: string
           first_name: string | null
+          follow_up_at: string | null
           full_name: string
           goals: string | null
           gym_access: string | null
           id: string
           injuries: string | null
           instagram: string | null
+          investment_readiness: string | null
           last_name: string | null
           lead_score: number | null
           lead_temperature: string | null
@@ -3438,10 +3510,16 @@ export type Database = {
           main_goal: string | null
           monthly_investment: string | null
           notes_admin: string | null
+          obstacle: string | null
+          obstacle_other: string | null
           phone: string | null
+          preferred_contact: string | null
+          qualification_label: string | null
+          readiness: string | null
           ready_to_invest: boolean | null
           recommended_offer: string | null
           schedule: string | null
+          scoring: Json | null
           seriousness: number | null
           source: string
           status: string
@@ -3449,31 +3527,42 @@ export type Database = {
           summary: string | null
           target_outcome: string | null
           timeline: string | null
+          tracking_willingness: string | null
           training_history: string | null
+          training_location: string | null
           tried_before: string | null
           updated_at: string
           why_now: string | null
+          why_now_tags: string[] | null
           win_90_days: string | null
         }
         Insert: {
+          application_source?: string | null
           application_status?: string | null
           appointment_id?: string | null
+          assigned_to?: string | null
+          best_time?: string | null
           biggest_struggle?: string | null
           booking_link_slug?: string | null
           budget_range?: string | null
+          call_status?: string | null
           can_follow_plan?: boolean | null
           client_id?: string | null
+          coaching_interest?: string | null
+          consent_contact_at?: string | null
           created_at?: string
           current_weight?: string | null
           days_per_week?: number | null
           email: string
           first_name?: string | null
+          follow_up_at?: string | null
           full_name: string
           goals?: string | null
           gym_access?: string | null
           id?: string
           injuries?: string | null
           instagram?: string | null
+          investment_readiness?: string | null
           last_name?: string | null
           lead_score?: number | null
           lead_temperature?: string | null
@@ -3481,10 +3570,16 @@ export type Database = {
           main_goal?: string | null
           monthly_investment?: string | null
           notes_admin?: string | null
+          obstacle?: string | null
+          obstacle_other?: string | null
           phone?: string | null
+          preferred_contact?: string | null
+          qualification_label?: string | null
+          readiness?: string | null
           ready_to_invest?: boolean | null
           recommended_offer?: string | null
           schedule?: string | null
+          scoring?: Json | null
           seriousness?: number | null
           source?: string
           status?: string
@@ -3492,31 +3587,42 @@ export type Database = {
           summary?: string | null
           target_outcome?: string | null
           timeline?: string | null
+          tracking_willingness?: string | null
           training_history?: string | null
+          training_location?: string | null
           tried_before?: string | null
           updated_at?: string
           why_now?: string | null
+          why_now_tags?: string[] | null
           win_90_days?: string | null
         }
         Update: {
+          application_source?: string | null
           application_status?: string | null
           appointment_id?: string | null
+          assigned_to?: string | null
+          best_time?: string | null
           biggest_struggle?: string | null
           booking_link_slug?: string | null
           budget_range?: string | null
+          call_status?: string | null
           can_follow_plan?: boolean | null
           client_id?: string | null
+          coaching_interest?: string | null
+          consent_contact_at?: string | null
           created_at?: string
           current_weight?: string | null
           days_per_week?: number | null
           email?: string
           first_name?: string | null
+          follow_up_at?: string | null
           full_name?: string
           goals?: string | null
           gym_access?: string | null
           id?: string
           injuries?: string | null
           instagram?: string | null
+          investment_readiness?: string | null
           last_name?: string | null
           lead_score?: number | null
           lead_temperature?: string | null
@@ -3524,10 +3630,16 @@ export type Database = {
           main_goal?: string | null
           monthly_investment?: string | null
           notes_admin?: string | null
+          obstacle?: string | null
+          obstacle_other?: string | null
           phone?: string | null
+          preferred_contact?: string | null
+          qualification_label?: string | null
+          readiness?: string | null
           ready_to_invest?: boolean | null
           recommended_offer?: string | null
           schedule?: string | null
+          scoring?: Json | null
           seriousness?: number | null
           source?: string
           status?: string
@@ -3535,10 +3647,13 @@ export type Database = {
           summary?: string | null
           target_outcome?: string | null
           timeline?: string | null
+          tracking_willingness?: string | null
           training_history?: string | null
+          training_location?: string | null
           tried_before?: string | null
           updated_at?: string
           why_now?: string | null
+          why_now_tags?: string[] | null
           win_90_days?: string | null
         }
         Relationships: [
