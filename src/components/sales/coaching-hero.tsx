@@ -1,8 +1,4 @@
 import { Button } from "@/components/ui/button";
-import {
-  MessageCircle, ClipboardCheck, Target,
-  Utensils,
-} from "lucide-react";
 import type { ReactNode } from "react";
 
 export function CoachingHero({
@@ -42,25 +38,6 @@ export function CoachingHero({
             {headline}
           </h1>
           <p className="mt-5 max-w-xl text-base text-white/75 md:text-lg">{sub}</p>
-
-          <ul className="mt-8 grid max-w-xl gap-4 sm:grid-cols-2">
-            {[
-              { Icon: Target, title: "A Plan Built for You", body: "Built for your body, your schedule, your gym \u2014 not pulled from a library and slapped on you." },
-              { Icon: ClipboardCheck, title: "Weekly Check-Ins & Adjustments", body: "Every week I look at your numbers and adjust. You're never guessing whether it's working." },
-              { Icon: Utensils, title: "Nutrition That Fits Your Life", body: "Real targets built around how you actually eat \u2014 no spreadsheets you'll abandon in a week." },
-              { Icon: MessageCircle, title: "Direct Access to Me", body: "Message me directly. Not a chatbot, not a junior coach \u2014 me." },
-            ].map(({ Icon, title, body }) => (
-              <li key={title} className="flex items-start gap-3">
-                <div className="grid h-9 w-9 shrink-0 place-items-center rounded-xl border border-white/15 bg-white/5 text-primary">
-                  <Icon className="h-4 w-4" />
-                </div>
-                <div>
-                  <div className="text-sm font-bold text-white">{title}</div>
-                  <div className="text-sm text-white/65">{body}</div>
-                </div>
-              </li>
-            ))}
-          </ul>
 
           <div className="mt-8 flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:gap-5">
             {primary}
@@ -151,10 +128,10 @@ export function CoachingVsMembership({ onApply }: { onApply: () => void }) {
             {[
               "A plan built for you, not pulled from a library",
               "Weekly check-ins I review myself",
+              "Nutrition coaching built around your life",
               "Adjustments based on your actual numbers",
-              "Message me directly, anytime",
-              "Lift video reviews with timestamped feedback",
-              "A real call before you commit",
+              "Direct access to me, anytime",
+              "A real strategy call before you commit",
             ].map((l) => (
               <li key={l} className="flex items-start gap-2">
                 <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-primary" />{l}
@@ -168,12 +145,12 @@ export function CoachingVsMembership({ onApply }: { onApply: () => void }) {
           <div className="mt-1 text-2xl font-black">Self-guided app subscription</div>
           <ul className="mt-4 space-y-2 text-sm text-muted-foreground">
             {[
-              "Pre-built programs you choose from",
-              "Tracking, analytics, and exercise demos",
-              "Recipes, nutrition resources, education",
-              "Member events and updates",
-              "No 1:1 coach involvement",
-              "Self-paced — no application required",
+              "The full app + workout library",
+              "Pre-built training programs you choose from",
+              "Exercise demos, tracking, analytics",
+              "Nutrition resources + education",
+              "Self-paced — no application",
+              "No 1:1 coaching",
             ].map((l) => (
               <li key={l} className="flex items-start gap-2">
                 <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-muted-foreground/60" />{l}
