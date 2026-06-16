@@ -12,6 +12,47 @@
 
 const GATEWAY_URL = "https://connector-gateway.lovable.dev/twilio";
 
+function b64url(s: string) {
+  return Buffer.from(s, "utf8").toString("base64")
+    .replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
+
+async function sendEmailViaProvider(supabaseAdmin: any, to: string, subject: string, body: string) {
+  const { data: settings } = await supabaseAdmin
+    .from("email_sender_settings").select("*").eq("singleton", true).maybeSingle();
+  if (!settings) throw new Error("Email sender not configured");
+  const from = `${settings.sender_name} <${settings.sender_email}>`;
+  const replyTo = settings.reply_to_email;
+  const LOVABLE_API_KEY = process.env.LOVABLE_API_KEY;
+  if (settings.provider === "gmail") {
+    const GMAIL_KEY = process.env.GOOGLE_MAIL_API_KEY;
+    if (!LOVABLE_API_KEY || !GMAIL_KEY) throw new Error("Gmail connector not linked");
+    const raw = [
+      `From: ${from}`, `To: ${to}`, `Reply-To: ${replyTo}`,
+      `Subject: ${subject}`, `Content-Type: text/plain; charset="UTF-8"`, ``, body,
+    ].join("\r\n");
+    const res = await fetch("https://connector-gateway.lovable.dev/google_mail/gmail/v1/users/me/messages/send", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${LOVABLE_API_KEY}`, "X-Connection-Api-Key": GMAIL_KEY },
+      body: JSON.stringify({ raw: b64url(raw) }),
+    });
+    if (!res.ok) throw new Error(`Gmail send failed (${res.status})`);
+    return;
+  }
+  if (settings.provider === "resend") {
+    const RESEND_KEY = process.env.RESEND_API_KEY;
+    if (!LOVABLE_API_KEY || !RESEND_KEY) throw new Error("Resend connector not linked");
+    const res = await fetch("https://connector-gateway.lovable.dev/resend/emails", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${LOVABLE_API_KEY}`, "X-Connection-Api-Key": RESEND_KEY },
+      body: JSON.stringify({ from, to: [to], reply_to: replyTo, subject, text: body }),
+    });
+    if (!res.ok) throw new Error(`Resend send failed (${res.status})`);
+    return;
+  }
+  throw new Error(`Provider ${settings.provider} not supported`);
+}
+
 function normalizePhone(raw: string | null | undefined): string | null {
   if (!raw) return null;
   const cleaned = String(raw).replace(/[^\d+]/g, "");
@@ -92,14 +133,30 @@ export async function notifyCoachingAppRecipients(supabaseAdmin: any, ctx: Notif
       }
     }
     if (r[wantEmail] && r.email) {
-      emailQueued++;
+      const dedupeKey = `${ctx.kind}:${ctx.event_key}:email:${r.id}`;
+      const { data: existing } = await supabaseAdmin
+        .from("communication_log").select("id")
+        .eq("source", dedupeKey).limit(1).maybeSingle();
+      if (existing) continue;
       try {
-        await supabaseAdmin.from("communication_log").insert({
-          channel: "email", recipient: r.email,
-          subject: ctx.emailSubject, body: ctx.emailBody,
-          status: "queued", source: ctx.kind,
-        });
-      } catch { /* schema variance — best-effort */ }
+        await sendEmailViaProvider(supabaseAdmin, r.email, ctx.emailSubject, ctx.emailBody);
+        emailQueued++;
+        try {
+          await supabaseAdmin.from("communication_log").insert({
+            channel: "email", recipient: r.email,
+            subject: ctx.emailSubject, body: ctx.emailBody,
+            status: "sent", source: dedupeKey,
+          });
+        } catch { /* schema variance */ }
+      } catch (e: any) {
+        try {
+          await supabaseAdmin.from("communication_log").insert({
+            channel: "email", recipient: r.email,
+            subject: ctx.emailSubject, body: ctx.emailBody,
+            status: "failed", source: dedupeKey,
+          });
+        } catch { /* schema variance */ }
+      }
     }
   }
   return { recipients_matched: matched.length, sms_sent: smsSent, sms_skipped: smsSkipped, email_queued: emailQueued };
