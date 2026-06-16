@@ -115,6 +115,7 @@ import { Route as AuthenticatedAdminProgramAssignRouteImport } from './routes/_a
 import { Route as AuthenticatedAdminPopupsRouteImport } from './routes/_authenticated/admin/popups'
 import { Route as AuthenticatedAdminPaymentsRouteImport } from './routes/_authenticated/admin/payments'
 import { Route as AuthenticatedAdminPaymentLinksRouteImport } from './routes/_authenticated/admin/payment-links'
+import { Route as AuthenticatedAdminOnboardingRouteImport } from './routes/_authenticated/admin/onboarding'
 import { Route as AuthenticatedAdminOffersRouteImport } from './routes/_authenticated/admin/offers'
 import { Route as AuthenticatedAdminNutritionTargetsRouteImport } from './routes/_authenticated/admin/nutrition-targets'
 import { Route as AuthenticatedAdminNutritionDashboardRouteImport } from './routes/_authenticated/admin/nutrition-dashboard'
@@ -832,6 +833,12 @@ const AuthenticatedAdminPaymentLinksRoute =
   AuthenticatedAdminPaymentLinksRouteImport.update({
     id: '/payment-links',
     path: '/payment-links',
+    getParentRoute: () => AuthenticatedAdminRouteRoute,
+  } as any)
+const AuthenticatedAdminOnboardingRoute =
+  AuthenticatedAdminOnboardingRouteImport.update({
+    id: '/onboarding',
+    path: '/onboarding',
     getParentRoute: () => AuthenticatedAdminRouteRoute,
   } as any)
 const AuthenticatedAdminOffersRoute =
@@ -1683,6 +1690,7 @@ export interface FileRoutesByFullPath {
   '/admin/nutrition-dashboard': typeof AuthenticatedAdminNutritionDashboardRouteWithChildren
   '/admin/nutrition-targets': typeof AuthenticatedAdminNutritionTargetsRoute
   '/admin/offers': typeof AuthenticatedAdminOffersRoute
+  '/admin/onboarding': typeof AuthenticatedAdminOnboardingRoute
   '/admin/payment-links': typeof AuthenticatedAdminPaymentLinksRoute
   '/admin/payments': typeof AuthenticatedAdminPaymentsRoute
   '/admin/popups': typeof AuthenticatedAdminPopupsRoute
@@ -1916,6 +1924,7 @@ export interface FileRoutesByTo {
   '/admin/nutrition-dashboard': typeof AuthenticatedAdminNutritionDashboardRouteWithChildren
   '/admin/nutrition-targets': typeof AuthenticatedAdminNutritionTargetsRoute
   '/admin/offers': typeof AuthenticatedAdminOffersRoute
+  '/admin/onboarding': typeof AuthenticatedAdminOnboardingRoute
   '/admin/payment-links': typeof AuthenticatedAdminPaymentLinksRoute
   '/admin/payments': typeof AuthenticatedAdminPaymentsRoute
   '/admin/popups': typeof AuthenticatedAdminPopupsRoute
@@ -2156,6 +2165,7 @@ export interface FileRoutesById {
   '/_authenticated/admin/nutrition-dashboard': typeof AuthenticatedAdminNutritionDashboardRouteWithChildren
   '/_authenticated/admin/nutrition-targets': typeof AuthenticatedAdminNutritionTargetsRoute
   '/_authenticated/admin/offers': typeof AuthenticatedAdminOffersRoute
+  '/_authenticated/admin/onboarding': typeof AuthenticatedAdminOnboardingRoute
   '/_authenticated/admin/payment-links': typeof AuthenticatedAdminPaymentLinksRoute
   '/_authenticated/admin/payments': typeof AuthenticatedAdminPaymentsRoute
   '/_authenticated/admin/popups': typeof AuthenticatedAdminPopupsRoute
@@ -2396,6 +2406,7 @@ export interface FileRouteTypes {
     | '/admin/nutrition-dashboard'
     | '/admin/nutrition-targets'
     | '/admin/offers'
+    | '/admin/onboarding'
     | '/admin/payment-links'
     | '/admin/payments'
     | '/admin/popups'
@@ -2629,6 +2640,7 @@ export interface FileRouteTypes {
     | '/admin/nutrition-dashboard'
     | '/admin/nutrition-targets'
     | '/admin/offers'
+    | '/admin/onboarding'
     | '/admin/payment-links'
     | '/admin/payments'
     | '/admin/popups'
@@ -2868,6 +2880,7 @@ export interface FileRouteTypes {
     | '/_authenticated/admin/nutrition-dashboard'
     | '/_authenticated/admin/nutrition-targets'
     | '/_authenticated/admin/offers'
+    | '/_authenticated/admin/onboarding'
     | '/_authenticated/admin/payment-links'
     | '/_authenticated/admin/payments'
     | '/_authenticated/admin/popups'
@@ -3826,6 +3839,13 @@ declare module '@tanstack/react-router' {
       path: '/payment-links'
       fullPath: '/admin/payment-links'
       preLoaderRoute: typeof AuthenticatedAdminPaymentLinksRouteImport
+      parentRoute: typeof AuthenticatedAdminRouteRoute
+    }
+    '/_authenticated/admin/onboarding': {
+      id: '/_authenticated/admin/onboarding'
+      path: '/onboarding'
+      fullPath: '/admin/onboarding'
+      preLoaderRoute: typeof AuthenticatedAdminOnboardingRouteImport
       parentRoute: typeof AuthenticatedAdminRouteRoute
     }
     '/_authenticated/admin/offers': {
@@ -4940,6 +4960,7 @@ interface AuthenticatedAdminRouteRouteChildren {
   AuthenticatedAdminNutritionDashboardRoute: typeof AuthenticatedAdminNutritionDashboardRouteWithChildren
   AuthenticatedAdminNutritionTargetsRoute: typeof AuthenticatedAdminNutritionTargetsRoute
   AuthenticatedAdminOffersRoute: typeof AuthenticatedAdminOffersRoute
+  AuthenticatedAdminOnboardingRoute: typeof AuthenticatedAdminOnboardingRoute
   AuthenticatedAdminPaymentLinksRoute: typeof AuthenticatedAdminPaymentLinksRoute
   AuthenticatedAdminPaymentsRoute: typeof AuthenticatedAdminPaymentsRoute
   AuthenticatedAdminPopupsRoute: typeof AuthenticatedAdminPopupsRoute
@@ -5053,6 +5074,7 @@ const AuthenticatedAdminRouteRouteChildren: AuthenticatedAdminRouteRouteChildren
     AuthenticatedAdminNutritionTargetsRoute:
       AuthenticatedAdminNutritionTargetsRoute,
     AuthenticatedAdminOffersRoute: AuthenticatedAdminOffersRoute,
+    AuthenticatedAdminOnboardingRoute: AuthenticatedAdminOnboardingRoute,
     AuthenticatedAdminPaymentLinksRoute: AuthenticatedAdminPaymentLinksRoute,
     AuthenticatedAdminPaymentsRoute: AuthenticatedAdminPaymentsRoute,
     AuthenticatedAdminPopupsRoute: AuthenticatedAdminPopupsRoute,
