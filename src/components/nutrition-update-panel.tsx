@@ -52,18 +52,6 @@ export function NutritionUpdatePanel() {
     progress_photo_urls: [] as string[],
   });
   const [uploading, setUploading] = useState(false);
-
-  // Defer PWA updates while the nutrition dialog has unsaved edits or is uploading
-  // photos / submitting. Warn before close while a photo upload is in flight.
-  const dirty = open && (
-    uploading ||
-    m.isPending ||
-    !!form.current_bodyweight || !!form.avg_bodyweight || !!form.compliance_pct ||
-    !!form.steps_completed || !!form.cardio_completed || !!form.missed_meals || !!form.notes ||
-    form.progress_photo_urls.length > 0
-  );
-  useUnsavedWarning(dirty, { warnOnUnload: uploading || m.isPending });
-
   const m = useMutation({
     mutationFn: (v: any) => submit({ data: v }),
     onSuccess: () => {
