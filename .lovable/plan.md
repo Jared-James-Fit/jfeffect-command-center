@@ -1,84 +1,92 @@
-## Goal
+This is a large request that touches the admin program library, the admin recipe library, the member recipe/nutrition experience, recipe access/RLS, and the member bottom navigation. I'm going to lay out the plan in phases so we can ship and verify each piece before moving to the next, rather than landing 10 sweeping changes in one drop.
 
-Redesign the JF Effect Notification Center so unread vs read vs archived is unmistakable, mark/clear actions are obvious, and the system stays fast at scale — for admins, coaches, clients, and members. Reuse the existing derived feed (messages, lift videos, agreements, exercise notes, group chats, check-ins, appointments) and the existing delivery tables (`jf_notification_attempts`, `sms_log`, `email_send_log`, `notification_dedupe`). No duplicate notification system. Email/SMS delivery untouched.
+I'd recommend approving phase by phase. I can do them in order, but trying to do all of it in one turn would be risky for a system with this much live data (programs, recipes, member access, RLS).
 
-## Approach
+---
 
-Today, in-app notifications are **derived** from 10+ source tables and there is no persisted per-item read/archive state — so "mark as read" can only update scattered source columns and there is no concept of "archive" or "clear". Rather than rewriting every producer or creating a parallel system, add one small **state-only** table that tracks per-user read/archive for each derived item, keyed by `(user_id, kind, source_id)`. Items still surface from the same sources; the new table just remembers what the user has marked.
+## Phase 1 — Investigate & confirm before any destructive change
 
-```text
-derived feed (existing)  ──►  notification_state (new, tiny)
-        │                              │
-        └──────────► merged in `useNotificationFeed` ──► UI
-```
+Before I touch anything, I'll:
 
-### Technical details
+1. Read the current admin program library (`admin/program-library.tsx`, 1530 lines) and capture how templates, drafts, archives, membership vs coaching, and metadata are stored today (table: `pl_templates`, plus `pl_template_shares`, `member_plans`).
+2. Read `admin/recipes.tsx`, `m/nutrition.tsx`, `m/nutrition.$recipeId.tsx`, and the `recipes` / `recipe_client_access` / `recipe_notifications` tables — and find out **why member-facing recipes are missing**. Likely causes: missing GRANT to `authenticated`, an RLS policy requiring a row in `recipe_client_access` that was never inserted, or a `status != 'published'` filter on the member query. I'll confirm with a direct DB read.
+3. Audit `m/resources.tsx` + `resources.$slug.tsx` + the `resources` / `member_resources` / `resource_*` tables and every link in the codebase that points at `/m/resources`, onboarding emails, notification templates, etc. Output: a short list of what (if anything) needs to be migrated before Resources can be removed.
 
-**New table `public.notification_state`** (state-only, no payload):
-- `id uuid pk`, `user_id uuid not null`, `kind text not null`, `source_id text not null`, `read_at timestamptz`, `archived_at timestamptz`, `created_at timestamptz default now()`
-- Unique `(user_id, kind, source_id)` — idempotent upserts, prevents duplicate state rows
-- Indexes: `(user_id, archived_at, read_at)`, `(user_id, kind)`
-- RLS: user can only `select/insert/update/delete` rows where `user_id = auth.uid()`; grants to `authenticated` and `service_role`
-- RPCs: `mark_notifications_read(items jsonb)`, `mark_all_notifications_read(items jsonb)`, `archive_notifications(items jsonb)`, `archive_read_notifications(items jsonb)`, `restore_notifications(items jsonb)` — all `security definer`, all scoped to `auth.uid()`
+Deliverable of this phase: a short written summary in chat (no code yet) of: recipe bug root cause, what Resources currently contains, and any sharp edges (e.g. a notification that deep-links into `/m/resources/...`).
 
-**Rewrite `src/components/notification-bell.tsx` (split into folder):**
-- `src/components/notifications/use-notification-feed.ts` — keep the existing derived queries (admin/coach/client paths intact), then LEFT JOIN against `notification_state` in-memory by `(kind, source_id)` to compute `isRead` / `isArchived`. Source-derived "implicit read" (e.g. message already read via `conversation_state.client_last_read_at`) still counts as read.
-- `src/components/notifications/notification-bell.tsx` — bell button + badge. Badge counts only `items.filter(i => !i.isRead && !i.isArchived)`; shows `99+` over 99.
-- `src/components/notifications/notification-panel.tsx` — Sheet on mobile (full-screen drawer), Popover on desktop. Filters: **New** (default, with count) / **All**. Header actions: **Mark All as Read**, **Clear Read** (archives read items). Three-dot menu: View Archived, Archive All (with strong confirm). Per-item three-dot: Mark Read/Unread, Archive, Restore.
-- `src/components/notifications/notification-row.tsx` — unread = bold title + subtle `bg-muted/40` + dot indicator; read = normal weight, no dot, slightly muted. Icon + title + 1-line preview + relative time. Click → mark read + navigate via existing `destinationFor`.
-- `src/components/notifications/empty-states.tsx` — "You're all caught up.", "No notifications yet.", "No archived notifications."
+## Phase 2 — Fix the broken member recipe access (highest priority)
 
-**Full page `src/routes/_authenticated/notifications.tsx`:**
-- Server-side pagination: load 20 newest derived items + their state on mount; "Load older" appends next page (cursor by `created_at` of the derived source).
-- Group rows by Today / Yesterday / Earlier. Use `react-window` virtualization only if a page renders >100 rows.
-- Tabs: New / All / Archived. Filter chips: Workouts, Check-Ins, Messages, Payments, Agreements, Account, Coaching, System (mapped from `kind`).
-- Mobile: filters collapse behind a Filter button.
+This is the "members can't see recipes" bug and should ship first, independent of any UI redesign.
 
-**Realtime consolidation:**
-- One channel `notifications-${userId}` subscribed to the same source tables as today, plus `notification_state` filtered to `user_id=eq.${userId}`. Debounce 300ms then `invalidateQueries(["notifications"])`.
-- Remove the duplicate `NotificationBell` mount in `src/routes/_authenticated/portal/messages.tsx:130` (AppShell already renders it).
-- Keep `use-client-nav-badges.ts` as-is for sidebar dots (separate concern), but stop it from re-subscribing to tables the bell already watches; reuse the same query key invalidation.
+- Apply whatever the root cause turns out to be (likely: add a migration that grants `SELECT` to `authenticated` and adds/loosens an RLS policy like `published = true AND visibility = 'membership'`, OR backfill missing `recipe_client_access` rows for published membership recipes).
+- Confirm via a logged-in member query that previously-created published recipes now return.
+- No UI changes in this phase — purely data/access correctness.
 
-**Optimistic updates:**
-- `useMutation` for mark-read / archive with `onMutate` patching the cached feed; rollback on error. Debounce repeated Mark-All clicks via mutation `isPending` guard.
+## Phase 3 — Member "Nutrition & Recipes" page + bottom nav
 
-**Bug fixes carried in:**
-- Admin `check_in_review` destination → `/admin/clients/${clientId}?tab=check-ins` (was `/portal`).
-- Replace remaining `notification_dedupe` check-then-insert sites with `INSERT ... ON CONFLICT (key) DO NOTHING` + check `rowsAffected` to make dedupe atomic. (Touches: `members.functions.ts`, `setup-reminder.server.ts`, `membership-onboarding-email.server.ts` + `.functions.ts`, `stripe-webhook.ts`.)
+- Rename `m/nutrition.tsx` heading and page title to **Nutrition & Recipes** everywhere it's referenced.
+- Update the member bottom-nav item currently labeled "Resources" to **Nutrition** with a nutrition icon, pointing at `/m/nutrition`. Keep the same nav slot — no new tab.
+- Inside Nutrition & Recipes, lay out:
+  - Nutrition targets card (if assigned to this member — read from `nutrition_targets`)
+  - **Recommended for You** strip (Phase 4 fills it in; ship a stub first)
+  - Category chips (Recommended, Breakfast, Lunch, …, All Recipes)
+  - Compact filter panel (Calories / Protein / Carbs / Fat / Meal type / Goal / Prep time / Dietary preference / Food restrictions / Difficulty), with active filters shown as removable chips
+  - Recipe grid using a slimmed-down card (name, photo, category, calories, protein, prep time, short description, tags, View / Save)
+  - Saved recipes section
+- Pagination or "load more" — never load every recipe at once.
 
-**No changes to:** SMS sending, email sending, `jf_notification_attempts` writes, broadcasts, support_alerts, recipe_notifications, nutrition_notification_log, the `/admin/membership/notifications` delivery audit page.
+## Phase 4 — Personalized recipe recommendations
 
-## File-by-file
+- Read the member's `client_goals_setup` (goal, nutrition preference, food restrictions, biggest challenge).
+- Server function that returns 3–5 recipes matched by goal/preference, **filtered to exclude anything that conflicts with food restrictions** (safety filter — hard exclude, not just deprioritize).
+- If `client_goals_setup` is incomplete, render the "Complete your Goals & Setup to get personalized nutrition recommendations" CTA instead.
+- Each recommendation shows a short reason chip ("High protein", "Matches your nutrition goal", etc.).
 
-**New**
-- `supabase/migrations/<ts>_notification_state.sql` — table + indexes + RLS + grants + RPCs
-- `src/components/notifications/use-notification-feed.ts`
-- `src/components/notifications/notification-bell.tsx`
-- `src/components/notifications/notification-panel.tsx`
-- `src/components/notifications/notification-row.tsx`
-- `src/components/notifications/notification-state.functions.ts` — server fns wrapping the RPCs
-- `src/components/notifications/types.ts`
+## Phase 5 — Remove the Resources page safely
 
-**Updated**
-- `src/components/app-shell.tsx` — import path for `NotificationBell`
-- `src/routes/_authenticated/notifications.tsx` — paginated full page
-- `src/routes/_authenticated/portal/messages.tsx` — remove duplicate `<NotificationBell />`
-- `src/lib/members.functions.ts`, `src/lib/setup-reminder.server.ts`, `src/lib/membership-onboarding-email.server.ts`, `src/lib/membership-onboarding-email.functions.ts`, `src/routes/api/public/stripe-webhook.ts` — atomic dedupe upsert
+Only after Phase 1 confirms nothing critical depends on it:
 
-**Deleted**
-- `src/components/notification-bell.tsx` (replaced by folder)
+- Delete `m/resources.tsx` and `m/resources.$slug.tsx`.
+- Remove the nav entry (already replaced in Phase 3).
+- Remove dead imports / dead components / dead server fns that were only used by Resources.
+- Leave shared tables and storage buckets alone if any other feature still touches them.
+- Migrate anything Phase 1 surfaced (nutrition→Nutrition & Recipes, workout→Training, exercise education→Exercise Library, agreements→Agreements, account info→Account).
 
-## Verification
+## Phase 6 — Admin Program Library reorganization
 
-1. Build + typecheck green (auto).
-2. Security scan — no new findings on `notification_state` (RLS scoped to `auth.uid()`).
-3. Playwright smoke against the live preview as admin and client: bell badge updates, mark-one, mark-all, clear-read, archived view, full page load-older, mobile drawer.
-4. Confirm `/admin/membership/notifications` delivery log + dry-run mode unchanged.
-5. Publish to jfeffect.com and post a handoff report.
+Rebuild `admin/program-library.tsx` UI (no schema change to programs):
 
-## Out of scope
+- Section chips: Recently edited, Drafts, Published, Membership, Coaching, Beginner, Bodybuilding, Glute focused, Powerbuilding, Powerlifting, At home, Archived.
+- Compact filter panel: Goal / Training style / Experience level / Days per week / Workout length / Gym or home / Equipment / Duration / Draft or published / Membership or coaching / Active or archived.
+- Toolbar: Search, Sort, Clear filters, result count, **Create new program**.
+- Pagination / lazy loading (server-side via TanStack Query `useInfiniteQuery` against `pl_templates`).
+- Card shows: full name (no truncation), category, goal, experience level, days/week, duration, gym/home, draft/published, membership/coaching, last updated.
+- Card actions: Open, Edit, Duplicate, Preview as member, Publish/Unpublish, Archive.
+- Add an **Edit metadata** dialog so the admin can update category/goal/tags/access without rebuilding blocks/weeks/exercises.
 
-- Notification preferences UI (kept as-is).
-- Push notifications.
-- Rewriting the sidebar nav-badges hook (only de-duplicating its realtime subscriptions).
-- Migrating existing derived sources into the new table — they remain derived; only state is persisted.
+## Phase 7 — Admin Recipe Library reorganization
+
+Inside the nutrition area (new route: `admin/nutrition.recipes.tsx` or keep `admin/recipes.tsx` and restructure):
+
+- Sections: Recently edited, Drafts, Published, Membership, Coaching-only, Archived.
+- Toolbar: Search, Filters, Sort, Create recipe, Duplicate, Preview as member, Publish/Unpublish, Archive.
+- Card shows: name, category, calories, protein, goal tags, dietary tags, draft/published, membership/coaching, last updated.
+- Confirm required metadata exists on the `recipes` table: meal category, goal, calories, protein, carbs, fat, prep time, difficulty, dietary tags, food restriction tags, membership availability, published status. If any column is missing, add it via migration (no destructive changes to existing recipes).
+
+---
+
+## Technical notes
+
+- **Data layer**: all reads via TanStack Query + `createServerFn`. Member-side reads use `requireSupabaseAuth` so RLS scopes per user. Admin-side reads use `requireSupabaseAuth` + role check (`has_role(auth.uid(), 'admin')`).
+- **No bulk loads**: program library and recipe library both use cursor-based pagination (~24 per page).
+- **Food restrictions are a safety filter**, not a ranking signal — implemented as a hard `NOT EXISTS` against the member's restriction tags.
+- **No schema drops, no recipe/program data rewrites.** Any new columns will be added with safe defaults. Any RLS changes will be additive (allow members to read published membership recipes), never broadening access to coaching-only content.
+- **Mobile-first**: all new layouts tested at 375px so cards/buttons aren't clipped by the bottom nav.
+
+---
+
+## What I need from you
+
+1. **Approval to proceed phase by phase** (preferred), or tell me to bundle phases.
+2. Confirm priority — if Phase 2 (recipes not showing up for members) is the most painful right now, I'll ship that first and pause for you to verify before moving to UI.
+3. Anything in the existing Resources page you already know we must preserve? If you can name it now it'll save me a round trip during Phase 1.
