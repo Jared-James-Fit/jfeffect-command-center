@@ -44,6 +44,7 @@ import {
 } from "lucide-react";
 import { runJob } from "@/lib/progress-jobs";
 import { toast } from "sonner";
+import { useUnsavedWarning } from "@/hooks/use-unsaved-warning";
 
 async function uploadGroupFile(groupId: string, file: File): Promise<GroupAttachment> {
   const ext = file.name.includes(".") ? file.name.split(".").pop() : "";
