@@ -221,3 +221,190 @@ export const listDiscountRedemptionsFn = createServerFn({ method: "POST" })
     if (error) throw new Error(error.message);
     return { rows: rows ?? [], total: count ?? 0 };
   });
+
+/* -------------------------------------------------------------------------- */
+/* Stripe synchronization                                                     */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Build the Stripe coupon param body for a discount_codes row.
+ * Notes:
+ *   - Stripe coupon IDs are immutable once created. We derive a stable per-mode
+ *     coupon id from the row UUID so re-sync is idempotent.
+ *   - applies_to[products][] requires Stripe product IDs. We resolve our DB
+ *     UUIDs against coaching_products.stripe_product_id when applicable.
+ */
+function buildCouponParams(row: any, couponId: string): Record<string, any> {
+  const params: Record<string, any> = {
+    id: couponId,
+    name: row.internal_name,
+    duration: row.subscription_duration,
+  };
+  if (row.discount_type === "percentage") {
+    params.percent_off = row.discount_value;
+  } else {
+    // Stripe expects integer cents; treat discount_value as dollars for fixed.
+    params.amount_off = Math.round(Number(row.discount_value) * 100);
+    params.currency = "usd";
+  }
+  if (row.subscription_duration === "repeating" && row.duration_months) {
+    params.duration_in_months = row.duration_months;
+  }
+  if (row.total_usage_limit) params.max_redemptions = row.total_usage_limit;
+  if (row.expires_at) params.redeem_by = Math.floor(new Date(row.expires_at).getTime() / 1000);
+  params.metadata = {
+    discount_code_id: row.id,
+    public_code: row.public_code,
+    category: row.category,
+  };
+  return params;
+}
+
+function buildPromotionCodeParams(row: any, couponId: string): Record<string, any> {
+  const params: Record<string, any> = {
+    coupon: couponId,
+    code: row.public_code,
+    active: row.status === "active",
+  };
+  if (row.expires_at) params.expires_at = Math.floor(new Date(row.expires_at).getTime() / 1000);
+  if (row.total_usage_limit) params.max_redemptions = row.total_usage_limit;
+  const restrictions: Record<string, any> = {};
+  if (row.new_customers_only) restrictions.first_time_transaction = true;
+  if (row.min_purchase_cents && row.min_purchase_cents > 0) {
+    restrictions.minimum_amount = row.min_purchase_cents;
+    restrictions.minimum_amount_currency = "usd";
+  }
+  if (Object.keys(restrictions).length) params.restrictions = restrictions;
+  params.metadata = {
+    discount_code_id: row.id,
+    public_code: row.public_code,
+    category: row.category,
+  };
+  return params;
+}
+
+/** Create or fetch the Stripe coupon for this mode (idempotent on couponId). */
+async function ensureStripeCoupon(apiKey: string, row: any, couponId: string): Promise<string> {
+  // Try to fetch first — if it exists with our id, reuse it.
+  try {
+    const existing = await stripeFetch(`/coupons/${encodeURIComponent(couponId)}`, { apiKey });
+    if (existing?.id) return existing.id;
+  } catch {
+    // not found → create
+  }
+  const params = buildCouponParams(row, couponId);
+  const created = await stripeFetch(`/coupons`, {
+    method: "POST",
+    apiKey,
+    body: formEncode(params),
+    idempotencyKey: `coupon:${couponId}`,
+  });
+  return created.id;
+}
+
+/** Create or update the Stripe promotion code. Stripe enforces unique 'code' values per account. */
+async function ensureStripePromotionCode(
+  apiKey: string,
+  row: any,
+  couponId: string,
+  existingId: string | null,
+): Promise<string> {
+  // If we already have an id, PATCH a small subset (active flag, expires_at, metadata).
+  if (existingId) {
+    const patch: Record<string, any> = {
+      active: row.status === "active",
+      metadata: { discount_code_id: row.id, public_code: row.public_code, category: row.category },
+    };
+    try {
+      const updated = await stripeFetch(`/promotion_codes/${encodeURIComponent(existingId)}`, {
+        method: "POST",
+        apiKey,
+        body: formEncode(patch),
+      });
+      return updated.id;
+    } catch (e: any) {
+      // Fall through to lookup by code below if the id no longer exists.
+      if (!/no such promotion_code/i.test(e?.message ?? "")) throw e;
+    }
+  }
+  // Look up by code first — Stripe rejects duplicate codes per coupon, so we reuse.
+  const search = await stripeFetch(
+    `/promotion_codes?code=${encodeURIComponent(row.public_code)}&coupon=${encodeURIComponent(couponId)}&limit=1`,
+    { apiKey },
+  );
+  if (Array.isArray(search?.data) && search.data[0]?.id) return search.data[0].id;
+  // Create fresh.
+  const params = buildPromotionCodeParams(row, couponId);
+  const created = await stripeFetch(`/promotion_codes`, {
+    method: "POST",
+    apiKey,
+    body: formEncode(params),
+    idempotencyKey: `promo:${row.id}:${couponId}`,
+  });
+  return created.id;
+}
+
+async function syncOneMode(row: any, mode: StripeMode): Promise<{ couponId: string; promoId: string } | null> {
+  const apiKey = getStripeKeyForMode(mode);
+  if (!apiKey) return null;
+  // Derive a stable per-mode coupon id from the row UUID.
+  const couponId = `${mode === "test" ? "tst" : "lv"}_${row.id.replace(/-/g, "").slice(0, 24)}`;
+  const ensuredCoupon = await ensureStripeCoupon(apiKey, row, couponId);
+  const existingPromoId = mode === "test"
+    ? (row.stripe_test_promotion_code_id ?? null)
+    : (row.stripe_live_promotion_code_id ?? null);
+  const promoId = await ensureStripePromotionCode(apiKey, row, ensuredCoupon, existingPromoId);
+  return { couponId: ensuredCoupon, promoId };
+}
+
+export const syncDiscountCodeToStripeFn = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: unknown) => z.object({
+    id: z.string().uuid(),
+    modes: z.array(z.enum(["test", "live"])).min(1).default(["test", "live"]),
+  }).parse(input))
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context;
+    // RLS scopes the SELECT to admins; non-admins get no row.
+    const { data: row, error } = await (supabase as any)
+      .from("discount_codes").select("*").eq("id", data.id).single();
+    if (error || !row) throw new Error("Discount code not found or not permitted");
+
+    const update: Record<string, any> = {
+      stripe_last_sync_at: new Date().toISOString(),
+      stripe_last_sync_error: null,
+    };
+    const results: Array<{ mode: StripeMode; ok: boolean; error?: string; couponId?: string; promoId?: string }> = [];
+
+    for (const mode of data.modes) {
+      try {
+        const out = await syncOneMode(row, mode);
+        if (!out) {
+          results.push({ mode, ok: false, error: `No ${mode}-mode Stripe key configured` });
+          continue;
+        }
+        if (mode === "test") {
+          update.stripe_test_coupon_id = out.couponId;
+          update.stripe_test_promotion_code_id = out.promoId;
+          update.stripe_test_mode_synced = true;
+        } else {
+          update.stripe_live_coupon_id = out.couponId;
+          update.stripe_live_promotion_code_id = out.promoId;
+          update.stripe_live_mode_synced = true;
+        }
+        results.push({ mode, ok: true, couponId: out.couponId, promoId: out.promoId });
+      } catch (e: any) {
+        results.push({ mode, ok: false, error: e?.message ?? String(e) });
+      }
+    }
+
+    const errs = results.filter((r) => !r.ok);
+    if (errs.length) update.stripe_last_sync_error = errs.map((r) => `[${r.mode}] ${r.error}`).join(" | ");
+    update.stripe_active = !!update.stripe_live_promotion_code_id && row.status === "active";
+
+    const { error: updErr } = await (supabase as any).from("discount_codes").update(update).eq("id", row.id);
+    if (updErr) throw new Error(updErr.message);
+
+    await writeAudit(supabase, userId, "code_synced_to_stripe", row.id, row.public_code, { results });
+    return { ok: errs.length === 0, results, applied: update };
+  });
