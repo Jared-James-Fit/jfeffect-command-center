@@ -11,6 +11,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { stripeFetch, getStripeKeyForMode, formEncode, type StripeMode } from "@/lib/stripe.server";
 
 export type DiscountCode = {
   id: string;
@@ -45,6 +46,13 @@ export type DiscountCode = {
   stripe_promotion_code_id: string | null;
   stripe_test_mode_synced: boolean;
   stripe_live_mode_synced: boolean;
+  stripe_test_coupon_id: string | null;
+  stripe_test_promotion_code_id: string | null;
+  stripe_live_coupon_id: string | null;
+  stripe_live_promotion_code_id: string | null;
+  stripe_last_sync_at: string | null;
+  stripe_last_sync_error: string | null;
+  stripe_active: boolean;
   created_at: string;
   updated_at: string;
 };
