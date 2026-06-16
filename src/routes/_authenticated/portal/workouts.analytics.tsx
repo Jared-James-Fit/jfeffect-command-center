@@ -21,6 +21,7 @@ import {
   type SearchableOption,
 } from "@/components/analytics/searchable-select";
 import { PlannedVsActualCard } from "@/components/analytics/planned-vs-actual-card";
+import { WeightLiftedCard } from "@/components/analytics/weight-lifted-card";
 import { getClientAnalyticsSettings } from "@/lib/analytics/settings";
 import {
   ANALYTICS_COLORS,
@@ -309,6 +310,11 @@ function PortalAnalytics() {
                 color={ANALYTICS_COLORS.purple}
               />
             </section>
+
+            {/* WEIGHT LIFTED — lifetime / last / week / month / current block */}
+            {client?.id && (
+              <WeightLiftedCard clientId={client.id} displayUnit={displayUnit} />
+            )}
 
             {/* RECENT PRS */}
             {client?.id && (
