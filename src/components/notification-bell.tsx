@@ -98,7 +98,7 @@ async function fetchUnreadGroupItems(userId: string): Promise<BellItem[]> {
   return items;
 }
 
-export function NotificationBell() {
+export function useNotificationFeed() {
   const { role, user } = useAuth();
   const qc = useQueryClient();
   const adminUpcoming = useServerFn(listUpcomingForBell);
@@ -130,7 +130,7 @@ export function NotificationBell() {
     return () => { if (timer) clearTimeout(timer); supabase.removeChannel(ch); };
   }, [user, qc]);
 
-  const { data } = useQuery({
+  const query = useQuery({
     queryKey: ["unread-counts", role, user?.id],
     enabled: !!user && !!role,
     queryFn: async () => {
@@ -354,7 +354,12 @@ export function NotificationBell() {
       }
     },
   });
+  return { query, role, user, qc };
+}
 
+export function NotificationBell() {
+  const { query, role, user, qc } = useNotificationFeed();
+  const data = query.data;
   const count = data?.count ?? 0;
   const allItems = useMemo<BellItem[]>(() => data?.items ?? [], [data]);
   const items = useMemo<BellItem[]>(() => allItems.slice(0, 10), [allItems]);
