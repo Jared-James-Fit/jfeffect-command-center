@@ -275,6 +275,15 @@ html[data-keyboard-open="true"] { --bottom-nav-clearance: 0px; }
   input, textarea, select {
     font-size: 16px;
   }
+
+  /* Faster tap response + no double-tap zoom on actionable controls. */
+  button, a, [role="button"], [data-tap] {
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  /* Guard against accidental horizontal overflow on phones. */
+  html, body { overflow-x: hidden; }
 }
 
 /* Reaction chip pop-in animation (≈240ms) */
