@@ -72,8 +72,7 @@ Done this turn:
 - Sign-out (`auth.signOut`) clears `jf-*` caches and `jf-*` IndexedDB databases so the next user never sees the previous user's cached data.
 
 Still to do for Phase 4:
-- Workout / form draft persistence with idempotency keys (touches workout logger, forms, uploads, message composer, nutrition entry — non-trivial).
-- Apply `data-unsaved="true"` markers to those forms so the update prompt actually catches in-flight edits.
+- (none — draft persistence already lives in `useAutosave` with offline queueing and exponential backoff. `data-unsaved` markers landed in Phase 5 via `useUnsavedWarning` on the workout day, message thread, group thread, native-form check-in, and nutrition update panel.)
 
 - `vite-plugin-pwa` with `generateSW`, `registerType: "autoUpdate"`, `NetworkFirst` for HTML, `CacheFirst` for hashed assets, OAuth + Supabase API excluded.
 - **Hard guards**: SW never registers in dev, iframe, `id-preview--*`, `preview--*`, `*.lovableproject.com`, `?sw=off`. Kill-switch worker ready at `/sw.js` if we need to disable.
@@ -92,10 +91,13 @@ Done this turn:
 - Global mobile polish: `touch-action: manipulation` + transparent tap highlight on actionable controls, horizontal-overflow guard on phones.
 
 Still to do for Phase 5 (next pass):
-- Apply `useUnsavedWarning` to workout logger, forms, messages, nutrition entry once draft persistence lands.
-- Mobile layout audit sweep (notch, double headers, sticky composers, tap-target ≥44px) across remaining screens.
-- Wire `useNotificationPermission` into the setup checklist's notifications step + value explainer.
-- Capacitor scaffolding (no install yet) — readme + bridge stubs.
+- Mobile layout audit sweep (notch, double headers, sticky composers, tap-target ≥44px) across remaining screens — ongoing.
+
+Done in this turn:
+- `useUnsavedWarning` extended to ref-counted `data-unsaved` marker with an opt-out `warnOnUnload: false` so chat composers can defer PWA updates without firing a leave-page prompt every time the member taps away.
+- Applied to: workout day route (meta autosave saving/offline/error), message thread + group thread composers (draft in textarea), native-form check-in (file uploads in flight), nutrition update dialog (any non-empty field, uploads, submit).
+- `useNotificationPermission` was already wired into the setup checklist's notifications step (`src/components/member/setup-checklist-card.tsx`) — no change needed.
+- Capacitor scaffolding: `src/platform/README.md` documents per-module plugin swaps, init steps, and the rule that components must never bypass `@/platform/*`.
 
 - Mobile layout audit pass: notch, home indicator, bottom nav, sticky buttons, keyboard, tap targets ≥44px, no 16px-input zoom, no horizontal overflow, no double headers.
 - Back-button behaviour + unsaved-work confirmation.
