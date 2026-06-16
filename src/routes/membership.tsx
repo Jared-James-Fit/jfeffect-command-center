@@ -240,58 +240,74 @@ function SignupJf() {
       </Section>
 
       {/* Offer comparison surfaced early so visitors see both paths within 5s. */}
-      <Reveal><OfferComparison accent="membership" /></Reveal>
-
+      {/* 2. Compare to doing it alone */}
       <div ref={featuresRef} id="features" />
-      <Reveal><FeatureTabs /></Reveal>
+      <Reveal><CompareAloneSection /></Reveal>
 
-      {Array.isArray(s.features) && s.features.length > 0 && (
-        <Reveal><FeatureGrid title="What's inside Membership" items={s.features} /></Reveal>
-      )}
+      {/* 3. What's included — premium feature cards */}
+      <Reveal>
+        <FeatureGrid
+          title="What's included"
+          items={Array.isArray(s.features) && s.features.length > 0 ? s.features : DEFAULT_FEATURES}
+        />
+      </Reveal>
 
-      <Reveal><IncludedNotIncluded
-        includedTitle="What's included"
-        notIncludedTitle="Not included"
-        included={s.included ?? []}
-        notIncluded={s.not_included ?? []}
-      /></Reveal>
+      {/* 4. Program library showcase */}
+      <Reveal><ProgramLibraryShowcase categories={Array.isArray(s.library_categories) && s.library_categories.length > 0 ? s.library_categories : DEFAULT_LIBRARY} programCount={s.program_count ?? ""} /></Reveal>
 
-      {s.comparison?.left && s.comparison?.right && (
-        <Reveal><ComparisonCard left={s.comparison.left} right={s.comparison.right} /></Reveal>
-      )}
+      {/* 5. Why people stick with it */}
+      <Reveal><WhyStickSection /></Reveal>
 
+      {/* 6. Who it's for / not for */}
+      <Reveal>
+        <IncludedNotIncluded
+          includedTitle="This is for you if"
+          notIncludedTitle="This is NOT for you if"
+          included={Array.isArray(s.who_for) && s.who_for.length > 0 ? s.who_for : DEFAULT_WHO_FOR}
+          notIncluded={Array.isArray(s.not_for) && s.not_for.length > 0 ? s.not_for : DEFAULT_NOT_FOR}
+        />
+      </Reveal>
+
+      {/* 7. App preview */}
+      <Reveal>
+        <AppPreviewGrid
+          title="Here's exactly what you get when you log in."
+          sub="Previews are illustrations of the live app interface."
+          items={Array.isArray(s.app_previews) && s.app_previews.length > 0 ? s.app_previews : DEFAULT_APP_PREVIEWS}
+        />
+      </Reveal>
+
+      {/* 8. Proof wall */}
       <Reveal><ProofWall
         testimonials={p?.testimonials ?? []}
         images={(p?.visuals ?? []).filter((v) => v.slot === "proof")}
       /></Reveal>
 
-      <Reveal><FaqAccordion items={mergeTaxFaq(s.faq ?? [])} /></Reveal>
+      {/* 9. Coaching vs Membership */}
+      <Reveal><OfferComparison accent="membership" /></Reveal>
+      <Section className="!pt-0">
+        <p className="mx-auto max-w-3xl text-center text-sm text-muted-foreground md:text-base">
+          Most people are in the right place right here. But if you want a plan built specifically for you, with weekly check-ins and a coach in your corner, that's{" "}
+          <Link to="/coaching" className="font-semibold text-primary underline underline-offset-2 hover:text-primary/80">Private Coaching</Link> — application only.
+        </p>
+      </Section>
 
-      {/* Lower coaching CTA before form / footer. */}
-      <Reveal as={Section}>
-        <div className="mx-auto max-w-3xl rounded-2xl border border-white/10 bg-gradient-to-br from-[#111318] to-[#0B0D12] p-6 md:p-8 text-center">
-          <div className="text-[11px] font-bold uppercase tracking-[0.2em] text-primary">
-            Know You Need More Than an App?
-          </div>
-          <h3 className="mt-2 text-2xl font-black tracking-tight md:text-3xl">
-            Private Coaching may be the better fit.
-          </h3>
-          <p className="mt-3 text-sm text-muted-foreground md:text-base">
-            If you want a plan built for you and someone holding the standard when you don't feel like it, apply for coaching.
-          </p>
-          <div className="mt-5 flex flex-col items-center justify-center gap-3 sm:flex-row">
-            <Link to="/coaching/apply">
-              <Button size="lg" className="h-12 px-6 text-base font-bold">Apply for Private Coaching</Button>
-            </Link>
-            <button
-              type="button"
-              onClick={scrollToForm}
-              className="text-sm font-semibold text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
-            >
-              Continue With Membership →
-            </button>
-          </div>
-        </div>
+      {/* 10. FAQ */}
+      <Reveal><FaqAccordion items={mergeTaxFaq(Array.isArray(s.faq) && s.faq.length > 0 ? s.faq : DEFAULT_FAQ)} /></Reveal>
+
+      {/* 11. Final CTA */}
+      <Reveal>
+        <FinalCta
+          headline="Stop starting over."
+          primary={
+            <Button size="lg" onClick={scrollToForm} className="h-12 px-6 text-base font-bold">
+              {`Start ${trialDays}-Day Free Trial`}
+            </Button>
+          }
+          secondary={
+            <span className="ml-1 text-xs text-muted-foreground">{trialDays}-day free trial · Cancel anytime</span>
+          }
+        />
       </Reveal>
 
       {/* Signup form */}
