@@ -20,6 +20,9 @@ import { reportLovableError } from "../lib/lovable-error-reporting";
 // Side-effect import: registers the global beforeinstallprompt listener early
 // so the install prompt can be captured before the user reaches /install.
 import "@/hooks/use-pwa-install";
+import { registerServiceWorker } from "@/lib/pwa/register-sw";
+import { PwaUpdateToast } from "@/components/pwa/pwa-update-toast";
+import { OnlineOfflineBanner } from "@/components/pwa/online-offline-banner";
 
 function NotFoundComponent() {
   return (
@@ -260,6 +263,8 @@ function RootShell({ children }: { children: ReactNode }) {
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
 
+  useEffect(() => { registerServiceWorker(); }, []);
+
   return (
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
@@ -269,6 +274,8 @@ function RootComponent() {
           <Toaster position="top-right" theme="dark" richColors />
           <ProgressDrawer />
           <GlobalHighlight />
+          <OnlineOfflineBanner />
+          <PwaUpdateToast />
         </ClientImpersonationProvider>
       </AuthProvider>
     </QueryClientProvider>

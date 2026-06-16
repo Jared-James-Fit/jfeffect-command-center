@@ -49,7 +49,19 @@ Still to do for Phase 3 (will tackle next turn if you want):
 - Email + SMS templates: "Set up your JF Effect app" using existing email infra (no new provider).
 - Goals & Setup save bug: audit + fix the existing submit flow — reliable save, empty/N/A/No/long answers, retry, Save & Continue Later, persistent completion.
 
-## Phase 4 — Service worker, updates, offline drafts, sign-out cache clearing
+## Phase 4 — Service worker, updates, sign-out cache clearing — IN PROGRESS
+
+Done this turn:
+- `vite-plugin-pwa` (`generateSW`, `registerType: autoUpdate`) generates `/sw.js`. Manifest stays hand-managed (Phase 1).
+- Guarded register wrapper in `src/lib/pwa/register-sw.ts` — refuses to register in dev, iframe, `id-preview--*`, `preview--*`, `*.lovableproject.com`, `*.lovableproject-dev.com`, `*.beta.lovable.dev`, or `?sw=off`, and unregisters any matching `/sw.js` or `/service-worker.js` when refused.
+- `NetworkFirst` for HTML navigations (4s timeout); `CacheFirst` for hashed `/assets/*`; `StaleWhileRevalidate` for images. `/~oauth`, `/api/`, `/_serverFn/`, `/_server/` excluded from navigation fallback.
+- "JF Effect has been updated" toast with Update / Later, with a heuristic unsaved-work check (`[data-unsaved="true"]`).
+- Online/offline banner at the root.
+- Sign-out (`auth.signOut`) clears `jf-*` caches and `jf-*` IndexedDB databases so the next user never sees the previous user's cached data.
+
+Still to do for Phase 4:
+- Workout / form draft persistence with idempotency keys (touches workout logger, forms, uploads, message composer, nutrition entry — non-trivial).
+- Apply `data-unsaved="true"` markers to those forms so the update prompt actually catches in-flight edits.
 
 - `vite-plugin-pwa` with `generateSW`, `registerType: "autoUpdate"`, `NetworkFirst` for HTML, `CacheFirst` for hashed assets, OAuth + Supabase API excluded.
 - **Hard guards**: SW never registers in dev, iframe, `id-preview--*`, `preview--*`, `*.lovableproject.com`, `?sw=off`. Kill-switch worker ready at `/sw.js` if we need to disable.

@@ -8,6 +8,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { defineConfig } from "@lovable.dev/vite-tanstack-config";
 import { loadEnv } from "vite";
+import { VitePWA } from "vite-plugin-pwa";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -46,5 +47,58 @@ export default defineConfig({
         entities: path.resolve(__dirname, "node_modules/entities"),
       },
     },
+    plugins: [
+      VitePWA({
+        // Manifest is hand-managed in public/manifest.json; only generate the SW here.
+        registerType: "autoUpdate",
+        injectRegister: null, // the guarded wrapper is the only registrar
+        filename: "sw.js",
+        strategies: "generateSW",
+        manifest: false,
+        devOptions: { enabled: false },
+        workbox: {
+          navigateFallback: "/",
+          navigateFallbackDenylist: [
+            /^\/~oauth/,         // Supabase OAuth callback — must hit network
+            /^\/api\//,
+            /^\/_serverFn\//,
+            /^\/_server\//,
+          ],
+          cleanupOutdatedCaches: true,
+          skipWaiting: false,    // we wait for the user to tap Update
+          clientsClaim: true,
+          globPatterns: ["**/*.{js,css,html,svg,png,ico,webp,woff,woff2}"],
+          runtimeCaching: [
+            {
+              urlPattern: ({ request }) => request.mode === "navigate",
+              handler: "NetworkFirst",
+              options: {
+                cacheName: "jf-html",
+                networkTimeoutSeconds: 4,
+                expiration: { maxEntries: 32, maxAgeSeconds: 60 * 60 * 24 },
+              },
+            },
+            {
+              urlPattern: ({ url, sameOrigin }) =>
+                sameOrigin && /\/assets\/.+\.[0-9a-f]{6,}\..+$/i.test(url.pathname),
+              handler: "CacheFirst",
+              options: {
+                cacheName: "jf-assets",
+                expiration: { maxEntries: 200, maxAgeSeconds: 60 * 60 * 24 * 30 },
+              },
+            },
+            {
+              urlPattern: ({ url, sameOrigin }) =>
+                sameOrigin && /\.(?:png|jpg|jpeg|webp|svg|gif|ico)$/i.test(url.pathname),
+              handler: "StaleWhileRevalidate",
+              options: {
+                cacheName: "jf-images",
+                expiration: { maxEntries: 200, maxAgeSeconds: 60 * 60 * 24 * 30 },
+              },
+            },
+          ],
+        },
+      }),
+    ],
   },
 });

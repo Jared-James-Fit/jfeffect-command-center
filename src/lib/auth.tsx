@@ -106,6 +106,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setSession(null);
     setUser(null);
     setRole(null);
+    // Clear app-shell caches and offline drafts so the next signed-in user
+    // never sees the previous user's cached data.
+    try {
+      const { clearAllAppCaches } = await import("@/lib/pwa/register-sw");
+      await clearAllAppCaches();
+    } catch { /* best-effort */ }
   };
 
   return (
