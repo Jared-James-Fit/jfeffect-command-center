@@ -295,6 +295,28 @@ export const createJfSignupCheckout = createServerFn({ method: "POST" })
       throw new Error("An account with that email already exists. Please sign in instead.");
     }
 
+    // Dual-billing safeguard: a client whose billing lives in the legacy
+    // "JF Effect Trainerize" Stripe account must NEVER trigger a new
+    // subscription in the JF Effect Stripe account. Refuse the checkout
+    // before any Stripe customer is created. An admin must invite them
+    // from /admin/billing-sources instead, which grants app access with
+    // zero writes to either Stripe account.
+    const { data: legacyClient } = await supabaseAdmin
+      .from("clients")
+      .select("id, billing_source, billing_source_locked")
+      .ilike("email", emailLc)
+      .eq("billing_source", "trainerize_legacy")
+      .maybeSingle();
+    if (legacyClient) {
+      console.warn(
+        `[jf-checkout] Blocked signup for legacy Trainerize client email=${emailLc} client_id=${legacyClient.id}`,
+      );
+      throw new Error(
+        "This email is already linked to an existing coaching plan billed through our previous system. " +
+        "Please contact your coach to be invited into the JF Effect app — no new payment is needed and your current billing will not change.",
+      );
+    }
+
     // Trial abuse: skip trial if email already had one in the SAME Stripe mode.
     // Scoping by mode prevents pre-launch test signups from suppressing the
     // trial for the same email's first real (live) signup.
