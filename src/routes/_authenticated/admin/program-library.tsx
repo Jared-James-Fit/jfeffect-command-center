@@ -166,6 +166,12 @@ type FilterChip =
   | { kind: "archived" }
   | { kind: "status"; v: "ready" | "incomplete" };
 
+type SortKey = "updated_desc" | "updated_asc" | "name_asc" | "name_desc";
+type PubFilter = "any" | "draft" | "published";
+type LocFilter = "any" | "gym" | "home";
+type DaysFilter = "any" | "1-2" | "3-4" | "5-6" | "7";
+type ExpFilter = "any" | "beginner" | "intermediate" | "advanced";
+
 export function ProgramLibrary({ embedded = false }: { embedded?: boolean } = {}) {
   const qc = useQueryClient();
   const [q, setQ] = useState("");
@@ -175,6 +181,12 @@ export function ProgramLibrary({ embedded = false }: { embedded?: boolean } = {}
   const [previewId, setPreviewId] = useState<string | null>(null);
   const [assignTpl, setAssignTpl] = useState<any | null>(null);
   const [shareTpl, setShareTpl] = useState<any | null>(null);
+  const [sort, setSort] = useState<SortKey>("updated_desc");
+  const [pubFilter, setPubFilter] = useState<PubFilter>("any");
+  const [locFilter, setLocFilter] = useState<LocFilter>("any");
+  const [daysFilter, setDaysFilter] = useState<DaysFilter>("any");
+  const [expFilter, setExpFilter] = useState<ExpFilter>("any");
+  const [showFilters, setShowFilters] = useState(false);
 
   const showArchived = chip.kind === "archived";
   const type = chip.kind === "type" ? chip.v : ("all" as const);
@@ -206,8 +218,63 @@ export function ProgramLibrary({ embedded = false }: { embedded?: boolean } = {}
         return wantReady ? issues.length === 0 : issues.length > 0;
       });
     }
+    if (pubFilter !== "any") {
+      rows = rows.filter((t) => {
+        const s = String(t.status ?? "Draft").toLowerCase();
+        return pubFilter === "published" ? s === "published" : s !== "published";
+      });
+    }
+    if (locFilter !== "any") {
+      rows = rows.filter((t) => {
+        const tags = (t.tags ?? []).map((x: string) => String(x).toLowerCase());
+        const nm = String(t.name ?? "").toLowerCase();
+        const isHome = tags.some((x: string) => /home|bodyweight|no equipment|no-equipment/.test(x)) || /at home|at-home/.test(nm);
+        return locFilter === "home" ? isHome : !isHome;
+      });
+    }
+    if (daysFilter !== "any") {
+      rows = rows.filter((t) => {
+        const d = Number(t.days_per_week ?? 0);
+        if (!d) return false;
+        if (daysFilter === "1-2") return d <= 2;
+        if (daysFilter === "3-4") return d >= 3 && d <= 4;
+        if (daysFilter === "5-6") return d >= 5 && d <= 6;
+        if (daysFilter === "7") return d >= 7;
+        return true;
+      });
+    }
+    if (expFilter !== "any") {
+      rows = rows.filter((t) => {
+        const tags = (t.tags ?? []).map((x: string) => String(x).toLowerCase());
+        return tags.includes(expFilter) || String((t as any).difficulty ?? "").toLowerCase() === expFilter;
+      });
+    }
+    rows = [...rows].sort((a, b) => {
+      if (sort === "name_asc") return String(a.name ?? "").localeCompare(String(b.name ?? ""));
+      if (sort === "name_desc") return String(b.name ?? "").localeCompare(String(a.name ?? ""));
+      if (sort === "updated_asc") return String(a.updated_at ?? "").localeCompare(String(b.updated_at ?? ""));
+      return String(b.updated_at ?? "").localeCompare(String(a.updated_at ?? ""));
+    });
     return rows;
-  }, [templates, weightClass, chip]);
+  }, [templates, weightClass, chip, pubFilter, locFilter, daysFilter, expFilter, sort]);
+
+  const activeFilterCount =
+    (weightClass ? 1 : 0) +
+    (pubFilter !== "any" ? 1 : 0) +
+    (locFilter !== "any" ? 1 : 0) +
+    (daysFilter !== "any" ? 1 : 0) +
+    (expFilter !== "any" ? 1 : 0);
+
+  const clearFilters = () => {
+    setQ("");
+    setChip({ kind: "all" });
+    setWeightClass(null);
+    setPubFilter("any");
+    setLocFilter("any");
+    setDaysFilter("any");
+    setExpFilter("any");
+    setSort("updated_desc");
+  };
 
   const invalidate = () => qc.invalidateQueries({ queryKey: ["pl-templates"] });
 
@@ -229,6 +296,31 @@ export function ProgramLibrary({ embedded = false }: { embedded?: boolean } = {}
               className="pl-8"
             />
           </div>
+          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+            <ArrowUpDown className="h-3.5 w-3.5" />
+            <Select value={sort} onValueChange={(v) => setSort(v as SortKey)}>
+              <SelectTrigger className="h-9 w-[160px]"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="updated_desc">Recently updated</SelectItem>
+                <SelectItem value="updated_asc">Oldest updated</SelectItem>
+                <SelectItem value="name_asc">Name A→Z</SelectItem>
+                <SelectItem value="name_desc">Name Z→A</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <Button
+            variant={showFilters ? "default" : "outline"}
+            size="sm"
+            onClick={() => setShowFilters((s) => !s)}
+          >
+            <Settings2 className="mr-1 h-3.5 w-3.5" />
+            Filters{activeFilterCount > 0 ? ` (${activeFilterCount})` : ""}
+          </Button>
+          {(activeFilterCount > 0 || q || chip.kind !== "all") && (
+            <Button variant="ghost" size="sm" onClick={clearFilters}>
+              <XIcon className="mr-1 h-3.5 w-3.5" /> Clear
+            </Button>
+          )}
           <Button onClick={() => setOpenNew(true)} className="ml-auto">
             <Plus className="mr-2 h-4 w-4" /> New Template
           </Button>
@@ -242,6 +334,62 @@ export function ProgramLibrary({ embedded = false }: { embedded?: boolean } = {}
         {/* Filter chips */}
         <FilterChips chip={chip} setChip={setChip} />
         <WeightClassFilter value={weightClass} onChange={setWeightClass} />
+
+        {showFilters && (
+          <Card className="grid gap-3 p-3 md:grid-cols-4">
+            <div>
+              <Label className="text-[11px] uppercase tracking-wider text-muted-foreground">Status</Label>
+              <Select value={pubFilter} onValueChange={(v) => setPubFilter(v as PubFilter)}>
+                <SelectTrigger className="h-8"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="any">Any status</SelectItem>
+                  <SelectItem value="draft">Draft</SelectItem>
+                  <SelectItem value="published">Published</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label className="text-[11px] uppercase tracking-wider text-muted-foreground">Location</Label>
+              <Select value={locFilter} onValueChange={(v) => setLocFilter(v as LocFilter)}>
+                <SelectTrigger className="h-8"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="any">Gym or home</SelectItem>
+                  <SelectItem value="gym">Gym</SelectItem>
+                  <SelectItem value="home">At home</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label className="text-[11px] uppercase tracking-wider text-muted-foreground">Days / week</Label>
+              <Select value={daysFilter} onValueChange={(v) => setDaysFilter(v as DaysFilter)}>
+                <SelectTrigger className="h-8"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="any">Any</SelectItem>
+                  <SelectItem value="1-2">1–2 days</SelectItem>
+                  <SelectItem value="3-4">3–4 days</SelectItem>
+                  <SelectItem value="5-6">5–6 days</SelectItem>
+                  <SelectItem value="7">7 days</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label className="text-[11px] uppercase tracking-wider text-muted-foreground">Experience</Label>
+              <Select value={expFilter} onValueChange={(v) => setExpFilter(v as ExpFilter)}>
+                <SelectTrigger className="h-8"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="any">Any level</SelectItem>
+                  <SelectItem value="beginner">Beginner</SelectItem>
+                  <SelectItem value="intermediate">Intermediate</SelectItem>
+                  <SelectItem value="advanced">Advanced</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </Card>
+        )}
+
+        <div className="text-xs text-muted-foreground">
+          {isLoading ? "Loading…" : `${filteredTemplates.length} result${filteredTemplates.length === 1 ? "" : "s"}`}
+        </div>
 
         {isLoading ? (
           <p className="text-sm text-muted-foreground">Loading…</p>
@@ -259,7 +407,7 @@ export function ProgramLibrary({ embedded = false }: { embedded?: boolean } = {}
         ) : (
           <div className="space-y-2">
             {groupTemplates(filteredTemplates as any[])
-              .filter((s) => s.id !== "archived")
+              .filter((s) => s.items.length > 0)
               .map((s, i) => (
                 <LibrarySection
                   key={s.id}
