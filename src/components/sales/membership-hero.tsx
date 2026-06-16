@@ -270,10 +270,10 @@ export function HeroDecisionArea({ onCoachingClick }: { onCoachingClick?: () => 
           className="text-left rounded-xl border border-white/10 bg-[#0F1116] p-3 hover:border-primary/40 hover:bg-[#13161D] transition-colors"
         >
           <div className="flex items-center gap-2 text-xs font-bold text-white">
-            <Users className="h-3.5 w-3.5 text-primary" /> Work Directly With Me
+            <Users className="h-3.5 w-3.5 text-primary" /> Work With a Dedicated Coach
           </div>
           <div className="mt-1 text-[11px] leading-snug text-[#B0B4BE]">
-            Apply to work with me directly — your plan, your accountability, dialed in over time.
+            Apply for Private Coaching — your plan, your accountability, dialed in over time.
           </div>
         </button>
       </div>

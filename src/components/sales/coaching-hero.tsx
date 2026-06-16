@@ -120,10 +120,10 @@ function CoachingAppPreview() {
 
 export function CoachingProcess() {
   const steps = [
-    { n: "01", title: "Apply", body: "Tell me your goals, your history, and what's been stopping you. Takes about 3 minutes." },
-    { n: "02", title: "I read it myself", body: "I read every application personally. No assistant, no auto-reply." },
-    { n: "03", title: "We get on a call", body: "If it's a fit, we get on a call and map the plan together." },
-    { n: "04", title: "Coaching begins", body: "Your plan, your check-ins, your adjustments, and direct access to me \u2014 all in one place." },
+    { n: "01", title: "Apply", body: "Tell us your goals, your history, and what's been stopping you. Takes about 3 minutes." },
+    { n: "02", title: "We read it ourselves", body: "Every application is read by the team personally. No assistant, no auto-reply." },
+    { n: "03", title: "Strategy call", body: "If it's a fit, we get on a call and map the plan together." },
+    { n: "04", title: "Coaching begins", body: "Your plan, your check-ins, your adjustments, and direct access to your dedicated coach \u2014 all in one place." },
   ];
   return (
     <section className="container mx-auto px-4 py-16 md:py-24">
@@ -131,7 +131,7 @@ export function CoachingProcess() {
         <div className="text-[11px] font-bold uppercase tracking-[0.2em] text-primary">How this actually works</div>
         <h2 className="mt-2 text-3xl font-black tracking-tight md:text-4xl">A real process — not a checkout</h2>
         <p className="mt-3 text-sm text-muted-foreground md:text-base">
-          This is application-only. I don't take everyone, and I don't take men I can't actually help.
+          This is application-only. We don't take everyone, and we don't take on people we can't actually help.
         </p>
       </div>
       <ol className="relative mx-auto grid max-w-5xl gap-4 md:grid-cols-4">
@@ -160,14 +160,14 @@ export function CoachingVsMembership({ onApply }: { onApply: () => void }) {
       <div className="mx-auto grid max-w-5xl gap-4 md:grid-cols-2">
         <div className="rounded-2xl border-2 border-primary/60 bg-gradient-to-br from-primary/10 via-card to-card p-6 shadow-xl shadow-primary/10">
           <div className="text-[11px] font-bold uppercase tracking-widest text-primary">Private Coaching</div>
-          <div className="mt-1 text-2xl font-black">Built by me, led by me</div>
+          <div className="mt-1 text-2xl font-black">Built for you. Run with you.</div>
           <ul className="mt-4 space-y-2 text-sm">
             {[
               "A plan built for you, not pulled from a library",
-              "Weekly check-ins I review myself",
+              "Weekly check-ins reviewed by your coach",
               "Nutrition coaching built around your life",
               "Adjustments based on your actual numbers",
-              "Direct access to me, anytime",
+              "Direct access to your dedicated coach, anytime",
               "A real strategy call before you commit",
             ].map((l) => (
               <li key={l} className="flex items-start gap-2">

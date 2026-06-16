@@ -222,13 +222,13 @@ function SignupJf() {
                 </div>
                 <div>
                   <div className="text-base font-black tracking-tight md:text-lg">
-                    Want Me in Your Corner Directly?
+                    Want a Coach in Your Corner Directly?
                   </div>
                   <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
-                    Private Coaching means a plan built for you, weekly check-ins, real adjustments, and direct access to me.
+                    Private Coaching means a plan built for you, weekly check-ins, real adjustments, and direct access to your dedicated coach.
                   </p>
                   <p className="mt-1 text-[11px] uppercase tracking-[0.18em] text-muted-foreground/80">
-                    Application required · I keep the roster small on purpose
+                    Application required · We keep the roster small on purpose
                   </p>
                 </div>
               </div>

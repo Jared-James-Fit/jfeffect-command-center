@@ -38,14 +38,14 @@ export const Route = createFileRoute("/coaching")({
   head: () => ({
     meta: [
       { title: "Private Coaching · By Application | JF Effect" },
-      { name: "description", content: "A plan built around your life. A coach who knows your numbers. Real progress, held to a standard. By application — limited spots." },
+      { name: "description", content: "A plan built around your life. A coaching team that knows your numbers. Real progress, held to a standard. By application — limited spots." },
       { property: "og:title", content: "Private Coaching · By Application | JF Effect" },
-      { property: "og:description", content: "A plan built around your life. A coach who knows your numbers. Real progress, held to a standard. By application — limited spots." },
+      { property: "og:description", content: "A plan built around your life. A coaching team that knows your numbers. Real progress, held to a standard. By application — limited spots." },
       { property: "og:type", content: "website" },
       { property: "og:url", content: "https://jfeffect.com/coaching" },
       { name: "twitter:card", content: "summary_large_image" },
       { name: "twitter:title", content: "Private Coaching · By Application | JF Effect" },
-      { name: "twitter:description", content: "A plan built around your life. A coach who knows your numbers. Real progress, held to a standard. By application — limited spots." },
+      { name: "twitter:description", content: "A plan built around your life. A coaching team that knows your numbers. Real progress, held to a standard. By application — limited spots." },
     ],
     links: [{ rel: "canonical", href: "https://jfeffect.com/coaching" }],
   }),
@@ -90,7 +90,7 @@ function CoachingPage() {
   const authority: Array<{ label: string }> = Array.isArray(s.authority) && s.authority.length > 0 ? s.authority : [
     { label: "100+ clients coached" },
     { label: "Coaching since 2019" },
-    { label: "Competitive strength background" },
+    { label: "A team built on competitive strength" },
   ];
 
   return (
@@ -101,7 +101,7 @@ function CoachingPage() {
       <CoachingHero
         eyebrow="Private Coaching · By Application"
         headline={"Coaching for people who are done settling."}
-        sub={"A plan built around your life. A coach who knows your numbers. Real progress, held to a standard."}
+        sub={"A plan built around your life. A coaching team that knows your numbers. Real progress, held to a standard."}
         primary={<HeroCta onClick={handleApply}>Apply for Coaching</HeroCta>}
         secondary={
           <Link
@@ -254,7 +254,7 @@ function WhatCoachingIncludes() {
     { Icon: Target, title: "A plan built for you", body: "Your body, your schedule, your training." },
     { Icon: ClipboardCheck, title: "Weekly check-ins", body: "Reviewed and adjusted around your progress." },
     { Icon: Utensils, title: "Nutrition that fits your life", body: "Clear targets, made to last." },
-    { Icon: MessageCircle, title: "A coach in your corner", body: "Direct access, always." },
+    { Icon: MessageCircle, title: "A coach in your corner", body: "Your dedicated coach, direct access, always." },
   ];
   return (
     <Section>
@@ -282,12 +282,12 @@ function JaredStory() {
         <div className="text-center">
           <div className="text-[11px] font-bold uppercase tracking-[0.2em] text-primary">The story</div>
           <h2 className="mt-2 text-3xl font-black tracking-tight md:text-4xl">
-            Earned, not borrowed.
+            How JF Effect started.
           </h2>
         </div>
         <div className="mt-8 space-y-5 text-sm leading-relaxed text-muted-foreground md:text-base">
           <p>
-            JF Effect was built from the ground up, under real pressure. The same discipline that took my own lifting to the competitive level runs through every plan I write. After years of coaching and 100+ clients, the principle is simple: structure and standards outlast motivation. That's what coaching delivers — a plan, and someone who holds the line.
+            JF Effect was built from the ground up, under real pressure — founded by Jared James out of a simple belief: structure and standards outlast motivation. The same discipline that took his own lifting to the competitive level now runs through how the whole team coaches. After years of coaching and 100+ clients, that belief hasn't changed. We build the plan, and we hold the line.
           </p>
         </div>
       </div>
