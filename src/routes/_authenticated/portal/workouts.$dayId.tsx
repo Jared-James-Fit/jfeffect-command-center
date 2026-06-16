@@ -26,6 +26,7 @@ import {
 } from "@/lib/exercise-metadata";
 import { listClientMaxes, buildMaxIndex, computeRowLoad } from "@/lib/pl-maxes";
 import { useAutosave, readLocalDraft, clearLocalDraft } from "@/hooks/use-autosave";
+import { useUnsavedWarning } from "@/hooks/use-unsaved-warning";
 import { SaveStatus } from "@/components/save-status";
 import { ActionButton } from "@/components/action-button";
 import { TrainingHelpButton } from "@/components/training-help-sheet";
