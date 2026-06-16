@@ -57,7 +57,7 @@ export function ProgramCard({
 
       {chips.length > 0 && (
         <div className="mt-2 flex flex-wrap gap-1">
-          {chips.slice(0, 5).map((c) => (
+          {chips.slice(0, 5).map((c: string) => (
             <Badge key={c} variant="outline" className="text-[10px] font-normal">{c}</Badge>
           ))}
         </div>
