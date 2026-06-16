@@ -7,11 +7,13 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, Pencil, Trash2, Eye, BookOpen } from "lucide-react";
+import { Plus, Pencil, Trash2, Eye, BookOpen, X } from "lucide-react";
 import { listRecipesAdmin, deleteRecipe, statusTone, RECIPE_ACCESS_LABELS, type Recipe } from "@/lib/recipes";
 import { RECIPE_CATEGORIES, recipePreview } from "@/lib/recipe-format";
 import { RecipeForm } from "@/components/recipe-form";
 import { RecipeFormattingGuide } from "@/components/recipe-formatting-guide";
+import { LibrarySection } from "@/components/library-section";
+import { groupRecipes } from "@/lib/library-grouping";
 import { format } from "date-fns";
 import { toast } from "sonner";
 
@@ -32,6 +34,8 @@ export function AdminRecipes({ embedded = false }: { embedded?: boolean } = {}) 
   const [query, setQuery] = useState("");
   const [statusF, setStatusF] = useState<string>("all");
   const [catF, setCatF] = useState<string>("all");
+  const [accessF, setAccessF] = useState<string>("all");
+  const [sortBy, setSortBy] = useState<"updated" | "title">("updated");
 
   const { data: recipes = [], isLoading } = useQuery({
     queryKey: ["admin-recipes"],
@@ -40,13 +44,30 @@ export function AdminRecipes({ embedded = false }: { embedded?: boolean } = {}) 
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    return recipes.filter((r) => {
+    const out = recipes.filter((r) => {
       if (statusF !== "all" && r.status !== statusF) return false;
       if (catF !== "all" && r.category !== catF) return false;
+      if (accessF !== "all" && r.access_scope !== accessF) return false;
       if (q && !r.title.toLowerCase().includes(q) && !r.tags.join(" ").toLowerCase().includes(q)) return false;
       return true;
     });
-  }, [recipes, query, statusF, catF]);
+    if (sortBy === "title") {
+      out.sort((a, b) => a.title.localeCompare(b.title));
+    } else {
+      out.sort((a, b) => (b.updated_at ?? "").localeCompare(a.updated_at ?? ""));
+    }
+    return out;
+  }, [recipes, query, statusF, catF, accessF, sortBy]);
+
+  const hasActiveFilters =
+    query.trim() !== "" || statusF !== "all" || catF !== "all" || accessF !== "all";
+
+  function clearFilters() {
+    setQuery("");
+    setStatusF("all");
+    setCatF("all");
+    setAccessF("all");
+  }
 
   async function onDelete(id: string) {
     if (!confirm("Delete this recipe?")) return;
@@ -103,6 +124,31 @@ export function AdminRecipes({ embedded = false }: { embedded?: boolean } = {}) 
               {RECIPE_CATEGORIES.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
             </SelectContent>
           </Select>
+          <Select value={accessF} onValueChange={setAccessF}>
+            <SelectTrigger className="w-[180px]"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All access</SelectItem>
+              {Object.entries(RECIPE_ACCESS_LABELS).map(([v, l]) => (
+                <SelectItem key={v} value={v}>{l}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Select value={sortBy} onValueChange={(v) => setSortBy(v as "updated" | "title")}>
+            <SelectTrigger className="w-[140px]"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="updated">Sort: Updated</SelectItem>
+              <SelectItem value="title">Sort: Name</SelectItem>
+            </SelectContent>
+          </Select>
+          {hasActiveFilters && (
+            <Button variant="ghost" size="sm" onClick={clearFilters}>
+              <X className="mr-1 h-3.5 w-3.5" /> Clear filters
+            </Button>
+          )}
+        </div>
+
+        <div className="text-xs text-muted-foreground">
+          {isLoading ? "Loading…" : `${filtered.length} result${filtered.length === 1 ? "" : "s"}`}
         </div>
 
         {isLoading ? (
@@ -113,38 +159,52 @@ export function AdminRecipes({ embedded = false }: { embedded?: boolean } = {}) 
             <p className="mt-3 text-sm text-muted-foreground">No recipes yet. Create your first one.</p>
           </Card>
         ) : (
-          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-            {filtered.map((r) => (
-              <Card key={r.id} className="flex flex-col gap-3 p-4">
-                <div className="flex items-start justify-between gap-2">
-                  <div className="min-w-0 flex-1">
-                    <div className="truncate text-base font-bold">{r.title}</div>
-                    <div className="mt-0.5 flex flex-wrap items-center gap-1.5">
-                      <Badge variant="outline" className="text-[10px]">{r.category}</Badge>
-                      <Badge variant="outline" className={`text-[10px] ${statusTone(r.status)}`}>{r.status}</Badge>
-                    </div>
+          <div className="space-y-2">
+            {groupRecipes(filtered)
+              .filter((s) => s.items.length > 0)
+              .map((s, i) => (
+                <LibrarySection
+                  key={s.id}
+                  label={s.label}
+                  description={s.description}
+                  count={s.items.length}
+                  defaultOpen={i < 3}
+                >
+                  <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                    {s.items.map((r) => (
+                      <Card key={r.id} className="flex flex-col gap-3 p-4">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="min-w-0 flex-1">
+                            <div className="break-words text-base font-bold">{r.title}</div>
+                            <div className="mt-0.5 flex flex-wrap items-center gap-1.5">
+                              <Badge variant="outline" className="text-[10px]">{r.category}</Badge>
+                              <Badge variant="outline" className={`text-[10px] ${statusTone(r.status)}`}>{r.status}</Badge>
+                            </div>
+                          </div>
+                        </div>
+                        <p className="line-clamp-3 text-xs text-muted-foreground">{recipePreview(r.body, 160) || "—"}</p>
+                        <div className="text-[11px] text-muted-foreground">
+                          Access: <span className="font-medium text-foreground">{RECIPE_ACCESS_LABELS[r.access_scope]}</span>
+                          {r.updated_at && <span> · {format(new Date(r.updated_at), "MMM d")}</span>}
+                        </div>
+                        <div className="mt-auto flex gap-2 pt-2">
+                          <Button variant="outline" size="sm" onClick={() => { setEditing(r); setOpen(true); }} className="flex-1">
+                            <Pencil className="mr-1 h-3.5 w-3.5" /> Edit
+                          </Button>
+                          <Button variant="ghost" size="sm" asChild>
+                            <Link to="/portal/recipes/$recipeId" params={{ recipeId: r.id } as any}>
+                              <Eye className="h-3.5 w-3.5" />
+                            </Link>
+                          </Button>
+                          <Button variant="ghost" size="sm" onClick={() => onDelete(r.id)}>
+                            <Trash2 className="h-3.5 w-3.5 text-destructive" />
+                          </Button>
+                        </div>
+                      </Card>
+                    ))}
                   </div>
-                </div>
-                <p className="line-clamp-3 text-xs text-muted-foreground">{recipePreview(r.body, 160) || "—"}</p>
-                <div className="text-[11px] text-muted-foreground">
-                  Access: <span className="font-medium text-foreground">{RECIPE_ACCESS_LABELS[r.access_scope]}</span>
-                  {r.updated_at && <span> · {format(new Date(r.updated_at), "MMM d")}</span>}
-                </div>
-                <div className="mt-auto flex gap-2 pt-2">
-                  <Button variant="outline" size="sm" onClick={() => { setEditing(r); setOpen(true); }} className="flex-1">
-                    <Pencil className="mr-1 h-3.5 w-3.5" /> Edit
-                  </Button>
-                  <Button variant="ghost" size="sm" asChild>
-                    <Link to="/portal/recipes/$recipeId" params={{ recipeId: r.id } as any}>
-                      <Eye className="h-3.5 w-3.5" />
-                    </Link>
-                  </Button>
-                  <Button variant="ghost" size="sm" onClick={() => onDelete(r.id)}>
-                    <Trash2 className="h-3.5 w-3.5 text-destructive" />
-                  </Button>
-                </div>
-              </Card>
-            ))}
+                </LibrarySection>
+              ))}
           </div>
         )}
       </div>
