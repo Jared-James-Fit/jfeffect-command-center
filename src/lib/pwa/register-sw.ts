@@ -13,9 +13,9 @@ function notify() {
 }
 
 export function getSwStatus(): Status { return status; }
-export function subscribeSw(fn: () => void) {
+export function subscribeSw(fn: () => void): () => void {
   listeners.add(fn);
-  return () => listeners.delete(fn);
+  return () => { listeners.delete(fn); };
 }
 export async function applyUpdate() {
   if (triggerUpdate) await triggerUpdate();
