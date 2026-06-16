@@ -617,6 +617,7 @@ function RowMenu({ tpl, onChanged }: { tpl: any; onChanged: () => void }) {
   const run = async (fn: () => Promise<any>, ok: string) => {
     try { await fn(); toast.success(ok); onChanged(); } catch (e: any) { toast.error(e.message); }
   };
+  const isPublished = String(tpl.status ?? "Draft") === "Published";
   return (
     <>
     <DropdownMenu>
@@ -641,6 +642,15 @@ function RowMenu({ tpl, onChanged }: { tpl: any; onChanged: () => void }) {
         <DropdownMenuItem onClick={() => run(() => duplicateTemplate(tpl.id), "Duplicated")}>
           <Copy className="mr-2 h-3.5 w-3.5" /> Duplicate
         </DropdownMenuItem>
+        {isPublished ? (
+          <DropdownMenuItem onClick={() => run(() => updateTemplate(tpl.id, { status: "Draft" }), "Unpublished")}>
+            <CircleDot className="mr-2 h-3.5 w-3.5" /> Unpublish
+          </DropdownMenuItem>
+        ) : (
+          <DropdownMenuItem onClick={() => run(() => updateTemplate(tpl.id, { status: "Published" }), "Published")}>
+            <CheckCircle2 className="mr-2 h-3.5 w-3.5" /> Publish
+          </DropdownMenuItem>
+        )}
         {tpl.archived ? (
           <DropdownMenuItem onClick={() => run(() => setTemplateArchived(tpl.id, false), "Restored")}>
             <ArchiveRestore className="mr-2 h-3.5 w-3.5" /> Restore
