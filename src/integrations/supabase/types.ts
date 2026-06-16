@@ -446,6 +446,9 @@ export type Database = {
           grace_period_ends_at: string | null
           hold_plan_started_at: string | null
           id: string
+          install_detected_at: string | null
+          install_dismissed_at: string | null
+          install_platform: string | null
           is_admin_sandbox: boolean
           last_active_at: string | null
           last_billing_event_at: string | null
@@ -508,6 +511,9 @@ export type Database = {
           grace_period_ends_at?: string | null
           hold_plan_started_at?: string | null
           id?: string
+          install_detected_at?: string | null
+          install_dismissed_at?: string | null
+          install_platform?: string | null
           is_admin_sandbox?: boolean
           last_active_at?: string | null
           last_billing_event_at?: string | null
@@ -570,6 +576,9 @@ export type Database = {
           grace_period_ends_at?: string | null
           hold_plan_started_at?: string | null
           id?: string
+          install_detected_at?: string | null
+          install_dismissed_at?: string | null
+          install_platform?: string | null
           is_admin_sandbox?: boolean
           last_active_at?: string | null
           last_billing_event_at?: string | null

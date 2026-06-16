@@ -11,6 +11,7 @@ import {
   Heart, Flame,
   Ticket,
   AlertCircle,
+  Download,
 } from "lucide-react";
 import { Sparkles } from "lucide-react";
 import type { NavItem } from "@/components/app-shell";
@@ -204,6 +205,7 @@ export const memberNav: NavItem[] = [
   { to: "/m/tools", label: "Tools", icon: Wrench },
   { to: "/m/announcements", label: "Announcements", icon: Megaphone },
   { to: "/m/support", label: "Support", icon: HelpCircle },
+  { to: "/install", label: "Install App", icon: Download },
   { to: "/m/billing", label: "Billing", icon: CreditCard },
   { to: "/m/account", label: "My Account", icon: UserCog },
 ];

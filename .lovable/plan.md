@@ -18,7 +18,7 @@ Goal: real install on iPhone + Android, real JF Effect branding, no Lovable plac
 
 Verification: Playwright check of `/manifest.webmanifest`, icon URLs 200, head tags rendered, lighthouse-style manifest validation, screenshots of the install sheet on a simulated iPhone viewport.
 
-## Phase 2 — Install flow + device-aware instructions
+## Phase 2 — Install flow + device-aware instructions ✅ DONE
 
 - New route `/install` (and a "Install JF Effect" entry from member home).
 - `usePlatform()` hook: detects iOS Safari, Android Chrome, in-app browser (FB/IG/Gmail), desktop, already-installed (`display-mode: standalone` + `navigator.standalone`), `beforeinstallprompt` availability.
