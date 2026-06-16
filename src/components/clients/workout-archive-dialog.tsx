@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Dialog,
   DialogContent,
@@ -9,9 +9,21 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Archive, Search, ExternalLink, Loader2 } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { toast } from "sonner";
+import { Archive, Search, ExternalLink, Loader2, Trash2 } from "lucide-react";
 import { format, parseISO } from "date-fns";
-import { listArchivedBlocks } from "@/lib/pl-programs";
+import { listArchivedBlocks, deleteBlock } from "@/lib/pl-programs";
 
 export function WorkoutArchiveDialog({
   open,
@@ -25,10 +37,24 @@ export function WorkoutArchiveDialog({
   clientName?: string | null;
 }) {
   const [q, setQ] = useState("");
+  const [pendingDelete, setPendingDelete] = useState<{ id: string; name: string } | null>(null);
+  const queryClient = useQueryClient();
   const { data: blocks = [], isLoading } = useQuery({
     queryKey: ["archived-blocks", clientId],
     enabled: open,
     queryFn: () => listArchivedBlocks(clientId),
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) => deleteBlock(id),
+    onSuccess: () => {
+      toast.success("Program deleted");
+      queryClient.invalidateQueries({ queryKey: ["archived-blocks", clientId] });
+      setPendingDelete(null);
+    },
+    onError: (e: any) => {
+      toast.error(e?.message || "Failed to delete program");
+    },
   });
 
   const filtered = useMemo(() => {
@@ -101,13 +127,13 @@ export function WorkoutArchiveDialog({
             <ul className="space-y-2">
               {filtered.map((b: any) => (
                 <li key={b.id}>
-                  <a
-                    href={`/admin/blocks/${b.id}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="group flex items-center justify-between gap-3 rounded-md border border-border bg-secondary/30 p-3 transition hover:border-primary/40 hover:bg-secondary/60"
-                  >
-                    <div className="min-w-0 flex-1">
+                  <div className="group flex items-center justify-between gap-3 rounded-md border border-border bg-secondary/30 p-3 transition hover:border-primary/40 hover:bg-secondary/60">
+                    <a
+                      href={`/admin/blocks/${b.id}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="min-w-0 flex-1"
+                    >
                       <div className="flex items-center gap-2">
                         <span className="truncate font-semibold text-foreground">
                           {b.name || "Untitled program"}
@@ -136,15 +162,70 @@ export function WorkoutArchiveDialog({
                           {format(parseISO(b.archived_at), "MMM d, yyyy")}
                         </div>
                       )}
+                    </a>
+                    <div className="flex shrink-0 items-center gap-1">
+                      <a
+                        href={`/admin/blocks/${b.id}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="rounded p-2 text-muted-foreground transition hover:bg-secondary hover:text-foreground"
+                        aria-label="Open program"
+                      >
+                        <ExternalLink className="h-4 w-4" />
+                      </a>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          setPendingDelete({ id: b.id, name: b.name || "Untitled program" });
+                        }}
+                        aria-label="Delete program"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
                     </div>
-                    <ExternalLink className="h-4 w-4 shrink-0 text-muted-foreground transition group-hover:text-foreground" />
-                  </a>
+                  </div>
                 </li>
               ))}
             </ul>
           )}
         </div>
       </DialogContent>
+      <AlertDialog
+        open={!!pendingDelete}
+        onOpenChange={(o) => !o && !deleteMutation.isPending && setPendingDelete(null)}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete archived program?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This permanently deletes "{pendingDelete?.name}" along with its weeks,
+              days, and exercises. This cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleteMutation.isPending}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              disabled={deleteMutation.isPending}
+              onClick={(e) => {
+                e.preventDefault();
+                if (pendingDelete) deleteMutation.mutate(pendingDelete.id);
+              }}
+            >
+              {deleteMutation.isPending ? (
+                <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Deleting…</>
+              ) : (
+                "Delete"
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Dialog>
   );
 }
