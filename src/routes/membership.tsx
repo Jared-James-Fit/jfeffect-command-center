@@ -529,52 +529,46 @@ function FieldError({ children }: { children: React.ReactNode }) {
 /* ---------------- Defaults (CMS-overridable) ---------------- */
 
 const DEFAULT_FEATURES = [
-  { title: "Program Library", body: "Powerlifting, bodybuilding, fat loss, strength, muscle, home workouts. Beginner to advanced. Pick a plan and start training today." },
-  { title: "Exercise Demo Library", body: "Clear technique videos built right into your workouts, so you're never guessing how a lift should look or feel." },
-  { title: "Progress Tracking", body: "Log every set, track your strength, watch your PRs climb, and actually see whether the work is paying off." },
-  { title: "Education", body: "Training, recovery, nutrition, and performance content so you understand the why behind the plan — not just the what." },
-  { title: "Future Updates", body: "New programs, resources, and features added regularly. Your membership gets better while you use it." },
+  { title: "Program library", body: "Powerlifting, bodybuilding, fat loss, home. Every level." },
+  { title: "Exercise demos", body: "Clear technique in every workout." },
+  { title: "Progress tracking", body: "Log sets, watch PRs climb." },
+  { title: "Education", body: "The reasoning behind the plan." },
+  { title: "Always growing", body: "New programs added often." },
 ];
 
 type LibraryCategory = { name: string; icon?: string; subtypes: string[] };
 const DEFAULT_LIBRARY: LibraryCategory[] = [
-  { name: "Powerlifting", icon: "trophy", subtypes: ["Beginner", "Intermediate", "Advanced", "Competition Prep"] },
-  { name: "Bodybuilding", icon: "dumbbell", subtypes: ["Push/Pull/Legs", "Upper/Lower", "Full Body", "Glute Focused"] },
+  { name: "Powerlifting", icon: "trophy", subtypes: ["Beginner", "Intermediate", "Advanced", "Comp Prep"] },
+  { name: "Bodybuilding", icon: "dumbbell", subtypes: ["PPL", "Upper/Lower", "Full Body", "Glute Focus"] },
   { name: "Fat Loss", icon: "flame", subtypes: ["Beginner", "Intermediate", "Advanced"] },
-  { name: "Home / Minimal Equipment", icon: "home", subtypes: ["Bodyweight", "Dumbbells Only", "At-Home Strength"] },
+  { name: "Home", icon: "home", subtypes: ["Bodyweight", "Dumbbells", "At-Home Strength"] },
 ];
 
 const DEFAULT_WHO_FOR = [
-  "You're driven and you want structure, not a hype video",
-  "You're beginner, intermediate, or advanced — the library covers all of it",
-  "You want to build muscle, lose fat, or get stronger on a real plan",
-  "You're happy to train on your own — you just want the right plan to follow",
-  "You're done restarting and want something that compounds",
+  "Any level. Muscle, fat loss, or strength.",
+  "For people who'll train on their own with the right plan to follow.",
 ];
 
 const DEFAULT_NOT_FOR = [
-  "You want a one-week quick fix",
-  "You need motivation to carry you every day",
-  "You won't actually follow a plan",
-  "You want someone to do the thinking for you (that's coaching)",
+  "Not for one-week fixes.",
 ];
 
 const DEFAULT_APP_PREVIEWS = [
-  { label: "Dashboard — today's session at a glance", url: appPreviewDashboard },
-  { label: "Workout logging — tap to log reps, load, RPE", url: appPreviewLogging },
-  { label: "Exercise library — every movement, every demo", url: appPreviewLibrary },
-  { label: "Program library — switch focus anytime", url: appPreviewPrograms },
-  { label: "Progress tracking — volume, PRs, trends", url: appPreviewProgress },
+  { label: "Dashboard — today's session and what's next", url: appPreviewDashboard },
+  { label: "Logging — tap to log; last session auto-fills", url: appPreviewLogging },
+  { label: "Exercise library — every movement, demo included", url: appPreviewLibrary },
+  { label: "Programs — browse by goal, switch anytime", url: appPreviewPrograms },
+  { label: "Tracking — PRs and trends, visualized", url: appPreviewProgress },
 ];
 
 const DEFAULT_FAQ = [
-  { q: "Is this coaching?", a: "No. Membership is the self-guided app — proven programs, demos, tracking, and education you run on your own. Coaching is 1:1, built for you, with weekly check-ins and direct access to me. Want that? Apply for coaching." },
-  { q: "Can beginners join?", a: "Absolutely. There are beginner programs in every category, with demos for every movement so you're never lost." },
-  { q: "Can I train at home?", a: "Yes — there's a whole home/minimal-equipment section, from bodyweight to dumbbells-only to at-home strength." },
-  { q: "Can I use this for powerlifting?", a: "Yes. Powerlifting is the founder's sport — beginner through competition prep is in the library." },
-  { q: "Can I use this for bodybuilding?", a: "Yes — PPL, upper/lower, full body, and glute-focused splits are all included." },
-  { q: "How often are new programs added?", a: "Regularly. New programs, resources, and features get added while you're a member — the library keeps growing." },
-  { q: "Can I cancel anytime?", a: "Yes. Cancel anytime from your billing page; access runs to the end of your current period. No games." },
+  { q: "Is this coaching?", a: "No — self-guided app. Coaching is 1:1." },
+  { q: "Beginner?", a: "Yes, every level." },
+  { q: "Home training?", a: "Yes." },
+  { q: "Powerlifting?", a: "Yes." },
+  { q: "Bodybuilding?", a: "Yes." },
+  { q: "New programs?", a: "Added often." },
+  { q: "Cancel anytime?", a: "Yes." },
 ];
 
 /* ---------------- Sections ---------------- */
