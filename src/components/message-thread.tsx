@@ -52,6 +52,7 @@ import {
 import { format, parseISO, isToday, isYesterday } from "date-fns";
 import { runJob } from "@/lib/progress-jobs";
 import { toast } from "sonner";
+import { useUnsavedWarning } from "@/hooks/use-unsaved-warning";
 
 function attachIcon(t: MessageAttachment["type"]) {
   if (t === "image") return ImageIcon;
@@ -604,6 +605,9 @@ export function MessageThread({
   const photoInputRef = useRef<HTMLInputElement>(null);
   const recorder = useVoiceRecorder();
   const transcribeFn = useServerFn(transcribeVoiceMessage);
+  // Defer PWA updates while there's an in-flight composer draft. No unload prompt
+  // — chat threads navigate freely and the draft is short-lived.
+  useUnsavedWarning(body.trim().length > 0 || sending || uploading, { warnOnUnload: false });
   const [preview, setPreview] = useState<{
     blob: Blob; url: string; duration: number; peaks: number[];
   } | null>(null);

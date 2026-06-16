@@ -26,6 +26,7 @@ import {
 } from "@/lib/exercise-metadata";
 import { listClientMaxes, buildMaxIndex, computeRowLoad } from "@/lib/pl-maxes";
 import { useAutosave, readLocalDraft, clearLocalDraft } from "@/hooks/use-autosave";
+import { useUnsavedWarning } from "@/hooks/use-unsaved-warning";
 import { SaveStatus } from "@/components/save-status";
 import { ActionButton } from "@/components/action-button";
 import { TrainingHelpButton } from "@/components/training-help-sheet";
@@ -589,6 +590,14 @@ function WorkoutDay() {
       }
     },
   });
+
+  // Defer PWA updates while the workout has unsaved meta (notes / actual minutes).
+  // No beforeunload prompt — set rows persist via their own autosaves and would
+  // otherwise nag every time the member taps away from the page.
+  useUnsavedWarning(
+    metaSave.state === "saving" || metaSave.state === "offline" || metaSave.state === "error",
+    { warnOnUnload: false },
+  );
 
   const refresh = () => {
     qc.invalidateQueries({ queryKey: ["pl-day-results", dayId] });

@@ -44,6 +44,7 @@ import {
 } from "lucide-react";
 import { runJob } from "@/lib/progress-jobs";
 import { toast } from "sonner";
+import { useUnsavedWarning } from "@/hooks/use-unsaved-warning";
 
 async function uploadGroupFile(groupId: string, file: File): Promise<GroupAttachment> {
   const ext = file.name.includes(".") ? file.name.split(".").pop() : "";
@@ -76,6 +77,7 @@ export function GroupMessageThread({
   const [preview, setPreview] = useState<{ blob: Blob; url: string; duration: number; peaks: number[] } | null>(null);
   const previewAudioRef = useRef<HTMLAudioElement | null>(null);
   const [previewPlaying, setPreviewPlaying] = useState(false);
+  useUnsavedWarning(body.trim().length > 0 || sending || uploading, { warnOnUnload: false });
 
   // Editing / actions
   const [editingId, setEditingId] = useState<string | null>(null);
