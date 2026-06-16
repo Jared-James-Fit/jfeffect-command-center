@@ -90,7 +90,7 @@ function CommunicationWorkspace() {
           })}
         </div>
       </div>
-      <div className="min-h-0 flex-1 overflow-hidden">
+      <div className="min-h-0 flex-1 overflow-auto">
         {tab === "messages" && <MessagesInbox initialClient={client} embedded />}
         {tab === "broadcasts" && <AdminBroadcasts embedded />}
         {tab === "support-inbox" && <SupportInbox embedded />}
