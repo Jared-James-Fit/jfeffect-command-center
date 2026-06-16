@@ -101,7 +101,7 @@ function CoachingPage() {
       <CoachingHero
         eyebrow="Private Coaching · By Application"
         headline={"Coaching for people who are done settling."}
-        sub={"A plan built around your life. A coach who knows your numbers. Real progress, held to a standard."}
+        sub={"A plan built around your life. A coaching team that knows your numbers. Real progress, held to a standard."}
         primary={<HeroCta onClick={handleApply}>Apply for Coaching</HeroCta>}
         secondary={
           <Link
