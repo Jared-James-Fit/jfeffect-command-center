@@ -574,44 +574,27 @@ const DEFAULT_FAQ = [
 /* ---------------- Sections ---------------- */
 
 function CompareAloneSection() {
-  const left = [
-    "Random workouts pulled from wherever",
-    "Conflicting advice from ten directions",
-    "No real structure week to week",
-    "No way to track if it's working",
-    "Restarting every few weeks",
-  ];
-  const right = [
-    "Proven programs built by a national-level coach",
-    "One organized system, no second-guessing",
-    "Built-in progress tracking",
-    "Exercise demos so form isn't a mystery",
-    "A clear path you can actually stick to",
+  const lines = [
+    "Proven programs for every goal.",
+    "One organized system.",
+    "Progress tracked as you train.",
+    "A plan you'll stay with.",
   ];
   return (
     <Section>
-      <SectionTitle title="The difference is structure." />
-      <div className="grid gap-4 md:grid-cols-2">
-        <Card className="border-border bg-card p-6">
-          <div className="text-xs font-bold uppercase tracking-widest text-muted-foreground mb-3">Figuring it out yourself</div>
-          <ul className="space-y-2 text-sm text-muted-foreground">
-            {left.map((x) => (
-              <li key={x} className="flex items-start gap-2"><XCircle className="mt-0.5 h-4 w-4 shrink-0 text-rose-400/80" />{x}</li>
-            ))}
-          </ul>
-        </Card>
-        <Card className="border-primary/40 bg-primary/5 p-6">
-          <div className="text-xs font-bold uppercase tracking-widest text-primary mb-3">JF Effect Membership</div>
-          <ul className="space-y-2 text-sm">
-            {right.map((x) => (
-              <li key={x} className="flex items-start gap-2"><CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-400" />{x}</li>
+      <SectionTitle eyebrow="The system" title="Structure, built in." />
+      <div className="mx-auto max-w-3xl">
+        <Card className="border-primary/30 bg-primary/5 p-6 md:p-8">
+          <ul className="grid gap-3 sm:grid-cols-2">
+            {lines.map((x) => (
+              <li key={x} className="flex items-start gap-3 text-sm md:text-base">
+                <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-emerald-400" />
+                <span className="font-medium">{x}</span>
+              </li>
             ))}
           </ul>
         </Card>
       </div>
-      <p className="mx-auto mt-6 max-w-3xl text-center text-sm text-muted-foreground md:text-base">
-        You've already tried winging it. You know where it goes. This is the version where the work compounds instead of resetting.
-      </p>
     </Section>
   );
 }
@@ -630,9 +613,9 @@ function ProgramLibraryShowcase({ categories, programCount }: { categories: Libr
   return (
     <Section>
       <SectionTitle
-        eyebrow="The full library"
-        title="Pick your goal. The plan's already built."
-        sub={count ? `${count}+ programs across every goal and level, all included — switch anytime.` : "Programs across every goal and level, all included — switch anytime."}
+        eyebrow="The library"
+        title="Pick your goal. The plan's built."
+        sub={count ? `${count}+ programs, every level, all included.` : "Programs across every level, all included."}
       />
       <div className="grid gap-3 sm:grid-cols-2">
         {categories.map((c) => {
@@ -664,15 +647,12 @@ function WhyStickSection() {
   return (
     <Section>
       <div className="mx-auto max-w-3xl text-center">
-        <div className="text-[11px] font-bold uppercase tracking-[0.18em] text-primary">Why this works when nothing else did</div>
+        <div className="text-[11px] font-bold uppercase tracking-[0.18em] text-primary">Why it works</div>
         <h2 className="mt-2 text-3xl font-black tracking-tight md:text-4xl">
-          You don't have a willpower problem. You have a structure problem.
+          Progress that compounds.
         </h2>
         <p className="mt-5 text-base text-muted-foreground md:text-lg">
-          Most people don't fail because they're lazy. They fail because they jump between programs, follow random advice, and never run anything long enough for it to work. So they restart. Again.
-        </p>
-        <p className="mt-4 text-base text-muted-foreground md:text-lg">
-          The membership kills that loop. One organized system, a clear plan every session, tracking that shows progress, and a library deep enough that you never need to go hunting for the next thing. You just keep showing up — and for once, it adds up.
+          One system, followed consistently, beats endless restarting. A clear plan every session — and it adds up.
         </p>
       </div>
     </Section>
