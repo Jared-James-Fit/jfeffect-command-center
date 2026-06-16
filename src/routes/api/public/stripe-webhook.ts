@@ -507,23 +507,23 @@ export const Route = createFileRoute("/api/public/stripe-webhook")({
                     const setupLink = member.setup_token && !member.user_id
                       ? `${origin}/member-setup?token=${member.setup_token}`
                       : `${origin}/auth`;
-                    // SMS — dedupe on membership_onboarding:<member_id>:sms.
+                    // SMS — atomically claim dedupe slot; on conflict skip.
                     const smsKey = `membership_onboarding:${member.id}:sms`;
-                    const { data: smsDupe } = await supabase
+                    const { data: smsClaimed, error: smsClaimErr } = await supabase
                       .from("notification_dedupe")
-                      .select("key").eq("key", smsKey).eq("channel", "sms").maybeSingle();
-                    if (!smsDupe) {
+                      .insert({
+                        key: smsKey,
+                        channel: "sms",
+                        member_id: member.id,
+                        metadata: { trigger: "subscription_purchased" },
+                      })
+                      .select("key");
+                    if (!smsClaimErr && smsClaimed && smsClaimed.length > 0) {
                       await fireAutomationTrigger(supabase, {
                         trigger: "subscription_purchased",
                         memberId: member.id,
                         vars: { setup_link: setupLink },
                       });
-                      await supabase.from("notification_dedupe").insert({
-                        key: smsKey,
-                        channel: "sms",
-                        member_id: member.id,
-                        metadata: { trigger: "subscription_purchased" },
-                      }).then(() => {}, () => {});
                     }
                     // Email — onboarding email (handles its own dedupe internally).
                     try {
