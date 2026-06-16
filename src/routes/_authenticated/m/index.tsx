@@ -10,7 +10,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
-import { BookOpen, ClipboardCheck, FolderOpen, Wrench, PlayCircle } from "lucide-react";
+import { BookOpen, ClipboardCheck, ChefHat, Wrench, PlayCircle } from "lucide-react";
 import { Star } from "lucide-react";
 import { UpgradeCTA } from "@/components/upgrade-cta";
 import { SetupChecklist } from "@/components/member/setup-checklist-card";
@@ -112,7 +112,7 @@ function MemberHome() {
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <QuickCard to="/m/my-plans" icon={ClipboardCheck} label="My Plans" />
         <QuickCard to="/m/plans" icon={BookOpen} label="Program Library" />
-        <QuickCard to="/m/resources" icon={FolderOpen} label="Resources" />
+        <QuickCard to="/m/nutrition" icon={ChefHat} label="Nutrition & Recipes" />
         <QuickCard to="/m/tools" icon={Wrench} label="Tools" />
       </div>
       {featured.length > 0 && (
