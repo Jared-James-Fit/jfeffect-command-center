@@ -15,6 +15,7 @@ import { validateTemplatePayload, type DayIssue } from "@/lib/pl-template-valida
 import {
   Plus, BookOpen, UserPlus, Eye, Pencil, Copy, Archive as ArchiveIcon,
   ArchiveRestore, Trash2, Clock, Calendar, Layers, MoreVertical, Search, Users, AlertTriangle, Share2, Inbox, Settings2,
+  CheckCircle2, CircleDot, X as XIcon, ArrowUpDown,
 } from "lucide-react";
 import { toast } from "sonner";
 import { runJob } from "@/lib/progress-jobs";
