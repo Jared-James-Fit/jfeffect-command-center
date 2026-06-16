@@ -14,6 +14,7 @@ import { Badge } from "@/components/ui/badge";
 import { ArrowLeft, ExternalLink, Save, Trash2, Mail, Archive, KeyRound, Copy, CheckCircle2, AlertCircle, BellRing, Tag, Dumbbell, MessageSquare, Link2, MoreHorizontal, User as UserIcon, Apple, DollarSign } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { SendBookingLinkDialog } from "@/components/appointments/send-booking-link-dialog";
+import { SendPasswordResetDialog } from "@/components/account/send-password-reset-dialog";
 import { toast } from "sonner";
 import { useServerFn } from "@tanstack/react-start";
 import { inviteClient, deleteClient, getSetupLink, getPasswordResetLink, sendPasswordReset, markSetupComplete, setNeedsAdminHelp, setClientPassword } from "@/lib/clients.functions";
