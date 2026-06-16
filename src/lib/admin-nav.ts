@@ -204,7 +204,7 @@ export const memberNav: NavItem[] = [
   { to: "/m", label: "Dashboard", icon: LayoutDashboard },
   { to: "/m/my-plans", label: "My Plans", icon: ClipboardCheck },
   { to: "/m/plans", label: "Program Library", icon: BookOpen },
-  { to: "/m/resources", label: "Resources", icon: FolderOpen },
+  { to: "/m/nutrition", label: "Nutrition & Recipes", icon: ChefHat },
   { to: "/m/tools", label: "Tools", icon: Wrench },
   { to: "/m/announcements", label: "Announcements", icon: Megaphone },
   { to: "/m/support", label: "Support", icon: HelpCircle },
@@ -219,6 +219,6 @@ export const memberBottomNav: NavItem[] = [
   { to: "/m", label: "Home", icon: LayoutDashboard },
   { to: "/m/my-plans", label: "My Plans", icon: ClipboardCheck },
   { to: "/m/plans", label: "Library", icon: BookOpen },
-  { to: "/m/resources", label: "Resources", icon: FolderOpen },
+  { to: "/m/nutrition", label: "Nutrition", icon: ChefHat },
   { to: "/m/account", label: "Account", icon: UserCog },
 ];

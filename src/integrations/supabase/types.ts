@@ -435,12 +435,14 @@ export type Database = {
           cross_account_locked: boolean
           current_period_end: string | null
           date_of_birth: string | null
+          dietary_preferences: string[]
           email: string
           email_marketing_opt_in: boolean
           emergency_contact_name: string | null
           emergency_contact_phone: string | null
           experience_level: string | null
           first_workout_opened_at: string | null
+          food_restrictions: string[]
           full_name: string | null
           goals: string | null
           goals_tags: string[]
@@ -506,12 +508,14 @@ export type Database = {
           cross_account_locked?: boolean
           current_period_end?: string | null
           date_of_birth?: string | null
+          dietary_preferences?: string[]
           email: string
           email_marketing_opt_in?: boolean
           emergency_contact_name?: string | null
           emergency_contact_phone?: string | null
           experience_level?: string | null
           first_workout_opened_at?: string | null
+          food_restrictions?: string[]
           full_name?: string | null
           goals?: string | null
           goals_tags?: string[]
@@ -577,12 +581,14 @@ export type Database = {
           cross_account_locked?: boolean
           current_period_end?: string | null
           date_of_birth?: string | null
+          dietary_preferences?: string[]
           email?: string
           email_marketing_opt_in?: boolean
           emergency_contact_name?: string | null
           emergency_contact_phone?: string | null
           experience_level?: string | null
           first_workout_opened_at?: string | null
+          food_restrictions?: string[]
           full_name?: string | null
           goals?: string | null
           goals_tags?: string[]
