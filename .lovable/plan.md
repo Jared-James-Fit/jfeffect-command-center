@@ -1,105 +1,72 @@
+# JF Effect PWA — Phased Build Plan
 
-# Goals & Setup Fix + "Never Trap the User" Refactor
+This brief is large enough that doing it as one change would be unsafe (touches auth, caching, sign-out, workouts, onboarding, admin). I'll ship it in 5 verifiable phases. Each phase is independently testable and publishable, and none of them touch existing programs, workouts, payments, or RLS.
 
-## What's actually broken today (evidence)
+I'd like your approval on the phase breakdown before I start — especially Phase 1, which is the foundation everything else builds on.
 
-`src/routes/_authenticated/portal/route.tsx` stacks **four full-screen hard-lock gates** around `<Outlet />`:
+---
 
-```
-ClientProfilePictureGate
- └ ClientBasicInfoGate
-    └ ClientTrainingScheduleGate
-       └ ClientGoalsSetupGate   ← Goals & Setup lives here
-          └ Outlet (Workouts, Messages, Account, …)
-```
+## Phase 1 — Installable PWA foundation (this turn, if approved)
 
-Each gate renders `<div className="grid min-h-[calc(100vh-4rem)] place-items-center">` with no exit, no "later", no skip — exactly what the brief calls out. Until the gate's row passes its completeness check, the entire portal (Workouts, Messages, Account, Sign Out) is unreachable. `FormPopupGate`, `LegalAcceptanceGate`, `HomeScreenSetupGate`, `BroadcastPopupGate`, `EventPopupGate` also auto-open on top.
+Goal: real install on iPhone + Android, real JF Effect branding, no Lovable placeholders, zero risk to existing portal.
 
-### Finish bug — most likely root cause
+1. **Manifest** at `public/manifest.webmanifest`: name "JF Effect", short_name "JF Effect", `start_url: "/"`, `scope: "/"`, `display: "standalone"`, `orientation: "portrait-primary"`, theme color (brand), background `#0a0a0a`, description, `id: "/"`.
+2. **Icons** (generated from existing JF Effect mark): 192, 512, 192-maskable, 512-maskable, apple-touch-icon 180, favicon. Uploaded via `lovable-assets`.
+3. **Head tags** in `src/routes/__root.tsx`: `manifest`, `theme-color`, `apple-touch-icon`, `apple-mobile-web-app-capable`, `apple-mobile-web-app-status-bar-style: black-translucent`, `apple-mobile-web-app-title: JF Effect`, viewport with `viewport-fit=cover`.
+4. **Safe-area CSS**: global `env(safe-area-inset-*)` padding utilities for header, bottom nav, sticky buttons.
+5. **No service worker yet.** Manifest-only install is enough for "Add to Home Screen" on iOS and Android's native install prompt — and it carries zero risk of breaking the live site for existing users. The SW lands in Phase 4 with a kill-switch-ready design.
 
-`GoalsSetupFlow.tsx` hydrates `local` from the DB row, then on Finish sends the **entire local object** (including DB-only fields like `id`, `client_id`, `created_at`, `updated_at`, `last_reviewed_at/by`, `update_requested_at/by/message`) through `saveGoalsSetupFn`. The server uses `clientGoalsSetupSchema.partial().extend({ completed })` and `.parse()` — zod strips unknown keys, so those pass through. But the array columns (`available_weekdays`, `training_styles`, `equipment`, `nutrition_challenges`) are typed `.optional()` without `.nullable()`. When the DB returns `null` for any of them (older rows do), zod throws a validation error on Finish. The thrown error is shown via `toast.error(e?.message)` but the modal stays open and the gate never releases → "Finish does nothing."
+Verification: Playwright check of `/manifest.webmanifest`, icon URLs 200, head tags rendered, lighthouse-style manifest validation, screenshots of the install sheet on a simulated iPhone viewport.
 
-We'll confirm with browser/Playwright + a DB read of a stuck row before changing schema.
+## Phase 2 — Install flow + device-aware instructions
 
-## Scope
+- New route `/install` (and a "Install JF Effect" entry from member home).
+- `usePlatform()` hook: detects iOS Safari, Android Chrome, in-app browser (FB/IG/Gmail), desktop, already-installed (`display-mode: standalone` + `navigator.standalone`), `beforeinstallprompt` availability.
+- iOS: visual Share → Add to Home Screen walkthrough with "I Added JF Effect" confirm + standalone re-check on next open.
+- Android: native prompt via captured `beforeinstallprompt`; fallback to menu instructions.
+- In-app browser: "Open in Safari/Chrome" guidance.
+- Desktop: QR code (qrcode lib) + copy link + short mobile instructions.
+- "Install dismissed" + "Install confirmed" persisted in `app_members` (new columns) so admins can see it.
 
-1. Reproduce + fix the Goals & Setup Finish bug.
-2. Convert every account-level hard-lock gate to a soft Home checklist + dismissable banner. No setup form may block the portal.
-3. Audit all auto-opening popups; document each as non-blocking, action-gated, or removed.
+## Phase 3 — Setup checklist + admin visibility (non-blocking)
 
-Out of scope this turn: redesigning legal/payment/safety logic itself, performance pass items still on the queue.
+- `member_setup_state` table (or columns on `app_members`) tracking: account_created_at, first_signin_at, install_detected_at, install_platform, goals_setup_status, profile_status, notifications_status, first_workout_opened_at, last_reminder_sent_at, last_setup_error.
+- Home checklist card "Finish Setting Up JF Effect" with progress, 5 items, one CTA per item, dismiss-for-now + remind-tomorrow.
+- **Never blocks** Workouts, Messages, Nutrition, Account, Help, Sign Out.
+- Admin page `/admin/onboarding` with filters (not signed in / not installed / setup incomplete / goals incomplete / notifications off / errors / ready), pagination, actions (Send Reminder, Copy Link, View Client, Resend Instructions, Clear Error, Mark Browser-Only).
+- Email + SMS templates: "Set up your JF Effect app" using existing email infra (no new provider).
+- Goals & Setup save bug: audit + fix the existing submit flow — reliable save, empty/N/A/No/long answers, retry, Save & Continue Later, persistent completion.
 
-## Plan
+## Phase 4 — Service worker, updates, offline drafts, sign-out cache clearing
 
-### 1. Reproduce the Finish bug (evidence)
-- Read a stuck `client_goals_setup` row via DB to confirm null array columns.
-- Drive Playwright against the preview, click Finish on Step 7 with empty Final Notes, capture console + network for `saveGoalsSetupFn`.
+- `vite-plugin-pwa` with `generateSW`, `registerType: "autoUpdate"`, `NetworkFirst` for HTML, `CacheFirst` for hashed assets, OAuth + Supabase API excluded.
+- **Hard guards**: SW never registers in dev, iframe, `id-preview--*`, `preview--*`, `*.lovableproject.com`, `?sw=off`. Kill-switch worker ready at `/sw.js` if we need to disable.
+- "JF Effect Has Been Updated" toast → Update App / Later, with unsaved-work check (workout logger, forms, uploads, message composer, nutrition entry).
+- Sign-out clears user-scoped caches + IndexedDB drafts.
+- Workout / form draft persistence with idempotency keys.
+- Online/offline banner, retry, no false "saved" confirmations.
 
-### 2. Fix Goals & Setup save/finish
-- **`src/lib/client-goals/schema.ts`** — make array columns `.nullable().optional()` (`available_weekdays`, `training_styles`, `equipment`, `nutrition_challenges`); accept `equipment_by_location: …nullable()`. `final_notes` already `.trim().nullable().optional()` — keep, ensure empty string → `null` before send.
-- **`src/components/client-goals/GoalsSetupFlow.tsx`** —
-  - Only send a clean whitelist of editable fields (drop `id`, `client_id`, timestamps, audit fields).
-  - Trim `final_notes`, `goal_target`, `injuries_details`, `food_restrictions_details`; coerce empty → `null`.
-  - Wrap `finish()` in try/catch; on error keep all answers, re-enable button, show retry / save-later / contact-coach actions.
-  - Disable Finish while pending; ignore double taps (mutation `isPending` guard already there — also add `idempotencyKey` not needed since upsert by `client_id`).
-  - On success: invalidate gate queries, close, toast "Setup complete — you're ready to go", redirect to Workouts if assigned else Home (caller-provided `onComplete`).
-- **`src/lib/client-goals/goals.functions.ts`** — sanitize patch server-side too (whitelist), log raw error server-side, return a safe message. Keep `service_role` upsert.
+## Phase 5 — Polish, audit, future-native scaffolding
 
-### 3. Convert account gates to soft Home banners (the "never trap" change)
-Replace the four blocking wrappers in `src/routes/_authenticated/portal/route.tsx` with a single non-blocking `<SetupChecklistBanner />` rendered on Home:
+- Mobile layout audit pass: notch, home indicator, bottom nav, sticky buttons, keyboard, tap targets ≥44px, no 16px-input zoom, no horizontal overflow, no double headers.
+- Back-button behaviour + unsaved-work confirmation.
+- Deep-link router that preserves intent through sign-in.
+- Thin service abstractions (`platform/notifications.ts`, `platform/camera.ts`, etc.) with web impls only — Capacitor-ready, but no Capacitor install.
+- Notification permission prompt gated behind explicit user action + value explanation, never on first load, respects denial.
 
-- `ClientProfilePictureGate` → remove gate; surface as checklist item ("Add a profile photo") and a small badge on Account.
-- `ClientBasicInfoGate` → remove gate; checklist item ("Confirm basic info") linking to Account.
-- `ClientTrainingScheduleGate` → remove gate; checklist item.
-- `ClientGoalsSetupGate` → remove gate; checklist item with progress ("5 of 7 steps complete"), opens `/portal/goals-setup`.
+---
 
-New file `src/components/portal/setup-checklist-banner.tsx`:
-- Card on Home only (not other routes).
-- Shows items with status `Not Started | In Progress | Completed | Save Failed`.
-- Buttons: **Continue Setup**, **Remind Me Later** (persists 24h dismiss in `localStorage` per item: `jf:setup-snooze:<key>`).
-- Once all complete → banner hidden permanently.
+## What I will NOT touch
 
-Removed `<ClientGoalsSetupGate>` etc. from the layout — keep their underlying queries reusable by the banner. Files kept but no longer wrap `<Outlet />`; can be deleted in a follow-up.
+Existing routes, RLS, payments, Stripe, programs, workout logs, messages, agreements, member tiers, auth, $29 trial logic, jfeffect.com checkout, existing analytics, legal records, SEO metadata.
 
-### 4. Soften the other auto-popups (audit table)
-| Popup | Today | After |
-|---|---|---|
-| Goals & Setup | Hard lock | Soft Home card + `/portal/goals-setup` page (already exists) |
-| Profile Picture | Hard lock | Checklist item |
-| Basic Info | Hard lock | Checklist item |
-| Training Schedule | Hard lock | Checklist item |
-| Home Screen Setup | Auto-modal | Already dismissable — verify Skip is visible; do not re-open every nav |
-| Form popups (`FormPopupGate`) | Auto-modal | Keep, but add **Remind me later** (24h) and never re-open mid-workout route (`/portal/workouts/*`) |
-| Legal Acceptance | Modal | Action-gate only — allow Home/Messages/Account/Sign Out; restrict the specific paid action. Out of scope to redesign deeply; ensure portal not blocked, document follow-up. |
-| Broadcast / Event / Birthday popups | Auto-modal | Verify each has a visible Close and per-user dismiss; no change to logic this pass. |
+## Technical notes
 
-### 5. Acceptance checks (Playwright evidence)
-- Finish works with empty Final Notes.
-- Finish works with "No".
-- Failed save preserves answers + offers Retry / Continue Later / Contact Coach + portal stays reachable.
-- Save & Continue Later closes form and returns to Home; resume from same step.
-- With incomplete Goals & Setup, screenshots prove Workouts / Messages / Account / Sign Out are reachable.
-- Refresh + sign-out/sign-in: completion persists.
-- DB query confirms one `client_goals_setup` row per client (no duplicates) after double-tap Finish.
+- Stack is TanStack Start on Cloudflare Workers. Service worker rules per Lovable PWA skill (no SW in preview/dev, kill-switch design, `NetworkFirst` for HTML).
+- New DB columns/tables added via migrations with GRANTs + RLS in the same migration.
+- Icons go through `lovable-assets` (CDN), not committed binaries.
+- Each phase ships behind feature checks so a broken phase can't take down the live portal.
 
-## Files I will touch
+---
 
-Create:
-- `src/components/portal/setup-checklist-banner.tsx`
-
-Edit:
-- `src/lib/client-goals/schema.ts` — nullable array fields
-- `src/lib/client-goals/goals.functions.ts` — whitelist + safer error
-- `src/components/client-goals/GoalsSetupFlow.tsx` — clean patch, safe finish, redirect, retry UI
-- `src/routes/_authenticated/portal/route.tsx` — remove 4 hard-lock wrappers, mount banner on Home only
-- `src/routes/_authenticated/portal/index.tsx` — render `<SetupChecklistBanner />`
-- `src/components/form-popup-gate.tsx` — add Remind Me Later (24h) + route-aware suppression on workout routes
-
-Leave intact: legal acceptance logic, agreements tables, payments, all DB schema (no migrations needed — schema fix is in zod/code only), notifications, design system, routes, role permissions.
-
-## Risks / decisions to confirm
-
-1. **Legal Acceptance** — brief says "do not blindly make legal optional." I'll leave the existing legal gate alone for now and only note it in the audit; if you want action-level gating refactored, that's a separate pass.
-2. **Profile picture / basic info / training schedule** — fully soft-gating these means a new member can reach Workouts before filling them in. Confirm that's acceptable (the brief explicitly says yes — "always be able to access workouts").
-
-Reply **Approve** to implement, or tell me what to change.
+**Please confirm**: should I proceed phase-by-phase starting with Phase 1 (manifest + icons + head tags + safe areas)? Or do you want me to bundle Phase 1+2 (install + instructions) into the first deploy?
