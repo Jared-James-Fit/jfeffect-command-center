@@ -24,6 +24,7 @@ import { Route as InstallRouteImport } from './routes/install'
 import { Route as CoachingRouteImport } from './routes/coaching'
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as ApplyRouteImport } from './routes/apply'
+import { Route as AppRouteImport } from './routes/app'
 import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as SignupJfRouteImport } from './routes/signup.jf'
@@ -324,6 +325,11 @@ const AuthRoute = AuthRouteImport.update({
 const ApplyRoute = ApplyRouteImport.update({
   id: '/apply',
   path: '/apply',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AppRoute = AppRouteImport.update({
+  id: '/app',
+  path: '/app',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AuthenticatedRouteRoute = AuthenticatedRouteRouteImport.update({
@@ -1644,6 +1650,7 @@ const AuthenticatedMWorkoutsEnrollmentIdWeekDayRoute =
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/app': typeof AppRoute
   '/apply': typeof ApplyRoute
   '/auth': typeof AuthRoute
   '/coaching': typeof CoachingRouteWithChildren
@@ -1886,6 +1893,7 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/app': typeof AppRoute
   '/apply': typeof ApplyRoute
   '/auth': typeof AuthRoute
   '/coaching': typeof CoachingRouteWithChildren
@@ -2125,6 +2133,7 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/_authenticated': typeof AuthenticatedRouteRouteWithChildren
+  '/app': typeof AppRoute
   '/apply': typeof ApplyRoute
   '/auth': typeof AuthRoute
   '/coaching': typeof CoachingRouteWithChildren
@@ -2369,6 +2378,7 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/app'
     | '/apply'
     | '/auth'
     | '/coaching'
@@ -2611,6 +2621,7 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/app'
     | '/apply'
     | '/auth'
     | '/coaching'
@@ -2849,6 +2860,7 @@ export interface FileRouteTypes {
     | '__root__'
     | '/'
     | '/_authenticated'
+    | '/app'
     | '/apply'
     | '/auth'
     | '/coaching'
@@ -3093,6 +3105,7 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AuthenticatedRouteRoute: typeof AuthenticatedRouteRouteWithChildren
+  AppRoute: typeof AppRoute
   ApplyRoute: typeof ApplyRoute
   AuthRoute: typeof AuthRoute
   CoachingRoute: typeof CoachingRouteWithChildren
@@ -3241,6 +3254,13 @@ declare module '@tanstack/react-router' {
       path: '/apply'
       fullPath: '/apply'
       preLoaderRoute: typeof ApplyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/app': {
+      id: '/app'
+      path: '/app'
+      fullPath: '/app'
+      preLoaderRoute: typeof AppRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/_authenticated': {
@@ -5537,6 +5557,7 @@ const CoachingRouteWithChildren = CoachingRoute._addFileChildren(
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AuthenticatedRouteRoute: AuthenticatedRouteRouteWithChildren,
+  AppRoute: AppRoute,
   ApplyRoute: ApplyRoute,
   AuthRoute: AuthRoute,
   CoachingRoute: CoachingRouteWithChildren,
