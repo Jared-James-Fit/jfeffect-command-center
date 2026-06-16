@@ -12,7 +12,7 @@ import { Calendar as CalendarIcon, Clock, CheckCircle2, Video, Lock } from "luci
 import { toast } from "sonner";
 import { todayLocalISO } from "@/lib/today";
 
-export const Route = createFileRoute("/book/$slug")({
+export const Route = createFileRoute("/book/")({
   component: BookingPage,
   // Accept prefill query params from the coaching application flow.
   validateSearch: (search: Record<string, unknown>) => ({
@@ -30,7 +30,10 @@ function BookingPage() {
   const slotsFn = useServerFn(computeAvailableSlots);
   const bookFn = useServerFn(bookSlotPublic);
 
-  const { data: info, isLoading } = useQuery({ queryKey: ["public-link", slug], queryFn: () => getFn({ data: { slug } }) });
+  const { data: info, isLoading } = useQuery({
+    queryKey: ["public-link", slug],
+    queryFn: () => getFn({ data: { slug } }),
+  });
   const [date, setDate] = useState(() => todayLocalISO());
   const [selected, setSelected] = useState<string | null>(null);
   const [form, setForm] = useState({
@@ -39,6 +42,7 @@ function BookingPage() {
     phone: prefill.phone ?? "",
     notes: "",
   });
+  // Keep form in sync if prefill changes (e.g., back/forward).
   useEffect(() => {
     setForm((f) => ({
       ...f,
@@ -47,6 +51,7 @@ function BookingPage() {
       phone: prefill.phone || f.phone,
     }));
   }, [prefill.name, prefill.email, prefill.phone]);
+
   const [success, setSuccess] = useState<{ time: string; meet: string | null } | null>(null);
 
   const { data: slotData, isLoading: loadingSlots } = useQuery({
@@ -60,39 +65,53 @@ function BookingPage() {
   const book = useMutation({
     mutationFn: () => bookFn({
       data: {
-        slug, starts_at: selected!, ...form,
+        slug,
+        starts_at: selected!,
+        ...form,
         application_id: prefill.application_id || undefined,
       } as any,
     }),
     onSuccess: (r: any) => {
-      const t = new Date(r.starts_at).toLocaleString(undefined, { weekday: "long", month: "long", day: "numeric", hour: "numeric", minute: "2-digit" });
+      const t = new Date(r.starts_at).toLocaleString(undefined, {
+        weekday: "long", month: "long", day: "numeric", hour: "numeric", minute: "2-digit",
+      });
       setSuccess({ time: t, meet: r.meet_link ?? null });
     },
     onError: (e: any) => toast.error(e.message),
   });
 
-  if (isLoading) return <div className="min-h-screen flex items-center justify-center text-muted-foreground">Loading…</div>;
-  if (!info) return (
-    <div className="min-h-screen flex items-center justify-center p-6">
-      <Card className="p-10 text-center max-w-md border-border bg-card"><h1 className="text-xl font-bold mb-2">Booking link not found</h1><p className="text-sm text-muted-foreground">This link may have been deactivated.</p></Card>
-    </div>
-  );
+  if (isLoading)
+    return <div className="min-h-screen flex items-center justify-center text-muted-foreground">Loading…</div>;
+  if (!info)
+    return (
+      <div className="min-h-screen flex items-center justify-center p-6">
+        <Card className="p-10 text-center max-w-md border-border bg-card">
+          <h1 className="text-xl font-bold mb-2">Booking link not found</h1>
+          <p className="text-sm text-muted-foreground">This link may have been deactivated.</p>
+        </Card>
+      </div>
+    );
 
-  if (success) return (
-    <div className="min-h-screen flex items-center justify-center p-6">
-      <Card className="p-10 text-center max-w-md border-border bg-card">
-        <CheckCircle2 className="mx-auto mb-3 h-10 w-10 text-emerald-400" />
-        <h1 className="text-xl font-bold mb-2">Your call is booked.</h1>
-        <p className="text-sm text-muted-foreground mb-4">{success.time}</p>
-        {success.meet && (
-          <a href={success.meet} target="_blank" rel="noreferrer">
-            <Button className="bg-gradient-primary"><Video className="mr-2 h-4 w-4" /> Join Google Meet</Button>
-          </a>
-        )}
-        <p className="text-xs text-muted-foreground mt-4">A calendar invite was sent to your email.</p>
-      </Card>
-    </div>
-  );
+  if (success)
+    return (
+      <div className="min-h-screen flex items-center justify-center p-6">
+        <Card className="p-10 text-center max-w-md border-border bg-card">
+          <CheckCircle2 className="mx-auto mb-3 h-10 w-10 text-emerald-400" />
+          <h1 className="text-xl font-bold mb-2">Your call is booked.</h1>
+          <p className="text-sm text-muted-foreground mb-4">{success.time}</p>
+          {success.meet && (
+            <a href={success.meet} target="_blank" rel="noreferrer">
+              <Button className="bg-gradient-primary">
+                <Video className="mr-2 h-4 w-4" /> Join Google Meet
+              </Button>
+            </a>
+          )}
+          <p className="text-xs text-muted-foreground mt-4">
+            A calendar invite was sent to your email.
+          </p>
+        </Card>
+      </div>
+    );
 
   const { link, coach } = info;
   const slots = (slotData?.slots ?? []) as Array<{ startISO: string; label: string }>;
@@ -102,10 +121,14 @@ function BookingPage() {
       <div className="max-w-3xl mx-auto">
         <Card className="border-border bg-card p-6 md:p-8">
           <div className="mb-6">
-            <div className="text-xs uppercase tracking-wider text-muted-foreground">{coach?.full_name}</div>
+            <div className="text-xs uppercase tracking-wider text-muted-foreground">
+              {coach?.full_name}
+            </div>
             <h1 className="text-2xl md:text-3xl font-bold mt-1">{link.name}</h1>
             <div className="flex flex-wrap items-center gap-3 mt-2 text-sm text-muted-foreground">
-              <span className="inline-flex items-center gap-1"><Clock className="h-3.5 w-3.5" /> {link.duration_minutes} min</span>
+              <span className="inline-flex items-center gap-1">
+                <Clock className="h-3.5 w-3.5" /> {link.duration_minutes} min
+              </span>
               <span>{link.appointment_type}</span>
               <span>{link.timezone}</span>
             </div>
@@ -114,8 +137,13 @@ function BookingPage() {
 
           <div className="grid md:grid-cols-[260px_1fr] gap-6">
             <div>
-              <Label className="text-xs font-semibold mb-2 flex items-center gap-1"><CalendarIcon className="h-3 w-3" /> DATE</Label>
-              <Input type="date" value={date} min={todayLocalISO()} onChange={(e) => { setDate(e.target.value); setSelected(null); }} />
+              <Label className="text-xs font-semibold mb-2 flex items-center gap-1">
+                <CalendarIcon className="h-3 w-3" /> DATE
+              </Label>
+              <Input
+                type="date" value={date} min={todayLocalISO()}
+                onChange={(e) => { setDate(e.target.value); setSelected(null); }}
+              />
 
               <Label className="text-xs font-semibold mt-4 mb-2 block">AVAILABLE TIMES</Label>
               {loadingSlots ? (
@@ -125,7 +153,11 @@ function BookingPage() {
               ) : (
                 <div className="grid grid-cols-2 gap-2">
                   {slots.map((s) => (
-                    <Button key={s.startISO} size="sm" variant={selected === s.startISO ? "default" : "outline"} onClick={() => setSelected(s.startISO)}>
+                    <Button
+                      key={s.startISO} size="sm"
+                      variant={selected === s.startISO ? "default" : "outline"}
+                      onClick={() => setSelected(s.startISO)}
+                    >
                       {s.label}
                     </Button>
                   ))}
@@ -144,18 +176,37 @@ function BookingPage() {
                 </div>
               ) : (
                 <>
-                  <div><Label>Your name</Label><Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} /></div>
-                  <div><Label>Email</Label><Input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} /></div>
-                  {link.collect_phone && <div><Label>Phone (for SMS reminders)</Label><Input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} /></div>}
+                  <div><Label>Your name</Label>
+                    <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+                  </div>
+                  <div><Label>Email</Label>
+                    <Input type="email" value={form.email}
+                      onChange={(e) => setForm({ ...form, email: e.target.value })} />
+                  </div>
+                  {link.collect_phone && (
+                    <div><Label>Phone (for SMS reminders)</Label>
+                      <Input value={form.phone}
+                        onChange={(e) => setForm({ ...form, phone: e.target.value })} />
+                    </div>
+                  )}
                 </>
               )}
-              {link.collect_notes && <div><Label>Anything you want to share?</Label><Textarea value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} rows={3} /></div>}
+              {link.collect_notes && (
+                <div><Label>Anything you want to share?</Label>
+                  <Textarea value={form.notes}
+                    onChange={(e) => setForm({ ...form, notes: e.target.value })} rows={3} />
+                </div>
+              )}
               <Button
                 className="w-full bg-gradient-primary"
                 disabled={!selected || !form.name || !form.email || book.isPending}
                 onClick={() => book.mutate()}
               >
-                {book.isPending ? "Booking…" : selected ? "Confirm & Book Call" : "Pick a time first"}
+                {book.isPending
+                  ? "Booking…"
+                  : selected
+                    ? "Confirm & Book Call"
+                    : "Pick a time first"}
               </Button>
             </div>
           </div>
