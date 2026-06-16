@@ -194,14 +194,14 @@ function AuthorityBar({ items }: { items: Array<{ label: string; value?: string 
 /* -------- Why most people fail -------- */
 function WhyMostFail() {
   const cards = [
-    { Icon: MapIcon, title: "No plan", body: "You're working hard with no map. Effort without a plan just gets you tired, not better." },
-    { Icon: Repeat, title: "Program-hopping", body: "New program every few weeks, so nothing ever compounds. You restart instead of progress." },
-    { Icon: Flame, title: "Chasing motivation", body: "Motivation shows up when it feels like it. Standards show up every day. You've been relying on the wrong one." },
-    { Icon: ShieldCheck, title: "No accountability", body: "Nobody's checking. So the day you \"don't feel like it\" wins, and then it keeps winning." },
+    { Icon: TrendingUp, title: "Strength that compounds", body: "One plan, run long enough to actually add up." },
+    { Icon: Sparkles, title: "A body you've worked for", body: "Built deliberately — not chased in week-long sprints." },
+    { Icon: RepeatIcon, title: "Habits that hold", body: "Routines that survive the busy weeks, not just the easy ones." },
+    { Icon: ShieldCheck, title: "Accountability that's real", body: "Someone watching the numbers and holding the standard." },
   ];
   return (
     <Section>
-      <SectionTitle eyebrow="The real reason you keep stalling" title="It's not effort. It's structure." />
+      <SectionTitle eyebrow="The standard" title="Built for a higher standard." />
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         {cards.map(({ Icon, title, body }) => (
           <Card key={title} className="p-5">
@@ -213,9 +213,6 @@ function WhyMostFail() {
           </Card>
         ))}
       </div>
-      <p className="mx-auto mt-8 max-w-2xl text-center text-sm text-muted-foreground md:text-base">
-        Coaching fixes all four at once — a real plan, built for you, with someone watching the numbers and holding the standard when you don't feel like it.
-      </p>
     </Section>
   );
 }
@@ -224,7 +221,7 @@ function WhyMostFail() {
 function WhoForNotFor({ whoFor, notFor }: { whoFor: string[]; notFor: string[] }) {
   return (
     <Section>
-      <SectionTitle eyebrow="Is this you?" title="Who this is — and isn't — for." />
+      <SectionTitle eyebrow="Who it's for" title="Selective by design." />
       <div className="mx-auto grid max-w-5xl gap-4 md:grid-cols-2">
         <Card className="p-6">
           <div className="text-[11px] font-bold uppercase tracking-widest text-emerald-400">This is for you if</div>
@@ -256,14 +253,14 @@ function WhoForNotFor({ whoFor, notFor }: { whoFor: string[]; notFor: string[] }
 /* -------- What coaching includes -------- */
 function WhatCoachingIncludes() {
   const items = [
-    { Icon: Target, title: "A Plan Built for You", body: "Built for your body, your schedule, your gym — not pulled from a library and slapped on you." },
-    { Icon: ClipboardCheck, title: "Weekly Check-Ins & Adjustments", body: "Every week I look at your numbers and adjust. You're never guessing whether it's working." },
-    { Icon: Utensils, title: "Nutrition That Fits Your Life", body: "Real targets built around how you actually eat — no spreadsheets you'll abandon in a week." },
-    { Icon: MessageCircle, title: "Direct Access to Me", body: "Message me directly. Not a chatbot, not a junior coach — me." },
+    { Icon: Target, title: "A plan built for you", body: "Your body, your schedule, your training." },
+    { Icon: ClipboardCheck, title: "Weekly check-ins", body: "Reviewed and adjusted around your progress." },
+    { Icon: Utensils, title: "Nutrition that fits your life", body: "Clear targets, made to last." },
+    { Icon: MessageCircle, title: "A coach in your corner", body: "Direct access, always." },
   ];
   return (
     <Section>
-      <SectionTitle eyebrow="What coaching includes" title="Built for you. Run with you." />
+      <SectionTitle eyebrow="What you get" title="Built for you. Run with you." />
       <div className="mx-auto grid max-w-5xl gap-3 sm:grid-cols-2 lg:grid-cols-4">
         {items.map(({ Icon, title, body }) => (
           <Card key={title} className="p-5">
@@ -285,23 +282,14 @@ function JaredStory() {
     <Section>
       <div className="mx-auto max-w-3xl">
         <div className="text-center">
-          <div className="text-[11px] font-bold uppercase tracking-[0.2em] text-primary">Why I coach the way I coach</div>
+          <div className="text-[11px] font-bold uppercase tracking-[0.2em] text-primary">The story</div>
           <h2 className="mt-2 text-3xl font-black tracking-tight md:text-4xl">
-            I built this under pressure. That's exactly why it works.
+            Earned, not borrowed.
           </h2>
         </div>
         <div className="mt-8 space-y-5 text-sm leading-relaxed text-muted-foreground md:text-base">
           <p>
-            I didn't come from a perfect setup. I built JF Effect from scratch while I was the one paying the bills — supporting my girlfriend through dental hygiene school, moving provinces, figuring it out with real weight on my shoulders. No safety net, no excuses available.
-          </p>
-          <p>
-            At the same time I was competing as a powerlifter at the national level. Not theory. Reps under a loaded bar with consequences.
-          </p>
-          <p>
-            Here's what those years taught me: motivation is useless and information is everywhere. What people actually lack is structure and a standard they can't quietly negotiate away. That's the whole job. I build the plan, I hold the line, and I don't let driven people keep folding under pressure they're fully capable of carrying.
-          </p>
-          <p>
-            Most clients don't come to me for another workout. They come because they were tired of not trusting themselves. That's the thing I actually fix.
+            JF Effect was built from the ground up, under real pressure, while competing at the national level. The principle behind it is simple: structure and standards outlast motivation. That's what coaching delivers — a plan, and someone who holds the line.
           </p>
         </div>
       </div>
