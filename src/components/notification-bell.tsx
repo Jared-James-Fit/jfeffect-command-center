@@ -412,15 +412,18 @@ export function useNotificationFeed() {
       const unique = Array.from(byId.values());
 
       // Overlay notification_state for this user.
-      const ids = unique.map((u) => u.id);
+      // Filter by BOTH kind list AND source_id list so the query stays
+      // bounded by the current derived feed (~300 rows max) instead of
+      // returning the user's entire lifetime archive of state rows.
       let stateMap = new Map<string, NotifStateRow>();
-      if (ids.length > 0) {
-        const pairs = unique.map((u) => ({ kind: u.kind, source_id: u.sourceId }));
-        const kinds = Array.from(new Set(pairs.map((p) => p.kind)));
+      if (unique.length > 0) {
+        const kinds = Array.from(new Set(unique.map((u) => u.kind)));
+        const sourceIds = Array.from(new Set(unique.map((u) => u.sourceId)));
         const { data: states } = await (supabase.from("notification_state") as any)
           .select("kind, source_id, read_at, archived_at")
           .eq("user_id", user!.id)
-          .in("kind", kinds);
+          .in("kind", kinds)
+          .in("source_id", sourceIds);
         for (const s of (states ?? []) as NotifStateRow[]) {
           stateMap.set(makeId(s.kind as BellKind, s.source_id), s);
         }
