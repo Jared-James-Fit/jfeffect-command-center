@@ -249,6 +249,7 @@ import { Route as AuthenticatedAdminAgreementsNativeNewRouteImport } from './rou
 import { Route as AuthenticatedAdminAgreementsNativePackageIdRouteImport } from './routes/_authenticated/admin/agreements-native.$packageId'
 import { Route as AuthenticatedAdminCrmContactsIndexRouteImport } from './routes/_authenticated/admin/crm.contacts.index'
 import { Route as ApiPublicGoogleOauthCallbackRouteImport } from './routes/api/public/google/oauth/callback'
+import { Route as AuthenticatedAdminSettingsNotificationsCoachingApplicationsRouteImport } from './routes/_authenticated/admin/settings_.notifications.coaching-applications'
 import { Route as AuthenticatedAdminNutritionDashboardReviewSubmissionIdRouteImport } from './routes/_authenticated/admin/nutrition-dashboard.review.$submissionId'
 import { Route as AuthenticatedAdminCrmContactsIdRouteImport } from './routes/_authenticated/admin/crm.contacts.$id'
 import { Route as AuthenticatedAdminClientsIdScheduleRouteImport } from './routes/_authenticated/admin/clients.$id.schedule'
@@ -1637,6 +1638,14 @@ const ApiPublicGoogleOauthCallbackRoute =
     path: '/api/public/google/oauth/callback',
     getParentRoute: () => rootRouteImport,
   } as any)
+const AuthenticatedAdminSettingsNotificationsCoachingApplicationsRoute =
+  AuthenticatedAdminSettingsNotificationsCoachingApplicationsRouteImport.update(
+    {
+      id: '/settings_/notifications/coaching-applications',
+      path: '/settings/notifications/coaching-applications',
+      getParentRoute: () => AuthenticatedAdminRouteRoute,
+    } as any,
+  )
 const AuthenticatedAdminNutritionDashboardReviewSubmissionIdRoute =
   AuthenticatedAdminNutritionDashboardReviewSubmissionIdRouteImport.update({
     id: '/review/$submissionId',
@@ -1917,6 +1926,7 @@ export interface FileRoutesByFullPath {
   '/admin/clients/$id/schedule': typeof AuthenticatedAdminClientsIdScheduleRoute
   '/admin/crm/contacts/$id': typeof AuthenticatedAdminCrmContactsIdRoute
   '/admin/nutrition-dashboard/review/$submissionId': typeof AuthenticatedAdminNutritionDashboardReviewSubmissionIdRoute
+  '/admin/settings/notifications/coaching-applications': typeof AuthenticatedAdminSettingsNotificationsCoachingApplicationsRoute
   '/api/public/google/oauth/callback': typeof ApiPublicGoogleOauthCallbackRoute
   '/admin/crm/contacts/': typeof AuthenticatedAdminCrmContactsIndexRoute
   '/m/workouts/$enrollmentId/$week/$day': typeof AuthenticatedMWorkoutsEnrollmentIdWeekDayRoute
@@ -2159,6 +2169,7 @@ export interface FileRoutesByTo {
   '/admin/clients/$id/schedule': typeof AuthenticatedAdminClientsIdScheduleRoute
   '/admin/crm/contacts/$id': typeof AuthenticatedAdminCrmContactsIdRoute
   '/admin/nutrition-dashboard/review/$submissionId': typeof AuthenticatedAdminNutritionDashboardReviewSubmissionIdRoute
+  '/admin/settings/notifications/coaching-applications': typeof AuthenticatedAdminSettingsNotificationsCoachingApplicationsRoute
   '/api/public/google/oauth/callback': typeof ApiPublicGoogleOauthCallbackRoute
   '/admin/crm/contacts': typeof AuthenticatedAdminCrmContactsIndexRoute
   '/m/workouts/$enrollmentId/$week/$day': typeof AuthenticatedMWorkoutsEnrollmentIdWeekDayRoute
@@ -2408,6 +2419,7 @@ export interface FileRoutesById {
   '/_authenticated/admin/clients/$id/schedule': typeof AuthenticatedAdminClientsIdScheduleRoute
   '/_authenticated/admin/crm/contacts/$id': typeof AuthenticatedAdminCrmContactsIdRoute
   '/_authenticated/admin/nutrition-dashboard/review/$submissionId': typeof AuthenticatedAdminNutritionDashboardReviewSubmissionIdRoute
+  '/_authenticated/admin/settings_/notifications/coaching-applications': typeof AuthenticatedAdminSettingsNotificationsCoachingApplicationsRoute
   '/api/public/google/oauth/callback': typeof ApiPublicGoogleOauthCallbackRoute
   '/_authenticated/admin/crm/contacts/': typeof AuthenticatedAdminCrmContactsIndexRoute
   '/_authenticated/m/workouts/$enrollmentId/$week/$day': typeof AuthenticatedMWorkoutsEnrollmentIdWeekDayRoute
@@ -2657,6 +2669,7 @@ export interface FileRouteTypes {
     | '/admin/clients/$id/schedule'
     | '/admin/crm/contacts/$id'
     | '/admin/nutrition-dashboard/review/$submissionId'
+    | '/admin/settings/notifications/coaching-applications'
     | '/api/public/google/oauth/callback'
     | '/admin/crm/contacts/'
     | '/m/workouts/$enrollmentId/$week/$day'
@@ -2899,6 +2912,7 @@ export interface FileRouteTypes {
     | '/admin/clients/$id/schedule'
     | '/admin/crm/contacts/$id'
     | '/admin/nutrition-dashboard/review/$submissionId'
+    | '/admin/settings/notifications/coaching-applications'
     | '/api/public/google/oauth/callback'
     | '/admin/crm/contacts'
     | '/m/workouts/$enrollmentId/$week/$day'
@@ -3147,6 +3161,7 @@ export interface FileRouteTypes {
     | '/_authenticated/admin/clients/$id/schedule'
     | '/_authenticated/admin/crm/contacts/$id'
     | '/_authenticated/admin/nutrition-dashboard/review/$submissionId'
+    | '/_authenticated/admin/settings_/notifications/coaching-applications'
     | '/api/public/google/oauth/callback'
     | '/_authenticated/admin/crm/contacts/'
     | '/_authenticated/m/workouts/$enrollmentId/$week/$day'
@@ -4882,6 +4897,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicGoogleOauthCallbackRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/_authenticated/admin/settings_/notifications/coaching-applications': {
+      id: '/_authenticated/admin/settings_/notifications/coaching-applications'
+      path: '/settings/notifications/coaching-applications'
+      fullPath: '/admin/settings/notifications/coaching-applications'
+      preLoaderRoute: typeof AuthenticatedAdminSettingsNotificationsCoachingApplicationsRouteImport
+      parentRoute: typeof AuthenticatedAdminRouteRoute
+    }
     '/_authenticated/admin/nutrition-dashboard/review/$submissionId': {
       id: '/_authenticated/admin/nutrition-dashboard/review/$submissionId'
       path: '/review/$submissionId'
@@ -5182,6 +5204,7 @@ interface AuthenticatedAdminRouteRouteChildren {
   AuthenticatedAdminClientProgramsClientIdAnalyticsRoute: typeof AuthenticatedAdminClientProgramsClientIdAnalyticsRoute
   AuthenticatedAdminClientProgramsClientIdHistoryRoute: typeof AuthenticatedAdminClientProgramsClientIdHistoryRoute
   AuthenticatedAdminCrmContactsIdRoute: typeof AuthenticatedAdminCrmContactsIdRoute
+  AuthenticatedAdminSettingsNotificationsCoachingApplicationsRoute: typeof AuthenticatedAdminSettingsNotificationsCoachingApplicationsRoute
   AuthenticatedAdminCrmContactsIndexRoute: typeof AuthenticatedAdminCrmContactsIndexRoute
 }
 
@@ -5329,6 +5352,8 @@ const AuthenticatedAdminRouteRouteChildren: AuthenticatedAdminRouteRouteChildren
     AuthenticatedAdminClientProgramsClientIdHistoryRoute:
       AuthenticatedAdminClientProgramsClientIdHistoryRoute,
     AuthenticatedAdminCrmContactsIdRoute: AuthenticatedAdminCrmContactsIdRoute,
+    AuthenticatedAdminSettingsNotificationsCoachingApplicationsRoute:
+      AuthenticatedAdminSettingsNotificationsCoachingApplicationsRoute,
     AuthenticatedAdminCrmContactsIndexRoute:
       AuthenticatedAdminCrmContactsIndexRoute,
   }
