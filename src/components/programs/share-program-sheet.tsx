@@ -70,6 +70,15 @@ export function ShareProgramSheet({
   const coachShares = shares.filter(
     (s) => s.destination === "coach" && s.status !== "removed" && s.status !== "rejected",
   );
+  // A direct "membership" share row (status='shared') is the source of
+  // truth that this template is live in the Membership Library. The
+  // legacy member_plans linkage (via source_template_id) is a secondary
+  // hint — many templates are published without ever creating a linked
+  // member_plans row, so treating "no linked plan" as "Not Published"
+  // was misreporting live programs.
+  const membershipShare = shares.find(
+    (s) => s.destination === "membership" && s.status === "shared",
+  );
   const pending = (d: ShareDestination) =>
     shares.find((s) => s.destination === d && (s.status === "pending" || s.status === "changes_requested"));
 
@@ -154,7 +163,18 @@ export function ShareProgramSheet({
                 ? (() => {
                     const lp = (linked as any)?.plan;
                     const tRev = (linked as any)?.template_revision;
-                    if (!lp) return <Badge variant="outline">Not Published</Badge>;
+                    if (!lp) {
+                      if (membershipShare) {
+                        const hasUpdate =
+                          tRev != null &&
+                          membershipShare.shared_version != null &&
+                          tRev > membershipShare.shared_version;
+                        return hasUpdate
+                          ? <Badge variant="secondary">Update Available</Badge>
+                          : <Badge>Published v{membershipShare.shared_version ?? 1}</Badge>;
+                      }
+                      return <Badge variant="outline">Not Published</Badge>;
+                    }
                     if (lp.status === "Published") {
                       const hasUpdate = tRev != null && lp.last_published_version != null && tRev > lp.last_published_version;
                       return hasUpdate
@@ -171,7 +191,7 @@ export function ShareProgramSheet({
             primary={
               viewerRole === "admin" ? (
                 <Button size="sm" onClick={() => setPublishOpen(true)}>
-                  {(linked as any)?.plan ? "Manage Publication" : "Publish to Library"}
+                  {(linked as any)?.plan || membershipShare ? "Manage Publication" : "Publish to Library"}
                 </Button>
               ) : pending("membership_submission") ? (
                 <Badge variant="secondary">Awaiting Admin</Badge>
