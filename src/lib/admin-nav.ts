@@ -61,6 +61,7 @@ export const adminNav: NavItem[] = [
   { to: "/admin/promo-codes", label: "Promo Codes", icon: Ticket, group: "Business" },
   { to: "/admin/purchases", label: "Purchases", icon: ClipboardCheck, group: "Business" },
   { to: "/admin/billing-sources", label: "Billing Sources & Legacy", icon: CreditCard, group: "Business", keywords: ["legacy","trainerize","billing source","dual billing","migration"] },
+  { to: "/admin/legacy-migration", label: "Legacy Migration Board", icon: CreditCard, group: "Business", keywords: ["legacy","trainerize","migration","board","kanban"] },
   { to: "/admin/calendar", label: "Calendar", icon: Calendar, group: "Business", keywords: ["calendar", "appointments", "booking", "booking links", "pt calendar", "google calendar", "availability", "schedule"] },
   { to: "/admin/events", label: "Events", icon: Calendar, group: "Business" },
   // DOCUMENTS
