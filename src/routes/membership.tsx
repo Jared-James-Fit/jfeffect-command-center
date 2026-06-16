@@ -545,7 +545,7 @@ const DEFAULT_LIBRARY: LibraryCategory[] = [
 ];
 
 const DEFAULT_WHO_FOR = [
-  "Any level. Muscle, fat loss, or strength.",
+  "Any level. Muscle, fat loss, or serious strength.",
   "For people who'll train on their own with the right plan to follow.",
 ];
 
