@@ -1,19 +1,25 @@
-import { useEffect, useMemo } from "react";
-import { Link } from "@tanstack/react-router";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Link, useNavigate } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Bell } from "lucide-react";
+import { Bell, CheckCheck, Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
 import { markRead } from "@/lib/messages";
 import { markClientViewed, markAdminViewed } from "@/lib/lift-videos";
 import {
-  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+  Popover, PopoverContent, PopoverTrigger,
+} from "@/components/ui/popover";
+import {
+  Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger,
+} from "@/components/ui/sheet";
 import { Badge } from "@/components/ui/badge";
-import { formatDistanceToNow, parseISO } from "date-fns";
+import { Button } from "@/components/ui/button";
+import { formatDistanceToNow, parseISO, isToday, isYesterday } from "date-fns";
 import type { ConversationState, Message, MessageAttachment } from "@/lib/messages";
 import { useServerFn } from "@tanstack/react-start";
 import { listUpcomingForBell, listMyPortalAppointments } from "@/lib/appointments.functions";
+import { useIsMobile } from "@/hooks/use-mobile";
+import { cn } from "@/lib/utils";
 
 type BellItem = {
   kind: "message" | "lift_video" | "agreement" | "exercise_note" | "group_message" | "check_in_review" | "appointment";
