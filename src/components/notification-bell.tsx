@@ -369,75 +369,231 @@ export function NotificationBell() {
   });
 
   const count = data?.count ?? 0;
-  const items = useMemo<BellItem[]>(
-    () => (data?.items ?? []).slice(0, 8),
-    [data],
+  const allItems = useMemo<BellItem[]>(() => data?.items ?? [], [data]);
+  const items = useMemo<BellItem[]>(() => allItems.slice(0, 10), [allItems]);
+
+  const [open, setOpen] = useState(false);
+  const isMobile = useIsMobile();
+
+  const trigger = (
+    <button
+      type="button"
+      aria-label={count > 0 ? `${count} unread notifications` : "Notifications"}
+      className="relative grid h-9 w-9 place-items-center rounded-md hover:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+    >
+      <Bell className="h-4 w-4" />
+      {count > 0 && (
+        <Badge className="absolute -right-1 -top-1 h-4 min-w-4 rounded-full bg-primary px-1 text-[9px] font-bold text-primary-foreground">
+          {count > 99 ? "99+" : count}
+        </Badge>
+      )}
+    </button>
   );
 
+  const panel = (
+    <NotificationPanel
+      items={items}
+      role={role}
+      count={count}
+      onItemClick={(it) => { markItem(it, role); qc.invalidateQueries({ queryKey: ["unread-counts"] }); setOpen(false); }}
+      onMarkAllRead={async () => {
+        await markAllRead(allItems, role, user?.id);
+        qc.invalidateQueries({ queryKey: ["unread-counts"] });
+      }}
+      onViewAll={() => setOpen(false)}
+    />
+  );
+
+  if (isMobile) {
+    return (
+      <Sheet open={open} onOpenChange={setOpen}>
+        <SheetTrigger asChild>{trigger}</SheetTrigger>
+        <SheetContent side="right" className="w-full p-0 sm:max-w-md">
+          <SheetHeader className="border-b px-4 py-3">
+            <SheetTitle className="text-base">Notifications</SheetTitle>
+          </SheetHeader>
+          {panel}
+        </SheetContent>
+      </Sheet>
+    );
+  }
+
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger className="relative grid h-9 w-9 place-items-center rounded-md hover:bg-secondary">
-        <Bell className="h-4 w-4" />
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>{trigger}</PopoverTrigger>
+      <PopoverContent align="end" className="w-[380px] p-0">
+        {panel}
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+function destinationFor(it: BellItem, role: string | null) {
+  const isAdmin = role === "admin";
+  switch (it.kind) {
+    case "lift_video": return { to: isAdmin ? "/admin/lift-videos" : "/portal/lift-videos" } as const;
+    case "agreement": return isAdmin
+      ? { to: "/admin/clients/$id", params: { id: it.clientId }, search: { tab: "agreements" as any } }
+      : { to: "/portal" } as const;
+    case "exercise_note": return isAdmin
+      ? { to: "/admin/clients/$id", params: { id: it.clientId }, search: { tab: "training" as any } }
+      : { to: "/portal" } as const;
+    case "check_in_review": return { to: "/portal" } as const;
+    case "appointment": return { to: isAdmin ? "/admin/appointments" : "/portal/appointments" } as const;
+    case "group_message": return { to: isAdmin ? "/admin/messages" : "/portal/messages" } as const;
+    default: return isAdmin
+      ? { to: "/admin/messages", search: { client: it.clientId } }
+      : { to: "/portal/messages" } as const;
+  }
+}
+
+function markItem(it: BellItem, role: string | null) {
+  if (it.kind === "message") {
+    markRead(it.clientId, role === "admin" ? "admin" : "client").catch(() => {});
+  } else if (it.kind === "lift_video" && it.videoId) {
+    (role === "admin" ? markAdminViewed(it.videoId) : markClientViewed(it.videoId)).catch(() => {});
+  } else if (it.kind === "exercise_note" && it.noteId && role === "admin") {
+    (supabase.from("pl_exercise_notes") as any).update({ coach_seen_at: new Date().toISOString() }).eq("id", it.noteId).then(() => {});
+  } else if (it.kind === "group_message" && it.groupId) {
+    // No user_id filter so RLS scopes to current user
+    (supabase.from("chat_group_members") as any).update({ last_read_at: new Date().toISOString() }).eq("group_id", it.groupId).then(() => {});
+  } else if (it.kind === "check_in_review" && it.reviewId) {
+    (supabase.from("manual_check_in_reviews") as any).update({ read_at: new Date().toISOString() }).eq("id", it.reviewId).then(() => {});
+  }
+}
+
+async function markAllRead(items: BellItem[], role: string | null, _userId: string | undefined) {
+  const isAdmin = role === "admin";
+  const messageClients = new Set<string>();
+  const videoIds = new Set<string>();
+  const noteIds = new Set<string>();
+  const groupIds = new Set<string>();
+  const reviewIds = new Set<string>();
+  for (const it of items) {
+    if (it.kind === "message" && it.clientId) messageClients.add(it.clientId);
+    else if (it.kind === "lift_video" && it.videoId) videoIds.add(it.videoId);
+    else if (it.kind === "exercise_note" && it.noteId && isAdmin) noteIds.add(it.noteId);
+    else if (it.kind === "group_message" && it.groupId) groupIds.add(it.groupId);
+    else if (it.kind === "check_in_review" && it.reviewId) reviewIds.add(it.reviewId);
+  }
+  const now = new Date().toISOString();
+  const tasks: Promise<unknown>[] = [];
+  for (const cid of messageClients) tasks.push(markRead(cid, isAdmin ? "admin" : "client").catch(() => {}));
+  for (const vid of videoIds) tasks.push((isAdmin ? markAdminViewed(vid) : markClientViewed(vid)).catch(() => {}));
+  if (noteIds.size > 0) tasks.push((supabase.from("pl_exercise_notes") as any).update({ coach_seen_at: now }).in("id", Array.from(noteIds)));
+  if (groupIds.size > 0) tasks.push((supabase.from("chat_group_members") as any).update({ last_read_at: now }).in("group_id", Array.from(groupIds)));
+  if (reviewIds.size > 0) tasks.push((supabase.from("manual_check_in_reviews") as any).update({ read_at: now }).in("id", Array.from(reviewIds)));
+  await Promise.all(tasks);
+}
+
+function groupByDate(items: BellItem[]): Array<{ label: string; items: BellItem[] }> {
+  const today: BellItem[] = [];
+  const yesterday: BellItem[] = [];
+  const earlier: BellItem[] = [];
+  for (const it of items) {
+    const d = parseISO(it.created_at);
+    if (isToday(d)) today.push(it);
+    else if (isYesterday(d)) yesterday.push(it);
+    else earlier.push(it);
+  }
+  const out: Array<{ label: string; items: BellItem[] }> = [];
+  if (today.length) out.push({ label: "Today", items: today });
+  if (yesterday.length) out.push({ label: "Yesterday", items: yesterday });
+  if (earlier.length) out.push({ label: "Earlier", items: earlier });
+  return out;
+}
+
+function NotificationPanel({
+  items, role, count, onItemClick, onMarkAllRead, onViewAll,
+}: {
+  items: BellItem[];
+  role: string | null;
+  count: number;
+  onItemClick: (it: BellItem) => void;
+  onMarkAllRead: () => Promise<void>;
+  onViewAll: () => void;
+}) {
+  const [marking, setMarking] = useState(false);
+  const groups = useMemo(() => groupByDate(items), [items]);
+
+  return (
+    <div className="flex max-h-[80vh] flex-col">
+      <div className="flex items-center justify-between border-b px-3 py-2">
+        <div className="flex items-center gap-2">
+          <span className="text-sm font-semibold">Notifications</span>
+          {count > 0 && (
+            <Badge variant="secondary" className="h-5 px-1.5 text-[10px]">{count > 99 ? "99+" : count} new</Badge>
+          )}
+        </div>
         {count > 0 && (
-          <Badge className="absolute -right-1 -top-1 h-4 min-w-4 rounded-full bg-primary px-1 text-[9px] font-bold text-primary-foreground">
-            {count > 9 ? "9+" : count}
-          </Badge>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-7 gap-1 px-2 text-xs"
+            disabled={marking}
+            onClick={async () => {
+              setMarking(true);
+              try { await onMarkAllRead(); } finally { setMarking(false); }
+            }}
+          >
+            {marking ? <Loader2 className="h-3 w-3 animate-spin" /> : <CheckCheck className="h-3 w-3" />}
+            Mark all read
+          </Button>
         )}
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-80">
-        <DropdownMenuLabel>Notifications</DropdownMenuLabel>
-        <DropdownMenuSeparator />
+      </div>
+
+      <div className="flex-1 overflow-y-auto">
         {items.length === 0 ? (
-          <div className="px-3 py-6 text-center text-xs text-muted-foreground">You're all caught up.</div>
-        ) : items.map((it, i) => (
-          <DropdownMenuItem asChild key={`${it.clientId}-${i}`}>
-            <Link
-              to={
-                it.kind === "lift_video"
-                  ? (role === "admin" ? "/admin/lift-videos" : "/portal/lift-videos")
-                  : it.kind === "agreement"
-                  ? (role === "admin" ? "/admin/clients/$id" : "/portal")
-                  : it.kind === "exercise_note"
-                  ? (role === "admin" ? "/admin/clients/$id" : "/portal")
-                  : it.kind === "check_in_review"
-                  ? "/portal"
-                  : it.kind === "appointment"
-                  ? (role === "admin" ? "/admin/appointments" : "/portal/appointments")
-                  : (role === "admin" ? "/admin/messages" : "/portal/messages")
-              }
-              params={
-                role === "admin" && (it.kind === "agreement" || it.kind === "exercise_note")
-                  ? { id: it.clientId }
-                  : undefined as any
-              }
-              search={
-                role === "admin" && it.kind === "message"
-                  ? { client: it.clientId }
-                  : role === "admin" && it.kind === "agreement"
-                  ? { tab: "agreements" as any }
-                  : role === "admin" && it.kind === "exercise_note"
-                  ? { tab: "training" as any }
-                  : undefined
-              }
-              className="block"
-              onClick={() => {
-                if (it.kind === "message") {
-                  markRead(it.clientId, role === "admin" ? "admin" : "client").catch(() => {});
-                } else if (it.kind === "lift_video" && it.videoId) {
-                  (role === "admin" ? markAdminViewed(it.videoId) : markClientViewed(it.videoId)).catch(() => {});
-                } else if (it.kind === "exercise_note" && it.noteId && role === "admin") {
-                  (supabase.from("pl_exercise_notes") as any).update({ coach_seen_at: new Date().toISOString() }).eq("id", it.noteId).then(() => {});
-                }
-                qc.invalidateQueries({ queryKey: ["unread-counts"] });
-              }}
-            >
-              <div className="text-xs font-semibold">{it.title}</div>
-              <div className="line-clamp-1 text-[11px] text-muted-foreground">{it.body || "(attachment)"}</div>
-              <div className="text-[10px] text-muted-foreground">{formatDistanceToNow(parseISO(it.created_at), { addSuffix: true })}</div>
-            </Link>
-          </DropdownMenuItem>
-        ))}
-      </DropdownMenuContent>
-    </DropdownMenu>
+          <div className="flex flex-col items-center justify-center px-6 py-10 text-center">
+            <div className="grid h-10 w-10 place-items-center rounded-full bg-secondary">
+              <CheckCheck className="h-5 w-5 text-muted-foreground" />
+            </div>
+            <p className="mt-3 text-sm font-medium">You're all caught up</p>
+            <p className="mt-1 text-xs text-muted-foreground">New notifications will appear here.</p>
+          </div>
+        ) : (
+          groups.map((g) => (
+            <div key={g.label}>
+              <div className="sticky top-0 z-10 bg-popover/95 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground backdrop-blur">
+                {g.label}
+              </div>
+              {g.items.map((it, i) => {
+                const dest = destinationFor(it, role);
+                return (
+                  <Link
+                    key={`${it.kind}-${it.clientId}-${it.videoId ?? it.noteId ?? it.groupId ?? it.reviewId ?? it.appointmentId ?? i}`}
+                    {...(dest as any)}
+                    onClick={() => onItemClick(it)}
+                    className={cn(
+                      "relative block border-l-2 border-primary bg-primary/5 px-3 py-2.5 transition hover:bg-primary/10",
+                      "focus-visible:outline-none focus-visible:bg-primary/10",
+                    )}
+                  >
+                    <span className="absolute right-3 top-3 inline-block h-2 w-2 rounded-full bg-primary" aria-hidden />
+                    <div className="pr-5 text-xs font-semibold leading-tight">{it.title}</div>
+                    {it.body && (
+                      <div className="mt-0.5 line-clamp-2 pr-5 text-[11px] text-muted-foreground">{it.body}</div>
+                    )}
+                    <div className="mt-1 text-[10px] text-muted-foreground">
+                      {formatDistanceToNow(parseISO(it.created_at), { addSuffix: true })}
+                    </div>
+                  </Link>
+                );
+              })}
+            </div>
+          ))
+        )}
+      </div>
+
+      <div className="border-t px-3 py-2">
+        <Link
+          to="/notifications"
+          onClick={onViewAll}
+          className="block text-center text-xs font-medium text-primary hover:underline"
+        >
+          View all notifications
+        </Link>
+      </div>
+    </div>
   );
 }
