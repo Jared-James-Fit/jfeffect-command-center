@@ -12,11 +12,14 @@ import { applyTemplateToClient, getTemplateWeeks, computeEndDateFromStart } from
 import { normalizeTemplatePayload, getActiveTemplateBlocks } from "@/lib/pl-template-blocks";
 import { toast } from "sonner";
 import { findOverlappingBlock, suggestNextStartISO } from "@/lib/block-schedule";
-import { AlertTriangle } from "lucide-react";
+import { AlertTriangle, ChevronDown } from "lucide-react";
 import { runJob } from "@/lib/progress-jobs";
 import { ProgramStatusBadge } from "@/components/programs/program-status-badge";
 import { validateTemplatePayload } from "@/lib/pl-template-validation";
 import { todayLocalISO } from "@/lib/today";
+import { AdminTemplatePickerSheet } from "@/components/programs/admin-template-picker-sheet";
+import { TemplateCompatWarnings } from "@/components/programs/template-compat-warnings";
+import { getClientGoalsSetupFn } from "@/lib/client-goals/goals.functions";
 
 type Props = {
   open: boolean;
@@ -35,19 +38,26 @@ export function QuickAssignTemplateDialog({ open, onOpenChange, clientId, client
   const [visible, setVisible] = useState(true);
   const [busy, setBusy] = useState(false);
   const [ackIncomplete, setAckIncomplete] = useState(false);
+  const [pickerOpen, setPickerOpen] = useState(false);
 
   const { data: templates = [] } = useQuery({
     queryKey: ["pl-templates-assignable"],
     enabled: open,
     queryFn: async () => (await (supabase as any)
       .from("pl_templates")
-      .select("id, name, template_type, weeks, training_style, training_focus, payload")
+      .select("id, name, template_type, weeks, training_style, training_focus, goal, tags, days_per_week, est_duration_min, payload")
       .in("template_type", ["block", "full_prep"])
       .eq("archived", false)
       .order("updated_at", { ascending: false })).data ?? [],
   });
 
   const selected = (templates as any[]).find((t) => t.id === templateId);
+  const { data: goalsData } = useQuery({
+    queryKey: ["client-goals-setup", clientId],
+    enabled: open && !!clientId,
+    queryFn: () => getClientGoalsSetupFn({ data: { clientId } } as any),
+  });
+  const clientGoals = (goalsData as any)?.goals ?? null;
   const selectedWeeks = selected ? getTemplateWeeks(selected) : 0;
   const selectedIssues = selected ? validateTemplatePayload(selected) : [];
   const selectedIssueCount = selectedIssues.reduce((n, d) => n + d.missing.length, 0);
@@ -175,20 +185,33 @@ export function QuickAssignTemplateDialog({ open, onOpenChange, clientId, client
         <div className="space-y-3 min-w-0">
           <div className="min-w-0">
             <Label>Template</Label>
-            <Select value={templateId} onValueChange={setTemplateId}>
-              <SelectTrigger className="w-full min-w-0"><SelectValue placeholder={(templates as any[]).length ? "Choose from Program Library…" : "No templates yet"} /></SelectTrigger>
-              <SelectContent>
-                {(templates as any[]).map((t) => (
-                  <SelectItem key={t.id} value={t.id}>
-                    {t.name} {t.weeks ? `· ${t.weeks}w` : ""} {t.training_focus ? `· ${t.training_focus}` : ""}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <button
+              type="button"
+              onClick={() => setPickerOpen(true)}
+              className="w-full flex items-center justify-between gap-2 rounded-md border border-input bg-background px-3 py-2 text-sm hover:bg-secondary/50 min-w-0"
+            >
+              <span className="truncate text-left">
+                {selected
+                  ? <>
+                      <span className="font-medium">{selected.name}</span>
+                      {selected.weeks ? <span className="text-muted-foreground"> · {selected.weeks}w</span> : null}
+                      {selected.training_focus ? <span className="text-muted-foreground"> · {selected.training_focus}</span> : null}
+                    </>
+                  : <span className="text-muted-foreground">
+                      {(templates as any[]).length ? "Browse Program Library…" : "No templates yet"}
+                    </span>}
+              </span>
+              <ChevronDown className="h-4 w-4 text-muted-foreground shrink-0" />
+            </button>
             {selected && (
               <div className="mt-2 flex items-center justify-between gap-2">
                 <span className="text-[11px] text-muted-foreground">Build status</span>
                 <ProgramStatusBadge template={selected} size="md" />
+              </div>
+            )}
+            {selected && clientGoals && (
+              <div className="mt-2">
+                <TemplateCompatWarnings template={selected as any} goals={clientGoals} />
               </div>
             )}
           </div>
@@ -352,6 +375,14 @@ export function QuickAssignTemplateDialog({ open, onOpenChange, clientId, client
             <Switch checked={visible} onCheckedChange={setVisible} />
           </div>
         </div>
+        <AdminTemplatePickerSheet
+          open={pickerOpen}
+          onOpenChange={setPickerOpen}
+          clientId={clientId}
+          clientName={clientName}
+          selectedId={templateId}
+          onSelect={(t) => setTemplateId(t.id)}
+        />
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
           <Button
