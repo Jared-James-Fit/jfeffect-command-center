@@ -13,7 +13,7 @@ import { StickyMobileCta } from "@/components/sales/sticky-mobile-cta";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
-  CheckCircle2, XCircle, Map as MapIcon, Repeat, Flame, ShieldCheck,
+  CheckCircle2, XCircle, TrendingUp, Sparkles, Repeat as RepeatIcon, ShieldCheck,
   Target, ClipboardCheck, Utensils, MessageCircle,
 } from "lucide-react";
 import { Reveal } from "@/components/sales/reveal";
@@ -37,15 +37,15 @@ export const Route = createFileRoute("/coaching")({
   component: CoachingPage,
   head: () => ({
     meta: [
-      { title: "1:1 Coaching for High-Performing Men | JF Effect" },
-      { name: "description", content: "Private coaching for ambitious men who are done starting over. Built-for-you training, nutrition, weekly accountability and direct coach access. By application." },
-      { property: "og:title", content: "1:1 Coaching for High-Performing Men | JF Effect" },
-      { property: "og:description", content: "Private coaching for ambitious men who are done starting over. Built-for-you training, nutrition, weekly accountability and direct coach access. By application." },
+      { title: "Private Coaching · By Application | JF Effect" },
+      { name: "description", content: "A plan built around your life. A coach who knows your numbers. Real progress, held to a standard. By application — limited spots." },
+      { property: "og:title", content: "Private Coaching · By Application | JF Effect" },
+      { property: "og:description", content: "A plan built around your life. A coach who knows your numbers. Real progress, held to a standard. By application — limited spots." },
       { property: "og:type", content: "website" },
       { property: "og:url", content: "https://jfeffect.com/coaching" },
       { name: "twitter:card", content: "summary_large_image" },
-      { name: "twitter:title", content: "1:1 Coaching for High-Performing Men | JF Effect" },
-      { name: "twitter:description", content: "Private coaching for ambitious men who are done starting over. Built-for-you training, nutrition, weekly accountability and direct coach access. By application." },
+      { name: "twitter:title", content: "Private Coaching · By Application | JF Effect" },
+      { name: "twitter:description", content: "A plan built around your life. A coach who knows your numbers. Real progress, held to a standard. By application — limited spots." },
     ],
     links: [{ rel: "canonical", href: "https://jfeffect.com/coaching" }],
   }),
@@ -65,42 +65,34 @@ function CoachingPage() {
   const s = (p?.sections ?? {}) as Record<string, any>;
 
   const whoFor: string[] = Array.isArray(s.who_for) && s.who_for.length > 0 ? s.who_for : [
-    "You're driven everywhere else and tired of your body being the exception",
-    "You want structure, not another pep talk",
-    "You're done restarting and want something that actually compounds",
-    "You're willing to be coached and do the work",
-    "You hold yourself to a high standard and want a plan that matches it",
+    "For driven people who want structure and will do the work.",
   ];
   const notFor: string[] = Array.isArray(s.not_for) && s.not_for.length > 0 ? s.not_for : [
-    "You want a shortcut or a quick fix",
-    "You need to be motivated every single day",
-    "You're not willing to be held accountable",
-    "You'll quit the first hard week",
-    "You want to argue with the plan instead of running it",
+    "Not for shortcuts, or anyone who won't follow a plan.",
   ];
   const howItWorks = Array.isArray(s.how_it_works) && s.how_it_works.length > 0 ? s.how_it_works : [
-    { step: 1, title: "Apply", body: "Tell me your goals, your history, and what's been stopping you. About 3 minutes." },
-    { step: 2, title: "Strategy Call", body: "If it's a fit, we get on a call and map the plan together. No pressure, no script." },
-    { step: 3, title: "Onboarding", body: "We set up your training, nutrition, and check-ins so day one is clear." },
-    { step: 4, title: "Your Custom Plan", body: "Built for your body and your schedule. You always know exactly what to do next." },
-    { step: 5, title: "Coaching & Accountability", body: "Weekly check-ins, real adjustments, and direct access to me the whole way." },
-    { step: 6, title: "Results", body: "The work compounds because, for once, you actually stuck to one plan." },
+    { step: 1, title: "Apply", body: "A few minutes." },
+    { step: 2, title: "Strategy call", body: "We map the plan together." },
+    { step: 3, title: "Onboarding", body: "Training and nutrition, dialed in." },
+    { step: 4, title: "Your plan", body: "Clear, every step." },
+    { step: 5, title: "Coaching", body: "Weekly check-ins and adjustments." },
+    { step: 6, title: "Results", body: "Built to last." },
   ];
   const faqItems = Array.isArray(s.faq) && s.faq.length > 0 ? s.faq : [
-    { q: "Can total beginners join?", a: "Yes. A beginner who'll follow a plan beats an \"advanced\" lifter who program-hops every month. I'll meet you where you are." },
-    { q: "Do I need a gym?", a: "A gym makes things easier, but no. Tell me your equipment in the application and I'll build around it." },
-    { q: "Can I train at home?", a: "Yes — plenty of clients do. The plan gets built around what you actually have access to." },
-    { q: "Can I train for powerlifting?", a: "Yes. It's my background and my sport. If strength is the goal, you're in the right place." },
-    { q: "Do I have to track calories?", a: "Not obsessively. I'll give you targets that fit how you eat. The goal is something you'll actually keep doing." },
-    { q: "What if I travel a lot?", a: "The plan flexes. We build around your real schedule, not a fantasy one." },
-    { q: "What if I've failed before?", a: "Then you've probably never had a real plan and real accountability at the same time. That's the whole point of coaching — that's not a reason to skip it, it's the reason to start." },
+    { q: "Beginner?", a: "Yes — if you'll commit to the plan." },
+    { q: "Need a gym?", a: "No. Built around your setup." },
+    { q: "Home training?", a: "Yes." },
+    { q: "Powerlifting?", a: "Yes." },
+    { q: "Track calories?", a: "Targets that fit you." },
+    { q: "Travel often?", a: "The plan adapts." },
+    { q: "Failed before?", a: "You've never had a real plan and real accountability together. That changes here." },
   ];
   const authority: Array<{ label: string }> = Array.isArray(s.authority) && s.authority.length > 0 ? s.authority : [
-    { label: "Team Canada Powerlifter" },
-    { label: "Total @ bodyweight" },
-    { label: "Nationals result" },
-    { label: "Clients coached" },
-    { label: "Coaching since" },
+    { label: "Team Canada" },
+    { label: "662.5kg @ 65.9kg" },
+    { label: "9/9 Nationals" },
+    { label: "100+ Clients" },
+    { label: "Since 2019" },
   ];
 
   return (
@@ -109,16 +101,16 @@ function CoachingPage() {
         <HeroSkeleton />
       ) : (
       <CoachingHero
-        eyebrow="Private 1:1 Coaching · By Application"
-        headline={"You already know what to do. You just stopped doing it."}
-        sub={"Private coaching for men and women who are done starting over. A plan built around your life, a coach who actually looks at your numbers, and accountability that doesn't let you quietly slip. This isn't another app — it's me, in your corner."}
-        primary={<HeroCta onClick={handleApply}>Apply for Private Coaching</HeroCta>}
+        eyebrow="Private Coaching · By Application"
+        headline={"Coaching for people who are done settling."}
+        sub={"A plan built around your life. A coach who knows your numbers. Real progress, held to a standard."}
+        primary={<HeroCta onClick={handleApply}>Apply for Coaching</HeroCta>}
         secondary={
           <Link
             to="/membership"
             className="text-sm font-semibold text-white/70 underline-offset-4 hover:text-white hover:underline"
           >
-            Not ready for 1:1 yet? Start with the Membership →
+            Explore the Membership →
           </Link>
         }
       />
@@ -157,14 +149,14 @@ function CoachingPage() {
       <div id="cta" />
       {/* 11. Final CTA */}
       <Reveal><FinalCta
-        headline={s.final_cta?.headline ?? "Stop starting over."}
+        headline={s.final_cta?.headline ?? "Raise the standard."}
         primary={
           <div className="flex flex-col items-center gap-2">
             <Button size="lg" onClick={handleApply} className="h-12 px-6 text-base font-bold">
-              {s.final_cta?.primary_label ?? "Apply for Private Coaching"}
+              {s.final_cta?.primary_label ?? "Apply for Coaching"}
             </Button>
             <p className="text-[11px] uppercase tracking-[0.22em] text-muted-foreground">
-              Application only · Limited client capacity
+              By application · Limited spots
             </p>
           </div>
         }
@@ -172,7 +164,7 @@ function CoachingPage() {
 
       <div className="pb-24 md:pb-0" />
       {/* 12. Sticky mobile CTA */}
-      <StickyMobileCta label={p?.primary_cta_label ?? "Apply for Private Coaching"} onClick={handleApply} />
+      <StickyMobileCta label={p?.primary_cta_label ?? "Apply for Coaching"} onClick={handleApply} />
     </SalesPageShell>
   );
 }
