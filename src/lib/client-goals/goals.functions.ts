@@ -138,3 +138,21 @@ export const clearGoalsUpdateRequestFn = createServerFn({ method: "POST" })
     if (error) throw new Error(error.message);
     return { ok: true };
   });
+/** Fetch the signed-in member's own Goals & Setup row. Returns null when no client record exists. */
+export const getMyGoalsSetupFn = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const { supabase, userId } = context;
+    const { data: client } = await supabase
+      .from("clients")
+      .select("id")
+      .eq("user_id", userId)
+      .maybeSingle();
+    if (!client) return { goals: null as any };
+    const { data: goals } = await supabase
+      .from("client_goals_setup")
+      .select("main_goal, training_days_per_week, workout_length_minutes, training_experience, training_styles, training_location, equipment, completed_at")
+      .eq("client_id", (client as any).id)
+      .maybeSingle();
+    return { goals: goals ?? null };
+  });
