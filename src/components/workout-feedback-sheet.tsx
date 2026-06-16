@@ -101,7 +101,7 @@ export function WorkoutFeedbackSheet({ open, onOpenChange, completionId, clientI
 
   const canSubmit = useMemo(() => {
     if (rating == null || rpe == null || pain == null) return false;
-    if (pain && (painLevel == null || !painArea)) return false;
+    if (pain && (painLevel == null || painArea.length === 0)) return false;
     return !submitting;
   }, [rating, rpe, pain, painLevel, painArea, submitting]);
 
