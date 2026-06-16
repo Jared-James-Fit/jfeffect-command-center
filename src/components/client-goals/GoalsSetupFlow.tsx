@@ -45,6 +45,8 @@ export function GoalsSetupFlow({ clientId, onComplete, compact }: Props) {
   const saveGoalsSetup = useServerFn(saveGoalsSetupFn);
   const navigate = useNavigate();
   const [saveFailed, setSaveFailed] = useState<string | null>(null);
+  const [stepSaveFailed, setStepSaveFailed] = useState<string | null>(null);
+  const draftKey = `goals-setup-draft:${clientId}`;
 
   const { data: row, isLoading } = useQuery({
     queryKey: ["client-goals-setup", clientId],
@@ -61,16 +63,47 @@ export function GoalsSetupFlow({ clientId, onComplete, compact }: Props) {
 
   // Local working copy hydrated from server.
   const [local, setLocal] = useState<Partial<ClientGoalsSetupRow>>({});
-  const hydratedRef = useRef(false);
+  const hydratedClientRef = useRef<string | null>(null);
   useEffect(() => {
-    if (row && !hydratedRef.current) {
-      setLocal(row);
-      hydratedRef.current = true;
-    } else if (!row && !hydratedRef.current && !isLoading) {
-      setLocal({});
-      hydratedRef.current = true;
+    // Re-hydrate whenever the target client changes (coach switching
+    // between client profiles in the admin sheet).
+    if (hydratedClientRef.current === clientId) return;
+    if (isLoading) return;
+    // Merge server row with any local draft from this device — the draft
+    // wins so a tab reload doesn't lose unsaved typing.
+    let draft: Partial<ClientGoalsSetupRow> | null = null;
+    try {
+      if (typeof window !== "undefined") {
+        const raw = window.localStorage.getItem(draftKey);
+        if (raw) draft = JSON.parse(raw);
+      }
+    } catch { /* ignore parse / quota errors */ }
+    setLocal({ ...(row ?? {}), ...(draft ?? {}) });
+    hydratedClientRef.current = clientId;
+  }, [row, isLoading, clientId, draftKey]);
+
+  // Persist working copy as a draft on this device — survives reload, tab
+  // close, and network failures. Cleared after a successful save.
+  useEffect(() => {
+    if (hydratedClientRef.current !== clientId) return;
+    if (typeof window === "undefined") return;
+    try {
+      window.localStorage.setItem(draftKey, JSON.stringify(local));
+    } catch { /* quota: ignore */ }
+  }, [local, clientId, draftKey]);
+
+  // When the user toggles "No" to a conditional question, drop any stale
+  // free-text detail so they're not confused by a hidden value.
+  useEffect(() => {
+    if (local.food_restrictions_has === false && local.food_restrictions_details) {
+      setLocal((p) => ({ ...p, food_restrictions_details: null }));
     }
-  }, [row, isLoading]);
+  }, [local.food_restrictions_has]);
+  useEffect(() => {
+    if (local.injuries_has === false && local.injuries_details) {
+      setLocal((p) => ({ ...p, injuries_details: null }));
+    }
+  }, [local.injuries_has]);
 
   const setField = <K extends keyof ClientGoalsSetupRow>(k: K, v: ClientGoalsSetupRow[K]) =>
     setLocal((p) => ({ ...p, [k]: v }));
@@ -101,18 +134,27 @@ export function GoalsSetupFlow({ clientId, onComplete, compact }: Props) {
       qc.invalidateQueries({ queryKey: ["client-goals-setup", clientId] });
       // Make sure dependent surfaces (Action Centre, banners) refresh too.
       qc.invalidateQueries({ queryKey: ["my-client"] });
+      // Saved successfully — the device draft is no longer needed.
+      try {
+        if (typeof window !== "undefined") window.localStorage.removeItem(draftKey);
+      } catch { /* ignore */ }
     },
   });
 
   const saveAndAdvance = async (extra?: Partial<ClientGoalsSetupRow>) => {
     try {
       setSaveFailed(null);
+      setStepSaveFailed(null);
       await upsert.mutateAsync(buildPatch(extra) as any);
       setStep((s) => Math.min(STEPS.length - 1, s + 1));
     } catch (e: any) {
-      // Don't trap the user — let them keep going through the steps even
-      // if a partial save fails. Their answers stay in local state.
-      toast.error("We couldn't save your latest changes. You can still use the app and try again later.");
+      // Don't trap the user — answers persist locally and will retry.
+      setStepSaveFailed(
+        typeof e?.message === "string" && e.message
+          ? e.message
+          : "We couldn't save your latest changes — they're saved on this device.",
+      );
+      toast.error("Couldn't save right now — your answers are kept on this device.");
       setStep((s) => Math.min(STEPS.length - 1, s + 1));
     }
   };
@@ -132,6 +174,7 @@ export function GoalsSetupFlow({ clientId, onComplete, compact }: Props) {
   const finish = async () => {
     if (upsert.isPending) return; // dedupe double-taps
     setSaveFailed(null);
+    setStepSaveFailed(null);
     try {
       await upsert.mutateAsync({ ...buildPatch(), completed: true } as any);
       toast.success("Setup complete. You're ready to go.");
