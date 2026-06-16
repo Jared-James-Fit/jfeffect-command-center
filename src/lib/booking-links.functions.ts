@@ -251,6 +251,7 @@ export const bookSlotPublic = createServerFn({ method: "POST" })
     email: z.string().trim().email(),
     phone: z.string().trim().max(40).optional().nullable(),
     notes: z.string().trim().max(2000).optional().nullable(),
+    application_id: z.string().uuid().optional().nullable(),
   }).parse(d))
   .handler(async ({ data }) => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
@@ -289,8 +290,48 @@ export const bookSlotPublic = createServerFn({ method: "POST" })
       sms_reminders_enabled: link.sms_reminders_enabled,
       source: "booking_link",
       booking_link_id: link.id,
+      application_id: data.application_id || null,
     }).select("*").single();
     if (error) throw new Error(error.message);
+
+    // If this booking is tied to a coaching application, link the appointment back
+    // onto the application row, update CRM stage, and notify configured recipients.
+    if (data.application_id) {
+      try {
+        const { data: app } = await supabaseAdmin
+          .from("coaching_applications")
+          .select("id, client_id, first_name, full_name, lead_score, qualification_label, main_goal")
+          .eq("id", data.application_id).maybeSingle();
+        if (app) {
+          await supabaseAdmin.from("coaching_applications").update({
+            appointment_id: appt.id,
+            call_status: "booked",
+          }).eq("id", app.id);
+          if (app.client_id) {
+            await supabaseAdmin.from("clients").update({
+              lifecycle_stage: "call_booked",
+              call_booked: true,
+            }).eq("id", app.client_id);
+          }
+          const { notifyCoachingAppRecipients } = await import("./coaching-app-notify.server");
+          const when = new Date(appt.starts_at).toLocaleString(undefined, {
+            weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit",
+          });
+          const reviewLink = `https://jfeffect.com/admin/forms?tab=coaching-applications`;
+          const smsBody = `JF Effect call booked: ${app.first_name ?? app.full_name ?? "Lead"} — ${when}. Score ${app.lead_score ?? "?"}. Review: ${reviewLink}`;
+          await notifyCoachingAppRecipients(supabaseAdmin, {
+            kind: "coaching_app_booked",
+            event_key: appt.id,
+            priority: (app.qualification_label ?? "").includes("Priority"),
+            smsBody,
+            emailSubject: `Coaching call booked — ${app.first_name ?? app.full_name ?? "Lead"} — ${when}`,
+            emailBody: `${app.first_name ?? app.full_name ?? "Lead"}\nWhen: ${when}\nReview: ${reviewLink}`,
+          });
+        }
+      } catch (e) {
+        console.warn("[bookSlotPublic] application linking/notify failed", e);
+      }
+    }
 
     let meetLink: string | null = null;
     try {
