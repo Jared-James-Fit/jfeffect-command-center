@@ -73,7 +73,7 @@ export function WorkoutFeedbackSheet({ open, onOpenChange, completionId, clientI
   const [rpe, setRpe] = useState<number | null>(null);
   const [pain, setPain] = useState<boolean | null>(null);
   const [painLevel, setPainLevel] = useState<number | null>(null);
-  const [painArea, setPainArea] = useState<string>("");
+  const [painArea, setPainArea] = useState<string[]>([]);
   const [painNote, setPainNote] = useState<string>("");
   const [note, setNote] = useState<string>("");
   const [submitting, setSubmitting] = useState(false);
@@ -89,19 +89,19 @@ export function WorkoutFeedbackSheet({ open, onOpenChange, completionId, clientI
       setRpe(existing.session_rpe ?? null);
       setPain(existing.pain ?? null);
       setPainLevel(existing.pain_level ?? null);
-      setPainArea(existing.pain_area ?? "");
+      setPainArea(existing.pain_area ? existing.pain_area.split(", ") : []);
       setPainNote(existing.pain_note ?? "");
       setNote(existing.client_note ?? "");
     } else {
       setRating(null); setRpe(null); setPain(null);
-      setPainLevel(null); setPainArea(""); setPainNote(""); setNote("");
+      setPainLevel(null); setPainArea([]); setPainNote(""); setNote("");
     }
     setSubmitting(false);
   }, [open, completionId, existing?.id]);
 
   const canSubmit = useMemo(() => {
     if (rating == null || rpe == null || pain == null) return false;
-    if (pain && (painLevel == null || !painArea)) return false;
+    if (pain && (painLevel == null || painArea.length === 0)) return false;
     return !submitting;
   }, [rating, rpe, pain, painLevel, painArea, submitting]);
 
@@ -113,7 +113,7 @@ export function WorkoutFeedbackSheet({ open, onOpenChange, completionId, clientI
       session_rpe: rpe!,
       pain: pain!,
       pain_level: pain ? painLevel : null,
-      pain_area: pain ? painArea : null,
+      pain_area: pain ? (painArea.length > 0 ? painArea.join(", ") : null) : null,
       pain_note: pain && painNote.trim() ? painNote.trim() : null,
       client_note: note.trim() ? note.trim() : null,
     };
@@ -257,7 +257,7 @@ export function WorkoutFeedbackSheet({ open, onOpenChange, completionId, clientI
             <div className="grid grid-cols-2 gap-2">
               <button
                 type="button"
-                onClick={() => { setPain(false); setPainLevel(null); setPainArea(""); setPainNote(""); }}
+                onClick={() => { setPain(false); setPainLevel(null); setPainArea([]); setPainNote(""); }}
                 aria-pressed={pain === false}
                 className={cn(
                   "rounded-xl border px-3 py-2.5 text-sm font-bold transition-colors",
@@ -314,22 +314,29 @@ export function WorkoutFeedbackSheet({ open, onOpenChange, completionId, clientI
                     Body area
                   </Label>
                   <div className="flex flex-wrap gap-1.5">
-                    {BODY_AREAS.map((a) => (
-                      <button
-                        key={a}
-                        type="button"
-                        onClick={() => setPainArea(a)}
-                        aria-pressed={painArea === a}
-                        className={cn(
-                          "rounded-full border px-3 py-1 text-xs font-bold transition-colors",
-                          painArea === a
-                            ? "border-amber-500 bg-amber-500/20 text-amber-800 dark:text-amber-200"
-                            : "border-border bg-card text-muted-foreground hover:bg-secondary/40",
-                        )}
-                      >
-                        {a}
-                      </button>
-                    ))}
+                    {BODY_AREAS.map((a) => {
+                      const selected = painArea.includes(a);
+                      return (
+                        <button
+                          key={a}
+                          type="button"
+                          onClick={() =>
+                            setPainArea((prev) =>
+                              selected ? prev.filter((x) => x !== a) : [...prev, a]
+                            )
+                          }
+                          aria-pressed={selected}
+                          className={cn(
+                            "rounded-full border px-3 py-1 text-xs font-bold transition-colors",
+                            selected
+                              ? "border-amber-500 bg-amber-500/20 text-amber-800 dark:text-amber-200"
+                              : "border-border bg-card text-muted-foreground hover:bg-secondary/40",
+                          )}
+                        >
+                          {a}
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
 
