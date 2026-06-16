@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
+import { useNavigate } from "@tanstack/react-router";
 import { supabase } from "@/integrations/supabase/client";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -8,13 +9,14 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Trash2, ChevronLeft, ChevronRight, Loader2, CheckCircle2, AlertTriangle } from "lucide-react";
+import { Plus, Trash2, ChevronLeft, ChevronRight, Loader2, CheckCircle2, AlertTriangle, RefreshCw, MessageCircle, Clock } from "lucide-react";
 import { toast } from "sonner";
 import { ChipGrid } from "./chip-grid";
 import {
   MAIN_GOALS, TRAINING_DAYS, WEEKDAYS, WEEKDAY_LABELS, WORKOUT_LENGTHS,
   EXPERIENCE_LEVELS, TRAINING_STYLES, TRAINING_LOCATIONS, EQUIPMENT_OPTIONS,
   NUTRITION_GOALS, NUTRITION_PREFS, NUTRITION_CHALLENGES, NUTRITION_CHALLENGES_MAX,
+  EDITABLE_GOALS_FIELDS,
   type ClientGoalsSetupRow,
 } from "@/lib/client-goals/schema";
 import { saveGoalsSetupFn } from "@/lib/client-goals/goals.functions";
@@ -41,6 +43,8 @@ export function GoalsSetupFlow({ clientId, onComplete, compact }: Props) {
   const qc = useQueryClient();
   const [step, setStep] = useState(0);
   const saveGoalsSetup = useServerFn(saveGoalsSetupFn);
+  const navigate = useNavigate();
+  const [saveFailed, setSaveFailed] = useState<string | null>(null);
 
   const { data: row, isLoading } = useQuery({
     queryKey: ["client-goals-setup", clientId],
@@ -71,32 +75,78 @@ export function GoalsSetupFlow({ clientId, onComplete, compact }: Props) {
   const setField = <K extends keyof ClientGoalsSetupRow>(k: K, v: ClientGoalsSetupRow[K]) =>
     setLocal((p) => ({ ...p, [k]: v }));
 
+  // Build a clean, whitelisted patch from the local state. Trims string
+  // fields and coerces empty strings to null so Finish never trips zod
+  // on rows that contain extra DB-only columns (id, timestamps, audit).
+  function buildPatch(extra?: Partial<ClientGoalsSetupRow>): Record<string, unknown> {
+    const merged: any = { ...local, ...(extra ?? {}) };
+    const out: Record<string, unknown> = {};
+    for (const key of EDITABLE_GOALS_FIELDS) {
+      if (!(key in merged)) continue;
+      let v: any = merged[key];
+      if (typeof v === "string") {
+        const trimmed = v.trim();
+        v = trimmed.length === 0 ? null : trimmed;
+      }
+      out[key] = v;
+    }
+    return out;
+  }
+
   const upsert = useMutation({
     mutationFn: async (patch: Partial<ClientGoalsSetupRow> & { completed?: boolean }) => {
       await saveGoalsSetup({ data: { clientId, patch } });
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["client-goals-setup", clientId] });
+      // Make sure dependent surfaces (Action Centre, banners) refresh too.
+      qc.invalidateQueries({ queryKey: ["my-client"] });
     },
-    onError: (e: any) => toast.error(e?.message ?? "Could not save"),
   });
 
   const saveAndAdvance = async (extra?: Partial<ClientGoalsSetupRow>) => {
-    const patch = { ...local, ...(extra ?? {}) };
-    await upsert.mutateAsync(patch);
-    setStep((s) => Math.min(STEPS.length - 1, s + 1));
+    try {
+      setSaveFailed(null);
+      await upsert.mutateAsync(buildPatch(extra) as any);
+      setStep((s) => Math.min(STEPS.length - 1, s + 1));
+    } catch (e: any) {
+      // Don't trap the user — let them keep going through the steps even
+      // if a partial save fails. Their answers stay in local state.
+      toast.error("We couldn't save your latest changes. You can still use the app and try again later.");
+      setStep((s) => Math.min(STEPS.length - 1, s + 1));
+    }
   };
 
   const saveAndExit = async () => {
-    await upsert.mutateAsync(local);
-    toast.success("Saved — you can finish later");
-    onComplete?.();
+    try {
+      await upsert.mutateAsync(buildPatch() as any);
+      toast.success("Saved — you can finish later");
+    } catch {
+      toast.error("We couldn't save your latest changes. You can still use the app and try again later.");
+    } finally {
+      // Always let them out — never trap on a network failure.
+      onComplete?.();
+    }
   };
 
   const finish = async () => {
-    await upsert.mutateAsync({ ...local, completed: true } as any);
-    toast.success("Goals & Setup saved");
-    onComplete?.();
+    if (upsert.isPending) return; // dedupe double-taps
+    setSaveFailed(null);
+    try {
+      await upsert.mutateAsync({ ...buildPatch(), completed: true } as any);
+      toast.success("Setup complete. You're ready to go.");
+      onComplete?.();
+      // Default redirect — caller can override via onComplete returning early.
+      try {
+        await navigate({ to: "/portal" });
+      } catch { /* navigation may be unavailable in tests */ }
+    } catch (e: any) {
+      setSaveFailed(
+        typeof e?.message === "string" && e.message
+          ? e.message
+          : "We couldn't complete your setup right now.",
+      );
+    }
   };
 
   if (isLoading) {
@@ -133,8 +183,44 @@ export function GoalsSetupFlow({ clientId, onComplete, compact }: Props) {
         {step === 6 && <FinalStep value={local} setField={setField} />}
       </Card>
 
+      {saveFailed && (
+        <Card className="border-destructive/40 bg-destructive/5 p-4 space-y-3">
+          <div className="flex items-start gap-2 text-sm">
+            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-destructive" />
+            <div>
+              <div className="font-semibold text-destructive">We couldn't complete your setup</div>
+              <p className="mt-1 text-muted-foreground">
+                Your answers are still saved on this device — your account is fully accessible.
+                Retry now, finish later, or message your coach for help.
+              </p>
+            </div>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Button size="sm" onClick={finish} disabled={upsert.isPending}>
+              <RefreshCw className="mr-1 h-4 w-4" /> Retry
+            </Button>
+            <Button size="sm" variant="outline" onClick={saveAndExit} disabled={upsert.isPending}>
+              <Clock className="mr-1 h-4 w-4" /> Continue later
+            </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={async () => {
+                try { await navigate({ to: "/portal/messages" }); } catch { /* no-op */ }
+                onComplete?.();
+              }}
+            >
+              <MessageCircle className="mr-1 h-4 w-4" /> Contact coach
+            </Button>
+          </div>
+        </Card>
+      )}
+
       {/* Sticky bottom bar — mobile-friendly */}
-      <div className="sticky bottom-0 z-10 -mx-3 border-t border-border bg-background/95 px-3 py-3 backdrop-blur sm:rounded-lg sm:border sm:bg-card">
+      <div
+        className="sticky bottom-0 z-10 -mx-3 border-t border-border bg-background/95 px-3 py-3 backdrop-blur sm:rounded-lg sm:border sm:bg-card"
+        style={{ paddingBottom: "max(0.75rem, env(safe-area-inset-bottom))" }}
+      >
         <div className="flex flex-wrap items-center justify-between gap-2">
           <Button
             variant="ghost"

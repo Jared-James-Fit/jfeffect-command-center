@@ -118,21 +118,21 @@ export const clientGoalsSetupSchema = z.object({
   goal_target: z.string().trim().max(400).nullable().optional(),
 
   training_days_per_week: z.number().int().min(1).max(7).nullable().optional(),
-  available_weekdays: z.array(z.enum(WEEKDAYS)).max(7).optional(),
+  available_weekdays: z.array(z.enum(WEEKDAYS)).max(7).nullable().optional(),
   workout_length_minutes: z.number().int().min(5).max(240).nullable().optional(),
 
   training_experience: z.string().max(80).nullable().optional(),
-  training_styles: z.array(z.string().max(80)).max(20).optional(),
+  training_styles: z.array(z.string().max(80)).max(20).nullable().optional(),
 
   training_location: z.string().max(80).nullable().optional(),
-  equipment: z.array(z.string().max(80)).max(40).optional(),
-  equipment_by_location: z.record(z.string().max(80), z.array(z.string().max(80)).max(40)).optional(),
+  equipment: z.array(z.string().max(80)).max(40).nullable().optional(),
+  equipment_by_location: z.record(z.string().max(80), z.array(z.string().max(80)).max(40)).nullable().optional(),
 
   nutrition_goal: z.string().max(80).nullable().optional(),
   nutrition_preference: z.string().max(80).nullable().optional(),
   food_restrictions_has: z.boolean().optional(),
   food_restrictions_details: z.string().trim().max(800).nullable().optional(),
-  nutrition_challenges: z.array(z.string().max(80)).max(NUTRITION_CHALLENGES_MAX).optional(),
+  nutrition_challenges: z.array(z.string().max(80)).max(NUTRITION_CHALLENGES_MAX).nullable().optional(),
 
   injuries_has: z.boolean().optional(),
   injuries_details: z.string().trim().max(2000).nullable().optional(),
@@ -141,6 +141,34 @@ export const clientGoalsSetupSchema = z.object({
 
   completed_at: z.string().nullable().optional(),
 });
+
+/**
+ * Whitelist of client-editable column names for `client_goals_setup`.
+ * Everything else (id, client_id, timestamps, review/audit fields) must be
+ * stripped before sending to the server so we never accidentally overwrite
+ * server-owned data and never trip "unknown column" errors.
+ */
+export const EDITABLE_GOALS_FIELDS = [
+  "main_goal",
+  "main_goal_other",
+  "goal_target",
+  "training_days_per_week",
+  "available_weekdays",
+  "workout_length_minutes",
+  "training_experience",
+  "training_styles",
+  "training_location",
+  "equipment",
+  "equipment_by_location",
+  "nutrition_goal",
+  "nutrition_preference",
+  "food_restrictions_has",
+  "food_restrictions_details",
+  "nutrition_challenges",
+  "injuries_has",
+  "injuries_details",
+  "final_notes",
+] as const;
 
 export type ClientGoalsSetupPatch = z.infer<typeof clientGoalsSetupSchema>;
 

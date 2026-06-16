@@ -1,11 +1,7 @@
 import { createFileRoute, Outlet } from "@tanstack/react-router";
 import { AppShell } from "@/components/app-shell";
 import { clientNav, clientBottomNav } from "@/lib/admin-nav";
-import { ClientProfilePictureGate } from "@/components/client-profile-picture-gate";
 import { ClientPovBanner } from "@/components/client-pov-banner";
-import { ClientBasicInfoGate } from "@/components/client-basic-info-gate";
-import { ClientTrainingScheduleGate } from "@/components/client-training-schedule-gate";
-import { ClientGoalsSetupGate } from "@/components/client-goals-setup-gate";
 import { useActivityHeartbeat } from "@/hooks/use-activity-heartbeat";
 import { BroadcastPopupGate } from "@/components/broadcast-popup-gate";
 import { ClientBirthdayCard } from "@/components/client-birthday-card";
@@ -20,21 +16,17 @@ function PortalLayout() {
     <>
       <ClientPovBanner />
       <AppShell items={clientNav} bottomItems={clientBottomNav} title="Client Portal">
-        <ClientProfilePictureGate>
-          <ClientBasicInfoGate>
-            <ClientTrainingScheduleGate>
-              <ClientGoalsSetupGate>
-                <Outlet />
-                <BroadcastPopupGate />
-                <ClientBirthdayCard />
-                <EventPopupGate />
-                <FormPopupGate />
-                <HomeScreenSetupGate />
-                <LegalAcceptanceGate />
-              </ClientGoalsSetupGate>
-            </ClientTrainingScheduleGate>
-          </ClientBasicInfoGate>
-        </ClientProfilePictureGate>
+        {/* Onboarding requirements (profile photo, basic info, training schedule,
+            Goals & Setup) are surfaced as a non-blocking checklist on the Home
+            page — they must never lock the portal. See
+            <SetupChecklistBanner /> in /portal/index.tsx. */}
+        <Outlet />
+        <BroadcastPopupGate />
+        <ClientBirthdayCard />
+        <EventPopupGate />
+        <FormPopupGate />
+        <HomeScreenSetupGate />
+        <LegalAcceptanceGate />
       </AppShell>
     </>
   );

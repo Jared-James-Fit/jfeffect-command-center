@@ -1,124 +1,105 @@
 
-# Forgot Password / Account Recovery — Implementation Plan
+# Goals & Setup Fix + "Never Trap the User" Refactor
+
+## What's actually broken today (evidence)
+
+`src/routes/_authenticated/portal/route.tsx` stacks **four full-screen hard-lock gates** around `<Outlet />`:
+
+```
+ClientProfilePictureGate
+ └ ClientBasicInfoGate
+    └ ClientTrainingScheduleGate
+       └ ClientGoalsSetupGate   ← Goals & Setup lives here
+          └ Outlet (Workouts, Messages, Account, …)
+```
+
+Each gate renders `<div className="grid min-h-[calc(100vh-4rem)] place-items-center">` with no exit, no "later", no skip — exactly what the brief calls out. Until the gate's row passes its completeness check, the entire portal (Workouts, Messages, Account, Sign Out) is unreachable. `FormPopupGate`, `LegalAcceptanceGate`, `HomeScreenSetupGate`, `BroadcastPopupGate`, `EventPopupGate` also auto-open on top.
+
+### Finish bug — most likely root cause
+
+`GoalsSetupFlow.tsx` hydrates `local` from the DB row, then on Finish sends the **entire local object** (including DB-only fields like `id`, `client_id`, `created_at`, `updated_at`, `last_reviewed_at/by`, `update_requested_at/by/message`) through `saveGoalsSetupFn`. The server uses `clientGoalsSetupSchema.partial().extend({ completed })` and `.parse()` — zod strips unknown keys, so those pass through. But the array columns (`available_weekdays`, `training_styles`, `equipment`, `nutrition_challenges`) are typed `.optional()` without `.nullable()`. When the DB returns `null` for any of them (older rows do), zod throws a validation error on Finish. The thrown error is shown via `toast.error(e?.message)` but the modal stays open and the gate never releases → "Finish does nothing."
+
+We'll confirm with browser/Playwright + a DB read of a stuck row before changing schema.
 
 ## Scope
 
-A single recovery system that works for clients, members, coaches, and admin — all of whom already authenticate through Supabase Auth. We will **not** create a parallel auth system. Email recovery uses Supabase's native reset token (which is already wired through the Lovable email queue and the existing branded `RecoveryEmail` template). SMS recovery uses our own short-lived, hashed token stored in a new `password_recovery_tokens` table, redeeming to the same `/reset-password` page.
+1. Reproduce + fix the Goals & Setup Finish bug.
+2. Convert every account-level hard-lock gate to a soft Home checklist + dismissable banner. No setup form may block the portal.
+3. Audit all auto-opening popups; document each as non-blocking, action-gated, or removed.
 
-## What gets built
+Out of scope this turn: redesigning legal/payment/safety logic itself, performance pass items still on the queue.
 
-### 1. Login page CTA
-- Add a "Forgot password or can't access your account?" link under the password field in `src/routes/auth.tsx`, routing to `/recover`.
+## Plan
 
-### 2. Recovery screen — `src/routes/recover.tsx` (public)
-- One input, auto-detects email vs phone (E.164 normalisation for phone).
-- "Send Recovery Instructions" button calls a new public server fn `requestAccountRecovery`.
-- Always renders the same neutral confirmation, regardless of whether the account exists.
+### 1. Reproduce the Finish bug (evidence)
+- Read a stuck `client_goals_setup` row via DB to confirm null array columns.
+- Drive Playwright against the preview, click Finish on Step 7 with empty Final Notes, capture console + network for `saveGoalsSetupFn`.
 
-### 3. Recovery server function — `src/lib/account-recovery.functions.ts`
-- Public `createServerFn` (no auth middleware) that:
-  - Rate-limits per identifier (1/60s, 5/h) and per IP (10/h) using a new `recovery_rate_limits` table.
-  - Looks up the user via `supabaseAdmin.auth.admin` + `app_members` / `clients` / `coaches` for verified phone.
-  - Determines verified email and verified phone for the account.
-  - **Email path**: `supabaseAdmin.auth.resetPasswordForEmail(email, { redirectTo: PROD_URL + '/reset-password' })`. This flows through the existing `/lovable/email/auth/webhook` → `RecoveryEmail` template → email queue. Subject already configurable; we'll set it to "Reset Your JF Effect Password".
-  - **SMS path**: mint a 32-byte random token, store SHA-256 hash + `user_id` + `expires_at = now()+30m` + `attempts_remaining = 5` + `consumed_at = null` in `password_recovery_tokens`, send branded SMS via existing Twilio helper with link `https://jfeffect.com/reset-password?rt=<token>`.
-  - Per spec §5: if email entered → email + SMS-if-verified-phone; if phone entered → SMS + email-if-verified-email; never to unverified methods; independent try/catch per channel.
-  - All link URLs hard-coded to the production custom domain (`https://jfeffect.com`) — never preview/localhost.
-  - Honors existing Dry Run / notification allowlist gate already used by `sms_log`/`jf_notification_attempts`.
+### 2. Fix Goals & Setup save/finish
+- **`src/lib/client-goals/schema.ts`** — make array columns `.nullable().optional()` (`available_weekdays`, `training_styles`, `equipment`, `nutrition_challenges`); accept `equipment_by_location: …nullable()`. `final_notes` already `.trim().nullable().optional()` — keep, ensure empty string → `null` before send.
+- **`src/components/client-goals/GoalsSetupFlow.tsx`** —
+  - Only send a clean whitelist of editable fields (drop `id`, `client_id`, timestamps, audit fields).
+  - Trim `final_notes`, `goal_target`, `injuries_details`, `food_restrictions_details`; coerce empty → `null`.
+  - Wrap `finish()` in try/catch; on error keep all answers, re-enable button, show retry / save-later / contact-coach actions.
+  - Disable Finish while pending; ignore double taps (mutation `isPending` guard already there — also add `idempotencyKey` not needed since upsert by `client_id`).
+  - On success: invalidate gate queries, close, toast "Setup complete — you're ready to go", redirect to Workouts if assigned else Home (caller-provided `onComplete`).
+- **`src/lib/client-goals/goals.functions.ts`** — sanitize patch server-side too (whitelist), log raw error server-side, return a safe message. Keep `service_role` upsert.
 
-### 4. Reset password page updates — `src/routes/reset-password.tsx`
-- Detect `?rt=<token>` query param (SMS path) in addition to the existing Supabase recovery hash flow.
-- For `rt` path: call new `validateRecoveryToken({ token })` server fn (returns `{ valid, expired, consumed }`). On submit, call `consumeRecoveryToken({ token, newPassword })` which:
-  - Re-hashes and looks up token, atomically marks `consumed_at`, decrements `attempts_remaining`.
-  - Uses `supabaseAdmin.auth.admin.updateUserById(user_id, { password })`.
-  - Calls `supabaseAdmin.auth.admin.signOut(user_id, 'global')` to revoke other sessions.
-  - Sends "password changed" confirmation to both verified channels.
-- Real-time password rule checklist (≥10, upper, lower, digit, special), show/hide toggle, "Update Password" disabled until valid+matching.
-- Expired/invalid token state shows the spec's message with a "Send a New Recovery Link" button → `/recover`.
+### 3. Convert account gates to soft Home banners (the "never trap" change)
+Replace the four blocking wrappers in `src/routes/_authenticated/portal/route.tsx` with a single non-blocking `<SetupChecklistBanner />` rendered on Home:
 
-### 5. Admin-initiated reset
-- Reusable `<SendPasswordResetDialog>` component added to client/member/coach/admin profile screens.
-- Shows masked destinations (`j***@example.com`, `***-***-1234`), radio for Email / SMS / Both.
-- Calls new `adminSendPasswordReset` server fn (requires `requireSupabaseAuth` + admin role check) that performs the same dispatch as the public flow but bypasses rate limits, attaches `initiated_by_admin_id` to the audit record.
-- Renders delivery status badges (Email Sent / SMS Sent / Partially Delivered / Delivery Failed / Rate Limited) sourced from a new `password_reset_events` table.
+- `ClientProfilePictureGate` → remove gate; surface as checklist item ("Add a profile photo") and a small badge on Account.
+- `ClientBasicInfoGate` → remove gate; checklist item ("Confirm basic info") linking to Account.
+- `ClientTrainingScheduleGate` → remove gate; checklist item.
+- `ClientGoalsSetupGate` → remove gate; checklist item with progress ("5 of 7 steps complete"), opens `/portal/goals-setup`.
 
-### 6. Audit logging
-- New `password_reset_events` table records every request, attempt, success, failure with: actor (self / admin id), target user id, channel, masked destination, outcome, timestamp, IP. Never stores tokens or passwords. Surfaces in admin UI and in `admin_audit_log` via trigger.
+New file `src/components/portal/setup-checklist-banner.tsx`:
+- Card on Home only (not other routes).
+- Shows items with status `Not Started | In Progress | Completed | Save Failed`.
+- Buttons: **Continue Setup**, **Remind Me Later** (persists 24h dismiss in `localStorage` per item: `jf:setup-snooze:<key>`).
+- Once all complete → banner hidden permanently.
 
-### 7. Account Settings — "Login & Security"
-- New section component under the existing member/client account settings tree:
-  - Change Password (supabase updateUser w/ current password reauth).
-  - Recovery Email / Recovery Mobile with verified badge + "Send verification" actions (use existing email + Twilio verify flows).
-  - Last password change timestamp (from `password_reset_events`).
-  - "Sign Out of All Devices" → `supabase.auth.signOut({ scope: 'global' })`.
+Removed `<ClientGoalsSetupGate>` etc. from the layout — keep their underlying queries reusable by the banner. Files kept but no longer wrap `<Outlet />`; can be deleted in a follow-up.
 
-## Database changes (single migration)
+### 4. Soften the other auto-popups (audit table)
+| Popup | Today | After |
+|---|---|---|
+| Goals & Setup | Hard lock | Soft Home card + `/portal/goals-setup` page (already exists) |
+| Profile Picture | Hard lock | Checklist item |
+| Basic Info | Hard lock | Checklist item |
+| Training Schedule | Hard lock | Checklist item |
+| Home Screen Setup | Auto-modal | Already dismissable — verify Skip is visible; do not re-open every nav |
+| Form popups (`FormPopupGate`) | Auto-modal | Keep, but add **Remind me later** (24h) and never re-open mid-workout route (`/portal/workouts/*`) |
+| Legal Acceptance | Modal | Action-gate only — allow Home/Messages/Account/Sign Out; restrict the specific paid action. Out of scope to redesign deeply; ensure portal not blocked, document follow-up. |
+| Broadcast / Event / Birthday popups | Auto-modal | Verify each has a visible Close and per-user dismiss; no change to logic this pass. |
 
-```text
-public.password_recovery_tokens
-  id uuid pk, user_id uuid (auth.users), token_hash text, channel text,
-  expires_at timestamptz, consumed_at timestamptz, attempts_remaining int,
-  created_ip inet, created_at timestamptz
-  index (token_hash), index (user_id, created_at)
-  RLS: deny all to anon/authenticated; service_role only.
+### 5. Acceptance checks (Playwright evidence)
+- Finish works with empty Final Notes.
+- Finish works with "No".
+- Failed save preserves answers + offers Retry / Continue Later / Contact Coach + portal stays reachable.
+- Save & Continue Later closes form and returns to Home; resume from same step.
+- With incomplete Goals & Setup, screenshots prove Workouts / Messages / Account / Sign Out are reachable.
+- Refresh + sign-out/sign-in: completion persists.
+- DB query confirms one `client_goals_setup` row per client (no duplicates) after double-tap Finish.
 
-public.recovery_rate_limits
-  identifier text (lowercased email/phone/ip), kind text, window_start timestamptz, count int
-  unique (identifier, kind, window_start)
-  RLS: service_role only.
+## Files I will touch
 
-public.password_reset_events
-  id uuid pk, target_user_id uuid, initiated_by uuid null, actor_kind text,
-  channel text, destination_masked text, outcome text, error_code text null,
-  ip inet, user_agent text, created_at timestamptz
-  RLS: admin read via has_role('admin'); insert service_role only.
-```
+Create:
+- `src/components/portal/setup-checklist-banner.tsx`
 
-All three tables get the standard `GRANT` block + RLS + policies per platform rules.
+Edit:
+- `src/lib/client-goals/schema.ts` — nullable array fields
+- `src/lib/client-goals/goals.functions.ts` — whitelist + safer error
+- `src/components/client-goals/GoalsSetupFlow.tsx` — clean patch, safe finish, redirect, retry UI
+- `src/routes/_authenticated/portal/route.tsx` — remove 4 hard-lock wrappers, mount banner on Home only
+- `src/routes/_authenticated/portal/index.tsx` — render `<SetupChecklistBanner />`
+- `src/components/form-popup-gate.tsx` — add Remind Me Later (24h) + route-aware suppression on workout routes
 
-## Security guarantees
+Leave intact: legal acceptance logic, agreements tables, payments, all DB schema (no migrations needed — schema fix is in zod/code only), notifications, design system, routes, role permissions.
 
-- Tokens: 32 random bytes (`crypto.randomBytes`), only SHA-256 hash stored, single-use, 30-min TTL, max 5 redemption attempts.
-- Neutral response on the recovery endpoint regardless of account existence.
-- Reset link domain is always the production custom domain; constant in `src/lib/account-recovery.constants.ts`.
-- Server-side validation only; no token state in the URL beyond the opaque random string.
-- Admin endpoint requires `has_role(auth.uid(), 'admin')`; admins never see tokens, current passwords, or temp passwords.
-- All writes via `supabaseAdmin` inside server fn handlers (loaded with `await import`), respecting RLS on app tables.
+## Risks / decisions to confirm
 
-## File map
+1. **Legal Acceptance** — brief says "do not blindly make legal optional." I'll leave the existing legal gate alone for now and only note it in the audit; if you want action-level gating refactored, that's a separate pass.
+2. **Profile picture / basic info / training schedule** — fully soft-gating these means a new member can reach Workouts before filling them in. Confirm that's acceptable (the brief explicitly says yes — "always be able to access workouts").
 
-```text
-supabase/migrations/<ts>_password_recovery.sql          (new)
-src/lib/account-recovery.constants.ts                   (new)
-src/lib/account-recovery.functions.ts                   (new — public + admin server fns)
-src/lib/account-recovery.server.ts                      (new — hashing, masking, rate-limit helpers)
-src/routes/recover.tsx                                   (new public route)
-src/routes/reset-password.tsx                            (extend for ?rt= token path)
-src/routes/auth.tsx                                      (add forgot-password link)
-src/components/account/send-password-reset-dialog.tsx    (new)
-src/components/account/login-security-section.tsx        (new)
-src/lib/email-templates/recovery.tsx                     (subject update only)
-src/lib/email-templates/password-changed.tsx             (new confirmation template)
-src/routes/_authenticated/admin/clients.$id.tsx          (mount admin reset dialog)
-src/routes/_authenticated/admin/coaches.$id.tsx          (mount admin reset dialog)
-src/routes/_authenticated/admin/members.$id.tsx          (mount admin reset dialog)
-src/routes/_authenticated/m/account.tsx                  (mount Login & Security section)
-```
-
-## Out of scope / explicit non-goals
-
-- No new identity provider, no parallel password store.
-- No changes to existing OAuth (Google) flows.
-- No bulk recovery tooling.
-- No SMS opt-in UX changes — we reuse the existing verified-phone state.
-
-## Verification before marking complete
-
-1. Migration applied; new tables visible with correct RLS + GRANTs.
-2. `/recover` accepts email and phone, always returns the neutral confirmation, rate limits trigger correctly.
-3. Email reset arrives in queue with production link; SMS reset arrives with `?rt=` link; both land on `/reset-password` and successfully change the password.
-4. Used / expired / over-attempted tokens show the invalid-link UI.
-5. Other sessions are revoked after success; confirmation email + SMS dispatched.
-6. Admin dialog dispatches correctly, shows delivery status, writes audit row, never exposes token.
-7. Account Settings → Login & Security renders for member/client and respects verification state.
-8. Dry Run / allowlist gate suppresses real sends in non-prod (verified via existing notification gate test pattern).
+Reply **Approve** to implement, or tell me what to change.
