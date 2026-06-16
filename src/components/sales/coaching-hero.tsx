@@ -1,30 +1,25 @@
 import { Button } from "@/components/ui/button";
 import type { ReactNode } from "react";
+import { MessageCircle, Dumbbell, ClipboardCheck, TrendingUp } from "lucide-react";
 
 export function CoachingHero({
-  eyebrow, headline, sub, primary, secondary, image,
+  eyebrow, headline, sub, primary, secondary,
 }: {
   eyebrow?: string;
   headline: string;
   sub: string;
   primary: ReactNode;
   secondary?: ReactNode;
+  /** @deprecated kept for backward compatibility — no longer rendered */
   image?: string | null;
 }) {
   return (
     <section className="relative isolate overflow-hidden border-b border-white/10 bg-[#0a0a0a] text-white">
-      {image && (
-        <div className="pointer-events-none absolute inset-0 -z-10">
-          <img
-            src={image}
-            alt=""
-            loading="eager"
-            className="absolute inset-0 h-full w-full object-cover object-[70%_center] opacity-70 lg:opacity-90"
-          />
-          <div className="absolute inset-0 bg-[linear-gradient(90deg,#0a0a0a_0%,#0a0a0a_38%,rgba(10,10,10,0.85)_55%,rgba(10,10,10,0.35)_80%,rgba(10,10,10,0.15)_100%)] lg:bg-[linear-gradient(90deg,#0a0a0a_0%,#0a0a0a_28%,rgba(10,10,10,0.78)_48%,rgba(10,10,10,0.25)_75%,rgba(10,10,10,0)_100%)]" />
-          <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_18%_30%,_color-mix(in_oklab,var(--primary)_22%,transparent),transparent_55%)]" />
-        </div>
-      )}
+      <div className="pointer-events-none absolute inset-0 -z-10">
+        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_18%_30%,_color-mix(in_oklab,var(--primary)_22%,transparent),transparent_55%)]" />
+        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_85%_75%,_color-mix(in_oklab,var(--primary)_14%,transparent),transparent_60%)]" />
+        <div className="absolute inset-0 opacity-[0.04] mix-blend-overlay [background-image:radial-gradient(circle_at_1px_1px,#fff_1px,transparent_0)] [background-size:3px_3px]" />
+      </div>
 
       <div className="container mx-auto grid gap-12 px-4 py-20 md:py-28 lg:grid-cols-[1.05fr_1fr] lg:items-center">
         <div className="relative">
@@ -48,36 +43,78 @@ export function CoachingHero({
           </p>
         </div>
 
-        <div className="hidden lg:block" />
+        <div className="relative mx-auto w-full max-w-[420px] lg:max-w-none">
+          <CoachingAppPreview />
+        </div>
       </div>
+    </section>
+  );
+}
 
-      {!image && (
-        <div className="container mx-auto -mt-16 px-4 pb-16 md:pb-24">
-          <div className="relative mx-auto max-w-md">
-            <div className="relative">
-              <div className="rounded-2xl border border-white/10 bg-white/5 p-5 shadow-2xl shadow-primary/10 backdrop-blur">
-                <div className="flex items-start gap-3">
-                  <div className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-gradient-to-br from-primary to-orange-500 text-sm font-black text-primary-foreground">
-                    JF
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2">
-                      <div className="text-sm font-bold">Your coach</div>
-                      <div className="text-[10px] uppercase tracking-widest text-primary">online</div>
-                    </div>
-                    <div className="mt-2 rounded-2xl rounded-tl-sm bg-primary/15 px-3 py-2 text-sm leading-relaxed">
-                      Reviewed your check-in — pushing top set on Wednesday up to a 7 RPE.
-                      Calories holding for this week.
-                    </div>
-                    <div className="mt-1 text-[10px] text-white/55">Adjusts your plan weekly</div>
-                  </div>
-                </div>
+function CoachingAppPreview() {
+  return (
+    <div className="relative mx-auto aspect-[9/19] w-[260px] rounded-[2.4rem] border border-white/[0.08] bg-gradient-to-b from-[#1A1E27] via-[#0d0f13] to-[#000] p-[6px] shadow-[0_40px_90px_-20px_rgba(0,0,0,0.85),0_0_0_1px_rgba(255,255,255,0.04)_inset] md:w-[300px]">
+      <div className="absolute inset-[6px] rounded-[2.05rem] ring-1 ring-white/[0.04]" />
+      <div className="absolute left-1/2 top-[10px] z-10 h-5 w-24 -translate-x-1/2 rounded-b-2xl bg-black" />
+      <div className="relative h-full w-full overflow-hidden rounded-[2rem] bg-[#0A0B0E] text-white">
+        <div className="flex h-full w-full flex-col">
+          <div className="px-4 pb-2 pt-8">
+            <div className="text-[10px] font-bold uppercase tracking-widest text-[#7E848F]">JF Effect · Coaching</div>
+            <div className="mt-1 text-lg font-black leading-tight">Welcome back</div>
+            <div className="text-[11px] text-[#B0B4BE]">Block 2 · Week 3</div>
+          </div>
+
+          <div className="mx-3 mt-2 rounded-2xl border border-primary/40 bg-gradient-to-br from-primary/25 to-primary/5 p-3">
+            <div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest text-primary">
+              <MessageCircle className="h-3 w-3" /> Message from Jared
+            </div>
+            <div className="mt-1.5 text-[11px] leading-snug text-white/90">
+              Reviewed your check-in — pushing top set Wed to RPE 7. Calories hold.
+            </div>
+          </div>
+
+          <div className="mx-3 mt-3 rounded-2xl border border-white/[0.08] bg-[#11141B] p-3">
+            <div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest text-[#7E848F]">
+              <Dumbbell className="h-3 w-3 text-primary" /> Today
+            </div>
+            <div className="mt-1 text-[13px] font-bold">Upper · Push focus</div>
+            <div className="mt-0.5 text-[10px] text-[#B0B4BE]">5 lifts · 42 min · RPE 7</div>
+            <div className="mt-2 flex gap-1">
+              <span className="rounded-full bg-primary/20 px-2 py-0.5 text-[9px] font-semibold text-primary">Bench</span>
+              <span className="rounded-full bg-white/10 px-2 py-0.5 text-[9px] font-semibold text-white/85">OHP</span>
+              <span className="rounded-full bg-white/10 px-2 py-0.5 text-[9px] font-semibold text-white/85">Dips</span>
+            </div>
+          </div>
+
+          <div className="mx-3 mt-3 grid grid-cols-2 gap-2">
+            <div className="rounded-2xl border border-white/[0.08] bg-[#11141B] p-2.5">
+              <div className="flex items-center gap-1 text-[9px] font-bold uppercase tracking-widest text-[#7E848F]">
+                <ClipboardCheck className="h-3 w-3 text-primary" /> Check-in
+              </div>
+              <div className="mt-1 text-[11px] font-bold">Due Sunday</div>
+              <div className="text-[9px] text-[#B0B4BE]">3 photos · weight</div>
+            </div>
+            <div className="rounded-2xl border border-white/[0.08] bg-[#11141B] p-2.5">
+              <div className="flex items-center gap-1 text-[9px] font-bold uppercase tracking-widest text-[#7E848F]">
+                <TrendingUp className="h-3 w-3 text-primary" /> Bench
+              </div>
+              <div className="mt-1 text-[11px] font-bold">+12 lb</div>
+              <div className="flex h-5 items-end gap-0.5">
+                {[35, 48, 42, 58, 64, 60, 72].map((h, i) => (
+                  <div key={i} className="flex-1 rounded-sm bg-gradient-to-t from-primary/40 to-primary" style={{ height: `${h}%` }} />
+                ))}
               </div>
             </div>
           </div>
+
+          <div className="mt-auto mx-3 mb-4 mt-3 flex items-center justify-around rounded-2xl border border-white/[0.06] bg-[#0F1218] py-2">
+            {["Home", "Train", "Check-in", "Chat"].map((l, i) => (
+              <div key={l} className={`text-[9px] font-semibold ${i === 1 ? "text-primary" : "text-[#7E848F]"}`}>{l}</div>
+            ))}
+          </div>
         </div>
-      )}
-    </section>
+      </div>
+    </div>
   );
 }
 
