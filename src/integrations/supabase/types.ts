@@ -457,6 +457,7 @@ export type Database = {
           last_invoice_status: string | null
           last_restart_attempt_at: string | null
           last_setup_error: string | null
+          last_setup_reminder_at: string | null
           last_signed_in_at: string | null
           messaging_permission: string
           notifications_status: string | null
@@ -465,6 +466,7 @@ export type Database = {
           payment_recovered_at: string | null
           phone: string | null
           profile_picture_required: boolean
+          setup_browser_only: boolean
           setup_completed_at: string | null
           setup_dismissed_until: string | null
           setup_token: string | null
@@ -526,6 +528,7 @@ export type Database = {
           last_invoice_status?: string | null
           last_restart_attempt_at?: string | null
           last_setup_error?: string | null
+          last_setup_reminder_at?: string | null
           last_signed_in_at?: string | null
           messaging_permission?: string
           notifications_status?: string | null
@@ -534,6 +537,7 @@ export type Database = {
           payment_recovered_at?: string | null
           phone?: string | null
           profile_picture_required?: boolean
+          setup_browser_only?: boolean
           setup_completed_at?: string | null
           setup_dismissed_until?: string | null
           setup_token?: string | null
@@ -595,6 +599,7 @@ export type Database = {
           last_invoice_status?: string | null
           last_restart_attempt_at?: string | null
           last_setup_error?: string | null
+          last_setup_reminder_at?: string | null
           last_signed_in_at?: string | null
           messaging_permission?: string
           notifications_status?: string | null
@@ -603,6 +608,7 @@ export type Database = {
           payment_recovered_at?: string | null
           phone?: string | null
           profile_picture_required?: boolean
+          setup_browser_only?: boolean
           setup_completed_at?: string | null
           setup_dismissed_until?: string | null
           setup_token?: string | null
