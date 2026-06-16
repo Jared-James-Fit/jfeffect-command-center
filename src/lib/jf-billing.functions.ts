@@ -424,6 +424,27 @@ export const createJfSignupCheckout = createServerFn({ method: "POST" })
       ip_address: ipAddress,
     });
 
+    // Attribution row for applied codes (one row per checkout session, unique).
+    // Webhook later fills in subscription_id, customer_id, and final amounts.
+    if (appliedDiscountRows.length > 0) {
+      const promoRow = appliedDiscountRows.find((r) => r.category === "promotion");
+      const referralRow = appliedDiscountRows.find((r) => r.category === "ambassador" || r.category === "client_referral");
+      try {
+        await supabaseAdmin.from("discount_code_redemptions").insert({
+          customer_email: emailLc,
+          promo_code_id: promoRow?.id ?? null,
+          referral_code_id: referralRow?.id ?? null,
+          checkout_session_id: session.id,
+          mode,
+          subscription_status: "pending",
+          stripe_sync_status: "session_created",
+          raw: { applied: appliedDiscountRows.map((r) => ({ id: r.id, code: r.public_code, category: r.category })) },
+        });
+      } catch (e: any) {
+        console.error("[jf-checkout] redemption insert failed", e?.message ?? e);
+      }
+    }
+
     return { url: session.url as string, used_trial: useTrial };
   });
 
