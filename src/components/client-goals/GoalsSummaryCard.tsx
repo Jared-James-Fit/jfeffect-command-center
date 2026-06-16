@@ -1,9 +1,11 @@
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { AlertTriangle, CheckCircle2 } from "lucide-react";
+import { AlertTriangle, CheckCircle2, ChevronDown, ChevronRight } from "lucide-react";
 import { WEEKDAY_LABELS, isGoalsSetupComplete, type ClientGoalsSetupRow } from "@/lib/client-goals/schema";
+import { getEquipmentSummary } from "@/lib/client-goals/equipment-flow";
 
 function Row({ label, value, warn }: { label: string; value: React.ReactNode; warn?: boolean }) {
   return (
@@ -66,21 +68,7 @@ export function GoalsSummaryCard({ clientId }: { clientId: string }) {
 
   const goal = row.main_goal === "Other" ? (row.main_goal_other || "Other") : row.main_goal;
   const days = (row.available_weekdays ?? []).map((d) => WEEKDAY_LABELS[d as keyof typeof WEEKDAY_LABELS] ?? d);
-  const equipDisplay = (() => {
-    const byLoc = row.equipment_by_location ?? {};
-    const locKeys = Object.keys(byLoc);
-    if (locKeys.length === 0) return chips(row.equipment);
-    return (
-      <div className="space-y-1">
-        {locKeys.map((k) => (
-          <div key={k}>
-            <div className="text-[10px] uppercase text-muted-foreground">{k}</div>
-            {chips(byLoc[k]) ?? <div className="text-xs text-muted-foreground">—</div>}
-          </div>
-        ))}
-      </div>
-    );
-  })();
+  const equipDisplay = <EquipmentSummary row={row} />;
 
   return (
     <Card className="p-4">
@@ -107,7 +95,6 @@ export function GoalsSummaryCard({ clientId }: { clientId: string }) {
         <Row label="Workout length" value={row.workout_length_minutes ? `${row.workout_length_minutes} min` : null} />
         <Row label="Experience" value={row.training_experience} />
         <Row label="Training style" value={chips(row.training_styles)} />
-        <Row label="Training location" value={row.training_location} />
         <Row label="Equipment access" value={equipDisplay} />
         <Row label="Nutrition goal" value={row.nutrition_goal} />
         <Row label="Nutrition preference" value={row.nutrition_preference} />
