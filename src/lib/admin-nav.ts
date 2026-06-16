@@ -33,6 +33,7 @@ export const adminNav: NavItem[] = [
   { to: "/admin/call-access", label: "Call Access", icon: Phone, group: "Communication" },
   { to: "/admin/settings/sms", label: "SMS Access", icon: MessageCircle, group: "Communication" },
   { to: "/admin/settings/chat", label: "Chat Settings", icon: MessageCircle, group: "Communication" },
+  { to: "/admin/settings/notifications/coaching-applications", label: "Application Alerts", icon: MessageCircle, group: "Communication", keywords: ["application","coaching alerts","notifications","yannick","recipient"] },
   { to: "/admin/chat-gifs", label: "Chat GIF Library", icon: Sparkles, group: "Communication" },
   { to: "/admin/chat-sounds", label: "Chat Sound Library", icon: Sparkles, group: "Communication" },
   // MEMBERSHIP
