@@ -1,22 +1,14 @@
 /**
- * Shared program facet derivation.
+ * Shared facet derivation for programs (member_plans + pl_templates).
  *
- * Phase 1 of the Program Library redesign: we don't add new columns yet.
- * Instead we derive a normalized facet shape from the existing
- * `pl_templates` / `member_plans` rows (mostly via `tags[]` plus the
- * existing structured columns). This is the single source of truth used
- * by category filtering, the filters drawer, and the recommendation
- * engine across member, admin, and coach surfaces.
+ * Neither table has explicit columns for experience level, equipment list,
+ * training location, or workout-length bucket. This module derives a
+ * normalized `ProgramFacets` shape from existing columns plus a tolerant
+ * `tags[]` parse so the rest of the UI (categories, filters, recommender)
+ * can stay table-agnostic.
+ *
+ * No DB schema change; phase 6 may add nullable overrides on pl_templates.
  */
-
-export type ProgramLevel =
-  | "beginner"
-  | "novice"
-  | "intermediate"
-  | "advanced"
-  | "elite";
-
-export type ProgramLocation = "gym" | "home" | "either";
 
 export type ProgramGoal =
   | "fat_loss"
@@ -27,32 +19,29 @@ export type ProgramGoal =
   | "powerbuilding"
   | "general";
 
-export type ProgramStyle =
-  | "powerlifting"
-  | "bodybuilding"
-  | "powerbuilding"
-  | "hypertrophy"
-  | "strength"
-  | "fat_loss"
-  | "lifestyle"
-  | "mobility"
-  | "hybrid"
-  | "custom";
+export type ProgramLevel = "beginner" | "novice" | "intermediate" | "advanced" | "elite";
+
+export type ProgramLocation = "gym" | "home" | "limited" | "mixed";
+
+export type ProgramLengthBucket = "short" | "medium" | "long";
 
 export interface ProgramFacets {
   goals: ProgramGoal[];
-  style: ProgramStyle | null;
+  style: string | null;
   level: ProgramLevel | null;
   daysPerWeek: number | null;
   weeks: number | null;
   lengthMin: number | null;
-  location: ProgramLocation;
+  lengthBucket: ProgramLengthBucket | null;
+  location: ProgramLocation | null;
   equipmentNeeded: string[];
   audienceTags: string[];
   rawTags: string[];
 }
 
-export interface FacetSource {
+/** Loose row shape covering the union of fields read from
+ * member_plans (Membership Library) and pl_templates (admin/coach builder). */
+export interface ProgramRowLike {
   name?: string | null;
   public_title?: string | null;
   description?: string | null;
@@ -62,172 +51,163 @@ export interface FacetSource {
   goal?: string | null;
   weeks?: number | null;
   days_per_week?: number | null;
-  est_duration_min?: number | null;
   est_minutes_per_workout?: number | null;
-  tags?: string[] | null;
+  est_duration_min?: number | null;
+  equipment_needed?: string[] | string | null;
+  tags?: string[] | string | null;
 }
 
-const LEVEL_PATTERNS: Array<[ProgramLevel, RegExp]> = [
-  ["elite", /\belite\b/],
-  ["advanced", /\badvanced\b/],
-  ["intermediate", /\bintermediate\b/],
-  ["novice", /\bnovice\b/],
-  ["beginner", /\bbeginner\b|\bbeginners?\b|\bfoundation\b/],
-];
-
-const STYLE_PATTERNS: Array<[ProgramStyle, RegExp]> = [
-  ["powerbuilding", /power[\s-]?build/],
-  ["powerlifting", /power[\s-]?lift/],
-  ["bodybuilding", /body[\s-]?build|hypertrophy/],
-  ["hypertrophy", /hypertrophy/],
-  ["strength", /\bstrength\b/],
-  ["fat_loss", /fat[\s-]?loss|cut\b|conditioning/],
-  ["mobility", /mobility|flexibility/],
-  ["lifestyle", /lifestyle|general fitness/],
-  ["hybrid", /hybrid/],
-];
-
-const EQUIPMENT_KEYWORDS = [
-  "barbell",
-  "dumbbell",
-  "kettlebell",
-  "cable",
-  "machine",
-  "smith",
-  "rack",
-  "bench",
-  "band",
-  "pull-up",
-  "plates",
-  "specialty bar",
-];
-
-function lc(value: string | null | undefined): string {
-  return (value ?? "").toString().trim().toLowerCase();
-}
-
-function uniq<T>(values: T[]): T[] {
-  return Array.from(new Set(values));
-}
-
-function detectLevel(haystack: string): ProgramLevel | null {
-  for (const [level, re] of LEVEL_PATTERNS) {
-    if (re.test(haystack)) return level;
+function toStrArray(v: unknown): string[] {
+  if (!v) return [];
+  if (Array.isArray(v)) return v.map((s) => String(s)).filter(Boolean);
+  if (typeof v === "string") {
+    const trimmed = v.trim();
+    if (!trimmed) return [];
+    if (trimmed.startsWith("[")) {
+      try {
+        const arr = JSON.parse(trimmed);
+        if (Array.isArray(arr)) return arr.map((s) => String(s)).filter(Boolean);
+      } catch { /* ignore */ }
+    }
+    return trimmed.split(/[,;]+/).map((s) => s.trim()).filter(Boolean);
   }
+  return [];
+}
+
+function norm(s: string): string {
+  return s.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+}
+
+function parseLevel(tags: string[], difficulty?: string | null): ProgramLevel | null {
+  const hay = [...tags, difficulty ?? ""].map(norm).join(" ");
+  if (/\belite\b/.test(hay)) return "elite";
+  if (/\badvanced\b/.test(hay)) return "advanced";
+  if (/\bintermediate\b/.test(hay)) return "intermediate";
+  if (/\bnovice\b/.test(hay)) return "novice";
+  if (/\bbeginner\b/.test(hay) || /\bnew(?:bie)?\b/.test(hay)) return "beginner";
   return null;
 }
 
-function detectStyle(haystack: string): ProgramStyle | null {
-  for (const [style, re] of STYLE_PATTERNS) {
-    if (re.test(haystack)) return style;
-  }
-  return null;
-}
-
-function detectGoals(haystack: string, style: ProgramStyle | null): ProgramGoal[] {
-  const goals: ProgramGoal[] = [];
-  if (/glute/.test(haystack)) goals.push("glutes");
-  if (/fat[\s-]?loss|conditioning|cut\b/.test(haystack)) goals.push("fat_loss");
-  if (/hypertrophy|muscle|body[\s-]?build/.test(haystack)) goals.push("muscle");
-  if (/power[\s-]?lift|meet prep|competition prep/.test(haystack)) goals.push("powerlifting");
-  if (/power[\s-]?build/.test(haystack)) goals.push("powerbuilding");
-  if (/\bstrength\b/.test(haystack)) goals.push("strength");
-  if (goals.length === 0 && style) {
-    if (style === "bodybuilding" || style === "hypertrophy") goals.push("muscle");
-    else if (style === "powerlifting") goals.push("powerlifting");
-    else if (style === "powerbuilding") goals.push("powerbuilding");
-    else if (style === "strength") goals.push("strength");
-    else if (style === "fat_loss") goals.push("fat_loss");
-  }
-  if (goals.length === 0) goals.push("general");
-  return uniq(goals);
-}
-
-function detectLocation(haystack: string): ProgramLocation {
-  if (/\bhome\b|apartment|garage/.test(haystack)) return "home";
-  return "gym";
-}
-
-function detectEquipment(haystack: string): string[] {
-  return EQUIPMENT_KEYWORDS.filter((kw) => haystack.includes(kw));
-}
-
-function detectAudience(tags: string[]): string[] {
-  return tags.filter((t) =>
-    /female|male|66kg|74kg|59kg|93kg|custom program|meet prep|competition/i.test(t),
-  );
-}
-
-export function deriveFacets(row: FacetSource): ProgramFacets {
-  const tags = (row.tags ?? []).map((t) => (t ?? "").toString());
-  const rawTags = tags.map(lc);
-  const text = [
-    row.name,
-    row.public_title,
-    row.training_style,
-    row.training_focus,
-    row.goal,
-    row.difficulty,
+function parseGoals(row: ProgramRowLike, tags: string[]): ProgramGoal[] {
+  const out = new Set<ProgramGoal>();
+  const hay = [
+    row.goal ?? "",
+    row.training_focus ?? "",
+    row.training_style ?? "",
+    row.name ?? "",
+    row.public_title ?? "",
     ...tags,
-  ]
-    .map(lc)
-    .filter(Boolean)
-    .join(" | ");
+  ].map(norm).join(" ");
 
-  const level =
-    detectLevel(text) ??
-    (row.difficulty ? detectLevel(lc(row.difficulty)) : null);
+  if (/\bglute(s)?\b/.test(hay) || /\bbooty\b/.test(hay)) out.add("glutes");
+  if (/\bfat\s*loss\b/.test(hay) || /\bcut(ting)?\b/.test(hay) || /\bweight\s*loss\b/.test(hay)) out.add("fat_loss");
+  if (/\bpowerlift(ing)?\b/.test(hay)) out.add("powerlifting");
+  if (/\bpowerbuild(ing)?\b/.test(hay)) out.add("powerbuilding");
+  if (/\bstrength\b/.test(hay)) out.add("strength");
+  if (/\bhypertrophy\b/.test(hay) || /\bmuscle\b/.test(hay) || /\bbuild\b/.test(hay) || /\bsize\b/.test(hay)) out.add("muscle");
+  if (out.size === 0) out.add("general");
+  return [...out];
+}
 
-  const style = detectStyle(text) ?? ((lc(row.training_style) || null) as ProgramStyle | null);
-  const goals = detectGoals(text, style);
-  const location = detectLocation(text);
-  const equipmentNeeded = detectEquipment(text);
-  const audienceTags = detectAudience(tags);
+function parseLocation(tags: string[], equipment: string[]): ProgramLocation | null {
+  const hay = tags.map(norm).join(" ");
+  if (/\bhome\b/.test(hay)) return "home";
+  if (/\blimited\b/.test(hay) || /\bminimal\b/.test(hay) || /\bbodyweight\b/.test(hay)) return "limited";
+  if (/\bgym\b/.test(hay) || /\bcommercial\b/.test(hay) || /\bpowerlifting\b/.test(hay)) return "gym";
+  // Equipment-based fallback
+  const eqHay = equipment.map(norm).join(" ");
+  if (/\brack\b|\bplatform\b|\bcable\b|\bmachine\b/.test(eqHay)) return "gym";
+  if (equipment.length > 0 && equipment.length <= 3) return "limited";
+  return null;
+}
 
-  const lengthMin = row.est_duration_min ?? row.est_minutes_per_workout ?? null;
+function parseAudience(tags: string[]): string[] {
+  const known = ["female", "male", "women", "men", "youth", "senior", "athlete", "pre natal", "post natal"];
+  const out: string[] = [];
+  for (const t of tags) {
+    const n = norm(t);
+    if (known.some((k) => n.includes(k))) out.push(t);
+  }
+  return out;
+}
 
+function bucketLength(min: number | null | undefined): ProgramLengthBucket | null {
+  if (!min || min <= 0) return null;
+  if (min <= 40) return "short";
+  if (min <= 70) return "medium";
+  return "long";
+}
+
+export function deriveFacets(row: ProgramRowLike): ProgramFacets {
+  const tags = toStrArray(row.tags);
+  const equipment = toStrArray(row.equipment_needed);
+  const lengthMin = row.est_minutes_per_workout ?? row.est_duration_min ?? null;
   return {
-    goals,
-    style: style ?? null,
-    level,
+    goals: parseGoals(row, tags),
+    style: row.training_style ?? row.training_focus ?? null,
+    level: parseLevel(tags, row.difficulty),
     daysPerWeek: row.days_per_week ?? null,
     weeks: row.weeks ?? null,
     lengthMin,
-    location,
-    equipmentNeeded,
-    audienceTags,
-    rawTags,
+    lengthBucket: bucketLength(lengthMin),
+    location: parseLocation(tags, equipment),
+    equipmentNeeded: equipment,
+    audienceTags: parseAudience(tags),
+    rawTags: tags,
   };
 }
 
-export function facetChips(f: ProgramFacets): string[] {
-  const chips: string[] = [];
-  if (f.level) chips.push(capitalize(f.level));
-  if (f.daysPerWeek) chips.push(`${f.daysPerWeek} Days`);
-  if (f.location === "home") chips.push("Home");
-  else if (f.location === "gym") chips.push("Gym");
-  if (f.goals[0]) chips.push(goalLabel(f.goals[0]));
-  if (f.lengthMin) chips.push(`${f.lengthMin} min`);
-  if (f.weeks) chips.push(`${f.weeks} wk`);
-  return chips;
-}
+/** Alias kept for back-compat with earlier component imports. */
+export type FacetSource = ProgramRowLike;
+
+const GOAL_LABELS: Record<ProgramGoal, string> = {
+  fat_loss: "Fat Loss",
+  muscle: "Muscle",
+  glutes: "Glutes",
+  strength: "Strength",
+  powerlifting: "Powerlifting",
+  powerbuilding: "Powerbuilding",
+  general: "General",
+};
 
 export function goalLabel(g: ProgramGoal): string {
-  switch (g) {
-    case "fat_loss": return "Fat Loss";
-    case "muscle": return "Muscle Building";
-    case "glutes": return "Glute Focus";
-    case "strength": return "Strength";
-    case "powerlifting": return "Powerlifting";
-    case "powerbuilding": return "Powerbuilding";
-    default: return "General";
-  }
+  return GOAL_LABELS[g] ?? "General";
 }
 
-export function levelLabel(l: ProgramLevel | null): string {
-  return l ? capitalize(l) : "All Levels";
+const LEVEL_LABELS: Record<ProgramLevel, string> = {
+  beginner: "Beginner",
+  novice: "Novice",
+  intermediate: "Intermediate",
+  advanced: "Advanced",
+  elite: "Elite",
+};
+
+const LOCATION_LABELS: Record<ProgramLocation, string> = {
+  gym: "Gym",
+  home: "Home",
+  limited: "Limited equipment",
+  mixed: "Mixed",
+};
+
+const LENGTH_LABELS: Record<ProgramLengthBucket, string> = {
+  short: "≤40 min",
+  medium: "40–70 min",
+  long: ">70 min",
+};
+
+/**
+ * Short, human-readable chips for ProgramCard / picker rows. Order is
+ * level → days → location → primary goal → length → style, capped by caller.
+ */
+export function facetChips(f: ProgramFacets): string[] {
+  const out: string[] = [];
+  if (f.level) out.push(LEVEL_LABELS[f.level]);
+  if (f.daysPerWeek) out.push(`${f.daysPerWeek}d/wk`);
+  if (f.location) out.push(LOCATION_LABELS[f.location]);
+  const primary = f.goals.find((g) => g !== "general");
+  if (primary) out.push(goalLabel(primary));
+  if (f.lengthBucket) out.push(LENGTH_LABELS[f.lengthBucket]);
+  if (f.style && !out.some((c) => c.toLowerCase() === f.style!.toLowerCase())) out.push(f.style);
+  return out;
 }
 
-function capitalize(s: string): string {
-  return s.charAt(0).toUpperCase() + s.slice(1);
-}
