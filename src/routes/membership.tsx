@@ -276,7 +276,15 @@ function SignupJf() {
         <AppPreviewGrid
           title="Here's exactly what you get when you log in."
           sub="Previews are illustrations of the live app interface."
-          items={Array.isArray(s.app_previews) && s.app_previews.length > 0 ? s.app_previews : DEFAULT_APP_PREVIEWS}
+          items={(() => {
+            const cms = Array.isArray(s.app_previews) && s.app_previews.length > 0 ? s.app_previews : null;
+            if (!cms) return DEFAULT_APP_PREVIEWS;
+            // Backfill missing image URLs from the defaults so cards never render as bare placeholders.
+            return cms.map((it: any, i: number) => ({
+              ...it,
+              url: it?.url || DEFAULT_APP_PREVIEWS[i % DEFAULT_APP_PREVIEWS.length]?.url,
+            }));
+          })()}
         />
       </Reveal>
 
