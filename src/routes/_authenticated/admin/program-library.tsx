@@ -348,6 +348,8 @@ function TemplateCard({ tpl, onPreview, onAssign, onShare, onChanged }: { tpl: a
 
       <ProgramStatusBadge template={tpl} />
 
+      <MembershipLibraryBadge summary={shareSummary} />
+
       <div className="flex flex-wrap gap-1 text-[10px]">
         <Badge variant="outline">{TYPE_LABEL[tpl.template_type] ?? tpl.template_type}</Badge>
         <Badge variant="secondary">{STYLE_LABEL[tpl.training_style] ?? tpl.training_style}</Badge>
