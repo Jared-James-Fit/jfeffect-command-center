@@ -1,4 +1,4 @@
-import { useMemo, useState, useEffect } from "react";
+import { useMemo, useState } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { PageHeader } from "@/components/app-shell";
@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { BookOpen, ChefHat, Sparkles, Settings2, ChevronDown, Apple } from "lucide-react";
+import { BookOpen, ChefHat, Sparkles, Settings2, ChevronDown, Apple, SlidersHorizontal, X } from "lucide-react";
 import { listRecipesForViewer, type Recipe } from "@/lib/recipes";
 import { RECIPE_CATEGORIES, recipePreview } from "@/lib/recipe-format";
 import { supabase } from "@/integrations/supabase/client";
@@ -33,6 +33,28 @@ const RESTRICTION_OPTIONS = [
   { value: "dessert-free", label: "Skip desserts", excludeTags: ["dessert", "sweet", "cheat-meal"], requireTag: null },
 ];
 
+const GOAL_FILTERS = [
+  { value: "high-protein", label: "High protein" },
+  { value: "low-calorie", label: "Low calorie" },
+  { value: "muscle-gain", label: "Muscle gain" },
+  { value: "performance", label: "Performance" },
+  { value: "post-workout", label: "Post-workout" },
+];
+
+const PREP_FILTERS = [
+  { value: "quick", label: "Quick (≤20 min)", tags: ["quick", "quick-meal", "15-min", "20-min"] },
+  { value: "meal-prep", label: "Meal prep", tags: ["meal-prep", "batch", "make-ahead"] },
+];
+
+const DIFFICULTY_FILTERS = [
+  { value: "easy", label: "Easy" },
+  { value: "medium", label: "Medium" },
+  { value: "hard", label: "Hard" },
+];
+
+const CATEGORY_CHIPS = ["Recommended", ...RECIPE_CATEGORIES.filter((c) => c !== "Custom"), "All Recipes"] as const;
+type CategoryChip = (typeof CATEGORY_CHIPS)[number];
+
 type MemberPrefs = {
   user_id: string;
   id: string;
@@ -49,6 +71,22 @@ function recipeMatchesRestrictions(r: Recipe, restrictions: string[]): boolean {
     if (opt.excludeTags.some((t) => tags.includes(t))) return false;
     if (opt.requireTag && !tags.includes(opt.requireTag)) return false;
   }
+  return true;
+}
+
+function recipeMatchesFilters(
+  r: Recipe,
+  filters: { dietary: string[]; goal: string[]; prep: string[]; difficulty: string[] },
+): boolean {
+  const tags = (r.tags ?? []).map((t) => t.toLowerCase());
+  for (const d of filters.dietary) if (!tags.includes(d.toLowerCase())) return false;
+  for (const g of filters.goal) if (!tags.includes(g.toLowerCase())) return false;
+  for (const p of filters.prep) {
+    const opt = PREP_FILTERS.find((o) => o.value === p);
+    if (!opt) continue;
+    if (!opt.tags.some((t) => tags.includes(t))) return false;
+  }
+  if (filters.difficulty.length > 0 && !filters.difficulty.some((d) => tags.includes(d))) return false;
   return true;
 }
 
@@ -79,6 +117,12 @@ function MemberNutrition() {
   const qc = useQueryClient();
   const [q, setQ] = useState("");
   const [showPrefs, setShowPrefs] = useState(false);
+  const [showFilters, setShowFilters] = useState(false);
+  const [activeCategory, setActiveCategory] = useState<CategoryChip>("Recommended");
+  const [fDietary, setFDietary] = useState<string[]>([]);
+  const [fGoal, setFGoal] = useState<string[]>([]);
+  const [fPrep, setFPrep] = useState<string[]>([]);
+  const [fDifficulty, setFDifficulty] = useState<string[]>([]);
 
   const { data: prefs } = useQuery({
     queryKey: ["m-nutrition-prefs"],
@@ -119,14 +163,18 @@ function MemberNutrition() {
   const restrictions = prefs?.food_restrictions ?? [];
   const dietary = prefs?.dietary_preferences ?? [];
 
+  const filters = { dietary: fDietary, goal: fGoal, prep: fPrep, difficulty: fDifficulty };
+  const activeFilterCount = fDietary.length + fGoal.length + fPrep.length + fDifficulty.length;
+
   const visible = useMemo(() => {
     const term = q.trim().toLowerCase();
     return recipes.filter((r) => {
       if (!recipeMatchesRestrictions(r, restrictions)) return false;
+      if (!recipeMatchesFilters(r, filters)) return false;
       if (term && !r.title.toLowerCase().includes(term) && !(r.tags ?? []).some((t) => t.toLowerCase().includes(term))) return false;
       return true;
     });
-  }, [recipes, restrictions, q]);
+  }, [recipes, restrictions, q, fDietary, fGoal, fPrep, fDifficulty]);
 
   const recommended = useMemo(() => {
     if (!prefs) return [] as Recipe[];
@@ -136,19 +184,28 @@ function MemberNutrition() {
       .map((r) => ({ r, s: recommendationScore(r, prefs) }))
       .filter((x) => x.s > 0)
       .sort((a, b) => b.s - a.s)
-      .slice(0, 6)
+      .slice(0, 12)
       .map((x) => x.r);
     return scored;
   }, [visible, prefs]);
 
-  const byCategory = useMemo(() => {
-    const groups: Record<string, Recipe[]> = {};
-    for (const r of visible) {
-      const key = (RECIPE_CATEGORIES as readonly string[]).includes(r.category) ? r.category : "Custom";
-      (groups[key] ??= []).push(r);
-    }
-    return groups;
-  }, [visible]);
+  const displayRecipes = useMemo(() => {
+    if (activeCategory === "Recommended") return recommended.length > 0 ? recommended : visible;
+    if (activeCategory === "All Recipes") return visible;
+    return visible.filter((r) =>
+      (RECIPE_CATEGORIES as readonly string[]).includes(r.category)
+        ? r.category === activeCategory
+        : activeCategory === "All Recipes",
+    );
+  }, [visible, recommended, activeCategory]);
+
+  const clearFilters = () => {
+    setFDietary([]); setFGoal([]); setFPrep([]); setFDifficulty([]);
+  };
+
+  const toggle = (arr: string[], setter: (v: string[]) => void, v: string) => {
+    setter(arr.includes(v) ? arr.filter((x) => x !== v) : [...arr, v]);
+  };
 
   return (
     <>
@@ -223,43 +280,131 @@ function MemberNutrition() {
           </Card>
         </Collapsible>
 
-        <Input placeholder="Search recipes or tags…" value={q} onChange={(e) => setQ(e.target.value)} className="max-w-md" />
+        <div className="flex flex-wrap items-center gap-2">
+          <Input placeholder="Search recipes or tags…" value={q} onChange={(e) => setQ(e.target.value)} className="max-w-md flex-1 min-w-[200px]" />
+          <Button variant="outline" size="sm" onClick={() => setShowFilters((v) => !v)}>
+            <SlidersHorizontal className="mr-1 h-4 w-4" /> Filters
+            {activeFilterCount > 0 && <Badge variant="secondary" className="ml-2 text-[10px]">{activeFilterCount}</Badge>}
+          </Button>
+          {activeFilterCount > 0 && (
+            <Button variant="ghost" size="sm" onClick={clearFilters}>Clear</Button>
+          )}
+        </div>
+
+        {/* Category chips */}
+        <div className="flex flex-wrap gap-2">
+          {CATEGORY_CHIPS.map((c) => (
+            <Button
+              key={c}
+              size="sm"
+              variant={activeCategory === c ? "default" : "outline"}
+              onClick={() => setActiveCategory(c)}
+              className="rounded-full"
+            >
+              {c === "Recommended" && <Sparkles className="mr-1 h-3.5 w-3.5" />}
+              {c}
+            </Button>
+          ))}
+        </div>
+
+        {/* Compact filter panel */}
+        {showFilters && (
+          <Card className="p-4 space-y-4">
+            <FilterRow label="Dietary" options={DIETARY_OPTIONS} value={fDietary} onToggle={(v) => toggle(fDietary, setFDietary, v)} />
+            <FilterRow label="Goal" options={GOAL_FILTERS} value={fGoal} onToggle={(v) => toggle(fGoal, setFGoal, v)} />
+            <FilterRow label="Prep time" options={PREP_FILTERS} value={fPrep} onToggle={(v) => toggle(fPrep, setFPrep, v)} />
+            <FilterRow label="Difficulty" options={DIFFICULTY_FILTERS} value={fDifficulty} onToggle={(v) => toggle(fDifficulty, setFDifficulty, v)} />
+          </Card>
+        )}
+
+        {/* Active filter pills */}
+        {activeFilterCount > 0 && (
+          <div className="flex flex-wrap gap-1.5">
+            {fDietary.map((v) => (
+              <FilterPill key={`d-${v}`} label={DIETARY_OPTIONS.find((o) => o.value === v)?.label ?? v} onRemove={() => toggle(fDietary, setFDietary, v)} />
+            ))}
+            {fGoal.map((v) => (
+              <FilterPill key={`g-${v}`} label={GOAL_FILTERS.find((o) => o.value === v)?.label ?? v} onRemove={() => toggle(fGoal, setFGoal, v)} />
+            ))}
+            {fPrep.map((v) => (
+              <FilterPill key={`p-${v}`} label={PREP_FILTERS.find((o) => o.value === v)?.label ?? v} onRemove={() => toggle(fPrep, setFPrep, v)} />
+            ))}
+            {fDifficulty.map((v) => (
+              <FilterPill key={`x-${v}`} label={DIFFICULTY_FILTERS.find((o) => o.value === v)?.label ?? v} onRemove={() => toggle(fDifficulty, setFDifficulty, v)} />
+            ))}
+          </div>
+        )}
 
         {isLoading ? (
           <Card className="p-8 text-center text-sm text-muted-foreground">Loading recipes…</Card>
-        ) : visible.length === 0 ? (
+        ) : displayRecipes.length === 0 ? (
           <Card className="p-12 text-center">
             <ChefHat className="mx-auto h-10 w-10 text-muted-foreground" />
-            <p className="mt-3 text-sm text-muted-foreground">No recipes match your filters. Try clearing search or restrictions.</p>
+            <p className="mt-3 text-sm text-muted-foreground">
+              {activeCategory === "Recommended" && recommended.length === 0
+                ? "Set your dietary preferences and goals to see personalized picks."
+                : "No recipes match your filters. Try clearing them or pick a different category."}
+            </p>
           </Card>
         ) : (
-          <div className="space-y-8">
-            {recommended.length > 0 && (
-              <section>
-                <div className="mb-3 flex items-center gap-2">
-                  <Sparkles className="h-4 w-4 text-primary" />
-                  <h2 className="text-base font-bold">Recommended for you</h2>
-                </div>
-                <RecipeGrid recipes={recommended} />
-              </section>
-            )}
-            {RECIPE_CATEGORIES.map((cat) => {
-              const items = byCategory[cat] ?? [];
-              if (items.length === 0) return null;
-              return (
-                <section key={cat}>
-                  <div className="mb-3 flex items-center justify-between">
-                    <h2 className="text-base font-bold">{cat}</h2>
-                    <span className="text-xs text-muted-foreground">{items.length}</span>
-                  </div>
-                  <RecipeGrid recipes={items} />
-                </section>
-              );
-            })}
-          </div>
+          <section>
+            <div className="mb-3 flex items-center justify-between">
+              <h2 className="flex items-center gap-2 text-base font-bold">
+                {activeCategory === "Recommended" && <Sparkles className="h-4 w-4 text-primary" />}
+                {activeCategory}
+              </h2>
+              <span className="text-xs text-muted-foreground">{displayRecipes.length} recipe{displayRecipes.length === 1 ? "" : "s"}</span>
+            </div>
+            <RecipeGrid recipes={displayRecipes} />
+          </section>
         )}
       </div>
     </>
+  );
+}
+
+function FilterRow({
+  label,
+  options,
+  value,
+  onToggle,
+}: {
+  label: string;
+  options: { value: string; label: string }[];
+  value: string[];
+  onToggle: (v: string) => void;
+}) {
+  return (
+    <div>
+      <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">{label}</div>
+      <div className="flex flex-wrap gap-2">
+        {options.map((o) => {
+          const active = value.includes(o.value);
+          return (
+            <Button
+              key={o.value}
+              size="sm"
+              variant={active ? "default" : "outline"}
+              onClick={() => onToggle(o.value)}
+              className="rounded-full"
+            >
+              {o.label}
+            </Button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function FilterPill({ label, onRemove }: { label: string; onRemove: () => void }) {
+  return (
+    <Badge variant="secondary" className="gap-1 pr-1 text-[11px]">
+      {label}
+      <button onClick={onRemove} className="ml-0.5 rounded p-0.5 hover:bg-background/60" aria-label={`Remove ${label}`}>
+        <X className="h-3 w-3" />
+      </button>
+    </Badge>
   );
 }
 
