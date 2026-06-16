@@ -39,7 +39,7 @@ export function OfferComparison({ accent = "membership" }: { accent?: "membershi
             "You want a plan built specifically for you",
             "You need accountability and regular adjustments",
             "You want nutrition guidance",
-            "You want direct access to me",
+            "You want direct access to a dedicated coach",
             "You're ready to invest in getting it right the first time",
           ]}
           ctaLabel="Apply for Coaching"
