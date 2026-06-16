@@ -198,6 +198,15 @@ const SignupInput = z.object({
   user_agent: z.string().trim().max(500).optional().or(z.literal("")),
 });
 
+/**
+ * Optional discount codes applied at checkout. Max 2 (one promotion + one
+ * ambassador/client_referral). Server re-validates via validate_discount_codes
+ * RPC; client-side validation is advisory only.
+ */
+const SignupInputWithCodes = SignupInput.extend({
+  codes: z.array(z.string().trim().min(1).max(60)).max(2).optional().default([]),
+});
+
 import { normalizePhoneToE164 } from "@/lib/phone-e164";
 
 /**
@@ -209,7 +218,7 @@ function normalizePhoneE164(raw: string): string | null {
 }
 
 export const createJfSignupCheckout = createServerFn({ method: "POST" })
-  .inputValidator((d: unknown) => SignupInput.parse(d))
+  .inputValidator((d: unknown) => SignupInputWithCodes.parse(d))
   .handler(async ({ data }) => {
     const s = await loadSettings();
     if (!s.monthly_price_id) throw new Error("Membership pricing isn't configured yet. Please contact support.");
@@ -297,6 +306,42 @@ export const createJfSignupCheckout = createServerFn({ method: "POST" })
       .maybeSingle();
     const useTrial = !trialRow && s.trial_days > 0;
 
+    /* ── Discount codes ──────────────────────────────────────────────────── */
+    // Validate the submitted codes via the SECURITY DEFINER RPC, then resolve
+    // each to its per-mode Stripe coupon id. Stripe rejects sessions that mix
+    // `discounts[]` with `allow_promotion_codes`, so we drop the latter when
+    // codes are applied.
+    const submittedCodes = (data.codes ?? []).map((c) => c.trim()).filter(Boolean);
+    let appliedDiscountRows: any[] = [];
+    if (submittedCodes.length > 0) {
+      const { data: vres, error: vErr } = await (supabaseAdmin as any).rpc("validate_discount_codes", {
+        _codes: submittedCodes,
+        _customer_id: null,
+        _product_id: null,
+      });
+      if (vErr) throw new Error(vErr.message);
+      if (!vres?.ok) {
+        const first = vres?.rejected?.[0];
+        throw new Error(first?.reason ?? "One of the codes you entered is not valid.");
+      }
+      const appliedCodes = (vres?.applied ?? []) as Array<{ id: string; code: string; category: string }>;
+      if (appliedCodes.length > 0) {
+        const { data: rows, error: rErr } = await supabaseAdmin
+          .from("discount_codes")
+          .select("id, public_code, category, stripe_test_coupon_id, stripe_live_coupon_id")
+          .in("id", appliedCodes.map((c) => c.id));
+        if (rErr) throw new Error(rErr.message);
+        appliedDiscountRows = (rows ?? []) as any[];
+        for (const r of appliedDiscountRows) {
+          const couponField = mode === "test" ? r.stripe_test_coupon_id : r.stripe_live_coupon_id;
+          if (!couponField) {
+            console.error(`[jf-checkout] code ${r.public_code} has no ${mode}-mode Stripe coupon; admin must Sync to Stripe.`);
+            throw new Error(`The code "${r.public_code}" isn't fully set up yet. Please try again shortly or remove the code.`);
+          }
+        }
+      }
+    }
+
     // Note: password_hash column actually stores the raw password temporarily.
     // The jf_pending_signups table is service-role only (no end-user RLS policies),
     // and the row is deleted immediately after Supabase Auth user creation.
@@ -313,7 +358,6 @@ export const createJfSignupCheckout = createServerFn({ method: "POST" })
       "line_items[0][quantity]": 1,
       success_url: `${data.origin}/m/welcome?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${data.origin}/membership?cancelled=1`,
-      allow_promotion_codes: "true",
       // Stripe Tax: calculate tax automatically based on customer location.
       // Tax is added on top of the price (prices stay tax-exclusive).
       "automatic_tax[enabled]": "true",
@@ -327,6 +371,24 @@ export const createJfSignupCheckout = createServerFn({ method: "POST" })
       "metadata[sms_consent]": data.sms_consent ? "1" : "0",
       "subscription_data[metadata][kind]": "jf_membership",
       "subscription_data[metadata][email_lc]": emailLc,
+      // Attach applied discount codes as Stripe discounts[]. Stripe rejects
+      // mixing this with allow_promotion_codes, hence the conditional above.
+      ...(appliedDiscountRows.length > 0
+        ? Object.fromEntries(
+            appliedDiscountRows.map((r, i) => [
+              `discounts[${i}][coupon]`,
+              (mode === "test" ? r.stripe_test_coupon_id : r.stripe_live_coupon_id) as string,
+            ]),
+          )
+        : { allow_promotion_codes: "true" }),
+      ...(appliedDiscountRows.length > 0
+        ? {
+            "metadata[applied_code_ids]": appliedDiscountRows.map((r) => r.id).join(","),
+            "metadata[applied_codes]": appliedDiscountRows.map((r) => r.public_code).join(","),
+            "subscription_data[metadata][applied_code_ids]": appliedDiscountRows.map((r) => r.id).join(","),
+            "subscription_data[metadata][applied_codes]": appliedDiscountRows.map((r) => r.public_code).join(","),
+          }
+        : {}),
       ...(useTrial ? { "subscription_data[trial_period_days]": String(s.trial_days) } : {}),
     });
     let session: any;
@@ -361,6 +423,27 @@ export const createJfSignupCheckout = createServerFn({ method: "POST" })
       user_agent: data.user_agent || null,
       ip_address: ipAddress,
     });
+
+    // Attribution row for applied codes (one row per checkout session, unique).
+    // Webhook later fills in subscription_id, customer_id, and final amounts.
+    if (appliedDiscountRows.length > 0) {
+      const promoRow = appliedDiscountRows.find((r) => r.category === "promotion");
+      const referralRow = appliedDiscountRows.find((r) => r.category === "ambassador" || r.category === "client_referral");
+      try {
+        await supabaseAdmin.from("discount_code_redemptions").insert({
+          customer_email: emailLc,
+          promo_code_id: promoRow?.id ?? null,
+          referral_code_id: referralRow?.id ?? null,
+          checkout_session_id: session.id,
+          mode,
+          subscription_status: "pending",
+          stripe_sync_status: "session_created",
+          raw: { applied: appliedDiscountRows.map((r) => ({ id: r.id, code: r.public_code, category: r.category })) },
+        });
+      } catch (e: any) {
+        console.error("[jf-checkout] redemption insert failed", e?.message ?? e);
+      }
+    }
 
     return { url: session.url as string, used_trial: useTrial };
   });

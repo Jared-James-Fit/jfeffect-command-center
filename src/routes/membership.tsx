@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import { createJfSignupCheckout, getJfPublicSettings } from "@/lib/jf-billing.functions";
 import { getPublicSalesPage } from "@/lib/sales-pages.functions";
 import { getMembershipLaunchGate } from "@/lib/membership-launch-gate.functions";
+import { validatePublicDiscountCodesFn } from "@/lib/discount-codes.functions";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -76,6 +77,7 @@ function SignupJf() {
   const createCheckout = useServerFn(createJfSignupCheckout);
   const fetchPage = useServerFn(getPublicSalesPage);
   const fetchGate = useServerFn(getMembershipLaunchGate);
+  const validateCodes = useServerFn(validatePublicDiscountCodesFn);
 
   const { data: settings } = useQuery({ queryKey: ["jf-public-settings"], queryFn: () => getSettings() });
   const { data: p } = useQuery({ queryKey: ["public-sales-page", "join"], queryFn: () => fetchPage({ data: { page_key: "join" } }) });
@@ -98,6 +100,88 @@ function SignupJf() {
   useEffect(() => {
     setCancelled(new URLSearchParams(window.location.search).has("cancelled"));
   }, []);
+
+  /* ── Discount codes (optional, max 1 promo + 1 referral) ─────────────── */
+  type AppliedCode = {
+    id: string;
+    code: string;
+    category: string;
+    discount_type: string;
+    discount_value: number;
+    subscription_duration: string;
+    duration_months: number | null;
+    description: string | null;
+  };
+  const [codeInput, setCodeInput] = useState("");
+  const [appliedCodes, setAppliedCodes] = useState<AppliedCode[]>([]);
+  const [codeError, setCodeError] = useState<string | null>(null);
+  const [codeBusy, setCodeBusy] = useState(false);
+
+  const applyCode = async (raw: string) => {
+    const code = raw.trim();
+    if (!code) return;
+    if (appliedCodes.some((c) => c.code.toLowerCase() === code.toLowerCase())) {
+      setCodeError("That code is already applied.");
+      return;
+    }
+    const nextCodes = [...appliedCodes.map((c) => c.code), code];
+    if (nextCodes.length > 2) {
+      setCodeError("You can apply at most two codes (one promotion + one referral).");
+      return;
+    }
+    setCodeBusy(true);
+    setCodeError(null);
+    try {
+      const res = await validateCodes({ data: { codes: nextCodes } });
+      if (!res.ok) {
+        const reason = res.rejected?.find((r) => (r.code ?? "").toLowerCase() === code.toLowerCase())?.reason
+          ?? res.rejected?.[0]?.reason
+          ?? "That code can't be used right now.";
+        setCodeError(reason);
+        return;
+      }
+      setAppliedCodes(res.applied as AppliedCode[]);
+      setCodeInput("");
+    } catch (e: any) {
+      setCodeError(e?.message ?? "Couldn't validate that code.");
+    } finally {
+      setCodeBusy(false);
+    }
+  };
+
+  const removeCode = (id: string) => {
+    setAppliedCodes((cur) => cur.filter((c) => c.id !== id));
+    setCodeError(null);
+  };
+
+  // URL capture: ?code= and ?ref= seed and auto-apply on mount.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const seeds = [params.get("code"), params.get("ref")].filter((v): v is string => !!v && v.trim().length > 0);
+    if (seeds.length === 0) return;
+    (async () => {
+      try {
+        const res = await validateCodes({ data: { codes: seeds.slice(0, 2) } });
+        if (res.ok && res.applied.length > 0) {
+          setAppliedCodes(res.applied as AppliedCode[]);
+        } else if (res.rejected?.length) {
+          setCodeError(res.rejected[0].reason);
+        }
+      } catch { /* ignore — user can still apply manually */ }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const codeChipLabel = (c: AppliedCode) => {
+    const off = c.discount_type === "percentage" ? `${c.discount_value}% off` : `$${c.discount_value} off`;
+    const dur = c.subscription_duration === "forever"
+      ? "forever"
+      : c.subscription_duration === "once"
+      ? "first invoice"
+      : c.duration_months ? `${c.duration_months} mo` : "";
+    return `${c.code} — ${off}${dur ? ` (${dur})` : ""}`;
+  };
+
   const [firstChargeLabel, setFirstChargeLabel] = useState<string | null>(null);
   const checkoutBlocked = (settings && !settings.has_monthly_price) || (gate && !gate.ok);
   const requiredDocs = gate?.required_docs ?? [];
@@ -151,6 +235,7 @@ function SignupJf() {
         })),
         acknowledgement_text: bundledStatement,
         user_agent: typeof navigator !== "undefined" ? navigator.userAgent : "",
+        codes: appliedCodes.map((c) => c.code),
       }});
       window.location.assign(r.url);
     } catch (e: any) {
@@ -441,6 +526,57 @@ function SignupJf() {
             </div>
 
             {/* Compact billing summary */}
+            {!checkoutBlocked && (
+              <div className="rounded-lg border border-border bg-card/40 p-3">
+                <Label className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground">Have a code? (optional)</Label>
+                <div className="mt-2 flex gap-2">
+                  <Input
+                    placeholder="Enter discount or referral code"
+                    value={codeInput}
+                    onChange={(e) => { setCodeInput(e.target.value); setCodeError(null); }}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") { e.preventDefault(); applyCode(codeInput); }
+                    }}
+                    disabled={codeBusy || appliedCodes.length >= 2}
+                    autoCapitalize="characters"
+                    className="font-mono text-sm uppercase"
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => applyCode(codeInput)}
+                    disabled={codeBusy || !codeInput.trim() || appliedCodes.length >= 2}
+                  >
+                    {codeBusy ? "Checking…" : "Apply"}
+                  </Button>
+                </div>
+                {codeError && <p className="mt-2 text-[11px] font-medium text-rose-400">{codeError}</p>}
+                {appliedCodes.length > 0 && (
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {appliedCodes.map((c) => (
+                      <span
+                        key={c.id}
+                        className="inline-flex items-center gap-1.5 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-1 text-[11px] font-semibold text-emerald-300"
+                      >
+                        <Check className="h-3 w-3" />
+                        {codeChipLabel(c)}
+                        <button
+                          type="button"
+                          aria-label={`Remove ${c.code}`}
+                          onClick={() => removeCode(c.id)}
+                          className="ml-1 rounded-full p-0.5 text-emerald-300/80 hover:bg-emerald-500/20 hover:text-emerald-100"
+                        >
+                          <XIcon className="h-3 w-3" />
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                )}
+                <p className="mt-2 text-[10px] leading-relaxed text-muted-foreground">
+                  You can combine one promotion code with one ambassador or client referral code.
+                </p>
+              </div>
+            )}
             {!checkoutBlocked && (
               <div className="rounded-lg border border-border bg-muted/30 p-3">
                 <div className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-widest text-muted-foreground">
