@@ -19,7 +19,14 @@ import { QuickActionsGrid } from "@/components/portal/quick-actions-grid";
 import { IntakeAnswersBigButton } from "@/components/clients/intake-answers-dialog";
 import { ActionCentre, type ActionItem } from "@/components/portal/action-centre";
 import { TrainingBlockCard } from "@/components/portal/training-block-card";
-import { BodyweightSummaryCard } from "@/components/portal/bodyweight-summary-card";
+// Lazy: this card pulls recharts. Defer it so the Home screen renders
+// before the chart bundle is fetched.
+import { lazy, Suspense } from "react";
+const BodyweightSummaryCard = lazy(() =>
+  import("@/components/portal/bodyweight-summary-card").then((m) => ({
+    default: m.BodyweightSummaryCard,
+  })),
+);
 import { SetupChecklistBanner } from "@/components/portal/setup-checklist-banner";
 import { useEffect, useRef, useState } from "react";
 import { listMyPortalAppointments } from "@/lib/appointments.functions";
