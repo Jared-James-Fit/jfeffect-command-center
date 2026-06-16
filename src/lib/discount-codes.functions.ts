@@ -223,6 +223,36 @@ export const listDiscountRedemptionsFn = createServerFn({ method: "POST" })
   });
 
 /* -------------------------------------------------------------------------- */
+/* Public validator (unauthenticated)                                         */
+/* -------------------------------------------------------------------------- */
+/**
+ * Public code validation used by the /membership signup form BEFORE the user
+ * has an account. Calls the same SECURITY DEFINER RPC as the admin validator,
+ * but via service_role so anon callers don't need EXECUTE on the RPC.
+ *
+ * Only returns metadata about the codes (no PII). Pairing limits + active
+ * window + product eligibility are enforced inside the RPC.
+ */
+export const validatePublicDiscountCodesFn = createServerFn({ method: "POST" })
+  .inputValidator((input: unknown) => z.object({
+    codes: z.array(z.string().trim().min(1).max(60)).max(5),
+  }).parse(input))
+  .handler(async ({ data }) => {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { data: result, error } = await (supabaseAdmin as any).rpc("validate_discount_codes", {
+      _codes: data.codes,
+      _customer_id: null,
+      _product_id: null,
+    });
+    if (error) throw new Error(error.message);
+    return result as {
+      ok: boolean;
+      applied: Array<{ id: string; code: string; category: string; discount_type: string; discount_value: number; subscription_duration: string; duration_months: number | null; description: string | null }>;
+      rejected: Array<{ code: string | null; reason: string }>;
+    };
+  });
+
+/* -------------------------------------------------------------------------- */
 /* Stripe synchronization                                                     */
 /* -------------------------------------------------------------------------- */
 
