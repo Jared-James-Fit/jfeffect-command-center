@@ -26,21 +26,30 @@ type Item = {
   done: boolean;
 };
 
-const SNOOZE_PREFIX = "jf:setup-snooze:";
-const SNOOZE_MS = 24 * 60 * 60 * 1000; // 24h
+const SNOOZE_KEY = "jf:setup-snooze:session";
 
+/**
+ * Session-scoped dismissal: the checklist hides for the rest of this
+ * browser session, but reappears the next time the client opens the app.
+ * sessionStorage is cleared when the tab/PWA window closes, which matches
+ * "appears every time they exit the app and return".
+ */
 function isSnoozed(): boolean {
   if (typeof window === "undefined") return false;
-  const v = window.localStorage.getItem(SNOOZE_PREFIX + "all");
-  if (!v) return false;
-  const t = Number(v);
-  if (!Number.isFinite(t)) return false;
-  return Date.now() - t < SNOOZE_MS;
+  try {
+    return window.sessionStorage.getItem(SNOOZE_KEY) === "1";
+  } catch {
+    return false;
+  }
 }
 
 function snoozeNow() {
   if (typeof window === "undefined") return;
-  window.localStorage.setItem(SNOOZE_PREFIX + "all", String(Date.now()));
+  try {
+    window.sessionStorage.setItem(SNOOZE_KEY, "1");
+  } catch {
+    // ignore
+  }
 }
 
 /**
@@ -50,7 +59,8 @@ function snoozeNow() {
  * Rules:
  *  - Never covers the screen. Inline card only.
  *  - Hidden once every item is complete.
- *  - "Remind me later" snoozes the whole card for 24h.
+ *  - "Remind me later" hides the card for the rest of this session only;
+ *    it returns the next time the client reopens the app.
  *  - Auto-dismisses on the dashboard only; other routes never see it.
  */
 export function SetupChecklistBanner({ clientId, userId }: Props) {
@@ -146,7 +156,7 @@ export function SetupChecklistBanner({ clientId, userId }: Props) {
     <Card className="relative overflow-hidden border-primary/30 bg-primary/5 p-4 sm:p-5">
       <button
         type="button"
-        aria-label="Remind me later"
+        aria-label="Hide for now"
         onClick={() => { snoozeNow(); setDismissed(true); }}
         className="absolute right-2 top-2 grid h-8 w-8 place-items-center rounded-full text-muted-foreground hover:bg-background/60 hover:text-foreground"
       >
@@ -211,7 +221,7 @@ export function SetupChecklistBanner({ clientId, userId }: Props) {
           variant="ghost"
           onClick={() => { snoozeNow(); setDismissed(true); }}
         >
-          Remind me later
+          Hide for now
         </Button>
       </div>
     </Card>
