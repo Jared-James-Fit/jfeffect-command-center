@@ -35,6 +35,7 @@ import { Route as EmailUnsubscribeRouteImport } from './routes/email/unsubscribe
 import { Route as CoachingApplyRouteImport } from './routes/coaching.apply'
 import { Route as BookSlugRouteImport } from './routes/book.$slug'
 import { Route as ApiDriveUploadRouteImport } from './routes/api/drive-upload'
+import { Route as AuthenticatedNotificationsRouteImport } from './routes/_authenticated/notifications'
 import { Route as AuthenticatedPortalRouteRouteImport } from './routes/_authenticated/portal/route'
 import { Route as AuthenticatedMediaRouteRouteImport } from './routes/_authenticated/media/route'
 import { Route as AuthenticatedMRouteRouteImport } from './routes/_authenticated/m/route'
@@ -381,6 +382,12 @@ const ApiDriveUploadRoute = ApiDriveUploadRouteImport.update({
   path: '/api/drive-upload',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AuthenticatedNotificationsRoute =
+  AuthenticatedNotificationsRouteImport.update({
+    id: '/notifications',
+    path: '/notifications',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
 const AuthenticatedPortalRouteRoute =
   AuthenticatedPortalRouteRouteImport.update({
     id: '/portal',
@@ -1671,6 +1678,7 @@ export interface FileRoutesByFullPath {
   '/m': typeof AuthenticatedMRouteRouteWithChildren
   '/media': typeof AuthenticatedMediaRouteRouteWithChildren
   '/portal': typeof AuthenticatedPortalRouteRouteWithChildren
+  '/notifications': typeof AuthenticatedNotificationsRoute
   '/api/drive-upload': typeof ApiDriveUploadRoute
   '/book/$slug': typeof BookSlugRoute
   '/coaching/apply': typeof CoachingApplyRoute
@@ -1910,6 +1918,7 @@ export interface FileRoutesByTo {
   '/terms': typeof TermsRoute
   '/unsubscribe': typeof UnsubscribeRoute
   '/coach': typeof AuthenticatedCoachRouteRouteWithChildren
+  '/notifications': typeof AuthenticatedNotificationsRoute
   '/api/drive-upload': typeof ApiDriveUploadRoute
   '/book/$slug': typeof BookSlugRoute
   '/coaching/apply': typeof CoachingApplyRoute
@@ -2154,6 +2163,7 @@ export interface FileRoutesById {
   '/_authenticated/m': typeof AuthenticatedMRouteRouteWithChildren
   '/_authenticated/media': typeof AuthenticatedMediaRouteRouteWithChildren
   '/_authenticated/portal': typeof AuthenticatedPortalRouteRouteWithChildren
+  '/_authenticated/notifications': typeof AuthenticatedNotificationsRoute
   '/api/drive-upload': typeof ApiDriveUploadRoute
   '/book/$slug': typeof BookSlugRoute
   '/coaching/apply': typeof CoachingApplyRoute
@@ -2399,6 +2409,7 @@ export interface FileRouteTypes {
     | '/m'
     | '/media'
     | '/portal'
+    | '/notifications'
     | '/api/drive-upload'
     | '/book/$slug'
     | '/coaching/apply'
@@ -2638,6 +2649,7 @@ export interface FileRouteTypes {
     | '/terms'
     | '/unsubscribe'
     | '/coach'
+    | '/notifications'
     | '/api/drive-upload'
     | '/book/$slug'
     | '/coaching/apply'
@@ -2881,6 +2893,7 @@ export interface FileRouteTypes {
     | '/_authenticated/m'
     | '/_authenticated/media'
     | '/_authenticated/portal'
+    | '/_authenticated/notifications'
     | '/api/drive-upload'
     | '/book/$slug'
     | '/coaching/apply'
@@ -3332,6 +3345,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/api/drive-upload'
       preLoaderRoute: typeof ApiDriveUploadRouteImport
       parentRoute: typeof rootRouteImport
+    }
+    '/_authenticated/notifications': {
+      id: '/_authenticated/notifications'
+      path: '/notifications'
+      fullPath: '/notifications'
+      preLoaderRoute: typeof AuthenticatedNotificationsRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/portal': {
       id: '/_authenticated/portal'
@@ -5529,6 +5549,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedMRouteRoute: typeof AuthenticatedMRouteRouteWithChildren
   AuthenticatedMediaRouteRoute: typeof AuthenticatedMediaRouteRouteWithChildren
   AuthenticatedPortalRouteRoute: typeof AuthenticatedPortalRouteRouteWithChildren
+  AuthenticatedNotificationsRoute: typeof AuthenticatedNotificationsRoute
 }
 
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
@@ -5537,6 +5558,7 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedMRouteRoute: AuthenticatedMRouteRouteWithChildren,
   AuthenticatedMediaRouteRoute: AuthenticatedMediaRouteRouteWithChildren,
   AuthenticatedPortalRouteRoute: AuthenticatedPortalRouteRouteWithChildren,
+  AuthenticatedNotificationsRoute: AuthenticatedNotificationsRoute,
 }
 
 const AuthenticatedRouteRouteWithChildren =
