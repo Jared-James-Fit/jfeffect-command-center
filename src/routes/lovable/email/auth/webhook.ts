@@ -5,7 +5,7 @@ const EMAIL_SUBJECTS: Record<string, string> = {
   signup: 'Confirm your email',
   invite: "You've been invited",
   magiclink: 'Your login link',
-  recovery: 'Reset your password',
+  recovery: 'Reset Your JF Effect Password',
   email_change: 'Confirm your new email',
   reauthentication: 'Your verification code',
 }

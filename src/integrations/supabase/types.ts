@@ -9994,6 +9994,93 @@ export type Database = {
           },
         ]
       }
+      password_recovery_tokens: {
+        Row: {
+          attempts_remaining: number
+          channel: string
+          consumed_at: string | null
+          created_at: string
+          created_ip: unknown
+          expires_at: string
+          id: string
+          token_hash: string
+          user_id: string
+        }
+        Insert: {
+          attempts_remaining?: number
+          channel: string
+          consumed_at?: string | null
+          created_at?: string
+          created_ip?: unknown
+          expires_at: string
+          id?: string
+          token_hash: string
+          user_id: string
+        }
+        Update: {
+          attempts_remaining?: number
+          channel?: string
+          consumed_at?: string | null
+          created_at?: string
+          created_ip?: unknown
+          expires_at?: string
+          id?: string
+          token_hash?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      password_reset_events: {
+        Row: {
+          actor_kind: string
+          channel: string
+          created_at: string
+          destination_masked: string | null
+          error_code: string | null
+          id: string
+          initiated_by: string | null
+          ip: unknown
+          metadata: Json
+          outcome: string
+          target_email_masked: string | null
+          target_phone_masked: string | null
+          target_user_id: string | null
+          user_agent: string | null
+        }
+        Insert: {
+          actor_kind: string
+          channel: string
+          created_at?: string
+          destination_masked?: string | null
+          error_code?: string | null
+          id?: string
+          initiated_by?: string | null
+          ip?: unknown
+          metadata?: Json
+          outcome: string
+          target_email_masked?: string | null
+          target_phone_masked?: string | null
+          target_user_id?: string | null
+          user_agent?: string | null
+        }
+        Update: {
+          actor_kind?: string
+          channel?: string
+          created_at?: string
+          destination_masked?: string | null
+          error_code?: string | null
+          id?: string
+          initiated_by?: string | null
+          ip?: unknown
+          metadata?: Json
+          outcome?: string
+          target_email_masked?: string | null
+          target_phone_masked?: string | null
+          target_user_id?: string | null
+          user_agent?: string | null
+        }
+        Relationships: []
+      }
       payment_allocations: {
         Row: {
           amount_minor: number
@@ -12533,6 +12620,30 @@ export type Database = {
           title?: string
           updated_at?: string
           video_url?: string | null
+        }
+        Relationships: []
+      }
+      recovery_rate_limits: {
+        Row: {
+          count: number
+          id: string
+          identifier: string
+          kind: string
+          window_start: string
+        }
+        Insert: {
+          count?: number
+          id?: string
+          identifier: string
+          kind: string
+          window_start: string
+        }
+        Update: {
+          count?: number
+          id?: string
+          identifier?: string
+          kind?: string
+          window_start?: string
         }
         Relationships: []
       }

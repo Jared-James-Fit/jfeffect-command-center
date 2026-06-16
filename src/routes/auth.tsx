@@ -138,6 +138,15 @@ function AuthPage() {
               </Button>
             </form>
 
+            <div className="mt-3 text-center">
+              <Link
+                to="/recover"
+                className="text-xs text-muted-foreground hover:text-foreground underline-offset-2 hover:underline"
+              >
+                Forgot password or can't access your account?
+              </Link>
+            </div>
+
             {/* Private access badge */}
             <div className="mt-6 inline-flex items-center gap-1.5 rounded-full border border-border/60 bg-muted/30 px-3 py-1.5">
               <ShieldCheck className="h-3 w-3 text-primary" />

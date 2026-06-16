@@ -25,13 +25,14 @@ export const RecoveryEmail = ({
     <Preview>Reset your password for {siteName}</Preview>
     <Body style={main}>
       <Container style={container}>
-        <Heading style={h1}>Reset your password</Heading>
+        <Heading style={h1}>Reset your JF Effect password</Heading>
         <Text style={text}>
-          We received a request to reset your password for {siteName}. Click
-          the button below to choose a new password.
+          We received a request to reset your password for {siteName}. Tap the
+          button below to choose a new password. This link expires in 30 minutes
+          and can only be used once.
         </Text>
         <Button style={button} href={confirmationUrl}>
-          Reset Password
+          Reset My Password
         </Button>
         <Text style={footer}>
           If you didn't request a password reset, you can safely ignore this
