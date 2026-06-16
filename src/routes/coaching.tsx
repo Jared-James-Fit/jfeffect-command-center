@@ -90,7 +90,7 @@ function CoachingPage() {
   const authority: Array<{ label: string }> = Array.isArray(s.authority) && s.authority.length > 0 ? s.authority : [
     { label: "100+ clients coached" },
     { label: "Coaching since 2019" },
-    { label: "Competitive strength background" },
+    { label: "A team built on competitive strength" },
   ];
 
   return (
