@@ -17,7 +17,6 @@ import {
   Target, ClipboardCheck, Utensils, MessageCircle,
 } from "lucide-react";
 import { Reveal } from "@/components/sales/reveal";
-import coachingHeroImg from "@/assets/coaching-hero-duo.jpg";
 
 function HeroSkeleton() {
   return (
