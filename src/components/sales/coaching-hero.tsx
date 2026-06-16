@@ -128,10 +128,10 @@ export function CoachingVsMembership({ onApply }: { onApply: () => void }) {
             {[
               "A plan built for you, not pulled from a library",
               "Weekly check-ins I review myself",
+              "Nutrition coaching built around your life",
               "Adjustments based on your actual numbers",
-              "Message me directly, anytime",
-              "Lift video reviews with timestamped feedback",
-              "A real call before you commit",
+              "Direct access to me, anytime",
+              "A real strategy call before you commit",
             ].map((l) => (
               <li key={l} className="flex items-start gap-2">
                 <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-primary" />{l}
@@ -145,12 +145,12 @@ export function CoachingVsMembership({ onApply }: { onApply: () => void }) {
           <div className="mt-1 text-2xl font-black">Self-guided app subscription</div>
           <ul className="mt-4 space-y-2 text-sm text-muted-foreground">
             {[
-              "Pre-built programs you choose from",
-              "Tracking, analytics, and exercise demos",
-              "Recipes, nutrition resources, education",
-              "Member events and updates",
-              "No 1:1 coach involvement",
-              "Self-paced — no application required",
+              "The full app + workout library",
+              "Pre-built training programs you choose from",
+              "Exercise demos, tracking, analytics",
+              "Nutrition resources + education",
+              "Self-paced — no application",
+              "No 1:1 coaching",
             ].map((l) => (
               <li key={l} className="flex items-start gap-2">
                 <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-muted-foreground/60" />{l}
