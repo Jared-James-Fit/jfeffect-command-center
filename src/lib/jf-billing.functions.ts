@@ -198,6 +198,15 @@ const SignupInput = z.object({
   user_agent: z.string().trim().max(500).optional().or(z.literal("")),
 });
 
+/**
+ * Optional discount codes applied at checkout. Max 2 (one promotion + one
+ * ambassador/client_referral). Server re-validates via validate_discount_codes
+ * RPC; client-side validation is advisory only.
+ */
+const SignupInputWithCodes = SignupInput.extend({
+  codes: z.array(z.string().trim().min(1).max(60)).max(2).optional().default([]),
+});
+
 import { normalizePhoneToE164 } from "@/lib/phone-e164";
 
 /**
@@ -209,7 +218,7 @@ function normalizePhoneE164(raw: string): string | null {
 }
 
 export const createJfSignupCheckout = createServerFn({ method: "POST" })
-  .inputValidator((d: unknown) => SignupInput.parse(d))
+  .inputValidator((d: unknown) => SignupInputWithCodes.parse(d))
   .handler(async ({ data }) => {
     const s = await loadSettings();
     if (!s.monthly_price_id) throw new Error("Membership pricing isn't configured yet. Please contact support.");
