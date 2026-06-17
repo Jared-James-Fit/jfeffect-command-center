@@ -466,6 +466,30 @@ function WorkoutTracker() {
         workoutId={null}
         pageRoute={route}
       />
+      {isComplete && (
+        <CompletedWorkoutActions
+          ctx={{ kind: "member", enrollmentId, weekIndex, dayIndex }}
+          hasCoach={false}
+          initialReview={
+            existingReview
+              ? {
+                  overallRating: existingReview.overall_rating,
+                  sessionRpe: existingReview.session_rpe,
+                  pain: existingReview.pain,
+                  painLevel: existingReview.pain_level,
+                  painArea: existingReview.pain_area,
+                  painNote: existingReview.pain_note,
+                  clientNote: existingReview.client_note,
+                  editCount: existingReview.review_edit_count,
+                  submittedAt: existingReview.review_submitted_at,
+                }
+              : null
+          }
+          onReviewSaved={() =>
+            qc.invalidateQueries({ queryKey: ["m-review", enrollmentId, weekIndex, dayIndex] })
+          }
+        />
+      )}
       {rows.length === 0 && (
         <WorkoutEmptyCard
           clientId={null}
