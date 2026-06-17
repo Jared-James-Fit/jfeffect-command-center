@@ -1212,6 +1212,29 @@ function ClientDetail() {
       </Tabs>
       </div>
 
+      {/* Sticky Save bar — visible while scrolling whenever unsaved changes exist.
+          Sits above the mobile bottom nav with safe-area padding. */}
+      {isDirty && (
+        <div
+          className="fixed inset-x-0 z-40 border-t border-border bg-card/95 backdrop-blur shadow-[0_-8px_24px_-12px_rgba(0,0,0,0.4)]"
+          style={{ bottom: 0, paddingBottom: "env(safe-area-inset-bottom)" }}
+        >
+          <div className="mx-auto flex max-w-7xl items-center justify-between gap-3 px-4 py-3 md:px-8">
+            <div className="min-w-0 text-sm">
+              <div className="font-semibold">Unsaved changes</div>
+              <div className="hidden text-xs text-muted-foreground sm:block truncate">Your edits aren't saved yet.</div>
+            </div>
+            <Button
+              onClick={save}
+              disabled={saving}
+              className="min-h-[48px] bg-gradient-primary uppercase font-bold"
+            >
+              <Save className="mr-2 h-4 w-4" />{saving ? "Saving…" : "Save"}
+            </Button>
+          </div>
+        </div>
+      )}
+
       <AlertDialog open={deleteStep > 0} onOpenChange={(o) => !o && setDeleteStep(0)}>
         <AlertDialogContent>
           <AlertDialogHeader>
