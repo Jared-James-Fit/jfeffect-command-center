@@ -666,7 +666,11 @@ export function NotificationPanel({
     else if (view === "new") base = items.filter((i) => !i.isRead && !i.isArchived);
     else base = items.filter((i) => !i.isArchived);
 
-    if (kindFilter !== "all") base = base.filter((i) => i.kind === kindFilter);
+    if (kindFilter !== "all") {
+      const bucket = CATEGORY_BUCKETS.find((b) => b.id === kindFilter);
+      const kinds = bucket?.kinds ?? [];
+      base = base.filter((i) => kinds.includes(i.kind));
+    }
 
     if (dateFilter !== "all") {
       const days = dateFilter === "today" ? 1 : dateFilter === "7d" ? 7 : 30;
@@ -685,11 +689,14 @@ export function NotificationPanel({
     return base;
   }, [items, view, kindFilter, dateFilter, search]);
 
-  // Available kinds for the category filter
-  const availableKinds = useMemo(() => {
-    const s = new Set<string>();
-    for (const i of items) s.add(i.kind);
-    return Array.from(s);
+  // Per-category counts (drives disabled state in the filter)
+  const categoryCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    const active = items.filter((i) => !i.isArchived);
+    for (const b of CATEGORY_BUCKETS) {
+      counts[b.id] = active.filter((i) => b.kinds.includes(i.kind)).length;
+    }
+    return counts;
   }, [items]);
 
   const shown = useMemo(() => filtered.slice(0, visible), [filtered, visible]);
@@ -886,8 +893,10 @@ export function NotificationPanel({
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All categories</SelectItem>
-                {availableKinds.map((k) => (
-                  <SelectItem key={k} value={k}>{kindLabel(k)}</SelectItem>
+                {CATEGORY_BUCKETS.map((b) => (
+                  <SelectItem key={b.id} value={b.id} disabled={categoryCounts[b.id] === 0}>
+                    {b.label}{categoryCounts[b.id] > 0 ? ` (${categoryCounts[b.id]})` : ""}
+                  </SelectItem>
                 ))}
               </SelectContent>
             </Select>
