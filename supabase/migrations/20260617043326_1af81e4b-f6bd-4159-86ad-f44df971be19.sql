@@ -1,0 +1,1 @@
+DELETE FROM public.coaching_app_notification_recipients WHERE id='e8457998-b112-4cf2-bb82-dd216d7e0943';
