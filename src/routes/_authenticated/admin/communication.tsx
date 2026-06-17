@@ -90,14 +90,22 @@ function CommunicationWorkspace() {
           })}
         </div>
       </div>
-      <div className="min-h-0 flex-1 overflow-auto">
-        {tab === "messages" && <MessagesInbox initialClient={client} embedded />}
-        {tab === "broadcasts" && <AdminBroadcasts embedded />}
-        {tab === "support-inbox" && <SupportInbox embedded />}
-        {tab === "support-alerts" && <SupportAlertsPage embedded />}
-        {tab === "media-libraries" && <MediaLibrariesPanel sub={sub} />}
-        {tab === "popups" && <PopupsManager embedded />}
-      </div>
+      {/* Chat-like tabs own their own scroll (inbox list + thread).
+          Page-style tabs scroll the whole panel. Mixing the two causes the
+          messenger header/sidebar to drift as the outer container scrolls. */}
+      {tab === "messages" || tab === "support-inbox" || tab === "support-alerts" ? (
+        <div className="min-h-0 flex-1 overflow-hidden">
+          {tab === "messages" && <MessagesInbox initialClient={client} embedded />}
+          {tab === "support-inbox" && <SupportInbox embedded />}
+          {tab === "support-alerts" && <SupportAlertsPage embedded />}
+        </div>
+      ) : (
+        <div className="min-h-0 flex-1 overflow-auto">
+          {tab === "broadcasts" && <AdminBroadcasts embedded />}
+          {tab === "media-libraries" && <MediaLibrariesPanel sub={sub} />}
+          {tab === "popups" && <PopupsManager embedded />}
+        </div>
+      )}
     </div>
   );
 }
