@@ -19,11 +19,11 @@ const completeWorkout = vi.fn(async () => ({}));
 const uncompleteWorkout = vi.fn(async () => ({}));
 
 vi.mock("@/lib/member-plans.functions", () => ({
-  rescheduleDay: (args: any) => rescheduleDay(args),
-  getEnrollmentSchedule: (args: any) => getEnrollmentSchedule(args),
-  logSet: (args: any) => logSet(args),
-  completeWorkout: (args: any) => completeWorkout(args),
-  uncompleteWorkout: (args: any) => uncompleteWorkout(args),
+  rescheduleDay: (...args: any[]) => rescheduleDay(...(args as [any])),
+  getEnrollmentSchedule: (...args: any[]) => getEnrollmentSchedule(...(args as [any])),
+  logSet: (...args: any[]) => logSet(...(args as [any])),
+  completeWorkout: (...args: any[]) => completeWorkout(...(args as [any])),
+  uncompleteWorkout: (...args: any[]) => uncompleteWorkout(...(args as [any])),
 }));
 
 vi.mock("@/integrations/supabase/client", () => ({
