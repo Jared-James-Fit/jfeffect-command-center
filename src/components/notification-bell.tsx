@@ -163,28 +163,8 @@ export function useNotificationFeed() {
   // ---- Realtime: one consolidated channel per user ----------------------
   useEffect(() => {
     if (!user) return;
-    let timer: ReturnType<typeof setTimeout> | null = null;
-    const invalidate = () => {
-      if (timer) clearTimeout(timer);
-      timer = setTimeout(() => {
-        qc.invalidateQueries({ queryKey: ["notifications"] });
-      }, 300);
-    };
-    const ch = supabase
-      .channel(`notifications-${user.id}`)
-      .on("postgres_changes", { event: "*", schema: "public", table: "messages" }, invalidate)
-      .on("postgres_changes", { event: "*", schema: "public", table: "conversation_state" }, invalidate)
-      .on("postgres_changes", { event: "*", schema: "public", table: "lift_videos" }, invalidate)
-      .on("postgres_changes", { event: "*", schema: "public", table: "lift_video_comments" }, invalidate)
-      .on("postgres_changes", { event: "*", schema: "public", table: "agreements" }, invalidate)
-      .on("postgres_changes", { event: "*", schema: "public", table: "pl_exercise_notes" }, invalidate)
-      .on("postgres_changes", { event: "*", schema: "public", table: "group_messages" }, invalidate)
-      .on("postgres_changes", { event: "*", schema: "public", table: "chat_group_members" }, invalidate)
-      .on("postgres_changes", { event: "*", schema: "public", table: "manual_check_in_reviews" }, invalidate)
-      .on("postgres_changes", { event: "*", schema: "public", table: "appointments" }, invalidate)
-      .on("postgres_changes", { event: "*", schema: "public", table: "notification_state", filter: `user_id=eq.${user.id}` }, invalidate)
-      .subscribe();
-    return () => { if (timer) clearTimeout(timer); supabase.removeChannel(ch); };
+    const release = acquireNotificationsChannel(user.id, qc);
+    return release;
   }, [user, qc]);
 
   const query = useQuery({
