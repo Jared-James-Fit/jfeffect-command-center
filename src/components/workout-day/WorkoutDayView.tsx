@@ -58,6 +58,8 @@ import { formatDuration } from "@/lib/duration";
 import { Timer } from "lucide-react";
 import type { WorkoutContextAdapter } from "@/lib/workout-context";
 import { summarizeCompleteness, type RequiredRowSpec, type LoggedSetSpec, type RowMetricKind } from "@/lib/workout-completeness";
+import { useWorkoutHeartbeat, readHeartbeatTimestamps, clearHeartbeatTimestamps } from "@/hooks/use-workout-heartbeat";
+import { computeActiveSeconds } from "@/lib/workout-duration";
 import { LoggingQualityBadge } from "@/components/workout/shared/logging-quality-badge";
 
 /* -------------------------------------------------------------------------- */
@@ -445,6 +447,16 @@ function WorkoutDay({
     }
     qc.invalidateQueries({ queryKey: ["pl-day-completion", dayId] });
   };
+
+  // Heartbeat: persist activity timestamps to localStorage while the
+  // workout is in-flight so the final active_duration_seconds reflects
+  // real engaged time and survives a mid-workout refresh.
+  const heartbeatEnabled = !!completion?.id && !completion?.completed_at && !readonly && !isImpersonating;
+  useWorkoutHeartbeat(
+    heartbeatEnabled
+      ? { enabled: true, completionId: completion!.id, ping: { kind: "client", dayId } }
+      : { enabled: false },
+  );
 
   const [notes, setNotes] = useState("");
   const [actualMin, setActualMin] = useState<string>("");
@@ -1084,10 +1096,12 @@ function WorkoutDay({
                 }));
                 const sum = summarizeCompleteness(required, logged);
                 const elapsedSec = Math.max(0, Math.round((new Date(completedAt).getTime() - new Date(startedAt).getTime()) / 1000));
+                const heartbeats = readHeartbeatTimestamps(completion?.id ?? null);
+                const activeSec = computeActiveSeconds(startedAt, completedAt, heartbeats) ?? elapsedSec;
                 Object.assign(baseRow, {
                   last_activity_at: completedAt,
                   elapsed_duration_seconds: elapsedSec,
-                  active_duration_seconds: Math.min(elapsedSec, 12 * 3600),
+                  active_duration_seconds: Math.min(activeSec, elapsedSec),
                   required_sets_count: sum.requiredSets,
                   logged_sets_count: sum.loggedSets,
                   skipped_exercises_count: sum.skippedExercises,
@@ -1104,6 +1118,7 @@ function WorkoutDay({
                 if (error) throw error;
               }
               if (draftKey) clearLocalDraft(draftKey);
+              clearHeartbeatTimestamps(completion?.id ?? null);
               setNotes("");
               setActualMin("");
               await qc.invalidateQueries({ queryKey: ["pl-day-completion", dayId] });
