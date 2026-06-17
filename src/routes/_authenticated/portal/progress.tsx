@@ -5,6 +5,7 @@ import { usePortalUserId } from "@/lib/client-impersonation";
 import { PageHeader } from "@/components/app-shell";
 import { Card } from "@/components/ui/card";
 import { ProgressSection } from "@/components/progress/progress-section";
+import { CheckInScheduleCard } from "@/components/progress/check-in-schedule-card";
 
 export const Route = createFileRoute("/_authenticated/portal/progress")({
   component: PortalProgress,
@@ -48,6 +49,13 @@ function PortalProgress() {
           canRequestReview: true,
         }}
       />
+      <div className="px-3 md:px-6 pb-6">
+        <CheckInScheduleCard
+          userId={userId}
+          title="Your check-in reminders"
+          subtitle="Pick how often you want to be reminded for each check-in."
+        />
+      </div>
     </>
   );
 }
