@@ -103,48 +103,6 @@ function WorkoutTracker() {
     registerQueueHandler("m_uncomplete_workout", async (payload: any) => { await uncompleteFn({ data: payload }); });
   }, [logFn, completeFn, uncompleteFn]);
 
-  // Heartbeat lifecycle: stamp start once, then push activity timestamps
-  // (coalesced to once per 20s) on user input and visibility. Disabled
-  // once the workout is complete or while a coach is impersonating.
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    if (completion) return; // already complete, nothing to track
-    if (isImpersonating) return;
-    if (!readHbStart()) {
-      try { window.localStorage.setItem(hbKeyStart, new Date().toISOString()); } catch { /* ignore */ }
-    }
-    const COALESCE_MS = 20_000;
-    const PING_MS = 60_000;
-    let lastPush = 0;
-    const push = () => {
-      const now = Date.now();
-      if (now - lastPush < COALESCE_MS) return;
-      lastPush = now;
-      const list = readHbList();
-      list.push(new Date(now).toISOString());
-      writeHbList(list);
-    };
-    push();
-    const onVis = () => { if (document.visibilityState === "visible") push(); };
-    const onFocus = () => push();
-    const onInput = () => push();
-    document.addEventListener("visibilitychange", onVis);
-    window.addEventListener("focus", onFocus);
-    window.addEventListener("pointerdown", onInput, { passive: true });
-    window.addEventListener("keydown", onInput);
-    const interval = window.setInterval(() => {
-      if (document.visibilityState === "visible") push();
-    }, PING_MS);
-    return () => {
-      document.removeEventListener("visibilitychange", onVis);
-      window.removeEventListener("focus", onFocus);
-      window.removeEventListener("pointerdown", onInput);
-      window.removeEventListener("keydown", onInput);
-      window.clearInterval(interval);
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [completion, isImpersonating, hbKeyStart]);
-
   const { data: enr, isError: enrError, isSuccess: enrLoaded, refetch: refetchEnr } = useQuery({
     queryKey: ["m-enrollment", enrollmentId],
     initialData: cachedInitialData<any>(cacheScope, "enrollment"),
