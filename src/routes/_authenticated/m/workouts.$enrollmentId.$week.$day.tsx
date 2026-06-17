@@ -30,7 +30,8 @@ import { computeWorkoutSummary, type WorkoutSummary } from "@/lib/workout-summar
 import { WorkoutSubmissionSummary } from "@/components/workout-submission-summary";
 import { summarizeCompleteness, type RequiredRowSpec, type LoggedSetSpec } from "@/lib/workout-completeness";
 import { LoggingQualityBadge } from "@/components/workout/shared/logging-quality-badge";
-import { WorkoutReviewEditor } from "@/components/workout/shared/workout-review-editor";
+import { CompletedWorkoutActions } from "@/components/workout/shared/completed-workout-actions";
+import { computeActiveSeconds } from "@/lib/workout-duration";
 
 export const Route = createFileRoute("/_authenticated/m/workouts/$enrollmentId/$week/$day")({
   component: () => (
@@ -57,10 +58,39 @@ function WorkoutTracker() {
   const [logs, setLogs] = useState<Record<string, SetLog>>({});
   const [summaryOpen, setSummaryOpen] = useState(false);
   const [lastSummary, setLastSummary] = useState<WorkoutSummary | null>(null);
-  const [reviewOpen, setReviewOpen] = useState(false);
 
   const cacheScope = `m:${enrollmentId}`;
   const route = `/m/workouts/${enrollmentId}/${week}/${day}`;
+
+  // ── Heartbeat-based active duration (member parity with client tracker) ──
+  // There's no completion row until the user marks the workout complete, so
+  // we key local state by `m:enrollmentId:week:day`. started_at is stamped on
+  // first mount; activity timestamps accrue on input/focus/visibility and
+  // survive refresh. On complete we hand both to the server fn so the stored
+  // active_duration_seconds reflects engaged time, not wall-clock.
+  const hbKeyStart = `m-hb-start:${enrollmentId}:${weekIndex}:${dayIndex}`;
+  const hbKeyList = `m-hb-list:${enrollmentId}:${weekIndex}:${dayIndex}`;
+  const readHbStart = (): string | null => {
+    if (typeof window === "undefined") return null;
+    try { return window.localStorage.getItem(hbKeyStart); } catch { return null; }
+  };
+  const readHbList = (): string[] => {
+    if (typeof window === "undefined") return [];
+    try {
+      const raw = window.localStorage.getItem(hbKeyList);
+      if (!raw) return [];
+      const arr = JSON.parse(raw);
+      return Array.isArray(arr) ? arr.filter((s) => typeof s === "string") : [];
+    } catch { return []; }
+  };
+  const writeHbList = (list: string[]) => {
+    if (typeof window === "undefined") return;
+    try { window.localStorage.setItem(hbKeyList, JSON.stringify(list.slice(-600))); } catch { /* quota */ }
+  };
+  const clearHb = () => {
+    if (typeof window === "undefined") return;
+    try { window.localStorage.removeItem(hbKeyStart); window.localStorage.removeItem(hbKeyList); } catch { /* ignore */ }
+  };
 
   // Register offline handlers once. These are the queue's only access to the
   // server fns — saveLog() etc. push payloads here instead of calling RPC
@@ -129,6 +159,48 @@ function WorkoutTracker() {
     }
     setLogs(map);
   }, [existingLogs]);
+
+  // Heartbeat lifecycle: stamp start once, then push activity timestamps
+  // (coalesced to once per 20s) on user input and visibility. Disabled
+  // once the workout is complete or while a coach is impersonating.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (completion) return;
+    if (isImpersonating) return;
+    if (!readHbStart()) {
+      try { window.localStorage.setItem(hbKeyStart, new Date().toISOString()); } catch { /* ignore */ }
+    }
+    const COALESCE_MS = 20_000;
+    const PING_MS = 60_000;
+    let lastPush = 0;
+    const push = () => {
+      const now = Date.now();
+      if (now - lastPush < COALESCE_MS) return;
+      lastPush = now;
+      const list = readHbList();
+      list.push(new Date(now).toISOString());
+      writeHbList(list);
+    };
+    push();
+    const onVis = () => { if (document.visibilityState === "visible") push(); };
+    const onFocus = () => push();
+    const onInput = () => push();
+    document.addEventListener("visibilitychange", onVis);
+    window.addEventListener("focus", onFocus);
+    window.addEventListener("pointerdown", onInput, { passive: true });
+    window.addEventListener("keydown", onInput);
+    const interval = window.setInterval(() => {
+      if (document.visibilityState === "visible") push();
+    }, PING_MS);
+    return () => {
+      document.removeEventListener("visibilitychange", onVis);
+      window.removeEventListener("focus", onFocus);
+      window.removeEventListener("pointerdown", onInput);
+      window.removeEventListener("keydown", onInput);
+      window.clearInterval(interval);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [completion, isImpersonating, hbKeyStart]);
 
   if (!enr && !enrLoaded && !enrError) {
     return <div className="p-6 text-sm text-muted-foreground">Loading…</div>;
@@ -295,11 +367,23 @@ function WorkoutTracker() {
       displayUnit: "lb",
       hasNote: !!notes.trim(),
     });
+    // Heartbeat-derived duration. Falls back gracefully if storage was wiped.
+    const startedAtIso = readHbStart() ?? new Date().toISOString();
+    const completedAtIso = new Date().toISOString();
+    const heartbeats = readHbList();
+    const activeSeconds = computeActiveSeconds(startedAtIso, completedAtIso, heartbeats) ?? null;
     enqueueOfflineWrite({
       id: `m_complete:${enrollmentId}:${weekIndex}:${dayIndex}`,
       label: "Marked workout complete",
       handlerKey: "m_complete_workout",
-      payload: { enrollmentId, weekIndex, dayIndex, notes },
+      payload: {
+        enrollmentId,
+        weekIndex,
+        dayIndex,
+        notes,
+        startedAt: startedAtIso,
+        ...(activeSeconds != null ? { activeDurationSeconds: activeSeconds } : {}),
+      },
     });
     toast.success(`Workout complete — Score: ${summary.score}/100`, {
       description: summary.totalLifted > 0 ? `Total lifted: ${summary.totalLiftedFmt}` : "Syncing in background.",
@@ -307,7 +391,8 @@ function WorkoutTracker() {
     setLastSummary(summary);
     setSummaryOpen(true);
     qc.setQueryData(["m-completion", enrollmentId, weekIndex, dayIndex],
-      (old: any) => old ?? { enrollment_id: enrollmentId, week_index: weekIndex, day_index: dayIndex, completed_at: new Date().toISOString(), _optimistic: true });
+      (old: any) => old ?? { enrollment_id: enrollmentId, week_index: weekIndex, day_index: dayIndex, completed_at: completedAtIso, started_at: startedAtIso, active_duration_seconds: activeSeconds, _optimistic: true });
+    clearHb();
     undo.push({
       label: "Marked workout complete",
       undo: () => {
@@ -379,6 +464,30 @@ function WorkoutTracker() {
         workoutId={null}
         pageRoute={route}
       />
+      {isComplete && (
+        <CompletedWorkoutActions
+          ctx={{ kind: "member", enrollmentId, weekIndex, dayIndex }}
+          hasCoach={false}
+          initialReview={
+            existingReview
+              ? {
+                  overallRating: existingReview.overall_rating,
+                  sessionRpe: existingReview.session_rpe,
+                  pain: existingReview.pain,
+                  painLevel: existingReview.pain_level,
+                  painArea: existingReview.pain_area,
+                  painNote: existingReview.pain_note,
+                  clientNote: existingReview.client_note,
+                  editCount: existingReview.review_edit_count,
+                  submittedAt: existingReview.review_submitted_at,
+                }
+              : null
+          }
+          onReviewSaved={() =>
+            qc.invalidateQueries({ queryKey: ["m-review", enrollmentId, weekIndex, dayIndex] })
+          }
+        />
+      )}
       {rows.length === 0 && (
         <WorkoutEmptyCard
           clientId={null}
@@ -438,38 +547,9 @@ function WorkoutTracker() {
             ? <Button variant="outline" onClick={handleUncomplete}>Mark incomplete</Button>
             : <ActionButton onAction={handleComplete} loadingLabel="Saving…" successLabel="Complete" successToast="Workout complete" icon={<CheckCircle2 className="h-4 w-4" />}>Mark workout complete</ActionButton>}
           <Button variant="ghost" onClick={() => navigate({ to: "/m/my-plans/$enrollmentId", params: { enrollmentId } })}>Back to plan</Button>
-          {isComplete && (
-            <Button variant="secondary" onClick={() => setReviewOpen(true)}>
-              {existingReview?.review_submitted_at ? "View / edit review" : "Add review"}
-            </Button>
-          )}
         </div>
       </Card>
 
-      <WorkoutReviewEditor
-        open={reviewOpen}
-        onOpenChange={setReviewOpen}
-        hasCoach={false}
-        ctx={{ kind: "member", enrollmentId, weekIndex, dayIndex }}
-        initial={
-          existingReview
-            ? {
-                overallRating: existingReview.overall_rating,
-                sessionRpe: existingReview.session_rpe,
-                pain: existingReview.pain,
-                painLevel: existingReview.pain_level,
-                painArea: existingReview.pain_area,
-                painNote: existingReview.pain_note,
-                clientNote: existingReview.client_note,
-                editCount: existingReview.review_edit_count,
-                submittedAt: existingReview.review_submitted_at,
-              }
-            : null
-        }
-        onSaved={() =>
-          qc.invalidateQueries({ queryKey: ["m-review", enrollmentId, weekIndex, dayIndex] })
-        }
-      />
     </div>
   );
 }
