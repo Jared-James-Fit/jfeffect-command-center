@@ -568,9 +568,9 @@ export function NotificationBell() {
     <button
       type="button"
       aria-label={unreadCount > 0 ? `${unreadCount} unread notifications` : "Notifications"}
-      className="relative grid h-9 w-9 place-items-center rounded-md hover:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      className="relative grid h-11 w-11 place-items-center rounded-md hover:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:h-9 sm:w-9"
     >
-      <Bell className="h-4 w-4" />
+      <Bell className="h-5 w-5 sm:h-4 sm:w-4" />
       {unreadCount > 0 && (
         <Badge className="absolute -right-1 -top-1 h-4 min-w-4 rounded-full bg-primary px-1 text-[9px] font-bold text-primary-foreground">
           {unreadCount > 99 ? "99+" : unreadCount}
