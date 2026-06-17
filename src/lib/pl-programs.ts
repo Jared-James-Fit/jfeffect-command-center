@@ -1327,7 +1327,19 @@ export async function saveBlockAsTemplate(blockId: string, name: string, style: 
 
 export async function getClientWorkouts(clientId: string) {
   // Visible blocks → weeks → days, plus completion status
-  const { data: blocks } = await sb.from("pl_blocks").select("*").eq("client_id", clientId).eq("client_visible", true).neq("status", "Archived").order("created_at", { ascending: true });
+  // Order matches pickCurrentBlock() and listClientBlocks(): sort_order first
+  // so coach-driven reordering takes effect everywhere, with created_at as
+  // a stable tiebreaker. Previously this used created_at only, causing the
+  // workouts list/calendar to disagree with the block-view tab about which
+  // block is "current".
+  const { data: blocks } = await sb
+    .from("pl_blocks")
+    .select("*")
+    .eq("client_id", clientId)
+    .eq("client_visible", true)
+    .neq("status", "Archived")
+    .order("sort_order", { ascending: true, nullsFirst: false })
+    .order("created_at", { ascending: true });
   const blockIds = (blocks ?? []).map((b: any) => b.id);
   if (!blockIds.length) return [];
   const { data: weeks } = await sb.from("pl_weeks").select("*").in("block_id", blockIds).order("week_index");
