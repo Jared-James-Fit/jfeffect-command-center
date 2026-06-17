@@ -13,6 +13,7 @@ import {
   AlertCircle,
   Download,
 } from "lucide-react";
+import { Camera } from "lucide-react";
 import { Sparkles } from "lucide-react";
 import type { NavItem } from "@/components/app-shell";
 
