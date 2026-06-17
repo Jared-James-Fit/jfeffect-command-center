@@ -810,15 +810,11 @@ function BlockViewTab({
   }, [items]);
 
   const today = localStartOfToday();
+  // Date-range driven (with sort_order / earliest-start tiebreakers) so
+  // multi-block templates pick the right "current" block instead of a
+  // random Active one.
   const defaultBlock =
-    blocks.find((b: any) => {
-      const s = b?.start_date ? new Date(b.start_date + "T00:00:00") : null;
-      const e = b?.end_date ? new Date(b.end_date + "T00:00:00") : null;
-      if (!s) return false;
-      if (s > today) return false;
-      if (e && e < today) return false;
-      return true;
-    }) ?? blocks[blocks.length - 1] ?? null;
+    pickCurrentBlock(blocks, today) ?? blocks[blocks.length - 1] ?? null;
 
   const [selectedBlockId, setSelectedBlockId] = useState<string | null>(defaultBlock?.id ?? null);
   useEffect(() => {
