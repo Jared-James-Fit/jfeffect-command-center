@@ -16,6 +16,7 @@ import { ManualCheckInReviewModal } from "@/components/manual-check-in-review-mo
 import { ClientActionRequestModal } from "@/components/client-action-request-modal";
 import { UpcomingEventsPanel } from "@/components/events/upcoming-events-panel";
 import { QuickActionsGrid } from "@/components/portal/quick-actions-grid";
+import { InstallAppCard } from "@/components/portal/install-app-card";
 import { IntakeAnswersBigButton } from "@/components/clients/intake-answers-dialog";
 import { ActionCentre, type ActionItem } from "@/components/portal/action-centre";
 import { TrainingBlockCard } from "@/components/portal/training-block-card";
@@ -399,6 +400,9 @@ function PortalHome() {
             weeklyCheckInFormId={pickWeeklyCheckInForm(assignedForms as any)?.id}
           />
         )}
+
+        {/* 3a — Install JF Effect on Your Phone (permanent action) */}
+        {client && <InstallAppCard />}
 
         {/* 3b — Intake & form answers (one-tap access for the client) */}
         {client && (
