@@ -24,9 +24,17 @@ function EnrollmentView() {
   // membership workout context. Underlying server fn is the same; this
   // keeps the call site uniform with completions/log writes once those
   // migrate too. See member-adapter-probe for drift verification.
+  const { data: userId } = useQuery({
+    queryKey: ["m-auth-user"],
+    queryFn: async () => (await supabase.auth.getUser()).data.user?.id ?? null,
+    staleTime: 60_000,
+  });
   const adapter = useMemo(
-    () => buildWorkoutAdapter({ kind: "member", enrollmentId }),
-    [enrollmentId],
+    () =>
+      userId
+        ? buildWorkoutAdapter({ kind: "member", userId, ownerId: userId, enrollmentId })
+        : null,
+    [enrollmentId, userId],
   );
 
   const { data: enr } = useQuery({
@@ -53,7 +61,7 @@ function EnrollmentView() {
   const { data: scheduleData } = useQuery({
     queryKey: ["m-schedule", enrollmentId],
     queryFn: async () => {
-      const days = await adapter.listSchedule();
+      const days = await adapter!.listSchedule();
       return {
         schedule: days.map((d) => ({
           week: d.week,
@@ -63,6 +71,7 @@ function EnrollmentView() {
         })),
       };
     },
+    enabled: !!adapter,
   });
 
   const doneSet = useMemo(
