@@ -11,6 +11,18 @@ import {
   type WorkoutCompletion,
   type RescheduleInput,
   type LogSetInput,
+  type WorkoutDay,
+  type ExerciseRowDTO,
+  type RowResultDTO,
+  type ExerciseNoteDTO,
+  type HistoryEntryDTO,
+  type MaxEntryDTO,
+  type DayCompletionDTO,
+  type DayCompletionPatch,
+  type RowBlockSummaryDTO,
+  type CoachPainFlagDTO,
+  type UpsertRowResultInput,
+  type UpsertExerciseNoteInput,
 } from "./types";
 import { getClientSchedule, applyBulkScheduleChange } from "@/lib/schedule-bulk.functions";
 
@@ -25,6 +37,10 @@ export function createClientAdapter(ref: WorkoutContextRef): WorkoutContextAdapt
       canReschedule: true,
       canSubstituteExercise: true,
       canSeeCoachNotes: true,
+      canSeeCoachIntel: true,
+      canLeaveCoachFeedback: false, // viewer is the client; coach POV sets this elsewhere
+      canSeeAdminNotes: false,
+      canAssignPrograms: false,
     },
     async listSchedule(opts): Promise<WorkoutScheduleDay[]> {
       const res = await getClientSchedule({ data: { clientId: ref.ownerId } });
@@ -100,5 +116,22 @@ export function createClientAdapter(ref: WorkoutContextRef): WorkoutContextAdapt
     async completeDay(_dayId: string): Promise<void> {
       throw new NotImplemented("completeDay", "client");
     },
+
+    /* ---- Phase B day-view surface (stubs filled in Phase B). ---- */
+    async getDay(_dayId: string): Promise<WorkoutDay> { throw new NotImplemented("getDay", "client"); },
+    async listRows(_dayId: string): Promise<ExerciseRowDTO[]> { throw new NotImplemented("listRows", "client"); },
+    async listRowResults(_dayId: string): Promise<RowResultDTO[]> { throw new NotImplemented("listRowResults", "client"); },
+    async listExerciseNotes(_dayId: string): Promise<ExerciseNoteDTO[]> { throw new NotImplemented("listExerciseNotes", "client"); },
+    async listExerciseHistory(_exerciseId: string): Promise<HistoryEntryDTO[]> { throw new NotImplemented("listExerciseHistory", "client"); },
+    async listClientMaxes(): Promise<MaxEntryDTO[]> { throw new NotImplemented("listClientMaxes", "client"); },
+    async getDayCompletion(_dayId: string): Promise<DayCompletionDTO | null> { throw new NotImplemented("getDayCompletion", "client"); },
+    async getRowBlockSummaries(_rowIds: string[]): Promise<RowBlockSummaryDTO[]> { throw new NotImplemented("getRowBlockSummaries", "client"); },
+    async listCoachPainFlags(_dayId: string): Promise<CoachPainFlagDTO[]> { throw new NotImplemented("listCoachPainFlags", "client"); },
+    async upsertRowResult(_input: UpsertRowResultInput): Promise<string> { throw new NotImplemented("upsertRowResult", "client"); },
+    async deleteRowResult(_id: string): Promise<void> { throw new NotImplemented("deleteRowResult", "client"); },
+    async upsertExerciseNote(_input: UpsertExerciseNoteInput): Promise<void> { throw new NotImplemented("upsertExerciseNote", "client"); },
+    async updateDayCompletion(_dayId: string, _patch: DayCompletionPatch): Promise<void> { throw new NotImplemented("updateDayCompletion", "client"); },
+    async saveExerciseUnitPref(_input: { exerciseId: string; unit: "lb" | "kg" }): Promise<void> { throw new NotImplemented("saveExerciseUnitPref", "client"); },
+    async notifyCoachOfFailure(_input: { dayId: string; reason: string }): Promise<void> { throw new NotImplemented("notifyCoachOfFailure", "client"); },
   };
 }
