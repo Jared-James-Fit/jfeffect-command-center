@@ -94,9 +94,26 @@ export async function getCoachIntel(opts?: { coachId?: string | null }): Promise
   if (clientIds.length === 0) return [];
 
   const { data: preps = [] } = await sb.from("pl_preps").select("*").in("client_id", clientIds).in("status", ["Active", "Planned"]);
-  const { data: blocks = [] } = await sb.from("pl_blocks").select("id, client_id, prep_id, name, status, weeks, updated_at").in("client_id", clientIds).in("status", ["Active", "Draft"]);
+  const { data: blocks = [] } = await sb
+    .from("pl_blocks")
+    .select("id, client_id, prep_id, name, status, weeks, updated_at, start_date, end_date, sort_order, archived, created_at")
+    .in("client_id", clientIds)
+    .in("status", ["Active", "Draft"]);
 
-  const activeBlockIds = (blocks as any[]).filter((b) => b.status === "Active").map((b) => b.id);
+  // Date-range driven current-block picker, one per client. See
+  // `pickCurrentBlock` for tiebreakers (earliest start_date, then sort_order).
+  const currentBlockByClient = new Map<string, any>();
+  const blocksByClient = new Map<string, any[]>();
+  for (const b of blocks as any[]) {
+    const list = blocksByClient.get(b.client_id) ?? [];
+    list.push(b);
+    blocksByClient.set(b.client_id, list);
+  }
+  for (const [cid, list] of blocksByClient) {
+    const picked = pickCurrentBlock(list);
+    if (picked) currentBlockByClient.set(cid, picked);
+  }
+  const activeBlockIds = Array.from(currentBlockByClient.values()).map((b) => b.id);
   let weekIds: string[] = [];
   if (activeBlockIds.length) {
     const { data: weeks = [] } = await sb.from("pl_weeks").select("id, block_id").in("block_id", activeBlockIds);
