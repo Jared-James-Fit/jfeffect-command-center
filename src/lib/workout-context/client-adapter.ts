@@ -25,6 +25,13 @@ import {
   type UpsertExerciseNoteInput,
 } from "./types";
 import { getClientSchedule, applyBulkScheduleChange } from "@/lib/schedule-bulk.functions";
+import { supabase } from "@/integrations/supabase/client";
+import { listClientMaxes as listClientMaxesRaw } from "@/lib/pl-maxes";
+import { saveExerciseUnitPref as saveExerciseUnitPrefRaw } from "@/lib/exercise-unit-prefs";
+import { getRowBlockSummariesFn } from "@/lib/exercise-blocks.functions";
+import { notifyCoachOfWorkoutFailure } from "@/lib/support-alerts.functions";
+
+const sb = supabase as any;
 
 export function createClientAdapter(ref: WorkoutContextRef): WorkoutContextAdapter {
   if (ref.kind !== "client") throw new Error("createClientAdapter requires kind=client");
@@ -110,28 +117,331 @@ export function createClientAdapter(ref: WorkoutContextRef): WorkoutContextAdapt
         },
       });
     },
-    async logSet(_input: LogSetInput): Promise<void> {
-      throw new NotImplemented("logSet", "client");
+    async logSet(input: LogSetInput): Promise<void> {
+      // Client logger writes through upsertRowResult; logSet is the
+      // adapter-agnostic shortcut for new rows.
+      await this.upsertRowResult({
+        rowId: input.rowId,
+        setIndex: input.setIndex,
+        reps: input.reps ?? null,
+        loadLb: input.loadLb ?? null,
+        rpe: input.rpe ?? null,
+        rir: input.rir ?? null,
+        isWorkingSet: input.isWorkingSet ?? null,
+        notes: input.notes ?? null,
+        completedDurationSeconds: input.completedDurationSeconds ?? null,
+      });
     },
-    async completeDay(_dayId: string): Promise<void> {
-      throw new NotImplemented("completeDay", "client");
+    async completeDay(dayId: string): Promise<void> {
+      await this.updateDayCompletion(dayId, {
+        completedAt: new Date().toISOString(),
+      });
     },
 
-    /* ---- Phase B day-view surface (stubs filled in Phase B). ---- */
-    async getDay(_dayId: string): Promise<WorkoutDay> { throw new NotImplemented("getDay", "client"); },
-    async listRows(_dayId: string): Promise<ExerciseRowDTO[]> { throw new NotImplemented("listRows", "client"); },
-    async listRowResults(_dayId: string): Promise<RowResultDTO[]> { throw new NotImplemented("listRowResults", "client"); },
-    async listExerciseNotes(_dayId: string): Promise<ExerciseNoteDTO[]> { throw new NotImplemented("listExerciseNotes", "client"); },
-    async listExerciseHistory(_exerciseId: string): Promise<HistoryEntryDTO[]> { throw new NotImplemented("listExerciseHistory", "client"); },
-    async listClientMaxes(): Promise<MaxEntryDTO[]> { throw new NotImplemented("listClientMaxes", "client"); },
-    async getDayCompletion(_dayId: string): Promise<DayCompletionDTO | null> { throw new NotImplemented("getDayCompletion", "client"); },
-    async getRowBlockSummaries(_rowIds: string[]): Promise<RowBlockSummaryDTO[]> { throw new NotImplemented("getRowBlockSummaries", "client"); },
-    async listCoachPainFlags(_dayId: string): Promise<CoachPainFlagDTO[]> { throw new NotImplemented("listCoachPainFlags", "client"); },
-    async upsertRowResult(_input: UpsertRowResultInput): Promise<string> { throw new NotImplemented("upsertRowResult", "client"); },
-    async deleteRowResult(_id: string): Promise<void> { throw new NotImplemented("deleteRowResult", "client"); },
-    async upsertExerciseNote(_input: UpsertExerciseNoteInput): Promise<void> { throw new NotImplemented("upsertExerciseNote", "client"); },
-    async updateDayCompletion(_dayId: string, _patch: DayCompletionPatch): Promise<void> { throw new NotImplemented("updateDayCompletion", "client"); },
-    async saveExerciseUnitPref(_input: { exerciseId: string; unit: "lb" | "kg" }): Promise<void> { throw new NotImplemented("saveExerciseUnitPref", "client"); },
-    async notifyCoachOfFailure(_input: { dayId: string; reason: string }): Promise<void> { throw new NotImplemented("notifyCoachOfFailure", "client"); },
+    /* ---- Phase C day-view surface ---- */
+    async getDay(dayId: string): Promise<WorkoutDay> {
+      const { data: d, error } = await sb
+        .from("pl_days")
+        .select("*, pl_weeks(id, week_index, block_id, pl_blocks(id, name))")
+        .eq("id", dayId)
+        .maybeSingle();
+      if (error) throw new Error(error.message);
+      if (!d) throw new Error(`pl_days row not found for ${dayId}`);
+      const w = (d as any).pl_weeks ?? null;
+      const b = w?.pl_blocks ?? null;
+      return {
+        id: dayId,
+        week: w?.week_index ?? 0,
+        day: (d as any).day_index ?? 0,
+        title: (d as any).title ?? (d as any).focus ?? null,
+        focus: (d as any).focus ?? null,
+        targetMinutes:
+          (d as any).target_minutes ?? (d as any).est_minutes ?? null,
+        blockId: b?.id ?? null,
+        blockName: b?.name ?? null,
+        scheduledDate: (d as any).scheduled_date ?? null,
+      };
+    },
+
+    async listRows(dayId: string): Promise<ExerciseRowDTO[]> {
+      const { data, error } = await sb
+        .from("pl_exercise_rows")
+        .select(
+          "*, exercises(id,name,video_url,vimeo_embed_url,thumbnail_url,cues,common_mistakes,muscle_group,category,pl_lift_group,warmup_protocol_id,is_powerlifting,warmup_notes,default_load_unit,exercise_category,is_competition_lift,competition_lift_type)",
+        )
+        .eq("day_id", dayId)
+        .order("sort_order");
+      if (error) throw new Error(error.message);
+      return (data ?? []).map((r: any) => {
+        const ex = r.exercises ?? null;
+        return {
+          id: r.id,
+          exerciseId: ex?.id ?? r.exercise_id ?? null,
+          exerciseName: ex?.name ?? r.exercise_name ?? "Exercise",
+          videoUrl: ex?.video_url ?? null,
+          vimeoEmbedUrl: ex?.vimeo_embed_url ?? null,
+          thumbnailUrl: ex?.thumbnail_url ?? null,
+          muscleGroup: ex?.muscle_group ?? null,
+          category: ex?.category ?? null,
+          cues: ex?.cues ?? null,
+          commonMistakes: ex?.common_mistakes ?? null,
+          sortOrder: Number.isFinite(Number(r.sort_order))
+            ? Number(r.sort_order)
+            : 0,
+          targetSets: r.sets ?? null,
+          targetReps: r.reps != null ? String(r.reps) : null,
+          targetEffort:
+            r.rpe != null && String(r.rpe).trim() !== ""
+              ? `RPE ${r.rpe}`
+              : r.rir != null && String(r.rir).trim() !== ""
+                ? `RIR ${r.rir}`
+                : null,
+          targetLoadText:
+            r.load_lb != null
+              ? String(r.load_lb)
+              : r.load_kg != null
+                ? String(r.load_kg)
+                : r.load_text ?? null,
+          restSeconds: r.rest_seconds ?? null,
+          notes: r.notes ?? null,
+          warmupProtocolId: ex?.warmup_protocol_id ?? null,
+          defaultLoadUnit: ex?.default_load_unit ?? null,
+          blockGroupId: r.block_group_id ?? null,
+          raw: r,
+        };
+      });
+    },
+
+    async listRowResults(dayId: string): Promise<RowResultDTO[]> {
+      // Fetch the row ids for this day, then fan out to pl_row_results
+      // restricted to this client. Mirrors WorkoutDayView's behaviour.
+      const { data: rowIdsRes, error: rowErr } = await sb
+        .from("pl_exercise_rows")
+        .select("id")
+        .eq("day_id", dayId);
+      if (rowErr) throw new Error(rowErr.message);
+      const rowIds = (rowIdsRes ?? []).map((r: any) => r.id);
+      if (!rowIds.length) return [];
+      const { data, error } = await sb
+        .from("pl_row_results")
+        .select("*")
+        .in("row_id", rowIds)
+        .eq("client_id", ref.ownerId);
+      if (error) throw new Error(error.message);
+      return (data ?? []).map((r: any) => ({
+        id: r.id,
+        rowId: r.row_id,
+        setIndex: r.set_index,
+        reps: r.actual_reps ?? null,
+        loadLb: r.normalized_lb ?? r.actual_load ?? null,
+        actualLoadUnit: r.actual_load_unit ?? r.entered_unit ?? null,
+        rpe: r.actual_rpe_num ?? null,
+        rir: r.actual_rir ?? null,
+        isWorkingSet: r.is_working_set ?? null,
+        notes: r.notes ?? null,
+        completedDurationSeconds: r.completed_duration_seconds ?? null,
+        loggedAt: r.completed_at ?? r.updated_at ?? null,
+      }));
+    },
+
+    async listExerciseNotes(dayId: string): Promise<ExerciseNoteDTO[]> {
+      const { data, error } = await sb
+        .from("pl_exercise_notes")
+        .select("*")
+        .eq("client_id", ref.ownerId)
+        .eq("day_id", dayId);
+      if (error) throw new Error(error.message);
+      return (data ?? []).map((n: any) => ({
+        id: n.id,
+        rowId: n.row_id ?? null,
+        exerciseId: n.exercise_id ?? null,
+        note: n.note ?? "",
+        createdAt: n.created_at ?? n.updated_at ?? "",
+        authorRole: n.author_role === "coach" ? "coach" : "trainee",
+      }));
+    },
+
+    async listExerciseHistory(exerciseId: string, opts): Promise<HistoryEntryDTO[]> {
+      if (!exerciseId) return [];
+      const { data, error } = await sb
+        .from("pl_row_results")
+        .select(
+          "set_index, completed_at, updated_at, actual_reps, actual_rpe_num, normalized_lb, actual_load, pl_exercise_rows!inner(exercise_id)",
+        )
+        .eq("client_id", ref.ownerId)
+        .eq("pl_exercise_rows.exercise_id", exerciseId)
+        .order("updated_at", { ascending: false })
+        .limit(opts?.limit ?? 100);
+      if (error) throw new Error(error.message);
+      return (data ?? []).map((r: any) => ({
+        date: String(r.completed_at ?? r.updated_at ?? "").slice(0, 10),
+        setIndex: r.set_index,
+        reps: r.actual_reps ?? null,
+        loadLb: r.normalized_lb ?? r.actual_load ?? null,
+        rpe: r.actual_rpe_num ?? null,
+      }));
+    },
+
+    async listClientMaxes(): Promise<MaxEntryDTO[]> {
+      const rows = await listClientMaxesRaw(ref.ownerId);
+      return rows
+        .filter((r: any) => r.exercise_id)
+        .map((r: any) => ({
+          exerciseId: r.exercise_id as string,
+          oneRmLb:
+            r.one_rm_lb ??
+            (r.one_rm_kg != null ? Math.round(r.one_rm_kg * 2.2046226218) : null),
+          estimated: !!r.estimated,
+        }));
+    },
+
+    async getDayCompletion(dayId: string): Promise<DayCompletionDTO | null> {
+      const { data, error } = await sb
+        .from("pl_day_completions")
+        .select("*")
+        .eq("day_id", dayId)
+        .eq("client_id", ref.ownerId)
+        .maybeSingle();
+      if (error) throw new Error(error.message);
+      if (!data) return null;
+      return {
+        id: data.id ?? null,
+        startedAt: data.started_at ?? null,
+        inProgressAt: data.in_progress_at ?? null,
+        completedAt: data.completed_at ?? null,
+        notes: data.notes ?? null,
+        actualMinutes: data.actual_minutes ?? null,
+      };
+    },
+
+    async getRowBlockSummaries(rowIds: string[]): Promise<RowBlockSummaryDTO[]> {
+      if (!rowIds.length) return [];
+      const summary = (await getRowBlockSummariesFn({ data: { rowIds } })) as
+        | Record<string, boolean>
+        | Record<string, string | null>;
+      return Object.entries(summary).map(([rowId, v]) => ({
+        rowId,
+        blockId: null,
+        summary: typeof v === "string" ? v : v ? "unsupported" : null,
+      }));
+    },
+
+    async listCoachPainFlags(dayId: string): Promise<CoachPainFlagDTO[]> {
+      const { data, error } = await sb
+        .from("coach_pain_flags")
+        .select("id, row_id, severity, note, created_at, day_id, client_id")
+        .eq("client_id", ref.ownerId)
+        .eq("day_id", dayId);
+      if (error) {
+        // Day-scoped column may not exist on every deployment; fall back.
+        return [];
+      }
+      return (data ?? []).map((p: any) => ({
+        id: p.id,
+        rowId: p.row_id ?? null,
+        severity: (p.severity as "low" | "medium" | "high") ?? "low",
+        note: p.note ?? null,
+        createdAt: p.created_at ?? "",
+      }));
+    },
+
+    async upsertRowResult(input: UpsertRowResultInput): Promise<string> {
+      const payload: Record<string, unknown> = {
+        row_id: input.rowId,
+        client_id: ref.ownerId,
+        set_index: input.setIndex,
+        actual_reps: input.reps ?? null,
+        normalized_lb: input.loadLb ?? null,
+        actual_load: input.loadLb ?? null,
+        actual_load_unit: input.actualLoadUnit ?? "lb",
+        entered_unit: input.actualLoadUnit ?? "lb",
+        actual_rpe_num: input.rpe ?? null,
+        actual_rir: input.rir ?? null,
+        is_working_set: input.isWorkingSet ?? null,
+        notes: input.notes ?? null,
+        completed_duration_seconds: input.completedDurationSeconds ?? null,
+        completed_at: new Date().toISOString(),
+      };
+      if (input.id) {
+        const { error } = await sb
+          .from("pl_row_results")
+          .update(payload)
+          .eq("id", input.id);
+        if (error) throw new Error(error.message);
+        return input.id;
+      }
+      const { data, error } = await sb
+        .from("pl_row_results")
+        .insert(payload)
+        .select("id")
+        .maybeSingle();
+      if (error) throw new Error(error.message);
+      return (data as any)?.id ?? "";
+    },
+
+    async deleteRowResult(id: string): Promise<void> {
+      const { error } = await sb.from("pl_row_results").delete().eq("id", id);
+      if (error) throw new Error(error.message);
+    },
+
+    async upsertExerciseNote(input: UpsertExerciseNoteInput): Promise<void> {
+      if (input.id) {
+        const { error } = await sb
+          .from("pl_exercise_notes")
+          .update({ note: input.note })
+          .eq("id", input.id);
+        if (error) throw new Error(error.message);
+        return;
+      }
+      const payload: Record<string, unknown> = {
+        client_id: ref.ownerId,
+        row_id: input.rowId ?? null,
+        exercise_id: input.exerciseId ?? null,
+        note: input.note,
+      };
+      const { error } = await sb.from("pl_exercise_notes").insert(payload);
+      if (error) throw new Error(error.message);
+    },
+
+    async updateDayCompletion(dayId: string, patch: DayCompletionPatch): Promise<void> {
+      const { data: existing } = await sb
+        .from("pl_day_completions")
+        .select("id")
+        .eq("day_id", dayId)
+        .eq("client_id", ref.ownerId)
+        .maybeSingle();
+      const dbPatch: Record<string, unknown> = {};
+      if (patch.startedAt !== undefined) dbPatch.started_at = patch.startedAt;
+      if (patch.inProgressAt !== undefined) dbPatch.in_progress_at = patch.inProgressAt;
+      if (patch.completedAt !== undefined) dbPatch.completed_at = patch.completedAt;
+      if (patch.notes !== undefined) dbPatch.notes = patch.notes;
+      if (patch.actualMinutes !== undefined) dbPatch.actual_minutes = patch.actualMinutes;
+      if (existing?.id) {
+        const { error } = await sb
+          .from("pl_day_completions")
+          .update(dbPatch)
+          .eq("id", existing.id);
+        if (error) throw new Error(error.message);
+      } else {
+        const { error } = await sb
+          .from("pl_day_completions")
+          .insert({ day_id: dayId, client_id: ref.ownerId, ...dbPatch });
+        if (error) throw new Error(error.message);
+      }
+    },
+
+    async saveExerciseUnitPref(input: { exerciseId: string; unit: "lb" | "kg" }): Promise<void> {
+      await saveExerciseUnitPrefRaw(ref.ownerId, input.exerciseId, input.unit);
+    },
+
+    async notifyCoachOfFailure(input: { dayId: string; reason: string }): Promise<void> {
+      await notifyCoachOfWorkoutFailure({
+        data: {
+          workout_id: input.dayId,
+          error_message: input.reason,
+          error_type: "workout_load_failure",
+        },
+      });
+    },
   };
 }
