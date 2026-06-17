@@ -1118,6 +1118,7 @@ function WorkoutDay({
                 if (error) throw error;
               }
               if (draftKey) clearLocalDraft(draftKey);
+              clearHeartbeatTimestamps(completion?.id ?? null);
               setNotes("");
               setActualMin("");
               await qc.invalidateQueries({ queryKey: ["pl-day-completion", dayId] });
