@@ -409,7 +409,6 @@ function ClientDetail() {
       return false;
     }
   }, [form, data]);
-  const activeSection = TAB_TO_SECTION[(tab ?? "summary") as TabValue] ?? "client-profile";
 
   const saveAccountInfo = async () => {
     if (!data) return;
