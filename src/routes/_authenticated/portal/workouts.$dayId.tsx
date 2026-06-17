@@ -51,6 +51,8 @@ import { ActiveRestTimerProvider, useRestTimer } from "@/components/active-rest-
 import { ExerciseHistoryButton } from "@/components/exercise-history-sheet";
 import { convertWeight } from "@/lib/progress-metrics";
 import { WorkoutCompleteSheet, type WorkoutCompletePayload } from "@/components/workout-complete-sheet";
+import { WorkoutSubmissionSummary } from "@/components/workout-submission-summary";
+import { computeWorkoutSummary, type WorkoutSummary } from "@/lib/workout-summary";
 import { WorkoutTimerSheet, QuickConfirmDuration, type TimerCompletionPayload } from "@/components/workout-timer-sheet";
 import { formatDuration } from "@/lib/duration";
 import { Timer } from "lucide-react";
@@ -609,6 +611,8 @@ function WorkoutDay() {
   const navigate = useNavigate();
   const [completeOpen, setCompleteOpen] = useState(false);
   const [completeSubmitting, setCompleteSubmitting] = useState(false);
+  const [summaryOpen, setSummaryOpen] = useState(false);
+  const [lastSummary, setLastSummary] = useState<WorkoutSummary | null>(null);
   // Notifications can deep-link with ?review=1 to nudge the member to finish
   // an in-progress workout. Auto-open the quick popup once it lands.
   const reviewParam = search.review === 1;
@@ -972,12 +976,9 @@ function WorkoutDay() {
         <WorkoutCompleteSheet
           open={completeOpen}
           onOpenChange={setCompleteOpen}
-          defaultUnit="lb"
           submitting={completeSubmitting}
           initial={completion ? {
             session_rating: (completion as any).session_rating ?? undefined,
-            session_weight_total: (completion as any).session_weight_total ?? undefined,
-            session_weight_unit: (completion as any).session_weight_unit ?? undefined,
             client_notes: completion.client_notes ?? undefined,
           } : undefined}
           onSubmit={async (payload: WorkoutCompletePayload) => {
@@ -991,6 +992,16 @@ function WorkoutDay() {
                 1,
                 Math.round((new Date(completedAt).getTime() - new Date(startedAt).getTime()) / 60000),
               );
+              const displayUnit: "kg" | "lb" =
+                ((client as any)?.preferred_weight_unit === "kg" ? "kg" : "lb");
+              const computed = computeWorkoutSummary(
+                rows as any[],
+                results as any[],
+                {
+                  displayUnit,
+                  hasNote: !!(payload.client_notes && payload.client_notes.trim()),
+                },
+              );
               const baseRow: any = {
                 day_id: dayId,
                 client_id: client.id,
@@ -1001,8 +1012,9 @@ function WorkoutDay() {
                 completion_method: "manual",
                 client_notes: payload.client_notes ?? completion?.client_notes ?? null,
                 session_rating: payload.session_rating,
-                session_weight_total: payload.session_weight_total,
-                session_weight_unit: payload.session_weight_unit,
+                // Auto-derived from logged sets — no manual entry.
+                session_weight_total: computed.totalLifted > 0 ? computed.totalLifted : null,
+                session_weight_unit: computed.totalLifted > 0 ? displayUnit : null,
               };
               if (completion) {
                 const { error } = await sb.from("pl_day_completions").update(baseRow).eq("id", completion.id);
@@ -1016,14 +1028,31 @@ function WorkoutDay() {
               setActualMin("");
               await qc.invalidateQueries({ queryKey: ["pl-day-completion", dayId] });
               setCompleteOpen(false);
-              toast.success("Workout submitted");
-              navigate({ to: "/portal/workouts" });
+              setLastSummary(computed);
+              setSummaryOpen(true);
+              toast.success(
+                `Workout submitted — Score: ${computed.score}/100`,
+                {
+                  description: computed.totalLifted > 0
+                    ? `Total lifted: ${computed.totalLiftedFmt}`
+                    : undefined,
+                },
+              );
             } catch (err: any) {
               toast.error("Could not submit workout", { description: err?.message });
             } finally {
               setCompleteSubmitting(false);
             }
           }}
+        />
+      )}
+      {lastSummary && (
+        <WorkoutSubmissionSummary
+          open={summaryOpen}
+          onOpenChange={setSummaryOpen}
+          summary={lastSummary}
+          workoutTitle={day?.title ?? null}
+          onClose={() => navigate({ to: "/portal/workouts" })}
         />
       )}
       <MoveWorkoutSheet
