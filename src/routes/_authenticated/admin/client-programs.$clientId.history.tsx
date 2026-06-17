@@ -190,6 +190,57 @@ function WorkoutFeedbackSection({ clientId }: { clientId: string }) {
     },
   });
 
+  // Per-feedback auto-computed summary built from logged sets.
+  const dayIds = useMemo(
+    () => Array.from(new Set((rows as any[]).map((r) => r.day_id).filter(Boolean))),
+    [rows],
+  );
+  const { data: summaryByDay = {} } = useQuery<Record<string, WorkoutSummary>>({
+    queryKey: ["pl-feedback-summaries", clientId, dayIds.join(",")],
+    enabled: dayIds.length > 0,
+    queryFn: async () => {
+      const { data: exRows } = await (supabase as any)
+        .from("pl_exercise_rows")
+        .select("id, day_id, sets, exercise_name_override, exercises(id, name)")
+        .in("day_id", dayIds);
+      const rowList = (exRows ?? []) as any[];
+      const rowIds = rowList.map((r) => r.id);
+      let resultsList: any[] = [];
+      if (rowIds.length > 0) {
+        const { data: res } = await (supabase as any)
+          .from("pl_row_results")
+          .select("row_id, actual_load, actual_reps, actual_load_unit, actual_rpe, completed_at")
+          .in("row_id", rowIds)
+          .eq("client_id", clientId);
+        resultsList = (res ?? []) as any[];
+      }
+      const rowsByDay = new Map<string, any[]>();
+      for (const r of rowList) {
+        if (!rowsByDay.has(r.day_id)) rowsByDay.set(r.day_id, []);
+        rowsByDay.get(r.day_id)!.push(r);
+      }
+      const rowIdToDay = new Map<string, string>();
+      for (const r of rowList) rowIdToDay.set(r.id, r.day_id);
+      const resultsByDay = new Map<string, any[]>();
+      for (const r of resultsList) {
+        const d = rowIdToDay.get(r.row_id);
+        if (!d) continue;
+        if (!resultsByDay.has(d)) resultsByDay.set(d, []);
+        resultsByDay.get(d)!.push(r);
+      }
+      const out: Record<string, WorkoutSummary> = {};
+      for (const did of dayIds) {
+        const fb = (rows as any[]).find((r) => r.day_id === did);
+        out[did] = computeWorkoutSummary(
+          rowsByDay.get(did) ?? [],
+          resultsByDay.get(did) ?? [],
+          { displayUnit: "lb", hasPain: !!fb?.pain, hasNote: !!fb?.client_note },
+        );
+      }
+      return out;
+    },
+  });
+
   const markReviewed = async (id: string) => {
     const { error } = await (supabase as any).rpc("mark_workout_feedback_reviewed", {
       _feedback_id: id,
