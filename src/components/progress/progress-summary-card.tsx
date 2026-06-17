@@ -79,13 +79,19 @@ export function ProgressSummaryCard({
     : sub?.review_status === "reviewed" ? "Reviewed"
     : null;
 
-  const linkProps =
-    progressHref.kind === "portal"
-      ? ({ to: "/portal/progress" } as const)
-      : progressHref.kind === "member"
-      ? ({ to: "/m/progress" } as const)
-      : ({ to: "/_authenticated/admin/clients/$id/progress",
-           params: { id: progressHref.clientId } } as never);
+  const openLink =
+    progressHref.kind === "portal" ? (
+      <Link to="/portal/progress">Open <ChevronRight className="ml-0.5 h-3.5 w-3.5" /></Link>
+    ) : progressHref.kind === "member" ? (
+      <Link to="/m/progress">Open <ChevronRight className="ml-0.5 h-3.5 w-3.5" /></Link>
+    ) : (
+      <Link
+        to="/_authenticated/admin/clients/$id/progress"
+        params={{ id: progressHref.clientId }}
+      >
+        Open <ChevronRight className="ml-0.5 h-3.5 w-3.5" />
+      </Link>
+    );
 
   return (
     <div className="space-y-3">
@@ -96,8 +102,7 @@ export function ProgressSummaryCard({
             <span className="text-xs font-bold uppercase tracking-widest">{title}</span>
           </div>
           <Button asChild size="sm" variant="ghost" className="h-7 px-2 text-xs">
-            {/* @ts-expect-error union props OK at runtime */}
-            <Link {...linkProps}>Open <ChevronRight className="ml-0.5 h-3.5 w-3.5" /></Link>
+            {openLink}
           </Button>
         </div>
 
