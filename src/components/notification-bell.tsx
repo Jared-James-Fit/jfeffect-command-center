@@ -805,7 +805,9 @@ export function NotificationPanel({
           </div>
           <div className="flex items-center gap-1">
             <Button
-              variant="ghost" size="sm" className="h-7 gap-1 px-2 text-xs"
+              variant="ghost" size="sm"
+              className="h-11 gap-1 px-2 text-xs sm:h-7"
+              aria-label="Mark all notifications as read"
               disabled={markAllMut.isPending || unreadCount === 0}
               onClick={() => markAllMut.mutate()}
               title={unreadCount === 0 ? "You have no new notifications." : "Mark all as read"}
@@ -815,7 +817,7 @@ export function NotificationPanel({
             </Button>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="icon" className="h-7 w-7" aria-label="More notification actions">
+                <Button variant="ghost" size="icon" className="h-11 w-11 sm:h-7 sm:w-7" aria-label="More notification actions">
                   <MoreHorizontal className="h-3.5 w-3.5" />
                 </Button>
               </DropdownMenuTrigger>
@@ -1045,18 +1047,20 @@ function NotificationRow({
       className={cn(
         "group relative flex items-start gap-2 border-b px-3 py-2.5 transition last:border-b-0",
         isUnread ? "bg-primary/5 hover:bg-primary/10" : "hover:bg-secondary/60",
-        isReadActive && "opacity-70",
         item.isArchived && "opacity-70",
       )}
     >
       {/* Unread dot */}
       <div className="mt-1.5 w-2 shrink-0">
-        {isUnread && <span className="block h-2 w-2 rounded-full bg-primary" aria-label="Unread" />}
+        {isUnread && (
+          <span className="block h-2 w-2 rounded-full bg-primary" aria-hidden="true" />
+        )}
       </div>
       <button
         type="button"
         onClick={onClick}
-        className="flex-1 min-w-0 text-left focus-visible:outline-none"
+        className="flex-1 min-w-0 rounded-sm text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
+        aria-label={`${isUnread ? "Unread: " : ""}${item.title}`}
       >
         <div className={cn(
           "truncate pr-1 text-xs leading-tight",
