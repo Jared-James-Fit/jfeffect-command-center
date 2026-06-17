@@ -555,6 +555,19 @@ function groupByDate(items: BellItem[]): Array<{ label: string; items: BellItem[
   return out;
 }
 
+function kindLabel(k: string): string {
+  switch (k) {
+    case "message": return "Messages";
+    case "lift_video": return "Lift videos";
+    case "agreement": return "Agreements";
+    case "exercise_note": return "Exercise notes";
+    case "group_message": return "Group chat";
+    case "check_in_review": return "Check-in reviews";
+    case "appointment": return "Appointments";
+    default: return k;
+  }
+}
+
 // =============================================================================
 // Bell button
 // =============================================================================
