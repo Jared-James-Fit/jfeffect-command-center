@@ -1047,18 +1047,20 @@ function NotificationRow({
       className={cn(
         "group relative flex items-start gap-2 border-b px-3 py-2.5 transition last:border-b-0",
         isUnread ? "bg-primary/5 hover:bg-primary/10" : "hover:bg-secondary/60",
-        isReadActive && "opacity-70",
         item.isArchived && "opacity-70",
       )}
     >
       {/* Unread dot */}
       <div className="mt-1.5 w-2 shrink-0">
-        {isUnread && <span className="block h-2 w-2 rounded-full bg-primary" aria-label="Unread" />}
+        {isUnread && (
+          <span className="block h-2 w-2 rounded-full bg-primary" aria-hidden="true" />
+        )}
       </div>
       <button
         type="button"
         onClick={onClick}
-        className="flex-1 min-w-0 text-left focus-visible:outline-none"
+        className="flex-1 min-w-0 rounded-sm text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
+        aria-label={`${isUnread ? "Unread: " : ""}${item.title}`}
       >
         <div className={cn(
           "truncate pr-1 text-xs leading-tight",
