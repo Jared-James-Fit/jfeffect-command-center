@@ -1,4 +1,4 @@
-import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { Link, useNavigate } from "@tanstack/react-router";
 import { Component, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -186,28 +186,47 @@ function formatPrescription(p: {
   return [`${sets} × ${reps}`, load, effort].filter(Boolean).join(" ");
 }
 
-export const Route = createFileRoute("/_authenticated/portal/workouts/$dayId")({
-  validateSearch: (s: Record<string, unknown>) => ({
-    readonly: s.readonly === 1 || s.readonly === "1" || s.readonly === true ? 1 : undefined,
-    // Coach- or client-initiated "open in edit mode" — auto-unlocks past workouts
-    // and auto-opens the feedback sheet when the user wants to edit a review.
-    edit: s.edit === 1 || s.edit === "1" || s.edit === true ? 1 : undefined,
-    review: s.review === 1 || s.review === "1" || s.review === true ? 1 : undefined,
-  }),
-  component: () => (
+/**
+ * Shared workout day view.
+ *
+ * Phase B extraction: the entire client logger body lives here, accepting
+ * `dayId` + `search` from props instead of route params. Phase C/D will
+ * progressively replace internal `sb.from("pl_*")` reads/writes with
+ * `adapter.*` calls so the member route can mount this same component.
+ * Until then, this component is only mounted from the portal route (kind=client)
+ * and behaviour is byte-identical with the previous monolith route.
+ */
+export type WorkoutDayViewSearch = {
+  readonly?: 1;
+  edit?: 1;
+  review?: 1;
+};
+
+export function WorkoutDayView({
+  dayId,
+  search,
+}: {
+  dayId: string;
+  search: WorkoutDayViewSearch;
+}) {
+  return (
     <WorkoutUndoProvider>
       <ActiveRestTimerProvider>
-        <WorkoutDay />
+        <WorkoutDay dayId={dayId} search={search} />
       </ActiveRestTimerProvider>
     </WorkoutUndoProvider>
-  ),
-});
+  );
+}
 
 const sb = supabase as any;
 
-function WorkoutDay() {
-  const { dayId } = Route.useParams();
-  const search = Route.useSearch();
+function WorkoutDay({
+  dayId,
+  search,
+}: {
+  dayId: string;
+  search: WorkoutDayViewSearch;
+}) {
   const portalUserId = usePortalUserId();
   const qc = useQueryClient();
   const undo = useWorkoutUndo();
