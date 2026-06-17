@@ -49,6 +49,7 @@ import { Route as AuthenticatedAdminIndexRouteImport } from './routes/_authentic
 import { Route as LovableEmailSuppressionRouteImport } from './routes/lovable/email/suppression'
 import { Route as ApiPublicStripeWebhookRouteImport } from './routes/api/public/stripe-webhook'
 import { Route as ApiPublicSignnowWebhookRouteImport } from './routes/api/public/signnow-webhook'
+import { Route as ApiPublicBulkExerciseImportRouteImport } from './routes/api/public/bulk-exercise-import'
 import { Route as ApiPublic_replay73ae9c8e4bcdc04ea9fd65f84f0752daRouteImport } from './routes/api/public/__replay-73ae9c8e4bcdc04ea9fd65f84f0752da'
 import { Route as AuthenticatedPortalScheduleRouteImport } from './routes/_authenticated/portal/schedule'
 import { Route as AuthenticatedPortalResourcesRouteImport } from './routes/_authenticated/portal/resources'
@@ -463,6 +464,12 @@ const ApiPublicSignnowWebhookRoute = ApiPublicSignnowWebhookRouteImport.update({
   path: '/api/public/signnow-webhook',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiPublicBulkExerciseImportRoute =
+  ApiPublicBulkExerciseImportRouteImport.update({
+    id: '/api/public/bulk-exercise-import',
+    path: '/api/public/bulk-exercise-import',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const ApiPublic_replay73ae9c8e4bcdc04ea9fd65f84f0752daRoute =
   ApiPublic_replay73ae9c8e4bcdc04ea9fd65f84f0752daRouteImport.update({
     id: '/api/public/__replay-73ae9c8e4bcdc04ea9fd65f84f0752da',
@@ -1858,6 +1865,7 @@ export interface FileRoutesByFullPath {
   '/portal/resources': typeof AuthenticatedPortalResourcesRoute
   '/portal/schedule': typeof AuthenticatedPortalScheduleRoute
   '/api/public': typeof ApiPublic_replay73ae9c8e4bcdc04ea9fd65f84f0752daRoute
+  '/api/public/bulk-exercise-import': typeof ApiPublicBulkExerciseImportRoute
   '/api/public/signnow-webhook': typeof ApiPublicSignnowWebhookRoute
   '/api/public/stripe-webhook': typeof ApiPublicStripeWebhookRoute
   '/lovable/email/suppression': typeof LovableEmailSuppressionRoute
@@ -2105,6 +2113,7 @@ export interface FileRoutesByTo {
   '/portal/resources': typeof AuthenticatedPortalResourcesRoute
   '/portal/schedule': typeof AuthenticatedPortalScheduleRoute
   '/api/public': typeof ApiPublic_replay73ae9c8e4bcdc04ea9fd65f84f0752daRoute
+  '/api/public/bulk-exercise-import': typeof ApiPublicBulkExerciseImportRoute
   '/api/public/signnow-webhook': typeof ApiPublicSignnowWebhookRoute
   '/api/public/stripe-webhook': typeof ApiPublicStripeWebhookRoute
   '/lovable/email/suppression': typeof LovableEmailSuppressionRoute
@@ -2359,6 +2368,7 @@ export interface FileRoutesById {
   '/_authenticated/portal/resources': typeof AuthenticatedPortalResourcesRoute
   '/_authenticated/portal/schedule': typeof AuthenticatedPortalScheduleRoute
   '/api/public/__replay-73ae9c8e4bcdc04ea9fd65f84f0752da': typeof ApiPublic_replay73ae9c8e4bcdc04ea9fd65f84f0752daRoute
+  '/api/public/bulk-exercise-import': typeof ApiPublicBulkExerciseImportRoute
   '/api/public/signnow-webhook': typeof ApiPublicSignnowWebhookRoute
   '/api/public/stripe-webhook': typeof ApiPublicStripeWebhookRoute
   '/lovable/email/suppression': typeof LovableEmailSuppressionRoute
@@ -2613,6 +2623,7 @@ export interface FileRouteTypes {
     | '/portal/resources'
     | '/portal/schedule'
     | '/api/public'
+    | '/api/public/bulk-exercise-import'
     | '/api/public/signnow-webhook'
     | '/api/public/stripe-webhook'
     | '/lovable/email/suppression'
@@ -2860,6 +2871,7 @@ export interface FileRouteTypes {
     | '/portal/resources'
     | '/portal/schedule'
     | '/api/public'
+    | '/api/public/bulk-exercise-import'
     | '/api/public/signnow-webhook'
     | '/api/public/stripe-webhook'
     | '/lovable/email/suppression'
@@ -3113,6 +3125,7 @@ export interface FileRouteTypes {
     | '/_authenticated/portal/resources'
     | '/_authenticated/portal/schedule'
     | '/api/public/__replay-73ae9c8e4bcdc04ea9fd65f84f0752da'
+    | '/api/public/bulk-exercise-import'
     | '/api/public/signnow-webhook'
     | '/api/public/stripe-webhook'
     | '/lovable/email/suppression'
@@ -3246,6 +3259,7 @@ export interface RootRouteChildren {
   SignTokenRoute: typeof SignTokenRoute
   SignupJfRoute: typeof SignupJfRoute
   ApiPublic_replay73ae9c8e4bcdc04ea9fd65f84f0752daRoute: typeof ApiPublic_replay73ae9c8e4bcdc04ea9fd65f84f0752daRoute
+  ApiPublicBulkExerciseImportRoute: typeof ApiPublicBulkExerciseImportRoute
   ApiPublicSignnowWebhookRoute: typeof ApiPublicSignnowWebhookRoute
   ApiPublicStripeWebhookRoute: typeof ApiPublicStripeWebhookRoute
   LovableEmailSuppressionRoute: typeof LovableEmailSuppressionRoute
@@ -3547,6 +3561,13 @@ declare module '@tanstack/react-router' {
       path: '/api/public/signnow-webhook'
       fullPath: '/api/public/signnow-webhook'
       preLoaderRoute: typeof ApiPublicSignnowWebhookRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/public/bulk-exercise-import': {
+      id: '/api/public/bulk-exercise-import'
+      path: '/api/public/bulk-exercise-import'
+      fullPath: '/api/public/bulk-exercise-import'
+      preLoaderRoute: typeof ApiPublicBulkExerciseImportRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/public/__replay-73ae9c8e4bcdc04ea9fd65f84f0752da': {
@@ -5792,6 +5813,7 @@ const rootRouteChildren: RootRouteChildren = {
   SignupJfRoute: SignupJfRoute,
   ApiPublic_replay73ae9c8e4bcdc04ea9fd65f84f0752daRoute:
     ApiPublic_replay73ae9c8e4bcdc04ea9fd65f84f0752daRoute,
+  ApiPublicBulkExerciseImportRoute: ApiPublicBulkExerciseImportRoute,
   ApiPublicSignnowWebhookRoute: ApiPublicSignnowWebhookRoute,
   ApiPublicStripeWebhookRoute: ApiPublicStripeWebhookRoute,
   LovableEmailSuppressionRoute: LovableEmailSuppressionRoute,
