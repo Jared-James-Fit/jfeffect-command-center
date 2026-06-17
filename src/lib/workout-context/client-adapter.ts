@@ -4,6 +4,7 @@
  * coaching components use today. The signatures below pin the contract.
  */
 import {
+  NotImplemented,
   type WorkoutContextAdapter,
   type WorkoutContextRef,
   type WorkoutScheduleDay,
