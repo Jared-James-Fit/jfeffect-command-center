@@ -649,7 +649,7 @@ function primaryCtaFor(item: WorkoutItem, status: WorkoutStatus): {
 } {
   const inProgress = !!item.completion && !item.completion?.completed_at;
   if (inProgress) {
-    return { label: "Continue Workout", tone: "bg-amber-500 text-black hover:bg-amber-400", icon: <Play className="mr-1 h-4 w-4" /> };
+    return { label: "Resume Workout", tone: "bg-amber-500 text-black hover:bg-amber-400", icon: <Play className="mr-1 h-4 w-4" /> };
   }
   switch (status) {
     case "completed_today":
