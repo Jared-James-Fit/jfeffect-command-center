@@ -1,6 +1,6 @@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Trophy, Dumbbell, Activity, CheckCircle2, XCircle, Flame } from "lucide-react";
+import { Trophy, Dumbbell, Activity, CheckCircle2, XCircle, Flame, Clock } from "lucide-react";
 import type { WorkoutSummary } from "@/lib/workout-summary";
 
 type Props = {
@@ -8,10 +8,11 @@ type Props = {
   onOpenChange: (open: boolean) => void;
   summary: WorkoutSummary;
   workoutTitle?: string | null;
+  durationMin?: number | null;
   onClose?: () => void;
 };
 
-export function WorkoutSubmissionSummary({ open, onOpenChange, summary, workoutTitle, onClose }: Props) {
+export function WorkoutSubmissionSummary({ open, onOpenChange, summary, workoutTitle, durationMin, onClose }: Props) {
   const headline =
     summary.score >= 90 ? "Crushed it!"
     : summary.score >= 75 ? "Great work!"
@@ -50,12 +51,13 @@ export function WorkoutSubmissionSummary({ open, onOpenChange, summary, workoutT
             </div>
           </div>
 
-          {/* Total lifted */}
+          {/* Total volume — auto-calculated from logged sets × reps × weight. */}
           <div className="rounded-2xl border border-border bg-card p-4">
             <div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
-              <Dumbbell className="h-3.5 w-3.5" /> Total Weight Lifted
+              <Dumbbell className="h-3.5 w-3.5" /> Total Volume
             </div>
             <div className="mt-0.5 text-2xl font-black">{summary.totalLiftedFmt}</div>
+            <div className="text-[10px] text-muted-foreground">sets × reps × weight</div>
           </div>
 
           {/* Stat grid */}
@@ -63,6 +65,12 @@ export function WorkoutSubmissionSummary({ open, onOpenChange, summary, workoutT
             <StatTile label="Exercises" value={`${summary.exercisesCompleted}/${summary.exercisesTotal}`} icon={<CheckCircle2 className="h-3.5 w-3.5" />} />
             <StatTile label="Sets" value={`${summary.completedSets}/${summary.prescribedSets}`} icon={<Activity className="h-3.5 w-3.5" />} />
             <StatTile label="Total Reps" value={`${summary.totalReps}`} icon={<Activity className="h-3.5 w-3.5" />} />
+            <StatTile
+              label="Duration"
+              value={durationMin != null && durationMin > 0 ? `${durationMin} min` : "—"}
+              icon={<Clock className="h-3.5 w-3.5" />}
+              muted={durationMin == null || durationMin <= 0}
+            />
             <StatTile
               label="Avg RPE"
               value={summary.avgRpe != null ? `${summary.avgRpe}` : "—"}
@@ -74,7 +82,6 @@ export function WorkoutSubmissionSummary({ open, onOpenChange, summary, workoutT
               value={`${summary.missedExercises.length}`}
               icon={<XCircle className="h-3.5 w-3.5" />}
               muted={summary.missedExercises.length === 0}
-              className="col-span-2"
             />
           </div>
 
@@ -121,18 +128,21 @@ export function WorkoutReviewSummaryHeader({
   difficulty,
   energy,
   pain,
+  durationMin,
 }: {
   summary: WorkoutSummary;
   difficulty?: number | null;   // session_rpe (1-10)
   energy?: number | null;       // overall_rating (1-5)
   pain?: boolean | null;
+  durationMin?: number | null;
 }) {
   return (
     <div className="rounded-xl border border-border bg-muted/30 p-3 mb-3">
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
         <Cell label="Score" value={`${summary.score}/100`} highlight />
-        <Cell label="Total Lifted" value={summary.totalLiftedFmt} />
+        <Cell label="Total Volume" value={summary.totalLiftedFmt} />
         <Cell label="Completion" value={`${summary.completionPct}%`} />
+        <Cell label="Duration" value={durationMin != null && durationMin > 0 ? `${durationMin} min` : "—"} />
         <Cell
           label="Difficulty"
           value={difficulty != null ? `RPE ${difficulty}/10` : "—"}
@@ -144,7 +154,6 @@ export function WorkoutReviewSummaryHeader({
           value={pain ? "Yes" : "No"}
           tone={pain ? "warn" : "ok"}
         />
-        <Cell label="Missed" value={`${summary.missedExercises.length}`} />
       </div>
     </div>
   );

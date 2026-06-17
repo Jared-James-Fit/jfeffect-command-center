@@ -342,6 +342,7 @@ function WorkoutFeedbackSection({ clientId }: { clientId: string }) {
                       difficulty={r.session_rpe}
                       energy={r.overall_rating}
                       pain={r.pain}
+                      durationMin={r.actual_duration_min ?? null}
                     />
                   </div>
                 )}
