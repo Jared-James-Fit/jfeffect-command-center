@@ -201,6 +201,11 @@ serve(async (request) => {
     const adminClient = createClient(supabaseUrl, serviceKey, { auth: { persistSession: false } });
     const bearer = authorization.replace(/^Bearer\s+/i, "");
     const isServiceRequest = bearer === serviceKey || jwtRole(bearer) === "service_role";
+    console.log("[sync-discount-code-to-stripe] auth", {
+      hasAuthorization: Boolean(authorization),
+      role: jwtRole(bearer),
+      isServiceRequest,
+    });
     let actorId: string | null = null;
     let actorEmail: string | null = null;
 
