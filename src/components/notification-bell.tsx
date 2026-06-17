@@ -788,9 +788,7 @@ export function NotificationPanel({
               )}
             </FilterChip>
             <FilterChip active={view === "all"} onClick={() => setView("all")}>All</FilterChip>
-            {view === "archived" && (
-              <FilterChip active onClick={() => setView("archived")}>Archived</FilterChip>
-            )}
+            <FilterChip active={view === "archived"} onClick={() => setView("archived")}>Archived</FilterChip>
           </div>
           <div className="flex items-center gap-1">
             <Button
@@ -830,6 +828,54 @@ export function NotificationPanel({
             </DropdownMenu>
           </div>
         </div>
+
+        {/* Full-page extra controls: search, category, date */}
+        {!compact && (
+          <div className="flex flex-wrap items-center gap-2 pt-1">
+            <div className="relative min-w-0 flex-1 sm:max-w-xs">
+              <Search className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                value={search}
+                onChange={(e) => { setSearch(e.target.value); setVisible(20); }}
+                placeholder="Search notifications"
+                className="h-9 pl-7 pr-7 text-sm"
+                aria-label="Search notifications"
+              />
+              {search && (
+                <button
+                  type="button"
+                  onClick={() => setSearch("")}
+                  aria-label="Clear search"
+                  className="absolute right-1 top-1/2 grid h-7 w-7 -translate-y-1/2 place-items-center rounded text-muted-foreground hover:bg-secondary"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              )}
+            </div>
+            <Select value={kindFilter} onValueChange={(v) => { setKindFilter(v); setVisible(20); }}>
+              <SelectTrigger className="h-9 w-[140px] text-xs" aria-label="Filter by category">
+                <SelectValue placeholder="Category" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All categories</SelectItem>
+                {availableKinds.map((k) => (
+                  <SelectItem key={k} value={k}>{kindLabel(k)}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Select value={dateFilter} onValueChange={(v) => { setDateFilter(v); setVisible(20); }}>
+              <SelectTrigger className="h-9 w-[130px] text-xs" aria-label="Filter by date">
+                <SelectValue placeholder="Date" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All time</SelectItem>
+                <SelectItem value="today">Today</SelectItem>
+                <SelectItem value="7d">Last 7 days</SelectItem>
+                <SelectItem value="30d">Last 30 days</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        )}
       </div>
 
       {/* List */}
