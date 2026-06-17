@@ -59,7 +59,6 @@ function WorkoutTracker() {
   const [logs, setLogs] = useState<Record<string, SetLog>>({});
   const [summaryOpen, setSummaryOpen] = useState(false);
   const [lastSummary, setLastSummary] = useState<WorkoutSummary | null>(null);
-  const [reviewOpen, setReviewOpen] = useState(false);
 
   const cacheScope = `m:${enrollmentId}`;
   const route = `/m/workouts/${enrollmentId}/${week}/${day}`;
