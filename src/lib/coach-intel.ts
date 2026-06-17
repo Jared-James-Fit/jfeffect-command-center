@@ -1,6 +1,7 @@
 import { supabase } from "@/integrations/supabase/client";
 import { epley1RM } from "@/lib/pl-programs";
 import { todayLocalISO } from "@/lib/today";
+import { pickCurrentBlock } from "@/lib/block-dates";
 
 const sb = supabase as any;
 
