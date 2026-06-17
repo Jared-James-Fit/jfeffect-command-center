@@ -195,6 +195,7 @@ import { Route as ApiPublicHooksFilloutRouteImport } from './routes/api/public/h
 import { Route as ApiPublicHooksCleanupPendingSignupsRouteImport } from './routes/api/public/hooks/cleanup-pending-signups'
 import { Route as ApiPublicHooksAppointmentRemindersRouteImport } from './routes/api/public/hooks/appointment-reminders'
 import { Route as AuthenticatedPortalWorkoutsAnalyticsRouteImport } from './routes/_authenticated/portal/workouts.analytics'
+import { Route as AuthenticatedPortalWorkoutsDayIdRouteImport } from './routes/_authenticated/portal/workouts.$dayId'
 import { Route as AuthenticatedPortalRecipesRecipeIdRouteImport } from './routes/_authenticated/portal/recipes.$recipeId'
 import { Route as AuthenticatedPortalPurchasesIdRouteImport } from './routes/_authenticated/portal/purchases.$id'
 import { Route as AuthenticatedPortalEventsIdRouteImport } from './routes/_authenticated/portal/events.$id'
@@ -1318,6 +1319,12 @@ const AuthenticatedPortalWorkoutsAnalyticsRoute =
     path: '/workouts/analytics',
     getParentRoute: () => AuthenticatedPortalRouteRoute,
   } as any)
+const AuthenticatedPortalWorkoutsDayIdRoute =
+  AuthenticatedPortalWorkoutsDayIdRouteImport.update({
+    id: '/workouts/$dayId',
+    path: '/workouts/$dayId',
+    getParentRoute: () => AuthenticatedPortalRouteRoute,
+  } as any)
 const AuthenticatedPortalRecipesRecipeIdRoute =
   AuthenticatedPortalRecipesRecipeIdRouteImport.update({
     id: '/$recipeId',
@@ -1930,6 +1937,7 @@ export interface FileRoutesByFullPath {
   '/portal/events/$id': typeof AuthenticatedPortalEventsIdRoute
   '/portal/purchases/$id': typeof AuthenticatedPortalPurchasesIdRoute
   '/portal/recipes/$recipeId': typeof AuthenticatedPortalRecipesRecipeIdRoute
+  '/portal/workouts/$dayId': typeof AuthenticatedPortalWorkoutsDayIdRoute
   '/portal/workouts/analytics': typeof AuthenticatedPortalWorkoutsAnalyticsRoute
   '/api/public/hooks/appointment-reminders': typeof ApiPublicHooksAppointmentRemindersRoute
   '/api/public/hooks/cleanup-pending-signups': typeof ApiPublicHooksCleanupPendingSignupsRoute
@@ -2178,6 +2186,7 @@ export interface FileRoutesByTo {
   '/portal/events/$id': typeof AuthenticatedPortalEventsIdRoute
   '/portal/purchases/$id': typeof AuthenticatedPortalPurchasesIdRoute
   '/portal/recipes/$recipeId': typeof AuthenticatedPortalRecipesRecipeIdRoute
+  '/portal/workouts/$dayId': typeof AuthenticatedPortalWorkoutsDayIdRoute
   '/portal/workouts/analytics': typeof AuthenticatedPortalWorkoutsAnalyticsRoute
   '/api/public/hooks/appointment-reminders': typeof ApiPublicHooksAppointmentRemindersRoute
   '/api/public/hooks/cleanup-pending-signups': typeof ApiPublicHooksCleanupPendingSignupsRoute
@@ -2433,6 +2442,7 @@ export interface FileRoutesById {
   '/_authenticated/portal/events/$id': typeof AuthenticatedPortalEventsIdRoute
   '/_authenticated/portal/purchases/$id': typeof AuthenticatedPortalPurchasesIdRoute
   '/_authenticated/portal/recipes/$recipeId': typeof AuthenticatedPortalRecipesRecipeIdRoute
+  '/_authenticated/portal/workouts/$dayId': typeof AuthenticatedPortalWorkoutsDayIdRoute
   '/_authenticated/portal/workouts/analytics': typeof AuthenticatedPortalWorkoutsAnalyticsRoute
   '/api/public/hooks/appointment-reminders': typeof ApiPublicHooksAppointmentRemindersRoute
   '/api/public/hooks/cleanup-pending-signups': typeof ApiPublicHooksCleanupPendingSignupsRoute
@@ -2688,6 +2698,7 @@ export interface FileRouteTypes {
     | '/portal/events/$id'
     | '/portal/purchases/$id'
     | '/portal/recipes/$recipeId'
+    | '/portal/workouts/$dayId'
     | '/portal/workouts/analytics'
     | '/api/public/hooks/appointment-reminders'
     | '/api/public/hooks/cleanup-pending-signups'
@@ -2936,6 +2947,7 @@ export interface FileRouteTypes {
     | '/portal/events/$id'
     | '/portal/purchases/$id'
     | '/portal/recipes/$recipeId'
+    | '/portal/workouts/$dayId'
     | '/portal/workouts/analytics'
     | '/api/public/hooks/appointment-reminders'
     | '/api/public/hooks/cleanup-pending-signups'
@@ -3190,6 +3202,7 @@ export interface FileRouteTypes {
     | '/_authenticated/portal/events/$id'
     | '/_authenticated/portal/purchases/$id'
     | '/_authenticated/portal/recipes/$recipeId'
+    | '/_authenticated/portal/workouts/$dayId'
     | '/_authenticated/portal/workouts/analytics'
     | '/api/public/hooks/appointment-reminders'
     | '/api/public/hooks/cleanup-pending-signups'
@@ -4585,6 +4598,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedPortalWorkoutsAnalyticsRouteImport
       parentRoute: typeof AuthenticatedPortalRouteRoute
     }
+    '/_authenticated/portal/workouts/$dayId': {
+      id: '/_authenticated/portal/workouts/$dayId'
+      path: '/workouts/$dayId'
+      fullPath: '/portal/workouts/$dayId'
+      preLoaderRoute: typeof AuthenticatedPortalWorkoutsDayIdRouteImport
+      parentRoute: typeof AuthenticatedPortalRouteRoute
+    }
     '/_authenticated/portal/recipes/$recipeId': {
       id: '/_authenticated/portal/recipes/$recipeId'
       path: '/$recipeId'
@@ -5703,6 +5723,7 @@ interface AuthenticatedPortalRouteRouteChildren {
   AuthenticatedPortalResourcesRoute: typeof AuthenticatedPortalResourcesRoute
   AuthenticatedPortalScheduleRoute: typeof AuthenticatedPortalScheduleRoute
   AuthenticatedPortalIndexRoute: typeof AuthenticatedPortalIndexRoute
+  AuthenticatedPortalWorkoutsDayIdRoute: typeof AuthenticatedPortalWorkoutsDayIdRoute
   AuthenticatedPortalWorkoutsAnalyticsRoute: typeof AuthenticatedPortalWorkoutsAnalyticsRoute
   AuthenticatedPortalAgreementsIndexRoute: typeof AuthenticatedPortalAgreementsIndexRoute
   AuthenticatedPortalWorkoutsIndexRoute: typeof AuthenticatedPortalWorkoutsIndexRoute
@@ -5737,6 +5758,8 @@ const AuthenticatedPortalRouteRouteChildren: AuthenticatedPortalRouteRouteChildr
     AuthenticatedPortalResourcesRoute: AuthenticatedPortalResourcesRoute,
     AuthenticatedPortalScheduleRoute: AuthenticatedPortalScheduleRoute,
     AuthenticatedPortalIndexRoute: AuthenticatedPortalIndexRoute,
+    AuthenticatedPortalWorkoutsDayIdRoute:
+      AuthenticatedPortalWorkoutsDayIdRoute,
     AuthenticatedPortalWorkoutsAnalyticsRoute:
       AuthenticatedPortalWorkoutsAnalyticsRoute,
     AuthenticatedPortalAgreementsIndexRoute:
