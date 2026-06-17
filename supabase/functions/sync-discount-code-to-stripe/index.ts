@@ -49,9 +49,11 @@ function stripeKeyForMode(mode: StripeMode): string | null {
 
 function jwtRole(token: string): string | null {
   try {
-    const part = token.split(".")[1];
+    let part = token.split(".")[1];
     if (!part) return null;
-    const payload = JSON.parse(atob(part.replace(/-/g, "+").replace(/_/g, "/")));
+    part = part.replace(/-/g, "+").replace(/_/g, "/");
+    part = part.padEnd(part.length + ((4 - (part.length % 4)) % 4), "=");
+    const payload = JSON.parse(atob(part));
     return typeof payload?.role === "string" ? payload.role : null;
   } catch {
     return null;
