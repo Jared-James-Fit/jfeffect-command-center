@@ -12,7 +12,15 @@ import { ActionButton } from "@/components/action-button";
 import { Textarea } from "@/components/ui/textarea";
 import { useQueryClient } from "@tanstack/react-query";
 import { cn } from "@/lib/utils";
-import { AlertCircle, Clock, CheckCircle2, Hammer } from "lucide-react";
+import { AlertCircle, Clock, CheckCircle2, Hammer, ExternalLink } from "lucide-react";
+import { Link } from "@tanstack/react-router";
+
+const ERROR_TYPE_LABELS: Record<string, string> = {
+  workout_load_failure: "Workout Logger",
+  progress_submission: "Progress Check-In",
+  missing_maxes: "Missing Maxes",
+  workout_sync_failure: "Workout Sync",
+};
 
 export const Route = createFileRoute("/_authenticated/admin/support-alerts")({
   component: SupportAlertsRedirect,
@@ -188,6 +196,8 @@ function AlertCard({ alert, onUpdateStatus, onAddNote }: {
   const client = alert.clients;
   const coach = alert.coaches;
   const isWorkoutFailure = alert.error_type === 'workout_load_failure';
+  const isProgress = alert.error_type === 'progress_submission';
+  const friendlyType = ERROR_TYPE_LABELS[alert.error_type] ?? alert.error_type;
 
   return (
     <Card className={cn(
@@ -263,11 +273,20 @@ function AlertCard({ alert, onUpdateStatus, onAddNote }: {
               <div className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Issue Details</div>
               <div className="text-sm font-semibold flex items-center gap-2">
                 <AlertCircle className="h-4 w-4 text-destructive" />
-                {isWorkoutFailure ? "Workout Logger" : alert.error_type}
+                {friendlyType}
               </div>
               <div className="text-xs font-mono bg-background/50 p-2 rounded border border-border/50 break-all">
                 {alert.error_message || "No error message provided"}
               </div>
+              {isProgress && client?.id && (
+                <Link
+                  to="/admin/clients/$id/progress"
+                  params={{ id: client.id }}
+                  className="inline-flex items-center gap-1 text-[11px] font-semibold text-primary hover:underline"
+                >
+                  Open submission <ExternalLink className="h-3 w-3" />
+                </Link>
+              )}
               {alert.page_route && (
                 <div className="text-[10px] text-muted-foreground truncate">
                   Route: {alert.page_route}
