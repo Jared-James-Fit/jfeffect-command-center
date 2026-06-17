@@ -25,6 +25,8 @@ import {
   type CoachPainFlagDTO,
   type UpsertRowResultInput,
   type UpsertExerciseNoteInput,
+  type EnrollmentSummaryDTO,
+  type ReviewDTO,
 } from "./types";
 import {
   getEnrollmentSchedule,
@@ -413,6 +415,45 @@ export function createMemberAdapter(ref: WorkoutContextRef): WorkoutContextAdapt
 
     async listCoachPainFlags(_dayId: string): Promise<CoachPainFlagDTO[]> {
       return [];
+    },
+
+    async getEnrollmentSummary(): Promise<EnrollmentSummaryDTO> {
+      const { data, error } = await supabase
+        .from("member_plan_enrollments")
+        .select("member_plan_id, member_plans(id, name, logging_enabled)")
+        .eq("id", enrollmentId)
+        .maybeSingle();
+      if (error) throw new Error(error.message);
+      const plan = (data as any)?.member_plans ?? null;
+      return {
+        planId: plan?.id ?? (data as any)?.member_plan_id ?? null,
+        planName: plan?.name ?? null,
+        loggingEnabled: plan?.logging_enabled !== false,
+      };
+    },
+
+    async getReview(dayId: string): Promise<ReviewDTO | null> {
+      const { week, day } = decodeDayId(dayId);
+      const { data, error } = await (supabase as any)
+        .from("member_workout_reviews")
+        .select("*")
+        .eq("enrollment_id", enrollmentId)
+        .eq("week_index", week)
+        .eq("day_index", day)
+        .maybeSingle();
+      if (error) throw new Error(error.message);
+      if (!data) return null;
+      return {
+        overallRating: data.overall_rating ?? null,
+        sessionRpe: data.session_rpe ?? null,
+        pain: data.pain ?? null,
+        painLevel: data.pain_level ?? null,
+        painArea: data.pain_area ?? null,
+        painNote: data.pain_note ?? null,
+        clientNote: data.client_note ?? null,
+        editCount: data.review_edit_count ?? null,
+        submittedAt: data.review_submitted_at ?? null,
+      };
     },
 
     async upsertRowResult(input: UpsertRowResultInput): Promise<string> {
