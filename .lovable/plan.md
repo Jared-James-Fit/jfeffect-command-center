@@ -1,160 +1,66 @@
+# Shared Workout Completion & Review — Plan
 
-# JF Effect Progress Tracking — Build Plan
+This is a multi-phase consolidation, not a single edit. I'll audit first, then refactor onto one shared completion/review pipeline used by both coaching clients and membership users.
 
-## What already exists (verified)
+## Phase 0 — Audit (read-only, no code changes)
+Goal: produce a written map of what exists today before touching anything.
 
-Routes, tables, and a 1,135-line `ProgressSection` component are already wired:
+- **Client workout flow:** find the active workout page, Finish action, completion writer, review submit/edit, duration tracking, logging-quality calc, analytics writer, notifications.
+- **Member workout flow:** find the equivalents. Identify whether members use `member_workout_completions`, `member_set_logs`, `member_plan_*` (separate pipeline) or already share `pl_*` tables.
+- **Tables in scope (from schema):** `pl_days`, `pl_exercise_rows`, `pl_row_results`, `pl_day_completions`, `pl_workout_feedback`, `pl_assignment_operations`, `member_plans`, `member_plan_enrollments`, `member_plan_day_schedule`, `member_set_logs`, `member_workout_completions`, `pl_block_set_rows`, `logged_set_edit_audit`.
+- **Output:** short audit note in chat listing: shared vs forked code paths, shared vs forked tables, fields already present vs missing for the spec (started_at, completed_at, elapsed/active duration, logging_percentage, logging_quality, completed_with_missing_logs, review edit metadata), and any duplicate-write risks.
 
-- **Tables:** `progress_submissions` (owner_type, client/member ids, assigned_coach_id, video_format, check_in_label, training_phase_id, bodyweight, review_status), `progress_media` (angle, drive sync status, retry_count), `progress_bodyweight`, `progress_measurements`, `progress_check_in_schedules`, `progress_review_responses`.
-- **Routes:** `/portal/progress`, `/m/progress`, `/admin/clients/$id/progress`, `/admin/media-review`, plus legacy `/portal/progress-metrics` and `/portal/media`.
-- **Component:** `ProgressSection` already implements Overview, Photos (4-angle upload), Videos (4-angle or continuous), Bodyweight, Measurements, Compare, Timeline, Submission detail w/ review responses, role-gated `canRequestReview`.
-- **Lift Review pipeline reused via:** `uploadProgressFile` + `submitProgressForReview` + `retryProgressDriveSync` server fns and `progress-archive.server.ts` (Drive offload worker).
-- **Admin nav** already lists Progress; cron worker `progress-archive-tick` exists.
-- Data: 0 rows in new progress_* tables, 45 in legacy `progress_metrics`, 46 in `lift_videos`.
+## Phase 1 — Data model (single migration)
+Only add what's missing. No destructive changes. No backfill that rewrites history.
 
-## What's missing vs the spec
+- Add to the completion record (whichever table is the single source of truth after audit — likely `pl_day_completions`, mirrored on `member_workout_completions` only if the audit shows members are not yet on `pl_day_completions`):
+  - `started_at`, `completed_at`, `last_activity_at`
+  - `elapsed_duration_seconds`, `active_duration_seconds` (nullable)
+  - `logging_percentage` (numeric), `logging_quality` (enum: fully/mostly/partially/no_log)
+  - `required_sets_count`, `logged_sets_count`, `skipped_exercises_count`
+  - `completed_with_missing_logs` (bool), `completion_source` (text)
+- Review record (`pl_workout_feedback` if it's the existing review table, otherwise a new `workout_reviews`):
+  - `review_submitted_at`, `review_last_edited_at`, `review_edit_count`, `review_updated_by`
+  - **Unique constraint:** one current review per (user_id, workout_instance_id).
+- Idempotency: unique constraint on (user_id, workout_instance_id) for completion record.
+- GRANTs + RLS policies for any new tables; existing tables keep their policies.
 
-1. **Water intake** — completely missing as a structured feature. Only exists as a free-text string on the nutrition target.
-2. **Water-target auto-calculation** (bodyweight × 35 mL/kg, default 3.0 L) — missing.
-3. **Profile/dashboard summary cards** for water + latest progress on client dashboard, member dashboard, admin client profile overview, admin member profile overview.
-4. **Bodyweight source-of-truth consolidation** — `progress_bodyweight`, `progress_metrics.bodyweight`, and `member_bodyweight_logs` overlap. Need one read path.
-5. **Member review eligibility** wired to `client_access_entitlements` so `canRequestReview` is real, not hard-coded `false`.
-6. **Check-in flow integration** — attaching a progress submission to a manual check-in.
-7. **Water reminders** + stop-after-target rule.
-8. **Polish gaps:** consent flow (media marketing opt-in), empty states alignment, admin review queue filtering to exclude self-tracking members.
+## Phase 2 — Shared backend (server functions)
+One module, used by both roles. Role differences are permission checks only.
 
-## Approach: extend the existing system, don't rebuild
+- `src/lib/workout-completion.functions.ts`
+  - `finishWorkout({ instanceId })` — idempotent UPSERT on completion, computes logging_percentage / logging_quality from `pl_row_results` against `pl_exercise_rows` prescription rules (load+reps / bodyweight / timed / distance / RPE only when required), writes duration, sets `completed_with_missing_logs`.
+  - `updateWorkoutLog({ instanceId, sets })` — writes set logs, then recomputes completeness on the existing completion row (no new completion, no new notification).
+  - `submitOrEditReview({ instanceId, rating, notes, ... })` — UPSERT on review by (user_id, instance_id); first write sets `review_submitted_at`, subsequent sets `review_last_edited_at`, increments `review_edit_count`. Never re-completes the workout.
+  - All three protected by `requireSupabaseAuth` and a permission helper that checks: (a) user owns the instance (client or member), (b) or coach/admin has access via existing role checks.
+- `src/lib/workout-duration.ts` — pure helpers for elapsed vs active duration, overnight clamp, format ("42 min", "1 hr 8 min").
+- `src/lib/workout-completeness.ts` — pure helpers for per-exercise "is this set logged" rules + aggregate %.
 
-Keep `ProgressSection`, `progress_submissions`, `progress_media`, `progress_bodyweight`, `progress_measurements`. Add water tables + water UI. Bridge legacy bodyweight rows through a read helper that unions the three sources but writes only to `progress_bodyweight` going forward.
+## Phase 3 — Shared UI components
+Replace both role-specific completion UIs with these.
 
----
+- `<FinishWorkoutBar />` — sticky bottom action with states (idle / completing / completed / error+retry), single button, disabled while in-flight.
+- `<CompletionSummarySheet />` — mobile sheet showing duration, sets logged / expected, %, optional rating + notes, primary "Complete Workout", secondary "Keep Logging". Handles missing-sets warning + "Complete Anyway".
+- `<LoggingQualityBadge />` — compact badge/ring for Fully / Mostly / Partially / No Log.
+- `<WorkoutReviewEditor />` — used both for first submission and edits; pre-fills, "Save Review Changes", optimistic save, preserves typed content on failure.
+- `<CompletedWorkoutActions />` — "View / Edit Log", "View / Edit Review" on every completed workout.
+- Wording adapts: if no assigned coach, neutral copy ("Anything you want to note about this workout?"); if coach assigned, "Your coach can see this".
 
-## Phase 1 — Foundation (this turn)
+## Phase 4 — Wire-in (replace, don't fork)
+- Point the client active-workout page at the shared components/functions.
+- Point the member active-workout page at the same shared components/functions.
+- Delete the duplicate member completion/review code paths (keep the tables/data — only remove the duplicate code).
+- Calendar View, Block View, client dashboard, member dashboard, coach client view, admin client/member view all read from the same completion + review rows; invalidate the relevant React Query keys on save.
 
-### 1a. Database migration (one migration call, awaiting your approval)
+## Phase 5 — Verify with Playwright
+Run the spec's required tests against the live preview as: client, member, admin, coach-viewing-client. Capture screenshots for each state (Fully / Mostly / Partially / No Log, review submit, review edit, duration after refresh, rapid-tap idempotency, slow-network retry). Report results.
 
-New tables:
+## Out of scope (won't touch this round)
+- Redesign of unrelated pages.
+- New analytics dashboards (existing analytics keep their inputs; we only stop double-counting).
+- Bulk historical data migration (audit-only — no destructive rewrites of existing member history).
+- Video/upload pipeline changes.
+- Notification system rewrite (only dedupe within the completion/review path).
 
-- `progress_water_targets(user_id PK, suggested_ml, active_ml, target_source enum[default|auto|user|coach|admin], calc_bodyweight_kg, calc_formula_version, mode enum[auto|custom], last_recalculated_at, set_by_user_id, created_at, updated_at)`
-- `progress_water_entries(id, user_id, amount_ml int, entry_at timestamptz, entry_date date generated, source enum[quick_add|custom|check_in|admin|imported], note, created_at, updated_at)`
-- `progress_consents(id, user_id, kind enum[marketing_photos|marketing_videos|testimonials], granted boolean, version, granted_at, revoked_at, created_by)`
-
-GRANTs + RLS:
-
-- water tables: owner read/write by `auth.uid()`; assigned coach + admin read/write via `has_role` and (for clients) the existing `assigned_coach_id` check used elsewhere.
-- All values stored in mL (base unit). Display conversion in TS.
-- Add `progress_submissions.linked_check_in_id uuid` if not present (it's already there — confirmed).
-- Add `clients.water_target_locked_by_coach boolean default false` (so user can't override coach-set targets without confirmation).
-
-Indexes: `progress_water_entries(user_id, entry_date desc)`, `progress_water_targets(user_id)`.
-
-No destructive changes. `progress_metrics`, `member_bodyweight_logs` left untouched; a new read helper unions them for the trend chart.
-
-### 1b. Water domain code (no UI yet)
-
-- `src/lib/water.ts` — types, mL↔(L/oz) conversions, `suggestTargetMl(bodyweightKg)` clamped to 2000–5000 and rounded to nearest 100, default 3000.
-- `src/lib/water.functions.ts` — `getWaterToday`, `addWaterEntry`, `undoLastWaterEntry`, `editWaterEntry`, `deleteWaterEntry`, `getWaterHistory`, `getWaterTarget`, `setWaterTarget({mode, customMl, setBy})`, `recalculateAutoTarget(userId)` (refreshes auto target only if Δbodyweight ≥ 2 kg). All `requireSupabaseAuth`-gated; admin/coach variants accept `targetUserId` and check role/assignment.
-- `src/lib/bodyweight.ts` — `getLatestBodyweightKg(userId)` reads in priority: latest `progress_bodyweight` → latest `progress_metrics.bodyweight` → `clients.starting_bodyweight` → null. Single source for the water calc.
-
-### 1c. Permissions / review eligibility
-
-- `src/lib/progress-access.ts` — `canRequestProgressReview(ctx)` checks `client_access_entitlements` (status='active', tier includes 'reviews') for members; always true for coaching clients.
-- Wire it into `/m/progress.tsx` (replace hard-coded `false`) and into the admin review queue filter so standard members never appear in the queue.
-
-### 1d. Navigation & placement audit
-
-- `Progress` already in portal + member nav — confirm and add to mobile primary nav if missing (≤2 taps).
-- Add an admin route already exists; nothing to add.
-
----
-
-## Phase 2 — Core user tools (this turn)
-
-### 2a. Water UI components
-
-- `src/components/progress/water-tracker-card.tsx` — compact "1.5 L of 3.0 L • 1.5 L remaining" card with quick-add chips (+250 / +500 / +750 / +1 L / Custom), Undo, target reached state, link to history. Mobile-first, tap targets ≥44px, neutral states (no red).
-- `src/components/progress/water-history-sheet.tsx` — daily totals, target line, 7-day average, streak (target-reached days). No aggressive warnings.
-- `src/components/progress/water-target-dialog.tsx` — toggle Auto / Custom, shows source badge (Suggested / Coach Set / Custom), "Use automatic suggestion" button, mL/L/oz input. Admin/coach version exposed inside admin client/member profile.
-- Add a `Water` tab in `ProgressSection` and a Water row in Overview + Timeline (compact daily summary only, not per-entry).
-
-### 2b. Bodyweight read consolidation
-
-- Update `BodyweightTab` and the dashboard summary cards to read via `getCombinedBodyweightSeries(userId)` so legacy 45 `progress_metrics` rows continue to show the trend.
-- New writes still go to `progress_bodyweight`. A trigger on `progress_bodyweight` insert calls `recalculateAutoTarget` (in SQL: simple update if mode='auto' and Δkg≥2).
-
-### 2c. Dashboard & profile summary cards
-
-- `src/components/progress/progress-summary-card.tsx` — used in:
-  - Portal client dashboard (`/portal/index.tsx`)
-  - Member dashboard (`/m/index.tsx`)
-  - Admin client profile overview (`/admin/clients.$id.tsx`)
-  - Admin member profile (`/admin/members.$memberId.tsx`)
-  Shows: latest submission, latest bodyweight, today's water (with Add Water inline), next scheduled check-in, pending review badge, "Open Progress" button. Rows with no data are hidden.
-- Reuse the same component, parametrized by `ctx`.
-
-### 2d. Check-in integration
-
-- In the existing portal check-in flow (`/portal/check-in.tsx`), add an optional "Progress" section that lists today's draft progress submission (if any) and exposes "Attach existing" / "Start new". Saves `linked_check_in_id` on the submission. Today's water + bodyweight surface inline.
-
-### 2e. Member review-eligibility UX
-
-- Member submission flow: when `canRequestReview` is false, primary button reads "Save to My Progress". When true, "Submit for Review" appears and shows tier source ("Included with your membership" / "Review credit available").
-
-### 2f. Notifications hygiene
-
-- Extend the existing notification dedupe to stop water reminders after the daily target is reached (unless `water_reminders_continue_after_target` is set on user prefs).
-
----
-
-## Out of scope this turn (Phase 3+)
-
-- Admin review queue page redesign (existing `progress-review-queue.tsx` already works; only adding the eligibility filter this turn).
-- Paid-review purchase flow (foundation in place via `client_access_entitlements`, sale UI deferred).
-- Media-consent capture UI (consent table created in Phase 1, capture screen Phase 3).
-- Heavy gallery virtualization, batch admin tools, transformation marketing flows.
-
-## Technical details
-
-```text
-Data flow for water:
-quick-add tap → addWaterEntry server fn → insert progress_water_entries
-  → invalidate ["water-today", userId] + ["water-history", userId]
-  → after-insert: if target reached & has reminders, mark today done in notification_state
-
-Auto target recalculation:
-new progress_bodyweight row → after-trigger calls public.maybe_refresh_water_target(user_id)
-  → if mode='auto' and |new_kg - calc_bodyweight_kg| >= 2 then update suggested_ml + active_ml
-```
-
-```text
-File touch list (Phase 1–2):
-  + supabase migration (1 call)
-  + src/lib/water.ts
-  + src/lib/water.functions.ts
-  + src/lib/bodyweight.ts
-  + src/lib/progress-access.ts
-  + src/components/progress/water-tracker-card.tsx
-  + src/components/progress/water-history-sheet.tsx
-  + src/components/progress/water-target-dialog.tsx
-  + src/components/progress/progress-summary-card.tsx
-  ~ src/components/progress/progress-section.tsx        (add Water tab, water row in Overview/Timeline)
-  ~ src/routes/_authenticated/m/progress.tsx            (canRequestReview from entitlements)
-  ~ src/routes/_authenticated/m/index.tsx               (summary card)
-  ~ src/routes/_authenticated/portal/index.tsx          (summary card)
-  ~ src/routes/_authenticated/admin/clients.$id.tsx     (summary card)
-  ~ src/routes/_authenticated/admin/members.$memberId.tsx (summary card)
-  ~ src/routes/_authenticated/portal/check-in.tsx       (optional progress section)
-  ~ src/components/progress/progress-review-queue.tsx   (filter ineligible members)
-```
-
-## Testing this turn
-
-- Add water + undo + custom amount + edit + delete; verify entries land in `progress_water_entries` and today's total recomputes.
-- Set auto target → log new bodyweight in kg → suggestion refreshes only if Δ≥2 kg.
-- Set custom target as coach → user sees "Coach Set" badge and cannot silently overwrite.
-- Member without entitlement sees "Save to My Progress" and never appears in admin review queue.
-- Add an entitlement with tier='reviews' active → member sees "Submit for Review".
-- Existing 45 `progress_metrics` bodyweight rows still render in the bodyweight chart.
-- Lift Review uploads still work (no shared code touched).
-
-## After Phase 2 you'll review, then Phase 3 = coaching review polish + scheduling + reminders + consent UI + admin queue page improvements.
+## Suggested execution order for this turn
+Given the size, I'd like to do **Phase 0 (audit) only this turn** and report back with the concrete map + a tightened Phase 1 migration proposal. Then build Phases 1–3 next turn, Phase 4 the turn after, Phase 5 to verify. Trying to do all five in one turn will produce broken intermediate state.
