@@ -16,15 +16,13 @@ import { Eye, EyeOff, Receipt, Check, X as XIcon } from "lucide-react";
 import { SalesPageShell, Section, SectionTitle } from "@/components/sales/sales-page-shell";
 import { MembershipHero, MemberHeroCta, MemberHeroGhost, HeroDecisionArea, MemberDetailsLink } from "@/components/sales/membership-hero";
 import { FeatureGrid } from "@/components/sales/feature-grid";
-import { IncludedNotIncluded } from "@/components/sales/included-not-included";
-import { OfferComparison } from "@/components/sales/offer-comparison";
 import { ProofWall } from "@/components/sales/proof-wall";
 import { FaqAccordion } from "@/components/sales/faq-accordion";
 import { StickyMobileCta } from "@/components/sales/sticky-mobile-cta";
 import { AppPreviewGrid } from "@/components/sales/app-preview-grid";
 import { FinalCta } from "@/components/sales/final-cta";
 import { Reveal } from "@/components/sales/reveal";
-import { ArrowRight, Headphones, CheckCircle2, XCircle, Library, PlayCircle, LineChart as LineChartIcon, BookOpen, Sparkles, Dumbbell, Home as HomeIcon, Flame, Trophy } from "lucide-react";
+import { ArrowRight, Headphones, CheckCircle2, Library, Dumbbell, Home as HomeIcon, Flame, Trophy } from "lucide-react";
 import { normalizePhoneToE164 } from "@/lib/phone-e164";
 import appPreviewDashboard from "@/assets/app-preview-dashboard.jpg";
 import appPreviewLogging from "@/assets/app-preview-logging.jpg";
@@ -278,8 +276,8 @@ function SignupJf() {
       ) : (
       <MembershipHero
         priceChip={settings?.monthly_price_display ?? "$29/month USD"}
-        headline={"Every program you need. One system."}
-        sub={"Training for strength, muscle, and fat loss in one app. Open it and follow the plan."}
+        headline={"Everything you need, in one place."}
+        sub={"Strength, muscle, and fat loss programs — with demos, tracking, and a clear plan every session."}
         heroImage={null}
         decisionArea={
           <HeroDecisionArea
@@ -327,36 +325,11 @@ function SignupJf() {
         </Link>
       </Section>
 
-      {/* Offer comparison surfaced early so visitors see both paths within 5s. */}
-      {/* 2. Compare to doing it alone */}
+      {/* 2. The library — core value, visual grid */}
       <div ref={featuresRef} id="features" />
-      <Reveal><CompareAloneSection /></Reveal>
-
-      {/* 3. What's included — premium feature cards */}
-      <Reveal>
-        <FeatureGrid
-          title="What's included"
-          items={Array.isArray(s.features) && s.features.length > 0 ? s.features : DEFAULT_FEATURES}
-        />
-      </Reveal>
-
-      {/* 4. Program library showcase */}
       <Reveal><ProgramLibraryShowcase categories={Array.isArray(s.library_categories) && s.library_categories.length > 0 ? s.library_categories : DEFAULT_LIBRARY} programCount={s.program_count ?? ""} /></Reveal>
 
-      {/* 5. Why people stick with it */}
-      <Reveal><WhyStickSection /></Reveal>
-
-      {/* 6. Who it's for / not for */}
-      <Reveal>
-        <IncludedNotIncluded
-          includedTitle="This is for you if"
-          notIncludedTitle="This is NOT for you if"
-          included={Array.isArray(s.who_for) && s.who_for.length > 0 ? s.who_for : DEFAULT_WHO_FOR}
-          notIncluded={Array.isArray(s.not_for) && s.not_for.length > 0 ? s.not_for : DEFAULT_NOT_FOR}
-        />
-      </Reveal>
-
-      {/* 7. App preview */}
+      {/* 3. Inside the app — visual support for the library */}
       <Reveal>
         <AppPreviewGrid
           title="Inside the app"
@@ -373,25 +346,32 @@ function SignupJf() {
         />
       </Reveal>
 
-      {/* 8. Proof wall */}
+      {/* 4. What you get — feature cards */}
+      <Reveal>
+        <FeatureGrid
+          title="What you get"
+          items={Array.isArray(s.features) && s.features.length > 0 ? s.features : DEFAULT_FEATURES}
+        />
+      </Reveal>
+
+      {/* 5. Proof — real members, real progress */}
       <Reveal><ProofWall
         testimonials={p?.testimonials ?? []}
         images={(p?.visuals ?? []).filter((v) => v.slot === "proof")}
       /></Reveal>
 
-      {/* 9. Coaching vs Membership */}
-      <Reveal><OfferComparison accent="membership" /></Reveal>
-      <Section className="!pt-0">
+      {/* 6. Membership vs Coaching — one-line low-priority cross-sell */}
+      <Section>
         <p className="mx-auto max-w-3xl text-center text-sm text-muted-foreground md:text-base">
           Most people are set right here. Want a plan built just for you, with weekly check-ins? That's{" "}
           <Link to="/coaching" className="font-semibold text-primary underline underline-offset-2 hover:text-primary/80">Coaching</Link> — by application.
         </p>
       </Section>
 
-      {/* 10. FAQ */}
+      {/* 7. FAQ */}
       <Reveal><FaqAccordion items={mergeTaxFaq(Array.isArray(s.faq) && s.faq.length > 0 ? s.faq : DEFAULT_FAQ)} /></Reveal>
 
-      {/* 11. Final CTA */}
+      {/* 8. Final CTA */}
       <Reveal>
         <FinalCta
           headline="Start training with a system."
@@ -401,7 +381,9 @@ function SignupJf() {
             </Button>
           }
           secondary={
-            <span className="ml-1 text-xs text-muted-foreground">{trialDays}-day free trial · Cancel anytime</span>
+            <span className="ml-1 text-xs text-muted-foreground">
+              Everything you need, in one app{s.program_count ? `. ${s.program_count}+ waiting` : ""}. {trialDays}-day free trial · Cancel anytime
+            </span>
           }
         />
       </Reveal>
@@ -665,16 +647,16 @@ function FieldError({ children }: { children: React.ReactNode }) {
 /* ---------------- Defaults (CMS-overridable) ---------------- */
 
 const DEFAULT_FEATURES = [
-  { title: "Program library", body: "Powerlifting, bodybuilding, fat loss, home. Every level." },
-  { title: "Exercise demos", body: "Clear technique in every workout." },
-  { title: "Progress tracking", body: "Log sets, watch PRs climb." },
-  { title: "Education", body: "The reasoning behind the plan." },
+  { title: "Program library", body: "Every goal, every level." },
+  { title: "Exercise demos", body: "Clear technique, built into each workout." },
+  { title: "Progress tracking", body: "Log sets, watch your numbers climb." },
+  { title: "Education", body: "The reasoning behind every plan." },
   { title: "Always growing", body: "New programs added often." },
 ];
 
 type LibraryCategory = { name: string; icon?: string; subtypes: string[] };
 const DEFAULT_LIBRARY: LibraryCategory[] = [
-  { name: "Powerlifting", icon: "trophy", subtypes: ["Beginner", "Intermediate", "Advanced", "Comp Prep"] },
+  { name: "Strength", icon: "trophy", subtypes: ["Beginner", "Intermediate", "Advanced"] },
   { name: "Bodybuilding", icon: "dumbbell", subtypes: ["PPL", "Upper/Lower", "Full Body", "Glute Focus"] },
   { name: "Fat Loss", icon: "flame", subtypes: ["Beginner", "Intermediate", "Advanced"] },
   { name: "Home", icon: "home", subtypes: ["Bodyweight", "Dumbbells", "At-Home Strength"] },
@@ -698,11 +680,10 @@ const DEFAULT_APP_PREVIEWS = [
 ];
 
 const DEFAULT_FAQ = [
-  { q: "Is this coaching?", a: "No — self-guided app. Coaching is 1:1." },
+  { q: "Is this coaching?", a: "No — self-guided app. Coaching is 1:1 with a dedicated coach." },
   { q: "Beginner?", a: "Yes, every level." },
   { q: "Home training?", a: "Yes." },
-  { q: "Powerlifting?", a: "Yes." },
-  { q: "Bodybuilding?", a: "Yes." },
+  { q: "Can I get serious about strength?", a: "Yes — strength programs from beginner to advanced." },
   { q: "New programs?", a: "Added often." },
   { q: "Cancel anytime?", a: "Yes." },
 ];

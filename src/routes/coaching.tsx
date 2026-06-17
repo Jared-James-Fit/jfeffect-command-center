@@ -82,7 +82,7 @@ function CoachingPage() {
     { q: "Beginner?", a: "Yes — if you'll commit to the plan." },
     { q: "Need a gym?", a: "No. Built around your setup." },
     { q: "Home training?", a: "Yes." },
-    { q: "Powerlifting?", a: "Yes." },
+    { q: "Strength focus?", a: "Yes — it's where we come from." },
     { q: "Track calories?", a: "Targets that fit you." },
     { q: "Travel often?", a: "The plan adapts." },
     { q: "Failed before?", a: "You've never had a real plan and real accountability together. That changes here." },
@@ -287,7 +287,7 @@ function JaredStory() {
         </div>
         <div className="mt-8 space-y-5 text-sm leading-relaxed text-muted-foreground md:text-base">
           <p>
-            JF Effect was built from the ground up, under real pressure — founded by Jared James out of a simple belief: structure and standards outlast motivation. The same discipline that took his own lifting to the competitive level now runs through how the whole team coaches. After years of coaching and 100+ clients, that belief hasn't changed. We build the plan, and we hold the line.
+            JF Effect was built from the ground up, under real pressure — founded by Jared James out of a simple belief: structure and standards outlast motivation. The same discipline that took his own strength training to the competitive level now runs through how the whole team coaches. After [X] years and [100+] clients, that belief hasn't changed. We build the plan, and we hold the line.
           </p>
         </div>
       </div>
