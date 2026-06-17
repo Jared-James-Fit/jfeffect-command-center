@@ -5,6 +5,8 @@ export type WorkoutStatus =
   | "today"
   | "upcoming"
   | "available"
+  | "not_started"
+  | "in_progress"
   | "completed_today"
   | "completed_on_scheduled"
   | "completed_different_day"
@@ -25,6 +27,7 @@ export function getWorkoutStatus(item: WorkoutItem, now: Date = new Date()): {
   const scheduled = dayScheduledDate(item);
   const completedAtRaw: string | null = item.completion?.completed_at ?? null;
   const completedAt = completedAtRaw ? new Date(completedAtRaw) : null;
+  const loggedSets = item.logged_sets_count ?? 0;
 
   if (completedAt) {
     if (isSameDay(completedAt, today)) {
@@ -50,8 +53,14 @@ export function getWorkoutStatus(item: WorkoutItem, now: Date = new Date()): {
     };
   }
 
+  // In progress = some sets logged, not yet marked complete.
+  if (loggedSets > 0) {
+    return { status: "in_progress", label: "In progress", tone: inProgressTone, scheduled, completedAt };
+  }
+
   if (!scheduled) {
-    return { status: "available", label: "Available", tone: neutralTone, scheduled, completedAt };
+    // No scheduled date and no logged sets → not yet started.
+    return { status: "not_started", label: "Not started", tone: neutralTone, scheduled, completedAt };
   }
   if (isSameDay(scheduled, today)) {
     return { status: "today", label: "Today", tone: todayTone, scheduled, completedAt };
@@ -70,6 +79,7 @@ export function getWorkoutStatus(item: WorkoutItem, now: Date = new Date()): {
 
 const completedTone = "border-emerald-500/40 bg-emerald-500/10 text-emerald-500";
 const todayTone = "border-primary/40 bg-primary/10 text-primary";
+const inProgressTone = "border-amber-500/40 bg-amber-500/10 text-amber-500";
 const upcomingTone = "border-muted-foreground/30 bg-muted/30 text-muted-foreground";
 const missedTone = "border-amber-500/40 bg-amber-500/10 text-amber-500";
 const neutralTone = "border-muted-foreground/20 bg-muted/20 text-muted-foreground";

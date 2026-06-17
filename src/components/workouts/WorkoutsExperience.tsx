@@ -366,9 +366,12 @@ function statusDotClass(status: WorkoutStatus | "none"): string {
     case "completed_different_day":
       return "bg-emerald-500";
     case "today": return "bg-primary";
+    case "in_progress": return "bg-amber-500";
     case "missed": return "bg-amber-500";
     case "upcoming": return "bg-muted-foreground/60";
-    case "available": return "bg-muted-foreground/40";
+    case "available":
+    case "not_started":
+      return "bg-muted-foreground/40";
     default: return "bg-transparent";
   }
 }
