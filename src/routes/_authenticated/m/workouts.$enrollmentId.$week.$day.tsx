@@ -26,6 +26,8 @@ import {
   registerQueueHandler,
 } from "@/lib/workout-offline-queue";
 import { writePlanCache, cachedInitialData } from "@/lib/workout-plan-cache";
+import { computeWorkoutSummary, type WorkoutSummary } from "@/lib/workout-summary";
+import { WorkoutSubmissionSummary } from "@/components/workout-submission-summary";
 
 export const Route = createFileRoute("/_authenticated/m/workouts/$enrollmentId/$week/$day")({
   component: () => (
@@ -50,6 +52,8 @@ function WorkoutTracker() {
   const undo = useWorkoutUndo();
   const [notes, setNotes] = useState("");
   const [logs, setLogs] = useState<Record<string, SetLog>>({});
+  const [summaryOpen, setSummaryOpen] = useState(false);
+  const [lastSummary, setLastSummary] = useState<WorkoutSummary | null>(null);
 
   const cacheScope = `m:${enrollmentId}`;
   const route = `/m/workouts/${enrollmentId}/${week}/${day}`;
@@ -223,13 +227,40 @@ function WorkoutTracker() {
 
   const handleComplete = async () => {
     const wasComplete = isComplete;
+    // Build a summary from the in-memory logs + plan rows so the member sees
+    // an instant post-workout summary screen (no extra DB round-trip needed).
+    const summaryRows = rows.map((row: any, ei: number) => ({
+      id: String(ei),
+      sets: Math.max(1, Number(row.sets) || 1),
+      exercises: { id: null, name: row.exercise || row.name || `Exercise ${ei + 1}` },
+    }));
+    const summaryResults: Array<{ row_id: string; actual_load: number | null; actual_reps: number | null; actual_load_unit: "kg" | "lb" | null; actual_rpe: number | null; completed_at: string | null }> = [];
+    for (const [key, v] of Object.entries(logs)) {
+      const [eiStr] = key.split(":");
+      summaryResults.push({
+        row_id: eiStr,
+        actual_load: v.load_lb ?? null,
+        actual_reps: v.reps ?? null,
+        actual_load_unit: "lb",
+        actual_rpe: v.rpe ?? null,
+        completed_at: null,
+      });
+    }
+    const summary = computeWorkoutSummary(summaryRows, summaryResults, {
+      displayUnit: "lb",
+      hasNote: !!notes.trim(),
+    });
     enqueueOfflineWrite({
       id: `m_complete:${enrollmentId}:${weekIndex}:${dayIndex}`,
       label: "Marked workout complete",
       handlerKey: "m_complete_workout",
       payload: { enrollmentId, weekIndex, dayIndex, notes },
     });
-    toast.success("Workout complete", { description: "Syncing in background." });
+    toast.success(`Workout complete — Score: ${summary.score}/100`, {
+      description: summary.totalLifted > 0 ? `Total lifted: ${summary.totalLiftedFmt}` : "Syncing in background.",
+    });
+    setLastSummary(summary);
+    setSummaryOpen(true);
     qc.setQueryData(["m-completion", enrollmentId, weekIndex, dayIndex],
       (old: any) => old ?? { enrollment_id: enrollmentId, week_index: weekIndex, day_index: dayIndex, completed_at: new Date().toISOString(), _optimistic: true });
     undo.push({
@@ -272,6 +303,14 @@ function WorkoutTracker() {
 
   return (
     <div className="space-y-5">
+      {lastSummary && (
+        <WorkoutSubmissionSummary
+          open={summaryOpen}
+          onOpenChange={setSummaryOpen}
+          summary={lastSummary}
+          workoutTitle={dayObj?.title ?? `Week ${weekIndex} · Day ${dayIndex}`}
+        />
+      )}
       <PageHeader
         title={dayObj?.title || `Week ${weekIndex} · Day ${dayIndex}`}
         subtitle={plan?.name}
