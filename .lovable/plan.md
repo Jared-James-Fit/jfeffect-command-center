@@ -1,93 +1,69 @@
-# Quick Apply for Coaching — Implementation Plan
+## Audit summary (existing systems to reuse)
 
-## What already exists (reuse, do not duplicate)
+Found existing infrastructure — will extend, not duplicate:
 
-- **CRM lead source of truth**: `clients` table + `upsertApplicantClient` in `src/lib/crm.functions.ts` (email/phone dedupe, conflict flag, activity log via `client_crm_activities`).
-- **Applications**: `coaching_applications` table (41 cols incl. `client_id`, `appointment_id`, `booking_link_slug`, `lead_score`, `lead_temperature`, `application_status`, `summary`, `submitted_at`) + `submitCoachingApplication` server fn.
-- **Public form**: `/coaching/apply` (current desktop-style long form — being replaced).
-- **Booking**: `booking_links` + `/book/$slug` route + `appointments` table.
-- **SMS**: Twilio integration via `src/lib/sms.functions.ts`, `sms-trigger.server.ts`, allowlist/dry-run controls in `sms_settings`.
-- **Coaching offers**: `coaching_products` table (active offers loadable for Step 5).
-- **Admin pages**: `/admin/sales/coaching-applications`, `/admin/settings/sms`, `/admin/crm.index`.
-- **Org settings**: `app_settings` already holds `coaching_apply.booking_link_slug` and `coaching_apply.allow_cold_booking`.
+- **Public coaching page**: `src/routes/coaching.tsx`
+- **Existing application form**: `src/routes/coaching.apply.tsx` + `src/routes/apply.tsx`
+- **Application server fns**: `src/lib/coaching-applications.functions.ts`
+- **DB table**: `coaching_applications` (58 cols — already has scoring, lead temp, contact fields)
+- **CRM**: `clients` + `crm.functions.ts` + admin CRM contacts pages
+- **Admin app list**: `src/routes/_authenticated/admin/sales.coaching-applications.tsx`
+- **Notification recipients UI**: `src/routes/_authenticated/admin/settings_.notifications.coaching-applications.tsx` + `coaching_app_notification_recipients` table
+- **SMS**: `sms_automations`, `sms_settings`, `sms_log`, `src/lib/sms-trigger.server.ts` (with dry-run/allowlist safety modes)
+- **Email**: Lovable email queue + transactional system
+- **Booking**: `booking_links` table, `appointments` table, `src/lib/booking-links.functions.ts`, public `book.$slug.tsx` page
 
-I will extend these, not duplicate them.
+## Scope
 
-## What I'll build
+This is a multi-week build (public quiz UX rewrite + admin lead-pipeline integration + booking embed + notifications + scoring config UI + acceptance tests). Given the credit-cost of doing all of this in one pass, I'll deliver it in **4 sequential phases** so you can verify each before paying for the next.
 
-### Phase A — Public quiz UX (the bulk of the work)
+### Phase 1 — Public quiz-style application (highest user-visible impact)
+Rewrite `coaching.apply.tsx` as a true mobile-first one-question-at-a-time quiz with:
+- Big tap cards, auto-advance, sticky Continue, progress bar, back, session-preserved state
+- Exact 7-step flow you specified, only 2 short-answer (250 char) fields + name/phone/email/IG
+- Reuses existing `coaching_applications` insert via `submitCoachingApplication` server fn (extend it for the new fields: obstacle, training_location, days_per_week, support_type, readiness, tracking_willingness, investment_readiness, why_now, best_contact, best_time, consent)
+- Adds CTAs to `coaching.tsx` (top/middle/pricing/bottom)
+- Post-submit success screen with dominant "Book Your Call" → embedded booking step (reuses `booking_links` slot picker, prefills name/phone/email, no re-entry)
+- "Finish Without Booking" path keeps application saved + marks lead `call_not_booked`
+- Honeypot + server-side rate-limit (per-IP) + Zod validation
 
-Rewrite `src/routes/coaching.apply.tsx` end-to-end as a step-based mobile quiz:
+### Phase 2 — Scoring engine + lead pipeline wiring
+- `compute_application_score(application_id)` SQL function: 6 categories (goal/start/process/investment/urgency/contact), 0–100, no protected traits, version-stamped, stored on row + per-category JSON breakdown + label
+- Trigger fires on insert/update of relevant fields
+- On submit: upsert into `clients` (CRM lead) by email/phone dedupe; link `client_id` back to application; previous applications visible via `client_id` history
+- On successful booking: move CRM lead stage → `Call Booked`, link `appointment_id`
+- Admin settings page to edit weights/thresholds/labels (writes to `app_settings`)
 
-- One question (or up to 3 tightly related) per screen, large tap-card answers, single-choice auto-advance, sticky Continue for multi-select / text steps, progress bar, Back button, session-only progress preserved in `sessionStorage`.
-- Exactly two free-text boxes (`target_outcome`, `why_now`), 250-char limit each, char counter, voice-input compatible.
-- Steps match the spec: 1 Main goal → 2 Desired result → 3 Biggest obstacle (with optional 80-char "other") → 4 Training (location, days/week, start timeline) → 5 Coaching fit (interest from live `coaching_products`, readiness, tracking, investment readiness — never asks for exact income) → 6 Why now (chips that prefill) → 7 Contact (name, mobile, email, optional IG, preferred channel, best time, **un-pre-checked** consent with Privacy/Terms links) → Final compact review with `Submit Application`.
-- Mobile keyboards: `type="tel"`, `inputMode="email"`, `autocomplete` hints.
-- Honeypot field + simple per-IP rate limit on the server fn (already runs through `supabaseAdmin`).
+### Phase 3 — Admin surface + notifications
+- Extend `sales.coaching-applications.tsx` list: search/sort/filter by score/qualification/stage/call status/assignee/follow-up; CSV export; call-status badges
+- New detail page `sales.coaching-applications.$id.tsx`: full applicant view, score explanation, quick actions (Call/Text/Email/Send Booking Link/Book For Lead/Reschedule/Assign/Convert/Close), booking history, notification history, previous applications
+- Admin homepage metrics: "New Coaching Applications" + "Calls Booked" + priority list
+- Wire `application_submitted` SMS automation trigger + ensure Yannick Ring (+13435714378) is seeded in `coaching_app_notification_recipients` with application+booking SMS on, email off
+- Wire `application_booked` trigger; reuse existing dry-run/allowlist safety modes (no bypass)
+- Email confirmation (transactional, applicant) + admin notification email
+- Idempotency keys on notification sends to prevent dup on retries
 
-### Phase B — Coaching page CTAs
+### Phase 4 — Acceptance tests + polish
+- Playwright smoke: full mobile flow ≤120s, double-tap dedupe, two-tab race for same slot, dedupe lead by email, abandoned booking leaves lead in `Review Needed`
+- DB constraints: unique appointment per (application_id, status='booked'), unique notification by idempotency_key
+- RLS audit on `coaching_applications`, `appointments` created here, `coaching_app_notification_recipients`
+- Final completion report with screenshots
 
-Add a shared `<ApplyForCoachingCTA />` button to `src/routes/coaching.tsx` in **four** positions (top hero, after explanation, near offers, near bottom) with supporting copy: "Answer a few quick questions, then book a call if coaching looks right for you." All link to `/coaching/apply`.
+## Technical notes
 
-### Phase C — Server-side score rewrite + new fields
+- Schema additions to `coaching_applications` (additive, non-breaking): `obstacle`, `obstacle_other`, `training_location`, `days_per_week`, `start_timeline`, `support_type`, `readiness`, `tracking_willingness`, `investment_readiness`, `why_now`, `best_contact_method`, `best_contact_time`, `consent_contact_at`, `score_breakdown jsonb`, `score_version int`, `qualification_label`, `call_status`, `appointment_id uuid`, `client_id uuid`, `submission_ip`, `honeypot_value`
+- Booking: extend `appointments` with `coaching_application_id uuid` FK + partial unique index on `(coaching_application_id) WHERE status IN ('booked','rescheduled')`
+- All new tables/columns get GRANTs + RLS policies in same migration
+- Public submission endpoint: server route at `/api/public/coaching-applications` with honeypot + rate-limit + Zod; or extend the existing `createServerFn` public path the form already uses
+- Reuse `sms-trigger.server.ts` automation pipeline — no new SMS system
+- Reuse Lovable email queue — no new email system
 
-- Extend the `submitSchema` in `src/lib/coaching-applications.functions.ts` with new fields: `obstacle`, `obstacle_other`, `training_location`, `coaching_interest`, `readiness`, `tracking_willingness`, `investment_readiness`, `preferred_contact`, `best_time`, `consent_contact`, `why_now_tags[]`, `honeypot`.
-- Reject if honeypot is filled; require consent boolean.
-- Rebuild `scoreLead` to return **category scores** (goal/service fit, readiness, willingness, investment fit, urgency, contact completeness) totaling 0–100, plus an `explanation` array. Never reads protected traits.
-- Migration adds the new columns + a `scoring` JSONB (category breakdown, version, explanation), `qualification_label` text, `consent_contact_at` timestamptz, `preferred_contact`, `best_time`, `obstacle`, `obstacle_other`, `training_location`, `coaching_interest`, `readiness`, `tracking_willingness`, `investment_readiness`, `application_source` (e.g. `quick_apply_v1`). Keeps legacy columns intact for back-compat.
+## Deliverables per phase
 
-### Phase D — Notification recipients
+Each phase ends with: working preview, the user verifies, then I publish. Phase 1 is the biggest visible change (the quiz). Phases 2–4 are mostly admin/backend.
 
-Migration: new `coaching_app_notification_recipients` table:
-`id, name, role, phone, email, receive_application_sms, receive_booking_sms, receive_application_email, receive_booking_email, priority_only, paused, phone_verified_at, email_verified_at, created_at, updated_at`. RLS: admin-only; GRANTs included.
+## Question before I start
 
-Seed two rows:
-1. **Primary Admin** — reads phone/email from `app_settings` (`org.primary_phone`, `org.primary_email`); if absent, leaves blank with a TODO badge in the UI.
-2. **Yannick Ring** — `+13435714378`, role "Media Manager / Team Member", application SMS on, booking SMS on, email off until set.
+**Do you want me to proceed phase-by-phase, or compress into a single mega-build?** Phase-by-phase keeps each turn reviewable and lets you stop after phase 1 if the quiz UX needs tweaks before backend wiring. Mega-build is faster end-to-end but harder to course-correct.
 
-New admin page `src/routes/_authenticated/admin/settings_.notifications.coaching-applications.tsx`: list + add/edit/remove, pause toggle, priority-only toggle, "Send test SMS" / "Send test email" buttons (uses existing SMS allowlist/dry-run controls — no bypass), quiet-hours field, immediate-vs-digest selector.
-
-### Phase E — Notify on submit + booking
-
-- After successful insert in `submitCoachingApplication`, enqueue SMS + email to all matching recipients using the existing SMS/email infrastructure. Idempotency key: `coaching_app_submit:{id}` (prevents double-send on retry).
-- SMS body never includes free-text answers — only: name, qualification label, score, main goal, start timeline, secure admin review link (`/admin/sales/coaching-applications#{id}`, authenticated).
-- Email uses Lovable Emails: new template `coaching-application-admin.tsx` registered in `email-templates/registry.ts`.
-- Booking notification: when an appointment is created against a coaching application (detect via `appointment.application_id`), fire `coaching_app_booked:{appt_id}` SMS + email to recipients with `receive_booking_*` on.
-
-### Phase F — Post-submission booking screen
-
-Replace current `<Success>` with a dominant **Book Your Call** screen:
-- Compact "Application received" hero, single big red `Book Your Call` button, quieter `Finish Without Booking` link.
-- On click, push to existing `/book/$slug` with prefilled contact via query params (`?name=…&email=…&phone=…&application_id=…`). `book.$slug.tsx` already exists — I'll extend it to read those params, skip the name/email/phone step, and stamp `appointments.application_id` + `coaching_applications.appointment_id` + move CRM stage to "Call Booked" on confirm.
-- Confirm button label: **"Confirm & Book Call"** (not "Submit").
-- On failure: keep application saved, show retry, log `call_status='not_booked'`.
-
-### Phase G — Admin enhancements
-
-- `/admin/sales/coaching-applications` list: add columns Score, Qualification, Goal, Start, Coaching interest, Preferred contact, Call status, Appt time, Assigned, Stage, Follow-up; filters + CSV export.
-- Application detail panel: quick actions (Call / Text / Email / Send Booking Link / Book For Lead / Reschedule / Assign / Create Follow-Up / Convert to Client / Close); shows score breakdown from `scoring` JSONB.
-- Admin home cards: "New Coaching Applications" (unreviewed count) and "Calls Booked" (last 7d) added to `/admin/index.tsx`.
-
-### Phase H — Acceptance verification
-
-Run the spec's acceptance tests via Playwright (mobile viewport): full quiz under 120s, double-tap no duplicate, abandoned booking preserves application, booking does not re-ask for contact, SMS/email queued, no protected-trait inputs.
-
-## Out of scope (call out)
-
-- Round-robin assignment (spec says "if supported later") — recipients table includes `role` for future use, but Jared remains the default assignee.
-- Marketing-style nurture sequences — only the one configurable reminder for "submitted but not booked" is included.
-- Editing the existing `book.$slug` time-slot picker visual design beyond prefill — only adds query-param prefill and application linking.
-
-## Technical details
-
-- Migrations: 1 file adding new application columns + `coaching_app_notification_recipients` (with GRANTs, RLS admin-only, service_role full).
-- New files (~10): mobile quiz component split (`src/components/coaching-apply/*` — step container, progress bar, card-answer, review), notification-recipients page + server fns, email template, score-breakdown helper, admin home metric cards.
-- Modified files (~6): `coaching.apply.tsx`, `coaching.tsx`, `coaching-applications.functions.ts`, `book.$slug.tsx`, `sales.coaching-applications.tsx`, `admin/index.tsx`, `email-templates/registry.ts`, `start.ts` (no change expected — `attachSupabaseAuth` already wired).
-- SMS path: continues to use existing dry-run / allowlist; submission alerts are queued, not sent inline, to satisfy the "save first, notify after" rule.
-- All `coaching_applications` writes stay through the existing server fn; no new write paths.
-- Single-question screens use auto-advance with 180 ms delay so users see their selection animate before transition.
-- Estimated build: ~15 file changes, 1 migration, ~1200 LOC net.
-
-## Approval
-
-This is a big surface area. If you approve as-is I'll execute end-to-end in one go and come back with the completion report (screenshots, test results, files changed, DB changes, recipient list). If you want to slice it — e.g., ship Phases A+B+F (the user-facing quiz + CTAs + booking screen) first, then C–G as a follow-up — say the word and I'll do that instead.
+Also: **for Phase 1's booking embed, should I use the existing `book.$slug.tsx` page (one specific booking link slug for "Coaching Discovery Call"), or build a dedicated in-flow slot picker?** Reusing `book.$slug.tsx` is much faster and respects all your existing booking config; the dedicated picker is a bigger lift.
