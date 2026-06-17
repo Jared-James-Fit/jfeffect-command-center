@@ -56,6 +56,7 @@ import { computeWorkoutSummary, type WorkoutSummary } from "@/lib/workout-summar
 import { WorkoutTimerSheet, QuickConfirmDuration, type TimerCompletionPayload } from "@/components/workout-timer-sheet";
 import { formatDuration } from "@/lib/duration";
 import { Timer } from "lucide-react";
+import type { WorkoutContextAdapter } from "@/lib/workout-context";
 
 /* -------------------------------------------------------------------------- */
 /* Target-parsing helpers (Suggested → Draft → Confirmed fast-logging)         */
@@ -205,14 +206,24 @@ export type WorkoutDayViewSearch = {
 export function WorkoutDayView({
   dayId,
   search,
+  adapter,
 }: {
   dayId: string;
   search: WorkoutDayViewSearch;
+  /**
+   * Phase C′ (feature-gated): when provided, future read/write paths
+   * route through this adapter so the same component can mount under
+   * both the coach/portal and member flows. When `undefined` (the
+   * default), the legacy direct-`sb.from("pl_*")` paths run unchanged,
+   * keeping the portal route byte-identical. Conversion of individual
+   * call sites happens incrementally in follow-up turns.
+   */
+  adapter?: WorkoutContextAdapter;
 }) {
   return (
     <WorkoutUndoProvider>
       <ActiveRestTimerProvider>
-        <WorkoutDay dayId={dayId} search={search} />
+        <WorkoutDay dayId={dayId} search={search} adapter={adapter} />
       </ActiveRestTimerProvider>
     </WorkoutUndoProvider>
   );
@@ -223,11 +234,17 @@ const sb = supabase as any;
 function WorkoutDay({
   dayId,
   search,
+  adapter,
 }: {
   dayId: string;
   search: WorkoutDayViewSearch;
+  adapter?: WorkoutContextAdapter;
 }) {
   const portalUserId = usePortalUserId();
+  // Adapter is wired in but not yet consumed: this turn lands the gating
+  // prop only so the portal route stays on the legacy sb.* path.
+  // Subsequent turns will flip individual reads/writes behind `if (adapter)`.
+  void adapter;
   const qc = useQueryClient();
   const undo = useWorkoutUndo();
   const cacheScope = `portal:${dayId}`;
