@@ -31,6 +31,7 @@ import {
   rescheduleDay,
   logSet as logSetFn,
   completeWorkout,
+  uncompleteWorkout,
 } from "@/lib/member-plans.functions";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -49,6 +50,47 @@ function decodeDayId(id: string): { week: number; day: number } {
     throw new Error(`member adapter: invalid dayId ${id}`);
   }
   return { week: w, day: d };
+}
+
+function decodeRowId(rowId: string): number {
+  // Shared UI generates rowId as "ex:<index>" for member context.
+  const m = /^ex:(\d+)$/.exec(rowId);
+  if (!m) throw new Error(`member adapter: rowId must be "ex:<index>", got ${rowId}`);
+  return Number(m[1]);
+}
+
+/**
+ * The member set log id is synthetic (a single row uniquely identified by
+ * enrollment/week/day/exercise/set). We use a composite string so the
+ * shared UI can pass it back to `deleteRowResult`.
+ */
+function encodeRowResultId(weekIndex: number, dayIndex: number, exerciseIndex: number, setIndex: number) {
+  return `mlog:${weekIndex}:${dayIndex}:${exerciseIndex}:${setIndex}`;
+}
+function decodeRowResultId(id: string) {
+  const m = /^mlog:(\d+):(\d+):(\d+):(\d+)$/.exec(id);
+  if (!m) throw new Error(`member adapter: invalid row result id ${id}`);
+  return {
+    weekIndex: Number(m[1]),
+    dayIndex: Number(m[2]),
+    exerciseIndex: Number(m[3]),
+    setIndex: Number(m[4]),
+  };
+}
+
+/** Locate the day object inside `member_plans.published_payload`. */
+async function loadPublishedDay(enrollmentId: string, weekIndex: number, dayIndex: number) {
+  const { data, error } = await supabase
+    .from("member_plan_enrollments")
+    .select("member_plans(published_payload)")
+    .eq("id", enrollmentId)
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  const payload = (data as any)?.member_plans?.published_payload ?? null;
+  const weeks = (payload?.weeks_data ?? []) as any[];
+  const week = weeks[weekIndex - 1] ?? null;
+  const day = week?.days?.[dayIndex - 1] ?? null;
+  return { payload, week, day };
 }
 
 export function createMemberAdapter(ref: WorkoutContextRef): WorkoutContextAdapter {
@@ -181,21 +223,223 @@ export function createMemberAdapter(ref: WorkoutContextRef): WorkoutContextAdapt
       });
     },
 
-    /* ---- Phase B day-view surface (filled in Phase C). ---- */
-    async getDay(_dayId: string): Promise<WorkoutDay> { throw new NotImplemented("getDay", "member"); },
-    async listRows(_dayId: string): Promise<ExerciseRowDTO[]> { throw new NotImplemented("listRows", "member"); },
-    async listRowResults(_dayId: string): Promise<RowResultDTO[]> { throw new NotImplemented("listRowResults", "member"); },
-    async listExerciseNotes(_dayId: string): Promise<ExerciseNoteDTO[]> { throw new NotImplemented("listExerciseNotes", "member"); },
-    async listExerciseHistory(_exerciseId: string): Promise<HistoryEntryDTO[]> { throw new NotImplemented("listExerciseHistory", "member"); },
-    async listClientMaxes(): Promise<MaxEntryDTO[]> { return []; },
-    async getDayCompletion(_dayId: string): Promise<DayCompletionDTO | null> { throw new NotImplemented("getDayCompletion", "member"); },
-    async getRowBlockSummaries(_rowIds: string[]): Promise<RowBlockSummaryDTO[]> { return []; },
-    async listCoachPainFlags(_dayId: string): Promise<CoachPainFlagDTO[]> { return []; },
-    async upsertRowResult(_input: UpsertRowResultInput): Promise<string> { throw new NotImplemented("upsertRowResult", "member"); },
-    async deleteRowResult(_id: string): Promise<void> { throw new NotImplemented("deleteRowResult", "member"); },
-    async upsertExerciseNote(_input: UpsertExerciseNoteInput): Promise<void> { throw new NotImplemented("upsertExerciseNote", "member"); },
-    async updateDayCompletion(_dayId: string, _patch: DayCompletionPatch): Promise<void> { throw new NotImplemented("updateDayCompletion", "member"); },
-    async saveExerciseUnitPref(_input: { exerciseId: string; unit: "lb" | "kg" }): Promise<void> { /* members default to lb; no-op */ },
-    async notifyCoachOfFailure(_input: { dayId: string; reason: string }): Promise<void> { /* routed via member support thread in Phase C */ },
+    /* ---- Phase C day-view surface ---- */
+    async getDay(dayId: string): Promise<WorkoutDay> {
+      const { week, day } = decodeDayId(dayId);
+      const { day: dayObj } = await loadPublishedDay(enrollmentId, week, day);
+      // Scheduled date comes from the schedule fn so day-level overrides apply.
+      const { schedule } = await getEnrollmentSchedule({ data: { enrollmentId } });
+      const scheduled = (schedule ?? []).find((s: any) => s.week === week && s.day === day);
+      return {
+        id: dayId,
+        week,
+        day,
+        title: dayObj?.title ?? dayObj?.focus ?? null,
+        focus: dayObj?.focus ?? null,
+        targetMinutes: dayObj?.target_minutes ?? dayObj?.est_minutes ?? null,
+        blockId: null,
+        blockName: null,
+        scheduledDate: scheduled?.date ?? null,
+      };
+    },
+
+    async listRows(dayId: string): Promise<ExerciseRowDTO[]> {
+      const { week, day } = decodeDayId(dayId);
+      const { day: dayObj } = await loadPublishedDay(enrollmentId, week, day);
+      const rows = (dayObj?.rows ?? []) as any[];
+      return rows.map((r: any, ei: number) => ({
+        id: `ex:${ei}`,
+        exerciseId: r.exercise_id ?? null,
+        exerciseName: r.exercise ?? r.name ?? `Exercise ${ei + 1}`,
+        videoUrl: r.video_url ?? null,
+        vimeoEmbedUrl: r.vimeo_embed_url ?? null,
+        thumbnailUrl: r.thumbnail_url ?? null,
+        muscleGroup: r.muscle_group ?? null,
+        category: r.category ?? null,
+        cues: r.cues ?? null,
+        commonMistakes: r.common_mistakes ?? null,
+        sortOrder: Number.isFinite(Number(r.sort_order)) ? Number(r.sort_order) : ei,
+        targetSets: Number.isFinite(Number(r.sets)) ? Number(r.sets) : null,
+        targetReps: r.reps != null ? String(r.reps) : null,
+        targetEffort:
+          r.rpe != null && String(r.rpe).trim() !== ""
+            ? `RPE ${r.rpe}`
+            : r.rir != null && String(r.rir).trim() !== ""
+              ? `RIR ${r.rir}`
+              : null,
+        targetLoadText: r.load != null ? String(r.load) : null,
+        restSeconds: Number.isFinite(Number(r.rest_seconds)) ? Number(r.rest_seconds) : null,
+        notes: r.notes ?? null,
+        warmupProtocolId: r.warmup_protocol_id ?? null,
+        defaultLoadUnit: r.default_load_unit ?? null,
+        blockGroupId: r.block_group ?? null,
+        raw: r,
+      }));
+    },
+
+    async listRowResults(dayId: string): Promise<RowResultDTO[]> {
+      const { week, day } = decodeDayId(dayId);
+      const { data, error } = await supabase
+        .from("member_set_logs")
+        .select("*")
+        .eq("enrollment_id", enrollmentId)
+        .eq("week_index", week)
+        .eq("day_index", day);
+      if (error) throw new Error(error.message);
+      return (data ?? []).map((l: any) => ({
+        id: encodeRowResultId(week, day, l.exercise_index, l.set_index),
+        rowId: `ex:${l.exercise_index}`,
+        setIndex: l.set_index,
+        reps: l.reps ?? null,
+        loadLb: l.load_lb ?? null,
+        actualLoadUnit: l.entered_unit ?? "lb",
+        rpe: l.rpe ?? null,
+        rir: l.rir ?? null,
+        isWorkingSet: l.is_working_set ?? null,
+        notes: l.notes ?? null,
+        completedDurationSeconds: l.completed_duration_seconds ?? null,
+        loggedAt: l.logged_at ?? l.created_at ?? null,
+      }));
+    },
+
+    async listExerciseNotes(_dayId: string): Promise<ExerciseNoteDTO[]> {
+      // Member plans don't persist per-day exercise notes today. UI surfaces
+      // in-memory notes via upsertExerciseNote → log notes field.
+      return [];
+    },
+
+    async listExerciseHistory(exerciseId: string, opts): Promise<HistoryEntryDTO[]> {
+      // We don't have a fast cross-day index by exercise_id for members; the
+      // published payload may not store stable exercise ids. Fall back to an
+      // empty list when the lookup isn't possible.
+      if (!exerciseId) return [];
+      const limit = opts?.limit ?? 50;
+      const { data, error } = await supabase
+        .from("member_set_logs")
+        .select("logged_at, set_index, reps, load_lb, rpe")
+        .eq("enrollment_id", enrollmentId)
+        .order("logged_at", { ascending: false })
+        .limit(limit);
+      if (error) throw new Error(error.message);
+      return (data ?? []).map((l: any) => ({
+        date: (l.logged_at ?? "").slice(0, 10),
+        setIndex: l.set_index,
+        reps: l.reps ?? null,
+        loadLb: l.load_lb ?? null,
+        rpe: l.rpe ?? null,
+      }));
+    },
+
+    async listClientMaxes(): Promise<MaxEntryDTO[]> {
+      // Members don't track 1RMs in this app.
+      return [];
+    },
+
+    async getDayCompletion(dayId: string): Promise<DayCompletionDTO | null> {
+      const { week, day } = decodeDayId(dayId);
+      const { data, error } = await supabase
+        .from("member_workout_completions")
+        .select("id, completed_at, notes")
+        .eq("enrollment_id", enrollmentId)
+        .eq("week_index", week)
+        .eq("day_index", day)
+        .maybeSingle();
+      if (error) throw new Error(error.message);
+      if (!data) return null;
+      return {
+        id: data.id,
+        startedAt: null,           // member schema doesn't track started_at
+        inProgressAt: null,
+        completedAt: data.completed_at ?? null,
+        notes: data.notes ?? null,
+        actualMinutes: null,
+      };
+    },
+
+    async getRowBlockSummaries(_rowIds: string[]): Promise<RowBlockSummaryDTO[]> {
+      return [];
+    },
+
+    async listCoachPainFlags(_dayId: string): Promise<CoachPainFlagDTO[]> {
+      return [];
+    },
+
+    async upsertRowResult(input: UpsertRowResultInput): Promise<string> {
+      const { week, day } = decodeDayId(ref.kind === "member" && input.id
+        // Honour the encoded id when we have one — covers updates that span
+        // a different (week/day) than the current view (rare but defensive).
+        ? `${decodeRowResultId(input.id).weekIndex}:${decodeRowResultId(input.id).dayIndex}`
+        : "1:1");
+      void week; void day; // satisfy linter if unused (we use the input rowId)
+      const exerciseIndex = decodeRowId(input.rowId);
+      // If an id was provided, prefer its encoded (week,day). Otherwise we
+      // need the caller to use the adapter on the active day, so the rowId
+      // index combined with current view will be saved through logSet.
+      if (input.id) {
+        const { weekIndex, dayIndex } = decodeRowResultId(input.id);
+        await logSetFn({
+          data: {
+            enrollmentId,
+            weekIndex,
+            dayIndex,
+            exerciseIndex,
+            setIndex: input.setIndex,
+            reps: input.reps ?? null,
+            load_lb: input.loadLb ?? null,
+            rpe: input.rpe ?? null,
+            rir: input.rir ?? null,
+            notes: input.notes ?? null,
+          },
+        });
+        return encodeRowResultId(weekIndex, dayIndex, exerciseIndex, input.setIndex);
+      }
+      throw new Error(
+        "member adapter: upsertRowResult requires either an existing id or the caller to use logSet({dayId, rowId, ...}); the shared UI passes id when editing an existing log",
+      );
+    },
+
+    async deleteRowResult(id: string): Promise<void> {
+      const { weekIndex, dayIndex, exerciseIndex, setIndex } = decodeRowResultId(id);
+      const { error } = await supabase
+        .from("member_set_logs")
+        .delete()
+        .eq("enrollment_id", enrollmentId)
+        .eq("week_index", weekIndex)
+        .eq("day_index", dayIndex)
+        .eq("exercise_index", exerciseIndex)
+        .eq("set_index", setIndex);
+      if (error) throw new Error(error.message);
+    },
+
+    async upsertExerciseNote(_input: UpsertExerciseNoteInput): Promise<void> {
+      // Member plans have no per-exercise notes table; notes ride along on
+      // the set log itself via the standard logSet path.
+    },
+
+    async updateDayCompletion(dayId: string, patch: DayCompletionPatch): Promise<void> {
+      const { week, day } = decodeDayId(dayId);
+      // The member schema only persists completed_at + notes. Treat
+      // completedAt=null as "uncomplete".
+      if (patch.completedAt === null) {
+        await uncompleteWorkout({ data: { enrollmentId, weekIndex: week, dayIndex: day } });
+        return;
+      }
+      if (patch.completedAt) {
+        await completeWorkout({
+          data: { enrollmentId, weekIndex: week, dayIndex: day, notes: patch.notes ?? undefined },
+        });
+      }
+      // started_at / in_progress_at / actualMinutes are ignored (no columns).
+    },
+
+    async saveExerciseUnitPref(_input: { exerciseId: string; unit: "lb" | "kg" }): Promise<void> {
+      // Members default to lb; per-exercise unit prefs aren't persisted.
+    },
+
+    async notifyCoachOfFailure(_input: { dayId: string; reason: string }): Promise<void> {
+      // Members don't have a dedicated coach to alert. The shared UI already
+      // surfaces sync errors via toast + offline queue retries; intentionally
+      // a no-op until membership support has a documented escalation path.
+    },
   };
 }
