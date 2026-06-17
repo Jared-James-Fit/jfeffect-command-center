@@ -1,10 +1,10 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
 import { SalesPageShell, Section } from "@/components/sales/sales-page-shell";
 import {
-  ArrowLeft, ArrowRight, CheckCircle2, CalendarClock, Loader2,
+  ArrowLeft, ArrowRight, CheckCircle2, CalendarClock, Loader2, Clock, Video,
 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -13,6 +13,9 @@ import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { submitCoachingApplication } from "@/lib/coaching-applications.functions";
+import {
+  computeAvailableSlots, bookSlotPublic, getBookingLinkPublic,
+} from "@/lib/booking-links.functions";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/coaching/apply")({
