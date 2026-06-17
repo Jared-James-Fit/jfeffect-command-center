@@ -44,11 +44,27 @@ export function weekDisplayRange(
   week: { week_index: number; start_date?: string | null; end_date?: string | null; date_source?: string | null },
 ): { start: Date; end: Date; source: "auto" | "manual" } | null {
   if (week.start_date && week.end_date) {
-    return {
-      start: parseLocalDate(week.start_date)!,
-      end: parseLocalDate(week.end_date)!,
-      source: (week.date_source as any) === "manual" ? "manual" : "auto",
-    };
+    const wStart = parseLocalDate(week.start_date)!;
+    const wEnd = parseLocalDate(week.end_date)!;
+    const isManual = (week.date_source as any) === "manual";
+    // Defensive: ignore stale auto-computed week dates that fall outside
+    // their block's range (happens when a block's start_date is moved
+    // without recomputing its weeks). Manual overrides are always honored.
+    const bStart = parseLocalDate(block?.start_date ?? null);
+    const dur = block?.week_duration_days ?? 7;
+    const bEnd = bStart && (block as any)?.end_date
+      ? parseLocalDate((block as any).end_date)
+      : null;
+    const outsideBlock =
+      !isManual && bStart && (
+        wStart < bStart ||
+        (bEnd && wEnd > bEnd)
+      );
+    if (!outsideBlock) {
+      return { start: wStart, end: wEnd, source: isManual ? "manual" : "auto" };
+    }
+    // Fall through to recompute from block start.
+    void dur;
   }
   const r = computeWeekRange(block?.start_date ?? null, week.week_index, block?.week_duration_days ?? 7);
   if (!r) return null;
