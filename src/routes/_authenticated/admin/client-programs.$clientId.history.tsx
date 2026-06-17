@@ -12,6 +12,8 @@ import { getCompletedHistory } from "@/lib/pl-programs";
 import { ProgressComparison } from "@/components/progress-comparison";
 import { ExerciseHistorySheet } from "@/components/exercise-history-sheet";
 import { toast } from "sonner";
+import { computeWorkoutSummary, type WorkoutSummary } from "@/lib/workout-summary";
+import { WorkoutReviewSummaryHeader } from "@/components/workout-submission-summary";
 
 export const Route = createFileRoute("/_authenticated/admin/client-programs/$clientId/history")({ component: HistoryPage });
 
