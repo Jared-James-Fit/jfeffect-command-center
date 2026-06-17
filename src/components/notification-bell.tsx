@@ -622,15 +622,49 @@ export function NotificationPanel({
   const [archiveAllOpen, setArchiveAllOpen] = useState(false);
   const [clearReadOpen, setClearReadOpen] = useState(false);
   const [visible, setVisible] = useState(compact ? 10 : 20);
+  const [search, setSearch] = useState("");
+  const [kindFilter, setKindFilter] = useState<string>("all");
+  const [dateFilter, setDateFilter] = useState<string>("all");
 
   const userId = user?.id;
+  const cacheKey = ["notifications", role, userId] as const;
+  const snapshot = () => qc.getQueryData<{ items: BellItem[] }>(cacheKey);
+  const restore = (prev: { items: BellItem[] } | undefined) => {
+    if (prev) qc.setQueryData(cacheKey, prev);
+  };
 
   // Filtered items per view
   const filtered = useMemo(() => {
-    if (view === "archived") return items.filter((i) => i.isArchived);
-    if (view === "new") return items.filter((i) => !i.isRead && !i.isArchived);
-    return items.filter((i) => !i.isArchived);
-  }, [items, view]);
+    let base: BellItem[];
+    if (view === "archived") base = items.filter((i) => i.isArchived);
+    else if (view === "new") base = items.filter((i) => !i.isRead && !i.isArchived);
+    else base = items.filter((i) => !i.isArchived);
+
+    if (kindFilter !== "all") base = base.filter((i) => i.kind === kindFilter);
+
+    if (dateFilter !== "all") {
+      const days = dateFilter === "today" ? 1 : dateFilter === "7d" ? 7 : 30;
+      const cutoff = Date.now() - days * 24 * 60 * 60 * 1000;
+      base = base.filter((i) => +new Date(i.created_at) >= cutoff);
+    }
+
+    const q = search.trim().toLowerCase();
+    if (q) {
+      base = base.filter((i) =>
+        i.title.toLowerCase().includes(q) ||
+        (i.body ?? "").toLowerCase().includes(q) ||
+        (i.name ?? "").toLowerCase().includes(q),
+      );
+    }
+    return base;
+  }, [items, view, kindFilter, dateFilter, search]);
+
+  // Available kinds for the category filter
+  const availableKinds = useMemo(() => {
+    const s = new Set<string>();
+    for (const i of items) s.add(i.kind);
+    return Array.from(s);
+  }, [items]);
 
   const shown = useMemo(() => filtered.slice(0, visible), [filtered, visible]);
   const hasMore = filtered.length > shown.length;
@@ -643,33 +677,41 @@ export function NotificationPanel({
       await Promise.all([rpc("notif_mark_read", toPairs([target])), markSourceRead(target, role)]);
     },
     onMutate: (target) => {
+      const prev = snapshot();
       patchCache(qc, role, userId, (it) => it.id === target.id ? { ...it, isRead: true } : it);
+      return { prev };
     },
-    onError: () => { toast.error("That notification could not be updated. Try again."); qc.invalidateQueries({ queryKey: ["notifications"] }); },
+    onError: (_e, _v, ctx) => { restore(ctx?.prev); toast.error("That notification could not be updated. Try again."); },
   });
 
   const markUnreadMut = useMutation({
     mutationFn: async (target: BellItem) => { await rpc("notif_mark_unread", toPairs([target])); },
     onMutate: (target) => {
+      const prev = snapshot();
       patchCache(qc, role, userId, (it) => it.id === target.id ? { ...it, isRead: false } : it);
+      return { prev };
     },
-    onError: () => { toast.error("That notification could not be updated. Try again."); qc.invalidateQueries({ queryKey: ["notifications"] }); },
+    onError: (_e, _v, ctx) => { restore(ctx?.prev); toast.error("That notification could not be updated. Try again."); },
   });
 
   const archiveMut = useMutation({
     mutationFn: async (target: BellItem) => { await rpc("notif_archive", toPairs([target])); },
     onMutate: (target) => {
+      const prev = snapshot();
       patchCache(qc, role, userId, (it) => it.id === target.id ? { ...it, isArchived: true, isRead: true } : it);
+      return { prev };
     },
-    onError: () => { toast.error("That notification could not be updated. Try again."); qc.invalidateQueries({ queryKey: ["notifications"] }); },
+    onError: (_e, _v, ctx) => { restore(ctx?.prev); toast.error("That notification could not be updated. Try again."); },
   });
 
   const restoreMut = useMutation({
     mutationFn: async (target: BellItem) => { await rpc("notif_restore", toPairs([target])); },
     onMutate: (target) => {
+      const prev = snapshot();
       patchCache(qc, role, userId, (it) => it.id === target.id ? { ...it, isArchived: false } : it);
+      return { prev };
     },
-    onError: () => { toast.error("That notification could not be updated. Try again."); qc.invalidateQueries({ queryKey: ["notifications"] }); },
+    onError: (_e, _v, ctx) => { restore(ctx?.prev); toast.error("That notification could not be updated. Try again."); },
   });
 
   const markAllMut = useMutation({
@@ -681,10 +723,12 @@ export function NotificationPanel({
       ]);
     },
     onMutate: () => {
+      const prev = snapshot();
       patchCache(qc, role, userId, (it) => it.isArchived ? it : { ...it, isRead: true });
+      return { prev };
     },
     onSuccess: () => toast.success("All notifications marked as read."),
-    onError: () => { toast.error("Couldn't mark notifications as read. Try again."); qc.invalidateQueries({ queryKey: ["notifications"] }); },
+    onError: (_e, _v, ctx) => { restore(ctx?.prev); toast.error("Couldn't mark notifications as read. Try again."); },
   });
 
   const clearReadMut = useMutation({
@@ -693,10 +737,12 @@ export function NotificationPanel({
       await rpc("notif_archive", toPairs(targets));
     },
     onMutate: () => {
+      const prev = snapshot();
       patchCache(qc, role, userId, (it) => (it.isRead && !it.isArchived) ? { ...it, isArchived: true } : it);
+      return { prev };
     },
     onSuccess: () => toast.success("Read notifications cleared."),
-    onError: () => { toast.error("Couldn't clear notifications. Try again."); qc.invalidateQueries({ queryKey: ["notifications"] }); },
+    onError: (_e, _v, ctx) => { restore(ctx?.prev); toast.error("Couldn't clear notifications. Try again."); },
   });
 
   const archiveAllMut = useMutation({
@@ -704,9 +750,13 @@ export function NotificationPanel({
       const targets = items.filter((i) => !i.isArchived);
       await rpc("notif_archive", toPairs(targets));
     },
-    onMutate: () => { patchCache(qc, role, userId, (it) => ({ ...it, isArchived: true, isRead: true })); },
+    onMutate: () => {
+      const prev = snapshot();
+      patchCache(qc, role, userId, (it) => ({ ...it, isArchived: true, isRead: true }));
+      return { prev };
+    },
     onSuccess: () => toast.success("All notifications archived."),
-    onError: () => { toast.error("Couldn't archive notifications. Try again."); qc.invalidateQueries({ queryKey: ["notifications"] }); },
+    onError: (_e, _v, ctx) => { restore(ctx?.prev); toast.error("Couldn't archive notifications. Try again."); },
   });
 
   // ---- Row click: navigate + mark read -----------------------------------
