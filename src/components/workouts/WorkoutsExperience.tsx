@@ -105,14 +105,6 @@ export function WorkoutsExperience({
     headerWeek?.week_index ? `Week ${headerWeek.week_index}` : null,
   ].filter(Boolean).join(" · ");
 
-  // --- Resume banner: any open in-progress session anywhere in the program.
-  const inProgress = useMemo(
-    () =>
-      dayItems.find(
-        (it) => it.completion && !it.completion?.completed_at,
-      ) ?? null,
-    [dayItems],
-  );
 
   // --- Selected date drives the calendar tab. Defaults to today. ----------
   const [selectedDate, setSelectedDate] = useState<Date>(today);
@@ -188,9 +180,6 @@ export function WorkoutsExperience({
       />
 
       <div className="space-y-4 p-4 pb-32 md:p-6">
-        {inProgress && (
-          <ResumeBanner item={inProgress} />
-        )}
 
         <Tabs defaultValue="calendar" className="space-y-4">
           <TabsList className="grid w-full grid-cols-2 sm:w-auto sm:inline-flex">
@@ -331,29 +320,6 @@ function DeferredAnalytics({ clientId }: { clientId: string }) {
   );
 }
 
-/* ---------------------------------------------------------------------- */
-/* Resume banner                                                          */
-/* ---------------------------------------------------------------------- */
-
-function ResumeBanner({ item }: { item: WorkoutItem }) {
-  const title = cleanDayTitle(item.day?.title, item.day?.day_index);
-  return (
-    <Card className="flex flex-wrap items-center justify-between gap-3 border-amber-500/40 bg-amber-500/10 p-3">
-      <div className="flex min-w-0 items-center gap-2 text-sm">
-        <Play className="h-4 w-4 text-amber-500" />
-        <div className="min-w-0">
-          <div className="truncate font-bold">Workout in progress</div>
-          <div className="truncate text-xs text-muted-foreground">{title}</div>
-        </div>
-      </div>
-      <Button asChild size="sm" className="bg-amber-500 text-black hover:bg-amber-400">
-        <Link to="/portal/workouts/$dayId" params={{ dayId: item.day.id }}>
-          Resume <ChevronRight className="ml-1 h-3.5 w-3.5" />
-        </Link>
-      </Button>
-    </Card>
-  );
-}
 
 /* ---------------------------------------------------------------------- */
 /* Week strip                                                             */
@@ -683,21 +649,21 @@ function primaryCtaFor(item: WorkoutItem, status: WorkoutStatus): {
 } {
   const inProgress = !!item.completion && !item.completion?.completed_at;
   if (inProgress) {
-    return { label: "Continue Workout", tone: "bg-amber-500 text-black hover:bg-amber-400", icon: <Play className="mr-1 h-4 w-4" /> };
+    return { label: "Resume Workout", tone: "bg-amber-500 text-black hover:bg-amber-400", icon: <Play className="mr-1 h-4 w-4" /> };
   }
   switch (status) {
     case "completed_today":
     case "completed_on_scheduled":
     case "completed_different_day":
       return {
-        label: "View / Edit Log",
+        label: "View / Edit Workout",
         tone: "bg-emerald-600 text-white hover:bg-emerald-500",
         icon: <Pencil className="mr-1 h-4 w-4" />,
         search: { edit: 1 },
       };
     case "missed":
       return {
-        label: "Log Workout",
+        label: "Complete Workout",
         tone: "bg-primary text-primary-foreground hover:bg-primary/90",
         icon: <Play className="mr-1 h-4 w-4" />,
         secondary: { label: "Reschedule" },
@@ -716,7 +682,7 @@ function primaryCtaFor(item: WorkoutItem, status: WorkoutStatus): {
       };
     default:
       return {
-        label: "Open Workout",
+        label: "Start Workout",
         tone: "bg-primary text-primary-foreground hover:bg-primary/90",
       };
   }
@@ -860,6 +826,3 @@ function EmptyState() {
     </Card>
   );
 }
-
-/* Re-export for callers that want individual pieces. */
-export { ResumeBanner };
