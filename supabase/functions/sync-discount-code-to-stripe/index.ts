@@ -47,6 +47,19 @@ function stripeKeyForMode(mode: StripeMode): string | null {
   return liveKey?.startsWith("sk_live_") || liveKey?.startsWith("rk_live_") ? liveKey : null;
 }
 
+function jwtRole(token: string): string | null {
+  try {
+    let payload = token.split(".")[1];
+    if (!payload) return null;
+    payload = payload.replace(/-/g, "+").replace(/_/g, "/");
+    payload = payload.padEnd(payload.length + ((4 - (payload.length % 4)) % 4), "=");
+    const claims = JSON.parse(atob(payload));
+    return typeof claims?.role === "string" ? claims.role : null;
+  } catch {
+    return null;
+  }
+}
+
 async function stripeFetch(path: string, init: { apiKey: string; method?: string; body?: string; idempotencyKey?: string }) {
   const headers: Record<string, string> = {
     Authorization: `Bearer ${init.apiKey}`,
@@ -200,7 +213,7 @@ serve(async (request) => {
 
     const adminClient = createClient(supabaseUrl, serviceKey, { auth: { persistSession: false } });
     const bearer = authorization.replace(/^Bearer\s+/i, "");
-    const isServiceRequest = bearer === serviceKey || gatewayApiKey === serviceKey;
+    const isServiceRequest = bearer === serviceKey || gatewayApiKey === serviceKey || jwtRole(bearer) === "service_role";
     let actorId: string | null = null;
     let actorEmail: string | null = null;
 
