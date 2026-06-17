@@ -31,6 +31,8 @@ import { WorkoutSubmissionSummary } from "@/components/workout-submission-summar
 import { summarizeCompleteness, type RequiredRowSpec, type LoggedSetSpec } from "@/lib/workout-completeness";
 import { LoggingQualityBadge } from "@/components/workout/shared/logging-quality-badge";
 import { WorkoutReviewEditor } from "@/components/workout/shared/workout-review-editor";
+import { CompletedWorkoutActions } from "@/components/workout/shared/completed-workout-actions";
+import { computeActiveSeconds } from "@/lib/workout-duration";
 
 export const Route = createFileRoute("/_authenticated/m/workouts/$enrollmentId/$week/$day")({
   component: () => (
