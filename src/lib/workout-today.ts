@@ -2,7 +2,14 @@ import { addDays, format } from "date-fns";
 import { weekDisplayRange } from "@/lib/block-dates";
 import { localStartOfToday, parseLocalDate } from "@/lib/today";
 
-export type WorkoutItem = { day: any; week: any; block: any; completion: any };
+export type WorkoutItem = {
+  day: any;
+  week: any;
+  block: any;
+  completion: any;
+  /** Count of logged sets for this day; >0 with no completion = in-progress. */
+  logged_sets_count?: number;
+};
 
 export type TodayState =
   | { kind: "workout_today"; item: WorkoutItem }
