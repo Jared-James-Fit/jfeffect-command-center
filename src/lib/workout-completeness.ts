@@ -29,7 +29,7 @@ export type RowMetricKind =
 export interface RequiredRowSpec {
   rowId: string;
   /** Prescribed set count. Falsy → assume 1. */
-  prescribedSets: number | null | undefined;
+  prescribedSets?: number | null;
   metricKind: RowMetricKind;
   /** Row was explicitly marked as skipped. Doesn't count as missing. */
   skipped?: boolean;
