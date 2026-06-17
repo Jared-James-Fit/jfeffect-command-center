@@ -649,21 +649,15 @@ function WorkoutDay({
     },
     onSave: async ({ notes, actualMin }) => {
       if (!client?.id) return;
-      const patch: any = {
-        day_id: dayId,
-        client_id: client.id,
-        client_notes: notes || null,
-        actual_duration_min: actualMin ? parseInt(actualMin) : null,
-      };
-      if (completion) {
-        const { error } = await sb.from("pl_day_completions").update(patch).eq("id", completion.id);
-        if (error) throw error;
-      } else {
-        // Draft row — no completed_at. Mark Complete button sets it explicitly.
-        const { error } = await sb.from("pl_day_completions").insert({ ...patch, completed_at: null });
-        if (error) throw error;
-        qc.invalidateQueries({ queryKey: ["pl-day-completion", dayId] });
-      }
+      await saveDraftSrv({
+        data: {
+          kind: "client",
+          dayId,
+          clientNotes: notes || null,
+          actualDurationMin: actualMin ? parseInt(actualMin) : null,
+        },
+      });
+      if (!completion) qc.invalidateQueries({ queryKey: ["pl-day-completion", dayId] });
     },
   });
 
