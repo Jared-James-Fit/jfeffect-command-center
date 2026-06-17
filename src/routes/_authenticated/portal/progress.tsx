@@ -6,6 +6,7 @@ import { PageHeader } from "@/components/app-shell";
 import { Card } from "@/components/ui/card";
 import { ProgressSection } from "@/components/progress/progress-section";
 import { CheckInScheduleCard } from "@/components/progress/check-in-schedule-card";
+import { StreakCelebration } from "@/components/progress/streak-celebration";
 
 export const Route = createFileRoute("/_authenticated/portal/progress")({
   component: PortalProgress,
@@ -37,6 +38,9 @@ function PortalProgress() {
   return (
     <>
       <PageHeader title="Progress" subtitle="Track visual, physical, and performance progress." />
+      <div className="px-3 md:px-6 pt-3">
+        <StreakCelebration userId={userId} />
+      </div>
       <ProgressSection
         ctx={{
           userId,
