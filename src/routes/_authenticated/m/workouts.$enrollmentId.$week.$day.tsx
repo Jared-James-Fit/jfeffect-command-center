@@ -551,30 +551,6 @@ function WorkoutTracker() {
         </div>
       </Card>
 
-      <WorkoutReviewEditor
-        open={reviewOpen}
-        onOpenChange={setReviewOpen}
-        hasCoach={false}
-        ctx={{ kind: "member", enrollmentId, weekIndex, dayIndex }}
-        initial={
-          existingReview
-            ? {
-                overallRating: existingReview.overall_rating,
-                sessionRpe: existingReview.session_rpe,
-                pain: existingReview.pain,
-                painLevel: existingReview.pain_level,
-                painArea: existingReview.pain_area,
-                painNote: existingReview.pain_note,
-                clientNote: existingReview.client_note,
-                editCount: existingReview.review_edit_count,
-                submittedAt: existingReview.review_submitted_at,
-              }
-            : null
-        }
-        onSaved={() =>
-          qc.invalidateQueries({ queryKey: ["m-review", enrollmentId, weekIndex, dayIndex] })
-        }
-      />
     </div>
   );
 }
