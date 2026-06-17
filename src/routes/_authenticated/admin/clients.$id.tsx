@@ -1178,27 +1178,65 @@ function ClientDetail() {
                 <Field label="Linked auth user" value={form.user_id ? "Yes" : "No"} />
               </div>
 
-              <div className="grid grid-cols-1 gap-2 pt-2 sm:grid-cols-2 lg:grid-cols-3">
-                <ActionButton className="min-h-[48px] justify-start" variant="outline" onAction={sendSetup} loadingLabel="Sending…" successLabel="Sent" successToast={false} errorToast={false} icon={<Mail className="h-4 w-4" />}>{form.invite_sent_at ? "Resend setup email" : "Send setup email"}</ActionButton>
-                <ActionButton className="min-h-[48px] justify-start" variant="outline" onAction={copySetupLink} loadingLabel="Copying…" successLabel="Copied" successToast={false} errorToast={false} icon={<Copy className="h-4 w-4" />}>Copy setup link</ActionButton>
-                <ActionButton className="min-h-[48px] justify-start" variant="outline" onAction={sendReset} loadingLabel="Sending…" successLabel="Sent" successToast={false} errorToast={false} icon={<KeyRound className="h-4 w-4" />}>Send password reset</ActionButton>
-                <ActionButton className="min-h-[48px] justify-start" variant="outline" onAction={copyResetLink} loadingLabel="Copying…" successLabel="Copied" successToast={false} errorToast={false} icon={<Copy className="h-4 w-4" />}>Copy reset link</ActionButton>
-                <ActionButton className="min-h-[48px] justify-start" variant="outline" onAction={smsLink("setup")} loadingLabel="Sending…" successLabel="Sent" successToast={false} errorToast={false} icon={<MessageSquare className="h-4 w-4" />}>SMS setup link</ActionButton>
-                <ActionButton className="min-h-[48px] justify-start" variant="outline" onAction={smsLink("magic")} loadingLabel="Sending…" successLabel="Sent" successToast={false} errorToast={false} icon={<MessageSquare className="h-4 w-4" />}>SMS sign-in link</ActionButton>
-                <ActionButton className="min-h-[48px] justify-start" variant="outline" onAction={smsLink("reset")} loadingLabel="Sending…" successLabel="Sent" successToast={false} errorToast={false} icon={<MessageSquare className="h-4 w-4" />}>SMS reset link</ActionButton>
-                <Button className="min-h-[48px] justify-start" variant="outline" onClick={() => { setPwValue(""); setPwOpen(true); }}>
-                  <KeyRound className="mr-2 h-4 w-4" />Set password
-                </Button>
-                <SendPasswordResetDialog
-                  targetUserId={form.user_id ?? null}
-                  email={form.email ?? null}
-                  phone={form.phone ?? null}
-                  triggerLabel="Secure password reset"
-                />
-                <ActionButton className="min-h-[48px] justify-start" variant="outline" onAction={markComplete} loadingLabel="Saving…" successLabel="Done" successToast={false} errorToast={false} icon={<CheckCircle2 className="h-4 w-4" />}>Mark setup complete</ActionButton>
-                <Button className="min-h-[48px] justify-start" variant={form.needs_admin_help ? "default" : "outline"} onClick={toggleNeedsHelp}>
-                  <AlertCircle className="mr-2 h-4 w-4" />{form.needs_admin_help ? "Clear admin help flag" : "Mark needs admin help"}
-                </Button>
+              <div className="space-y-5 pt-2">
+                {/* Setup link */}
+                <div>
+                  <div className="mb-2 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Setup link</div>
+                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                    <ActionButton className="min-h-[48px] justify-start" variant="outline" onAction={sendSetup} loadingLabel="Sending…" successLabel="Sent" successToast={false} errorToast={false} icon={<Mail className="h-4 w-4" />}>{form.invite_sent_at ? "Resend setup email" : "Send setup email"}</ActionButton>
+                    <ActionButton className="min-h-[48px] justify-start" variant="outline" onAction={copySetupLink} loadingLabel="Copying…" successLabel="Copied" successToast={false} errorToast={false} icon={<Copy className="h-4 w-4" />}>Copy setup link</ActionButton>
+                    <ActionButton className="min-h-[48px] justify-start" variant="outline" onAction={smsLink("setup")} loadingLabel="Sending…" successLabel="Sent" successToast={false} errorToast={false} icon={<MessageSquare className="h-4 w-4" />}>SMS setup link</ActionButton>
+                  </div>
+                </div>
+
+                {/* Password reset */}
+                <div>
+                  <div className="mb-2 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Password reset</div>
+                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                    <ActionButton className="min-h-[48px] justify-start" variant="outline" onAction={sendReset} loadingLabel="Sending…" successLabel="Sent" successToast={false} errorToast={false} icon={<KeyRound className="h-4 w-4" />}>Send password reset</ActionButton>
+                    <ActionButton className="min-h-[48px] justify-start" variant="outline" onAction={copyResetLink} loadingLabel="Copying…" successLabel="Copied" successToast={false} errorToast={false} icon={<Copy className="h-4 w-4" />}>Copy reset link</ActionButton>
+                    <ActionButton className="min-h-[48px] justify-start" variant="outline" onAction={smsLink("reset")} loadingLabel="Sending…" successLabel="Sent" successToast={false} errorToast={false} icon={<MessageSquare className="h-4 w-4" />}>SMS reset link</ActionButton>
+                    <SendPasswordResetDialog
+                      targetUserId={form.user_id ?? null}
+                      email={form.email ?? null}
+                      phone={form.phone ?? null}
+                      triggerLabel="Secure password reset"
+                    />
+                  </div>
+                </div>
+
+                {/* Sign-in & access */}
+                <div>
+                  <div className="mb-2 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Sign-in & access</div>
+                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                    <ActionButton className="min-h-[48px] justify-start" variant="outline" onAction={smsLink("magic")} loadingLabel="Sending…" successLabel="Sent" successToast={false} errorToast={false} icon={<MessageSquare className="h-4 w-4" />}>SMS sign-in link</ActionButton>
+                    <Button className="min-h-[48px] justify-start" variant="outline" onClick={() => { setPwValue(""); setPwOpen(true); }}>
+                      <KeyRound className="mr-2 h-4 w-4" />Set password
+                    </Button>
+                    <ActionButton className="min-h-[48px] justify-start" variant="outline" onAction={markComplete} loadingLabel="Saving…" successLabel="Done" successToast={false} errorToast={false} icon={<CheckCircle2 className="h-4 w-4" />}>Mark setup complete</ActionButton>
+                    <Button className="min-h-[48px] justify-start" variant={form.needs_admin_help ? "default" : "outline"} onClick={toggleNeedsHelp}>
+                      <AlertCircle className="mr-2 h-4 w-4" />{form.needs_admin_help ? "Clear admin help flag" : "Mark needs admin help"}
+                    </Button>
+                    {canPov && (
+                      <Button
+                        className="min-h-[48px] justify-start bg-warning/15 text-warning border border-warning/40 hover:bg-warning/25"
+                        onClick={() => {
+                          if (!form.user_id) {
+                            toast.error("Client has no account yet — send a setup link first.");
+                            return;
+                          }
+                          impersonation.start(
+                            { id, user_id: form.user_id, full_name: form.full_name },
+                            typeof window !== "undefined" ? window.location.pathname + window.location.search : `/admin/clients/${id}`,
+                          );
+                          navigate({ to: "/portal" });
+                        }}
+                      >
+                        <Eye className="mr-2 h-4 w-4" />Open Client POV
+                      </Button>
+                    )}
+                  </div>
+                </div>
               </div>
             </div>
 
