@@ -1034,25 +1034,12 @@ function WorkoutDay({
               onAction={async () => {
                 if (!client?.id) return;
                 await metaSave.flush();
-                const startedAt = completion?.started_at ?? new Date().toISOString();
-                const completedAt = new Date().toISOString();
-                const durationMin = actualMin
-                  ? parseInt(actualMin)
-                  : completion?.actual_duration_min ?? Math.max(1, Math.round((new Date(completedAt).getTime() - new Date(startedAt).getTime()) / 60000));
-                const noteValue = notes.length > 0 ? notes : (completion?.client_notes ?? null);
-                const payload = {
-                  day_id: dayId,
-                  client_id: client.id,
-                  client_notes: noteValue,
-                  actual_duration_min: durationMin,
-                  started_at: startedAt,
-                  in_progress_at: completion?.in_progress_at ?? startedAt,
-                  completed_at: null,
-                };
-                if (completion) {
-                  await sb.from("pl_day_completions").update(payload).eq("id", completion.id);
-                } else {
-                  await sb.from("pl_day_completions").insert(payload).select("id").maybeSingle();
+                // Ensure a draft row + started_at/in_progress_at exist before the
+                // complete sheet opens. startWorkout is idempotent.
+                try {
+                  await startWorkoutSrv({ data: { kind: "client", dayId } });
+                } catch (err) {
+                  console.warn("pre-complete startWorkout failed", err);
                 }
                 if (draftKey) clearLocalDraft(draftKey);
                 refresh();
