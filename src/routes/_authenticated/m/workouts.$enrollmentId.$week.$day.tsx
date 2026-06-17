@@ -28,6 +28,9 @@ import {
 import { writePlanCache, cachedInitialData } from "@/lib/workout-plan-cache";
 import { computeWorkoutSummary, type WorkoutSummary } from "@/lib/workout-summary";
 import { WorkoutSubmissionSummary } from "@/components/workout-submission-summary";
+import { summarizeCompleteness, type RequiredRowSpec, type LoggedSetSpec } from "@/lib/workout-completeness";
+import { LoggingQualityBadge } from "@/components/workout/shared/logging-quality-badge";
+import { WorkoutReviewEditor } from "@/components/workout/shared/workout-review-editor";
 
 export const Route = createFileRoute("/_authenticated/m/workouts/$enrollmentId/$week/$day")({
   component: () => (
@@ -54,6 +57,7 @@ function WorkoutTracker() {
   const [logs, setLogs] = useState<Record<string, SetLog>>({});
   const [summaryOpen, setSummaryOpen] = useState(false);
   const [lastSummary, setLastSummary] = useState<WorkoutSummary | null>(null);
+  const [reviewOpen, setReviewOpen] = useState(false);
 
   const cacheScope = `m:${enrollmentId}`;
   const route = `/m/workouts/${enrollmentId}/${week}/${day}`;
@@ -104,6 +108,20 @@ function WorkoutTracker() {
     },
   });
 
+  const { data: existingReview } = useQuery({
+    queryKey: ["m-review", enrollmentId, weekIndex, dayIndex],
+    queryFn: async () => {
+      const { data } = await (supabase as any)
+        .from("member_workout_reviews")
+        .select("*")
+        .eq("enrollment_id", enrollmentId)
+        .eq("week_index", weekIndex)
+        .eq("day_index", dayIndex)
+        .maybeSingle();
+      return data as any;
+    },
+  });
+
   useEffect(() => {
     const map: Record<string, SetLog> = {};
     for (const l of existingLogs as any[]) {
@@ -138,6 +156,33 @@ function WorkoutTracker() {
   }
   const loggingEnabled = plan?.logging_enabled !== false;
   const isComplete = !!completion;
+
+  // Compute logging quality from in-memory + persisted logs against the
+  // published plan rows. Skip rows have no concept on the member side yet.
+  const completeness = (() => {
+    const required: RequiredRowSpec[] = rows.map((row: any, ei: number) => ({
+      rowId: String(ei),
+      prescribedSets: Math.max(1, Number(row.sets) || 1),
+      metricKind: "load_reps",
+    }));
+    const logged: LoggedSetSpec[] = [];
+    for (const l of (existingLogs as any[])) {
+      logged.push({
+        rowId: String(l.exercise_index),
+        setIndex: l.set_index,
+        reps: l.reps,
+        loadLb: l.load_lb,
+        rpe: l.rpe,
+        rir: l.rir,
+      });
+    }
+    // Overlay in-memory edits so the live badge tracks unsaved work too.
+    for (const [key, v] of Object.entries(logs)) {
+      const [eiStr, siStr] = key.split(":");
+      logged.push({ rowId: eiStr, setIndex: Number(siStr), reps: v.reps, loadLb: v.load_lb, rpe: v.rpe, rir: v.rir });
+    }
+    return summarizeCompleteness(required, logged);
+  })();
 
   const updateLog = (key: string, patch: Partial<SetLog>) => {
     setLogs((prev) => {
@@ -319,6 +364,13 @@ function WorkoutTracker() {
             <UndoButton />
             <TrainingHelpButton size="sm" variant="outline" />
             {isComplete ? <Badge>Complete</Badge> : null}
+            {rows.length > 0 && (
+              <LoggingQualityBadge
+                quality={completeness.loggingQuality}
+                percentage={completeness.loggingPercentage}
+                showPercent
+              />
+            )}
           </div>
         }
       />
@@ -386,8 +438,38 @@ function WorkoutTracker() {
             ? <Button variant="outline" onClick={handleUncomplete}>Mark incomplete</Button>
             : <ActionButton onAction={handleComplete} loadingLabel="Saving…" successLabel="Complete" successToast="Workout complete" icon={<CheckCircle2 className="h-4 w-4" />}>Mark workout complete</ActionButton>}
           <Button variant="ghost" onClick={() => navigate({ to: "/m/my-plans/$enrollmentId", params: { enrollmentId } })}>Back to plan</Button>
+          {isComplete && (
+            <Button variant="secondary" onClick={() => setReviewOpen(true)}>
+              {existingReview?.review_submitted_at ? "View / edit review" : "Add review"}
+            </Button>
+          )}
         </div>
       </Card>
+
+      <WorkoutReviewEditor
+        open={reviewOpen}
+        onOpenChange={setReviewOpen}
+        hasCoach={false}
+        ctx={{ kind: "member", enrollmentId, weekIndex, dayIndex }}
+        initial={
+          existingReview
+            ? {
+                overallRating: existingReview.overall_rating,
+                sessionRpe: existingReview.session_rpe,
+                pain: existingReview.pain,
+                painLevel: existingReview.pain_level,
+                painArea: existingReview.pain_area,
+                painNote: existingReview.pain_note,
+                clientNote: existingReview.client_note,
+                editCount: existingReview.review_edit_count,
+                submittedAt: existingReview.review_submitted_at,
+              }
+            : null
+        }
+        onSaved={() =>
+          qc.invalidateQueries({ queryKey: ["m-review", enrollmentId, weekIndex, dayIndex] })
+        }
+      />
     </div>
   );
 }
