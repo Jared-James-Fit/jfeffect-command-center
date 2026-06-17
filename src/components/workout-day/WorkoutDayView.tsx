@@ -1,5 +1,5 @@
 import { Link, useNavigate } from "@tanstack/react-router";
-import { Component, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { Component, createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { usePortalUserId } from "@/lib/client-impersonation";
@@ -213,10 +213,35 @@ export type WorkoutDayViewSearch = {
   review?: 1;
 };
 
+/**
+ * Navigation paths injected by the route that mounts this view. Keeps the
+ * shared component free of `/portal/...` vs `/m/...` knowledge so it can
+ * mount under either the coach/portal flow or the member flow.
+ */
+export type WorkoutDayViewNavigation = {
+  /** Back-button target in the PageHeader. */
+  backTo: string;
+  /** Full-list page for "All workouts" links + post-completion navigation. */
+  listPath: string;
+  /** Messages page for "Contact Coach" / "Message Coach" CTAs. */
+  messagesPath: string;
+};
+
+const WorkoutNavigationContext = createContext<WorkoutDayViewNavigation | null>(null);
+
+function useWorkoutNavigation(): WorkoutDayViewNavigation {
+  const ctx = useContext(WorkoutNavigationContext);
+  if (!ctx) {
+    throw new Error("WorkoutDayView navigation context missing — wrap in <WorkoutDayView navigation={...} />");
+  }
+  return ctx;
+}
+
 export function WorkoutDayView({
   dayId,
   search,
   adapter,
+  navigation,
 }: {
   dayId: string;
   search: WorkoutDayViewSearch;
@@ -229,13 +254,16 @@ export function WorkoutDayView({
    * call sites happens incrementally in follow-up turns.
    */
   adapter?: WorkoutContextAdapter;
+  navigation: WorkoutDayViewNavigation;
 }) {
   return (
-    <WorkoutUndoProvider>
-      <ActiveRestTimerProvider>
-        <WorkoutDay dayId={dayId} search={search} adapter={adapter} />
-      </ActiveRestTimerProvider>
-    </WorkoutUndoProvider>
+    <WorkoutNavigationContext.Provider value={navigation}>
+      <WorkoutUndoProvider>
+        <ActiveRestTimerProvider>
+          <WorkoutDay dayId={dayId} search={search} adapter={adapter} navigation={navigation} />
+        </ActiveRestTimerProvider>
+      </WorkoutUndoProvider>
+    </WorkoutNavigationContext.Provider>
   );
 }
 
@@ -245,10 +273,12 @@ function WorkoutDay({
   dayId,
   search,
   adapter,
+  navigation,
 }: {
   dayId: string;
   search: WorkoutDayViewSearch;
   adapter?: WorkoutContextAdapter;
+  navigation: WorkoutDayViewNavigation;
 }) {
   const portalUserId = usePortalUserId();
   // Adapter is wired in but not yet consumed: this turn lands the gating
@@ -769,7 +799,7 @@ function WorkoutDay({
         </div>
       )}
       <PageHeader
-        backTo="/portal/workouts"
+        backTo={navigation.backTo}
         backLabel="Back to Workouts"
         title={cleanDayTitle(day.title, day.day_index)}
         subtitle={[
@@ -781,7 +811,7 @@ function WorkoutDay({
         actions={!readonly ? <UndoButton /> : undefined}
       />
       <div className="p-4 md:p-8 space-y-4 pb-[calc(var(--bottom-nav-clearance,96px)+env(safe-area-inset-bottom)+24px)] md:pb-8">
-        <Link to="/portal/workouts" className="inline-flex items-center text-sm text-muted-foreground hover:text-foreground">
+        <Link to={navigation.listPath} className="inline-flex items-center text-sm text-muted-foreground hover:text-foreground">
           <ArrowLeft className="mr-1 h-4 w-4" /> All workouts
         </Link>
 
@@ -1145,7 +1175,7 @@ function WorkoutDay({
           summary={lastSummary}
           workoutTitle={day?.title ?? null}
           durationMin={completion?.actual_duration_min ?? null}
-          onClose={() => navigate({ to: "/portal/workouts" })}
+          onClose={() => navigate({ to: navigation.listPath })}
         />
       )}
       <MoveWorkoutSheet
@@ -1158,6 +1188,7 @@ function WorkoutDay({
 }
 
 function SuggestedLoadBadge({ load, unit, exerciseName }: { load: number; unit: "kg" | "lb"; exerciseName: string }) {
+  const nav = useWorkoutNavigation();
   // Cheap suspicious-load heuristic: extreme absolute values flag a likely unit / data error.
   // We deliberately keep this client-side and non-blocking — clients must always stop and
   // contact their coach if anything looks wrong.
@@ -1183,7 +1214,7 @@ function SuggestedLoadBadge({ load, unit, exerciseName }: { load: number; unit: 
               Suggested Load is the starting weight programmed by your coach for <span className="font-medium text-foreground">{exerciseName}</span>. Adjust only when your plan or coach allows it. If the weight looks incorrect, unusually high, or you feel uncomfortable lifting it, stop and contact your coach before continuing.
             </p>
             <div className="mt-2 flex gap-2">
-              <Link to="/portal/messages" className="inline-flex items-center gap-1 rounded-md bg-primary px-2 py-1 text-[11px] font-semibold text-primary-foreground">
+              <Link to={nav.messagesPath} className="inline-flex items-center gap-1 rounded-md bg-primary px-2 py-1 text-[11px] font-semibold text-primary-foreground">
                 <MessageCircle className="h-3 w-3" /> Contact Coach
               </Link>
             </div>
@@ -1203,7 +1234,7 @@ function SuggestedLoadBadge({ load, unit, exerciseName }: { load: number; unit: 
               {load} {unit} is much higher than expected for most lifters on this exercise. Confirm the unit (kg vs lb) and contact your coach before lifting if it looks incorrect. Never lift a weight you believe is unsafe.
             </p>
             <div className="mt-2 flex gap-2">
-              <Link to="/portal/messages" className="inline-flex items-center gap-1 rounded-md bg-primary px-2 py-1 text-[11px] font-semibold text-primary-foreground">
+              <Link to={nav.messagesPath} className="inline-flex items-center gap-1 rounded-md bg-primary px-2 py-1 text-[11px] font-semibold text-primary-foreground">
                 <MessageCircle className="h-3 w-3" /> Contact Coach
               </Link>
             </div>
@@ -1225,6 +1256,7 @@ function SuggestedLoadBadge({ load, unit, exerciseName }: { load: number; unit: 
  * loggable as normal.
  */
 function UnsupportedExerciseCard({ row }: { row: any }) {
+  const nav = useWorkoutNavigation();
   const name = row.exercises?.name ?? row.exercise_name_override ?? "Exercise";
   return (
     <Card className="border-amber-500/40 bg-amber-500/5 p-4">
@@ -1236,7 +1268,7 @@ function UnsupportedExerciseCard({ row }: { row: any }) {
             This exercise prescription needs an updated logging format. Contact your coach before completing this exercise.
           </p>
           <Link
-            to="/portal/messages"
+            to={nav.messagesPath}
             className="mt-2 inline-flex items-center gap-1 rounded-md bg-primary px-2.5 py-1 text-xs font-semibold text-primary-foreground"
           >
             <MessageCircle className="h-3 w-3" /> Message Coach
