@@ -1,69 +1,109 @@
-## Audit summary (existing systems to reuse)
+## Goal
 
-Found existing infrastructure — will extend, not duplicate:
+Combine the admin client profile's **Overview** and **Account** sections into a single top-level section called **Client Profile** with 5 sub-tabs, while preserving every field, action, modal, server function, and role check that exists today. No backend changes. No data migration. No removed functionality.
 
-- **Public coaching page**: `src/routes/coaching.tsx`
-- **Existing application form**: `src/routes/coaching.apply.tsx` + `src/routes/apply.tsx`
-- **Application server fns**: `src/lib/coaching-applications.functions.ts`
-- **DB table**: `coaching_applications` (58 cols — already has scoring, lead temp, contact fields)
-- **CRM**: `clients` + `crm.functions.ts` + admin CRM contacts pages
-- **Admin app list**: `src/routes/_authenticated/admin/sales.coaching-applications.tsx`
-- **Notification recipients UI**: `src/routes/_authenticated/admin/settings_.notifications.coaching-applications.tsx` + `coaching_app_notification_recipients` table
-- **SMS**: `sms_automations`, `sms_settings`, `sms_log`, `src/lib/sms-trigger.server.ts` (with dry-run/allowlist safety modes)
-- **Email**: Lovable email queue + transactional system
-- **Booking**: `booking_links` table, `appointments` table, `src/lib/booking-links.functions.ts`, public `book.$slug.tsx` page
+## What stays the same
 
-## Scope
+- Top-level sections: **Client Profile** (new, merged), **Training**, **Nutrition**, **Communication**, **Business**.
+- All Supabase tables, RLS, and server functions (`inviteClient`, `getSetupLink`, `sendPasswordReset`, `setClientPassword`, `markSetupComplete`, `setNeedsAdminHelp`, `sendAuthLinkBySms`, `deactivateClient`, `reactivateClient`, `deleteClient`).
+- The persistent `SetupStatusBanner` at the top of every tab.
+- The global header (Message / Training Program / Nutrition / Client POV / More Actions) and the floating **Save** button — but Save will be made sticky while scrolling.
+- All `canPov` and other permission gates.
+- Existing edit modals (Set Password, Deactivate, Reactivate, Delete, PriceCardPickerDialog, SendBookingLinkDialog, SendPasswordResetDialog).
+- All deep-link URLs: existing `?tab=summary|info|goals-setup|coaching|account` values keep working — only the section grouping changes.
 
-This is a multi-week build (public quiz UX rewrite + admin lead-pipeline integration + booking embed + notifications + scoring config UI + acceptance tests). Given the credit-cost of doing all of this in one pass, I'll deliver it in **4 sequential phases** so you can verify each before paying for the next.
+## The 5 Client Profile sub-tabs
 
-### Phase 1 — Public quiz-style application (highest user-visible impact)
-Rewrite `coaching.apply.tsx` as a true mobile-first one-question-at-a-time quiz with:
-- Big tap cards, auto-advance, sticky Continue, progress bar, back, session-preserved state
-- Exact 7-step flow you specified, only 2 short-answer (250 char) fields + name/phone/email/IG
-- Reuses existing `coaching_applications` insert via `submitCoachingApplication` server fn (extend it for the new fields: obstacle, training_location, days_per_week, support_type, readiness, tracking_willingness, investment_readiness, why_now, best_contact, best_time, consent)
-- Adds CTAs to `coaching.tsx` (top/middle/pricing/bottom)
-- Post-submit success screen with dominant "Book Your Call" → embedded booking step (reuses `booking_links` slot picker, prefills name/phone/email, no re-entry)
-- "Finish Without Booking" path keeps application saved + marks lead `call_not_booked`
-- Honeypot + server-side rate-limit (per-IP) + Zod validation
+| # | Sub-tab label | URL tab value | Source today |
+|---|---|---|---|
+| 1 | Overview | `summary` | Already exists as Overview tab |
+| 2 | Personal Info | `info` | Already exists under Overview section |
+| 3 | Goals & Intake | `goals-setup` | Already exists under Overview section |
+| 4 | Coaching Setup | `coaching` | Already exists under Overview section |
+| 5 | Login & Access | `account` | Already exists as Account section |
 
-### Phase 2 — Scoring engine + lead pipeline wiring
-- `compute_application_score(application_id)` SQL function: 6 categories (goal/start/process/investment/urgency/contact), 0–100, no protected traits, version-stamped, stored on row + per-category JSON breakdown + label
-- Trigger fires on insert/update of relevant fields
-- On submit: upsert into `clients` (CRM lead) by email/phone dedupe; link `client_id` back to application; previous applications visible via `client_id` history
-- On successful booking: move CRM lead stage → `Call Booked`, link `appointment_id`
-- Admin settings page to edit weights/thresholds/labels (writes to `app_settings`)
+## Changes
 
-### Phase 3 — Admin surface + notifications
-- Extend `sales.coaching-applications.tsx` list: search/sort/filter by score/qualification/stage/call status/assignee/follow-up; CSV export; call-status badges
-- New detail page `sales.coaching-applications.$id.tsx`: full applicant view, score explanation, quick actions (Call/Text/Email/Send Booking Link/Book For Lead/Reschedule/Assign/Convert/Close), booking history, notification history, previous applications
-- Admin homepage metrics: "New Coaching Applications" + "Calls Booked" + priority list
-- Wire `application_submitted` SMS automation trigger + ensure Yannick Ring (+13435714378) is seeded in `coaching_app_notification_recipients` with application+booking SMS on, email off
-- Wire `application_booked` trigger; reuse existing dry-run/allowlist safety modes (no bypass)
-- Email confirmation (transactional, applicant) + admin notification email
-- Idempotency keys on notification sends to prevent dup on retries
+### 1. Regroup (`src/routes/_authenticated/admin/clients.$id.tsx`, lines 192–226)
 
-### Phase 4 — Acceptance tests + polish
-- Playwright smoke: full mobile flow ≤120s, double-tap dedupe, two-tab race for same slot, dedupe lead by email, abandoned booking leaves lead in `Review Needed`
-- DB constraints: unique appointment per (application_id, status='booked'), unique notification by idempotency_key
-- RLS audit on `coaching_applications`, `appointments` created here, `coaching_app_notification_recipients`
-- Final completion report with screenshots
+Update `SECTIONS` and `TAB_TO_SECTION`:
 
-## Technical notes
+- Remove the standalone `overview` and `account` top-level sections.
+- Add a single `client-profile` section containing the 5 sub-tabs above in that order.
+- Other top-level sections (`training`, `nutrition`, `communication`, `business`) untouched.
+- Default tab on first load becomes `summary` under `client-profile`.
 
-- Schema additions to `coaching_applications` (additive, non-breaking): `obstacle`, `obstacle_other`, `training_location`, `days_per_week`, `start_timeline`, `support_type`, `readiness`, `tracking_willingness`, `investment_readiness`, `why_now`, `best_contact_method`, `best_contact_time`, `consent_contact_at`, `score_breakdown jsonb`, `score_version int`, `qualification_label`, `call_status`, `appointment_id uuid`, `client_id uuid`, `submission_ip`, `honeypot_value`
-- Booking: extend `appointments` with `coaching_application_id uuid` FK + partial unique index on `(coaching_application_id) WHERE status IN ('booked','rescheduled')`
-- All new tables/columns get GRANTs + RLS policies in same migration
-- Public submission endpoint: server route at `/api/public/coaching-applications` with honeypot + rate-limit + Zod; or extend the existing `createServerFn` public path the form already uses
-- Reuse `sms-trigger.server.ts` automation pipeline — no new SMS system
-- Reuse Lovable email queue — no new email system
+### 2. Redesign Overview tab as large action cards (`ClientOverviewSnapshot`, lines 1753–1927)
 
-## Deliverables per phase
+Keep the identity header, profile completion card, personal snapshot, App Activity card, and Training Schedule card. Replace the current small quick-action button row with a **6-card grid of large clickable action cards** (min height ~96px, single column on mobile, 2 cols at iPad landscape `md:`, 3 cols at `lg:`):
 
-Each phase ends with: working preview, the user verifies, then I publish. Phase 1 is the biggest visible change (the quiz). Phases 2–4 are mostly admin/backend.
+1. **Open Client POV** — gated by `canPov` (admin/coach only); same `impersonation.start()` flow.
+2. **Message Client** — navigates to `tab=messages`.
+3. **Manage Schedule** — links to `/admin/clients/$id/schedule`.
+4. **View Intake & Goals** — navigates to `tab=goals-setup`.
+5. **Request Client Update** — toggles `clients.info_update_requested`; label flips to "Update requested" when set.
+6. **Assign Program** — links to `/admin/client-programs/$clientId`.
 
-## Question before I start
+Each card: icon + title + one-line description, full card is a tap target ≥44px tall.
 
-**Do you want me to proceed phase-by-phase, or compress into a single mega-build?** Phase-by-phase keeps each turn reviewable and lets you stop after phase 1 if the quiz UX needs tweaks before backend wiring. Mega-build is faster end-to-end but harder to course-correct.
+### 3. Personal Info tab — wrap existing fields in titled cards with large Edit buttons
 
-Also: **for Phase 1's booking embed, should I use the existing `book.$slug.tsx` page (one specific booking link slug for "Coaching Discovery Call"), or build a dedicated in-flow slot picker?** Reusing `book.$slug.tsx` is much faster and respects all your existing booking config; the dedicated picker is a bigger lift.
+The `info` tab already renders these fields. Group into 5 cards, each with its own visible **Edit** button (≥44px) that scrolls/focuses the relevant input group; no new modals required:
+
+- Name & Identity (first/last/preferred/full, profile picture)
+- Contact (email, phone, instagram)
+- Personal (date of birth, height, timezone)
+- Address (address, city, province, postal, country)
+- Emergency Contact (name, phone)
+
+### 4. Goals & Intake tab — keep existing `goals-setup` content as-is
+
+No structural change. Already shows intake answers, goals, training experience, equipment, injuries, nutrition goals, best lifts, OpenPowerlifting (`PowerlifterSection`).
+
+### 5. Coaching Setup tab — keep existing `coaching` content as-is
+
+Already shows assigned coach, status, package, program phase, start/renewal dates, payment summary, schedule, Drive folder link, quick links.
+
+### 6. Redesign Login & Access tab as large action cards (`account` tab, lines 1144–1192)
+
+Keep the metadata fields (email, invite sent, last resent, account created, password reset sent, linked auth user) in a header card. Replace the dense button row with **labeled action cards** grouped into:
+
+- **Setup link** — Send/Resend setup email, Copy setup link, SMS setup link
+- **Password reset** — Send password reset, Copy reset link, SMS reset link, Secure password reset (opens existing `SendPasswordResetDialog`)
+- **Sign-in & access** — SMS sign-in link, Set password (opens existing AlertDialog), Mark setup complete, Mark / Clear "needs admin help"
+- **App installation** — Mark Installed (from existing `AppActivityCard`)
+- **Client POV** — Open Client POV (gated by `canPov`)
+
+Every action button ≥44px, full-width on mobile.
+
+### 7. Sticky Save bar
+
+Today the global Save button is in the page header. Add a `sticky bottom-0` Save bar (or pin the existing button) that stays visible while scrolling any sub-tab, with safe-area padding on mobile. Disabled when no unsaved changes; spinner while saving.
+
+### 8. Responsive rules
+
+- Mobile (`<md`): single-column cards, full-width buttons.
+- iPad landscape (`md:` ~≥768px): two-column card grid.
+- Desktop (`lg:`): three columns on the Overview action grid.
+- All tap targets ≥44px high.
+
+## Out of scope
+
+- No changes to Training / Nutrition / Communication / Business sections.
+- No new fields, no schema changes.
+- No changes to server functions or RLS.
+- Not extracting the 1,948-line route file into smaller modules (that's a separate refactor).
+
+## Risks & mitigations
+
+- **Deep links** that point at `?section=overview` or `?section=account` break. Mitigation: keep `tab` values stable (the section dropdown isn't in URLs today, only `tab` is). Verified in current `validateSearch`.
+- **Save-button discoverability** changes if it moves. Mitigation: keep it in the header too — the sticky bar is additive on mobile.
+- **Permission drift** — every gated action (Client POV, destructive actions) keeps its existing `canPov` / role check; the card wrapper does not bypass them.
+
+## Acceptance check before publishing
+
+- Open an existing client. Confirm all 5 sub-tabs load, every field from the inventory renders, every button still triggers its existing server fn or modal.
+- Confirm `SetupStatusBanner` still appears on all tabs.
+- Confirm Client POV, Deactivate, Reactivate, Delete, Drive folder, Assign offer, Send booking link, all SMS variants, password set/reset all still work.
+- Confirm sticky Save persists across scroll on mobile.
+- Then publish to https://jfeffect.com.
