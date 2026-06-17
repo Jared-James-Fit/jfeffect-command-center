@@ -36,6 +36,11 @@ import { format, startOfDay } from "date-fns";
 import { useServerFn } from "@tanstack/react-start";
 import { notifyCoachOfWorkoutFailure } from "@/lib/support-alerts.functions";
 import { getRowBlockSummariesFn } from "@/lib/exercise-blocks.functions";
+import {
+  startWorkout as startWorkoutFn,
+  saveDraft as saveDraftFn,
+  completeWorkout as completeWorkoutFn,
+} from "@/lib/workout-completion.functions";
 import { runJob } from "@/lib/progress-jobs";
 import { cn } from "@/lib/utils";
 import { WorkoutEmptyCard } from "@/components/workout-empty-state";
@@ -362,6 +367,9 @@ function WorkoutDay({
   // toggled on, then a program containing unsupported blocks is opened
   // while the toggle is off again).
   const rowBlockSummariesFn = useServerFn(getRowBlockSummariesFn);
+  const startWorkoutSrv = useServerFn(startWorkoutFn);
+  const saveDraftSrv = useServerFn(saveDraftFn);
+  const completeWorkoutSrv = useServerFn(completeWorkoutFn);
   const { data: unsupportedRows = {} } = useQuery<Record<string, boolean>>({
     queryKey: ["pl-day-row-block-summaries", dayId, (rows as any[]).map((r) => r.id).sort().join(",")],
     enabled: (rows as any[]).length > 0,
@@ -442,27 +450,26 @@ function WorkoutDay({
     if (completion?.started_at) { startedRef.current = true; return; }
     startedRef.current = true;
     (async () => {
-      const payload: any = { day_id: dayId, client_id: client.id, started_at: new Date().toISOString(), completed_at: null };
-      if (completion) {
-        if (!completion.started_at) await sb.from("pl_day_completions").update({ started_at: payload.started_at }).eq("id", completion.id);
-      } else {
-        await sb.from("pl_day_completions").insert(payload);
-        qc.invalidateQueries({ queryKey: ["pl-day-completion", dayId] });
+      try {
+        await startWorkoutSrv({ data: { kind: "client", dayId } });
+        if (!completion) qc.invalidateQueries({ queryKey: ["pl-day-completion", dayId] });
+      } catch (err) {
+        // Soft-fail: starting is best-effort; later writes will create the row.
+        console.warn("startWorkout failed", err);
       }
     })();
-  }, [client?.id, completion?.id, completion?.started_at, dayId, qc]);
+  }, [client?.id, completion?.id, completion?.started_at, dayId, qc, startWorkoutSrv]);
 
   // Mark in_progress when any meaningful entry occurs
   const markInProgress = async () => {
     if (!client?.id) return;
     if (completion?.in_progress_at) return;
-    const now = new Date().toISOString();
-    if (completion) {
-      await sb.from("pl_day_completions").update({ in_progress_at: now }).eq("id", completion.id);
-    } else {
-      await sb.from("pl_day_completions").insert({ day_id: dayId, client_id: client.id, in_progress_at: now, started_at: now, completed_at: null });
+    try {
+      await startWorkoutSrv({ data: { kind: "client", dayId } });
+      qc.invalidateQueries({ queryKey: ["pl-day-completion", dayId] });
+    } catch (err) {
+      console.warn("markInProgress failed", err);
     }
-    qc.invalidateQueries({ queryKey: ["pl-day-completion", dayId] });
   };
 
   // Heartbeat: persist activity timestamps to localStorage while the
@@ -642,21 +649,15 @@ function WorkoutDay({
     },
     onSave: async ({ notes, actualMin }) => {
       if (!client?.id) return;
-      const patch: any = {
-        day_id: dayId,
-        client_id: client.id,
-        client_notes: notes || null,
-        actual_duration_min: actualMin ? parseInt(actualMin) : null,
-      };
-      if (completion) {
-        const { error } = await sb.from("pl_day_completions").update(patch).eq("id", completion.id);
-        if (error) throw error;
-      } else {
-        // Draft row — no completed_at. Mark Complete button sets it explicitly.
-        const { error } = await sb.from("pl_day_completions").insert({ ...patch, completed_at: null });
-        if (error) throw error;
-        qc.invalidateQueries({ queryKey: ["pl-day-completion", dayId] });
-      }
+      await saveDraftSrv({
+        data: {
+          kind: "client",
+          dayId,
+          clientNotes: notes || null,
+          actualDurationMin: actualMin ? parseInt(actualMin) : null,
+        },
+      });
+      if (!completion) qc.invalidateQueries({ queryKey: ["pl-day-completion", dayId] });
     },
   });
 
@@ -1033,25 +1034,12 @@ function WorkoutDay({
               onAction={async () => {
                 if (!client?.id) return;
                 await metaSave.flush();
-                const startedAt = completion?.started_at ?? new Date().toISOString();
-                const completedAt = new Date().toISOString();
-                const durationMin = actualMin
-                  ? parseInt(actualMin)
-                  : completion?.actual_duration_min ?? Math.max(1, Math.round((new Date(completedAt).getTime() - new Date(startedAt).getTime()) / 60000));
-                const noteValue = notes.length > 0 ? notes : (completion?.client_notes ?? null);
-                const payload = {
-                  day_id: dayId,
-                  client_id: client.id,
-                  client_notes: noteValue,
-                  actual_duration_min: durationMin,
-                  started_at: startedAt,
-                  in_progress_at: completion?.in_progress_at ?? startedAt,
-                  completed_at: null,
-                };
-                if (completion) {
-                  await sb.from("pl_day_completions").update(payload).eq("id", completion.id);
-                } else {
-                  await sb.from("pl_day_completions").insert(payload).select("id").maybeSingle();
+                // Ensure a draft row + started_at/in_progress_at exist before the
+                // complete sheet opens. startWorkout is idempotent.
+                try {
+                  await startWorkoutSrv({ data: { kind: "client", dayId } });
+                } catch (err) {
+                  console.warn("pre-complete startWorkout failed", err);
                 }
                 if (draftKey) clearLocalDraft(draftKey);
                 refresh();
@@ -1093,12 +1081,6 @@ function WorkoutDay({
             setCompleteSubmitting(true);
             try {
               await metaSave.flush();
-              const startedAt = completion?.started_at ?? new Date().toISOString();
-              const completedAt = new Date().toISOString();
-              const durationMin = completion?.actual_duration_min ?? Math.max(
-                1,
-                Math.round((new Date(completedAt).getTime() - new Date(startedAt).getTime()) / 60000),
-              );
               const displayUnit: "kg" | "lb" =
                 ((client as any)?.preferred_weight_unit === "kg" ? "kg" : "lb");
               const computed = computeWorkoutSummary(
@@ -1109,59 +1091,29 @@ function WorkoutDay({
                   hasNote: !!(payload.client_notes && payload.client_notes.trim()),
                 },
               );
-              const baseRow: any = {
-                day_id: dayId,
-                client_id: client.id,
-                started_at: startedAt,
-                in_progress_at: completion?.in_progress_at ?? startedAt,
-                completed_at: completedAt,
-                actual_duration_min: durationMin,
-                completion_method: "manual",
-                client_notes: payload.client_notes ?? completion?.client_notes ?? null,
-                session_rating: payload.session_rating,
-                // Auto-derived from logged sets — no manual entry.
-                session_weight_total: computed.totalLifted > 0 ? computed.totalLifted : null,
-                session_weight_unit: computed.totalLifted > 0 ? displayUnit : null,
-              };
-              // Shared logging-quality metrics (mirrors member side).
-              try {
-                const required: RequiredRowSpec[] = (rows as any[]).map((r: any) => ({
-                  rowId: String(r.id),
-                  prescribedSets: Math.max(1, Number(r.sets) || 1),
-                  skipped: !!r.skipped,
-                  metricKind: "load_reps" as RowMetricKind,
-                }));
-                const logged: LoggedSetSpec[] = (results as any[]).map((x: any) => ({
-                  rowId: String(x.row_id),
-                  setIndex: x.set_index ?? 0,
-                  reps: x.actual_reps,
-                  loadLb: x.actual_load_unit === "kg" ? null : x.actual_load,
-                  loadKg: x.actual_load_unit === "kg" ? x.actual_load : null,
-                  rpe: x.actual_rpe_num ?? x.actual_rpe,
-                }));
-                const sum = summarizeCompleteness(required, logged);
-                const elapsedSec = Math.max(0, Math.round((new Date(completedAt).getTime() - new Date(startedAt).getTime()) / 1000));
-                const heartbeats = readHeartbeatTimestamps(completion?.id ?? null);
-                const activeSec = computeActiveSeconds(startedAt, completedAt, heartbeats) ?? elapsedSec;
-                Object.assign(baseRow, {
-                  last_activity_at: completedAt,
-                  elapsed_duration_seconds: elapsedSec,
-                  active_duration_seconds: Math.min(activeSec, elapsedSec),
-                  required_sets_count: sum.requiredSets,
-                  logged_sets_count: sum.loggedSets,
-                  skipped_exercises_count: sum.skippedExercises,
-                  logging_percentage: sum.loggingPercentage,
-                  logging_quality: sum.loggingQuality,
-                  completed_with_missing_logs: sum.completedWithMissingLogs,
-                });
-              } catch { /* metrics are best-effort */ }
-              if (completion) {
-                const { error } = await sb.from("pl_day_completions").update(baseRow).eq("id", completion.id);
-                if (error) throw error;
-              } else {
-                const { error } = await sb.from("pl_day_completions").insert(baseRow);
-                if (error) throw error;
-              }
+              const requiredRows: RequiredRowSpec[] = (rows as any[]).map((r: any) => ({
+                rowId: String(r.id),
+                prescribedSets: Math.max(1, Number(r.sets) || 1),
+                skipped: !!r.skipped,
+                metricKind: "load_reps" as RowMetricKind,
+              }));
+              const heartbeats = readHeartbeatTimestamps(completion?.id ?? null);
+              await completeWorkoutSrv({
+                data: {
+                  kind: "client",
+                  dayId,
+                  requiredRows,
+                  activityTimestamps: heartbeats,
+                  completionMethod: "manual",
+                  completionSource: "workout_view",
+                  sessionRating: payload.session_rating ?? null,
+                  notes: payload.client_notes ?? completion?.client_notes ?? null,
+                  actualDurationMin: completion?.actual_duration_min ?? null,
+                  sessionWeightTotal: computed.totalLifted > 0 ? computed.totalLifted : null,
+                  sessionWeightUnit: computed.totalLifted > 0 ? displayUnit : null,
+                  confirmedMissingLogs: true,
+                },
+              });
               if (draftKey) clearLocalDraft(draftKey);
               clearHeartbeatTimestamps(completion?.id ?? null);
               setNotes("");

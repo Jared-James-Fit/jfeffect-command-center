@@ -287,6 +287,56 @@ const RequiredRowSchema = z.object({
   skipped: z.boolean().optional(),
 });
 
+/* -------------------------------------------------------------------------- */
+/*  saveDraft — persist in-flight notes / actual minutes (no completion)      */
+/* -------------------------------------------------------------------------- */
+
+const SaveDraftInput = z.intersection(
+  Ctx,
+  z.object({
+    clientNotes: z.string().nullable().optional(),
+    actualDurationMin: z.number().int().nonnegative().nullable().optional(),
+  }),
+);
+
+export const saveDraft = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => SaveDraftInput.parse(d))
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context;
+    if (data.kind === "client") {
+      const clientId = await resolveClientId(supabase, userId);
+      const { error } = await supabase
+        .from("pl_day_completions")
+        .upsert(
+          {
+            client_id: clientId,
+            day_id: data.dayId,
+            client_notes: data.clientNotes ?? null,
+            actual_duration_min: data.actualDurationMin ?? null,
+          },
+          { onConflict: "client_id,day_id" },
+        );
+      if (error) throw error;
+      return { ok: true };
+    }
+    await assertOwnsEnrollment(supabase, data.enrollmentId);
+    const { error } = await supabase
+      .from("member_workout_completions")
+      .upsert(
+        {
+          enrollment_id: data.enrollmentId,
+          week_index: data.weekIndex,
+          day_index: data.dayIndex,
+          notes: data.clientNotes ?? null,
+          actual_duration_min: data.actualDurationMin ?? null,
+        },
+        { onConflict: "enrollment_id,week_index,day_index" },
+      );
+    if (error) throw error;
+    return { ok: true };
+  });
+
 const CompleteInput = z.intersection(
   Ctx,
   z.object({
@@ -297,6 +347,9 @@ const CompleteInput = z.intersection(
     sessionRating: z.number().int().min(1).max(5).nullable().optional(),
     notes: z.string().nullable().optional(),
     confirmedMissingLogs: z.boolean().optional(),
+    actualDurationMin: z.number().int().positive().nullable().optional(),
+    sessionWeightTotal: z.number().nullable().optional(),
+    sessionWeightUnit: z.enum(["kg", "lb"]).nullable().optional(),
   }),
 );
 
@@ -359,15 +412,20 @@ export const completeWorkout = createServerFn({ method: "POST" })
         client_id: clientId,
         day_id: data.dayId,
         started_at: startedAt,
+        in_progress_at: existing?.last_activity_at ?? startedAt,
         completed_at: nowIso,
         last_activity_at: nowIso,
-        actual_duration_min: elapsed != null ? Math.max(1, Math.round(elapsed / 60)) : null,
+        actual_duration_min:
+          data.actualDurationMin ??
+          (elapsed != null ? Math.max(1, Math.round(elapsed / 60)) : null),
         elapsed_duration_seconds: elapsed,
         active_duration_seconds: active,
         completion_method: data.completionMethod,
         completion_source: data.completionSource ?? "workout_view",
         session_rating: data.sessionRating ?? null,
         client_notes: data.notes ?? null,
+        session_weight_total: data.sessionWeightTotal ?? null,
+        session_weight_unit: data.sessionWeightUnit ?? null,
         required_sets_count: summary.requiredSets,
         logged_sets_count: summary.loggedSets,
         skipped_exercises_count: summary.skippedExercises,
