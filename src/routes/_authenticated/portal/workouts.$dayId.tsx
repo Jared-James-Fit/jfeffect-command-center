@@ -712,7 +712,7 @@ function WorkoutDay() {
         ].filter(Boolean).join(" · ")}
         actions={!readonly ? <UndoButton /> : undefined}
       />
-      <div className="p-4 md:p-8 space-y-4">
+      <div className="p-4 md:p-8 space-y-4 pb-[calc(var(--bottom-nav-clearance,96px)+env(safe-area-inset-bottom)+24px)] md:pb-8">
         <Link to="/portal/workouts" className="inline-flex items-center text-sm text-muted-foreground hover:text-foreground">
           <ArrowLeft className="mr-1 h-4 w-4" /> All workouts
         </Link>
@@ -964,7 +964,7 @@ function WorkoutDay() {
 
       {/* Sticky general-notes shortcut */}
       {!readonly && (
-      <div className="fixed right-4 z-30 bottom-[calc(env(safe-area-inset-bottom)+96px)] md:right-6 md:bottom-6">
+      <div className="fixed right-4 z-50 bottom-[calc(env(safe-area-inset-bottom)+96px)] md:right-6 md:bottom-6">
         <Button size="lg" variant="secondary" onClick={focusGeneralNotes} className="shadow-lg">
           <NotebookPen className="mr-2 h-4 w-4" /> Workout Notes
         </Button>
