@@ -243,6 +243,8 @@ export const completeWorkout = createServerFn({ method: "POST" })
     weekIndex: z.number().int().min(1),
     dayIndex: z.number().int().min(1),
     notes: z.string().max(2000).optional(),
+    startedAt: z.string().datetime().optional(),
+    activeDurationSeconds: z.number().int().nonnegative().max(12 * 3600).optional(),
   }).parse(i))
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context;
@@ -286,9 +288,18 @@ export const completeWorkout = createServerFn({ method: "POST" })
       .eq("enrollment_id", data.enrollmentId)
       .eq("week_index", data.weekIndex)
       .eq("day_index", data.dayIndex).maybeSingle();
-    const startedAt = (prevRow as any)?.started_at ?? completedAt;
-    const elapsedSec = Math.max(0, Math.round((new Date(completedAt).getTime() - new Date(startedAt).getTime()) / 1000));
-    const activeSec = (prevRow as any)?.active_duration_seconds ?? Math.min(elapsedSec, 12 * 3600);
+    // Prefer client-supplied started_at / active duration (heartbeat-derived)
+    // when present; fall back to any previous row, then to completedAt.
+    const startedAt =
+      (prevRow as any)?.started_at ?? data.startedAt ?? completedAt;
+    const elapsedSec = Math.max(
+      0,
+      Math.round((new Date(completedAt).getTime() - new Date(startedAt).getTime()) / 1000),
+    );
+    const activeSec =
+      data.activeDurationSeconds ??
+      (prevRow as any)?.active_duration_seconds ??
+      Math.min(elapsedSec, 12 * 3600);
 
     const { error } = await supabase.from("member_workout_completions").upsert({
       enrollment_id: data.enrollmentId,
