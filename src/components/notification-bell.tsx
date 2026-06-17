@@ -805,7 +805,9 @@ export function NotificationPanel({
           </div>
           <div className="flex items-center gap-1">
             <Button
-              variant="ghost" size="sm" className="h-7 gap-1 px-2 text-xs"
+              variant="ghost" size="sm"
+              className="h-11 gap-1 px-2 text-xs sm:h-7"
+              aria-label="Mark all notifications as read"
               disabled={markAllMut.isPending || unreadCount === 0}
               onClick={() => markAllMut.mutate()}
               title={unreadCount === 0 ? "You have no new notifications." : "Mark all as read"}
@@ -815,7 +817,7 @@ export function NotificationPanel({
             </Button>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="icon" className="h-7 w-7" aria-label="More notification actions">
+                <Button variant="ghost" size="icon" className="h-11 w-11 sm:h-7 sm:w-7" aria-label="More notification actions">
                   <MoreHorizontal className="h-3.5 w-3.5" />
                 </Button>
               </DropdownMenuTrigger>
