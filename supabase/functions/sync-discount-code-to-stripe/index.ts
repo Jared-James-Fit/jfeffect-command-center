@@ -103,7 +103,10 @@ function buildCouponParams(row: Record<string, any>, couponId: string) {
 
 function buildPromotionCodeParams(row: Record<string, any>, couponId: string) {
   const params: Record<string, unknown> = {
-    coupon: couponId,
+    promotion: {
+      type: "coupon",
+      coupon: couponId,
+    },
     code: row.public_code,
     active: row.status === "active",
     metadata: {
@@ -169,7 +172,7 @@ async function ensureStripePromotionCode(apiKey: string, row: Record<string, any
   });
   if (Array.isArray(search?.data)) {
     const match = search.data.find((promo: any) => {
-      const promoCoupon = typeof promo?.coupon === "string" ? promo.coupon : promo?.coupon?.id;
+      const promoCoupon = typeof promo?.coupon === "string" ? promo.coupon : promo?.coupon?.id ?? promo?.promotion?.coupon;
       return promoCoupon === couponId;
     });
     if (match?.id) return match.id as string;
