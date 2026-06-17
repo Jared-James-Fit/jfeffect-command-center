@@ -6,6 +6,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { ChevronLeft } from "lucide-react";
 import { ProgressSection } from "@/components/progress/progress-section";
+import { CheckInScheduleCard } from "@/components/progress/check-in-schedule-card";
 import { useAuth } from "@/lib/auth";
 
 export const Route = createFileRoute("/_authenticated/admin/clients/$id/progress")({
@@ -55,6 +56,17 @@ function AdminClientProgress() {
           canRequestReview: false,
         }}
       />
+      {(client as any).user_id ? (
+        <div className="px-3 md:px-6 pb-6">
+          <CheckInScheduleCard
+            userId={(client as any).user_id}
+            readOnly={role !== "admin"}
+            subtitle={role === "admin"
+              ? "Set how often this client is reminded for each check-in."
+              : "Cadence set by admin — read-only."}
+          />
+        </div>
+      ) : null}
     </>
   );
 }
