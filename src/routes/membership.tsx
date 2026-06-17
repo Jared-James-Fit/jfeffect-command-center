@@ -649,16 +649,16 @@ function FieldError({ children }: { children: React.ReactNode }) {
 /* ---------------- Defaults (CMS-overridable) ---------------- */
 
 const DEFAULT_FEATURES = [
-  { title: "Program library", body: "Powerlifting, bodybuilding, fat loss, home. Every level." },
-  { title: "Exercise demos", body: "Clear technique in every workout." },
-  { title: "Progress tracking", body: "Log sets, watch PRs climb." },
-  { title: "Education", body: "The reasoning behind the plan." },
+  { title: "Program library", body: "Every goal, every level." },
+  { title: "Exercise demos", body: "Clear technique, built into each workout." },
+  { title: "Progress tracking", body: "Log sets, watch your numbers climb." },
+  { title: "Education", body: "The reasoning behind every plan." },
   { title: "Always growing", body: "New programs added often." },
 ];
 
 type LibraryCategory = { name: string; icon?: string; subtypes: string[] };
 const DEFAULT_LIBRARY: LibraryCategory[] = [
-  { name: "Powerlifting", icon: "trophy", subtypes: ["Beginner", "Intermediate", "Advanced", "Comp Prep"] },
+  { name: "Strength", icon: "trophy", subtypes: ["Beginner", "Intermediate", "Advanced"] },
   { name: "Bodybuilding", icon: "dumbbell", subtypes: ["PPL", "Upper/Lower", "Full Body", "Glute Focus"] },
   { name: "Fat Loss", icon: "flame", subtypes: ["Beginner", "Intermediate", "Advanced"] },
   { name: "Home", icon: "home", subtypes: ["Bodyweight", "Dumbbells", "At-Home Strength"] },
@@ -682,11 +682,10 @@ const DEFAULT_APP_PREVIEWS = [
 ];
 
 const DEFAULT_FAQ = [
-  { q: "Is this coaching?", a: "No — self-guided app. Coaching is 1:1." },
+  { q: "Is this coaching?", a: "No — self-guided app. Coaching is 1:1 with a dedicated coach." },
   { q: "Beginner?", a: "Yes, every level." },
   { q: "Home training?", a: "Yes." },
-  { q: "Powerlifting?", a: "Yes." },
-  { q: "Bodybuilding?", a: "Yes." },
+  { q: "Can I get serious about strength?", a: "Yes — strength programs from beginner to advanced." },
   { q: "New programs?", a: "Added often." },
   { q: "Cancel anytime?", a: "Yes." },
 ];
