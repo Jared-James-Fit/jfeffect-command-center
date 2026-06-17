@@ -139,6 +139,7 @@ import { Route as AuthenticatedAdminGoogleCalendarRouteImport } from './routes/_
 import { Route as AuthenticatedAdminFormsRouteImport } from './routes/_authenticated/admin/forms'
 import { Route as AuthenticatedAdminFloatingBarRouteImport } from './routes/_authenticated/admin/floating-bar'
 import { Route as AuthenticatedAdminFilloutSubmissionsRouteImport } from './routes/_authenticated/admin/fillout-submissions'
+import { Route as AuthenticatedAdminFeatureFlagsRouteImport } from './routes/_authenticated/admin/feature-flags'
 import { Route as AuthenticatedAdminFaqsRouteImport } from './routes/_authenticated/admin/faqs'
 import { Route as AuthenticatedAdminExercisesRouteImport } from './routes/_authenticated/admin/exercises'
 import { Route as AuthenticatedAdminDiscountCodesRouteImport } from './routes/_authenticated/admin/discount-codes'
@@ -987,6 +988,12 @@ const AuthenticatedAdminFilloutSubmissionsRoute =
     path: '/fillout-submissions',
     getParentRoute: () => AuthenticatedAdminRouteRoute,
   } as any)
+const AuthenticatedAdminFeatureFlagsRoute =
+  AuthenticatedAdminFeatureFlagsRouteImport.update({
+    id: '/feature-flags',
+    path: '/feature-flags',
+    getParentRoute: () => AuthenticatedAdminRouteRoute,
+  } as any)
 const AuthenticatedAdminFaqsRoute = AuthenticatedAdminFaqsRouteImport.update({
   id: '/faqs',
   path: '/faqs',
@@ -1776,6 +1783,7 @@ export interface FileRoutesByFullPath {
   '/admin/discount-codes': typeof AuthenticatedAdminDiscountCodesRoute
   '/admin/exercises': typeof AuthenticatedAdminExercisesRoute
   '/admin/faqs': typeof AuthenticatedAdminFaqsRoute
+  '/admin/feature-flags': typeof AuthenticatedAdminFeatureFlagsRoute
   '/admin/fillout-submissions': typeof AuthenticatedAdminFilloutSubmissionsRoute
   '/admin/floating-bar': typeof AuthenticatedAdminFloatingBarRoute
   '/admin/forms': typeof AuthenticatedAdminFormsRoute
@@ -2025,6 +2033,7 @@ export interface FileRoutesByTo {
   '/admin/discount-codes': typeof AuthenticatedAdminDiscountCodesRoute
   '/admin/exercises': typeof AuthenticatedAdminExercisesRoute
   '/admin/faqs': typeof AuthenticatedAdminFaqsRoute
+  '/admin/feature-flags': typeof AuthenticatedAdminFeatureFlagsRoute
   '/admin/fillout-submissions': typeof AuthenticatedAdminFilloutSubmissionsRoute
   '/admin/floating-bar': typeof AuthenticatedAdminFloatingBarRoute
   '/admin/forms': typeof AuthenticatedAdminFormsRoute
@@ -2279,6 +2288,7 @@ export interface FileRoutesById {
   '/_authenticated/admin/discount-codes': typeof AuthenticatedAdminDiscountCodesRoute
   '/_authenticated/admin/exercises': typeof AuthenticatedAdminExercisesRoute
   '/_authenticated/admin/faqs': typeof AuthenticatedAdminFaqsRoute
+  '/_authenticated/admin/feature-flags': typeof AuthenticatedAdminFeatureFlagsRoute
   '/_authenticated/admin/fillout-submissions': typeof AuthenticatedAdminFilloutSubmissionsRoute
   '/_authenticated/admin/floating-bar': typeof AuthenticatedAdminFloatingBarRoute
   '/_authenticated/admin/forms': typeof AuthenticatedAdminFormsRoute
@@ -2534,6 +2544,7 @@ export interface FileRouteTypes {
     | '/admin/discount-codes'
     | '/admin/exercises'
     | '/admin/faqs'
+    | '/admin/feature-flags'
     | '/admin/fillout-submissions'
     | '/admin/floating-bar'
     | '/admin/forms'
@@ -2783,6 +2794,7 @@ export interface FileRouteTypes {
     | '/admin/discount-codes'
     | '/admin/exercises'
     | '/admin/faqs'
+    | '/admin/feature-flags'
     | '/admin/fillout-submissions'
     | '/admin/floating-bar'
     | '/admin/forms'
@@ -3036,6 +3048,7 @@ export interface FileRouteTypes {
     | '/_authenticated/admin/discount-codes'
     | '/_authenticated/admin/exercises'
     | '/_authenticated/admin/faqs'
+    | '/_authenticated/admin/feature-flags'
     | '/_authenticated/admin/fillout-submissions'
     | '/_authenticated/admin/floating-bar'
     | '/_authenticated/admin/forms'
@@ -4193,6 +4206,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAdminFilloutSubmissionsRouteImport
       parentRoute: typeof AuthenticatedAdminRouteRoute
     }
+    '/_authenticated/admin/feature-flags': {
+      id: '/_authenticated/admin/feature-flags'
+      path: '/feature-flags'
+      fullPath: '/admin/feature-flags'
+      preLoaderRoute: typeof AuthenticatedAdminFeatureFlagsRouteImport
+      parentRoute: typeof AuthenticatedAdminRouteRoute
+    }
     '/_authenticated/admin/faqs': {
       id: '/_authenticated/admin/faqs'
       path: '/faqs'
@@ -5232,6 +5252,7 @@ interface AuthenticatedAdminRouteRouteChildren {
   AuthenticatedAdminDiscountCodesRoute: typeof AuthenticatedAdminDiscountCodesRoute
   AuthenticatedAdminExercisesRoute: typeof AuthenticatedAdminExercisesRoute
   AuthenticatedAdminFaqsRoute: typeof AuthenticatedAdminFaqsRoute
+  AuthenticatedAdminFeatureFlagsRoute: typeof AuthenticatedAdminFeatureFlagsRoute
   AuthenticatedAdminFilloutSubmissionsRoute: typeof AuthenticatedAdminFilloutSubmissionsRoute
   AuthenticatedAdminFloatingBarRoute: typeof AuthenticatedAdminFloatingBarRoute
   AuthenticatedAdminFormsRoute: typeof AuthenticatedAdminFormsRoute
@@ -5345,6 +5366,7 @@ const AuthenticatedAdminRouteRouteChildren: AuthenticatedAdminRouteRouteChildren
     AuthenticatedAdminDiscountCodesRoute: AuthenticatedAdminDiscountCodesRoute,
     AuthenticatedAdminExercisesRoute: AuthenticatedAdminExercisesRoute,
     AuthenticatedAdminFaqsRoute: AuthenticatedAdminFaqsRoute,
+    AuthenticatedAdminFeatureFlagsRoute: AuthenticatedAdminFeatureFlagsRoute,
     AuthenticatedAdminFilloutSubmissionsRoute:
       AuthenticatedAdminFilloutSubmissionsRoute,
     AuthenticatedAdminFloatingBarRoute: AuthenticatedAdminFloatingBarRoute,
