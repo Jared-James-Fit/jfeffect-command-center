@@ -327,36 +327,11 @@ function SignupJf() {
         </Link>
       </Section>
 
-      {/* Offer comparison surfaced early so visitors see both paths within 5s. */}
-      {/* 2. Compare to doing it alone */}
+      {/* 2. The library — core value, visual grid */}
       <div ref={featuresRef} id="features" />
-      <Reveal><CompareAloneSection /></Reveal>
-
-      {/* 3. What's included — premium feature cards */}
-      <Reveal>
-        <FeatureGrid
-          title="What's included"
-          items={Array.isArray(s.features) && s.features.length > 0 ? s.features : DEFAULT_FEATURES}
-        />
-      </Reveal>
-
-      {/* 4. Program library showcase */}
       <Reveal><ProgramLibraryShowcase categories={Array.isArray(s.library_categories) && s.library_categories.length > 0 ? s.library_categories : DEFAULT_LIBRARY} programCount={s.program_count ?? ""} /></Reveal>
 
-      {/* 5. Why people stick with it */}
-      <Reveal><WhyStickSection /></Reveal>
-
-      {/* 6. Who it's for / not for */}
-      <Reveal>
-        <IncludedNotIncluded
-          includedTitle="This is for you if"
-          notIncludedTitle="This is NOT for you if"
-          included={Array.isArray(s.who_for) && s.who_for.length > 0 ? s.who_for : DEFAULT_WHO_FOR}
-          notIncluded={Array.isArray(s.not_for) && s.not_for.length > 0 ? s.not_for : DEFAULT_NOT_FOR}
-        />
-      </Reveal>
-
-      {/* 7. App preview */}
+      {/* 3. Inside the app — visual support for the library */}
       <Reveal>
         <AppPreviewGrid
           title="Inside the app"
@@ -373,25 +348,32 @@ function SignupJf() {
         />
       </Reveal>
 
-      {/* 8. Proof wall */}
+      {/* 4. What you get — feature cards */}
+      <Reveal>
+        <FeatureGrid
+          title="What you get"
+          items={Array.isArray(s.features) && s.features.length > 0 ? s.features : DEFAULT_FEATURES}
+        />
+      </Reveal>
+
+      {/* 5. Proof — real members, real progress */}
       <Reveal><ProofWall
         testimonials={p?.testimonials ?? []}
         images={(p?.visuals ?? []).filter((v) => v.slot === "proof")}
       /></Reveal>
 
-      {/* 9. Coaching vs Membership */}
-      <Reveal><OfferComparison accent="membership" /></Reveal>
-      <Section className="!pt-0">
+      {/* 6. Membership vs Coaching — one-line low-priority cross-sell */}
+      <Section>
         <p className="mx-auto max-w-3xl text-center text-sm text-muted-foreground md:text-base">
           Most people are set right here. Want a plan built just for you, with weekly check-ins? That's{" "}
           <Link to="/coaching" className="font-semibold text-primary underline underline-offset-2 hover:text-primary/80">Coaching</Link> — by application.
         </p>
       </Section>
 
-      {/* 10. FAQ */}
+      {/* 7. FAQ */}
       <Reveal><FaqAccordion items={mergeTaxFaq(Array.isArray(s.faq) && s.faq.length > 0 ? s.faq : DEFAULT_FAQ)} /></Reveal>
 
-      {/* 11. Final CTA */}
+      {/* 8. Final CTA */}
       <Reveal>
         <FinalCta
           headline="Start training with a system."
@@ -401,7 +383,9 @@ function SignupJf() {
             </Button>
           }
           secondary={
-            <span className="ml-1 text-xs text-muted-foreground">{trialDays}-day free trial · Cancel anytime</span>
+            <span className="ml-1 text-xs text-muted-foreground">
+              Everything you need, in one app{s.program_count ? `. ${s.program_count}+ waiting` : ""}. {trialDays}-day free trial · Cancel anytime
+            </span>
           }
         />
       </Reveal>
