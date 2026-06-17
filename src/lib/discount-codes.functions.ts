@@ -311,9 +311,10 @@ function buildCouponParams(row: any, couponId: string): Record<string, any> {
 
 function buildPromotionCodeParams(row: any, couponId: string): Record<string, any> {
   const params: Record<string, any> = {
-    // Stripe's POST /v1/promotion_codes requires a top-level `coupon` parameter
-    // (the coupon id). See: https://docs.stripe.com/api/promotion_codes/create
-    coupon: couponId,
+    promotion: {
+      type: "coupon",
+      coupon: couponId,
+    },
     code: row.public_code,
     active: row.status === "active",
   };
@@ -379,11 +380,14 @@ async function ensureStripePromotionCode(
     }
   }
   // Look up by code first — Stripe rejects duplicate codes per coupon, so we reuse.
-  const search = await stripeFetch(
-    `/promotion_codes?code=${encodeURIComponent(row.public_code)}&coupon=${encodeURIComponent(couponId)}&limit=1`,
-    { apiKey },
-  );
-  if (Array.isArray(search?.data) && search.data[0]?.id) return search.data[0].id;
+  const search = await stripeFetch(`/promotion_codes?code=${encodeURIComponent(row.public_code)}&limit=100`, { apiKey });
+  if (Array.isArray(search?.data)) {
+    const match = search.data.find((promo: any) => {
+      const promoCoupon = typeof promo?.coupon === "string" ? promo.coupon : promo?.coupon?.id ?? promo?.promotion?.coupon;
+      return promoCoupon === couponId;
+    });
+    if (match?.id) return match.id;
+  }
   // Create fresh.
   const params = buildPromotionCodeParams(row, couponId);
   const created = await stripeFetch(`/promotion_codes`, {
