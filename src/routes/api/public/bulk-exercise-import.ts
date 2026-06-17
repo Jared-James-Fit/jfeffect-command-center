@@ -26,9 +26,11 @@ const ExerciseSchema = z.object({
   youtube_fallback_allowed: z.boolean().optional(),
 });
 
-const BodySchema = z.object({
-  exercises: z.array(ExerciseSchema).min(1).max(1000),
-});
+const ExercisesArraySchema = z.array(ExerciseSchema).min(1).max(1000);
+const BodySchema = z.union([
+  ExercisesArraySchema,
+  z.object({ exercises: ExercisesArraySchema }),
+]);
 
 function timingSafeEqualStr(a: string, b: string): boolean {
   if (a.length !== b.length) return false;
@@ -65,7 +67,11 @@ export const Route = createFileRoute("/api/public/bulk-exercise-import")({
           );
         }
 
-        const rows = parsed.data.exercises.map((e) => ({
+        const exercises = Array.isArray(parsed.data)
+          ? parsed.data
+          : parsed.data.exercises;
+
+        const rows = exercises.map((e) => ({
           name: e.name,
           category: e.category ?? null,
           muscle_group: e.muscle_group ?? null,
@@ -83,20 +89,55 @@ export const Route = createFileRoute("/api/public/bulk-exercise-import")({
         }));
 
         const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-        const { data, error } = await supabaseAdmin
-          .from("exercises")
-          .upsert(rows, { onConflict: "name" })
-          .select("id");
 
-        if (error) {
-          console.error("[bulk-exercise-import] upsert failed", error.message);
-          return Response.json(
-            { error: "Upsert failed", message: error.message },
-            { status: 500 },
-          );
+        let inserted = 0;
+        let updated = 0;
+        const errors: Array<{ name: string; message: string }> = [];
+
+        for (const row of rows) {
+          const { data: existing, error: selErr } = await supabaseAdmin
+            .from("exercises")
+            .select("id")
+            .eq("name", row.name)
+            .maybeSingle();
+
+          if (selErr) {
+            console.error("[bulk-exercise-import] select failed", selErr.message);
+            errors.push({ name: row.name, message: selErr.message });
+            continue;
+          }
+
+          if (existing?.id) {
+            const { error: updErr } = await supabaseAdmin
+              .from("exercises")
+              .update(row)
+              .eq("id", existing.id);
+            if (updErr) {
+              console.error("[bulk-exercise-import] update failed", updErr.message);
+              errors.push({ name: row.name, message: updErr.message });
+            } else {
+              updated++;
+            }
+          } else {
+            const { error: insErr } = await supabaseAdmin
+              .from("exercises")
+              .insert(row);
+            if (insErr) {
+              console.error("[bulk-exercise-import] insert failed", insErr.message);
+              errors.push({ name: row.name, message: insErr.message });
+            } else {
+              inserted++;
+            }
+          }
         }
 
-        return Response.json({ ok: true, count: data?.length ?? 0 });
+        return Response.json({
+          ok: errors.length === 0,
+          inserted,
+          updated,
+          count: inserted + updated,
+          errors,
+        });
       },
     },
   },
