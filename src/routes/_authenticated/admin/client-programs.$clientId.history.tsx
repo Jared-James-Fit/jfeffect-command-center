@@ -335,6 +335,16 @@ function WorkoutFeedbackSection({ clientId }: { clientId: string }) {
                     )}
                   </div>
                 )}
+                {summaryByDay[r.day_id] && (
+                  <div className="mt-3">
+                    <WorkoutReviewSummaryHeader
+                      summary={summaryByDay[r.day_id]!}
+                      difficulty={r.session_rpe}
+                      energy={r.overall_rating}
+                      pain={r.pain}
+                    />
+                  </div>
+                )}
                 <div className="mt-3 flex flex-wrap gap-2">
                   {!r.reviewed_at && (
                     <Button size="sm" variant="default" onClick={() => markReviewed(r.id)}>
