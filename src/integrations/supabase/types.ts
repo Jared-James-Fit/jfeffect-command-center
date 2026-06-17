@@ -12725,6 +12725,188 @@ export type Database = {
         }
         Relationships: []
       }
+      progress_bodyweight: {
+        Row: {
+          created_at: string
+          id: string
+          logged_date: string
+          note: string | null
+          updated_at: string
+          user_id: string
+          weight_unit: string
+          weight_value: number
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          logged_date?: string
+          note?: string | null
+          updated_at?: string
+          user_id: string
+          weight_unit: string
+          weight_value: number
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          logged_date?: string
+          note?: string | null
+          updated_at?: string
+          user_id?: string
+          weight_unit?: string
+          weight_value?: number
+        }
+        Relationships: []
+      }
+      progress_check_in_schedules: {
+        Row: {
+          created_at: string
+          custom_days: number | null
+          enabled: boolean
+          frequency: Database["public"]["Enums"]["progress_schedule_frequency"]
+          id: string
+          kind: Database["public"]["Enums"]["progress_schedule_kind"]
+          last_completed_at: string | null
+          next_due: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          custom_days?: number | null
+          enabled?: boolean
+          frequency?: Database["public"]["Enums"]["progress_schedule_frequency"]
+          id?: string
+          kind: Database["public"]["Enums"]["progress_schedule_kind"]
+          last_completed_at?: string | null
+          next_due?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          custom_days?: number | null
+          enabled?: boolean
+          frequency?: Database["public"]["Enums"]["progress_schedule_frequency"]
+          id?: string
+          kind?: Database["public"]["Enums"]["progress_schedule_kind"]
+          last_completed_at?: string | null
+          next_due?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      progress_measurements: {
+        Row: {
+          created_at: string
+          fields: Json
+          id: string
+          measured_date: string
+          note: string | null
+          unit: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          fields?: Json
+          id?: string
+          measured_date?: string
+          note?: string | null
+          unit?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          fields?: Json
+          id?: string
+          measured_date?: string
+          note?: string | null
+          unit?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      progress_media: {
+        Row: {
+          angle: Database["public"]["Enums"]["progress_angle"]
+          created_at: string
+          drive_file_id: string | null
+          drive_folder_id: string | null
+          drive_sync_status: string | null
+          drive_url: string | null
+          file_size_bytes: number | null
+          id: string
+          media_type: Database["public"]["Enums"]["progress_submission_type"]
+          mime_type: string | null
+          original_filename: string | null
+          processing_error: string | null
+          retry_count: number
+          storage_path: string | null
+          submission_id: string
+          synced_at: string | null
+          thumbnail_path: string | null
+          updated_at: string
+          upload_status: Database["public"]["Enums"]["progress_upload_status"]
+          user_id: string
+        }
+        Insert: {
+          angle: Database["public"]["Enums"]["progress_angle"]
+          created_at?: string
+          drive_file_id?: string | null
+          drive_folder_id?: string | null
+          drive_sync_status?: string | null
+          drive_url?: string | null
+          file_size_bytes?: number | null
+          id?: string
+          media_type: Database["public"]["Enums"]["progress_submission_type"]
+          mime_type?: string | null
+          original_filename?: string | null
+          processing_error?: string | null
+          retry_count?: number
+          storage_path?: string | null
+          submission_id: string
+          synced_at?: string | null
+          thumbnail_path?: string | null
+          updated_at?: string
+          upload_status?: Database["public"]["Enums"]["progress_upload_status"]
+          user_id: string
+        }
+        Update: {
+          angle?: Database["public"]["Enums"]["progress_angle"]
+          created_at?: string
+          drive_file_id?: string | null
+          drive_folder_id?: string | null
+          drive_sync_status?: string | null
+          drive_url?: string | null
+          file_size_bytes?: number | null
+          id?: string
+          media_type?: Database["public"]["Enums"]["progress_submission_type"]
+          mime_type?: string | null
+          original_filename?: string | null
+          processing_error?: string | null
+          retry_count?: number
+          storage_path?: string | null
+          submission_id?: string
+          synced_at?: string | null
+          thumbnail_path?: string | null
+          updated_at?: string
+          upload_status?: Database["public"]["Enums"]["progress_upload_status"]
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "progress_media_submission_id_fkey"
+            columns: ["submission_id"]
+            isOneToOne: false
+            referencedRelation: "progress_submissions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       progress_metrics: {
         Row: {
           active_minutes: number | null
@@ -12778,6 +12960,141 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
+      }
+      progress_review_responses: {
+        Row: {
+          angle: Database["public"]["Enums"]["progress_angle"] | null
+          body: string
+          created_at: string
+          id: string
+          kind: string
+          reviewer_id: string
+          submission_id: string
+        }
+        Insert: {
+          angle?: Database["public"]["Enums"]["progress_angle"] | null
+          body: string
+          created_at?: string
+          id?: string
+          kind?: string
+          reviewer_id: string
+          submission_id: string
+        }
+        Update: {
+          angle?: Database["public"]["Enums"]["progress_angle"] | null
+          body?: string
+          created_at?: string
+          id?: string
+          kind?: string
+          reviewer_id?: string
+          submission_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "progress_review_responses_submission_id_fkey"
+            columns: ["submission_id"]
+            isOneToOne: false
+            referencedRelation: "progress_submissions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      progress_submissions: {
+        Row: {
+          assigned_coach_id: string | null
+          bodyweight: number | null
+          check_in_label: string | null
+          client_id: string | null
+          created_at: string
+          id: string
+          member_id: string | null
+          notes: string | null
+          owner_type: Database["public"]["Enums"]["progress_owner_type"]
+          review_status: Database["public"]["Enums"]["progress_review_status"]
+          reviewed_at: string | null
+          reviewer_id: string | null
+          submission_date: string
+          submission_type: Database["public"]["Enums"]["progress_submission_type"]
+          submitted_at: string | null
+          training_phase_id: string | null
+          updated_at: string
+          user_id: string
+          video_format:
+            | Database["public"]["Enums"]["progress_video_format"]
+            | null
+          weight_unit: string | null
+        }
+        Insert: {
+          assigned_coach_id?: string | null
+          bodyweight?: number | null
+          check_in_label?: string | null
+          client_id?: string | null
+          created_at?: string
+          id?: string
+          member_id?: string | null
+          notes?: string | null
+          owner_type: Database["public"]["Enums"]["progress_owner_type"]
+          review_status?: Database["public"]["Enums"]["progress_review_status"]
+          reviewed_at?: string | null
+          reviewer_id?: string | null
+          submission_date?: string
+          submission_type: Database["public"]["Enums"]["progress_submission_type"]
+          submitted_at?: string | null
+          training_phase_id?: string | null
+          updated_at?: string
+          user_id: string
+          video_format?:
+            | Database["public"]["Enums"]["progress_video_format"]
+            | null
+          weight_unit?: string | null
+        }
+        Update: {
+          assigned_coach_id?: string | null
+          bodyweight?: number | null
+          check_in_label?: string | null
+          client_id?: string | null
+          created_at?: string
+          id?: string
+          member_id?: string | null
+          notes?: string | null
+          owner_type?: Database["public"]["Enums"]["progress_owner_type"]
+          review_status?: Database["public"]["Enums"]["progress_review_status"]
+          reviewed_at?: string | null
+          reviewer_id?: string | null
+          submission_date?: string
+          submission_type?: Database["public"]["Enums"]["progress_submission_type"]
+          submitted_at?: string | null
+          training_phase_id?: string | null
+          updated_at?: string
+          user_id?: string
+          video_format?:
+            | Database["public"]["Enums"]["progress_video_format"]
+            | null
+          weight_unit?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "progress_submissions_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "progress_submissions_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: false
+            referencedRelation: "app_members"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "progress_submissions_training_phase_id_fkey"
+            columns: ["training_phase_id"]
+            isOneToOne: false
+            referencedRelation: "training_phases"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       promo_code_redemptions: {
         Row: {
@@ -16023,6 +16340,38 @@ export type Database = {
         | "authorized"
         | "completed"
         | "cancelled"
+      progress_angle: "front" | "left" | "back" | "right" | "all"
+      progress_owner_type: "client" | "member"
+      progress_review_status:
+        | "draft"
+        | "submitted"
+        | "awaiting_review"
+        | "reviewed"
+        | "needs_update"
+        | "self_tracking"
+      progress_schedule_frequency:
+        | "weekly"
+        | "biweekly"
+        | "monthly"
+        | "per_block"
+        | "custom"
+        | "none"
+      progress_schedule_kind:
+        | "photos"
+        | "videos"
+        | "bodyweight"
+        | "measurements"
+      progress_submission_type: "photo" | "video"
+      progress_upload_status:
+        | "draft"
+        | "uploading"
+        | "processing"
+        | "ready"
+        | "syncing_drive"
+        | "saved_to_drive"
+        | "upload_failed"
+        | "sync_failed"
+      progress_video_format: "four_angle" | "continuous"
       reminder_audience: "attendee" | "host"
       reminder_status: "pending" | "sent" | "failed" | "skipped"
       review_status:
@@ -16336,6 +16685,42 @@ export const Constants = {
         "completed",
         "cancelled",
       ],
+      progress_angle: ["front", "left", "back", "right", "all"],
+      progress_owner_type: ["client", "member"],
+      progress_review_status: [
+        "draft",
+        "submitted",
+        "awaiting_review",
+        "reviewed",
+        "needs_update",
+        "self_tracking",
+      ],
+      progress_schedule_frequency: [
+        "weekly",
+        "biweekly",
+        "monthly",
+        "per_block",
+        "custom",
+        "none",
+      ],
+      progress_schedule_kind: [
+        "photos",
+        "videos",
+        "bodyweight",
+        "measurements",
+      ],
+      progress_submission_type: ["photo", "video"],
+      progress_upload_status: [
+        "draft",
+        "uploading",
+        "processing",
+        "ready",
+        "syncing_drive",
+        "saved_to_drive",
+        "upload_failed",
+        "sync_failed",
+      ],
+      progress_video_format: ["four_angle", "continuous"],
       reminder_audience: ["attendee", "host"],
       reminder_status: ["pending", "sent", "failed", "skipped"],
       review_status: [
