@@ -5,9 +5,10 @@ import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
-import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { AlertTriangle, Loader2, Lock, Pencil } from "lucide-react";
+import { useServerFn } from "@tanstack/react-start";
+import { submitOrEditReview } from "@/lib/workout-completion.functions";
 
 const RATING_OPTIONS: { value: number; label: string; emoji: string }[] = [
   { value: 1, label: "Rough", emoji: "😖" },
@@ -72,6 +73,7 @@ type Props = {
 };
 
 export function WorkoutFeedbackSheet({ open, onOpenChange, completionId, clientId, dayId, existing, workoutDate, onSubmitted }: Props) {
+  void clientId; // server fn resolves client from the signed-in user
   const [rating, setRating] = useState<number | null>(null);
   const [rpe, setRpe] = useState<number | null>(null);
   const [pain, setPain] = useState<boolean | null>(null);
@@ -83,6 +85,7 @@ export function WorkoutFeedbackSheet({ open, onOpenChange, completionId, clientI
 
   const isEdit = !!existing?.id;
   const isLocked = !!(existing?.reviewed_at || existing?.reviewed_by);
+  const submitReview = useServerFn(submitOrEditReview);
 
   // Reset / prefill whenever the sheet (re)opens for a different completion.
   useEffect(() => {
@@ -121,44 +124,32 @@ export function WorkoutFeedbackSheet({ open, onOpenChange, completionId, clientI
       client_note: note.trim() ? note.trim() : null,
     };
 
-    let error: any = null;
-    if (isEdit && existing?.id) {
-      // Track edit metadata so the shared review surface knows this is
-      // a re-submission, not the original answer.
-      const editPatch: any = {
-        ...fields,
-        review_last_edited_at: new Date().toISOString(),
-        review_edit_count: ((existing as any)?.review_edit_count ?? 0) + 1,
-      };
-      const res = await (supabase as any)
-        .from("pl_workout_feedback")
-        .update(editPatch)
-        .eq("id", existing.id);
-      error = res.error;
-    } else {
-      const payload = {
-        completion_id: completionId,
-        client_id: clientId,
-        day_id: dayId,
-        ...fields,
-        review_submitted_at: new Date().toISOString(),
-        review_edit_count: 0,
-      };
-      const res = await (supabase as any).from("pl_workout_feedback").insert(payload);
-      error = res.error;
-      if (error && ((error.code === "23505") || /duplicate key|unique/i.test(String(error.message ?? "")))) {
+    try {
+      await submitReview({
+        data: {
+          kind: "client",
+          dayId,
+          overallRating: fields.overall_rating,
+          sessionRpe: fields.session_rpe,
+          pain: fields.pain,
+          painLevel: fields.pain_level,
+          painArea: fields.pain_area,
+          painNote: fields.pain_note,
+          clientNote: fields.client_note,
+        },
+      });
+    } catch (err: any) {
+      const msg = String(err?.message ?? "");
+      if (err?.code === "23505" || /duplicate key|unique/i.test(msg)) {
         setSubmitting(false);
         toast.message("Feedback already submitted for this workout.");
         onSubmitted?.();
         onOpenChange(false);
         return;
       }
-    }
-
-    if (error) {
       setSubmitting(false);
       toast.error(isEdit ? "Couldn't update feedback" : "Couldn't save feedback", {
-        description: error.message,
+        description: msg,
       });
       return;
     }
