@@ -1039,11 +1039,13 @@ function NotificationRow({
   onRestore: () => void;
 }) {
   const isUnread = !item.isRead && !item.isArchived;
+  const isReadActive = !isUnread && !item.isArchived;
   return (
     <div
       className={cn(
         "group relative flex items-start gap-2 border-b px-3 py-2.5 transition last:border-b-0",
         isUnread ? "bg-primary/5 hover:bg-primary/10" : "hover:bg-secondary/60",
+        isReadActive && "opacity-70",
         item.isArchived && "opacity-70",
       )}
     >
@@ -1058,7 +1060,7 @@ function NotificationRow({
       >
         <div className={cn(
           "truncate pr-1 text-xs leading-tight",
-          isUnread ? "font-semibold text-foreground" : "font-medium text-foreground/90",
+          isUnread ? "font-semibold text-foreground" : "font-normal text-muted-foreground",
         )}>
           {item.title}
         </div>
@@ -1077,7 +1079,7 @@ function NotificationRow({
         <DropdownMenuTrigger asChild>
           <Button
             variant="ghost" size="icon"
-            className="h-7 w-7 shrink-0 opacity-60 hover:opacity-100"
+            className="h-11 w-11 shrink-0 opacity-60 hover:opacity-100 sm:h-7 sm:w-7"
             aria-label="Notification actions"
             onClick={(e) => e.stopPropagation()}
           >
