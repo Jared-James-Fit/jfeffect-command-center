@@ -185,16 +185,25 @@ serve(async (request) => {
     const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const authorization = request.headers.get("Authorization") ?? "";
 
-    const authClient = createClient(supabaseUrl, anonKey, { global: { headers: { Authorization: authorization } } });
-    const { data: authData, error: authError } = await authClient.auth.getUser();
-    if (authError || !authData.user) return json({ error: "Unauthorized" }, 401);
-
     const adminClient = createClient(supabaseUrl, serviceKey, { auth: { persistSession: false } });
-    const { data: isAdmin, error: roleError } = await adminClient.rpc("has_role", {
-      _user_id: authData.user.id,
-      _role: "admin",
-    });
-    if (roleError || !isAdmin) return json({ error: "Forbidden" }, 403);
+    const bearer = authorization.replace(/^Bearer\s+/i, "");
+    const isServiceRequest = bearer === serviceKey;
+    let actorId: string | null = null;
+    let actorEmail: string | null = null;
+
+    if (!isServiceRequest) {
+      const authClient = createClient(supabaseUrl, anonKey, { global: { headers: { Authorization: authorization } } });
+      const { data: authData, error: authError } = await authClient.auth.getUser();
+      if (authError || !authData.user) return json({ error: "Unauthorized" }, 401);
+
+      const { data: isAdmin, error: roleError } = await adminClient.rpc("has_role", {
+        _user_id: authData.user.id,
+        _role: "admin",
+      });
+      if (roleError || !isAdmin) return json({ error: "Forbidden" }, 403);
+      actorId = authData.user.id;
+      actorEmail = authData.user.email ?? null;
+    }
 
     const body = await request.json().catch(() => ({}));
     const id = typeof body.id === "string" ? body.id : null;
@@ -243,8 +252,8 @@ serve(async (request) => {
     if (updateError) throw new Error(updateError.message);
 
     await adminClient.from("discount_code_audit_log").insert({
-      actor_id: authData.user.id,
-      actor_email: authData.user.email,
+      actor_id: actorId,
+      actor_email: actorEmail,
       action: "code_synced_to_stripe",
       code_id: row.id,
       code_public: row.public_code,
