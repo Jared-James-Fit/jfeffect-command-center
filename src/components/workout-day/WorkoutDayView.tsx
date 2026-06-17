@@ -57,6 +57,7 @@ import { WorkoutTimerSheet, QuickConfirmDuration, type TimerCompletionPayload } 
 import { formatDuration } from "@/lib/duration";
 import { Timer } from "lucide-react";
 import type { WorkoutContextAdapter } from "@/lib/workout-context";
+import { summarizeCompleteness, type RequiredRowSpec, type LoggedSetSpec, type RowMetricKind } from "@/lib/workout-completeness";
 
 /* -------------------------------------------------------------------------- */
 /* Target-parsing helpers (Suggested → Draft → Confirmed fast-logging)         */
