@@ -7,6 +7,7 @@ import { Progress } from "@/components/ui/progress";
 import { Flame, Dumbbell, CheckCircle2, TrendingUp } from "lucide-react";
 import { differenceInCalendarDays, format, startOfWeek, endOfWeek } from "date-fns";
 import { MemberBodyweightCard } from "./member-bodyweight-card";
+import { MemberAnalyticsCard } from "./member-analytics-card";
 
 export function MemberDataTracker({ enrollmentId, enrollment }: { enrollmentId: string; enrollment: any }) {
   const { data: completions = [] } = useQuery({
@@ -73,6 +74,8 @@ export function MemberDataTracker({ enrollmentId, enrollment }: { enrollmentId: 
         <Progress value={pct} className="mt-3 h-3" />
         <div className="mt-2 text-xs text-muted-foreground">{done} of {total} workouts complete</div>
       </Card>
+
+      <MemberAnalyticsCard enrollmentId={enrollmentId} />
 
       <Card className="p-5">
         <div className="text-sm font-semibold">Recent workouts</div>
