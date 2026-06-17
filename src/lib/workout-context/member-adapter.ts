@@ -13,6 +13,18 @@ import {
   type WorkoutCompletion,
   type RescheduleInput,
   type LogSetInput,
+  type WorkoutDay,
+  type ExerciseRowDTO,
+  type RowResultDTO,
+  type ExerciseNoteDTO,
+  type HistoryEntryDTO,
+  type MaxEntryDTO,
+  type DayCompletionDTO,
+  type DayCompletionPatch,
+  type RowBlockSummaryDTO,
+  type CoachPainFlagDTO,
+  type UpsertRowResultInput,
+  type UpsertExerciseNoteInput,
 } from "./types";
 import {
   getEnrollmentSchedule,
@@ -52,6 +64,10 @@ export function createMemberAdapter(ref: WorkoutContextRef): WorkoutContextAdapt
       canReschedule: true,
       canSubstituteExercise: false, // membership programs are static library entries
       canSeeCoachNotes: false,
+      canSeeCoachIntel: false,
+      canLeaveCoachFeedback: false,
+      canSeeAdminNotes: false,
+      canAssignPrograms: false,
     },
     async listSchedule(opts): Promise<WorkoutScheduleDay[]> {
       const { schedule } = await getEnrollmentSchedule({ data: { enrollmentId } });
@@ -164,5 +180,22 @@ export function createMemberAdapter(ref: WorkoutContextRef): WorkoutContextAdapt
         data: { enrollmentId, weekIndex: week, dayIndex: day },
       });
     },
+
+    /* ---- Phase B day-view surface (filled in Phase C). ---- */
+    async getDay(_dayId: string): Promise<WorkoutDay> { throw new NotImplemented("getDay", "member"); },
+    async listRows(_dayId: string): Promise<ExerciseRowDTO[]> { throw new NotImplemented("listRows", "member"); },
+    async listRowResults(_dayId: string): Promise<RowResultDTO[]> { throw new NotImplemented("listRowResults", "member"); },
+    async listExerciseNotes(_dayId: string): Promise<ExerciseNoteDTO[]> { throw new NotImplemented("listExerciseNotes", "member"); },
+    async listExerciseHistory(_exerciseId: string): Promise<HistoryEntryDTO[]> { throw new NotImplemented("listExerciseHistory", "member"); },
+    async listClientMaxes(): Promise<MaxEntryDTO[]> { return []; },
+    async getDayCompletion(_dayId: string): Promise<DayCompletionDTO | null> { throw new NotImplemented("getDayCompletion", "member"); },
+    async getRowBlockSummaries(_rowIds: string[]): Promise<RowBlockSummaryDTO[]> { return []; },
+    async listCoachPainFlags(_dayId: string): Promise<CoachPainFlagDTO[]> { return []; },
+    async upsertRowResult(_input: UpsertRowResultInput): Promise<string> { throw new NotImplemented("upsertRowResult", "member"); },
+    async deleteRowResult(_id: string): Promise<void> { throw new NotImplemented("deleteRowResult", "member"); },
+    async upsertExerciseNote(_input: UpsertExerciseNoteInput): Promise<void> { throw new NotImplemented("upsertExerciseNote", "member"); },
+    async updateDayCompletion(_dayId: string, _patch: DayCompletionPatch): Promise<void> { throw new NotImplemented("updateDayCompletion", "member"); },
+    async saveExerciseUnitPref(_input: { exerciseId: string; unit: "lb" | "kg" }): Promise<void> { /* members default to lb; no-op */ },
+    async notifyCoachOfFailure(_input: { dayId: string; reason: string }): Promise<void> { /* routed via member support thread in Phase C */ },
   };
 }
