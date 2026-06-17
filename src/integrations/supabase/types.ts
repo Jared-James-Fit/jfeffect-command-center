@@ -8493,35 +8493,176 @@ export type Database = {
       }
       member_workout_completions: {
         Row: {
-          completed_at: string
+          active_duration_seconds: number | null
+          actual_duration_min: number | null
+          client_notes: string | null
+          completed_at: string | null
+          completed_with_missing_logs: boolean | null
+          completion_method: string | null
+          completion_source: string | null
           created_at: string
           day_index: number
+          elapsed_duration_seconds: number | null
           enrollment_id: string
           id: string
+          in_progress_at: string | null
+          last_activity_at: string | null
+          logged_sets_count: number | null
+          logging_percentage: number | null
+          logging_quality:
+            | Database["public"]["Enums"]["workout_logging_quality"]
+            | null
           notes: string | null
+          required_sets_count: number | null
+          session_rating: number | null
+          skipped_exercises_count: number | null
+          started_at: string | null
+          updated_at: string
           week_index: number
         }
         Insert: {
-          completed_at?: string
+          active_duration_seconds?: number | null
+          actual_duration_min?: number | null
+          client_notes?: string | null
+          completed_at?: string | null
+          completed_with_missing_logs?: boolean | null
+          completion_method?: string | null
+          completion_source?: string | null
           created_at?: string
           day_index: number
+          elapsed_duration_seconds?: number | null
           enrollment_id: string
           id?: string
+          in_progress_at?: string | null
+          last_activity_at?: string | null
+          logged_sets_count?: number | null
+          logging_percentage?: number | null
+          logging_quality?:
+            | Database["public"]["Enums"]["workout_logging_quality"]
+            | null
           notes?: string | null
+          required_sets_count?: number | null
+          session_rating?: number | null
+          skipped_exercises_count?: number | null
+          started_at?: string | null
+          updated_at?: string
           week_index: number
         }
         Update: {
-          completed_at?: string
+          active_duration_seconds?: number | null
+          actual_duration_min?: number | null
+          client_notes?: string | null
+          completed_at?: string | null
+          completed_with_missing_logs?: boolean | null
+          completion_method?: string | null
+          completion_source?: string | null
           created_at?: string
           day_index?: number
+          elapsed_duration_seconds?: number | null
           enrollment_id?: string
           id?: string
+          in_progress_at?: string | null
+          last_activity_at?: string | null
+          logged_sets_count?: number | null
+          logging_percentage?: number | null
+          logging_quality?:
+            | Database["public"]["Enums"]["workout_logging_quality"]
+            | null
           notes?: string | null
+          required_sets_count?: number | null
+          session_rating?: number | null
+          skipped_exercises_count?: number | null
+          started_at?: string | null
+          updated_at?: string
           week_index?: number
         }
         Relationships: [
           {
             foreignKeyName: "member_workout_completions_enrollment_id_fkey"
+            columns: ["enrollment_id"]
+            isOneToOne: false
+            referencedRelation: "member_plan_enrollments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      member_workout_reviews: {
+        Row: {
+          client_note: string | null
+          completion_id: string | null
+          created_at: string
+          day_index: number
+          enrollment_id: string
+          id: string
+          overall_rating: number
+          pain: boolean
+          pain_area: string | null
+          pain_level: number | null
+          pain_note: string | null
+          review_edit_count: number
+          review_last_edited_at: string | null
+          review_submitted_at: string
+          review_updated_by: string | null
+          reviewed_at: string | null
+          reviewed_by: string | null
+          session_rpe: number
+          updated_at: string
+          week_index: number
+        }
+        Insert: {
+          client_note?: string | null
+          completion_id?: string | null
+          created_at?: string
+          day_index: number
+          enrollment_id: string
+          id?: string
+          overall_rating: number
+          pain?: boolean
+          pain_area?: string | null
+          pain_level?: number | null
+          pain_note?: string | null
+          review_edit_count?: number
+          review_last_edited_at?: string | null
+          review_submitted_at?: string
+          review_updated_by?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          session_rpe: number
+          updated_at?: string
+          week_index: number
+        }
+        Update: {
+          client_note?: string | null
+          completion_id?: string | null
+          created_at?: string
+          day_index?: number
+          enrollment_id?: string
+          id?: string
+          overall_rating?: number
+          pain?: boolean
+          pain_area?: string | null
+          pain_level?: number | null
+          pain_note?: string | null
+          review_edit_count?: number
+          review_last_edited_at?: string | null
+          review_submitted_at?: string
+          review_updated_by?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          session_rpe?: number
+          updated_at?: string
+          week_index?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "member_workout_reviews_completion_id_fkey"
+            columns: ["completion_id"]
+            isOneToOne: false
+            referencedRelation: "member_workout_completions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "member_workout_reviews_enrollment_id_fkey"
             columns: ["enrollment_id"]
             isOneToOne: false
             referencedRelation: "member_plan_enrollments"
@@ -11487,50 +11628,86 @@ export type Database = {
       }
       pl_day_completions: {
         Row: {
+          active_duration_seconds: number | null
           actual_duration_min: number | null
           client_id: string
           client_notes: string | null
           completed_at: string | null
+          completed_with_missing_logs: boolean | null
           completion_method: string | null
+          completion_source: string | null
           created_at: string
           day_id: string
+          elapsed_duration_seconds: number | null
           id: string
           in_progress_at: string | null
+          last_activity_at: string | null
+          logged_sets_count: number | null
+          logging_percentage: number | null
+          logging_quality:
+            | Database["public"]["Enums"]["workout_logging_quality"]
+            | null
+          required_sets_count: number | null
           session_rating: number | null
           session_weight_total: number | null
           session_weight_unit: string | null
+          skipped_exercises_count: number | null
           started_at: string | null
           updated_at: string
         }
         Insert: {
+          active_duration_seconds?: number | null
           actual_duration_min?: number | null
           client_id: string
           client_notes?: string | null
           completed_at?: string | null
+          completed_with_missing_logs?: boolean | null
           completion_method?: string | null
+          completion_source?: string | null
           created_at?: string
           day_id: string
+          elapsed_duration_seconds?: number | null
           id?: string
           in_progress_at?: string | null
+          last_activity_at?: string | null
+          logged_sets_count?: number | null
+          logging_percentage?: number | null
+          logging_quality?:
+            | Database["public"]["Enums"]["workout_logging_quality"]
+            | null
+          required_sets_count?: number | null
           session_rating?: number | null
           session_weight_total?: number | null
           session_weight_unit?: string | null
+          skipped_exercises_count?: number | null
           started_at?: string | null
           updated_at?: string
         }
         Update: {
+          active_duration_seconds?: number | null
           actual_duration_min?: number | null
           client_id?: string
           client_notes?: string | null
           completed_at?: string | null
+          completed_with_missing_logs?: boolean | null
           completion_method?: string | null
+          completion_source?: string | null
           created_at?: string
           day_id?: string
+          elapsed_duration_seconds?: number | null
           id?: string
           in_progress_at?: string | null
+          last_activity_at?: string | null
+          logged_sets_count?: number | null
+          logging_percentage?: number | null
+          logging_quality?:
+            | Database["public"]["Enums"]["workout_logging_quality"]
+            | null
+          required_sets_count?: number | null
           session_rating?: number | null
           session_weight_total?: number | null
           session_weight_unit?: string | null
+          skipped_exercises_count?: number | null
           started_at?: string | null
           updated_at?: string
         }
@@ -12567,6 +12744,10 @@ export type Database = {
           pain_area: string | null
           pain_level: number | null
           pain_note: string | null
+          review_edit_count: number
+          review_last_edited_at: string | null
+          review_submitted_at: string | null
+          review_updated_by: string | null
           reviewed_at: string | null
           reviewed_by: string | null
           session_rpe: number
@@ -12584,6 +12765,10 @@ export type Database = {
           pain_area?: string | null
           pain_level?: number | null
           pain_note?: string | null
+          review_edit_count?: number
+          review_last_edited_at?: string | null
+          review_submitted_at?: string | null
+          review_updated_by?: string | null
           reviewed_at?: string | null
           reviewed_by?: string | null
           session_rpe: number
@@ -12601,6 +12786,10 @@ export type Database = {
           pain_area?: string | null
           pain_level?: number | null
           pain_note?: string | null
+          review_edit_count?: number
+          review_last_edited_at?: string | null
+          review_submitted_at?: string | null
+          review_updated_by?: string | null
           reviewed_at?: string | null
           reviewed_by?: string | null
           session_rpe?: number
@@ -16031,6 +16220,10 @@ export type Database = {
           pain_area: string | null
           pain_level: number | null
           pain_note: string | null
+          review_edit_count: number
+          review_last_edited_at: string | null
+          review_submitted_at: string | null
+          review_updated_by: string | null
           reviewed_at: string | null
           reviewed_by: string | null
           session_rpe: number
@@ -16513,6 +16706,12 @@ export type Database = {
         | "archived"
       task_quadrant: "do" | "schedule" | "delegate" | "eliminate"
       task_status: "open" | "done"
+      workout_logging_quality:
+        | "complete"
+        | "mostly_logged"
+        | "partially_logged"
+        | "minimal_logging"
+        | "no_logs"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -16863,6 +17062,13 @@ export const Constants = {
       ],
       task_quadrant: ["do", "schedule", "delegate", "eliminate"],
       task_status: ["open", "done"],
+      workout_logging_quality: [
+        "complete",
+        "mostly_logged",
+        "partially_logged",
+        "minimal_logging",
+        "no_logs",
+      ],
     },
   },
 } as const
