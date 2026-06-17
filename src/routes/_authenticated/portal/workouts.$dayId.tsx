@@ -962,15 +962,6 @@ function WorkoutDay() {
         )}
       </div>
 
-      {/* Sticky general-notes shortcut */}
-      {!readonly && (
-      <div className="fixed right-4 z-50 bottom-[calc(env(safe-area-inset-bottom)+96px)] md:right-6 md:bottom-6">
-        <Button size="lg" variant="secondary" onClick={focusGeneralNotes} className="shadow-lg">
-          <NotebookPen className="mr-2 h-4 w-4" /> Workout Notes
-        </Button>
-      </div>
-      )}
-
       {/* Minimal post-workout completion sheet. Readonly (admin POV) never opens it. */}
       {client?.id && !isImpersonating && (
         <WorkoutCompleteSheet
