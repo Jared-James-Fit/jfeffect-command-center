@@ -402,6 +402,22 @@ function WorkoutDay({
     enabled: !!client?.id,
     queryFn: async () => (await sb.from("pl_exercise_notes").select("*").eq("client_id", client!.id).eq("day_id", dayId)).data ?? [],
   });
+
+  // Existing review (pl_workout_feedback) for the post-completion actions card.
+  // Scoped by client + day; one row per (client, day) thanks to the Phase 1 unique constraint.
+  const { data: existingReview } = useQuery({
+    queryKey: ["pl-workout-feedback", dayId, client?.id],
+    enabled: !!client?.id && !!completion?.completed_at,
+    queryFn: async () => {
+      const { data } = await sb
+        .from("pl_workout_feedback")
+        .select("*")
+        .eq("day_id", dayId)
+        .eq("client_id", client!.id)
+        .maybeSingle();
+      return data as any;
+    },
+  });
   const notesByRowId = useMemo(() => {
     const m = new Map<string, any>();
     for (const n of exerciseNotes as any[]) if (n.row_id) m.set(n.row_id, n);
