@@ -266,6 +266,7 @@ function ClientDetail() {
   const [deactivateDisablePortal, setDeactivateDisablePortal] = useState<boolean>(true);
   const [reactivateOpen, setReactivateOpen] = useState(false);
   const [reactivateRestorePortal, setReactivateRestorePortal] = useState(true);
+  const [saving, setSaving] = useState(false);
 
   const { data } = useQuery({
     queryKey: ["client", id],
@@ -286,12 +287,18 @@ function ClientDetail() {
   if (!form) return <div className="p-10 text-muted-foreground">Loading…</div>;
 
   const save = async () => {
-    const { id: _id, created_at, updated_at, ...patch } = form;
-    const { error } = await supabase.from("clients").update(patch).eq("id", id);
-    if (error) return toast.error(error.message);
-    toast.success("Saved");
-    qc.invalidateQueries({ queryKey: ["client", id] });
-    qc.invalidateQueries({ queryKey: ["clients"] });
+    if (saving) return;
+    setSaving(true);
+    try {
+      const { id: _id, created_at, updated_at, ...patch } = form;
+      const { error } = await supabase.from("clients").update(patch).eq("id", id);
+      if (error) return toast.error(error.message);
+      toast.success("Saved");
+      qc.invalidateQueries({ queryKey: ["client", id] });
+      qc.invalidateQueries({ queryKey: ["clients"] });
+    } finally {
+      setSaving(false);
+    }
   };
 
   const archive = async () => {
