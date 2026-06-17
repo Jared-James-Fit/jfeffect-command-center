@@ -12,18 +12,18 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 
 /* ------------------------------------------------------------ mocks --- */
 
-const rescheduleDay = vi.fn(async () => ({}));
-const getEnrollmentSchedule = vi.fn(async () => ({ schedule: [] as any[] }));
-const logSet = vi.fn(async () => ({}));
-const completeWorkout = vi.fn(async () => ({}));
-const uncompleteWorkout = vi.fn(async () => ({}));
+const rescheduleDay = vi.fn(async (_args: any) => ({}) as any);
+const getEnrollmentSchedule = vi.fn(async (_args: any) => ({ schedule: [] as any[] }));
+const logSet = vi.fn(async (_args: any) => ({}) as any);
+const completeWorkout = vi.fn(async (_args: any) => ({}) as any);
+const uncompleteWorkout = vi.fn(async (_args: any) => ({}) as any);
 
 vi.mock("@/lib/member-plans.functions", () => ({
-  rescheduleDay: (...args: any[]) => rescheduleDay(...(args as [any])),
-  getEnrollmentSchedule: (...args: any[]) => getEnrollmentSchedule(...(args as [any])),
-  logSet: (...args: any[]) => logSet(...(args as [any])),
-  completeWorkout: (...args: any[]) => completeWorkout(...(args as [any])),
-  uncompleteWorkout: (...args: any[]) => uncompleteWorkout(...(args as [any])),
+  rescheduleDay: (args: any) => rescheduleDay(args),
+  getEnrollmentSchedule: (args: any) => getEnrollmentSchedule(args),
+  logSet: (args: any) => logSet(args),
+  completeWorkout: (args: any) => completeWorkout(args),
+  uncompleteWorkout: (args: any) => uncompleteWorkout(args),
 }));
 
 vi.mock("@/integrations/supabase/client", () => ({
