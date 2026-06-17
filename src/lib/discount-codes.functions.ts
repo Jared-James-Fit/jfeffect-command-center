@@ -311,11 +311,9 @@ function buildCouponParams(row: any, couponId: string): Record<string, any> {
 
 function buildPromotionCodeParams(row: any, couponId: string): Record<string, any> {
   const params: Record<string, any> = {
-    // Stripe deprecated the top-level `coupon` parameter on POST /v1/promotion_codes
-    // in favor of the nested `promotion` object. Sending `coupon` now returns
-    // "Received unknown parameter: coupon". See:
-    // https://docs.stripe.com/api/promotion_codes/create
-    promotion: { type: "coupon", coupon: couponId },
+    // Stripe's POST /v1/promotion_codes requires a top-level `coupon` parameter
+    // (the coupon id). See: https://docs.stripe.com/api/promotion_codes/create
+    coupon: couponId,
     code: row.public_code,
     active: row.status === "active",
   };
