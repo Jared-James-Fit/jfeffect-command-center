@@ -47,19 +47,6 @@ function stripeKeyForMode(mode: StripeMode): string | null {
   return liveKey?.startsWith("sk_live_") || liveKey?.startsWith("rk_live_") ? liveKey : null;
 }
 
-function jwtRole(token: string): string | null {
-  try {
-    let part = token.split(".")[1];
-    if (!part) return null;
-    part = part.replace(/-/g, "+").replace(/_/g, "/");
-    part = part.padEnd(part.length + ((4 - (part.length % 4)) % 4), "=");
-    const payload = JSON.parse(atob(part));
-    return typeof payload?.role === "string" ? payload.role : null;
-  } catch {
-    return null;
-  }
-}
-
 async function stripeFetch(path: string, init: { apiKey: string; method?: string; body?: string; idempotencyKey?: string }) {
   const headers: Record<string, string> = {
     Authorization: `Bearer ${init.apiKey}`,
@@ -213,12 +200,7 @@ serve(async (request) => {
 
     const adminClient = createClient(supabaseUrl, serviceKey, { auth: { persistSession: false } });
     const bearer = authorization.replace(/^Bearer\s+/i, "");
-    const isServiceRequest = bearer === serviceKey || gatewayApiKey === serviceKey || jwtRole(bearer) === "service_role";
-    console.log("[sync-discount-code-to-stripe] auth", {
-      hasAuthorization: Boolean(authorization),
-      role: jwtRole(bearer),
-      isServiceRequest,
-    });
+    const isServiceRequest = bearer === serviceKey || gatewayApiKey === serviceKey;
     let actorId: string | null = null;
     let actorEmail: string | null = null;
 
