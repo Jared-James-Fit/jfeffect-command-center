@@ -436,25 +436,10 @@ export function createMemberAdapter(ref: WorkoutContextRef): WorkoutContextAdapt
       // Members default to lb; per-exercise unit prefs aren't persisted.
     },
 
-    async notifyCoachOfFailure(input: { dayId: string; reason: string }): Promise<void> {
-      // Route through the member support thread instead of the coach alert.
-      // Best-effort: don't block the UI if support thread creation fails.
-      try {
-        const { data: thread } = await supabase
-          .from("member_support_threads")
-          .select("id")
-          .eq("user_id", ref.userId)
-          .maybeSingle();
-        const threadId = thread?.id;
-        if (!threadId) return;
-        await supabase.from("member_support_messages").insert({
-          thread_id: threadId,
-          user_id: ref.userId,
-          body: `Workout sync issue (${input.dayId}): ${input.reason}`,
-        });
-      } catch {
-        /* swallow — UI already shows the error toast */
-      }
+    async notifyCoachOfFailure(_input: { dayId: string; reason: string }): Promise<void> {
+      // Members don't have a dedicated coach to alert. The shared UI already
+      // surfaces sync errors via toast + offline queue retries; intentionally
+      // a no-op until membership support has a documented escalation path.
     },
   };
 }
