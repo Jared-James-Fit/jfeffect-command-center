@@ -379,11 +379,14 @@ async function ensureStripePromotionCode(
     }
   }
   // Look up by code first — Stripe rejects duplicate codes per coupon, so we reuse.
-  const search = await stripeFetch(
-    `/promotion_codes?code=${encodeURIComponent(row.public_code)}&coupon=${encodeURIComponent(couponId)}&limit=1`,
-    { apiKey },
-  );
-  if (Array.isArray(search?.data) && search.data[0]?.id) return search.data[0].id;
+  const search = await stripeFetch(`/promotion_codes?code=${encodeURIComponent(row.public_code)}&limit=100`, { apiKey });
+  if (Array.isArray(search?.data)) {
+    const match = search.data.find((promo: any) => {
+      const promoCoupon = typeof promo?.coupon === "string" ? promo.coupon : promo?.coupon?.id;
+      return promoCoupon === couponId;
+    });
+    if (match?.id) return match.id;
+  }
   // Create fresh.
   const params = buildPromotionCodeParams(row, couponId);
   const created = await stripeFetch(`/promotion_codes`, {

@@ -162,11 +162,14 @@ async function ensureStripePromotionCode(apiKey: string, row: Record<string, any
     }
   }
 
-  const search = await stripeFetch(
-    `/promotion_codes?code=${encodeURIComponent(row.public_code)}&coupon=${encodeURIComponent(couponId)}&limit=1`,
-    { apiKey },
-  );
-  if (Array.isArray(search?.data) && search.data[0]?.id) return search.data[0].id as string;
+  const search = await stripeFetch(`/promotion_codes?code=${encodeURIComponent(row.public_code)}&limit=100`, { apiKey });
+  if (Array.isArray(search?.data)) {
+    const match = search.data.find((promo: any) => {
+      const promoCoupon = typeof promo?.coupon === "string" ? promo.coupon : promo?.coupon?.id;
+      return promoCoupon === couponId;
+    });
+    if (match?.id) return match.id as string;
+  }
 
   const created = await stripeFetch("/promotion_codes", {
     method: "POST",
