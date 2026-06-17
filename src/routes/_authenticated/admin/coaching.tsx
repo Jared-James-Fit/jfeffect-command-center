@@ -6,11 +6,13 @@ import { AdminCheckInReviews } from "./check-in-reviews";
 import { AdminLiftVideos } from "./lift-videos";
 import { TrainingIntelPage } from "./training-intelligence";
 import { AdminClientActionRequests } from "./client-action-requests";
+import { ProgressReviewQueue } from "@/components/progress/progress-review-queue";
 
-type TabKey = "check-ins" | "lift-reviews" | "training-intel" | "requests";
+type TabKey = "check-ins" | "lift-reviews" | "progress" | "training-intel" | "requests";
 const TABS: { value: TabKey; label: string }[] = [
   { value: "check-ins", label: "Check-Ins" },
   { value: "lift-reviews", label: "Lift Reviews" },
+  { value: "progress", label: "Progress" },
   { value: "training-intel", label: "Training Intel" },
   { value: "requests", label: "Requests" },
 ];
@@ -56,6 +58,7 @@ function CoachingWorkspace() {
       <div>
         {tab === "check-ins" && <AdminCheckInReviews embedded />}
         {tab === "lift-reviews" && <AdminLiftVideos embedded initialOpen={open} />}
+        {tab === "progress" && <ProgressReviewQueue />}
         {tab === "training-intel" && <TrainingIntelPage embedded />}
         {tab === "requests" && <AdminClientActionRequests embedded />}
       </div>
