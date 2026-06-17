@@ -399,6 +399,18 @@ function ClientDetail() {
 
   const set = (k: string, v: any) => setForm({ ...form, [k]: v });
 
+  // Compare current form state to the last server snapshot to know when to
+  // show the sticky Save bar. JSON.stringify is fine for a single client row.
+  const isDirty = useMemo(() => {
+    if (!data || !form) return false;
+    try {
+      return JSON.stringify(form) !== JSON.stringify(data);
+    } catch {
+      return false;
+    }
+  }, [form, data]);
+  const activeSection = TAB_TO_SECTION[(tab ?? "summary") as TabValue] ?? "client-profile";
+
   const saveAccountInfo = async () => {
     if (!data) return;
     const updatedFields = ACCOUNT_FIELDS.filter((f) => form[f] !== (data as any)[f]);
