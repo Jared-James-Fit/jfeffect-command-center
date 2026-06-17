@@ -27,6 +27,7 @@ import { getClientWorkouts, durationRange } from "@/lib/pl-programs";
 import { cleanDayTitle, type WorkoutItem, dayScheduledDate } from "@/lib/workout-today";
 import { getWorkoutStatus, type WorkoutStatus } from "@/lib/workout-status";
 import { localStartOfToday, toLocalISO } from "@/lib/today";
+import { pickCurrentBlock } from "@/lib/block-dates";
 import { MoveWorkoutSheet } from "@/components/schedule/MoveWorkoutSheet";
 import { ScheduleHistoryDrawer } from "@/components/schedule/ScheduleHistoryDrawer";
 import { ClientBlockView } from "@/components/client-block-view";
@@ -76,7 +77,18 @@ export function WorkoutsExperience({
   // --- Current block / week label for the header subtitle. -----------------
   const today = localStartOfToday();
   const todayItem = byDate.get(toLocalISO(today)) ?? null;
+  // Collect unique blocks across scheduled days and pick the current one
+  // by date range (with sort_order / earliest-start tiebreakers). Falls back
+  // to today's item or the most recent scheduled item if no block covers today.
+  const allBlocks = useMemo(() => {
+    const seen = new Map<string, any>();
+    for (const it of dayItems) {
+      if (it.block?.id && !seen.has(it.block.id)) seen.set(it.block.id, it.block);
+    }
+    return [...seen.values()];
+  }, [dayItems]);
   const headerBlock =
+    pickCurrentBlock(allBlocks, today) ??
     todayItem?.block ??
     dayItems.find((it) => {
       const d = dayScheduledDate(it);
@@ -798,15 +810,11 @@ function BlockViewTab({
   }, [items]);
 
   const today = localStartOfToday();
+  // Date-range driven (with sort_order / earliest-start tiebreakers) so
+  // multi-block templates pick the right "current" block instead of a
+  // random Active one.
   const defaultBlock =
-    blocks.find((b: any) => {
-      const s = b?.start_date ? new Date(b.start_date + "T00:00:00") : null;
-      const e = b?.end_date ? new Date(b.end_date + "T00:00:00") : null;
-      if (!s) return false;
-      if (s > today) return false;
-      if (e && e < today) return false;
-      return true;
-    }) ?? blocks[blocks.length - 1] ?? null;
+    pickCurrentBlock(blocks, today) ?? blocks[blocks.length - 1] ?? null;
 
   const [selectedBlockId, setSelectedBlockId] = useState<string | null>(defaultBlock?.id ?? null);
   useEffect(() => {

@@ -62,6 +62,64 @@ export function isCurrentWeek(range: { start: Date; end: Date } | null): boolean
 }
 
 /**
+ * Pick the single "current" block for a client from a list.
+ *
+ * Date-range driven (not just status=Active). When multiple blocks overlap
+ * today the earliest-started wins, with sort_order as a tiebreaker. Status
+ * is used only to exclude archived/completed blocks and as a fallback when
+ * no block's date range covers today.
+ *
+ * Background: the assignment RPC previously marked every block in a
+ * template as `Active` on the same `start_date`, so `status === "Active"`
+ * picked a random block. The repaired data + this helper make selection
+ * deterministic across the app.
+ */
+export function pickCurrentBlock<
+  T extends {
+    start_date?: string | null;
+    end_date?: string | null;
+    sort_order?: number | null;
+    status?: string | null;
+    archived?: boolean | null;
+    created_at?: string | null;
+  },
+>(blocks: ReadonlyArray<T>, today: Date = localStartOfToday()): T | null {
+  const visible = blocks.filter(
+    (b) => !!b && !b.archived && b.status !== "Archived" && b.status !== "Completed",
+  );
+  if (visible.length === 0) return null;
+
+  const startOf = (b: T) => parseLocalDate(b.start_date ?? null);
+  const endOf = (b: T) => parseLocalDate(b.end_date ?? null);
+
+  const inRange = visible.filter((b) => {
+    const s = startOf(b);
+    if (!s) return false;
+    if (s > today) return false;
+    const e = endOf(b);
+    if (e && e < today) return false;
+    return true;
+  });
+
+  const pool = inRange.length
+    ? inRange
+    : visible.filter((b) => b.status === "Active");
+  const finalPool = pool.length ? pool : visible;
+
+  const sorted = finalPool.slice().sort((a, b) => {
+    const sa = startOf(a)?.getTime() ?? Number.POSITIVE_INFINITY;
+    const sb = startOf(b)?.getTime() ?? Number.POSITIVE_INFINITY;
+    if (sa !== sb) return sa - sb;
+    const oa = a.sort_order ?? Number.POSITIVE_INFINITY;
+    const ob = b.sort_order ?? Number.POSITIVE_INFINITY;
+    if (oa !== ob) return oa - ob;
+    return String(a.created_at ?? "").localeCompare(String(b.created_at ?? ""));
+  });
+
+  return sorted[0] ?? null;
+}
+
+/**
  * Set block start date and recompute auto-dated weeks.
  * Manual-dated weeks are preserved unless `overrideManual` is true.
  */
