@@ -287,6 +287,56 @@ const RequiredRowSchema = z.object({
   skipped: z.boolean().optional(),
 });
 
+/* -------------------------------------------------------------------------- */
+/*  saveDraft — persist in-flight notes / actual minutes (no completion)      */
+/* -------------------------------------------------------------------------- */
+
+const SaveDraftInput = z.intersection(
+  Ctx,
+  z.object({
+    clientNotes: z.string().nullable().optional(),
+    actualDurationMin: z.number().int().nonnegative().nullable().optional(),
+  }),
+);
+
+export const saveDraft = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => SaveDraftInput.parse(d))
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context;
+    if (data.kind === "client") {
+      const clientId = await resolveClientId(supabase, userId);
+      const { error } = await supabase
+        .from("pl_day_completions")
+        .upsert(
+          {
+            client_id: clientId,
+            day_id: data.dayId,
+            client_notes: data.clientNotes ?? null,
+            actual_duration_min: data.actualDurationMin ?? null,
+          },
+          { onConflict: "client_id,day_id" },
+        );
+      if (error) throw error;
+      return { ok: true };
+    }
+    await assertOwnsEnrollment(supabase, data.enrollmentId);
+    const { error } = await supabase
+      .from("member_workout_completions")
+      .upsert(
+        {
+          enrollment_id: data.enrollmentId,
+          week_index: data.weekIndex,
+          day_index: data.dayIndex,
+          notes: data.clientNotes ?? null,
+          actual_duration_min: data.actualDurationMin ?? null,
+        },
+        { onConflict: "enrollment_id,week_index,day_index" },
+      );
+    if (error) throw error;
+    return { ok: true };
+  });
+
 const CompleteInput = z.intersection(
   Ctx,
   z.object({
