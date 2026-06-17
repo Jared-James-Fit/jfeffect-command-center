@@ -278,8 +278,8 @@ function SignupJf() {
       ) : (
       <MembershipHero
         priceChip={settings?.monthly_price_display ?? "$29/month USD"}
-        headline={"Every program you need. One system."}
-        sub={"Training for strength, muscle, and fat loss in one app. Open it and follow the plan."}
+        headline={"Everything you need, in one place."}
+        sub={"Strength, muscle, and fat loss programs — with demos, tracking, and a clear plan every session."}
         heroImage={null}
         decisionArea={
           <HeroDecisionArea
