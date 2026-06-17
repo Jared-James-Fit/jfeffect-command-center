@@ -61,6 +61,7 @@ import { summarizeCompleteness, type RequiredRowSpec, type LoggedSetSpec, type R
 import { useWorkoutHeartbeat, readHeartbeatTimestamps, clearHeartbeatTimestamps } from "@/hooks/use-workout-heartbeat";
 import { computeActiveSeconds } from "@/lib/workout-duration";
 import { LoggingQualityBadge } from "@/components/workout/shared/logging-quality-badge";
+import { CompletedWorkoutActions } from "@/components/workout/shared/completed-workout-actions";
 
 /* -------------------------------------------------------------------------- */
 /* Target-parsing helpers (Suggested → Draft → Confirmed fast-logging)         */
