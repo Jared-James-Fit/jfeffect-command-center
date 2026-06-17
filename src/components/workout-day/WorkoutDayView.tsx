@@ -1096,10 +1096,12 @@ function WorkoutDay({
                 }));
                 const sum = summarizeCompleteness(required, logged);
                 const elapsedSec = Math.max(0, Math.round((new Date(completedAt).getTime() - new Date(startedAt).getTime()) / 1000));
+                const heartbeats = readHeartbeatTimestamps(completion?.id ?? null);
+                const activeSec = computeActiveSeconds(startedAt, completedAt, heartbeats) ?? elapsedSec;
                 Object.assign(baseRow, {
                   last_activity_at: completedAt,
                   elapsed_duration_seconds: elapsedSec,
-                  active_duration_seconds: Math.min(elapsedSec, 12 * 3600),
+                  active_duration_seconds: Math.min(activeSec, elapsedSec),
                   required_sets_count: sum.requiredSets,
                   logged_sets_count: sum.loggedSets,
                   skipped_exercises_count: sum.skippedExercises,
