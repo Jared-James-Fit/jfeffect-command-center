@@ -759,9 +759,43 @@ export function MessageThread({
     });
   }, [clientId, role, messages.length, qc]);
 
+  // Pin the scroller to the bottom after layout settles. Setting scrollTop
+  // synchronously inside the effect runs BEFORE the new bubble's height is
+  // measured (and before async media like avatars/images take their final
+  // size), which is what produced the "first message clipped at the top /
+  // composer hidden behind the bottom nav" glitch on initial open. We wait
+  // for the next two animation frames so the browser has finished layout,
+  // and also watch the scroller with a ResizeObserver to re-pin while the
+  // user is already at (or near) the bottom — covers late image loads and
+  // viewport changes from the on-screen keyboard.
   useEffect(() => {
-    if (scrollerRef.current) scrollerRef.current.scrollTop = scrollerRef.current.scrollHeight;
-  }, [messages.length]);
+    const el = scrollerRef.current;
+    if (!el) return;
+    let raf1 = 0;
+    let raf2 = 0;
+    raf1 = requestAnimationFrame(() => {
+      raf2 = requestAnimationFrame(() => {
+        el.scrollTop = el.scrollHeight;
+      });
+    });
+    return () => {
+      cancelAnimationFrame(raf1);
+      cancelAnimationFrame(raf2);
+    };
+  }, [messages.length, clientId]);
+
+  useEffect(() => {
+    const el = scrollerRef.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(() => {
+      // Only auto-pin when the user is already near the bottom so we don't
+      // yank them away while they're reading older messages.
+      const distance = el.scrollHeight - el.scrollTop - el.clientHeight;
+      if (distance < 120) el.scrollTop = el.scrollHeight;
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [clientId]);
 
   const visibleMessages = useMemo(
     () => role === "admin" ? messages : messages.filter((m) => !m.is_internal_note),

@@ -61,7 +61,14 @@ function CommunicationWorkspace() {
   return (
     <div
       className="flex flex-col"
-      style={{ height: "calc(100dvh - var(--bottom-nav-clearance, 0px))" }}
+      style={{
+        // Subtract both the AppShell mobile top bar AND the bottom-nav
+        // clearance so the messenger composer always lands exactly above
+        // the bottom tab bar — no body scroll, no glitch where the topbar
+        // and composer fight for the same vertical space.
+        height:
+          "calc(100dvh - var(--shell-topbar-h, 0px) - var(--bottom-nav-clearance, 0px))",
+      }}
     >
       <PageHeader
         title="Communication"
