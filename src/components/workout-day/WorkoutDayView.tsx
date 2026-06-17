@@ -58,6 +58,7 @@ import { formatDuration } from "@/lib/duration";
 import { Timer } from "lucide-react";
 import type { WorkoutContextAdapter } from "@/lib/workout-context";
 import { summarizeCompleteness, type RequiredRowSpec, type LoggedSetSpec, type RowMetricKind } from "@/lib/workout-completeness";
+import { LoggingQualityBadge } from "@/components/workout/shared/logging-quality-badge";
 
 /* -------------------------------------------------------------------------- */
 /* Target-parsing helpers (Suggested → Draft → Confirmed fast-logging)         */
