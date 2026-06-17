@@ -1044,6 +1044,36 @@ function WorkoutDay({
                 session_weight_total: computed.totalLifted > 0 ? computed.totalLifted : null,
                 session_weight_unit: computed.totalLifted > 0 ? displayUnit : null,
               };
+              // Shared logging-quality metrics (mirrors member side).
+              try {
+                const required: RequiredRowSpec[] = (rows as any[]).map((r: any) => ({
+                  rowId: String(r.id),
+                  prescribedSets: Math.max(1, Number(r.sets) || 1),
+                  skipped: !!r.skipped,
+                  metricKind: "load_reps" as RowMetricKind,
+                }));
+                const logged: LoggedSetSpec[] = (results as any[]).map((x: any) => ({
+                  rowId: String(x.row_id),
+                  setIndex: x.set_index ?? 0,
+                  reps: x.actual_reps,
+                  loadLb: x.actual_load_unit === "kg" ? null : x.actual_load,
+                  loadKg: x.actual_load_unit === "kg" ? x.actual_load : null,
+                  rpe: x.actual_rpe_num ?? x.actual_rpe,
+                }));
+                const sum = summarizeCompleteness(required, logged);
+                const elapsedSec = Math.max(0, Math.round((new Date(completedAt).getTime() - new Date(startedAt).getTime()) / 1000));
+                Object.assign(baseRow, {
+                  last_activity_at: completedAt,
+                  elapsed_duration_seconds: elapsedSec,
+                  active_duration_seconds: Math.min(elapsedSec, 12 * 3600),
+                  required_sets_count: sum.requiredSets,
+                  logged_sets_count: sum.loggedSets,
+                  skipped_exercises_count: sum.skippedExercises,
+                  logging_percentage: sum.loggingPercentage,
+                  logging_quality: sum.loggingQuality,
+                  completed_with_missing_logs: sum.completedWithMissingLogs,
+                });
+              } catch { /* metrics are best-effort */ }
               if (completion) {
                 const { error } = await sb.from("pl_day_completions").update(baseRow).eq("id", completion.id);
                 if (error) throw error;
