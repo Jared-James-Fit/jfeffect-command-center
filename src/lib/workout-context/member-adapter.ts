@@ -178,19 +178,49 @@ export function createMemberAdapter(ref: WorkoutContextRef): WorkoutContextAdapt
       }));
     },
     async reschedule(input: RescheduleInput): Promise<void> {
-      if (input.scope !== "this_workout_only") {
-        // Scope-aware fan-out lands with the WorkoutScheduleSection in Phase 4.
-        throw new NotImplemented(`reschedule:${input.scope}`, "member");
-      }
       const { week, day } = decodeDayId(input.dayId);
-      await rescheduleDay({
-        data: {
-          enrollmentId,
-          weekIndex: week,
-          dayIndex: day,
-          scheduledDate: input.newDate,
-        },
+      if (input.scope === "this_workout_only") {
+        await rescheduleDay({
+          data: {
+            enrollmentId,
+            weekIndex: week,
+            dayIndex: day,
+            scheduledDate: input.newDate,
+          },
+        });
+        return;
+      }
+      // Fan-out scopes: compute the day delta from the day being moved,
+      // then shift every affected (week, day) pair by the same number of
+      // calendar days. Uses the current resolved schedule (defaults +
+      // existing overrides) as the source of truth.
+      const { schedule } = await getEnrollmentSchedule({ data: { enrollmentId } });
+      const target = (schedule ?? []).find(
+        (s: any) => s.week === week && s.day === day,
+      );
+      if (!target) throw new Error(`member adapter: day ${week}:${day} not in schedule`);
+      const deltaDays = daysBetween(target.date, input.newDate);
+      if (deltaDays === 0) return;
+      const affected = (schedule ?? []).filter((s: any) => {
+        if (input.scope === "this_week_only") return s.week === week;
+        if (input.scope === "all_future_weeks") {
+          // Same day-of-program slot, this week and every future week.
+          return s.day === day && s.week >= week;
+        }
+        // entire_schedule
+        return true;
       });
+      // Sequential to avoid racing the same row through upsert ordering.
+      for (const s of affected) {
+        await rescheduleDay({
+          data: {
+            enrollmentId,
+            weekIndex: s.week,
+            dayIndex: s.day,
+            scheduledDate: addDays(s.date, deltaDays),
+          },
+        });
+      }
     },
     async logSet(input: LogSetInput): Promise<void> {
       const { week, day } = decodeDayId(input.dayId);
