@@ -78,6 +78,27 @@ function decodeRowResultId(id: string) {
   };
 }
 
+/** yyyy-MM-dd date arithmetic kept local — UTC parsing avoids tz drift. */
+function parseYmd(ymd: string): Date {
+  const [y, m, d] = ymd.split("-").map(Number);
+  return new Date(Date.UTC(y, (m ?? 1) - 1, d ?? 1));
+}
+function formatYmd(date: Date): string {
+  const y = date.getUTCFullYear();
+  const m = String(date.getUTCMonth() + 1).padStart(2, "0");
+  const d = String(date.getUTCDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+}
+function daysBetween(fromYmd: string, toYmd: string): number {
+  const ms = parseYmd(toYmd).getTime() - parseYmd(fromYmd).getTime();
+  return Math.round(ms / 86_400_000);
+}
+function addDays(ymd: string, delta: number): string {
+  const d = parseYmd(ymd);
+  d.setUTCDate(d.getUTCDate() + delta);
+  return formatYmd(d);
+}
+
 /** Locate the day object inside `member_plans.published_payload`. */
 async function loadPublishedDay(enrollmentId: string, weekIndex: number, dayIndex: number) {
   const { data, error } = await supabase
@@ -178,19 +199,49 @@ export function createMemberAdapter(ref: WorkoutContextRef): WorkoutContextAdapt
       }));
     },
     async reschedule(input: RescheduleInput): Promise<void> {
-      if (input.scope !== "this_workout_only") {
-        // Scope-aware fan-out lands with the WorkoutScheduleSection in Phase 4.
-        throw new NotImplemented(`reschedule:${input.scope}`, "member");
-      }
       const { week, day } = decodeDayId(input.dayId);
-      await rescheduleDay({
-        data: {
-          enrollmentId,
-          weekIndex: week,
-          dayIndex: day,
-          scheduledDate: input.newDate,
-        },
+      if (input.scope === "this_workout_only") {
+        await rescheduleDay({
+          data: {
+            enrollmentId,
+            weekIndex: week,
+            dayIndex: day,
+            scheduledDate: input.newDate,
+          },
+        });
+        return;
+      }
+      // Fan-out scopes: compute the day delta from the day being moved,
+      // then shift every affected (week, day) pair by the same number of
+      // calendar days. Uses the current resolved schedule (defaults +
+      // existing overrides) as the source of truth.
+      const { schedule } = await getEnrollmentSchedule({ data: { enrollmentId } });
+      const target = (schedule ?? []).find(
+        (s: any) => s.week === week && s.day === day,
+      );
+      if (!target) throw new Error(`member adapter: day ${week}:${day} not in schedule`);
+      const deltaDays = daysBetween(target.date, input.newDate);
+      if (deltaDays === 0) return;
+      const affected = (schedule ?? []).filter((s: any) => {
+        if (input.scope === "this_week_only") return s.week === week;
+        if (input.scope === "all_future_weeks") {
+          // Same day-of-program slot, this week and every future week.
+          return s.day === day && s.week >= week;
+        }
+        // entire_schedule
+        return true;
       });
+      // Sequential to avoid racing the same row through upsert ordering.
+      for (const s of affected) {
+        await rescheduleDay({
+          data: {
+            enrollmentId,
+            weekIndex: s.week,
+            dayIndex: s.day,
+            scheduledDate: addDays(s.date, deltaDays),
+          },
+        });
+      }
     },
     async logSet(input: LogSetInput): Promise<void> {
       const { week, day } = decodeDayId(input.dayId);
