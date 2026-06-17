@@ -656,14 +656,14 @@ function primaryCtaFor(item: WorkoutItem, status: WorkoutStatus): {
     case "completed_on_scheduled":
     case "completed_different_day":
       return {
-        label: "View / Edit Log",
+        label: "View / Edit Workout",
         tone: "bg-emerald-600 text-white hover:bg-emerald-500",
         icon: <Pencil className="mr-1 h-4 w-4" />,
         search: { edit: 1 },
       };
     case "missed":
       return {
-        label: "Log Workout",
+        label: "Complete Workout",
         tone: "bg-primary text-primary-foreground hover:bg-primary/90",
         icon: <Play className="mr-1 h-4 w-4" />,
         secondary: { label: "Reschedule" },
@@ -682,7 +682,7 @@ function primaryCtaFor(item: WorkoutItem, status: WorkoutStatus): {
       };
     default:
       return {
-        label: "Open Workout",
+        label: "Start Workout",
         tone: "bg-primary text-primary-foreground hover:bg-primary/90",
       };
   }
