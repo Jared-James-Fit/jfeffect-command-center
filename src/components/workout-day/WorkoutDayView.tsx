@@ -36,6 +36,11 @@ import { format, startOfDay } from "date-fns";
 import { useServerFn } from "@tanstack/react-start";
 import { notifyCoachOfWorkoutFailure } from "@/lib/support-alerts.functions";
 import { getRowBlockSummariesFn } from "@/lib/exercise-blocks.functions";
+import {
+  startWorkout as startWorkoutFn,
+  saveDraft as saveDraftFn,
+  completeWorkout as completeWorkoutFn,
+} from "@/lib/workout-completion.functions";
 import { runJob } from "@/lib/progress-jobs";
 import { cn } from "@/lib/utils";
 import { WorkoutEmptyCard } from "@/components/workout-empty-state";
