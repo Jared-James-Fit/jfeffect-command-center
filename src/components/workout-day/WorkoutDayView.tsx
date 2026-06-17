@@ -922,6 +922,34 @@ function WorkoutDay({
           </div>
         )}
 
+        {completion?.completed_at && client?.id && (
+          <CompletedWorkoutActions
+            ctx={{ kind: "client", dayId }}
+            hasCoach
+            initialReview={
+              existingReview
+                ? {
+                    overallRating: existingReview.overall_rating ?? null,
+                    sessionRpe: existingReview.session_rpe ?? null,
+                    pain: existingReview.pain ?? false,
+                    painLevel: existingReview.pain_level ?? null,
+                    painArea: existingReview.pain_area ?? null,
+                    painNote: existingReview.pain_note ?? null,
+                    clientNote: existingReview.client_note ?? null,
+                    editCount: existingReview.review_edit_count ?? 0,
+                    submittedAt:
+                      existingReview.review_submitted_at ??
+                      existingReview.created_at ??
+                      null,
+                  }
+                : null
+            }
+            onReviewSaved={() =>
+              qc.invalidateQueries({ queryKey: ["pl-workout-feedback", dayId, client.id] })
+            }
+          />
+        )}
+
         {!readonly && isOutsideScheduledDay && !completion?.completed_at && scheduledDate && (
           <Card className="flex items-start gap-2 border-amber-500/30 bg-amber-500/5 p-3 text-xs">
             <Info className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" />
