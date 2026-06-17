@@ -47,6 +47,9 @@ export type ExistingFeedback = {
   client_note: string | null;
   reviewed_at?: string | null;
   reviewed_by?: string | null;
+  review_edit_count?: number | null;
+  review_submitted_at?: string | null;
+  review_last_edited_at?: string | null;
 } | null;
 
 type Props = {
@@ -120,9 +123,16 @@ export function WorkoutFeedbackSheet({ open, onOpenChange, completionId, clientI
 
     let error: any = null;
     if (isEdit && existing?.id) {
+      // Track edit metadata so the shared review surface knows this is
+      // a re-submission, not the original answer.
+      const editPatch: any = {
+        ...fields,
+        review_last_edited_at: new Date().toISOString(),
+        review_edit_count: ((existing as any)?.review_edit_count ?? 0) + 1,
+      };
       const res = await (supabase as any)
         .from("pl_workout_feedback")
-        .update(fields)
+        .update(editPatch)
         .eq("id", existing.id);
       error = res.error;
     } else {
@@ -131,6 +141,8 @@ export function WorkoutFeedbackSheet({ open, onOpenChange, completionId, clientI
         client_id: clientId,
         day_id: dayId,
         ...fields,
+        review_submitted_at: new Date().toISOString(),
+        review_edit_count: 0,
       };
       const res = await (supabase as any).from("pl_workout_feedback").insert(payload);
       error = res.error;
