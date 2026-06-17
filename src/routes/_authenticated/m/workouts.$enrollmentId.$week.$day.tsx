@@ -64,6 +64,36 @@ function WorkoutTracker() {
   const cacheScope = `m:${enrollmentId}`;
   const route = `/m/workouts/${enrollmentId}/${week}/${day}`;
 
+  // ── Heartbeat-based active duration (member parity with client tracker) ──
+  // There's no completion row until the user marks the workout complete, so
+  // we key local state by `m:enrollmentId:week:day`. started_at is stamped on
+  // first mount; activity timestamps accrue on input/focus/visibility and
+  // survive refresh. On complete we hand both to the server fn so the stored
+  // active_duration_seconds reflects engaged time, not wall-clock.
+  const hbKeyStart = `m-hb-start:${enrollmentId}:${weekIndex}:${dayIndex}`;
+  const hbKeyList = `m-hb-list:${enrollmentId}:${weekIndex}:${dayIndex}`;
+  const readHbStart = (): string | null => {
+    if (typeof window === "undefined") return null;
+    try { return window.localStorage.getItem(hbKeyStart); } catch { return null; }
+  };
+  const readHbList = (): string[] => {
+    if (typeof window === "undefined") return [];
+    try {
+      const raw = window.localStorage.getItem(hbKeyList);
+      if (!raw) return [];
+      const arr = JSON.parse(raw);
+      return Array.isArray(arr) ? arr.filter((s) => typeof s === "string") : [];
+    } catch { return []; }
+  };
+  const writeHbList = (list: string[]) => {
+    if (typeof window === "undefined") return;
+    try { window.localStorage.setItem(hbKeyList, JSON.stringify(list.slice(-600))); } catch { /* quota */ }
+  };
+  const clearHb = () => {
+    if (typeof window === "undefined") return;
+    try { window.localStorage.removeItem(hbKeyStart); window.localStorage.removeItem(hbKeyList); } catch { /* ignore */ }
+  };
+
   // Register offline handlers once. These are the queue's only access to the
   // server fns — saveLog() etc. push payloads here instead of calling RPC
   // directly, so a flaky connection never loses data.
