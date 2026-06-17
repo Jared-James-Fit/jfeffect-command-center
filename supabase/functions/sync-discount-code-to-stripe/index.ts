@@ -141,6 +141,8 @@ async function ensureStripeCoupon(apiKey: string, row: Record<string, any>, coup
     apiKey,
     body: formEncode(params),
     idempotencyKey: `coupon:${couponId}`,
+  }).catch((error) => {
+    throw new Error(`create coupon: ${(error as Error).message}`);
   });
   return created.id as string;
 }
@@ -162,7 +164,9 @@ async function ensureStripePromotionCode(apiKey: string, row: Record<string, any
     }
   }
 
-  const search = await stripeFetch(`/promotion_codes?code=${encodeURIComponent(row.public_code)}&limit=100`, { apiKey });
+  const search = await stripeFetch(`/promotion_codes?code=${encodeURIComponent(row.public_code)}&limit=100`, { apiKey }).catch((error) => {
+    throw new Error(`search promotion code: ${(error as Error).message}`);
+  });
   if (Array.isArray(search?.data)) {
     const match = search.data.find((promo: any) => {
       const promoCoupon = typeof promo?.coupon === "string" ? promo.coupon : promo?.coupon?.id;
@@ -176,6 +180,8 @@ async function ensureStripePromotionCode(apiKey: string, row: Record<string, any
     apiKey,
     body: formEncode(buildPromotionCodeParams(row, couponId)),
     idempotencyKey: `promo:${row.id}:${couponId}`,
+  }).catch((error) => {
+    throw new Error(`create promotion code: ${(error as Error).message}`);
   });
   return created.id as string;
 }
