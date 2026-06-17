@@ -13,6 +13,7 @@ import {
   AlertCircle,
   Download,
 } from "lucide-react";
+import { Camera } from "lucide-react";
 import { Sparkles } from "lucide-react";
 import type { NavItem } from "@/components/app-shell";
 
@@ -174,6 +175,7 @@ export const clientNav: NavItem[] = [
   { to: "/portal/goals-setup", label: "Goals & Setup", icon: ClipboardCheck },
   { to: "/portal/messages", label: "Messages", icon: MessageCircle },
   { to: "/portal/workouts", label: "Workouts", icon: Activity },
+  { to: "/portal/progress", label: "Progress", icon: Camera, keywords: ["progress","photos","videos","bodyweight","measurements","check-in","compare"] },
   { to: "/portal/lift-videos", label: "Lift Review Upload", icon: Video },
   { to: "/portal/nutrition-targets", label: "Nutrition", icon: Apple },
   { to: "/portal/recipes", label: "Recipes", icon: ChefHat },
@@ -207,6 +209,7 @@ export const memberNav: NavItem[] = [
   { to: "/m/my-plans", label: "My Plans", icon: ClipboardCheck },
   { to: "/m/plans", label: "Program Library", icon: BookOpen },
   { to: "/m/nutrition", label: "Nutrition & Recipes", icon: ChefHat },
+  { to: "/m/progress", label: "Progress", icon: Camera, keywords: ["progress","photos","bodyweight","measurements","compare"] },
   { to: "/m/tools", label: "Tools", icon: Wrench },
   { to: "/m/announcements", label: "Announcements", icon: Megaphone },
   { to: "/m/support", label: "Support", icon: HelpCircle },

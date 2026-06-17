@@ -703,6 +703,11 @@ function ClientDetail() {
                 <Calendar className="mr-2 h-5 w-5" /> Manage Schedule
               </Button>
             </Link>
+            <Link to="/admin/clients/$id/progress" params={{ id }} className="block">
+              <Button variant="outline" className="min-h-[52px] w-full text-base font-semibold">
+                <Calendar className="mr-2 h-5 w-5" /> Open Progress (Photos, Videos, Weight)
+              </Button>
+            </Link>
             <ClientQuickLinksCard
               clientId={id}
               driveFolderLink={form.drive_folder_link}
