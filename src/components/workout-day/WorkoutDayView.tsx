@@ -213,10 +213,25 @@ export type WorkoutDayViewSearch = {
   review?: 1;
 };
 
+/**
+ * Navigation paths injected by the route that mounts this view. Keeps the
+ * shared component free of `/portal/...` vs `/m/...` knowledge so it can
+ * mount under either the coach/portal flow or the member flow.
+ */
+export type WorkoutDayViewNavigation = {
+  /** Back-button target in the PageHeader. */
+  backTo: string;
+  /** Full-list page for "All workouts" links + post-completion navigation. */
+  listPath: string;
+  /** Messages page for "Contact Coach" / "Message Coach" CTAs. */
+  messagesPath: string;
+};
+
 export function WorkoutDayView({
   dayId,
   search,
   adapter,
+  navigation,
 }: {
   dayId: string;
   search: WorkoutDayViewSearch;
@@ -229,11 +244,12 @@ export function WorkoutDayView({
    * call sites happens incrementally in follow-up turns.
    */
   adapter?: WorkoutContextAdapter;
+  navigation: WorkoutDayViewNavigation;
 }) {
   return (
     <WorkoutUndoProvider>
       <ActiveRestTimerProvider>
-        <WorkoutDay dayId={dayId} search={search} adapter={adapter} />
+        <WorkoutDay dayId={dayId} search={search} adapter={adapter} navigation={navigation} />
       </ActiveRestTimerProvider>
     </WorkoutUndoProvider>
   );
@@ -245,10 +261,12 @@ function WorkoutDay({
   dayId,
   search,
   adapter,
+  navigation,
 }: {
   dayId: string;
   search: WorkoutDayViewSearch;
   adapter?: WorkoutContextAdapter;
+  navigation: WorkoutDayViewNavigation;
 }) {
   const portalUserId = usePortalUserId();
   // Adapter is wired in but not yet consumed: this turn lands the gating
