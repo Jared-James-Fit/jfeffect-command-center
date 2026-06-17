@@ -14,10 +14,35 @@ import {
   type RescheduleInput,
   type LogSetInput,
 } from "./types";
+import {
+  getEnrollmentSchedule,
+  rescheduleDay,
+  logSet as logSetFn,
+  completeWorkout,
+} from "@/lib/member-plans.functions";
+import { supabase } from "@/integrations/supabase/client";
+
+/**
+ * Members address workouts by (week_index, day_index) tuples — there is
+ * no per-day UUID like the coaching pl_days table. The adapter encodes
+ * those tuples into a synthetic `dayId` string `"w:d"` so the shared
+ * UI can keep using a flat string id. Decoded on every write below.
+ */
+function encodeDayId(week: number, day: number) {
+  return `${week}:${day}`;
+}
+function decodeDayId(id: string): { week: number; day: number } {
+  const [w, d] = id.split(":").map((n) => Number(n));
+  if (!Number.isFinite(w) || !Number.isFinite(d)) {
+    throw new Error(`member adapter: invalid dayId ${id}`);
+  }
+  return { week: w, day: d };
+}
 
 export function createMemberAdapter(ref: WorkoutContextRef): WorkoutContextAdapter {
   if (ref.kind !== "member") throw new Error("createMemberAdapter requires kind=member");
   if (!ref.enrollmentId) throw new Error("member adapter requires enrollmentId");
+  const enrollmentId = ref.enrollmentId;
   return {
     kind: "member",
     ref,
@@ -28,20 +53,116 @@ export function createMemberAdapter(ref: WorkoutContextRef): WorkoutContextAdapt
       canSubstituteExercise: false, // membership programs are static library entries
       canSeeCoachNotes: false,
     },
-    async listSchedule(_opts): Promise<WorkoutScheduleDay[]> {
-      throw new NotImplemented("listSchedule", "member");
+    async listSchedule(opts): Promise<WorkoutScheduleDay[]> {
+      const { schedule } = await getEnrollmentSchedule({ data: { enrollmentId } });
+      // Pull plan payload for titles + completions in parallel.
+      const [planRes, completionsRes] = await Promise.all([
+        supabase
+          .from("member_plan_enrollments")
+          .select("member_plans(published_payload)")
+          .eq("id", enrollmentId)
+          .maybeSingle(),
+        supabase
+          .from("member_workout_completions")
+          .select("week_index, day_index, completed_at")
+          .eq("enrollment_id", enrollmentId),
+      ]);
+      const weeksData =
+        ((planRes.data as any)?.member_plans?.published_payload?.weeks_data ?? []) as any[];
+      const titleByKey = new Map<string, string | null>();
+      for (const w of weeksData) {
+        for (const d of w.days ?? []) {
+          titleByKey.set(`${w.week_index}:${d.day_index}`, d.title ?? d.focus ?? null);
+        }
+      }
+      const compByKey = new Map<string, string>();
+      for (const c of (completionsRes.data ?? []) as any[]) {
+        if (c.completed_at) compByKey.set(`${c.week_index}:${c.day_index}`, c.completed_at);
+      }
+      const from = opts?.fromDate ?? null;
+      const to = opts?.toDate ?? null;
+      const out: WorkoutScheduleDay[] = [];
+      for (const s of schedule ?? []) {
+        if (from && s.date < from) continue;
+        if (to && s.date > to) continue;
+        const key = `${s.week}:${s.day}`;
+        const completedAt = compByKey.get(key) ?? null;
+        out.push({
+          id: encodeDayId(s.week, s.day),
+          date: s.date,
+          week: s.week,
+          day: s.day,
+          title: titleByKey.get(key) ?? null,
+          blockId: null,
+          blockName: null,
+          completed: !!completedAt,
+          completedAt,
+        });
+      }
+      out.sort((a, b) => a.date.localeCompare(b.date));
+      return out;
     },
-    async listCompletions(_opts): Promise<WorkoutCompletion[]> {
-      throw new NotImplemented("listCompletions", "member");
+    async listCompletions(opts): Promise<WorkoutCompletion[]> {
+      const { data, error } = await supabase
+        .from("member_workout_completions")
+        .select("id, week_index, day_index, completed_at")
+        .eq("enrollment_id", enrollmentId)
+        .not("completed_at", "is", null)
+        .order("completed_at", { ascending: false })
+        .limit(opts?.limit ?? 200);
+      if (error) throw new Error(error.message);
+      return (data ?? []).map((c: any) => ({
+        id: c.id,
+        dayId: encodeDayId(c.week_index, c.day_index),
+        week: c.week_index,
+        day: c.day_index,
+        completedAt: c.completed_at,
+      }));
     },
-    async reschedule(_input: RescheduleInput): Promise<void> {
-      throw new NotImplemented("reschedule", "member");
+    async reschedule(input: RescheduleInput): Promise<void> {
+      if (input.scope !== "this_workout_only") {
+        // Scope-aware fan-out lands with the WorkoutScheduleSection in Phase 4.
+        throw new NotImplemented(`reschedule:${input.scope}`, "member");
+      }
+      const { week, day } = decodeDayId(input.dayId);
+      await rescheduleDay({
+        data: {
+          enrollmentId,
+          weekIndex: week,
+          dayIndex: day,
+          scheduledDate: input.newDate,
+        },
+      });
     },
-    async logSet(_input: LogSetInput): Promise<void> {
-      throw new NotImplemented("logSet", "member");
+    async logSet(input: LogSetInput): Promise<void> {
+      const { week, day } = decodeDayId(input.dayId);
+      // rowId on the member side encodes the exercise index — shared UI
+      // generates rowId as `"ex:<index>"` so the adapter can decode.
+      const exerciseIndex = (() => {
+        const m = /^ex:(\d+)$/.exec(input.rowId);
+        if (!m) throw new Error(`member adapter: rowId must be "ex:<index>", got ${input.rowId}`);
+        return Number(m[1]);
+      })();
+      await logSetFn({
+        data: {
+          enrollmentId,
+          weekIndex: week,
+          dayIndex: day,
+          exerciseIndex,
+          setIndex: input.setIndex,
+          reps: input.reps ?? null,
+          load_lb: input.loadLb ?? null,
+          rpe: input.rpe ?? null,
+          rir: input.rir ?? null,
+          notes: input.notes ?? null,
+        },
+      });
     },
-    async completeDay(_dayId: string): Promise<void> {
-      throw new NotImplemented("completeDay", "member");
+    async completeDay(dayId: string): Promise<void> {
+      const { week, day } = decodeDayId(dayId);
+      await completeWorkout({
+        data: { enrollmentId, weekIndex: week, dayIndex: day },
+      });
     },
   };
 }
