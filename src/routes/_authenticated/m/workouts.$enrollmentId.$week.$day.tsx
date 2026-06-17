@@ -29,7 +29,6 @@ import { summarizeCompleteness, type RequiredRowSpec, type LoggedSetSpec } from 
 import { LoggingQualityBadge } from "@/components/workout/shared/logging-quality-badge";
 import { CompletedWorkoutActions } from "@/components/workout/shared/completed-workout-actions";
 import { computeActiveSeconds } from "@/lib/workout-duration";
-import { MemberAdapterProbe } from "@/components/workout/member-adapter-probe";
 import { buildWorkoutAdapter } from "@/lib/workout-context";
 import type {
   RowResultDTO,
@@ -44,23 +43,10 @@ export const Route = createFileRoute("/_authenticated/m/workouts/$enrollmentId/$
   component: () => (
     <WorkoutUndoProvider>
       <WorkoutTracker />
-      <MemberAdapterProbeMount />
     </WorkoutUndoProvider>
   ),
 });
 
-function MemberAdapterProbeMount() {
-  const { enrollmentId, week, day } = Route.useParams();
-  const { user } = useAuth();
-  return (
-    <MemberAdapterProbe
-      userId={user?.id}
-      enrollmentId={enrollmentId}
-      week={Number(week)}
-      day={Number(day)}
-    />
-  );
-}
 
 type SetLog = { reps?: number | null; load_lb?: number | null; rpe?: number | null; rir?: number | null; notes?: string | null };
 
