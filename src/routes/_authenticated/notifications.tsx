@@ -4,7 +4,12 @@ import { Button } from "@/components/ui/button";
 import { NotificationPanel } from "@/components/notification-bell";
 
 export const Route = createFileRoute("/_authenticated/notifications")({
-  head: () => ({ meta: [{ title: "Notifications" }] }),
+  head: () => ({
+    meta: [
+      { title: "Notifications" },
+      { name: "description", content: "Your JF Effect notification center — messages, lift videos, agreements, appointments, and check-in reviews in one place." },
+    ],
+  }),
   component: NotificationsPage,
 });
 

@@ -3,7 +3,7 @@ import { Link, useNavigate } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Bell, CheckCheck, Loader2, MoreHorizontal, Archive, ArchiveRestore, MailOpen, Mail,
-  Inbox, Filter,
+  Inbox, Filter, Search, X,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
@@ -13,6 +13,8 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
@@ -438,7 +440,8 @@ export function useNotificationFeed() {
         };
       });
       items.sort((a, b) => +new Date(b.created_at) - +new Date(a.created_at));
-      return { items };
+      // Hard cap to prevent UI freezes if the merged feed grows unexpectedly large.
+      return { items: items.slice(0, 500) };
     },
   });
 
@@ -552,6 +555,19 @@ function groupByDate(items: BellItem[]): Array<{ label: string; items: BellItem[
   return out;
 }
 
+function kindLabel(k: string): string {
+  switch (k) {
+    case "message": return "Messages";
+    case "lift_video": return "Lift videos";
+    case "agreement": return "Agreements";
+    case "exercise_note": return "Exercise notes";
+    case "group_message": return "Group chat";
+    case "check_in_review": return "Check-in reviews";
+    case "appointment": return "Appointments";
+    default: return k;
+  }
+}
+
 // =============================================================================
 // Bell button
 // =============================================================================
@@ -565,9 +581,9 @@ export function NotificationBell() {
     <button
       type="button"
       aria-label={unreadCount > 0 ? `${unreadCount} unread notifications` : "Notifications"}
-      className="relative grid h-9 w-9 place-items-center rounded-md hover:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      className="relative grid h-11 w-11 place-items-center rounded-md hover:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:h-9 sm:w-9"
     >
-      <Bell className="h-4 w-4" />
+      <Bell className="h-5 w-5 sm:h-4 sm:w-4" />
       {unreadCount > 0 && (
         <Badge className="absolute -right-1 -top-1 h-4 min-w-4 rounded-full bg-primary px-1 text-[9px] font-bold text-primary-foreground">
           {unreadCount > 99 ? "99+" : unreadCount}
@@ -619,15 +635,49 @@ export function NotificationPanel({
   const [archiveAllOpen, setArchiveAllOpen] = useState(false);
   const [clearReadOpen, setClearReadOpen] = useState(false);
   const [visible, setVisible] = useState(compact ? 10 : 20);
+  const [search, setSearch] = useState("");
+  const [kindFilter, setKindFilter] = useState<string>("all");
+  const [dateFilter, setDateFilter] = useState<string>("all");
 
   const userId = user?.id;
+  const cacheKey = ["notifications", role, userId] as const;
+  const snapshot = () => qc.getQueryData<{ items: BellItem[] }>(cacheKey);
+  const restore = (prev: { items: BellItem[] } | undefined) => {
+    if (prev) qc.setQueryData(cacheKey, prev);
+  };
 
   // Filtered items per view
   const filtered = useMemo(() => {
-    if (view === "archived") return items.filter((i) => i.isArchived);
-    if (view === "new") return items.filter((i) => !i.isRead && !i.isArchived);
-    return items.filter((i) => !i.isArchived);
-  }, [items, view]);
+    let base: BellItem[];
+    if (view === "archived") base = items.filter((i) => i.isArchived);
+    else if (view === "new") base = items.filter((i) => !i.isRead && !i.isArchived);
+    else base = items.filter((i) => !i.isArchived);
+
+    if (kindFilter !== "all") base = base.filter((i) => i.kind === kindFilter);
+
+    if (dateFilter !== "all") {
+      const days = dateFilter === "today" ? 1 : dateFilter === "7d" ? 7 : 30;
+      const cutoff = Date.now() - days * 24 * 60 * 60 * 1000;
+      base = base.filter((i) => +new Date(i.created_at) >= cutoff);
+    }
+
+    const q = search.trim().toLowerCase();
+    if (q) {
+      base = base.filter((i) =>
+        i.title.toLowerCase().includes(q) ||
+        (i.body ?? "").toLowerCase().includes(q) ||
+        (i.name ?? "").toLowerCase().includes(q),
+      );
+    }
+    return base;
+  }, [items, view, kindFilter, dateFilter, search]);
+
+  // Available kinds for the category filter
+  const availableKinds = useMemo(() => {
+    const s = new Set<string>();
+    for (const i of items) s.add(i.kind);
+    return Array.from(s);
+  }, [items]);
 
   const shown = useMemo(() => filtered.slice(0, visible), [filtered, visible]);
   const hasMore = filtered.length > shown.length;
@@ -640,33 +690,41 @@ export function NotificationPanel({
       await Promise.all([rpc("notif_mark_read", toPairs([target])), markSourceRead(target, role)]);
     },
     onMutate: (target) => {
+      const prev = snapshot();
       patchCache(qc, role, userId, (it) => it.id === target.id ? { ...it, isRead: true } : it);
+      return { prev };
     },
-    onError: () => { toast.error("That notification could not be updated. Try again."); qc.invalidateQueries({ queryKey: ["notifications"] }); },
+    onError: (_e, _v, ctx) => { restore(ctx?.prev); toast.error("That notification could not be updated. Try again."); },
   });
 
   const markUnreadMut = useMutation({
     mutationFn: async (target: BellItem) => { await rpc("notif_mark_unread", toPairs([target])); },
     onMutate: (target) => {
+      const prev = snapshot();
       patchCache(qc, role, userId, (it) => it.id === target.id ? { ...it, isRead: false } : it);
+      return { prev };
     },
-    onError: () => { toast.error("That notification could not be updated. Try again."); qc.invalidateQueries({ queryKey: ["notifications"] }); },
+    onError: (_e, _v, ctx) => { restore(ctx?.prev); toast.error("That notification could not be updated. Try again."); },
   });
 
   const archiveMut = useMutation({
     mutationFn: async (target: BellItem) => { await rpc("notif_archive", toPairs([target])); },
     onMutate: (target) => {
+      const prev = snapshot();
       patchCache(qc, role, userId, (it) => it.id === target.id ? { ...it, isArchived: true, isRead: true } : it);
+      return { prev };
     },
-    onError: () => { toast.error("That notification could not be updated. Try again."); qc.invalidateQueries({ queryKey: ["notifications"] }); },
+    onError: (_e, _v, ctx) => { restore(ctx?.prev); toast.error("That notification could not be updated. Try again."); },
   });
 
   const restoreMut = useMutation({
     mutationFn: async (target: BellItem) => { await rpc("notif_restore", toPairs([target])); },
     onMutate: (target) => {
+      const prev = snapshot();
       patchCache(qc, role, userId, (it) => it.id === target.id ? { ...it, isArchived: false } : it);
+      return { prev };
     },
-    onError: () => { toast.error("That notification could not be updated. Try again."); qc.invalidateQueries({ queryKey: ["notifications"] }); },
+    onError: (_e, _v, ctx) => { restore(ctx?.prev); toast.error("That notification could not be updated. Try again."); },
   });
 
   const markAllMut = useMutation({
@@ -678,10 +736,12 @@ export function NotificationPanel({
       ]);
     },
     onMutate: () => {
+      const prev = snapshot();
       patchCache(qc, role, userId, (it) => it.isArchived ? it : { ...it, isRead: true });
+      return { prev };
     },
     onSuccess: () => toast.success("All notifications marked as read."),
-    onError: () => { toast.error("Couldn't mark notifications as read. Try again."); qc.invalidateQueries({ queryKey: ["notifications"] }); },
+    onError: (_e, _v, ctx) => { restore(ctx?.prev); toast.error("Couldn't mark notifications as read. Try again."); },
   });
 
   const clearReadMut = useMutation({
@@ -690,10 +750,12 @@ export function NotificationPanel({
       await rpc("notif_archive", toPairs(targets));
     },
     onMutate: () => {
+      const prev = snapshot();
       patchCache(qc, role, userId, (it) => (it.isRead && !it.isArchived) ? { ...it, isArchived: true } : it);
+      return { prev };
     },
     onSuccess: () => toast.success("Read notifications cleared."),
-    onError: () => { toast.error("Couldn't clear notifications. Try again."); qc.invalidateQueries({ queryKey: ["notifications"] }); },
+    onError: (_e, _v, ctx) => { restore(ctx?.prev); toast.error("Couldn't clear notifications. Try again."); },
   });
 
   const archiveAllMut = useMutation({
@@ -701,9 +763,13 @@ export function NotificationPanel({
       const targets = items.filter((i) => !i.isArchived);
       await rpc("notif_archive", toPairs(targets));
     },
-    onMutate: () => { patchCache(qc, role, userId, (it) => ({ ...it, isArchived: true, isRead: true })); },
+    onMutate: () => {
+      const prev = snapshot();
+      patchCache(qc, role, userId, (it) => ({ ...it, isArchived: true, isRead: true }));
+      return { prev };
+    },
     onSuccess: () => toast.success("All notifications archived."),
-    onError: () => { toast.error("Couldn't archive notifications. Try again."); qc.invalidateQueries({ queryKey: ["notifications"] }); },
+    onError: (_e, _v, ctx) => { restore(ctx?.prev); toast.error("Couldn't archive notifications. Try again."); },
   });
 
   // ---- Row click: navigate + mark read -----------------------------------
@@ -735,9 +801,7 @@ export function NotificationPanel({
               )}
             </FilterChip>
             <FilterChip active={view === "all"} onClick={() => setView("all")}>All</FilterChip>
-            {view === "archived" && (
-              <FilterChip active onClick={() => setView("archived")}>Archived</FilterChip>
-            )}
+            <FilterChip active={view === "archived"} onClick={() => setView("archived")}>Archived</FilterChip>
           </div>
           <div className="flex items-center gap-1">
             <Button
@@ -777,6 +841,54 @@ export function NotificationPanel({
             </DropdownMenu>
           </div>
         </div>
+
+        {/* Full-page extra controls: search, category, date */}
+        {!compact && (
+          <div className="flex flex-wrap items-center gap-2 pt-1">
+            <div className="relative min-w-0 flex-1 sm:max-w-xs">
+              <Search className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                value={search}
+                onChange={(e) => { setSearch(e.target.value); setVisible(20); }}
+                placeholder="Search notifications"
+                className="h-9 pl-7 pr-7 text-sm"
+                aria-label="Search notifications"
+              />
+              {search && (
+                <button
+                  type="button"
+                  onClick={() => setSearch("")}
+                  aria-label="Clear search"
+                  className="absolute right-1 top-1/2 grid h-7 w-7 -translate-y-1/2 place-items-center rounded text-muted-foreground hover:bg-secondary"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              )}
+            </div>
+            <Select value={kindFilter} onValueChange={(v) => { setKindFilter(v); setVisible(20); }}>
+              <SelectTrigger className="h-9 w-[140px] text-xs" aria-label="Filter by category">
+                <SelectValue placeholder="Category" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All categories</SelectItem>
+                {availableKinds.map((k) => (
+                  <SelectItem key={k} value={k}>{kindLabel(k)}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Select value={dateFilter} onValueChange={(v) => { setDateFilter(v); setVisible(20); }}>
+              <SelectTrigger className="h-9 w-[130px] text-xs" aria-label="Filter by date">
+                <SelectValue placeholder="Date" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All time</SelectItem>
+                <SelectItem value="today">Today</SelectItem>
+                <SelectItem value="7d">Last 7 days</SelectItem>
+                <SelectItem value="30d">Last 30 days</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        )}
       </div>
 
       {/* List */}
@@ -927,11 +1039,13 @@ function NotificationRow({
   onRestore: () => void;
 }) {
   const isUnread = !item.isRead && !item.isArchived;
+  const isReadActive = !isUnread && !item.isArchived;
   return (
     <div
       className={cn(
         "group relative flex items-start gap-2 border-b px-3 py-2.5 transition last:border-b-0",
         isUnread ? "bg-primary/5 hover:bg-primary/10" : "hover:bg-secondary/60",
+        isReadActive && "opacity-70",
         item.isArchived && "opacity-70",
       )}
     >
@@ -946,7 +1060,7 @@ function NotificationRow({
       >
         <div className={cn(
           "truncate pr-1 text-xs leading-tight",
-          isUnread ? "font-semibold text-foreground" : "font-medium text-foreground/90",
+          isUnread ? "font-semibold text-foreground" : "font-normal text-muted-foreground",
         )}>
           {item.title}
         </div>
@@ -965,7 +1079,7 @@ function NotificationRow({
         <DropdownMenuTrigger asChild>
           <Button
             variant="ghost" size="icon"
-            className="h-7 w-7 shrink-0 opacity-60 hover:opacity-100"
+            className="h-11 w-11 shrink-0 opacity-60 hover:opacity-100 sm:h-7 sm:w-7"
             aria-label="Notification actions"
             onClick={(e) => e.stopPropagation()}
           >
