@@ -367,6 +367,9 @@ function WorkoutDay({
   // toggled on, then a program containing unsupported blocks is opened
   // while the toggle is off again).
   const rowBlockSummariesFn = useServerFn(getRowBlockSummariesFn);
+  const startWorkoutSrv = useServerFn(startWorkoutFn);
+  const saveDraftSrv = useServerFn(saveDraftFn);
+  const completeWorkoutSrv = useServerFn(completeWorkoutFn);
   const { data: unsupportedRows = {} } = useQuery<Record<string, boolean>>({
     queryKey: ["pl-day-row-block-summaries", dayId, (rows as any[]).map((r) => r.id).sort().join(",")],
     enabled: (rows as any[]).length > 0,
