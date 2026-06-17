@@ -450,27 +450,26 @@ function WorkoutDay({
     if (completion?.started_at) { startedRef.current = true; return; }
     startedRef.current = true;
     (async () => {
-      const payload: any = { day_id: dayId, client_id: client.id, started_at: new Date().toISOString(), completed_at: null };
-      if (completion) {
-        if (!completion.started_at) await sb.from("pl_day_completions").update({ started_at: payload.started_at }).eq("id", completion.id);
-      } else {
-        await sb.from("pl_day_completions").insert(payload);
-        qc.invalidateQueries({ queryKey: ["pl-day-completion", dayId] });
+      try {
+        await startWorkoutSrv({ data: { kind: "client", dayId } });
+        if (!completion) qc.invalidateQueries({ queryKey: ["pl-day-completion", dayId] });
+      } catch (err) {
+        // Soft-fail: starting is best-effort; later writes will create the row.
+        console.warn("startWorkout failed", err);
       }
     })();
-  }, [client?.id, completion?.id, completion?.started_at, dayId, qc]);
+  }, [client?.id, completion?.id, completion?.started_at, dayId, qc, startWorkoutSrv]);
 
   // Mark in_progress when any meaningful entry occurs
   const markInProgress = async () => {
     if (!client?.id) return;
     if (completion?.in_progress_at) return;
-    const now = new Date().toISOString();
-    if (completion) {
-      await sb.from("pl_day_completions").update({ in_progress_at: now }).eq("id", completion.id);
-    } else {
-      await sb.from("pl_day_completions").insert({ day_id: dayId, client_id: client.id, in_progress_at: now, started_at: now, completed_at: null });
+    try {
+      await startWorkoutSrv({ data: { kind: "client", dayId } });
+      qc.invalidateQueries({ queryKey: ["pl-day-completion", dayId] });
+    } catch (err) {
+      console.warn("markInProgress failed", err);
     }
-    qc.invalidateQueries({ queryKey: ["pl-day-completion", dayId] });
   };
 
   // Heartbeat: persist activity timestamps to localStorage while the
