@@ -1335,6 +1335,23 @@ export async function getClientWorkouts(clientId: string) {
   const { data: days } = weekIds.length ? await sb.from("pl_days").select("*").in("week_id", weekIds).order("day_index") : { data: [] };
   const dayIds = (days ?? []).map((d: any) => d.id);
   const { data: completions } = dayIds.length ? await sb.from("pl_day_completions").select("*").in("day_id", dayIds) : { data: [] };
+  // Logged-set counts per day. "In progress" is defined as ≥1 logged set
+  // on a day with no completion row; pl_row_results.row_id → pl_exercise_rows.day_id.
+  const { data: exerciseRows } = dayIds.length
+    ? await sb.from("pl_exercise_rows").select("id, day_id").in("day_id", dayIds)
+    : { data: [] };
+  const rowIdToDay = new Map<string, string>();
+  for (const r of (exerciseRows ?? []) as any[]) rowIdToDay.set(r.id, r.day_id);
+  const rowIds = Array.from(rowIdToDay.keys());
+  const { data: rowResults } = rowIds.length
+    ? await sb.from("pl_row_results").select("row_id").eq("client_id", clientId).in("row_id", rowIds)
+    : { data: [] };
+  const loggedSetsByDay = new Map<string, number>();
+  for (const rr of (rowResults ?? []) as any[]) {
+    const dayId = rowIdToDay.get(rr.row_id);
+    if (!dayId) continue;
+    loggedSetsByDay.set(dayId, (loggedSetsByDay.get(dayId) ?? 0) + 1);
+  }
   // Look up which completions already have post-workout feedback submitted, so
   // the workouts list can show "Leave review" vs "Edit review" without each
   // card firing its own query.
@@ -1354,11 +1371,17 @@ export async function getClientWorkouts(clientId: string) {
   const items = (weeks ?? []).flatMap((w: any) => {
     const b = (blocks ?? []).find((x: any) => x.id === w?.block_id);
     const weekDays = daysByWeek.get(w.id) ?? [];
-    if (weekDays.length === 0) return [{ day: null, week: w, block: b, completion: null }];
+    if (weekDays.length === 0) return [{ day: null, week: w, block: b, completion: null, logged_sets_count: 0 }];
     return weekDays.map((d: any) => {
       const c = (completions ?? []).find((x: any) => x.day_id === d.id);
       const completion = c ? { ...c, has_feedback: feedbackSet.has(c.id) } : c;
-      return { day: d, week: w, block: b, completion };
+      return {
+        day: d,
+        week: w,
+        block: b,
+        completion,
+        logged_sets_count: loggedSetsByDay.get(d.id) ?? 0,
+      };
     });
   });
   // Sort: block (created order) → week_index → day_index
