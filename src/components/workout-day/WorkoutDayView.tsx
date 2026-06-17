@@ -448,6 +448,16 @@ function WorkoutDay({
     qc.invalidateQueries({ queryKey: ["pl-day-completion", dayId] });
   };
 
+  // Heartbeat: persist activity timestamps to localStorage while the
+  // workout is in-flight so the final active_duration_seconds reflects
+  // real engaged time and survives a mid-workout refresh.
+  const heartbeatEnabled = !!completion?.id && !completion?.completed_at && !readonly && !isImpersonating;
+  useWorkoutHeartbeat(
+    heartbeatEnabled
+      ? { enabled: true, completionId: completion!.id, ping: { kind: "client", dayId } }
+      : { enabled: false },
+  );
+
   const [notes, setNotes] = useState("");
   const [actualMin, setActualMin] = useState<string>("");
 
