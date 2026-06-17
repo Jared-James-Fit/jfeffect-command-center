@@ -767,6 +767,27 @@ function WorkoutDay({
           {completion && !completion.completed_at && (completion.in_progress_at || completion.started_at) && (
             <Badge variant="outline" className="border-amber-500/30 bg-amber-500/10 text-amber-500">In progress</Badge>
           )}
+          {(() => {
+            try {
+              const required: RequiredRowSpec[] = (rows as any[]).map((r: any) => ({
+                rowId: String(r.id),
+                prescribedSets: Math.max(1, Number(r.sets) || 1),
+                skipped: !!r.skipped,
+                metricKind: "load_reps" as RowMetricKind,
+              }));
+              const logged: LoggedSetSpec[] = (results as any[]).map((x: any) => ({
+                rowId: String(x.row_id),
+                setIndex: x.set_index ?? 0,
+                reps: x.actual_reps,
+                loadLb: x.actual_load_unit === "kg" ? null : x.actual_load,
+                loadKg: x.actual_load_unit === "kg" ? x.actual_load : null,
+                rpe: x.actual_rpe_num ?? x.actual_rpe,
+              }));
+              if (required.length === 0) return null;
+              const sum = summarizeCompleteness(required, logged);
+              return <LoggingQualityBadge quality={sum.loggingQuality} percentage={sum.loggingPercentage} />;
+            } catch { return null; }
+          })()}
           <div className="ml-auto flex items-center gap-2">
             {/* Global KG/LB toggle removed — per-exercise unit controls remain
                 the single source of truth for unit selection. */}
