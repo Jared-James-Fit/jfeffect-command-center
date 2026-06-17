@@ -23,6 +23,8 @@ import {
   type CoachPainFlagDTO,
   type UpsertRowResultInput,
   type UpsertExerciseNoteInput,
+  type EnrollmentSummaryDTO,
+  type ReviewDTO,
 } from "./types";
 import { getClientSchedule, applyBulkScheduleChange } from "@/lib/schedule-bulk.functions";
 import { supabase } from "@/integrations/supabase/client";
@@ -343,6 +345,17 @@ export function createClientAdapter(ref: WorkoutContextRef): WorkoutContextAdapt
         note: p.note ?? null,
         createdAt: p.created_at ?? "",
       }));
+    },
+
+    async getEnrollmentSummary(): Promise<EnrollmentSummaryDTO> {
+      // Membership-only concept; coaching clients have no single enrollment row.
+      throw new NotImplemented("getEnrollmentSummary", "client");
+    },
+
+    async getReview(_dayId: string): Promise<ReviewDTO | null> {
+      // Coaching reviews live in pl_workout_feedback and have a different
+      // shape; the shared workout surface doesn't consume them yet.
+      return null;
     },
 
     async upsertRowResult(input: UpsertRowResultInput): Promise<string> {

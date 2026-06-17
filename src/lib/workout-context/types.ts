@@ -234,6 +234,25 @@ export interface CoachPainFlagDTO {
   createdAt: string;
 }
 
+export interface EnrollmentSummaryDTO {
+  planId: string | null;
+  planName: string | null;
+  /** When false, the UI suppresses the per-set logging inputs. */
+  loggingEnabled: boolean;
+}
+
+export interface ReviewDTO {
+  overallRating: number | null;
+  sessionRpe: number | null;
+  pain: boolean | null;
+  painLevel: number | null;
+  painArea: string | null;
+  painNote: string | null;
+  clientNote: string | null;
+  editCount: number | null;
+  submittedAt: string | null;
+}
+
 export interface WorkoutContextAdapter {
   kind: WorkoutContextKind;
   ref: WorkoutContextRef;
@@ -256,6 +275,11 @@ export interface WorkoutContextAdapter {
   getDayCompletion(dayId: string): Promise<DayCompletionDTO | null>;
   getRowBlockSummaries(rowIds: string[]): Promise<RowBlockSummaryDTO[]>;
   listCoachPainFlags(dayId: string): Promise<CoachPainFlagDTO[]>;
+
+  /** Membership-only today; clients return NotImplemented. */
+  getEnrollmentSummary(): Promise<EnrollmentSummaryDTO>;
+  /** Membership-only today; clients return null. */
+  getReview(dayId: string): Promise<ReviewDTO | null>;
 
   upsertRowResult(input: UpsertRowResultInput): Promise<string>;
   deleteRowResult(id: string): Promise<void>;

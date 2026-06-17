@@ -1,6 +1,5 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/app-shell";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -32,6 +31,14 @@ import { CompletedWorkoutActions } from "@/components/workout/shared/completed-w
 import { computeActiveSeconds } from "@/lib/workout-duration";
 import { MemberAdapterProbe } from "@/components/workout/member-adapter-probe";
 import { buildWorkoutAdapter } from "@/lib/workout-context";
+import type {
+  RowResultDTO,
+  DayCompletionDTO,
+  ReviewDTO,
+  ExerciseRowDTO,
+  WorkoutDay,
+  EnrollmentSummaryDTO,
+} from "@/lib/workout-context/types";
 
 export const Route = createFileRoute("/_authenticated/m/workouts/$enrollmentId/$week/$day")({
   component: () => (
@@ -154,61 +161,85 @@ function WorkoutTracker() {
     });
   }, [adapter]);
 
-  const { data: enr, isError: enrError, isSuccess: enrLoaded, refetch: refetchEnr } = useQuery({
-    queryKey: ["m-enrollment", enrollmentId],
-    initialData: cachedInitialData<any>(cacheScope, "enrollment"),
-    queryFn: async () => {
-      const { data } = await supabase
-        .from("member_plan_enrollments").select("*, member_plans(*)")
-        .eq("id", enrollmentId).maybeSingle();
-      if (data) writePlanCache(cacheScope, "enrollment", data);
-      return data as any;
-    },
-  });
+  // Adapter-fronted reads. All shapes are DTOs (camelCase), not raw rows —
+  // the adapter encapsulates the member_* table layout. Queries are gated on
+  // an authenticated adapter; without auth the protected route layout
+  // already redirects to /auth, but we still guard `enabled` so this page
+  // doesn't try to fetch with a null adapter during a transient render.
+  const dayId = `${weekIndex}:${dayIndex}`;
+  const enabled = !!adapter;
 
-  const { data: completion } = useQuery({
-    queryKey: ["m-completion", enrollmentId, weekIndex, dayIndex],
-    initialData: cachedInitialData<any>(cacheScope, `completion:${weekIndex}:${dayIndex}`),
+  const { data: summary } = useQuery<EnrollmentSummaryDTO | null>({
+    queryKey: ["m-summary", enrollmentId],
+    enabled,
+    initialData: cachedInitialData<EnrollmentSummaryDTO>(cacheScope, "summary-dto") ?? null,
     queryFn: async () => {
-      const { data } = await supabase
-        .from("member_workout_completions").select("*")
-        .eq("enrollment_id", enrollmentId).eq("week_index", weekIndex).eq("day_index", dayIndex).maybeSingle();
-      writePlanCache(cacheScope, `completion:${weekIndex}:${dayIndex}`, data);
-      return data;
-    },
-  });
-
-  const { data: existingLogs = [] } = useQuery({
-    queryKey: ["m-set-logs", enrollmentId, weekIndex, dayIndex],
-    initialData: cachedInitialData<any[]>(cacheScope, `set-logs:${weekIndex}:${dayIndex}`),
-    queryFn: async () => {
-      const { data } = await supabase
-        .from("member_set_logs").select("*")
-        .eq("enrollment_id", enrollmentId).eq("week_index", weekIndex).eq("day_index", dayIndex);
-      const out = (data ?? []) as any[];
-      writePlanCache(cacheScope, `set-logs:${weekIndex}:${dayIndex}`, out);
+      const out = await adapter!.getEnrollmentSummary();
+      writePlanCache(cacheScope, "summary-dto", out);
       return out;
     },
   });
 
-  const { data: existingReview } = useQuery({
-    queryKey: ["m-review", enrollmentId, weekIndex, dayIndex],
+  const { data: dayMeta, isError: dayError, isSuccess: dayLoaded, refetch: refetchDay } = useQuery<WorkoutDay | null>({
+    queryKey: ["m-day-dto", enrollmentId, weekIndex, dayIndex],
+    enabled,
+    initialData: cachedInitialData<WorkoutDay>(cacheScope, `day-dto:${weekIndex}:${dayIndex}`) ?? null,
     queryFn: async () => {
-      const { data } = await (supabase as any)
-        .from("member_workout_reviews")
-        .select("*")
-        .eq("enrollment_id", enrollmentId)
-        .eq("week_index", weekIndex)
-        .eq("day_index", dayIndex)
-        .maybeSingle();
-      return data as any;
+      const out = await adapter!.getDay(dayId);
+      writePlanCache(cacheScope, `day-dto:${weekIndex}:${dayIndex}`, out);
+      return out;
     },
+  });
+
+  const { data: rows = [], refetch: refetchRows } = useQuery<ExerciseRowDTO[]>({
+    queryKey: ["m-rows-dto", enrollmentId, weekIndex, dayIndex],
+    enabled,
+    initialData: cachedInitialData<ExerciseRowDTO[]>(cacheScope, `rows-dto:${weekIndex}:${dayIndex}`) ?? [],
+    queryFn: async () => {
+      const out = await adapter!.listRows(dayId);
+      writePlanCache(cacheScope, `rows-dto:${weekIndex}:${dayIndex}`, out);
+      return out;
+    },
+  });
+
+  const { data: completion } = useQuery<DayCompletionDTO | null>({
+    queryKey: ["m-completion-dto", enrollmentId, weekIndex, dayIndex],
+    enabled,
+    initialData: cachedInitialData<DayCompletionDTO>(cacheScope, `completion-dto:${weekIndex}:${dayIndex}`) ?? null,
+    queryFn: async () => {
+      const out = await adapter!.getDayCompletion(dayId);
+      writePlanCache(cacheScope, `completion-dto:${weekIndex}:${dayIndex}`, out);
+      return out;
+    },
+  });
+
+  const { data: existingLogs = [] } = useQuery<RowResultDTO[]>({
+    queryKey: ["m-set-logs-dto", enrollmentId, weekIndex, dayIndex],
+    enabled,
+    initialData: cachedInitialData<RowResultDTO[]>(cacheScope, `set-logs-dto:${weekIndex}:${dayIndex}`) ?? [],
+    queryFn: async () => {
+      const out = await adapter!.listRowResults(dayId);
+      writePlanCache(cacheScope, `set-logs-dto:${weekIndex}:${dayIndex}`, out);
+      return out;
+    },
+  });
+
+  const { data: existingReview } = useQuery<ReviewDTO | null>({
+    queryKey: ["m-review-dto", enrollmentId, weekIndex, dayIndex],
+    enabled,
+    queryFn: async () => adapter!.getReview(dayId),
   });
 
   useEffect(() => {
     const map: Record<string, SetLog> = {};
-    for (const l of existingLogs as any[]) {
-      map[`${l.exercise_index}:${l.set_index}`] = { reps: l.reps, load_lb: l.load_lb, rpe: l.rpe, rir: l.rir, notes: l.notes };
+    for (const l of existingLogs) {
+      map[`${l.rowId}:${l.setIndex}`] = {
+        reps: l.reps,
+        load_lb: l.loadLb,
+        rpe: l.rpe,
+        rir: l.rir,
+        notes: l.notes,
+      };
     }
     setLogs(map);
   }, [existingLogs]);
@@ -255,13 +286,10 @@ function WorkoutTracker() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [completion, isImpersonating, hbKeyStart]);
 
-  if (!enr && !enrLoaded && !enrError) {
+  if (!dayMeta && !dayLoaded && !dayError) {
     return <div className="p-6 text-sm text-muted-foreground">Loading…</div>;
   }
-  const plan = enr?.member_plans;
-  const dayObj = plan?.published_payload?.weeks_data?.[weekIndex - 1]?.days?.[dayIndex - 1];
-  const rows: any[] = dayObj?.rows ?? [];
-  if (enrError || (enrLoaded && !enr)) {
+  if (dayError || (dayLoaded && !dayMeta)) {
     return (
       <div className="space-y-5">
         <PageHeader title="Workout didn’t load" subtitle="" />
@@ -271,40 +299,43 @@ function WorkoutTracker() {
           workoutId={null}
           route={route}
           onRetry={() => Promise.all([
-            refetchEnr(),
-            qc.refetchQueries({ queryKey: ["m-completion", enrollmentId, weekIndex, dayIndex] }),
-            qc.refetchQueries({ queryKey: ["m-set-logs", enrollmentId, weekIndex, dayIndex] }),
+            refetchDay(),
+            refetchRows(),
+            qc.refetchQueries({ queryKey: ["m-completion-dto", enrollmentId, weekIndex, dayIndex] }),
+            qc.refetchQueries({ queryKey: ["m-set-logs-dto", enrollmentId, weekIndex, dayIndex] }),
           ])}
         />
       </div>
     );
   }
-  const loggingEnabled = plan?.logging_enabled !== false;
-  const isComplete = !!completion;
+  const loggingEnabled = summary?.loggingEnabled !== false;
+  const isComplete = !!completion?.completedAt;
 
   // Compute logging quality from in-memory + persisted logs against the
   // published plan rows. Skip rows have no concept on the member side yet.
   const completeness = (() => {
-    const required: RequiredRowSpec[] = rows.map((row: any, ei: number) => ({
-      rowId: String(ei),
-      prescribedSets: Math.max(1, Number(row.sets) || 1),
+    const required: RequiredRowSpec[] = rows.map((row) => ({
+      rowId: row.id,
+      prescribedSets: Math.max(1, Number(row.targetSets) || 1),
       metricKind: "load_reps",
     }));
     const logged: LoggedSetSpec[] = [];
-    for (const l of (existingLogs as any[])) {
+    for (const l of existingLogs) {
       logged.push({
-        rowId: String(l.exercise_index),
-        setIndex: l.set_index,
+        rowId: l.rowId,
+        setIndex: l.setIndex,
         reps: l.reps,
-        loadLb: l.load_lb,
+        loadLb: l.loadLb,
         rpe: l.rpe,
         rir: l.rir,
       });
     }
     // Overlay in-memory edits so the live badge tracks unsaved work too.
     for (const [key, v] of Object.entries(logs)) {
-      const [eiStr, siStr] = key.split(":");
-      logged.push({ rowId: eiStr, setIndex: Number(siStr), reps: v.reps, loadLb: v.load_lb, rpe: v.rpe, rir: v.rir });
+      const lastColon = key.lastIndexOf(":");
+      const rowId = key.slice(0, lastColon);
+      const siStr = key.slice(lastColon + 1);
+      logged.push({ rowId, setIndex: Number(siStr), reps: v.reps, loadLb: v.load_lb, rpe: v.rpe, rir: v.rir });
     }
     return summarizeCompleteness(required, logged);
   })();
@@ -325,9 +356,10 @@ function WorkoutTracker() {
   };
 
   const saveLog = async (exerciseIndex: number, setIndex: number) => {
-    const key = `${exerciseIndex}:${setIndex}`;
+    const rowId = `ex:${exerciseIndex}`;
+    const key = `${rowId}:${setIndex}`;
     const v = logs[key] ?? {};
-    const before = (existingLogs as any[]).find((l) => l.exercise_index === exerciseIndex && l.set_index === setIndex) ?? null;
+    const before = existingLogs.find((l) => l.rowId === rowId && l.setIndex === setIndex) ?? null;
     const payload = {
       enrollmentId, weekIndex, dayIndex, exerciseIndex, setIndex,
       reps: v.reps ?? null, load_lb: v.load_lb ?? null, rpe: v.rpe ?? null, rir: v.rir ?? null, notes: v.notes ?? null,
@@ -340,10 +372,27 @@ function WorkoutTracker() {
       payload,
     });
     // Optimistic local sync of existingLogs cache so the UI feels instant.
-    qc.setQueryData(["m-set-logs", enrollmentId, weekIndex, dayIndex], (old: any[] = []) => {
-      const filtered = old.filter((l) => !(l.exercise_index === exerciseIndex && l.set_index === setIndex));
-      return [...filtered, { ...(before ?? {}), ...payload, _optimistic: true }];
-    });
+    qc.setQueryData<RowResultDTO[]>(
+      ["m-set-logs-dto", enrollmentId, weekIndex, dayIndex],
+      (old = []) => {
+        const filtered = old.filter((l) => !(l.rowId === rowId && l.setIndex === setIndex));
+        const next: RowResultDTO = {
+          id: before?.id ?? `mlog:${weekIndex}:${dayIndex}:${exerciseIndex}:${setIndex}`,
+          rowId,
+          setIndex,
+          reps: v.reps ?? null,
+          loadLb: v.load_lb ?? null,
+          actualLoadUnit: before?.actualLoadUnit ?? "lb",
+          rpe: v.rpe ?? null,
+          rir: v.rir ?? null,
+          isWorkingSet: before?.isWorkingSet ?? null,
+          notes: v.notes ?? null,
+          completedDurationSeconds: before?.completedDurationSeconds ?? null,
+          loggedAt: before?.loggedAt ?? new Date().toISOString(),
+        };
+        return [...filtered, next];
+      },
+    );
     // Push an undo entry that reverses to the previous saved value.
     undo.push({
       label: "Saved set",
@@ -354,10 +403,10 @@ function WorkoutTracker() {
             label: "Reverted set",
             handlerKey: "m_log_set",
             payload: { enrollmentId, weekIndex, dayIndex, exerciseIndex, setIndex,
-              reps: before.reps ?? null, load_lb: before.load_lb ?? null,
+              reps: before.reps ?? null, load_lb: before.loadLb ?? null,
               rpe: before.rpe ?? null, rir: before.rir ?? null, notes: before.notes ?? null },
           });
-          setLogs((m) => ({ ...m, [key]: { reps: before.reps, load_lb: before.load_lb, rpe: before.rpe, rir: before.rir, notes: before.notes } }));
+          setLogs((m) => ({ ...m, [key]: { reps: before.reps, load_lb: before.loadLb, rpe: before.rpe, rir: before.rir, notes: before.notes } }));
         }
       },
     });
@@ -366,7 +415,7 @@ function WorkoutTracker() {
       const row = rows[exerciseIndex];
       void writeSetEditAudit(
         {
-          weight: before?.load_lb ?? null,
+          weight: before?.loadLb ?? null,
           reps: before?.reps ?? null,
           rpe: before?.rpe ?? null,
           unit: "lb",
@@ -385,7 +434,7 @@ function WorkoutTracker() {
           workoutId: null,
           enrollmentId,
           exerciseId: null,
-          exerciseName: row?.exercise || row?.name || null,
+          exerciseName: row?.exerciseName ?? null,
           editedByUserId: user.id,
           editedByRole: "coach_pov",
           editSource: "coach_pov",
@@ -399,16 +448,17 @@ function WorkoutTracker() {
     const wasComplete = isComplete;
     // Build a summary from the in-memory logs + plan rows so the member sees
     // an instant post-workout summary screen (no extra DB round-trip needed).
-    const summaryRows = rows.map((row: any, ei: number) => ({
-      id: String(ei),
-      sets: Math.max(1, Number(row.sets) || 1),
-      exercises: { id: null, name: row.exercise || row.name || `Exercise ${ei + 1}` },
+    const summaryRows = rows.map((row) => ({
+      id: row.id,
+      sets: Math.max(1, Number(row.targetSets) || 1),
+      exercises: { id: null, name: row.exerciseName },
     }));
     const summaryResults: Array<{ row_id: string; actual_load: number | null; actual_reps: number | null; actual_load_unit: "kg" | "lb" | null; actual_rpe: number | null; completed_at: string | null }> = [];
     for (const [key, v] of Object.entries(logs)) {
-      const [eiStr] = key.split(":");
+      const lastColon = key.lastIndexOf(":");
+      const rowId = key.slice(0, lastColon);
       summaryResults.push({
-        row_id: eiStr,
+        row_id: rowId,
         actual_load: v.load_lb ?? null,
         actual_reps: v.reps ?? null,
         actual_load_unit: "lb",
@@ -416,7 +466,7 @@ function WorkoutTracker() {
         completed_at: null,
       });
     }
-    const summary = computeWorkoutSummary(summaryRows, summaryResults, {
+    const workoutSummary = computeWorkoutSummary(summaryRows, summaryResults, {
       displayUnit: "lb",
       hasNote: !!notes.trim(),
     });
@@ -438,13 +488,23 @@ function WorkoutTracker() {
         ...(activeSeconds != null ? { activeDurationSeconds: activeSeconds } : {}),
       },
     });
-    toast.success(`Workout complete — Score: ${summary.score}/100`, {
-      description: summary.totalLifted > 0 ? `Total lifted: ${summary.totalLiftedFmt}` : "Syncing in background.",
+    toast.success(`Workout complete — Score: ${workoutSummary.score}/100`, {
+      description: workoutSummary.totalLifted > 0 ? `Total lifted: ${workoutSummary.totalLiftedFmt}` : "Syncing in background.",
     });
-    setLastSummary(summary);
+    setLastSummary(workoutSummary);
     setSummaryOpen(true);
-    qc.setQueryData(["m-completion", enrollmentId, weekIndex, dayIndex],
-      (old: any) => old ?? { enrollment_id: enrollmentId, week_index: weekIndex, day_index: dayIndex, completed_at: completedAtIso, started_at: startedAtIso, active_duration_seconds: activeSeconds, _optimistic: true });
+    qc.setQueryData<DayCompletionDTO | null>(
+      ["m-completion-dto", enrollmentId, weekIndex, dayIndex],
+      (old) =>
+        old ?? {
+          id: null,
+          startedAt: startedAtIso,
+          inProgressAt: null,
+          completedAt: completedAtIso,
+          notes: notes || null,
+          actualMinutes: activeSeconds != null ? Math.round(activeSeconds / 60) : null,
+        },
+    );
     clearHb();
     undo.push({
       label: "Marked workout complete",
@@ -456,7 +516,7 @@ function WorkoutTracker() {
           handlerKey: "m_uncomplete_workout",
           payload: { enrollmentId, weekIndex, dayIndex },
         });
-        qc.setQueryData(["m-completion", enrollmentId, weekIndex, dayIndex], null);
+        qc.setQueryData(["m-completion-dto", enrollmentId, weekIndex, dayIndex], null);
       },
     });
   };
@@ -469,7 +529,7 @@ function WorkoutTracker() {
       handlerKey: "m_uncomplete_workout",
       payload: { enrollmentId, weekIndex, dayIndex },
     });
-    qc.setQueryData(["m-completion", enrollmentId, weekIndex, dayIndex], null);
+    qc.setQueryData(["m-completion-dto", enrollmentId, weekIndex, dayIndex], null);
     undo.push({
       label: "Marked workout incomplete",
       undo: () => {
@@ -479,7 +539,7 @@ function WorkoutTracker() {
           handlerKey: "m_complete_workout",
           payload: { enrollmentId, weekIndex, dayIndex, notes },
         });
-        qc.setQueryData(["m-completion", enrollmentId, weekIndex, dayIndex], prev ?? null);
+        qc.setQueryData(["m-completion-dto", enrollmentId, weekIndex, dayIndex], prev ?? null);
       },
     });
   };
@@ -491,12 +551,12 @@ function WorkoutTracker() {
           open={summaryOpen}
           onOpenChange={setSummaryOpen}
           summary={lastSummary}
-          workoutTitle={dayObj?.title ?? `Week ${weekIndex} · Day ${dayIndex}`}
+          workoutTitle={dayMeta?.title ?? `Week ${weekIndex} · Day ${dayIndex}`}
         />
       )}
       <PageHeader
-        title={dayObj?.title || `Week ${weekIndex} · Day ${dayIndex}`}
-        subtitle={plan?.name}
+        title={dayMeta?.title || `Week ${weekIndex} · Day ${dayIndex}`}
+        subtitle={summary?.planName ?? undefined}
         actions={
           <div className="flex items-center gap-2">
             <UndoButton />
@@ -524,20 +584,20 @@ function WorkoutTracker() {
           initialReview={
             existingReview
               ? {
-                  overallRating: existingReview.overall_rating,
-                  sessionRpe: existingReview.session_rpe,
+                  overallRating: existingReview.overallRating,
+                  sessionRpe: existingReview.sessionRpe,
                   pain: existingReview.pain,
-                  painLevel: existingReview.pain_level,
-                  painArea: existingReview.pain_area,
-                  painNote: existingReview.pain_note,
-                  clientNote: existingReview.client_note,
-                  editCount: existingReview.review_edit_count,
-                  submittedAt: existingReview.review_submitted_at,
+                  painLevel: existingReview.painLevel,
+                  painArea: existingReview.painArea,
+                  painNote: existingReview.painNote,
+                  clientNote: existingReview.clientNote,
+                  editCount: existingReview.editCount,
+                  submittedAt: existingReview.submittedAt,
                 }
               : null
           }
           onReviewSaved={() =>
-            qc.invalidateQueries({ queryKey: ["m-review", enrollmentId, weekIndex, dayIndex] })
+            qc.invalidateQueries({ queryKey: ["m-review-dto", enrollmentId, weekIndex, dayIndex] })
           }
         />
       )}
@@ -548,25 +608,29 @@ function WorkoutTracker() {
           workoutId={null}
           route={route}
           onRetry={() => Promise.all([
-            qc.refetchQueries({ queryKey: ["m-enrollment", enrollmentId] }),
-            qc.refetchQueries({ queryKey: ["m-completion", enrollmentId, weekIndex, dayIndex] }),
-            qc.refetchQueries({ queryKey: ["m-set-logs", enrollmentId, weekIndex, dayIndex] }),
+            qc.refetchQueries({ queryKey: ["m-rows-dto", enrollmentId, weekIndex, dayIndex] }),
+            qc.refetchQueries({ queryKey: ["m-completion-dto", enrollmentId, weekIndex, dayIndex] }),
+            qc.refetchQueries({ queryKey: ["m-set-logs-dto", enrollmentId, weekIndex, dayIndex] }),
           ])}
         />
       )}
-      {rows.map((row: any, ei: number) => {
-        const setCount = Math.max(1, Number(row.sets) || 1);
+      {rows.map((row, ei) => {
+        const setCount = Math.max(1, Number(row.targetSets) || 1);
+        const rowId = row.id; // "ex:<index>"
         return (
           <Card key={ei} className="p-4">
-            <div className="font-semibold">{row.exercise || row.name || `Exercise ${ei + 1}`}</div>
+            <div className="font-semibold">{row.exerciseName || `Exercise ${ei + 1}`}</div>
             <div className="text-xs text-muted-foreground">
-              {row.sets ? `${row.sets} sets` : ""}{row.reps ? ` · ${row.reps} reps` : ""}{row.rpe ? ` · RPE ${row.rpe}` : ""}{row.rir ? ` · RIR ${row.rir}` : ""}{row.rest ? ` · rest ${row.rest}` : ""}
+              {row.targetSets ? `${row.targetSets} sets` : ""}
+              {row.targetReps ? ` · ${row.targetReps} reps` : ""}
+              {row.targetEffort ? ` · ${row.targetEffort}` : ""}
+              {row.restSeconds != null ? ` · rest ${row.restSeconds}s` : ""}
             </div>
             {row.notes && <div className="mt-1 text-xs text-muted-foreground">{row.notes}</div>}
             {loggingEnabled && (
               <div className="mt-3 space-y-2">
                 {Array.from({ length: setCount }, (_, si) => {
-                  const key = `${ei}:${si}`;
+                  const key = `${rowId}:${si}`;
                   const v = logs[key] ?? {};
                   return (
                     <div key={si} className="grid grid-cols-12 items-center gap-1.5">
