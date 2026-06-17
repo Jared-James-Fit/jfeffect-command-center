@@ -1188,6 +1188,7 @@ function WorkoutDay({
 }
 
 function SuggestedLoadBadge({ load, unit, exerciseName }: { load: number; unit: "kg" | "lb"; exerciseName: string }) {
+  const nav = useWorkoutNavigation();
   // Cheap suspicious-load heuristic: extreme absolute values flag a likely unit / data error.
   // We deliberately keep this client-side and non-blocking — clients must always stop and
   // contact their coach if anything looks wrong.
@@ -1213,7 +1214,7 @@ function SuggestedLoadBadge({ load, unit, exerciseName }: { load: number; unit: 
               Suggested Load is the starting weight programmed by your coach for <span className="font-medium text-foreground">{exerciseName}</span>. Adjust only when your plan or coach allows it. If the weight looks incorrect, unusually high, or you feel uncomfortable lifting it, stop and contact your coach before continuing.
             </p>
             <div className="mt-2 flex gap-2">
-              <Link to="/portal/messages" className="inline-flex items-center gap-1 rounded-md bg-primary px-2 py-1 text-[11px] font-semibold text-primary-foreground">
+              <Link to={nav.messagesPath} className="inline-flex items-center gap-1 rounded-md bg-primary px-2 py-1 text-[11px] font-semibold text-primary-foreground">
                 <MessageCircle className="h-3 w-3" /> Contact Coach
               </Link>
             </div>
@@ -1233,7 +1234,7 @@ function SuggestedLoadBadge({ load, unit, exerciseName }: { load: number; unit: 
               {load} {unit} is much higher than expected for most lifters on this exercise. Confirm the unit (kg vs lb) and contact your coach before lifting if it looks incorrect. Never lift a weight you believe is unsafe.
             </p>
             <div className="mt-2 flex gap-2">
-              <Link to="/portal/messages" className="inline-flex items-center gap-1 rounded-md bg-primary px-2 py-1 text-[11px] font-semibold text-primary-foreground">
+              <Link to={nav.messagesPath} className="inline-flex items-center gap-1 rounded-md bg-primary px-2 py-1 text-[11px] font-semibold text-primary-foreground">
                 <MessageCircle className="h-3 w-3" /> Contact Coach
               </Link>
             </div>
@@ -1255,6 +1256,7 @@ function SuggestedLoadBadge({ load, unit, exerciseName }: { load: number; unit: 
  * loggable as normal.
  */
 function UnsupportedExerciseCard({ row }: { row: any }) {
+  const nav = useWorkoutNavigation();
   const name = row.exercises?.name ?? row.exercise_name_override ?? "Exercise";
   return (
     <Card className="border-amber-500/40 bg-amber-500/5 p-4">
@@ -1266,7 +1268,7 @@ function UnsupportedExerciseCard({ row }: { row: any }) {
             This exercise prescription needs an updated logging format. Contact your coach before completing this exercise.
           </p>
           <Link
-            to="/portal/messages"
+            to={nav.messagesPath}
             className="mt-2 inline-flex items-center gap-1 rounded-md bg-primary px-2.5 py-1 text-xs font-semibold text-primary-foreground"
           >
             <MessageCircle className="h-3 w-3" /> Message Coach
