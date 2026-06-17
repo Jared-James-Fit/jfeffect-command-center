@@ -197,10 +197,11 @@ serve(async (request) => {
     const anonKey = Deno.env.get("SUPABASE_ANON_KEY") ?? Deno.env.get("SUPABASE_PUBLISHABLE_KEY")!;
     const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const authorization = request.headers.get("Authorization") ?? "";
+    const gatewayApiKey = request.headers.get("apikey") ?? "";
 
     const adminClient = createClient(supabaseUrl, serviceKey, { auth: { persistSession: false } });
     const bearer = authorization.replace(/^Bearer\s+/i, "");
-    const isServiceRequest = bearer === serviceKey || jwtRole(bearer) === "service_role";
+    const isServiceRequest = bearer === serviceKey || gatewayApiKey === serviceKey || jwtRole(bearer) === "service_role";
     console.log("[sync-discount-code-to-stripe] auth", {
       hasAuthorization: Boolean(authorization),
       role: jwtRole(bearer),
