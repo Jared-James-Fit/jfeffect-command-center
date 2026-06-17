@@ -1,109 +1,106 @@
-## Goal
+# Unified Workout Experience — Implementation Plan
 
-Combine the admin client profile's **Overview** and **Account** sections into a single top-level section called **Client Profile** with 5 sub-tabs, while preserving every field, action, modal, server function, and role check that exists today. No backend changes. No data migration. No removed functionality.
+## Strategy
 
-## What stays the same
+- **One UI, two data backends.** The coaching workout components (workout day page, exercise card, logging row, rest timer, RPE/RIR inputs, schedule shells) are refactored to read/write through a **workout context adapter**. Members and clients render the same components; the adapter dispatches to `pl_*` (clients) or `member_*` (members) under the hood.
+- **No data migration.** Existing `member_set_logs`, `member_workout_completions`, `member_plan_enrollments`, and `pl_row_results` / `pl_day_completions` rows stay exactly where they are. Zero risk of touching completed logs.
+- **Feature flag `unified_workouts.enabled`** stored in `app_settings`. Default off. Admin toggle in `/admin`. Pilot list of user IDs (`unified_workouts.pilot_user_ids`) so we can flip Jared + one member first.
 
-- Top-level sections: **Client Profile** (new, merged), **Training**, **Nutrition**, **Communication**, **Business**.
-- All Supabase tables, RLS, and server functions (`inviteClient`, `getSetupLink`, `sendPasswordReset`, `setClientPassword`, `markSetupComplete`, `setNeedsAdminHelp`, `sendAuthLinkBySms`, `deactivateClient`, `reactivateClient`, `deleteClient`).
-- The persistent `SetupStatusBanner` at the top of every tab.
-- The global header (Message / Training Program / Nutrition / Client POV / More Actions) and the floating **Save** button — but Save will be made sticky while scrolling.
-- All `canPov` and other permission gates.
-- Existing edit modals (Set Password, Deactivate, Reactivate, Delete, PriceCardPickerDialog, SendBookingLinkDialog, SendPasswordResetDialog).
-- All deep-link URLs: existing `?tab=summary|info|goals-setup|coaching|account` values keep working — only the section grouping changes.
+## Phase 1 — Adapter + flag (foundation, no UI change visible to users)
 
-## The 5 Client Profile sub-tabs
+1. Add `app_settings` row `unified_workouts` with `{ enabled: false, pilot_user_ids: [] }`.
+2. Create `src/lib/workout-context/`:
+   - `types.ts` — `WorkoutContext` interface: `kind: 'client' | 'member'`, `enrollmentId | clientId`, plus the function signatures every shared component needs (`listDays`, `getDay`, `logSet`, `completeDay`, `listCompletions`, `reschedule`, `getBlocks`, `getWeeks`, etc.).
+   - `client-adapter.ts` — wraps existing `pl_*` reads/writes (no behavior change).
+   - `member-adapter.ts` — wraps existing `member_*` reads/writes.
+   - `useWorkoutContext(userIdOrEnrollment)` — returns the right adapter.
+3. Add `useUnifiedWorkoutsFlag()` hook reading the flag + pilot list.
+4. Admin UI: small card in `/admin` to toggle the flag and edit pilot list.
 
-| # | Sub-tab label | URL tab value | Source today |
-|---|---|---|---|
-| 1 | Overview | `summary` | Already exists as Overview tab |
-| 2 | Personal Info | `info` | Already exists under Overview section |
-| 3 | Goals & Intake | `goals-setup` | Already exists under Overview section |
-| 4 | Coaching Setup | `coaching` | Already exists under Overview section |
-| 5 | Login & Access | `account` | Already exists as Account section |
+No user-facing change yet. Phase 1 ships safely on its own.
 
-## Changes
+## Phase 2 — Refactor coaching components to use the adapter (no UX change for clients)
 
-### 1. Regroup (`src/routes/_authenticated/admin/clients.$id.tsx`, lines 192–226)
+Convert these to take a `WorkoutContext` prop instead of querying `pl_*` directly:
+- `ScheduleManagerShell`
+- Workout day route view (`/portal/schedule` day drilldown + the workout logging page)
+- Exercise card / set row / rest timer / RPE+RIR inputs / notes / warm-up / review
+- Block/week navigation
+- Completed-workout history list
 
-Update `SECTIONS` and `TAB_TO_SECTION`:
+Coaching clients continue using the client adapter — behavior identical. Verified by running existing client flows end-to-end against Jared's account.
 
-- Remove the standalone `overview` and `account` top-level sections.
-- Add a single `client-profile` section containing the 5 sub-tabs above in that order.
-- Other top-level sections (`training`, `nutrition`, `communication`, `business`) untouched.
-- Default tab on first load becomes `summary` under `client-profile`.
+## Phase 3 — Mount shared components on the membership side (behind flag)
 
-### 2. Redesign Overview tab as large action cards (`ClientOverviewSnapshot`, lines 1753–1927)
+In `/m/my-plans/$enrollmentId` and `/m/workouts/$enrollmentId/$week/$day`:
+- When `unified_workouts.enabled` is true for this user → mount the shared components with the member adapter.
+- When false → keep current member workout pages exactly as they are.
 
-Keep the identity header, profile completion card, personal snapshot, App Activity card, and Training Schedule card. Replace the current small quick-action button row with a **6-card grid of large clickable action cards** (min height ~96px, single column on mobile, 2 cols at iPad landscape `md:`, 3 cols at `lg:`):
+Pilot Jared (coaching, regression baseline) + one membership account. Verify:
+- Existing member completions render in history with correct dates
+- New sets log to `member_set_logs` (not `pl_row_results`)
+- No member can hit any coaching-admin write (template edits etc.) — adapter gates writes by `kind`
 
-1. **Open Client POV** — gated by `canPov` (admin/coach only); same `impersonation.start()` flow.
-2. **Message Client** — navigates to `tab=messages`.
-3. **Manage Schedule** — links to `/admin/clients/$id/schedule`.
-4. **View Intake & Goals** — navigates to `tab=goals-setup`.
-5. **Request Client Update** — toggles `clients.info_update_requested`; label flips to "Update requested" when set.
-6. **Assign Program** — links to `/admin/client-programs/$clientId`.
+## Phase 4 — Workout Schedule section on profiles
 
-Each card: icon + title + one-line description, full card is a tap target ≥44px tall.
+New component `<WorkoutScheduleSection contextRef={…} variant="simple" | "full">`:
+- **Simple weekly picker** (mock you described): Mon–Sun rows with current workout name and large tap targets. Edit modal shows confirmation: `this workout only / this week only / all future weeks / entire schedule going forward`. Writes through the adapter's `reschedule` — same backend the calendar uses, so changes appear everywhere immediately.
+- **Full editor** (`ScheduleManagerShell`) reachable from a "Advanced editor →" link inside the section.
 
-### 3. Personal Info tab — wrap existing fields in titled cards with large Edit buttons
+Mounted on:
+- Coaching client profile (admin view + client's own `/portal/account`)
+- Membership profile (admin view + member's own `/m/account` and onboarding wizard step)
 
-The `info` tab already renders these fields. Group into 5 cards, each with its own visible **Edit** button (≥44px) that scrolls/focuses the relevant input group; no new modals required:
+## Phase 5 — Cutover and cleanup (only after pilot confirms green)
 
-- Name & Identity (first/last/preferred/full, profile picture)
-- Contact (email, phone, instagram)
-- Personal (date of birth, height, timezone)
-- Address (address, city, province, postal, country)
-- Emergency Contact (name, phone)
+- Flip flag to `enabled: true` globally (still per-user override possible).
+- Remove the legacy `<MemberBlockWeekColumns>` workout-launch path and the standalone member workout page; redirect them to the shared route.
+- Keep `member_*` tables and the member adapter — they are now the storage layer, not a separate UI.
 
-### 4. Goals & Intake tab — keep existing `goals-setup` content as-is
+## Safety guardrails (apply in every phase)
 
-No structural change. Already shows intake answers, goals, training experience, equipment, injuries, nutrition goals, best lifts, OpenPowerlifting (`PowerlifterSection`).
+- No write that targets `member_workout_completions`, `member_set_logs`, `pl_row_results`, or `pl_day_completions` rows with `completed_at IS NOT NULL` may be issued except by the user who logged them.
+- Rescheduling with "all future weeks" only moves days whose `scheduled_date >= today AND completion row IS NULL`.
+- Master program templates (`pl_templates`, `member_plans`) are read-only from the workout UI for both roles — only `/admin/programs` can edit them.
+- All adapter writes go through existing audit triggers (`pl_schedule_audit`, `logged_set_edit_audit`, `member_plan_audit`) — no new audit gap.
 
-### 5. Coaching Setup tab — keep existing `coaching` content as-is
+## Acceptance checks (mapped to your list)
 
-Already shows assigned coach, status, package, program phase, start/renewal dates, payment summary, schedule, Drive folder link, quick links.
+- Member + client Workouts page identical → satisfied by Phase 2+3 (same components).
+- Schedule section on both profiles → Phase 4.
+- One-workout vs week vs future-weeks confirmation → Phase 4 modal.
+- One source of truth across calendar/dashboard/profile → adapter, Phase 1+2.
+- Completed data preserved → no migration; adapter guard above.
+- Refresh/sign-out persistence → data lives in DB as today.
+- Phased rollout → flag + pilot list, Phase 1.
+- Mobile/tablet first → shared coaching components are already mobile-tuned.
 
-### 6. Redesign Login & Access tab as large action cards (`account` tab, lines 1144–1192)
+## Technical scope summary
 
-Keep the metadata fields (email, invite sent, last resent, account created, password reset sent, linked auth user) in a header card. Replace the dense button row with **labeled action cards** grouped into:
+```text
+NEW
+  src/lib/workout-context/{types,client-adapter,member-adapter,index}.ts
+  src/hooks/use-unified-workouts-flag.ts
+  src/components/workout-schedule/{section,weekly-picker,confirm-scope-modal}.tsx
+  src/components/admin/unified-workouts-flag-card.tsx
+  migration: insert app_settings row 'unified_workouts'
 
-- **Setup link** — Send/Resend setup email, Copy setup link, SMS setup link
-- **Password reset** — Send password reset, Copy reset link, SMS reset link, Secure password reset (opens existing `SendPasswordResetDialog`)
-- **Sign-in & access** — SMS sign-in link, Set password (opens existing AlertDialog), Mark setup complete, Mark / Clear "needs admin help"
-- **App installation** — Mark Installed (from existing `AppActivityCard`)
-- **Client POV** — Open Client POV (gated by `canPov`)
+REFACTORED (behavior-preserving for clients)
+  ScheduleManagerShell + day drilldown
+  Exercise card / set row / rest timer / RPE+RIR / notes / warm-up / review
+  Block+week navigation
+  Completed-workout history
 
-Every action button ≥44px, full-width on mobile.
+MOUNTED ON MEMBER SIDE (behind flag)
+  /m/my-plans/$enrollmentId
+  /m/workouts/$enrollmentId/$week/$day
 
-### 7. Sticky Save bar
+UNTOUCHED
+  All *_logs, *_completions, *_results rows
+  Master templates (pl_templates, member_plans)
+  Auth, billing, messaging, nutrition, media
+```
 
-Today the global Save button is in the page header. Add a `sticky bottom-0` Save bar (or pin the existing button) that stays visible while scrolling any sub-tab, with safe-area padding on mobile. Disabled when no unsaved changes; spinner while saving.
+## What I recommend shipping this turn
 
-### 8. Responsive rules
-
-- Mobile (`<md`): single-column cards, full-width buttons.
-- iPad landscape (`md:` ~≥768px): two-column card grid.
-- Desktop (`lg:`): three columns on the Overview action grid.
-- All tap targets ≥44px high.
-
-## Out of scope
-
-- No changes to Training / Nutrition / Communication / Business sections.
-- No new fields, no schema changes.
-- No changes to server functions or RLS.
-- Not extracting the 1,948-line route file into smaller modules (that's a separate refactor).
-
-## Risks & mitigations
-
-- **Deep links** that point at `?section=overview` or `?section=account` break. Mitigation: keep `tab` values stable (the section dropdown isn't in URLs today, only `tab` is). Verified in current `validateSearch`.
-- **Save-button discoverability** changes if it moves. Mitigation: keep it in the header too — the sticky bar is additive on mobile.
-- **Permission drift** — every gated action (Client POV, destructive actions) keeps its existing `canPov` / role check; the card wrapper does not bypass them.
-
-## Acceptance check before publishing
-
-- Open an existing client. Confirm all 5 sub-tabs load, every field from the inventory renders, every button still triggers its existing server fn or modal.
-- Confirm `SetupStatusBanner` still appears on all tabs.
-- Confirm Client POV, Deactivate, Reactivate, Delete, Drive folder, Assign offer, Send booking link, all SMS variants, password set/reset all still work.
-- Confirm sticky Save persists across scroll on mobile.
-- Then publish to https://jfeffect.com.
+**Phase 1 only.** It is safe (no user-visible change), unblocks every later phase, and lets us add the admin toggle so you can flip pilot users yourself. Phases 2–5 each get their own turn with verification against Jared's account between every step.
