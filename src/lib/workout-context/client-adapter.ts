@@ -436,7 +436,11 @@ export function createClientAdapter(ref: WorkoutContextRef): WorkoutContextAdapt
 
     async notifyCoachOfFailure(input: { dayId: string; reason: string }): Promise<void> {
       await notifyCoachOfWorkoutFailure({
-        data: { dayId: input.dayId, reason: input.reason },
+        data: {
+          workout_id: input.dayId,
+          error_message: input.reason,
+          error_type: "workout_load_failure",
+        },
       });
     },
   };
