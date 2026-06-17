@@ -568,6 +568,19 @@ function kindLabel(k: string): string {
   }
 }
 
+// Semantic category buckets surfaced in the full-page Category filter.
+// Maps a user-facing category to the underlying notification kinds it covers.
+const CATEGORY_BUCKETS: { id: string; label: string; kinds: string[] }[] = [
+  { id: "workouts",   label: "Workouts",   kinds: ["lift_video", "exercise_note"] },
+  { id: "check_ins",  label: "Check-Ins",  kinds: ["check_in_review"] },
+  { id: "messages",   label: "Messages",   kinds: ["message", "group_message"] },
+  { id: "payments",   label: "Payments",   kinds: [] },
+  { id: "agreements", label: "Agreements", kinds: ["agreement"] },
+  { id: "account",    label: "Account",    kinds: [] },
+  { id: "coaching",   label: "Coaching",   kinds: ["appointment"] },
+  { id: "system",     label: "System",     kinds: [] },
+];
+
 // =============================================================================
 // Bell button
 // =============================================================================
