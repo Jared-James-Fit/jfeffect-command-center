@@ -15,6 +15,7 @@
  */
 import { useEffect, useState } from "react";
 import { buildWorkoutAdapter } from "@/lib/workout-context";
+import { supabase } from "@/integrations/supabase/client";
 
 const STORAGE_KEY = "unified_member_adapter";
 
@@ -36,6 +37,7 @@ type ProbeState =
       results: number;
       completion: boolean;
       day: string | null;
+      drift: string[];
     }
   | { status: "error"; message: string };
 
@@ -66,13 +68,54 @@ export function MemberAdapterProbe({
           enrollmentId,
         });
         const dayId = `${week}:${day}`;
-        const [dayDto, rows, results, completion] = await Promise.all([
+        const [dayDto, rows, results, completion, directLogs, directCompletion] = await Promise.all([
           adapter.getDay(dayId),
           adapter.listRows(dayId),
           adapter.listRowResults(dayId),
           adapter.getDayCompletion(dayId),
+          supabase
+            .from("member_set_logs")
+            .select("exercise_index, set_index, reps, load_lb, rpe, rir")
+            .eq("enrollment_id", enrollmentId)
+            .eq("week_index", week)
+            .eq("day_index", day),
+          supabase
+            .from("member_workout_completions")
+            .select("completed_at")
+            .eq("enrollment_id", enrollmentId)
+            .eq("week_index", week)
+            .eq("day_index", day)
+            .maybeSingle(),
         ]);
         if (cancelled) return;
+        // Shadow-compare adapter output against the legacy direct reads.
+        // Drift here means the adapter is diverging from what WorkoutTracker
+        // sees and we should NOT flip reads behind it yet.
+        const drift: string[] = [];
+        const directLogRows = (directLogs.data ?? []) as any[];
+        if (directLogRows.length !== results.length) {
+          drift.push(`logs count ${results.length} vs direct ${directLogRows.length}`);
+        } else {
+          const adapterKeys = new Set(
+            results.map((r) => `${r.rowId}:${r.setIndex}:${r.reps ?? ""}:${r.loadLb ?? ""}`),
+          );
+          for (const l of directLogRows) {
+            const k = `ex:${l.exercise_index}:${l.set_index}:${l.reps ?? ""}:${l.load_lb ?? ""}`;
+            if (!adapterKeys.has(k)) {
+              drift.push(`log ex:${l.exercise_index}/set:${l.set_index} mismatch`);
+              break;
+            }
+          }
+        }
+        const directCompleted = !!(directCompletion.data as any)?.completed_at;
+        const adapterCompleted = !!completion?.completedAt;
+        if (directCompleted !== adapterCompleted) {
+          drift.push(`completion ${adapterCompleted} vs direct ${directCompleted}`);
+        }
+        if (drift.length) {
+          // eslint-disable-next-line no-console
+          console.warn("[member-adapter-probe] drift", { enrollmentId, week, day, drift });
+        }
         // eslint-disable-next-line no-console
         console.info("[member-adapter-probe]", {
           enrollmentId,
@@ -82,6 +125,7 @@ export function MemberAdapterProbe({
           rows,
           results,
           completion,
+          drift,
         });
         setState({
           status: "ok",
@@ -89,6 +133,7 @@ export function MemberAdapterProbe({
           results: results.length,
           completion: !!completion?.completedAt,
           day: dayDto.title,
+          drift,
         });
       } catch (err) {
         if (cancelled) return;
@@ -116,6 +161,9 @@ export function MemberAdapterProbe({
           <div>rows: {state.rows}</div>
           <div>logs: {state.results}</div>
           <div>completed: {state.completion ? "yes" : "no"}</div>
+          <div className={state.drift.length ? "text-red-300" : "text-emerald-300"}>
+            drift: {state.drift.length === 0 ? "none ✓" : `${state.drift.length} ⚠`}
+          </div>
         </div>
       )}
       {state.status === "error" && (
