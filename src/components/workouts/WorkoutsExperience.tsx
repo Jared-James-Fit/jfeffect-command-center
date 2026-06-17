@@ -77,7 +77,18 @@ export function WorkoutsExperience({
   // --- Current block / week label for the header subtitle. -----------------
   const today = localStartOfToday();
   const todayItem = byDate.get(toLocalISO(today)) ?? null;
+  // Collect unique blocks across scheduled days and pick the current one
+  // by date range (with sort_order / earliest-start tiebreakers). Falls back
+  // to today's item or the most recent scheduled item if no block covers today.
+  const allBlocks = useMemo(() => {
+    const seen = new Map<string, any>();
+    for (const it of dayItems) {
+      if (it.block?.id && !seen.has(it.block.id)) seen.set(it.block.id, it.block);
+    }
+    return [...seen.values()];
+  }, [dayItems]);
   const headerBlock =
+    pickCurrentBlock(allBlocks, today) ??
     todayItem?.block ??
     dayItems.find((it) => {
       const d = dayScheduledDate(it);
