@@ -13,7 +13,7 @@ import {
   Tooltip,
   CartesianGrid,
 } from "recharts";
-import { format, startOfWeek, addWeeks, differenceInCalendarWeeks } from "date-fns";
+import { format, startOfWeek, addWeeks } from "date-fns";
 import { estimate1RM } from "@/lib/analytics/e1rm";
 
 /**
