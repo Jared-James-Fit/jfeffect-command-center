@@ -826,6 +826,3 @@ function EmptyState() {
     </Card>
   );
 }
-
-/* Re-export for callers that want individual pieces. */
-export { ResumeBanner };
