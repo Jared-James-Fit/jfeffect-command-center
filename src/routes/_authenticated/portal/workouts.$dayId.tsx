@@ -51,6 +51,8 @@ import { ActiveRestTimerProvider, useRestTimer } from "@/components/active-rest-
 import { ExerciseHistoryButton } from "@/components/exercise-history-sheet";
 import { convertWeight } from "@/lib/progress-metrics";
 import { WorkoutCompleteSheet, type WorkoutCompletePayload } from "@/components/workout-complete-sheet";
+import { WorkoutSubmissionSummary } from "@/components/workout-submission-summary";
+import { computeWorkoutSummary, type WorkoutSummary } from "@/lib/workout-summary";
 import { WorkoutTimerSheet, QuickConfirmDuration, type TimerCompletionPayload } from "@/components/workout-timer-sheet";
 import { formatDuration } from "@/lib/duration";
 import { Timer } from "lucide-react";
@@ -609,6 +611,8 @@ function WorkoutDay() {
   const navigate = useNavigate();
   const [completeOpen, setCompleteOpen] = useState(false);
   const [completeSubmitting, setCompleteSubmitting] = useState(false);
+  const [summaryOpen, setSummaryOpen] = useState(false);
+  const [lastSummary, setLastSummary] = useState<WorkoutSummary | null>(null);
   // Notifications can deep-link with ?review=1 to nudge the member to finish
   // an in-progress workout. Auto-open the quick popup once it lands.
   const reviewParam = search.review === 1;
