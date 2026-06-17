@@ -1,8 +1,6 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useServerFn } from "@tanstack/react-start";
 import { supabase } from "@/integrations/supabase/client";
-import { completeWorkout, uncompleteWorkout, logSet } from "@/lib/member-plans.functions";
 import { PageHeader } from "@/components/app-shell";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -10,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { CheckCircle2, Save } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { ActionButton } from "@/components/action-button";
 import { TrainingHelpButton } from "@/components/training-help-sheet";
@@ -33,6 +31,7 @@ import { LoggingQualityBadge } from "@/components/workout/shared/logging-quality
 import { CompletedWorkoutActions } from "@/components/workout/shared/completed-workout-actions";
 import { computeActiveSeconds } from "@/lib/workout-duration";
 import { MemberAdapterProbe } from "@/components/workout/member-adapter-probe";
+import { buildWorkoutAdapter } from "@/lib/workout-context";
 
 export const Route = createFileRoute("/_authenticated/m/workouts/$enrollmentId/$week/$day")({
   component: () => (
@@ -63,10 +62,23 @@ function WorkoutTracker() {
   const weekIndex = Number(week), dayIndex = Number(day);
   const navigate = useNavigate();
   const qc = useQueryClient();
-  const completeFn = useServerFn(completeWorkout);
-  const uncompleteFn = useServerFn(uncompleteWorkout);
-  const logFn = useServerFn(logSet);
   const { user } = useAuth();
+  // Member-context adapter — all member writes flow through here so the
+  // shared workout surface stays the single source of truth. The offline
+  // queue handlers below translate persisted payloads into adapter calls,
+  // which keeps already-enqueued items compatible across deploys.
+  const adapter = useMemo(
+    () =>
+      user?.id
+        ? buildWorkoutAdapter({
+            kind: "member",
+            userId: user.id,
+            ownerId: user.id,
+            enrollmentId,
+          })
+        : null,
+    [user?.id, enrollmentId],
+  );
   const { isImpersonating, client: povClient } = useClientImpersonation();
   const undo = useWorkoutUndo();
   const [notes, setNotes] = useState("");
@@ -107,14 +119,40 @@ function WorkoutTracker() {
     try { window.localStorage.removeItem(hbKeyStart); window.localStorage.removeItem(hbKeyList); } catch { /* ignore */ }
   };
 
-  // Register offline handlers once. These are the queue's only access to the
-  // server fns — saveLog() etc. push payloads here instead of calling RPC
-  // directly, so a flaky connection never loses data.
+  // Register offline handlers once. These are the queue's only access to
+  // member writes — saveLog() etc. push payloads here instead of calling
+  // the adapter directly, so a flaky connection never loses data. Payload
+  // shapes are kept stable (enrollmentId/weekIndex/dayIndex/...) so any
+  // queued item from a prior deploy still replays cleanly; the handler
+  // re-encodes them into the adapter's dayId/rowId surface.
   useEffect(() => {
-    registerQueueHandler("m_log_set", async (payload: any) => { await logFn({ data: payload }); });
-    registerQueueHandler("m_complete_workout", async (payload: any) => { await completeFn({ data: payload }); });
-    registerQueueHandler("m_uncomplete_workout", async (payload: any) => { await uncompleteFn({ data: payload }); });
-  }, [logFn, completeFn, uncompleteFn]);
+    if (!adapter) return;
+    registerQueueHandler("m_log_set", async (payload: any) => {
+      await adapter.logSet({
+        dayId: `${payload.weekIndex}:${payload.dayIndex}`,
+        rowId: `ex:${payload.exerciseIndex}`,
+        setIndex: payload.setIndex,
+        reps: payload.reps ?? null,
+        loadLb: payload.load_lb ?? null,
+        rpe: payload.rpe ?? null,
+        rir: payload.rir ?? null,
+        notes: payload.notes ?? null,
+      });
+    });
+    registerQueueHandler("m_complete_workout", async (payload: any) => {
+      await adapter.updateDayCompletion(`${payload.weekIndex}:${payload.dayIndex}`, {
+        completedAt: new Date().toISOString(),
+        notes: payload.notes ?? null,
+        startedAt: payload.startedAt ?? null,
+        activeDurationSeconds: payload.activeDurationSeconds ?? null,
+      });
+    });
+    registerQueueHandler("m_uncomplete_workout", async (payload: any) => {
+      await adapter.updateDayCompletion(`${payload.weekIndex}:${payload.dayIndex}`, {
+        completedAt: null,
+      });
+    });
+  }, [adapter]);
 
   const { data: enr, isError: enrError, isSuccess: enrLoaded, refetch: refetchEnr } = useQuery({
     queryKey: ["m-enrollment", enrollmentId],

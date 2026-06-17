@@ -477,7 +477,16 @@ export function createMemberAdapter(ref: WorkoutContextRef): WorkoutContextAdapt
       }
       if (patch.completedAt) {
         await completeWorkout({
-          data: { enrollmentId, weekIndex: week, dayIndex: day, notes: patch.notes ?? undefined },
+          data: {
+            enrollmentId,
+            weekIndex: week,
+            dayIndex: day,
+            notes: patch.notes ?? undefined,
+            ...(patch.startedAt ? { startedAt: patch.startedAt } : {}),
+            ...(patch.activeDurationSeconds != null
+              ? { activeDurationSeconds: patch.activeDurationSeconds }
+              : {}),
+          },
         });
       }
       // started_at / in_progress_at / actualMinutes are ignored (no columns).
