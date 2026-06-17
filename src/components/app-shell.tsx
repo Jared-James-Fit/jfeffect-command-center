@@ -720,7 +720,7 @@ export function AppShell({ items, bottomItems: customBottomItems, title, childre
             "fixed left-3 right-3 z-50 grid overflow-hidden rounded-2xl border border-border bg-card/95 px-1 py-1 backdrop-blur supports-[backdrop-filter]:bg-card/80 shadow-[0_8px_24px_-6px_rgba(0,0,0,0.55)] md:hidden",
             gridCols,
           )}
-          style={{ bottom: "calc(env(safe-area-inset-bottom) + 10px)" }}
+          style={{ bottom: "max(env(safe-area-inset-bottom), 6px)" }}
         >
           {visible.map((item) => (
             <BottomNavSlot
