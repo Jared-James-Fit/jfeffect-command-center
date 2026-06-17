@@ -1,66 +1,50 @@
-# Shared Workout Completion & Review — Plan
+## Phase 4a — Unify `WorkoutDayView` via the existing adapter seam
 
-This is a multi-phase consolidation, not a single edit. I'll audit first, then refactor onto one shared completion/review pipeline used by both coaching clients and membership users.
+The good news: the abstraction is already designed. `WorkoutDayView` accepts an `adapter: WorkoutContextAdapter` prop, but line 257 does `void adapter;` and the component runs a hardcoded `kind: "client"` + `sb.from("pl_*")` path. Both `client-adapter.ts` and `member-adapter.ts` are fully implemented and unused. The member app currently duplicates the entire UI in `workouts.$enrollmentId.$week.$day.tsx`.
 
-## Phase 0 — Audit (read-only, no code changes)
-Goal: produce a written map of what exists today before touching anything.
+This phase wires the adapter through without behavior change for the portal, then deletes the member duplicate.
 
-- **Client workout flow:** find the active workout page, Finish action, completion writer, review submit/edit, duration tracking, logging-quality calc, analytics writer, notifications.
-- **Member workout flow:** find the equivalents. Identify whether members use `member_workout_completions`, `member_set_logs`, `member_plan_*` (separate pipeline) or already share `pl_*` tables.
-- **Tables in scope (from schema):** `pl_days`, `pl_exercise_rows`, `pl_row_results`, `pl_day_completions`, `pl_workout_feedback`, `pl_assignment_operations`, `member_plans`, `member_plan_enrollments`, `member_plan_day_schedule`, `member_set_logs`, `member_workout_completions`, `pl_block_set_rows`, `logged_set_edit_audit`.
-- **Output:** short audit note in chat listing: shared vs forked code paths, shared vs forked tables, fields already present vs missing for the spec (started_at, completed_at, elapsed/active duration, logging_percentage, logging_quality, completed_with_missing_logs, review edit metadata), and any duplicate-write risks.
+### Steps
 
-## Phase 1 — Data model (single migration)
-Only add what's missing. No destructive changes. No backfill that rewrites history.
+1. **Make `adapter` required.** Change the prop from optional to required. Remove `void adapter;`.
 
-- Add to the completion record (whichever table is the single source of truth after audit — likely `pl_day_completions`, mirrored on `member_workout_completions` only if the audit shows members are not yet on `pl_day_completions`):
-  - `started_at`, `completed_at`, `last_activity_at`
-  - `elapsed_duration_seconds`, `active_duration_seconds` (nullable)
-  - `logging_percentage` (numeric), `logging_quality` (enum: fully/mostly/partially/no_log)
-  - `required_sets_count`, `logged_sets_count`, `skipped_exercises_count`
-  - `completed_with_missing_logs` (bool), `completion_source` (text)
-- Review record (`pl_workout_feedback` if it's the existing review table, otherwise a new `workout_reviews`):
-  - `review_submitted_at`, `review_last_edited_at`, `review_edit_count`, `review_updated_by`
-  - **Unique constraint:** one current review per (user_id, workout_instance_id).
-- Idempotency: unique constraint on (user_id, workout_instance_id) for completion record.
-- GRANTs + RLS policies for any new tables; existing tables keep their policies.
+2. **Replace direct queries with adapter calls** (~12 `useQuery` blocks in `WorkoutDay`):
+   - `pl-day`, `pl-day-block`, `pl-day-results`, `pl-day-completion`, `pl-day-exercise-notes`, `pl-workout-feedback` → `adapter.getDay`, `adapter.getDayBlock`, `adapter.listRowResults`, `adapter.getCompletion`, `adapter.listExerciseNotes`, `adapter.getFeedback`
+   - `client-exercise-unit-prefs`, `client-exercise-unit-history` → adapter equivalents (verify they exist; add if missing)
+   - Query keys include `adapter.kind` + `adapter.ref` so caches don't collide
 
-## Phase 2 — Shared backend (server functions)
-One module, used by both roles. Role differences are permission checks only.
+3. **Replace hardcoded `kind: "client"` server-fn calls** (lines 454, 468, 481, 654, 1040, 1103):
+   - `startWorkoutSrv`, `saveDraftSrv`, `completeWorkoutSrv`, `useWorkoutHeartbeat` → use `adapter.kind` (or move these into adapter methods if cleaner)
 
-- `src/lib/workout-completion.functions.ts`
-  - `finishWorkout({ instanceId })` — idempotent UPSERT on completion, computes logging_percentage / logging_quality from `pl_row_results` against `pl_exercise_rows` prescription rules (load+reps / bodyweight / timed / distance / RPE only when required), writes duration, sets `completed_with_missing_logs`.
-  - `updateWorkoutLog({ instanceId, sets })` — writes set logs, then recomputes completeness on the existing completion row (no new completion, no new notification).
-  - `submitOrEditReview({ instanceId, rating, notes, ... })` — UPSERT on review by (user_id, instance_id); first write sets `review_submitted_at`, subsequent sets `review_last_edited_at`, increments `review_edit_count`. Never re-completes the workout.
-  - All three protected by `requireSupabaseAuth` and a permission helper that checks: (a) user owns the instance (client or member), (b) or coach/admin has access via existing role checks.
-- `src/lib/workout-duration.ts` — pure helpers for elapsed vs active duration, overnight clamp, format ("42 min", "1 hr 8 min").
-- `src/lib/workout-completeness.ts` — pure helpers for per-exercise "is this set logged" rules + aggregate %.
+4. **Inject navigation paths as props** to remove the four `/portal/…` hardcodes (lines 772, 784, 1148, 1186, 1206, 1239):
+   - Add `navigation: { backTo, listPath, messagesPath }` to props
+   - Portal passes `/portal/workouts` + `/portal/messages`; member passes `/m/workouts` + `/m/messages`
 
-## Phase 3 — Shared UI components
-Replace both role-specific completion UIs with these.
+5. **Gate admin-only UI via capabilities, not raw hook**:
+   - `isImpersonating` status-override card (848–910) → `adapter.capabilities.canSeeCoachIntel`
+   - `WorkoutCompleteSheet` suppression (1070) → `!adapter.capabilities.canSeeCoachIntel`
 
-- `<FinishWorkoutBar />` — sticky bottom action with states (idle / completing / completed / error+retry), single button, disabled while in-flight.
-- `<CompletionSummarySheet />` — mobile sheet showing duration, sets logged / expected, %, optional rating + notes, primary "Complete Workout", secondary "Keep Logging". Handles missing-sets warning + "Complete Anyway".
-- `<LoggingQualityBadge />` — compact badge/ring for Fully / Mostly / Partially / No Log.
-- `<WorkoutReviewEditor />` — used both for first submission and edits; pre-fills, "Save Review Changes", optimistic save, preserves typed content on failure.
-- `<CompletedWorkoutActions />` — "View / Edit Log", "View / Edit Review" on every completed workout.
-- Wording adapts: if no assigned coach, neutral copy ("Anything you want to note about this workout?"); if coach assigned, "Your coach can see this".
+6. **Push adapter into `ExerciseBlock` and `SetRow`** so `applyToRemaining` (1369–1373) and `SetRow`'s direct `pl_row_results` writes (~1650–1950) go through `adapter.upsertRowResult` / `adapter.deleteRowResult`. Sub-components stop needing `clientId`.
 
-## Phase 4 — Wire-in (replace, don't fork)
-- Point the client active-workout page at the shared components/functions.
-- Point the member active-workout page at the same shared components/functions.
-- Delete the duplicate member completion/review code paths (keep the tables/data — only remove the duplicate code).
-- Calendar View, Block View, client dashboard, member dashboard, coach client view, admin client/member view all read from the same completion + review rows; invalidate the relevant React Query keys on save.
+7. **Update the lone call site** `src/routes/_authenticated/portal/workouts.$dayId.tsx` to construct a `client-adapter` and pass it + portal navigation paths.
 
-## Phase 5 — Verify with Playwright
-Run the spec's required tests against the live preview as: client, member, admin, coach-viewing-client. Capture screenshots for each state (Fully / Mostly / Partially / No Log, review submit, review edit, duration after refresh, rapid-tap idempotency, slow-network retry). Report results.
+8. **Replace the member route** `src/routes/_authenticated/m/workouts.$enrollmentId.$week.$day.tsx` to render `<WorkoutDayView adapter={memberAdapter} navigation={memberNav} />` instead of its monolithic copy. Delete the duplicate UI code.
 
-## Out of scope (won't touch this round)
-- Redesign of unrelated pages.
-- New analytics dashboards (existing analytics keep their inputs; we only stop double-counting).
-- Bulk historical data migration (audit-only — no destructive rewrites of existing member history).
-- Video/upload pipeline changes.
-- Notification system rewrite (only dedupe within the completion/review path).
+9. **Smoke test** via Playwright on portal + member workout pages — load a day, log a set, mark complete; verify both flows.
 
-## Suggested execution order for this turn
-Given the size, I'd like to do **Phase 0 (audit) only this turn** and report back with the concrete map + a tightened Phase 1 migration proposal. Then build Phases 1–3 next turn, Phase 4 the turn after, Phase 5 to verify. Trying to do all five in one turn will produce broken intermediate state.
+### Technical notes
+
+- Branch off the existing `WorkoutContextAdapter` interface in `src/lib/workout-context/types.ts` — extend only if step 2 finds missing methods (unit prefs/history).
+- Query keys must include `[adapter.kind, adapter.ref.ownerId, adapter.ref.enrollmentId ?? null]` to avoid cross-pollination between portal and member caches.
+- Keep the same `WorkoutDayViewSearch` shape — no URL changes.
+- No DB migrations.
+
+### Out of scope
+
+- No new features, no styling changes, no schema changes
+- Member route's surrounding navigation (week picker, etc.) stays put — only the day-view body gets swapped
+- The 92 security warnings (separate cleanup phase)
+
+### Risk
+
+Medium — touches a ~2000-line file, but the adapter interface is already proven by `member-adapter.ts` running the parallel member tracker. Biggest risk is missed `kind: "client"` strings in deep sub-components; ripgrep sweep at the end catches those.
