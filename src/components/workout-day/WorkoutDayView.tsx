@@ -61,6 +61,7 @@ import { summarizeCompleteness, type RequiredRowSpec, type LoggedSetSpec, type R
 import { useWorkoutHeartbeat, readHeartbeatTimestamps, clearHeartbeatTimestamps } from "@/hooks/use-workout-heartbeat";
 import { computeActiveSeconds } from "@/lib/workout-duration";
 import { LoggingQualityBadge } from "@/components/workout/shared/logging-quality-badge";
+import { CompletedWorkoutActions } from "@/components/workout/shared/completed-workout-actions";
 
 /* -------------------------------------------------------------------------- */
 /* Target-parsing helpers (Suggested → Draft → Confirmed fast-logging)         */
@@ -400,6 +401,22 @@ function WorkoutDay({
     queryKey: ["pl-day-exercise-notes", dayId, client?.id],
     enabled: !!client?.id,
     queryFn: async () => (await sb.from("pl_exercise_notes").select("*").eq("client_id", client!.id).eq("day_id", dayId)).data ?? [],
+  });
+
+  // Existing review (pl_workout_feedback) for the post-completion actions card.
+  // Scoped by client + day; one row per (client, day) thanks to the Phase 1 unique constraint.
+  const { data: existingReview } = useQuery({
+    queryKey: ["pl-workout-feedback", dayId, client?.id],
+    enabled: !!client?.id && !!completion?.completed_at,
+    queryFn: async () => {
+      const { data } = await sb
+        .from("pl_workout_feedback")
+        .select("*")
+        .eq("day_id", dayId)
+        .eq("client_id", client!.id)
+        .maybeSingle();
+      return data as any;
+    },
   });
   const notesByRowId = useMemo(() => {
     const m = new Map<string, any>();
@@ -903,6 +920,34 @@ function WorkoutDay({
             />
             <TrainingHelpButton size="sm" variant="outline" />
           </div>
+        )}
+
+        {completion?.completed_at && client?.id && (
+          <CompletedWorkoutActions
+            ctx={{ kind: "client", dayId }}
+            hasCoach
+            initialReview={
+              existingReview
+                ? {
+                    overallRating: existingReview.overall_rating ?? null,
+                    sessionRpe: existingReview.session_rpe ?? null,
+                    pain: existingReview.pain ?? false,
+                    painLevel: existingReview.pain_level ?? null,
+                    painArea: existingReview.pain_area ?? null,
+                    painNote: existingReview.pain_note ?? null,
+                    clientNote: existingReview.client_note ?? null,
+                    editCount: existingReview.review_edit_count ?? 0,
+                    submittedAt:
+                      existingReview.review_submitted_at ??
+                      existingReview.created_at ??
+                      null,
+                  }
+                : null
+            }
+            onReviewSaved={() =>
+              qc.invalidateQueries({ queryKey: ["pl-workout-feedback", dayId, client.id] })
+            }
+          />
         )}
 
         {!readonly && isOutsideScheduledDay && !completion?.completed_at && scheduledDate && (
