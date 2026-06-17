@@ -2756,6 +2756,7 @@ export type Database = {
           updated_at: string
           user_id: string | null
           warmup_protocol_id: string | null
+          water_target_locked_by_coach: boolean
           website: string | null
           youtube: string | null
         }
@@ -2933,6 +2934,7 @@ export type Database = {
           updated_at?: string
           user_id?: string | null
           warmup_protocol_id?: string | null
+          water_target_locked_by_coach?: boolean
           website?: string | null
           youtube?: string | null
         }
@@ -3110,6 +3112,7 @@ export type Database = {
           updated_at?: string
           user_id?: string | null
           warmup_protocol_id?: string | null
+          water_target_locked_by_coach?: boolean
           website?: string | null
           youtube?: string | null
         }
@@ -12797,6 +12800,45 @@ export type Database = {
         }
         Relationships: []
       }
+      progress_consents: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          granted: boolean
+          granted_at: string | null
+          id: string
+          kind: string
+          revoked_at: string | null
+          updated_at: string
+          user_id: string
+          version: number
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          granted?: boolean
+          granted_at?: string | null
+          id?: string
+          kind: string
+          revoked_at?: string | null
+          updated_at?: string
+          user_id: string
+          version?: number
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          granted?: boolean
+          granted_at?: string | null
+          id?: string
+          kind?: string
+          revoked_at?: string | null
+          updated_at?: string
+          user_id?: string
+          version?: number
+        }
+        Relationships: []
+      }
       progress_measurements: {
         Row: {
           created_at: string
@@ -13095,6 +13137,87 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      progress_water_entries: {
+        Row: {
+          amount_ml: number
+          created_at: string
+          created_by: string | null
+          entry_at: string
+          entry_date: string
+          id: string
+          note: string | null
+          source: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          amount_ml: number
+          created_at?: string
+          created_by?: string | null
+          entry_at?: string
+          entry_date?: string
+          id?: string
+          note?: string | null
+          source?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          amount_ml?: number
+          created_at?: string
+          created_by?: string | null
+          entry_at?: string
+          entry_date?: string
+          id?: string
+          note?: string | null
+          source?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      progress_water_targets: {
+        Row: {
+          active_ml: number
+          calc_bodyweight_kg: number | null
+          calc_formula_version: number
+          created_at: string
+          last_recalculated_at: string | null
+          mode: string
+          set_by_user_id: string | null
+          suggested_ml: number
+          target_source: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          active_ml?: number
+          calc_bodyweight_kg?: number | null
+          calc_formula_version?: number
+          created_at?: string
+          last_recalculated_at?: string | null
+          mode?: string
+          set_by_user_id?: string | null
+          suggested_ml?: number
+          target_source?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          active_ml?: number
+          calc_bodyweight_kg?: number | null
+          calc_formula_version?: number
+          created_at?: string
+          last_recalculated_at?: string | null
+          mode?: string
+          set_by_user_id?: string | null
+          suggested_ml?: number
+          target_source?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
       }
       promo_code_redemptions: {
         Row: {
@@ -15920,6 +16043,10 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      maybe_refresh_water_target: {
+        Args: { _bodyweight_kg: number; _user_id: string }
+        Returns: undefined
+      }
       member_can_consume: { Args: { _user_id: string }; Returns: boolean }
       member_has_access: {
         Args: { _key: string; _member_id: string }
@@ -16166,6 +16293,10 @@ export type Database = {
           transferred: number
           used: number
         }[]
+      }
+      user_can_access_progress: {
+        Args: { _target_user: string }
+        Returns: boolean
       }
       user_can_see_broadcast: {
         Args: { _broadcast_id: string; _user_id: string }

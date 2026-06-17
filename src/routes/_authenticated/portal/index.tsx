@@ -20,6 +20,7 @@ import { InstallAppCard } from "@/components/portal/install-app-card";
 import { IntakeAnswersBigButton } from "@/components/clients/intake-answers-dialog";
 import { ActionCentre, type ActionItem } from "@/components/portal/action-centre";
 import { TrainingBlockCard } from "@/components/portal/training-block-card";
+import { ProgressSummaryCard } from "@/components/progress/progress-summary-card";
 // Lazy: this card pulls recharts. Defer it so the Home screen renders
 // before the chart bundle is fetched.
 import { lazy, Suspense } from "react";
@@ -426,6 +427,16 @@ function PortalHome() {
             ref={bodyweightRef}
             clientId={client.id}
             defaultUnit={(client.preferred_weight_unit as WeightUnit) ?? "lb"}
+          />
+        )}
+
+        {/* 6b — Progress & Water summary */}
+        {portalUserId && (
+          <ProgressSummaryCard
+            userId={portalUserId}
+            currentUserId={portalUserId}
+            viewerRole="owner"
+            progressHref={{ kind: "portal" }}
           />
         )}
 

@@ -14,6 +14,7 @@ import { BookOpen, ClipboardCheck, ChefHat, Wrench, PlayCircle } from "lucide-re
 import { Star } from "lucide-react";
 import { UpgradeCTA } from "@/components/upgrade-cta";
 import { SetupChecklist } from "@/components/member/setup-checklist-card";
+import { ProgressSummaryCard } from "@/components/progress/progress-summary-card";
 
 export const Route = createFileRoute("/_authenticated/m/")({
   component: MemberHome,
@@ -85,6 +86,14 @@ function MemberHome() {
         />
       )}
       <SetupChecklist activeEnrollment={activeEnrollment} />
+      {me?.member?.user_id && (
+        <ProgressSummaryCard
+          userId={me.member.user_id}
+          currentUserId={me.member.user_id}
+          viewerRole="owner"
+          progressHref={{ kind: "member" }}
+        />
+      )}
       {activeEnrollment ? (
         <Card className="p-6">
           <div className="flex items-center justify-between gap-4">

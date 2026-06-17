@@ -29,6 +29,7 @@ import {
   listReviewResponses, addReviewResponse,
 } from "@/lib/progress";
 import { format, parseISO, differenceInDays } from "date-fns";
+import { WaterTrackerCard } from "./water-tracker-card";
 
 export type ProgressContext = {
   userId: string;
@@ -54,11 +55,12 @@ export function ProgressSection({ ctx }: { ctx: ProgressContext }) {
   return (
     <div className="space-y-4 p-3 md:p-6">
       <Tabs value={tab} onValueChange={setTab} className="space-y-4">
-        <TabsList className="grid w-full grid-cols-3 md:grid-cols-6 h-auto">
+        <TabsList className="grid w-full grid-cols-4 md:grid-cols-7 h-auto">
           <TabsTrigger value="overview">Overview</TabsTrigger>
           <TabsTrigger value="photos">Photos</TabsTrigger>
           <TabsTrigger value="videos">Videos</TabsTrigger>
           <TabsTrigger value="bodyweight">Weight</TabsTrigger>
+          <TabsTrigger value="water">Water</TabsTrigger>
           <TabsTrigger value="measurements">Measure</TabsTrigger>
           <TabsTrigger value="timeline">Timeline</TabsTrigger>
         </TabsList>
@@ -81,6 +83,15 @@ export function ProgressSection({ ctx }: { ctx: ProgressContext }) {
         </TabsContent>
         <TabsContent value="bodyweight">
           <BodyweightTab ctx={ctx} onLog={() => setWeightDialog(true)} />
+        </TabsContent>
+        <TabsContent value="water">
+          <div className="max-w-md">
+            <WaterTrackerCard
+              userId={ctx.userId}
+              currentUserId={ctx.userId}
+              viewerRole={ctx.viewerRole}
+            />
+          </div>
         </TabsContent>
         <TabsContent value="measurements">
           <MeasurementsTab ctx={ctx} onAdd={() => setMeasureDialog(true)} />
