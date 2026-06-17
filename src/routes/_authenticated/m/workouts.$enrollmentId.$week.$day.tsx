@@ -549,11 +549,6 @@ function WorkoutTracker() {
             ? <Button variant="outline" onClick={handleUncomplete}>Mark incomplete</Button>
             : <ActionButton onAction={handleComplete} loadingLabel="Saving…" successLabel="Complete" successToast="Workout complete" icon={<CheckCircle2 className="h-4 w-4" />}>Mark workout complete</ActionButton>}
           <Button variant="ghost" onClick={() => navigate({ to: "/m/my-plans/$enrollmentId", params: { enrollmentId } })}>Back to plan</Button>
-          {isComplete && (
-            <Button variant="secondary" onClick={() => setReviewOpen(true)}>
-              {existingReview?.review_submitted_at ? "View / edit review" : "Add review"}
-            </Button>
-          )}
         </div>
       </Card>
 
