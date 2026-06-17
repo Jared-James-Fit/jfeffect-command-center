@@ -1052,6 +1052,7 @@ function WorkoutDay() {
           onOpenChange={setSummaryOpen}
           summary={lastSummary}
           workoutTitle={day?.title ?? null}
+          durationMin={completion?.actual_duration_min ?? null}
           onClose={() => navigate({ to: "/portal/workouts" })}
         />
       )}
