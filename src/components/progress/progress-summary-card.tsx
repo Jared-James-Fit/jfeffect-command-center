@@ -86,7 +86,7 @@ export function ProgressSummaryCard({
       <Link to="/m/progress">Open <ChevronRight className="ml-0.5 h-3.5 w-3.5" /></Link>
     ) : (
       <Link
-        to="/_authenticated/admin/clients/$id/progress"
+        to="/admin/clients/$id/progress"
         params={{ id: progressHref.clientId }}
       >
         Open <ChevronRight className="ml-0.5 h-3.5 w-3.5" />
