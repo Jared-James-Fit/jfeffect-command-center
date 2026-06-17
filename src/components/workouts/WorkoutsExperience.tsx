@@ -105,14 +105,6 @@ export function WorkoutsExperience({
     headerWeek?.week_index ? `Week ${headerWeek.week_index}` : null,
   ].filter(Boolean).join(" · ");
 
-  // --- Resume banner: any open in-progress session anywhere in the program.
-  const inProgress = useMemo(
-    () =>
-      dayItems.find(
-        (it) => it.completion && !it.completion?.completed_at,
-      ) ?? null,
-    [dayItems],
-  );
 
   // --- Selected date drives the calendar tab. Defaults to today. ----------
   const [selectedDate, setSelectedDate] = useState<Date>(today);
