@@ -297,6 +297,9 @@ const CompleteInput = z.intersection(
     sessionRating: z.number().int().min(1).max(5).nullable().optional(),
     notes: z.string().nullable().optional(),
     confirmedMissingLogs: z.boolean().optional(),
+    actualDurationMin: z.number().int().positive().nullable().optional(),
+    sessionWeightTotal: z.number().nullable().optional(),
+    sessionWeightUnit: z.enum(["kg", "lb"]).nullable().optional(),
   }),
 );
 
