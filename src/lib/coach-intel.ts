@@ -203,7 +203,7 @@ export async function getCoachIntel(opts?: { coachId?: string | null }): Promise
   return (clients as any[]).map((c) => {
     const prep = (preps as any[]).find((p) => p.client_id === c.id && p.status === "Active")
       ?? (preps as any[]).find((p) => p.client_id === c.id);
-    const activeBlock = (blocks as any[]).find((b) => b.client_id === c.id && b.status === "Active");
+    const activeBlock = currentBlockByClient.get(c.id) ?? null;
 
     const today = todayLocalISO();
     const mySchedDays = scheduledDays.filter((d) => d.pl_weeks?.pl_blocks?.client_id === c.id);
