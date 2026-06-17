@@ -149,11 +149,8 @@ export async function deleteSubmission(id: string) {
 }
 
 export async function submitForReview(submissionId: string) {
-  const now = new Date().toISOString();
-  await updateSubmission(submissionId, {
-    review_status: "awaiting_review",
-    submitted_at: now,
-  } as any);
+  const { submitProgressForReview } = await import("./progress.functions");
+  await submitProgressForReview({ data: { submissionId } });
 }
 
 // ---------- Media ----------
