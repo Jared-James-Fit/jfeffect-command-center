@@ -22,7 +22,7 @@ import { StickyMobileCta } from "@/components/sales/sticky-mobile-cta";
 import { AppPreviewGrid } from "@/components/sales/app-preview-grid";
 import { FinalCta } from "@/components/sales/final-cta";
 import { Reveal } from "@/components/sales/reveal";
-import { ArrowRight, Headphones, Library, Dumbbell, Home as HomeIcon, Flame, Trophy } from "lucide-react";
+import { ArrowRight, Headphones, CheckCircle2, Library, Dumbbell, Home as HomeIcon, Flame, Trophy } from "lucide-react";
 import { normalizePhoneToE164 } from "@/lib/phone-e164";
 import appPreviewDashboard from "@/assets/app-preview-dashboard.jpg";
 import appPreviewLogging from "@/assets/app-preview-logging.jpg";
