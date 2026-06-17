@@ -320,29 +320,6 @@ function DeferredAnalytics({ clientId }: { clientId: string }) {
   );
 }
 
-/* ---------------------------------------------------------------------- */
-/* Resume banner                                                          */
-/* ---------------------------------------------------------------------- */
-
-function ResumeBanner({ item }: { item: WorkoutItem }) {
-  const title = cleanDayTitle(item.day?.title, item.day?.day_index);
-  return (
-    <Card className="flex flex-wrap items-center justify-between gap-3 border-amber-500/40 bg-amber-500/10 p-3">
-      <div className="flex min-w-0 items-center gap-2 text-sm">
-        <Play className="h-4 w-4 text-amber-500" />
-        <div className="min-w-0">
-          <div className="truncate font-bold">Workout in progress</div>
-          <div className="truncate text-xs text-muted-foreground">{title}</div>
-        </div>
-      </div>
-      <Button asChild size="sm" className="bg-amber-500 text-black hover:bg-amber-400">
-        <Link to="/portal/workouts/$dayId" params={{ dayId: item.day.id }}>
-          Resume <ChevronRight className="ml-1 h-3.5 w-3.5" />
-        </Link>
-      </Button>
-    </Card>
-  );
-}
 
 /* ---------------------------------------------------------------------- */
 /* Week strip                                                             */
