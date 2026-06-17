@@ -191,6 +191,12 @@ export interface DayCompletionPatch {
   completedAt?: string | null;
   notes?: string | null;
   actualMinutes?: number | null;
+  /**
+   * Heartbeat-derived active engagement time. Currently only consumed by
+   * the member adapter (writes to `member_workout_completions.active_duration_seconds`).
+   * Other adapters ignore it.
+   */
+  activeDurationSeconds?: number | null;
 }
 
 export interface UpsertRowResultInput {
