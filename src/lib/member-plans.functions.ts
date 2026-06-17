@@ -252,16 +252,61 @@ export const completeWorkout = createServerFn({ method: "POST" })
 
     const { data: enr } = await supabase
       .from("member_plan_enrollments")
-      .select("*").eq("id", data.enrollmentId).eq("member_id", member.id).maybeSingle();
+      .select("*, member_plans(published_payload)")
+      .eq("id", data.enrollmentId).eq("member_id", member.id).maybeSingle();
     if (!enr) throw new Error("Enrollment not found");
+
+    // Compute shared logging-quality metrics so member completions match
+    // the client (`pl_*`) shape — single source of truth for downstream UI.
+    const dayObj: any = (enr as any)?.member_plans?.published_payload
+      ?.weeks_data?.[data.weekIndex - 1]?.days?.[data.dayIndex - 1];
+    const rowsArr: any[] = Array.isArray(dayObj?.rows) ? dayObj.rows : [];
+    const { summarizeCompleteness } = await import("./workout-completeness");
+    const required = rowsArr.map((row: any, ei: number) => ({
+      rowId: String(ei),
+      prescribedSets: Math.max(1, Number(row?.sets) || 1),
+      metricKind: "load_reps" as const,
+    }));
+    const { data: setLogs } = await supabase
+      .from("member_set_logs").select("exercise_index,set_index,reps,load_lb,rpe,rir")
+      .eq("enrollment_id", data.enrollmentId)
+      .eq("week_index", data.weekIndex)
+      .eq("day_index", data.dayIndex);
+    const logged = (setLogs ?? []).map((l: any) => ({
+      rowId: String(l.exercise_index),
+      setIndex: l.set_index,
+      reps: l.reps, loadLb: l.load_lb, rpe: l.rpe, rir: l.rir,
+    }));
+    const sum = summarizeCompleteness(required, logged);
+    const completedAt = new Date().toISOString();
+
+    // Compute durations from any previous start/heartbeat row (best-effort).
+    const { data: prevRow } = await supabase
+      .from("member_workout_completions").select("started_at,last_activity_at,active_duration_seconds")
+      .eq("enrollment_id", data.enrollmentId)
+      .eq("week_index", data.weekIndex)
+      .eq("day_index", data.dayIndex).maybeSingle();
+    const startedAt = (prevRow as any)?.started_at ?? completedAt;
+    const elapsedSec = Math.max(0, Math.round((new Date(completedAt).getTime() - new Date(startedAt).getTime()) / 1000));
+    const activeSec = (prevRow as any)?.active_duration_seconds ?? Math.min(elapsedSec, 12 * 3600);
 
     const { error } = await supabase.from("member_workout_completions").upsert({
       enrollment_id: data.enrollmentId,
       week_index: data.weekIndex,
       day_index: data.dayIndex,
       notes: data.notes ?? null,
-      completed_at: new Date().toISOString(),
-    }, { onConflict: "enrollment_id,week_index,day_index" });
+      completed_at: completedAt,
+      started_at: startedAt,
+      last_activity_at: completedAt,
+      elapsed_duration_seconds: elapsedSec,
+      active_duration_seconds: activeSec,
+      required_sets_count: sum.requiredSets,
+      logged_sets_count: sum.loggedSets,
+      skipped_exercises_count: sum.skippedExercises,
+      logging_percentage: sum.loggingPercentage,
+      logging_quality: sum.loggingQuality,
+      completed_with_missing_logs: sum.completedWithMissingLogs,
+    } as any, { onConflict: "enrollment_id,week_index,day_index" });
     if (error) throw new Error(error.message);
 
     // Recompute progress

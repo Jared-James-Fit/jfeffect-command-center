@@ -57,6 +57,8 @@ import { WorkoutTimerSheet, QuickConfirmDuration, type TimerCompletionPayload } 
 import { formatDuration } from "@/lib/duration";
 import { Timer } from "lucide-react";
 import type { WorkoutContextAdapter } from "@/lib/workout-context";
+import { summarizeCompleteness, type RequiredRowSpec, type LoggedSetSpec, type RowMetricKind } from "@/lib/workout-completeness";
+import { LoggingQualityBadge } from "@/components/workout/shared/logging-quality-badge";
 
 /* -------------------------------------------------------------------------- */
 /* Target-parsing helpers (Suggested → Draft → Confirmed fast-logging)         */
@@ -765,6 +767,27 @@ function WorkoutDay({
           {completion && !completion.completed_at && (completion.in_progress_at || completion.started_at) && (
             <Badge variant="outline" className="border-amber-500/30 bg-amber-500/10 text-amber-500">In progress</Badge>
           )}
+          {(() => {
+            try {
+              const required: RequiredRowSpec[] = (rows as any[]).map((r: any) => ({
+                rowId: String(r.id),
+                prescribedSets: Math.max(1, Number(r.sets) || 1),
+                skipped: !!r.skipped,
+                metricKind: "load_reps" as RowMetricKind,
+              }));
+              const logged: LoggedSetSpec[] = (results as any[]).map((x: any) => ({
+                rowId: String(x.row_id),
+                setIndex: x.set_index ?? 0,
+                reps: x.actual_reps,
+                loadLb: x.actual_load_unit === "kg" ? null : x.actual_load,
+                loadKg: x.actual_load_unit === "kg" ? x.actual_load : null,
+                rpe: x.actual_rpe_num ?? x.actual_rpe,
+              }));
+              if (required.length === 0) return null;
+              const sum = summarizeCompleteness(required, logged);
+              return <LoggingQualityBadge quality={sum.loggingQuality} percentage={sum.loggingPercentage} />;
+            } catch { return null; }
+          })()}
           <div className="ml-auto flex items-center gap-2">
             {/* Global KG/LB toggle removed — per-exercise unit controls remain
                 the single source of truth for unit selection. */}
@@ -1043,6 +1066,36 @@ function WorkoutDay({
                 session_weight_total: computed.totalLifted > 0 ? computed.totalLifted : null,
                 session_weight_unit: computed.totalLifted > 0 ? displayUnit : null,
               };
+              // Shared logging-quality metrics (mirrors member side).
+              try {
+                const required: RequiredRowSpec[] = (rows as any[]).map((r: any) => ({
+                  rowId: String(r.id),
+                  prescribedSets: Math.max(1, Number(r.sets) || 1),
+                  skipped: !!r.skipped,
+                  metricKind: "load_reps" as RowMetricKind,
+                }));
+                const logged: LoggedSetSpec[] = (results as any[]).map((x: any) => ({
+                  rowId: String(x.row_id),
+                  setIndex: x.set_index ?? 0,
+                  reps: x.actual_reps,
+                  loadLb: x.actual_load_unit === "kg" ? null : x.actual_load,
+                  loadKg: x.actual_load_unit === "kg" ? x.actual_load : null,
+                  rpe: x.actual_rpe_num ?? x.actual_rpe,
+                }));
+                const sum = summarizeCompleteness(required, logged);
+                const elapsedSec = Math.max(0, Math.round((new Date(completedAt).getTime() - new Date(startedAt).getTime()) / 1000));
+                Object.assign(baseRow, {
+                  last_activity_at: completedAt,
+                  elapsed_duration_seconds: elapsedSec,
+                  active_duration_seconds: Math.min(elapsedSec, 12 * 3600),
+                  required_sets_count: sum.requiredSets,
+                  logged_sets_count: sum.loggedSets,
+                  skipped_exercises_count: sum.skippedExercises,
+                  logging_percentage: sum.loggingPercentage,
+                  logging_quality: sum.loggingQuality,
+                  completed_with_missing_logs: sum.completedWithMissingLogs,
+                });
+              } catch { /* metrics are best-effort */ }
               if (completion) {
                 const { error } = await sb.from("pl_day_completions").update(baseRow).eq("id", completion.id);
                 if (error) throw error;
