@@ -242,7 +242,11 @@ export function MessagesInbox({
       >
         <header
           className="border-b border-border px-4 py-3"
-          style={{ paddingTop: "max(env(safe-area-inset-top), 0.75rem)" }}
+          style={
+            embedded
+              ? undefined
+              : { paddingTop: "max(env(safe-area-inset-top), 0.75rem)" }
+          }
         >
           <div className="mb-2 flex items-center justify-between">
             <h1 className="text-lg font-black tracking-tight">Messages</h1>
@@ -276,7 +280,14 @@ export function MessagesInbox({
             ))}
           </div>
         </header>
-        <div className="flex-1 overflow-y-auto pb-[calc(var(--bottom-nav-clearance,0px)+max(env(safe-area-inset-bottom),1.5rem))]">
+        <div
+          className={cn(
+            "flex-1 overflow-y-auto",
+            embedded
+              ? "pb-[max(env(safe-area-inset-bottom),0.75rem)]"
+              : "pb-[calc(var(--bottom-nav-clearance,0px)+max(env(safe-area-inset-bottom),1.5rem))]",
+          )}
+        >
           {conversations.length === 0 ? (
             <div className="p-6 text-center text-sm text-muted-foreground">No conversations.</div>
           ) : conversations.map(({ client, state, last, unread }) => (
@@ -343,7 +354,11 @@ export function MessagesInbox({
           <>
             <header
               className="flex items-center gap-2 border-b border-border bg-card/80 px-3 py-2 backdrop-blur supports-[backdrop-filter]:bg-card/60 md:px-4"
-              style={{ paddingTop: "max(env(safe-area-inset-top), 0.5rem)" }}
+              style={
+                embedded
+                  ? undefined
+                  : { paddingTop: "max(env(safe-area-inset-top), 0.5rem)" }
+              }
             >
               <Button
                 variant="ghost"
