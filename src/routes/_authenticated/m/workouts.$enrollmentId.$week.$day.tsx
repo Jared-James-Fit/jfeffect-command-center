@@ -369,11 +369,23 @@ function WorkoutTracker() {
       displayUnit: "lb",
       hasNote: !!notes.trim(),
     });
+    // Heartbeat-derived duration. Falls back gracefully if storage was wiped.
+    const startedAtIso = readHbStart() ?? new Date().toISOString();
+    const completedAtIso = new Date().toISOString();
+    const heartbeats = readHbList();
+    const activeSeconds = computeActiveSeconds(startedAtIso, completedAtIso, heartbeats) ?? null;
     enqueueOfflineWrite({
       id: `m_complete:${enrollmentId}:${weekIndex}:${dayIndex}`,
       label: "Marked workout complete",
       handlerKey: "m_complete_workout",
-      payload: { enrollmentId, weekIndex, dayIndex, notes },
+      payload: {
+        enrollmentId,
+        weekIndex,
+        dayIndex,
+        notes,
+        startedAt: startedAtIso,
+        ...(activeSeconds != null ? { activeDurationSeconds: activeSeconds } : {}),
+      },
     });
     toast.success(`Workout complete — Score: ${summary.score}/100`, {
       description: summary.totalLifted > 0 ? `Total lifted: ${summary.totalLiftedFmt}` : "Syncing in background.",
@@ -381,7 +393,8 @@ function WorkoutTracker() {
     setLastSummary(summary);
     setSummaryOpen(true);
     qc.setQueryData(["m-completion", enrollmentId, weekIndex, dayIndex],
-      (old: any) => old ?? { enrollment_id: enrollmentId, week_index: weekIndex, day_index: dayIndex, completed_at: new Date().toISOString(), _optimistic: true });
+      (old: any) => old ?? { enrollment_id: enrollmentId, week_index: weekIndex, day_index: dayIndex, completed_at: completedAtIso, started_at: startedAtIso, active_duration_seconds: activeSeconds, _optimistic: true });
+    clearHb();
     undo.push({
       label: "Marked workout complete",
       undo: () => {
