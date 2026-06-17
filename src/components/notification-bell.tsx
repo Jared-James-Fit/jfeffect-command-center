@@ -440,7 +440,8 @@ export function useNotificationFeed() {
         };
       });
       items.sort((a, b) => +new Date(b.created_at) - +new Date(a.created_at));
-      return { items };
+      // Hard cap to prevent UI freezes if the merged feed grows unexpectedly large.
+      return { items: items.slice(0, 500) };
     },
   });
 
