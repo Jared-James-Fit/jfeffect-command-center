@@ -45,10 +45,10 @@ export async function getCombinedBodyweightSeries(
 ): Promise<BodyweightPoint[]> {
   const cap = Math.min(200, Math.max(1, limit));
 
-  // Lookup the client row to find client_id and starting_bodyweight (single row)
+  // Lookup the client row to find client_id for legacy progress_metrics rows.
   const { data: clientRow } = await supabase
     .from("clients")
-    .select("id, starting_bodyweight, starting_bodyweight_unit, created_at")
+    .select("id")
     .eq("user_id", userId)
     .maybeSingle();
 
@@ -98,19 +98,5 @@ export async function getCombinedBodyweightSeries(
       byKey.set(p.date, p);
     }
   }
-  let merged = Array.from(byKey.values()).sort((a, b) => a.date.localeCompare(b.date));
-
-  // Final fallback to starting_bodyweight if nothing else is present
-  if (!merged.length && clientRow?.starting_bodyweight) {
-    merged = [
-      {
-        date: (clientRow.created_at ?? new Date().toISOString()).slice(0, 10),
-        value: Number(clientRow.starting_bodyweight),
-        unit: ((clientRow.starting_bodyweight_unit as WeightUnit) ?? "lb"),
-        source: "clients",
-      },
-    ];
-  }
-
-  return merged;
+  return Array.from(byKey.values()).sort((a, b) => a.date.localeCompare(b.date));
 }
