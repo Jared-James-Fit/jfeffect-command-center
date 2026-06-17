@@ -47,6 +47,9 @@ export type ExistingFeedback = {
   client_note: string | null;
   reviewed_at?: string | null;
   reviewed_by?: string | null;
+  review_edit_count?: number | null;
+  review_submitted_at?: string | null;
+  review_last_edited_at?: string | null;
 } | null;
 
 type Props = {
