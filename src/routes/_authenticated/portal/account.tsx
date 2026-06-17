@@ -21,6 +21,7 @@ import { useAutosave } from "@/hooks/use-autosave";
 import { SavedIndicator } from "@/components/saved-indicator";
 import { ClientLegalSafety } from "@/components/legal/client-legal-safety";
 import { InstallAppCard } from "@/components/portal/install-app-card";
+import { SectionErrorBoundary } from "@/components/section-error-boundary";
 
 export const Route = createFileRoute("/_authenticated/portal/account")({
   component: AccountPage,
@@ -174,65 +175,81 @@ function AccountPage() {
           </Card>
         )}
 
-        <Card className="border-border bg-card p-6 md:col-span-2 space-y-4">
-          <div className="flex items-center justify-between">
-            <h3 className="text-xs uppercase tracking-widest text-muted-foreground">Basic Information</h3>
-            <SavedIndicator state={saveState} />
-          </div>
-          <BasicInfoForm
-            values={form}
-            onChange={(p) => setForm({ ...form, ...p })}
-            emailReadOnly={form.email ?? user.email ?? ""}
-          />
-          <p className="text-[11px] text-muted-foreground">
-            Saves automatically. Last updated:{" "}
-            {form.info_last_updated_at ? new Date(form.info_last_updated_at).toLocaleString() : "—"}{" "}
-            {form.info_last_updated_by ? `by ${form.info_last_updated_by}` : ""}
-          </p>
-        </Card>
-
-        <Card className="border-border bg-card p-6 space-y-3">
-          <h3 className="text-xs uppercase tracking-widest text-muted-foreground">Profile Picture</h3>
-          <ProfilePictureCapture
-            mode="client"
-            userId={user.id}
-            currentUrl={form.profile_picture_url}
-            onUploaded={updatePicture}
-          />
-          <p className="text-[11px] text-muted-foreground">
-            Use a clear, real-time headshot. Replacement only — you can't leave this blank.
-            Last updated: {form.profile_picture_updated_at ? new Date(form.profile_picture_updated_at).toLocaleString() : "—"}
-          </p>
-        </Card>
-
-        <Card className="border-border bg-card p-6 md:col-span-3 space-y-4">
-          <div>
-            <h3 className="text-xs uppercase tracking-widest text-muted-foreground">Social Media (optional)</h3>
-            <p className="mt-1 text-[11px] text-muted-foreground">
-              Add just your username/handle — no full URLs needed. Leave any field blank to skip.
+        <SectionErrorBoundary label="Basic Information" className="md:col-span-2">
+          <Card className="border-border bg-card p-6 md:col-span-2 space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="text-xs uppercase tracking-widest text-muted-foreground">Basic Information</h3>
+              <SavedIndicator state={saveState} />
+            </div>
+            <BasicInfoForm
+              values={form}
+              onChange={(p) => setForm({ ...form, ...p })}
+              emailReadOnly={form.email ?? user.email ?? ""}
+            />
+            <p className="text-[11px] text-muted-foreground">
+              Saves automatically. Last updated:{" "}
+              {form.info_last_updated_at ? new Date(form.info_last_updated_at).toLocaleString() : "—"}{" "}
+              {form.info_last_updated_by ? `by ${form.info_last_updated_by}` : ""}
             </p>
-          </div>
-          <SocialHandlesEditor values={form} onChange={(k, v) => set(k, v)} />
-        </Card>
+          </Card>
+        </SectionErrorBoundary>
+
+        <SectionErrorBoundary label="Profile Picture">
+          <Card className="border-border bg-card p-6 space-y-3">
+            <h3 className="text-xs uppercase tracking-widest text-muted-foreground">Profile Picture</h3>
+            <ProfilePictureCapture
+              mode="client"
+              userId={user.id}
+              currentUrl={form.profile_picture_url}
+              onUploaded={updatePicture}
+            />
+            <p className="text-[11px] text-muted-foreground">
+              Use a clear, real-time headshot. Replacement only — you can't leave this blank.
+              Last updated: {form.profile_picture_updated_at ? new Date(form.profile_picture_updated_at).toLocaleString() : "—"}
+            </p>
+          </Card>
+        </SectionErrorBoundary>
+
+        <SectionErrorBoundary label="Social Media" className="md:col-span-3">
+          <Card className="border-border bg-card p-6 md:col-span-3 space-y-4">
+            <div>
+              <h3 className="text-xs uppercase tracking-widest text-muted-foreground">Social Media (optional)</h3>
+              <p className="mt-1 text-[11px] text-muted-foreground">
+                Add just your username/handle — no full URLs needed. Leave any field blank to skip.
+              </p>
+            </div>
+            <SocialHandlesEditor values={form} onChange={(k, v) => set(k, v)} />
+          </Card>
+        </SectionErrorBoundary>
 
         <div className="md:col-span-3">
-          <ChangePasswordCard />
+          <SectionErrorBoundary label="Change Password">
+            <ChangePasswordCard />
+          </SectionErrorBoundary>
         </div>
 
         <div className="md:col-span-3">
-          <TrainingScheduleCard client={client as any} editable />
+          <SectionErrorBoundary label="Training Schedule">
+            <TrainingScheduleCard client={client as any} editable />
+          </SectionErrorBoundary>
         </div>
 
         <div className="md:col-span-3">
-          <ClientLegalSafety />
+          <SectionErrorBoundary label="Legal & Safety">
+            <ClientLegalSafety />
+          </SectionErrorBoundary>
         </div>
 
         <div className="md:col-span-3">
-          <InstallAppCard />
+          <SectionErrorBoundary label="Install App">
+            <InstallAppCard />
+          </SectionErrorBoundary>
         </div>
 
         {/* ── Billing & Subscription ─────────────────────────────────────── */}
-        <BillingSection clientId={client?.id} />
+        <SectionErrorBoundary label="Billing & Subscription" className="md:col-span-3">
+          <BillingSection clientId={client?.id} />
+        </SectionErrorBoundary>
       </div>
     </>
   );
