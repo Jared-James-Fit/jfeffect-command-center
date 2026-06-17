@@ -43,23 +43,10 @@ export const Route = createFileRoute("/_authenticated/m/workouts/$enrollmentId/$
   component: () => (
     <WorkoutUndoProvider>
       <WorkoutTracker />
-      <MemberAdapterProbeMount />
     </WorkoutUndoProvider>
   ),
 });
 
-function MemberAdapterProbeMount() {
-  const { enrollmentId, week, day } = Route.useParams();
-  const { user } = useAuth();
-  return (
-    <MemberAdapterProbe
-      userId={user?.id}
-      enrollmentId={enrollmentId}
-      week={Number(week)}
-      day={Number(day)}
-    />
-  );
-}
 
 type SetLog = { reps?: number | null; load_lb?: number | null; rpe?: number | null; rir?: number | null; notes?: string | null };
 
