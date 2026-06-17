@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetFooter } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
@@ -11,15 +10,12 @@ const RATING_LABELS = ["Rough", "Below Avg", "Solid", "Great", "Excellent"];
 
 export type WorkoutCompletePayload = {
   session_rating: number;
-  session_weight_total: number | null;
-  session_weight_unit: "kg" | "lb" | null;
   client_notes: string | null;
 };
 
 type Props = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  defaultUnit?: "kg" | "lb";
   initial?: Partial<WorkoutCompletePayload>;
   submitting?: boolean;
   onSubmit: (payload: WorkoutCompletePayload) => Promise<void> | void;
@@ -28,35 +24,25 @@ type Props = {
 export function WorkoutCompleteSheet({
   open,
   onOpenChange,
-  defaultUnit = "lb",
   initial,
   submitting = false,
   onSubmit,
 }: Props) {
   const [rating, setRating] = useState<number | null>(null);
-  const [weight, setWeight] = useState<string>("");
-  const [unit, setUnit] = useState<"kg" | "lb">(defaultUnit);
   const [note, setNote] = useState<string>("");
 
   useEffect(() => {
     if (!open) return;
     setRating(initial?.session_rating ?? null);
-    setWeight(
-      initial?.session_weight_total != null ? String(initial.session_weight_total) : "",
-    );
-    setUnit((initial?.session_weight_unit as "kg" | "lb") ?? defaultUnit);
     setNote(initial?.client_notes ?? "");
-  }, [open, initial?.session_rating, initial?.session_weight_total, initial?.session_weight_unit, initial?.client_notes, defaultUnit]);
+  }, [open, initial?.session_rating, initial?.client_notes]);
 
   const canSubmit = rating != null && !submitting;
 
   const submit = async () => {
     if (!canSubmit || rating == null) return;
-    const parsed = weight.trim() === "" ? null : Number(weight);
     await onSubmit({
       session_rating: rating,
-      session_weight_total: parsed != null && Number.isFinite(parsed) && parsed > 0 ? parsed : null,
-      session_weight_unit: parsed != null && Number.isFinite(parsed) && parsed > 0 ? unit : null,
       client_notes: note.trim() ? note.trim() : null,
     });
   };
@@ -70,7 +56,7 @@ export function WorkoutCompleteSheet({
         <div className="px-5 pt-5">
           <SheetHeader className="space-y-1 text-left">
             <SheetTitle className="text-xl font-black">Workout Complete</SheetTitle>
-            <SheetDescription>Quick rating and total weight lifted. Takes 5 seconds.</SheetDescription>
+            <SheetDescription>One quick rating and you're done.</SheetDescription>
           </SheetHeader>
         </div>
 
@@ -100,41 +86,6 @@ export function WorkoutCompleteSheet({
               ))}
             </div>
           </fieldset>
-
-          {/* Total weight lifted */}
-          <div className="space-y-2">
-            <Label htmlFor="wc-total" className="text-sm font-bold">
-              Total weight lifted <span className="font-normal text-muted-foreground">(optional)</span>
-            </Label>
-            <div className="flex items-stretch gap-2">
-              <Input
-                id="wc-total"
-                inputMode="decimal"
-                placeholder="e.g. 12000"
-                value={weight}
-                onChange={(e) => setWeight(e.target.value.replace(/[^0-9.]/g, ""))}
-                className="h-11 flex-1 text-base"
-              />
-              <div className="inline-flex overflow-hidden rounded-md border border-border">
-                {(["lb", "kg"] as const).map((u) => (
-                  <button
-                    key={u}
-                    type="button"
-                    onClick={() => setUnit(u)}
-                    aria-pressed={unit === u}
-                    className={cn(
-                      "px-4 text-sm font-bold uppercase tracking-wide transition-colors",
-                      unit === u
-                        ? "bg-primary text-primary-foreground"
-                        : "bg-card text-muted-foreground hover:bg-secondary/40",
-                    )}
-                  >
-                    {u}
-                  </button>
-                ))}
-              </div>
-            </div>
-          </div>
 
           {/* Optional note */}
           <div className="space-y-2">
