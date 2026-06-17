@@ -180,9 +180,6 @@ export function WorkoutsExperience({
       />
 
       <div className="space-y-4 p-4 pb-32 md:p-6">
-        {inProgress && (
-          <ResumeBanner item={inProgress} />
-        )}
 
         <Tabs defaultValue="calendar" className="space-y-4">
           <TabsList className="grid w-full grid-cols-2 sm:w-auto sm:inline-flex">
