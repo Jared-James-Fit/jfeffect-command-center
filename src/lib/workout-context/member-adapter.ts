@@ -78,6 +78,27 @@ function decodeRowResultId(id: string) {
   };
 }
 
+/** yyyy-MM-dd date arithmetic kept local — UTC parsing avoids tz drift. */
+function parseYmd(ymd: string): Date {
+  const [y, m, d] = ymd.split("-").map(Number);
+  return new Date(Date.UTC(y, (m ?? 1) - 1, d ?? 1));
+}
+function formatYmd(date: Date): string {
+  const y = date.getUTCFullYear();
+  const m = String(date.getUTCMonth() + 1).padStart(2, "0");
+  const d = String(date.getUTCDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+}
+function daysBetween(fromYmd: string, toYmd: string): number {
+  const ms = parseYmd(toYmd).getTime() - parseYmd(fromYmd).getTime();
+  return Math.round(ms / 86_400_000);
+}
+function addDays(ymd: string, delta: number): string {
+  const d = parseYmd(ymd);
+  d.setUTCDate(d.getUTCDate() + delta);
+  return formatYmd(d);
+}
+
 /** Locate the day object inside `member_plans.published_payload`. */
 async function loadPublishedDay(enrollmentId: string, weekIndex: number, dayIndex: number) {
   const { data, error } = await supabase
