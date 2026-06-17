@@ -314,7 +314,12 @@ export function DiscountCodesPage({ embedded = false }: { embedded?: boolean } =
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction
               onClick={() => confirmAction && setStatusM.mutate({ id: confirmAction.code.id, status: confirmAction.next })}
-              disabled={setStatusM.isPending}
+              disabled={
+                setStatusM.isPending ||
+                (confirmAction?.next === "active" &&
+                  confirmAction.code.category === "promotion" &&
+                  !confirmAction.code.expires_at)
+              }
             >
               Confirm
             </AlertDialogAction>
