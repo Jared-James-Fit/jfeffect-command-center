@@ -2,7 +2,6 @@ import { parseLocalDate } from "@/lib/today";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { useServerFn } from "@tanstack/react-start";
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/app-shell";
 import { Card } from "@/components/ui/card";
@@ -15,13 +14,28 @@ import { format, startOfDay } from "date-fns";
 import { MemberBlockWeekColumns } from "@/components/member/member-block-week-columns";
 import { MemberPlanCalendar } from "@/components/member/member-plan-calendar";
 import { MemberDataTracker } from "@/components/member/member-data-tracker";
-import { getEnrollmentSchedule } from "@/lib/member-plans.functions";
+import { buildWorkoutAdapter } from "@/lib/workout-context";
 
 export const Route = createFileRoute("/_authenticated/m/my-plans/$enrollmentId")({ component: EnrollmentView });
 
 function EnrollmentView() {
   const { enrollmentId } = Route.useParams();
-  const getSchedule = useServerFn(getEnrollmentSchedule);
+  // Read schedule through the member adapter — single source of truth for
+  // membership workout context. Underlying server fn is the same; this
+  // keeps the call site uniform with completions/log writes once those
+  // migrate too. See member-adapter-probe for drift verification.
+  const { data: userId } = useQuery({
+    queryKey: ["m-auth-user"],
+    queryFn: async () => (await supabase.auth.getUser()).data.user?.id ?? null,
+    staleTime: 60_000,
+  });
+  const adapter = useMemo(
+    () =>
+      userId
+        ? buildWorkoutAdapter({ kind: "member", userId, ownerId: userId, enrollmentId })
+        : null,
+    [enrollmentId, userId],
+  );
 
   const { data: enr } = useQuery({
     queryKey: ["m-enrollment", enrollmentId],
@@ -46,7 +60,18 @@ function EnrollmentView() {
 
   const { data: scheduleData } = useQuery({
     queryKey: ["m-schedule", enrollmentId],
-    queryFn: () => getSchedule({ data: { enrollmentId } }),
+    queryFn: async () => {
+      const days = await adapter!.listSchedule();
+      return {
+        schedule: days.map((d) => ({
+          week: d.week,
+          day: d.day,
+          date: d.date,
+          isOverride: false,
+        })),
+      };
+    },
+    enabled: !!adapter,
   });
 
   const doneSet = useMemo(
