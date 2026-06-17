@@ -284,6 +284,18 @@ function ClientDetail() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [data]);
 
+  // Compare current form state to the last server snapshot to know when to
+  // show the sticky Save bar. Must run before any early return to keep hook
+  // order stable across renders.
+  const isDirty = useMemo(() => {
+    if (!data || !form) return false;
+    try {
+      return JSON.stringify(form) !== JSON.stringify(data);
+    } catch {
+      return false;
+    }
+  }, [form, data]);
+
   if (!form) return <div className="p-10 text-muted-foreground">Loading…</div>;
 
   const save = async () => {
@@ -398,17 +410,6 @@ function ClientDetail() {
   };
 
   const set = (k: string, v: any) => setForm({ ...form, [k]: v });
-
-  // Compare current form state to the last server snapshot to know when to
-  // show the sticky Save bar. JSON.stringify is fine for a single client row.
-  const isDirty = useMemo(() => {
-    if (!data || !form) return false;
-    try {
-      return JSON.stringify(form) !== JSON.stringify(data);
-    } catch {
-      return false;
-    }
-  }, [form, data]);
 
   const saveAccountInfo = async () => {
     if (!data) return;
