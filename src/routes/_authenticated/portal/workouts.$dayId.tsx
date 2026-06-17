@@ -960,7 +960,7 @@ function WorkoutDay() {
 
       {/* Sticky general-notes shortcut */}
       {!readonly && (
-      <div className="fixed bottom-4 right-4 z-30 md:bottom-6 md:right-6">
+      <div className="fixed right-4 z-30 bottom-[calc(env(safe-area-inset-bottom)+96px)] md:right-6 md:bottom-6">
         <Button size="lg" variant="secondary" onClick={focusGeneralNotes} className="shadow-lg">
           <NotebookPen className="mr-2 h-4 w-4" /> Workout Notes
         </Button>
