@@ -55,10 +55,7 @@ function AccountPage() {
     });
   }, [client]);
 
-  if (!user) return <div className="p-10 text-muted-foreground">Sign in to manage your account.</div>;
-  if (!form) return <div className="p-10 text-muted-foreground">Loading…</div>;
-
-  const set = (k: string, v: any) => setForm({ ...form, [k]: v });
+  const set = (k: string, v: any) => setForm({ ...(form ?? {}), [k]: v });
 
   const buildPatch = (current: any) => {
     const updatedFields = PROFILE_FIELDS.filter((f) => current[f] !== client?.[f]);
@@ -119,6 +116,9 @@ function AccountPage() {
       qc.invalidateQueries({ queryKey: ["my-client"] });
     },
   });
+
+  if (!user) return <div className="p-10 text-muted-foreground">Sign in to manage your account.</div>;
+  if (!form) return <div className="p-10 text-muted-foreground">Loading…</div>;
 
   // Manual save button (rare — used if you change everything and want immediate confirmation).
   const flushNow = async () => {
