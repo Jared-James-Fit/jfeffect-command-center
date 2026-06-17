@@ -1,5 +1,5 @@
 import { Link, useNavigate } from "@tanstack/react-router";
-import { Component, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { Component, createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { usePortalUserId } from "@/lib/client-impersonation";
@@ -227,6 +227,16 @@ export type WorkoutDayViewNavigation = {
   messagesPath: string;
 };
 
+const WorkoutNavigationContext = createContext<WorkoutDayViewNavigation | null>(null);
+
+function useWorkoutNavigation(): WorkoutDayViewNavigation {
+  const ctx = useContext(WorkoutNavigationContext);
+  if (!ctx) {
+    throw new Error("WorkoutDayView navigation context missing — wrap in <WorkoutDayView navigation={...} />");
+  }
+  return ctx;
+}
+
 export function WorkoutDayView({
   dayId,
   search,
@@ -247,11 +257,13 @@ export function WorkoutDayView({
   navigation: WorkoutDayViewNavigation;
 }) {
   return (
-    <WorkoutUndoProvider>
-      <ActiveRestTimerProvider>
-        <WorkoutDay dayId={dayId} search={search} adapter={adapter} navigation={navigation} />
-      </ActiveRestTimerProvider>
-    </WorkoutUndoProvider>
+    <WorkoutNavigationContext.Provider value={navigation}>
+      <WorkoutUndoProvider>
+        <ActiveRestTimerProvider>
+          <WorkoutDay dayId={dayId} search={search} adapter={adapter} navigation={navigation} />
+        </ActiveRestTimerProvider>
+      </WorkoutUndoProvider>
+    </WorkoutNavigationContext.Provider>
   );
 }
 
