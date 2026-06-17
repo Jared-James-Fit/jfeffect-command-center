@@ -154,6 +154,53 @@ async function fetchUnreadGroupItems(userId: string): Promise<Omit<BellItem, "is
 // Feed hook — derives items from existing source tables + overlays state
 // =============================================================================
 
+// Refcounted singleton realtime channel — many components can call
+// useNotificationFeed(), but only one Postgres-changes subscription exists
+// per user. Prevents duplicate invalidations when both the bell and the
+// full /notifications page are mounted at once.
+type QC = ReturnType<typeof useQueryClient>;
+const _notifChannels = new Map<string, { ch: ReturnType<typeof supabase.channel>; timer: ReturnType<typeof setTimeout> | null; refs: number }>();
+
+function acquireNotificationsChannel(userId: string, qc: QC): () => void {
+  const existing = _notifChannels.get(userId);
+  if (existing) {
+    existing.refs += 1;
+  } else {
+    const entry: { ch: ReturnType<typeof supabase.channel>; timer: ReturnType<typeof setTimeout> | null; refs: number } = {
+      ch: null as any, timer: null, refs: 1,
+    };
+    const invalidate = () => {
+      if (entry.timer) clearTimeout(entry.timer);
+      entry.timer = setTimeout(() => { qc.invalidateQueries({ queryKey: ["notifications"] }); }, 300);
+    };
+    entry.ch = supabase
+      .channel(`notifications-${userId}`)
+      .on("postgres_changes", { event: "*", schema: "public", table: "messages" }, invalidate)
+      .on("postgres_changes", { event: "*", schema: "public", table: "conversation_state" }, invalidate)
+      .on("postgres_changes", { event: "*", schema: "public", table: "lift_videos" }, invalidate)
+      .on("postgres_changes", { event: "*", schema: "public", table: "lift_video_comments" }, invalidate)
+      .on("postgres_changes", { event: "*", schema: "public", table: "agreements" }, invalidate)
+      .on("postgres_changes", { event: "*", schema: "public", table: "pl_exercise_notes" }, invalidate)
+      .on("postgres_changes", { event: "*", schema: "public", table: "group_messages" }, invalidate)
+      .on("postgres_changes", { event: "*", schema: "public", table: "chat_group_members" }, invalidate)
+      .on("postgres_changes", { event: "*", schema: "public", table: "manual_check_in_reviews" }, invalidate)
+      .on("postgres_changes", { event: "*", schema: "public", table: "appointments" }, invalidate)
+      .on("postgres_changes", { event: "*", schema: "public", table: "notification_state", filter: `user_id=eq.${userId}` }, invalidate)
+      .subscribe();
+    _notifChannels.set(userId, entry);
+  }
+  return () => {
+    const e = _notifChannels.get(userId);
+    if (!e) return;
+    e.refs -= 1;
+    if (e.refs <= 0) {
+      if (e.timer) clearTimeout(e.timer);
+      supabase.removeChannel(e.ch);
+      _notifChannels.delete(userId);
+    }
+  };
+}
+
 export function useNotificationFeed() {
   const { role, user } = useAuth();
   const qc = useQueryClient();
