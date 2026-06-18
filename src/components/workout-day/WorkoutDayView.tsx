@@ -237,6 +237,18 @@ function useWorkoutNavigation(): WorkoutDayViewNavigation {
   return ctx;
 }
 
+/**
+ * Optional adapter context. When `null`, write sites fall back to direct
+ * `sb.from("pl_*")` calls (legacy portal path). When set, every write
+ * routes through `adapter.upsertPl*Raw` — byte-identical for the client
+ * adapter (passthrough), and reshaped into `member_*` tables by the
+ * member adapter in turn 4c.
+ */
+const WorkoutAdapterContext = createContext<WorkoutContextAdapter | null>(null);
+function useOptionalAdapter(): WorkoutContextAdapter | null {
+  return useContext(WorkoutAdapterContext);
+}
+
 export function WorkoutDayView({
   dayId,
   search,
@@ -258,11 +270,13 @@ export function WorkoutDayView({
 }) {
   return (
     <WorkoutNavigationContext.Provider value={navigation}>
-      <WorkoutUndoProvider>
-        <ActiveRestTimerProvider>
-          <WorkoutDay dayId={dayId} search={search} adapter={adapter} navigation={navigation} />
-        </ActiveRestTimerProvider>
-      </WorkoutUndoProvider>
+      <WorkoutAdapterContext.Provider value={adapter ?? null}>
+        <WorkoutUndoProvider>
+          <ActiveRestTimerProvider>
+            <WorkoutDay dayId={dayId} search={search} adapter={adapter} navigation={navigation} />
+          </ActiveRestTimerProvider>
+        </WorkoutUndoProvider>
+      </WorkoutAdapterContext.Provider>
     </WorkoutNavigationContext.Provider>
   );
 }
