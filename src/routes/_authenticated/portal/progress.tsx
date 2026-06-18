@@ -12,7 +12,7 @@ export const Route = createFileRoute("/_authenticated/portal/progress")({
   component: PortalProgress,
   validateSearch: (s: Record<string, unknown>) => {
     const a = s.action as string | undefined;
-    const allowed: ProgressInitialAction[] = ["photo", "weight", "measure", "history"];
+    const allowed: ProgressInitialAction[] = ["photo", "weight", "bodyweight", "measure", "history"];
     return { action: (allowed as string[]).includes(a ?? "") ? (a as ProgressInitialAction) : undefined };
   },
 });
