@@ -833,7 +833,36 @@ function BodyweightDialog({ ctx, open, onOpenChange }: { ctx: ProgressContext; o
       await logBodyweight({
         user_id: ctx.userId, weight_value: Number(val), weight_unit: unit, logged_date: date, note: note || null,
       });
+      if (ctx.clientId) {
+        const { data: existing, error: findError } = await supabase
+          .from("progress_metrics")
+          .select("id")
+          .eq("client_id", ctx.clientId)
+          .eq("entry_date", date)
+          .maybeSingle();
+        if (findError) throw findError;
+        if (existing?.id) {
+          const { error } = await supabase.from("progress_metrics").update({
+            bodyweight: Number(val),
+            bodyweight_unit: unit,
+            source: "manual",
+            notes: note || null,
+          } as never).eq("id", existing.id);
+          if (error) throw error;
+        } else {
+          const { error } = await supabase.from("progress_metrics").insert({
+            client_id: ctx.clientId,
+            entry_date: date,
+            bodyweight: Number(val),
+            bodyweight_unit: unit,
+            source: "manual",
+            notes: note || null,
+          } as never);
+          if (error) throw error;
+        }
+      }
       qc.invalidateQueries({ queryKey: ["progress-bw", ctx.userId] });
+      qc.invalidateQueries({ queryKey: ["progress-metrics", ctx.clientId] });
       toast.success("Logged");
       onOpenChange(false);
     } catch (e: any) { toast.error(e?.message ?? "Failed"); }
