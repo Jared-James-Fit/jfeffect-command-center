@@ -913,9 +913,6 @@ function WorkoutDay({
         actions={!readonly ? <UndoButton /> : undefined}
       />
       <div className="p-4 md:p-8 space-y-4 pb-[calc(var(--bottom-nav-clearance,96px)+env(safe-area-inset-bottom)+24px)] md:pb-8">
-        <Link to={navigation.listPath} className="inline-flex items-center text-sm text-muted-foreground hover:text-foreground">
-          <ArrowLeft className="mr-1 h-4 w-4" /> All workouts
-        </Link>
 
         <WorkoutSyncBanner
           clientId={client?.id ?? null}
