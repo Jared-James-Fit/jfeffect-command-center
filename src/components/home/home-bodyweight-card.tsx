@@ -10,9 +10,8 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sh
 import { Scale, TrendingDown, TrendingUp, Plus, History, Loader2 } from "lucide-react";
 import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis } from "recharts";
 import { toast } from "sonner";
-import {
-  listBodyweight, logBodyweight, bodyweightStats, type ProgressBodyweight,
-} from "@/lib/progress";
+import { logBodyweight } from "@/lib/progress";
+import { getCombinedBodyweightSeries, type BodyweightPoint } from "@/lib/bodyweight";
 import { todayLocalISO } from "@/lib/today";
 
 type Surface = "portal" | "member";
@@ -40,21 +39,25 @@ export function HomeBodyweightCard({ userId, surface, defaultUnit = "lb" }: Prop
   const { data: rows = [] } = useQuery({
     queryKey: ["progress-bw", userId],
     enabled: !!userId,
-    queryFn: () => listBodyweight(userId),
+    queryFn: () => getCombinedBodyweightSeries(userId, 200),
     staleTime: 30_000,
   });
 
-  const stats = bodyweightStats(rows);
+  // Latest point (unioned across progress_bodyweight + progress_metrics)
+  const latestPoint = rows.length ? rows[rows.length - 1] : null;
+  const stats = latestPoint
+    ? { latest: Number(latestPoint.value), unit: latestPoint.unit }
+    : null;
   const spark = useMemo(() => {
-    const sorted = [...rows].sort((a, b) => a.logged_date.localeCompare(b.logged_date));
+    const sorted = [...rows].sort((a, b) => a.date.localeCompare(b.date));
     const last = sorted.slice(-30);
-    return last.map((r: ProgressBodyweight) => ({
-      d: r.logged_date,
-      v: r.weight_unit === unit
-        ? Number(r.weight_value)
-        : r.weight_unit === "kg"
-          ? +(Number(r.weight_value) * 2.20462).toFixed(2)
-          : +(Number(r.weight_value) / 2.20462).toFixed(2),
+    return last.map((r: BodyweightPoint) => ({
+      d: r.date,
+      v: r.unit === unit
+        ? Number(r.value)
+        : r.unit === "kg"
+          ? +(Number(r.value) * 2.20462).toFixed(2)
+          : +(Number(r.value) / 2.20462).toFixed(2),
     }));
   }, [rows, unit]);
 
