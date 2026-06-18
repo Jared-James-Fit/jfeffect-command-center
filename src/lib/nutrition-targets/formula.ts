@@ -14,6 +14,7 @@
 export type ActivityLevel = "sedentary" | "light" | "moderate" | "very" | "extra";
 export type BiologicalSex = "male" | "female";
 export type NutritionGoal = "lose" | "maintain" | "gain";
+export type GoalIntensity = "conservative" | "standard" | "aggressive";
 
 export type FormulaSettings = {
   deficit_percent: number;
@@ -55,6 +56,31 @@ export const GOAL_OPTIONS: { value: NutritionGoal; label: string; hint: string }
   { value: "gain", label: "Build Muscle", hint: "Lean surplus" },
 ];
 
+/**
+ * Intensity presets scale the formula's default deficit/surplus.
+ * Conservative = gentler change; Aggressive = larger swing.
+ * `maintain` ignores intensity (no deficit/surplus to scale).
+ */
+export const INTENSITY_OPTIONS: { value: GoalIntensity; label: string; multiplier: number; hint: string }[] = [
+  { value: "conservative", label: "Conservative", multiplier: 0.5, hint: "Slow & sustainable" },
+  { value: "standard",     label: "Standard",     multiplier: 1.0, hint: "Recommended default" },
+  { value: "aggressive",   label: "Aggressive",   multiplier: 1.5, hint: "Faster — harder to sustain" },
+];
+
+export function applyIntensity(
+  settings: FormulaSettings,
+  goal: NutritionGoal,
+  intensity: GoalIntensity = "standard",
+): FormulaSettings {
+  if (goal === "maintain" || intensity === "standard") return settings;
+  const mult = INTENSITY_OPTIONS.find((o) => o.value === intensity)?.multiplier ?? 1;
+  return {
+    ...settings,
+    deficit_percent: Math.min(0.4, settings.deficit_percent * mult),
+    surplus_percent: Math.min(0.3, settings.surplus_percent * mult),
+  };
+}
+
 export type FormulaInput = {
   bodyweightKg: number;
   heightCm: number;
@@ -62,6 +88,7 @@ export type FormulaInput = {
   sex: BiologicalSex;
   activity: ActivityLevel;
   goal: NutritionGoal;
+  intensity?: GoalIntensity;
 };
 
 export type CalculatedTargets = {
