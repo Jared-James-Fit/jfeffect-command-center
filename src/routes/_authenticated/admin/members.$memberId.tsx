@@ -82,8 +82,23 @@ function MemberProfile() {
   const refresh = () => qc.invalidateQueries({ queryKey: ["admin-member", memberId] });
   const acctLabel = (ACCOUNT_TYPES as any)[member.account_type]?.label ?? member.account_type;
 
+  const accessActive = isMemberAccessActive(member);
+
   return (
     <div className="space-y-5">
+      <Card className="p-5 flex items-center gap-4">
+        <div className="text-sm font-medium text-muted-foreground">Membership Access</div>
+        {accessActive ? (
+          <div className="inline-flex items-center gap-2 rounded-full bg-emerald-500/15 px-4 py-2 text-emerald-300 font-bold text-lg border border-emerald-500/30">
+            <span>✓</span> Access Active
+          </div>
+        ) : (
+          <div className="inline-flex items-center gap-2 rounded-full bg-red-500/15 px-4 py-2 text-red-300 font-bold text-lg border border-red-500/30">
+            <span>✗</span> Access Blocked
+          </div>
+        )}
+      </Card>
+
       {member.account_type === "jf_member" && member.profile_picture_required && !member.avatar_url && (
         <div className="rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs font-semibold text-amber-300">
           Setup incomplete — profile picture required.
