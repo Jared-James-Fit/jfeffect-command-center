@@ -1170,7 +1170,10 @@ function BottomNavSlot({ item, pathname, navBadges, onNavigate }: {
         navigate({ to: id });
       }
     },
-    onShortTap: () => setOpen((o) => !o),
+    // Radix's PopoverTrigger already toggles `open` via `onOpenChange` when the
+    // trigger button is tapped. Don't toggle again here or the two updates
+    // cancel out and the menu flickers ("glitches") on tap.
+    onShortTap: () => {},
   });
 
   return (
