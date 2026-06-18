@@ -5,6 +5,14 @@ import { Flame, Beef, Clock, Users } from "lucide-react";
 import type { Recipe } from "@/lib/recipes";
 import { getRecipeMeta } from "@/lib/recipe-meta";
 
+const CATEGORY_ACCENT: Record<string, string> = {
+  Breakfast: "from-amber-500/30 to-amber-500/0",
+  Lunch: "from-emerald-500/30 to-emerald-500/0",
+  Dinner: "from-indigo-500/30 to-indigo-500/0",
+  Snack: "from-pink-500/30 to-pink-500/0",
+  "Meal Prep": "from-sky-500/30 to-sky-500/0",
+};
+
 export function RecipeCard({
   recipe,
   to,
@@ -16,11 +24,13 @@ export function RecipeCard({
 }) {
   const meta = getRecipeMeta(recipe.body);
   const tags = (recipe.tags ?? []).slice(0, 3);
+  const accent = CATEGORY_ACCENT[recipe.category] ?? "from-primary/30 to-primary/0";
 
   return (
     <Link to={to.pathname as any} params={to.params as any}>
-      <Card className="group flex h-full flex-col gap-3 overflow-hidden p-4 transition-colors hover:border-primary/40 hover:bg-muted/30">
-        <div className="flex items-start justify-between gap-2">
+      <Card className="group relative flex h-full flex-col gap-3 overflow-hidden p-4 transition-all hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-md">
+        <div className={`pointer-events-none absolute inset-x-0 top-0 h-16 bg-gradient-to-b ${accent}`} aria-hidden />
+        <div className="relative flex items-start justify-between gap-2">
           <div className="min-w-0 flex-1">
             <div className="text-base font-bold leading-snug">{recipe.title}</div>
             <Badge variant="outline" className="mt-1 text-[10px]">{recipe.category}</Badge>
@@ -30,7 +40,7 @@ export function RecipeCard({
           )}
         </div>
 
-        <div className="grid grid-cols-4 gap-2 rounded-lg border border-border/60 bg-secondary/30 p-2">
+        <div className="relative grid grid-cols-4 gap-2 rounded-lg border border-border/60 bg-secondary/40 p-2">
           <Stat icon={Flame} label="kcal" value={meta.calories} />
           <Stat icon={Beef} label="P (g)" value={meta.protein} />
           <Stat icon={Clock} label="min" value={meta.prepMinutes} />
@@ -38,7 +48,7 @@ export function RecipeCard({
         </div>
 
         {tags.length > 0 && (
-          <div className="mt-auto flex flex-wrap gap-1">
+          <div className="relative mt-auto flex flex-wrap gap-1">
             {tags.map((t) => (
               <Badge key={t} variant="secondary" className="text-[10px]">{t}</Badge>
             ))}
