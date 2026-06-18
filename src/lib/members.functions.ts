@@ -166,6 +166,8 @@ const UpdateMemberInput = z.object({
   admin_notes: z.string().nullable().optional(),
   phone: z.string().nullable().optional(),
   sms_opt_out: z.boolean().optional(),
+  manual_access_override: z.boolean().optional(),
+  manual_access_disabled: z.boolean().optional(),
 });
 
 export const updateAppMember = createServerFn({ method: "POST" })
