@@ -1216,6 +1216,13 @@ function WorkoutDay({
                 metricKind: "load_reps" as RowMetricKind,
               }));
               const heartbeats = readHeartbeatTimestamps(completion?.id ?? null);
+              // Prefer the value the user just typed into the duration input
+              // over the (possibly stale) completion query snapshot, so edits
+              // to a past workout's actual minutes actually persist.
+              const typedMin = Number.parseInt(actualMin, 10);
+              const resolvedDurationMin = Number.isFinite(typedMin) && typedMin > 0
+                ? typedMin
+                : completion?.actual_duration_min ?? null;
               await completeWorkoutSrv({
                 data: {
                   kind: "client",
@@ -1226,7 +1233,7 @@ function WorkoutDay({
                   completionSource: "workout_view",
                   sessionRating: payload.session_rating ?? null,
                   notes: payload.client_notes ?? completion?.client_notes ?? null,
-                  actualDurationMin: completion?.actual_duration_min ?? null,
+                  actualDurationMin: resolvedDurationMin,
                   sessionWeightTotal: computed.totalLifted > 0 ? computed.totalLifted : null,
                   sessionWeightUnit: computed.totalLifted > 0 ? displayUnit : null,
                   confirmedMissingLogs: true,
