@@ -7828,6 +7828,7 @@ export type Database = {
           active: boolean
           calories: number
           carbs_g: number
+          coach_ack_at: string | null
           created_at: string
           fat_g: number
           goal: string | null
@@ -7844,6 +7845,7 @@ export type Database = {
           active?: boolean
           calories: number
           carbs_g: number
+          coach_ack_at?: string | null
           created_at?: string
           fat_g: number
           goal?: string | null
@@ -7860,6 +7862,7 @@ export type Database = {
           active?: boolean
           calories?: number
           carbs_g?: number
+          coach_ack_at?: string | null
           created_at?: string
           fat_g?: number
           goal?: string | null

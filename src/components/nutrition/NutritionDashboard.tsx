@@ -10,6 +10,7 @@ import { WaterTargetDialog } from "@/components/progress/water-target-dialog";
 import { useAuth } from "@/lib/auth";
 import { MacroBreakdown } from "./MacroBreakdown";
 import { TargetsHistorySparkline } from "./TargetsHistorySparkline";
+import { CoachTargetChangeBanner } from "./CoachTargetChangeBanner";
 
 /**
  * Shared nutrition dashboard surface used by members and coaching clients.
@@ -44,6 +45,7 @@ export function NutritionDashboard({
 }) {
   return (
     <div className="space-y-6 p-4 pb-28 md:p-6 md:pb-12">
+      {viewer === "member" && <CoachTargetChangeBanner />}
       <div id="targets" className="scroll-mt-20">
         <TargetsStrip targets={targets} userId={userId} />
       </div>
