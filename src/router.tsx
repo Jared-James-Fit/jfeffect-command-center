@@ -23,7 +23,18 @@ export const getRouter = () => {
     routeTree,
     context: { queryClient },
     scrollRestoration: true,
+    // Preload the next route's code + loader data the moment a user
+    // hovers or touch-starts a link. This is the single biggest win for
+    // "toggling between pages feels slow" — by the time they actually
+    // tap, the data is usually already in cache.
+    defaultPreload: "intent",
+    defaultPreloadDelay: 50,
     defaultPreloadStaleTime: 0,
+    // Keep the previous page on screen briefly while the next one
+    // resolves, instead of flashing a blank/skeleton frame. Anything
+    // slower than 400ms still shows the route's pendingComponent.
+    defaultPendingMs: 400,
+    defaultPendingMinMs: 200,
     defaultErrorComponent: RouterErrorFallback,
   });
 

@@ -359,6 +359,9 @@ function WorkoutDay({
   const { data: day } = useQuery({
     queryKey: ["pl-day", dayId, adapter?.kind ?? null, adapter?.ref.ownerId ?? null],
     initialData: cachedInitialData<any>(cacheScope, "day"),
+    // Days don't mutate while a workout is open. Treat as fresh for the
+    // whole session so remounts (tab toggles, back nav) are instant.
+    staleTime: 5 * 60_000,
     queryFn: async () => {
       const d = adapter
         ? await adapter.getDayRaw(dayId)
@@ -368,27 +371,31 @@ function WorkoutDay({
     },
   });
 
-  // Resolve which block this day belongs to so block-scoped maxes apply.
-  const { data: blockId = null } = useQuery({
-    queryKey: ["pl-day-block", day?.week_id],
+  // Resolve week + block in a single round-trip via the FK join.
+  // Previously this was three sequential queries (day → week.block_id →
+  // week → block), causing visible pop-in as each settled. Weeks/blocks
+  // are immutable for an open workout, so cache for the session.
+  const { data: weekWithBlock = null } = useQuery({
+    queryKey: ["pl-week-with-block", day?.week_id],
     enabled: !!day?.week_id,
+    staleTime: 5 * 60_000,
     queryFn: async () => {
-      const { data } = await sb.from("pl_weeks").select("block_id").eq("id", day.week_id).maybeSingle();
-      return (data?.block_id as string | null) ?? null;
+      const { data } = await sb
+        .from("pl_weeks")
+        .select("*, pl_blocks(*)")
+        .eq("id", day.week_id)
+        .maybeSingle();
+      return data;
     },
   });
-
-  // Resolve block + week for the outside-day notice and readonly auto-detection.
-  const { data: week = null } = useQuery({
-    queryKey: ["pl-week", day?.week_id],
-    enabled: !!day?.week_id,
-    queryFn: async () => (await sb.from("pl_weeks").select("*").eq("id", day.week_id).maybeSingle()).data,
-  });
-  const { data: block = null } = useQuery({
-    queryKey: ["pl-block", blockId],
-    enabled: !!blockId,
-    queryFn: async () => (await sb.from("pl_blocks").select("*").eq("id", blockId).maybeSingle()).data,
-  });
+  const week = weekWithBlock
+    ? (() => {
+        const { pl_blocks: _pl_blocks, ...rest } = weekWithBlock as any;
+        return rest;
+      })()
+    : null;
+  const block = (weekWithBlock as any)?.pl_blocks ?? null;
+  const blockId = (block as any)?.id ?? (weekWithBlock as any)?.block_id ?? null;
 
   const scheduledDate = useMemo(() => {
     if (!day) return null;
