@@ -1,16 +1,10 @@
-import { createFileRoute } from "@tanstack/react-router";
-import { useQuery } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
-import { usePortalUserId } from "@/lib/client-impersonation";
-import { PageHeader } from "@/components/app-shell";
-import { Card } from "@/components/ui/card";
-import { Scale } from "lucide-react";
-import { ProgressMetricsPanel } from "@/components/progress-metrics-panel";
-import { ConnectHealthDeviceCard } from "@/components/connect-health-device-card";
-import type { WeightUnit } from "@/lib/progress-metrics";
+import { createFileRoute, redirect } from "@tanstack/react-router";
 
 export const Route = createFileRoute("/_authenticated/portal/progress-metrics")({
-  component: PortalProgressMetrics,
+  beforeLoad: () => {
+    throw redirect({ to: "/portal/progress", hash: "bodyweight" });
+  },
+  component: () => null,
 });
 
 function PortalProgressMetrics() {
