@@ -31,8 +31,9 @@ import {
   listMeasurements, logMeasurement, deleteMeasurement, bodyweightStats,
   listReviewResponses, addReviewResponse,
 } from "@/lib/progress";
-import { format, parseISO, differenceInDays } from "date-fns";
+import { format, parseISO } from "date-fns";
 import { WaterTrackerCard } from "./water-tracker-card";
+import { convertWeight, type ProgressMetric } from "@/lib/progress-metrics";
 
 /**
  * Mobile-safe date picker: defaults to today and shows a plain text
@@ -94,12 +95,12 @@ export type ProgressContext = {
 };
 
 /** Quick-action requested from a Home dashboard via `?action=...`. */
-export type ProgressInitialAction = "photo" | "weight" | "measure" | "history";
+export type ProgressInitialAction = "photo" | "weight" | "bodyweight" | "measure" | "history";
 
 export function ProgressSection({
   ctx, initialAction,
 }: { ctx: ProgressContext; initialAction?: ProgressInitialAction }) {
-  const [tab, setTab] = useState<string>(initialAction === "history" ? "timeline" : "photos");
+  const [tab, setTab] = useState<string>(initialAction === "history" ? "timeline" : initialAction === "bodyweight" ? "bodyweight" : "photos");
   const [photoDialog, setPhotoDialog] = useState(false);
   const [videoDialog, setVideoDialog] = useState(false);
   const [weightDialog, setWeightDialog] = useState(false);
@@ -111,7 +112,8 @@ export function ProgressSection({
   useEffect(() => {
     if (!initialAction) return;
     if (initialAction === "photo") setPhotoDialog(true);
-    else if (initialAction === "weight") setWeightDialog(true);
+    else if (initialAction === "weight") { setTab("bodyweight"); setWeightDialog(true); }
+    else if (initialAction === "bodyweight") setTab("bodyweight");
     else if (initialAction === "measure") setMeasureDialog(true);
     else if (initialAction === "history") setTab("timeline");
   }, [initialAction]);
@@ -626,30 +628,74 @@ function BodyweightTab({
   ctx, onLog, onOpenSubmission,
 }: { ctx: ProgressContext; onLog: () => void; onOpenSubmission?: (id: string) => void }) {
   const qc = useQueryClient();
-  const [range, setRange] = useState<"7d" | "30d" | "90d" | "all">("30d");
+  const [range, setRange] = useState<"7d" | "30d" | "90d" | "all">("all");
+  const [selectedPoint, setSelectedPoint] = useState<{ date: string; value: number; unit: "kg" | "lb"; note?: string | null } | null>(null);
   const { data: rows = [] } = useQuery({
     queryKey: ["progress-bw", ctx.userId],
     queryFn: () => listBodyweight(ctx.userId),
   });
-  const { data: photoSubs = [] } = useQuery({
-    queryKey: ["progress-subs-photo", ctx.userId],
-    queryFn: () => listSubmissions({ userId: ctx.userId, type: "photo" }),
+  const { data: metricRows = [] } = useQuery({
+    queryKey: ["progress-metrics", ctx.clientId],
+    enabled: !!ctx.clientId,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("progress_metrics")
+        .select("*")
+        .eq("client_id", ctx.clientId!)
+        .not("bodyweight", "is", null)
+        .order("entry_date", { ascending: false })
+        .limit(200);
+      if (error) throw error;
+      return (data ?? []) as ProgressMetric[];
+    },
   });
-  const stats = bodyweightStats(rows);
+  const combinedRows = useMemo(() => {
+    const byDate = new Map<string, { id: string; date: string; value: number; unit: "kg" | "lb"; note?: string | null; source: "progress_bodyweight" | "progress_metrics" }>();
+    for (const r of metricRows) {
+      if (r.bodyweight == null) continue;
+      byDate.set(r.entry_date, {
+        id: r.id,
+        date: r.entry_date,
+        value: Number(r.bodyweight),
+        unit: ((r.bodyweight_unit as "kg" | "lb" | null) ?? ctx.preferredWeightUnit ?? "lb"),
+        note: (r as any).notes ?? null,
+        source: "progress_metrics",
+      });
+    }
+    for (const r of rows) {
+      byDate.set(r.logged_date, {
+        id: r.id,
+        date: r.logged_date,
+        value: Number(r.weight_value),
+        unit: r.weight_unit,
+        note: r.note,
+        source: "progress_bodyweight",
+      });
+    }
+    return Array.from(byDate.values()).sort((a, b) => b.date.localeCompare(a.date));
+  }, [ctx.preferredWeightUnit, metricRows, rows]);
 
-  const unit = rows[0]?.weight_unit ?? "lb";
+  const stats = bodyweightStats(combinedRows.map((r) => ({
+    id: r.id,
+    user_id: ctx.userId,
+    logged_date: r.date,
+    weight_value: r.value,
+    weight_unit: r.unit,
+    note: r.note ?? null,
+    created_at: "",
+  })));
+
+  const unit = combinedRows[0]?.unit ?? ctx.preferredWeightUnit ?? "lb";
   const chartAll = useMemo(() => {
-    return [...rows]
-      .sort((a, b) => a.logged_date.localeCompare(b.logged_date))
+    return [...combinedRows]
+      .sort((a, b) => a.date.localeCompare(b.date))
       .map((r) => ({
-        d: r.logged_date,
-        v: r.weight_unit === unit
-          ? Number(r.weight_value)
-          : r.weight_unit === "kg"
-            ? +(Number(r.weight_value) * 2.20462).toFixed(2)
-            : +(Number(r.weight_value) / 2.20462).toFixed(2),
+        d: r.date,
+        v: Number(convertWeight(r.value, r.unit, unit).toFixed(1)),
+        unit,
+        note: r.note,
       }));
-  }, [rows, unit]);
+  }, [combinedRows, unit]);
   const chart = useMemo(() => {
     if (range === "all") return chartAll;
     const days = range === "7d" ? 7 : range === "30d" ? 30 : 90;
@@ -657,13 +703,11 @@ function BodyweightTab({
     cutoff.setDate(cutoff.getDate() - days);
     return chartAll.filter((p) => new Date(p.d) >= cutoff);
   }, [chartAll, range]);
+  const yDomain = chart.length === 1 ? [chart[0].v - 1, chart[0].v + 1] : ["auto", "auto"];
 
-  function handlePointClick(d?: string) {
-    if (!d || !onOpenSubmission) return;
-    const sub = photoSubs.find((s) => s.submission_date === d)
-      ?? photoSubs.find((s) => Math.abs(differenceInDays(parseISO(s.submission_date), parseISO(d))) <= 3);
-    if (sub) onOpenSubmission(sub.id);
-    else toast.message("No progress entry on that date yet.");
+  function handlePointClick(point?: { d: string; v: number; unit: "kg" | "lb"; note?: string | null }) {
+    if (!point) return;
+    setSelectedPoint({ date: point.d, value: point.v, unit: point.unit, note: point.note ?? null });
   }
 
   async function remove(id: string) {
@@ -685,7 +729,7 @@ function BodyweightTab({
           <div><p className="text-2xl font-semibold">{stats.change > 0 ? "+" : ""}{stats.change}</p><p className="text-xs text-muted-foreground">Since start</p></div>
         </Card>
       )}
-      {chartAll.length >= 2 && (
+      {chartAll.length >= 1 && (
         <Card className="p-3">
           <div className="mb-2 flex items-center justify-between gap-2">
             <div className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Bodyweight ({unit})</div>
@@ -708,7 +752,7 @@ function BodyweightTab({
               <AreaChart
                 data={chart}
                 margin={{ top: 6, right: 8, left: 0, bottom: 0 }}
-                onClick={(e: any) => handlePointClick(e?.activePayload?.[0]?.payload?.d)}
+                onClick={(e: any) => handlePointClick(e?.activePayload?.[0]?.payload)}
               >
                 <defs>
                   <linearGradient id="bwChartArea" x1="0" y1="0" x2="0" y2="1">
@@ -717,7 +761,7 @@ function BodyweightTab({
                   </linearGradient>
                 </defs>
                 <XAxis dataKey="d" tickFormatter={(v) => { try { return format(parseISO(v), "MMM d"); } catch { return v; } }} tick={{ fontSize: 10 }} minTickGap={24} />
-                <YAxis domain={["auto", "auto"]} tick={{ fontSize: 10 }} width={32} />
+                <YAxis domain={yDomain} tick={{ fontSize: 10 }} width={32} />
                 <Tooltip
                   contentStyle={{ fontSize: 12, padding: 6 }}
                   labelFormatter={(v) => { try { return format(parseISO(String(v)), "MMM d, yyyy"); } catch { return String(v); } }}
@@ -727,25 +771,44 @@ function BodyweightTab({
                   type="monotone" dataKey="v"
                   stroke="var(--primary)" strokeWidth={2}
                   fill="url(#bwChartArea)" isAnimationActive={false}
-                  activeDot={{ r: 5, style: { cursor: "pointer" } }}
+                  dot={(props: any) => (
+                    <circle
+                      cx={props.cx}
+                      cy={props.cy}
+                      r={4}
+                      fill="var(--primary)"
+                      stroke="var(--card)"
+                      strokeWidth={2}
+                      className="cursor-pointer"
+                      onClick={(e) => { e.stopPropagation(); handlePointClick(props.payload); }}
+                    />
+                  )}
+                  activeDot={{ r: 6, onClick: (_event: unknown, payload: any) => handlePointClick(payload?.payload), style: { cursor: "pointer" } }}
                 />
               </AreaChart>
             </ResponsiveContainer>
           </div>
-          <p className="mt-1 text-[10px] text-muted-foreground">Tap a point to open that date's entry.</p>
+          {selectedPoint ? (
+            <div className="mt-2 rounded-md border border-primary/30 bg-primary/10 px-3 py-2 text-sm">
+              <div className="font-semibold">{selectedPoint.value.toFixed(1)} {selectedPoint.unit}</div>
+              <div className="text-xs text-muted-foreground">{fmtDate(selectedPoint.date)}{selectedPoint.note ? ` · ${selectedPoint.note}` : ""}</div>
+            </div>
+          ) : (
+            <p className="mt-1 text-[10px] text-muted-foreground">Tap a dot to see that weigh-in.</p>
+          )}
         </Card>
       )}
-      {!rows.length ? (
+      {!combinedRows.length ? (
         <EmptyState icon={Scale} title="No entries yet" body="Track your bodyweight to see trends over time." actionLabel="Log Weight" onAction={onLog} />
       ) : (
         <Card className="divide-y">
-          {rows.slice(0, 50).map((r) => (
+          {combinedRows.slice(0, 50).map((r) => (
             <div key={r.id} className="flex items-center justify-between p-3">
               <div>
-                <p className="font-medium">{r.weight_value} {r.weight_unit}</p>
-                <p className="text-xs text-muted-foreground">{fmtDate(r.logged_date)} {r.note ? `· ${r.note}` : ""}</p>
+                <p className="font-medium">{r.value} {r.unit}</p>
+                <p className="text-xs text-muted-foreground">{fmtDate(r.date)} {r.note ? `· ${r.note}` : ""}</p>
               </div>
-              {ctx.viewerRole === "owner" || ctx.viewerRole === "admin" ? (
+              {(ctx.viewerRole === "owner" || ctx.viewerRole === "admin") && r.source === "progress_bodyweight" ? (
                 <Button size="sm" variant="ghost" onClick={() => remove(r.id)}><Trash2 className="h-4 w-4" /></Button>
               ) : null}
             </div>
@@ -771,7 +834,36 @@ function BodyweightDialog({ ctx, open, onOpenChange }: { ctx: ProgressContext; o
       await logBodyweight({
         user_id: ctx.userId, weight_value: Number(val), weight_unit: unit, logged_date: date, note: note || null,
       });
+      if (ctx.clientId) {
+        const { data: existing, error: findError } = await supabase
+          .from("progress_metrics")
+          .select("id")
+          .eq("client_id", ctx.clientId)
+          .eq("entry_date", date)
+          .maybeSingle();
+        if (findError) throw findError;
+        if (existing?.id) {
+          const { error } = await supabase.from("progress_metrics").update({
+            bodyweight: Number(val),
+            bodyweight_unit: unit,
+            source: "manual",
+            notes: note || null,
+          } as never).eq("id", existing.id);
+          if (error) throw error;
+        } else {
+          const { error } = await supabase.from("progress_metrics").insert({
+            client_id: ctx.clientId,
+            entry_date: date,
+            bodyweight: Number(val),
+            bodyweight_unit: unit,
+            source: "manual",
+            notes: note || null,
+          } as never);
+          if (error) throw error;
+        }
+      }
       qc.invalidateQueries({ queryKey: ["progress-bw", ctx.userId] });
+      qc.invalidateQueries({ queryKey: ["progress-metrics", ctx.clientId] });
       toast.success("Logged");
       onOpenChange(false);
     } catch (e: any) { toast.error(e?.message ?? "Failed"); }

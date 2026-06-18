@@ -126,7 +126,7 @@ export function LogBodyweightCard({ clientId, defaultUnit = "lb" }: Props) {
           <Scale className="h-4 w-4 text-primary" />
           <h3 className="text-xs uppercase tracking-widest text-muted-foreground">Log Weight</h3>
         </div>
-        <Link to="/portal/progress-metrics" className="text-xs text-primary hover:underline">View history</Link>
+        <Link to="/portal/progress" search={{ action: "bodyweight" } as never} className="text-xs text-primary hover:underline">View history</Link>
       </div>
 
       {/* Mini sparkline + range toggle */}
