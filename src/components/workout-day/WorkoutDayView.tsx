@@ -1609,6 +1609,7 @@ function ExerciseBlock({ row, dayId, dayTitle, clientId, blockId, existingResult
         <Button size="sm" variant={hasNote ? "default" : "outline"} onClick={() => setNotesOpen(true)} className="h-7 px-2 text-xs">
           <StickyNote className="mr-1 h-3 w-3" /> Notes
         </Button>
+        <QuickSwapButton rowId={row.id} exerciseId={exerciseId} exerciseName={name} />
         {cues && (
           <Button size="sm" variant="ghost" onClick={() => setCuesOpen((v) => !v)} className="h-7 px-2 text-xs">
             {cuesOpen ? <ChevronUp className="mr-1 h-3 w-3" /> : <ChevronDown className="mr-1 h-3 w-3" />}
