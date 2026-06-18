@@ -22,6 +22,7 @@ import { ActionCentre, type ActionItem } from "@/components/portal/action-centre
 import { TrainingBlockCard } from "@/components/portal/training-block-card";
 import { ProgressSummaryCard } from "@/components/progress/progress-summary-card";
 import { HomeWaterCard } from "@/components/home/home-water-card";
+import { HomeBodyweightCard } from "@/components/home/home-bodyweight-card";
 import { SetupChecklistBanner } from "@/components/portal/setup-checklist-banner";
 import { useEffect, useState } from "react";
 import { listMyPortalAppointments } from "@/lib/appointments.functions";
@@ -397,6 +398,15 @@ function PortalHome() {
             userId={portalUserId}
             currentUserId={portalUserId}
             surface="portal"
+          />
+        )}
+
+        {/* 3b — Bodyweight tracker (syncs with Progress > Weight) */}
+        {portalUserId && (
+          <HomeBodyweightCard
+            userId={portalUserId}
+            surface="portal"
+            defaultUnit={((client as any)?.preferred_weight_unit as WeightUnit) ?? "lb"}
           />
         )}
 
