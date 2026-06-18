@@ -156,24 +156,42 @@ jobs:
         run: |
           ICONSET="ios/App/App/Assets.xcassets/AppIcon.appiconset"
           mkdir -p "$ICONSET"
-          cp AppIcon-1024.png "$ICONSET/AppIcon-1024.png"
-          cat > "$ICONSET/Contents.json" << 'JSON'
-          {
-            "images": [
-              {
-                "filename": "AppIcon-1024.png",
-                "idiom": "ios-marketing",
-                "scale": "1x",
-                "size": "1024x1024"
-              }
-            ],
-            "info": {
-              "author": "xcode",
-              "version": 1
-            }
-          }
-          JSON
-          echo "✅ AppIcon set: $(ls -la $ICONSET)"
+          # Generate all required icon sizes from the 1024x1024 source
+          python3 << 'PYEOF'
+          from PIL import Image
+          import json, os
+          src = "AppIcon-1024.png"
+          iconset = "ios/App/App/Assets.xcassets/AppIcon.appiconset"
+          sizes = [
+            (20, "iphone", "1x"), (40, "iphone", "2x"), (60, "iphone", "3x"),
+            (29, "iphone", "1x"), (58, "iphone", "2x"), (87, "iphone", "3x"),
+            (40, "iphone", "2x"), (80, "iphone", "2x"), (120, "iphone", "2x"), (120, "iphone", "3x"),
+            (180, "iphone", "3x"),
+            (20, "ipad", "1x"), (20, "ipad", "2x"),
+            (29, "ipad", "1x"), (58, "ipad", "2x"),
+            (40, "ipad", "1x"), (80, "ipad", "2x"),
+            (76, "ipad", "1x"), (152, "ipad", "2x"),
+            (167, "ipad", "2x"),
+            (1024, "ios-marketing", "1x"),
+          ]
+          img = Image.open(src).convert("RGB")
+          images = []
+          seen = set()
+          for px, idiom, scale in sizes:
+            key = (px, idiom, scale)
+            if key in seen: continue
+            seen.add(key)
+            fname = f"AppIcon-{px}@{scale}.png"
+            resized = img.resize((px, px), Image.LANCZOS)
+            resized.save(os.path.join(iconset, fname), "PNG")
+            base = px // int(scale[0])
+            images.append({"filename": fname, "idiom": idiom, "scale": scale, "size": f"{base}x{base}"})
+          contents = {"images": images, "info": {"author": "xcode", "version": 1}}
+          with open(os.path.join(iconset, "Contents.json"), "w") as f:
+            json.dump(contents, f, indent=2)
+          print(f"✅ Generated {len(images)} icon sizes")
+          PYEOF
+          echo "✅ AppIcon set: $(ls $ICONSET | wc -l) files"
 
       - name: Run pod install
         run: cd ios/App && pod install
