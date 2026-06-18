@@ -8,7 +8,8 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { useState } from "react";
-import { Check, ArrowLeft } from "lucide-react";
+import { Check, ArrowLeft, Info } from "lucide-react";
+import { isNative } from "@/platform";
 
 export const Route = createFileRoute("/_authenticated/m/upgrade")({ component: UpgradePage });
 
@@ -23,6 +24,7 @@ function UpgradePage() {
   const { data } = useQuery({ queryKey: ["m-upgrade-offers"], queryFn: () => fetchOffers() });
   const offers: any[] = data?.offers ?? [];
   const [busy, setBusy] = useState<string | null>(null);
+  const native = isNative();
 
   const buy = async (productId: string) => {
     if (busy) return;
@@ -40,6 +42,17 @@ function UpgradePage() {
         subtitle="Pick the plan that fits — unlocks new content and tools immediately."
         actions={<Link to="/m"><Button variant="outline" size="sm"><ArrowLeft className="mr-1 h-3.5 w-3.5" />Back</Button></Link>}
       />
+      {native && (
+        <Card className="flex items-start gap-3 border-amber-500/30 bg-amber-500/10 p-4 text-sm">
+          <Info className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" />
+          <div>
+            <div className="font-semibold">Manage your membership on the web</div>
+            <div className="text-muted-foreground">
+              Purchases and plan changes are handled at jfeffect.com. Sign in there to upgrade — your access updates automatically in the app.
+            </div>
+          </div>
+        </Card>
+      )}
       {offers.length === 0 ? (
         <Card className="p-6 text-sm text-muted-foreground">No upgrade options available right now. Check back soon.</Card>
       ) : (
@@ -59,8 +72,8 @@ function UpgradePage() {
                 </ul>
               )}
               <div className="mt-auto pt-5">
-                <Button className="w-full" disabled={busy === o.id} onClick={() => buy(o.id)}>
-                  {busy === o.id ? "Redirecting…" : "Get access"}
+                <Button className="w-full" disabled={native || busy === o.id} onClick={() => buy(o.id)}>
+                  {native ? "Available on web" : busy === o.id ? "Redirecting…" : "Get access"}
                 </Button>
               </div>
             </Card>
