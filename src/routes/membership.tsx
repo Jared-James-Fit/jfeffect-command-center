@@ -29,6 +29,9 @@ import appPreviewLogging from "@/assets/app-preview-logging.jpg";
 import appPreviewLibrary from "@/assets/app-preview-library.jpg";
 import appPreviewPrograms from "@/assets/app-preview-programs.jpg";
 import appPreviewProgress from "@/assets/app-preview-progress.jpg";
+import appPreviewAnalyticsOverview from "@/assets/app-preview-analytics-overview.png.asset.json";
+import appPreviewRecentPrs from "@/assets/app-preview-recent-prs.png.asset.json";
+import appPreview1rmChart from "@/assets/app-preview-1rm-chart.png.asset.json";
 
 function HeroSkeleton() {
   return (
