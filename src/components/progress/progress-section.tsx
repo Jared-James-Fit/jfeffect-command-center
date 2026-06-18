@@ -115,10 +115,9 @@ export function ProgressSection({ ctx }: { ctx: ProgressContext }) {
         <TabsContent value="overview">
           <Overview ctx={ctx}
             onAddPhoto={() => setPhotoDialog(true)}
-            onAddVideo={() => setVideoDialog(true)}
             onLogWeight={() => setWeightDialog(true)}
             onAddMeasure={() => setMeasureDialog(true)}
-            onCompare={() => setCompareDialog(true)}
+            onViewTimeline={() => setTab("timeline")}
             onOpenSubmission={setDetailId}
           />
         </TabsContent>
@@ -436,10 +435,7 @@ function PhotoSubmissionDialog({ ctx, open, onOpenChange }: { ctx: ProgressConte
 
         <div className="space-y-4">
           <div className="grid grid-cols-2 gap-3">
-            <div>
-              <Label className="text-xs">Date</Label>
-              <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
-            </div>
+            <DateField value={date} onChange={setDate} />
             <div>
               <Label className="text-xs">Label</Label>
               <Select value={label} onValueChange={setLabel}>
@@ -650,10 +646,7 @@ function VideoSubmissionDialog({ ctx, open, onOpenChange }: { ctx: ProgressConte
           </div>
 
           <div className="grid grid-cols-2 gap-3">
-            <div>
-              <Label className="text-xs">Date</Label>
-              <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
-            </div>
+            <DateField value={date} onChange={setDate} />
             <div>
               <Label className="text-xs">Label</Label>
               <Select value={label} onValueChange={setLabel}>
