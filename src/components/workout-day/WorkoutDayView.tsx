@@ -55,6 +55,7 @@ import { writePlanCache, cachedInitialData } from "@/lib/workout-plan-cache";
 import { enqueueOfflineWrite, registerQueueHandler } from "@/lib/workout-offline-queue";
 import { ActiveRestTimerProvider, useRestTimer } from "@/components/active-rest-timer";
 import { ExerciseHistoryButton } from "@/components/exercise-history-sheet";
+import { QuickSwapButton } from "@/components/workout-day/QuickSwapButton";
 import { convertWeight } from "@/lib/progress-metrics";
 import { WorkoutCompleteSheet, type WorkoutCompletePayload } from "@/components/workout-complete-sheet";
 import { WorkoutSubmissionSummary } from "@/components/workout-submission-summary";
@@ -1612,6 +1613,15 @@ function ExerciseBlock({ row, dayId, dayTitle, clientId, blockId, existingResult
         <Button size="sm" variant={hasNote ? "default" : "outline"} onClick={() => setNotesOpen(true)} className="h-7 px-2 text-xs">
           <StickyNote className="mr-1 h-3 w-3" /> Notes
         </Button>
+        <QuickSwapButton
+          rowId={row.id}
+          exerciseId={exerciseId}
+          exerciseName={name}
+          muscleGroup={exercise?.muscle_group ?? null}
+          category={exercise?.category ?? null}
+          equipment={(exercise as any)?.equipment ?? null}
+          difficulty={(exercise as any)?.difficulty ?? null}
+        />
         {cues && (
           <Button size="sm" variant="ghost" onClick={() => setCuesOpen((v) => !v)} className="h-7 px-2 text-xs">
             {cuesOpen ? <ChevronUp className="mr-1 h-3 w-3" /> : <ChevronDown className="mr-1 h-3 w-3" />}
