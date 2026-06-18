@@ -41,6 +41,7 @@ import { listForms as listNativeForms, type NfForm } from "@/lib/native-forms";
 import { replaceClientNativeFormAssignments } from "@/lib/native-forms.functions";
 import { ActionButton } from "@/components/action-button";
 import { IntakeAnswersBigButton } from "@/components/clients/intake-answers-dialog";
+import { UserAvatar } from "@/components/user-avatar";
 import {
   IdentityCard,
   ContactCard,
@@ -1870,11 +1871,13 @@ function ClientOverviewSnapshot({
       <Card className="border-border bg-card p-5 md:p-6">
         <div className="flex flex-col gap-5 md:flex-row md:items-start">
           <div className="flex items-center gap-4">
-            {form.profile_picture_url ? (
-              <img src={form.profile_picture_url} alt="" className="h-20 w-20 shrink-0 rounded-2xl object-cover ring-1 ring-border" />
-            ) : (
-              <div className="grid h-20 w-20 shrink-0 place-items-center rounded-2xl bg-secondary text-lg font-bold text-muted-foreground ring-1 ring-border">{initials || "?"}</div>
-            )}
+            <UserAvatar
+              src={form.profile_picture_url}
+              name={form.full_name}
+              size={80}
+              ring
+              className="rounded-2xl"
+            />
             <div className="min-w-0">
               <div className="text-xl font-bold leading-tight truncate">{form.full_name ?? "Unnamed client"}</div>
               <div className="mt-1 flex flex-wrap items-center gap-1.5">
