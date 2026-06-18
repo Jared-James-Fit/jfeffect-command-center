@@ -71,7 +71,7 @@ function mergeTaxFaq(items: Array<{ q: string; a: string }>) {
   return has ? items : [...items, { q: taxQ, a: taxA }];
 }
 
-function SignupJf() {
+export function SignupJf() {
   const getSettings = useServerFn(getJfPublicSettings);
   const createCheckout = useServerFn(createJfSignupCheckout);
   const fetchPage = useServerFn(getPublicSalesPage);
