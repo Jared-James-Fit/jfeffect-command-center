@@ -30,12 +30,11 @@ Split into 4 turns so each lands in a working state with a clear verification st
 - Member rows always take the manual-load path (`manual_override=true`, `percentage_basis="none"`) since membership programs prescribe absolute loads only. `week_id` is null so WorkoutDayView's pl_weeks/pl_blocks follow-ups degrade silently (no block concept for members).
 - 16 unit tests pass (`src/test/member-adapter.test.ts`), covering capabilities, dayId encoding, reschedule fan-out, and all three raw reshapes (lb/kg variants, exercise-id fallback, log shape).
 
-### Turn 4 — Mount WorkoutDayView under the member route + writes via adapter
+### Turn 4 — split into 4a / 4b / 4c
 
-- Steps 3 + 5 + 6 from the original plan: route writes (`startWorkout` / `saveDraft` / `completeWorkout` / `upsertRowResult` / `deleteRowResult`) through the adapter.
-- Replace `m/workouts.$enrollmentId.$week.$day.tsx` (657 lines) with `<WorkoutDayView adapter={memberAdapter} navigation={memberNav} />`.
-- Capability-gate admin-only UI (`isImpersonating` card, coach intel).
-- Playwright smoke after this turn.
+- **4a ✅ DONE** — Adapter contract already covered all 12 WorkoutDayView write sites (`upsertRowResult` / `deleteRowResult` / `upsertExerciseNote` / `updateDayCompletion`). Only gap was a `listUnitPrefs(exerciseIds)` read for `client_exercise_unit_prefs`. Added to `types.ts`, implemented as passthrough on `client-adapter.ts`, member adapter returns `[]` (memberships don't persist per-exercise unit prefs).
+- **4b** — Mechanical swap of the 12 `sb.*` write sites in `WorkoutDayView.tsx` to `adapter.*`, gated on `adapter` (sb fallback retained). Portal byte-identical because client adapter is passthrough.
+- **4c** — Implement member-side writes against `member_set_logs` / `member_workout_completions` / `member_exercise_notes`. Replace the 657-line member route with a ~80-line shim that wires auth/heartbeat/offline queue around `<WorkoutDayView adapter={memberAdapter} navigation={memberNav} />`. Capability-gate impersonation UI. Playwright smoke.
 
 ---
 
