@@ -1332,6 +1332,12 @@ function ClientDetail() {
         defaultEmail={form.email}
       />
 
+      <ManualCheckInReviewComposer
+        open={checkInResponseOpen}
+        onOpenChange={setCheckInResponseOpen}
+        defaultClientId={id}
+      />
+
       <AlertDialog open={pwOpen} onOpenChange={(o) => !pwSaving && setPwOpen(o)}>
         <AlertDialogContent>
           <AlertDialogHeader>
