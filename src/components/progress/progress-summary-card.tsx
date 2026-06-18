@@ -2,29 +2,32 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Camera, Scale, ChevronRight, Droplet, Plus } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
-import { format, parseISO } from "date-fns";
-import { addWaterEntry, ensureWaterTarget, formatWater, listWaterForDate, summarizeToday, todayLocalISO } from "@/lib/water";
-import { getCombinedBodyweightSeries } from "@/lib/bodyweight";
+import { Camera, Scale, Ruler, History, Droplet, Plus } from "lucide-react";
+import {
+  addWaterEntry, ensureWaterTarget, formatWater, listWaterForDate,
+  summarizeToday, todayLocalISO,
+} from "@/lib/water";
 import { toast } from "sonner";
 
 /**
- * Compact Progress + Water summary, used on portal/member dashboards and
- * admin profile overview tiles. Rows with no data are hidden.
+ * Dummy-proof Progress Tracking card for client + member home dashboards.
+ * Four large action buttons that navigate to the Progress page with a
+ * `?action=` search param so the right dialog/tab opens automatically.
+ * Latest-entry rows are intentionally NOT shown here — the Progress page
+ * is the archive/history; Home stays focused on quick actions.
  */
+export type ProgressSummaryAction = "photo" | "weight" | "measure" | "history";
+
 export function ProgressSummaryCard({
   userId,
   currentUserId,
   viewerRole,
   progressHref,
-  title = "Progress",
+  title = "Progress Tracking",
 }: {
   userId: string;
   currentUserId: string;
   viewerRole: "owner" | "admin" | "coach";
-  /** Where the "Open" button navigates. */
   progressHref:
     | { kind: "portal" }
     | { kind: "member" }
@@ -33,28 +36,6 @@ export function ProgressSummaryCard({
 }) {
   const today = todayLocalISO();
   const qc = useQueryClient();
-
-  const subQ = useQuery({
-    queryKey: ["progress-summary-sub", userId],
-    enabled: !!userId,
-    queryFn: async () => {
-      const { data } = await supabase
-        .from("progress_submissions")
-        .select("id, submission_type, submission_date, check_in_label, review_status, submitted_at")
-        .eq("user_id", userId)
-        .order("submission_date", { ascending: false })
-        .limit(1);
-      return data?.[0] ?? null;
-    },
-    staleTime: 30_000,
-  });
-
-  const bwQ = useQuery({
-    queryKey: ["progress-summary-bw", userId],
-    enabled: !!userId,
-    queryFn: () => getCombinedBodyweightSeries(userId, 1),
-    staleTime: 30_000,
-  });
 
   const waterTargetQ = useQuery({
     queryKey: ["water-target", userId],
@@ -69,41 +50,8 @@ export function ProgressSummaryCard({
     staleTime: 5_000,
   });
 
-  const latestBw = bwQ.data?.[bwQ.data.length - 1];
-  const sub = subQ.data;
   const target = waterTargetQ.data;
   const summary = summarizeToday(waterTodayQ.data ?? [], target?.active_ml ?? 3000);
-
-  const reviewBadge =
-    sub?.review_status === "awaiting_review" ? "Awaiting review"
-    : sub?.review_status === "needs_update" ? "Needs update"
-    : sub?.review_status === "reviewed" ? "Reviewed"
-    : null;
-
-  const openLink =
-    progressHref.kind === "portal" ? (
-      <Link to="/portal/progress">Open <ChevronRight className="ml-0.5 h-3.5 w-3.5" /></Link>
-    ) : progressHref.kind === "member" ? (
-      <Link to="/m/progress">Open <ChevronRight className="ml-0.5 h-3.5 w-3.5" /></Link>
-    ) : (
-      <Link
-        to="/admin/clients/$id/progress"
-        params={{ id: progressHref.clientId }}
-      >
-        Open <ChevronRight className="ml-0.5 h-3.5 w-3.5" />
-      </Link>
-    );
-
-  const startCheckInLink =
-    progressHref.kind === "portal" ? (
-      <Link to="/portal/progress">Start Check-In</Link>
-    ) : progressHref.kind === "member" ? (
-      <Link to="/m/progress">Start Check-In</Link>
-    ) : (
-      <Link to="/admin/clients/$id/progress" params={{ id: progressHref.clientId }}>
-        Start Check-In
-      </Link>
-    );
 
   async function quickAddWater() {
     if (viewerRole !== "owner") return;
@@ -115,6 +63,37 @@ export function ProgressSummaryCard({
     }
   }
 
+  function ActionLink({
+    action, icon: Icon, label, primary,
+  }: { action: ProgressSummaryAction; icon: any; label: string; primary?: boolean }) {
+    const search = action === "history" ? undefined : ({ action } as { action: ProgressSummaryAction });
+    const className = `flex min-h-[104px] flex-col items-center justify-center gap-2 rounded-lg border-2 p-4 text-center transition active:scale-[0.98] ${
+      primary ? "border-primary bg-primary/10 hover:bg-primary/15" : "border-border bg-card hover:bg-accent"
+    }`;
+    const inner = (
+      <>
+        <Icon className={`h-7 w-7 ${primary ? "text-primary" : ""}`} />
+        <span className="text-sm font-bold leading-tight">{label}</span>
+      </>
+    );
+    if (progressHref.kind === "portal") {
+      return <Link to="/portal/progress" search={search as any} className={className}>{inner}</Link>;
+    }
+    if (progressHref.kind === "member") {
+      return <Link to="/m/progress" search={search as any} className={className}>{inner}</Link>;
+    }
+    return (
+      <Link
+        to="/admin/clients/$id/progress"
+        params={{ id: progressHref.clientId }}
+        search={search as any}
+        className={className}
+      >
+        {inner}
+      </Link>
+    );
+  }
+
   return (
     <div className="space-y-3">
       <Card className="overflow-hidden">
@@ -123,42 +102,12 @@ export function ProgressSummaryCard({
             <Camera className="h-4 w-4 text-primary" />
             <span className="text-xs font-bold uppercase tracking-widest">{title}</span>
           </div>
-          <Button asChild size="sm" variant="ghost" className="h-7 px-2 text-xs">
-            {openLink}
-          </Button>
         </div>
-
-        <div className="divide-y divide-border">
-          {sub && (
-            <Row
-              icon={<Camera className="h-4 w-4" />}
-              label={`Latest ${sub.submission_type === "photo" ? "photo" : "video"} check-in`}
-              value={fmt(sub.submission_date)}
-              right={reviewBadge ? <Badge variant="outline" className="text-[10px]">{reviewBadge}</Badge> : null}
-            />
-          )}
-          {latestBw && (
-            <Row
-              icon={<Scale className="h-4 w-4" />}
-              label="Latest bodyweight"
-              value={`${latestBw.value.toFixed(1)} ${latestBw.unit}`}
-              right={<span className="text-[11px] text-muted-foreground">{fmt(latestBw.date)}</span>}
-            />
-          )}
-          {!sub && !latestBw && (
-            <div className="px-4 py-3 text-xs text-muted-foreground">
-              No progress entries yet. Open Progress to start your first check-in.
-            </div>
-          )}
-        </div>
-
-        <div className="flex gap-2 border-t border-border bg-secondary/20 px-3 py-2.5">
-          <Button asChild size="sm" className="flex-1 font-bold uppercase">
-            {startCheckInLink}
-          </Button>
-          <Button asChild size="sm" variant="outline" className="flex-1">
-            {openLink}
-          </Button>
+        <div className="grid grid-cols-2 gap-2 p-3">
+          <ActionLink action="photo" icon={Camera} label="Upload Photos" primary />
+          <ActionLink action="weight" icon={Scale} label="Log Weight" />
+          <ActionLink action="measure" icon={Ruler} label="Add Measurements" />
+          <ActionLink action="history" icon={History} label="View Progress" />
         </div>
       </Card>
 
@@ -179,34 +128,9 @@ export function ProgressSummaryCard({
             <Plus className="mr-1 h-3.5 w-3.5" /> 250ml
           </Button>
         )}
-        <Button asChild size="sm" variant="ghost" className="h-9 shrink-0 px-2 text-xs">
-          {openLink}
-        </Button>
       </Card>
     </div>
   );
-}
-
-function Row({ icon, label, value, right }: {
-  icon: React.ReactNode; label: string; value: string; right?: React.ReactNode;
-}) {
-  return (
-    <div className="flex items-center justify-between gap-3 px-4 py-2.5">
-      <div className="flex items-center gap-2 min-w-0">
-        <span className="text-muted-foreground">{icon}</span>
-        <div className="min-w-0">
-          <div className="text-[11px] uppercase tracking-widest text-muted-foreground">{label}</div>
-          <div className="truncate text-sm font-semibold">{value}</div>
-        </div>
-      </div>
-      {right}
-    </div>
-  );
-}
-
-function fmt(d: string | null | undefined): string {
-  if (!d) return "—";
-  try { return format(parseISO(d), "MMM d, yyyy"); } catch { return d; }
 }
 
 export { Droplet };
