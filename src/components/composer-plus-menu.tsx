@@ -5,11 +5,14 @@ import {
 import { Button } from "@/components/ui/button";
 import {
   Plus, Camera, Image as ImageIcon, File as FileIcon, Sparkles,
-  ClipboardList, FileSignature, UtensilsCrossed, ZapIcon,
+  ClipboardList, FileSignature, UtensilsCrossed, ZapIcon, Video,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ChatSendMenu, type ChatSendAttachment } from "@/components/chat-send-menu";
 import { GifPicker } from "@/components/gif-picker";
+import { useServerFn } from "@tanstack/react-start";
+import { createMeetLink } from "@/lib/meet.functions";
+import { toast } from "sonner";
 import type { ChatGif } from "@/lib/chat-gifs";
 import type { ChatSound } from "@/lib/chat-sounds";
 
@@ -37,6 +40,7 @@ export function ComposerPlusMenu({
   onPickGif,
   onPickSound,
   onAttach,
+  onInsertText,
 }: {
   role: "admin" | "client" | "member";
   surface: "dm" | "group";
@@ -52,6 +56,8 @@ export function ComposerPlusMenu({
   onPickSound?: (s: ChatSound) => void | Promise<void>;
   /** Admin/coach-only — undefined hides the request tiles. */
   onAttach?: (att: ChatSendAttachment, body: string) => void | Promise<void>;
+  /** Admin/coach-only — receives generated Google Meet URLs to append. */
+  onInsertText?: (text: string) => void;
 }) {
   const [open, setOpen] = useState(false);
   const [gifOpen, setGifOpen] = useState(false);
@@ -59,6 +65,8 @@ export function ComposerPlusMenu({
   const [sigOpen, setSigOpen] = useState(false);
   const [recipeOpen, setRecipeOpen] = useState(false);
   const [actionOpen, setActionOpen] = useState(false);
+  const [creatingMeet, setCreatingMeet] = useState(false);
+  const createMeet = useServerFn(createMeetLink);
 
   const isAdmin = role === "admin";
   const canSendRequests = !!onAttach && (isAdmin || surface === "group");
@@ -124,6 +132,28 @@ export function ComposerPlusMenu({
       onClick: () => { setOpen(false); setActionOpen(true); },
       hidden: !canSendRequests || surface !== "dm" || !defaultClientId,
       tone: "warning",
+    },
+    {
+      key: "meet",
+      label: creatingMeet ? "Creating…" : "Google Meet",
+      icon: <Video className="h-6 w-6" />,
+      onClick: async () => {
+        if (!onInsertText || creatingMeet) return;
+        setCreatingMeet(true);
+        try {
+          const { meetUrl } = await createMeet({ data: {} });
+          onInsertText(meetUrl);
+          setOpen(false);
+          toast.success("Google Meet link added");
+        } catch (e: any) {
+          toast.error(e?.message ?? "Failed to create Meet link");
+        } finally {
+          setCreatingMeet(false);
+        }
+      },
+      hidden: !isAdmin || !onInsertText,
+      tone: "primary",
+      disabled: creatingMeet,
     },
   ];
 
