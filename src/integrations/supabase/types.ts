@@ -418,6 +418,7 @@ export type Database = {
       }
       app_members: {
         Row: {
+          access_end_date: string | null
           access_restricted_at: string | null
           account_type: string
           activity_level: string | null
@@ -452,6 +453,7 @@ export type Database = {
           height_cm: number | null
           hold_plan_started_at: string | null
           id: string
+          in_grace: boolean
           install_detected_at: string | null
           install_dismissed_at: string | null
           install_platform: string | null
@@ -464,6 +466,8 @@ export type Database = {
           last_setup_error: string | null
           last_setup_reminder_at: string | null
           last_signed_in_at: string | null
+          manual_access_disabled: boolean
+          manual_access_override: boolean
           messaging_permission: string
           notifications_status: string | null
           paused_until: string | null
@@ -495,6 +499,7 @@ export type Database = {
           user_id: string | null
         }
         Insert: {
+          access_end_date?: string | null
           access_restricted_at?: string | null
           account_type?: string
           activity_level?: string | null
@@ -529,6 +534,7 @@ export type Database = {
           height_cm?: number | null
           hold_plan_started_at?: string | null
           id?: string
+          in_grace?: boolean
           install_detected_at?: string | null
           install_dismissed_at?: string | null
           install_platform?: string | null
@@ -541,6 +547,8 @@ export type Database = {
           last_setup_error?: string | null
           last_setup_reminder_at?: string | null
           last_signed_in_at?: string | null
+          manual_access_disabled?: boolean
+          manual_access_override?: boolean
           messaging_permission?: string
           notifications_status?: string | null
           paused_until?: string | null
@@ -572,6 +580,7 @@ export type Database = {
           user_id?: string | null
         }
         Update: {
+          access_end_date?: string | null
           access_restricted_at?: string | null
           account_type?: string
           activity_level?: string | null
@@ -606,6 +615,7 @@ export type Database = {
           height_cm?: number | null
           hold_plan_started_at?: string | null
           id?: string
+          in_grace?: boolean
           install_detected_at?: string | null
           install_dismissed_at?: string | null
           install_platform?: string | null
@@ -618,6 +628,8 @@ export type Database = {
           last_setup_error?: string | null
           last_setup_reminder_at?: string | null
           last_signed_in_at?: string | null
+          manual_access_disabled?: boolean
+          manual_access_override?: boolean
           messaging_permission?: string
           notifications_status?: string | null
           paused_until?: string | null
