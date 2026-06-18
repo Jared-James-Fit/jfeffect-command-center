@@ -327,6 +327,14 @@ export interface WorkoutContextAdapter {
   upsertExerciseNote(input: UpsertExerciseNoteInput): Promise<void>;
   updateDayCompletion(dayId: string, patch: DayCompletionPatch): Promise<void>;
   saveExerciseUnitPref(input: { exerciseId: string; unit: "lb" | "kg" }): Promise<void>;
+  /**
+   * Per-exercise weight-unit preferences for the current trainee. Mirrors
+   * `client_exercise_unit_prefs.select("exercise_id, unit").in("exercise_id", ids)`.
+   * Returns only rows that exist; callers should fall back to the exercise's
+   * `default_load_unit` for missing entries. Member adapter returns `[]` since
+   * memberships don't persist per-exercise unit prefs yet.
+   */
+  listUnitPrefs(exerciseIds: string[]): Promise<{ exerciseId: string; unit: "lb" | "kg" }[]>;
   notifyCoachOfFailure(input: { dayId: string; reason: string }): Promise<void>;
 }
 
