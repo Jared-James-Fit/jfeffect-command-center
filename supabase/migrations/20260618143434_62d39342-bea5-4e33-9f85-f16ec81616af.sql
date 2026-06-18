@@ -1,0 +1,1 @@
+ALTER TABLE public.member_nutrition_targets ADD COLUMN IF NOT EXISTS coach_ack_at timestamptz;
