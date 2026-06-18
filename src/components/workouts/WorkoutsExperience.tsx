@@ -538,7 +538,6 @@ function SelectedDayCard({
   const [previewOpen, setPreviewOpen] = useState(false);
   const [moveOpen, setMoveOpen] = useState(false);
   const [statusOpen, setStatusOpen] = useState(false);
-  const { isImpersonating } = useClientImpersonation();
 
   if (!item) {
     return (
@@ -592,11 +591,9 @@ function SelectedDayCard({
                 <DropdownMenuItem onSelect={() => setMoveOpen(true)}>
                   <Move className="mr-2 h-4 w-4" /> Move workout
                 </DropdownMenuItem>
-                {isImpersonating && (
-                  <DropdownMenuItem onSelect={() => setStatusOpen(true)}>
-                    <CircleDot className="mr-2 h-4 w-4" /> Change status
-                  </DropdownMenuItem>
-                )}
+                <DropdownMenuItem onSelect={() => setStatusOpen(true)}>
+                  <CircleDot className="mr-2 h-4 w-4" /> Change status
+                </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
           )}
@@ -642,7 +639,7 @@ function SelectedDayCard({
         />
       )}
 
-      {!readonly && isImpersonating && (
+      {!readonly && (
         <WorkoutStatusSheet
           open={statusOpen}
           onOpenChange={setStatusOpen}
