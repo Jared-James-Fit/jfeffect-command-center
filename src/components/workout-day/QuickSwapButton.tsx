@@ -7,11 +7,14 @@ import {
   PlayCircle,
   Search,
 } from "lucide-react";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import {
   Sheet,
   SheetContent,
@@ -20,6 +23,7 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
+import { applySwap, getSwapImpact } from "@/lib/quick-swap.functions";
 
 type ExerciseLite = {
   id: string;
@@ -113,13 +117,14 @@ function ExerciseRowCard({
   );
 }
 
-type ViewMode = "suggestions" | "search" | "confirm";
+type ViewMode = "suggestions" | "search" | "warning" | "scope";
 
 /**
  * Shared Quick Swap entry point used by every exercise row in
  * WorkoutDayView (both coaching clients and membership users).
  */
 export function QuickSwapButton({
+  rowId,
   exerciseId,
   exerciseName,
   muscleGroup,
@@ -138,15 +143,20 @@ export function QuickSwapButton({
   const [open, setOpen] = useState(false);
   const [mode, setMode] = useState<ViewMode>("suggestions");
   const [pending, setPending] = useState<ExerciseLite | null>(null);
+  const [scope, setScope] = useState<"today" | "future">("today");
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(0);
   const debouncedSearch = useDebounced(search.trim(), 300);
+  const qc = useQueryClient();
+  const getImpactFn = useServerFn(getSwapImpact);
+  const applySwapFn = useServerFn(applySwap);
 
   // Reset state every time the sheet opens.
   useEffect(() => {
     if (open) {
       setMode("suggestions");
       setPending(null);
+      setScope("today");
       setSearch("");
       setPage(0);
     }
@@ -208,22 +218,44 @@ export function QuickSwapButton({
   });
 
   const startSelect = (ex: ExerciseLite) => {
+    setPending(ex);
+    setScope("today");
     const diff =
       (muscleGroup && ex.muscle_group && ex.muscle_group !== muscleGroup) ||
       (category && ex.category && ex.category !== category);
-    if (diff) {
-      setPending(ex);
-      setMode("confirm");
-    } else {
-      confirmSwap(ex);
-    }
+    setMode(diff ? "warning" : "scope");
   };
 
-  const confirmSwap = (ex: ExerciseLite) => {
-    // Persistence wiring lands in the next pass; for now confirm + close.
-    toast.success(`Swap queued: ${exerciseName} → ${ex.name}`);
-    setOpen(false);
-  };
+  // Pull "how many future workouts" for the scope step.
+  const { data: impact, isLoading: impactLoading } = useQuery({
+    queryKey: ["quick-swap-impact", rowId],
+    enabled: open && mode === "scope" && !!pending,
+    staleTime: 30_000,
+    queryFn: () => getImpactFn({ data: { rowId } }),
+  });
+
+  const swapMutation = useMutation({
+    mutationFn: (vars: { newExerciseId: string; scope: "today" | "future" }) =>
+      applySwapFn({ data: { rowId, ...vars } }),
+    onSuccess: (res, vars) => {
+      toast.success(
+        vars.scope === "future"
+          ? `Swapped across ${res.count} workout${res.count === 1 ? "" : "s"}`
+          : `Swapped for today`,
+      );
+      // Refresh any cached workout-day data so the new exercise appears.
+      qc.invalidateQueries({
+        predicate: (q) => {
+          const k = q.queryKey?.[0];
+          return typeof k === "string" && k.startsWith("pl-");
+        },
+      });
+      setOpen(false);
+    },
+    onError: (err: any) => {
+      toast.error(err?.message ?? "Swap failed");
+    },
+  });
 
   const totalPages = useMemo(() => {
     if (!searchResults) return 1;
@@ -248,8 +280,10 @@ export function QuickSwapButton({
             <SheetDescription>
               {mode === "search"
                 ? "Search all exercises."
-                : mode === "confirm"
-                ? "Confirm swap."
+                : mode === "warning"
+                ? "Confirm different target."
+                : mode === "scope"
+                ? "Choose where to apply."
                 : "Pick an alternate exercise."}
             </SheetDescription>
           </SheetHeader>
@@ -346,16 +380,82 @@ export function QuickSwapButton({
             </div>
           )}
 
-          {mode === "confirm" && pending && (
+          {mode === "warning" && pending && (
             <div className="mt-4 space-y-3">
               <div className="flex items-start gap-2 rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-amber-700 dark:text-amber-300">
                 <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
                 <div className="text-xs">
                   <strong className="block">Different target</strong>
-                  This exercise targets a different muscle group or category. Swap anyway?
+                  This exercise targets a different muscle group or category. Continue anyway?
                 </div>
               </div>
-              <ExerciseRowCard ex={pending} onSelect={() => confirmSwap(pending)} />
+              <ExerciseRowCard ex={pending} onSelect={() => setMode("scope")} />
+              <Button variant="ghost" className="w-full" onClick={() => setMode("suggestions")}>
+                <ArrowLeft className="mr-2 h-4 w-4" /> Back
+              </Button>
+            </div>
+          )}
+
+          {mode === "scope" && pending && (
+            <div className="mt-4 space-y-3">
+              <div className="rounded-md border border-border bg-card px-3 py-2">
+                <div className="text-[11px] uppercase tracking-wide text-muted-foreground">New exercise</div>
+                <div className="mt-0.5 truncate text-sm font-medium">{pending.name}</div>
+              </div>
+              <div>
+                <div className="mb-2 text-sm font-medium">Where should this swap apply?</div>
+                <RadioGroup
+                  value={scope}
+                  onValueChange={(v) => setScope(v as "today" | "future")}
+                  className="space-y-2"
+                >
+                  <div className="flex items-start gap-2 rounded-md border border-border px-3 py-2">
+                    <RadioGroupItem value="today" id="swap-scope-today" className="mt-0.5" />
+                    <Label htmlFor="swap-scope-today" className="flex-1 cursor-pointer">
+                      <div className="text-sm font-medium">Today only</div>
+                      <div className="text-xs text-muted-foreground">Just this workout.</div>
+                    </Label>
+                  </div>
+                  <div
+                    className={
+                      "flex items-start gap-2 rounded-md border border-border px-3 py-2 " +
+                      (impact?.isTemplate ? "opacity-50" : "")
+                    }
+                  >
+                    <RadioGroupItem
+                      value="future"
+                      id="swap-scope-future"
+                      className="mt-0.5"
+                      disabled={!!impact?.isTemplate || (impact?.futureCount ?? 0) === 0}
+                    />
+                    <Label htmlFor="swap-scope-future" className="flex-1 cursor-pointer">
+                      <div className="text-sm font-medium">Future workouts in this block</div>
+                      <div className="text-xs text-muted-foreground">
+                        {impactLoading
+                          ? "Counting…"
+                          : impact?.isTemplate
+                          ? "Not available on template blocks."
+                          : `${impact?.futureCount ?? 0} uncompleted workout${(impact?.futureCount ?? 0) === 1 ? "" : "s"} affected.`}
+                      </div>
+                    </Label>
+                  </div>
+                </RadioGroup>
+              </div>
+              <div className="flex items-center gap-2 pt-1">
+                <Button variant="ghost" onClick={() => setMode("suggestions")} className="flex-1">
+                  <ArrowLeft className="mr-2 h-4 w-4" /> Back
+                </Button>
+                <Button
+                  onClick={() => swapMutation.mutate({ newExerciseId: pending.id, scope })}
+                  disabled={swapMutation.isPending}
+                  className="flex-1"
+                >
+                  {swapMutation.isPending ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  ) : null}
+                  Confirm Swap
+                </Button>
+              </div>
             </div>
           )}
 
