@@ -303,8 +303,8 @@ export interface WorkoutContextAdapter {
   listRowResults(dayId: string): Promise<RowResultDTO[]>;
 
   /* ---- raw passthrough surface (Phase B turn 1 — see PlRowRaw above) ----- */
-  /** Raw pl_days row for `dayId`. Member adapter reshapes member_* equivalents. */
-  getDayRaw(dayId: string): Promise<PlDayRaw>;
+  /** Raw pl_days row for `dayId`, or null if missing. Member adapter reshapes member_* equivalents. */
+  getDayRaw(dayId: string): Promise<PlDayRaw | null>;
   /** Raw pl_exercise_rows with `exercises(...)` join for `dayId`, in sort_order. */
   listRowsRaw(dayId: string): Promise<PlRowRaw[]>;
   /** Raw pl_row_results for this day, scoped to the current trainee. */

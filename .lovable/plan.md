@@ -6,7 +6,7 @@ Split into 4 turns so each lands in a working state with a clear verification st
 
 ---
 
-### Turn 1 (this turn) — Adapter contract: add raw read surface
+### Turn 1 — Adapter contract: add raw read surface ✅ DONE
 
 - In `src/lib/workout-context/types.ts`, add three new methods alongside the DTO ones (do NOT remove the DTO methods — keep them as future-cleanup):
   - `listRowsRaw(dayId): Promise<PlRowRaw[]>`
@@ -17,12 +17,12 @@ Split into 4 turns so each lands in a working state with a clear verification st
 - Stub on `member-adapter.ts`: throw `NotImplemented` (turn 3 fills these in).
 - No `WorkoutDayView` changes yet → portal behavior unchanged, build green.
 
-### Turn 2 — Swap WorkoutDayView reads to `adapter.*Raw`
+### Turn 2 — Swap WorkoutDayView reads to `adapter.*Raw` ✅ DONE
 
-- Replace the ~12 `useQuery({ queryFn: () => sb.from("pl_*")... })` blocks with `adapter.listRowsRaw` / `listRowResultsRaw` / `getDayRaw`.
-- Cache keys become `[adapter.kind, adapter.ref.ownerId, dayId, ...]` so client and member POVs never share cache entries.
+- Swapped day/rows/results reads to `adapter.getDayRaw` / `listRowsRaw` / `listRowResultsRaw` when an adapter is provided; sb.* fallback retained for safety.
+- Cache keys append `adapter.kind` + `adapter.ref.ownerId` as a suffix so existing `invalidateQueries({queryKey: ["pl-day-results", dayId]})` prefix-matches still work while client and member POVs stay isolated.
 - Writes still on `sb.*` for this turn (deferred to turn 4).
-- Portal behavior still identical (client adapter is a passthrough).
+- Portal behavior identical (client adapter is byte-for-byte passthrough).
 
 ### Turn 3 — Member adapter raw-shape implementation
 
