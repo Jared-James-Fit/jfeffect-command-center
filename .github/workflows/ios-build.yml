@@ -30,12 +30,16 @@ jobs:
       - name: Install Capacitor CLI
         run: npm install -g @capacitor/cli
 
-      - name: Add iOS platform if not present
+      - name: Setup iOS platform
         run: |
+          # If xcworkspace doesn't exist, the iOS project is incomplete.
+          # Remove the partial ios directory and re-add the platform cleanly.
           if [ ! -f "ios/App/App.xcworkspace/contents.xcworkspacedata" ]; then
+            echo "xcworkspace not found — removing partial ios directory and re-adding platform"
+            rm -rf ios
             npx cap add ios
           else
-            echo "iOS platform already exists"
+            echo "iOS platform already complete"
           fi
 
       - name: Sync Capacitor
@@ -49,7 +53,7 @@ jobs:
 
       - name: Install CocoaPods
         run: |
-          gem install cocoapods
+          gem install cocoapods --no-document
           cd ios/App && pod install
 
       - name: Set up App Store Connect API key
@@ -60,11 +64,10 @@ jobs:
 
       - name: Update bundle identifier in Xcode project
         run: |
-          cd ios/App
-          # Update bundle ID to com.jfeffect.app
-          sed -i '' 's/com\.jaredjamesfit\.jfeffect/com.jfeffect.app/g' App.xcodeproj/project.pbxproj || true
-          # Also try the workspace
-          find . -name "*.pbxproj" -exec sed -i '' 's/com\.jaredjamesfit\.jfeffect/com.jfeffect.app/g' {} \; || true
+          find ios -name "*.pbxproj" -exec sed -i '' 's/com\.jaredjamesfit\.jfeffect/com.jfeffect.app/g' {} \; || true
+          find ios -name "*.pbxproj" -exec sed -i '' 's/com\.capacitorjs\.app/com.jfeffect.app/g' {} \; || true
+          echo "Bundle ID update complete"
+          grep -r "PRODUCT_BUNDLE_IDENTIFIER" ios/App/App.xcodeproj/project.pbxproj | head -5 || true
 
       - name: Build and Archive iOS app
         run: |
@@ -74,30 +77,18 @@ jobs:
             -scheme App \
             -configuration Release \
             -destination "generic/platform=iOS" \
-            -archivePath $RUNNER_TEMP/JFEffect.xcarchive \
+            -archivePath "$RUNNER_TEMP/JFEffect.xcarchive" \
             archive \
             CODE_SIGN_STYLE=Automatic \
-            DEVELOPMENT_TEAM=$(xcrun altool --list-providers -u "" --apiKey ${{ secrets.APP_STORE_CONNECT_KEY_ID }} --apiIssuer ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }} 2>/dev/null | grep "Provider" | head -1 | awk '{print $NF}' || echo "") \
             PRODUCT_BUNDLE_IDENTIFIER=com.jfeffect.app \
-            | xcpretty || true
-          
-          # Try without xcpretty if it fails
-          if [ ! -d "$RUNNER_TEMP/JFEffect.xcarchive" ]; then
-            xcodebuild \
-              -workspace App.xcworkspace \
-              -scheme App \
-              -configuration Release \
-              -destination "generic/platform=iOS" \
-              -archivePath $RUNNER_TEMP/JFEffect.xcarchive \
-              archive \
-              CODE_SIGN_STYLE=Automatic \
-              PRODUCT_BUNDLE_IDENTIFIER=com.jfeffect.app \
-              ALLOW_PROVISIONING_UPDATES=YES
-          fi
+            ALLOW_PROVISIONING_UPDATES=YES \
+            -authenticationKeyPath "$HOME/.private_keys/AuthKey_${{ secrets.APP_STORE_CONNECT_KEY_ID }}.p8" \
+            -authenticationKeyID "${{ secrets.APP_STORE_CONNECT_KEY_ID }}" \
+            -authenticationKeyIssuerID "${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}"
 
-      - name: Export IPA
+      - name: Export and Upload to TestFlight
         run: |
-          cat > /tmp/ExportOptions.plist << 'EOF'
+          cat > /tmp/ExportOptions.plist << 'PLIST'
           <?xml version="1.0" encoding="UTF-8"?>
           <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
           <plist version="1.0">
@@ -108,34 +99,19 @@ jobs:
             <string>upload</string>
             <key>signingStyle</key>
             <string>automatic</string>
-            <key>teamID</key>
-            <string>$(security find-identity -v -p codesigning | grep "Apple Distribution" | head -1 | awk '{print $3}' | tr -d '()')</string>
           </dict>
           </plist>
-          EOF
-          
+          PLIST
+
           xcodebuild \
             -exportArchive \
-            -archivePath $RUNNER_TEMP/JFEffect.xcarchive \
-            -exportPath $RUNNER_TEMP/JFEffect-export \
+            -archivePath "$RUNNER_TEMP/JFEffect.xcarchive" \
+            -exportPath "$RUNNER_TEMP/JFEffect-export" \
             -exportOptionsPlist /tmp/ExportOptions.plist \
-            -allowProvisioningUpdates
-
-      - name: Upload to App Store Connect
-        run: |
-          xcrun altool \
-            --upload-package "$RUNNER_TEMP/JFEffect-export/JF Effect.ipa" \
-            --type ios \
-            --apiKey ${{ secrets.APP_STORE_CONNECT_KEY_ID }} \
-            --apiIssuer ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }} \
-            --verbose || \
-          xcrun altool \
-            --upload-app \
-            --file "$RUNNER_TEMP/JFEffect-export/App.ipa" \
-            --type ios \
-            --apiKey ${{ secrets.APP_STORE_CONNECT_KEY_ID }} \
-            --apiIssuer ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }} \
-            --verbose
+            -allowProvisioningUpdates \
+            -authenticationKeyPath "$HOME/.private_keys/AuthKey_${{ secrets.APP_STORE_CONNECT_KEY_ID }}.p8" \
+            -authenticationKeyID "${{ secrets.APP_STORE_CONNECT_KEY_ID }}" \
+            -authenticationKeyIssuerID "${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}"
 
       - name: Upload archive as artifact (backup)
         uses: actions/upload-artifact@v4
