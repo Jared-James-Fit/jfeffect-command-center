@@ -30,18 +30,6 @@ jobs:
       - name: Install Capacitor CLI
         run: npm install -g @capacitor/cli
 
-      - name: Setup iOS platform
-        run: |
-          # If xcworkspace doesn't exist, the iOS project is incomplete.
-          # Remove the partial ios directory and re-add the platform cleanly.
-          if [ ! -f "ios/App/App.xcworkspace/contents.xcworkspacedata" ]; then
-            echo "xcworkspace not found — removing partial ios directory and re-adding platform"
-            rm -rf ios
-            npx cap add ios
-          else
-            echo "iOS platform already complete"
-          fi
-
       - name: Setup Ruby and CocoaPods
         uses: ruby/setup-ruby@v1
         with:
@@ -51,11 +39,38 @@ jobs:
       - name: Install CocoaPods gem
         run: gem install cocoapods --no-document
 
-      - name: Sync Capacitor (generates Podfile)
-        run: npx cap sync ios
+      - name: Setup iOS platform (add + sync)
+        run: |
+          # The ios/ directory in the repo only has PrivacyInfo.xcprivacy
+          # We need to generate the full Xcode project
+          echo "=== Current ios/ directory contents ==="
+          ls -la ios/ 2>/dev/null || echo "ios/ does not exist"
+          ls -la ios/App/ 2>/dev/null || echo "ios/App/ does not exist"
+          
+          # Remove the partial ios directory and re-add cleanly
+          echo "=== Removing partial ios directory ==="
+          rm -rf ios
+          
+          echo "=== Running npx cap add ios ==="
+          npx cap add ios
+          
+          echo "=== After cap add ios ==="
+          ls -la ios/App/ 2>/dev/null || echo "ios/App/ still not created"
+          ls ios/App/Podfile 2>/dev/null && echo "Podfile EXISTS" || echo "Podfile NOT FOUND"
+          
+          echo "=== Running npx cap sync ios ==="
+          npx cap sync ios
+          
+          echo "=== After cap sync ios ==="
+          ls -la ios/App/ 2>/dev/null
+          ls ios/App/Podfile 2>/dev/null && echo "Podfile EXISTS after sync" || echo "Podfile NOT FOUND after sync"
 
       - name: Run pod install
-        run: cd ios/App && pod install
+        run: |
+          echo "=== Contents of ios/App/ ==="
+          ls -la ios/App/
+          echo "=== Running pod install ==="
+          cd ios/App && pod install
 
       - name: Set up App Store Connect API key
         run: |
