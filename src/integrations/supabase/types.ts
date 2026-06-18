@@ -4622,6 +4622,7 @@ export type Database = {
       }
       exercises: {
         Row: {
+          active_video_set: string
           archived: boolean
           archived_at: string | null
           archived_by: string | null
@@ -4648,6 +4649,8 @@ export type Database = {
           primary_movement_pattern: string | null
           quality_warning: string | null
           safe_to_publish: boolean
+          secondary_vimeo_embed_url: string | null
+          secondary_vimeo_id: string | null
           source_quality: string | null
           source_type: string | null
           source_youtube_url: string | null
@@ -4670,6 +4673,7 @@ export type Database = {
           youtube_url: string | null
         }
         Insert: {
+          active_video_set?: string
           archived?: boolean
           archived_at?: string | null
           archived_by?: string | null
@@ -4696,6 +4700,8 @@ export type Database = {
           primary_movement_pattern?: string | null
           quality_warning?: string | null
           safe_to_publish?: boolean
+          secondary_vimeo_embed_url?: string | null
+          secondary_vimeo_id?: string | null
           source_quality?: string | null
           source_type?: string | null
           source_youtube_url?: string | null
@@ -4718,6 +4724,7 @@ export type Database = {
           youtube_url?: string | null
         }
         Update: {
+          active_video_set?: string
           archived?: boolean
           archived_at?: string | null
           archived_by?: string | null
@@ -4744,6 +4751,8 @@ export type Database = {
           primary_movement_pattern?: string | null
           quality_warning?: string | null
           safe_to_publish?: boolean
+          secondary_vimeo_embed_url?: string | null
+          secondary_vimeo_id?: string | null
           source_quality?: string | null
           source_type?: string | null
           source_youtube_url?: string | null
