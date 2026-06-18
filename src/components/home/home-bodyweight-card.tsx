@@ -10,9 +10,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sh
 import { Scale, TrendingDown, TrendingUp, Plus, History, Loader2 } from "lucide-react";
 import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis } from "recharts";
 import { toast } from "sonner";
-import {
-  listBodyweight, logBodyweight, bodyweightStats, type ProgressBodyweight,
-} from "@/lib/progress";
+import { logBodyweight } from "@/lib/progress";
 import { getCombinedBodyweightSeries, type BodyweightPoint } from "@/lib/bodyweight";
 import { todayLocalISO } from "@/lib/today";
 
