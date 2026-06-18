@@ -21,7 +21,7 @@ import { RecipeCard } from "./RecipeCard";
  * clients (/portal/recipes, /portal/nutrition-targets). Same data, same UI.
  */
 
-const VISIBLE_CATEGORIES = ["Recommended", "Breakfast", "Lunch", "Dinner", "Snack", "Meal Prep"] as const;
+const VISIBLE_CATEGORIES = ["Recommended", "Breakfast", "Lunch", "Dinner", "Snack", "Drinks", "Meal Prep"] as const;
 type Category = (typeof VISIBLE_CATEGORIES)[number] | "All";
 
 // Phase 5 — six advanced filters, hidden behind one Filters button.
@@ -34,6 +34,7 @@ const ADVANCED_FILTERS = [
   { value: "omnivore", label: "Omnivore" },
   { value: "quick", label: "Quick Meals", tagAliases: ["quick", "quick-meal", "15-min", "20-min"] },
   { value: "performance", label: "Performance", tagAliases: ["performance", "post-workout"] },
+  { value: "drinks", label: "Drinks", tagAliases: ["drink", "drinks", "beverage", "smoothie", "shake"] },
 ] as const;
 
 // Phase 8 — recipe scoring by stored goal text.
