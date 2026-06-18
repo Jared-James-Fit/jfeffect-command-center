@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
+import { useNavigate } from "@tanstack/react-router";
 import { format, parseISO, addDays, startOfToday } from "date-fns";
 import { toast } from "sonner";
 import {
@@ -14,7 +15,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
 import { Badge } from "@/components/ui/badge";
-import { CalendarIcon, AlertTriangle, ArrowRight, Loader2, RotateCcw, Replace } from "lucide-react";
+import { CalendarIcon, AlertTriangle, ArrowRight, Loader2, RotateCcw, Replace, Eye } from "lucide-react";
 import {
   moveWorkout,
   swapWorkouts,
@@ -22,6 +23,7 @@ import {
   getMoveContext,
 } from "@/lib/schedule-manager.functions";
 import { detectScheduleConflicts } from "@/lib/schedule-conflicts";
+import { useClientImpersonation } from "@/lib/client-impersonation";
 
 const WEEKDAY_TO_INT: Record<string, number> = {
   sun: 0, sunday: 0,
@@ -46,6 +48,17 @@ export interface MoveWorkoutSheetProps {
   onOpenChange: (open: boolean) => void;
   /** Optional pre-selected target date (used when arriving from drag-drop). */
   initialTargetDate?: Date | null;
+  /**
+   * When provided (coach/admin viewing a client schedule), reveals a
+   * "View what they logged" action on completed / in-progress workouts.
+   * Clicking it enters Client POV as that client and opens the workout
+   * page so the coach can see every field the client filled in.
+   */
+  viewWorkoutAs?: {
+    clientId: string;
+    clientUserId: string | null;
+    clientName: string | null;
+  } | null;
 }
 
 /**
@@ -58,8 +71,11 @@ export function MoveWorkoutSheet({
   open,
   onOpenChange,
   initialTargetDate,
+  viewWorkoutAs,
 }: MoveWorkoutSheetProps) {
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
+  const impersonation = useClientImpersonation();
   const fetchCtx = useServerFn(getMoveContext);
   const move = useServerFn(moveWorkout);
   const swap = useServerFn(swapWorkouts);
@@ -104,6 +120,31 @@ export function MoveWorkoutSheet({
   const sameDayConflict = conflicts.find((c) => c.kind === "sameDayWorkout");
   const isCompleted = !!ctx?.completion?.completed_at;
   const inProgress = !isCompleted && !!ctx?.completion?.in_progress_at;
+
+  const canViewLogged =
+    !!viewWorkoutAs &&
+    !!viewWorkoutAs.clientUserId &&
+    !!dayId &&
+    (isCompleted || inProgress);
+
+  const handleViewLogged = () => {
+    if (!viewWorkoutAs || !viewWorkoutAs.clientUserId || !dayId) return;
+    impersonation.start(
+      {
+        id: viewWorkoutAs.clientId,
+        user_id: viewWorkoutAs.clientUserId,
+        full_name: viewWorkoutAs.clientName,
+      },
+      typeof window !== "undefined"
+        ? window.location.pathname + window.location.search
+        : null,
+    );
+    onOpenChange(false);
+    navigate({
+      to: "/portal/workouts/$dayId",
+      params: { dayId },
+    });
+  };
 
   // Suggested chips: client's training-day weekdays in the next 14 days.
   const suggestions = useMemo(() => {
@@ -308,6 +349,17 @@ export function MoveWorkoutSheet({
                 </div>
               </div>
             </div>
+          )}
+
+          {canViewLogged && (
+            <Button
+              variant="outline"
+              className="w-full justify-center gap-2"
+              onClick={handleViewLogged}
+            >
+              <Eye className="h-4 w-4" />
+              View what {viewWorkoutAs?.clientName?.split(" ")[0] ?? "they"} logged
+            </Button>
           )}
 
           {/* Conflicts */}
