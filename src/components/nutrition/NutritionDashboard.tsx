@@ -1,8 +1,7 @@
 import { type ReactNode } from "react";
 import { Link } from "@tanstack/react-router";
 import { Card } from "@/components/ui/card";
-import { Flame, Beef, Wheat, Cookie, Droplets, Moon, Target, HeartPulse, ChefHat, HelpCircle } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { Flame, Beef, Wheat, Cookie, Droplets, Moon, ChefHat, HelpCircle } from "lucide-react";
 import { RecipeBrowser } from "./RecipeBrowser";
 
 /**
@@ -82,15 +81,6 @@ function TargetsStrip({ targets }: { targets?: NutritionTargets }) {
   );
 }
 
-type Tile = {
-  label: string;
-  icon: any;
-  emphasis?: boolean;
-  to?: string;
-  anchor?: string;
-  hint?: string;
-};
-
 function QuickActions({
   viewer,
   recipesAnchorId,
@@ -98,69 +88,29 @@ function QuickActions({
   viewer: "member" | "client";
   recipesAnchorId: string;
 }) {
-  const tiles: Tile[] = [
-    {
-      label: "My Targets",
-      icon: Target,
-      emphasis: true,
-      anchor: "targets",
-      hint: "Calories, protein, carbs, fats",
-    },
-    {
-      label: "Water & Recovery",
-      icon: HeartPulse,
-      anchor: "targets",
-      hint: "Water and sleep targets",
-    },
-    {
-      label: "Recipes",
-      icon: ChefHat,
-      anchor: recipesAnchorId,
-      hint: "Browse the recipe library",
-    },
-    {
-      label: "Nutrition FAQ",
-      icon: HelpCircle,
-      to: viewer === "member" ? "/m/resources" : "/portal/resources",
-      hint: "Help center articles",
-    },
-  ];
-
+  const faqTo = viewer === "member" ? "/m/resources" : "/portal/resources";
   return (
-    <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-      {tiles.map((t) => {
-        const Icon = t.icon;
-        const inner = (
-          <div
-            className={cn(
-              "flex min-h-[112px] flex-col items-start justify-between gap-2 rounded-2xl border bg-card p-4 transition active:scale-[0.98]",
-              t.emphasis
-                ? "border-primary/40 bg-gradient-to-br from-primary/10 to-card hover:border-primary"
-                : "border-border hover:border-primary/40 hover:bg-card/80",
-            )}
-          >
-            <Icon className={cn("h-7 w-7", t.emphasis ? "text-primary" : "text-foreground")} />
-            <div>
-              <div className="text-sm font-bold leading-tight">{t.label}</div>
-              {t.hint && (
-                <div className="mt-0.5 text-[11px] text-muted-foreground">{t.hint}</div>
-              )}
-            </div>
-          </div>
-        );
-        if (t.anchor) {
-          return (
-            <a key={t.label} href={`#${t.anchor}`}>
-              {inner}
-            </a>
-          );
-        }
-        return (
-          <Link key={t.label} to={t.to!}>
-            {inner}
-          </Link>
-        );
-      })}
+    <div className="grid grid-cols-2 gap-3">
+      <a
+        href={`#${recipesAnchorId}`}
+        className="flex items-center gap-3 rounded-xl border border-primary/30 bg-gradient-to-br from-primary/10 to-card p-4 transition hover:border-primary active:scale-[0.98]"
+      >
+        <ChefHat className="h-6 w-6 text-primary" />
+        <div>
+          <div className="text-sm font-bold leading-tight">Browse Recipes</div>
+          <div className="text-[11px] text-muted-foreground">Jump to the recipe library</div>
+        </div>
+      </a>
+      <Link
+        to={faqTo}
+        className="flex items-center gap-3 rounded-xl border border-border bg-card p-4 transition hover:border-primary/40 active:scale-[0.98]"
+      >
+        <HelpCircle className="h-6 w-6 text-foreground" />
+        <div>
+          <div className="text-sm font-bold leading-tight">Nutrition Help</div>
+          <div className="text-[11px] text-muted-foreground">FAQ & resources</div>
+        </div>
+      </Link>
     </div>
   );
 }
