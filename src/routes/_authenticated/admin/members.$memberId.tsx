@@ -20,6 +20,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Link2, KeyRound, Trash2, Plus, Eye } from "lucide-react";
 import { toast } from "sonner";
 import { useState, lazy, Suspense } from "react";
+import { cn } from "@/lib/utils";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { supabase } from "@/integrations/supabase/client";
