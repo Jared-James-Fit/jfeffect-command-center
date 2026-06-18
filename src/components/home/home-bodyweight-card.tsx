@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { Card } from "@/components/ui/card";
@@ -35,6 +35,7 @@ export function HomeBodyweightCard({ userId, surface, defaultUnit = "lb" }: Prop
   const [unit, setUnit] = useState<"kg" | "lb">(defaultUnit);
   const [date, setDate] = useState(todayLocalISO());
   const [saving, setSaving] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
 
   const { data: rows = [] } = useQuery({
     queryKey: ["progress-bw", userId],
@@ -91,10 +92,14 @@ export function HomeBodyweightCard({ userId, surface, defaultUnit = "lb" }: Prop
     setSaving(true);
     try {
       await logBodyweight({ user_id: userId, weight_value: w, weight_unit: unit, logged_date: date, note: null });
-      qc.invalidateQueries({ queryKey: ["progress-bw", userId] });
       toast.success("Weight logged");
       setVal("");
       setOpen(false);
+      // Defer cache invalidation until after the sheet close animation
+      // finishes so we don't jank the closing transition with a re-render.
+      window.setTimeout(() => {
+        qc.invalidateQueries({ queryKey: ["progress-bw", userId] });
+      }, 280);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Couldn't save weight");
     } finally {
@@ -164,7 +169,16 @@ export function HomeBodyweightCard({ userId, surface, defaultUnit = "lb" }: Prop
       </Button>
 
       <Sheet open={open} onOpenChange={setOpen}>
-        <SheetContent side="bottom" className="rounded-t-2xl p-0">
+        <SheetContent
+          side="bottom"
+          className="rounded-t-2xl p-0"
+          onOpenAutoFocus={(e) => {
+            // Defer focus until after the sheet's open animation so the
+            // mobile keyboard doesn't fight the slide-up transition.
+            e.preventDefault();
+            window.setTimeout(() => inputRef.current?.focus(), 220);
+          }}
+        >
           <SheetHeader className="border-b border-border px-5 py-4">
             <SheetTitle>Log Weight</SheetTitle>
           </SheetHeader>
@@ -172,11 +186,21 @@ export function HomeBodyweightCard({ userId, surface, defaultUnit = "lb" }: Prop
             <div>
               <Label className="text-xs uppercase tracking-widest text-muted-foreground">Weight</Label>
               <Input
-                autoFocus
-                type="number" step="0.1" inputMode="decimal"
+                ref={inputRef}
+                type="text"
+                inputMode="decimal"
+                pattern="[0-9]*\.?[0-9]*"
+                enterKeyHint="done"
                 placeholder="e.g. 182.4"
                 className="h-12 text-lg"
-                value={val} onChange={(e) => setVal(e.target.value)}
+                value={val}
+                onChange={(e) => {
+                  // Allow only digits + a single decimal point — keeps the
+                  // value typing-smooth on mobile without numeric spinners.
+                  const next = e.target.value.replace(/[^0-9.]/g, "").replace(/(\..*)\./g, "$1");
+                  setVal(next);
+                }}
+                onKeyDown={(e) => { if (e.key === "Enter" && val && !saving) save(); }}
               />
             </div>
             <div className="grid grid-cols-2 gap-3">

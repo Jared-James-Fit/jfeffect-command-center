@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card } from "@/components/ui/card";
@@ -34,6 +34,7 @@ export function BodyweightSummaryCard({ clientId, defaultUnit = "lb" }: Props) {
   const [weight, setWeight] = useState("");
   const [date, setDate] = useState(todayLocalISO());
   const [saving, setSaving] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
 
   const { data: rows = [] } = useQuery({
     queryKey: ["progress-metrics", clientId],
@@ -87,8 +88,10 @@ export function BodyweightSummaryCard({ clientId, defaultUnit = "lb" }: Props) {
         if (error) throw new Error(error.message);
       }
       toast.success("Bodyweight saved");
-      qc.invalidateQueries({ queryKey: ["progress-metrics", clientId] });
       setSheetOpen(false);
+      window.setTimeout(() => {
+        qc.invalidateQueries({ queryKey: ["progress-metrics", clientId] });
+      }, 280);
     } finally {
       setSaving(false);
     }
@@ -164,7 +167,14 @@ export function BodyweightSummaryCard({ clientId, defaultUnit = "lb" }: Props) {
       </Button>
 
       <Sheet open={sheetOpen} onOpenChange={setSheetOpen}>
-        <SheetContent side="bottom" className="rounded-t-2xl p-0">
+        <SheetContent
+          side="bottom"
+          className="rounded-t-2xl p-0"
+          onOpenAutoFocus={(e) => {
+            e.preventDefault();
+            window.setTimeout(() => inputRef.current?.focus(), 220);
+          }}
+        >
           <SheetHeader className="border-b border-border px-5 py-4">
             <SheetTitle>Log Weight</SheetTitle>
           </SheetHeader>
@@ -172,11 +182,19 @@ export function BodyweightSummaryCard({ clientId, defaultUnit = "lb" }: Props) {
             <div>
               <Label className="text-xs uppercase tracking-widest text-muted-foreground">Weight</Label>
               <Input
-                autoFocus
-                type="number" step="0.1" inputMode="decimal"
+                ref={inputRef}
+                type="text"
+                inputMode="decimal"
+                pattern="[0-9]*\.?[0-9]*"
+                enterKeyHint="done"
                 placeholder="e.g. 182.4"
                 className="h-12 text-lg"
-                value={weight} onChange={(e) => setWeight(e.target.value)}
+                value={weight}
+                onChange={(e) => {
+                  const next = e.target.value.replace(/[^0-9.]/g, "").replace(/(\..*)\./g, "$1");
+                  setWeight(next);
+                }}
+                onKeyDown={(e) => { if (e.key === "Enter" && weight && !saving) save(); }}
               />
             </div>
             <div className="grid grid-cols-2 gap-3">
