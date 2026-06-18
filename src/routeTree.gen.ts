@@ -205,6 +205,7 @@ import { Route as AuthenticatedMediaSalesMembershipRouteImport } from './routes/
 import { Route as AuthenticatedMediaSalesCoachingRouteImport } from './routes/_authenticated/media/sales.coaching'
 import { Route as AuthenticatedMResourcesSlugRouteImport } from './routes/_authenticated/m/resources.$slug'
 import { Route as AuthenticatedMPlansPlanIdRouteImport } from './routes/_authenticated/m/plans.$planId'
+import { Route as AuthenticatedMNutritionTargetsSetupRouteImport } from './routes/_authenticated/m/nutrition.targets-setup'
 import { Route as AuthenticatedMNutritionRecipeIdRouteImport } from './routes/_authenticated/m/nutrition.$recipeId'
 import { Route as AuthenticatedMMyPlansEnrollmentIdRouteImport } from './routes/_authenticated/m/my-plans.$enrollmentId'
 import { Route as AuthenticatedAdminSettingsSmsRouteImport } from './routes/_authenticated/admin/settings_.sms'
@@ -1379,6 +1380,12 @@ const AuthenticatedMPlansPlanIdRoute =
     path: '/$planId',
     getParentRoute: () => AuthenticatedMPlansRoute,
   } as any)
+const AuthenticatedMNutritionTargetsSetupRoute =
+  AuthenticatedMNutritionTargetsSetupRouteImport.update({
+    id: '/targets-setup',
+    path: '/targets-setup',
+    getParentRoute: () => AuthenticatedMNutritionRoute,
+  } as any)
 const AuthenticatedMNutritionRecipeIdRoute =
   AuthenticatedMNutritionRecipeIdRouteImport.update({
     id: '/$recipeId',
@@ -1936,6 +1943,7 @@ export interface FileRoutesByFullPath {
   '/admin/settings/sms': typeof AuthenticatedAdminSettingsSmsRoute
   '/m/my-plans/$enrollmentId': typeof AuthenticatedMMyPlansEnrollmentIdRoute
   '/m/nutrition/$recipeId': typeof AuthenticatedMNutritionRecipeIdRoute
+  '/m/nutrition/targets-setup': typeof AuthenticatedMNutritionTargetsSetupRoute
   '/m/plans/$planId': typeof AuthenticatedMPlansPlanIdRoute
   '/m/resources/$slug': typeof AuthenticatedMResourcesSlugRoute
   '/media/sales/coaching': typeof AuthenticatedMediaSalesCoachingRoute
@@ -2186,6 +2194,7 @@ export interface FileRoutesByTo {
   '/admin/settings/sms': typeof AuthenticatedAdminSettingsSmsRoute
   '/m/my-plans/$enrollmentId': typeof AuthenticatedMMyPlansEnrollmentIdRoute
   '/m/nutrition/$recipeId': typeof AuthenticatedMNutritionRecipeIdRoute
+  '/m/nutrition/targets-setup': typeof AuthenticatedMNutritionTargetsSetupRoute
   '/m/plans/$planId': typeof AuthenticatedMPlansPlanIdRoute
   '/m/resources/$slug': typeof AuthenticatedMResourcesSlugRoute
   '/media/sales/coaching': typeof AuthenticatedMediaSalesCoachingRoute
@@ -2443,6 +2452,7 @@ export interface FileRoutesById {
   '/_authenticated/admin/settings_/sms': typeof AuthenticatedAdminSettingsSmsRoute
   '/_authenticated/m/my-plans/$enrollmentId': typeof AuthenticatedMMyPlansEnrollmentIdRoute
   '/_authenticated/m/nutrition/$recipeId': typeof AuthenticatedMNutritionRecipeIdRoute
+  '/_authenticated/m/nutrition/targets-setup': typeof AuthenticatedMNutritionTargetsSetupRoute
   '/_authenticated/m/plans/$planId': typeof AuthenticatedMPlansPlanIdRoute
   '/_authenticated/m/resources/$slug': typeof AuthenticatedMResourcesSlugRoute
   '/_authenticated/media/sales/coaching': typeof AuthenticatedMediaSalesCoachingRoute
@@ -2700,6 +2710,7 @@ export interface FileRouteTypes {
     | '/admin/settings/sms'
     | '/m/my-plans/$enrollmentId'
     | '/m/nutrition/$recipeId'
+    | '/m/nutrition/targets-setup'
     | '/m/plans/$planId'
     | '/m/resources/$slug'
     | '/media/sales/coaching'
@@ -2950,6 +2961,7 @@ export interface FileRouteTypes {
     | '/admin/settings/sms'
     | '/m/my-plans/$enrollmentId'
     | '/m/nutrition/$recipeId'
+    | '/m/nutrition/targets-setup'
     | '/m/plans/$planId'
     | '/m/resources/$slug'
     | '/media/sales/coaching'
@@ -3206,6 +3218,7 @@ export interface FileRouteTypes {
     | '/_authenticated/admin/settings_/sms'
     | '/_authenticated/m/my-plans/$enrollmentId'
     | '/_authenticated/m/nutrition/$recipeId'
+    | '/_authenticated/m/nutrition/targets-setup'
     | '/_authenticated/m/plans/$planId'
     | '/_authenticated/m/resources/$slug'
     | '/_authenticated/media/sales/coaching'
@@ -4681,6 +4694,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedMPlansPlanIdRouteImport
       parentRoute: typeof AuthenticatedMPlansRoute
     }
+    '/_authenticated/m/nutrition/targets-setup': {
+      id: '/_authenticated/m/nutrition/targets-setup'
+      path: '/targets-setup'
+      fullPath: '/m/nutrition/targets-setup'
+      preLoaderRoute: typeof AuthenticatedMNutritionTargetsSetupRouteImport
+      parentRoute: typeof AuthenticatedMNutritionRoute
+    }
     '/_authenticated/m/nutrition/$recipeId': {
       id: '/_authenticated/m/nutrition/$recipeId'
       path: '/$recipeId'
@@ -5539,11 +5559,14 @@ const AuthenticatedMMyPlansRouteWithChildren =
 
 interface AuthenticatedMNutritionRouteChildren {
   AuthenticatedMNutritionRecipeIdRoute: typeof AuthenticatedMNutritionRecipeIdRoute
+  AuthenticatedMNutritionTargetsSetupRoute: typeof AuthenticatedMNutritionTargetsSetupRoute
 }
 
 const AuthenticatedMNutritionRouteChildren: AuthenticatedMNutritionRouteChildren =
   {
     AuthenticatedMNutritionRecipeIdRoute: AuthenticatedMNutritionRecipeIdRoute,
+    AuthenticatedMNutritionTargetsSetupRoute:
+      AuthenticatedMNutritionTargetsSetupRoute,
   }
 
 const AuthenticatedMNutritionRouteWithChildren =
