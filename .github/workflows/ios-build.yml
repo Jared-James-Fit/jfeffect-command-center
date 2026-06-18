@@ -73,11 +73,25 @@ jobs:
 
       - name: Update bundle identifier and signing settings
         run: |
-          find ios -name "*.pbxproj" -exec sed -i '' 's/com\.jaredjamesfit\.jfeffect/com.jfeffect.app/g' {} \; || true
-          find ios -name "*.pbxproj" -exec sed -i '' 's/com\.capacitorjs\.app/com.jfeffect.app/g' {} \; || true
-          find ios -name "*.pbxproj" -exec sed -i '' 's/CODE_SIGN_STYLE = Manual/CODE_SIGN_STYLE = Automatic/g' {} \; || true
-          find ios -name "*.pbxproj" -exec sed -i '' 's/ProvisioningStyle = Manual/ProvisioningStyle = Automatic/g' {} \; || true
-          echo "Signing settings updated"
+          PBXPROJ="ios/App/App.xcodeproj/project.pbxproj"
+          
+          # Update bundle ID
+          sed -i '' 's/com\.jaredjamesfit\.jfeffect/com.jfeffect.app/g' "$PBXPROJ" || true
+          sed -i '' 's/com\.capacitorjs\.app/com.jfeffect.app/g' "$PBXPROJ" || true
+          
+          # Force automatic signing - replace ALL occurrences of Manual with Automatic
+          sed -i '' 's/CODE_SIGN_STYLE = Manual/CODE_SIGN_STYLE = Automatic/g' "$PBXPROJ" || true
+          sed -i '' 's/ProvisioningStyle = Manual/ProvisioningStyle = Automatic/g' "$PBXPROJ" || true
+          
+          # Also remove any explicit provisioning profile settings that block automatic signing
+          sed -i '' '/PROVISIONING_PROFILE_SPECIFIER/d' "$PBXPROJ" || true
+          sed -i '' '/PROVISIONING_PROFILE = /d' "$PBXPROJ" || true
+          
+          # Verify the changes
+          echo "=== CODE_SIGN_STYLE values ==="
+          grep "CODE_SIGN_STYLE" "$PBXPROJ" || echo "None found"
+          echo "=== BUNDLE_IDENTIFIER values ==="
+          grep "PRODUCT_BUNDLE_IDENTIFIER" "$PBXPROJ" | head -5 || echo "None found"
 
       - name: Build and Archive iOS app
         run: |
