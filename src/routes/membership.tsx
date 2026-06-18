@@ -629,7 +629,7 @@ export function SignupJf({ floatingHeader = false }: { floatingHeader?: boolean 
       <div style={{ paddingBottom: "calc(env(safe-area-inset-bottom) + 5.5rem)" }} className="md:hidden" />
       <StickyMobileCta
         label={checkoutBlocked ? pausedLabel : (busy ? "Starting checkout…" : ctaLabel)}
-        disabled={!!checkoutBlocked || busy || !formValid}
+        disabled={!!checkoutBlocked || busy}
         paused={!!checkoutBlocked}
         onClick={() => {
           if (checkoutBlocked) return;
