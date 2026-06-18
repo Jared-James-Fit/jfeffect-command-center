@@ -4,15 +4,21 @@ import { useServerFn } from "@tanstack/react-start";
 import { getCurrentMember } from "@/lib/members.functions";
 import { PageHeader } from "@/components/app-shell";
 import { Card } from "@/components/ui/card";
-import { ProgressSection } from "@/components/progress/progress-section";
+import { ProgressSection, type ProgressInitialAction } from "@/components/progress/progress-section";
 import { canRequestProgressReviewForMember } from "@/lib/progress-access";
 
 export const Route = createFileRoute("/_authenticated/m/progress")({
   component: MemberProgress,
+  validateSearch: (s: Record<string, unknown>) => {
+    const a = s.action as string | undefined;
+    const allowed: ProgressInitialAction[] = ["photo", "weight", "measure", "history"];
+    return { action: (allowed as string[]).includes(a ?? "") ? (a as ProgressInitialAction) : undefined };
+  },
 });
 
 function MemberProgress() {
   const fetchMe = useServerFn(getCurrentMember);
+  const { action } = Route.useSearch();
   const { data: me } = useQuery({ queryKey: ["m-me"], queryFn: () => fetchMe() });
   const member: any = me?.member;
 
@@ -39,6 +45,7 @@ function MemberProgress() {
     <>
       <PageHeader title="Progress" subtitle="Photos, videos, weight, and measurements — saved to your account." />
       <ProgressSection
+        initialAction={action}
         ctx={{
           userId: member.user_id,
           ownerType: "member",
