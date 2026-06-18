@@ -71,10 +71,13 @@ jobs:
           echo "${{ secrets.APP_STORE_CONNECT_API_KEY_BASE64 }}" | base64 --decode > ~/.private_keys/AuthKey_${{ secrets.APP_STORE_CONNECT_KEY_ID }}.p8
           chmod 600 ~/.private_keys/AuthKey_${{ secrets.APP_STORE_CONNECT_KEY_ID }}.p8
 
-      - name: Update bundle identifier in Xcode project
+      - name: Update bundle identifier and signing settings
         run: |
           find ios -name "*.pbxproj" -exec sed -i '' 's/com\.jaredjamesfit\.jfeffect/com.jfeffect.app/g' {} \; || true
           find ios -name "*.pbxproj" -exec sed -i '' 's/com\.capacitorjs\.app/com.jfeffect.app/g' {} \; || true
+          find ios -name "*.pbxproj" -exec sed -i '' 's/CODE_SIGN_STYLE = Manual/CODE_SIGN_STYLE = Automatic/g' {} \; || true
+          find ios -name "*.pbxproj" -exec sed -i '' 's/ProvisioningStyle = Manual/ProvisioningStyle = Automatic/g' {} \; || true
+          echo "Signing settings updated"
 
       - name: Build and Archive iOS app
         run: |
