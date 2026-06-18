@@ -24,6 +24,11 @@ export type Recipe = {
   published_at: string | null;
   created_at: string;
   updated_at: string;
+  image_url: string | null;
+  calories_per_serving: number | null;
+  protein_grams: number | null;
+  prep_time_minutes: number | null;
+  servings: number | null;
 };
 
 export const RECIPE_ACCESS_LABELS: Record<RecipeAccessScope, string> = {
@@ -73,6 +78,11 @@ export async function createRecipe(input: Partial<Recipe> & { title: string; aut
       video_url: input.video_url ?? null,
       tags: input.tags ?? [],
       author_id: input.authorId ?? null,
+      image_url: input.image_url ?? null,
+      calories_per_serving: input.calories_per_serving ?? null,
+      protein_grams: input.protein_grams ?? null,
+      prep_time_minutes: input.prep_time_minutes ?? null,
+      servings: input.servings ?? null,
     })
     .select()
     .single();
