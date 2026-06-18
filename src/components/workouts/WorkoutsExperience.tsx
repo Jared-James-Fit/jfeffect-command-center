@@ -32,7 +32,6 @@ import { MoveWorkoutSheet } from "@/components/schedule/MoveWorkoutSheet";
 import { ScheduleHistoryDrawer } from "@/components/schedule/ScheduleHistoryDrawer";
 import { ClientBlockView } from "@/components/client-block-view";
 import { WorkoutStatusSheet } from "@/components/workout-status-sheet";
-import { useClientImpersonation } from "@/lib/client-impersonation";
 import { CircleDot } from "lucide-react";
 // Lazy: this card pulls recharts (~120KB). Defer it so the main Workouts
 // view can render without waiting on the chart bundle.
@@ -538,7 +537,6 @@ function SelectedDayCard({
   const [previewOpen, setPreviewOpen] = useState(false);
   const [moveOpen, setMoveOpen] = useState(false);
   const [statusOpen, setStatusOpen] = useState(false);
-  const { isImpersonating } = useClientImpersonation();
 
   if (!item) {
     return (
@@ -592,11 +590,9 @@ function SelectedDayCard({
                 <DropdownMenuItem onSelect={() => setMoveOpen(true)}>
                   <Move className="mr-2 h-4 w-4" /> Move workout
                 </DropdownMenuItem>
-                {isImpersonating && (
-                  <DropdownMenuItem onSelect={() => setStatusOpen(true)}>
-                    <CircleDot className="mr-2 h-4 w-4" /> Change status
-                  </DropdownMenuItem>
-                )}
+                <DropdownMenuItem onSelect={() => setStatusOpen(true)}>
+                  <CircleDot className="mr-2 h-4 w-4" /> Change status
+                </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
           )}
@@ -642,7 +638,7 @@ function SelectedDayCard({
         />
       )}
 
-      {!readonly && isImpersonating && (
+      {!readonly && (
         <WorkoutStatusSheet
           open={statusOpen}
           onOpenChange={setStatusOpen}
