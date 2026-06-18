@@ -562,9 +562,31 @@ function WorkoutDay({
   // workout is in-flight so the final active_duration_seconds reflects
   // real engaged time and survives a mid-workout refresh.
   const heartbeatEnabled = !!completion?.id && !completion?.completed_at && !readonly && !isImpersonating;
+  // Ping shape depends on the mounted adapter: members address workouts by
+  // (enrollmentId, weekIndex, dayIndex) tuples (the member adapter encodes
+  // these into the `"week:day"` dayId), so the heartbeat must report the
+  // tuple — there's no `pl_day_completions` row to key by on the member
+  // side. Falls back to the legacy client ping when no member adapter is
+  // mounted, keeping the portal route byte-identical.
+  const heartbeatPing = (() => {
+    if (adapter?.kind === "member" && adapter.ref.enrollmentId) {
+      const [w, d] = dayId.split(":");
+      const weekIndex = Number(w);
+      const dayIndex = Number(d);
+      if (Number.isFinite(weekIndex) && Number.isFinite(dayIndex)) {
+        return {
+          kind: "member" as const,
+          enrollmentId: adapter.ref.enrollmentId,
+          weekIndex,
+          dayIndex,
+        };
+      }
+    }
+    return { kind: "client" as const, dayId };
+  })();
   useWorkoutHeartbeat(
     heartbeatEnabled
-      ? { enabled: true, completionId: completion!.id, ping: { kind: "client", dayId } }
+      ? { enabled: true, completionId: completion!.id, ping: heartbeatPing }
       : { enabled: false },
   );
 
