@@ -134,6 +134,8 @@ function MemberProfile() {
         <TabsContent value="summary" className="space-y-5">
           <MemberAccessSummary member={member} access={access} />
 
+          <AdminWaterTargetCard memberUserId={member.user_id} />
+
           <Card className="space-y-3 p-5">
             <div className="text-xs uppercase tracking-wider text-muted-foreground">Contact</div>
             <div className="grid gap-3 sm:grid-cols-3">
