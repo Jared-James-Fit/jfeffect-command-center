@@ -3,10 +3,10 @@ import { Link } from "@tanstack/react-router";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
-import { Droplet, Plus, History } from "lucide-react";
+import { Droplet, Plus, History, Undo2 } from "lucide-react";
 import { toast } from "sonner";
 import {
-  addWaterEntry, ensureWaterTarget, formatWater, listWaterForDate,
+  addWaterEntry, deleteWaterEntry, ensureWaterTarget, formatWater, listWaterForDate,
   summarizeToday, todayLocalISO,
 } from "@/lib/water";
 
@@ -58,6 +58,18 @@ export function HomeWaterCard({ userId, currentUserId, surface }: Props) {
     }
   }
 
+  const lastEntry = entries[0];
+  async function undoLast() {
+    if (!lastEntry) return;
+    try {
+      await deleteWaterEntry(lastEntry.id);
+      qc.invalidateQueries({ queryKey: ["water-today", userId] });
+      toast.success(`Removed ${formatWater(lastEntry.amount_ml, "ml")}`);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Couldn't undo");
+    }
+  }
+
   const historyHref = surface === "portal" ? "/portal/progress" : "/m/progress";
 
   return (
@@ -101,6 +113,17 @@ export function HomeWaterCard({ userId, currentUserId, surface }: Props) {
           </Button>
         ))}
       </div>
+
+      <Button
+        variant="ghost"
+        size="sm"
+        className="mt-2 h-9 w-full text-xs text-muted-foreground hover:text-foreground"
+        onClick={undoLast}
+        disabled={!lastEntry}
+      >
+        <Undo2 className="mr-1.5 h-3.5 w-3.5" />
+        {lastEntry ? `Undo last (−${formatWater(lastEntry.amount_ml, "ml")})` : "Nothing to undo"}
+      </Button>
     </Card>
   );
 }
