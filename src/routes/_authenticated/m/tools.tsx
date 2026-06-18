@@ -9,6 +9,8 @@ import { Wrench, Lock } from "lucide-react";
 import { OneRepMaxCalculator } from "@/components/tools/OneRepMaxCalculator";
 import { MacroCalculator } from "@/components/tools/MacroCalculator";
 import { PlateCalculator } from "@/components/tools/PlateCalculator";
+import { WaterCalculator } from "@/components/tools/WaterCalculator";
+import { SleepCalculator } from "@/components/tools/SleepCalculator";
 
 export const Route = createFileRoute("/_authenticated/m/tools")({ component: ToolsPage });
 
@@ -23,6 +25,8 @@ function ToolsPage() {
         <OneRepMaxCalculator />
         <MacroCalculator />
         <PlateCalculator />
+        <WaterCalculator />
+        <SleepCalculator />
       </div>
       {items.length > 0 && (
         <div className="space-y-3">
