@@ -21,6 +21,7 @@ import { reportLovableError } from "../lib/lovable-error-reporting";
 // so the install prompt can be captured before the user reaches /install.
 import "@/hooks/use-pwa-install";
 import { registerServiceWorker } from "@/lib/pwa/register-sw";
+import { initNativeShell } from "@/platform/native-init";
 import { PwaUpdateToast } from "@/components/pwa/pwa-update-toast";
 import { OnlineOfflineBanner } from "@/components/pwa/online-offline-banner";
 
@@ -263,7 +264,10 @@ function RootShell({ children }: { children: ReactNode }) {
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
 
-  useEffect(() => { registerServiceWorker(); }, []);
+  useEffect(() => {
+    registerServiceWorker();
+    void initNativeShell();
+  }, []);
 
   return (
     <QueryClientProvider client={queryClient}>
