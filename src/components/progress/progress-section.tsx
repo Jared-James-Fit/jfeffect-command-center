@@ -161,11 +161,11 @@ export function ProgressSection({ ctx }: { ctx: ProgressContext }) {
 // ============== Overview ==============
 
 function Overview({
-  ctx, onAddPhoto, onAddVideo, onLogWeight, onAddMeasure, onCompare, onOpenSubmission,
+  ctx, onAddPhoto, onLogWeight, onAddMeasure, onViewTimeline, onOpenSubmission,
 }: {
   ctx: ProgressContext;
-  onAddPhoto: () => void; onAddVideo: () => void;
-  onLogWeight: () => void; onAddMeasure: () => void; onCompare: () => void;
+  onAddPhoto: () => void;
+  onLogWeight: () => void; onAddMeasure: () => void; onViewTimeline: () => void;
   onOpenSubmission: (id: string) => void;
 }) {
   const { data: subs = [] } = useQuery({
@@ -188,13 +188,12 @@ function Overview({
 
   return (
     <div className="space-y-4">
-      {/* Primary actions */}
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
-        <ActionTile icon={Camera} label="Photos" onClick={onAddPhoto} primary />
-        <ActionTile icon={VideoIcon} label="Video" onClick={onAddVideo} primary />
-        <ActionTile icon={Scale} label="Weight" onClick={onLogWeight} />
-        <ActionTile icon={Ruler} label="Measure" onClick={onAddMeasure} />
-        <ActionTile icon={Eye} label="Compare" onClick={onCompare} />
+      {/* Primary actions — Compare lives inside Photos/Timeline only */}
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+        <ActionTile icon={Camera} label="Start Check-In" onClick={onAddPhoto} primary />
+        <ActionTile icon={Scale} label="Log Bodyweight" onClick={onLogWeight} />
+        <ActionTile icon={Ruler} label="Add Measurements" onClick={onAddMeasure} />
+        <ActionTile icon={Clock} label="View Timeline" onClick={onViewTimeline} />
       </div>
 
       {/* Summary cards */}
