@@ -774,7 +774,7 @@ function BodyweightDialog({ ctx, open, onOpenChange }: { ctx: ProgressContext; o
               <SelectContent><SelectItem value="kg">kg</SelectItem><SelectItem value="lb">lb</SelectItem></SelectContent>
             </Select>
           </div>
-          <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+          <DateField value={date} onChange={setDate} />
           <Textarea placeholder="Note (optional)" rows={2} value={note} onChange={(e) => setNote(e.target.value)} />
         </div>
         <DialogFooter>
@@ -857,12 +857,15 @@ function MeasurementDialog({ ctx, open, onOpenChange }: { ctx: ProgressContext; 
       <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
         <DialogHeader><DialogTitle>Add Measurements</DialogTitle></DialogHeader>
         <div className="space-y-3">
-          <div className="grid grid-cols-2 gap-2">
-            <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
-            <Select value={unit} onValueChange={(v: any) => setUnit(v)}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent><SelectItem value="cm">cm</SelectItem><SelectItem value="in">inches</SelectItem></SelectContent>
-            </Select>
+          <div className="grid grid-cols-[1fr_120px] gap-2 items-end">
+            <DateField value={date} onChange={setDate} />
+            <div>
+              <Label className="text-xs">Unit</Label>
+              <Select value={unit} onValueChange={(v: any) => setUnit(v)}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent><SelectItem value="cm">cm</SelectItem><SelectItem value="in">inches</SelectItem></SelectContent>
+              </Select>
+            </div>
           </div>
           <div className="grid grid-cols-2 gap-2">
             {MEASUREMENT_FIELDS.map((f) => (
