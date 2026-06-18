@@ -6,6 +6,7 @@
  * even if a shared component forgets to check.
  */
 import {
+  NotImplemented,
   type WorkoutContextAdapter,
   type WorkoutContextRef,
   type WorkoutScheduleDay,
