@@ -546,16 +546,161 @@ export function createMemberAdapter(ref: WorkoutContextRef): WorkoutContextAdapt
       // a no-op until membership support has a documented escalation path.
     },
 
-    /* ---- Phase B turn 1 — raw passthrough surface (stubs) ---- */
-    /* member_* → pl_*-shaped reshape lands in turn 3. */
-    async getDayRaw(_dayId: string): Promise<PlDayRaw | null> {
-      throw new NotImplemented("getDayRaw", "member");
+    /* ---- Phase B turn 3 — raw passthrough surface ----
+     * Reshape member_plans.published_payload + member_set_logs into the
+     * exact pl_days / pl_exercise_rows / pl_row_results column layout that
+     * WorkoutDayView consumes. Helpers below are pure so they can be
+     * unit-tested without hitting the network. */
+    async getDayRaw(dayId: string): Promise<PlDayRaw | null> {
+      const { week, day } = decodeDayId(dayId);
+      const { day: dayObj } = await loadPublishedDay(enrollmentId, week, day);
+      if (!dayObj) return null;
+      const { schedule } = await getEnrollmentSchedule({ data: { enrollmentId } });
+      const scheduled = (schedule ?? []).find((s: any) => s.week === week && s.day === day);
+      return memberDayToPlDay({ dayId, weekIndex: week, dayIndex: day, dayObj, scheduledDate: scheduled?.date ?? null });
     },
-    async listRowsRaw(_dayId: string): Promise<PlRowRaw[]> {
-      throw new NotImplemented("listRowsRaw", "member");
+    async listRowsRaw(dayId: string): Promise<PlRowRaw[]> {
+      const { week, day } = decodeDayId(dayId);
+      const { day: dayObj } = await loadPublishedDay(enrollmentId, week, day);
+      const rows = (dayObj?.rows ?? []) as any[];
+      return rows.map((r, ei) => memberRowToPlRow({ row: r, exerciseIndex: ei, dayId }));
     },
-    async listRowResultsRaw(_dayId: string): Promise<PlRowResultRaw[]> {
-      throw new NotImplemented("listRowResultsRaw", "member");
+    async listRowResultsRaw(dayId: string): Promise<PlRowResultRaw[]> {
+      const { week, day } = decodeDayId(dayId);
+      const { data, error } = await supabase
+        .from("member_set_logs")
+        .select("*")
+        .eq("enrollment_id", enrollmentId)
+        .eq("week_index", week)
+        .eq("day_index", day);
+      if (error) throw new Error(error.message);
+      return (data ?? []).map((l: any) =>
+        memberLogToPlRowResult({ log: l, clientId: ref.ownerId }),
+      );
     },
   };
+}
+
+/* -------------------------------------------------------------------------- */
+/* Pure reshape helpers (member_* → pl_*-shaped). Exported for unit tests.    */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Build a pl_days-shaped object from a member_plans.published_payload day.
+ * week_id is left null — WorkoutDayView's pl_weeks/pl_blocks follow-up
+ * queries silently degrade to null (members have no block concept).
+ */
+export function memberDayToPlDay(args: {
+  dayId: string;
+  weekIndex: number;
+  dayIndex: number;
+  dayObj: any;
+  scheduledDate: string | null;
+}): PlDayRaw {
+  const { dayId, weekIndex, dayIndex, dayObj, scheduledDate } = args;
+  return {
+    id: dayId,
+    week_id: null,
+    day_index: dayIndex,
+    week_index: weekIndex,
+    title: dayObj?.title ?? dayObj?.focus ?? null,
+    focus: dayObj?.focus ?? null,
+    target_minutes: dayObj?.target_minutes ?? dayObj?.est_minutes ?? null,
+    scheduled_date: scheduledDate,
+    notes: dayObj?.notes ?? null,
+  } as PlDayRaw;
+}
+
+/**
+ * Map a single member-published row into the pl_exercise_rows shape, including
+ * the nested `exercises(...)` join WorkoutDayView reads (name, video, cues,
+ * default_load_unit, warmup_protocol_id, etc). Member rows never carry
+ * percentage-based loading or coach overrides — `manual_override=true` keeps
+ * the load resolver on the manual path so the prescribed load shows through.
+ */
+export function memberRowToPlRow(args: {
+  row: any;
+  exerciseIndex: number;
+  dayId: string;
+}): PlRowRaw {
+  const { row: r, exerciseIndex: ei, dayId } = args;
+  const rawLoad = r.load;
+  const loadNum =
+    rawLoad != null && rawLoad !== "" && Number.isFinite(Number(rawLoad))
+      ? Number(rawLoad)
+      : null;
+  const unit: "kg" | "lb" =
+    r.default_load_unit === "kg" ? "kg" : "lb";
+  return {
+    id: `ex:${ei}`,
+    day_id: dayId,
+    sort_order: Number.isFinite(Number(r.sort_order)) ? Number(r.sort_order) : ei,
+    exercise_id: r.exercise_id ?? null,
+    exercise_name_override: r.exercise_id ? null : (r.exercise ?? r.name ?? null),
+    sets: Number.isFinite(Number(r.sets)) ? Number(r.sets) : 1,
+    reps_text: r.reps != null ? String(r.reps) : null,
+    rest_seconds: Number.isFinite(Number(r.rest_seconds)) ? Number(r.rest_seconds) : null,
+    rest_seconds_override: null,
+    notes: r.notes ?? null,
+    load_lb: unit === "lb" ? loadNum : null,
+    load_kg: unit === "kg" ? loadNum : null,
+    load_unit: unit,
+    // Member programs prescribe absolute loads only; bypass percentage path.
+    percentage: null,
+    percentage_basis: "none",
+    manual_override: true,
+    warmup_protocol_id: r.warmup_protocol_id ?? null,
+    exercises: {
+      id: r.exercise_id ?? null,
+      name: r.exercise ?? r.name ?? `Exercise ${ei + 1}`,
+      video_url: r.video_url ?? null,
+      vimeo_embed_url: r.vimeo_embed_url ?? null,
+      thumbnail_url: r.thumbnail_url ?? null,
+      cues: r.cues ?? null,
+      common_mistakes: r.common_mistakes ?? null,
+      muscle_group: r.muscle_group ?? null,
+      category: r.category ?? null,
+      pl_lift_group: r.pl_lift_group ?? null,
+      warmup_protocol_id: r.warmup_protocol_id ?? null,
+      is_powerlifting: r.is_powerlifting ?? false,
+      warmup_notes: r.warmup_notes ?? null,
+      default_load_unit: unit,
+      exercise_category: r.exercise_category ?? null,
+      is_competition_lift: r.is_competition_lift ?? false,
+      competition_lift_type: r.competition_lift_type ?? null,
+    },
+  } as PlRowRaw;
+}
+
+/**
+ * Map a member_set_logs row into the pl_row_results column layout. `client_id`
+ * is filled with the trainee's auth user id so any downstream filters that
+ * reference it still match. `row_id` re-encodes the exercise index so the
+ * shared UI can correlate back to the synthesized rows above.
+ */
+export function memberLogToPlRowResult(args: {
+  log: any;
+  clientId: string;
+}): PlRowResultRaw {
+  const { log: l, clientId } = args;
+  return {
+    id: l.id,
+    row_id: `ex:${l.exercise_index}`,
+    client_id: clientId,
+    set_index: l.set_index,
+    reps: l.reps ?? null,
+    load_lb: l.load_lb ?? l.normalized_lb ?? null,
+    load_kg: l.load_kg ?? l.normalized_kg ?? null,
+    entered_value: l.entered_value ?? null,
+    entered_unit: l.entered_unit ?? null,
+    normalized_lb: l.normalized_lb ?? null,
+    normalized_kg: l.normalized_kg ?? null,
+    actual_load_unit: l.entered_unit ?? "lb",
+    rpe: l.rpe ?? null,
+    rir: l.rir ?? null,
+    is_working_set: l.is_working_set ?? null,
+    notes: l.notes ?? null,
+    completed_duration_seconds: l.completed_duration_seconds ?? null,
+    logged_at: l.logged_at ?? l.created_at ?? null,
+  } as PlRowResultRaw;
 }
