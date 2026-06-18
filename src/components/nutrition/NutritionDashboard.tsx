@@ -8,6 +8,7 @@ import { RecipeBrowser } from "./RecipeBrowser";
 import { ensureWaterTarget, formatWater } from "@/lib/water";
 import { WaterTargetDialog } from "@/components/progress/water-target-dialog";
 import { useAuth } from "@/lib/auth";
+import { MacroBreakdown } from "./MacroBreakdown";
 
 /**
  * Shared nutrition dashboard surface used by members and coaching clients.
@@ -45,6 +46,7 @@ export function NutritionDashboard({
       <div id="targets" className="scroll-mt-20">
         <TargetsStrip targets={targets} userId={userId} />
       </div>
+      <MacroBreakdown targets={targets} />
       <QuickActions viewer={viewer} recipesAnchorId={recipesAnchorId} />
       {children}
       <div id={recipesAnchorId} className="scroll-mt-20">
