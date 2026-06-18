@@ -664,7 +664,10 @@ export function AppShell({ items, bottomItems: customBottomItems, title, childre
 
       {/* Mobile top bar */}
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="flex items-center justify-between border-b border-border px-4 py-3 md:hidden">
+        <header
+          className="flex items-center justify-between border-b border-border px-4 pb-3 md:hidden"
+          style={{ paddingTop: "calc(env(safe-area-inset-top) + 0.75rem)" }}
+        >
           <div className="flex items-center gap-2">
             <img src="/logo.png" alt="JF Effect" className="h-8 w-8 rounded-md object-cover" />
             <span className="text-sm font-black tracking-tight">{title}</span>
