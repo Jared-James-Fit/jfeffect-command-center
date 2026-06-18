@@ -703,6 +703,7 @@ function BodyweightTab({
     cutoff.setDate(cutoff.getDate() - days);
     return chartAll.filter((p) => new Date(p.d) >= cutoff);
   }, [chartAll, range]);
+  const yDomain = chart.length === 1 ? [chart[0].v - 1, chart[0].v + 1] : ["auto", "auto"];
 
   function handlePointClick(point?: { d: string; v: number; unit: "kg" | "lb"; note?: string | null }) {
     if (!point) return;
@@ -760,7 +761,7 @@ function BodyweightTab({
                   </linearGradient>
                 </defs>
                 <XAxis dataKey="d" tickFormatter={(v) => { try { return format(parseISO(v), "MMM d"); } catch { return v; } }} tick={{ fontSize: 10 }} minTickGap={24} />
-                <YAxis domain={["auto", "auto"]} tick={{ fontSize: 10 }} width={32} />
+                <YAxis domain={yDomain} tick={{ fontSize: 10 }} width={32} />
                 <Tooltip
                   contentStyle={{ fontSize: 12, padding: 6 }}
                   labelFormatter={(v) => { try { return format(parseISO(String(v)), "MMM d, yyyy"); } catch { return String(v); } }}
