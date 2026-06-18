@@ -379,6 +379,9 @@ function WorkoutFeedbackSection({
                   </div>
                 )}
                 <div className="mt-3 flex flex-wrap gap-2">
+                  <Button size="sm" variant="outline" onClick={() => viewWorkout(r.day_id)}>
+                    <Eye className="mr-1 h-3.5 w-3.5" /> View workout
+                  </Button>
                   {!r.reviewed_at && (
                     <Button size="sm" variant="default" onClick={() => markReviewed(r.id)}>
                       <CheckCircle2 className="mr-1 h-3.5 w-3.5" /> Mark reviewed
