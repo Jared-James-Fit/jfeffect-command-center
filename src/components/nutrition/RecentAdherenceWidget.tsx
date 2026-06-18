@@ -17,7 +17,8 @@ export function RecentAdherenceWidget() {
     staleTime: 60_000,
   });
 
-  const rows = q.data?.rows ?? [];
+  type Row = { id: string; submitted_at: string; compliance_pct: number | null };
+  const rows: Row[] = q.data?.rows ?? [];
   if (q.isLoading || rows.length === 0) return null;
 
   const latest = rows[rows.length - 1];
@@ -25,7 +26,7 @@ export function RecentAdherenceWidget() {
   const latestPct = latest.compliance_pct ?? 0;
   const delta = prev?.compliance_pct != null ? latestPct - prev.compliance_pct : null;
   const avg = Math.round(
-    rows.reduce((s, r) => s + (r.compliance_pct ?? 0), 0) / rows.length,
+    rows.reduce((s: number, r: Row) => s + (r.compliance_pct ?? 0), 0) / rows.length,
   );
 
   const TrendIcon = delta == null ? Minus : delta > 0 ? TrendingUp : delta < 0 ? TrendingDown : Minus;
@@ -64,7 +65,7 @@ export function RecentAdherenceWidget() {
       </div>
 
       <div className="mt-4 flex items-end gap-1.5" aria-label="Adherence history">
-        {rows.map((r) => {
+        {rows.map((r: Row) => {
           const pct = r.compliance_pct ?? 0;
           return (
             <div key={r.id} className="flex flex-1 flex-col items-center gap-1">
