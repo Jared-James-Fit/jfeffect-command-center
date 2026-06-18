@@ -1722,6 +1722,7 @@ function ExerciseNotesSheet({ open, onOpenChange, clientId, dayId, dayTitle, row
 }) {
   const [draft, setDraft] = useState(existingNote?.content ?? "");
   useEffect(() => { setDraft(existingNote?.content ?? ""); }, [existingNote?.id, existingNote?.content, open]);
+  const adapter = useOptionalAdapter();
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -1767,14 +1768,15 @@ function ExerciseNotesSheet({ open, onOpenChange, clientId, dayId, dayTitle, row
               const trimmed = draft.trim();
               if (!trimmed) throw new Error("Note is empty");
               if (existingNote) {
-                const { error } = await sb.from("pl_exercise_notes").update({
-                  content: trimmed,
-                  status: "edited",
-                  coach_seen_at: null,
-                }).eq("id", existingNote.id);
-                if (error) throw error;
+                const payload = { content: trimmed, status: "edited", coach_seen_at: null };
+                if (adapter) {
+                  await adapter.upsertPlExerciseNoteRaw(payload, existingNote.id);
+                } else {
+                  const { error } = await sb.from("pl_exercise_notes").update(payload).eq("id", existingNote.id);
+                  if (error) throw error;
+                }
               } else {
-                const { error } = await sb.from("pl_exercise_notes").insert({
+                const payload = {
                   client_id: clientId,
                   day_id: dayId,
                   row_id: rowId,
@@ -1782,8 +1784,13 @@ function ExerciseNotesSheet({ open, onOpenChange, clientId, dayId, dayTitle, row
                   exercise_name: exerciseName,
                   content: trimmed,
                   status: "new",
-                });
-                if (error) throw error;
+                };
+                if (adapter) {
+                  await adapter.upsertPlExerciseNoteRaw(payload, null);
+                } else {
+                  const { error } = await sb.from("pl_exercise_notes").insert(payload);
+                  if (error) throw error;
+                }
               }
               onSaved();
             }}
