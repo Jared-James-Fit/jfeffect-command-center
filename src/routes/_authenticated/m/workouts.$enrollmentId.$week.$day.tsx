@@ -1,51 +1,73 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { PageHeader } from "@/components/app-shell";
-import { Card } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
-import { Badge } from "@/components/ui/badge";
-import { CheckCircle2, Save } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
-import { toast } from "sonner";
-import { ActionButton } from "@/components/action-button";
-import { TrainingHelpButton } from "@/components/training-help-sheet";
-import { WorkoutEmptyCard } from "@/components/workout-empty-state";
-import { runJob } from "@/lib/progress-jobs";
-import { useAuth } from "@/lib/auth";
-import { useClientImpersonation } from "@/lib/client-impersonation";
-import { writeSetEditAudit } from "@/lib/logged-set-audit";
-import { WorkoutUndoProvider, useWorkoutUndo, UndoButton } from "@/lib/workout-undo";
-import { WorkoutSyncBanner } from "@/components/workout-sync-banner";
-import {
-  enqueueOfflineWrite,
-  registerQueueHandler,
-} from "@/lib/workout-offline-queue";
-import { writePlanCache, cachedInitialData } from "@/lib/workout-plan-cache";
-import { computeWorkoutSummary, type WorkoutSummary } from "@/lib/workout-summary";
-import { WorkoutSubmissionSummary } from "@/components/workout-submission-summary";
-import { summarizeCompleteness, type RequiredRowSpec, type LoggedSetSpec } from "@/lib/workout-completeness";
-import { LoggingQualityBadge } from "@/components/workout/shared/logging-quality-badge";
-import { CompletedWorkoutActions } from "@/components/workout/shared/completed-workout-actions";
-import { computeActiveSeconds } from "@/lib/workout-duration";
+// Thin route shim: mounts the shared <WorkoutDayView> with the member
+// adapter so member workouts run the same UI / write paths as the coach
+// portal. The previous 657-line monolith duplicated read shapes (DTO
+// queries) and write paths (`m_log_set` / `m_complete_workout` offline
+// handlers) that the adapter now subsumes — every member write reshapes
+// from a pl_*-row payload to the member_* tables inside the adapter.
+//
+// dayId convention: the member adapter encodes (week, day) tuples as the
+// string `"week:day"` (see encodeDayId / decodeDayId in member-adapter.ts).
+// The shared view treats it as an opaque id.
+import { createFileRoute } from "@tanstack/react-router";
+import { useMemo } from "react";
+import { WorkoutDayView } from "@/components/workout-day/WorkoutDayView";
 import { buildWorkoutAdapter } from "@/lib/workout-context";
-import type {
-  RowResultDTO,
-  DayCompletionDTO,
-  ReviewDTO,
-  ExerciseRowDTO,
-  WorkoutDay,
-  EnrollmentSummaryDTO,
-} from "@/lib/workout-context/types";
+import { useAuth } from "@/lib/auth";
 
 export const Route = createFileRoute("/_authenticated/m/workouts/$enrollmentId/$week/$day")({
-  component: () => (
-    <WorkoutUndoProvider>
-      <WorkoutTracker />
-    </WorkoutUndoProvider>
-  ),
+  // Mirror the portal route's search contract so deep links into the
+  // member workout (readonly preview, "edit past workout", "leave a
+  // review") behave identically across both surfaces.
+  validateSearch: (s: Record<string, unknown>) => ({
+    readonly: s.readonly === 1 || s.readonly === "1" || s.readonly === true ? 1 : undefined,
+    edit: s.edit === 1 || s.edit === "1" || s.edit === true ? 1 : undefined,
+    review: s.review === 1 || s.review === "1" || s.review === true ? 1 : undefined,
+  }),
+  component: MemberWorkoutRoute,
 });
+
+function MemberWorkoutRoute() {
+  const { enrollmentId, week, day } = Route.useParams();
+  const search = Route.useSearch();
+  const { user } = useAuth();
+
+  // Member adapter: ownerId == userId because there's no `clients` row
+  // (members live in `member_*` tables). The adapter rewrites all
+  // pl_*-shaped reads/writes against member_* on the way through.
+  const adapter = useMemo(
+    () =>
+      user?.id
+        ? buildWorkoutAdapter({
+            kind: "member",
+            userId: user.id,
+            ownerId: user.id,
+            enrollmentId,
+          })
+        : undefined,
+    [user?.id, enrollmentId],
+  );
+
+  // The protected layout already redirects unauthenticated visitors, but
+  // guard against the transient render where `user` resolves after the
+  // first paint so we never mount WorkoutDayView with a null adapter
+  // (its queries assume one is present when `adapter.kind === "member"`).
+  if (!adapter) {
+    return <div className="p-6 text-sm text-muted-foreground">Loading…</div>;
+  }
+
+  return (
+    <WorkoutDayView
+      dayId={`${week}:${day}`}
+      search={search}
+      adapter={adapter}
+      navigation={{
+        backTo: `/m/my-plans/${enrollmentId}`,
+        listPath: `/m/my-plans/${enrollmentId}`,
+        messagesPath: "/m/messages",
+      }}
+    />
+  );
+}
 
 
 type SetLog = { reps?: number | null; load_lb?: number | null; rpe?: number | null; rir?: number | null; notes?: string | null };
