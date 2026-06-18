@@ -16,6 +16,7 @@ import { UpgradeCTA } from "@/components/upgrade-cta";
 import { SetupChecklist } from "@/components/member/setup-checklist-card";
 import { ProgressSummaryCard } from "@/components/progress/progress-summary-card";
 import { HomeWaterCard } from "@/components/home/home-water-card";
+import { HomeBodyweightCard } from "@/components/home/home-bodyweight-card";
 
 export const Route = createFileRoute("/_authenticated/m/")({
   component: MemberHome,
@@ -117,6 +118,13 @@ function MemberHome() {
           currentUserId={me.member.user_id}
           viewerRole="owner"
           progressHref={{ kind: "member" }}
+        />
+      )}
+      {me?.member?.user_id && (
+        <HomeBodyweightCard
+          userId={me.member.user_id}
+          surface="member"
+          defaultUnit={(me.member.units_preference as "kg" | "lb") ?? "lb"}
         />
       )}
       {me?.member?.user_id && (
