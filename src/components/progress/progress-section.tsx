@@ -31,7 +31,7 @@ import {
   listMeasurements, logMeasurement, deleteMeasurement, bodyweightStats,
   listReviewResponses, addReviewResponse,
 } from "@/lib/progress";
-import { format, parseISO, differenceInDays } from "date-fns";
+import { format, parseISO } from "date-fns";
 import { WaterTrackerCard } from "./water-tracker-card";
 import { convertWeight, type ProgressMetric } from "@/lib/progress-metrics";
 
@@ -628,7 +628,7 @@ function BodyweightTab({
   ctx, onLog, onOpenSubmission,
 }: { ctx: ProgressContext; onLog: () => void; onOpenSubmission?: (id: string) => void }) {
   const qc = useQueryClient();
-  const [range, setRange] = useState<"7d" | "30d" | "90d" | "all">("30d");
+  const [range, setRange] = useState<"7d" | "30d" | "90d" | "all">("all");
   const [selectedPoint, setSelectedPoint] = useState<{ date: string; value: number; unit: "kg" | "lb"; note?: string | null } | null>(null);
   const { data: rows = [] } = useQuery({
     queryKey: ["progress-bw", ctx.userId],
@@ -648,10 +648,6 @@ function BodyweightTab({
       if (error) throw error;
       return (data ?? []) as ProgressMetric[];
     },
-  });
-  const { data: photoSubs = [] } = useQuery({
-    queryKey: ["progress-subs-photo", ctx.userId],
-    queryFn: () => listSubmissions({ userId: ctx.userId, type: "photo" }),
   });
   const combinedRows = useMemo(() => {
     const byDate = new Map<string, { id: string; date: string; value: number; unit: "kg" | "lb"; note?: string | null; source: "progress_bodyweight" | "progress_metrics" }>();
@@ -711,10 +707,6 @@ function BodyweightTab({
   function handlePointClick(point?: { d: string; v: number; unit: "kg" | "lb"; note?: string | null }) {
     if (!point) return;
     setSelectedPoint({ date: point.d, value: point.v, unit: point.unit, note: point.note ?? null });
-    if (!onOpenSubmission) return;
-    const sub = photoSubs.find((s) => s.submission_date === d)
-      ?? photoSubs.find((s) => Math.abs(differenceInDays(parseISO(s.submission_date), parseISO(d))) <= 3);
-    if (sub) onOpenSubmission(sub.id);
   }
 
   async function remove(id: string) {
