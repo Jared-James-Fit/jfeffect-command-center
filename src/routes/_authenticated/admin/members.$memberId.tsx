@@ -25,6 +25,10 @@ import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { supabase } from "@/integrations/supabase/client";
 import { MemberAccessSummary } from "@/components/admin/member-access-summary";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Calendar } from "@/components/ui/calendar";
+import { CalendarIcon } from "lucide-react";
+import { format } from "date-fns";
 const MemberFeatureToggles = lazy(() =>
   import("@/components/admin/member-feature-toggles").then((m) => ({ default: m.MemberFeatureToggles })),
 );
