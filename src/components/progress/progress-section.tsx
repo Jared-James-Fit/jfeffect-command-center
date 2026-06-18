@@ -629,29 +629,77 @@ function BodyweightTab({
 }: { ctx: ProgressContext; onLog: () => void; onOpenSubmission?: (id: string) => void }) {
   const qc = useQueryClient();
   const [range, setRange] = useState<"7d" | "30d" | "90d" | "all">("30d");
+  const [selectedPoint, setSelectedPoint] = useState<{ date: string; value: number; unit: "kg" | "lb"; note?: string | null } | null>(null);
   const { data: rows = [] } = useQuery({
     queryKey: ["progress-bw", ctx.userId],
     queryFn: () => listBodyweight(ctx.userId),
+  });
+  const { data: metricRows = [] } = useQuery({
+    queryKey: ["progress-metrics", ctx.clientId],
+    enabled: !!ctx.clientId,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("progress_metrics")
+        .select("*")
+        .eq("client_id", ctx.clientId!)
+        .not("bodyweight", "is", null)
+        .order("entry_date", { ascending: false })
+        .limit(200);
+      if (error) throw error;
+      return (data ?? []) as ProgressMetric[];
+    },
   });
   const { data: photoSubs = [] } = useQuery({
     queryKey: ["progress-subs-photo", ctx.userId],
     queryFn: () => listSubmissions({ userId: ctx.userId, type: "photo" }),
   });
-  const stats = bodyweightStats(rows);
+  const combinedRows = useMemo(() => {
+    const byDate = new Map<string, { id: string; date: string; value: number; unit: "kg" | "lb"; note?: string | null; source: "progress_bodyweight" | "progress_metrics" }>();
+    for (const r of metricRows) {
+      if (r.bodyweight == null) continue;
+      byDate.set(r.entry_date, {
+        id: r.id,
+        date: r.entry_date,
+        value: Number(r.bodyweight),
+        unit: ((r.bodyweight_unit as "kg" | "lb" | null) ?? ctx.preferredWeightUnit ?? "lb"),
+        note: (r as any).notes ?? null,
+        source: "progress_metrics",
+      });
+    }
+    for (const r of rows) {
+      byDate.set(r.logged_date, {
+        id: r.id,
+        date: r.logged_date,
+        value: Number(r.weight_value),
+        unit: r.weight_unit,
+        note: r.note,
+        source: "progress_bodyweight",
+      });
+    }
+    return Array.from(byDate.values()).sort((a, b) => b.date.localeCompare(a.date));
+  }, [ctx.preferredWeightUnit, metricRows, rows]);
 
-  const unit = rows[0]?.weight_unit ?? "lb";
+  const stats = bodyweightStats(combinedRows.map((r) => ({
+    id: r.id,
+    user_id: ctx.userId,
+    logged_date: r.date,
+    weight_value: r.value,
+    weight_unit: r.unit,
+    note: r.note ?? null,
+    created_at: "",
+  })));
+
+  const unit = combinedRows[0]?.unit ?? ctx.preferredWeightUnit ?? "lb";
   const chartAll = useMemo(() => {
-    return [...rows]
-      .sort((a, b) => a.logged_date.localeCompare(b.logged_date))
+    return [...combinedRows]
+      .sort((a, b) => a.date.localeCompare(b.date))
       .map((r) => ({
-        d: r.logged_date,
-        v: r.weight_unit === unit
-          ? Number(r.weight_value)
-          : r.weight_unit === "kg"
-            ? +(Number(r.weight_value) * 2.20462).toFixed(2)
-            : +(Number(r.weight_value) / 2.20462).toFixed(2),
+        d: r.date,
+        v: Number(convertWeight(r.value, r.unit, unit).toFixed(1)),
+        unit,
+        note: r.note,
       }));
-  }, [rows, unit]);
+  }, [combinedRows, unit]);
   const chart = useMemo(() => {
     if (range === "all") return chartAll;
     const days = range === "7d" ? 7 : range === "30d" ? 30 : 90;
@@ -660,12 +708,13 @@ function BodyweightTab({
     return chartAll.filter((p) => new Date(p.d) >= cutoff);
   }, [chartAll, range]);
 
-  function handlePointClick(d?: string) {
-    if (!d || !onOpenSubmission) return;
+  function handlePointClick(point?: { d: string; v: number; unit: "kg" | "lb"; note?: string | null }) {
+    if (!point) return;
+    setSelectedPoint({ date: point.d, value: point.v, unit: point.unit, note: point.note ?? null });
+    if (!onOpenSubmission) return;
     const sub = photoSubs.find((s) => s.submission_date === d)
       ?? photoSubs.find((s) => Math.abs(differenceInDays(parseISO(s.submission_date), parseISO(d))) <= 3);
     if (sub) onOpenSubmission(sub.id);
-    else toast.message("No progress entry on that date yet.");
   }
 
   async function remove(id: string) {
