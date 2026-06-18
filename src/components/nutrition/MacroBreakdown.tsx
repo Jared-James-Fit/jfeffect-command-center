@@ -33,9 +33,9 @@ export function MacroBreakdown({ targets }: { targets?: NutritionTargets }) {
   const fPct = 100 - pPct - cPct;
 
   const rows = [
-    { label: "Protein", icon: Beef, grams: protein, kcal: pKcal, pct: pPct, color: "bg-[hsl(var(--chart-1,346_77%_50%))]" },
-    { label: "Carbs", icon: Wheat, grams: carbs, kcal: cKcal, pct: cPct, color: "bg-[hsl(var(--chart-2,38_92%_50%))]" },
-    { label: "Fats", icon: Cookie, grams: fats, kcal: fKcal, pct: fPct, color: "bg-[hsl(var(--chart-3,217_91%_60%))]" },
+    { label: "Protein", icon: Beef, grams: protein, kcal: pKcal, pct: pPct, color: "hsl(346 77% 50%)" },
+    { label: "Carbs", icon: Wheat, grams: carbs, kcal: cKcal, pct: cPct, color: "hsl(38 92% 50%)" },
+    { label: "Fats", icon: Cookie, grams: fats, kcal: fKcal, pct: fPct, color: "hsl(217 91% 60%)" },
   ];
 
   return (
@@ -53,8 +53,7 @@ export function MacroBreakdown({ targets }: { targets?: NutritionTargets }) {
         {rows.map((r) => (
           <div
             key={r.label}
-            className={r.color}
-            style={{ width: `${r.pct}%` }}
+            style={{ width: `${r.pct}%`, backgroundColor: r.color }}
             title={`${r.label} ${r.pct}%`}
           />
         ))}
@@ -63,7 +62,7 @@ export function MacroBreakdown({ targets }: { targets?: NutritionTargets }) {
         {rows.map((r) => (
           <div key={r.label} className="rounded-lg border border-border/60 bg-secondary/30 p-3">
             <div className="flex items-center gap-1.5 text-[11px] uppercase tracking-wide text-muted-foreground">
-              <r.icon className="h-3.5 w-3.5" />
+              <r.icon className="h-3.5 w-3.5" style={{ color: r.color }} />
               {r.label}
             </div>
             <div className="mt-1 text-lg font-black leading-none">{r.pct}%</div>
