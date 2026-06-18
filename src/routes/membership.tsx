@@ -26,7 +26,7 @@ import { ArrowRight, Headphones, CheckCircle2, Library, Dumbbell, Home as HomeIc
 import { normalizePhoneToE164 } from "@/lib/phone-e164";
 import appPreviewDashboard from "@/assets/app-preview-dashboard.jpg";
 import appPreviewLogging from "@/assets/app-preview-logging.jpg";
-import appPreviewPrograms from "@/assets/app-preview-programs.jpg";
+import appPreviewRecipes from "@/assets/app-preview-recipes.jpg";
 import appPreviewAnalyticsOverview from "@/assets/app-preview-analytics-overview.png.asset.json";
 import appPreviewRecentPrs from "@/assets/app-preview-recent-prs.png.asset.json";
 import appPreview1rmChart from "@/assets/app-preview-1rm-chart.png.asset.json";
