@@ -869,7 +869,6 @@ export const restartMembership = createServerFn({ method: "POST" })
       allow_promotion_codes: "true",
       "automatic_tax[enabled]": "true",
       billing_address_collection: "required",
-      "tax_id_collection[enabled]": "true",
       "metadata[kind]": "jf_membership",
       "metadata[restart_member_id]": member.id,
       "subscription_data[metadata][kind]": "jf_membership",
