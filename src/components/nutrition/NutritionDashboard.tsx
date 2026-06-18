@@ -38,7 +38,9 @@ export function NutritionDashboard({
 }) {
   return (
     <div className="space-y-6 p-4 pb-28 md:p-6 md:pb-12">
-      <TargetsStrip targets={targets} />
+      <div id="targets" className="scroll-mt-20">
+        <TargetsStrip targets={targets} />
+      </div>
       <QuickActions viewer={viewer} recipesAnchorId={recipesAnchorId} />
       {children}
       <div id={recipesAnchorId} className="scroll-mt-20">
