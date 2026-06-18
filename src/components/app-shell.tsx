@@ -988,18 +988,28 @@ function useHoldDragSelect({
     return opt?.dataset.barOption ?? null;
   };
 
+  // Stable listener refs across renders. If we recreated these inline every
+  // render, `setHighlight` during a press would replace the references and
+  // `removeEventListener` in cleanup would no longer match the originals,
+  // leaving zombie `pointermove` listeners that cause UI glitches.
+  const onMoveRef = useRef<(e: PointerEvent) => void>(() => {});
+  const onUpRef = useRef<(e: PointerEvent) => void>(() => {});
+  const onCancelRef = useRef<() => void>(() => {});
+  const onSelectRef = useRef(onSelect);
+  onSelectRef.current = onSelect;
+
   const cleanup = () => {
     if (timer.current) { clearTimeout(timer.current); timer.current = null; }
     pressed.current = false;
     dragging.current = false;
     highlightRef.current = null;
     setHighlight(null);
-    window.removeEventListener("pointermove", onMove);
-    window.removeEventListener("pointerup", onUp);
-    window.removeEventListener("pointercancel", onCancel);
+    window.removeEventListener("pointermove", onMoveRef.current);
+    window.removeEventListener("pointerup", onUpRef.current);
+    window.removeEventListener("pointercancel", onCancelRef.current);
   };
 
-  const onMove = (e: PointerEvent) => {
+  onMoveRef.current = (e: PointerEvent) => {
     if (!dragging.current) return;
     const id = elementToOption(e.clientX, e.clientY);
     if (id !== highlightRef.current) {
@@ -1007,13 +1017,13 @@ function useHoldDragSelect({
       setHighlight(id);
     }
   };
-  const onUp = (e: PointerEvent) => {
+  onUpRef.current = (e: PointerEvent) => {
     const wasDragging = dragging.current;
     const id = wasDragging ? elementToOption(e.clientX, e.clientY) : null;
     cleanup();
-    if (wasDragging && id) onSelect(id);
+    if (wasDragging && id) onSelectRef.current(id);
   };
-  const onCancel = () => cleanup();
+  onCancelRef.current = () => cleanup();
 
   const onPointerDown = (e: React.PointerEvent) => {
     if (!enabled) return;
@@ -1028,9 +1038,9 @@ function useHoldDragSelect({
       highlightRef.current = id;
       setHighlight(id);
     }, longMs);
-    window.addEventListener("pointermove", onMove);
-    window.addEventListener("pointerup", onUp, { once: true });
-    window.addEventListener("pointercancel", onCancel, { once: true });
+    window.addEventListener("pointermove", onMoveRef.current);
+    window.addEventListener("pointerup", onUpRef.current, { once: true });
+    window.addEventListener("pointercancel", onCancelRef.current, { once: true });
   };
 
   const onClick = (e: React.MouseEvent) => {
@@ -1170,7 +1180,10 @@ function BottomNavSlot({ item, pathname, navBadges, onNavigate }: {
         navigate({ to: id });
       }
     },
-    onShortTap: () => setOpen((o) => !o),
+    // Radix's PopoverTrigger already toggles `open` via `onOpenChange` when the
+    // trigger button is tapped. Don't toggle again here or the two updates
+    // cancel out and the menu flickers ("glitches") on tap.
+    onShortTap: () => {},
   });
 
   return (
