@@ -147,10 +147,10 @@ export function PaymentsPage({ embedded = false }: { embedded?: boolean } = {}) 
       )}
       <div className="p-6 md:p-8 space-y-4">
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          <Stat label="Records" value={totals.count.toString()} icon={DollarSign} />
-          <Stat label="Paid" value={`$${totals.paid.toLocaleString()}`} tone="primary" icon={CheckCircle2} />
-          <Stat label="Pending" value={`$${totals.pending.toLocaleString()}`} tone="warn" />
-          <Stat label="Overdue / failed" value={`$${totals.overdue.toLocaleString()}`} tone="warn" icon={AlertTriangle} />
+          <Stat label="Records" value={totals.count.toString()} icon={DollarSign} onClick={() => setStatusFilter("all")} active={statusFilter === "all"} />
+          <Stat label="Paid" value={`$${totals.paid.toLocaleString()}`} tone="primary" icon={CheckCircle2} onClick={() => setStatusFilter("Paid")} active={statusFilter === "Paid"} />
+          <Stat label="Pending" value={`$${totals.pending.toLocaleString()}`} tone="warn" onClick={() => setStatusFilter("Manual Payment Needed")} active={statusFilter === "Manual Payment Needed"} />
+          <Stat label="Overdue / failed" value={`$${totals.overdue.toLocaleString()}`} tone="warn" icon={AlertTriangle} onClick={() => setStatusFilter("Overdue")} active={statusFilter === "Overdue"} />
         </div>
 
         <Card className="border-border bg-card p-3 flex flex-wrap gap-3 items-center">
@@ -184,6 +184,13 @@ export function PaymentsPage({ embedded = false }: { embedded?: boolean } = {}) 
                     {r.service_status && r.service_status !== "Not Started" && <Badge variant="outline">{r.service_status}</Badge>}
                   </div>
                 </div>
+                {(r.stripe_customer_id || r.stripe_subscription_id || r.stripe_payment_intent_id) && (
+                  <div className="mt-2 flex flex-wrap gap-1.5 text-[10px] font-mono text-muted-foreground">
+                    {r.stripe_customer_id && <span className="px-1.5 py-0.5 rounded bg-muted/50" title="Stripe customer ID">cus: {String(r.stripe_customer_id).slice(-10)}</span>}
+                    {r.stripe_subscription_id && <span className="px-1.5 py-0.5 rounded bg-muted/50" title="Stripe subscription ID">sub: {String(r.stripe_subscription_id).slice(-10)}</span>}
+                    {r.stripe_payment_intent_id && <span className="px-1.5 py-0.5 rounded bg-muted/50" title="Stripe payment intent">pi: {String(r.stripe_payment_intent_id).slice(-10)}</span>}
+                  </div>
+                )}
                 <div className="mt-2 flex flex-wrap gap-1.5">
                   {r.payment_status !== "Paid" && (
                     <Button size="sm" variant="outline" onClick={() => markPaid(r)}><CheckCircle2 className="mr-1 h-3 w-3" />Mark paid</Button>
@@ -230,9 +237,15 @@ export function PaymentsPage({ embedded = false }: { embedded?: boolean } = {}) 
   );
 }
 
-function Stat({ label, value, tone, icon: Icon }: { label: string; value: string; tone?: "primary" | "warn"; icon?: any }) {
+function Stat({ label, value, tone, icon: Icon, onClick, active }: { label: string; value: string; tone?: "primary" | "warn"; icon?: any; onClick?: () => void; active?: boolean }) {
   return (
-    <Card className="border-border bg-card p-4">
+    <Card
+      className={`border-border bg-card p-4 ${onClick ? "cursor-pointer transition-colors hover:bg-muted/40" : ""} ${active ? "ring-2 ring-primary/50" : ""}`}
+      onClick={onClick}
+      role={onClick ? "button" : undefined}
+      tabIndex={onClick ? 0 : undefined}
+      onKeyDown={onClick ? (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onClick(); } } : undefined}
+    >
       <div className="flex items-center justify-between">
         <div>
           <div className="text-xs uppercase tracking-widest text-muted-foreground">{label}</div>
