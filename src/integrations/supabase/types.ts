@@ -420,6 +420,7 @@ export type Database = {
         Row: {
           access_end_date: string | null
           access_restricted_at: string | null
+          access_start_date: string | null
           account_type: string
           activity_level: string | null
           address_city: string | null
@@ -427,6 +428,7 @@ export type Database = {
           address_line1: string | null
           address_state: string | null
           address_zip: string | null
+          admin_access_note: string | null
           admin_notes: string | null
           avatar_url: string | null
           biological_sex: string | null
@@ -444,6 +446,7 @@ export type Database = {
           emergency_contact_name: string | null
           emergency_contact_phone: string | null
           experience_level: string | null
+          expired_at: string | null
           first_workout_opened_at: string | null
           food_restrictions: string[]
           full_name: string | null
@@ -475,6 +478,7 @@ export type Database = {
           payment_recovered_at: string | null
           phone: string | null
           profile_picture_required: boolean
+          reactivated_at: string | null
           setup_browser_only: boolean
           setup_completed_at: string | null
           setup_dismissed_until: string | null
@@ -501,6 +505,7 @@ export type Database = {
         Insert: {
           access_end_date?: string | null
           access_restricted_at?: string | null
+          access_start_date?: string | null
           account_type?: string
           activity_level?: string | null
           address_city?: string | null
@@ -508,6 +513,7 @@ export type Database = {
           address_line1?: string | null
           address_state?: string | null
           address_zip?: string | null
+          admin_access_note?: string | null
           admin_notes?: string | null
           avatar_url?: string | null
           biological_sex?: string | null
@@ -525,6 +531,7 @@ export type Database = {
           emergency_contact_name?: string | null
           emergency_contact_phone?: string | null
           experience_level?: string | null
+          expired_at?: string | null
           first_workout_opened_at?: string | null
           food_restrictions?: string[]
           full_name?: string | null
@@ -556,6 +563,7 @@ export type Database = {
           payment_recovered_at?: string | null
           phone?: string | null
           profile_picture_required?: boolean
+          reactivated_at?: string | null
           setup_browser_only?: boolean
           setup_completed_at?: string | null
           setup_dismissed_until?: string | null
@@ -582,6 +590,7 @@ export type Database = {
         Update: {
           access_end_date?: string | null
           access_restricted_at?: string | null
+          access_start_date?: string | null
           account_type?: string
           activity_level?: string | null
           address_city?: string | null
@@ -589,6 +598,7 @@ export type Database = {
           address_line1?: string | null
           address_state?: string | null
           address_zip?: string | null
+          admin_access_note?: string | null
           admin_notes?: string | null
           avatar_url?: string | null
           biological_sex?: string | null
@@ -606,6 +616,7 @@ export type Database = {
           emergency_contact_name?: string | null
           emergency_contact_phone?: string | null
           experience_level?: string | null
+          expired_at?: string | null
           first_workout_opened_at?: string | null
           food_restrictions?: string[]
           full_name?: string | null
@@ -637,6 +648,7 @@ export type Database = {
           payment_recovered_at?: string | null
           phone?: string | null
           profile_picture_required?: boolean
+          reactivated_at?: string | null
           setup_browser_only?: boolean
           setup_completed_at?: string | null
           setup_dismissed_until?: string | null
