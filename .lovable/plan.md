@@ -24,10 +24,11 @@ Split into 4 turns so each lands in a working state with a clear verification st
 - Writes still on `sb.*` for this turn (deferred to turn 4).
 - Portal behavior identical (client adapter is byte-for-byte passthrough).
 
-### Turn 3 — Member adapter raw-shape implementation
+### Turn 3 — Member adapter raw-shape implementation ✅ DONE
 
-- Implement `listRowsRaw` / `listRowResultsRaw` / `getDayRaw` on `member-adapter.ts` by reading `member_*` tables and reshaping into the `PlRowRaw` shape WorkoutDayView expects (column-name + nested-relation alignment).
-- Unit test coverage in `src/test/member-adapter.test.ts` for at least the row mapping.
+- Implemented `getDayRaw` / `listRowsRaw` / `listRowResultsRaw` on `member-adapter.ts`. Pure reshape helpers (`memberDayToPlDay`, `memberRowToPlRow`, `memberLogToPlRowResult`) are exported and unit-tested so future schema drift is caught quickly.
+- Member rows always take the manual-load path (`manual_override=true`, `percentage_basis="none"`) since membership programs prescribe absolute loads only. `week_id` is null so WorkoutDayView's pl_weeks/pl_blocks follow-ups degrade silently (no block concept for members).
+- 16 unit tests pass (`src/test/member-adapter.test.ts`), covering capabilities, dayId encoding, reschedule fan-out, and all three raw reshapes (lb/kg variants, exercise-id fallback, log shape).
 
 ### Turn 4 — Mount WorkoutDayView under the member route + writes via adapter
 
