@@ -116,7 +116,7 @@ function MemberHome() {
         <HomeBodyweightCard
           userId={me.member.user_id}
           surface="member"
-          defaultUnit={(me.member.preferred_weight_unit as "kg" | "lb") ?? "lb"}
+          defaultUnit={((me.member as any).preferred_weight_unit as "kg" | "lb") ?? "lb"}
         />
       )}
       {me?.member?.user_id && (
