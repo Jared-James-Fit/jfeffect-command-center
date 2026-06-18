@@ -31,6 +31,9 @@ import { pickCurrentBlock } from "@/lib/block-dates";
 import { MoveWorkoutSheet } from "@/components/schedule/MoveWorkoutSheet";
 import { ScheduleHistoryDrawer } from "@/components/schedule/ScheduleHistoryDrawer";
 import { ClientBlockView } from "@/components/client-block-view";
+import { WorkoutStatusSheet } from "@/components/workout-status-sheet";
+import { useClientImpersonation } from "@/lib/client-impersonation";
+import { CircleDot } from "lucide-react";
 // Lazy: this card pulls recharts (~120KB). Defer it so the main Workouts
 // view can render without waiting on the chart bundle.
 const TrainingAnalyticsPreviewCard = lazy(() =>
@@ -243,6 +246,7 @@ export function WorkoutsExperience({
                   item={byDate.get(toLocalISO(selectedDate)) ?? null}
                   date={selectedDate}
                   readonly={mode === "coach"}
+                  clientId={clientId}
                 />
               </>
             )}
