@@ -14,6 +14,27 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Select Xcode 26
+        run: |
+          # List available Xcode versions
+          ls /Applications/ | grep -i xcode || true
+          # Select Xcode 26 if available
+          if [ -d "/Applications/Xcode_26.app" ]; then
+            sudo xcode-select -s /Applications/Xcode_26.app
+            echo "Selected Xcode 26"
+          elif [ -d "/Applications/Xcode_26.5.app" ]; then
+            sudo xcode-select -s /Applications/Xcode_26.5.app
+            echo "Selected Xcode 26.5"
+          elif [ -d "/Applications/Xcode_26.4.1.app" ]; then
+            sudo xcode-select -s /Applications/Xcode_26.4.1.app
+            echo "Selected Xcode 26.4.1"
+          else
+            echo "Xcode 26 not found, using default"
+            ls /Applications/ | grep -i xcode
+          fi
+          xcodebuild -version
+          xcrun --sdk iphoneos --show-sdk-version
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
