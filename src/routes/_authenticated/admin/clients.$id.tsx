@@ -926,6 +926,8 @@ function ClientDetail() {
             <p className="text-[11px] text-muted-foreground">Use the Save button at the top of the page to apply changes.</p>
           </Card>
 
+          <ClientCheckInConversations clientId={id} onCompose={() => setCheckInResponseOpen(true)} />
+
           <Card className="border-border bg-card p-6 md:col-span-3 space-y-3">
             <h3 className="text-xs uppercase tracking-widest text-muted-foreground">Linked Resources & Uploads</h3>
             <p className="text-xs text-muted-foreground">Attach Google Sheets, Drive folders, PDFs, and external links. Save to apply.</p>
