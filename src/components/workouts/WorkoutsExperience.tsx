@@ -31,6 +31,9 @@ import { pickCurrentBlock } from "@/lib/block-dates";
 import { MoveWorkoutSheet } from "@/components/schedule/MoveWorkoutSheet";
 import { ScheduleHistoryDrawer } from "@/components/schedule/ScheduleHistoryDrawer";
 import { ClientBlockView } from "@/components/client-block-view";
+import { WorkoutStatusSheet } from "@/components/workout-status-sheet";
+import { useClientImpersonation } from "@/lib/client-impersonation";
+import { CircleDot } from "lucide-react";
 // Lazy: this card pulls recharts (~120KB). Defer it so the main Workouts
 // view can render without waiting on the chart bundle.
 const TrainingAnalyticsPreviewCard = lazy(() =>
@@ -243,6 +246,7 @@ export function WorkoutsExperience({
                   item={byDate.get(toLocalISO(selectedDate)) ?? null}
                   date={selectedDate}
                   readonly={mode === "coach"}
+                  clientId={clientId}
                 />
               </>
             )}
@@ -524,14 +528,17 @@ function MonthGrid({
 /* ---------------------------------------------------------------------- */
 
 function SelectedDayCard({
-  item, date, readonly,
+  item, date, readonly, clientId,
 }: {
   item: WorkoutItem | null;
   date: Date;
   readonly: boolean;
+  clientId: string;
 }) {
   const [previewOpen, setPreviewOpen] = useState(false);
   const [moveOpen, setMoveOpen] = useState(false);
+  const [statusOpen, setStatusOpen] = useState(false);
+  const { isImpersonating } = useClientImpersonation();
 
   if (!item) {
     return (
@@ -585,6 +592,11 @@ function SelectedDayCard({
                 <DropdownMenuItem onSelect={() => setMoveOpen(true)}>
                   <Move className="mr-2 h-4 w-4" /> Move workout
                 </DropdownMenuItem>
+                {isImpersonating && (
+                  <DropdownMenuItem onSelect={() => setStatusOpen(true)}>
+                    <CircleDot className="mr-2 h-4 w-4" /> Change status
+                  </DropdownMenuItem>
+                )}
               </DropdownMenuContent>
             </DropdownMenu>
           )}
@@ -627,6 +639,16 @@ function SelectedDayCard({
           dayId={item.day.id}
           open={moveOpen}
           onOpenChange={setMoveOpen}
+        />
+      )}
+
+      {!readonly && isImpersonating && (
+        <WorkoutStatusSheet
+          open={statusOpen}
+          onOpenChange={setStatusOpen}
+          dayId={item.day.id}
+          clientId={clientId}
+          completion={item.completion as any}
         />
       )}
 
