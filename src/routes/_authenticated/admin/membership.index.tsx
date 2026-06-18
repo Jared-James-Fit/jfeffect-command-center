@@ -14,7 +14,7 @@ import { Button } from "@/components/ui/button";
 import {
   Users, Sparkles, AlertCircle, CreditCard, Camera, Phone, MessageCircle, Mail,
   Pause, ListChecks, XCircle, TrendingUp, Clock,
-  Eye, ShieldCheck, AlertTriangle, Gift, UserSearch, Tags, FileText, Activity, Package,
+  Eye, ShieldCheck, AlertTriangle, Gift, UserSearch, Tags, FileText, Activity, Package, UserCog,
 } from "lucide-react";
 import { getMembershipStats } from "@/lib/membership-admin.functions";
 
@@ -124,6 +124,15 @@ function MembershipDashboard() {
           <Stat label="Paused" value={isLoading ? "…" : c?.paused ?? 0} icon={Pause} />
           <Stat label="Hold Plan" value={isLoading ? "…" : c?.hold ?? 0} icon={ListChecks} />
           <Stat label="Cancelled" value={isLoading ? "…" : c?.cancelled ?? 0} icon={XCircle} />
+        </div>
+      </div>
+
+      <div>
+        <h2 className="mb-2 text-xs font-bold uppercase tracking-widest text-muted-foreground">Access Control</h2>
+        <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
+          <Stat label="Access Active" value={isLoading ? "…" : c?.access_active ?? 0} icon={ShieldCheck} tone="primary" to="/admin/members" />
+          <Stat label="Access Expired" value={isLoading ? "…" : c?.access_expired ?? 0} icon={AlertTriangle} tone="rose" to="/admin/members" />
+          <Stat label="Manual Override" value={isLoading ? "…" : c?.manual_override ?? 0} icon={UserCog} tone="warn" to="/admin/members" />
         </div>
       </div>
 

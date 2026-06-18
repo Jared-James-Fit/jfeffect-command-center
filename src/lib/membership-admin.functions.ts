@@ -1,5 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { isMemberAccessActive } from "@/lib/memberAccess";
 
 async function assertAdmin(ctx: any) {
   const { supabase, userId } = ctx;
@@ -19,7 +20,7 @@ export const getMembershipStats = createServerFn({ method: "GET" })
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { data: rows, error } = await supabaseAdmin
       .from("app_members")
-      .select("id, account_type, status, subscription_status, trial_end_at, current_period_end, avatar_url, phone, sms_opt_out, last_signed_in_at, user_id, full_name, email, profile_picture_required, created_at, paused_until, hold_plan_started_at, cancelled_at, cancel_at")
+      .select("id, account_type, status, subscription_status, trial_end_at, current_period_end, avatar_url, phone, sms_opt_out, last_signed_in_at, user_id, full_name, email, profile_picture_required, created_at, paused_until, hold_plan_started_at, cancelled_at, cancel_at, manual_access_override, manual_access_disabled, access_end_date, in_grace")
       .eq("account_type", "jf_member");
     if (error) throw new Error(error.message);
     const list = rows ?? [];
@@ -36,6 +37,9 @@ export const getMembershipStats = createServerFn({ method: "GET" })
       missing_phone: list.filter((m) => !m.phone).length,
       missing_sms: list.filter((m) => !!m.sms_opt_out).length,
       total: list.length,
+      access_active: list.filter((m) => isMemberAccessActive(m)).length,
+      access_expired: list.filter((m) => !isMemberAccessActive(m)).length,
+      manual_override: list.filter((m) => m.manual_access_override === true).length,
     };
     const recentSignups = list
       .slice()
