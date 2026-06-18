@@ -306,18 +306,39 @@ export const saveDraft = createServerFn({ method: "POST" })
     const { supabase, userId } = context;
     if (data.kind === "client") {
       const clientId = await resolveClientId(supabase, userId);
-      const { error } = await supabase
+      // Check for an existing row first so we never overwrite completion
+      // state (notes-only autosave must not flip a workout to "completed",
+      // and editing a finished workout's notes must not clear completed_at
+      // via the column default).
+      const { data: existing } = await supabase
         .from("pl_day_completions")
-        .upsert(
-          {
+        .select("id")
+        .eq("client_id", clientId)
+        .eq("day_id", data.dayId)
+        .maybeSingle();
+      if (existing?.id) {
+        const { error } = await supabase
+          .from("pl_day_completions")
+          .update({
+            client_notes: data.clientNotes ?? null,
+            actual_duration_min: data.actualDurationMin ?? null,
+          })
+          .eq("id", existing.id);
+        if (error) throw error;
+      } else {
+        const { error } = await supabase
+          .from("pl_day_completions")
+          .insert({
             client_id: clientId,
             day_id: data.dayId,
             client_notes: data.clientNotes ?? null,
             actual_duration_min: data.actualDurationMin ?? null,
-          },
-          { onConflict: "client_id,day_id" },
-        );
-      if (error) throw error;
+            // Explicit null — the column has DEFAULT now() so omitting this
+            // would mark the workout as completed on first note keystroke.
+            completed_at: null,
+          });
+        if (error) throw error;
+      }
       return { ok: true };
     }
     await assertOwnsEnrollment(supabase, data.enrollmentId);
