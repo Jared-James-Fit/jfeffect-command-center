@@ -24,6 +24,7 @@ import {
   getTargetsSetupPrefill,
   getFormulaSettings,
   saveCalculatedTargets,
+  saveManualTargets,
 } from "@/lib/nutrition-targets/member-targets.functions";
 
 export const Route = createFileRoute("/_authenticated/m/nutrition/targets-setup")({
@@ -40,6 +41,7 @@ function TargetsSetup() {
   const prefillFn = useServerFn(getTargetsSetupPrefill);
   const settingsFn = useServerFn(getFormulaSettings);
   const saveFn = useServerFn(saveCalculatedTargets);
+  const saveManualFn = useServerFn(saveManualTargets);
 
   const prefillQ = useQuery({ queryKey: ["nt-prefill"], queryFn: () => prefillFn({}) });
   const settingsQ = useQuery({ queryKey: ["nt-settings"], queryFn: () => settingsFn({}) });
@@ -55,6 +57,12 @@ function TargetsSetup() {
   const [goal, setGoal] = useState<NutritionGoal | null>(null);
   const [step, setStep] = useState(0);
   const [saving, setSaving] = useState(false);
+  const [manualMode, setManualMode] = useState(false);
+  const [mCal, setMCal] = useState("");
+  const [mProt, setMProt] = useState("");
+  const [mCarb, setMCarb] = useState("");
+  const [mFat, setMFat] = useState("");
+  const [mWater, setMWater] = useState("");
 
   // Prefill from member profile once loaded.
   useEffect(() => {
@@ -158,6 +166,49 @@ function TargetsSetup() {
     } finally {
       setSaving(false);
     }
+  }
+
+  async function handleSaveManual() {
+    const cal = parseInt(mCal, 10);
+    const prot = parseInt(mProt, 10);
+    const carb = parseInt(mCarb, 10);
+    const fat = parseInt(mFat, 10);
+    const waterL = parseFloat(mWater);
+    if (!cal || isNaN(cal) || cal <= 0) {
+      toast.error("Enter a calorie target");
+      return;
+    }
+    setSaving(true);
+    try {
+      await saveManualFn({
+        data: {
+          calories: cal,
+          protein_g: isNaN(prot) ? 0 : prot,
+          carbs_g: isNaN(carb) ? 0 : carb,
+          fat_g: isNaN(fat) ? 0 : fat,
+          water_ml: !isNaN(waterL) && waterL > 0 ? Math.round(waterL * 1000) : undefined,
+          goal: goal ?? undefined,
+        },
+      });
+      toast.success("Targets saved");
+      navigate({ to: "/m/nutrition" });
+    } catch (e: any) {
+      toast.error(e?.message ?? "Could not save targets");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  function enterManualMode() {
+    // Prefill manual fields from the calculated preview, when available.
+    if (preview) {
+      setMCal(String(preview.calories));
+      setMProt(String(preview.protein_g));
+      setMCarb(String(preview.carbs_g));
+      setMFat(String(preview.fat_g));
+      setMWater((preview.water_ml / 1000).toFixed(1));
+    }
+    setManualMode(true);
   }
 
   return (
@@ -313,22 +364,63 @@ function TargetsSetup() {
 
           {step === 4 && preview && (
             <div className="space-y-4">
-              <div>
-                <div className="text-sm font-semibold">Your calculated targets</div>
-                <div className="text-xs text-muted-foreground">
-                  BMR {preview.bmr} · TDEE {preview.tdee} kcal · {goal && GOAL_OPTIONS.find((g) => g.value === goal)?.label}
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
-                <Tile icon={Flame} label="Cal" value={preview.calories} />
-                <Tile icon={Beef} label="Protein" value={`${preview.protein_g}g`} />
-                <Tile icon={Wheat} label="Carbs" value={`${preview.carbs_g}g`} />
-                <Tile icon={Cookie} label="Fat" value={`${preview.fat_g}g`} />
-                <Tile icon={Droplets} label="Water" value={`${(preview.water_ml / 1000).toFixed(1)}L`} />
-              </div>
-              <p className="text-xs text-muted-foreground">
-                These will be saved as your active targets. You can edit them any time, and bodyweight changes won't overwrite them automatically.
-              </p>
+              {!manualMode ? (
+                <>
+                  <div>
+                    <div className="text-sm font-semibold">Your calculated targets</div>
+                    <div className="text-xs text-muted-foreground">
+                      BMR {preview.bmr} · TDEE {preview.tdee} kcal · {goal && GOAL_OPTIONS.find((g) => g.value === goal)?.label}
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
+                    <Tile icon={Flame} label="Cal" value={preview.calories} />
+                    <Tile icon={Beef} label="Protein" value={`${preview.protein_g}g`} />
+                    <Tile icon={Wheat} label="Carbs" value={`${preview.carbs_g}g`} />
+                    <Tile icon={Cookie} label="Fat" value={`${preview.fat_g}g`} />
+                    <Tile icon={Droplets} label="Water" value={`${(preview.water_ml / 1000).toFixed(1)}L`} />
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    These will be saved as your active targets. You can edit them any time, and bodyweight changes won't overwrite them automatically.
+                  </p>
+                  <Button type="button" variant="outline" className="w-full" onClick={enterManualMode}>
+                    Enter my own numbers instead
+                  </Button>
+                </>
+              ) : (
+                <>
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <div className="text-sm font-semibold">Enter your own targets</div>
+                      <div className="text-xs text-muted-foreground">Saved as Manual — won't be auto-recalculated.</div>
+                    </div>
+                    <Button type="button" variant="ghost" size="sm" onClick={() => setManualMode(false)}>
+                      Use calculated
+                    </Button>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1.5">
+                      <Label>Calories</Label>
+                      <Input type="number" inputMode="numeric" value={mCal} onChange={(e) => setMCal(e.target.value)} />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label>Water (L)</Label>
+                      <Input type="number" inputMode="decimal" value={mWater} onChange={(e) => setMWater(e.target.value)} />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label>Protein (g)</Label>
+                      <Input type="number" inputMode="numeric" value={mProt} onChange={(e) => setMProt(e.target.value)} />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label>Carbs (g)</Label>
+                      <Input type="number" inputMode="numeric" value={mCarb} onChange={(e) => setMCarb(e.target.value)} />
+                    </div>
+                    <div className="space-y-1.5 col-span-2">
+                      <Label>Fat (g)</Label>
+                      <Input type="number" inputMode="numeric" value={mFat} onChange={(e) => setMFat(e.target.value)} />
+                    </div>
+                  </div>
+                </>
+              )}
             </div>
           )}
         </Card>
@@ -348,7 +440,11 @@ function TargetsSetup() {
               Next <ArrowRight className="ml-1.5 h-4 w-4" />
             </Button>
           ) : (
-            <Button type="button" onClick={handleSave} disabled={!canNext || saving}>
+            <Button
+              type="button"
+              onClick={manualMode ? handleSaveManual : handleSave}
+              disabled={(!canNext && !manualMode) || saving}
+            >
               {saving ? "Saving…" : "Save Targets"}
             </Button>
           )}
