@@ -90,14 +90,28 @@ export type ProgressContext = {
   canRequestReview: boolean;
 };
 
-export function ProgressSection({ ctx }: { ctx: ProgressContext }) {
-  const [tab, setTab] = useState<string>("photos");
+/** Quick-action requested from a Home dashboard via `?action=...`. */
+export type ProgressInitialAction = "photo" | "weight" | "measure" | "history";
+
+export function ProgressSection({
+  ctx, initialAction,
+}: { ctx: ProgressContext; initialAction?: ProgressInitialAction }) {
+  const [tab, setTab] = useState<string>(initialAction === "history" ? "timeline" : "photos");
   const [photoDialog, setPhotoDialog] = useState(false);
   const [videoDialog, setVideoDialog] = useState(false);
   const [weightDialog, setWeightDialog] = useState(false);
   const [measureDialog, setMeasureDialog] = useState(false);
   const [compareDialog, setCompareDialog] = useState(false);
   const [detailId, setDetailId] = useState<string | null>(null);
+
+  // Auto-open the right dialog when navigated from a Home action button.
+  useEffect(() => {
+    if (!initialAction) return;
+    if (initialAction === "photo") setPhotoDialog(true);
+    else if (initialAction === "weight") setWeightDialog(true);
+    else if (initialAction === "measure") setMeasureDialog(true);
+    else if (initialAction === "history") setTab("timeline");
+  }, [initialAction]);
 
   return (
     <div className="space-y-4 p-3 pb-28 md:p-6 md:pb-12">
