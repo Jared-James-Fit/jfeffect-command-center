@@ -1,6 +1,6 @@
-import { useState, useEffect, useMemo } from "react";
+import { useMemo } from "react";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { usePortalUserId } from "@/lib/client-impersonation";
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/app-shell";
@@ -17,7 +17,7 @@ import {
   pickNutritionUpdateForm,
   type NfForm,
 } from "@/lib/native-forms";
-import { listManualReviewsForClient, sourceLabel } from "@/lib/manual-check-in-reviews";
+import { listManualReviewsForClient } from "@/lib/manual-check-in-reviews";
 import { buildFilloutUrl } from "@/lib/fillout";
 import { CheckInReviewThread } from "@/components/check-in-review-thread";
 
