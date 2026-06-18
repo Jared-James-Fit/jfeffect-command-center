@@ -4,6 +4,7 @@ import { z } from "zod";
 import {
   calculateTargets,
   DEFAULT_FORMULA_SETTINGS,
+  applyIntensity,
   type FormulaSettings,
   type FormulaInput,
 } from "./formula";
@@ -15,6 +16,7 @@ const inputSchema = z.object({
   sex: z.enum(["male", "female"]),
   activity: z.enum(["sedentary", "light", "moderate", "very", "extra"]),
   goal: z.enum(["lose", "maintain", "gain"]),
+  intensity: z.enum(["conservative", "standard", "aggressive"]).optional(),
   unitsPreference: z.enum(["metric", "imperial"]).optional(),
 });
 
@@ -74,7 +76,9 @@ export const saveCalculatedTargets = createServerFn({ method: "POST" })
     const member = await loadMember(supabase, userId);
     if (!member?.id) throw new Error("Member profile not found");
 
-    const settings = await loadSettings(supabase);
+    const baseSettings = await loadSettings(supabase);
+    const intensity = data.intensity ?? "standard";
+    const settings = applyIntensity(baseSettings, data.goal, intensity);
     const input: FormulaInput = {
       bodyweightKg: data.bodyweightKg,
       heightCm: data.heightCm,
@@ -82,6 +86,7 @@ export const saveCalculatedTargets = createServerFn({ method: "POST" })
       sex: data.sex,
       activity: data.activity,
       goal: data.goal,
+      intensity,
     };
     const targets = calculateTargets(input, settings);
 
@@ -118,6 +123,9 @@ export const saveCalculatedTargets = createServerFn({ method: "POST" })
           ...input,
           bmr: targets.bmr,
           tdee: targets.tdee,
+          intensity,
+          effective_deficit: settings.deficit_percent,
+          effective_surplus: settings.surplus_percent,
           settings_version: 1,
         },
         active: true,
