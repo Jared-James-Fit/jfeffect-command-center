@@ -4,16 +4,22 @@ import { supabase } from "@/integrations/supabase/client";
 import { usePortalUserId } from "@/lib/client-impersonation";
 import { PageHeader } from "@/components/app-shell";
 import { Card } from "@/components/ui/card";
-import { ProgressSection } from "@/components/progress/progress-section";
+import { ProgressSection, type ProgressInitialAction } from "@/components/progress/progress-section";
 import { CheckInScheduleCard } from "@/components/progress/check-in-schedule-card";
 import { StreakCelebration } from "@/components/progress/streak-celebration";
 
 export const Route = createFileRoute("/_authenticated/portal/progress")({
   component: PortalProgress,
+  validateSearch: (s: Record<string, unknown>) => {
+    const a = s.action as string | undefined;
+    const allowed: ProgressInitialAction[] = ["photo", "weight", "measure", "history"];
+    return { action: (allowed as string[]).includes(a ?? "") ? (a as ProgressInitialAction) : undefined };
+  },
 });
 
 function PortalProgress() {
   const userId = usePortalUserId();
+  const { action } = Route.useSearch();
   const { data: client, isLoading } = useQuery({
     queryKey: ["my-client-progress-ctx", userId],
     enabled: !!userId,
@@ -42,6 +48,7 @@ function PortalProgress() {
         <StreakCelebration userId={userId} />
       </div>
       <ProgressSection
+        initialAction={action}
         ctx={{
           userId,
           ownerType: "client",

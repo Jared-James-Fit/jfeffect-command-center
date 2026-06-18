@@ -90,8 +90,13 @@ export type ProgressContext = {
   canRequestReview: boolean;
 };
 
-export function ProgressSection({ ctx }: { ctx: ProgressContext }) {
-  const [tab, setTab] = useState("overview");
+/** Quick-action requested from a Home dashboard via `?action=...`. */
+export type ProgressInitialAction = "photo" | "weight" | "measure" | "history";
+
+export function ProgressSection({
+  ctx, initialAction,
+}: { ctx: ProgressContext; initialAction?: ProgressInitialAction }) {
+  const [tab, setTab] = useState<string>(initialAction === "history" ? "timeline" : "photos");
   const [photoDialog, setPhotoDialog] = useState(false);
   const [videoDialog, setVideoDialog] = useState(false);
   const [weightDialog, setWeightDialog] = useState(false);
@@ -99,28 +104,27 @@ export function ProgressSection({ ctx }: { ctx: ProgressContext }) {
   const [compareDialog, setCompareDialog] = useState(false);
   const [detailId, setDetailId] = useState<string | null>(null);
 
+  // Auto-open the right dialog when navigated from a Home action button.
+  useEffect(() => {
+    if (!initialAction) return;
+    if (initialAction === "photo") setPhotoDialog(true);
+    else if (initialAction === "weight") setWeightDialog(true);
+    else if (initialAction === "measure") setMeasureDialog(true);
+    else if (initialAction === "history") setTab("timeline");
+  }, [initialAction]);
+
   return (
     <div className="space-y-4 p-3 pb-28 md:p-6 md:pb-12">
       <Tabs value={tab} onValueChange={setTab} className="space-y-4">
-        <TabsList className="grid w-full grid-cols-4 md:grid-cols-7 h-auto">
-          <TabsTrigger value="overview">Overview</TabsTrigger>
+        <TabsList className="grid w-full grid-cols-3 md:grid-cols-6 h-auto">
           <TabsTrigger value="photos">Photos</TabsTrigger>
           <TabsTrigger value="videos">Videos</TabsTrigger>
           <TabsTrigger value="bodyweight">Weight</TabsTrigger>
           <TabsTrigger value="water">Water</TabsTrigger>
           <TabsTrigger value="measurements">Measure</TabsTrigger>
-          <TabsTrigger value="timeline">Timeline</TabsTrigger>
+          <TabsTrigger value="timeline">History</TabsTrigger>
         </TabsList>
 
-        <TabsContent value="overview">
-          <Overview ctx={ctx}
-            onAddPhoto={() => setPhotoDialog(true)}
-            onLogWeight={() => setWeightDialog(true)}
-            onAddMeasure={() => setMeasureDialog(true)}
-            onViewTimeline={() => setTab("timeline")}
-            onOpenSubmission={setDetailId}
-          />
-        </TabsContent>
         <TabsContent value="photos">
           <PhotosTab ctx={ctx} onNew={() => setPhotoDialog(true)} onOpen={setDetailId} onCompare={() => setCompareDialog(true)} />
         </TabsContent>
@@ -189,10 +193,10 @@ function Overview({
     <div className="space-y-4">
       {/* Primary actions — Compare lives inside Photos/Timeline only */}
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-        <ActionTile icon={Camera} label="Start Check-In" onClick={onAddPhoto} primary />
-        <ActionTile icon={Scale} label="Log Bodyweight" onClick={onLogWeight} />
+        <ActionTile icon={Camera} label="Upload Photos" onClick={onAddPhoto} primary />
+        <ActionTile icon={Scale} label="Log Weight" onClick={onLogWeight} />
         <ActionTile icon={Ruler} label="Add Measurements" onClick={onAddMeasure} />
-        <ActionTile icon={Clock} label="View Timeline" onClick={onViewTimeline} />
+        <ActionTile icon={Clock} label="View Progress" onClick={onViewTimeline} />
       </div>
 
       {/* Summary cards */}
@@ -709,7 +713,7 @@ function BodyweightTab({ ctx, onLog }: { ctx: ProgressContext; onLog: () => void
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between">
-        <h2 className="text-lg font-semibold">Bodyweight</h2>
+        <h2 className="text-lg font-semibold">Weight</h2>
         <Button size="sm" onClick={onLog}><Plus className="h-4 w-4 mr-1" />Log</Button>
       </div>
       {stats && (
@@ -765,7 +769,7 @@ function BodyweightDialog({ ctx, open, onOpenChange }: { ctx: ProgressContext; o
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-sm">
-        <DialogHeader><DialogTitle>Log Bodyweight</DialogTitle></DialogHeader>
+        <DialogHeader><DialogTitle>Log Weight</DialogTitle></DialogHeader>
         <div className="space-y-3">
           <div className="flex gap-2">
             <Input type="number" inputMode="decimal" autoFocus value={val} onChange={(e) => setVal(e.target.value)} placeholder="Weight" />
