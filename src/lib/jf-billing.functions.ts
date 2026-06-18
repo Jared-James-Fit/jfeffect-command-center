@@ -869,6 +869,12 @@ export const restartMembership = createServerFn({ method: "POST" })
       allow_promotion_codes: "true",
       "automatic_tax[enabled]": "true",
       billing_address_collection: "required",
+      // Explicitly disable tax ID collection on restart: when enabled it
+      // requires customer_update[name]=auto on the existing customer, and
+      // any drift in the Stripe account default would block the session
+      // with "Tax ID collection requires updating business name on the
+      // customer." Restart doesn't need a tax ID — disable to be safe.
+      "tax_id_collection[enabled]": "false",
       "metadata[kind]": "jf_membership",
       "metadata[restart_member_id]": member.id,
       "subscription_data[metadata][kind]": "jf_membership",
