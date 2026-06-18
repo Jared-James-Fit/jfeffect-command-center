@@ -63,7 +63,10 @@ function MemberWorkoutRoute() {
       navigation={{
         backTo: `/m/my-plans/${enrollmentId}`,
         listPath: `/m/my-plans/${enrollmentId}`,
-        messagesPath: "/m/messages",
+        // Members don't have a dedicated messages inbox — `/m/support`
+        // is the single coach-contact surface, so all "Contact coach"
+        // CTAs from the shared workout view route there.
+        messagesPath: "/m/support",
       }}
     />
   );
