@@ -16238,6 +16238,19 @@ export type Database = {
           schedule: string
         }[]
       }
+      get_my_referral_attribution: {
+        Args: never
+        Returns: {
+          attributed_at: string
+          cancellation_status: string
+          id: string
+          original_cents: number
+          recurring_discounted_cents: number
+          referral_discount_cents: number
+          refund_status: string
+          subscription_status: string
+        }[]
+      }
       grant_sessions_if_paid_in_full: {
         Args: { _purchase_id: string }
         Returns: undefined
