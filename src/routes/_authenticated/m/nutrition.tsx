@@ -9,6 +9,7 @@ import { PageHeader } from "@/components/app-shell";
 import { supabase } from "@/integrations/supabase/client";
 import { NutritionDashboard, type NutritionTargets } from "@/components/nutrition/NutritionDashboard";
 import { getActiveMemberTargets } from "@/lib/nutrition-targets/member-targets.functions";
+import { DailyNutritionPanel } from "@/components/nutrition/DailyNutritionPanel";
 
 export const Route = createFileRoute("/_authenticated/m/nutrition")({
   component: MemberNutrition,
@@ -59,6 +60,7 @@ function MemberNutrition() {
         title="Nutrition"
         subtitle="Targets, recipes, and recovery — all in one place."
       />
+      <DailyNutritionPanel />
       {showSetupCta && (
         <div className="p-4 md:p-6 pb-0">
           <Card className="flex flex-col items-start gap-3 border-primary/40 bg-gradient-to-br from-primary/10 to-card p-5 sm:flex-row sm:items-center sm:justify-between">
