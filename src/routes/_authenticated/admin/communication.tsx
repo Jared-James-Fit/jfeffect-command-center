@@ -70,12 +70,18 @@ function CommunicationWorkspace() {
           "calc(100dvh - var(--shell-topbar-h, 0px) - var(--bottom-nav-clearance, 0px))",
       }}
     >
-      <PageHeader
-        title="Communication"
-        subtitle="Manage messages, broadcasts, support, chat assets, and in-app communication."
-      />
+      {/* Desktop-only page header. On mobile the screen jumps straight to the
+          communication tabs to avoid wasting vertical space above the inbox. */}
+      <div className="hidden md:block">
+        <PageHeader
+          title="Communication"
+          subtitle="Manage messages, broadcasts, support, chat assets, and in-app communication."
+        />
+      </div>
       <div className="shrink-0 border-b border-border bg-background/50">
-        <div className="-mb-px flex gap-1 overflow-x-auto px-2 md:px-4">
+        <div
+          className="-mb-px flex gap-1 overflow-x-auto px-3 md:px-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        >
           {TABS.map((t) => {
             const active = t.value === tab;
             return (
@@ -84,7 +90,7 @@ function CommunicationWorkspace() {
                 type="button"
                 onClick={() => setTab(t.value)}
                 className={cn(
-                  "shrink-0 whitespace-nowrap border-b-2 px-3 py-3 text-sm font-semibold transition-colors",
+                  "shrink-0 whitespace-nowrap border-b-2 px-3 py-2.5 text-[13px] font-semibold transition-colors md:text-sm md:py-3",
                   active
                     ? "border-primary text-foreground"
                     : "border-transparent text-muted-foreground hover:text-foreground",
