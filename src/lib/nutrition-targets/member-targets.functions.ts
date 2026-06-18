@@ -184,13 +184,13 @@ export const getTargetsSetupPrefill = createServerFn({ method: "GET" })
     let bodyweightKg: number | null = null;
     const { data: bw } = await supabase
       .from("progress_bodyweight")
-      .select("value, unit, recorded_at")
+      .select("weight_value, weight_unit, logged_date")
       .eq("user_id", userId)
-      .order("recorded_at", { ascending: false })
+      .order("logged_date", { ascending: false })
       .limit(1);
     if (bw && bw[0]) {
-      const v = Number(bw[0].value);
-      bodyweightKg = bw[0].unit === "kg" ? v : v * 0.45359237;
+      const v = Number(bw[0].weight_value);
+      bodyweightKg = bw[0].weight_unit === "kg" ? v : v * 0.45359237;
     }
 
     return {
