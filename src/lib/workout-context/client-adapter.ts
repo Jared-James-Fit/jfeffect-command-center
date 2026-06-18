@@ -504,6 +504,43 @@ export function createClientAdapter(ref: WorkoutContextRef): WorkoutContextAdapt
       }));
     },
 
+    /* ---- raw passthrough writes (Phase B turn 4b) ----
+     * Byte-identical to the previous `sb.from("pl_*").update/insert` calls
+     * that WorkoutDayView made directly. Member adapter reshapes in turn 4c.
+     */
+    async upsertPlRowResultRaw(payload, id) {
+      if (id) {
+        const { error } = await sb.from("pl_row_results").update(payload).eq("id", id);
+        if (error) throw new Error(error.message);
+        return { id };
+      }
+      const { data, error } = await sb
+        .from("pl_row_results")
+        .insert(payload)
+        .select("id")
+        .maybeSingle();
+      if (error) throw new Error(error.message);
+      return { id: (data as any)?.id ?? null };
+    },
+    async upsertPlExerciseNoteRaw(payload, id) {
+      if (id) {
+        const { error } = await sb.from("pl_exercise_notes").update(payload).eq("id", id);
+        if (error) throw new Error(error.message);
+        return;
+      }
+      const { error } = await sb.from("pl_exercise_notes").insert(payload);
+      if (error) throw new Error(error.message);
+    },
+    async upsertPlDayCompletionRaw(payload, id) {
+      if (id) {
+        const { error } = await sb.from("pl_day_completions").update(payload).eq("id", id);
+        if (error) throw new Error(error.message);
+        return;
+      }
+      const { error } = await sb.from("pl_day_completions").insert(payload);
+      if (error) throw new Error(error.message);
+    },
+
     async notifyCoachOfFailure(input: { dayId: string; reason: string }): Promise<void> {
       await notifyCoachOfWorkoutFailure({
         data: {

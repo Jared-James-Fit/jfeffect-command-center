@@ -335,6 +335,21 @@ export interface WorkoutContextAdapter {
    * memberships don't persist per-exercise unit prefs yet.
    */
   listUnitPrefs(exerciseIds: string[]): Promise<{ exerciseId: string; unit: "lb" | "kg" }[]>;
+  /* ---- raw passthrough write surface (Phase B turn 4b) -------------------
+   * Mechanical mirror of the raw read surface. WorkoutDayView's writes use
+   * `pl_*` columns the typed DTOs don't cover yet (`entered_value/unit`,
+   * `actual_rpe_num`, `timer_*`, `completion_method`,
+   * `pl_exercise_notes.status/coach_seen_at/exercise_name`, completion
+   * tri-state). Adapters pass payloads through verbatim — the client
+   * adapter is byte-identical with the previous `sb.from("pl_*")` writes;
+   * the member adapter reshapes into `member_*` tables in turn 4c.
+   *
+   * When `id` is provided, the adapter UPDATEs that row; otherwise it
+   * INSERTs. The row-result variant returns the resulting id so the
+   * caller can record audit trails. */
+  upsertPlRowResultRaw(payload: Record<string, any>, id?: string | null): Promise<{ id: string | null }>;
+  upsertPlExerciseNoteRaw(payload: Record<string, any>, id?: string | null): Promise<void>;
+  upsertPlDayCompletionRaw(payload: Record<string, any>, id?: string | null): Promise<void>;
   notifyCoachOfFailure(input: { dayId: string; reason: string }): Promise<void>;
 }
 
