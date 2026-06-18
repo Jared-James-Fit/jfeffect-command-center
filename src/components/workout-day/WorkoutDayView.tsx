@@ -1842,6 +1842,7 @@ function SetRow({
 }) {
   const { user } = useAuth();
   const { isImpersonating, client: povClient } = useClientImpersonation();
+  const adapter = useOptionalAdapter();
   // Display weight is always shown in the active unit.
   // existing stores normalized kg + lb columns (Stage 1 trigger keeps them in sync),
   // plus the original actual_load/actual_load_unit pair. We pick whichever matches `unit`.
