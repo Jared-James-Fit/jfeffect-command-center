@@ -107,7 +107,7 @@ export function BodyweightSummaryCard({ clientId, defaultUnit = "lb" }: Props) {
           <Scale className="h-5 w-5 text-primary" />
           <h3 className="text-base font-bold">Bodyweight</h3>
         </div>
-        <Link to="/portal/progress-metrics" className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground">
+        <Link to="/portal/progress" search={{ action: "bodyweight" }} className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground">
           <History className="h-3.5 w-3.5" /> History
         </Link>
       </div>

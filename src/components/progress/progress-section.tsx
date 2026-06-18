@@ -728,7 +728,7 @@ function BodyweightTab({
           <div><p className="text-2xl font-semibold">{stats.change > 0 ? "+" : ""}{stats.change}</p><p className="text-xs text-muted-foreground">Since start</p></div>
         </Card>
       )}
-      {chartAll.length >= 2 && (
+      {chartAll.length >= 1 && (
         <Card className="p-3">
           <div className="mb-2 flex items-center justify-between gap-2">
             <div className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Bodyweight ({unit})</div>
