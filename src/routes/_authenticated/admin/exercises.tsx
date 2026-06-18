@@ -18,6 +18,7 @@ import { buildCleanVimeoEmbedUrl, vimeoUrlFromId, MIGRATION_STATUSES } from "@/l
 import { ExerciseWarmupDialog } from "@/components/exercise-warmup-dialog";
 import { ExerciseVolumeTagsDialog } from "@/components/volume/exercise-volume-tags-dialog";
 import { MOVEMENT_PATTERN_LABELS, VARIATION_LABELS } from "@/lib/volume";
+import { useExerciseVideoSetGlobal, setExerciseVideoSetGlobal } from "@/hooks/use-exercise-video-set";
 
 export const Route = createFileRoute("/_authenticated/admin/exercises")({
   component: ExercisesRedirect,
@@ -105,6 +106,17 @@ export function ExercisesAdmin({ embedded = false }: { embedded?: boolean } = {}
     (e: any) => !e.primary_movement_pattern || !e.variation_type,
   ).length;
 
+  const { data: globalSet } = useExerciseVideoSetGlobal();
+  const onChangeGlobal = async (v: string) => {
+    try {
+      await setExerciseVideoSetGlobal(v === "none" ? null : (v as "primary" | "secondary"));
+      toast.success(v === "none" ? "Global override cleared" : `Library switched to ${v}`);
+      qc.invalidateQueries({ queryKey: ["app_settings", "exercise_video_set"] });
+    } catch (err: any) {
+      toast.error(err?.message ?? "Failed to update");
+    }
+  };
+
   return (
     <>
       {!embedded && <PageHeader
@@ -134,6 +146,22 @@ export function ExercisesAdmin({ embedded = false }: { embedded?: boolean } = {}
         </div>
       )}
       <div className="space-y-4 p-6 md:p-8">
+        <Card className="border-primary/30 bg-card p-3 flex flex-wrap items-center gap-3">
+          <div className="text-xs font-bold uppercase tracking-widest text-muted-foreground">
+            Global video set
+          </div>
+          <Select value={globalSet ?? "none"} onValueChange={onChangeGlobal}>
+            <SelectTrigger className="w-56"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="none">Per-exercise (default)</SelectItem>
+              <SelectItem value="primary">Force Primary (all)</SelectItem>
+              <SelectItem value="secondary">Force Secondary (all)</SelectItem>
+            </SelectContent>
+          </Select>
+          <div className="text-[11px] text-muted-foreground">
+            One-click swap for the entire library. Overrides each exercise's own setting.
+          </div>
+        </Card>
         <div className="sticky top-0 z-20 -mx-6 md:-mx-8 -mt-6 md:-mt-8 px-6 md:px-8 py-3 bg-background/80 backdrop-blur-md border-b border-border/50 shadow-sm">
           <div className="flex flex-wrap gap-3">
             <div className="relative flex-1 min-w-[240px]">
