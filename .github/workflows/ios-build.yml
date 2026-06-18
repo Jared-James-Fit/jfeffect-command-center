@@ -45,16 +45,31 @@ jobs:
           rm -rf ios
           npx cap add ios
           
-          # When server.url is set in capacitor.config.ts, cap sync skips Podfile generation.
-          # Create a minimal dist directory so cap sync can run fully and generate the Podfile.
-          mkdir -p dist
-          echo '<!DOCTYPE html><html><body>JF Effect</body></html>' > dist/index.html
+          # Capacitor 7+ with server.url set does not generate a Podfile during cap add/sync.
+          # Write the standard Capacitor Podfile manually.
+          cat > ios/App/Podfile << 'PODFILE'
+          require_relative '../../node_modules/@capacitor/ios/scripts/pods_helpers'
+
+          platform :ios, '14.0'
+          use_frameworks!
+
+          # workaround to avoid Xcode 14 caching of Pods that requires
+          # Product -> Clean Build Folder after new Cordova plugins are installed
+          install! 'cocoapods', :disable_input_output_paths => true
+
+          def capacitor_pods
+            pod 'Capacitor', :path => '../../node_modules/@capacitor/ios'
+            pod 'CapacitorCordova', :path => '../../node_modules/@capacitor/ios'
+          end
+
+          target 'App' do
+            capacitor_pods
+            # Add your Pods here
+          end
+          PODFILE
           
-          # Now run cap sync - this will generate the Podfile
-          npx cap sync ios
-          
-          # Verify Podfile was created
-          ls ios/App/Podfile && echo "✅ Podfile created" || echo "❌ Podfile still missing"
+          echo "✅ Podfile written manually"
+          ls ios/App/Podfile
 
       - name: Run pod install
         run: cd ios/App && pod install
