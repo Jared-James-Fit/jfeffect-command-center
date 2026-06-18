@@ -498,3 +498,194 @@ function MemberSetupInfoCard({ member, memberId }: { member: any; memberId: stri
     </Card>
   );
 }
+
+function MembershipAccessCard({
+  member,
+  memberId,
+  accessActive,
+  update,
+  refresh,
+}: {
+  member: any;
+  memberId: string;
+  accessActive: boolean;
+  update: (args: any) => Promise<any>;
+  refresh: () => void;
+}) {
+  const overrideOn = member.manual_access_override === true;
+  const disabledOn = member.manual_access_disabled === true;
+  const [endDate, setEndDate] = useState<Date | undefined>(
+    member.access_end_date ? new Date(member.access_end_date) : undefined,
+  );
+  const [note, setNote] = useState<string>(member.admin_access_note ?? "");
+  const [saving, setSaving] = useState(false);
+
+  const dirty =
+    note !== (member.admin_access_note ?? "") ||
+    (endDate?.toISOString().slice(0, 10) ?? null) !==
+      (member.access_end_date ? new Date(member.access_end_date).toISOString().slice(0, 10) : null);
+
+  const toggleAccess = async () => {
+    const turningOn = !accessActive;
+    try {
+      await update({
+        data: {
+          memberId,
+          manual_access_override: turningOn,
+          manual_access_disabled: !turningOn,
+        },
+      });
+      refresh();
+      toast.success(turningOn ? "Access granted" : "Access blocked");
+    } catch (e: any) {
+      toast.error(e?.message ?? "Failed to update access");
+    }
+  };
+
+  const saveFields = async () => {
+    setSaving(true);
+    try {
+      await update({
+        data: {
+          memberId,
+          access_end_date: endDate ? endDate.toISOString() : null,
+          admin_access_note: note || null,
+        },
+      });
+      refresh();
+      toast.success("Saved");
+    } catch (e: any) {
+      toast.error(e?.message ?? "Failed to save");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Card className="space-y-4 border-2 p-5">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex items-center gap-4">
+          <div className="text-sm font-medium text-muted-foreground">Membership Access</div>
+          {accessActive ? (
+            <div className="inline-flex items-center gap-2 rounded-full border border-emerald-500/30 bg-emerald-500/15 px-4 py-2 text-lg font-bold text-emerald-300">
+              <span>✓</span> Access Active
+            </div>
+          ) : (
+            <div className="inline-flex items-center gap-2 rounded-full border border-red-500/30 bg-red-500/15 px-4 py-2 text-lg font-bold text-red-300">
+              <span>✗</span> Access Blocked
+            </div>
+          )}
+        </div>
+        <button
+          onClick={toggleAccess}
+          className={cn(
+            "relative inline-flex h-10 w-[10.5rem] shrink-0 cursor-pointer items-center rounded-full border-2 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+            accessActive
+              ? "border-emerald-500/50 bg-emerald-500/20 text-emerald-300"
+              : "border-red-500/50 bg-red-500/20 text-red-300",
+          )}
+        >
+          <span className="sr-only">Toggle membership access</span>
+          <span
+            className={cn(
+              "pointer-events-none absolute left-1 flex h-8 w-8 items-center justify-center rounded-full bg-background shadow-lg ring-0 transition-transform",
+              accessActive ? "translate-x-[6.5rem]" : "translate-x-0",
+            )}
+          >
+            <span className={cn("text-xs font-bold", accessActive ? "text-emerald-500" : "text-red-500")}>
+              {accessActive ? "ON" : "OFF"}
+            </span>
+          </span>
+          <span
+            className={cn(
+              "absolute text-sm font-bold uppercase tracking-wider transition-opacity",
+              accessActive ? "left-3 opacity-100" : "left-3 opacity-0",
+            )}
+          >
+            Access ON
+          </span>
+          <span
+            className={cn(
+              "absolute text-sm font-bold uppercase tracking-wider transition-opacity",
+              accessActive ? "right-3 opacity-0" : "right-3 opacity-100",
+            )}
+          >
+            Access OFF
+          </span>
+        </button>
+      </div>
+
+      {disabledOn && (
+        <div className="rounded-md border border-red-500/40 bg-red-500/10 px-3 py-2 text-sm font-semibold text-red-300">
+          🚫 Access is OFF — member is blocked regardless of Stripe
+        </div>
+      )}
+      {overrideOn && !disabledOn && (
+        <div className="rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm font-semibold text-amber-300">
+          ⚠️ Manual override is ON — member has access regardless of Stripe
+        </div>
+      )}
+
+      <div className="grid gap-4 sm:grid-cols-3">
+        <div>
+          <Label className="text-xs text-muted-foreground">Stripe subscription status</Label>
+          <div className="mt-1 flex h-9 items-center rounded-md border bg-muted/40 px-3 text-sm">
+            {member.subscription_status ? (
+              <Badge variant="outline" className="font-mono">{member.subscription_status}</Badge>
+            ) : (
+              <span className="text-muted-foreground">—</span>
+            )}
+          </div>
+        </div>
+        <div>
+          <Label className="text-xs text-muted-foreground">Access end date</Label>
+          <div className="mt-1 flex gap-1">
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  className={cn(
+                    "w-full justify-start text-left font-normal",
+                    !endDate && "text-muted-foreground",
+                  )}
+                >
+                  <CalendarIcon className="mr-2 h-4 w-4" />
+                  {endDate ? format(endDate, "PPP") : <span>No end date</span>}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-auto p-0" align="start">
+                <Calendar
+                  mode="single"
+                  selected={endDate}
+                  onSelect={setEndDate}
+                  initialFocus
+                  className={cn("p-3 pointer-events-auto")}
+                />
+              </PopoverContent>
+            </Popover>
+            {endDate && (
+              <Button variant="ghost" size="sm" onClick={() => setEndDate(undefined)}>
+                Clear
+              </Button>
+            )}
+          </div>
+        </div>
+        <div>
+          <Label className="text-xs text-muted-foreground">Admin access note</Label>
+          <Input
+            className="mt-1"
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+            placeholder="Reason / internal note"
+          />
+        </div>
+      </div>
+
+      <div className="flex justify-end">
+        <Button onClick={saveFields} disabled={!dirty || saving}>
+          {saving ? "Saving…" : "Save"}
+        </Button>
+      </div>
+    </Card>
+  );
+}
