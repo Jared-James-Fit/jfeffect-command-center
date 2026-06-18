@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { isMemberAccessActive } from "@/lib/memberAccess";
+import { z } from "zod";
 
 async function assertAdmin(ctx: any) {
   const { supabase, userId } = ctx;
@@ -96,4 +97,54 @@ export const getSignupStats = createServerFn({ method: "GET" })
       all_time: list.length,
       churn_30d: list.filter((m) => m.cancelled_at && new Date(m.cancelled_at).getTime() > now - 30 * day).length,
     };
+  });
+
+export const getRecentlyExpiredMembers = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    await assertAdmin(context);
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { data: rows } = await supabaseAdmin
+      .from("app_members")
+      .select("id, full_name, email, avatar_url, subscription_status, status, manual_access_override, manual_access_disabled, access_end_date, in_grace, cancelled_at, current_period_end, trial_end_at")
+      .eq("account_type", "jf_member");
+    const list = rows ?? [];
+    const now = Date.now();
+    const day = 1000 * 60 * 60 * 24;
+    const expired = list
+      .filter((m) => !isMemberAccessActive(m as any))
+      .map((m) => {
+        const candidates = [m.access_end_date, m.cancelled_at, m.current_period_end, m.trial_end_at]
+          .map((v) => (v ? new Date(v as string).getTime() : null))
+          .filter((v): v is number => v !== null && v <= now);
+        const expiredAt = candidates.length ? Math.max(...candidates) : null;
+        return { ...m, _expiredAt: expiredAt };
+      })
+      .filter((m) => m._expiredAt !== null && m._expiredAt > now - 30 * day)
+      .sort((a, b) => (b._expiredAt as number) - (a._expiredAt as number))
+      .slice(0, 15);
+    return { members: expired };
+  });
+
+export const grantTemporaryAccess = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((i: unknown) =>
+    z.object({ memberId: z.string().uuid(), days: z.number().int().positive().max(365).default(7) }).parse(i),
+  )
+  .handler(async ({ data, context }) => {
+    await assertAdmin(context);
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const endDate = new Date(Date.now() + data.days * 24 * 60 * 60 * 1000).toISOString();
+    const note = `Admin granted ${data.days}-day access on ${new Date().toLocaleDateString()}`;
+    const { error } = await supabaseAdmin
+      .from("app_members")
+      .update({
+        manual_access_override: true,
+        manual_access_disabled: false,
+        access_end_date: endDate,
+        admin_access_note: note,
+      })
+      .eq("id", data.memberId);
+    if (error) throw new Error(error.message);
+    return { ok: true, access_end_date: endDate };
   });
