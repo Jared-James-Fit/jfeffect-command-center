@@ -7,6 +7,9 @@ import {
   CheckCircle2, AlertTriangle, Loader2, Trash2, X, ChevronRight, Plus,
   ArrowRight, MessageSquare,
 } from "lucide-react";
+import {
+  ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip,
+} from "recharts";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -115,6 +118,33 @@ export function ProgressSection({
 
   return (
     <div className="space-y-4 p-3 pb-28 md:p-6 md:pb-12">
+      {/* Always-visible quick actions so logging is one tap from any tab */}
+      <div className="grid grid-cols-3 gap-2">
+        <Button
+          variant="outline"
+          className="h-12 flex-col gap-0.5 text-xs font-bold"
+          onClick={() => setWeightDialog(true)}
+        >
+          <Scale className="h-4 w-4" />
+          Log Weight
+        </Button>
+        <Button
+          variant="outline"
+          className="h-12 flex-col gap-0.5 text-xs font-bold"
+          onClick={() => setPhotoDialog(true)}
+        >
+          <Camera className="h-4 w-4" />
+          Add Photos
+        </Button>
+        <Button
+          variant="outline"
+          className="h-12 flex-col gap-0.5 text-xs font-bold"
+          onClick={() => setMeasureDialog(true)}
+        >
+          <Ruler className="h-4 w-4" />
+          Add Measurements
+        </Button>
+      </div>
       <Tabs value={tab} onValueChange={setTab} className="space-y-4">
         <TabsList className="grid w-full grid-cols-3 md:grid-cols-6 h-auto">
           <TabsTrigger value="photos">Photos</TabsTrigger>
@@ -132,7 +162,11 @@ export function ProgressSection({
           <VideosTab ctx={ctx} onNew={() => setVideoDialog(true)} onOpen={setDetailId} />
         </TabsContent>
         <TabsContent value="bodyweight">
-          <BodyweightTab ctx={ctx} onLog={() => setWeightDialog(true)} />
+          <BodyweightTab
+            ctx={ctx}
+            onLog={() => setWeightDialog(true)}
+            onOpenSubmission={setDetailId}
+          />
         </TabsContent>
         <TabsContent value="water">
           <div className="max-w-md">
