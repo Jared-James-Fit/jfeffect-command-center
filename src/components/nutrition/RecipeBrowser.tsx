@@ -107,13 +107,14 @@ export function RecipeBrowser({ viewer, userId, goals = [] }: RecipeBrowserProps
 
   const display = useMemo(() => {
     if (active === "Recommended") {
-      if (goals.length === 0) return filtered;
+      if (goals.length === 0) return filtered.slice(0, 10);
       const scored = filtered
         .map((r) => ({ r, s: scoreRecipe(r, goals) }))
         .filter((x) => x.s > 0)
         .sort((a, b) => b.s - a.s)
-        .map((x) => x.r);
-      return scored.length > 0 ? scored : filtered;
+        .map((x) => x.r)
+        .slice(0, 10);
+      return scored.length > 0 ? scored : filtered.slice(0, 10);
     }
     if (active === "All") return filtered;
     return filtered.filter((r) => r.category === active);
