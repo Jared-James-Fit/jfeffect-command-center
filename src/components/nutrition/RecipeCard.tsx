@@ -3,7 +3,7 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Flame, Beef, Clock, Users } from "lucide-react";
 import type { Recipe } from "@/lib/recipes";
-import { getRecipeMeta } from "@/lib/recipe-meta";
+import { getRecipeCardMeta } from "@/lib/recipe-meta";
 
 const CATEGORY_ACCENT: Record<string, string> = {
   Breakfast: "from-amber-500/30 to-amber-500/0",
@@ -22,14 +22,25 @@ export function RecipeCard({
   to: { pathname: string; params: Record<string, string> };
   isNew?: boolean;
 }) {
-  const meta = getRecipeMeta(recipe.body);
+  const meta = getRecipeCardMeta(recipe);
   const tags = (recipe.tags ?? []).slice(0, 3);
   const accent = CATEGORY_ACCENT[recipe.category] ?? "from-primary/30 to-primary/0";
 
   return (
     <Link to={to.pathname as any} params={to.params as any}>
       <Card className="group relative flex h-full flex-col gap-3 overflow-hidden p-4 transition-all hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-md">
-        <div className={`pointer-events-none absolute inset-x-0 top-0 h-16 bg-gradient-to-b ${accent}`} aria-hidden />
+        {recipe.image_url ? (
+          <div className="relative -mx-4 -mt-4 mb-1 aspect-[16/9] overflow-hidden bg-secondary">
+            <img
+              src={recipe.image_url}
+              alt={recipe.title}
+              loading="lazy"
+              className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.03]"
+            />
+          </div>
+        ) : (
+          <div className={`pointer-events-none absolute inset-x-0 top-0 h-16 bg-gradient-to-b ${accent}`} aria-hidden />
+        )}
         <div className="relative flex items-start justify-between gap-2">
           <div className="min-w-0 flex-1">
             <div className="text-base font-bold leading-snug">{recipe.title}</div>
