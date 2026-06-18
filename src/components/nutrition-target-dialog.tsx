@@ -28,25 +28,6 @@ const QUICK_DAY_TYPES = [
 
 const DEFAULT_NEW_DAYS = ["Training Day", "Non-Training Day", "High Day"];
 
-const WATER_UNITS = ["ml", "L", "oz", "cups", "glasses", "custom"] as const;
-type WaterUnit = typeof WATER_UNITS[number];
-
-function parseWater(raw: string): { amount: string; unit: WaterUnit; customUnit: string } {
-  const s = (raw ?? "").trim();
-  if (!s) return { amount: "", unit: "ml", customUnit: "" };
-  const m = s.match(/^([\d.,]+)\s*(.*)$/);
-  if (!m) return { amount: "", unit: "custom", customUnit: s };
-  const amount = m[1].replace(",", ".");
-  const rest = (m[2] || "").trim().toLowerCase();
-  if (!rest) return { amount, unit: "ml", customUnit: "" };
-  if (/^(ml|milliliters?|millilitres?)$/.test(rest)) return { amount, unit: "ml", customUnit: "" };
-  if (/^(l|liters?|litres?)$/.test(rest)) return { amount, unit: "L", customUnit: "" };
-  if (/^(oz|ounces?|fl\s*oz)$/.test(rest)) return { amount, unit: "oz", customUnit: "" };
-  if (/^cups?$/.test(rest)) return { amount, unit: "cups", customUnit: "" };
-  if (/^glasses?$/.test(rest)) return { amount, unit: "glasses", customUnit: "" };
-  return { amount, unit: "custom", customUnit: m[2].trim() };
-}
-
 type Day = {
   id?: string;
   day_label: string;
