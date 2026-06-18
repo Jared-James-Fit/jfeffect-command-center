@@ -120,6 +120,24 @@ jobs:
           
           echo "✅ All placeholder web assets created"
 
+
+      - name: Patch Info.plist for encryption compliance
+        run: |
+          # Add ITSAppUsesNonExemptEncryption=false to avoid App Store compliance questions
+          INFOPLIST="ios/App/App/Info.plist"
+          if [ -f "$INFOPLIST" ]; then
+            # Check if key already exists
+            if ! grep -q "ITSAppUsesNonExemptEncryption" "$INFOPLIST"; then
+              # Add before closing </dict>
+              sed -i '' 's|</dict>|\t<key>ITSAppUsesNonExemptEncryption</key>\n\t<false/>\n</dict>|' "$INFOPLIST"
+              echo "✅ Added ITSAppUsesNonExemptEncryption=false to Info.plist"
+            else
+              echo "ℹ️ ITSAppUsesNonExemptEncryption already set"
+            fi
+          else
+            echo "⚠️ Info.plist not found at $INFOPLIST"
+          fi
+
       - name: Run pod install
         run: cd ios/App && pod install
 
