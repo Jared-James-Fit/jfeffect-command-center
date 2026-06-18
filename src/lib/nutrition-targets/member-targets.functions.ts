@@ -203,6 +203,39 @@ export const getFormulaSettings = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => loadSettings(context.supabase));
 
+/** Read the current member's target history (most recent first). */
+export const getMemberTargetsHistory = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const { supabase, userId } = context;
+    const member = await loadMember(supabase, userId);
+    if (!member?.id) return [];
+    const { data, error } = await supabase
+      .from("member_nutrition_targets")
+      .select("*")
+      .eq("member_id", member.id)
+      .order("created_at", { ascending: false })
+      .limit(20);
+    if (error) throw error;
+    return data ?? [];
+  });
+
+/** Clear (deactivate) the current member's active target. */
+export const clearActiveMemberTargets = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const { supabase, userId } = context;
+    const member = await loadMember(supabase, userId);
+    if (!member?.id) throw new Error("Member profile not found");
+    const { error } = await supabase
+      .from("member_nutrition_targets")
+      .update({ active: false })
+      .eq("member_id", member.id)
+      .eq("active", true);
+    if (error) throw error;
+    return { ok: true };
+  });
+
 async function assertStaff(supabase: any, userId: string) {
   const [{ data: isAdmin }, { data: isCoach }] = await Promise.all([
     supabase.rpc("has_role", { _user_id: userId, _role: "admin" }),
