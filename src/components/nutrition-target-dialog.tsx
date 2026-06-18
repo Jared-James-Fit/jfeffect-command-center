@@ -47,45 +47,6 @@ function parseWater(raw: string): { amount: string; unit: WaterUnit; customUnit:
   return { amount, unit: "custom", customUnit: m[2].trim() };
 }
 
-function WaterTargetInput({ value, onChange }: { value: string; onChange: (v: string) => void }) {
-  const parsed = parseWater(value);
-  const update = (amount: string, unit: WaterUnit, customUnit: string) => {
-    if (!amount && unit !== "custom") return onChange("");
-    if (unit === "custom") {
-      const u = customUnit.trim();
-      onChange(amount ? `${amount}${u ? " " + u : ""}` : u);
-    } else {
-      onChange(`${amount} ${unit}`);
-    }
-  };
-  return (
-    <div className="flex gap-2">
-      <Input
-        type="number"
-        inputMode="decimal"
-        placeholder="Amount"
-        value={parsed.amount}
-        onChange={(e) => update(e.target.value, parsed.unit, parsed.customUnit)}
-        className="flex-1"
-      />
-      <Select value={parsed.unit} onValueChange={(v) => update(parsed.amount, v as WaterUnit, parsed.customUnit)}>
-        <SelectTrigger className="w-32"><SelectValue /></SelectTrigger>
-        <SelectContent>
-          {WATER_UNITS.map((u) => <SelectItem key={u} value={u}>{u === "custom" ? "Custom…" : u}</SelectItem>)}
-        </SelectContent>
-      </Select>
-      {parsed.unit === "custom" && (
-        <Input
-          placeholder="Unit / label"
-          value={parsed.customUnit}
-          onChange={(e) => update(parsed.amount, "custom", e.target.value)}
-          className="w-40"
-        />
-      )}
-    </div>
-  );
-}
-
 type Day = {
   id?: string;
   day_label: string;
