@@ -1,5 +1,7 @@
 ## 4c.2b — Replace member workout monolith with `WorkoutDayView` shim
 
+**✅ DONE.** Member route is now a 70-line shim mounting `<WorkoutDayView adapter={memberAdapter} navigation={{ backTo: "/m/my-plans/$enrollmentId", listPath: "/m/my-plans/$enrollmentId", messagesPath: "/m/support" }} />`. The 657-line monolith (DTO queries, custom heartbeat with `m-hb-*` keys, `m_log_set`/`m_complete_workout`/`m_uncomplete_workout` offline handlers) is deleted. WorkoutDayView's heartbeat block now derives ping shape from `adapter.kind` + `adapter.ref.enrollmentId` so members send `{ kind: "member", enrollmentId, weekIndex, dayIndex }` while portal stays on `{ kind: "client", dayId }`. Note on `messagesPath`: members have no dedicated inbox, so coach-contact CTAs route to `/m/support`. Follow-ups for 4c.2c: (1) one-time bridge replaying old `m_*` offline queue items through the adapter, (2) acceptable one-time loss of in-flight active-duration accrued under the old `m-hb-*` keys, (3) Playwright smoke (load → log → complete → refresh) under a real member account.
+
 ### What changes
 
 Replace the 657-line `src/routes/_authenticated/m/workouts.$enrollmentId.$week.$day.tsx` with an ~80-line route shim that:
