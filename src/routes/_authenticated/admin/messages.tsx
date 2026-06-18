@@ -495,7 +495,7 @@ function TabsHeader({
   tab, setTab, onMass,
 }: { tab: "chats" | "groups"; setTab: (t: "chats" | "groups") => void; onMass: () => void }) {
   return (
-    <div className="flex items-center gap-2 border-b border-border bg-card/80 px-3 py-2 md:px-4">
+    <div className="flex items-center gap-2 border-b border-border bg-card/80 px-3 py-1.5 md:px-4 md:py-2">
       <div className="inline-flex rounded-full bg-secondary/60 p-0.5 text-xs">
         <button
           onClick={() => setTab("chats")}
@@ -517,8 +517,9 @@ function TabsHeader({
         </button>
       </div>
       <div className="flex-1" />
-      <Button size="sm" variant="outline" onClick={onMass}>
-        <Megaphone className="mr-1 h-3 w-3" /> Mass Message
+      <Button size="sm" variant="outline" onClick={onMass} className="h-8 shrink-0 px-2 md:px-3" aria-label="Mass message">
+        <Megaphone className="h-3.5 w-3.5 md:mr-1" />
+        <span className="hidden md:inline">Mass Message</span>
       </Button>
     </div>
   );
