@@ -914,19 +914,29 @@ function WorkoutDay({
                       try {
                         if (opt.key === "not_started") {
                           if (completion?.id) {
-                            await sb.from("pl_day_completions").update({ started_at: null, in_progress_at: null, completed_at: null }).eq("id", completion.id);
+                            const payload = { started_at: null, in_progress_at: null, completed_at: null };
+                            if (adapter) await adapter.upsertPlDayCompletionRaw(payload, completion.id);
+                            else await sb.from("pl_day_completions").update(payload).eq("id", completion.id);
                           }
                         } else if (opt.key === "in_progress") {
                           if (completion?.id) {
-                            await sb.from("pl_day_completions").update({ started_at: completion.started_at ?? now, in_progress_at: now, completed_at: null }).eq("id", completion.id);
+                            const payload = { started_at: completion.started_at ?? now, in_progress_at: now, completed_at: null };
+                            if (adapter) await adapter.upsertPlDayCompletionRaw(payload, completion.id);
+                            else await sb.from("pl_day_completions").update(payload).eq("id", completion.id);
                           } else {
-                            await sb.from("pl_day_completions").insert({ day_id: dayId, client_id: client.id, started_at: now, in_progress_at: now, completed_at: null });
+                            const payload = { day_id: dayId, client_id: client.id, started_at: now, in_progress_at: now, completed_at: null };
+                            if (adapter) await adapter.upsertPlDayCompletionRaw(payload, null);
+                            else await sb.from("pl_day_completions").insert(payload);
                           }
                         } else if (opt.key === "completed") {
                           if (completion?.id) {
-                            await sb.from("pl_day_completions").update({ started_at: completion.started_at ?? now, in_progress_at: completion.in_progress_at ?? now, completed_at: now }).eq("id", completion.id);
+                            const payload = { started_at: completion.started_at ?? now, in_progress_at: completion.in_progress_at ?? now, completed_at: now };
+                            if (adapter) await adapter.upsertPlDayCompletionRaw(payload, completion.id);
+                            else await sb.from("pl_day_completions").update(payload).eq("id", completion.id);
                           } else {
-                            await sb.from("pl_day_completions").insert({ day_id: dayId, client_id: client.id, started_at: now, in_progress_at: now, completed_at: now });
+                            const payload = { day_id: dayId, client_id: client.id, started_at: now, in_progress_at: now, completed_at: now };
+                            if (adapter) await adapter.upsertPlDayCompletionRaw(payload, null);
+                            else await sb.from("pl_day_completions").insert(payload);
                           }
                         }
                         await qc.invalidateQueries({ queryKey: ["pl-day-completion", dayId] });
