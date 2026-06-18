@@ -55,6 +55,7 @@ import { writePlanCache, cachedInitialData } from "@/lib/workout-plan-cache";
 import { enqueueOfflineWrite, registerQueueHandler } from "@/lib/workout-offline-queue";
 import { ActiveRestTimerProvider, useRestTimer } from "@/components/active-rest-timer";
 import { ExerciseHistoryButton } from "@/components/exercise-history-sheet";
+import { QuickSwapButton } from "@/components/workout-day/QuickSwapButton";
 import { convertWeight } from "@/lib/progress-metrics";
 import { WorkoutCompleteSheet, type WorkoutCompletePayload } from "@/components/workout-complete-sheet";
 import { WorkoutSubmissionSummary } from "@/components/workout-submission-summary";
