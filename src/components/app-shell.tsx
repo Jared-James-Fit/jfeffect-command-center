@@ -156,6 +156,7 @@ export function AppShell({ items, bottomItems: customBottomItems, title, childre
   const { signOut, user, role } = useAuth();
   const navigate = useNavigate();
   const pathname = useRouterState({ select: (r) => r.location.pathname });
+  const search = useRouterState({ select: (r) => r.location.search as Record<string, unknown> });
   const navBadges = useClientNavBadges();
   const [mode, setMode] = useSidebarMode();
   const [collapsedSections, toggleSection, setAllSections] = useCollapsedSections();
@@ -727,6 +728,7 @@ export function AppShell({ items, bottomItems: customBottomItems, title, childre
               key={(item.children ? "g:" : "") + item.to + ":" + item.label}
               item={item}
               pathname={pathname}
+              search={search}
               navBadges={navBadges}
               onNavigate={(to) => markNavSeen(user?.id, to)}
             />
@@ -1099,9 +1101,10 @@ function BottomNavBadge({ badge }: { badge?: { count?: number; dot?: boolean } }
   return null;
 }
 
-function BottomNavSlot({ item, pathname, navBadges, onNavigate }: {
+function BottomNavSlot({ item, pathname, search, navBadges, onNavigate }: {
   item: NavItem;
   pathname: string;
+  search?: Record<string, unknown>;
   navBadges: Record<string, { count?: number; dot?: boolean }>;
   onNavigate: (to: string) => void;
 }) {
@@ -1143,7 +1146,21 @@ function BottomNavSlot({ item, pathname, navBadges, onNavigate }: {
         </button>
       );
     }
-    const active = pathname === item.to;
+    // Some bottom-nav items (e.g. "Messages" → /admin/messages) actually
+    // render inside the unified /admin/communication workspace under a
+    // specific ?tab=. Honour that alias so the active state stays lit while
+    // inside the inbox or any open conversation.
+    const tabAlias =
+      item.to === "/admin/messages"
+        ? { path: "/admin/communication", tab: "messages" }
+        : null;
+    const active =
+      pathname === item.to ||
+      (tabAlias != null &&
+        pathname === tabAlias.path &&
+        (search?.tab === tabAlias.tab ||
+          // No tab in URL → workspace falls back to "messages" by default.
+          (typeof search?.tab === "undefined" && tabAlias.tab === "messages")));
     return (
       <Link
         to={item.to}
