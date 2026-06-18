@@ -220,6 +220,22 @@ export function ExercisesAdmin({ embedded = false }: { embedded?: boolean } = {}
                   {e.video_provider ?? "—"}
                 </Badge>
                 <Badge variant="outline" className="text-[10px]">{e.video_migration_status ?? "—"}</Badge>
+                {e.secondary_vimeo_embed_url ? (
+                  <Badge
+                    className={
+                      (e.active_video_set === "secondary"
+                        ? "bg-purple-600"
+                        : "bg-slate-600") + " text-[10px]"
+                    }
+                    title="Video set active for this exercise"
+                  >
+                    {e.active_video_set === "secondary" ? "Secondary" : "Primary"}
+                  </Badge>
+                ) : (
+                  <Badge variant="outline" className="text-[10px] border-dashed">
+                    No Secondary
+                  </Badge>
+                )}
                 {e.safe_to_publish && (
                   <Badge className="bg-green-600 text-[10px]"><CheckCircle2 className="mr-0.5 h-2.5 w-2.5" />safe</Badge>
                 )}
@@ -296,6 +312,9 @@ function EditExerciseDialog({
     vimeo_working: !!exercise.vimeo_working,
     safe_to_publish: !!exercise.safe_to_publish,
     youtube_fallback_allowed: !!exercise.youtube_fallback_allowed,
+    secondary_vimeo_id: exercise.secondary_vimeo_id ?? "",
+    secondary_vimeo_embed_url: exercise.secondary_vimeo_embed_url ?? "",
+    active_video_set: (exercise.active_video_set ?? "primary") as "primary" | "secondary",
   });
   const [busy, setBusy] = useState(false);
 
@@ -306,6 +325,15 @@ function EditExerciseDialog({
       vimeo_video_id: trimmed,
       vimeo_url: trimmed ? vimeoUrlFromId(trimmed) : "",
       vimeo_embed_url: trimmed ? buildCleanVimeoEmbedUrl(trimmed) : "",
+    }));
+  };
+
+  const onSecondaryVimeoIdChange = (id: string) => {
+    const trimmed = id.trim();
+    setForm((f) => ({
+      ...f,
+      secondary_vimeo_id: trimmed,
+      secondary_vimeo_embed_url: trimmed ? buildCleanVimeoEmbedUrl(trimmed) : "",
     }));
   };
 
