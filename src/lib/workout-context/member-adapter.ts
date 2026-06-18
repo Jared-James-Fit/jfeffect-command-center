@@ -732,6 +732,83 @@ export function createMemberAdapter(ref: WorkoutContextRef): WorkoutContextAdapt
         memberLogToPlRowResult({ log: l, clientId: ref.ownerId }),
       );
     },
+
+    async getDayCompletionRaw(dayId) {
+      const { week, day } = decodeDayId(dayId);
+      const { data, error } = await (supabase as any)
+        .from("member_workout_completions")
+        .select("*")
+        .eq("enrollment_id", enrollmentId)
+        .eq("week_index", week)
+        .eq("day_index", day)
+        .maybeSingle();
+      if (error) throw new Error(error.message);
+      if (!data) return null;
+      // Reshape into the pl_day_completions column layout WorkoutDayView reads.
+      return {
+        id: data.id,
+        day_id: dayId,
+        client_id: ref.ownerId,
+        started_at: data.started_at ?? null,
+        in_progress_at: data.in_progress_at ?? null,
+        completed_at: data.completed_at ?? null,
+        notes: data.notes ?? null,
+        client_notes: data.notes ?? null,
+        actual_duration_min: data.actual_duration_min ?? null,
+        actual_minutes: data.actual_duration_min ?? null,
+      };
+    },
+
+    async listExerciseNotesRaw(_dayId) {
+      // Member plans don't persist per-day exercise notes; notes ride on
+      // member_set_logs.notes via the standard log path.
+      return [];
+    },
+
+    async getWorkoutFeedbackRaw(dayId) {
+      const { week, day } = decodeDayId(dayId);
+      const { data, error } = await (supabase as any)
+        .from("member_workout_reviews")
+        .select("*")
+        .eq("enrollment_id", enrollmentId)
+        .eq("week_index", week)
+        .eq("day_index", day)
+        .maybeSingle();
+      if (error) throw new Error(error.message);
+      if (!data) return null;
+      // Reshape into the pl_workout_feedback column layout the post-completion
+      // actions card consumes.
+      return {
+        id: data.id,
+        day_id: dayId,
+        client_id: ref.ownerId,
+        overall_rating: data.overall_rating ?? null,
+        session_rpe: data.session_rpe ?? null,
+        pain: data.pain ?? null,
+        pain_level: data.pain_level ?? null,
+        pain_area: data.pain_area ?? null,
+        pain_note: data.pain_note ?? null,
+        client_note: data.client_note ?? null,
+        review_edit_count: data.review_edit_count ?? null,
+        review_submitted_at: data.review_submitted_at ?? null,
+        created_at: data.created_at ?? null,
+      };
+    },
+
+    async getActiveSubject() {
+      // Members don't have a `clients` row. Use the auth user id as the
+      // stable scope and pull display name from app_members when present.
+      const { data } = await (supabase as any)
+        .from("app_members")
+        .select("full_name")
+        .eq("user_id", ref.userId)
+        .maybeSingle();
+      return {
+        id: ref.userId,
+        full_name: (data as any)?.full_name ?? null,
+        preferred_weight_unit: "lb" as const,
+      };
+    },
   };
 }
 
