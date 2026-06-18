@@ -786,24 +786,45 @@ export interface LiftResultPoint {
 export async function getClientResults(clientId: string) {
   const { data, error } = await sb
     .from("pl_row_results")
-    .select("id, set_index, actual_load, actual_reps, actual_rpe, completed_at, row_id, pl_exercise_rows(exercise_id, exercise_name_override, exercises(name, muscle_group, category))")
+    .select("id, set_index, actual_load, actual_load_unit, entered_value, entered_unit, normalized_lb, normalized_kg, actual_reps, actual_rpe, completed_at, row_id, pl_exercise_rows(exercise_id, exercise_name_override, exercises(name, muscle_group, category))")
     .eq("client_id", clientId)
-    .not("actual_load", "is", null)
     .not("actual_reps", "is", null)
     .order("completed_at", { ascending: true });
   if (error) throw error;
-  return (data ?? []).map((r: any) => ({
-    id: r.id,
-    set_index: r.set_index,
-    load: Number(r.actual_load) || 0,
-    reps: Number(r.actual_reps) || 0,
-    rpe: r.actual_rpe,
-    date: r.completed_at,
-    est_1rm: epley1RM(Number(r.actual_load) || 0, Number(r.actual_reps) || 0),
-    exercise_name: r.pl_exercise_rows?.exercises?.name ?? r.pl_exercise_rows?.exercise_name_override ?? "Unknown",
-    muscle_group: r.pl_exercise_rows?.exercises?.muscle_group ?? "Other",
-    category: r.pl_exercise_rows?.exercises?.category ?? null,
-  }));
+  const LB_PER_KG = 2.2046226;
+  return (data ?? [])
+    .map((r: any) => {
+      // Always work in LB internally. Prefer the pre-computed normalized
+      // column; fall back to converting whichever raw value + unit was
+      // logged. This is what stops kg-logged sets from being summed as lb
+      // (or vice versa) on the analytics page.
+      let loadLb: number;
+      if (r.normalized_lb != null) {
+        loadLb = Number(r.normalized_lb) || 0;
+      } else if (r.normalized_kg != null) {
+        loadLb = (Number(r.normalized_kg) || 0) * LB_PER_KG;
+      } else {
+        const rawVal = r.entered_value ?? r.actual_load;
+        const rawUnit = (r.entered_unit ?? r.actual_load_unit ?? "lb") as string;
+        const n = Number(rawVal) || 0;
+        loadLb = rawUnit === "kg" ? n * LB_PER_KG : n;
+      }
+      return {
+        id: r.id,
+        set_index: r.set_index,
+        // `load` is now ALWAYS in LB. Display code is responsible for
+        // converting to the viewer's preferred unit before rendering.
+        load: loadLb,
+        reps: Number(r.actual_reps) || 0,
+        rpe: r.actual_rpe,
+        date: r.completed_at,
+        est_1rm: epley1RM(loadLb, Number(r.actual_reps) || 0),
+        exercise_name: r.pl_exercise_rows?.exercises?.name ?? r.pl_exercise_rows?.exercise_name_override ?? "Unknown",
+        muscle_group: r.pl_exercise_rows?.exercises?.muscle_group ?? "Other",
+        category: r.pl_exercise_rows?.exercises?.category ?? null,
+      };
+    })
+    .filter((r: any) => r.load > 0);
 }
 
 /** Group result history by exercise; return time-series est-1RM and current PR. */
