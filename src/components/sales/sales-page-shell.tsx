@@ -6,10 +6,12 @@ export function SalesPageShell({
   children,
   pageId,
   theme = "dark",
+  floatingHeader = false,
 }: {
   children: ReactNode;
   pageId?: string;
   theme?: "light" | "dark";
+  floatingHeader?: boolean;
 }) {
   const themeClass = theme === "light" ? "theme-light" : "";
   return (
@@ -18,7 +20,7 @@ export function SalesPageShell({
       data-page-id={pageId}
       data-theme={theme}
     >
-      <header className="sticky top-0 z-40 border-b border-border bg-background/90 backdrop-blur">
+      <header className={`z-40 bg-background/90 backdrop-blur ${floatingHeader ? "sticky top-0 mx-3 rounded-2xl border border-border shadow-lg" : "sticky top-0 border-b border-border"}`}>
         <div className="container mx-auto flex items-center justify-between gap-2 px-4 py-3">
           <Link to="/" className="text-base sm:text-lg font-black tracking-tight">JF Effect</Link>
           <nav className="flex items-center gap-1 sm:gap-2">
