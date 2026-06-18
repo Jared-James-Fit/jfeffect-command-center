@@ -11,7 +11,7 @@ export const Route = createFileRoute("/join")({
       throw redirect({ to: "/app", replace: true });
     }
   },
-  component: SignupJf,
+  component: () => <SignupJf floatingHeader />,
   head: () => ({
     meta: [
       { title: "Join JF Effect Membership" },

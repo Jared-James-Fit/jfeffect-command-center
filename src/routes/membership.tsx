@@ -71,7 +71,7 @@ function mergeTaxFaq(items: Array<{ q: string; a: string }>) {
   return has ? items : [...items, { q: taxQ, a: taxA }];
 }
 
-export function SignupJf() {
+export function SignupJf({ floatingHeader = false }: { floatingHeader?: boolean }) {
   const getSettings = useServerFn(getJfPublicSettings);
   const createCheckout = useServerFn(createJfSignupCheckout);
   const fetchPage = useServerFn(getPublicSalesPage);
@@ -271,7 +271,7 @@ export function SignupJf() {
   }
 
   return (
-    <SalesPageShell pageId="membership-join">
+    <SalesPageShell pageId="membership-join" floatingHeader={floatingHeader}>
       {p === undefined ? (
         <HeroSkeleton />
       ) : (

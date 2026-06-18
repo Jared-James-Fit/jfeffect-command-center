@@ -94,7 +94,7 @@ function CoachingPage() {
   ];
 
   return (
-    <SalesPageShell pageId="coaching">
+    <SalesPageShell pageId="coaching" floatingHeader>
       {p === undefined ? (
         <HeroSkeleton />
       ) : (
