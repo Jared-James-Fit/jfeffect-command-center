@@ -70,7 +70,8 @@ export function MacroCalculator() {
   );
 }
 
-function Stat({ label, value }: { label: string; value: string | number }) {
+function Stat({ label, value }: { label: string; value: string | number | null | undefined }) {
+  if (value == null) return null;
   return (
     <div className="rounded-lg bg-muted/40 p-2.5">
       <div className="text-base font-bold">{value}</div>
