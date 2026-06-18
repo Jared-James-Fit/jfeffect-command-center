@@ -6,6 +6,7 @@
  * even if a shared component forgets to check.
  */
 import {
+  NotImplemented,
   type WorkoutContextAdapter,
   type WorkoutContextRef,
   type WorkoutScheduleDay,
@@ -549,6 +550,20 @@ export function createMemberAdapter(ref: WorkoutContextRef): WorkoutContextAdapt
       // Members don't have a dedicated coach to alert. The shared UI already
       // surfaces sync errors via toast + offline queue retries; intentionally
       // a no-op until membership support has a documented escalation path.
+    },
+
+    /* ---- Phase B turn 4b — raw passthrough writes (member stubs) ----
+     * Stubs until 4c reshapes these into member_set_logs /
+     * member_exercise_notes / member_workout_completions writes.
+     */
+    async upsertPlRowResultRaw(_payload, _id) {
+      throw new NotImplemented("upsertPlRowResultRaw", "member");
+    },
+    async upsertPlExerciseNoteRaw(_payload, _id) {
+      throw new NotImplemented("upsertPlExerciseNoteRaw", "member");
+    },
+    async upsertPlDayCompletionRaw(_payload, _id) {
+      throw new NotImplemented("upsertPlDayCompletionRaw", "member");
     },
 
     /* ---- Phase B turn 3 — raw passthrough surface ----

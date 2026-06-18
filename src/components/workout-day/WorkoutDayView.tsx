@@ -237,6 +237,18 @@ function useWorkoutNavigation(): WorkoutDayViewNavigation {
   return ctx;
 }
 
+/**
+ * Optional adapter context. When `null`, write sites fall back to direct
+ * `sb.from("pl_*")` calls (legacy portal path). When set, every write
+ * routes through `adapter.upsertPl*Raw` — byte-identical for the client
+ * adapter (passthrough), and reshaped into `member_*` tables by the
+ * member adapter in turn 4c.
+ */
+const WorkoutAdapterContext = createContext<WorkoutContextAdapter | null>(null);
+function useOptionalAdapter(): WorkoutContextAdapter | null {
+  return useContext(WorkoutAdapterContext);
+}
+
 export function WorkoutDayView({
   dayId,
   search,
@@ -258,11 +270,13 @@ export function WorkoutDayView({
 }) {
   return (
     <WorkoutNavigationContext.Provider value={navigation}>
-      <WorkoutUndoProvider>
-        <ActiveRestTimerProvider>
-          <WorkoutDay dayId={dayId} search={search} adapter={adapter} navigation={navigation} />
-        </ActiveRestTimerProvider>
-      </WorkoutUndoProvider>
+      <WorkoutAdapterContext.Provider value={adapter ?? null}>
+        <WorkoutUndoProvider>
+          <ActiveRestTimerProvider>
+            <WorkoutDay dayId={dayId} search={search} adapter={adapter} navigation={navigation} />
+          </ActiveRestTimerProvider>
+        </WorkoutUndoProvider>
+      </WorkoutAdapterContext.Provider>
     </WorkoutNavigationContext.Provider>
   );
 }
@@ -900,19 +914,29 @@ function WorkoutDay({
                       try {
                         if (opt.key === "not_started") {
                           if (completion?.id) {
-                            await sb.from("pl_day_completions").update({ started_at: null, in_progress_at: null, completed_at: null }).eq("id", completion.id);
+                            const payload = { started_at: null, in_progress_at: null, completed_at: null };
+                            if (adapter) await adapter.upsertPlDayCompletionRaw(payload, completion.id);
+                            else await sb.from("pl_day_completions").update(payload).eq("id", completion.id);
                           }
                         } else if (opt.key === "in_progress") {
                           if (completion?.id) {
-                            await sb.from("pl_day_completions").update({ started_at: completion.started_at ?? now, in_progress_at: now, completed_at: null }).eq("id", completion.id);
+                            const payload = { started_at: completion.started_at ?? now, in_progress_at: now, completed_at: null };
+                            if (adapter) await adapter.upsertPlDayCompletionRaw(payload, completion.id);
+                            else await sb.from("pl_day_completions").update(payload).eq("id", completion.id);
                           } else {
-                            await sb.from("pl_day_completions").insert({ day_id: dayId, client_id: client.id, started_at: now, in_progress_at: now, completed_at: null });
+                            const payload = { day_id: dayId, client_id: client.id, started_at: now, in_progress_at: now, completed_at: null };
+                            if (adapter) await adapter.upsertPlDayCompletionRaw(payload, null);
+                            else await sb.from("pl_day_completions").insert(payload);
                           }
                         } else if (opt.key === "completed") {
                           if (completion?.id) {
-                            await sb.from("pl_day_completions").update({ started_at: completion.started_at ?? now, in_progress_at: completion.in_progress_at ?? now, completed_at: now }).eq("id", completion.id);
+                            const payload = { started_at: completion.started_at ?? now, in_progress_at: completion.in_progress_at ?? now, completed_at: now };
+                            if (adapter) await adapter.upsertPlDayCompletionRaw(payload, completion.id);
+                            else await sb.from("pl_day_completions").update(payload).eq("id", completion.id);
                           } else {
-                            await sb.from("pl_day_completions").insert({ day_id: dayId, client_id: client.id, started_at: now, in_progress_at: now, completed_at: now });
+                            const payload = { day_id: dayId, client_id: client.id, started_at: now, in_progress_at: now, completed_at: now };
+                            if (adapter) await adapter.upsertPlDayCompletionRaw(payload, null);
+                            else await sb.from("pl_day_completions").insert(payload);
                           }
                         }
                         await qc.invalidateQueries({ queryKey: ["pl-day-completion", dayId] });
@@ -1284,6 +1308,7 @@ function UnsupportedExerciseCard({ row }: { row: any }) {
 }
 
 function ExerciseBlock({ row, dayId, dayTitle, clientId, blockId, existingResults, existingNote, readonly = false, unit = "kg", onUnitChange, focusMode = false, onChange, onNoteChange, purposeLabel = null }: { row: any; dayId: string; dayTitle: string; clientId: string | undefined; blockId?: string | null; existingResults: any[]; existingNote?: any; readonly?: boolean; unit?: "kg" | "lb"; onUnitChange?: (u: "kg" | "lb") => void; focusMode?: boolean; onChange: () => void; onNoteChange: () => void; purposeLabel?: string | null }) {
+  const adapter = useOptionalAdapter();
   const name = row.exercises?.name ?? row.exercise_name_override ?? "Exercise";
   const exercise = row.exercises ?? null;
   const exerciseId = exercise?.id ?? null;
@@ -1402,8 +1427,12 @@ function ExerciseBlock({ row, dayId, dayTitle, clientId, blockId, existingResult
         actual_rpe_num: rpeNum,
         completed_at: null, // Draft only — must be confirmed per set
       };
-      if (ex?.id) tasks.push(sb.from("pl_row_results").update(body).eq("id", ex.id));
-      else tasks.push(sb.from("pl_row_results").insert(body));
+      if (adapter) {
+        tasks.push(adapter.upsertPlRowResultRaw(body, ex?.id ?? null));
+      } else {
+        if (ex?.id) tasks.push(sb.from("pl_row_results").update(body).eq("id", ex.id));
+        else tasks.push(sb.from("pl_row_results").insert(body));
+      }
     }
     if (!tasks.length) return;
     await Promise.all(tasks);
@@ -1693,6 +1722,7 @@ function ExerciseNotesSheet({ open, onOpenChange, clientId, dayId, dayTitle, row
 }) {
   const [draft, setDraft] = useState(existingNote?.content ?? "");
   useEffect(() => { setDraft(existingNote?.content ?? ""); }, [existingNote?.id, existingNote?.content, open]);
+  const adapter = useOptionalAdapter();
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -1738,14 +1768,15 @@ function ExerciseNotesSheet({ open, onOpenChange, clientId, dayId, dayTitle, row
               const trimmed = draft.trim();
               if (!trimmed) throw new Error("Note is empty");
               if (existingNote) {
-                const { error } = await sb.from("pl_exercise_notes").update({
-                  content: trimmed,
-                  status: "edited",
-                  coach_seen_at: null,
-                }).eq("id", existingNote.id);
-                if (error) throw error;
+                const payload = { content: trimmed, status: "edited", coach_seen_at: null };
+                if (adapter) {
+                  await adapter.upsertPlExerciseNoteRaw(payload, existingNote.id);
+                } else {
+                  const { error } = await sb.from("pl_exercise_notes").update(payload).eq("id", existingNote.id);
+                  if (error) throw error;
+                }
               } else {
-                const { error } = await sb.from("pl_exercise_notes").insert({
+                const payload = {
                   client_id: clientId,
                   day_id: dayId,
                   row_id: rowId,
@@ -1753,8 +1784,13 @@ function ExerciseNotesSheet({ open, onOpenChange, clientId, dayId, dayTitle, row
                   exercise_name: exerciseName,
                   content: trimmed,
                   status: "new",
-                });
-                if (error) throw error;
+                };
+                if (adapter) {
+                  await adapter.upsertPlExerciseNoteRaw(payload, null);
+                } else {
+                  const { error } = await sb.from("pl_exercise_notes").insert(payload);
+                  if (error) throw error;
+                }
               }
               onSaved();
             }}
@@ -1806,6 +1842,7 @@ function SetRow({
 }) {
   const { user } = useAuth();
   const { isImpersonating, client: povClient } = useClientImpersonation();
+  const adapter = useOptionalAdapter();
   // Display weight is always shown in the active unit.
   // existing stores normalized kg + lb columns (Stage 1 trigger keeps them in sync),
   // plus the original actual_load/actual_load_unit pair. We pick whichever matches `unit`.
@@ -1930,12 +1967,21 @@ function SetRow({
           }
         : { weight: null, reps: null, rpe: null, unit: null, status: null };
       if (existing) {
-        const { error } = await sb.from("pl_row_results").update(payload).eq("id", existing.id);
-        if (error) throw error;
+        if (adapter) {
+          await adapter.upsertPlRowResultRaw(payload, existing.id);
+        } else {
+          const { error } = await sb.from("pl_row_results").update(payload).eq("id", existing.id);
+          if (error) throw error;
+        }
       } else {
-        const { data: inserted, error } = await sb.from("pl_row_results").insert(payload).select("id").maybeSingle();
-        if (error) throw error;
-        savedId = inserted?.id ?? null;
+        if (adapter) {
+          const res = await adapter.upsertPlRowResultRaw(payload, null);
+          savedId = res.id;
+        } else {
+          const { data: inserted, error } = await sb.from("pl_row_results").insert(payload).select("id").maybeSingle();
+          if (error) throw error;
+          savedId = inserted?.id ?? null;
+        }
       }
       onChange();
       // Auto-start the per-exercise rest timer when this set transitions
@@ -2038,11 +2084,19 @@ function SetRow({
     };
     try {
       if (existing?.id) {
-        const { error } = await sb.from("pl_row_results").update(payload).eq("id", existing.id);
-        if (error) throw error;
+        if (adapter) {
+          await adapter.upsertPlRowResultRaw(payload, existing.id);
+        } else {
+          const { error } = await sb.from("pl_row_results").update(payload).eq("id", existing.id);
+          if (error) throw error;
+        }
       } else {
-        const { error } = await sb.from("pl_row_results").insert(payload);
-        if (error) throw error;
+        if (adapter) {
+          await adapter.upsertPlRowResultRaw(payload, null);
+        } else {
+          const { error } = await sb.from("pl_row_results").insert(payload);
+          if (error) throw error;
+        }
       }
       onChange();
       if (!existing?.completed_at) onSetCompleted?.(setIndex);
