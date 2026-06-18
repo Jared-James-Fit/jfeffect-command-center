@@ -1,14 +1,9 @@
 name: iOS Build and Upload
 
 on:
-  workflow_dispatch:
   push:
-    branches:
-      - main
-    paths:
-      - 'ios/**'
-      - 'capacitor.config.ts'
-      - '.github/workflows/ios-build.yml'
+    branches: [main]
+  workflow_dispatch:
 
 jobs:
   build-ios:
@@ -45,17 +40,13 @@ jobs:
           npx cap add ios
           cat > ios/App/Podfile << 'PODFILE'
           require_relative '../../node_modules/@capacitor/ios/scripts/pods_helpers'
-
           platform :ios, '16.0'
           use_frameworks!
-
           install! 'cocoapods', :disable_input_output_paths => true
-
           def capacitor_pods
             pod 'Capacitor', :path => '../../node_modules/@capacitor/ios'
             pod 'CapacitorCordova', :path => '../../node_modules/@capacitor/ios'
           end
-
           target 'App' do
             capacitor_pods
           end
@@ -71,27 +62,41 @@ jobs:
           echo "${{ secrets.APP_STORE_CONNECT_API_KEY_BASE64 }}" | base64 --decode > ~/.private_keys/AuthKey_${{ secrets.APP_STORE_CONNECT_KEY_ID }}.p8
           chmod 600 ~/.private_keys/AuthKey_${{ secrets.APP_STORE_CONNECT_KEY_ID }}.p8
 
-      - name: Update bundle identifier and signing settings
+      - name: Patch pbxproj for automatic signing
         run: |
           PBXPROJ="ios/App/App.xcodeproj/project.pbxproj"
+          echo "=== BEFORE patching ==="
+          grep -n "CODE_SIGN_STYLE\|ProvisioningStyle\|PROVISIONING_PROFILE\|DEVELOPMENT_TEAM\|PRODUCT_BUNDLE_IDENTIFIER" "$PBXPROJ" || echo "No matches found"
           
-          # Update bundle ID
-          sed -i '' 's/com\.jaredjamesfit\.jfeffect/com.jfeffect.app/g' "$PBXPROJ" || true
-          sed -i '' 's/com\.capacitorjs\.app/com.jfeffect.app/g' "$PBXPROJ" || true
+          python3 << 'PYEOF'
+          import re, sys
+
+          path = "ios/App/App.xcodeproj/project.pbxproj"
+          with open(path, "r") as f:
+              content = f.read()
+
+          # Force automatic signing - replace Manual with Automatic
+          content = re.sub(r'CODE_SIGN_STYLE\s*=\s*[^;]+;', 'CODE_SIGN_STYLE = Automatic;', content)
+          content = re.sub(r'ProvisioningStyle\s*=\s*[^;]+;', 'ProvisioningStyle = Automatic;', content)
+
+          # Remove provisioning profile specifiers that block automatic signing
+          content = re.sub(r'\s*PROVISIONING_PROFILE_SPECIFIER\s*=\s*[^;]*;\n', '\n', content)
+          content = re.sub(r'\s*PROVISIONING_PROFILE\s*=\s*[^;]*;\n', '\n', content)
+
+          # Fix bundle ID
+          content = re.sub(r'PRODUCT_BUNDLE_IDENTIFIER\s*=\s*[^;]+;', 'PRODUCT_BUNDLE_IDENTIFIER = com.jfeffect.app;', content)
+
+          # Set development team
+          content = re.sub(r'DEVELOPMENT_TEAM\s*=\s*[^;]*;', 'DEVELOPMENT_TEAM = 92T56MN5FL;', content)
+
+          with open(path, "w") as f:
+              f.write(content)
+
+          print("✅ pbxproj patched successfully")
+          PYEOF
           
-          # Force automatic signing - replace ALL occurrences of Manual with Automatic
-          sed -i '' 's/CODE_SIGN_STYLE = Manual/CODE_SIGN_STYLE = Automatic/g' "$PBXPROJ" || true
-          sed -i '' 's/ProvisioningStyle = Manual/ProvisioningStyle = Automatic/g' "$PBXPROJ" || true
-          
-          # Also remove any explicit provisioning profile settings that block automatic signing
-          sed -i '' '/PROVISIONING_PROFILE_SPECIFIER/d' "$PBXPROJ" || true
-          sed -i '' '/PROVISIONING_PROFILE = /d' "$PBXPROJ" || true
-          
-          # Verify the changes
-          echo "=== CODE_SIGN_STYLE values ==="
-          grep "CODE_SIGN_STYLE" "$PBXPROJ" || echo "None found"
-          echo "=== BUNDLE_IDENTIFIER values ==="
-          grep "PRODUCT_BUNDLE_IDENTIFIER" "$PBXPROJ" | head -5 || echo "None found"
+          echo "=== AFTER patching ==="
+          grep -n "CODE_SIGN_STYLE\|ProvisioningStyle\|PROVISIONING_PROFILE\|DEVELOPMENT_TEAM\|PRODUCT_BUNDLE_IDENTIFIER" "$PBXPROJ" || echo "No matches found"
 
       - name: Build and Archive iOS app
         run: |
@@ -106,7 +111,7 @@ jobs:
             CODE_SIGN_STYLE=Automatic \
             DEVELOPMENT_TEAM=${{ secrets.APPLE_TEAM_ID }} \
             PRODUCT_BUNDLE_IDENTIFIER=com.jfeffect.app \
-            ALLOW_PROVISIONING_UPDATES=YES \
+            -allowProvisioningUpdates \
             -authenticationKeyPath "$HOME/.private_keys/AuthKey_${{ secrets.APP_STORE_CONNECT_KEY_ID }}.p8" \
             -authenticationKeyID "${{ secrets.APP_STORE_CONNECT_KEY_ID }}" \
             -authenticationKeyIssuerID "${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}"
@@ -129,7 +134,6 @@ jobs:
           </dict>
           </plist>
           PLIST
-
           xcodebuild \
             -exportArchive \
             -archivePath "$RUNNER_TEMP/JFEffect.xcarchive" \
