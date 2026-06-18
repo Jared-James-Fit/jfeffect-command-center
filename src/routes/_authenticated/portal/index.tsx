@@ -21,21 +21,12 @@ import { IntakeAnswersBigButton } from "@/components/clients/intake-answers-dial
 import { ActionCentre, type ActionItem } from "@/components/portal/action-centre";
 import { TrainingBlockCard } from "@/components/portal/training-block-card";
 import { ProgressSummaryCard } from "@/components/progress/progress-summary-card";
-// Lazy: this card pulls recharts. Defer it so the Home screen renders
-// before the chart bundle is fetched.
-import { lazy, Suspense } from "react";
-const HomeBodyweightCard = lazy(() =>
-  import("@/components/home/home-bodyweight-card").then((m) => ({
-    default: m.HomeBodyweightCard,
-  })),
-);
 import { HomeWaterCard } from "@/components/home/home-water-card";
 import { SetupChecklistBanner } from "@/components/portal/setup-checklist-banner";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { listMyPortalAppointments } from "@/lib/appointments.functions";
 import { useServerFn } from "@tanstack/react-start";
 import { format, parseISO, isToday, isTomorrow } from "date-fns";
-import { forwardRef, useImperativeHandle } from "react";
 
 export const Route = createFileRoute("/_authenticated/portal/")({ component: PortalHome });
 
