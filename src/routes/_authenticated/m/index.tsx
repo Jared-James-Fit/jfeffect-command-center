@@ -15,6 +15,8 @@ import { Star } from "lucide-react";
 import { UpgradeCTA } from "@/components/upgrade-cta";
 import { SetupChecklist } from "@/components/member/setup-checklist-card";
 import { ProgressSummaryCard } from "@/components/progress/progress-summary-card";
+import { HomeBodyweightCard } from "@/components/home/home-bodyweight-card";
+import { HomeWaterCard } from "@/components/home/home-water-card";
 
 export const Route = createFileRoute("/_authenticated/m/")({
   component: MemberHome,
@@ -86,14 +88,6 @@ function MemberHome() {
         />
       )}
       <SetupChecklist activeEnrollment={activeEnrollment} />
-      {me?.member?.user_id && (
-        <ProgressSummaryCard
-          userId={me.member.user_id}
-          currentUserId={me.member.user_id}
-          viewerRole="owner"
-          progressHref={{ kind: "member" }}
-        />
-      )}
       {activeEnrollment ? (
         <Card className="p-6">
           <div className="flex items-center justify-between gap-4">
@@ -117,6 +111,28 @@ function MemberHome() {
             <Button><BookOpen className="mr-2 h-4 w-4" />Browse Program Library</Button>
           </Link>
         </Card>
+      )}
+      {me?.member?.user_id && (
+        <HomeBodyweightCard
+          userId={me.member.user_id}
+          surface="member"
+          defaultUnit={(me.member.preferred_weight_unit as "kg" | "lb") ?? "lb"}
+        />
+      )}
+      {me?.member?.user_id && (
+        <ProgressSummaryCard
+          userId={me.member.user_id}
+          currentUserId={me.member.user_id}
+          viewerRole="owner"
+          progressHref={{ kind: "member" }}
+        />
+      )}
+      {me?.member?.user_id && (
+        <HomeWaterCard
+          userId={me.member.user_id}
+          currentUserId={me.member.user_id}
+          surface="member"
+        />
       )}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <QuickCard to="/m/my-plans" icon={ClipboardCheck} label="My Plans" />
