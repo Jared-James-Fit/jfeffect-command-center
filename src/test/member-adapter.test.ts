@@ -217,3 +217,124 @@ describe("member adapter logSet", () => {
     ).rejects.toThrow(/rowId must be/);
   });
 });
+
+/* ------------------------------------------------------- raw reshape --- */
+
+import {
+  memberDayToPlDay,
+  memberRowToPlRow,
+  memberLogToPlRowResult,
+} from "@/lib/workout-context/member-adapter";
+
+describe("member adapter — raw reshape (pl_*-shaped)", () => {
+  it("maps a published_payload day onto pl_days columns", () => {
+    const out = memberDayToPlDay({
+      dayId: "2:3",
+      weekIndex: 2,
+      dayIndex: 3,
+      dayObj: { title: "Push", focus: "Chest", target_minutes: 60, notes: "go heavy" },
+      scheduledDate: "2026-06-20",
+    });
+    expect(out.id).toBe("2:3");
+    expect(out.week_index).toBe(2);
+    expect(out.day_index).toBe(3);
+    expect(out.title).toBe("Push");
+    expect(out.focus).toBe("Chest");
+    expect(out.target_minutes).toBe(60);
+    expect(out.scheduled_date).toBe("2026-06-20");
+    // week_id stays null so the pl_weeks/pl_blocks follow-up query degrades silently.
+    expect(out.week_id).toBeNull();
+  });
+
+  it("maps a member row into pl_exercise_rows shape with nested exercises join", () => {
+    const out = memberRowToPlRow({
+      row: {
+        exercise_id: "ex-uuid",
+        exercise: "Bench Press",
+        sets: 3,
+        reps: "8-10",
+        load: 185,
+        rest_seconds: 120,
+        default_load_unit: "lb",
+        warmup_protocol_id: "wp-1",
+        video_url: "https://v.example/bench",
+        cues: "tuck elbows",
+      },
+      exerciseIndex: 0,
+      dayId: "1:1",
+    });
+    expect(out.id).toBe("ex:0");
+    expect(out.day_id).toBe("1:1");
+    expect(out.sort_order).toBe(0);
+    expect(out.sets).toBe(3);
+    expect(out.reps_text).toBe("8-10");
+    expect(out.load_lb).toBe(185);
+    expect(out.load_kg).toBeNull();
+    expect(out.load_unit).toBe("lb");
+    // member rows always take the manual-load path
+    expect(out.manual_override).toBe(true);
+    expect(out.percentage).toBeNull();
+    expect(out.percentage_basis).toBe("none");
+    expect(out.warmup_protocol_id).toBe("wp-1");
+    expect(out.exercises.name).toBe("Bench Press");
+    expect(out.exercises.video_url).toBe("https://v.example/bench");
+    expect(out.exercises.default_load_unit).toBe("lb");
+    // when exercise_id is present, override stays null so the join name wins
+    expect(out.exercise_name_override).toBeNull();
+  });
+
+  it("routes kg-default rows into load_kg and leaves load_lb null", () => {
+    const out = memberRowToPlRow({
+      row: { exercise: "Squat", sets: 5, reps: 5, load: 100, default_load_unit: "kg" },
+      exerciseIndex: 2,
+      dayId: "1:1",
+    });
+    expect(out.load_kg).toBe(100);
+    expect(out.load_lb).toBeNull();
+    expect(out.load_unit).toBe("kg");
+    expect(out.exercises.default_load_unit).toBe("kg");
+  });
+
+  it("falls back to exercise_name_override when no exercise_id is present", () => {
+    const out = memberRowToPlRow({
+      row: { exercise: "Custom Lift", sets: 2, reps: 10 },
+      exerciseIndex: 1,
+      dayId: "1:1",
+    });
+    expect(out.exercise_name_override).toBe("Custom Lift");
+    expect(out.exercises.name).toBe("Custom Lift");
+  });
+
+  it("maps a member_set_logs row onto pl_row_results shape", () => {
+    const out = memberLogToPlRowResult({
+      log: {
+        id: "log-uuid",
+        exercise_index: 4,
+        set_index: 2,
+        reps: 8,
+        load_lb: 135,
+        load_kg: null,
+        entered_value: 135,
+        entered_unit: "lb",
+        normalized_lb: 135,
+        normalized_kg: 61.235,
+        rpe: 8,
+        is_working_set: true,
+        notes: "felt heavy",
+        completed_duration_seconds: 42,
+        logged_at: "2026-06-18T10:00:00Z",
+      },
+      clientId: "user-uuid",
+    });
+    expect(out.id).toBe("log-uuid");
+    expect(out.row_id).toBe("ex:4");
+    expect(out.client_id).toBe("user-uuid");
+    expect(out.set_index).toBe(2);
+    expect(out.load_lb).toBe(135);
+    expect(out.normalized_kg).toBe(61.235);
+    expect(out.actual_load_unit).toBe("lb");
+    expect(out.is_working_set).toBe(true);
+    expect(out.completed_duration_seconds).toBe(42);
+    expect(out.logged_at).toBe("2026-06-18T10:00:00Z");
+  });
+});
