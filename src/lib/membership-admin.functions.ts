@@ -1,5 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { isMemberAccessActive } from "@/lib/memberAccess";
 
 async function assertAdmin(ctx: any) {
   const { supabase, userId } = ctx;
