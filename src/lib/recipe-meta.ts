@@ -1,4 +1,5 @@
 import { parseRecipeBody } from "./recipe-format";
+import type { Recipe } from "./recipes";
 
 /**
  * Lightweight extraction of card-friendly metadata from a recipe body.
@@ -45,5 +46,21 @@ export function getRecipeMeta(body: string | null | undefined): RecipeMeta {
     fats: macros ? macroValue(macros.macros, ["fat"]) : null,
     prepMinutes: prepField ? num(prepField.value) : null,
     servings: num(parsed.servings ?? null),
+  };
+}
+
+/**
+ * Card meta with DB columns taking precedence over body-parsed values.
+ * Lets admins override the auto-parsed numbers without editing the body.
+ */
+export function getRecipeCardMeta(recipe: Recipe): RecipeMeta {
+  const parsed = getRecipeMeta(recipe.body);
+  return {
+    calories: recipe.calories_per_serving ?? parsed.calories,
+    protein: recipe.protein_grams ?? parsed.protein,
+    carbs: parsed.carbs,
+    fats: parsed.fats,
+    prepMinutes: recipe.prep_time_minutes ?? parsed.prepMinutes,
+    servings: recipe.servings ?? parsed.servings,
   };
 }
