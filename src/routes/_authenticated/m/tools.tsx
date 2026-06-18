@@ -6,6 +6,9 @@ import { PageHeader } from "@/components/app-shell";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Wrench, Lock } from "lucide-react";
+import { OneRepMaxCalculator } from "@/components/tools/OneRepMaxCalculator";
+import { MacroCalculator } from "@/components/tools/MacroCalculator";
+import { PlateCalculator } from "@/components/tools/PlateCalculator";
 
 export const Route = createFileRoute("/_authenticated/m/tools")({ component: ToolsPage });
 
@@ -16,9 +19,14 @@ function ToolsPage() {
   return (
     <div className="space-y-6">
       <PageHeader title="Tools" subtitle="Calculators and trackers." />
-      {items.length === 0 ? (
-        <Card className="p-6 text-sm text-muted-foreground">Tools coming soon.</Card>
-      ) : (
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+        <OneRepMaxCalculator />
+        <MacroCalculator />
+        <PlateCalculator />
+      </div>
+      {items.length > 0 && (
+        <div className="space-y-3">
+          <div className="text-sm font-semibold text-muted-foreground">More tools</div>
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {items.map((r) => (
             <Link key={r.id} to="/m/resources/$slug" params={{ slug: r.slug }}>
@@ -32,6 +40,7 @@ function ToolsPage() {
               </Card>
             </Link>
           ))}
+        </div>
         </div>
       )}
     </div>
