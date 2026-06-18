@@ -25,6 +25,9 @@ import {
   type UpsertExerciseNoteInput,
   type EnrollmentSummaryDTO,
   type ReviewDTO,
+  type PlDayRaw,
+  type PlRowRaw,
+  type PlRowResultRaw,
 } from "./types";
 import { getClientSchedule, applyBulkScheduleChange } from "@/lib/schedule-bulk.functions";
 import { supabase } from "@/integrations/supabase/client";
