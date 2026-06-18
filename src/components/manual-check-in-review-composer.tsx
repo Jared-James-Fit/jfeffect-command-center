@@ -11,7 +11,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
 import { createManualReview, type ManualReviewSource } from "@/lib/manual-check-in-reviews";
 import { toast } from "sonner";
-import { Send } from "lucide-react";
+import { Send, ChevronDown, ChevronRight } from "lucide-react";
 import { runJob } from "@/lib/progress-jobs";
 import { todayLocalISO } from "@/lib/today";
 
@@ -30,13 +30,14 @@ export function ManualCheckInReviewComposer({
   const [clientId, setClientId] = useState<string>(defaultClientId ?? "");
   const [source, setSource] = useState<ManualReviewSource>("fillout");
   const [checkInDate, setCheckInDate] = useState<string>(todayLocalISO());
-  const [title, setTitle] = useState("Weekly Check-In Review");
+  const [title, setTitle] = useState("Weekly Check-In Response");
   const [message, setMessage] = useState("");
   const [actionItems, setActionItems] = useState("");
   const [priority, setPriority] = useState<string>("none");
   const [internalNotes, setInternalNotes] = useState("");
   const [externalLink, setExternalLink] = useState("");
   const [notify, setNotify] = useState(true);
+  const [advancedOpen, setAdvancedOpen] = useState(false);
 
   useEffect(() => { if (defaultClientId) setClientId(defaultClientId); }, [defaultClientId]);
 
@@ -97,9 +98,9 @@ export function ManualCheckInReviewComposer({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Manual Check-In Review</DialogTitle>
+          <DialogTitle>Send Check-In Response</DialogTitle>
           <DialogDescription>
-            Send a check-in review to a client — works even when the check-in came from an external form (Fillout, etc.).
+            Two boxes — what you want to say, and their focus for the week. They'll get a notification and can chat back like a text message.
           </DialogDescription>
         </DialogHeader>
 
@@ -118,79 +119,74 @@ export function ManualCheckInReviewComposer({
             </div>
           )}
 
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <Label>Source</Label>
-              <Select value={source} onValueChange={(v) => setSource(v as ManualReviewSource)}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="fillout">Fillout</SelectItem>
-                  <SelectItem value="external">External Form</SelectItem>
-                  <SelectItem value="manual">Manual</SelectItem>
-                  <SelectItem value="native">Native (In-App)</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label>Check-In Date</Label>
-              <Input type="date" value={checkInDate} onChange={(e) => setCheckInDate(e.target.value)} />
-            </div>
+          <div className="rounded-xl border border-border bg-muted/30 p-3 text-xs text-muted-foreground">
+            Sending today · <span className="font-bold text-foreground">{new Date().toLocaleDateString(undefined, { weekday: "long", month: "short", day: "numeric" })}</span>
           </div>
 
           <div>
-            <Label>Title</Label>
-            <Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Weekly Check-In Review" />
+            <Label className="text-sm font-bold">📝 Message for me to send</Label>
+            <p className="mb-1 text-xs text-muted-foreground">What you want to tell them about this week's check-in. Type it like a text.</p>
+            <Textarea
+              rows={7}
+              value={message}
+              onChange={(e) => setMessage(e.target.value)}
+              placeholder="Hey! Great work this week — here's what stood out…"
+              autoFocus
+            />
           </div>
 
           <div>
-            <Label>Coach Feedback</Label>
-            <Textarea rows={6} value={message} onChange={(e) => setMessage(e.target.value)} placeholder="Type your review like a message…" />
+            <Label className="text-sm font-bold">🎯 Focus for this week</Label>
+            <p className="mb-1 text-xs text-muted-foreground">The 1–3 things you want them to lock in. Short bullets are perfect.</p>
+            <Textarea
+              rows={3}
+              value={actionItems}
+              onChange={(e) => setActionItems(e.target.value)}
+              placeholder="• Hit 10k steps daily&#10;• Add 1 extra back set&#10;• Sleep 7+ hours"
+            />
           </div>
 
-          <div>
-            <Label>Action Items <span className="text-xs text-muted-foreground">(optional)</span></Label>
-            <Textarea rows={2} value={actionItems} onChange={(e) => setActionItems(e.target.value)} placeholder="e.g. hit 10k steps daily, add 1 extra back set" />
-          </div>
+          <button
+            type="button"
+            onClick={() => setAdvancedOpen((v) => !v)}
+            className="flex items-center gap-1 text-xs font-bold uppercase tracking-wider text-muted-foreground hover:text-foreground"
+          >
+            {advancedOpen ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
+            Advanced (optional)
+          </button>
 
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <Label>Priority <span className="text-xs text-muted-foreground">(optional)</span></Label>
-              <Select value={priority} onValueChange={setPriority}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">None</SelectItem>
-                  <SelectItem value="low">Low</SelectItem>
-                  <SelectItem value="normal">Normal</SelectItem>
-                  <SelectItem value="high">High</SelectItem>
-                  <SelectItem value="urgent">Urgent</SelectItem>
-                </SelectContent>
-              </Select>
+          {advancedOpen && (
+            <div className="space-y-3 rounded-xl border border-border bg-muted/20 p-3">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label className="text-xs">Title</Label>
+                  <Input value={title} onChange={(e) => setTitle(e.target.value)} />
+                </div>
+                <div>
+                  <Label className="text-xs">Check-In Date</Label>
+                  <Input type="date" value={checkInDate} onChange={(e) => setCheckInDate(e.target.value)} />
+                </div>
+              </div>
+              <div>
+                <Label className="text-xs">Internal notes (only you see)</Label>
+                <Textarea rows={2} value={internalNotes} onChange={(e) => setInternalNotes(e.target.value)} />
+              </div>
+              <div className="flex items-center justify-between rounded-md bg-card px-3 py-2">
+                <div className="text-xs">
+                  <div className="font-bold">Notify client</div>
+                  <div className="text-muted-foreground">Pops up next time they open the app.</div>
+                </div>
+                <Switch checked={notify} onCheckedChange={setNotify} />
+              </div>
             </div>
-            <div>
-              <Label>External Link <span className="text-xs text-muted-foreground">(admin-only)</span></Label>
-              <Input value={externalLink} onChange={(e) => setExternalLink(e.target.value)} placeholder="Fillout response URL…" />
-            </div>
-          </div>
-
-          <div>
-            <Label>Internal Notes <span className="text-xs text-muted-foreground">(admin-only, not shown to client)</span></Label>
-            <Textarea rows={2} value={internalNotes} onChange={(e) => setInternalNotes(e.target.value)} />
-          </div>
-
-          <div className="flex items-center justify-between rounded-md border border-border bg-muted/30 px-3 py-2">
-            <div>
-              <div className="text-sm font-bold">Notify Client</div>
-              <div className="text-xs text-muted-foreground">Show this review in their portal on next login.</div>
-            </div>
-            <Switch checked={notify} onCheckedChange={setNotify} />
-          </div>
+          )}
         </div>
 
         <DialogFooter>
           <ActionButton variant="outline" onClick={() => onOpenChange(false)}>Cancel</ActionButton>
           <ActionButton onClick={submit} disabled={!message.trim() || !clientId} className="bg-gradient-primary font-bold">
             <Send className="mr-2 h-4 w-4" />
-            Send Review
+            Send to Client
           </ActionButton>
         </DialogFooter>
       </DialogContent>
