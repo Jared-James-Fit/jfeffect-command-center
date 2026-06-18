@@ -65,11 +65,7 @@ function AdminLayout() {
       return [
         pick("/admin"),
         { ...pick("/admin/clients"), label: "Clients" },
-        // Point Messages straight at the Communication workspace so the
-        // bottom-nav active state stays highlighted inside the inbox and
-        // any open conversation (the legacy /admin/messages just redirects
-        // here, which broke the strict pathname-equality active check).
-        { ...pick("/admin/messages"), to: "/admin/communication", label: "Messages" },
+        pick("/admin/messages"),
         { ...pick("/admin/lift-videos"), label: "Lifts" },
         { ...pick("/admin/tasks"), label: "Tasks" },
       ].filter(Boolean);
@@ -77,7 +73,7 @@ function AdminLayout() {
     return [
       pick("/admin"),
       { ...pick("/admin/clients"), label: "Clients" },
-      { ...pick("/admin/messages"), to: "/admin/communication", label: "Messages" },
+      pick("/admin/messages"),
       {
         to: "/admin/check-in-reviews",
         label: "Reviews",
