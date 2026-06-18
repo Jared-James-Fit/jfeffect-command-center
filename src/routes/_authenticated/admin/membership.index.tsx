@@ -128,6 +128,15 @@ function MembershipDashboard() {
       </div>
 
       <div>
+        <h2 className="mb-2 text-xs font-bold uppercase tracking-widest text-muted-foreground">Access Control</h2>
+        <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
+          <Stat label="Access Active" value={isLoading ? "…" : c?.access_active ?? 0} icon={ShieldCheck} tone="primary" to="/admin/members" />
+          <Stat label="Access Expired" value={isLoading ? "…" : c?.access_expired ?? 0} icon={AlertTriangle} tone="rose" to="/admin/members" />
+          <Stat label="Manual Override" value={isLoading ? "…" : c?.manual_override ?? 0} icon={UserCog} tone="warn" to="/admin/members" />
+        </div>
+      </div>
+
+      <div>
         <h2 className="mb-2 text-xs font-bold uppercase tracking-widest text-muted-foreground">Setup health</h2>
         <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
           <Stat label="Incomplete Setup" value={isLoading ? "…" : c?.incomplete_setup ?? 0} icon={ListChecks} tone="warn" to="/admin/membership/action-needed" />
