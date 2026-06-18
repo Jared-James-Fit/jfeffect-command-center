@@ -33,7 +33,7 @@ function HeroSkeleton() {
   );
 }
 
-export const Route = createFileRoute("/coaching")({
+export const Route = createFileRoute("/coaching/")({
   component: CoachingPage,
   head: () => ({
     meta: [

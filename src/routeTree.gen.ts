@@ -21,13 +21,13 @@ import { Route as MembershipRouteImport } from './routes/membership'
 import { Route as MemberSetupRouteImport } from './routes/member-setup'
 import { Route as JoinRouteImport } from './routes/join'
 import { Route as InstallRouteImport } from './routes/install'
-import { Route as CoachingRouteImport } from './routes/coaching'
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as ApplyRouteImport } from './routes/apply'
 import { Route as AppRouteImport } from './routes/app'
 import { Route as AccountDeletionRouteImport } from './routes/account-deletion'
 import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as CoachingIndexRouteImport } from './routes/coaching.index'
 import { Route as SignupJfRouteImport } from './routes/signup.jf'
 import { Route as SignTokenRouteImport } from './routes/sign.$token'
 import { Route as MWelcomeRouteImport } from './routes/m.welcome'
@@ -326,11 +326,6 @@ const InstallRoute = InstallRouteImport.update({
   path: '/install',
   getParentRoute: () => rootRouteImport,
 } as any)
-const CoachingRoute = CoachingRouteImport.update({
-  id: '/coaching',
-  path: '/coaching',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const AuthRoute = AuthRouteImport.update({
   id: '/auth',
   path: '/auth',
@@ -360,6 +355,11 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const CoachingIndexRoute = CoachingIndexRouteImport.update({
+  id: '/coaching/',
+  path: '/coaching/',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const SignupJfRoute = SignupJfRouteImport.update({
   id: '/signup/jf',
   path: '/signup/jf',
@@ -386,9 +386,9 @@ const EmailUnsubscribeRoute = EmailUnsubscribeRouteImport.update({
   getParentRoute: () => rootRouteImport,
 } as any)
 const CoachingApplyRoute = CoachingApplyRouteImport.update({
-  id: '/apply',
-  path: '/apply',
-  getParentRoute: () => CoachingRoute,
+  id: '/coaching/apply',
+  path: '/coaching/apply',
+  getParentRoute: () => rootRouteImport,
 } as any)
 const BookSlugRoute = BookSlugRouteImport.update({
   id: '/book/$slug',
@@ -1750,7 +1750,6 @@ export interface FileRoutesByFullPath {
   '/app': typeof AppRoute
   '/apply': typeof ApplyRoute
   '/auth': typeof AuthRoute
-  '/coaching': typeof CoachingRouteWithChildren
   '/install': typeof InstallRoute
   '/join': typeof JoinRoute
   '/member-setup': typeof MemberSetupRoute
@@ -1778,6 +1777,7 @@ export interface FileRoutesByFullPath {
   '/m/welcome': typeof MWelcomeRoute
   '/sign/$token': typeof SignTokenRoute
   '/signup/jf': typeof SignupJfRoute
+  '/coaching/': typeof CoachingIndexRoute
   '/admin/account': typeof AuthenticatedAdminAccountRoute
   '/admin/appointments': typeof AuthenticatedAdminAppointmentsRoute
   '/admin/approvals': typeof AuthenticatedAdminApprovalsRoute
@@ -2007,7 +2007,6 @@ export interface FileRoutesByTo {
   '/app': typeof AppRoute
   '/apply': typeof ApplyRoute
   '/auth': typeof AuthRoute
-  '/coaching': typeof CoachingRouteWithChildren
   '/install': typeof InstallRoute
   '/join': typeof JoinRoute
   '/member-setup': typeof MemberSetupRoute
@@ -2031,6 +2030,7 @@ export interface FileRoutesByTo {
   '/m/welcome': typeof MWelcomeRoute
   '/sign/$token': typeof SignTokenRoute
   '/signup/jf': typeof SignupJfRoute
+  '/coaching': typeof CoachingIndexRoute
   '/admin/account': typeof AuthenticatedAdminAccountRoute
   '/admin/appointments': typeof AuthenticatedAdminAppointmentsRoute
   '/admin/approvals': typeof AuthenticatedAdminApprovalsRoute
@@ -2261,7 +2261,6 @@ export interface FileRoutesById {
   '/app': typeof AppRoute
   '/apply': typeof ApplyRoute
   '/auth': typeof AuthRoute
-  '/coaching': typeof CoachingRouteWithChildren
   '/install': typeof InstallRoute
   '/join': typeof JoinRoute
   '/member-setup': typeof MemberSetupRoute
@@ -2289,6 +2288,7 @@ export interface FileRoutesById {
   '/m/welcome': typeof MWelcomeRoute
   '/sign/$token': typeof SignTokenRoute
   '/signup/jf': typeof SignupJfRoute
+  '/coaching/': typeof CoachingIndexRoute
   '/_authenticated/admin/account': typeof AuthenticatedAdminAccountRoute
   '/_authenticated/admin/appointments': typeof AuthenticatedAdminAppointmentsRoute
   '/_authenticated/admin/approvals': typeof AuthenticatedAdminApprovalsRoute
@@ -2520,7 +2520,6 @@ export interface FileRouteTypes {
     | '/app'
     | '/apply'
     | '/auth'
-    | '/coaching'
     | '/install'
     | '/join'
     | '/member-setup'
@@ -2548,6 +2547,7 @@ export interface FileRouteTypes {
     | '/m/welcome'
     | '/sign/$token'
     | '/signup/jf'
+    | '/coaching/'
     | '/admin/account'
     | '/admin/appointments'
     | '/admin/approvals'
@@ -2777,7 +2777,6 @@ export interface FileRouteTypes {
     | '/app'
     | '/apply'
     | '/auth'
-    | '/coaching'
     | '/install'
     | '/join'
     | '/member-setup'
@@ -2801,6 +2800,7 @@ export interface FileRouteTypes {
     | '/m/welcome'
     | '/sign/$token'
     | '/signup/jf'
+    | '/coaching'
     | '/admin/account'
     | '/admin/appointments'
     | '/admin/approvals'
@@ -3030,7 +3030,6 @@ export interface FileRouteTypes {
     | '/app'
     | '/apply'
     | '/auth'
-    | '/coaching'
     | '/install'
     | '/join'
     | '/member-setup'
@@ -3058,6 +3057,7 @@ export interface FileRouteTypes {
     | '/m/welcome'
     | '/sign/$token'
     | '/signup/jf'
+    | '/coaching/'
     | '/_authenticated/admin/account'
     | '/_authenticated/admin/appointments'
     | '/_authenticated/admin/approvals'
@@ -3289,7 +3289,6 @@ export interface RootRouteChildren {
   AppRoute: typeof AppRoute
   ApplyRoute: typeof ApplyRoute
   AuthRoute: typeof AuthRoute
-  CoachingRoute: typeof CoachingRouteWithChildren
   InstallRoute: typeof InstallRoute
   JoinRoute: typeof JoinRoute
   MemberSetupRoute: typeof MemberSetupRoute
@@ -3305,11 +3304,13 @@ export interface RootRouteChildren {
   BookRoute: typeof BookRoute
   ApiDriveUploadRoute: typeof ApiDriveUploadRoute
   BookSlugRoute: typeof BookSlugRoute
+  CoachingApplyRoute: typeof CoachingApplyRoute
   EmailUnsubscribeRoute: typeof EmailUnsubscribeRoute
   LegalSlugRoute: typeof LegalSlugRoute
   MWelcomeRoute: typeof MWelcomeRoute
   SignTokenRoute: typeof SignTokenRoute
   SignupJfRoute: typeof SignupJfRoute
+  CoachingIndexRoute: typeof CoachingIndexRoute
   ApiPublic_replay73ae9c8e4bcdc04ea9fd65f84f0752daRoute: typeof ApiPublic_replay73ae9c8e4bcdc04ea9fd65f84f0752daRoute
   ApiPublicBulkExerciseImportRoute: typeof ApiPublicBulkExerciseImportRoute
   ApiPublicSignnowWebhookRoute: typeof ApiPublicSignnowWebhookRoute
@@ -3419,13 +3420,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof InstallRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/coaching': {
-      id: '/coaching'
-      path: '/coaching'
-      fullPath: '/coaching'
-      preLoaderRoute: typeof CoachingRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/auth': {
       id: '/auth'
       path: '/auth'
@@ -3468,6 +3462,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/coaching/': {
+      id: '/coaching/'
+      path: '/coaching'
+      fullPath: '/coaching/'
+      preLoaderRoute: typeof CoachingIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/signup/jf': {
       id: '/signup/jf'
       path: '/signup/jf'
@@ -3505,10 +3506,10 @@ declare module '@tanstack/react-router' {
     }
     '/coaching/apply': {
       id: '/coaching/apply'
-      path: '/apply'
+      path: '/coaching/apply'
       fullPath: '/coaching/apply'
       preLoaderRoute: typeof CoachingApplyRouteImport
-      parentRoute: typeof CoachingRoute
+      parentRoute: typeof rootRouteImport
     }
     '/book/$slug': {
       id: '/book/$slug'
@@ -5860,18 +5861,6 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
 const AuthenticatedRouteRouteWithChildren =
   AuthenticatedRouteRoute._addFileChildren(AuthenticatedRouteRouteChildren)
 
-interface CoachingRouteChildren {
-  CoachingApplyRoute: typeof CoachingApplyRoute
-}
-
-const CoachingRouteChildren: CoachingRouteChildren = {
-  CoachingApplyRoute: CoachingApplyRoute,
-}
-
-const CoachingRouteWithChildren = CoachingRoute._addFileChildren(
-  CoachingRouteChildren,
-)
-
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AuthenticatedRouteRoute: AuthenticatedRouteRouteWithChildren,
@@ -5879,7 +5868,6 @@ const rootRouteChildren: RootRouteChildren = {
   AppRoute: AppRoute,
   ApplyRoute: ApplyRoute,
   AuthRoute: AuthRoute,
-  CoachingRoute: CoachingRouteWithChildren,
   InstallRoute: InstallRoute,
   JoinRoute: JoinRoute,
   MemberSetupRoute: MemberSetupRoute,
@@ -5895,11 +5883,13 @@ const rootRouteChildren: RootRouteChildren = {
   BookRoute: BookRoute,
   ApiDriveUploadRoute: ApiDriveUploadRoute,
   BookSlugRoute: BookSlugRoute,
+  CoachingApplyRoute: CoachingApplyRoute,
   EmailUnsubscribeRoute: EmailUnsubscribeRoute,
   LegalSlugRoute: LegalSlugRoute,
   MWelcomeRoute: MWelcomeRoute,
   SignTokenRoute: SignTokenRoute,
   SignupJfRoute: SignupJfRoute,
+  CoachingIndexRoute: CoachingIndexRoute,
   ApiPublic_replay73ae9c8e4bcdc04ea9fd65f84f0752daRoute:
     ApiPublic_replay73ae9c8e4bcdc04ea9fd65f84f0752daRoute,
   ApiPublicBulkExerciseImportRoute: ApiPublicBulkExerciseImportRoute,
