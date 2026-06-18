@@ -49,6 +49,7 @@ import {
   AddressCard,
   EmergencyContactCard,
 } from "@/components/admin/client-profile/personal-info-cards";
+import { CoachNutritionOverrideCard } from "@/components/admin/coach-nutrition-override-card";
 
 // Heavy panels — code-split so visiting a client only loads the active tab's code.
 const lazyDefault = <T,>(loader: () => Promise<{ [k: string]: T }>, name: string) =>
