@@ -1,6 +1,6 @@
 import { Link } from "@tanstack/react-router";
 import { Card } from "@/components/ui/card";
-import { Camera, Scale, Ruler, History, Droplet } from "lucide-react";
+import { Camera, Scale, Ruler, History } from "lucide-react";
 
 /**
  * Dummy-proof Progress Tracking card for client + member home dashboards.
@@ -81,4 +81,3 @@ export function ProgressSummaryCard({
   );
 }
 
-export { Droplet };
