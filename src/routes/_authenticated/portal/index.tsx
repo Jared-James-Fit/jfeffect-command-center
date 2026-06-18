@@ -349,7 +349,7 @@ function PortalHome() {
     } as any);
   }
 
-  // Bottom-sheet trigger for Log Bodyweight from the quick-actions grid.
+  // Bottom-sheet trigger for Log Weight from the quick-actions grid.
   const bodyweightRef = useRef<{ open: () => void }>(null);
 
   // While the core client record is loading, render a steady skeleton in the

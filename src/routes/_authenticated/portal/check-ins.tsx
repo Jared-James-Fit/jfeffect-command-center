@@ -208,7 +208,7 @@ function ClientCheckInsList() {
                       {status === "in_progress"
                         ? "Continue"
                         : status === "not_started"
-                          ? "Start Check-In"
+                          ? "Upload Photos"
                           : "Open"}
                       <ChevronRight className="ml-1 h-4 w-4" />
                     </Button>
