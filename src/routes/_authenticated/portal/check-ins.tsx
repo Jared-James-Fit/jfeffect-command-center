@@ -1,6 +1,6 @@
-import { useState, useEffect, useMemo } from "react";
+import { useMemo } from "react";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { usePortalUserId } from "@/lib/client-impersonation";
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/app-shell";
@@ -17,8 +17,9 @@ import {
   pickNutritionUpdateForm,
   type NfForm,
 } from "@/lib/native-forms";
-import { listManualReviewsForClient, sourceLabel } from "@/lib/manual-check-in-reviews";
+import { listManualReviewsForClient } from "@/lib/manual-check-in-reviews";
 import { buildFilloutUrl } from "@/lib/fillout";
+import { CheckInReviewThread } from "@/components/check-in-review-thread";
 
 export const Route = createFileRoute("/_authenticated/portal/check-ins")({
   component: ClientCheckInsList,
@@ -107,33 +108,16 @@ function ClientCheckInsList() {
           <Card className="border-border bg-card p-5">
             <div className="mb-3 flex items-center justify-between">
               <div>
-                <div className="text-lg font-black">Check-In Reviews</div>
-                <div className="text-xs text-muted-foreground">Coach feedback on your check-ins.</div>
+                <div className="text-lg font-black">Check-In Responses</div>
+                <div className="text-xs text-muted-foreground">Coach Jared's responses. Reply anytime — it's a chat.</div>
               </div>
               <Badge variant="outline">{manualReviews.length}</Badge>
             </div>
-            <ul className="divide-y divide-border">
+            <div className="space-y-4">
               {manualReviews.map((r) => (
-                <li key={r.id} className="py-3">
-                  <div className="flex items-center justify-between gap-2">
-                    <div className="min-w-0">
-                      <div className="truncate text-sm font-bold">{r.title}</div>
-                      <div className="text-[11px] text-muted-foreground">
-                        {sourceLabel(r.source)} · {r.check_in_date ?? new Date(r.created_at).toLocaleDateString()}
-                      </div>
-                    </div>
-                    <Badge variant="outline" className="text-[10px]">{r.read_at ? "Read" : "New"}</Badge>
-                  </div>
-                  <div className="mt-2 whitespace-pre-wrap rounded-md bg-muted/40 p-3 text-sm">{r.message}</div>
-                  {r.action_items && (
-                    <div className="mt-2 rounded-md border border-border p-2 text-sm">
-                      <div className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Action Items</div>
-                      <div className="mt-1 whitespace-pre-wrap">{r.action_items}</div>
-                    </div>
-                  )}
-                </li>
+                <CheckInReviewThread key={r.id} review={r} viewerRole="client" />
               ))}
-            </ul>
+            </div>
           </Card>
         )}
 

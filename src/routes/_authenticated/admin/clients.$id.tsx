@@ -34,6 +34,7 @@ import { SocialIcons } from "@/components/social-icons";
 import { ClientQuickLinksCard } from "@/components/client-quick-links-card";
 import { AppActivityCard } from "@/components/app-activity-card";
 import { ManualCheckInReviewComposer } from "@/components/manual-check-in-review-composer";
+import { ClientCheckInConversations } from "@/components/client-check-in-conversations";
 import { Send } from "lucide-react";
 import { FolderOpen, Eye } from "lucide-react";
 import { useClientImpersonation } from "@/lib/client-impersonation";
@@ -924,6 +925,8 @@ function ClientDetail() {
             </div>
             <p className="text-[11px] text-muted-foreground">Use the Save button at the top of the page to apply changes.</p>
           </Card>
+
+          <ClientCheckInConversations clientId={id} onCompose={() => setCheckInResponseOpen(true)} />
 
           <Card className="border-border bg-card p-6 md:col-span-3 space-y-3">
             <h3 className="text-xs uppercase tracking-widest text-muted-foreground">Linked Resources & Uploads</h3>

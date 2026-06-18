@@ -6909,11 +6909,48 @@ export type Database = {
         }
         Relationships: []
       }
+      manual_check_in_review_messages: {
+        Row: {
+          body: string
+          created_at: string
+          id: string
+          review_id: string
+          sender_role: string
+          sender_user_id: string
+        }
+        Insert: {
+          body: string
+          created_at?: string
+          id?: string
+          review_id: string
+          sender_role: string
+          sender_user_id: string
+        }
+        Update: {
+          body?: string
+          created_at?: string
+          id?: string
+          review_id?: string
+          sender_role?: string
+          sender_user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "manual_check_in_review_messages_review_id_fkey"
+            columns: ["review_id"]
+            isOneToOne: false
+            referencedRelation: "manual_check_in_reviews"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       manual_check_in_reviews: {
         Row: {
           action_items: string | null
           check_in_date: string | null
           client_id: string
+          client_last_read_at: string | null
+          coach_last_read_at: string | null
           coach_user_id: string
           created_at: string
           dismissed_at: string | null
@@ -6933,6 +6970,8 @@ export type Database = {
           action_items?: string | null
           check_in_date?: string | null
           client_id: string
+          client_last_read_at?: string | null
+          coach_last_read_at?: string | null
           coach_user_id: string
           created_at?: string
           dismissed_at?: string | null
@@ -6952,6 +6991,8 @@ export type Database = {
           action_items?: string | null
           check_in_date?: string | null
           client_id?: string
+          client_last_read_at?: string | null
+          coach_last_read_at?: string | null
           coach_user_id?: string
           created_at?: string
           dismissed_at?: string | null
