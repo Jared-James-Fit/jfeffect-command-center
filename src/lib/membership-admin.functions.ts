@@ -37,6 +37,9 @@ export const getMembershipStats = createServerFn({ method: "GET" })
       missing_phone: list.filter((m) => !m.phone).length,
       missing_sms: list.filter((m) => !!m.sms_opt_out).length,
       total: list.length,
+      access_active: list.filter((m) => isMemberAccessActive(m)).length,
+      access_expired: list.filter((m) => !isMemberAccessActive(m)).length,
+      manual_override: list.filter((m) => m.manual_access_override === true).length,
     };
     const recentSignups = list
       .slice()
