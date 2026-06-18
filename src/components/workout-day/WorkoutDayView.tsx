@@ -311,9 +311,7 @@ function WorkoutDay({
   });
 
   const { data: day } = useQuery({
-    queryKey: adapter
-      ? [adapter.kind, adapter.ref.ownerId, "pl-day", dayId]
-      : ["pl-day", dayId],
+    queryKey: ["pl-day", dayId, adapter?.kind ?? null, adapter?.ref.ownerId ?? null],
     initialData: cachedInitialData<any>(cacheScope, "day"),
     queryFn: async () => {
       const d = adapter
@@ -362,9 +360,7 @@ function WorkoutDay({
   const readonly = false;
 
   const { data: rows = [], isSuccess: rowsLoaded } = useQuery({
-    queryKey: adapter
-      ? [adapter.kind, adapter.ref.ownerId, "pl-day-rows", dayId]
-      : ["pl-day-rows", dayId],
+    queryKey: ["pl-day-rows", dayId, adapter?.kind ?? null, adapter?.ref.ownerId ?? null],
     initialData: cachedInitialData<any[]>(cacheScope, "rows"),
     queryFn: async () => {
       const r = adapter
@@ -382,9 +378,7 @@ function WorkoutDay({
   }, [rowsLoaded, rows.length]);
 
   const { data: results = [] } = useQuery({
-    queryKey: adapter
-      ? [adapter.kind, adapter.ref.ownerId, "pl-day-results", dayId]
-      : ["pl-day-results", dayId, client?.id],
+    queryKey: ["pl-day-results", dayId, client?.id, adapter?.kind ?? null, adapter?.ref.ownerId ?? null],
     enabled: !!client?.id && (rows as any[]).length > 0,
     initialData: client?.id ? cachedInitialData<any[]>(cacheScope, `results:${client.id}`) : undefined,
     queryFn: async () => {
