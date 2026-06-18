@@ -27,6 +27,19 @@ export async function initNativeShell() {
     const { Keyboard, KeyboardResize } = await import("@capacitor/keyboard");
     await Keyboard.setResizeMode({ mode: KeyboardResize.Native }).catch(() => {});
     await Keyboard.setScroll({ isDisabled: false }).catch(() => {});
+    // Mirror the keyboard state into <html data-keyboard-open> so the same
+    // CSS that hides the mobile bottom-nav on web (visualViewport-based)
+    // also fires on native iOS where Native resize means visualViewport
+    // never changes and the web hook would otherwise never trigger.
+    const root = document.documentElement;
+    Keyboard.addListener("keyboardWillShow", (info: { keyboardHeight: number }) => {
+      root.setAttribute("data-keyboard-open", "true");
+      root.style.setProperty("--keyboard-inset", `${info?.keyboardHeight ?? 0}px`);
+    }).catch(() => {});
+    Keyboard.addListener("keyboardWillHide", () => {
+      root.removeAttribute("data-keyboard-open");
+      root.style.setProperty("--keyboard-inset", "0px");
+    }).catch(() => {});
   } catch { /* plugin not installed */ }
 
   try {
