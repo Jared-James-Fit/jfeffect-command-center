@@ -90,8 +90,8 @@ function MemberNutrition() {
           <span className="rounded-full bg-secondary px-2 py-0.5 uppercase tracking-wide text-[10px] font-semibold">
             {saved.source === "coach" ? "Set by coach" : saved.source === "manual" ? "Manual" : "Calculated"}
           </span>
-          <Link to="/m/nutrition/targets-setup" className="underline hover:text-foreground">
-            Edit targets
+          <Link to="/m/nutrition/targets-manage" className="underline hover:text-foreground">
+            Manage targets
           </Link>
         </div>
       )}
