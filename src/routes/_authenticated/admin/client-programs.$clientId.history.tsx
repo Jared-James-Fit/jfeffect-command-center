@@ -1,4 +1,4 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -7,13 +7,14 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, Search, AlertTriangle, CheckCircle2, MessageCircle, Star } from "lucide-react";
+import { ArrowLeft, Search, AlertTriangle, CheckCircle2, MessageCircle, Star, Eye } from "lucide-react";
 import { getCompletedHistory } from "@/lib/pl-programs";
 import { ProgressComparison } from "@/components/progress-comparison";
 import { ExerciseHistorySheet } from "@/components/exercise-history-sheet";
 import { toast } from "sonner";
 import { computeWorkoutSummary, type WorkoutSummary } from "@/lib/workout-summary";
 import { WorkoutReviewSummaryHeader } from "@/components/workout-submission-summary";
+import { useClientImpersonation } from "@/lib/client-impersonation";
 
 export const Route = createFileRoute("/_authenticated/admin/client-programs/$clientId/history")({ component: HistoryPage });
 
@@ -21,7 +22,7 @@ function HistoryPage() {
   const { clientId } = Route.useParams();
   const { data: client } = useQuery({
     queryKey: ["client", clientId],
-    queryFn: async () => (await supabase.from("clients").select("id, full_name, preferred_weight_unit").eq("id", clientId).maybeSingle()).data,
+    queryFn: async () => (await supabase.from("clients").select("id, full_name, user_id, preferred_weight_unit").eq("id", clientId).maybeSingle()).data,
   });
   const { data: history } = useQuery({
     queryKey: ["pl-history", clientId],
