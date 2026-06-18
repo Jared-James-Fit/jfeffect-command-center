@@ -4,15 +4,43 @@ import { supabase } from "@/integrations/supabase/client";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Apple, Plus, Pencil, Trash2, Copy } from "lucide-react";
+import { Apple, Plus, Pencil, Trash2, Copy, Droplet } from "lucide-react";
 import { toast } from "sonner";
 import { NutritionTargetDialog } from "./nutrition-target-dialog";
 import { deriveTarget } from "@/lib/nutrition-cardio";
+import { WaterTargetDialog } from "@/components/progress/water-target-dialog";
+import { ensureWaterTarget, formatWater } from "@/lib/water";
+import { useAuth } from "@/lib/auth";
 
 export function NutritionTargetsPanel({ clientId }: { clientId: string }) {
   const qc = useQueryClient();
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<any>(null);
+  const [waterOpen, setWaterOpen] = useState(false);
+  const { user, role } = useAuth();
+
+  // Resolve the client's auth user_id (progress_water_targets is keyed on
+  // auth.users.id, but this panel receives clients.id).
+  const { data: clientRow } = useQuery({
+    queryKey: ["client-user-id", clientId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("clients").select("user_id").eq("id", clientId).maybeSingle();
+      if (error) throw error;
+      return data;
+    },
+  });
+  const clientUserId = clientRow?.user_id ?? null;
+
+  const { data: waterTarget } = useQuery({
+    queryKey: ["water-target", clientUserId],
+    enabled: !!clientUserId,
+    queryFn: () => ensureWaterTarget(clientUserId!),
+    staleTime: 30_000,
+  });
+
+  const viewerRole: "owner" | "admin" | "coach" =
+    role === "admin" ? "admin" : "coach";
 
   const { data: targets = [] } = useQuery({
     queryKey: ["nutrition-targets", clientId],
@@ -57,6 +85,24 @@ export function NutritionTargetsPanel({ clientId }: { clientId: string }) {
           <Plus className="mr-2 h-4 w-4" /> Add Targets
         </Button>
       </div>
+      {clientUserId && (
+        <div className="flex items-center justify-between rounded-md border border-border bg-secondary/20 p-3">
+          <div className="flex items-center gap-2">
+            <Droplet className="h-4 w-4 text-sky-500" />
+            <div>
+              <div className="text-sm font-semibold">
+                Water target: {waterTarget ? formatWater(waterTarget.active_ml, "L") : "—"}
+              </div>
+              <div className="text-[11px] text-muted-foreground">
+                Source: {waterTarget?.target_source ?? "default"} · synced across Home & Nutrition
+              </div>
+            </div>
+          </div>
+          <Button size="sm" variant="outline" onClick={() => setWaterOpen(true)}>
+            Set water target
+          </Button>
+        </div>
+      )}
       {targets.length === 0 ? (
         <div className="rounded-md border border-dashed border-border p-6 text-center text-sm text-muted-foreground">
           No nutrition targets assigned yet.
@@ -98,6 +144,15 @@ export function NutritionTargetsPanel({ clientId }: { clientId: string }) {
         </ul>
       )}
       <NutritionTargetDialog open={open} onOpenChange={setOpen} clientId={clientId} initial={editing ?? undefined} />
+      {clientUserId && user?.id && (
+        <WaterTargetDialog
+          open={waterOpen}
+          onOpenChange={setWaterOpen}
+          userId={clientUserId}
+          currentUserId={user.id}
+          viewerRole={viewerRole}
+        />
+      )}
     </Card>
   );
 }

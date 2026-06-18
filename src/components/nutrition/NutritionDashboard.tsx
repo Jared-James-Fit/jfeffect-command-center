@@ -1,8 +1,13 @@
 import { type ReactNode } from "react";
 import { Link } from "@tanstack/react-router";
+import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { Card } from "@/components/ui/card";
 import { Flame, Beef, Wheat, Cookie, Droplets, Moon, ChefHat, HelpCircle } from "lucide-react";
 import { RecipeBrowser } from "./RecipeBrowser";
+import { ensureWaterTarget, formatWater } from "@/lib/water";
+import { WaterTargetDialog } from "@/components/progress/water-target-dialog";
+import { useAuth } from "@/lib/auth";
 
 /**
  * Shared nutrition dashboard surface used by members and coaching clients.
@@ -38,7 +43,7 @@ export function NutritionDashboard({
   return (
     <div className="space-y-6 p-4 pb-28 md:p-6 md:pb-12">
       <div id="targets" className="scroll-mt-20">
-        <TargetsStrip targets={targets} />
+        <TargetsStrip targets={targets} userId={userId} />
       </div>
       <QuickActions viewer={viewer} recipesAnchorId={recipesAnchorId} />
       {children}
@@ -49,34 +54,89 @@ export function NutritionDashboard({
   );
 }
 
-function TargetsStrip({ targets }: { targets?: NutritionTargets }) {
+function TargetsStrip({ targets, userId }: { targets?: NutritionTargets; userId?: string }) {
+  const { user, role } = useAuth();
+  const [waterOpen, setWaterOpen] = useState(false);
+
+  // Single source of truth for water target: progress_water_targets.active_ml.
+  // Falls back to the legacy nutrition_targets.water string only if we
+  // have no synced user id (rare — viewing a target preview without auth).
+  const waterQ = useQuery({
+    queryKey: ["water-target", userId],
+    enabled: !!userId,
+    queryFn: () => ensureWaterTarget(userId!),
+    staleTime: 30_000,
+  });
+
+  const syncedWaterValue = waterQ.data ? formatWater(waterQ.data.active_ml, "L") : null;
+  const waterSourceLabel =
+    waterQ.data?.target_source === "coach" ? "Set by coach"
+    : waterQ.data?.target_source === "admin" ? "Set by admin"
+    : waterQ.data?.target_source === "user" ? "Custom"
+    : "Daily target";
+
+  const viewerRole: "owner" | "admin" | "coach" =
+    role === "admin" ? "admin" : role === "coach" ? "coach" : "owner";
+
   const items = [
     { icon: Flame, label: "Cal", value: targets?.calories, unit: "" },
     { icon: Beef, label: "Protein", value: targets?.protein, unit: "g" },
     { icon: Wheat, label: "Carbs", value: targets?.carbs, unit: "g" },
     { icon: Cookie, label: "Fats", value: targets?.fats, unit: "g" },
-    { icon: Droplets, label: "Water", value: targets?.water, unit: "" },
+    { icon: Droplets, label: "Water", value: syncedWaterValue ?? targets?.water, unit: "", isWater: true as const },
     { icon: Moon, label: "Sleep", value: targets?.sleep, unit: "" },
   ];
   return (
     <Card className="p-3 sm:p-4">
       <div className="grid grid-cols-3 gap-2 sm:grid-cols-6">
-        {items.map((it) => (
-          <div
-            key={it.label}
-            className="rounded-lg border border-border/60 bg-secondary/30 p-2.5 text-center"
-          >
-            <it.icon className="mx-auto h-4 w-4 text-primary" />
-            <div className="mt-1 text-lg font-black leading-none">
-              {it.value ?? "—"}
-              {it.value != null && it.unit && (
-                <span className="ml-0.5 text-[10px] font-normal text-muted-foreground">{it.unit}</span>
-              )}
+        {items.map((it) => {
+          const isWater = "isWater" in it && it.isWater;
+          const clickable = isWater && !!userId;
+          const content = (
+            <>
+              <it.icon className="mx-auto h-4 w-4 text-primary" />
+              <div className="mt-1 text-lg font-black leading-none">
+                {it.value ?? "—"}
+                {it.value != null && it.unit && (
+                  <span className="ml-0.5 text-[10px] font-normal text-muted-foreground">{it.unit}</span>
+                )}
+              </div>
+              <div className="mt-1 text-[10px] uppercase tracking-wide text-muted-foreground">
+                {isWater && syncedWaterValue ? waterSourceLabel : it.label}
+              </div>
+            </>
+          );
+          if (clickable) {
+            return (
+              <button
+                key={it.label}
+                type="button"
+                onClick={() => setWaterOpen(true)}
+                className="rounded-lg border border-border/60 bg-secondary/30 p-2.5 text-center transition hover:border-primary/50 active:scale-[0.98]"
+              >
+                {content}
+              </button>
+            );
+          }
+          return (
+            <div
+              key={it.label}
+              className="rounded-lg border border-border/60 bg-secondary/30 p-2.5 text-center"
+            >
+              {content}
             </div>
-            <div className="mt-1 text-[10px] uppercase tracking-wide text-muted-foreground">{it.label}</div>
-          </div>
-        ))}
+          );
+        })}
       </div>
+      {userId && user?.id && (
+        <WaterTargetDialog
+          open={waterOpen}
+          onOpenChange={setWaterOpen}
+          userId={userId}
+          currentUserId={user.id}
+          viewerRole={viewerRole}
+        />
+      )}
     </Card>
   );
 }
