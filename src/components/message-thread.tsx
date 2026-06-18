@@ -1499,6 +1499,9 @@ export function MessageThread({
               onPickCamera={() => cameraInputRef.current?.click()}
               onPickPhotos={() => photoInputRef.current?.click()}
               onPickFiles={() => fileInputRef.current?.click()}
+              onInsertText={role === "admin" ? (text) =>
+                setBody((b) => (b ? `${b.replace(/\s+$/, "")} ${text}` : text))
+              : undefined}
               onAttach={role === "admin" ? async (att, noteBody) => {
                 await doSend({ body: noteBody, extraAttachments: [att as unknown as MessageAttachment] });
               } : undefined}
@@ -1565,22 +1568,13 @@ export function MessageThread({
 
             {/* Priority selector removed for simplicity. */}
 
-            {role === "admin" && (
-              <MeetQuickAction
-                disabled={sending || uploading}
-                onInsert={(text) =>
-                  setBody((b) => (b ? `${b.replace(/\s+$/, "")} ${text}` : text))
-                }
-              />
-            )}
-
             {/* Textarea */}
             <Textarea
               value={body}
               onChange={(e) => setBody(e.target.value)}
               placeholder={role === "client" ? "Message Coach Jared…" : "Reply to client…"}
-              rows={1}
-              className="min-h-10 max-h-40 flex-1 resize-none rounded-2xl border-input bg-background px-3 py-2 text-base sm:text-sm"
+              rows={2}
+              className="min-h-[52px] max-h-44 flex-1 resize-none rounded-2xl border-input bg-background px-3.5 py-2.5 text-base leading-snug sm:text-sm"
               onKeyDown={(e) => {
                 if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
                   e.preventDefault(); onSend();
