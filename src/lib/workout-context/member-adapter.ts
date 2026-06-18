@@ -27,6 +27,9 @@ import {
   type UpsertExerciseNoteInput,
   type EnrollmentSummaryDTO,
   type ReviewDTO,
+  type PlDayRaw,
+  type PlRowRaw,
+  type PlRowResultRaw,
 } from "./types";
 import {
   getEnrollmentSchedule,
