@@ -41,7 +41,6 @@ import { ChatSoundCard } from "@/components/chat-sound-card";
 import { ScheduledStrip } from "@/components/messages/scheduled-strip";
 import { ScheduleButton } from "@/components/messages/schedule-button";
 import { renderBodyWithMeet } from "@/components/chat-shared";
-import { MeetQuickAction } from "@/components/meet-quick-action";
 import { ComposerPlusMenu } from "@/components/composer-plus-menu";
 import {
   Paperclip, Send, X, FileText, Image as ImageIcon, Video, Link as LinkIcon, ExternalLink,
