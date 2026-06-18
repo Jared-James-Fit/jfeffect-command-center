@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { usePortalUserId } from "@/lib/client-impersonation";
@@ -77,8 +77,22 @@ function PortalAnalytics() {
     queryFn: () => getClientAnalyticsSettings(client!.id),
   });
 
-  const sourceUnit: Unit = (client?.preferred_weight_unit === "kg" ? "kg" : "lb");
-  const [displayUnit, setDisplayUnit] = useState<Unit>(sourceUnit);
+  // `getClientResults` always returns loads in LB (normalized at the data
+  // layer from each set's logged unit), so the source unit here is fixed
+  // to LB. The display unit defaults to the client's preferred unit and
+  // can be toggled freely without re-mixing kg/lb numbers.
+  const sourceUnit: Unit = "lb";
+  const preferredUnit: Unit = client?.preferred_weight_unit === "kg" ? "kg" : "lb";
+  const [displayUnit, setDisplayUnit] = useState<Unit>(preferredUnit);
+  // Once the client record loads, sync the toggle to their preferred unit.
+  // Runs once per client load — the user can still toggle freely after.
+  const [unitSynced, setUnitSynced] = useState(false);
+  useEffect(() => {
+    if (client && !unitSynced) {
+      setDisplayUnit(preferredUnit);
+      setUnitSynced(true);
+    }
+  }, [client, preferredUnit, unitSynced]);
   const [rangeDays, setRangeDays] = useState<number>(30);
   const [volumeDays, setVolumeDays] = useState<number>(7);
   const [selectedEx, setSelectedEx] = useState<string>("");
