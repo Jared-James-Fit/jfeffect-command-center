@@ -731,6 +731,21 @@ function WorkoutDay({
     setDraftHydrated(true);
   }, [draftKey, draftHydrated]);
 
+  // After local-draft hydration, seed notes/actualMin from the saved completion
+  // when the field is still empty. Without this, editing a past completed
+  // workout's notes would autosave `actual_duration_min: null` and clobber the
+  // previously-saved duration (and vice-versa).
+  const [completionHydrated, setCompletionHydrated] = useState(false);
+  useEffect(() => {
+    if (!draftHydrated || completionHydrated) return;
+    if (completion === undefined) return; // query still loading
+    if (completion) {
+      setNotes((prev) => (prev.length === 0 && completion.client_notes ? String(completion.client_notes) : prev));
+      setActualMin((prev) => (prev.length === 0 && completion.actual_duration_min != null ? String(completion.actual_duration_min) : prev));
+    }
+    setCompletionHydrated(true);
+  }, [draftHydrated, completionHydrated, completion]);
+
   // Autosave workout-level notes + actual minutes into pl_day_completions (draft state — does NOT set completed_at).
   const metaSave = useAutosave({
     key: draftKey,
