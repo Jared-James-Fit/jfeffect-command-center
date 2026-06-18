@@ -4,7 +4,8 @@ import {
   ArrowLeft,
   ArrowLeftRight,
   Loader2,
-  PlayCircle,
+  Play,
+  X,
   RefreshCw,
   Search,
 } from "lucide-react";
@@ -34,6 +35,10 @@ type ExerciseLite = {
   equipment: string | null;
   difficulty: string | null;
   vimeo_embed_url?: string | null;
+  youtube_url?: string | null;
+  thumbnail_url?: string | null;
+  cues?: string | null;
+  common_mistakes?: string | null;
 };
 
 type RankedSuggestion = { ex: ExerciseLite; reason: string };
@@ -148,7 +153,7 @@ function matchesChip(chip: EquipmentChip, equipment: string | null): boolean {
   }
 }
 
-const SELECT_COLS = "id,name,muscle_group,category,equipment,difficulty,vimeo_embed_url";
+const SELECT_COLS = "id,name,muscle_group,category,equipment,difficulty,vimeo_embed_url,youtube_url,thumbnail_url,cues,common_mistakes";
 const PAGE_SIZE = 20;
 
 function useDebounced<T>(value: T, ms: number): T {
@@ -160,6 +165,19 @@ function useDebounced<T>(value: T, ms: number): T {
   return v;
 }
 
+function youtubeEmbed(url: string | null | undefined): string | null {
+  if (!url) return null;
+  // Match v=ID or youtu.be/ID or /embed/ID
+  const m = url.match(/(?:v=|youtu\.be\/|embed\/)([A-Za-z0-9_-]{6,})/);
+  return m ? `https://www.youtube.com/embed/${m[1]}?autoplay=1&rel=0&modestbranding=1` : null;
+}
+
+function vimeoAutoplay(url: string | null | undefined): string | null {
+  if (!url) return null;
+  const sep = url.includes("?") ? "&" : "?";
+  return `${url}${sep}autoplay=1&title=0&byline=0&portrait=0`;
+}
+
 function ExerciseRowCard({
   ex,
   reason,
@@ -169,22 +187,70 @@ function ExerciseRowCard({
   reason?: string;
   onSelect: () => void;
 }) {
+  const [playing, setPlaying] = useState(false);
   const meta = [ex.muscle_group, ex.equipment].filter(Boolean).join(" · ");
+  const vimeoSrc = vimeoAutoplay(ex.vimeo_embed_url);
+  const ytSrc = !vimeoSrc ? youtubeEmbed(ex.youtube_url) : null;
+  const hasVideo = !!(vimeoSrc || ytSrc);
+  const cues = (ex.cues ?? "").trim();
+  const mistakes = (ex.common_mistakes ?? "").trim();
+
   return (
-    <div className="flex items-center justify-between gap-3 rounded-md border border-border bg-card px-3 py-2">
-      <div className="min-w-0 flex-1">
-        <div className="flex items-center gap-1.5">
-          <span className="truncate text-sm font-medium">{ex.name}</span>
-          {ex.vimeo_embed_url && (
-            <PlayCircle className="h-3.5 w-3.5 shrink-0 text-primary" aria-label="Video available" />
+    <div className="rounded-md border border-border bg-card">
+      <div className="flex items-center justify-between gap-2 px-3 py-2">
+        <div className="min-w-0 flex-1">
+          <div className="truncate text-sm font-medium">{ex.name}</div>
+          {reason && <div className="mt-0.5 text-[11px] font-medium text-primary/80">{reason}</div>}
+          {meta && <div className="mt-0.5 truncate text-[11px] text-muted-foreground">{meta}</div>}
+        </div>
+        <div className="flex shrink-0 items-center gap-1.5">
+          {hasVideo && (
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-7 w-7 p-0"
+              onClick={(e) => { e.stopPropagation(); setPlaying((p) => !p); }}
+              aria-label={playing ? `Hide ${ex.name} video` : `Play ${ex.name} video`}
+              aria-pressed={playing}
+            >
+              {playing ? <X className="h-3.5 w-3.5" /> : <Play className="h-3.5 w-3.5 fill-current" />}
+            </Button>
+          )}
+          <Button size="sm" variant="default" className="h-7 px-2 text-xs" onClick={onSelect}>
+            Use
+          </Button>
+        </div>
+      </div>
+      {playing && hasVideo && (
+        <div className="border-t border-border px-3 pb-3 pt-2">
+          <div className="relative w-full overflow-hidden rounded-md bg-black" style={{ aspectRatio: "16 / 9" }}>
+            <iframe
+              src={(vimeoSrc ?? ytSrc) as string}
+              title={`${ex.name} demonstration`}
+              loading="lazy"
+              allow="autoplay; fullscreen; picture-in-picture"
+              allowFullScreen
+              className="absolute inset-0 h-full w-full"
+            />
+          </div>
+          {(cues || mistakes) && (
+            <div className="mt-2 space-y-1.5 text-[12px] leading-snug">
+              {cues && (
+                <div>
+                  <div className="text-[10px] font-semibold uppercase tracking-wide text-primary">Cues</div>
+                  <div className="whitespace-pre-line text-foreground/90">{cues}</div>
+                </div>
+              )}
+              {mistakes && (
+                <div>
+                  <div className="text-[10px] font-semibold uppercase tracking-wide text-amber-600 dark:text-amber-400">Avoid</div>
+                  <div className="whitespace-pre-line text-foreground/90">{mistakes}</div>
+                </div>
+              )}
+            </div>
           )}
         </div>
-        {reason && <div className="mt-0.5 text-[11px] font-medium text-primary/80">{reason}</div>}
-        {meta && <div className="mt-0.5 truncate text-[11px] text-muted-foreground">{meta}</div>}
-      </div>
-      <Button size="sm" variant="default" className="h-7 px-2 text-xs shrink-0" onClick={onSelect}>
-        Use Exercise
-      </Button>
+      )}
     </div>
   );
 }
