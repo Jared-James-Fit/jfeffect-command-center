@@ -127,6 +127,15 @@ export function ScheduleManagerShell({ clientId, mode }: ScheduleManagerShellPro
         open={!!moveDayId}
         onOpenChange={(o) => { if (!o) { setMoveDayId(null); setMoveInitialDate(null); } }}
         initialTargetDate={moveInitialDate}
+        viewWorkoutAs={
+          mode === "coach"
+            ? {
+                clientId,
+                clientUserId: client?.user_id ?? null,
+                clientName: client?.full_name ?? null,
+              }
+            : null
+        }
       />
       <BulkMoveDialog
         open={bulkOpen}

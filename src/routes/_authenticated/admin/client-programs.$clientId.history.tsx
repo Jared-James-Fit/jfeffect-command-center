@@ -1,4 +1,4 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -7,13 +7,14 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, Search, AlertTriangle, CheckCircle2, MessageCircle, Star } from "lucide-react";
+import { ArrowLeft, Search, AlertTriangle, CheckCircle2, MessageCircle, Star, Eye } from "lucide-react";
 import { getCompletedHistory } from "@/lib/pl-programs";
 import { ProgressComparison } from "@/components/progress-comparison";
 import { ExerciseHistorySheet } from "@/components/exercise-history-sheet";
 import { toast } from "sonner";
 import { computeWorkoutSummary, type WorkoutSummary } from "@/lib/workout-summary";
 import { WorkoutReviewSummaryHeader } from "@/components/workout-submission-summary";
+import { useClientImpersonation } from "@/lib/client-impersonation";
 
 export const Route = createFileRoute("/_authenticated/admin/client-programs/$clientId/history")({ component: HistoryPage });
 
@@ -21,7 +22,7 @@ function HistoryPage() {
   const { clientId } = Route.useParams();
   const { data: client } = useQuery({
     queryKey: ["client", clientId],
-    queryFn: async () => (await supabase.from("clients").select("id, full_name, preferred_weight_unit").eq("id", clientId).maybeSingle()).data,
+    queryFn: async () => (await supabase.from("clients").select("id, full_name, user_id, preferred_weight_unit").eq("id", clientId).maybeSingle()).data,
   });
   const { data: history } = useQuery({
     queryKey: ["pl-history", clientId],
@@ -73,7 +74,11 @@ function HistoryPage() {
           <ArrowLeft className="mr-1 h-4 w-4" /> Back to programs
         </Link>
 
-        <WorkoutFeedbackSection clientId={clientId} />
+        <WorkoutFeedbackSection
+          clientId={clientId}
+          clientUserId={(client as any)?.user_id ?? null}
+          clientName={client?.full_name ?? null}
+        />
 
         <section>
           <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
@@ -169,7 +174,34 @@ function HistoryPage() {
   );
 }
 
-function WorkoutFeedbackSection({ clientId }: { clientId: string }) {
+function WorkoutFeedbackSection({
+  clientId,
+  clientUserId,
+  clientName,
+}: {
+  clientId: string;
+  clientUserId: string | null;
+  clientName: string | null;
+}) {
+  const navigate = useNavigate();
+  const impersonation = useClientImpersonation();
+  const viewWorkout = (dayId: string | null | undefined) => {
+    if (!dayId) {
+      toast.error("This feedback isn't linked to a workout day yet.");
+      return;
+    }
+    if (!clientUserId) {
+      toast.error("This client has no account yet — can't open their workout view.");
+      return;
+    }
+    impersonation.start(
+      { id: clientId, user_id: clientUserId, full_name: clientName },
+      typeof window !== "undefined"
+        ? window.location.pathname + window.location.search
+        : null,
+    );
+    navigate({ to: "/portal/workouts/$dayId", params: { dayId } });
+  };
   const { data: rows = [], refetch } = useQuery({
     queryKey: ["pl-workout-feedback-history", clientId],
     queryFn: async () => {
@@ -347,6 +379,9 @@ function WorkoutFeedbackSection({ clientId }: { clientId: string }) {
                   </div>
                 )}
                 <div className="mt-3 flex flex-wrap gap-2">
+                  <Button size="sm" variant="outline" onClick={() => viewWorkout(r.day_id)}>
+                    <Eye className="mr-1 h-3.5 w-3.5" /> View workout
+                  </Button>
                   {!r.reviewed_at && (
                     <Button size="sm" variant="default" onClick={() => markReviewed(r.id)}>
                       <CheckCircle2 className="mr-1 h-3.5 w-3.5" /> Mark reviewed
