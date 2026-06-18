@@ -62,7 +62,7 @@ jobs:
           echo "${{ secrets.APP_STORE_CONNECT_API_KEY_BASE64 }}" | base64 --decode > ~/.private_keys/AuthKey_${{ secrets.APP_STORE_CONNECT_KEY_ID }}.p8
           chmod 600 ~/.private_keys/AuthKey_${{ secrets.APP_STORE_CONNECT_KEY_ID }}.p8
 
-      - name: Patch pbxproj for App Store distribution signing
+      - name: Patch pbxproj for automatic signing
         run: |
           PBXPROJ="ios/App/App.xcodeproj/project.pbxproj"
           
@@ -81,6 +81,9 @@ jobs:
           content = re.sub(r'\s*PROVISIONING_PROFILE_SPECIFIER\s*=\s*[^;]*;\n', '\n', content)
           content = re.sub(r'\s*PROVISIONING_PROFILE\s*=\s*[^;]*;\n', '\n', content)
 
+          # Remove any explicit CODE_SIGN_IDENTITY settings that conflict with automatic signing
+          content = re.sub(r'\s*CODE_SIGN_IDENTITY\s*=\s*[^;]*;\n', '\n', content)
+
           # Fix bundle ID
           content = re.sub(r'PRODUCT_BUNDLE_IDENTIFIER\s*=\s*[^;]+;', 'PRODUCT_BUNDLE_IDENTIFIER = com.jfeffect.app;', content)
 
@@ -94,7 +97,7 @@ jobs:
           PYEOF
           
           echo "=== Signing settings after patch ==="
-          grep -n "CODE_SIGN_STYLE\|CODE_SIGN_IDENTITY\|DEVELOPMENT_TEAM\|PRODUCT_BUNDLE_IDENTIFIER" "$PBXPROJ" | head -20
+          grep -n "CODE_SIGN\|ProvisioningStyle\|DEVELOPMENT_TEAM\|PRODUCT_BUNDLE_IDENTIFIER" "$PBXPROJ" | head -20
 
       - name: Build and Archive iOS app
         run: |
@@ -107,9 +110,9 @@ jobs:
             -archivePath "$RUNNER_TEMP/JFEffect.xcarchive" \
             archive \
             CODE_SIGN_STYLE=Automatic \
-            CODE_SIGN_IDENTITY="Apple Distribution" \
             DEVELOPMENT_TEAM=${{ secrets.APPLE_TEAM_ID }} \
             PRODUCT_BUNDLE_IDENTIFIER=com.jfeffect.app \
+            ONLY_ACTIVE_ARCH=NO \
             -allowProvisioningUpdates \
             -authenticationKeyPath "$HOME/.private_keys/AuthKey_${{ secrets.APP_STORE_CONNECT_KEY_ID }}.p8" \
             -authenticationKeyID "${{ secrets.APP_STORE_CONNECT_KEY_ID }}" \
