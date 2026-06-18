@@ -91,7 +91,7 @@ export type ProgressContext = {
 };
 
 export function ProgressSection({ ctx }: { ctx: ProgressContext }) {
-  const [tab, setTab] = useState("overview");
+  const [tab, setTab] = useState<string>("photos");
   const [photoDialog, setPhotoDialog] = useState(false);
   const [videoDialog, setVideoDialog] = useState(false);
   const [weightDialog, setWeightDialog] = useState(false);
@@ -102,25 +102,15 @@ export function ProgressSection({ ctx }: { ctx: ProgressContext }) {
   return (
     <div className="space-y-4 p-3 pb-28 md:p-6 md:pb-12">
       <Tabs value={tab} onValueChange={setTab} className="space-y-4">
-        <TabsList className="grid w-full grid-cols-4 md:grid-cols-7 h-auto">
-          <TabsTrigger value="overview">Overview</TabsTrigger>
+        <TabsList className="grid w-full grid-cols-3 md:grid-cols-6 h-auto">
           <TabsTrigger value="photos">Photos</TabsTrigger>
           <TabsTrigger value="videos">Videos</TabsTrigger>
           <TabsTrigger value="bodyweight">Weight</TabsTrigger>
           <TabsTrigger value="water">Water</TabsTrigger>
           <TabsTrigger value="measurements">Measure</TabsTrigger>
-          <TabsTrigger value="timeline">Timeline</TabsTrigger>
+          <TabsTrigger value="timeline">History</TabsTrigger>
         </TabsList>
 
-        <TabsContent value="overview">
-          <Overview ctx={ctx}
-            onAddPhoto={() => setPhotoDialog(true)}
-            onLogWeight={() => setWeightDialog(true)}
-            onAddMeasure={() => setMeasureDialog(true)}
-            onViewTimeline={() => setTab("timeline")}
-            onOpenSubmission={setDetailId}
-          />
-        </TabsContent>
         <TabsContent value="photos">
           <PhotosTab ctx={ctx} onNew={() => setPhotoDialog(true)} onOpen={setDetailId} onCompare={() => setCompareDialog(true)} />
         </TabsContent>
