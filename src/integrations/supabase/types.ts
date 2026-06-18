@@ -420,6 +420,7 @@ export type Database = {
         Row: {
           access_restricted_at: string | null
           account_type: string
+          activity_level: string | null
           address_city: string | null
           address_country: string | null
           address_line1: string | null
@@ -427,6 +428,7 @@ export type Database = {
           address_zip: string | null
           admin_notes: string | null
           avatar_url: string | null
+          biological_sex: string | null
           cancel_at: string | null
           cancelled_at: string | null
           committed_training_days: string[]
@@ -447,6 +449,7 @@ export type Database = {
           goals: string | null
           goals_tags: string[]
           grace_period_ends_at: string | null
+          height_cm: number | null
           hold_plan_started_at: string | null
           id: string
           install_detected_at: string | null
@@ -487,12 +490,14 @@ export type Database = {
           sync_warning_reason: string | null
           training_background: string | null
           trial_end_at: string | null
+          units_preference: string | null
           updated_at: string
           user_id: string | null
         }
         Insert: {
           access_restricted_at?: string | null
           account_type?: string
+          activity_level?: string | null
           address_city?: string | null
           address_country?: string | null
           address_line1?: string | null
@@ -500,6 +505,7 @@ export type Database = {
           address_zip?: string | null
           admin_notes?: string | null
           avatar_url?: string | null
+          biological_sex?: string | null
           cancel_at?: string | null
           cancelled_at?: string | null
           committed_training_days?: string[]
@@ -520,6 +526,7 @@ export type Database = {
           goals?: string | null
           goals_tags?: string[]
           grace_period_ends_at?: string | null
+          height_cm?: number | null
           hold_plan_started_at?: string | null
           id?: string
           install_detected_at?: string | null
@@ -560,12 +567,14 @@ export type Database = {
           sync_warning_reason?: string | null
           training_background?: string | null
           trial_end_at?: string | null
+          units_preference?: string | null
           updated_at?: string
           user_id?: string | null
         }
         Update: {
           access_restricted_at?: string | null
           account_type?: string
+          activity_level?: string | null
           address_city?: string | null
           address_country?: string | null
           address_line1?: string | null
@@ -573,6 +582,7 @@ export type Database = {
           address_zip?: string | null
           admin_notes?: string | null
           avatar_url?: string | null
+          biological_sex?: string | null
           cancel_at?: string | null
           cancelled_at?: string | null
           committed_training_days?: string[]
@@ -593,6 +603,7 @@ export type Database = {
           goals?: string | null
           goals_tags?: string[]
           grace_period_ends_at?: string | null
+          height_cm?: number | null
           hold_plan_started_at?: string | null
           id?: string
           install_detected_at?: string | null
@@ -633,6 +644,7 @@ export type Database = {
           sync_warning_reason?: string | null
           training_background?: string | null
           trial_end_at?: string | null
+          units_preference?: string | null
           updated_at?: string
           user_id?: string | null
         }
@@ -7811,6 +7823,65 @@ export type Database = {
         }
         Relationships: []
       }
+      member_nutrition_targets: {
+        Row: {
+          active: boolean
+          calories: number
+          carbs_g: number
+          created_at: string
+          fat_g: number
+          goal: string | null
+          id: string
+          input_snapshot: Json | null
+          member_id: string
+          notes: string | null
+          protein_g: number
+          source: string
+          updated_at: string
+          water_ml: number | null
+        }
+        Insert: {
+          active?: boolean
+          calories: number
+          carbs_g: number
+          created_at?: string
+          fat_g: number
+          goal?: string | null
+          id?: string
+          input_snapshot?: Json | null
+          member_id: string
+          notes?: string | null
+          protein_g: number
+          source?: string
+          updated_at?: string
+          water_ml?: number | null
+        }
+        Update: {
+          active?: boolean
+          calories?: number
+          carbs_g?: number
+          created_at?: string
+          fat_g?: number
+          goal?: string | null
+          id?: string
+          input_snapshot?: Json | null
+          member_id?: string
+          notes?: string | null
+          protein_g?: number
+          source?: string
+          updated_at?: string
+          water_ml?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "member_nutrition_targets_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: false
+            referencedRelation: "app_members"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       member_plan_audit: {
         Row: {
           action: string
@@ -10443,6 +10514,57 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      nutrition_target_settings: {
+        Row: {
+          created_at: string
+          deficit_percent: number
+          fat_g_per_kg: number
+          id: string
+          pal_extra: number
+          pal_light: number
+          pal_moderate: number
+          pal_sedentary: number
+          pal_very: number
+          protein_g_per_kg: number
+          surplus_percent: number
+          updated_at: string
+          updated_by: string | null
+          water_ml_per_kg: number
+        }
+        Insert: {
+          created_at?: string
+          deficit_percent?: number
+          fat_g_per_kg?: number
+          id?: string
+          pal_extra?: number
+          pal_light?: number
+          pal_moderate?: number
+          pal_sedentary?: number
+          pal_very?: number
+          protein_g_per_kg?: number
+          surplus_percent?: number
+          updated_at?: string
+          updated_by?: string | null
+          water_ml_per_kg?: number
+        }
+        Update: {
+          created_at?: string
+          deficit_percent?: number
+          fat_g_per_kg?: number
+          id?: string
+          pal_extra?: number
+          pal_light?: number
+          pal_moderate?: number
+          pal_sedentary?: number
+          pal_very?: number
+          protein_g_per_kg?: number
+          surplus_percent?: number
+          updated_at?: string
+          updated_by?: string | null
+          water_ml_per_kg?: number
+        }
+        Relationships: []
       }
       nutrition_targets: {
         Row: {
