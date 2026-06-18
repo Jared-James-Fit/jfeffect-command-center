@@ -34,6 +34,7 @@ import { SocialIcons } from "@/components/social-icons";
 import { ClientQuickLinksCard } from "@/components/client-quick-links-card";
 import { AppActivityCard } from "@/components/app-activity-card";
 import { ManualCheckInReviewComposer } from "@/components/manual-check-in-review-composer";
+import { ClientCheckInConversations } from "@/components/client-check-in-conversations";
 import { Send } from "lucide-react";
 import { FolderOpen, Eye } from "lucide-react";
 import { useClientImpersonation } from "@/lib/client-impersonation";
