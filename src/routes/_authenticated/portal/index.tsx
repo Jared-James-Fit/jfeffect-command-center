@@ -341,9 +341,6 @@ function PortalHome() {
     } as any);
   }
 
-  // Bottom-sheet trigger for Log Weight from the quick-actions grid.
-  const bodyweightRef = useRef<{ open: () => void }>(null);
-
   // While the core client record is loading, render a steady skeleton in the
   // same layout shape as the real portal so the dashboard fades in once
   // instead of popping in piece-by-piece.
@@ -399,7 +396,6 @@ function PortalHome() {
           <QuickActionsGrid
             messageBadge={unreadMsgs.length}
             checkInBadge={(assignedForms as any[])?.length || undefined}
-            onLogWeight={() => bodyweightRef.current?.open()}
             weeklyCheckInFormId={pickWeeklyCheckInForm(assignedForms as any)?.id}
           />
         )}
@@ -422,16 +418,6 @@ function PortalHome() {
 
         {/* 5 — Current Training Block */}
         {activePhase && <TrainingBlockCard phase={activePhase} />}
-
-        {/* 6 — Bodyweight summary */}
-        {client && portalUserId && (
-          <BodyweightSummaryCardWithRef
-            ref={bodyweightRef}
-            userId={portalUserId}
-            defaultUnit={(client.preferred_weight_unit as WeightUnit) ?? "lb"}
-          />
-        )}
-
 
         {/* 6c — Water Today */}
         {portalUserId && (
