@@ -253,6 +253,38 @@ export interface ReviewDTO {
   submittedAt: string | null;
 }
 
+/* -------------------------------------------------------------------------- */
+/* Raw passthrough row shapes (Phase B — adapter-as-data-source switch)       */
+/*                                                                            */
+/* WorkoutDayView and its leaf components (ExerciseBlock, SetRow, autosave,   */
+/* completeness helpers) consume raw pl_* row shapes end-to-end. The DTOs     */
+/* above are not yet adopted by any consumer. To unify the read source        */
+/* without rippling a DTO refactor through every leaf, adapters expose a      */
+/* raw read surface that returns rows matching the existing                   */
+/* `sb.from("pl_*").select(...)` projections WorkoutDayView currently uses.   */
+/*                                                                            */
+/* The client adapter returns these byte-identically (passthrough). The       */
+/* member adapter reshapes member_* data into the same column-name layout.    */
+/*                                                                            */
+/* These are intentionally `Record<string, any>` — the underlying tables are  */
+/* not strongly typed elsewhere in the codebase, and forcing nominal types    */
+/* here would create churn without runtime safety. See                        */
+/* WorkoutDayView.tsx for the exact columns consumed.                         */
+/* -------------------------------------------------------------------------- */
+
+/** Mirrors `sb.from("pl_days").select("*")` — see WorkoutDayView dayQuery. */
+export type PlDayRaw = Record<string, any>;
+
+/**
+ * Mirrors `sb.from("pl_exercise_rows").select("*, exercises(id,name,...)")`.
+ * Includes the nested `exercises` join used by ExerciseBlock for name,
+ * video, cues, warmup_protocol_id, default_load_unit, etc.
+ */
+export type PlRowRaw = Record<string, any>;
+
+/** Mirrors `sb.from("pl_row_results").select("*")` scoped to one trainee. */
+export type PlRowResultRaw = Record<string, any>;
+
 export interface WorkoutContextAdapter {
   kind: WorkoutContextKind;
   ref: WorkoutContextRef;
@@ -269,6 +301,15 @@ export interface WorkoutContextAdapter {
   getDay(dayId: string): Promise<WorkoutDay>;
   listRows(dayId: string): Promise<ExerciseRowDTO[]>;
   listRowResults(dayId: string): Promise<RowResultDTO[]>;
+
+  /* ---- raw passthrough surface (Phase B turn 1 — see PlRowRaw above) ----- */
+  /** Raw pl_days row for `dayId`. Member adapter reshapes member_* equivalents. */
+  getDayRaw(dayId: string): Promise<PlDayRaw>;
+  /** Raw pl_exercise_rows with `exercises(...)` join for `dayId`, in sort_order. */
+  listRowsRaw(dayId: string): Promise<PlRowRaw[]>;
+  /** Raw pl_row_results for this day, scoped to the current trainee. */
+  listRowResultsRaw(dayId: string): Promise<PlRowResultRaw[]>;
+
   listExerciseNotes(dayId: string): Promise<ExerciseNoteDTO[]>;
   listExerciseHistory(exerciseId: string, opts?: { limit?: number }): Promise<HistoryEntryDTO[]>;
   listClientMaxes(): Promise<MaxEntryDTO[]>;

@@ -25,6 +25,9 @@ import {
   type UpsertExerciseNoteInput,
   type EnrollmentSummaryDTO,
   type ReviewDTO,
+  type PlDayRaw,
+  type PlRowRaw,
+  type PlRowResultRaw,
 } from "./types";
 import { getClientSchedule, applyBulkScheduleChange } from "@/lib/schedule-bulk.functions";
 import { supabase } from "@/integrations/supabase/client";
@@ -163,6 +166,47 @@ export function createClientAdapter(ref: WorkoutContextRef): WorkoutContextAdapt
         blockName: b?.name ?? null,
         scheduledDate: (d as any).scheduled_date ?? null,
       };
+    },
+
+    /* ---- Phase B turn 1 — raw passthrough surface ---- */
+    async getDayRaw(dayId: string): Promise<PlDayRaw> {
+      const { data, error } = await sb
+        .from("pl_days")
+        .select("*")
+        .eq("id", dayId)
+        .maybeSingle();
+      if (error) throw new Error(error.message);
+      if (!data) throw new Error(`pl_days row not found for ${dayId}`);
+      return data as PlDayRaw;
+    },
+
+    async listRowsRaw(dayId: string): Promise<PlRowRaw[]> {
+      const { data, error } = await sb
+        .from("pl_exercise_rows")
+        .select(
+          "*, exercises(id,name,video_url,vimeo_embed_url,thumbnail_url,cues,common_mistakes,muscle_group,category,pl_lift_group,warmup_protocol_id,is_powerlifting,warmup_notes,default_load_unit,exercise_category,is_competition_lift,competition_lift_type)",
+        )
+        .eq("day_id", dayId)
+        .order("sort_order");
+      if (error) throw new Error(error.message);
+      return (data ?? []) as PlRowRaw[];
+    },
+
+    async listRowResultsRaw(dayId: string): Promise<PlRowResultRaw[]> {
+      const { data: rowIdsRes, error: rowErr } = await sb
+        .from("pl_exercise_rows")
+        .select("id")
+        .eq("day_id", dayId);
+      if (rowErr) throw new Error(rowErr.message);
+      const rowIds = (rowIdsRes ?? []).map((r: any) => r.id);
+      if (!rowIds.length) return [];
+      const { data, error } = await sb
+        .from("pl_row_results")
+        .select("*")
+        .in("row_id", rowIds)
+        .eq("client_id", ref.ownerId);
+      if (error) throw new Error(error.message);
+      return (data ?? []) as PlRowResultRaw[];
     },
 
     async listRows(dayId: string): Promise<ExerciseRowDTO[]> {
