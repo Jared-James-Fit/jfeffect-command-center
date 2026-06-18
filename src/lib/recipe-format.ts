@@ -42,12 +42,12 @@ const KNOWN_HEADERS = [
 ];
 
 const HEADER_RE = new RegExp(
-  `^\\s*(${KNOWN_HEADERS.map((h) => h.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|")})\\s*[:\\-]?\\s*$`,
+  `^\\s*#{0,6}\\s*\\**\\s*(${KNOWN_HEADERS.map((h) => h.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|")})\\s*\\**\\s*[:\\-]?\\s*$`,
   "i",
 );
 
 const INLINE_RE = new RegExp(
-  `^\\s*(${KNOWN_HEADERS.map((h) => h.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|")})\\s*:\\s*(.+)$`,
+  `^\\s*#{0,6}\\s*\\**\\s*(${KNOWN_HEADERS.map((h) => h.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|")})\\**\\s*:\\s*(.+)$`,
   "i",
 );
 
@@ -77,8 +77,10 @@ function isMacros(label: string) {
 function parseMacros(lines: string[]): { key: string; value: string }[] {
   const out: { key: string; value: string }[] = [];
   for (const raw of lines) {
-    const m = raw.match(/^\s*[-*•]?\s*([A-Za-z][A-Za-z ]+?)\s*[:\-]\s*(.+)$/);
-    if (m) out.push({ key: m[1].trim(), value: m[2].trim() });
+    // Strip markdown bold/italic wrappers so "- **Calories:** 950" parses cleanly.
+    const cleaned = raw.replace(/\*\*/g, "").replace(/__/g, "");
+    const m = cleaned.match(/^\s*[-*•]?\s*([A-Za-z][A-Za-z ]+?)\s*[:\-]\s*(.+)$/);
+    if (m) out.push({ key: m[1].trim(), value: m[2].replace(/\*+$/, "").trim() });
   }
   return out;
 }
