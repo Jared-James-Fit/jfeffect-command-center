@@ -156,6 +156,7 @@ export function AppShell({ items, bottomItems: customBottomItems, title, childre
   const { signOut, user, role } = useAuth();
   const navigate = useNavigate();
   const pathname = useRouterState({ select: (r) => r.location.pathname });
+  const search = useRouterState({ select: (r) => r.location.search as Record<string, unknown> });
   const navBadges = useClientNavBadges();
   const [mode, setMode] = useSidebarMode();
   const [collapsedSections, toggleSection, setAllSections] = useCollapsedSections();
@@ -727,6 +728,7 @@ export function AppShell({ items, bottomItems: customBottomItems, title, childre
               key={(item.children ? "g:" : "") + item.to + ":" + item.label}
               item={item}
               pathname={pathname}
+              search={search}
               navBadges={navBadges}
               onNavigate={(to) => markNavSeen(user?.id, to)}
             />
