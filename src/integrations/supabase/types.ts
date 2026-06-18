@@ -7847,12 +7847,105 @@ export type Database = {
         }
         Relationships: []
       }
+      member_meal_logs: {
+        Row: {
+          calories: number
+          carbs_g: number
+          created_at: string
+          fat_g: number
+          id: string
+          logged_at: string
+          member_id: string
+          name: string
+          preset_id: string | null
+          protein_g: number
+          raw_text: string | null
+          source: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          calories?: number
+          carbs_g?: number
+          created_at?: string
+          fat_g?: number
+          id?: string
+          logged_at?: string
+          member_id: string
+          name: string
+          preset_id?: string | null
+          protein_g?: number
+          raw_text?: string | null
+          source?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          calories?: number
+          carbs_g?: number
+          created_at?: string
+          fat_g?: number
+          id?: string
+          logged_at?: string
+          member_id?: string
+          name?: string
+          preset_id?: string | null
+          protein_g?: number
+          raw_text?: string | null
+          source?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      member_meal_presets: {
+        Row: {
+          calories: number
+          carbs_g: number
+          created_at: string
+          fat_g: number
+          id: string
+          member_id: string
+          name: string
+          protein_g: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          calories?: number
+          carbs_g?: number
+          created_at?: string
+          fat_g?: number
+          id?: string
+          member_id: string
+          name: string
+          protein_g?: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          calories?: number
+          carbs_g?: number
+          created_at?: string
+          fat_g?: number
+          id?: string
+          member_id?: string
+          name?: string
+          protein_g?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       member_nutrition_targets: {
         Row: {
           active: boolean
+          approved_at: string | null
+          approved_by: string | null
           calories: number
           carbs_g: number
           coach_ack_at: string | null
+          coach_note: string | null
           created_at: string
           fat_g: number
           goal: string | null
@@ -7860,6 +7953,7 @@ export type Database = {
           input_snapshot: Json | null
           member_id: string
           notes: string | null
+          pending_review: boolean
           protein_g: number
           source: string
           updated_at: string
@@ -7867,9 +7961,12 @@ export type Database = {
         }
         Insert: {
           active?: boolean
+          approved_at?: string | null
+          approved_by?: string | null
           calories: number
           carbs_g: number
           coach_ack_at?: string | null
+          coach_note?: string | null
           created_at?: string
           fat_g: number
           goal?: string | null
@@ -7877,6 +7974,7 @@ export type Database = {
           input_snapshot?: Json | null
           member_id: string
           notes?: string | null
+          pending_review?: boolean
           protein_g: number
           source?: string
           updated_at?: string
@@ -7884,9 +7982,12 @@ export type Database = {
         }
         Update: {
           active?: boolean
+          approved_at?: string | null
+          approved_by?: string | null
           calories?: number
           carbs_g?: number
           coach_ack_at?: string | null
+          coach_note?: string | null
           created_at?: string
           fat_g?: number
           goal?: string | null
@@ -7894,6 +7995,7 @@ export type Database = {
           input_snapshot?: Json | null
           member_id?: string
           notes?: string | null
+          pending_review?: boolean
           protein_g?: number
           source?: string
           updated_at?: string
@@ -8499,6 +8601,72 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      member_supplement_logs: {
+        Row: {
+          created_at: string
+          dose: string | null
+          id: string
+          member_id: string
+          supplement_id: string | null
+          supplement_name: string
+          taken_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          dose?: string | null
+          id?: string
+          member_id: string
+          supplement_id?: string | null
+          supplement_name: string
+          taken_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          dose?: string | null
+          id?: string
+          member_id?: string
+          supplement_id?: string | null
+          supplement_name?: string
+          taken_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      member_supplements: {
+        Row: {
+          active: boolean
+          created_at: string
+          daily_target_count: number
+          id: string
+          member_id: string
+          name: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          active?: boolean
+          created_at?: string
+          daily_target_count?: number
+          id?: string
+          member_id: string
+          name: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          active?: boolean
+          created_at?: string
+          daily_target_count?: number
+          id?: string
+          member_id?: string
+          name?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
       }
       member_support_messages: {
         Row: {
