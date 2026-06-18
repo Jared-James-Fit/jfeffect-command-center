@@ -33,6 +33,7 @@ import {
 } from "@/lib/progress";
 import { format, parseISO, differenceInDays } from "date-fns";
 import { WaterTrackerCard } from "./water-tracker-card";
+import { convertWeight, type ProgressMetric } from "@/lib/progress-metrics";
 
 /**
  * Mobile-safe date picker: defaults to today and shows a plain text
@@ -94,12 +95,12 @@ export type ProgressContext = {
 };
 
 /** Quick-action requested from a Home dashboard via `?action=...`. */
-export type ProgressInitialAction = "photo" | "weight" | "measure" | "history";
+export type ProgressInitialAction = "photo" | "weight" | "bodyweight" | "measure" | "history";
 
 export function ProgressSection({
   ctx, initialAction,
 }: { ctx: ProgressContext; initialAction?: ProgressInitialAction }) {
-  const [tab, setTab] = useState<string>(initialAction === "history" ? "timeline" : "photos");
+  const [tab, setTab] = useState<string>(initialAction === "history" ? "timeline" : initialAction === "bodyweight" ? "bodyweight" : "photos");
   const [photoDialog, setPhotoDialog] = useState(false);
   const [videoDialog, setVideoDialog] = useState(false);
   const [weightDialog, setWeightDialog] = useState(false);
@@ -111,7 +112,8 @@ export function ProgressSection({
   useEffect(() => {
     if (!initialAction) return;
     if (initialAction === "photo") setPhotoDialog(true);
-    else if (initialAction === "weight") setWeightDialog(true);
+    else if (initialAction === "weight") { setTab("bodyweight"); setWeightDialog(true); }
+    else if (initialAction === "bodyweight") setTab("bodyweight");
     else if (initialAction === "measure") setMeasureDialog(true);
     else if (initialAction === "history") setTab("timeline");
   }, [initialAction]);
