@@ -545,5 +545,17 @@ export function createMemberAdapter(ref: WorkoutContextRef): WorkoutContextAdapt
       // surfaces sync errors via toast + offline queue retries; intentionally
       // a no-op until membership support has a documented escalation path.
     },
+
+    /* ---- Phase B turn 1 — raw passthrough surface (stubs) ---- */
+    /* member_* → pl_*-shaped reshape lands in turn 3. */
+    async getDayRaw(_dayId: string): Promise<PlDayRaw> {
+      throw new NotImplemented("getDayRaw", "member");
+    },
+    async listRowsRaw(_dayId: string): Promise<PlRowRaw[]> {
+      throw new NotImplemented("listRowsRaw", "member");
+    },
+    async listRowResultsRaw(_dayId: string): Promise<PlRowResultRaw[]> {
+      throw new NotImplemented("listRowResultsRaw", "member");
+    },
   };
 }
