@@ -5,6 +5,7 @@ import {
   ArrowLeftRight,
   Loader2,
   PlayCircle,
+  RefreshCw,
   Search,
 } from "lucide-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -37,43 +38,114 @@ type ExerciseLite = {
 
 type RankedSuggestion = { ex: ExerciseLite; reason: string };
 
-const REASONS = [
-  "Same muscle target",
-  "Same muscle, different equipment",
-  "Similar difficulty",
-  "Same movement category",
-] as const;
-
 /**
- * Deterministic ranker. Buckets, in order:
- *   1. same muscle_group + same category
- *   2. same muscle_group, different equipment
- *   3. same category, same difficulty
- *   4. same category (fallback)
- * Within a bucket, sort by name (case-insensitive). Dedupe across buckets,
- * drop the source exercise, cap at 5.
+ * Deterministic ranker. Uses whatever metadata the row actually has —
+ * `category` is the strongest squat-bucket signal in this library, then
+ * `muscle_group` (treated as a tokenized set since values like
+ * "Quads, glutes, adductors, core" share tokens across variants), then a
+ * keyword fallback on the source name's distinctive token (Squat, Press,
+ * Deadlift, Row, etc).
+ *
+ * Buckets, in order, dedupe across:
+ *   1. same category + same equipment           → "Closest match"
+ *   2. same category + same difficulty          → "Same movement"
+ *   3. same category (any equipment)            → "Same movement"
+ *   4. shared muscle-group tokens               → "Same muscles"
+ *   5. shared distinctive keyword in name       → "Similar"
  */
+function tokenize(s: string | null | undefined): string[] {
+  if (!s) return [];
+  return s
+    .toLowerCase()
+    .split(/[,/&·\-]+|\s+/)
+    .map((t) => t.trim())
+    .filter((t) => t.length >= 3);
+}
+
+const KEYWORD_STOPWORDS = new Set([
+  "the", "and", "with", "for", "bar", "barbell", "dumbbell", "machine",
+  "cable", "band", "bodyweight", "single", "double", "left", "right",
+  "front", "back", "side", "view", "competition", "high", "low", "wide",
+  "narrow", "close", "grip", "stance", "alternating", "alternate",
+]);
+
+function distinctiveKeyword(name: string): string | null {
+  const toks = tokenize(name).filter((t) => !KEYWORD_STOPWORDS.has(t));
+  // Prefer the last token, which is usually the movement noun
+  // ("Competition Squat" → "squat", "Romanian Deadlift" → "deadlift").
+  return toks[toks.length - 1] ?? null;
+}
+
 function rankSuggestions(src: ExerciseLite, pool: ExerciseLite[]): RankedSuggestion[] {
   const cand = pool.filter((e) => e.id !== src.id);
   const byName = (a: ExerciseLite, b: ExerciseLite) =>
     (a.name ?? "").toLowerCase().localeCompare((b.name ?? "").toLowerCase());
-  const buckets: ExerciseLite[][] = [
-    cand.filter((e) => e.muscle_group && e.muscle_group === src.muscle_group && e.category === src.category).sort(byName),
-    cand.filter((e) => e.muscle_group && e.muscle_group === src.muscle_group && e.equipment !== src.equipment).sort(byName),
-    cand.filter((e) => e.category && e.category === src.category && e.difficulty && e.difficulty === src.difficulty).sort(byName),
-    cand.filter((e) => e.category && e.category === src.category).sort(byName),
+  const srcTokens = new Set(tokenize(src.muscle_group));
+  const kw = distinctiveKeyword(src.name);
+  const sameCat = (e: ExerciseLite) => !!src.category && e.category === src.category;
+  const sharedMuscles = (e: ExerciseLite) => {
+    if (srcTokens.size === 0) return false;
+    return tokenize(e.muscle_group).some((t) => srcTokens.has(t));
+  };
+
+  const buckets: Array<[ExerciseLite[], string]> = [
+    [cand.filter((e) => sameCat(e) && e.equipment === src.equipment).sort(byName), "Closest match"],
+    [cand.filter((e) => sameCat(e) && e.difficulty && e.difficulty === src.difficulty).sort(byName), "Same movement"],
+    [cand.filter(sameCat).sort(byName), "Same movement"],
+    [cand.filter(sharedMuscles).sort(byName), "Same muscles"],
+    [
+      kw
+        ? cand
+            .filter((e) => (e.name ?? "").toLowerCase().includes(kw))
+            .sort(byName)
+        : [],
+      "Similar",
+    ],
   ];
+
   const out: RankedSuggestion[] = [];
   const seen = new Set<string>();
-  buckets.forEach((bucket, i) => {
+  for (const [bucket, reason] of buckets) {
     for (const e of bucket) {
-      if (out.length >= 5) return;
+      if (out.length >= 12) break;
       if (seen.has(e.id)) continue;
       seen.add(e.id);
-      out.push({ ex: e, reason: REASONS[i] });
+      out.push({ ex: e, reason });
     }
-  });
+    if (out.length >= 12) break;
+  }
   return out;
+}
+
+/** Map equipment chip → predicate over an exercise's free-text equipment field. */
+const EQUIPMENT_CHIPS = [
+  "Best Match",
+  "Full Gym",
+  "Home Gym",
+  "Dumbbells",
+  "Machines",
+  "Bodyweight",
+  "No Barbell",
+] as const;
+type EquipmentChip = (typeof EQUIPMENT_CHIPS)[number];
+
+function matchesChip(chip: EquipmentChip, equipment: string | null): boolean {
+  if (chip === "Best Match") return true;
+  const eq = (equipment ?? "").toLowerCase();
+  switch (chip) {
+    case "Full Gym":
+      return true; // anything's available in a full gym
+    case "Home Gym":
+      return /dumbbell|bodyweight|band|kettlebell/.test(eq);
+    case "Dumbbells":
+      return /dumbbell/.test(eq);
+    case "Machines":
+      return /machine|smith|pendulum|hack|leg press|cable/.test(eq);
+    case "Bodyweight":
+      return /bodyweight/.test(eq);
+    case "No Barbell":
+      return !/barbell/.test(eq);
+  }
 }
 
 const SELECT_COLS = "id,name,muscle_group,category,equipment,difficulty,vimeo_embed_url";
@@ -111,7 +183,7 @@ function ExerciseRowCard({
         {meta && <div className="mt-0.5 truncate text-[11px] text-muted-foreground">{meta}</div>}
       </div>
       <Button size="sm" variant="default" className="h-7 px-2 text-xs shrink-0" onClick={onSelect}>
-        Select
+        Use Exercise
       </Button>
     </div>
   );
@@ -146,6 +218,7 @@ export function QuickSwapButton({
   const [scope, setScope] = useState<"today" | "future">("today");
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(0);
+  const [chip, setChip] = useState<EquipmentChip>("Best Match");
   const debouncedSearch = useDebounced(search.trim(), 300);
   const qc = useQueryClient();
   const getImpactFn = useServerFn(getSwapImpact);
@@ -159,6 +232,7 @@ export function QuickSwapButton({
       setScope("today");
       setSearch("");
       setPage(0);
+      setChip("Best Match");
     }
   }, [open]);
 
@@ -166,24 +240,19 @@ export function QuickSwapButton({
     setPage(0);
   }, [debouncedSearch]);
 
-  const { data: suggestions = [], isLoading } = useQuery({
-    queryKey: ["quick-swap-suggestions", exerciseId, muscleGroup, category, difficulty, equipment],
+  const {
+    data: suggestions = [],
+    isLoading,
+    isError,
+    error: suggestionsError,
+    refetch: refetchSuggestions,
+  } = useQuery({
+    queryKey: ["quick-swap-suggestions", exerciseId, muscleGroup, category, difficulty, equipment, exerciseName],
     enabled: open && !!exerciseId,
     staleTime: 5 * 60_000,
+    retry: 1,
     queryFn: async () => {
       if (!exerciseId) return [] as RankedSuggestion[];
-      const filters: string[] = [];
-      if (muscleGroup) filters.push(`muscle_group.eq.${muscleGroup}`);
-      if (category) filters.push(`category.eq.${category}`);
-      let q = supabase
-        .from("exercises")
-        .select(SELECT_COLS)
-        .eq("archived", false)
-        .neq("id", exerciseId)
-        .limit(200);
-      if (filters.length) q = q.or(filters.join(","));
-      const { data, error } = await q;
-      if (error) throw error;
       const src: ExerciseLite = {
         id: exerciseId,
         name: exerciseName,
@@ -192,9 +261,60 @@ export function QuickSwapButton({
         equipment: equipment ?? null,
         difficulty: difficulty ?? null,
       };
-      return rankSuggestions(src, (data ?? []) as ExerciseLite[]);
+
+      // Tier 1: same category — cheap, indexed, and the strongest signal
+      // in this library ("Squat" buckets all squat variants together).
+      // PostgREST .or() treats commas in values as separators, so we
+      // call .eq() per filter and merge client-side instead.
+      const pool = new Map<string, ExerciseLite>();
+      const ingest = (rows: ExerciseLite[] | null | undefined) => {
+        for (const r of rows ?? []) if (r.id !== exerciseId) pool.set(r.id, r);
+      };
+
+      if (src.category) {
+        const { data, error } = await supabase
+          .from("exercises")
+          .select(SELECT_COLS)
+          .eq("archived", false)
+          .eq("category", src.category)
+          .neq("id", exerciseId)
+          .limit(60);
+        if (error) throw error;
+        ingest(data as ExerciseLite[]);
+      }
+
+      // Tier 2: keyword fallback on the distinctive movement noun
+      // ("Competition Squat" → "squat") — catches squats whose category
+      // string differs ("Legs" vs "Squat") and bulks out thin pools.
+      const kw = distinctiveKeyword(src.name);
+      if (kw && pool.size < 24) {
+        const { data, error } = await supabase
+          .from("exercises")
+          .select(SELECT_COLS)
+          .eq("archived", false)
+          .ilike("name", `%${kw}%`)
+          .neq("id", exerciseId)
+          .limit(60);
+        if (error) throw error;
+        ingest(data as ExerciseLite[]);
+      }
+
+      return rankSuggestions(src, Array.from(pool.values()));
     },
   });
+
+  // Which equipment chips actually yield results — only those render.
+  const availableChips = useMemo<EquipmentChip[]>(() => {
+    if (suggestions.length === 0) return ["Best Match"];
+    return EQUIPMENT_CHIPS.filter((c) =>
+      c === "Best Match" || suggestions.some((s) => matchesChip(c, s.ex.equipment)),
+    );
+  }, [suggestions]);
+
+  const filteredSuggestions = useMemo(
+    () => suggestions.filter((s) => matchesChip(chip, s.ex.equipment)),
+    [suggestions, chip],
+  );
 
   const { data: searchResults, isFetching: isSearching } = useQuery({
     queryKey: ["quick-swap-search", debouncedSearch, page, exerciseId],
@@ -300,10 +420,55 @@ export function QuickSwapButton({
                   <Loader2 className="h-4 w-4 animate-spin" /> Finding alternates…
                 </div>
               )}
-              {exerciseId && !isLoading && suggestions.length === 0 && (
-                <p className="text-sm text-muted-foreground">No close alternates found.</p>
+              {exerciseId && !isLoading && isError && (
+                <div className="flex items-start gap-2 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-destructive">
+                  <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
+                  <div className="flex-1 text-xs">
+                    <strong className="block">Couldn't load alternates</strong>
+                    {(suggestionsError as Error)?.message ?? "Network error"}
+                  </div>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-7 px-2 text-xs"
+                    onClick={() => refetchSuggestions()}
+                  >
+                    <RefreshCw className="mr-1 h-3 w-3" /> Retry
+                  </Button>
+                </div>
               )}
-              {suggestions.map(({ ex, reason }) => (
+
+              {exerciseId && !isLoading && !isError && suggestions.length > 0 && availableChips.length > 1 && (
+                <div className="flex flex-wrap gap-1.5 pb-1">
+                  {availableChips.map((c) => (
+                    <button
+                      key={c}
+                      type="button"
+                      onClick={() => setChip(c)}
+                      className={
+                        "rounded-full border px-2.5 py-0.5 text-[11px] transition-colors " +
+                        (chip === c
+                          ? "border-primary bg-primary text-primary-foreground"
+                          : "border-border bg-card text-muted-foreground hover:text-foreground")
+                      }
+                    >
+                      {c}
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              {exerciseId && !isLoading && !isError && suggestions.length === 0 && (
+                <p className="text-sm text-muted-foreground">
+                  No close alternates found. Try Search All Exercises below.
+                </p>
+              )}
+              {exerciseId && !isLoading && !isError && suggestions.length > 0 && filteredSuggestions.length === 0 && (
+                <p className="text-sm text-muted-foreground">
+                  No alternates match "{chip}". Pick another filter.
+                </p>
+              )}
+              {filteredSuggestions.map(({ ex, reason }) => (
                 <ExerciseRowCard key={ex.id} ex={ex} reason={reason} onSelect={() => startSelect(ex)} />
               ))}
 
