@@ -13,12 +13,15 @@ import { ArrowLeft, ArrowRight, Check, Flame, Beef, Wheat, Cookie, Droplets } fr
 import {
   ACTIVITY_OPTIONS,
   GOAL_OPTIONS,
+  INTENSITY_OPTIONS,
+  applyIntensity,
   calculateTargets,
   DEFAULT_FORMULA_SETTINGS,
   ageFromDob,
   type ActivityLevel,
   type BiologicalSex,
   type NutritionGoal,
+  type GoalIntensity,
 } from "@/lib/nutrition-targets/formula";
 import {
   getTargetsSetupPrefill,
@@ -55,6 +58,7 @@ function TargetsSetup() {
   const [sex, setSex] = useState<BiologicalSex | null>(null);
   const [activity, setActivity] = useState<ActivityLevel | null>(null);
   const [goal, setGoal] = useState<NutritionGoal | null>(null);
+  const [intensity, setIntensity] = useState<GoalIntensity>("standard");
   const [step, setStep] = useState(0);
   const [saving, setSaving] = useState(false);
   const [manualMode, setManualMode] = useState(false);
@@ -119,11 +123,13 @@ function TargetsSetup() {
 
   const preview = useMemo(() => {
     if (!bodyweightKg || !heightCm || !ageYears || !sex || !activity || !goal) return null;
+    const base = settingsQ.data ?? DEFAULT_FORMULA_SETTINGS;
+    const effective = applyIntensity(base, goal, intensity);
     return calculateTargets(
-      { bodyweightKg, heightCm, ageYears, sex, activity, goal },
-      settingsQ.data ?? DEFAULT_FORMULA_SETTINGS,
+      { bodyweightKg, heightCm, ageYears, sex, activity, goal, intensity },
+      effective,
     );
-  }, [bodyweightKg, heightCm, ageYears, sex, activity, goal, settingsQ.data]);
+  }, [bodyweightKg, heightCm, ageYears, sex, activity, goal, intensity, settingsQ.data]);
 
   const steps = [
     { label: "Body" },
@@ -156,6 +162,7 @@ function TargetsSetup() {
           sex,
           activity,
           goal,
+          intensity,
           unitsPreference: units,
         },
       });
@@ -359,6 +366,31 @@ function TargetsSetup() {
                   </button>
                 ))}
               </div>
+              {goal && goal !== "maintain" && (
+                <div className="space-y-2 pt-2">
+                  <Label className="text-xs uppercase tracking-wide text-muted-foreground">
+                    How aggressive?
+                  </Label>
+                  <div className="grid grid-cols-3 gap-2">
+                    {INTENSITY_OPTIONS.map((o) => (
+                      <button
+                        key={o.value}
+                        type="button"
+                        onClick={() => setIntensity(o.value)}
+                        className={[
+                          "rounded-lg border p-3 text-center transition active:scale-[0.98]",
+                          intensity === o.value
+                            ? "border-primary bg-primary/10"
+                            : "border-border bg-card hover:border-primary/40",
+                        ].join(" ")}
+                      >
+                        <div className="text-sm font-semibold">{o.label}</div>
+                        <div className="mt-0.5 text-[10px] text-muted-foreground leading-tight">{o.hint}</div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
