@@ -552,18 +552,152 @@ export function createMemberAdapter(ref: WorkoutContextRef): WorkoutContextAdapt
       // a no-op until membership support has a documented escalation path.
     },
 
-    /* ---- Phase B turn 4b — raw passthrough writes (member stubs) ----
-     * Stubs until 4c reshapes these into member_set_logs /
-     * member_exercise_notes / member_workout_completions writes.
+    /* ---- Phase B turn 4c — raw passthrough writes (member impl) ----
+     * Reshape pl_*-shaped payloads from WorkoutDayView into the member_*
+     * column layout. The caller's `id` is the synthetic encoded row-result
+     * id (`mlog:w:d:ei:si`) for set logs, or the real member_workout_completions
+     * id for completions. exercise notes aren't persisted (no table).
      */
-    async upsertPlRowResultRaw(_payload, _id) {
-      throw new NotImplemented("upsertPlRowResultRaw", "member");
+    async upsertPlRowResultRaw(payload, id) {
+      // pl_row_results uses (row_id, client_id, set_index, ...). For member
+      // we ignore client_id (the enrollment is implicit) and decode the
+      // exercise index out of `row_id` ("ex:<n>").
+      const rowId = String(payload.row_id ?? "");
+      const exerciseIndex = decodeRowId(rowId);
+      const setIndex = Number(payload.set_index ?? 0);
+      // Translate to member_set_logs columns. entered_value/unit is the
+      // canonical source of truth on the member side; mirror load_lb/load_kg
+      // for downstream reads that key off them.
+      const enteredUnit: "lb" | "kg" =
+        payload.entered_unit === "kg" || payload.actual_load_unit === "kg" ? "kg" : "lb";
+      const enteredValue =
+        payload.entered_value != null
+          ? Number(payload.entered_value)
+          : payload.actual_load != null
+            ? Number(payload.actual_load)
+            : null;
+      const rpeNum =
+        payload.actual_rpe_num != null
+          ? Number(payload.actual_rpe_num)
+          : payload.actual_rpe != null && payload.actual_rpe !== ""
+            ? Number(payload.actual_rpe)
+            : null;
+      // Decode week/day from the encoded id when updating; fall back to
+      // payload.week_index/day_index for inserts (caller sets them when
+      // calling from the member route).
+      let weekIndex: number;
+      let dayIndex: number;
+      if (id) {
+        const dec = decodeRowResultId(id);
+        weekIndex = dec.weekIndex;
+        dayIndex = dec.dayIndex;
+      } else {
+        weekIndex = Number(payload.week_index);
+        dayIndex = Number(payload.day_index);
+        if (!Number.isFinite(weekIndex) || !Number.isFinite(dayIndex)) {
+          throw new Error(
+            "member adapter: upsertPlRowResultRaw insert needs week_index + day_index in payload",
+          );
+        }
+      }
+      const memberPayload: Record<string, any> = {
+        enrollment_id: enrollmentId,
+        week_index: weekIndex,
+        day_index: dayIndex,
+        exercise_index: exerciseIndex,
+        set_index: setIndex,
+        reps: payload.actual_reps ?? payload.reps ?? null,
+        entered_value: enteredValue,
+        entered_unit: enteredUnit,
+        load_lb:
+          enteredValue == null
+            ? null
+            : enteredUnit === "lb"
+              ? enteredValue
+              : Number((enteredValue * 2.2046226218).toFixed(2)),
+        load_kg:
+          enteredValue == null
+            ? null
+            : enteredUnit === "kg"
+              ? enteredValue
+              : Number((enteredValue / 2.2046226218).toFixed(2)),
+        rpe: rpeNum,
+        rir: payload.actual_rir ?? payload.rir ?? null,
+        notes: payload.notes ?? null,
+        is_working_set: payload.is_working_set ?? null,
+        completed_duration_seconds: payload.completed_duration_seconds ?? null,
+        timer_started_at: payload.timer_started_at ?? null,
+        timer_completed_at: payload.timer_completed_at ?? null,
+        completion_method: payload.completion_method ?? null,
+        logged_at: payload.completed_at ?? new Date().toISOString(),
+      };
+      // Upsert on the natural key (enrollment + week + day + exercise + set).
+      // Avoids the read-then-write race the client adapter uses by relying on
+      // a unique constraint we already maintain on member_set_logs.
+      const { data, error } = await (supabase as any)
+        .from("member_set_logs")
+        .upsert(memberPayload, {
+          onConflict: "enrollment_id,week_index,day_index,exercise_index,set_index",
+        })
+        .select("id")
+        .maybeSingle();
+      if (error) throw new Error(error.message);
+      // Return the synthetic encoded id so callers using it as a stable
+      // React key / lookup keep working without knowing the real uuid.
+      void data;
+      return { id: encodeRowResultId(weekIndex, dayIndex, exerciseIndex, setIndex) };
     },
     async upsertPlExerciseNoteRaw(_payload, _id) {
-      throw new NotImplemented("upsertPlExerciseNoteRaw", "member");
+      // Member plans don't have a per-exercise notes table — notes ride on
+      // member_set_logs.notes. Silently no-op so the shared UI's save call
+      // doesn't crash; the autosave on the active set captures the note.
     },
-    async upsertPlDayCompletionRaw(_payload, _id) {
-      throw new NotImplemented("upsertPlDayCompletionRaw", "member");
+    async upsertPlDayCompletionRaw(payload, id) {
+      // pl_day_completions tracks started_at / in_progress_at / completed_at /
+      // notes / actual_minutes per (day_id, client_id). Member equivalent is
+      // member_workout_completions keyed by (enrollment_id, week_index, day_index).
+      // Decode week/day from the payload's day_id when present (insert path)
+      // or look up the row by id (update path).
+      let weekIndex: number | null = null;
+      let dayIndex: number | null = null;
+      if (payload.day_id) {
+        const dec = decodeDayId(String(payload.day_id));
+        weekIndex = dec.week;
+        dayIndex = dec.day;
+      }
+      const dbPatch: Record<string, any> = {};
+      if ("started_at" in payload) dbPatch.started_at = payload.started_at;
+      if ("in_progress_at" in payload) dbPatch.in_progress_at = payload.in_progress_at;
+      if ("completed_at" in payload) dbPatch.completed_at = payload.completed_at;
+      if ("notes" in payload) dbPatch.notes = payload.notes;
+      if ("actual_minutes" in payload && payload.actual_minutes != null) {
+        dbPatch.actual_duration_min = payload.actual_minutes;
+      }
+      if (id) {
+        const { error } = await (supabase as any)
+          .from("member_workout_completions")
+          .update(dbPatch)
+          .eq("id", id);
+        if (error) throw new Error(error.message);
+        return;
+      }
+      if (weekIndex == null || dayIndex == null) {
+        throw new Error(
+          "member adapter: upsertPlDayCompletionRaw insert requires day_id in payload",
+        );
+      }
+      const { error } = await (supabase as any)
+        .from("member_workout_completions")
+        .upsert(
+          {
+            enrollment_id: enrollmentId,
+            week_index: weekIndex,
+            day_index: dayIndex,
+            ...dbPatch,
+          },
+          { onConflict: "enrollment_id,week_index,day_index" },
+        );
+      if (error) throw new Error(error.message);
     },
 
     /* ---- Phase B turn 3 — raw passthrough surface ----
