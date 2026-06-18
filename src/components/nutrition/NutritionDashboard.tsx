@@ -11,6 +11,7 @@ import { useAuth } from "@/lib/auth";
 import { MacroBreakdown } from "./MacroBreakdown";
 import { TargetsHistorySparkline } from "./TargetsHistorySparkline";
 import { CoachTargetChangeBanner } from "./CoachTargetChangeBanner";
+import { RecentAdherenceWidget } from "./RecentAdherenceWidget";
 
 /**
  * Shared nutrition dashboard surface used by members and coaching clients.
@@ -51,6 +52,7 @@ export function NutritionDashboard({
       </div>
       <MacroBreakdown targets={targets} />
       {viewer === "member" && <TargetsHistorySparkline />}
+      {viewer === "client" && <RecentAdherenceWidget />}
       <QuickActions viewer={viewer} recipesAnchorId={recipesAnchorId} />
       {children}
       <div id={recipesAnchorId} className="scroll-mt-20">
