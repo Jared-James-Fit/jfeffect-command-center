@@ -931,7 +931,7 @@ function WorkoutDay({
           </div>
         </div>
 
-        {isImpersonating && client?.id && (
+        {isImpersonating && client?.id && (!adapter || adapter.kind !== "member") && (
           <Card className="border-primary/30 bg-primary/5 p-3">
             <div className="flex flex-wrap items-center gap-3">
               <div className="flex items-center gap-2">
