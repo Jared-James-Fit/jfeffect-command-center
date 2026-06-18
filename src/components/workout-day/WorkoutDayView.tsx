@@ -308,6 +308,23 @@ function WorkoutDay({
   useEffect(() => {
     registerQueueHandler("portal_table_upsert", async (p: any) => {
       if (!p?.table) return;
+      // Route through the active adapter when one is mounted so member
+      // contexts replay queued writes against member_* tables, not pl_*.
+      // Falls back to direct sb.from() for legacy portal-only deploys.
+      if (adapter) {
+        if (p.table === "pl_row_results") {
+          await adapter.upsertPlRowResultRaw(p.payload, p.id ?? null);
+          return;
+        }
+        if (p.table === "pl_exercise_notes") {
+          await adapter.upsertPlExerciseNoteRaw(p.payload, p.id ?? null);
+          return;
+        }
+        if (p.table === "pl_day_completions") {
+          await adapter.upsertPlDayCompletionRaw(p.payload, p.id ?? null);
+          return;
+        }
+      }
       if (p.id) {
         const { error } = await sb.from(p.table).update(p.payload).eq("id", p.id);
         if (error) throw error;
@@ -316,7 +333,7 @@ function WorkoutDay({
         if (error) throw error;
       }
     });
-  }, []);
+  }, [adapter]);
 
   const { data: client } = useQuery({
     queryKey: ["my-client", portalUserId],
