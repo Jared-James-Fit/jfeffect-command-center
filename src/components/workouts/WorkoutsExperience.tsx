@@ -645,6 +645,7 @@ function SelectedDayCard({
           dayId={item.day.id}
           clientId={clientId}
           completion={item.completion as any}
+          invalidateKeys={[["workouts-experience-client", clientId]]}
         />
       )}
 
