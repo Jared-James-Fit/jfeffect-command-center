@@ -490,6 +490,20 @@ export function createClientAdapter(ref: WorkoutContextRef): WorkoutContextAdapt
       await saveExerciseUnitPrefRaw(ref.ownerId, input.exerciseId, input.unit);
     },
 
+    async listUnitPrefs(exerciseIds: string[]): Promise<{ exerciseId: string; unit: "lb" | "kg" }[]> {
+      if (!exerciseIds.length) return [];
+      const { data, error } = await sb
+        .from("client_exercise_unit_prefs")
+        .select("exercise_id, unit")
+        .eq("client_id", ref.ownerId)
+        .in("exercise_id", exerciseIds);
+      if (error) throw new Error(error.message);
+      return (data ?? []).map((r: any) => ({
+        exerciseId: r.exercise_id as string,
+        unit: (r.unit === "kg" ? "kg" : "lb") as "lb" | "kg",
+      }));
+    },
+
     async notifyCoachOfFailure(input: { dayId: string; reason: string }): Promise<void> {
       await notifyCoachOfWorkoutFailure({
         data: {
