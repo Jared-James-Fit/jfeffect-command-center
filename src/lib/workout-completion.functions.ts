@@ -368,7 +368,7 @@ const CompleteInput = z.intersection(
     sessionRating: z.number().int().min(1).max(5).nullable().optional(),
     notes: z.string().nullable().optional(),
     confirmedMissingLogs: z.boolean().optional(),
-    actualDurationMin: z.number().int().positive().nullable().optional(),
+    actualDurationMin: z.number().int().nonnegative().nullable().optional(),
     sessionWeightTotal: z.number().nullable().optional(),
     sessionWeightUnit: z.enum(["kg", "lb"]).nullable().optional(),
   }),
@@ -393,9 +393,24 @@ export const completeWorkout = createServerFn({ method: "POST" })
         .eq("day_id", data.dayId)
         .maybeSingle();
 
-      // Idempotency: already completed → return existing.
+      // Already completed → apply edits (notes / rating / duration) in place
+      // rather than silently no-op. Stats (elapsed, logged_sets_count, etc.)
+      // are preserved from the original completion.
       if (existing?.completed_at) {
-        return { id: existing.id, alreadyCompleted: true };
+        const patch: Record<string, any> = {};
+        if (data.notes !== undefined) patch.client_notes = data.notes ?? null;
+        if (data.sessionRating !== undefined) patch.session_rating = data.sessionRating ?? null;
+        if (data.actualDurationMin !== undefined && data.actualDurationMin !== null) {
+          patch.actual_duration_min = data.actualDurationMin;
+        }
+        if (Object.keys(patch).length) {
+          const { error } = await supabase
+            .from("pl_day_completions")
+            .update(patch)
+            .eq("id", existing.id);
+          if (error) throw error;
+        }
+        return { id: existing.id, alreadyCompleted: true, edited: Object.keys(patch).length > 0 };
       }
 
       const startedAt = existing?.started_at ?? nowIso;
@@ -473,7 +488,20 @@ export const completeWorkout = createServerFn({ method: "POST" })
       .eq("day_index", data.dayIndex)
       .maybeSingle();
     if (existing?.completed_at) {
-      return { id: existing.id, alreadyCompleted: true };
+      const patch: Record<string, any> = {};
+      if (data.notes !== undefined) {
+        patch.client_notes = data.notes ?? null;
+        patch.notes = data.notes ?? null;
+      }
+      if (data.sessionRating !== undefined) patch.session_rating = data.sessionRating ?? null;
+      if (Object.keys(patch).length) {
+        const { error } = await supabase
+          .from("member_workout_completions")
+          .update(patch)
+          .eq("id", existing.id);
+        if (error) throw error;
+      }
+      return { id: existing.id, alreadyCompleted: true, edited: Object.keys(patch).length > 0 };
     }
     const startedAt = existing?.started_at ?? nowIso;
 
