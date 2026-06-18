@@ -228,6 +228,44 @@ export const getMemberTargetsHistory = createServerFn({ method: "GET" })
     return data ?? [];
   });
 
+/** Member: detect an unacknowledged coach-set target change with a before/after diff. */
+export const getCoachTargetChangeForMe = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const { supabase, userId } = context;
+    const member = await loadMember(supabase, userId);
+    if (!member?.id) return null;
+    const { data: rows, error } = await supabase
+      .from("member_nutrition_targets")
+      .select("*")
+      .eq("member_id", member.id)
+      .order("created_at", { ascending: false })
+      .limit(2);
+    if (error) throw error;
+    const current = rows?.[0];
+    if (!current || current.source !== "coach" || !current.active) return null;
+    if (current.coach_ack_at) return null;
+    return { current, previous: rows?.[1] ?? null };
+  });
+
+/** Member: acknowledge (dismiss) the active coach-set target change banner. */
+export const acknowledgeCoachTargetChange = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const { supabase, userId } = context;
+    const member = await loadMember(supabase, userId);
+    if (!member?.id) throw new Error("Member profile not found");
+    const { error } = await supabase
+      .from("member_nutrition_targets")
+      .update({ coach_ack_at: new Date().toISOString() })
+      .eq("member_id", member.id)
+      .eq("active", true)
+      .eq("source", "coach")
+      .is("coach_ack_at", null);
+    if (error) throw error;
+    return { ok: true };
+  });
+
 /** Clear (deactivate) the current member's active target. */
 export const clearActiveMemberTargets = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
