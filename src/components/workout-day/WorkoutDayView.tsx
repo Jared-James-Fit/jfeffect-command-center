@@ -905,7 +905,11 @@ function WorkoutDay({
         ].filter(Boolean).join(" · ")}
         actions={!readonly ? <UndoButton /> : undefined}
       />
-      <div className="px-4 pt-3 pb-4 md:px-8 md:pt-6 md:pb-8 space-y-3 pb-[calc(var(--bottom-nav-clearance,96px)+env(safe-area-inset-bottom)+24px)]">
+      <div className="p-4 md:p-8 space-y-4 pb-[calc(var(--bottom-nav-clearance,96px)+env(safe-area-inset-bottom)+24px)] md:pb-8">
+        <Link to={navigation.listPath} className="inline-flex items-center text-sm text-muted-foreground hover:text-foreground">
+          <ArrowLeft className="mr-1 h-4 w-4" /> All workouts
+        </Link>
+
         <WorkoutSyncBanner
           clientId={client?.id ?? null}
           workoutId={dayId}
@@ -1609,7 +1613,15 @@ function ExerciseBlock({ row, dayId, dayTitle, clientId, blockId, existingResult
         <Button size="sm" variant={hasNote ? "default" : "outline"} onClick={() => setNotesOpen(true)} className="h-7 px-2 text-xs">
           <StickyNote className="mr-1 h-3 w-3" /> Notes
         </Button>
-        <QuickSwapButton rowId={row.id} exerciseId={exerciseId} exerciseName={name} />
+        <QuickSwapButton
+          rowId={row.id}
+          exerciseId={exerciseId}
+          exerciseName={name}
+          muscleGroup={exercise?.muscle_group ?? null}
+          category={exercise?.category ?? null}
+          equipment={(exercise as any)?.equipment ?? null}
+          difficulty={(exercise as any)?.difficulty ?? null}
+        />
         {cues && (
           <Button size="sm" variant="ghost" onClick={() => setCuesOpen((v) => !v)} className="h-7 px-2 text-xs">
             {cuesOpen ? <ChevronUp className="mr-1 h-3 w-3" /> : <ChevronDown className="mr-1 h-3 w-3" />}
