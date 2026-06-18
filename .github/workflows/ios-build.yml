@@ -83,7 +83,22 @@ jobs:
           XML
           fi
           
-          echo "✅ Placeholder web assets created"
+          # Create capacitor.config.json if it doesn't exist
+          if [ ! -f ios/App/App/capacitor.config.json ]; then
+            cat > ios/App/App/capacitor.config.json << 'JSON'
+          {
+            "appId": "com.jfeffect.app",
+            "appName": "JF Effect",
+            "webDir": "public",
+            "server": {
+              "url": "https://jfeffect.com",
+              "cleartext": false
+            }
+          }
+          JSON
+          fi
+          
+          echo "✅ All placeholder web assets created"
 
       - name: Run pod install
         run: cd ios/App && pod install
