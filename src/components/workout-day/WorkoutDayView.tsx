@@ -1308,6 +1308,7 @@ function UnsupportedExerciseCard({ row }: { row: any }) {
 }
 
 function ExerciseBlock({ row, dayId, dayTitle, clientId, blockId, existingResults, existingNote, readonly = false, unit = "kg", onUnitChange, focusMode = false, onChange, onNoteChange, purposeLabel = null }: { row: any; dayId: string; dayTitle: string; clientId: string | undefined; blockId?: string | null; existingResults: any[]; existingNote?: any; readonly?: boolean; unit?: "kg" | "lb"; onUnitChange?: (u: "kg" | "lb") => void; focusMode?: boolean; onChange: () => void; onNoteChange: () => void; purposeLabel?: string | null }) {
+  const adapter = useOptionalAdapter();
   const name = row.exercises?.name ?? row.exercise_name_override ?? "Exercise";
   const exercise = row.exercises ?? null;
   const exerciseId = exercise?.id ?? null;
@@ -1426,8 +1427,12 @@ function ExerciseBlock({ row, dayId, dayTitle, clientId, blockId, existingResult
         actual_rpe_num: rpeNum,
         completed_at: null, // Draft only — must be confirmed per set
       };
-      if (ex?.id) tasks.push(sb.from("pl_row_results").update(body).eq("id", ex.id));
-      else tasks.push(sb.from("pl_row_results").insert(body));
+      if (adapter) {
+        tasks.push(adapter.upsertPlRowResultRaw(body, ex?.id ?? null));
+      } else {
+        if (ex?.id) tasks.push(sb.from("pl_row_results").update(body).eq("id", ex.id));
+        else tasks.push(sb.from("pl_row_results").insert(body));
+      }
     }
     if (!tasks.length) return;
     await Promise.all(tasks);
