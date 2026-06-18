@@ -276,7 +276,9 @@ export function NutritionTargetDialog({ open, onOpenChange, clientId, clients = 
           <div><Label>Ending soon (days)</Label><Input type="number" value={form.ending_soon_days} onChange={(e) => set("ending_soon_days", e.target.value)} /></div>
           <div>
             <Label>Water target</Label>
-            <WaterTargetInput value={form.water ?? ""} onChange={(v) => set("water", v)} />
+            <div className="rounded-md border border-dashed border-border bg-secondary/20 px-3 py-2 text-xs text-muted-foreground">
+              Water targets are now synced from the Nutrition Targets panel. Edit there to update everywhere.
+            </div>
           </div>
           <div className="flex items-center justify-between rounded-md border border-border bg-secondary/30 px-3 py-2 md:col-span-2">
             <Label className="text-xs">Visible to client</Label>
