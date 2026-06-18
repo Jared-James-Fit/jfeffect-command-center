@@ -1,13 +1,16 @@
 import { createFileRoute, Link, useSearch } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
+import { useServerFn } from "@tanstack/react-start";
 import { supabase } from "@/integrations/supabase/client";
 import { usePortalUserId } from "@/lib/client-impersonation";
 import { PageHeader } from "@/components/app-shell";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { ChevronRight } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { ChevronRight, ShoppingCart, Loader2 } from "lucide-react";
 import { toast } from "sonner";
+import { createCheckoutSession } from "@/lib/stripe-checkout.functions";
 
 function statusBadgeClass(s?: string | null) {
   if (s === "Paid" || s === "Active Subscription") return "border-green-500/40 text-green-500 bg-green-500/10";
@@ -61,6 +64,21 @@ function MyPurchases() {
       ).data ?? [],
   });
 
+  const { data: availablePlans = [] } = useQuery({
+    queryKey: ["available-coaching-products"],
+    queryFn: async () =>
+      (
+        await supabase
+          .from("coaching_products")
+          .select("id, name, description, price_cents, currency, mode, payment_structure, image_url, included_features, stripe_price_id")
+          .eq("active", true)
+          .eq("archived", false)
+          .eq("status", "Active")
+          .not("stripe_price_id", "is", null)
+          .order("price_cents", { ascending: true })
+      ).data ?? [],
+  });
+
   return (
     <>
       <PageHeader
@@ -68,6 +86,18 @@ function MyPurchases() {
         subtitle="Your coaching purchases and billing history."
       />
       <div className="p-6 md:p-8 space-y-8">
+
+        {/* ── Available Plans ──────────────────────────────────────────────── */}
+        {availablePlans.length > 0 && (
+          <section>
+            <h2 className="text-xs uppercase tracking-widest text-muted-foreground mb-3">Available Plans</h2>
+            <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
+              {availablePlans.map((p: any) => (
+                <PlanCard key={p.id} plan={p} />
+              ))}
+            </div>
+          </section>
+        )}
 
         {/* ── Purchase History ─────────────────────────────────────────────── */}
         <section>
@@ -100,5 +130,70 @@ function MyPurchases() {
         </section>
       </div>
     </>
+  );
+}
+
+function PlanCard({ plan }: { plan: any }) {
+  const checkoutFn = useServerFn(createCheckoutSession);
+  const [loading, setLoading] = useState(false);
+
+  const isSubscription =
+    plan.mode === "subscription" ||
+    (plan.mode === "auto" && !!plan.payment_structure &&
+      /monthly|weekly|bi-weekly|quarterly|annual|recurring/i.test(plan.payment_structure));
+
+  const price = (plan.price_cents / 100).toLocaleString(undefined, {
+    style: "currency",
+    currency: (plan.currency ?? "cad").toUpperCase(),
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 2,
+  });
+
+  const buy = async () => {
+    setLoading(true);
+    try {
+      const { url } = await checkoutFn({
+        data: { productId: plan.id, origin: window.location.origin },
+      });
+      window.location.href = url;
+    } catch (e: any) {
+      toast.error(e?.message ?? "Could not start checkout");
+      setLoading(false);
+    }
+  };
+
+  return (
+    <Card className="border-border bg-card p-5 flex flex-col gap-3">
+      <div className="flex items-start justify-between gap-2">
+        <div>
+          <div className="font-bold">{plan.name}</div>
+          {plan.description && (
+            <div className="text-xs text-muted-foreground mt-1 line-clamp-3">{plan.description}</div>
+          )}
+        </div>
+        {isSubscription && (
+          <Badge variant="outline" className="border-primary/40 text-primary bg-primary/5 shrink-0">
+            Subscription
+          </Badge>
+        )}
+      </div>
+      <div className="text-2xl font-bold">
+        {price}
+        {plan.payment_structure && (
+          <span className="text-xs text-muted-foreground font-normal ml-1">/ {plan.payment_structure}</span>
+        )}
+      </div>
+      {plan.included_features?.length > 0 && (
+        <ul className="text-xs text-muted-foreground space-y-1 list-disc list-inside">
+          {plan.included_features.slice(0, 4).map((f: string, i: number) => (
+            <li key={i}>{f}</li>
+          ))}
+        </ul>
+      )}
+      <Button onClick={buy} disabled={loading} className="mt-auto gap-2">
+        {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <ShoppingCart className="h-4 w-4" />}
+        {loading ? "Opening checkout…" : "Buy now"}
+      </Button>
+    </Card>
   );
 }
