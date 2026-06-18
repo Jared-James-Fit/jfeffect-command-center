@@ -179,7 +179,16 @@ function QuickActions({
           <div className="text-[11px] text-muted-foreground">FAQ & resources</div>
         </div>
       </Link>
-      <ComingSoonTile icon={Calculator} title="Macro Calculator" />
+      <Link
+        to="/m/nutrition/targets-setup"
+        className="flex items-center gap-3 rounded-xl border border-primary/30 bg-gradient-to-br from-primary/10 to-card p-4 transition hover:border-primary active:scale-[0.98]"
+      >
+        <Calculator className="h-6 w-6 text-primary" />
+        <div>
+          <div className="text-sm font-bold leading-tight">Macro Calculator</div>
+          <div className="text-[11px] text-muted-foreground">Calculate your targets</div>
+        </div>
+      </Link>
       <ComingSoonTile icon={Sparkles} title="Meal Builder" />
     </div>
   );
