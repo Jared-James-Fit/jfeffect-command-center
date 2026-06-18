@@ -14,25 +14,24 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Select Xcode 26
+      - name: Select latest Xcode 26
         run: |
-          # List available Xcode versions
-          ls /Applications/ | grep -i xcode || true
-          # Select Xcode 26 if available
-          if [ -d "/Applications/Xcode_26.app" ]; then
-            sudo xcode-select -s /Applications/Xcode_26.app
-            echo "Selected Xcode 26"
-          elif [ -d "/Applications/Xcode_26.5.app" ]; then
-            sudo xcode-select -s /Applications/Xcode_26.5.app
-            echo "Selected Xcode 26.5"
-          elif [ -d "/Applications/Xcode_26.4.1.app" ]; then
-            sudo xcode-select -s /Applications/Xcode_26.4.1.app
-            echo "Selected Xcode 26.4.1"
+          # Find and select the latest Xcode 26.x version
+          XCODE_26=$(ls /Applications/ | grep -E "^Xcode_26\." | sort -V | tail -1)
+          echo "Found Xcode 26 versions:"
+          ls /Applications/ | grep -E "^Xcode_26" || echo "None found"
+          
+          if [ -n "$XCODE_26" ]; then
+            sudo xcode-select -s "/Applications/$XCODE_26"
+            echo "✅ Selected $XCODE_26"
           else
-            echo "Xcode 26 not found, using default"
-            ls /Applications/ | grep -i xcode
+            echo "⚠️ No Xcode 26.x found, trying Xcode.app"
+            sudo xcode-select -s /Applications/Xcode.app
           fi
+          
+          echo "=== Xcode version ==="
           xcodebuild -version
+          echo "=== iOS SDK version ==="
           xcrun --sdk iphoneos --show-sdk-version
 
       - name: Setup Node.js
