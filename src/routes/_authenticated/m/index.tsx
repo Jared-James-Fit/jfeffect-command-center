@@ -15,7 +15,6 @@ import { Star } from "lucide-react";
 import { UpgradeCTA } from "@/components/upgrade-cta";
 import { SetupChecklist } from "@/components/member/setup-checklist-card";
 import { ProgressSummaryCard } from "@/components/progress/progress-summary-card";
-import { HomeBodyweightCard } from "@/components/home/home-bodyweight-card";
 import { HomeWaterCard } from "@/components/home/home-water-card";
 
 export const Route = createFileRoute("/_authenticated/m/")({
@@ -111,13 +110,6 @@ function MemberHome() {
             <Button><BookOpen className="mr-2 h-4 w-4" />Browse Program Library</Button>
           </Link>
         </Card>
-      )}
-      {me?.member?.user_id && (
-        <HomeBodyweightCard
-          userId={me.member.user_id}
-          surface="member"
-          defaultUnit={((me.member as any).preferred_weight_unit as "kg" | "lb") ?? "lb"}
-        />
       )}
       {me?.member?.user_id && (
         <ProgressSummaryCard

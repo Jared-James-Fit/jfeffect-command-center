@@ -21,21 +21,12 @@ import { IntakeAnswersBigButton } from "@/components/clients/intake-answers-dial
 import { ActionCentre, type ActionItem } from "@/components/portal/action-centre";
 import { TrainingBlockCard } from "@/components/portal/training-block-card";
 import { ProgressSummaryCard } from "@/components/progress/progress-summary-card";
-// Lazy: this card pulls recharts. Defer it so the Home screen renders
-// before the chart bundle is fetched.
-import { lazy, Suspense } from "react";
-const HomeBodyweightCard = lazy(() =>
-  import("@/components/home/home-bodyweight-card").then((m) => ({
-    default: m.HomeBodyweightCard,
-  })),
-);
 import { HomeWaterCard } from "@/components/home/home-water-card";
 import { SetupChecklistBanner } from "@/components/portal/setup-checklist-banner";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { listMyPortalAppointments } from "@/lib/appointments.functions";
 import { useServerFn } from "@tanstack/react-start";
 import { format, parseISO, isToday, isTomorrow } from "date-fns";
-import { forwardRef, useImperativeHandle } from "react";
 
 export const Route = createFileRoute("/_authenticated/portal/")({ component: PortalHome });
 
@@ -350,9 +341,6 @@ function PortalHome() {
     } as any);
   }
 
-  // Bottom-sheet trigger for Log Weight from the quick-actions grid.
-  const bodyweightRef = useRef<{ open: () => void }>(null);
-
   // While the core client record is loading, render a steady skeleton in the
   // same layout shape as the real portal so the dashboard fades in once
   // instead of popping in piece-by-piece.
@@ -408,7 +396,6 @@ function PortalHome() {
           <QuickActionsGrid
             messageBadge={unreadMsgs.length}
             checkInBadge={(assignedForms as any[])?.length || undefined}
-            onLogWeight={() => bodyweightRef.current?.open()}
             weeklyCheckInFormId={pickWeeklyCheckInForm(assignedForms as any)?.id}
           />
         )}
@@ -431,16 +418,6 @@ function PortalHome() {
 
         {/* 5 — Current Training Block */}
         {activePhase && <TrainingBlockCard phase={activePhase} />}
-
-        {/* 6 — Bodyweight summary */}
-        {client && portalUserId && (
-          <BodyweightSummaryCardWithRef
-            ref={bodyweightRef}
-            userId={portalUserId}
-            defaultUnit={(client.preferred_weight_unit as WeightUnit) ?? "lb"}
-          />
-        )}
-
 
         {/* 6c — Water Today */}
         {portalUserId && (
@@ -593,28 +570,3 @@ function SecondaryLinks({ handleAgreementComplete: _ }: { handleAgreementComplet
     </ul>
   );
 }
-
-// Imperative-handle wrapper for the bodyweight bottom sheet (so the quick
-// action tile can open it).
-const BodyweightSummaryCardWithRef = forwardRef<
-  { open: () => void },
-  { userId: string; defaultUnit?: WeightUnit }
->(function BodyweightSummaryCardWithRef({ userId, defaultUnit }, ref) {
-  // Trigger the visible "Log Weight" button programmatically by clicking it.
-  const containerRef = useRef<HTMLDivElement>(null);
-  useImperativeHandle(ref, () => ({
-    open: () => {
-      const btn = containerRef.current?.querySelector<HTMLButtonElement>(
-        "button[data-log-bw-trigger]",
-      ) ?? containerRef.current?.querySelector<HTMLButtonElement>("button");
-      btn?.click();
-    },
-  }));
-  return (
-    <div ref={containerRef}>
-      <Suspense fallback={null}>
-        <HomeBodyweightCard userId={userId} surface="portal" defaultUnit={defaultUnit} />
-      </Suspense>
-    </div>
-  );
-});

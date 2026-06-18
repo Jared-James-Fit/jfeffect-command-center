@@ -1,5 +1,5 @@
 import { Link } from "@tanstack/react-router";
-import { Activity, MessageCircle, ClipboardCheck, Scale, Video, Apple } from "lucide-react";
+import { Activity, MessageCircle, ClipboardCheck, Video, Apple } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 type Tile = {
@@ -12,12 +12,11 @@ type Tile = {
 };
 
 export function QuickActionsGrid({
-  onLogWeight,
   messageBadge,
   checkInBadge,
   weeklyCheckInFormId,
+  showCheckIn = true,
 }: {
-  onLogWeight?: () => void;
   messageBadge?: number;
   checkInBadge?: number;
   /**
@@ -26,6 +25,8 @@ export function QuickActionsGrid({
    * client never feels like they leave the app to fill it out.
    */
   weeklyCheckInFormId?: string;
+  /** Hide the Submit Check-In tile for non-coaching members. */
+  showCheckIn?: boolean;
 }) {
   const checkInTo = weeklyCheckInFormId
     ? `/portal/check-ins/${weeklyCheckInFormId}`
@@ -33,8 +34,9 @@ export function QuickActionsGrid({
   const tiles: Tile[] = [
     { to: "/portal/workouts", label: "Workouts", icon: Activity, emphasis: true },
     { to: "/portal/messages", label: "Message Coach", icon: MessageCircle, badge: messageBadge },
-    { to: checkInTo, label: "Submit Check-In", icon: ClipboardCheck, badge: checkInBadge },
-    { to: "#", label: "Log Weight", icon: Scale, onClick: onLogWeight },
+    ...(showCheckIn
+      ? [{ to: checkInTo, label: "Submit Check-In", icon: ClipboardCheck, badge: checkInBadge } as Tile]
+      : []),
     { to: "/portal/lift-videos", label: "Upload Lift", icon: Video },
     { to: "/portal/nutrition-targets", label: "Nutrition", icon: Apple },
   ];

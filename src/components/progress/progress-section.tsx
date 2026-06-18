@@ -7,6 +7,9 @@ import {
   CheckCircle2, AlertTriangle, Loader2, Trash2, X, ChevronRight, Plus,
   ArrowRight, MessageSquare,
 } from "lucide-react";
+import {
+  ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip,
+} from "recharts";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -115,6 +118,33 @@ export function ProgressSection({
 
   return (
     <div className="space-y-4 p-3 pb-28 md:p-6 md:pb-12">
+      {/* Always-visible quick actions so logging is one tap from any tab */}
+      <div className="grid grid-cols-3 gap-2">
+        <Button
+          variant="outline"
+          className="h-12 flex-col gap-0.5 text-xs font-bold"
+          onClick={() => setWeightDialog(true)}
+        >
+          <Scale className="h-4 w-4" />
+          Log Weight
+        </Button>
+        <Button
+          variant="outline"
+          className="h-12 flex-col gap-0.5 text-xs font-bold"
+          onClick={() => setPhotoDialog(true)}
+        >
+          <Camera className="h-4 w-4" />
+          Add Photos
+        </Button>
+        <Button
+          variant="outline"
+          className="h-12 flex-col gap-0.5 text-xs font-bold"
+          onClick={() => setMeasureDialog(true)}
+        >
+          <Ruler className="h-4 w-4" />
+          Add Measurements
+        </Button>
+      </div>
       <Tabs value={tab} onValueChange={setTab} className="space-y-4">
         <TabsList className="grid w-full grid-cols-3 md:grid-cols-6 h-auto">
           <TabsTrigger value="photos">Photos</TabsTrigger>
@@ -132,7 +162,11 @@ export function ProgressSection({
           <VideosTab ctx={ctx} onNew={() => setVideoDialog(true)} onOpen={setDetailId} />
         </TabsContent>
         <TabsContent value="bodyweight">
-          <BodyweightTab ctx={ctx} onLog={() => setWeightDialog(true)} />
+          <BodyweightTab
+            ctx={ctx}
+            onLog={() => setWeightDialog(true)}
+            onOpenSubmission={setDetailId}
+          />
         </TabsContent>
         <TabsContent value="water">
           <div className="max-w-md">
@@ -588,13 +622,49 @@ function VideoSubmissionDialog({ ctx, open, onOpenChange }: { ctx: ProgressConte
 
 // ============== Bodyweight ==============
 
-function BodyweightTab({ ctx, onLog }: { ctx: ProgressContext; onLog: () => void }) {
+function BodyweightTab({
+  ctx, onLog, onOpenSubmission,
+}: { ctx: ProgressContext; onLog: () => void; onOpenSubmission?: (id: string) => void }) {
   const qc = useQueryClient();
+  const [range, setRange] = useState<"7d" | "30d" | "90d" | "all">("30d");
   const { data: rows = [] } = useQuery({
     queryKey: ["progress-bw", ctx.userId],
     queryFn: () => listBodyweight(ctx.userId),
   });
+  const { data: photoSubs = [] } = useQuery({
+    queryKey: ["progress-subs-photo", ctx.userId],
+    queryFn: () => listSubmissions({ userId: ctx.userId, type: "photo" }),
+  });
   const stats = bodyweightStats(rows);
+
+  const unit = rows[0]?.weight_unit ?? "lb";
+  const chartAll = useMemo(() => {
+    return [...rows]
+      .sort((a, b) => a.logged_date.localeCompare(b.logged_date))
+      .map((r) => ({
+        d: r.logged_date,
+        v: r.weight_unit === unit
+          ? Number(r.weight_value)
+          : r.weight_unit === "kg"
+            ? +(Number(r.weight_value) * 2.20462).toFixed(2)
+            : +(Number(r.weight_value) / 2.20462).toFixed(2),
+      }));
+  }, [rows, unit]);
+  const chart = useMemo(() => {
+    if (range === "all") return chartAll;
+    const days = range === "7d" ? 7 : range === "30d" ? 30 : 90;
+    const cutoff = new Date();
+    cutoff.setDate(cutoff.getDate() - days);
+    return chartAll.filter((p) => new Date(p.d) >= cutoff);
+  }, [chartAll, range]);
+
+  function handlePointClick(d?: string) {
+    if (!d || !onOpenSubmission) return;
+    const sub = photoSubs.find((s) => s.submission_date === d)
+      ?? photoSubs.find((s) => Math.abs(differenceInDays(parseISO(s.submission_date), parseISO(d))) <= 3);
+    if (sub) onOpenSubmission(sub.id);
+    else toast.message("No progress entry on that date yet.");
+  }
 
   async function remove(id: string) {
     if (!confirm("Delete this entry?")) return;
@@ -613,6 +683,56 @@ function BodyweightTab({ ctx, onLog }: { ctx: ProgressContext; onLog: () => void
           <div><p className="text-2xl font-semibold">{stats.latest}</p><p className="text-xs text-muted-foreground">Latest {stats.unit}</p></div>
           <div><p className="text-2xl font-semibold">{stats.avg7 ?? "—"}</p><p className="text-xs text-muted-foreground">7-day avg</p></div>
           <div><p className="text-2xl font-semibold">{stats.change > 0 ? "+" : ""}{stats.change}</p><p className="text-xs text-muted-foreground">Since start</p></div>
+        </Card>
+      )}
+      {chartAll.length >= 2 && (
+        <Card className="p-3">
+          <div className="mb-2 flex items-center justify-between gap-2">
+            <div className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Bodyweight ({unit})</div>
+            <div className="flex gap-1">
+              {(["7d", "30d", "90d", "all"] as const).map((r) => (
+                <Button
+                  key={r}
+                  size="sm"
+                  variant={range === r ? "default" : "outline"}
+                  className="h-7 px-2 text-[11px] uppercase"
+                  onClick={() => setRange(r)}
+                >
+                  {r === "all" ? "All" : r}
+                </Button>
+              ))}
+            </div>
+          </div>
+          <div className="h-[180px] w-full">
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart
+                data={chart}
+                margin={{ top: 6, right: 8, left: 0, bottom: 0 }}
+                onClick={(e: any) => handlePointClick(e?.activePayload?.[0]?.payload?.d)}
+              >
+                <defs>
+                  <linearGradient id="bwChartArea" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="var(--primary)" stopOpacity={0.4} />
+                    <stop offset="100%" stopColor="var(--primary)" stopOpacity={0} />
+                  </linearGradient>
+                </defs>
+                <XAxis dataKey="d" tickFormatter={(v) => { try { return format(parseISO(v), "MMM d"); } catch { return v; } }} tick={{ fontSize: 10 }} minTickGap={24} />
+                <YAxis domain={["auto", "auto"]} tick={{ fontSize: 10 }} width={32} />
+                <Tooltip
+                  contentStyle={{ fontSize: 12, padding: 6 }}
+                  labelFormatter={(v) => { try { return format(parseISO(String(v)), "MMM d, yyyy"); } catch { return String(v); } }}
+                  formatter={(v: any) => [`${v} ${unit}`, "Weight"]}
+                />
+                <Area
+                  type="monotone" dataKey="v"
+                  stroke="var(--primary)" strokeWidth={2}
+                  fill="url(#bwChartArea)" isAnimationActive={false}
+                  activeDot={{ r: 5, style: { cursor: "pointer" } }}
+                />
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
+          <p className="mt-1 text-[10px] text-muted-foreground">Tap a point to open that date's entry.</p>
         </Card>
       )}
       {!rows.length ? (
@@ -1027,18 +1147,34 @@ function TimelineTab({ ctx, onOpen }: { ctx: ProgressContext; onOpen: (id: strin
       {!items.length ? (
         <p className="text-sm text-muted-foreground p-4 text-center">Nothing yet.</p>
       ) : (
-        <div className="space-y-2">
-          {items.map((it, i) => (
-            <Card key={i} className={`p-3 ${it.id ? "cursor-pointer hover:bg-accent/50" : ""}`} onClick={() => it.id && onOpen(it.id)}>
-              <div className="flex items-start justify-between gap-2">
-                <div>
-                  <p className="text-xs text-muted-foreground">{fmtDate(it.at)} · {it.kind}</p>
-                  <p className="font-medium">{it.title}</p>
-                  {it.subtitle && <p className="text-xs text-muted-foreground">{it.subtitle}</p>}
-                </div>
-                {it.id && <ChevronRight className="h-4 w-4 text-muted-foreground" />}
+        <div className="space-y-4">
+          {Array.from(
+            items.reduce<Map<string, Item[]>>((m, it) => {
+              const arr = m.get(it.at) ?? [];
+              arr.push(it);
+              m.set(it.at, arr);
+              return m;
+            }, new Map()).entries(),
+          ).map(([date, group]) => (
+            <div key={date} className="space-y-2">
+              <div className="sticky top-0 z-10 -mx-1 bg-background/95 px-1 py-1 backdrop-blur">
+                <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground">
+                  {fmtDate(date)}
+                </p>
               </div>
-            </Card>
+              {group.map((it, i) => (
+                <Card key={i} className={`p-3 ${it.id ? "cursor-pointer hover:bg-accent/50" : ""}`} onClick={() => it.id && onOpen(it.id)}>
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <p className="text-xs text-muted-foreground">{it.kind}</p>
+                      <p className="font-medium">{it.title}</p>
+                      {it.subtitle && <p className="text-xs text-muted-foreground">{it.subtitle}</p>}
+                    </div>
+                    {it.id && <ChevronRight className="h-4 w-4 text-muted-foreground" />}
+                  </div>
+                </Card>
+              ))}
+            </div>
           ))}
         </div>
       )}
