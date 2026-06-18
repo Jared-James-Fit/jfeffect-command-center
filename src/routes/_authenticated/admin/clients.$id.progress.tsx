@@ -5,16 +5,22 @@ import { PageHeader } from "@/components/app-shell";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { ChevronLeft } from "lucide-react";
-import { ProgressSection } from "@/components/progress/progress-section";
+import { ProgressSection, type ProgressInitialAction } from "@/components/progress/progress-section";
 import { CheckInScheduleCard } from "@/components/progress/check-in-schedule-card";
 import { useAuth } from "@/lib/auth";
 
 export const Route = createFileRoute("/_authenticated/admin/clients/$id/progress")({
   component: AdminClientProgress,
+  validateSearch: (s: Record<string, unknown>) => {
+    const a = s.action as string | undefined;
+    const allowed: ProgressInitialAction[] = ["photo", "weight", "measure", "history"];
+    return { action: (allowed as string[]).includes(a ?? "") ? (a as ProgressInitialAction) : undefined };
+  },
 });
 
 function AdminClientProgress() {
   const { id } = useParams({ from: "/_authenticated/admin/clients/$id/progress" });
+  const { action } = Route.useSearch();
   const { role } = useAuth();
   const { data: client } = useQuery({
     queryKey: ["admin-client-progress", id],
@@ -45,6 +51,7 @@ function AdminClientProgress() {
         </Button>
       </div>
       <ProgressSection
+        initialAction={action}
         ctx={{
           userId: (client as any).user_id,
           ownerType: "client",
