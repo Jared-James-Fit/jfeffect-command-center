@@ -1967,12 +1967,21 @@ function SetRow({
           }
         : { weight: null, reps: null, rpe: null, unit: null, status: null };
       if (existing) {
-        const { error } = await sb.from("pl_row_results").update(payload).eq("id", existing.id);
-        if (error) throw error;
+        if (adapter) {
+          await adapter.upsertPlRowResultRaw(payload, existing.id);
+        } else {
+          const { error } = await sb.from("pl_row_results").update(payload).eq("id", existing.id);
+          if (error) throw error;
+        }
       } else {
-        const { data: inserted, error } = await sb.from("pl_row_results").insert(payload).select("id").maybeSingle();
-        if (error) throw error;
-        savedId = inserted?.id ?? null;
+        if (adapter) {
+          const res = await adapter.upsertPlRowResultRaw(payload, null);
+          savedId = res.id;
+        } else {
+          const { data: inserted, error } = await sb.from("pl_row_results").insert(payload).select("id").maybeSingle();
+          if (error) throw error;
+          savedId = inserted?.id ?? null;
+        }
       }
       onChange();
       // Auto-start the per-exercise rest timer when this set transitions
@@ -2075,11 +2084,19 @@ function SetRow({
     };
     try {
       if (existing?.id) {
-        const { error } = await sb.from("pl_row_results").update(payload).eq("id", existing.id);
-        if (error) throw error;
+        if (adapter) {
+          await adapter.upsertPlRowResultRaw(payload, existing.id);
+        } else {
+          const { error } = await sb.from("pl_row_results").update(payload).eq("id", existing.id);
+          if (error) throw error;
+        }
       } else {
-        const { error } = await sb.from("pl_row_results").insert(payload);
-        if (error) throw error;
+        if (adapter) {
+          await adapter.upsertPlRowResultRaw(payload, null);
+        } else {
+          const { error } = await sb.from("pl_row_results").insert(payload);
+          if (error) throw error;
+        }
       }
       onChange();
       if (!existing?.completed_at) onSetCompleted?.(setIndex);
