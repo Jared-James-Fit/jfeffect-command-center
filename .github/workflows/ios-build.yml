@@ -41,20 +41,14 @@ jobs:
 
       - name: Setup iOS platform
         run: |
-          # Remove partial ios directory and re-add cleanly
           rm -rf ios
           npx cap add ios
-          
-          # Capacitor 7+ with server.url set does not generate a Podfile during cap add/sync.
-          # Write the standard Capacitor Podfile manually.
           cat > ios/App/Podfile << 'PODFILE'
           require_relative '../../node_modules/@capacitor/ios/scripts/pods_helpers'
 
           platform :ios, '16.0'
           use_frameworks!
 
-          # workaround to avoid Xcode 14 caching of Pods that requires
-          # Product -> Clean Build Folder after new Cordova plugins are installed
           install! 'cocoapods', :disable_input_output_paths => true
 
           def capacitor_pods
@@ -64,12 +58,9 @@ jobs:
 
           target 'App' do
             capacitor_pods
-            # Add your Pods here
           end
           PODFILE
-          
-          echo "✅ Podfile written manually"
-          ls ios/App/Podfile
+          echo "✅ Podfile written"
 
       - name: Run pod install
         run: cd ios/App && pod install
@@ -80,15 +71,38 @@ jobs:
           echo "${{ secrets.APP_STORE_CONNECT_API_KEY_BASE64 }}" | base64 --decode > ~/.private_keys/AuthKey_${{ secrets.APP_STORE_CONNECT_KEY_ID }}.p8
           chmod 600 ~/.private_keys/AuthKey_${{ secrets.APP_STORE_CONNECT_KEY_ID }}.p8
 
+      - name: Get Apple Developer Team ID
+        id: team
+        run: |
+          TEAM_ID=$(xcrun altool --list-providers \
+            --apiKey ${{ secrets.APP_STORE_CONNECT_KEY_ID }} \
+            --apiIssuer ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }} \
+            2>/dev/null | grep -E "^[A-Z0-9]{10}" | head -1 | awk '{print $1}' || echo "")
+          
+          if [ -z "$TEAM_ID" ]; then
+            # Try alternative: get from App Store Connect API
+            TEAM_ID=$(curl -s "https://api.appstoreconnect.apple.com/v1/apps/6781493556" \
+              -H "Authorization: Bearer $(python3 -c "
+          import jwt, time
+          key = open('$HOME/.private_keys/AuthKey_${{ secrets.APP_STORE_CONNECT_KEY_ID }}.p8').read()
+          payload = {'iss': '${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}', 'iat': int(time.time()), 'exp': int(time.time())+600, 'aud': 'appstoreconnect-v1'}
+          print(jwt.encode(payload, key, algorithm='ES256', headers={'kid': '${{ secrets.APP_STORE_CONNECT_KEY_ID }}'}))
+          " 2>/dev/null)" 2>/dev/null | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('data',{}).get('relationships',{}).get('gameCenterEnabledVersions',{}).get('data',''))" 2>/dev/null || echo "")
+          fi
+          
+          echo "TEAM_ID=$TEAM_ID" >> $GITHUB_OUTPUT
+          echo "Team ID: $TEAM_ID"
+
       - name: Update bundle identifier in Xcode project
         run: |
           find ios -name "*.pbxproj" -exec sed -i '' 's/com\.jaredjamesfit\.jfeffect/com.jfeffect.app/g' {} \; || true
           find ios -name "*.pbxproj" -exec sed -i '' 's/com\.capacitorjs\.app/com.jfeffect.app/g' {} \; || true
-          grep "PRODUCT_BUNDLE_IDENTIFIER" ios/App/App.xcodeproj/project.pbxproj | head -3 || true
 
       - name: Build and Archive iOS app
         run: |
           cd ios/App
+          TEAM_ID="${{ steps.team.outputs.TEAM_ID }}"
+          
           xcodebuild \
             -workspace App.xcworkspace \
             -scheme App \
@@ -99,6 +113,7 @@ jobs:
             CODE_SIGN_STYLE=Automatic \
             PRODUCT_BUNDLE_IDENTIFIER=com.jfeffect.app \
             ALLOW_PROVISIONING_UPDATES=YES \
+            ${TEAM_ID:+DEVELOPMENT_TEAM=$TEAM_ID} \
             -authenticationKeyPath "$HOME/.private_keys/AuthKey_${{ secrets.APP_STORE_CONNECT_KEY_ID }}.p8" \
             -authenticationKeyID "${{ secrets.APP_STORE_CONNECT_KEY_ID }}" \
             -authenticationKeyIssuerID "${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}"
