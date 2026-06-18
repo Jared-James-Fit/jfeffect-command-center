@@ -33,6 +33,8 @@ import { SocialHandlesEditor } from "@/components/social-handles-editor";
 import { SocialIcons } from "@/components/social-icons";
 import { ClientQuickLinksCard } from "@/components/client-quick-links-card";
 import { AppActivityCard } from "@/components/app-activity-card";
+import { ManualCheckInReviewComposer } from "@/components/manual-check-in-review-composer";
+import { Send } from "lucide-react";
 import { FolderOpen, Eye } from "lucide-react";
 import { useClientImpersonation } from "@/lib/client-impersonation";
 import { useAuth } from "@/lib/auth";
@@ -248,6 +250,7 @@ function ClientDetail() {
   const [deleteStep, setDeleteStep] = useState<0 | 1 | 2>(0);
   const [priceCardOpen, setPriceCardOpen] = useState(false);
   const [bookingLinkOpen, setBookingLinkOpen] = useState(false);
+  const [checkInResponseOpen, setCheckInResponseOpen] = useState(false);
   const inviteFn = useServerFn(inviteClient);
   const deleteFn = useServerFn(deleteClient);
   const getSetupLinkFn = useServerFn(getSetupLink);
@@ -879,7 +882,16 @@ function ClientDetail() {
                 <h3 className="text-xs uppercase tracking-widest text-muted-foreground">Check-Ins & Forms</h3>
                 <p className="text-xs text-muted-foreground mt-1">Assign this client to forms from the unified form builder.</p>
               </div>
-              <Link to="/admin/native-forms"><Button variant="outline" size="sm">Manage forms</Button></Link>
+              <div className="flex items-center gap-2">
+                <Button
+                  size="sm"
+                  className="bg-gradient-primary font-bold"
+                  onClick={() => setCheckInResponseOpen(true)}
+                >
+                  <Send className="mr-1 h-4 w-4" /> Send Check-In Response
+                </Button>
+                <Link to="/admin/native-forms"><Button variant="outline" size="sm">Manage forms</Button></Link>
+              </div>
             </div>
             <ClientNativeFormsAssignment clientId={id} />
             <div className="grid gap-3 md:grid-cols-2">
@@ -1318,6 +1330,12 @@ function ClientDetail() {
         onOpenChange={setBookingLinkOpen}
         defaultPhone={form.phone}
         defaultEmail={form.email}
+      />
+
+      <ManualCheckInReviewComposer
+        open={checkInResponseOpen}
+        onOpenChange={setCheckInResponseOpen}
+        defaultClientId={id}
       />
 
       <AlertDialog open={pwOpen} onOpenChange={(o) => !pwSaving && setPwOpen(o)}>
