@@ -3,7 +3,7 @@ import { Link } from "@tanstack/react-router";
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Card } from "@/components/ui/card";
-import { Flame, Beef, Wheat, Cookie, Droplets, Moon, ChefHat, HelpCircle } from "lucide-react";
+import { Flame, Beef, Wheat, Cookie, Droplets, Moon, ChefHat, HelpCircle, Calculator, Sparkles } from "lucide-react";
 import { RecipeBrowser } from "./RecipeBrowser";
 import { ensureWaterTarget, formatWater } from "@/lib/water";
 import { WaterTargetDialog } from "@/components/progress/water-target-dialog";
@@ -150,7 +150,7 @@ function QuickActions({
 }) {
   const faqTo = viewer === "member" ? "/m/resources" : "/portal/resources";
   return (
-    <div className="grid grid-cols-2 gap-3">
+    <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
       <a
         href={`#${recipesAnchorId}`}
         className="flex items-center gap-3 rounded-xl border border-primary/30 bg-gradient-to-br from-primary/10 to-card p-4 transition hover:border-primary active:scale-[0.98]"
@@ -171,6 +171,23 @@ function QuickActions({
           <div className="text-[11px] text-muted-foreground">FAQ & resources</div>
         </div>
       </Link>
+      <ComingSoonTile icon={Calculator} title="Macro Calculator" />
+      <ComingSoonTile icon={Sparkles} title="Meal Builder" />
+    </div>
+  );
+}
+
+function ComingSoonTile({ icon: Icon, title }: { icon: any; title: string }) {
+  return (
+    <div
+      className="relative flex items-center gap-3 rounded-xl border border-dashed border-border bg-secondary/20 p-4 opacity-80"
+      aria-disabled="true"
+    >
+      <Icon className="h-6 w-6 text-muted-foreground" />
+      <div>
+        <div className="text-sm font-bold leading-tight text-foreground/80">{title}</div>
+        <div className="text-[11px] uppercase tracking-widest text-muted-foreground">Coming soon</div>
+      </div>
     </div>
   );
 }
