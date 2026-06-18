@@ -751,7 +751,7 @@ function BodyweightTab({
               <AreaChart
                 data={chart}
                 margin={{ top: 6, right: 8, left: 0, bottom: 0 }}
-                onClick={(e: any) => handlePointClick(e?.activePayload?.[0]?.payload?.d)}
+                onClick={(e: any) => handlePointClick(e?.activePayload?.[0]?.payload)}
               >
                 <defs>
                   <linearGradient id="bwChartArea" x1="0" y1="0" x2="0" y2="1">
@@ -770,25 +770,44 @@ function BodyweightTab({
                   type="monotone" dataKey="v"
                   stroke="var(--primary)" strokeWidth={2}
                   fill="url(#bwChartArea)" isAnimationActive={false}
-                  activeDot={{ r: 5, style: { cursor: "pointer" } }}
+                  dot={(props: any) => (
+                    <circle
+                      cx={props.cx}
+                      cy={props.cy}
+                      r={4}
+                      fill="var(--primary)"
+                      stroke="var(--card)"
+                      strokeWidth={2}
+                      className="cursor-pointer"
+                      onClick={(e) => { e.stopPropagation(); handlePointClick(props.payload); }}
+                    />
+                  )}
+                  activeDot={{ r: 6, onClick: (_event: unknown, payload: any) => handlePointClick(payload?.payload), style: { cursor: "pointer" } }}
                 />
               </AreaChart>
             </ResponsiveContainer>
           </div>
-          <p className="mt-1 text-[10px] text-muted-foreground">Tap a point to open that date's entry.</p>
+          {selectedPoint ? (
+            <div className="mt-2 rounded-md border border-primary/30 bg-primary/10 px-3 py-2 text-sm">
+              <div className="font-semibold">{selectedPoint.value.toFixed(1)} {selectedPoint.unit}</div>
+              <div className="text-xs text-muted-foreground">{fmtDate(selectedPoint.date)}{selectedPoint.note ? ` · ${selectedPoint.note}` : ""}</div>
+            </div>
+          ) : (
+            <p className="mt-1 text-[10px] text-muted-foreground">Tap a dot to see that weigh-in.</p>
+          )}
         </Card>
       )}
-      {!rows.length ? (
+      {!combinedRows.length ? (
         <EmptyState icon={Scale} title="No entries yet" body="Track your bodyweight to see trends over time." actionLabel="Log Weight" onAction={onLog} />
       ) : (
         <Card className="divide-y">
-          {rows.slice(0, 50).map((r) => (
+          {combinedRows.slice(0, 50).map((r) => (
             <div key={r.id} className="flex items-center justify-between p-3">
               <div>
-                <p className="font-medium">{r.weight_value} {r.weight_unit}</p>
-                <p className="text-xs text-muted-foreground">{fmtDate(r.logged_date)} {r.note ? `· ${r.note}` : ""}</p>
+                <p className="font-medium">{r.value} {r.unit}</p>
+                <p className="text-xs text-muted-foreground">{fmtDate(r.date)} {r.note ? `· ${r.note}` : ""}</p>
               </div>
-              {ctx.viewerRole === "owner" || ctx.viewerRole === "admin" ? (
+              {(ctx.viewerRole === "owner" || ctx.viewerRole === "admin") && r.source === "progress_bodyweight" ? (
                 <Button size="sm" variant="ghost" onClick={() => remove(r.id)}><Trash2 className="h-4 w-4" /></Button>
               ) : null}
             </div>
