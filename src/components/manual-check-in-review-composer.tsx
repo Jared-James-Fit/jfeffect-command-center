@@ -87,7 +87,7 @@ export function ManualCheckInReviewComposer({
       qc.invalidateQueries({ queryKey: ["manual-reviews-for-client"] });
       
       // reset
-      setMessage(""); setActionItems(""); setInternalNotes(""); setExternalLink("");
+      setMessage(""); setActionItems(""); setInternalNotes("");
       
       job.completeStep(4); // Completed
       onOpenChange(false);
