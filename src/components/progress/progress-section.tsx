@@ -622,13 +622,49 @@ function VideoSubmissionDialog({ ctx, open, onOpenChange }: { ctx: ProgressConte
 
 // ============== Bodyweight ==============
 
-function BodyweightTab({ ctx, onLog }: { ctx: ProgressContext; onLog: () => void }) {
+function BodyweightTab({
+  ctx, onLog, onOpenSubmission,
+}: { ctx: ProgressContext; onLog: () => void; onOpenSubmission?: (id: string) => void }) {
   const qc = useQueryClient();
+  const [range, setRange] = useState<"7d" | "30d" | "90d" | "all">("30d");
   const { data: rows = [] } = useQuery({
     queryKey: ["progress-bw", ctx.userId],
     queryFn: () => listBodyweight(ctx.userId),
   });
+  const { data: photoSubs = [] } = useQuery({
+    queryKey: ["progress-subs-photo", ctx.userId],
+    queryFn: () => listSubmissions({ userId: ctx.userId, type: "photo" }),
+  });
   const stats = bodyweightStats(rows);
+
+  const unit = rows[0]?.weight_unit ?? "lb";
+  const chartAll = useMemo(() => {
+    return [...rows]
+      .sort((a, b) => a.logged_date.localeCompare(b.logged_date))
+      .map((r) => ({
+        d: r.logged_date,
+        v: r.weight_unit === unit
+          ? Number(r.weight_value)
+          : r.weight_unit === "kg"
+            ? +(Number(r.weight_value) * 2.20462).toFixed(2)
+            : +(Number(r.weight_value) / 2.20462).toFixed(2),
+      }));
+  }, [rows, unit]);
+  const chart = useMemo(() => {
+    if (range === "all") return chartAll;
+    const days = range === "7d" ? 7 : range === "30d" ? 30 : 90;
+    const cutoff = new Date();
+    cutoff.setDate(cutoff.getDate() - days);
+    return chartAll.filter((p) => new Date(p.d) >= cutoff);
+  }, [chartAll, range]);
+
+  function handlePointClick(d?: string) {
+    if (!d || !onOpenSubmission) return;
+    const sub = photoSubs.find((s) => s.submission_date === d)
+      ?? photoSubs.find((s) => Math.abs(differenceInDays(parseISO(s.submission_date), parseISO(d))) <= 3);
+    if (sub) onOpenSubmission(sub.id);
+    else toast.message("No progress entry on that date yet.");
+  }
 
   async function remove(id: string) {
     if (!confirm("Delete this entry?")) return;
@@ -647,6 +683,56 @@ function BodyweightTab({ ctx, onLog }: { ctx: ProgressContext; onLog: () => void
           <div><p className="text-2xl font-semibold">{stats.latest}</p><p className="text-xs text-muted-foreground">Latest {stats.unit}</p></div>
           <div><p className="text-2xl font-semibold">{stats.avg7 ?? "—"}</p><p className="text-xs text-muted-foreground">7-day avg</p></div>
           <div><p className="text-2xl font-semibold">{stats.change > 0 ? "+" : ""}{stats.change}</p><p className="text-xs text-muted-foreground">Since start</p></div>
+        </Card>
+      )}
+      {chartAll.length >= 2 && (
+        <Card className="p-3">
+          <div className="mb-2 flex items-center justify-between gap-2">
+            <div className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Bodyweight ({unit})</div>
+            <div className="flex gap-1">
+              {(["7d", "30d", "90d", "all"] as const).map((r) => (
+                <Button
+                  key={r}
+                  size="sm"
+                  variant={range === r ? "default" : "outline"}
+                  className="h-7 px-2 text-[11px] uppercase"
+                  onClick={() => setRange(r)}
+                >
+                  {r === "all" ? "All" : r}
+                </Button>
+              ))}
+            </div>
+          </div>
+          <div className="h-[180px] w-full">
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart
+                data={chart}
+                margin={{ top: 6, right: 8, left: 0, bottom: 0 }}
+                onClick={(e: any) => handlePointClick(e?.activePayload?.[0]?.payload?.d)}
+              >
+                <defs>
+                  <linearGradient id="bwChartArea" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="var(--primary)" stopOpacity={0.4} />
+                    <stop offset="100%" stopColor="var(--primary)" stopOpacity={0} />
+                  </linearGradient>
+                </defs>
+                <XAxis dataKey="d" tickFormatter={(v) => { try { return format(parseISO(v), "MMM d"); } catch { return v; } }} tick={{ fontSize: 10 }} minTickGap={24} />
+                <YAxis domain={["auto", "auto"]} tick={{ fontSize: 10 }} width={32} />
+                <Tooltip
+                  contentStyle={{ fontSize: 12, padding: 6 }}
+                  labelFormatter={(v) => { try { return format(parseISO(String(v)), "MMM d, yyyy"); } catch { return String(v); } }}
+                  formatter={(v: any) => [`${v} ${unit}`, "Weight"]}
+                />
+                <Area
+                  type="monotone" dataKey="v"
+                  stroke="var(--primary)" strokeWidth={2}
+                  fill="url(#bwChartArea)" isAnimationActive={false}
+                  activeDot={{ r: 5, style: { cursor: "pointer" } }}
+                />
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
+          <p className="mt-1 text-[10px] text-muted-foreground">Tap a point to open that date's entry.</p>
         </Card>
       )}
       {!rows.length ? (
