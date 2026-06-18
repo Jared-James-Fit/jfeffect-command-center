@@ -50,7 +50,7 @@ jobs:
           cat > ios/App/Podfile << 'PODFILE'
           require_relative '../../node_modules/@capacitor/ios/scripts/pods_helpers'
 
-          platform :ios, '14.0'
+          platform :ios, '16.0'
           use_frameworks!
 
           # workaround to avoid Xcode 14 caching of Pods that requires
