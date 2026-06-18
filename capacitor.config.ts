@@ -3,18 +3,21 @@ import type { CapacitorConfig } from "@capacitor/cli";
 /**
  * Capacitor config for the native iOS/Android builds of JF Effect.
  *
- * `webDir` points at the built TanStack Start client bundle; the native
- * shells load that bundle locally and use Lovable Cloud for all data calls.
- * `server.url` is intentionally absent — native builds must not point at
- * a remote URL or Apple/Google review will reject the binary as a web wrapper.
+ * The native shell loads the production website via server.url.
+ * This is the correct approach for TanStack Start (SSR) projects.
  */
 const config: CapacitorConfig = {
-  appId: "com.jaredjamesfit.jfeffect",
+  appId: "com.jfeffect.app",
   appName: "JF Effect",
   webDir: "dist",
+  server: {
+    url: "https://jfeffect.com",
+    cleartext: false,
+  },
   ios: {
     contentInset: "always",
     limitsNavigationsToAppBoundDomains: false,
+    allowsLinkPreview: false,
   },
   android: {
     allowMixedContent: false,
@@ -27,6 +30,11 @@ const config: CapacitorConfig = {
     StatusBar: {
       style: "DARK",
       backgroundColor: "#0B0B0F",
+    },
+    SplashScreen: {
+      launchShowDuration: 2000,
+      backgroundColor: "#0B0B0F",
+      showSpinner: false,
     },
   },
 };
