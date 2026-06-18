@@ -23,10 +23,6 @@ import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { supabase } from "@/integrations/supabase/client";
 import { MemberAccessSummary } from "@/components/admin/member-access-summary";
-import { WaterTargetDialog } from "@/components/progress/water-target-dialog";
-import { ensureWaterTarget, formatWater } from "@/lib/water";
-import { useAuth } from "@/lib/auth";
-import { Droplet } from "lucide-react";
 const MemberFeatureToggles = lazy(() =>
   import("@/components/admin/member-feature-toggles").then((m) => ({ default: m.MemberFeatureToggles })),
 );
@@ -133,8 +129,6 @@ function MemberProfile() {
         {/* ───────────── Summary ───────────── */}
         <TabsContent value="summary" className="space-y-5">
           <MemberAccessSummary member={member} access={access} />
-
-          <AdminWaterTargetCard memberUserId={member.user_id} />
 
           <Card className="space-y-3 p-5">
             <div className="text-xs uppercase tracking-wider text-muted-foreground">Contact</div>
@@ -431,60 +425,6 @@ function DangerZone({ memberEmail, onDelete }: { memberEmail: string; onDelete: 
 }
 
 function MemberSetupInfoCard({ member, memberId }: { member: any; memberId: string }) {
-  return <_MemberSetupInfoCardImpl member={member} memberId={memberId} />;
-}
-
-function AdminWaterTargetCard({ memberUserId }: { memberUserId: string | null }) {
-  const { user, role } = useAuth();
-  const [open, setOpen] = useState(false);
-  const { data: target } = useQuery({
-    queryKey: ["water-target", memberUserId],
-    enabled: !!memberUserId,
-    queryFn: () => ensureWaterTarget(memberUserId!),
-    staleTime: 30_000,
-  });
-  if (!memberUserId) {
-    return (
-      <Card className="p-5 text-sm text-muted-foreground">
-        <div className="text-xs uppercase tracking-wider mb-1">Water target</div>
-        Member hasn't completed account setup yet — water target can be set after first sign-in.
-      </Card>
-    );
-  }
-  const viewerRole: "owner" | "admin" | "coach" = role === "admin" ? "admin" : "coach";
-  return (
-    <Card className="p-5 space-y-3">
-      <div className="text-xs uppercase tracking-wider text-muted-foreground">Water target</div>
-      <div className="flex items-center justify-between gap-3">
-        <div className="flex items-center gap-2">
-          <Droplet className="h-4 w-4 text-sky-500" />
-          <div>
-            <div className="text-sm font-semibold">
-              {target ? formatWater(target.active_ml, "L") : "—"}
-            </div>
-            <div className="text-[11px] text-muted-foreground">
-              Source: {target?.target_source ?? "default"} · synced across Home, Nutrition & Progress
-            </div>
-          </div>
-        </div>
-        <Button size="sm" variant="outline" onClick={() => setOpen(true)}>
-          Set water target
-        </Button>
-      </div>
-      {user?.id && (
-        <WaterTargetDialog
-          open={open}
-          onOpenChange={setOpen}
-          userId={memberUserId}
-          currentUserId={user.id}
-          viewerRole={viewerRole}
-        />
-      )}
-    </Card>
-  );
-}
-
-function _MemberSetupInfoCardImpl({ member, memberId }: { member: any; memberId: string }) {
   const save = useServerFn(adminUpdateMemberSetup);
   const qc = useQueryClient();
   const [form, setForm] = useState<any>({});

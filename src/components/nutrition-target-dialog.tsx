@@ -28,64 +28,6 @@ const QUICK_DAY_TYPES = [
 
 const DEFAULT_NEW_DAYS = ["Training Day", "Non-Training Day", "High Day"];
 
-const WATER_UNITS = ["ml", "L", "oz", "cups", "glasses", "custom"] as const;
-type WaterUnit = typeof WATER_UNITS[number];
-
-function parseWater(raw: string): { amount: string; unit: WaterUnit; customUnit: string } {
-  const s = (raw ?? "").trim();
-  if (!s) return { amount: "", unit: "ml", customUnit: "" };
-  const m = s.match(/^([\d.,]+)\s*(.*)$/);
-  if (!m) return { amount: "", unit: "custom", customUnit: s };
-  const amount = m[1].replace(",", ".");
-  const rest = (m[2] || "").trim().toLowerCase();
-  if (!rest) return { amount, unit: "ml", customUnit: "" };
-  if (/^(ml|milliliters?|millilitres?)$/.test(rest)) return { amount, unit: "ml", customUnit: "" };
-  if (/^(l|liters?|litres?)$/.test(rest)) return { amount, unit: "L", customUnit: "" };
-  if (/^(oz|ounces?|fl\s*oz)$/.test(rest)) return { amount, unit: "oz", customUnit: "" };
-  if (/^cups?$/.test(rest)) return { amount, unit: "cups", customUnit: "" };
-  if (/^glasses?$/.test(rest)) return { amount, unit: "glasses", customUnit: "" };
-  return { amount, unit: "custom", customUnit: m[2].trim() };
-}
-
-function WaterTargetInput({ value, onChange }: { value: string; onChange: (v: string) => void }) {
-  const parsed = parseWater(value);
-  const update = (amount: string, unit: WaterUnit, customUnit: string) => {
-    if (!amount && unit !== "custom") return onChange("");
-    if (unit === "custom") {
-      const u = customUnit.trim();
-      onChange(amount ? `${amount}${u ? " " + u : ""}` : u);
-    } else {
-      onChange(`${amount} ${unit}`);
-    }
-  };
-  return (
-    <div className="flex gap-2">
-      <Input
-        type="number"
-        inputMode="decimal"
-        placeholder="Amount"
-        value={parsed.amount}
-        onChange={(e) => update(e.target.value, parsed.unit, parsed.customUnit)}
-        className="flex-1"
-      />
-      <Select value={parsed.unit} onValueChange={(v) => update(parsed.amount, v as WaterUnit, parsed.customUnit)}>
-        <SelectTrigger className="w-32"><SelectValue /></SelectTrigger>
-        <SelectContent>
-          {WATER_UNITS.map((u) => <SelectItem key={u} value={u}>{u === "custom" ? "Custom…" : u}</SelectItem>)}
-        </SelectContent>
-      </Select>
-      {parsed.unit === "custom" && (
-        <Input
-          placeholder="Unit / label"
-          value={parsed.customUnit}
-          onChange={(e) => update(parsed.amount, "custom", e.target.value)}
-          className="w-40"
-        />
-      )}
-    </div>
-  );
-}
-
 type Day = {
   id?: string;
   day_label: string;
@@ -277,8 +219,7 @@ export function NutritionTargetDialog({ open, onOpenChange, clientId, clients = 
           <div>
             <Label>Water target</Label>
             <div className="rounded-md border border-dashed border-border bg-secondary/20 px-3 py-2 text-xs text-muted-foreground">
-              Water targets are now synced. Set them from the
-              <span className="font-semibold"> Nutrition Targets panel</span> (above) so Home, Nutrition, and the Progress tracker stay in sync.
+              Water targets are now synced from the Nutrition Targets panel. Edit there to update everywhere.
             </div>
           </div>
           <div className="flex items-center justify-between rounded-md border border-border bg-secondary/30 px-3 py-2 md:col-span-2">
