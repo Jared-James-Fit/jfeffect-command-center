@@ -34,6 +34,20 @@ jobs:
           echo "=== iOS SDK version ==="
           xcrun --sdk iphoneos --show-sdk-version
 
+
+      - name: Set build number and version
+        run: |
+          # Use GitHub run number as build number (increments automatically)
+          BUILD_NUMBER=${{ github.run_number }}
+          echo "Build number: $BUILD_NUMBER"
+          
+          # Get version from package.json
+          VERSION=$(node -e "const p=require('./package.json'); console.log(p.version || '1.0.0')")
+          echo "Version: $VERSION"
+          
+          echo "BUILD_NUMBER=$BUILD_NUMBER" >> $GITHUB_ENV
+          echo "APP_VERSION=$VERSION" >> $GITHUB_ENV
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
@@ -248,6 +262,8 @@ jobs:
             "CODE_SIGN_IDENTITY=$SIGNING_IDENTITY" \
             DEVELOPMENT_TEAM=${{ secrets.APPLE_TEAM_ID }} \
             PRODUCT_BUNDLE_IDENTIFIER=com.jfeffect.app \
+            CURRENT_PROJECT_VERSION=$BUILD_NUMBER \
+            MARKETING_VERSION=$APP_VERSION \
             PROVISIONING_PROFILE_SPECIFIER="JF Effect App Store Distribution" \
             "OTHER_CODE_SIGN_FLAGS=--keychain $KEYCHAIN_PATH"
 
