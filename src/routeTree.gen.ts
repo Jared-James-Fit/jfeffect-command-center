@@ -206,6 +206,7 @@ import { Route as AuthenticatedMediaSalesCoachingRouteImport } from './routes/_a
 import { Route as AuthenticatedMResourcesSlugRouteImport } from './routes/_authenticated/m/resources.$slug'
 import { Route as AuthenticatedMPlansPlanIdRouteImport } from './routes/_authenticated/m/plans.$planId'
 import { Route as AuthenticatedMNutritionTargetsSetupRouteImport } from './routes/_authenticated/m/nutrition.targets-setup'
+import { Route as AuthenticatedMNutritionTargetsManageRouteImport } from './routes/_authenticated/m/nutrition.targets-manage'
 import { Route as AuthenticatedMNutritionRecipeIdRouteImport } from './routes/_authenticated/m/nutrition.$recipeId'
 import { Route as AuthenticatedMMyPlansEnrollmentIdRouteImport } from './routes/_authenticated/m/my-plans.$enrollmentId'
 import { Route as AuthenticatedAdminSettingsSmsRouteImport } from './routes/_authenticated/admin/settings_.sms'
@@ -1386,6 +1387,12 @@ const AuthenticatedMNutritionTargetsSetupRoute =
     path: '/targets-setup',
     getParentRoute: () => AuthenticatedMNutritionRoute,
   } as any)
+const AuthenticatedMNutritionTargetsManageRoute =
+  AuthenticatedMNutritionTargetsManageRouteImport.update({
+    id: '/targets-manage',
+    path: '/targets-manage',
+    getParentRoute: () => AuthenticatedMNutritionRoute,
+  } as any)
 const AuthenticatedMNutritionRecipeIdRoute =
   AuthenticatedMNutritionRecipeIdRouteImport.update({
     id: '/$recipeId',
@@ -1943,6 +1950,7 @@ export interface FileRoutesByFullPath {
   '/admin/settings/sms': typeof AuthenticatedAdminSettingsSmsRoute
   '/m/my-plans/$enrollmentId': typeof AuthenticatedMMyPlansEnrollmentIdRoute
   '/m/nutrition/$recipeId': typeof AuthenticatedMNutritionRecipeIdRoute
+  '/m/nutrition/targets-manage': typeof AuthenticatedMNutritionTargetsManageRoute
   '/m/nutrition/targets-setup': typeof AuthenticatedMNutritionTargetsSetupRoute
   '/m/plans/$planId': typeof AuthenticatedMPlansPlanIdRoute
   '/m/resources/$slug': typeof AuthenticatedMResourcesSlugRoute
@@ -2194,6 +2202,7 @@ export interface FileRoutesByTo {
   '/admin/settings/sms': typeof AuthenticatedAdminSettingsSmsRoute
   '/m/my-plans/$enrollmentId': typeof AuthenticatedMMyPlansEnrollmentIdRoute
   '/m/nutrition/$recipeId': typeof AuthenticatedMNutritionRecipeIdRoute
+  '/m/nutrition/targets-manage': typeof AuthenticatedMNutritionTargetsManageRoute
   '/m/nutrition/targets-setup': typeof AuthenticatedMNutritionTargetsSetupRoute
   '/m/plans/$planId': typeof AuthenticatedMPlansPlanIdRoute
   '/m/resources/$slug': typeof AuthenticatedMResourcesSlugRoute
@@ -2452,6 +2461,7 @@ export interface FileRoutesById {
   '/_authenticated/admin/settings_/sms': typeof AuthenticatedAdminSettingsSmsRoute
   '/_authenticated/m/my-plans/$enrollmentId': typeof AuthenticatedMMyPlansEnrollmentIdRoute
   '/_authenticated/m/nutrition/$recipeId': typeof AuthenticatedMNutritionRecipeIdRoute
+  '/_authenticated/m/nutrition/targets-manage': typeof AuthenticatedMNutritionTargetsManageRoute
   '/_authenticated/m/nutrition/targets-setup': typeof AuthenticatedMNutritionTargetsSetupRoute
   '/_authenticated/m/plans/$planId': typeof AuthenticatedMPlansPlanIdRoute
   '/_authenticated/m/resources/$slug': typeof AuthenticatedMResourcesSlugRoute
@@ -2710,6 +2720,7 @@ export interface FileRouteTypes {
     | '/admin/settings/sms'
     | '/m/my-plans/$enrollmentId'
     | '/m/nutrition/$recipeId'
+    | '/m/nutrition/targets-manage'
     | '/m/nutrition/targets-setup'
     | '/m/plans/$planId'
     | '/m/resources/$slug'
@@ -2961,6 +2972,7 @@ export interface FileRouteTypes {
     | '/admin/settings/sms'
     | '/m/my-plans/$enrollmentId'
     | '/m/nutrition/$recipeId'
+    | '/m/nutrition/targets-manage'
     | '/m/nutrition/targets-setup'
     | '/m/plans/$planId'
     | '/m/resources/$slug'
@@ -3218,6 +3230,7 @@ export interface FileRouteTypes {
     | '/_authenticated/admin/settings_/sms'
     | '/_authenticated/m/my-plans/$enrollmentId'
     | '/_authenticated/m/nutrition/$recipeId'
+    | '/_authenticated/m/nutrition/targets-manage'
     | '/_authenticated/m/nutrition/targets-setup'
     | '/_authenticated/m/plans/$planId'
     | '/_authenticated/m/resources/$slug'
@@ -4701,6 +4714,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedMNutritionTargetsSetupRouteImport
       parentRoute: typeof AuthenticatedMNutritionRoute
     }
+    '/_authenticated/m/nutrition/targets-manage': {
+      id: '/_authenticated/m/nutrition/targets-manage'
+      path: '/targets-manage'
+      fullPath: '/m/nutrition/targets-manage'
+      preLoaderRoute: typeof AuthenticatedMNutritionTargetsManageRouteImport
+      parentRoute: typeof AuthenticatedMNutritionRoute
+    }
     '/_authenticated/m/nutrition/$recipeId': {
       id: '/_authenticated/m/nutrition/$recipeId'
       path: '/$recipeId'
@@ -5559,12 +5579,15 @@ const AuthenticatedMMyPlansRouteWithChildren =
 
 interface AuthenticatedMNutritionRouteChildren {
   AuthenticatedMNutritionRecipeIdRoute: typeof AuthenticatedMNutritionRecipeIdRoute
+  AuthenticatedMNutritionTargetsManageRoute: typeof AuthenticatedMNutritionTargetsManageRoute
   AuthenticatedMNutritionTargetsSetupRoute: typeof AuthenticatedMNutritionTargetsSetupRoute
 }
 
 const AuthenticatedMNutritionRouteChildren: AuthenticatedMNutritionRouteChildren =
   {
     AuthenticatedMNutritionRecipeIdRoute: AuthenticatedMNutritionRecipeIdRoute,
+    AuthenticatedMNutritionTargetsManageRoute:
+      AuthenticatedMNutritionTargetsManageRoute,
     AuthenticatedMNutritionTargetsSetupRoute:
       AuthenticatedMNutritionTargetsSetupRoute,
   }
