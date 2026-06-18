@@ -31,6 +31,53 @@ import {
 import { format, parseISO, differenceInDays } from "date-fns";
 import { WaterTrackerCard } from "./water-tracker-card";
 
+/**
+ * Mobile-safe date picker: defaults to today and shows a plain text
+ * pill ("Today · Jun 18, 2026"). Native date input is hidden behind an
+ * "Edit date" toggle so it cannot accidentally cover the upload form.
+ */
+function DateField({
+  value, onChange, label = "Date",
+}: { value: string; onChange: (v: string) => void; label?: string }) {
+  const [editing, setEditing] = useState(false);
+  const today = new Date().toISOString().slice(0, 10);
+  const isToday = value === today;
+  let pretty = value;
+  try { pretty = format(parseISO(value), "MMM d, yyyy"); } catch { /* noop */ }
+  return (
+    <div>
+      <Label className="text-xs">{label}</Label>
+      {editing ? (
+        <div className="flex gap-2">
+          <Input
+            type="date"
+            value={value}
+            onChange={(e) => onChange(e.target.value || today)}
+            className="flex-1"
+            autoFocus
+          />
+          <Button type="button" variant="ghost" size="sm" onClick={() => setEditing(false)}>
+            Done
+          </Button>
+        </div>
+      ) : (
+        <div className="flex items-center justify-between gap-2 rounded-md border border-border bg-secondary/30 px-3 py-2">
+          <span className="text-sm font-semibold">
+            {isToday ? "Today" : ""}{isToday ? " · " : ""}{pretty}
+          </span>
+          <button
+            type="button"
+            className="text-xs font-semibold uppercase tracking-wider text-primary hover:underline"
+            onClick={() => setEditing(true)}
+          >
+            Edit date
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export type ProgressContext = {
   userId: string;
   ownerType: ProgressOwnerType;
