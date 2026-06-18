@@ -1,13 +1,6 @@
-import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { Card } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Camera, Scale, Ruler, History, Droplet, Plus } from "lucide-react";
-import {
-  addWaterEntry, ensureWaterTarget, formatWater, listWaterForDate,
-  summarizeToday, todayLocalISO,
-} from "@/lib/water";
-import { toast } from "sonner";
+import { Camera, Scale, Ruler, History, Droplet } from "lucide-react";
 
 /**
  * Dummy-proof Progress Tracking card for client + member home dashboards.
@@ -34,34 +27,7 @@ export function ProgressSummaryCard({
     | { kind: "admin-client"; clientId: string };
   title?: string;
 }) {
-  const today = todayLocalISO();
-  const qc = useQueryClient();
-
-  const waterTargetQ = useQuery({
-    queryKey: ["water-target", userId],
-    enabled: !!userId,
-    queryFn: () => ensureWaterTarget(userId),
-    staleTime: 30_000,
-  });
-  const waterTodayQ = useQuery({
-    queryKey: ["water-today", userId, today],
-    enabled: !!userId,
-    queryFn: () => listWaterForDate(userId, today),
-    staleTime: 5_000,
-  });
-
-  const target = waterTargetQ.data;
-  const summary = summarizeToday(waterTodayQ.data ?? [], target?.active_ml ?? 3000);
-
-  async function quickAddWater() {
-    if (viewerRole !== "owner") return;
-    try {
-      await addWaterEntry({ userId, amountMl: 250, source: "quick_add", createdByUserId: currentUserId });
-      qc.invalidateQueries({ queryKey: ["water-today", userId] });
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Couldn't log water");
-    }
-  }
+  void userId; void currentUserId; void viewerRole;
 
   function ActionLink({
     action, icon: Icon, label, primary,
@@ -111,24 +77,6 @@ export function ProgressSummaryCard({
         </div>
       </Card>
 
-      {/* Compact water summary — full tracker lives in Progress */}
-      <Card className="flex items-center gap-3 px-4 py-3">
-        <div className="grid h-9 w-9 shrink-0 place-items-center rounded-md bg-sky-500/10 text-sky-600 dark:text-sky-400">
-          <Droplet className="h-4 w-4" />
-        </div>
-        <div className="min-w-0 flex-1">
-          <div className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Water today</div>
-          <div className="truncate text-sm font-bold tabular-nums">
-            {formatWater(summary.total, "L")} / {formatWater(target?.active_ml ?? 3000, "L")}
-            <span className="ml-2 text-xs font-normal text-muted-foreground">{summary.pct}%</span>
-          </div>
-        </div>
-        {viewerRole === "owner" && (
-          <Button size="sm" variant="secondary" className="h-9 shrink-0" onClick={quickAddWater}>
-            <Plus className="mr-1 h-3.5 w-3.5" /> 250ml
-          </Button>
-        )}
-      </Card>
     </div>
   );
 }
