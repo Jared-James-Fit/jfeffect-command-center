@@ -442,6 +442,41 @@ function EditExerciseDialog({
             <Switch checked={form.youtube_fallback_allowed} onCheckedChange={(v) => setForm({ ...form, youtube_fallback_allowed: v })} />
           </label>
         </div>
+        <div className="space-y-3 rounded-md border border-primary/30 bg-primary/5 p-3">
+          <div className="flex items-center justify-between">
+            <div className="text-xs font-bold uppercase tracking-widest text-primary">
+              Secondary video (female / variant)
+            </div>
+            <label className="flex items-center gap-2 text-xs">
+              Active set
+              <Select
+                value={form.active_video_set}
+                onValueChange={(v) => setForm({ ...form, active_video_set: v as "primary" | "secondary" })}
+              >
+                <SelectTrigger className="h-8 w-32"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="primary">Primary</SelectItem>
+                  <SelectItem value="secondary" disabled={!form.secondary_vimeo_embed_url}>Secondary</SelectItem>
+                </SelectContent>
+              </Select>
+            </label>
+          </div>
+          <div>
+            <Label>Secondary Vimeo video ID</Label>
+            <Input
+              value={form.secondary_vimeo_id}
+              onChange={(e) => onSecondaryVimeoIdChange(e.target.value)}
+              placeholder="e.g. 987654321"
+            />
+          </div>
+          <div>
+            <Label>Secondary Vimeo embed URL (clean)</Label>
+            <Input
+              value={form.secondary_vimeo_embed_url}
+              onChange={(e) => setForm({ ...form, secondary_vimeo_embed_url: e.target.value })}
+            />
+          </div>
+        </div>
         <Button type="button" variant="outline" className="w-full" onClick={publish} disabled={!form.vimeo_embed_url}>
           Mark working + publish with Vimeo
         </Button>
