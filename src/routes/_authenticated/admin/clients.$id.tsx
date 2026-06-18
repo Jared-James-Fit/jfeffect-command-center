@@ -545,6 +545,9 @@ function ClientDetail() {
             <Link to="/admin/client-programs/$clientId" params={{ clientId: id }}>
               <Button variant="outline" size="sm"><Dumbbell className="mr-2 h-4 w-4" />Training Program</Button>
             </Link>
+            <Link to="/admin/client-programs/$clientId/history" params={{ clientId: id }}>
+              <Button variant="outline" size="sm"><Calendar className="mr-2 h-4 w-4" />Program History</Button>
+            </Link>
             <Button
               variant="outline"
               size="sm"
