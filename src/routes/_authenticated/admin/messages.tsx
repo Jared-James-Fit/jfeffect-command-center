@@ -241,15 +241,15 @@ export function MessagesInbox({
         )}
       >
         <header
-          className="border-b border-border px-4 py-3"
+          className="border-b border-border px-3 py-2 md:px-4 md:py-3"
           style={
             embedded
               ? undefined
               : { paddingTop: "max(env(safe-area-inset-top), 0.75rem)" }
           }
         >
-          <div className="mb-2 flex items-center justify-between">
-            <h1 className="text-lg font-black tracking-tight">Messages</h1>
+          <div className="mb-2 flex items-center gap-2">
+            <h1 className="text-base font-black tracking-tight md:text-lg">Messages</h1>
             <span className="text-[10px] uppercase tracking-widest text-muted-foreground">
               {conversations.length}
             </span>
@@ -263,7 +263,7 @@ export function MessagesInbox({
               onChange={(e) => setSearch(e.target.value)}
             />
           </div>
-          <div className="mt-2 flex gap-1 overflow-x-auto pb-1">
+          <div className="mt-2 flex gap-1 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
             {FILTERS.map((f) => (
               <button
                 key={f}
