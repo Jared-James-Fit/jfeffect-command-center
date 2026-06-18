@@ -281,10 +281,8 @@ function WorkoutDay({
   navigation: WorkoutDayViewNavigation;
 }) {
   const portalUserId = usePortalUserId();
-  // Adapter is wired in but not yet consumed: this turn lands the gating
-  // prop only so the portal route stays on the legacy sb.* path.
-  // Subsequent turns will flip individual reads/writes behind `if (adapter)`.
-  void adapter;
+  // Phase B turn 2: day/rows/results reads route through the adapter when
+  // provided. Other reads/writes still on sb.* for now (turns 3/4).
   const qc = useQueryClient();
   const undo = useWorkoutUndo();
   const cacheScope = `portal:${dayId}`;
@@ -313,10 +311,14 @@ function WorkoutDay({
   });
 
   const { data: day } = useQuery({
-    queryKey: ["pl-day", dayId],
+    queryKey: adapter
+      ? [adapter.kind, adapter.ref.ownerId, "pl-day", dayId]
+      : ["pl-day", dayId],
     initialData: cachedInitialData<any>(cacheScope, "day"),
     queryFn: async () => {
-      const d = (await sb.from("pl_days").select("*").eq("id", dayId).maybeSingle()).data;
+      const d = adapter
+        ? await adapter.getDayRaw(dayId)
+        : (await sb.from("pl_days").select("*").eq("id", dayId).maybeSingle()).data;
       if (d) writePlanCache(cacheScope, "day", d);
       return d;
     },
@@ -360,10 +362,14 @@ function WorkoutDay({
   const readonly = false;
 
   const { data: rows = [], isSuccess: rowsLoaded } = useQuery({
-    queryKey: ["pl-day-rows", dayId],
+    queryKey: adapter
+      ? [adapter.kind, adapter.ref.ownerId, "pl-day-rows", dayId]
+      : ["pl-day-rows", dayId],
     initialData: cachedInitialData<any[]>(cacheScope, "rows"),
     queryFn: async () => {
-      const r = (await sb.from("pl_exercise_rows").select("*, exercises(id,name,video_url,vimeo_embed_url,thumbnail_url,cues,common_mistakes,muscle_group,category,pl_lift_group,warmup_protocol_id,is_powerlifting,warmup_notes,default_load_unit,exercise_category,is_competition_lift,competition_lift_type)").eq("day_id", dayId).order("sort_order")).data ?? [];
+      const r = adapter
+        ? await adapter.listRowsRaw(dayId)
+        : (await sb.from("pl_exercise_rows").select("*, exercises(id,name,video_url,vimeo_embed_url,thumbnail_url,cues,common_mistakes,muscle_group,category,pl_lift_group,warmup_protocol_id,is_powerlifting,warmup_notes,default_load_unit,exercise_category,is_competition_lift,competition_lift_type)").eq("day_id", dayId).order("sort_order")).data ?? [];
       writePlanCache(cacheScope, "rows", r);
       return r;
     },
@@ -376,13 +382,17 @@ function WorkoutDay({
   }, [rowsLoaded, rows.length]);
 
   const { data: results = [] } = useQuery({
-    queryKey: ["pl-day-results", dayId, client?.id],
+    queryKey: adapter
+      ? [adapter.kind, adapter.ref.ownerId, "pl-day-results", dayId]
+      : ["pl-day-results", dayId, client?.id],
     enabled: !!client?.id && (rows as any[]).length > 0,
     initialData: client?.id ? cachedInitialData<any[]>(cacheScope, `results:${client.id}`) : undefined,
     queryFn: async () => {
       const rowIds = (rows as any[]).map((r) => r.id);
       if (!rowIds.length) return [];
-      const r = (await sb.from("pl_row_results").select("*").in("row_id", rowIds).eq("client_id", client!.id)).data ?? [];
+      const r = adapter
+        ? await adapter.listRowResultsRaw(dayId)
+        : (await sb.from("pl_row_results").select("*").in("row_id", rowIds).eq("client_id", client!.id)).data ?? [];
       writePlanCache(cacheScope, `results:${client!.id}`, r);
       return r;
     },
