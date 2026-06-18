@@ -16,7 +16,7 @@ import {
   Pause, ListChecks, XCircle, TrendingUp, Clock,
   Eye, ShieldCheck, AlertTriangle, Gift, UserSearch, Tags, FileText, Activity, Package, UserCog,
 } from "lucide-react";
-import { getMembershipStats } from "@/lib/membership-admin.functions";
+import { getMembershipStats, getRecentlyExpiredMembers, grantTemporaryAccess } from "@/lib/membership-admin.functions";
 
 export const Route = createFileRoute("/_authenticated/admin/membership/")({
   component: MembershipDashboard,
@@ -52,6 +52,25 @@ function MembershipDashboard() {
   const qc = useQueryClient();
   const setPersona = useServerFn(setPovPersona);
   const [povBusy, setPovBusy] = useState(false);
+
+  const fetchExpired = useServerFn(getRecentlyExpiredMembers);
+  const expiredQuery = useQuery({ queryKey: ["jf-recently-expired"], queryFn: () => fetchExpired(), refetchInterval: 60_000 });
+  const grant = useServerFn(grantTemporaryAccess);
+  const [grantingId, setGrantingId] = useState<string | null>(null);
+  const onGrant = async (memberId: string, name: string) => {
+    if (grantingId) return;
+    setGrantingId(memberId);
+    try {
+      await grant({ data: { memberId, days: 7 } });
+      toast.success(`Granted 7-day access to ${name}`);
+      await qc.invalidateQueries({ queryKey: ["jf-recently-expired"] });
+      await qc.invalidateQueries({ queryKey: ["jf-membership-stats"] });
+    } catch (e: any) {
+      toast.error(e?.message ?? "Could not grant access");
+    } finally {
+      setGrantingId(null);
+    }
+  };
 
   const enterPov = async () => {
     if (povBusy) return;
