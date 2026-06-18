@@ -193,10 +193,10 @@ function Overview({
     <div className="space-y-4">
       {/* Primary actions — Compare lives inside Photos/Timeline only */}
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-        <ActionTile icon={Camera} label="Start Check-In" onClick={onAddPhoto} primary />
-        <ActionTile icon={Scale} label="Log Bodyweight" onClick={onLogWeight} />
+        <ActionTile icon={Camera} label="Upload Photos" onClick={onAddPhoto} primary />
+        <ActionTile icon={Scale} label="Log Weight" onClick={onLogWeight} />
         <ActionTile icon={Ruler} label="Add Measurements" onClick={onAddMeasure} />
-        <ActionTile icon={Clock} label="View Timeline" onClick={onViewTimeline} />
+        <ActionTile icon={Clock} label="View Progress" onClick={onViewTimeline} />
       </div>
 
       {/* Summary cards */}

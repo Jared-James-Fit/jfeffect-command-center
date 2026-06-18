@@ -34,7 +34,7 @@ export function QuickActionsGrid({
     { to: "/portal/workouts", label: "Workouts", icon: Activity, emphasis: true },
     { to: "/portal/messages", label: "Message Coach", icon: MessageCircle, badge: messageBadge },
     { to: checkInTo, label: "Submit Check-In", icon: ClipboardCheck, badge: checkInBadge },
-    { to: "#", label: "Log Bodyweight", icon: Scale, onClick: onLogWeight },
+    { to: "#", label: "Log Weight", icon: Scale, onClick: onLogWeight },
     { to: "/portal/lift-videos", label: "Upload Lift", icon: Video },
     { to: "/portal/nutrition-targets", label: "Nutrition", icon: Apple },
   ];

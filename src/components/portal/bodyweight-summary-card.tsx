@@ -166,7 +166,7 @@ export function BodyweightSummaryCard({ clientId, defaultUnit = "lb" }: Props) {
       <Sheet open={sheetOpen} onOpenChange={setSheetOpen}>
         <SheetContent side="bottom" className="rounded-t-2xl p-0">
           <SheetHeader className="border-b border-border px-5 py-4">
-            <SheetTitle>Log Bodyweight</SheetTitle>
+            <SheetTitle>Log Weight</SheetTitle>
           </SheetHeader>
           <div className="space-y-4 p-5 pb-[calc(env(safe-area-inset-bottom)+1rem)]">
             <div>

@@ -124,7 +124,7 @@ export function LogBodyweightCard({ clientId, defaultUnit = "lb" }: Props) {
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-2">
           <Scale className="h-4 w-4 text-primary" />
-          <h3 className="text-xs uppercase tracking-widest text-muted-foreground">Log Bodyweight</h3>
+          <h3 className="text-xs uppercase tracking-widest text-muted-foreground">Log Weight</h3>
         </div>
         <Link to="/portal/progress-metrics" className="text-xs text-primary hover:underline">View history</Link>
       </div>
