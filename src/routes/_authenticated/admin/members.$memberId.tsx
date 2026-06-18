@@ -86,17 +86,57 @@ function MemberProfile() {
 
   return (
     <div className="space-y-5">
-      <Card className="p-5 flex items-center gap-4">
-        <div className="text-sm font-medium text-muted-foreground">Membership Access</div>
-        {accessActive ? (
-          <div className="inline-flex items-center gap-2 rounded-full bg-emerald-500/15 px-4 py-2 text-emerald-300 font-bold text-lg border border-emerald-500/30">
-            <span>✓</span> Access Active
-          </div>
-        ) : (
-          <div className="inline-flex items-center gap-2 rounded-full bg-red-500/15 px-4 py-2 text-red-300 font-bold text-lg border border-red-500/30">
-            <span>✗</span> Access Blocked
-          </div>
-        )}
+      <Card className="p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-2">
+        <div className="flex items-center gap-4">
+          <div className="text-sm font-medium text-muted-foreground">Membership Access</div>
+          {accessActive ? (
+            <div className="inline-flex items-center gap-2 rounded-full bg-emerald-500/15 px-4 py-2 text-emerald-300 font-bold text-lg border border-emerald-500/30">
+              <span>✓</span> Access Active
+            </div>
+          ) : (
+            <div className="inline-flex items-center gap-2 rounded-full bg-red-500/15 px-4 py-2 text-red-300 font-bold text-lg border border-red-500/30">
+              <span>✗</span> Access Blocked
+            </div>
+          )}
+        </div>
+        <button
+          onClick={async () => {
+            const turningOn = !accessActive;
+            try {
+              await update({
+                data: {
+                  memberId,
+                  manual_access_override: turningOn,
+                  manual_access_disabled: !turningOn,
+                },
+              });
+              refresh();
+              toast.success(turningOn ? "Access granted" : "Access blocked");
+            } catch (e: any) {
+              toast.error(e?.message ?? "Failed to update access");
+            }
+          }}
+          className={cn(
+            "relative inline-flex h-10 w-[10.5rem] shrink-0 cursor-pointer items-center rounded-full border-2 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+            accessActive
+              ? "border-emerald-500/50 bg-emerald-500/20 text-emerald-300"
+              : "border-red-500/50 bg-red-500/20 text-red-300"
+          )}
+        >
+          <span className="sr-only">Toggle membership access</span>
+          <span
+            className={cn(
+              "pointer-events-none absolute left-1 flex h-8 w-8 items-center justify-center rounded-full bg-background shadow-lg ring-0 transition-transform",
+              accessActive ? "translate-x-[6.5rem]" : "translate-x-0"
+            )}
+          >
+            <span className={cn("text-xs font-bold", accessActive ? "text-emerald-500" : "text-red-500")}>
+              {accessActive ? "ON" : "OFF"}
+            </span>
+          </span>
+          <span className={cn("absolute text-sm font-bold uppercase tracking-wider transition-opacity", accessActive ? "left-3 opacity-100" : "left-3 opacity-0")}>Access ON</span>
+          <span className={cn("absolute text-sm font-bold uppercase tracking-wider transition-opacity", accessActive ? "right-3 opacity-0" : "right-3 opacity-100")}>Access OFF</span>
+        </button>
       </Card>
 
       {member.account_type === "jf_member" && member.profile_picture_required && !member.avatar_url && (
