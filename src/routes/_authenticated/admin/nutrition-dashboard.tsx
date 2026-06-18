@@ -219,3 +219,45 @@ function NutritionDashboard() {
     </>
   );
 }
+
+function PendingTargetsApprovalCard() {
+  const qc = useQueryClient();
+  const listFn = useServerFn(listPendingTargets);
+  const approveFn = useServerFn(approveMemberTargets);
+  const { data } = useQuery({ queryKey: ["pending-member-targets"], queryFn: () => listFn({}) });
+  const rows = (data ?? []) as any[];
+  const approveM = useMutation({
+    mutationFn: (id: string) => approveFn({ data: { id } }),
+    onSuccess: () => {
+      toast.success("Target approved");
+      qc.invalidateQueries({ queryKey: ["pending-member-targets"] });
+    },
+    onError: (e: any) => toast.error(e?.message ?? "Approve failed"),
+  });
+  if (rows.length === 0) return null;
+  return (
+    <Card className="border-amber-500/40 bg-amber-500/5 p-4">
+      <div className="flex items-center justify-between mb-3">
+        <div className="font-semibold">Pending target approvals</div>
+        <Badge variant="outline">{rows.length}</Badge>
+      </div>
+      <ul className="space-y-2">
+        {rows.map((r) => (
+          <li key={r.id} className="flex items-center justify-between rounded-md border bg-card p-3">
+            <div className="min-w-0">
+              <div className="font-medium text-sm truncate">
+                {r.app_members?.display_name || r.app_members?.full_name || "Member"}
+              </div>
+              <div className="text-xs text-muted-foreground">
+                {r.calories} kcal · P{r.protein_g}/C{r.carbs_g}/F{r.fat_g} · {r.source}
+              </div>
+            </div>
+            <Button size="sm" onClick={() => approveM.mutate(r.id)} disabled={approveM.isPending}>
+              Approve
+            </Button>
+          </li>
+        ))}
+      </ul>
+    </Card>
+  );
+}
