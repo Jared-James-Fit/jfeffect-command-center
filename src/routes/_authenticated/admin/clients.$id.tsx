@@ -49,6 +49,7 @@ import {
   AddressCard,
   EmergencyContactCard,
 } from "@/components/admin/client-profile/personal-info-cards";
+import { CoachNutritionOverrideCard } from "@/components/admin/coach-nutrition-override-card";
 
 // Heavy panels — code-split so visiting a client only loads the active tab's code.
 const lazyDefault = <T,>(loader: () => Promise<{ [k: string]: T }>, name: string) =>
@@ -721,6 +722,7 @@ function ClientDetail() {
 
           <div className="space-y-6">
             <TrainingScheduleCard client={form} />
+            <CoachNutritionOverrideCard userId={form.user_id ?? null} />
             <Link to="/admin/clients/$id/schedule" params={{ id }} className="block">
               <Button className="min-h-[52px] w-full bg-gradient-primary text-base font-bold uppercase">
                 <Calendar className="mr-2 h-5 w-5" /> Manage Schedule

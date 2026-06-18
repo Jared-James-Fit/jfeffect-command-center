@@ -202,3 +202,84 @@ export const getTargetsSetupPrefill = createServerFn({ method: "GET" })
 export const getFormulaSettings = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => loadSettings(context.supabase));
+
+async function assertStaff(supabase: any, userId: string) {
+  const [{ data: isAdmin }, { data: isCoach }] = await Promise.all([
+    supabase.rpc("has_role", { _user_id: userId, _role: "admin" }),
+    supabase.rpc("has_role", { _user_id: userId, _role: "coach" }),
+  ]);
+  if (!isAdmin && !isCoach) throw new Error("Forbidden");
+}
+
+async function loadMemberByUserId(supabase: any, targetUserId: string) {
+  const { data, error } = await supabase
+    .from("app_members")
+    .select("id, height_cm, biological_sex, activity_level, units_preference, date_of_birth")
+    .eq("user_id", targetUserId)
+    .maybeSingle();
+  if (error) throw error;
+  return data;
+}
+
+/** Coach/admin: read the active member targets for any user. */
+export const getMemberTargetsForUser = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d) => z.object({ userId: z.string().uuid() }).parse(d))
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context;
+    await assertStaff(supabase, userId);
+    const member = await loadMemberByUserId(supabase, data.userId);
+    if (!member?.id) return { member: null, target: null };
+    const { data: target } = await supabase
+      .from("member_nutrition_targets")
+      .select("*")
+      .eq("member_id", member.id)
+      .eq("active", true)
+      .maybeSingle();
+    return { member, target: target ?? null };
+  });
+
+/** Coach/admin: save coach-set targets for a member (source: "coach"). */
+export const saveCoachOverrideTargets = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d) =>
+    z.object({
+      userId: z.string().uuid(),
+      calories: z.number().int().positive(),
+      protein_g: z.number().int().min(0),
+      carbs_g: z.number().int().min(0),
+      fat_g: z.number().int().min(0),
+      water_ml: z.number().int().min(0).optional(),
+      goal: z.enum(["lose", "maintain", "gain"]).optional(),
+      note: z.string().max(500).optional(),
+    }).parse(d),
+  )
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context;
+    await assertStaff(supabase, userId);
+    const member = await loadMemberByUserId(supabase, data.userId);
+    if (!member?.id) throw new Error("Member profile not found for this client");
+    await supabase
+      .from("member_nutrition_targets")
+      .update({ active: false })
+      .eq("member_id", member.id)
+      .eq("active", true);
+    const { data: inserted, error } = await supabase
+      .from("member_nutrition_targets")
+      .insert({
+        member_id: member.id,
+        source: "coach",
+        goal: data.goal ?? null,
+        calories: data.calories,
+        protein_g: data.protein_g,
+        carbs_g: data.carbs_g,
+        fat_g: data.fat_g,
+        water_ml: data.water_ml ?? null,
+        input_snapshot: { set_by: userId, note: data.note ?? null, at: new Date().toISOString() },
+        active: true,
+      })
+      .select("*")
+      .single();
+    if (error) throw error;
+    return inserted;
+  });
