@@ -165,6 +165,46 @@ function MembershipDashboard() {
         </div>
       </div>
 
+      <Card className="p-4">
+        <div className="mb-2 flex items-center justify-between">
+          <h3 className="text-sm font-bold flex items-center gap-2">
+            <AlertTriangle className="h-4 w-4 text-rose-300" />
+            Recently expired members
+          </h3>
+          <Link to="/admin/membership/action-needed" className="text-xs text-primary hover:underline">View all</Link>
+        </div>
+        {expiredQuery.isLoading ? (
+          <div className="text-xs text-muted-foreground">Loading…</div>
+        ) : expiredQuery.data?.members?.length ? (
+          <ul className="divide-y divide-border text-sm">
+            {expiredQuery.data.members.map((m: any) => (
+              <li key={m.id} className="flex items-center justify-between gap-3 py-2">
+                <div className="min-w-0 flex-1">
+                  <Link to="/admin/members/$memberId" params={{ memberId: m.id }} className="block truncate font-medium hover:underline">
+                    {m.full_name || m.email}
+                  </Link>
+                  <div className="text-xs text-muted-foreground">
+                    Expired {m._expiredAt ? new Date(m._expiredAt).toLocaleDateString() : "—"}
+                    {m.subscription_status ? ` · ${m.subscription_status}` : ""}
+                  </div>
+                </div>
+                <Button
+                  size="sm"
+                  onClick={() => onGrant(m.id, m.full_name || m.email)}
+                  disabled={grantingId === m.id}
+                  className="bg-emerald-600 hover:bg-emerald-700"
+                >
+                  <Gift className="mr-1 h-3.5 w-3.5" />
+                  {grantingId === m.id ? "Granting…" : "Grant 7-day access"}
+                </Button>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <div className="text-xs text-muted-foreground">No recently expired members in the last 30 days.</div>
+        )}
+      </Card>
+
       <div className="grid gap-4 md:grid-cols-2">
         <Card className="p-4">
           <div className="mb-2 flex items-center justify-between">
