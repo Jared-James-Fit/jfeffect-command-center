@@ -1147,18 +1147,34 @@ function TimelineTab({ ctx, onOpen }: { ctx: ProgressContext; onOpen: (id: strin
       {!items.length ? (
         <p className="text-sm text-muted-foreground p-4 text-center">Nothing yet.</p>
       ) : (
-        <div className="space-y-2">
-          {items.map((it, i) => (
-            <Card key={i} className={`p-3 ${it.id ? "cursor-pointer hover:bg-accent/50" : ""}`} onClick={() => it.id && onOpen(it.id)}>
-              <div className="flex items-start justify-between gap-2">
-                <div>
-                  <p className="text-xs text-muted-foreground">{fmtDate(it.at)} · {it.kind}</p>
-                  <p className="font-medium">{it.title}</p>
-                  {it.subtitle && <p className="text-xs text-muted-foreground">{it.subtitle}</p>}
-                </div>
-                {it.id && <ChevronRight className="h-4 w-4 text-muted-foreground" />}
+        <div className="space-y-4">
+          {Array.from(
+            items.reduce<Map<string, Item[]>>((m, it) => {
+              const arr = m.get(it.at) ?? [];
+              arr.push(it);
+              m.set(it.at, arr);
+              return m;
+            }, new Map()).entries(),
+          ).map(([date, group]) => (
+            <div key={date} className="space-y-2">
+              <div className="sticky top-0 z-10 -mx-1 bg-background/95 px-1 py-1 backdrop-blur">
+                <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground">
+                  {fmtDate(date)}
+                </p>
               </div>
-            </Card>
+              {group.map((it, i) => (
+                <Card key={i} className={`p-3 ${it.id ? "cursor-pointer hover:bg-accent/50" : ""}`} onClick={() => it.id && onOpen(it.id)}>
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <p className="text-xs text-muted-foreground">{it.kind}</p>
+                      <p className="font-medium">{it.title}</p>
+                      {it.subtitle && <p className="text-xs text-muted-foreground">{it.subtitle}</p>}
+                    </div>
+                    {it.id && <ChevronRight className="h-4 w-4 text-muted-foreground" />}
+                  </div>
+                </Card>
+              ))}
+            </div>
           ))}
         </div>
       )}
