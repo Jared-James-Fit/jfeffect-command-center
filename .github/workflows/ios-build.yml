@@ -39,38 +39,25 @@ jobs:
       - name: Install CocoaPods gem
         run: gem install cocoapods --no-document
 
-      - name: Setup iOS platform (add + sync)
+      - name: Setup iOS platform
         run: |
-          # The ios/ directory in the repo only has PrivacyInfo.xcprivacy
-          # We need to generate the full Xcode project
-          echo "=== Current ios/ directory contents ==="
-          ls -la ios/ 2>/dev/null || echo "ios/ does not exist"
-          ls -la ios/App/ 2>/dev/null || echo "ios/App/ does not exist"
-          
-          # Remove the partial ios directory and re-add cleanly
-          echo "=== Removing partial ios directory ==="
+          # Remove partial ios directory and re-add cleanly
           rm -rf ios
-          
-          echo "=== Running npx cap add ios ==="
           npx cap add ios
           
-          echo "=== After cap add ios ==="
-          ls -la ios/App/ 2>/dev/null || echo "ios/App/ still not created"
-          ls ios/App/Podfile 2>/dev/null && echo "Podfile EXISTS" || echo "Podfile NOT FOUND"
+          # When server.url is set in capacitor.config.ts, cap sync skips Podfile generation.
+          # Create a minimal dist directory so cap sync can run fully and generate the Podfile.
+          mkdir -p dist
+          echo '<!DOCTYPE html><html><body>JF Effect</body></html>' > dist/index.html
           
-          echo "=== Running npx cap sync ios ==="
+          # Now run cap sync - this will generate the Podfile
           npx cap sync ios
           
-          echo "=== After cap sync ios ==="
-          ls -la ios/App/ 2>/dev/null
-          ls ios/App/Podfile 2>/dev/null && echo "Podfile EXISTS after sync" || echo "Podfile NOT FOUND after sync"
+          # Verify Podfile was created
+          ls ios/App/Podfile && echo "✅ Podfile created" || echo "❌ Podfile still missing"
 
       - name: Run pod install
-        run: |
-          echo "=== Contents of ios/App/ ==="
-          ls -la ios/App/
-          echo "=== Running pod install ==="
-          cd ios/App && pod install
+        run: cd ios/App && pod install
 
       - name: Set up App Store Connect API key
         run: |
@@ -82,8 +69,7 @@ jobs:
         run: |
           find ios -name "*.pbxproj" -exec sed -i '' 's/com\.jaredjamesfit\.jfeffect/com.jfeffect.app/g' {} \; || true
           find ios -name "*.pbxproj" -exec sed -i '' 's/com\.capacitorjs\.app/com.jfeffect.app/g' {} \; || true
-          echo "Bundle ID update complete"
-          grep "PRODUCT_BUNDLE_IDENTIFIER" ios/App/App.xcodeproj/project.pbxproj | head -5 || true
+          grep "PRODUCT_BUNDLE_IDENTIFIER" ios/App/App.xcodeproj/project.pbxproj | head -3 || true
 
       - name: Build and Archive iOS app
         run: |
