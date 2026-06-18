@@ -13993,10 +13993,15 @@ export type Database = {
           access_scope: string
           author_id: string | null
           body: string
+          calories_per_serving: number | null
           category: string
           created_at: string
           id: string
+          image_url: string | null
+          prep_time_minutes: number | null
+          protein_grams: number | null
           published_at: string | null
+          servings: number | null
           status: string
           tags: string[]
           title: string
@@ -14007,10 +14012,15 @@ export type Database = {
           access_scope?: string
           author_id?: string | null
           body?: string
+          calories_per_serving?: number | null
           category?: string
           created_at?: string
           id?: string
+          image_url?: string | null
+          prep_time_minutes?: number | null
+          protein_grams?: number | null
           published_at?: string | null
+          servings?: number | null
           status?: string
           tags?: string[]
           title: string
@@ -14021,10 +14031,15 @@ export type Database = {
           access_scope?: string
           author_id?: string | null
           body?: string
+          calories_per_serving?: number | null
           category?: string
           created_at?: string
           id?: string
+          image_url?: string | null
+          prep_time_minutes?: number | null
+          protein_grams?: number | null
           published_at?: string | null
+          servings?: number | null
           status?: string
           tags?: string[]
           title?: string
