@@ -140,6 +140,27 @@ export const getMyNutritionStatusFn = createServerFn({ method: "GET" })
   });
 
 // ============================================================================
+// CLIENT: recent adherence (compliance_pct trend across recent submissions)
+// ============================================================================
+export const getMyRecentAdherenceFn = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const { supabase, userId } = context as any;
+    const { data: client } = await supabase
+      .from("clients").select("id").eq("user_id", userId).maybeSingle();
+    if (!client) return { rows: [] as Array<{ id: string; submitted_at: string; compliance_pct: number | null }> };
+    const { data } = await supabase
+      .from("nutrition_update_submissions")
+      .select("id, submitted_at, compliance_pct")
+      .eq("client_id", client.id)
+      .in("status", ["published", "under_review", "submitted"])
+      .not("compliance_pct", "is", null)
+      .order("submitted_at", { ascending: false })
+      .limit(8);
+    return { rows: (data ?? []).reverse() };
+  });
+
+// ============================================================================
 // COACH/ADMIN: list dashboard
 // ============================================================================
 const ListInput = z.object({
