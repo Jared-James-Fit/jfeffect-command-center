@@ -105,8 +105,8 @@ export const coachingAdminNav: NavItem[] = [
   { to: "/admin/settings/chat", label: "Chat Settings", icon: MessageCircle, group: "Communication" },
   { to: "/admin/chat-gifs", label: "Chat GIF Library", icon: Sparkles, group: "Communication" },
   { to: "/admin/chat-sounds", label: "Chat Sound Library", icon: Sparkles, group: "Communication" },
-  // PROGRAMMING (coaching)
   { to: "/admin/settings/notifications/coaching-applications", label: "Application Alerts", icon: MessageCircle, group: "Communication", keywords: ["application","coaching alerts","notifications","yannick","recipient"] },
+  // PROGRAMMING (coaching)
   { to: "/admin/program-library", label: "Program Library", icon: BookOpen, group: "Programming" },
   { to: "/admin/exercises", label: "Exercise Library", icon: Dumbbell, group: "Programming" },
   { to: "/admin/cardio-targets", label: "Cardio Targets", icon: Heart, group: "Programming", keywords: ["card", "cardio", "targets", "conditioning", "steps", "hiit", "liss", "zone 2", "heart rate"] },
@@ -133,7 +133,7 @@ export const coachingAdminNav: NavItem[] = [
   { to: "/admin/resources", label: "Resources", icon: FolderOpen, group: "Documents" },
   // TEAM / OPS
   { to: "/admin/coaches", label: "Coaches", icon: UserCheck, group: "Team / Ops" },
-  { to: "/admin/staff", label: "Staff & Media Manager", icon: UserPlus, group: "Team / Ops" },
+  { to: "/admin/staff", label: "Staff & Media Managers", icon: UserPlus, group: "Team / Ops" },
   { to: "/admin/support-alerts", label: "Support Alerts", icon: AlertCircle, group: "Team / Ops" },
   { to: "/admin/media-review", label: "Media Inbox", icon: Film, group: "Team / Ops" },
   { to: "/admin/media-archives", label: "Media Archives", icon: FolderOpen, group: "Team / Ops" },
