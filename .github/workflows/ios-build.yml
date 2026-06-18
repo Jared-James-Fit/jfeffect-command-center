@@ -56,13 +56,63 @@ jobs:
       - name: Run pod install
         run: cd ios/App && pod install
 
+      - name: Install Distribution Certificate and Provisioning Profile
+        run: |
+          # Decode and install the distribution certificate
+          echo "${{ secrets.DISTRIBUTION_CERTIFICATE_P12_BASE64 }}" | base64 --decode > /tmp/distribution.p12
+          
+          # Decode provisioning profile
+          echo "${{ secrets.PROVISIONING_PROFILE_BASE64 }}" | base64 --decode > /tmp/JFEffect_AppStore.mobileprovision
+          
+          # Create a temporary keychain
+          KEYCHAIN_PATH="$RUNNER_TEMP/build.keychain"
+          KEYCHAIN_PASSWORD="$(openssl rand -base64 32)"
+          
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          
+          # Import certificate
+          security import /tmp/distribution.p12 \
+            -k "$KEYCHAIN_PATH" \
+            -P "${{ secrets.DISTRIBUTION_CERTIFICATE_PASSWORD }}" \
+            -T /usr/bin/codesign \
+            -T /usr/bin/xcodebuild
+          
+          # Allow codesign to access the keychain
+          security set-key-partition-list \
+            -S apple-tool:,apple:,codesign: \
+            -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          
+          # Add to search list
+          security list-keychains -d user -s "$KEYCHAIN_PATH" login.keychain
+          
+          # Install provisioning profile
+          mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
+          PROFILE_UUID=$(python3 -c "
+          import subprocess, plistlib, re
+          result = subprocess.run(['security', 'cms', '-D', '-i', '/tmp/JFEffect_AppStore.mobileprovision'], capture_output=True)
+          plist = plistlib.loads(result.stdout)
+          print(plist['UUID'])
+          ")
+          echo "Profile UUID: $PROFILE_UUID"
+          cp /tmp/JFEffect_AppStore.mobileprovision ~/Library/MobileDevice/Provisioning\ Profiles/$PROFILE_UUID.mobileprovision
+          
+          echo "KEYCHAIN_PATH=$KEYCHAIN_PATH" >> $GITHUB_ENV
+          echo "PROFILE_UUID=$PROFILE_UUID" >> $GITHUB_ENV
+          
+          echo "✅ Certificate and profile installed"
+          
+          # Verify certificate is accessible
+          security find-identity -v -p codesigning "$KEYCHAIN_PATH" | head -5
+
       - name: Set up App Store Connect API key
         run: |
           mkdir -p ~/.private_keys
           echo "${{ secrets.APP_STORE_CONNECT_API_KEY_BASE64 }}" | base64 --decode > ~/.private_keys/AuthKey_${{ secrets.APP_STORE_CONNECT_KEY_ID }}.p8
           chmod 600 ~/.private_keys/AuthKey_${{ secrets.APP_STORE_CONNECT_KEY_ID }}.p8
 
-      - name: Patch pbxproj for automatic signing
+      - name: Patch pbxproj for manual signing
         run: |
           PBXPROJ="ios/App/App.xcodeproj/project.pbxproj"
           
@@ -72,17 +122,6 @@ jobs:
           path = "ios/App/App.xcodeproj/project.pbxproj"
           with open(path, "r") as f:
               content = f.read()
-
-          # Force automatic signing
-          content = re.sub(r'CODE_SIGN_STYLE\s*=\s*[^;]+;', 'CODE_SIGN_STYLE = Automatic;', content)
-          content = re.sub(r'ProvisioningStyle\s*=\s*[^;]+;', 'ProvisioningStyle = Automatic;', content)
-
-          # Remove provisioning profile specifiers
-          content = re.sub(r'\s*PROVISIONING_PROFILE_SPECIFIER\s*=\s*[^;]*;\n', '\n', content)
-          content = re.sub(r'\s*PROVISIONING_PROFILE\s*=\s*[^;]*;\n', '\n', content)
-
-          # Remove any explicit CODE_SIGN_IDENTITY settings that conflict with automatic signing
-          content = re.sub(r'\s*CODE_SIGN_IDENTITY\s*=\s*[^;]*;\n', '\n', content)
 
           # Fix bundle ID
           content = re.sub(r'PRODUCT_BUNDLE_IDENTIFIER\s*=\s*[^;]+;', 'PRODUCT_BUNDLE_IDENTIFIER = com.jfeffect.app;', content)
@@ -96,11 +135,15 @@ jobs:
           print("✅ pbxproj patched successfully")
           PYEOF
           
-          echo "=== Signing settings after patch ==="
-          grep -n "CODE_SIGN\|ProvisioningStyle\|DEVELOPMENT_TEAM\|PRODUCT_BUNDLE_IDENTIFIER" "$PBXPROJ" | head -20
+          echo "=== Bundle ID and Team after patch ==="
+          grep -n "PRODUCT_BUNDLE_IDENTIFIER\|DEVELOPMENT_TEAM" "$PBXPROJ" | head -10
 
       - name: Build and Archive iOS app
         run: |
+          # Get the signing identity from keychain
+          SIGNING_IDENTITY=$(security find-identity -v -p codesigning "$KEYCHAIN_PATH" | grep "Apple Distribution" | head -1 | sed 's/.*"\(.*\)".*/\1/')
+          echo "Signing identity: $SIGNING_IDENTITY"
+          
           cd ios/App
           xcodebuild \
             -workspace App.xcworkspace \
@@ -109,14 +152,12 @@ jobs:
             -destination "generic/platform=iOS" \
             -archivePath "$RUNNER_TEMP/JFEffect.xcarchive" \
             archive \
-            CODE_SIGN_STYLE=Automatic \
+            CODE_SIGN_STYLE=Manual \
+            CODE_SIGN_IDENTITY="Apple Distribution" \
             DEVELOPMENT_TEAM=${{ secrets.APPLE_TEAM_ID }} \
             PRODUCT_BUNDLE_IDENTIFIER=com.jfeffect.app \
-            ONLY_ACTIVE_ARCH=NO \
-            -allowProvisioningUpdates \
-            -authenticationKeyPath "$HOME/.private_keys/AuthKey_${{ secrets.APP_STORE_CONNECT_KEY_ID }}.p8" \
-            -authenticationKeyID "${{ secrets.APP_STORE_CONNECT_KEY_ID }}" \
-            -authenticationKeyIssuerID "${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}"
+            PROVISIONING_PROFILE_SPECIFIER="JF Effect App Store Distribution" \
+            OTHER_CODE_SIGN_FLAGS="--keychain $KEYCHAIN_PATH"
 
       - name: Export and Upload to TestFlight
         run: |
@@ -130,9 +171,14 @@ jobs:
             <key>destination</key>
             <string>upload</string>
             <key>signingStyle</key>
-            <string>automatic</string>
+            <string>manual</string>
             <key>teamID</key>
             <string>${{ secrets.APPLE_TEAM_ID }}</string>
+            <key>provisioningProfiles</key>
+            <dict>
+              <key>com.jfeffect.app</key>
+              <string>JF Effect App Store Distribution</string>
+            </dict>
           </dict>
           </plist>
           PLIST
