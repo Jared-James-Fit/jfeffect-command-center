@@ -551,6 +551,20 @@ export function createMemberAdapter(ref: WorkoutContextRef): WorkoutContextAdapt
       // a no-op until membership support has a documented escalation path.
     },
 
+    /* ---- Phase B turn 4b — raw passthrough writes (member stubs) ----
+     * Stubs until 4c reshapes these into member_set_logs /
+     * member_exercise_notes / member_workout_completions writes.
+     */
+    async upsertPlRowResultRaw(_payload, _id) {
+      throw new NotImplemented("upsertPlRowResultRaw", "member");
+    },
+    async upsertPlExerciseNoteRaw(_payload, _id) {
+      throw new NotImplemented("upsertPlExerciseNoteRaw", "member");
+    },
+    async upsertPlDayCompletionRaw(_payload, _id) {
+      throw new NotImplemented("upsertPlDayCompletionRaw", "member");
+    },
+
     /* ---- Phase B turn 3 — raw passthrough surface ----
      * Reshape member_plans.published_payload + member_set_logs into the
      * exact pl_days / pl_exercise_rows / pl_row_results column layout that
