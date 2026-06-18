@@ -42,19 +42,20 @@ jobs:
             echo "iOS platform already complete"
           fi
 
-      - name: Sync Capacitor
-        run: npx cap sync ios
-
       - name: Setup Ruby and CocoaPods
         uses: ruby/setup-ruby@v1
         with:
           ruby-version: '3.2'
           bundler-cache: false
 
-      - name: Install CocoaPods
-        run: |
-          gem install cocoapods --no-document
-          cd ios/App && pod install
+      - name: Install CocoaPods gem
+        run: gem install cocoapods --no-document
+
+      - name: Sync Capacitor (generates Podfile)
+        run: npx cap sync ios
+
+      - name: Run pod install
+        run: cd ios/App && pod install
 
       - name: Set up App Store Connect API key
         run: |
@@ -67,7 +68,7 @@ jobs:
           find ios -name "*.pbxproj" -exec sed -i '' 's/com\.jaredjamesfit\.jfeffect/com.jfeffect.app/g' {} \; || true
           find ios -name "*.pbxproj" -exec sed -i '' 's/com\.capacitorjs\.app/com.jfeffect.app/g' {} \; || true
           echo "Bundle ID update complete"
-          grep -r "PRODUCT_BUNDLE_IDENTIFIER" ios/App/App.xcodeproj/project.pbxproj | head -5 || true
+          grep "PRODUCT_BUNDLE_IDENTIFIER" ios/App/App.xcodeproj/project.pbxproj | head -5 || true
 
       - name: Build and Archive iOS app
         run: |
