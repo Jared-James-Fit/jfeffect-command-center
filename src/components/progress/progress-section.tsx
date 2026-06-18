@@ -31,6 +31,53 @@ import {
 import { format, parseISO, differenceInDays } from "date-fns";
 import { WaterTrackerCard } from "./water-tracker-card";
 
+/**
+ * Mobile-safe date picker: defaults to today and shows a plain text
+ * pill ("Today · Jun 18, 2026"). Native date input is hidden behind an
+ * "Edit date" toggle so it cannot accidentally cover the upload form.
+ */
+function DateField({
+  value, onChange, label = "Date",
+}: { value: string; onChange: (v: string) => void; label?: string }) {
+  const [editing, setEditing] = useState(false);
+  const today = new Date().toISOString().slice(0, 10);
+  const isToday = value === today;
+  let pretty = value;
+  try { pretty = format(parseISO(value), "MMM d, yyyy"); } catch { /* noop */ }
+  return (
+    <div>
+      <Label className="text-xs">{label}</Label>
+      {editing ? (
+        <div className="flex gap-2">
+          <Input
+            type="date"
+            value={value}
+            onChange={(e) => onChange(e.target.value || today)}
+            className="flex-1"
+            autoFocus
+          />
+          <Button type="button" variant="ghost" size="sm" onClick={() => setEditing(false)}>
+            Done
+          </Button>
+        </div>
+      ) : (
+        <div className="flex items-center justify-between gap-2 rounded-md border border-border bg-secondary/30 px-3 py-2">
+          <span className="text-sm font-semibold">
+            {isToday ? "Today" : ""}{isToday ? " · " : ""}{pretty}
+          </span>
+          <button
+            type="button"
+            className="text-xs font-semibold uppercase tracking-wider text-primary hover:underline"
+            onClick={() => setEditing(true)}
+          >
+            Edit date
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export type ProgressContext = {
   userId: string;
   ownerType: ProgressOwnerType;
@@ -53,7 +100,7 @@ export function ProgressSection({ ctx }: { ctx: ProgressContext }) {
   const [detailId, setDetailId] = useState<string | null>(null);
 
   return (
-    <div className="space-y-4 p-3 md:p-6">
+    <div className="space-y-4 p-3 pb-28 md:p-6 md:pb-12">
       <Tabs value={tab} onValueChange={setTab} className="space-y-4">
         <TabsList className="grid w-full grid-cols-4 md:grid-cols-7 h-auto">
           <TabsTrigger value="overview">Overview</TabsTrigger>
@@ -68,10 +115,9 @@ export function ProgressSection({ ctx }: { ctx: ProgressContext }) {
         <TabsContent value="overview">
           <Overview ctx={ctx}
             onAddPhoto={() => setPhotoDialog(true)}
-            onAddVideo={() => setVideoDialog(true)}
             onLogWeight={() => setWeightDialog(true)}
             onAddMeasure={() => setMeasureDialog(true)}
-            onCompare={() => setCompareDialog(true)}
+            onViewTimeline={() => setTab("timeline")}
             onOpenSubmission={setDetailId}
           />
         </TabsContent>
@@ -114,11 +160,11 @@ export function ProgressSection({ ctx }: { ctx: ProgressContext }) {
 // ============== Overview ==============
 
 function Overview({
-  ctx, onAddPhoto, onAddVideo, onLogWeight, onAddMeasure, onCompare, onOpenSubmission,
+  ctx, onAddPhoto, onLogWeight, onAddMeasure, onViewTimeline, onOpenSubmission,
 }: {
   ctx: ProgressContext;
-  onAddPhoto: () => void; onAddVideo: () => void;
-  onLogWeight: () => void; onAddMeasure: () => void; onCompare: () => void;
+  onAddPhoto: () => void;
+  onLogWeight: () => void; onAddMeasure: () => void; onViewTimeline: () => void;
   onOpenSubmission: (id: string) => void;
 }) {
   const { data: subs = [] } = useQuery({
@@ -141,13 +187,12 @@ function Overview({
 
   return (
     <div className="space-y-4">
-      {/* Primary actions */}
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
-        <ActionTile icon={Camera} label="Photos" onClick={onAddPhoto} primary />
-        <ActionTile icon={VideoIcon} label="Video" onClick={onAddVideo} primary />
-        <ActionTile icon={Scale} label="Weight" onClick={onLogWeight} />
-        <ActionTile icon={Ruler} label="Measure" onClick={onAddMeasure} />
-        <ActionTile icon={Eye} label="Compare" onClick={onCompare} />
+      {/* Primary actions — Compare lives inside Photos/Timeline only */}
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+        <ActionTile icon={Camera} label="Start Check-In" onClick={onAddPhoto} primary />
+        <ActionTile icon={Scale} label="Log Bodyweight" onClick={onLogWeight} />
+        <ActionTile icon={Ruler} label="Add Measurements" onClick={onAddMeasure} />
+        <ActionTile icon={Clock} label="View Timeline" onClick={onViewTimeline} />
       </div>
 
       {/* Summary cards */}
@@ -390,10 +435,7 @@ function PhotoSubmissionDialog({ ctx, open, onOpenChange }: { ctx: ProgressConte
 
         <div className="space-y-4">
           <div className="grid grid-cols-2 gap-3">
-            <div>
-              <Label className="text-xs">Date</Label>
-              <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
-            </div>
+            <DateField value={date} onChange={setDate} />
             <div>
               <Label className="text-xs">Label</Label>
               <Select value={label} onValueChange={setLabel}>
@@ -604,10 +646,7 @@ function VideoSubmissionDialog({ ctx, open, onOpenChange }: { ctx: ProgressConte
           </div>
 
           <div className="grid grid-cols-2 gap-3">
-            <div>
-              <Label className="text-xs">Date</Label>
-              <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
-            </div>
+            <DateField value={date} onChange={setDate} />
             <div>
               <Label className="text-xs">Label</Label>
               <Select value={label} onValueChange={setLabel}>
@@ -735,7 +774,7 @@ function BodyweightDialog({ ctx, open, onOpenChange }: { ctx: ProgressContext; o
               <SelectContent><SelectItem value="kg">kg</SelectItem><SelectItem value="lb">lb</SelectItem></SelectContent>
             </Select>
           </div>
-          <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+          <DateField value={date} onChange={setDate} />
           <Textarea placeholder="Note (optional)" rows={2} value={note} onChange={(e) => setNote(e.target.value)} />
         </div>
         <DialogFooter>
@@ -818,12 +857,15 @@ function MeasurementDialog({ ctx, open, onOpenChange }: { ctx: ProgressContext; 
       <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
         <DialogHeader><DialogTitle>Add Measurements</DialogTitle></DialogHeader>
         <div className="space-y-3">
-          <div className="grid grid-cols-2 gap-2">
-            <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
-            <Select value={unit} onValueChange={(v: any) => setUnit(v)}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent><SelectItem value="cm">cm</SelectItem><SelectItem value="in">inches</SelectItem></SelectContent>
-            </Select>
+          <div className="grid grid-cols-[1fr_120px] gap-2 items-end">
+            <DateField value={date} onChange={setDate} />
+            <div>
+              <Label className="text-xs">Unit</Label>
+              <Select value={unit} onValueChange={(v: any) => setUnit(v)}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent><SelectItem value="cm">cm</SelectItem><SelectItem value="in">inches</SelectItem></SelectContent>
+              </Select>
+            </div>
           </div>
           <div className="grid grid-cols-2 gap-2">
             {MEASUREMENT_FIELDS.map((f) => (

@@ -1,14 +1,14 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Camera, Scale, ChevronRight, Droplet } from "lucide-react";
+import { Camera, Scale, ChevronRight, Droplet, Plus } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { format, parseISO } from "date-fns";
-import { ensureWaterTarget, formatWater, listWaterForDate, summarizeToday, todayLocalISO } from "@/lib/water";
+import { addWaterEntry, ensureWaterTarget, formatWater, listWaterForDate, summarizeToday, todayLocalISO } from "@/lib/water";
 import { getCombinedBodyweightSeries } from "@/lib/bodyweight";
-import { WaterTrackerCard } from "./water-tracker-card";
+import { toast } from "sonner";
 
 /**
  * Compact Progress + Water summary, used on portal/member dashboards and
@@ -32,6 +32,7 @@ export function ProgressSummaryCard({
   title?: string;
 }) {
   const today = todayLocalISO();
+  const qc = useQueryClient();
 
   const subQ = useQuery({
     queryKey: ["progress-summary-sub", userId],
@@ -93,6 +94,27 @@ export function ProgressSummaryCard({
       </Link>
     );
 
+  const startCheckInLink =
+    progressHref.kind === "portal" ? (
+      <Link to="/portal/progress">Start Check-In</Link>
+    ) : progressHref.kind === "member" ? (
+      <Link to="/m/progress">Start Check-In</Link>
+    ) : (
+      <Link to="/admin/clients/$id/progress" params={{ id: progressHref.clientId }}>
+        Start Check-In
+      </Link>
+    );
+
+  async function quickAddWater() {
+    if (viewerRole !== "owner") return;
+    try {
+      await addWaterEntry({ userId, amountMl: 250, source: "quick_add", createdByUserId: currentUserId });
+      qc.invalidateQueries({ queryKey: ["water-today", userId] });
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Couldn't log water");
+    }
+  }
+
   return (
     <div className="space-y-3">
       <Card className="overflow-hidden">
@@ -110,7 +132,7 @@ export function ProgressSummaryCard({
           {sub && (
             <Row
               icon={<Camera className="h-4 w-4" />}
-              label={`Latest ${sub.submission_type} check-in`}
+              label={`Latest ${sub.submission_type === "photo" ? "photo" : "video"} check-in`}
               value={fmt(sub.submission_date)}
               right={reviewBadge ? <Badge variant="outline" className="text-[10px]">{reviewBadge}</Badge> : null}
             />
@@ -129,18 +151,38 @@ export function ProgressSummaryCard({
             </div>
           )}
         </div>
+
+        <div className="flex gap-2 border-t border-border bg-secondary/20 px-3 py-2.5">
+          <Button asChild size="sm" className="flex-1 font-bold uppercase">
+            {startCheckInLink}
+          </Button>
+          <Button asChild size="sm" variant="outline" className="flex-1">
+            {openLink}
+          </Button>
+        </div>
       </Card>
 
-      {/* Water tracker (always visible — default 3.0 L target) */}
-      <WaterTrackerCard
-        userId={userId}
-        currentUserId={currentUserId}
-        viewerRole={viewerRole}
-        compact={false}
-      />
-      <p className="px-1 text-[10px] text-muted-foreground">
-        Today: {formatWater(summary.total, "L")} of {formatWater(target?.active_ml ?? 3000, "L")} ({summary.pct}%)
-      </p>
+      {/* Compact water summary — full tracker lives in Progress */}
+      <Card className="flex items-center gap-3 px-4 py-3">
+        <div className="grid h-9 w-9 shrink-0 place-items-center rounded-md bg-sky-500/10 text-sky-600 dark:text-sky-400">
+          <Droplet className="h-4 w-4" />
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Water today</div>
+          <div className="truncate text-sm font-bold tabular-nums">
+            {formatWater(summary.total, "L")} / {formatWater(target?.active_ml ?? 3000, "L")}
+            <span className="ml-2 text-xs font-normal text-muted-foreground">{summary.pct}%</span>
+          </div>
+        </div>
+        {viewerRole === "owner" && (
+          <Button size="sm" variant="secondary" className="h-9 shrink-0" onClick={quickAddWater}>
+            <Plus className="mr-1 h-3.5 w-3.5" /> 250ml
+          </Button>
+        )}
+        <Button asChild size="sm" variant="ghost" className="h-9 shrink-0 px-2 text-xs">
+          {openLink}
+        </Button>
+      </Card>
     </div>
   );
 }
