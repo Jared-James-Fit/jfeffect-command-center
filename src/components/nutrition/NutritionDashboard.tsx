@@ -9,6 +9,7 @@ import { ensureWaterTarget, formatWater } from "@/lib/water";
 import { WaterTargetDialog } from "@/components/progress/water-target-dialog";
 import { useAuth } from "@/lib/auth";
 import { MacroBreakdown } from "./MacroBreakdown";
+import { TargetsHistorySparkline } from "./TargetsHistorySparkline";
 
 /**
  * Shared nutrition dashboard surface used by members and coaching clients.
@@ -47,6 +48,7 @@ export function NutritionDashboard({
         <TargetsStrip targets={targets} userId={userId} />
       </div>
       <MacroBreakdown targets={targets} />
+      {viewer === "member" && <TargetsHistorySparkline />}
       <QuickActions viewer={viewer} recipesAnchorId={recipesAnchorId} />
       {children}
       <div id={recipesAnchorId} className="scroll-mt-20">
