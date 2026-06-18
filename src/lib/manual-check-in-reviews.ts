@@ -154,3 +154,56 @@ export function reviewStatus(r: Pick<ManualCheckInReview, "read_at" | "seen_at">
   if (r.seen_at) return { label: "Seen · Unread", tone: "bg-amber-500/15 text-amber-300 border-amber-500/30" } as const;
   return { label: "Sent · Unread", tone: "bg-blue-500/15 text-blue-300 border-blue-500/30" } as const;
 }
+
+// =========================================================================
+// Threaded reply messages on a check-in review
+// =========================================================================
+
+export type ReviewMessage = {
+  id: string;
+  review_id: string;
+  sender_role: "coach" | "client";
+  sender_user_id: string;
+  body: string;
+  created_at: string;
+};
+
+export async function listReviewMessages(reviewId: string) {
+  const { data, error } = await db
+    .from("manual_check_in_review_messages")
+    .select("*")
+    .eq("review_id", reviewId)
+    .order("created_at", { ascending: true });
+  if (error) throw error;
+  return (data ?? []) as ReviewMessage[];
+}
+
+export async function postReviewMessage(input: {
+  reviewId: string;
+  senderRole: "coach" | "client";
+  senderUserId: string;
+  body: string;
+}) {
+  const body = input.body.trim();
+  if (!body) throw new Error("Message is empty");
+  const { data, error } = await db
+    .from("manual_check_in_review_messages")
+    .insert({
+      review_id: input.reviewId,
+      sender_role: input.senderRole,
+      sender_user_id: input.senderUserId,
+      body,
+    })
+    .select()
+    .single();
+  if (error) throw error;
+  // Bump the per-side last-read for the sender so their own message isn't unread to them.
+  const col = input.senderRole === "coach" ? "coach_last_read_at" : "client_last_read_at";
+  await db.from("manual_check_in_reviews").update({ [col]: new Date().toISOString() }).eq("id", input.reviewId);
+  return data as ReviewMessage;
+}
+
+export async function markThreadRead(reviewId: string, role: "coach" | "client") {
+  const col = role === "coach" ? "coach_last_read_at" : "client_last_read_at";
+  await db.from("manual_check_in_reviews").update({ [col]: new Date().toISOString() }).eq("id", reviewId);
+}
