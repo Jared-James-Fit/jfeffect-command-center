@@ -250,6 +250,7 @@ function ClientDetail() {
   const [deleteStep, setDeleteStep] = useState<0 | 1 | 2>(0);
   const [priceCardOpen, setPriceCardOpen] = useState(false);
   const [bookingLinkOpen, setBookingLinkOpen] = useState(false);
+  const [checkInResponseOpen, setCheckInResponseOpen] = useState(false);
   const inviteFn = useServerFn(inviteClient);
   const deleteFn = useServerFn(deleteClient);
   const getSetupLinkFn = useServerFn(getSetupLink);
