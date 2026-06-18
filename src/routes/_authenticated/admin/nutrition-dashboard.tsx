@@ -16,6 +16,7 @@ import {
   listNutritionDashboardFn, pushDueDateFn, setNutritionCadenceFn,
   markNotNeededFn, allowResubmitFn,
 } from "@/lib/nutrition-updates.functions";
+import { listPendingTargets, approveMemberTargets } from "@/lib/nutrition-dashboard.functions";
 
 export const Route = createFileRoute("/_authenticated/admin/nutrition-dashboard")({
   component: NutritionDashboard,
@@ -77,6 +78,7 @@ function NutritionDashboard() {
     <>
       <PageHeader title="Nutrition Dashboard" subtitle="Who is due, overdue, submitted, and handled — at a glance." />
       <div className="p-4 md:p-6 space-y-4 pb-24">
+        <PendingTargetsApprovalCard />
         <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
           {tiles.map((t) => (
             <button key={t.key} onClick={() => setFilter(t.key as any)} className={`text-left rounded-lg border bg-card p-3 hover:bg-muted/30 transition ${filter === t.key ? "ring-2 ring-primary" : ""}`}>
