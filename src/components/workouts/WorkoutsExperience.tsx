@@ -32,7 +32,6 @@ import { MoveWorkoutSheet } from "@/components/schedule/MoveWorkoutSheet";
 import { ScheduleHistoryDrawer } from "@/components/schedule/ScheduleHistoryDrawer";
 import { ClientBlockView } from "@/components/client-block-view";
 import { WorkoutStatusSheet } from "@/components/workout-status-sheet";
-import { useClientImpersonation } from "@/lib/client-impersonation";
 import { CircleDot } from "lucide-react";
 // Lazy: this card pulls recharts (~120KB). Defer it so the main Workouts
 // view can render without waiting on the chart bundle.
