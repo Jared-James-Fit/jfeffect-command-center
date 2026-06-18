@@ -904,7 +904,7 @@ function WorkoutDay({
         ].filter(Boolean).join(" · ")}
         actions={!readonly ? <UndoButton /> : undefined}
       />
-      <div className="p-4 md:p-8 space-y-4 pb-[calc(var(--bottom-nav-clearance,96px)+env(safe-area-inset-bottom)+24px)] md:pb-8">
+      <div className="px-4 pt-3 pb-4 md:px-8 md:pt-6 md:pb-8 space-y-3 pb-[calc(var(--bottom-nav-clearance,96px)+env(safe-area-inset-bottom)+24px)]">
         <WorkoutSyncBanner
           clientId={client?.id ?? null}
           workoutId={dayId}
