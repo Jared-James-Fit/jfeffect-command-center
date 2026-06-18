@@ -441,15 +441,6 @@ function PortalHome() {
           />
         )}
 
-        {/* 6b — Progress & Water summary */}
-        {portalUserId && (
-          <ProgressSummaryCard
-            userId={portalUserId}
-            currentUserId={portalUserId}
-            viewerRole="owner"
-            progressHref={{ kind: "portal" }}
-          />
-        )}
 
         {/* 6c — Water Today */}
         {portalUserId && (
