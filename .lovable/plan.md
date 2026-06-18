@@ -1,35 +1,72 @@
-## 4c.2b — Replace member workout monolith with `WorkoutDayView` shim
 
-**✅ DONE.** Member route is now a 70-line shim mounting `<WorkoutDayView adapter={memberAdapter} navigation={{ backTo: "/m/my-plans/$enrollmentId", listPath: "/m/my-plans/$enrollmentId", messagesPath: "/m/support" }} />`. The 657-line monolith (DTO queries, custom heartbeat with `m-hb-*` keys, `m_log_set`/`m_complete_workout`/`m_uncomplete_workout` offline handlers) is deleted. WorkoutDayView's heartbeat block now derives ping shape from `adapter.kind` + `adapter.ref.enrollmentId` so members send `{ kind: "member", enrollmentId, weekIndex, dayIndex }` while portal stays on `{ kind: "client", dayId }`. Note on `messagesPath`: members have no dedicated inbox, so coach-contact CTAs route to `/m/support`. Follow-ups for 4c.2c: (1) one-time bridge replaying old `m_*` offline queue items through the adapter, (2) acceptable one-time loss of in-flight active-duration accrued under the old `m-hb-*` keys, (3) Playwright smoke (load → log → complete → refresh) under a real member account.
+## Phase 1 — Audit results
 
-### What changes
+### What exists today
+**Member experience (`/m/*`)**
+- `src/routes/_authenticated/m/nutrition.tsx` — recipe browser with category chips, search, filters panel (Dietary / Goal / Prep / Difficulty), recipe preferences (dietary + restrictions stored on `app_members`), recommendation scoring from `goals_tags`. Has a thin "Your nutrition targets" card linking out to `/m/tools`.
+- `src/routes/_authenticated/m/nutrition.$recipeId.tsx` — recipe detail (reuses `recipe-body-view`).
+- `src/routes/_authenticated/m/tools.tsx` — generic resource list filtered by `kind="tool"`. NOT actual calculators — just links to admin-curated tool resources. No macro/calorie/water/sleep calculator components exist in code.
 
-Replace the 657-line `src/routes/_authenticated/m/workouts.$enrollmentId.$week.$day.tsx` with an ~80-line route shim that:
+**Coaching client experience (`/portal/*`)**
+- `src/routes/_authenticated/portal/nutrition-targets.tsx` — coach-assigned targets from `nutrition_targets` + `nutrition_target_days`, water string, cardio-by-day, optional PDF, FAQ widget, `NutritionUpdatePanel` (request update).
+- `src/routes/_authenticated/portal/recipes.tsx` + `recipes.$recipeId.tsx` — separate recipe browser (different layout, fewer filters).
 
-1. Builds the member adapter (`buildWorkoutAdapter({ kind: "member", userId, ownerId: userId, enrollmentId })`).
-2. Encodes `dayId = ${week}:${day}` (the shape `decodeDayId` in `member-adapter.ts` expects).
-3. Mounts `<WorkoutDayView dayId search adapter navigation />` with `/m/workouts` / `/m/messages` paths.
-4. Validates `search` the same way the portal route does (`readonly`, `edit`, `review` flags).
+**Shared infra (already reusable)**
+- `src/lib/recipes.ts` — `listRecipesForViewer()` works for both members and clients (RLS handles access).
+- `src/lib/recipe-format.ts` — categories, `recipePreview`, parsing helpers.
+- `src/components/recipe-body-view.tsx`, `meal-plan-display.tsx`, `nutrition-update-panel.tsx`, `nutrition-targets-panel.tsx` (coach view), `faq-widget.tsx`.
 
-### Prerequisite change in `WorkoutDayView.tsx`
+### Issues / duplication
+1. **Two recipe browsers** (`m/nutrition.tsx` and `portal/recipes.tsx`) with different UX, filters, and routing — same data source.
+2. **Targets fragmentation:** members have no targets surface (just a link to "tools" which has none); clients have a separate `/portal/nutrition-targets` page.
+3. **"Open nutrition tools"** CTA points at a generic resource list — calculator features the spec mentions (macro/calorie/water/sleep) don't exist as actual calculators. Either auto-derived display from existing data or new lightweight components needed.
+4. **Recipe cards** show raw markdown preview text (`recipePreview(r.body, 160)`) — looks unfinished. No image, prep time, servings, calories on card.
+5. **Filter clutter** on `m/nutrition.tsx` — 4 filter groups always rendered when expanded; categories include `All Recipes` and full `RECIPE_CATEGORIES`.
+6. **Hidden features:** `goals_tags`-driven recommendation scoring exists but is invisible to clients (only members use it). Cardio-by-day card is hidden from members. Water target only shows on client targets page.
+7. **No grocery list / meal builder** in code — spec mentions them; treat as Phase-2 stubs unless data already lives somewhere (audit found nothing).
 
-The heartbeat ping currently always passes `{ kind: "client", dayId }`. The plan's `useWorkoutHeartbeat` already accepts a `{ kind: "member", enrollmentId, weekIndex, dayIndex }` shape, so:
+## Plan (minimal, reuse-first, no migrations)
 
-- Derive the ping from `adapter.kind` + `adapter.ref.enrollmentId` + decoded `dayId`. When `adapter?.kind === "member"`, send the member ping; otherwise send the existing client ping.
+### Step 1 — Create one shared Nutrition shell component
+New `src/components/nutrition/NutritionDashboard.tsx` that takes `{ viewer: "member" | "client", clientId?, userId }` and renders:
+- **Top: Targets strip** — Calories / Protein / Carbs / Fats / Water / Sleep cards, always visible. For clients: pull from `nutrition_targets` (existing query). For members: derived/auto values from `app_members` (use existing `goals_tags` + body data if present; otherwise show "—" with a "Set in goals" link). No new tables.
+- **Quick actions grid (4 large mobile cards):** My Targets · Water & Recovery · Recipes · Nutrition FAQ. (Meal Builder + Grocery List = "Coming soon" tiles — no fake functionality.)
+- **Inline recipe browser** below (shared component, see Step 2).
 
-### Files
+### Step 2 — One shared `RecipeBrowser` component
+New `src/components/nutrition/RecipeBrowser.tsx`, extracted from current `m/nutrition.tsx`:
+- Visible category chips: **Recommended, Breakfast, Lunch, Dinner, Snack, Meal Prep** (filter `RECIPE_CATEGORIES` to this set; "Recommended" only shows when prefs/goals available).
+- Single **Filters** button → `Sheet` modal containing High Protein / Fat Loss / Muscle Gain / Vegan / Vegetarian / Omnivore / Quick / Performance. All currently-scattered Dietary/Goal/Prep/Difficulty groups collapse into one tag-matching list.
+- Goal-based prioritization (Phase 8): keep existing `recommendationScore`; extend `goalTagMap` with `fat loss`, `maintenance`, `muscle gain`, `powerlifting`, `bodybuilding` keys; pull goal from `clients.goal` for clients and `app_members.goals_tags` for members.
+- **New recipe card** (`RecipeCard`): image (if `r.image_url` exists), title, category badge, calories, protein, prep time, servings, tags. NO ingredient/markdown preview text. Need to check `recipes` columns for `image_url / calories / protein / prep_time / servings`; if missing, show only what's available (no schema changes).
 
-- **Rewrite** `src/routes/_authenticated/m/workouts.$enrollmentId.$week.$day.tsx` (657 → ~80 lines). The new shim mirrors `src/routes/_authenticated/portal/workouts.$dayId.tsx`.
-- **Edit** `src/components/workout-day/WorkoutDayView.tsx` heartbeat block (~lines 564-569) to switch ping shape by adapter kind.
-- **Update** `.lovable/plan.md` — mark 4c.2b ✅ DONE; note that 4c offline-queue compat (the old `m_log_set` / `m_complete_workout` / `m_uncomplete_workout` queue handlers) needs a follow-up replayer for already-enqueued items from prior deploys.
+### Step 3 — Wire both routes to the shared dashboard
+- `m/nutrition.tsx` → renders `<NutritionDashboard viewer="member" />`.
+- `portal/nutrition-targets.tsx` → renders `<NutritionDashboard viewer="client" clientId=… />` (keeps existing coach-assigned targets, day tabs, cardio-by-day, PDF card via the same component — pass extra blocks as children).
+- `portal/recipes.tsx` becomes a thin route that just renders `<RecipeBrowser />` (or redirect to nutrition page — TBD with user).
+- Keep route paths working; existing `/m/nutrition/$recipeId` and `/portal/recipes/$recipeId` detail routes untouched.
 
-### Risk / what's deliberately left for follow-up
+### Step 4 — Replace "Open nutrition tools" CTA
+Remove the CTA at top of member nutrition page. Targets strip now visible directly. The `/m/tools` route is left alone (it's used by other resource categories).
 
-- **Stale offline queue payloads.** Members who left the old route with queued `m_log_set` items will lose them after this deploy because the new shim doesn't register `m_log_set` handlers — the `portal_table_upsert` handler in `WorkoutDayView` takes over for new writes. Mitigation: add a one-time bridge in 4c.2c that registers all three `m_*` handlers and re-dispatches them via the adapter, even from the shim route. Listed as a follow-up.
-- **Heartbeat localStorage key change.** Old keys were `m-hb-start:*` / `m-hb-list:*`; `useWorkoutHeartbeat` uses its own keys. Any in-flight workout active-duration loses its accrued time on cutover. Acceptable one-time loss (workouts that aren't completed yet) — call it out in plan notes.
+### Step 5 — Mobile polish
+- Targets strip: 3-col on mobile (`grid-cols-3 sm:grid-cols-6`).
+- Quick action cards: 2-col on mobile, `min-h-[112px]`, large icons, large tap area.
+- Category chips: horizontal scroll on mobile, `h-10` buttons.
+- Filter sheet: full-height bottom sheet on mobile.
+- No new container padding; reuse existing PageHeader.
 
-### Verification
+### What this plan does NOT do
+- No DB migrations, no new tables.
+- No new recipe system, no new water/sleep tracking tables (unless the user confirms tracking is wanted — current code has no water/sleep tracking, only targets).
+- No grocery list or meal builder logic — only placeholder tiles to surface the concept (the user can prioritize them in a follow-up).
+- No edits to coach-side assignment UI (`nutrition-targets-panel.tsx`, dialogs, admin pages).
+- No changes to auth, routing structure, or unrelated areas.
 
-- Run Playwright against the live preview: navigate to `/m/workouts/<enrollmentId>/<week>/<day>`, log a set, complete the workout, refresh, confirm completion persists.
-- Confirm portal route still loads (`/portal/workouts/<dayId>`) — only WorkoutDayView's heartbeat block changed, behavior is unchanged for client adapter.
+### Open questions before I build
+1. **Calculators:** the spec lists macro/calorie/water/sleep calculators, but none exist in code. Do you want me to (a) build lightweight in-page calculators now, (b) auto-derive displayed targets from existing `app_members`/`clients` fields only, or (c) leave calculator tiles as "coming soon" and ship the consolidation first?
+2. **Recipe card fields:** if the `recipes` table doesn't have `image_url`, `calories_per_serving`, `prep_time_minutes`, `servings`, do you want me to add those columns (one migration), or render only fields that exist today?
+3. **Members targets:** members currently have NO target data at all. Should the member targets strip show (a) auto-calculated values from their goals/bodyweight, (b) blank with a "Calculate mine" button that runs a simple formula client-side, or (c) hide the strip entirely for members?
+4. **`/portal/recipes` route:** keep it as a separate page that just renders the shared browser, or redirect it into the unified nutrition page?
 
+Once you answer 1–4 I'll execute steps 1–5 in a single pass with no migrations and no parallel systems.
