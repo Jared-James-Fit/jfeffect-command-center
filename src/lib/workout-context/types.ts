@@ -285,6 +285,29 @@ export type PlRowRaw = Record<string, any>;
 /** Mirrors `sb.from("pl_row_results").select("*")` scoped to one trainee. */
 export type PlRowResultRaw = Record<string, any>;
 
+/** Mirrors `sb.from("pl_day_completions").select("*")` for the active trainee. */
+export type PlDayCompletionRaw = Record<string, any>;
+
+/** Mirrors `sb.from("pl_exercise_notes").select("*")` rows for one day. */
+export type PlExerciseNoteRaw = Record<string, any>;
+
+/** Mirrors `sb.from("pl_workout_feedback").select("*")` for one day. */
+export type PlWorkoutFeedbackRaw = Record<string, any>;
+
+/**
+ * Active trainee identity, shaped like the `clients` row WorkoutDayView
+ * currently consumes. Client adapter returns the actual clients row.
+ * Member adapter returns a synthetic row keyed by auth user id so the
+ * shared UI can keep using `subject.id` as a stable scope; the value
+ * never reaches a pl_* write — those go through `upsertPl*Raw` and get
+ * reshaped to member_* tables on the member adapter.
+ */
+export interface ActiveSubjectDTO {
+  id: string;
+  full_name: string | null;
+  preferred_weight_unit: "lb" | "kg" | null;
+}
+
 export interface WorkoutContextAdapter {
   kind: WorkoutContextKind;
   ref: WorkoutContextRef;
@@ -309,6 +332,14 @@ export interface WorkoutContextAdapter {
   listRowsRaw(dayId: string): Promise<PlRowRaw[]>;
   /** Raw pl_row_results for this day, scoped to the current trainee. */
   listRowResultsRaw(dayId: string): Promise<PlRowResultRaw[]>;
+  /** Raw pl_day_completions row for this day + trainee, or null. */
+  getDayCompletionRaw(dayId: string): Promise<PlDayCompletionRaw | null>;
+  /** Raw pl_exercise_notes rows for this day + trainee. */
+  listExerciseNotesRaw(dayId: string): Promise<PlExerciseNoteRaw[]>;
+  /** Raw pl_workout_feedback row for this day + trainee, or null. */
+  getWorkoutFeedbackRaw(dayId: string): Promise<PlWorkoutFeedbackRaw | null>;
+  /** Active trainee identity for the shared WorkoutDayView. */
+  getActiveSubject(): Promise<ActiveSubjectDTO | null>;
 
   listExerciseNotes(dayId: string): Promise<ExerciseNoteDTO[]>;
   listExerciseHistory(exerciseId: string, opts?: { limit?: number }): Promise<HistoryEntryDTO[]>;
