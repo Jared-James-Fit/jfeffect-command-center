@@ -208,6 +208,54 @@ export function createClientAdapter(ref: WorkoutContextRef): WorkoutContextAdapt
       return (data ?? []) as PlRowResultRaw[];
     },
 
+    async getDayCompletionRaw(dayId) {
+      const { data, error } = await sb
+        .from("pl_day_completions")
+        .select("*")
+        .eq("day_id", dayId)
+        .eq("client_id", ref.ownerId)
+        .maybeSingle();
+      if (error) throw new Error(error.message);
+      return (data ?? null) as Record<string, any> | null;
+    },
+
+    async listExerciseNotesRaw(dayId) {
+      const { data, error } = await sb
+        .from("pl_exercise_notes")
+        .select("*")
+        .eq("client_id", ref.ownerId)
+        .eq("day_id", dayId);
+      if (error) throw new Error(error.message);
+      return (data ?? []) as Record<string, any>[];
+    },
+
+    async getWorkoutFeedbackRaw(dayId) {
+      const { data, error } = await sb
+        .from("pl_workout_feedback")
+        .select("*")
+        .eq("day_id", dayId)
+        .eq("client_id", ref.ownerId)
+        .maybeSingle();
+      if (error) throw new Error(error.message);
+      return (data ?? null) as Record<string, any> | null;
+    },
+
+    async getActiveSubject() {
+      const { data, error } = await sb
+        .from("clients")
+        .select("id, full_name, preferred_weight_unit")
+        .eq("user_id", ref.userId)
+        .maybeSingle();
+      if (error) throw new Error(error.message);
+      if (!data) return null;
+      const unit = (data as any).preferred_weight_unit;
+      return {
+        id: (data as any).id as string,
+        full_name: (data as any).full_name ?? null,
+        preferred_weight_unit: unit === "kg" ? "kg" : unit === "lb" ? "lb" : null,
+      };
+    },
+
     async listRows(dayId: string): Promise<ExerciseRowDTO[]> {
       const { data, error } = await sb
         .from("pl_exercise_rows")

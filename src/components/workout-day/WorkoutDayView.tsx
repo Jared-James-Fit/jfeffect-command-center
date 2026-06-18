@@ -336,9 +336,22 @@ function WorkoutDay({
   }, [adapter]);
 
   const { data: client } = useQuery({
-    queryKey: ["my-client", portalUserId],
-    enabled: !!portalUserId,
-    queryFn: async () => (await supabase.from("clients").select("id, full_name, preferred_weight_unit").eq("user_id", portalUserId!).maybeSingle()).data,
+    queryKey: [
+      "workout-subject",
+      adapter?.kind ?? null,
+      adapter?.ref.ownerId ?? portalUserId ?? null,
+    ],
+    enabled: adapter ? true : !!portalUserId,
+    queryFn: async () => {
+      if (adapter) return await adapter.getActiveSubject();
+      return (
+        await supabase
+          .from("clients")
+          .select("id, full_name, preferred_weight_unit")
+          .eq("user_id", portalUserId!)
+          .maybeSingle()
+      ).data;
+    },
   });
 
   const { data: day } = useQuery({
@@ -459,11 +472,13 @@ function WorkoutDay({
   });
 
   const { data: completion } = useQuery({
-    queryKey: ["pl-day-completion", dayId, client?.id],
+    queryKey: ["pl-day-completion", dayId, client?.id, adapter?.kind ?? null],
     enabled: !!client?.id,
     initialData: client?.id ? cachedInitialData<any>(cacheScope, `completion:${client.id}`) : undefined,
     queryFn: async () => {
-      const c = (await sb.from("pl_day_completions").select("*").eq("day_id", dayId).eq("client_id", client!.id).maybeSingle()).data;
+      const c = adapter
+        ? await adapter.getDayCompletionRaw(dayId)
+        : (await sb.from("pl_day_completions").select("*").eq("day_id", dayId).eq("client_id", client!.id).maybeSingle()).data;
       writePlanCache(cacheScope, `completion:${client!.id}`, c);
       return c;
     },
@@ -471,17 +486,23 @@ function WorkoutDay({
 
   // Exercise notes for this day
   const { data: exerciseNotes = [] } = useQuery({
-    queryKey: ["pl-day-exercise-notes", dayId, client?.id],
+    queryKey: ["pl-day-exercise-notes", dayId, client?.id, adapter?.kind ?? null],
     enabled: !!client?.id,
-    queryFn: async () => (await sb.from("pl_exercise_notes").select("*").eq("client_id", client!.id).eq("day_id", dayId)).data ?? [],
+    queryFn: async () =>
+      adapter
+        ? await adapter.listExerciseNotesRaw(dayId)
+        : (await sb.from("pl_exercise_notes").select("*").eq("client_id", client!.id).eq("day_id", dayId)).data ?? [],
   });
 
   // Existing review (pl_workout_feedback) for the post-completion actions card.
   // Scoped by client + day; one row per (client, day) thanks to the Phase 1 unique constraint.
   const { data: existingReview } = useQuery({
-    queryKey: ["pl-workout-feedback", dayId, client?.id],
+    queryKey: ["pl-workout-feedback", dayId, client?.id, adapter?.kind ?? null],
     enabled: !!client?.id && !!completion?.completed_at,
     queryFn: async () => {
+      if (adapter) {
+        return (await adapter.getWorkoutFeedbackRaw(dayId)) as any;
+      }
       const { data } = await sb
         .from("pl_workout_feedback")
         .select("*")
