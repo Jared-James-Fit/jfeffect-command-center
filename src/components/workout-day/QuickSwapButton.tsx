@@ -4,7 +4,6 @@ import {
   ArrowLeft,
   ArrowLeftRight,
   Loader2,
-  PlayCircle,
   Play,
   X,
   RefreshCw,
