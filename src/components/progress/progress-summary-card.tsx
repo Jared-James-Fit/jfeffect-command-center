@@ -214,7 +214,7 @@ export function ProgressSummaryCard({
         file_size_bytes: uploaded.sizeBytes,
         mime_type: uploaded.mimeType,
         storage_path: uploaded.path,
-        upload_status: "uploaded",
+        upload_status: "ready",
       });
       toast.success("Photo added");
       qc.invalidateQueries({ queryKey: ["progress-subs-photo", userId] });
