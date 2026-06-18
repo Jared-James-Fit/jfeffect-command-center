@@ -24,11 +24,12 @@ import { ProgressSummaryCard } from "@/components/progress/progress-summary-card
 // Lazy: this card pulls recharts. Defer it so the Home screen renders
 // before the chart bundle is fetched.
 import { lazy, Suspense } from "react";
-const BodyweightSummaryCard = lazy(() =>
-  import("@/components/portal/bodyweight-summary-card").then((m) => ({
-    default: m.BodyweightSummaryCard,
+const HomeBodyweightCard = lazy(() =>
+  import("@/components/home/home-bodyweight-card").then((m) => ({
+    default: m.HomeBodyweightCard,
   })),
 );
+import { HomeWaterCard } from "@/components/home/home-water-card";
 import { SetupChecklistBanner } from "@/components/portal/setup-checklist-banner";
 import { useEffect, useRef, useState } from "react";
 import { listMyPortalAppointments } from "@/lib/appointments.functions";
@@ -422,10 +423,10 @@ function PortalHome() {
         {activePhase && <TrainingBlockCard phase={activePhase} />}
 
         {/* 6 — Bodyweight summary */}
-        {client && (
+        {client && portalUserId && (
           <BodyweightSummaryCardWithRef
             ref={bodyweightRef}
-            clientId={client.id}
+            userId={portalUserId}
             defaultUnit={(client.preferred_weight_unit as WeightUnit) ?? "lb"}
           />
         )}
@@ -437,6 +438,15 @@ function PortalHome() {
             currentUserId={portalUserId}
             viewerRole="owner"
             progressHref={{ kind: "portal" }}
+          />
+        )}
+
+        {/* 6c — Water Today */}
+        {portalUserId && (
+          <HomeWaterCard
+            userId={portalUserId}
+            currentUserId={portalUserId}
+            surface="portal"
           />
         )}
 
@@ -587,8 +597,8 @@ function SecondaryLinks({ handleAgreementComplete: _ }: { handleAgreementComplet
 // action tile can open it).
 const BodyweightSummaryCardWithRef = forwardRef<
   { open: () => void },
-  { clientId: string; defaultUnit?: WeightUnit }
->(function BodyweightSummaryCardWithRef({ clientId, defaultUnit }, ref) {
+  { userId: string; defaultUnit?: WeightUnit }
+>(function BodyweightSummaryCardWithRef({ userId, defaultUnit }, ref) {
   // Trigger the visible "Log Weight" button programmatically by clicking it.
   const containerRef = useRef<HTMLDivElement>(null);
   useImperativeHandle(ref, () => ({
@@ -602,7 +612,7 @@ const BodyweightSummaryCardWithRef = forwardRef<
   return (
     <div ref={containerRef}>
       <Suspense fallback={null}>
-        <BodyweightSummaryCard clientId={clientId} defaultUnit={defaultUnit} />
+        <HomeBodyweightCard userId={userId} surface="portal" defaultUnit={defaultUnit} />
       </Suspense>
     </div>
   );
