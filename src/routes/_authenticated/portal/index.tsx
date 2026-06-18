@@ -391,6 +391,15 @@ function PortalHome() {
           />
         )}
 
+        {/* 3a — Water Today */}
+        {portalUserId && (
+          <HomeWaterCard
+            userId={portalUserId}
+            currentUserId={portalUserId}
+            surface="portal"
+          />
+        )}
+
         {/* 4 — Quick Actions */}
         {client && (
           <QuickActionsGrid
@@ -419,14 +428,6 @@ function PortalHome() {
         {/* 5 — Current Training Block */}
         {activePhase && <TrainingBlockCard phase={activePhase} />}
 
-        {/* 6c — Water Today */}
-        {portalUserId && (
-          <HomeWaterCard
-            userId={portalUserId}
-            currentUserId={portalUserId}
-            surface="portal"
-          />
-        )}
 
         {/* 7 — Upcoming appointment (compact, only if exists) */}
         {nextAppointment && <UpcomingAppointmentRow appt={nextAppointment} />}
