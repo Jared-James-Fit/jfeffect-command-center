@@ -876,8 +876,18 @@ export const restartMembership = createServerFn({ method: "POST" })
       "subscription_data[metadata][email_lc]": (member.email ?? "").toLowerCase(),
       "subscription_data[metadata][restart_member_id]": member.id,
     };
-    if (reuseCustomerId) body.customer = reuseCustomerId;
-    else body.customer_email = member.email!;
+    if (reuseCustomerId) {
+      body.customer = reuseCustomerId;
+      // Tax ID collection on an existing customer requires Stripe to be
+      // allowed to update the customer's business name/address from the
+      // checkout form. Without these, Stripe rejects the session with
+      // "Tax ID collection requires updating business name on the customer."
+      body["customer_update[name]"] = "auto";
+      body["customer_update[address]"] = "auto";
+      body["customer_update[shipping]"] = "auto";
+    } else {
+      body.customer_email = member.email!;
+    }
 
     // Idempotency key: same member + same minute = same checkout session.
     // Defeats double-clicks but allows a genuine retry after a minute.
