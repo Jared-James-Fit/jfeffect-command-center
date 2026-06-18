@@ -63,8 +63,8 @@ function PortalProgress() {
       <div className="px-3 md:px-6 pb-6">
         <CheckInScheduleCard
           userId={userId}
-          title="Your check-in reminders"
-          subtitle="Pick how often you want to be reminded for each check-in."
+          title="Your progress reminders"
+          subtitle="Pick how often you want to be reminded to update each part of your progress."
         />
       </div>
     </>
