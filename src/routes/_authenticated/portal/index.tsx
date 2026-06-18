@@ -570,28 +570,3 @@ function SecondaryLinks({ handleAgreementComplete: _ }: { handleAgreementComplet
     </ul>
   );
 }
-
-// Imperative-handle wrapper for the bodyweight bottom sheet (so the quick
-// action tile can open it).
-const BodyweightSummaryCardWithRef = forwardRef<
-  { open: () => void },
-  { userId: string; defaultUnit?: WeightUnit }
->(function BodyweightSummaryCardWithRef({ userId, defaultUnit }, ref) {
-  // Trigger the visible "Log Weight" button programmatically by clicking it.
-  const containerRef = useRef<HTMLDivElement>(null);
-  useImperativeHandle(ref, () => ({
-    open: () => {
-      const btn = containerRef.current?.querySelector<HTMLButtonElement>(
-        "button[data-log-bw-trigger]",
-      ) ?? containerRef.current?.querySelector<HTMLButtonElement>("button");
-      btn?.click();
-    },
-  }));
-  return (
-    <div ref={containerRef}>
-      <Suspense fallback={null}>
-        <HomeBodyweightCard userId={userId} surface="portal" defaultUnit={defaultUnit} />
-      </Suspense>
-    </div>
-  );
-});
