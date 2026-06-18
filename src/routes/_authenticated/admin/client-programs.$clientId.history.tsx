@@ -74,7 +74,11 @@ function HistoryPage() {
           <ArrowLeft className="mr-1 h-4 w-4" /> Back to programs
         </Link>
 
-        <WorkoutFeedbackSection clientId={clientId} />
+        <WorkoutFeedbackSection
+          clientId={clientId}
+          clientUserId={(client as any)?.user_id ?? null}
+          clientName={client?.full_name ?? null}
+        />
 
         <section>
           <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
@@ -170,7 +174,34 @@ function HistoryPage() {
   );
 }
 
-function WorkoutFeedbackSection({ clientId }: { clientId: string }) {
+function WorkoutFeedbackSection({
+  clientId,
+  clientUserId,
+  clientName,
+}: {
+  clientId: string;
+  clientUserId: string | null;
+  clientName: string | null;
+}) {
+  const navigate = useNavigate();
+  const impersonation = useClientImpersonation();
+  const viewWorkout = (dayId: string | null | undefined) => {
+    if (!dayId) {
+      toast.error("This feedback isn't linked to a workout day yet.");
+      return;
+    }
+    if (!clientUserId) {
+      toast.error("This client has no account yet — can't open their workout view.");
+      return;
+    }
+    impersonation.start(
+      { id: clientId, user_id: clientUserId, full_name: clientName },
+      typeof window !== "undefined"
+        ? window.location.pathname + window.location.search
+        : null,
+    );
+    navigate({ to: "/portal/workouts/$dayId", params: { dayId } });
+  };
   const { data: rows = [], refetch } = useQuery({
     queryKey: ["pl-workout-feedback-history", clientId],
     queryFn: async () => {
