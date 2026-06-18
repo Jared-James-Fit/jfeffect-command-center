@@ -14,7 +14,7 @@ import { Button } from "@/components/ui/button";
 import {
   Users, Sparkles, AlertCircle, CreditCard, Camera, Phone, MessageCircle, Mail,
   Pause, ListChecks, XCircle, TrendingUp, Clock,
-  Eye, ShieldCheck, AlertTriangle, Gift, UserSearch, Tags, FileText, Activity, Package,
+  Eye, ShieldCheck, AlertTriangle, Gift, UserSearch, Tags, FileText, Activity, Package, UserCog,
 } from "lucide-react";
 import { getMembershipStats } from "@/lib/membership-admin.functions";
 
