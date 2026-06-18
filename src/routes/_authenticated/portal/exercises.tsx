@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Search, Play } from "lucide-react";
 import { getExerciseVideoSource } from "@/lib/exercise-video";
+import { useExerciseVideoSetGlobal } from "@/hooks/use-exercise-video-set";
 
 export const Route = createFileRoute("/_authenticated/portal/exercises")({
   component: ExerciseLibrary,
@@ -105,7 +106,8 @@ function ExerciseLibrary() {
 }
 
 function ExerciseVideo({ exercise }: { exercise: any }) {
-  const src = getExerciseVideoSource(exercise);
+  const { data: globalSet } = useExerciseVideoSetGlobal();
+  const src = getExerciseVideoSource(exercise, { globalOverride: globalSet ?? null });
   if (src.status === "coming_soon") {
     return (
       <div className="mt-4 grid aspect-video w-full place-items-center rounded-xl border border-dashed border-border bg-black/40 text-sm text-muted-foreground">

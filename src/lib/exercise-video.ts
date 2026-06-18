@@ -18,7 +18,24 @@ export function vimeoUrlFromId(vimeoVideoId: string): string {
   return `https://vimeo.com/${vimeoVideoId}`;
 }
 
-export function getExerciseVideoSource(exercise: any): ExerciseVideoSource {
+export type VideoSet = "primary" | "secondary";
+
+export function getExerciseVideoSource(
+  exercise: any,
+  opts?: { globalOverride?: VideoSet | null },
+): ExerciseVideoSource {
+  const effective: VideoSet =
+    opts?.globalOverride ?? (exercise?.active_video_set as VideoSet) ?? "primary";
+  if (
+    effective === "secondary" &&
+    exercise?.secondary_vimeo_embed_url
+  ) {
+    return {
+      provider: "vimeo",
+      url: exercise.secondary_vimeo_embed_url,
+      status: "ready",
+    };
+  }
   if (
     exercise?.video_provider === "vimeo" &&
     exercise?.vimeo_embed_url &&
