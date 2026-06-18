@@ -280,8 +280,10 @@ export function QuickSwapButton({
             <SheetDescription>
               {mode === "search"
                 ? "Search all exercises."
-                : mode === "confirm"
-                ? "Confirm swap."
+                : mode === "warning"
+                ? "Confirm different target."
+                : mode === "scope"
+                ? "Choose where to apply."
                 : "Pick an alternate exercise."}
             </SheetDescription>
           </SheetHeader>
