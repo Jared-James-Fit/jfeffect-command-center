@@ -100,7 +100,7 @@ export function ProgressSection({ ctx }: { ctx: ProgressContext }) {
   const [detailId, setDetailId] = useState<string | null>(null);
 
   return (
-    <div className="space-y-4 p-3 md:p-6">
+    <div className="space-y-4 p-3 pb-28 md:p-6 md:pb-12">
       <Tabs value={tab} onValueChange={setTab} className="space-y-4">
         <TabsList className="grid w-full grid-cols-4 md:grid-cols-7 h-auto">
           <TabsTrigger value="overview">Overview</TabsTrigger>
