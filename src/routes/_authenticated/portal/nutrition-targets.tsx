@@ -1,15 +1,16 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
+import { useEffect, useMemo, useState } from "react";
 import { usePortalUserId } from "@/lib/client-impersonation";
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/app-shell";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Apple, Beef, Wheat, Droplets, Flame, Cookie, FileText, Download, ExternalLink, Heart } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
 import { MealPlanDisplay } from "@/components/meal-plan-display";
 import { FaqWidget } from "@/components/faq-widget";
 import { NutritionUpdatePanel } from "@/components/nutrition-update-panel";
+import { NutritionDashboard } from "@/components/nutrition/NutritionDashboard";
 
 export const Route = createFileRoute("/_authenticated/portal/nutrition-targets")({ component: NutritionTargets });
 
@@ -19,7 +20,8 @@ function NutritionTargets() {
   const { data: client } = useQuery({
     queryKey: ["my-client", portalUserId],
     enabled: !!portalUserId,
-    queryFn: async () => (await supabase.from("clients").select("id, full_name").eq("user_id", portalUserId!).maybeSingle()).data,
+    queryFn: async () =>
+      (await supabase.from("clients").select("id, full_name, goals").eq("user_id", portalUserId!).maybeSingle()).data,
   });
 
   const { data: targets = [] } = useQuery({
@@ -37,90 +39,145 @@ function NutritionTargets() {
   });
 
   const current = targets[0] as any;
+  const days = useMemo(
+    () => (current ? [...(current.nutrition_target_days ?? [])].sort((a: any, b: any) => a.sort_order - b.sort_order) : []),
+    [current],
+  );
+  const [activeId, setActiveId] = useState<string | null>(null);
+  useEffect(() => {
+    if (days.length && !days.find((d: any) => d.id === activeId)) setActiveId(days[0].id);
+  }, [days, activeId]);
+  const activeDay: any = days.find((d: any) => d.id === activeId) ?? days[0];
+
+  const dashboardTargets = current
+    ? {
+        calories: activeDay?.calories ?? null,
+        protein: activeDay?.protein ?? null,
+        carbs: activeDay?.carbs ?? null,
+        fats: activeDay?.fats ?? null,
+        water: current.water ?? null,
+        sleep: null,
+      }
+    : undefined;
+
+  const goalString = current?.goal === "Custom" ? current?.custom_goal : current?.goal;
+  const goals = [goalString, ...((client as any)?.goals ? [String((client as any).goals)] : [])].filter(Boolean) as string[];
+
+  const subtitle = current
+    ? current.phase === "Custom"
+      ? current.custom_phase
+      : current.phase
+    : "Your coach hasn't assigned targets yet.";
 
   return (
     <>
-      <PageHeader title="Nutrition" subtitle={current ? (current.phase === "Custom" ? current.custom_phase : current.phase) : "Your assigned targets from Coach Jared."} />
-      <div className="p-4 pb-28 md:p-8 md:pb-12 space-y-6">
+      <PageHeader title="Nutrition" subtitle={subtitle} />
+      <NutritionDashboard viewer="client" userId={portalUserId} goals={goals} targets={dashboardTargets}>
         <FaqWidget category="nutrition" />
         <NutritionUpdatePanel />
+
         {!current ? (
           <Card className="border-border bg-card p-10 text-center">
             <Apple className="mx-auto h-10 w-10 text-primary" />
             <h2 className="mt-4 text-xl font-black">No targets assigned yet</h2>
-            <p className="mt-2 text-sm text-muted-foreground">Your coach hasn't set up your nutrition targets. Check back soon.</p>
+            <p className="mt-2 text-sm text-muted-foreground">
+              Your coach hasn't set up your nutrition targets. Check back soon.
+            </p>
           </Card>
         ) : (
-          <NutritionView current={current} />
+          <>
+            <CurrentGoalCard current={current} />
+            {days.length > 1 && <DayTabs days={days} activeId={activeDay?.id} onSelect={setActiveId} />}
+            {activeDay && <DayPanel day={activeDay} water={current.water} />}
+            <CardioByDay clientId={current.client_id} nutritionLabels={days.map((d: any) => d.day_label)} />
+            {current.pdf_url && <PdfCard path={current.pdf_url} name={current.pdf_name} />}
+          </>
         )}
-      </div>
+      </NutritionDashboard>
     </>
   );
 }
 
-function NutritionView({ current }: { current: any }) {
-  const days = useMemo(
-    () => [...(current.nutrition_target_days ?? [])].sort((a: any, b: any) => a.sort_order - b.sort_order),
-    [current.nutrition_target_days],
-  );
-  const [activeId, setActiveId] = useState<string | null>(days[0]?.id ?? null);
-  useEffect(() => {
-    if (days.length && !days.find((d: any) => d.id === activeId)) setActiveId(days[0].id);
-  }, [days, activeId]);
-  const activeDay = days.find((d: any) => d.id === activeId) ?? days[0];
-
+function CurrentGoalCard({ current }: { current: any }) {
   return (
-    <>
-      <Card className="border-border bg-card p-5">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <div className="text-[10px] uppercase tracking-widest text-muted-foreground">Current goal</div>
-            <div className="mt-0.5 text-base font-black">{current.goal === "Custom" ? current.custom_goal : current.goal}</div>
-          </div>
-          <div className="text-right text-[11px] text-muted-foreground">
-            <div>{current.start_date} → {current.end_date ?? "ongoing"}</div>
-            <div>Updated {new Date(current.last_updated_at).toLocaleDateString()}</div>
+    <Card className="border-border bg-card p-5">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <div className="text-[10px] uppercase tracking-widest text-muted-foreground">Current goal</div>
+          <div className="mt-0.5 text-base font-black">
+            {current.goal === "Custom" ? current.custom_goal : current.goal}
           </div>
         </div>
-        {current.client_notes && (
-          <div className="mt-3 rounded-md border border-primary/30 bg-primary/5 p-3 text-sm">{current.client_notes}</div>
-        )}
-        {current.water && (
-          <div className="mt-3 flex items-center gap-2 rounded-md border border-border bg-secondary/30 px-3 py-2 text-sm">
-            <Droplets className="h-4 w-4 text-primary" />
-            <span className="text-muted-foreground">Water target:</span>
-            <span className="font-bold">{current.water}</span>
-          </div>
-        )}
-      </Card>
+        <div className="text-right text-[11px] text-muted-foreground">
+          <div>{current.start_date} → {current.end_date ?? "ongoing"}</div>
+          <div>Updated {new Date(current.last_updated_at).toLocaleDateString()}</div>
+        </div>
+      </div>
+      {current.client_notes && (
+        <div className="mt-3 rounded-md border border-primary/30 bg-primary/5 p-3 text-sm">{current.client_notes}</div>
+      )}
+    </Card>
+  );
+}
 
-      {days.length > 1 && (
-        <div className="-mx-2 overflow-x-auto px-2">
-          <div className="inline-flex rounded-md border border-border bg-secondary/30 p-1">
-            {days.map((d: any) => (
-              <button
-                key={d.id}
-                onClick={() => setActiveId(d.id)}
-                className={
-                  "rounded px-3 py-1.5 text-xs font-bold uppercase tracking-wider whitespace-nowrap transition " +
-                  (d.id === activeDay?.id
-                    ? "bg-gradient-primary text-primary-foreground shadow"
-                    : "text-muted-foreground hover:text-foreground")
-                }
-              >
-                {d.day_label}
-              </button>
-            ))}
-          </div>
+function DayTabs({ days, activeId, onSelect }: { days: any[]; activeId?: string; onSelect: (id: string) => void }) {
+  return (
+    <div className="-mx-2 overflow-x-auto px-2">
+      <div className="inline-flex rounded-md border border-border bg-secondary/30 p-1">
+        {days.map((d) => (
+          <button
+            key={d.id}
+            onClick={() => onSelect(d.id)}
+            className={
+              "rounded px-3 py-1.5 text-xs font-bold uppercase tracking-wider whitespace-nowrap transition " +
+              (d.id === activeId
+                ? "bg-gradient-primary text-primary-foreground shadow"
+                : "text-muted-foreground hover:text-foreground")
+            }
+          >
+            {d.day_label}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function DayPanel({ day, water }: { day: any; water?: string | null }) {
+  return (
+    <Card className="border-border bg-card p-5 space-y-4">
+      <div className="rounded-md border border-primary/30 bg-primary/5 px-4 py-3">
+        <div className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">{day.day_label}</div>
+        <div className="mt-1 flex flex-wrap items-baseline gap-x-3 gap-y-1">
+          <span className="text-2xl font-black">
+            {day.calories ?? "—"}
+            <span className="ml-1 text-xs font-normal text-muted-foreground">kcal</span>
+          </span>
+          <span className="text-sm font-bold text-foreground/90">
+            P {day.protein ?? "—"} <span className="text-muted-foreground">/</span> C {day.carbs ?? "—"}{" "}
+            <span className="text-muted-foreground">/</span> F {day.fats ?? "—"}
+          </span>
         </div>
+      </div>
+
+      <div className="grid grid-cols-3 gap-2 sm:grid-cols-5">
+        <Macro icon={Flame} label="Cal" value={day.calories} unit="" />
+        <Macro icon={Beef} label="Protein" value={day.protein} unit="g" />
+        <Macro icon={Wheat} label="Carbs" value={day.carbs} unit="g" />
+        <Macro icon={Cookie} label="Fats" value={day.fats} unit="g" />
+        <Macro icon={Droplets} label="Water" value={water} unit="" />
+      </div>
+      {day.fibre != null && (
+        <div className="text-xs"><span className="text-muted-foreground">Fibre:</span> <span className="font-semibold">{day.fibre}g</span></div>
       )}
 
-      {activeDay && <DayPanel day={activeDay} water={current.water} />}
-
-      <CardioByDay clientId={current.client_id} nutritionLabels={days.map((d: any) => d.day_label)} />
-
-      {current.pdf_url && <PdfCard path={current.pdf_url} name={current.pdf_name} />}
-    </>
+      {day.notes && (
+        <div>
+          <div className="mb-2 text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Meal Plan</div>
+          <MealPlanDisplay text={day.notes} />
+        </div>
+      )}
+    </Card>
   );
 }
 
@@ -144,7 +201,6 @@ function CardioByDay({ clientId, nutritionLabels }: { clientId: string; nutritio
   const active = (cardio as any[]).filter((c) => c.status !== "Archived");
   if (active.length === 0) return null;
 
-  // Group by day_type, preferring the most recent per type
   const byType: Record<string, any> = {};
   for (const c of active) {
     const key = c.day_type === "Custom" ? c.custom_day_type || "Custom" : c.day_type;
@@ -183,42 +239,6 @@ function CardioByDay({ clientId, nutritionLabels }: { clientId: string; nutritio
           );
         })}
       </ul>
-    </Card>
-  );
-}
-
-function DayPanel({ day, water }: { day: any; water?: string | null }) {
-  return (
-    <Card className="border-border bg-card p-5 space-y-4">
-      {/* Compact macro summary row */}
-      <div className="rounded-md border border-primary/30 bg-primary/5 px-4 py-3">
-        <div className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">{day.day_label}</div>
-        <div className="mt-1 flex flex-wrap items-baseline gap-x-3 gap-y-1">
-          <span className="text-2xl font-black">{day.calories ?? "—"}<span className="ml-1 text-xs font-normal text-muted-foreground">kcal</span></span>
-          <span className="text-sm font-bold text-foreground/90">
-            P {day.protein ?? "—"} <span className="text-muted-foreground">/</span> C {day.carbs ?? "—"} <span className="text-muted-foreground">/</span> F {day.fats ?? "—"}
-          </span>
-        </div>
-      </div>
-
-      {/* Detailed macro cards */}
-      <div className="grid grid-cols-3 gap-2 sm:grid-cols-5">
-        <Macro icon={Flame} label="Cal" value={day.calories} unit="" />
-        <Macro icon={Beef} label="Protein" value={day.protein} unit="g" />
-        <Macro icon={Wheat} label="Carbs" value={day.carbs} unit="g" />
-        <Macro icon={Cookie} label="Fats" value={day.fats} unit="g" />
-        <Macro icon={Droplets} label="Water" value={water} unit="" />
-      </div>
-      {day.fibre != null && (
-        <div className="text-xs"><span className="text-muted-foreground">Fibre:</span> <span className="font-semibold">{day.fibre}g</span></div>
-      )}
-
-      {day.notes && (
-        <div>
-          <div className="mb-2 text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Meal Plan</div>
-          <MealPlanDisplay text={day.notes} />
-        </div>
-      )}
     </Card>
   );
 }
@@ -263,14 +283,16 @@ function PdfCard({ path, name }: { path: string; name?: string | null }) {
   );
 }
 
-
 function Macro({ icon: Icon, label, value, unit }: { icon: any; label: string; value: any; unit: string }) {
   return (
     <div className="rounded-md border border-border bg-secondary/30 p-2">
       <div className="flex items-center gap-1 text-[10px] uppercase tracking-widest text-muted-foreground">
         <Icon className="h-3 w-3" /> {label}
       </div>
-      <div className="mt-0.5 text-base font-black leading-tight">{value ?? "—"}{unit && <span className="ml-0.5 text-[10px] font-normal text-muted-foreground">{unit}</span>}</div>
+      <div className="mt-0.5 text-base font-black leading-tight">
+        {value ?? "—"}
+        {unit && <span className="ml-0.5 text-[10px] font-normal text-muted-foreground">{unit}</span>}
+      </div>
     </div>
   );
 }
