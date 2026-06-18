@@ -26,7 +26,7 @@ import { ArrowRight, Headphones, CheckCircle2, Library, Dumbbell, Home as HomeIc
 import { normalizePhoneToE164 } from "@/lib/phone-e164";
 import appPreviewDashboard from "@/assets/app-preview-dashboard.jpg";
 import appPreviewLogging from "@/assets/app-preview-logging.jpg";
-import appPreviewPrograms from "@/assets/app-preview-programs.jpg";
+import appPreviewRecipes from "@/assets/app-preview-recipes.jpg";
 import appPreviewAnalyticsOverview from "@/assets/app-preview-analytics-overview.png.asset.json";
 import appPreviewRecentPrs from "@/assets/app-preview-recent-prs.png.asset.json";
 import appPreview1rmChart from "@/assets/app-preview-1rm-chart.png.asset.json";
@@ -675,7 +675,7 @@ const DEFAULT_NOT_FOR = [
 const DEFAULT_APP_PREVIEWS = [
   { label: "Dashboard — today's session and what's next", url: appPreviewDashboard },
   { label: "Logging — tap to log; last session auto-fills", url: appPreviewLogging },
-  { label: "Programs — browse by goal, switch anytime", url: appPreviewPrograms },
+  { label: "Recipes & meal prep — browse by goal, save your favorites", url: appPreviewRecipes },
   { label: "Analytics — PRs, sets, workouts and top gains at a glance", url: appPreviewAnalyticsOverview.url },
   { label: "Recent PRs — every breakthrough, dated and stacked against your previous best", url: appPreviewRecentPrs.url },
   { label: "Estimated 1RM progress — per-lift strength curves so you can see the trend, not guess it", url: appPreview1rmChart.url },
