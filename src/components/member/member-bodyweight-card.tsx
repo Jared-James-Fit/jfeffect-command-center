@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card } from "@/components/ui/card";
@@ -12,71 +12,77 @@ import { format } from "date-fns";
 import { parseLocalDate, todayLocalISO } from "@/lib/today";
 import { toast } from "sonner";
 import { convertWeight, type WeightUnit } from "@/lib/progress-metrics";
+import {
+  listBodyweight,
+  logBodyweight,
+  deleteBodyweight,
+  type ProgressBodyweight,
+} from "@/lib/progress";
 
-type Row = {
-  id: string;
-  user_id: string;
-  entry_date: string;
-  weight: number;
-  unit: WeightUnit;
-};
-
+/**
+ * Reads & writes the SAME `progress_bodyweight` source as the Progress
+ * page weight graph and the Home "Bodyweight" card, so a weight logged
+ * here shows up on the graph and the dashboard immediately.
+ */
 export function MemberBodyweightCard() {
   const qc = useQueryClient();
+  const [userId, setUserId] = useState<string | null>(null);
   const [unit, setUnit] = useState<WeightUnit>("lb");
   const [weight, setWeight] = useState("");
   const [date, setDate] = useState(todayLocalISO());
 
+  useEffect(() => {
+    let mounted = true;
+    supabase.auth.getUser().then(({ data }) => {
+      if (mounted) setUserId(data.user?.id ?? null);
+    });
+    return () => { mounted = false; };
+  }, []);
+
   const { data: rows = [] } = useQuery({
-    queryKey: ["member-bodyweight-logs"],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("member_bodyweight_logs")
-        .select("id,user_id,entry_date,weight,unit")
-        .order("entry_date", { ascending: false })
-        .limit(60);
-      if (error) throw error;
-      return (data ?? []) as Row[];
-    },
+    queryKey: ["progress-bw", userId],
+    enabled: !!userId,
+    queryFn: () => listBodyweight(userId!),
+    staleTime: 30_000,
   });
 
   const save = useMutation({
     mutationFn: async () => {
       const w = parseFloat(weight);
       if (!Number.isFinite(w) || w <= 0) throw new Error("Enter a valid weight");
-      const { data: auth } = await supabase.auth.getUser();
-      if (!auth.user) throw new Error("Not signed in");
-      const { error } = await supabase
-        .from("member_bodyweight_logs")
-        .upsert(
-          { user_id: auth.user.id, entry_date: date, weight: w, unit },
-          { onConflict: "user_id,entry_date" },
-        );
-      if (error) throw error;
+      if (!userId) throw new Error("Not signed in");
+      await logBodyweight({
+        user_id: userId,
+        weight_value: w,
+        weight_unit: unit,
+        logged_date: date,
+        note: null,
+      });
     },
     onSuccess: () => {
       toast.success("Weight logged");
       setWeight("");
-      qc.invalidateQueries({ queryKey: ["member-bodyweight-logs"] });
+      qc.invalidateQueries({ queryKey: ["progress-bw", userId] });
     },
     onError: (e: Error) => toast.error(e.message),
   });
 
   const remove = useMutation({
-    mutationFn: async (id: string) => {
-      const { error } = await supabase.from("member_bodyweight_logs").delete().eq("id", id);
-      if (error) throw error;
-    },
+    mutationFn: (id: string) => deleteBodyweight(id),
     onSuccess: () => {
       toast.success("Entry removed");
-      qc.invalidateQueries({ queryKey: ["member-bodyweight-logs"] });
+      qc.invalidateQueries({ queryKey: ["progress-bw", userId] });
     },
     onError: (e: Error) => toast.error(e.message),
   });
 
   // normalize series to display unit
-  const series = rows
-    .map((r) => ({ ...r, normalized: convertWeight(Number(r.weight), r.unit, unit) }))
+  const series = (rows as ProgressBodyweight[])
+    .map((r) => ({
+      id: r.id,
+      entry_date: r.logged_date,
+      normalized: convertWeight(Number(r.weight_value), r.weight_unit as WeightUnit, unit),
+    }))
     .sort((a, b) => a.entry_date.localeCompare(b.entry_date));
 
   const latest = series[series.length - 1];
