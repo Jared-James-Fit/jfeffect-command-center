@@ -23,6 +23,10 @@ import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { supabase } from "@/integrations/supabase/client";
 import { MemberAccessSummary } from "@/components/admin/member-access-summary";
+import { WaterTargetDialog } from "@/components/progress/water-target-dialog";
+import { ensureWaterTarget, formatWater } from "@/lib/water";
+import { useAuth } from "@/lib/auth";
+import { Droplet } from "lucide-react";
 const MemberFeatureToggles = lazy(() =>
   import("@/components/admin/member-feature-toggles").then((m) => ({ default: m.MemberFeatureToggles })),
 );
