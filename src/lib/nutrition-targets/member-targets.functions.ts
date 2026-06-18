@@ -64,6 +64,8 @@ export const getActiveMemberTargets = createServerFn({ method: "GET" })
       .eq("member_id", member.id)
       .eq("active", true)
       .maybeSingle();
+    // Hide pending (unapproved) targets from the client view.
+    if (data && (data as any).pending_review) return null;
     return data ?? null;
   });
 
@@ -129,6 +131,7 @@ export const saveCalculatedTargets = createServerFn({ method: "POST" })
           settings_version: 1,
         },
         active: true,
+        pending_review: true,
       })
       .select("*")
       .single();
@@ -170,6 +173,7 @@ export const saveManualTargets = createServerFn({ method: "POST" })
         fat_g: data.fat_g,
         water_ml: data.water_ml ?? null,
         active: true,
+        pending_review: true,
       })
       .select("*")
       .single();
