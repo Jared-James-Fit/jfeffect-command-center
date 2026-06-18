@@ -539,6 +539,12 @@ export function createMemberAdapter(ref: WorkoutContextRef): WorkoutContextAdapt
       // Members default to lb; per-exercise unit prefs aren't persisted.
     },
 
+    async listUnitPrefs(_exerciseIds: string[]): Promise<{ exerciseId: string; unit: "lb" | "kg" }[]> {
+      // Memberships don't persist per-exercise unit prefs; callers fall back
+      // to the exercise's default_load_unit.
+      return [];
+    },
+
     async notifyCoachOfFailure(_input: { dayId: string; reason: string }): Promise<void> {
       // Members don't have a dedicated coach to alert. The shared UI already
       // surfaces sync errors via toast + offline queue retries; intentionally
