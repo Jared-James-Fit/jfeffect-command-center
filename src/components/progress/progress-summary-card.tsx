@@ -1,13 +1,16 @@
 import { Link } from "@tanstack/react-router";
+import { useQuery } from "@tanstack/react-query";
 import { Card } from "@/components/ui/card";
-import { Camera, Scale, Ruler, History } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Camera, Scale, Ruler, TrendingDown, TrendingUp, Minus, ArrowRight } from "lucide-react";
+import { format, parseISO, differenceInDays } from "date-fns";
+import { listBodyweight, listSubmissions, listMeasurements } from "@/lib/progress";
 
 /**
- * Dummy-proof Progress Tracking card for client + member home dashboards.
- * Four large action buttons that navigate to the Progress page with a
- * `?action=` search param so the right dialog/tab opens automatically.
- * Latest-entry rows are intentionally NOT shown here — the Progress page
- * is the archive/history; Home stays focused on quick actions.
+ * Progress Snapshot card for client + member home dashboards.
+ * Shows current bodyweight, 7-day change, latest progress photo date,
+ * and latest measurement date — with one CTA to the Progress page.
+ * Keeps Home focused; all logging happens on the Progress page itself.
  */
 export type ProgressSummaryAction = "photo" | "weight" | "measure" | "history";
 
@@ -16,7 +19,7 @@ export function ProgressSummaryCard({
   currentUserId,
   viewerRole,
   progressHref,
-  title = "Progress Tracking",
+  title = "Progress Snapshot",
 }: {
   userId: string;
   currentUserId: string;
@@ -27,56 +30,132 @@ export function ProgressSummaryCard({
     | { kind: "admin-client"; clientId: string };
   title?: string;
 }) {
-  void userId; void currentUserId; void viewerRole;
+  void currentUserId; void viewerRole;
 
-  function ActionLink({
-    action, icon: Icon, label, primary,
-  }: { action: ProgressSummaryAction; icon: any; label: string; primary?: boolean }) {
-    const search = action === "history" ? undefined : ({ action } as { action: ProgressSummaryAction });
-    const className = `flex min-h-[104px] flex-col items-center justify-center gap-2 rounded-lg border-2 p-4 text-center transition active:scale-[0.98] ${
-      primary ? "border-primary bg-primary/10 hover:bg-primary/15" : "border-border bg-card hover:bg-accent"
-    }`;
-    const inner = (
-      <>
-        <Icon className={`h-7 w-7 ${primary ? "text-primary" : ""}`} />
-        <span className="text-sm font-bold leading-tight">{label}</span>
-      </>
-    );
-    if (progressHref.kind === "portal") {
-      return <Link to="/portal/progress" search={search as any} className={className}>{inner}</Link>;
+  const { data: bw = [] } = useQuery({
+    queryKey: ["progress-bw", userId],
+    enabled: !!userId,
+    queryFn: () => listBodyweight(userId),
+    staleTime: 30_000,
+  });
+  const { data: photos = [] } = useQuery({
+    queryKey: ["progress-subs-photo", userId],
+    enabled: !!userId,
+    queryFn: () => listSubmissions({ userId, type: "photo" }),
+    staleTime: 30_000,
+  });
+  const { data: meas = [] } = useQuery({
+    queryKey: ["progress-meas", userId],
+    enabled: !!userId,
+    queryFn: () => listMeasurements(userId),
+    staleTime: 30_000,
+  });
+
+  // Most recent weight & 7-day delta (in the latest entry's unit).
+  const sorted = [...bw].sort((a, b) => a.logged_date.localeCompare(b.logged_date));
+  const latest = sorted[sorted.length - 1] ?? null;
+  const unit = latest?.weight_unit ?? "lb";
+  const currentWeight = latest ? `${latest.weight_value} ${unit}` : "—";
+  const weekChange = (() => {
+    if (!latest || sorted.length < 2) return null;
+    const target = new Date(latest.logged_date);
+    target.setDate(target.getDate() - 7);
+    let prev: typeof sorted[number] | null = null;
+    for (let i = sorted.length - 2; i >= 0; i--) {
+      if (new Date(sorted[i].logged_date) <= target) { prev = sorted[i]; break; }
+      prev = sorted[i];
     }
-    if (progressHref.kind === "member") {
-      return <Link to="/m/progress" search={search as any} className={className}>{inner}</Link>;
-    }
+    if (!prev) return null;
+    const toLatest = prev.weight_unit === unit
+      ? Number(prev.weight_value)
+      : prev.weight_unit === "kg"
+        ? Number(prev.weight_value) * 2.20462
+        : Number(prev.weight_value) / 2.20462;
+    return +(Number(latest.weight_value) - toLatest).toFixed(1);
+  })();
+
+  const latestPhoto = photos[0]?.submission_date ?? null;
+  const latestMeas = meas[0]?.measured_date ?? null;
+
+  const fmtAgo = (d: string | null) => {
+    if (!d) return "Not yet";
+    try {
+      const days = differenceInDays(new Date(), parseISO(d));
+      if (days <= 0) return "Today";
+      if (days === 1) return "Yesterday";
+      if (days < 30) return `${days}d ago`;
+      return format(parseISO(d), "MMM d");
+    } catch { return d; }
+  };
+
+  const TrendIcon = weekChange == null ? Minus : weekChange < 0 ? TrendingDown : weekChange > 0 ? TrendingUp : Minus;
+  const trendTone = weekChange == null ? "text-muted-foreground" : weekChange <= 0 ? "text-emerald-500" : "text-amber-500";
+
+  const ctaClass = "mt-4 h-12 w-full font-bold uppercase tracking-wide";
+  const cta = (
+    <Button className={ctaClass}>
+      View Progress <ArrowRight className="ml-1.5 h-4 w-4" />
+    </Button>
+  );
+
+  const ViewCta = () => {
+    if (progressHref.kind === "portal") return <Link to="/portal/progress">{cta}</Link>;
+    if (progressHref.kind === "member") return <Link to="/m/progress">{cta}</Link>;
     return (
-      <Link
-        to="/admin/clients/$id/progress"
-        params={{ id: progressHref.clientId }}
-        search={search as any}
-        className={className}
-      >
-        {inner}
-      </Link>
+      <Link to="/admin/clients/$id/progress" params={{ id: progressHref.clientId }}>{cta}</Link>
     );
-  }
+  };
 
   return (
-    <div className="space-y-3">
-      <Card className="overflow-hidden">
-        <div className="flex items-center justify-between gap-2 border-b border-border bg-secondary/40 px-4 py-2.5">
-          <div className="flex items-center gap-2">
-            <Camera className="h-4 w-4 text-primary" />
-            <span className="text-xs font-bold uppercase tracking-widest">{title}</span>
-          </div>
+    <Card className="overflow-hidden">
+      <div className="flex items-center justify-between gap-2 border-b border-border bg-secondary/40 px-4 py-2.5">
+        <div className="flex items-center gap-2">
+          <Scale className="h-4 w-4 text-primary" />
+          <span className="text-xs font-bold uppercase tracking-widest">{title}</span>
         </div>
-        <div className="grid grid-cols-2 gap-2 p-3">
-          <ActionLink action="photo" icon={Camera} label="Upload Photos" primary />
-          <ActionLink action="weight" icon={Scale} label="Log Weight" />
-          <ActionLink action="measure" icon={Ruler} label="Add Measurements" />
-          <ActionLink action="history" icon={History} label="View Progress" />
+      </div>
+      <div className="p-4">
+        <div className="grid grid-cols-2 gap-3">
+          <Stat
+            icon={Scale}
+            label="Current weight"
+            value={currentWeight}
+          />
+          <Stat
+            icon={TrendIcon}
+            label="7-day change"
+            value={weekChange == null
+              ? "—"
+              : `${weekChange > 0 ? "+" : ""}${weekChange} ${unit}`}
+            tone={trendTone}
+          />
+          <Stat
+            icon={Camera}
+            label="Latest photo"
+            value={fmtAgo(latestPhoto)}
+          />
+          <Stat
+            icon={Ruler}
+            label="Latest measurement"
+            value={fmtAgo(latestMeas)}
+          />
         </div>
-      </Card>
+        <ViewCta />
+      </div>
+    </Card>
+  );
+}
 
+function Stat({
+  icon: Icon, label, value, tone,
+}: { icon: any; label: string; value: string; tone?: string }) {
+  return (
+    <div className="rounded-xl border border-border bg-card p-3">
+      <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+        <Icon className={`h-3.5 w-3.5 ${tone ?? ""}`} />
+        {label}
+      </div>
+      <div className={`mt-1 text-base font-bold leading-tight ${tone ?? ""}`}>{value}</div>
     </div>
   );
 }
