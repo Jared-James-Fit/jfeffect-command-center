@@ -252,6 +252,66 @@ export function RecipeForm({ open, onOpenChange, initial, onSaved }: Props) {
                 <Input value={tags} onChange={(e) => setTags(e.target.value)} placeholder="high-protein, quick" />
               </div>
             </div>
+
+            <div className="space-y-1.5">
+              <Label>Cover Image URL <span className="text-muted-foreground">(optional)</span></Label>
+              <Input
+                value={imageUrl}
+                onChange={(e) => setImageUrl(e.target.value)}
+                placeholder="https://…/recipe.jpg"
+              />
+              {imageUrl && (
+                <div className="mt-1 aspect-[16/9] w-full max-w-xs overflow-hidden rounded-md border border-border bg-secondary">
+                  <img src={imageUrl} alt="Cover preview" className="h-full w-full object-cover" />
+                </div>
+              )}
+            </div>
+
+            <div className="grid gap-3 md:grid-cols-4">
+              <div className="space-y-1.5">
+                <Label>Calories / serving</Label>
+                <Input
+                  type="number"
+                  inputMode="numeric"
+                  value={calories}
+                  onChange={(e) => setCalories(e.target.value)}
+                  placeholder="auto"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Protein (g)</Label>
+                <Input
+                  type="number"
+                  inputMode="numeric"
+                  value={protein}
+                  onChange={(e) => setProtein(e.target.value)}
+                  placeholder="auto"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Prep (min)</Label>
+                <Input
+                  type="number"
+                  inputMode="numeric"
+                  value={prepMinutes}
+                  onChange={(e) => setPrepMinutes(e.target.value)}
+                  placeholder="auto"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Servings</Label>
+                <Input
+                  type="number"
+                  inputMode="numeric"
+                  value={servings}
+                  onChange={(e) => setServings(e.target.value)}
+                  placeholder="auto"
+                />
+              </div>
+            </div>
+            <p className="text-[11px] text-muted-foreground">
+              Leave numbers blank to auto-fill from the recipe body.
+            </p>
           </TabsContent>
 
           <TabsContent value="preview" className="pt-2">
