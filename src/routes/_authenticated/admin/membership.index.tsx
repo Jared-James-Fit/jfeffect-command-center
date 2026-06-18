@@ -14,7 +14,7 @@ import { Button } from "@/components/ui/button";
 import {
   Users, Sparkles, AlertCircle, CreditCard, Camera, Phone, MessageCircle, Mail,
   Pause, ListChecks, XCircle, TrendingUp, Clock,
-  Eye,
+  Eye, ShieldCheck, AlertTriangle, Gift, UserSearch, Tags, FileText, Activity, Package,
 } from "lucide-react";
 import { getMembershipStats } from "@/lib/membership-admin.functions";
 
@@ -94,6 +94,28 @@ function MembershipDashboard() {
       </div>
 
       <div>
+        <h2 className="mb-2 text-xs font-bold uppercase tracking-widest text-muted-foreground">Quick Access</h2>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <QuickCard to="/admin/members" icon={ShieldCheck} title="Manage Member Access"
+            desc="Turn access on/off, set status, dates, grant comp access, add notes." tone="primary" featured />
+          <QuickCard to="/admin/membership/action-needed" icon={AlertTriangle} title="Expired & Payment Issues"
+            desc="Trial ended, failed payments, grace period, members needing reactivation." tone="rose" featured />
+          <QuickCard to="/admin/members" icon={Gift} title="Grant Complimentary Access"
+            desc="Find a member and activate without Stripe — pick duration or end date." tone="primary" featured />
+          <QuickCard to="/admin/members" icon={UserSearch} title="View All Members"
+            desc="Full member list with search and status filters." featured />
+          <QuickCard to="/admin/membership/checkout-settings" icon={Package} title="Membership Plans & Pricing"
+            desc="$29/mo plan, trial, checkout visibility. Annual hidden." />
+          <QuickCard to="/admin/membership/promo-tools" icon={Tags} title="Promotions & Referral Codes"
+            desc="Discount codes, referral codes, usage, and referred purchases." />
+          <QuickCard to="/admin/membership/sales-page" icon={FileText} title="Membership Sales Page"
+            desc="Edit and preview jfeffect.com/join." />
+          <QuickCard to="/admin/membership/stripe-sync" icon={Activity} title="Stripe Sync & System Health"
+            desc="Failed webhooks, subscription mismatches, manual sync." />
+        </div>
+      </div>
+
+      <div>
         <h2 className="mb-2 text-xs font-bold uppercase tracking-widest text-muted-foreground">Subscriptions</h2>
         <div className="grid grid-cols-2 gap-3 md:grid-cols-4 lg:grid-cols-6">
           <Stat label="Active" value={isLoading ? "…" : c?.active ?? 0} icon={Users} tone="primary" />
@@ -152,5 +174,38 @@ function MembershipDashboard() {
         </Card>
       </div>
     </div>
+  );
+}
+
+function QuickCard({
+  to, icon: Icon, title, desc, tone = "default", featured = false,
+}: {
+  to: string; icon: any; title: string; desc: string;
+  tone?: "default" | "primary" | "rose" | "warn"; featured?: boolean;
+}) {
+  const toneRing =
+    tone === "primary" ? "border-emerald-500/40 bg-emerald-500/5 hover:bg-emerald-500/10" :
+    tone === "rose" ? "border-rose-500/40 bg-rose-500/5 hover:bg-rose-500/10" :
+    tone === "warn" ? "border-amber-500/40 bg-amber-500/5 hover:bg-amber-500/10" :
+    "border-border bg-card hover:bg-muted/40";
+  const iconTone =
+    tone === "primary" ? "bg-emerald-500/15 text-emerald-300" :
+    tone === "rose" ? "bg-rose-500/15 text-rose-300" :
+    tone === "warn" ? "bg-amber-500/15 text-amber-300" :
+    "bg-secondary text-foreground";
+  return (
+    <Link to={to as any}>
+      <Card className={`h-full border transition-colors ${toneRing} ${featured ? "p-5" : "p-4"}`}>
+        <div className="flex items-start gap-3">
+          <div className={`grid shrink-0 place-items-center rounded-md ${iconTone} ${featured ? "h-10 w-10" : "h-9 w-9"}`}>
+            <Icon className={featured ? "h-5 w-5" : "h-4 w-4"} />
+          </div>
+          <div className="min-w-0">
+            <div className={`font-bold tracking-tight ${featured ? "text-base" : "text-sm"}`}>{title}</div>
+            <div className={`mt-1 text-muted-foreground ${featured ? "text-xs" : "text-[11px]"}`}>{desc}</div>
+          </div>
+        </div>
+      </Card>
+    </Link>
   );
 }
