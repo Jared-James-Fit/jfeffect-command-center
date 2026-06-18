@@ -393,7 +393,17 @@ function PortalHome() {
           <SetupChecklistBanner clientId={client.id} userId={portalUserId} />
         )}
 
-        {/* 3 — Quick Actions */}
+        {/* 3 — Progress summary */}
+        {portalUserId && (
+          <ProgressSummaryCard
+            userId={portalUserId}
+            currentUserId={portalUserId}
+            viewerRole="owner"
+            progressHref={{ kind: "portal" }}
+          />
+        )}
+
+        {/* 4 — Quick Actions */}
         {client && (
           <QuickActionsGrid
             messageBadge={unreadMsgs.length}
@@ -431,15 +441,6 @@ function PortalHome() {
           />
         )}
 
-        {/* 6b — Progress & Water summary */}
-        {portalUserId && (
-          <ProgressSummaryCard
-            userId={portalUserId}
-            currentUserId={portalUserId}
-            viewerRole="owner"
-            progressHref={{ kind: "portal" }}
-          />
-        )}
 
         {/* 6c — Water Today */}
         {portalUserId && (
