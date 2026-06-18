@@ -28,14 +28,14 @@ export function ManualCheckInReviewComposer({
   const qc = useQueryClient();
 
   const [clientId, setClientId] = useState<string>(defaultClientId ?? "");
-  const [source, setSource] = useState<ManualReviewSource>("fillout");
+  const source: ManualReviewSource = "manual";
   const [checkInDate, setCheckInDate] = useState<string>(todayLocalISO());
   const [title, setTitle] = useState("Weekly Check-In Response");
   const [message, setMessage] = useState("");
   const [actionItems, setActionItems] = useState("");
-  const [priority, setPriority] = useState<string>("none");
+  const priority: string = "none";
   const [internalNotes, setInternalNotes] = useState("");
-  const [externalLink, setExternalLink] = useState("");
+  const externalLink = "";
   const [notify, setNotify] = useState(true);
   const [advancedOpen, setAdvancedOpen] = useState(false);
 
