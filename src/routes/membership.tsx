@@ -675,7 +675,7 @@ const DEFAULT_NOT_FOR = [
 const DEFAULT_APP_PREVIEWS = [
   { label: "Dashboard — today's session and what's next", url: appPreviewDashboard },
   { label: "Logging — tap to log; last session auto-fills", url: appPreviewLogging },
-  { label: "Programs — browse by goal, switch anytime", url: appPreviewPrograms },
+  { label: "Recipes & meal prep — browse by goal, save your favorites", url: appPreviewRecipes },
   { label: "Analytics — PRs, sets, workouts and top gains at a glance", url: appPreviewAnalyticsOverview.url },
   { label: "Recent PRs — every breakthrough, dated and stacked against your previous best", url: appPreviewRecentPrs.url },
   { label: "Estimated 1RM progress — per-lift strength curves so you can see the trend, not guess it", url: appPreview1rmChart.url },
