@@ -169,15 +169,14 @@ export function createClientAdapter(ref: WorkoutContextRef): WorkoutContextAdapt
     },
 
     /* ---- Phase B turn 1 — raw passthrough surface ---- */
-    async getDayRaw(dayId: string): Promise<PlDayRaw> {
+    async getDayRaw(dayId: string): Promise<PlDayRaw | null> {
       const { data, error } = await sb
         .from("pl_days")
         .select("*")
         .eq("id", dayId)
         .maybeSingle();
       if (error) throw new Error(error.message);
-      if (!data) throw new Error(`pl_days row not found for ${dayId}`);
-      return data as PlDayRaw;
+      return (data ?? null) as PlDayRaw | null;
     },
 
     async listRowsRaw(dayId: string): Promise<PlRowRaw[]> {
