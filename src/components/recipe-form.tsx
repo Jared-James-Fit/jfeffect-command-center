@@ -50,6 +50,11 @@ export function RecipeForm({ open, onOpenChange, initial, onSaved }: Props) {
   const [selectedClients, setSelectedClients] = useState<string[]>([]);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [imageUrl, setImageUrl] = useState("");
+  const [calories, setCalories] = useState("");
+  const [protein, setProtein] = useState("");
+  const [prepMinutes, setPrepMinutes] = useState("");
+  const [servings, setServings] = useState("");
 
   useEffect(() => {
     if (!open) return;
@@ -61,6 +66,11 @@ export function RecipeForm({ open, onOpenChange, initial, onSaved }: Props) {
       setBody(initial.body);
       setVideoUrl(initial.video_url ?? "");
       setTags((initial.tags ?? []).join(", "));
+      setImageUrl(initial.image_url ?? "");
+      setCalories(initial.calories_per_serving != null ? String(initial.calories_per_serving) : "");
+      setProtein(initial.protein_grams != null ? String(initial.protein_grams) : "");
+      setPrepMinutes(initial.prep_time_minutes != null ? String(initial.prep_time_minutes) : "");
+      setServings(initial.servings != null ? String(initial.servings) : "");
       getRecipeSelectedClients(initial.id).then(setSelectedClients);
     } else {
       setTitle("");
@@ -71,6 +81,11 @@ export function RecipeForm({ open, onOpenChange, initial, onSaved }: Props) {
       setVideoUrl("");
       setTags("");
       setSelectedClients([]);
+      setImageUrl("");
+      setCalories("");
+      setProtein("");
+      setPrepMinutes("");
+      setServings("");
     }
   }, [open, initial]);
 
@@ -94,6 +109,19 @@ export function RecipeForm({ open, onOpenChange, initial, onSaved }: Props) {
     try {
       const finalStatus: RecipeStatus = publish ? "Published" : status;
       const tagList = tags.split(",").map((t) => t.trim()).filter(Boolean);
+      const toInt = (s: string) => {
+        const t = s.trim();
+        if (!t) return null;
+        const n = parseInt(t, 10);
+        return Number.isFinite(n) ? n : null;
+      };
+      const cardFields = {
+        image_url: imageUrl.trim() || null,
+        calories_per_serving: toInt(calories),
+        protein_grams: toInt(protein),
+        prep_time_minutes: toInt(prepMinutes),
+        servings: toInt(servings),
+      };
       const row = await runJob<Recipe>(
         {
           title: publish ? `Publishing "${title}"` : `Saving "${title}"`,
@@ -108,12 +136,14 @@ export function RecipeForm({ open, onOpenChange, initial, onSaved }: Props) {
             saved = await updateRecipe(initial.id, {
               title, category, access_scope: access, status: finalStatus,
               body, video_url: videoUrl || null, tags: tagList,
+              ...cardFields,
             });
           } else {
             saved = await createRecipe({
               title, category, access_scope: access, status: finalStatus,
               body, video_url: videoUrl || null, tags: tagList,
               authorId: user?.id,
+              ...cardFields,
             });
           }
           job.completeStep(1);
