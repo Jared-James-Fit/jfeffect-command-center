@@ -713,7 +713,7 @@ function BodyweightTab({ ctx, onLog }: { ctx: ProgressContext; onLog: () => void
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between">
-        <h2 className="text-lg font-semibold">Bodyweight</h2>
+        <h2 className="text-lg font-semibold">Weight</h2>
         <Button size="sm" onClick={onLog}><Plus className="h-4 w-4 mr-1" />Log</Button>
       </div>
       {stats && (
@@ -769,7 +769,7 @@ function BodyweightDialog({ ctx, open, onOpenChange }: { ctx: ProgressContext; o
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-sm">
-        <DialogHeader><DialogTitle>Log Bodyweight</DialogTitle></DialogHeader>
+        <DialogHeader><DialogTitle>Log Weight</DialogTitle></DialogHeader>
         <div className="space-y-3">
           <div className="flex gap-2">
             <Input type="number" inputMode="decimal" autoFocus value={val} onChange={(e) => setVal(e.target.value)} placeholder="Weight" />
