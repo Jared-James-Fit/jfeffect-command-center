@@ -548,7 +548,7 @@ export function createMemberAdapter(ref: WorkoutContextRef): WorkoutContextAdapt
 
     /* ---- Phase B turn 1 — raw passthrough surface (stubs) ---- */
     /* member_* → pl_*-shaped reshape lands in turn 3. */
-    async getDayRaw(_dayId: string): Promise<PlDayRaw> {
+    async getDayRaw(_dayId: string): Promise<PlDayRaw | null> {
       throw new NotImplemented("getDayRaw", "member");
     },
     async listRowsRaw(_dayId: string): Promise<PlRowRaw[]> {
