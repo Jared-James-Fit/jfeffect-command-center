@@ -882,7 +882,16 @@ function ClientDetail() {
                 <h3 className="text-xs uppercase tracking-widest text-muted-foreground">Check-Ins & Forms</h3>
                 <p className="text-xs text-muted-foreground mt-1">Assign this client to forms from the unified form builder.</p>
               </div>
-              <Link to="/admin/native-forms"><Button variant="outline" size="sm">Manage forms</Button></Link>
+              <div className="flex items-center gap-2">
+                <Button
+                  size="sm"
+                  className="bg-gradient-primary font-bold"
+                  onClick={() => setCheckInResponseOpen(true)}
+                >
+                  <Send className="mr-1 h-4 w-4" /> Send Check-In Response
+                </Button>
+                <Link to="/admin/native-forms"><Button variant="outline" size="sm">Manage forms</Button></Link>
+              </div>
             </div>
             <ClientNativeFormsAssignment clientId={id} />
             <div className="grid gap-3 md:grid-cols-2">
