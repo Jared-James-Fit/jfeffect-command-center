@@ -5,6 +5,8 @@ import {
   ArrowLeftRight,
   Loader2,
   PlayCircle,
+  Play,
+  X,
   RefreshCw,
   Search,
 } from "lucide-react";
@@ -34,6 +36,10 @@ type ExerciseLite = {
   equipment: string | null;
   difficulty: string | null;
   vimeo_embed_url?: string | null;
+  youtube_url?: string | null;
+  thumbnail_url?: string | null;
+  cues?: string | null;
+  common_mistakes?: string | null;
 };
 
 type RankedSuggestion = { ex: ExerciseLite; reason: string };
@@ -148,7 +154,7 @@ function matchesChip(chip: EquipmentChip, equipment: string | null): boolean {
   }
 }
 
-const SELECT_COLS = "id,name,muscle_group,category,equipment,difficulty,vimeo_embed_url";
+const SELECT_COLS = "id,name,muscle_group,category,equipment,difficulty,vimeo_embed_url,youtube_url,thumbnail_url,cues,common_mistakes";
 const PAGE_SIZE = 20;
 
 function useDebounced<T>(value: T, ms: number): T {
