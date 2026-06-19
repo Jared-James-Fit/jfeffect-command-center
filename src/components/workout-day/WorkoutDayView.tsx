@@ -1042,16 +1042,24 @@ function WorkoutDay({
           <Badge variant="outline"><Clock className="mr-1 h-3 w-3" /> {(() => {
             // Prefer a coach-set override; otherwise derive from prescribed
             // sets + per-row rest so the pill matches what's actually
-            // programmed instead of a stale 60-min default.
-            if (day.duration_override_min) return durationRange(day.duration_override_min);
-            const estRows: EstimatedDurationRow[] = (rows as any[]).map((r: any) => ({
-              prescribedSets: Number(r.sets) || 1,
-              restSeconds: r.rest_seconds ?? null,
-              category: r.exercises?.category ?? r.category ?? null,
-              skipped: !!r.skipped,
-            }));
-            const derived = estimatedDurationLabel(estRows);
-            if (derived) return derived;
+            // programmed instead of a stale 60-min default. Hardened with a
+            // try/catch so a malformed row never crashes the whole workout
+            // screen — fall back to the static estimate on any failure.
+            try {
+              if (day.duration_override_min) return durationRange(day.duration_override_min);
+              const safeRows = Array.isArray(rows) ? (rows as any[]) : [];
+              const estRows: EstimatedDurationRow[] = safeRows.map((r: any) => ({
+                prescribedSets: Number(r?.sets) || 1,
+                restSeconds: r?.rest_seconds ?? null,
+                category: r?.exercises?.category ?? r?.category ?? null,
+                skipped: !!r?.skipped,
+              }));
+              const derived = estimatedDurationLabel(estRows);
+              if (derived) return derived;
+            } catch (e) {
+              // eslint-disable-next-line no-console
+              console.warn("[WorkoutDayView] duration pill fallback:", e);
+            }
             return durationRange(day.duration_estimate_min ?? 60);
           })()}</Badge>
           {completion?.completed_at && <Badge variant="outline" className="text-green-500 border-green-500/30 bg-green-500/10"><CheckCircle2 className="mr-1 h-3 w-3" /> Completed</Badge>}
