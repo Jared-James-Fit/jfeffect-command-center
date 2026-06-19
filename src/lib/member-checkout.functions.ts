@@ -97,7 +97,10 @@ export const createMemberCheckoutSession = createServerFn({ method: "POST" })
         stripeCustomerId = created.id;
       }
       if (stripeCustomerId && member?.id) {
-        await supabase.from("app_members").update({ stripe_customer_id: stripeCustomerId }).eq("id", member.id);
+        // Use admin client: stripe_customer_id is not in the member-allowed
+        // UPDATE column grant (members must not be able to rewrite billing IDs).
+        const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+        await supabaseAdmin.from("app_members").update({ stripe_customer_id: stripeCustomerId }).eq("id", member.id);
       }
     }
 
