@@ -1710,7 +1710,7 @@ function ExerciseBlock({ row, dayId, dayTitle, clientId, blockId, existingResult
         <div className="min-w-0 flex-1 font-bold leading-snug break-words text-sm sm:text-base">{name}</div>
         {!readonly && onUnitChange && (
           <div className="shrink-0">
-            <UnitToggle unit={unit} onChange={onUnitChange} compact />
+            <UnitToggle unit={activeUnit} onChange={handleUnitToggle} compact />
           </div>
         )}
       </div>
