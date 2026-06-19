@@ -1,9 +1,9 @@
 // ============================================================================
 // Phase 6 — Pending Signup cleanup
 //
-// Deletes expired jf_pending_signups that have no completed checkout. Idempotent
-// and safe to call hourly via pg_cron. Authenticates via the project's Supabase
-// publishable apikey header. Never logs password_hash or any other signup secret.
+// Deletes expired jf_pending_signups that have no completed checkout, and
+// removes the auth user we created up-front when no app_members row was ever
+// finalized for them. Idempotent and safe to call hourly via pg_cron.
 // ============================================================================
 import { createFileRoute } from "@tanstack/react-router";
 
@@ -18,7 +18,7 @@ export const Route = createFileRoute("/api/public/hooks/cleanup-pending-signups"
         const cutoff = new Date().toISOString();
         const { data: expired, error: selErr } = await supabaseAdmin
           .from("jf_pending_signups")
-          .select("id, email, expires_at")
+          .select("id, email, expires_at, user_id")
           .lt("expires_at", cutoff)
           .limit(500);
         if (selErr) {
@@ -35,10 +35,12 @@ export const Route = createFileRoute("/api/public/hooks/cleanup-pending-signups"
         const finalized = new Set((existingMembers ?? []).map((m: any) => (m.email ?? "").toLowerCase()));
 
         const removeIds: string[] = [];
+        const orphanUserIds: string[] = [];
         let preserved = 0;
         for (const row of expired) {
           if (finalized.has((row.email ?? "").toLowerCase())) { preserved += 1; continue; }
           removeIds.push(row.id);
+          if (row.user_id) orphanUserIds.push(row.user_id);
         }
 
         let removed = 0;
@@ -54,10 +56,25 @@ export const Route = createFileRoute("/api/public/hooks/cleanup-pending-signups"
           removed = count ?? removeIds.length;
         }
 
+        // Clean up orphan auth users (created at checkout-start, never finalized).
+        let removedAuthUsers = 0;
+        for (const uid of orphanUserIds) {
+          try {
+            const { data: stillMember } = await supabaseAdmin
+              .from("app_members").select("id").eq("user_id", uid).maybeSingle();
+            if (stillMember) continue;
+            const { error: delAuthErr } = await (supabaseAdmin as any).auth.admin.deleteUser(uid);
+            if (!delAuthErr) removedAuthUsers += 1;
+          } catch (e) {
+            console.error("[cleanup-pending-signups] auth deleteUser failed", e);
+          }
+        }
+
         return Response.json({
           ok: true,
           checked: expired.length,
           removed,
+          removed_auth_users: removedAuthUsers,
           preserved_finalized: preserved,
           ran_at: new Date().toISOString(),
         });
