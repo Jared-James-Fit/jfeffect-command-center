@@ -17,6 +17,7 @@ import { SetupChecklist } from "@/components/member/setup-checklist-card";
 import { ProgressSummaryCard } from "@/components/progress/progress-summary-card";
 import { HomeWaterCard } from "@/components/home/home-water-card";
 import { HomeBodyweightCard } from "@/components/home/home-bodyweight-card";
+import { MemberTodayCard } from "@/components/member/member-today-card";
 
 export const Route = createFileRoute("/_authenticated/m/")({
   component: MemberHome,
@@ -89,21 +90,24 @@ function MemberHome() {
       )}
       <SetupChecklist activeEnrollment={activeEnrollment} />
       {activeEnrollment ? (
-        <Card className="p-6">
-          <div className="flex items-center justify-between gap-4">
-            <div>
-              <div className="text-xs uppercase tracking-wider text-muted-foreground">Current plan</div>
-              <div className="mt-1 text-lg font-bold">{activeEnrollment.member_plans?.name}</div>
-              <div className="mt-0.5 text-sm text-muted-foreground">
-                Week {activeEnrollment.current_week} · {activeEnrollment.workouts_completed} of {activeEnrollment.workouts_total} workouts
+        <>
+          <MemberTodayCard enrollment={activeEnrollment} />
+          <Card className="p-6">
+            <div className="flex items-center justify-between gap-4">
+              <div>
+                <div className="text-xs uppercase tracking-wider text-muted-foreground">Current plan</div>
+                <div className="mt-1 text-lg font-bold">{activeEnrollment.member_plans?.name}</div>
+                <div className="mt-0.5 text-sm text-muted-foreground">
+                  Week {activeEnrollment.current_week} · {activeEnrollment.workouts_completed} of {activeEnrollment.workouts_total} workouts
+                </div>
               </div>
+              <Link to="/m/my-plans/$enrollmentId" params={{ enrollmentId: activeEnrollment.id }}>
+                <Button><PlayCircle className="mr-2 h-4 w-4" />Continue</Button>
+              </Link>
             </div>
-            <Link to="/m/my-plans/$enrollmentId" params={{ enrollmentId: activeEnrollment.id }}>
-              <Button><PlayCircle className="mr-2 h-4 w-4" />Continue</Button>
-            </Link>
-          </div>
-          <Progress value={progress} className="mt-4" />
-        </Card>
+            <Progress value={progress} className="mt-4" />
+          </Card>
+        </>
       ) : (
         <Card className="p-6">
           <div className="text-sm text-muted-foreground">You don't have an active plan yet.</div>
