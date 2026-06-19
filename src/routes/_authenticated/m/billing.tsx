@@ -105,7 +105,7 @@ function BillingPage() {
         </Card>
       )}
 
-      <Card className="p-5 space-y-3">
+      <Card id="billing-status-card" className="p-5 space-y-3 scroll-mt-20">
         {showCrossAccountLock && (
           <div className="rounded border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-200 flex gap-2">
             <ShieldAlert className="h-4 w-4 mt-0.5 shrink-0" />
