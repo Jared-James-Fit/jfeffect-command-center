@@ -469,7 +469,10 @@ async function getMember(ctx: any) {
 
 export const getEnrollmentSchedule = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((i: unknown) => z.object({ enrollmentId: z.string().uuid() }).parse(i))
+  .inputValidator((i: unknown) => z.object({
+    enrollmentId: z.string().uuid(),
+    timezone: z.string().max(64).optional(),
+  }).parse(i))
   .handler(async ({ data, context }) => {
     const { supabase, member } = await getMember(context);
     const { data: enr } = await supabase
@@ -494,7 +497,10 @@ export const getEnrollmentSchedule = createServerFn({ method: "GET" })
         const ov = overrideMap.get(key);
         schedule.push({
           week: w.week_index, day: d.day_index,
-          date: ov ?? defaultScheduledDate(typeof startISO === "string" ? startISO : new Date(startISO).toISOString(), w.week_index, d.day_index, dpw),
+          date: ov ?? defaultScheduledDate(
+            typeof startISO === "string" ? startISO : new Date(startISO).toISOString(),
+            w.week_index, d.day_index, dpw, data.timezone,
+          ),
           isOverride: !!ov,
         });
       }
