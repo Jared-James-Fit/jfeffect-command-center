@@ -318,7 +318,7 @@ function MediaThumb({ m }: { m: ProgressMedia }) {
       </div>
     );
   }
-  return <img loading="lazy" src={url} alt={m.angle} loading="lazy" className="h-full w-full object-cover" />;
+  return <img src={url} alt={m.angle} loading="lazy" className="h-full w-full object-cover" />;
 }
 
 // ============== Photo submission dialog ==============

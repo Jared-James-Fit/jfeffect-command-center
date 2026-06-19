@@ -17,7 +17,7 @@ export function ProofWall({
       {i.length > 0 && (
         <div className="mb-6 grid grid-cols-2 gap-2 md:grid-cols-4">
           {i.map((x, idx) => (
-            <img loading="lazy" key={idx} src={x.url} alt={x.alt ?? ""} loading="lazy" className="aspect-square w-full rounded-lg object-cover" />
+            <img key={idx} src={x.url} alt={x.alt ?? ""} loading="lazy" className="aspect-square w-full rounded-lg object-cover" />
           ))}
         </div>
       )}

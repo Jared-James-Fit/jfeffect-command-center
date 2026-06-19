@@ -155,7 +155,7 @@ export function ChatGifsPage({ embedded = false }: { embedded?: boolean } = {}) 
         {filtered.map((g) => (
           <Card key={g.id} className="overflow-hidden">
             <div className="aspect-square bg-secondary/40">
-              <img loading="lazy" src={g.thumb_url || g.media_url} alt={g.title}
+              <img src={g.thumb_url || g.media_url} alt={g.title}
                 className="h-full w-full object-cover" loading="lazy" />
             </div>
             <div className="space-y-1 p-2">

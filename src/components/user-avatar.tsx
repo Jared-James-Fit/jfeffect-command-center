@@ -158,7 +158,7 @@ export function UserAvatar({
 
         {/* Loaded image fades in on top */}
         {url && !failed && (
-          <img loading="lazy"
+          <img
             src={url}
             alt={name ?? ""}
             loading={size >= 48 ? "eager" : "lazy"}

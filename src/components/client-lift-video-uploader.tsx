@@ -626,7 +626,7 @@ export function ClientLiftVideoUploader({ clientId, clientName, userId, onSaved 
                       aria-label={`Select clip ${idx + 1}`}
                     >
                       {clip.kind === "file" && clip.previewUrl && clip.isImage ? (
-                        <img loading="lazy"
+                        <img
                           src={clip.previewUrl}
                           alt={clip.file?.name || `Clip ${idx + 1}`}
                           className="h-full w-full object-cover"
@@ -638,7 +638,7 @@ export function ClientLiftVideoUploader({ clientId, clientName, userId, onSaved 
                           }}
                         />
                       ) : clip.kind === "file" && clip.thumbnailUrl ? (
-                        <img loading="lazy"
+                        <img
                           src={clip.thumbnailUrl}
                           alt={clip.file?.name || `Clip ${idx + 1}`}
                           className="h-full w-full object-cover"

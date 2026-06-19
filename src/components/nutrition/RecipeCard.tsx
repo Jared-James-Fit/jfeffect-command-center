@@ -31,7 +31,7 @@ export function RecipeCard({
       <Card className="group relative flex h-full flex-col gap-3 overflow-hidden p-4 transition-all hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-md">
         {recipe.image_url ? (
           <div className="relative -mx-4 -mt-4 mb-1 aspect-[16/9] overflow-hidden bg-secondary">
-            <img loading="lazy"
+            <img
               src={recipe.image_url}
               alt={recipe.title}
               loading="lazy"

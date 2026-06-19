@@ -39,7 +39,7 @@ export function GifThumb({
   return (
     <div className={cn("relative overflow-hidden bg-gradient-to-br from-secondary/60 to-secondary/30", className)}>
       {showImg && (
-        <img loading="lazy"
+        <img
           src={src!}
           alt={alt ?? title ?? ""}
           loading="lazy"

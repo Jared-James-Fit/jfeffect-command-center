@@ -146,7 +146,7 @@ function ImageAttachment({ att }: { att: MessageAttachment }) {
   }
   return (
     <a href={src} target="_blank" rel="noreferrer" className="block max-w-[280px]">
-      <img loading="lazy"
+      <img
         src={src}
         alt={att.name ?? ""}
         className={cn(
