@@ -56,75 +56,62 @@ jobs:
           rm -rf android
           npx cap add android
           echo "✅ Android platform added"
+          ls android/
 
       # ── 7. Create assets directory and capacitor config ──────────────────────
-      # cap sync requires android/app/src/main/assets/ to exist
       - name: Create Android assets directory and capacitor config
         run: |
           mkdir -p android/app/src/main/assets
-          # Write capacitor.config.json for the Android project
           cat > android/app/src/main/assets/capacitor.config.json << 'JSON'
-          {
-            "appId": "com.jfeffect.app",
-            "appName": "JF Effect",
-            "webDir": "dist",
-            "server": {
-              "url": "https://jfeffect.com",
-              "cleartext": false
-            },
-            "plugins": {
-              "Keyboard": {
-                "resize": "native",
-                "resizeOnFullScreen": true
-              },
-              "StatusBar": {
-                "style": "DARK",
-                "backgroundColor": "#0B0B0F"
-              },
-              "SplashScreen": {
-                "launchShowDuration": 2000,
-                "backgroundColor": "#0B0B0F",
-                "showSpinner": false
-              }
-            }
-          }
-          JSON
-          echo "✅ Assets directory and capacitor.config.json created"
-          ls -la android/app/src/main/assets/
+{
+  "appId": "com.jfeffect.app",
+  "appName": "JF Effect",
+  "webDir": "dist",
+  "server": {
+    "url": "https://jfeffect.com",
+    "cleartext": false
+  },
+  "plugins": {
+    "Keyboard": {
+      "resize": "native",
+      "resizeOnFullScreen": true
+    },
+    "StatusBar": {
+      "style": "DARK",
+      "backgroundColor": "#0B0B0F"
+    },
+    "SplashScreen": {
+      "launchShowDuration": 2000,
+      "backgroundColor": "#0B0B0F",
+      "showSpinner": false
+    }
+  }
+}
+JSON
+          echo "✅ capacitor.config.json created"
 
       # ── 8. Run cap sync ──────────────────────────────────────────────────────
       - name: Run cap sync
         run: |
-          npx cap sync android 2>&1 | tail -20
-          echo "✅ cap sync complete"
-          ls android/capacitor.settings.gradle 2>/dev/null && echo "✅ capacitor.settings.gradle exists" || echo "WARNING: capacitor.settings.gradle missing"
+          npx cap sync android 2>&1 | tail -10
+          ls android/capacitor.settings.gradle 2>/dev/null && echo "✅ capacitor.settings.gradle exists" || echo "WARNING: missing"
 
-      # ── 9. Patch Android project for Play Store compliance ───────────────────
-      - name: Patch Android project for Play Store compliance
+      # ── 9. Inspect generated build.gradle ────────────────────────────────────
+      - name: Inspect generated build.gradle
         run: |
-          GRADLE="android/app/build.gradle"
-          if [ -f "$GRADLE" ]; then
-            sed -i 's/versionCode [0-9]*/versionCode 1/' "$GRADLE"
-            sed -i 's/versionName "[^"]*"/versionName "1.0.0"/' "$GRADLE"
-            sed -i 's/targetSdkVersion [0-9]*/targetSdkVersion 35/' "$GRADLE"
-            sed -i 's/compileSdkVersion [0-9]*/compileSdkVersion 35/' "$GRADLE"
-            echo "✅ Patched build.gradle"
-            grep -E "versionCode|versionName|targetSdk|compileSdk" "$GRADLE" | head -6
-          fi
-          MANIFEST="android/app/src/main/AndroidManifest.xml"
-          if [ -f "$MANIFEST" ]; then
-            sed -i 's/android:usesCleartextTraffic="true"/android:usesCleartextTraffic="false"/' "$MANIFEST"
-            echo "✅ Cleartext HTTP disabled"
-          fi
+          echo "=== android/app/build.gradle ==="
+          cat android/app/build.gradle
+          echo "=== android/build.gradle ==="
+          cat android/build.gradle 2>/dev/null || echo "no root build.gradle"
 
       # ── 10. Restore signing keystore ─────────────────────────────────────────
       - name: Restore Android signing keystore
         run: |
           echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 --decode > android/app/jfeffect-upload.jks
           echo "Keystore size: $(wc -c < android/app/jfeffect-upload.jks) bytes"
-          echo "✅ Keystore restored"
 
       # ── 11. Build signed release AAB ─────────────────────────────────────────
+      # Pass version code/name as Gradle properties to avoid patching build.gradle
       - name: Build signed release AAB
         working-directory: android
         env:
@@ -134,12 +121,14 @@ jobs:
         run: |
           chmod +x gradlew
           ./gradlew bundleRelease \
+            -PversionCode=1 \
+            -PversionName=1.0.0 \
             -Pandroid.injected.signing.store.file="$(pwd)/app/jfeffect-upload.jks" \
             -Pandroid.injected.signing.store.password="$ANDROID_KEYSTORE_PASSWORD" \
             -Pandroid.injected.signing.key.alias="$ANDROID_KEY_ALIAS" \
             -Pandroid.injected.signing.key.password="$ANDROID_KEY_PASSWORD" \
             --no-daemon \
-            2>&1 | tail -40
+            2>&1 | tail -50
 
       # ── 12. Verify and upload AAB ────────────────────────────────────────────
       - name: Verify AAB exists
@@ -151,7 +140,7 @@ jobs:
             echo "✅ AAB found: $(ls -lh $AAB_PATH)"
           else
             echo "❌ AAB not found"
-            find android/app/build/outputs -type f 2>/dev/null | head -20 || echo "No build outputs"
+            find android/app/build -type f 2>/dev/null | head -20 || echo "No build outputs"
             exit 1
           fi
 
