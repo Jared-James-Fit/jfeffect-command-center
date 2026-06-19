@@ -542,10 +542,10 @@ export function IntakeAnswersBigButton({
             <ClipboardList className="h-6 w-6" />
           </span>
           <span className="flex min-w-0 flex-1 flex-col">
-            <span className="text-base font-semibold leading-tight">
+            <span className="truncate text-base font-semibold leading-tight">
               {label}
             </span>
-            <span className="text-xs font-normal text-muted-foreground">
+            <span className="truncate text-xs font-normal text-muted-foreground">
               {subtitle}
             </span>
           </span>
