@@ -1,4 +1,4 @@
-import { Link } from "@tanstack/react-router";
+import { Link, useLocation } from "@tanstack/react-router";
 import { AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
@@ -18,6 +18,8 @@ export function SubscriptionRestrictedBanner({
 }) {
   const s = subscriptionStatus || status || null;
   if (!s) return null;
+  const location = useLocation();
+  const onBilling = location.pathname.startsWith("/m/billing");
   const reason =
     s === "Past Due" ? "Your subscription payment is past due."
     : s === "Payment Failed" ? "Your last payment didn't go through."
@@ -41,9 +43,23 @@ export function SubscriptionRestrictedBanner({
         <div className="font-semibold">{reason}</div>
         <div className="text-xs opacity-80">{detail}</div>
       </div>
-      <Link to={"/m/billing" as any}>
-        <Button size="sm" variant="outline" className="border-amber-500/50">Manage billing</Button>
-      </Link>
+      {onBilling ? (
+        <Button
+          size="sm"
+          variant="outline"
+          className="border-amber-500/50"
+          onClick={() => {
+            const el = document.getElementById("billing-status-card");
+            if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+          }}
+        >
+          Manage billing
+        </Button>
+      ) : (
+        <Link to={"/m/billing" as any}>
+          <Button size="sm" variant="outline" className="border-amber-500/50">Manage billing</Button>
+        </Link>
+      )}
     </div>
   );
 }
