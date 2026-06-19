@@ -298,6 +298,21 @@ export async function logBodyweight(input: {
     logged_date: input.logged_date ?? new Date().toISOString().slice(0, 10),
     note: input.note ?? null,
   };
+  // Offline-first: if there is no network, drop the insert into the durable
+  // queue and return an optimistic row so the UI updates immediately. The
+  // queue replays via `bodyweight_insert` (see src/lib/offline/data-handlers).
+  const offline = typeof navigator !== "undefined" && navigator.onLine === false;
+  if (offline) {
+    const { enqueueOfflineWrite } = await import("@/lib/workout-offline-queue");
+    enqueueOfflineWrite({
+      // Stable id per (user, date) — re-saving the same day replaces.
+      id: `bw:${row.user_id}:${row.logged_date}`,
+      label: "Bodyweight entry",
+      handlerKey: "bodyweight_insert",
+      payload: row,
+    });
+    return { id: `pending-bw-${row.logged_date}`, ...row, created_at: new Date().toISOString() } as unknown as ProgressBodyweight;
+  }
   const { data, error } = await db.from("progress_bodyweight").insert(row).select().single();
   if (error) throw error;
   return data as ProgressBodyweight;
