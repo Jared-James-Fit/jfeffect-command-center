@@ -1036,13 +1036,10 @@ function WorkoutDay({
 
         {statusBarVisible && (
           <WorkoutStatusBar
-            title={cleanDayTitle(day.title, day.day_index)}
             exercisesDone={statusSummary.exercisesDone}
             exercisesTotal={statusSummary.exercisesTotal}
             setsDone={statusSummary.setsDone}
             setsTotal={statusSummary.setsTotal}
-            startedAt={completion?.started_at ?? completion?.in_progress_at ?? null}
-            completedAt={completion?.completed_at ?? null}
           />
         )}
 
