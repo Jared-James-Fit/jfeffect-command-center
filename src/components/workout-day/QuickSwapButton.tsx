@@ -26,6 +26,10 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import { applySwap, getSwapImpact } from "@/lib/quick-swap.functions";
+import {
+  applyMemberSwap,
+  getMemberSwapImpact,
+} from "@/lib/member-swap.functions";
 
 type ExerciseLite = {
   id: string;
@@ -269,6 +273,7 @@ export function QuickSwapButton({
   category,
   equipment,
   difficulty,
+  swapContext,
 }: {
   rowId: string;
   exerciseId: string | null;
@@ -277,6 +282,22 @@ export function QuickSwapButton({
   category?: string | null;
   equipment?: string | null;
   difficulty?: string | null;
+  /**
+   * Where to persist the swap. Defaults to the coaching-client path
+   * (writes to `pl_exercise_rows`). When the calling row belongs to a
+   * member workout, pass `{ kind: "member", enrollmentId, weekIndex,
+   * dayIndex, exerciseIndex }` so the swap is stored in
+   * `member_exercise_swaps` and survives refresh.
+   */
+  swapContext?:
+    | { kind: "client" }
+    | {
+        kind: "member";
+        enrollmentId: string;
+        weekIndex: number;
+        dayIndex: number;
+        exerciseIndex: number;
+      };
 }) {
   const [open, setOpen] = useState(false);
   const [mode, setMode] = useState<ViewMode>("suggestions");
@@ -287,8 +308,11 @@ export function QuickSwapButton({
   const [chip, setChip] = useState<EquipmentChip>("Best Match");
   const debouncedSearch = useDebounced(search.trim(), 300);
   const qc = useQueryClient();
-  const getImpactFn = useServerFn(getSwapImpact);
-  const applySwapFn = useServerFn(applySwap);
+  const isMember = swapContext?.kind === "member";
+  const getImpactFnClient = useServerFn(getSwapImpact);
+  const applySwapFnClient = useServerFn(applySwap);
+  const getImpactFnMember = useServerFn(getMemberSwapImpact);
+  const applySwapFnMember = useServerFn(applyMemberSwap);
 
   // Reset state every time the sheet opens.
   useEffect(() => {
