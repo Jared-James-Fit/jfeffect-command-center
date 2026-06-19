@@ -227,7 +227,7 @@ function statusBadgeTone(s?: string | null) {
     case "noshow":
     case "no_show":
     case "no-show": return "bg-rose-500/10 text-rose-300 border-rose-500/30";
-    case "missed": return "bg-amber-500/10 text-amber-300 border-amber-500/30";
+    case "missed": return "bg-rose-500/10 text-rose-300 border-rose-500/30";
     default: return "bg-primary/10 text-primary border-primary/30";
   }
 }
