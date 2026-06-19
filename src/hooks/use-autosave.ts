@@ -133,7 +133,8 @@ export function useAutosave<T>({
     pendingValue.current = value;
     if (!enabled) return;
     if (!lastSavedSet.current) {
-      // Treat the very first value as the synced baseline; don't fire on mount.
+      // Baseline wasn't established at mount (unusual). Treat the current
+      // value as the synced baseline so we don't fire on first enable.
       lastSaved.current = value;
       lastSavedSet.current = true;
       return;
@@ -144,6 +145,19 @@ export function useAutosave<T>({
     schedule();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [value, enabled]);
+
+  // Establish the synced baseline at mount, regardless of `enabled`. This
+  // ensures bulk fills (e.g. "Copy Previous", "Quick Inputs") that flip
+  // `enabled` from false→true with populated values are detected as a
+  // change vs. the empty mount value and trigger a save — instead of being
+  // mistaken for the initial baseline.
+  useEffect(() => {
+    if (!lastSavedSet.current) {
+      lastSaved.current = pendingValue.current;
+      lastSavedSet.current = true;
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Retry when back online
   useEffect(() => {
