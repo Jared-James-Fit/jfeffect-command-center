@@ -175,7 +175,7 @@ export const clientNav: NavItem[] = [
   { to: "/portal/workouts", label: "Workouts", icon: Activity },
   { to: "/portal/progress", label: "Progress", icon: Camera, keywords: ["progress","photos","videos","bodyweight","measurements","check-in","compare"] },
   { to: "/portal/lift-videos", label: "Lift Review Upload", icon: Video },
-  { to: "/portal/nutrition-targets", label: "Nutrition", icon: Apple, keywords: ["nutrition","macros","targets","recipes","meals"] },
+  { to: "/portal/recipes", label: "Nutrition", icon: Apple, keywords: ["nutrition","macros","targets","recipes","meals"] },
   { to: "/portal/check-ins", label: "Check-Ins & Forms", icon: ClipboardCheck },
   { to: "/portal/announcements", label: "Announcements", icon: Megaphone },
   { to: "/portal/exercises", label: "Exercises", icon: Dumbbell },
@@ -196,7 +196,7 @@ export const clientBottomNav: NavItem[] = [
   { to: "/portal", label: "Home", icon: LayoutDashboard },
   { to: "/portal/workouts", label: "Workouts", icon: Activity },
   { to: "/portal/messages", label: "Messages", icon: MessageCircle },
-  { to: "/portal/nutrition-targets", label: "Nutrition", icon: Apple },
+  { to: "/portal/recipes", label: "Nutrition", icon: Apple },
 ];
 
 // App Member portal navigation
