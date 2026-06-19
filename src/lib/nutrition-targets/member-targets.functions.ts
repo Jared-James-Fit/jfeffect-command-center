@@ -57,16 +57,56 @@ export const getActiveMemberTargets = createServerFn({ method: "GET" })
   .handler(async ({ context }) => {
     const { supabase, userId } = context;
     const member = await loadMember(supabase, userId);
-    if (!member?.id) return null;
-    const { data } = await supabase
-      .from("member_nutrition_targets")
-      .select("*")
-      .eq("member_id", member.id)
-      .eq("active", true)
+    if (member?.id) {
+      const { data } = await supabase
+        .from("member_nutrition_targets")
+        .select("*")
+        .eq("member_id", member.id)
+        .eq("active", true)
+        .maybeSingle();
+      if (data && !(data as any).pending_review) return data;
+    }
+    // Fallback: coach/admin-set targets live in `nutrition_targets` (+ `nutrition_target_days`)
+    // keyed by the matching `clients.user_id`. Surface those so the member's
+    // nutrition page reflects what the coach assigned.
+    const { data: client } = await supabase
+      .from("clients")
+      .select("id")
+      .eq("user_id", userId)
       .maybeSingle();
-    // Hide pending (unapproved) targets from the client view.
-    if (data && (data as any).pending_review) return null;
-    return data ?? null;
+    if (!client?.id) return null;
+    const { data: target } = await supabase
+      .from("nutrition_targets")
+      .select("id, goal, water, visible_to_client, status, start_date, nutrition_target_days(day_label, calories, protein, carbs, fats, sort_order)")
+      .eq("client_id", client.id)
+      .eq("visible_to_client", true)
+      .neq("status", "Archived")
+      .order("start_date", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (!target) return null;
+    const days = ((target as any).nutrition_target_days ?? [])
+      .slice()
+      .sort((a: any, b: any) => (a.sort_order ?? 0) - (b.sort_order ?? 0));
+    const day = days[0];
+    if (!day) return null;
+    // Parse "3.5L" / "3500 ml" / "3.5" → ml
+    let water_ml: number | null = null;
+    if (target.water) {
+      const s = String(target.water).toLowerCase().trim();
+      const n = parseFloat(s);
+      if (!isNaN(n)) water_ml = /ml/.test(s) ? Math.round(n) : Math.round(n * 1000);
+    }
+    return {
+      source: "coach" as const,
+      goal: target.goal ?? null,
+      calories: day.calories ?? 0,
+      protein_g: day.protein ?? 0,
+      carbs_g: day.carbs ?? 0,
+      fat_g: day.fats ?? 0,
+      water_ml,
+      pending_review: false,
+    };
   });
 
 /** Calculate + save active targets for the current member. */
