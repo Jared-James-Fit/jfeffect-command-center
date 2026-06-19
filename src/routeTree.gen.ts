@@ -17,6 +17,7 @@ import { Route as SetupRouteImport } from './routes/setup'
 import { Route as ResetPasswordRouteImport } from './routes/reset-password'
 import { Route as RecoverRouteImport } from './routes/recover'
 import { Route as PrivacyRouteImport } from './routes/privacy'
+import { Route as PersonalTrainerSelkirkRouteImport } from './routes/personal-trainer-selkirk'
 import { Route as MembershipRouteImport } from './routes/membership'
 import { Route as MemberSetupRouteImport } from './routes/member-setup'
 import { Route as JoinRouteImport } from './routes/join'
@@ -305,6 +306,11 @@ const RecoverRoute = RecoverRouteImport.update({
 const PrivacyRoute = PrivacyRouteImport.update({
   id: '/privacy',
   path: '/privacy',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PersonalTrainerSelkirkRoute = PersonalTrainerSelkirkRouteImport.update({
+  id: '/personal-trainer-selkirk',
+  path: '/personal-trainer-selkirk',
   getParentRoute: () => rootRouteImport,
 } as any)
 const MembershipRoute = MembershipRouteImport.update({
@@ -1761,6 +1767,7 @@ export interface FileRoutesByFullPath {
   '/join': typeof JoinRoute
   '/member-setup': typeof MemberSetupRoute
   '/membership': typeof MembershipRoute
+  '/personal-trainer-selkirk': typeof PersonalTrainerSelkirkRoute
   '/privacy': typeof PrivacyRoute
   '/recover': typeof RecoverRoute
   '/reset-password': typeof ResetPasswordRoute
@@ -2019,6 +2026,7 @@ export interface FileRoutesByTo {
   '/join': typeof JoinRoute
   '/member-setup': typeof MemberSetupRoute
   '/membership': typeof MembershipRoute
+  '/personal-trainer-selkirk': typeof PersonalTrainerSelkirkRoute
   '/privacy': typeof PrivacyRoute
   '/recover': typeof RecoverRoute
   '/reset-password': typeof ResetPasswordRoute
@@ -2274,6 +2282,7 @@ export interface FileRoutesById {
   '/join': typeof JoinRoute
   '/member-setup': typeof MemberSetupRoute
   '/membership': typeof MembershipRoute
+  '/personal-trainer-selkirk': typeof PersonalTrainerSelkirkRoute
   '/privacy': typeof PrivacyRoute
   '/recover': typeof RecoverRoute
   '/reset-password': typeof ResetPasswordRoute
@@ -2534,6 +2543,7 @@ export interface FileRouteTypes {
     | '/join'
     | '/member-setup'
     | '/membership'
+    | '/personal-trainer-selkirk'
     | '/privacy'
     | '/recover'
     | '/reset-password'
@@ -2792,6 +2802,7 @@ export interface FileRouteTypes {
     | '/join'
     | '/member-setup'
     | '/membership'
+    | '/personal-trainer-selkirk'
     | '/privacy'
     | '/recover'
     | '/reset-password'
@@ -3046,6 +3057,7 @@ export interface FileRouteTypes {
     | '/join'
     | '/member-setup'
     | '/membership'
+    | '/personal-trainer-selkirk'
     | '/privacy'
     | '/recover'
     | '/reset-password'
@@ -3306,6 +3318,7 @@ export interface RootRouteChildren {
   JoinRoute: typeof JoinRoute
   MemberSetupRoute: typeof MemberSetupRoute
   MembershipRoute: typeof MembershipRoute
+  PersonalTrainerSelkirkRoute: typeof PersonalTrainerSelkirkRoute
   PrivacyRoute: typeof PrivacyRoute
   RecoverRoute: typeof RecoverRoute
   ResetPasswordRoute: typeof ResetPasswordRoute
@@ -3403,6 +3416,13 @@ declare module '@tanstack/react-router' {
       path: '/privacy'
       fullPath: '/privacy'
       preLoaderRoute: typeof PrivacyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/personal-trainer-selkirk': {
+      id: '/personal-trainer-selkirk'
+      path: '/personal-trainer-selkirk'
+      fullPath: '/personal-trainer-selkirk'
+      preLoaderRoute: typeof PersonalTrainerSelkirkRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/membership': {
@@ -5893,6 +5913,7 @@ const rootRouteChildren: RootRouteChildren = {
   JoinRoute: JoinRoute,
   MemberSetupRoute: MemberSetupRoute,
   MembershipRoute: MembershipRoute,
+  PersonalTrainerSelkirkRoute: PersonalTrainerSelkirkRoute,
   PrivacyRoute: PrivacyRoute,
   RecoverRoute: RecoverRoute,
   ResetPasswordRoute: ResetPasswordRoute,
@@ -5942,13 +5963,3 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
-
-import type { getRouter } from './router.tsx'
-import type { startInstance } from './start.ts'
-declare module '@tanstack/react-start' {
-  interface Register {
-    ssr: true
-    router: Awaited<ReturnType<typeof getRouter>>
-    config: Awaited<ReturnType<typeof startInstance.getOptions>>
-  }
-}
