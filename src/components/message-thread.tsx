@@ -1598,7 +1598,7 @@ export function MessageThread({
                 disabled={sending || uploading}
                 aria-busy={sending || uploading || undefined}
                 size="icon"
-                className="h-10 w-10 shrink-0 rounded-full bg-primary transition-transform active:scale-90"
+                className="h-9 w-9 shrink-0 rounded-full bg-primary transition-transform active:scale-90"
               >
                 {sending || uploading ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
@@ -1608,7 +1608,7 @@ export function MessageThread({
               </Button>
               </>
             ) : (
-              <Button type="button" variant="ghost" size="icon" className="h-10 w-10 shrink-0 rounded-full"
+              <Button type="button" variant="ghost" size="icon" className="h-9 w-9 shrink-0 rounded-full"
                 onClick={async () => {
                   try { await recorder.start(); }
                   catch (e: any) { toast.error(e?.message ?? "Mic permission needed"); }
