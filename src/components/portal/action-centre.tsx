@@ -1,5 +1,6 @@
 import { Link } from "@tanstack/react-router";
 import { CheckCircle2, ChevronRight } from "lucide-react";
+import { useEffect, useState } from "react";
 import { cn } from "@/lib/utils";
 
 export type ActionTone = "warning" | "primary" | "success";
@@ -18,16 +19,73 @@ export type ActionItem = {
 
 const toneOrder: Record<ActionTone, number> = { warning: 0, primary: 1, success: 2 };
 
+const SEEN_KEY = "jf:action-centre:seen-keys:v1";
+
+function readSeen(): Set<string> {
+  if (typeof window === "undefined") return new Set();
+  try {
+    const raw = window.localStorage.getItem(SEEN_KEY);
+    if (!raw) return new Set();
+    const arr = JSON.parse(raw);
+    return new Set(Array.isArray(arr) ? arr : []);
+  } catch {
+    return new Set();
+  }
+}
+
+function writeSeen(keys: Set<string>) {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(SEEN_KEY, JSON.stringify(Array.from(keys)));
+  } catch {
+    /* ignore */
+  }
+}
+
 export function ActionCentre({ items }: { items: ActionItem[] }) {
   const sorted = [...items].sort((a, b) => toneOrder[a.tone] - toneOrder[b.tone]);
+  const [seen, setSeen] = useState<Set<string>>(() => readSeen());
+
+  const currentKeys = sorted.map((it) => it.key);
+  const unseenCount = currentKeys.filter((k) => !seen.has(k)).length;
+
+  // Mark all currently-visible items as seen shortly after they render, so the
+  // badge clears once the user has actually had a chance to see them.
+  useEffect(() => {
+    if (currentKeys.length === 0) return;
+    const t = window.setTimeout(() => {
+      setSeen((prev) => {
+        const next = new Set(prev);
+        let changed = false;
+        for (const k of currentKeys) {
+          if (!next.has(k)) {
+            next.add(k);
+            changed = true;
+          }
+        }
+        // Prune keys for items that no longer exist so the store stays bounded.
+        const live = new Set(currentKeys);
+        for (const k of Array.from(next)) {
+          if (!live.has(k)) {
+            next.delete(k);
+            changed = true;
+          }
+        }
+        if (changed) writeSeen(next);
+        return changed ? next : prev;
+      });
+    }, 1200);
+    return () => window.clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentKeys.join("|")]);
 
   return (
     <section aria-label="Action Centre" className="space-y-2">
       <div className="flex items-center justify-between px-1">
         <h3 className="text-base font-bold">Action Centre</h3>
-        {sorted.length > 0 && (
+        {unseenCount > 0 && (
           <span className="rounded-full bg-primary/15 px-2 py-0.5 text-[10px] font-bold uppercase tracking-widest text-primary">
-            {sorted.length}
+            {unseenCount}
           </span>
         )}
       </div>
