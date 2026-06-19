@@ -33,6 +33,7 @@ import { ScheduleHistoryDrawer } from "@/components/schedule/ScheduleHistoryDraw
 import { ClientBlockView } from "@/components/client-block-view";
 import { WorkoutStatusSheet } from "@/components/workout-status-sheet";
 import { CircleDot } from "lucide-react";
+import { TrainingScheduleCard } from "@/components/training-schedule-card";
 // Lazy: this card pulls recharts (~120KB). Defer it so the main Workouts
 // view can render without waiting on the chart bundle.
 const TrainingAnalyticsPreviewCard = lazy(() =>
