@@ -458,7 +458,7 @@ function WorkoutDay({
     queryFn: async () => {
       const r = adapter
         ? await adapter.listRowsRaw(dayId)
-        : (await sb.from("pl_exercise_rows").select("*, exercises(id,name,video_url,vimeo_embed_url,secondary_vimeo_embed_url,active_video_set,thumbnail_url,cues,common_mistakes,muscle_group,category,pl_lift_group,warmup_protocol_id,is_powerlifting,warmup_notes,default_load_unit,exercise_category,is_competition_lift,competition_lift_type)").eq("day_id", dayId).order("sort_order")).data ?? [];
+        : (await sb.from("pl_exercise_rows").select("*, exercises(id,name,video_url,vimeo_embed_url,secondary_vimeo_embed_url,active_video_set,thumbnail_url,cues,common_mistakes,muscle_group,category,pl_lift_group,warmup_protocol_id,is_powerlifting,warmup_notes,default_load_unit,exercise_category,is_competition_lift,competition_lift_type,default_measurement_type,duration_seconds)").eq("day_id", dayId).order("sort_order")).data ?? [];
       writePlanCache(cacheScope, "rows", r);
       return r;
     },
