@@ -6,7 +6,7 @@ import { Dumbbell, ChevronRight, Calendar as CalendarIcon, Pencil, MessageSquare
 import { format } from "date-fns";
 import { getWorkoutStatus } from "@/lib/workout-status";
 import { durationRange } from "@/lib/pl-programs";
-import { cleanDayTitle } from "@/lib/workout-today";
+import { cleanDayTitle, dayScheduledDate } from "@/lib/workout-today";
 import { MoveWorkoutSheet } from "@/components/schedule/MoveWorkoutSheet";
 
 export function WorkoutListCard({ item, readonly = false }: { item: any; readonly?: boolean }) {
@@ -92,6 +92,7 @@ export function WorkoutListCard({ item, readonly = false }: { item: any; readonl
         dayId={item.day.id}
         open={moveOpen}
         onOpenChange={setMoveOpen}
+        currentScheduledDate={status.scheduled ?? dayScheduledDate(item)}
       />
     )}
     </div>
