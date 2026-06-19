@@ -38,7 +38,7 @@ export function QuickActionsGrid({
       ? [{ to: checkInTo, label: "Submit Check-In", icon: ClipboardCheck, badge: checkInBadge } as Tile]
       : []),
     { to: "/portal/lift-videos", label: "Upload Lift", icon: Video },
-    { to: "/m/nutrition", label: "Nutrition", icon: Apple },
+    { to: "/portal/nutrition-targets", label: "Nutrition", icon: Apple },
   ];
 
   return (
