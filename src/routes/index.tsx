@@ -1,7 +1,8 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useAuth } from "@/lib/auth";
 import { AuthSplash } from "@/components/auth-splash";
+import { useClientImpersonation } from "@/lib/client-impersonation";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -18,10 +19,26 @@ export const Route = createFileRoute("/")({
 function IndexRedirect() {
   const { user, role, loading } = useAuth();
   const navigate = useNavigate();
+  const { isImpersonating } = useClientImpersonation();
+  // Give the impersonation provider one tick to hydrate from sessionStorage
+  // before we redirect — otherwise admins in active Client POV get bounced
+  // to /admin on every cold launch / SW navigate-fallback that lands them
+  // back at "/".
+  const [hydrated, setHydrated] = useState(false);
+  useEffect(() => {
+    const t = setTimeout(() => setHydrated(true), 0);
+    return () => clearTimeout(t);
+  }, []);
 
   useEffect(() => {
-    if (loading) return;
+    if (loading || !hydrated) return;
     if (user && role) {
+      // Respect active Client POV: admins/coaches impersonating a client
+      // must land in /portal, not their own admin dashboard.
+      if (isImpersonating && (role === "admin" || role === "coach")) {
+        navigate({ to: "/portal", replace: true });
+        return;
+      }
       const dest =
         role === "client" ? "/portal"
         : role === "member" ? "/m"
@@ -31,7 +48,7 @@ function IndexRedirect() {
     } else {
       navigate({ to: "/auth", replace: true });
     }
-  }, [user, role, loading, navigate]);
+  }, [user, role, loading, navigate, isImpersonating, hydrated]);
 
   return <AuthSplash />;
 }
