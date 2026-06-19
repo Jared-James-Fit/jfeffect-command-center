@@ -46,50 +46,60 @@ jobs:
             "platform-tools" \
             2>&1 | tail -5
 
-      # ── 5. Add Capacitor Android platform ────────────────────────────────────
+      # ── 5. Install Capacitor CLI ─────────────────────────────────────────────
       - name: Install Capacitor CLI globally
         run: npm install -g @capacitor/cli
 
+      # ── 6. Add Android platform and run cap sync ─────────────────────────────
+      # The app uses server.url (production website) so no web build is needed.
+      # cap sync copies capacitor.config.ts into the Android project and generates
+      # the required capacitor.settings.gradle file.
       - name: Add Android platform
         run: |
-          # Remove any stale android folder
           rm -rf android
           npx cap add android
           echo "✅ Android platform added"
+          ls android/
 
-      # ── 6. Patch AndroidManifest and build.gradle ────────────────────────────
+      - name: Run cap sync (generates capacitor.settings.gradle)
+        run: |
+          npx cap sync android --no-build
+          echo "✅ cap sync complete"
+          ls android/capacitor.settings.gradle 2>/dev/null && echo "capacitor.settings.gradle exists" || echo "WARNING: capacitor.settings.gradle missing"
+
+      # ── 7. Patch Android project for Play Store compliance ───────────────────
       - name: Patch Android project for Play Store compliance
         run: |
-          # Ensure cleartext HTTP is disabled (already set in capacitor.config.ts)
-          MANIFEST="android/app/src/main/AndroidManifest.xml"
-          if grep -q "usesCleartextTraffic=\"true\"" "$MANIFEST" 2>/dev/null; then
-            sed -i 's/android:usesCleartextTraffic="true"/android:usesCleartextTraffic="false"/' "$MANIFEST"
-            echo "✅ Disabled cleartext HTTP in manifest"
-          fi
-
-          # Set version name and version code in build.gradle
           GRADLE="android/app/build.gradle"
           if [ -f "$GRADLE" ]; then
+            # Set version code and name
             sed -i 's/versionCode [0-9]*/versionCode 1/' "$GRADLE"
             sed -i 's/versionName "[^"]*"/versionName "1.0.0"/' "$GRADLE"
-            echo "✅ Set versionCode=1, versionName=1.0.0 in build.gradle"
-          fi
-
-          # Set target SDK to 35
-          if [ -f "$GRADLE" ]; then
+            # Set target SDK to 35
             sed -i 's/targetSdkVersion [0-9]*/targetSdkVersion 35/' "$GRADLE"
             sed -i 's/compileSdkVersion [0-9]*/compileSdkVersion 35/' "$GRADLE"
-            echo "✅ Set targetSdkVersion=35 in build.gradle"
+            echo "✅ Patched build.gradle: versionCode=1, versionName=1.0.0, targetSdk=35"
+            grep -E "versionCode|versionName|targetSdk|compileSdk" "$GRADLE" | head -6
+          else
+            echo "WARNING: build.gradle not found at $GRADLE"
+            find android -name "build.gradle" | head -5
           fi
 
-      # ── 7. Restore signing keystore ──────────────────────────────────────────
+          # Ensure cleartext HTTP is disabled
+          MANIFEST="android/app/src/main/AndroidManifest.xml"
+          if [ -f "$MANIFEST" ]; then
+            sed -i 's/android:usesCleartextTraffic="true"/android:usesCleartextTraffic="false"/' "$MANIFEST"
+            echo "✅ Cleartext HTTP disabled in manifest"
+          fi
+
+      # ── 8. Restore signing keystore ──────────────────────────────────────────
       - name: Restore Android signing keystore
         run: |
           echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 --decode > android/app/jfeffect-upload.jks
           echo "Keystore size: $(wc -c < android/app/jfeffect-upload.jks) bytes"
           echo "✅ Keystore restored"
 
-      # ── 8. Build signed release AAB ──────────────────────────────────────────
+      # ── 9. Build signed release AAB ──────────────────────────────────────────
       - name: Build signed release AAB
         working-directory: android
         env:
@@ -104,22 +114,25 @@ jobs:
             -Pandroid.injected.signing.key.alias="$ANDROID_KEY_ALIAS" \
             -Pandroid.injected.signing.key.password="$ANDROID_KEY_PASSWORD" \
             --no-daemon \
-            2>&1 | tail -30
-          echo "✅ Release AAB built"
+            2>&1 | tail -40
+          echo "Build step complete"
 
-      # ── 9. Verify AAB ────────────────────────────────────────────────────────
+      # ── 10. Verify and locate AAB ────────────────────────────────────────────
       - name: Verify AAB exists
         run: |
+          echo "Searching for AAB files..."
+          find android -name "*.aab" 2>/dev/null
           AAB_PATH="android/app/build/outputs/bundle/release/app-release.aab"
           if [ -f "$AAB_PATH" ]; then
             echo "✅ AAB found: $(ls -lh $AAB_PATH)"
           else
             echo "❌ AAB not found at expected path"
-            find android/app/build/outputs -name "*.aab" 2>/dev/null || echo "No AAB files found"
+            echo "Build outputs:"
+            find android/app/build/outputs -type f 2>/dev/null | head -20 || echo "No build outputs found"
             exit 1
           fi
 
-      # ── 10. Upload AAB as artifact ───────────────────────────────────────────
+      # ── 11. Upload signed AAB as artifact ────────────────────────────────────
       - name: Upload signed AAB artifact
         uses: actions/upload-artifact@v4
         with:
@@ -127,7 +140,7 @@ jobs:
           path: android/app/build/outputs/bundle/release/app-release.aab
           retention-days: 30
 
-      # ── 11. Upload keystore backup (encrypted) ───────────────────────────────
+      # ── 12. Upload keystore backup ───────────────────────────────────────────
       - name: Upload keystore backup artifact
         uses: actions/upload-artifact@v4
         if: always()
