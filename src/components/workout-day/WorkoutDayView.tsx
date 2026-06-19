@@ -2457,7 +2457,9 @@ function SetRow({
     )}>
     <div className={cn(
       "grid items-center gap-1.5 px-2.5 py-1.5",
-      focusMode ? "grid-cols-[36px_1.1fr_1.1fr_1fr_52px]" : "grid-cols-[28px_1.1fr_1.1fr_1fr_44px]",
+      hideWeight
+        ? (focusMode ? "grid-cols-[36px_1.6fr_1fr_52px]" : "grid-cols-[28px_1.6fr_1fr_44px]")
+        : (focusMode ? "grid-cols-[36px_1.1fr_1.1fr_1fr_52px]" : "grid-cols-[28px_1.1fr_1.1fr_1fr_44px]"),
     )}>
       <span className={cn("font-mono text-muted-foreground", focusMode ? "text-sm" : "text-xs")}>{setIndex}</span>
       {isTime ? (
@@ -2512,6 +2514,7 @@ function SetRow({
         disabled={readonly}
       />
       )}
+      {!hideWeight && (
       <Input
         className={cn(focusMode ? "h-9 text-base px-2" : "h-8 text-sm px-2", "bg-white text-black placeholder:text-gray-500")}
         inputMode="decimal"
@@ -2526,6 +2529,7 @@ function SetRow({
         readOnly={readonly}
         disabled={readonly}
       />
+      )}
       <Input
         className={cn(focusMode ? "h-9 text-base px-2" : "h-8 text-sm px-2", "bg-white text-black placeholder:text-gray-500")}
         inputMode="decimal"
