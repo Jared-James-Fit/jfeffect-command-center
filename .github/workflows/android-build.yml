@@ -62,32 +62,23 @@ jobs:
       - name: Create Android assets directory and capacitor config
         run: |
           mkdir -p android/app/src/main/assets
-          cat > android/app/src/main/assets/capacitor.config.json << 'JSON'
-{
-  "appId": "com.jfeffect.app",
-  "appName": "JF Effect",
-  "webDir": "dist",
-  "server": {
-    "url": "https://jfeffect.com",
-    "cleartext": false
-  },
-  "plugins": {
-    "Keyboard": {
-      "resize": "native",
-      "resizeOnFullScreen": true
-    },
-    "StatusBar": {
-      "style": "DARK",
-      "backgroundColor": "#0B0B0F"
-    },
-    "SplashScreen": {
-      "launchShowDuration": 2000,
-      "backgroundColor": "#0B0B0F",
-      "showSpinner": false
-    }
+          python3 -c "
+import json
+config = {
+  'appId': 'com.jfeffect.app',
+  'appName': 'JF Effect',
+  'webDir': 'dist',
+  'server': {'url': 'https://jfeffect.com', 'cleartext': False},
+  'plugins': {
+    'Keyboard': {'resize': 'native', 'resizeOnFullScreen': True},
+    'StatusBar': {'style': 'DARK', 'backgroundColor': '#0B0B0F'},
+    'SplashScreen': {'launchShowDuration': 2000, 'backgroundColor': '#0B0B0F', 'showSpinner': False}
   }
 }
-JSON
+with open('android/app/src/main/assets/capacitor.config.json', 'w') as f:
+  json.dump(config, f, indent=2)
+print('capacitor.config.json written')
+"
           echo "✅ capacitor.config.json created"
 
       # ── 8. Run cap sync ──────────────────────────────────────────────────────
