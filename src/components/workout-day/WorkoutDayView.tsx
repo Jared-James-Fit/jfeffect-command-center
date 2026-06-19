@@ -1586,6 +1586,15 @@ function ExerciseBlock({ row, dayId, dayTitle, clientId, blockId, existingResult
       : ((row as any).exercises?.default_measurement_type === "time" ? "time" : "reps");
   const effectivePrescribedDurationSec: number | null =
     (row as any).duration_seconds ?? (row as any).exercises?.duration_seconds ?? null;
+  // Time-based exercises (planks, dead-hangs, etc.) usually have no added
+  // weight. Only show the Wt column when the prescription actually requires
+  // weight (explicit load or %-based work).
+  const requiresWeight =
+    effectiveMeasurementType !== "time" ||
+    row.load_kg != null ||
+    row.load_lb != null ||
+    row.percentage != null;
+  const hideWeight = !requiresWeight;
   const exMeta: ExerciseMeta | null = exercise
     ? {
         exercise_category: exercise.exercise_category ?? null,
@@ -1826,10 +1835,15 @@ function ExerciseBlock({ row, dayId, dayTitle, clientId, blockId, existingResult
       )}
 
       <div className={cn("mt-3 overflow-hidden rounded-md border border-builder-card-border bg-builder-inset", focusMode && "text-base")}>
-        <div className={cn("grid items-center gap-1.5 border-b border-builder-card-border bg-builder-card/60 px-2.5 py-1.5 text-[10px] font-bold uppercase tracking-wider text-muted-foreground", focusMode ? "grid-cols-[36px_1.1fr_1.1fr_1fr_52px] text-xs" : "grid-cols-[28px_1.1fr_1.1fr_1fr_44px]")}>
+        <div className={cn(
+          "grid items-center gap-1.5 border-b border-builder-card-border bg-builder-card/60 px-2.5 py-1.5 text-[10px] font-bold uppercase tracking-wider text-muted-foreground",
+          hideWeight
+            ? (focusMode ? "grid-cols-[36px_1.6fr_1fr_52px] text-xs" : "grid-cols-[28px_1.6fr_1fr_44px]")
+            : (focusMode ? "grid-cols-[36px_1.1fr_1.1fr_1fr_52px] text-xs" : "grid-cols-[28px_1.1fr_1.1fr_1fr_44px]"),
+        )}>
           <span>Set</span>
           <span>{effectiveMeasurementType === "time" ? "Time" : "Reps"}</span>
-          <span className="truncate">Wt ({activeUnit.toUpperCase()})</span>
+          {!hideWeight && <span className="truncate">Wt ({activeUnit.toUpperCase()})</span>}
           <span>{showRir ? "RIR" : "RPE"}</span>
           <span className="text-right">Status</span>
         </div>
@@ -1865,6 +1879,7 @@ function ExerciseBlock({ row, dayId, dayTitle, clientId, blockId, existingResult
               onApplyToRemaining={applyToRemaining}
               readonly={readonly}
               unit={activeUnit}
+              hideWeight={hideWeight}
               focusMode={focusMode}
               onChange={onChange}
               onSetCompleted={bumpRestTimer}
@@ -2095,7 +2110,7 @@ function SetRow({
   targetReps, targetRpe, targetRir, suggestedWeight,
   repTarget, rpeTarget, rirTarget,
   hasUncompletedAfter, onApplyToRemaining,
-  readonly = false, unit = "kg", focusMode = false, onChange, onSetCompleted,
+  readonly = false, unit = "kg", hideWeight = false, focusMode = false, onChange, onSetCompleted,
   setCount, measurementType = "reps", prescribedDurationSeconds = null,
 }: {
   rowId: string;
@@ -2120,6 +2135,7 @@ function SetRow({
   onApplyToRemaining?: (fromSetIndex: number, payload: { load: string; reps: string; rpe: string; unit: "kg" | "lb" }) => Promise<void> | void;
   readonly?: boolean;
   unit?: "kg" | "lb";
+  hideWeight?: boolean;
   focusMode?: boolean;
   onChange: () => void;
   onSetCompleted?: (setIndex: number) => void;
@@ -2160,6 +2176,11 @@ function SetRow({
   }, [draftKey, hydrated, existing]);
 
   // Reset from server when the persisted result changes (but never while typing)
+  // When the active unit toggles, convert the currently-displayed load value
+  // (typed or hydrated) instead of wiping it. Stored values are read back from
+  // the matching kg/lb column when the row reloads, so old logs are never
+  // corrupted — this only affects the in-progress UI value.
+  const lastUnitRef = useRef<"kg" | "lb">(unit);
   useEffect(() => {
     const kg = existing?.actual_load_kg;
     const lb = existing?.actual_load_lb;
@@ -2169,7 +2190,25 @@ function SetRow({
     setLoad(display);
     setReps(existing?.actual_reps?.toString() ?? "");
     setRpe(existing?.actual_rpe_num != null ? String(existing.actual_rpe_num) : (existing?.actual_rpe ?? ""));
-  }, [existing?.id, existing?.actual_load_kg, existing?.actual_load_lb, existing?.actual_load, existing?.actual_reps, existing?.actual_rpe_num, existing?.actual_rpe, unit]);
+    // Track the unit at the moment of (re)hydration so unit-conversion
+    // effect doesn't re-convert the freshly-set display value.
+    lastUnitRef.current = unit;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [existing?.id, existing?.actual_load_kg, existing?.actual_load_lb, existing?.actual_load, existing?.actual_reps, existing?.actual_rpe_num, existing?.actual_rpe]);
+
+  useEffect(() => {
+    if (lastUnitRef.current === unit) return;
+    const from = lastUnitRef.current;
+    lastUnitRef.current = unit;
+    setLoad((cur) => {
+      if (!cur) return cur;
+      const n = Number(cur);
+      if (!isFinite(n) || n === 0) return cur;
+      const converted = convertWeight(n, from, unit);
+      const step = weightIncrement(unit);
+      return fmtNum(Math.round(converted / step) * step);
+    });
+  }, [unit]);
 
   const value = useMemo(() => ({ load, reps, rpe, unit }), [load, reps, rpe, unit]);
   const save = useAutosave({
@@ -2418,7 +2457,9 @@ function SetRow({
     )}>
     <div className={cn(
       "grid items-center gap-1.5 px-2.5 py-1.5",
-      focusMode ? "grid-cols-[36px_1.1fr_1.1fr_1fr_52px]" : "grid-cols-[28px_1.1fr_1.1fr_1fr_44px]",
+      hideWeight
+        ? (focusMode ? "grid-cols-[36px_1.6fr_1fr_52px]" : "grid-cols-[28px_1.6fr_1fr_44px]")
+        : (focusMode ? "grid-cols-[36px_1.1fr_1.1fr_1fr_52px]" : "grid-cols-[28px_1.1fr_1.1fr_1fr_44px]"),
     )}>
       <span className={cn("font-mono text-muted-foreground", focusMode ? "text-sm" : "text-xs")}>{setIndex}</span>
       {isTime ? (
@@ -2473,6 +2514,7 @@ function SetRow({
         disabled={readonly}
       />
       )}
+      {!hideWeight && (
       <Input
         className={cn(focusMode ? "h-9 text-base px-2" : "h-8 text-sm px-2", "bg-white text-black placeholder:text-gray-500")}
         inputMode="decimal"
@@ -2487,6 +2529,7 @@ function SetRow({
         readOnly={readonly}
         disabled={readonly}
       />
+      )}
       <Input
         className={cn(focusMode ? "h-9 text-base px-2" : "h-8 text-sm px-2", "bg-white text-black placeholder:text-gray-500")}
         inputMode="decimal"
