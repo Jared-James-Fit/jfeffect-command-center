@@ -1586,6 +1586,15 @@ function ExerciseBlock({ row, dayId, dayTitle, clientId, blockId, existingResult
       : ((row as any).exercises?.default_measurement_type === "time" ? "time" : "reps");
   const effectivePrescribedDurationSec: number | null =
     (row as any).duration_seconds ?? (row as any).exercises?.duration_seconds ?? null;
+  // Time-based exercises (planks, dead-hangs, etc.) usually have no added
+  // weight. Only show the Wt column when the prescription actually requires
+  // weight (explicit load or %-based work).
+  const requiresWeight =
+    effectiveMeasurementType !== "time" ||
+    row.load_kg != null ||
+    row.load_lb != null ||
+    row.percentage != null;
+  const hideWeight = !requiresWeight;
   const exMeta: ExerciseMeta | null = exercise
     ? {
         exercise_category: exercise.exercise_category ?? null,
