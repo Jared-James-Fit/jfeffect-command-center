@@ -101,7 +101,7 @@ export function MediaItemCard({
       {item.drive_file_id && (
         <div className="overflow-hidden rounded border border-border bg-black/40">
           {isImage ? (
-            <img src={item.thumbnail_url ?? `https://drive.google.com/uc?id=${item.drive_file_id}`} alt={item.file_name} className="w-full max-h-[60vh] object-contain" />
+            <img loading="lazy" src={item.thumbnail_url ?? `https://drive.google.com/uc?id=${item.drive_file_id}`} alt={item.file_name} className="w-full max-h-[60vh] object-contain" />
           ) : (
             <iframe
               ref={iframeRef}

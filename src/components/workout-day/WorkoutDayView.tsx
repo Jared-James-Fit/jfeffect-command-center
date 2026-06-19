@@ -876,7 +876,23 @@ function WorkoutDay({
     setTimeout(() => generalNotesRef.current?.querySelector("textarea")?.focus(), 350);
   };
 
-  if (!day) return <div className="p-8 text-sm text-muted-foreground">Loading…</div>;
+  if (!day) {
+    return (
+      <div className="mx-auto w-full max-w-3xl space-y-3 p-6" aria-busy="true" aria-label="Loading workout">
+        <div className="h-7 w-2/3 animate-pulse rounded bg-muted" />
+        <div className="h-4 w-1/3 animate-pulse rounded bg-muted" />
+        <div className="mt-2 flex gap-2">
+          <div className="h-6 w-20 animate-pulse rounded-full bg-muted" />
+          <div className="h-6 w-24 animate-pulse rounded-full bg-muted" />
+        </div>
+        <div className="space-y-2 pt-3">
+          <div className="h-24 w-full animate-pulse rounded-lg bg-muted" />
+          <div className="h-24 w-full animate-pulse rounded-lg bg-muted" />
+          <div className="h-24 w-full animate-pulse rounded-lg bg-muted" />
+        </div>
+      </div>
+    );
+  }
 
   // Shared workout summary for the pinned status bar AND the inline quality badge.
   const statusSummary = (() => {

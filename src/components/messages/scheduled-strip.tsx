@@ -44,7 +44,7 @@ export function ScheduledStrip({ clientId }: { clientId: string }) {
     queryKey: ["pending-messages", clientId],
     enabled: !!clientId,
     queryFn: () => listPendingMessages(clientId),
-    refetchInterval: 30_000,
+    refetchInterval: 300_000,
   });
 
   const { scheduled, failed } = useMemo(() => {

@@ -49,7 +49,7 @@ export function SupportInbox({ embedded = false }: { embedded?: boolean } = {}) 
   const { data: threads = { threads: [] } } = useQuery({
     queryKey: ["admin-support-threads", statusFilter],
     queryFn: () => list({ data: statusFilter ? { status: statusFilter } : undefined }),
-    refetchInterval: 15_000,
+    refetchInterval: 120_000,
   });
   const { data: detail } = useQuery({
     queryKey: ["admin-support-thread", selected],

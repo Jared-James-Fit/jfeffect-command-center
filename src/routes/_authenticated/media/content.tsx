@@ -79,7 +79,7 @@ function InboxTab() {
       <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-3">
         {(data ?? []).map((m: any) => (
           <Card key={m.id} className="p-3">
-            {m.thumbnail_url && <img src={m.thumbnail_url} alt="" className="mb-2 h-32 w-full rounded object-cover" />}
+            {m.thumbnail_url && <img loading="lazy" src={m.thumbnail_url} alt="" className="mb-2 h-32 w-full rounded object-cover" />}
             <div className="truncate font-medium text-sm">{m.file_name || m.media_type}</div>
             <div className="text-xs text-muted-foreground">{new Date(m.created_at).toLocaleDateString()}</div>
           </Card>

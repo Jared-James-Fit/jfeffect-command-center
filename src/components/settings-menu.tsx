@@ -208,7 +208,7 @@ export function SettingsMenu({
             <DialogTitle>Your profile picture</DialogTitle>
           </DialogHeader>
           {signedPic ? (
-            <img
+            <img loading="lazy"
               src={signedPic}
               alt="Profile"
               className="mx-auto aspect-square w-full max-w-sm rounded-xl object-cover"

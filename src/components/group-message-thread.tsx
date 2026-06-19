@@ -112,7 +112,7 @@ export function GroupMessageThread({
   const { data: rawMessages = [] } = useQuery({
     queryKey: ["group-messages", groupId],
     queryFn: () => listGroupMessages(groupId),
-    refetchInterval: 30_000,
+    refetchInterval: 300_000,
   });
 
   const { data: rawReactions = [] } = useQuery({

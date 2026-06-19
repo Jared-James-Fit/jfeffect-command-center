@@ -25,7 +25,7 @@ function ExerciseLibrary() {
   const [category, setCategory] = useState("all");
   const [selected, setSelected] = useState<any>(null);
 
-  const { data: exercises = [] } = useQuery({
+  const { data: exercises = [], isLoading: exercisesLoading } = useQuery({
     queryKey: ["exercises"],
     queryFn: async () => {
       const { data } = await supabase.from("exercises").select("*").order("name");
@@ -83,7 +83,19 @@ function ExerciseLibrary() {
         )}
 
         <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
-          {filtered.map((e) => (
+          {exercisesLoading
+            ? Array.from({ length: 8 }).map((_, i) => (
+                <Card key={`sk-${i}`} className="h-full border-border bg-card p-4" aria-hidden="true">
+                  <div className="flex items-start gap-3">
+                    <div className="h-10 w-10 animate-pulse rounded-md bg-muted" />
+                    <div className="min-w-0 flex-1 space-y-2">
+                      <div className="h-4 w-3/4 animate-pulse rounded bg-muted" />
+                      <div className="h-3 w-1/2 animate-pulse rounded bg-muted" />
+                    </div>
+                  </div>
+                </Card>
+              ))
+            : filtered.map((e) => (
             <button key={e.id} onClick={() => setSelected(e)} className="text-left">
               <Card className="group h-full border-border bg-card p-4 transition hover:border-primary hover:shadow-glow">
                 <div className="flex items-start gap-3">
@@ -96,7 +108,7 @@ function ExerciseLibrary() {
               </Card>
             </button>
           ))}
-          {filtered.length === 0 && (
+          {!exercisesLoading && filtered.length === 0 && (
             <div className="col-span-full rounded-md border border-dashed border-border p-8 text-center text-sm text-muted-foreground">No exercises yet.</div>
           )}
         </div>

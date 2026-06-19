@@ -175,7 +175,7 @@ export function UserAvatar({
       {canExpand && (
         <Dialog open={open} onOpenChange={setOpen}>
           <DialogContent className="max-w-[92vw] border-0 bg-transparent p-0 shadow-none sm:max-w-lg">
-            <img
+            <img loading="lazy"
               src={url!}
               alt={name ?? "Profile picture"}
               className="mx-auto max-h-[80vh] w-auto rounded-2xl object-contain shadow-2xl"

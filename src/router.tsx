@@ -10,8 +10,8 @@ export const getRouter = () => {
   const queryClient = new QueryClient({
     defaultOptions: {
       queries: {
-        staleTime: 30_000,           // treat data as fresh for 30s
-        gcTime: 5 * 60_000,          // keep cached data for 5min after unmount
+        staleTime: 2 * 60_000,       // treat data as fresh for 2min
+        gcTime: 10 * 60_000,         // keep cached data for 10min after unmount
         refetchOnWindowFocus: false, // don't refetch on every tab switch
         refetchOnReconnect: "always",
         retry: 1,                    // a single retry instead of the default 3

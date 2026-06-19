@@ -61,7 +61,7 @@ export function useClientNavBadges(): Record<string, NavBadge> {
   const { data } = useQuery({
     queryKey: ["client-nav-badges", user?.id],
     enabled,
-    refetchInterval: 30_000,
+    refetchInterval: 300_000,
     queryFn: async () => {
       const { data: client } = await supabase
         .from("clients")
@@ -100,7 +100,7 @@ export function useClientNavBadges(): Record<string, NavBadge> {
   const { data: adminData } = useQuery({
     queryKey: ["admin-nav-badges", user?.id],
     enabled: adminEnabled,
-    refetchInterval: 30_000,
+    refetchInterval: 300_000,
     queryFn: async () => {
       const [needsResp, liftPending, liftUrgent, mediaPending, supportAlerts] = await Promise.all([
         (supabase.from("conversation_state") as any)

@@ -310,7 +310,7 @@ function ResourceCard({ r, onOpen }: { r: Resource; onOpen: () => void }) {
     >
       <div className="grid h-32 place-items-center overflow-hidden bg-muted">
         {isImage && signed?.url
-          ? <img src={signed.url} alt={r.name} className="h-full w-full object-cover" />
+          ? <img loading="lazy" src={signed.url} alt={r.name} className="h-full w-full object-cover" />
           : <FileTypeIcon mime={r.mime_type} className="h-10 w-10 text-muted-foreground" />}
       </div>
       <div className="space-y-2 p-3">
@@ -420,7 +420,7 @@ function ResourceDetailDialog({
               {!signed?.url ? (
                 <div className="grid h-full place-items-center text-sm text-muted-foreground">Loading preview…</div>
               ) : isImage ? (
-                <img src={signed.url} alt={resource.name} className="mx-auto max-h-full" />
+                <img loading="lazy" src={signed.url} alt={resource.name} className="mx-auto max-h-full" />
               ) : isVideo ? (
                 <video src={signed.url} controls className="h-full w-full bg-black" />
               ) : isAudio ? (

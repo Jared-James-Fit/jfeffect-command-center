@@ -63,7 +63,7 @@ type Clip = {
 // Generate a poster image from a video file by seeking to ~0.1s and
 // painting the frame into a canvas. iOS Safari often won't render a frame
 // inside a <video preload="metadata"> tag in a small thumbnail, so we bake
-// an <img>-friendly data URL instead.
+// an <img loading="lazy">-friendly data URL instead.
 async function generateVideoThumbnail(file: File): Promise<string | null> {
   const url = URL.createObjectURL(file);
   const video = document.createElement("video");
@@ -858,7 +858,7 @@ export function ClientLiftVideoUploader({ clientId, clientName, userId, onSaved 
           </DialogHeader>
           {previewClip?.previewUrl && (
             previewClip.isImage ? (
-              <img
+              <img loading="lazy"
                 src={previewClip.previewUrl}
                 alt={previewClip.file?.name || "Preview"}
                 className="w-full rounded-lg bg-black object-contain"

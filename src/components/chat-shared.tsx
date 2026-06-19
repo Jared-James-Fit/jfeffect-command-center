@@ -798,7 +798,7 @@ function FormRequestCard({ att, mine }: { att: SharedAttachment; mine: boolean }
   const { data: subs } = useQuery({
     queryKey: ["chat-req-form-status", formId, clientIds.slice().sort().join(",")],
     enabled: !!formId && clientIds.length > 0,
-    refetchInterval: 30_000,
+    refetchInterval: 300_000,
     refetchOnWindowFocus: true,
     queryFn: async () => {
       const { data } = await supabase
@@ -866,7 +866,7 @@ function SignatureRequestCard({ att, mine }: { att: SharedAttachment; mine: bool
   const { data: agreements } = useQuery({
     queryKey: ["chat-req-agreements", ids.slice().sort().join(",")],
     enabled: ids.length > 0,
-    refetchInterval: 30_000,
+    refetchInterval: 300_000,
     refetchOnWindowFocus: true,
     queryFn: async () => {
       const { data } = await supabase
