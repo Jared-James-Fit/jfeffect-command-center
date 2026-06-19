@@ -130,7 +130,9 @@ export function createMemberAdapter(ref: WorkoutContextRef): WorkoutContextAdapt
       canEditTemplate: false,
       canEditOwnLogs: true,
       canReschedule: true,
-      canSubstituteExercise: false, // membership programs are static library entries
+      // Members can swap an exercise; the swap is persisted in
+      // `member_exercise_swaps` and overlaid by `listRowsRaw`.
+      canSubstituteExercise: true,
       canSeeCoachNotes: false,
       canSeeCoachIntel: false,
       canLeaveCoachFeedback: false,
@@ -717,7 +719,62 @@ export function createMemberAdapter(ref: WorkoutContextRef): WorkoutContextAdapt
       const { week, day } = decodeDayId(dayId);
       const { day: dayObj } = await loadPublishedDay(enrollmentId, week, day);
       const rows = (dayObj?.rows ?? []) as any[];
-      return rows.map((r, ei) => memberRowToPlRow({ row: r, exerciseIndex: ei, dayId }));
+      // Fetch any persisted member-side swaps for this (enrollment, week, day).
+      const { data: swaps } = await supabase
+        .from("member_exercise_swaps")
+        .select("exercise_index, exercise_id")
+        .eq("enrollment_id", enrollmentId)
+        .eq("week_index", week)
+        .eq("day_index", day);
+      const swapByIndex = new Map<number, string>();
+      for (const s of (swaps ?? []) as any[]) {
+        swapByIndex.set(Number(s.exercise_index), s.exercise_id);
+      }
+
+      // Resolve full exercise details for any swap targets in one query
+      // so the swapped row renders with the right name, media, cues, etc.
+      const swapIds = Array.from(new Set(Array.from(swapByIndex.values())));
+      const exerciseById = new Map<string, any>();
+      if (swapIds.length > 0) {
+        const { data: exs } = await supabase
+          .from("exercises")
+          .select(
+            "id, name, video_url, vimeo_embed_url, secondary_vimeo_embed_url, active_video_set, thumbnail_url, cues, common_mistakes, muscle_group, category, pl_lift_group, warmup_protocol_id, is_powerlifting, warmup_notes, default_load_unit, exercise_category, is_competition_lift, competition_lift_type",
+          )
+          .in("id", swapIds);
+        for (const e of (exs ?? []) as any[]) exerciseById.set(e.id, e);
+      }
+
+      return rows.map((r, ei) => {
+        const overrideId = swapByIndex.get(ei) ?? null;
+        if (!overrideId) {
+          return memberRowToPlRow({ row: r, exerciseIndex: ei, dayId });
+        }
+        const ex = exerciseById.get(overrideId);
+        // Merge the swap target onto the original JSON row, preserving
+        // prescribed sets/reps/rest/load and replacing only the exercise.
+        const merged = {
+          ...r,
+          exercise_id: overrideId,
+          exercise: ex?.name ?? r.exercise ?? r.name,
+          name: ex?.name ?? r.name ?? r.exercise,
+          video_url: ex?.video_url ?? null,
+          vimeo_embed_url: ex?.vimeo_embed_url ?? null,
+          thumbnail_url: ex?.thumbnail_url ?? null,
+          cues: ex?.cues ?? null,
+          common_mistakes: ex?.common_mistakes ?? null,
+          muscle_group: ex?.muscle_group ?? null,
+          category: ex?.category ?? null,
+          pl_lift_group: ex?.pl_lift_group ?? null,
+          warmup_protocol_id: ex?.warmup_protocol_id ?? r.warmup_protocol_id ?? null,
+          is_powerlifting: ex?.is_powerlifting ?? false,
+          warmup_notes: ex?.warmup_notes ?? null,
+          exercise_category: ex?.exercise_category ?? null,
+          is_competition_lift: ex?.is_competition_lift ?? false,
+          competition_lift_type: ex?.competition_lift_type ?? null,
+        };
+        return memberRowToPlRow({ row: merged, exerciseIndex: ei, dayId });
+      });
     },
     async listRowResultsRaw(dayId: string): Promise<PlRowResultRaw[]> {
       const { week, day } = decodeDayId(dayId);

@@ -7888,6 +7888,60 @@ export type Database = {
         }
         Relationships: []
       }
+      member_exercise_swaps: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          day_index: number
+          enrollment_id: string
+          exercise_id: string
+          exercise_index: number
+          id: string
+          scope: string
+          updated_at: string
+          week_index: number
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          day_index: number
+          enrollment_id: string
+          exercise_id: string
+          exercise_index: number
+          id?: string
+          scope?: string
+          updated_at?: string
+          week_index: number
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          day_index?: number
+          enrollment_id?: string
+          exercise_id?: string
+          exercise_index?: number
+          id?: string
+          scope?: string
+          updated_at?: string
+          week_index?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "member_exercise_swaps_enrollment_id_fkey"
+            columns: ["enrollment_id"]
+            isOneToOne: false
+            referencedRelation: "member_plan_enrollments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "member_exercise_swaps_exercise_id_fkey"
+            columns: ["exercise_id"]
+            isOneToOne: false
+            referencedRelation: "exercises"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       member_meal_logs: {
         Row: {
           calories: number

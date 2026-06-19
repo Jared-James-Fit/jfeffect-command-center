@@ -285,6 +285,36 @@ export function WorkoutDayView({
 
 const sb = supabase as any;
 
+/**
+ * Derive the swap-persistence target for an exercise row. Members
+ * persist swaps in `member_exercise_swaps` keyed by (enrollment, week,
+ * day, exercise_index); coaches/clients persist by mutating
+ * `pl_exercise_rows`. Returns `undefined` when the adapter is missing
+ * or the row id can't be decoded (defaults to the client write path).
+ */
+function swapContextForRow(
+  adapter: WorkoutContextAdapter | undefined,
+  dayId: string,
+  rowId: string,
+):
+  | { kind: "client" }
+  | { kind: "member"; enrollmentId: string; weekIndex: number; dayIndex: number; exerciseIndex: number }
+  | undefined {
+  if (!adapter) return undefined;
+  if (adapter.kind !== "member") return { kind: "client" };
+  const enrollmentId = (adapter.ref as any).enrollmentId as string | undefined;
+  if (!enrollmentId) return undefined;
+  const [wRaw, dRaw] = dayId.split(":");
+  const weekIndex = Number(wRaw);
+  const dayIndex = Number(dRaw);
+  const m = /^ex:(\d+)$/.exec(rowId);
+  const exerciseIndex = m ? Number(m[1]) : NaN;
+  if (!Number.isFinite(weekIndex) || !Number.isFinite(dayIndex) || !Number.isFinite(exerciseIndex)) {
+    return undefined;
+  }
+  return { kind: "member", enrollmentId, weekIndex, dayIndex, exerciseIndex };
+}
+
 function WorkoutDay({
   dayId,
   search,
@@ -892,6 +922,7 @@ function WorkoutDay({
                   onChange={refresh}
                   onNoteChange={refreshNotes}
                   purposeLabel={purposeLabelById.get(r.id) ?? null}
+                  swapContext={swapContextForRow(adapter, dayId, r.id)}
                 />
                 )
               ))}
@@ -1138,6 +1169,7 @@ function WorkoutDay({
                 onChange={refresh}
                 onNoteChange={refreshNotes}
                 purposeLabel={purposeLabelById.get(r.id) ?? null}
+                swapContext={swapContextForRow(adapter, dayId, r.id)}
               />
               )
             ))}
@@ -1395,7 +1427,7 @@ function UnsupportedExerciseCard({ row }: { row: any }) {
   );
 }
 
-function ExerciseBlock({ row, dayId, dayTitle, clientId, blockId, existingResults, existingNote, readonly = false, unit = "kg", onUnitChange, focusMode = false, onChange, onNoteChange, purposeLabel = null }: { row: any; dayId: string; dayTitle: string; clientId: string | undefined; blockId?: string | null; existingResults: any[]; existingNote?: any; readonly?: boolean; unit?: "kg" | "lb"; onUnitChange?: (u: "kg" | "lb") => void; focusMode?: boolean; onChange: () => void; onNoteChange: () => void; purposeLabel?: string | null }) {
+function ExerciseBlock({ row, dayId, dayTitle, clientId, blockId, existingResults, existingNote, readonly = false, unit = "kg", onUnitChange, focusMode = false, onChange, onNoteChange, purposeLabel = null, swapContext = undefined }: { row: any; dayId: string; dayTitle: string; clientId: string | undefined; blockId?: string | null; existingResults: any[]; existingNote?: any; readonly?: boolean; unit?: "kg" | "lb"; onUnitChange?: (u: "kg" | "lb") => void; focusMode?: boolean; onChange: () => void; onNoteChange: () => void; purposeLabel?: string | null; swapContext?: { kind: "client" } | { kind: "member"; enrollmentId: string; weekIndex: number; dayIndex: number; exerciseIndex: number } | undefined }) {
   const adapter = useOptionalAdapter();
   const name = row.exercises?.name ?? row.exercise_name_override ?? "Exercise";
   const exercise = row.exercises ?? null;
@@ -1625,6 +1657,7 @@ function ExerciseBlock({ row, dayId, dayTitle, clientId, blockId, existingResult
           category={exercise?.category ?? null}
           equipment={(exercise as any)?.equipment ?? null}
           difficulty={(exercise as any)?.difficulty ?? null}
+          swapContext={swapContext}
         />
         {cues && (
           <Button size="sm" variant="ghost" onClick={() => setCuesOpen((v) => !v)} className="h-7 px-2 text-xs">

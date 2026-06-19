@@ -26,6 +26,10 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import { applySwap, getSwapImpact } from "@/lib/quick-swap.functions";
+import {
+  applyMemberSwap,
+  getMemberSwapImpact,
+} from "@/lib/member-swap.functions";
 
 type ExerciseLite = {
   id: string;
@@ -269,6 +273,7 @@ export function QuickSwapButton({
   category,
   equipment,
   difficulty,
+  swapContext,
 }: {
   rowId: string;
   exerciseId: string | null;
@@ -277,6 +282,22 @@ export function QuickSwapButton({
   category?: string | null;
   equipment?: string | null;
   difficulty?: string | null;
+  /**
+   * Where to persist the swap. Defaults to the coaching-client path
+   * (writes to `pl_exercise_rows`). When the calling row belongs to a
+   * member workout, pass `{ kind: "member", enrollmentId, weekIndex,
+   * dayIndex, exerciseIndex }` so the swap is stored in
+   * `member_exercise_swaps` and survives refresh.
+   */
+  swapContext?:
+    | { kind: "client" }
+    | {
+        kind: "member";
+        enrollmentId: string;
+        weekIndex: number;
+        dayIndex: number;
+        exerciseIndex: number;
+      };
 }) {
   const [open, setOpen] = useState(false);
   const [mode, setMode] = useState<ViewMode>("suggestions");
@@ -287,8 +308,11 @@ export function QuickSwapButton({
   const [chip, setChip] = useState<EquipmentChip>("Best Match");
   const debouncedSearch = useDebounced(search.trim(), 300);
   const qc = useQueryClient();
-  const getImpactFn = useServerFn(getSwapImpact);
-  const applySwapFn = useServerFn(applySwap);
+  const isMember = swapContext?.kind === "member";
+  const getImpactFnClient = useServerFn(getSwapImpact);
+  const applySwapFnClient = useServerFn(applySwap);
+  const getImpactFnMember = useServerFn(getMemberSwapImpact);
+  const applySwapFnMember = useServerFn(applyMemberSwap);
 
   // Reset state every time the sheet opens.
   useEffect(() => {
@@ -414,16 +438,41 @@ export function QuickSwapButton({
 
   // Pull "how many future workouts" for the scope step.
   const { data: impact, isLoading: impactLoading } = useQuery({
-    queryKey: ["quick-swap-impact", rowId],
+    queryKey: ["quick-swap-impact", rowId, isMember],
     enabled: open && mode === "scope" && !!pending,
     staleTime: 30_000,
-    queryFn: () => getImpactFn({ data: { rowId } }),
+    queryFn: async () => {
+      if (isMember && swapContext && swapContext.kind === "member") {
+        return getImpactFnMember({
+          data: {
+            enrollmentId: swapContext.enrollmentId,
+            weekIndex: swapContext.weekIndex,
+            dayIndex: swapContext.dayIndex,
+            exerciseIndex: swapContext.exerciseIndex,
+          },
+        });
+      }
+      return getImpactFnClient({ data: { rowId } });
+    },
   });
 
   const swapMutation = useMutation({
-    mutationFn: (vars: { newExerciseId: string; scope: "today" | "future" }) =>
-      applySwapFn({ data: { rowId, ...vars } }),
-    onSuccess: (res, vars) => {
+    mutationFn: async (vars: { newExerciseId: string; scope: "today" | "future" }) => {
+      if (isMember && swapContext && swapContext.kind === "member") {
+        return applySwapFnMember({
+          data: {
+            enrollmentId: swapContext.enrollmentId,
+            weekIndex: swapContext.weekIndex,
+            dayIndex: swapContext.dayIndex,
+            exerciseIndex: swapContext.exerciseIndex,
+            newExerciseId: vars.newExerciseId,
+            scope: vars.scope,
+          },
+        });
+      }
+      return applySwapFnClient({ data: { rowId, ...vars } });
+    },
+    onSuccess: (res: { count: number }, vars) => {
       toast.success(
         vars.scope === "future"
           ? `Swapped across ${res.count} workout${res.count === 1 ? "" : "s"}`

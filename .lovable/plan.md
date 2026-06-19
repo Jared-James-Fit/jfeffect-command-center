@@ -1,64 +1,66 @@
-## Goal
+## Scope
 
-Replace the scattered client-facing nutrition pages with a single consolidated Nutrition dashboard. Add a coach approval gate for targets, three logging methods, and weekly trends + water/supplements tracking.
+This request spans 8 major areas across the existing workout stack (`WorkoutDayView` 2,607 lines, `QuickSwapButton` 703 lines, client + member adapters ~1,500 lines, `WorkoutsExperience` 821 lines, plus scheduling/timezone logic). Doing it all in one pass is high-risk and expensive. I propose phased delivery, with QA pause after each phase as you requested.
 
-## What it includes
+I also want to flag: **items 4 (estimated time), 5 (actual duration), 6 (completion quality badge), and partial completion stats already exist** in the codebase (`workout-completeness.ts`, `member_workout_completions` columns like duration/sets/volume, `WorkoutRestTimer` component). They're built but not always surfaced in the UI. The fixes are mostly wiring, not new systems.
 
-**Client dashboard (`/m/nutrition`)** — one page with these sections:
-1. **Daily macros** — calories, protein, carbs, fat with progress bars vs target. Only shown after a coach has approved the target.
-2. **Meal log timeline** — chronological list of today's meals with edit/delete and a date picker for past days.
-3. **Weekly trends** — 7/30-day adherence chart (% target hit) and bodyweight trend line, sourced from existing `member_bodyweight_logs`.
-4. **Water + supplements** — quick-tap counters with daily goals; uses existing `progress_water_entries` / `progress_water_targets` and a new `member_supplement_logs` table.
+---
 
-**Three logging methods** on the same "Log food" sheet:
-- Quick presets — pick from saved meals (new `member_meal_presets` table).
-- Manual entry — type calories + macros directly.
-- AI text parse — "2 eggs and toast" → macros via Lovable AI Gateway (Gemini), shown for confirm/edit before save.
+## Phase 1 — Reliability fixes (ship first, then QA pause)
 
-**Targets flow (auto → coach approval → client)**
-1. Auto-calc on the client: Mifflin-St Jeor TDEE from `clients` (sex, age, height, weight, activity) + goal offset (cut/maintain/bulk → -500/0/+300 kcal), macro split (protein g/kg, fat 25% kcal, carbs remainder).
-2. Result lands in a `member_nutrition_targets_pending` queue with `status='pending'`, NOT visible to client.
-3. Coach reviews on `/admin/nutrition-dashboard`: approve as-is, edit then approve, or assign their own. On approve, write to existing `member_nutrition_targets` (active) and mark pending row `approved`.
-4. Client dashboard reads only active approved targets — if none, shows "Your coach is reviewing your targets" placeholder.
+**1. Swap persistence (the actual reported bug).**
+- `quick-swap.functions.ts` only writes to `pl_exercise_rows`. For **members**, rows are synthetic `ex:<index>` ids backed by `member_plan_enrollments` JSON — `applySwap` silently no-ops (or 500s) and the UI never updates. Toast lies.
+- Fix: branch `applySwap` / `getSwapImpact` by adapter kind. Add a member path that persists the swap into the enrollment's plan structure (new column or override map on `member_plan_enrollments`, applied at adapter read time).
+- Invalidate the correct query keys for both contexts after success; verify the row re-renders with the new exercise name + media.
+- Verify with Playwright on `/m/workouts/...`.
 
-**Replace existing pages** — these become redirects to `/m/nutrition`:
-- `_authenticated/m/nutrition.targets-setup.tsx`
-- `_authenticated/m/nutrition.targets-manage.tsx`
-- `_authenticated/portal/nutrition-targets.tsx`
-- `_authenticated/m/nutrition.tsx` (rebuilt as the new dashboard)
-- Recipe detail (`m/nutrition.$recipeId.tsx`) is kept; surfaced via "Saved recipes" link.
+**2. Workout "not showing up" audit.**
+- Audit `getEnrollmentSchedule` + `getClientWorkouts` + `workout-today.ts` for timezone handling (member tz vs UTC vs coach tz), week rollover, and day-of-week math. Produce a written diff of any drift bugs and fix them.
+- Add a "Today" pinned card on `/m` and `/portal/workouts` that uses the same resolver everywhere.
 
-Admin tools (`/admin/nutrition-dashboard`, `/admin/nutrition-targets`, `/admin/settings_.nutrition-automation`) stay; the review page gains the new approval action.
+**Pause for QA here.** You confirm 1 & 2 are clean before I touch the rest.
 
-## Technical
+---
 
-**DB migrations (one batch)**
-- `member_meal_logs` — id, client_id, logged_at, name, calories, protein_g, carbs_g, fat_g, source enum('preset'|'manual'|'ai'), preset_id nullable, raw_text nullable. RLS: client owns rows; coach (admin role) can read. GRANT to authenticated + service_role.
-- `member_meal_presets` — id, client_id, name, calories, macros, created_at. Same RLS shape.
-- `member_supplement_logs` — id, client_id, supplement_name, taken_at, dose. Same RLS.
-- `member_supplements` (config) — id, client_id, name, daily_target_count, active.
-- `member_nutrition_targets_pending` — id, client_id, computed_kcal, protein_g, carbs_g, fat_g, inputs jsonb, status enum('pending'|'approved'|'rejected'), reviewed_by, reviewed_at, note. RLS: client read own pending; admin read+update all.
-- All tables: `ENABLE RLS` + `GRANT SELECT, INSERT, UPDATE, DELETE ON ... TO authenticated; GRANT ALL TO service_role;` per project rules.
+## Phase 2 — Visible timers + status bar
 
-**Server functions** (`src/lib/nutrition.functions.ts`, all with `requireSupabaseAuth`):
-- `computeAndQueueTargets({ data: { clientId } })` — runs Mifflin-St Jeor, writes pending row.
-- `logMeal`, `updateMeal`, `deleteMeal`.
-- `parseMealFromText({ data: { text } })` — Lovable AI call returning `{name, calories, macros}` JSON.
-- `getDashboard({ data: { date } })` — returns active target, today's logs, water + supps, 7/30-day trend aggregates. Primes TanStack Query.
-- Admin: `approveTargets`, `rejectTargets`, `assignTargets`.
+**3. Pinned Workout Status Bar** (persists across the workout page, sticky top):
+   `Chest Day | 5/8 Exercises | 18/27 Sets | 43:21`
+   - Workout timer starts on first "Start Set" tap (or explicit **Start Workout** if none logged yet) and is stored in `member_workout_completions.started_at` / `pl_day_completions.started_at` so refresh/reload preserves it.
+   - Exercise/set counters derive from existing `workout-completeness.ts`.
 
-**Route shape**
-- `_authenticated/m/nutrition.tsx` becomes the dashboard (loader uses `ensureQueryData` + `useSuspenseQuery`).
-- Other client nutrition routes: replace component body with `<Navigate to="/m/nutrition" replace />` (and keep file so old links don't 404).
+**4. Auto rest timer after set log.**
+   - `WorkoutRestTimer` already exists. After a set is logged, auto-mount it inline with a one-tap "Start 2:00 Rest" button using the assigned rest (`pl_exercise_rows.rest_seconds` → fallback to category midpoint). Presets: 30s/60s/90s/2m/3m/5m.
+   - Visible without any menu dive.
 
-**UI**
-- Sections as Cards in a single scrollable column on mobile, 2-col grid on desktop.
-- Reuse existing chart components from `progress` pages where possible.
-- "Log food" opens a Sheet with three tabs (Presets / Manual / AI).
+---
 
-## Out of scope (this pass)
+## Phase 3 — Pre/post workout surfaces
 
-- Barcode scan, photo recognition, macro goals per meal (breakfast/lunch split).
-- Notifications when coach approves targets — added if you want, but defaults to in-app only.
+**5. Estimated time pill** on the workout-open screen: `sets × (avg_set_seconds + rest_seconds)` using a single helper in `workout-completeness.ts`.
 
-Approve and I'll build it end-to-end.
+**6. Completion summary screen** (already-persisted data, just surface it):
+   - Duration, sets logged X/Y, exercises X/Y, total volume.
+   - Quality badge 🟢/🟡/🔴 driven by existing `categorizeLoggingQuality()`.
+   - Block "Mark Complete" or require confirm when < 75% so members can't fake completions.
+
+---
+
+## Out of scope unless you confirm
+
+- Coach-side "assign default rest per exercise" UI — column already exists (`pl_exercise_rows.rest_seconds`); the editor surface for it is a separate task.
+- Redesigning the workout list page beyond adding the Today card.
+
+---
+
+## Technical notes
+
+- Single source of truth: extend `WorkoutContextAdapter` with `applySwap`, `getStartedAt`, `setStartedAt` so both `client-adapter` and `member-adapter` implement the same contract. No parallel system, no duplicated components — `WorkoutDayView` stays the only workout UI.
+- New DB column likely needed: `member_plan_enrollments.row_overrides jsonb` (or a small `member_exercise_swaps` table) to persist member swaps without forking the plan template. Migration will include `GRANT`s + RLS.
+- All toast confirmations driven by mutation `onSuccess`, never optimistic-only, so "did it save?" is always truthful.
+
+---
+
+## Recommended next step
+
+Approve Phase 1 only. I'll implement, run Playwright against `/m/workouts/...` for the swap repro and a date/timezone audit, then hand back for QA before starting Phase 2.
