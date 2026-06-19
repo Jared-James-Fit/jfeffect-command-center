@@ -922,6 +922,7 @@ function WorkoutDay({
                   onChange={refresh}
                   onNoteChange={refreshNotes}
                   purposeLabel={purposeLabelById.get(r.id) ?? null}
+                  swapContext={swapContextForRow(adapter, dayId, r.id)}
                 />
                 )
               ))}
@@ -1168,6 +1169,7 @@ function WorkoutDay({
                 onChange={refresh}
                 onNoteChange={refreshNotes}
                 purposeLabel={purposeLabelById.get(r.id) ?? null}
+                swapContext={swapContextForRow(adapter, dayId, r.id)}
               />
               )
             ))}
