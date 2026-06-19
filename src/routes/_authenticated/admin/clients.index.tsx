@@ -44,7 +44,23 @@ const searchSchema = z.object({
 export const Route = createFileRoute("/_authenticated/admin/clients/")({
   validateSearch: zodValidator(searchSchema),
   component: ClientsDirectoryPage,
+  // Skeleton shown while the route's code-split chunk is loading.
+  pendingComponent: AdminRouteSkeleton,
 });
+
+function AdminRouteSkeleton() {
+  return (
+    <div className="space-y-4 p-3 sm:p-4 md:p-6">
+      <div className="h-10 w-56 animate-pulse rounded bg-muted" />
+      <div className="h-14 w-full animate-pulse rounded bg-muted" />
+      <ul className="space-y-2">
+        {Array.from({ length: 6 }).map((_, i) => (
+          <li key={i} className="h-16 w-full animate-pulse rounded bg-muted" />
+        ))}
+      </ul>
+    </div>
+  );
+}
 
 function ClientsDirectoryPage() {
   const search = Route.useSearch();

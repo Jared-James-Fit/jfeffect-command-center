@@ -68,7 +68,23 @@ export default defineConfig({
           cleanupOutdatedCaches: true,
           skipWaiting: false,    // we wait for the user to tap Update
           clientsClaim: true,
-          globPatterns: ["**/*.{js,css,html,svg,png,ico,webp,woff,woff2}"],
+          // Precache only the app shell: index.html, manifest, and the icon set
+          // shipped from /public. JS/CSS chunks and other assets are cached
+          // lazily on first use by the runtimeCaching rules below. This keeps
+          // the SW install fast (was ~395 files; now <10) and prevents stale
+          // chunks from pinning users to old builds.
+          globPatterns: [
+            "index.html",
+            "manifest.json",
+            "favicon.ico",
+            "favicon-32.png",
+            "apple-touch-icon.png",
+            "icon-192.png",
+            "icon-512.png",
+            "icon-1024.png",
+            "icon-maskable-192.png",
+            "icon-maskable-512.png",
+          ],
           runtimeCaching: [
             {
               urlPattern: ({ request }) => request.mode === "navigate",
