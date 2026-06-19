@@ -1578,23 +1578,20 @@ function ExerciseBlock({ row, dayId, dayTitle, clientId, blockId, existingResult
   const hasGuide = Boolean(exerciseId || video);
   const cues = exercise?.cues ?? null;
   const setCount = Math.max(1, row.sets ?? 1);
-  // Effective measurement type: prefer the row's explicit setting; otherwise
-  // fall back to the exercise's default (e.g. planks/holds default to "time").
-  const effectiveMeasurementType: "reps" | "time" =
-    (row as any).measurement_type === "time"
-      ? "time"
-      : ((row as any).exercises?.default_measurement_type === "time" ? "time" : "reps");
+  // Tracking type comes ONLY from the prescription. We do not guess from the
+  // exercise name or the exercise's default measurement type — coaches must
+  // explicitly mark a row as reps+weight, reps only, or time only.
+  const trackingType: "reps_weight" | "reps" | "time" =
+    (row as any).tracking_type === "reps"
+      ? "reps"
+      : ((row as any).tracking_type === "time" || (row as any).measurement_type === "time")
+        ? "time"
+        : "reps_weight";
+  const effectiveMeasurementType: "reps" | "time" = trackingType === "time" ? "time" : "reps";
   const effectivePrescribedDurationSec: number | null =
-    (row as any).duration_seconds ?? (row as any).exercises?.duration_seconds ?? null;
-  // Time-based exercises (planks, dead-hangs, etc.) usually have no added
-  // weight. Only show the Wt column when the prescription actually requires
-  // weight (explicit load or %-based work).
-  const requiresWeight =
-    effectiveMeasurementType !== "time" ||
-    row.load_kg != null ||
-    row.load_lb != null ||
-    row.percentage != null;
-  const hideWeight = !requiresWeight;
+    trackingType === "time" ? ((row as any).duration_seconds ?? null) : null;
+  // Hide the weight column for reps-only and time-only prescriptions.
+  const hideWeight = trackingType !== "reps_weight";
   const exMeta: ExerciseMeta | null = exercise
     ? {
         exercise_category: exercise.exercise_category ?? null,

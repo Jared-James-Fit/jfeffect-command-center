@@ -12461,6 +12461,7 @@ export type Database = {
           sort_order: number
           tempo: string | null
           time_profile: string
+          tracking_type: string
           updated_at: string
         }
         Insert: {
@@ -12497,6 +12498,7 @@ export type Database = {
           sort_order?: number
           tempo?: string | null
           time_profile?: string
+          tracking_type?: string
           updated_at?: string
         }
         Update: {
@@ -12533,6 +12535,7 @@ export type Database = {
           sort_order?: number
           tempo?: string | null
           time_profile?: string
+          tracking_type?: string
           updated_at?: string
         }
         Relationships: [
