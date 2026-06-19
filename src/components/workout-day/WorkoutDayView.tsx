@@ -1643,18 +1643,18 @@ function ExerciseBlock({ row, dayId, dayTitle, clientId, blockId, existingResult
   // This is "Suggested" only — it never auto-confirms a set.
   const suggestedWeight: number | null = useMemo(() => {
     if (row.manual_override) {
-      if (unit === "kg" && row.load_kg) return Number(row.load_kg);
-      if (unit === "lb" && row.load_lb) return Number(row.load_lb);
+      if (activeUnit === "kg" && row.load_kg) return Number(row.load_kg);
+      if (activeUnit === "lb" && row.load_lb) return Number(row.load_lb);
     }
     if (computed && computed.status === "ok" && computed.load != null) {
-      const inUnit = unit === "kg" ? computed.load : computed.load * 2.2046226218;
-      const step = weightIncrement(unit);
+      const inUnit = activeUnit === "kg" ? computed.load : computed.load * 2.2046226218;
+      const step = weightIncrement(activeUnit);
       return Math.round(inUnit / step) * step;
     }
-    if (unit === "kg" && row.load_kg) return Number(row.load_kg);
-    if (unit === "lb" && row.load_lb) return Number(row.load_lb);
+    if (activeUnit === "kg" && row.load_kg) return Number(row.load_kg);
+    if (activeUnit === "lb" && row.load_lb) return Number(row.load_lb);
     return null;
-  }, [row.manual_override, row.load_kg, row.load_lb, computed, unit]);
+  }, [row.manual_override, row.load_kg, row.load_lb, computed, activeUnit]);
 
   const repTarget = useMemo(() => parseRepTarget(row.reps_text), [row.reps_text]);
   const rpeTarget = useMemo(() => parseEffortTarget(row.rpe), [row.rpe]);
