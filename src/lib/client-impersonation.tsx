@@ -18,6 +18,25 @@ interface ImpersonationState {
 const STORAGE_KEY = "jfeffect.clientPov";
 const RETURN_KEY = "jfeffect.clientPovReturn";
 
+function readStoredClient(): ImpersonatedClient | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = sessionStorage.getItem(STORAGE_KEY) || localStorage.getItem(STORAGE_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
+
+function readStoredReturnTo(): string | null {
+  if (typeof window === "undefined") return null;
+  try {
+    return sessionStorage.getItem(RETURN_KEY) || localStorage.getItem(RETURN_KEY);
+  } catch {
+    return null;
+  }
+}
+
 const Ctx = createContext<ImpersonationState>({
   client: null,
   isImpersonating: false,
@@ -27,28 +46,29 @@ const Ctx = createContext<ImpersonationState>({
 });
 
 export function ClientImpersonationProvider({ children }: { children: ReactNode }) {
-  const [client, setClient] = useState<ImpersonatedClient | null>(null);
-  const [returnTo, setReturnTo] = useState<string | null>(null);
+  const [client, setClient] = useState<ImpersonatedClient | null>(() => readStoredClient());
+  const [returnTo, setReturnTo] = useState<string | null>(() => readStoredReturnTo());
 
   useEffect(() => {
-    if (typeof window === "undefined") return;
-    try {
-      const raw = sessionStorage.getItem(STORAGE_KEY);
-      if (raw) setClient(JSON.parse(raw));
-      const ret = sessionStorage.getItem(RETURN_KEY);
-      if (ret) setReturnTo(ret);
-    } catch {}
+    const storedClient = readStoredClient();
+    const storedReturnTo = readStoredReturnTo();
+    if (storedClient) setClient(storedClient);
+    if (storedReturnTo) setReturnTo(storedReturnTo);
   }, []);
 
   const start = useCallback((c: ImpersonatedClient, ret?: string | null) => {
     setClient(c);
     try {
-      sessionStorage.setItem(STORAGE_KEY, JSON.stringify(c));
+      const payload = JSON.stringify(c);
+      sessionStorage.setItem(STORAGE_KEY, payload);
+      localStorage.setItem(STORAGE_KEY, payload);
       if (ret) {
         sessionStorage.setItem(RETURN_KEY, ret);
+        localStorage.setItem(RETURN_KEY, ret);
         setReturnTo(ret);
       } else {
         sessionStorage.removeItem(RETURN_KEY);
+        localStorage.removeItem(RETURN_KEY);
         setReturnTo(null);
       }
     } catch {}
@@ -60,6 +80,8 @@ export function ClientImpersonationProvider({ children }: { children: ReactNode 
     try {
       sessionStorage.removeItem(STORAGE_KEY);
       sessionStorage.removeItem(RETURN_KEY);
+      localStorage.removeItem(STORAGE_KEY);
+      localStorage.removeItem(RETURN_KEY);
     } catch {}
   }, []);
 
