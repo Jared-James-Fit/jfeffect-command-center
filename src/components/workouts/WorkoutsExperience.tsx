@@ -33,6 +33,7 @@ import { ScheduleHistoryDrawer } from "@/components/schedule/ScheduleHistoryDraw
 import { ClientBlockView } from "@/components/client-block-view";
 import { WorkoutStatusSheet } from "@/components/workout-status-sheet";
 import { CircleDot } from "lucide-react";
+import { TrainingScheduleCard } from "@/components/training-schedule-card";
 // Lazy: this card pulls recharts (~120KB). Defer it so the main Workouts
 // view can render without waiting on the chart bundle.
 const TrainingAnalyticsPreviewCard = lazy(() =>
@@ -182,6 +183,14 @@ export function WorkoutsExperience({
       />
 
       <div className="space-y-4 p-4 pb-32 md:p-6">
+
+        {client && (
+          <TrainingScheduleCard
+            client={client as any}
+            editable={mode === "self"}
+            compact
+          />
+        )}
 
         <Tabs defaultValue="calendar" className="space-y-4">
           <TabsList className="grid w-full grid-cols-2 sm:w-auto sm:inline-flex">
