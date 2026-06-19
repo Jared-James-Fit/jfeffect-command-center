@@ -1625,6 +1625,7 @@ function ExerciseBlock({ row, dayId, dayTitle, clientId, blockId, existingResult
           category={exercise?.category ?? null}
           equipment={(exercise as any)?.equipment ?? null}
           difficulty={(exercise as any)?.difficulty ?? null}
+          swapContext={swapContext}
         />
         {cues && (
           <Button size="sm" variant="ghost" onClick={() => setCuesOpen((v) => !v)} className="h-7 px-2 text-xs">
