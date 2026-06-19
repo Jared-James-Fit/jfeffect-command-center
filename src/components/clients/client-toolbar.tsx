@@ -34,7 +34,7 @@ export function ClientToolbar({ search, coachingType, coachId, coaches, sort, is
     if (local === search) return;
     const t = setTimeout(() => {
       navigate({ search: (prev: any) => ({ ...prev, search: local || undefined, page: 1 }) });
-    }, 250);
+    }, 300);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [local]);
