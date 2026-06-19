@@ -140,7 +140,7 @@ export function createMemberAdapter(ref: WorkoutContextRef): WorkoutContextAdapt
       canAssignPrograms: false,
     },
     async listSchedule(opts): Promise<WorkoutScheduleDay[]> {
-      const { schedule } = await getEnrollmentSchedule({ data: { enrollmentId } });
+      const { schedule } = await getEnrollmentSchedule({ data: { enrollmentId, timezone: typeof window !== "undefined" ? Intl.DateTimeFormat().resolvedOptions().timeZone : undefined } });
       // Pull plan payload for titles + completions in parallel.
       const [planRes, completionsRes] = await Promise.all([
         supabase
@@ -222,7 +222,7 @@ export function createMemberAdapter(ref: WorkoutContextRef): WorkoutContextAdapt
       // then shift every affected (week, day) pair by the same number of
       // calendar days. Uses the current resolved schedule (defaults +
       // existing overrides) as the source of truth.
-      const { schedule } = await getEnrollmentSchedule({ data: { enrollmentId } });
+      const { schedule } = await getEnrollmentSchedule({ data: { enrollmentId, timezone: typeof window !== "undefined" ? Intl.DateTimeFormat().resolvedOptions().timeZone : undefined } });
       const target = (schedule ?? []).find(
         (s: any) => s.week === week && s.day === day,
       );
@@ -286,7 +286,7 @@ export function createMemberAdapter(ref: WorkoutContextRef): WorkoutContextAdapt
       const { week, day } = decodeDayId(dayId);
       const { day: dayObj } = await loadPublishedDay(enrollmentId, week, day);
       // Scheduled date comes from the schedule fn so day-level overrides apply.
-      const { schedule } = await getEnrollmentSchedule({ data: { enrollmentId } });
+      const { schedule } = await getEnrollmentSchedule({ data: { enrollmentId, timezone: typeof window !== "undefined" ? Intl.DateTimeFormat().resolvedOptions().timeZone : undefined } });
       const scheduled = (schedule ?? []).find((s: any) => s.week === week && s.day === day);
       return {
         id: dayId,
@@ -711,7 +711,7 @@ export function createMemberAdapter(ref: WorkoutContextRef): WorkoutContextAdapt
       const { week, day } = decodeDayId(dayId);
       const { day: dayObj } = await loadPublishedDay(enrollmentId, week, day);
       if (!dayObj) return null;
-      const { schedule } = await getEnrollmentSchedule({ data: { enrollmentId } });
+      const { schedule } = await getEnrollmentSchedule({ data: { enrollmentId, timezone: typeof window !== "undefined" ? Intl.DateTimeFormat().resolvedOptions().timeZone : undefined } });
       const scheduled = (schedule ?? []).find((s: any) => s.week === week && s.day === day);
       return memberDayToPlDay({ dayId, weekIndex: week, dayIndex: day, dayObj, scheduledDate: scheduled?.date ?? null });
     },
