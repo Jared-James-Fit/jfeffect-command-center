@@ -202,6 +202,36 @@ export async function addWaterEntry(args: {
   entryAt?: string;
 }): Promise<WaterEntry> {
   const amount = Math.max(1, Math.min(5000, Math.round(args.amountMl)));
+  const offline = typeof navigator !== "undefined" && navigator.onLine === false;
+  const entryAt = args.entryAt ?? new Date().toISOString();
+  if (offline) {
+    const { enqueueOfflineWrite } = await import("@/lib/workout-offline-queue");
+    enqueueOfflineWrite({
+      // Unique per entry instant so multiple quick-adds in the same minute
+      // don't collapse into one.
+      id: `water:${args.userId}:${entryAt}`,
+      label: `Water +${amount} ml`,
+      handlerKey: "water_insert",
+      payload: {
+        user_id: args.userId,
+        amount_ml: amount,
+        source: args.source ?? "quick_add",
+        note: args.note ?? null,
+        created_by: args.createdByUserId,
+        entry_at: entryAt,
+      },
+    });
+    return {
+      id: `pending-water-${entryAt}`,
+      user_id: args.userId,
+      amount_ml: amount,
+      source: args.source ?? "quick_add",
+      note: args.note ?? null,
+      created_by: args.createdByUserId,
+      entry_at: entryAt,
+      entry_date: entryAt.slice(0, 10),
+    } as unknown as WaterEntry;
+  }
   const { data, error } = await supabase
     .from("progress_water_entries")
     .insert({
@@ -210,7 +240,7 @@ export async function addWaterEntry(args: {
       source: args.source ?? "quick_add",
       note: args.note ?? null,
       created_by: args.createdByUserId,
-      ...(args.entryAt ? { entry_at: args.entryAt } : {}),
+      entry_at: entryAt,
     } as never)
     .select()
     .single();

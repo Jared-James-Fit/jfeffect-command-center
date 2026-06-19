@@ -24,6 +24,9 @@ import { registerServiceWorker } from "@/lib/pwa/register-sw";
 import { initNativeShell } from "@/platform/native-init";
 import { PwaUpdateToast } from "@/components/pwa/pwa-update-toast";
 import { OnlineOfflineBanner } from "@/components/pwa/online-offline-banner";
+// Side-effect import: registers durable-queue handlers for cross-feature
+// offline writes (bodyweight, water, …) so pending items can drain at boot.
+import "@/lib/offline/data-handlers";
 
 function NotFoundComponent() {
   return (
