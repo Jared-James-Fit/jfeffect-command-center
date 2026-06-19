@@ -1,8 +1,10 @@
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { Card } from "@/components/ui/card";
-import { ClipboardList, Droplets } from "lucide-react";
+import { ClipboardList, Droplets, FileText } from "lucide-react";
 import { getCoachAssignedMealPlan } from "@/lib/nutrition-targets/member-targets.functions";
+import { Button } from "@/components/ui/button";
+import { MealPlanDisplay } from "@/components/meal-plan-display";
 
 type Day = {
   id?: string;
@@ -33,25 +35,22 @@ function DayBlock({ title, day }: { title: string; day: Day | undefined }) {
     <div className="space-y-2">
       <div className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground">{title}</div>
       {day ? (
-        <div className="grid grid-cols-4 gap-2">
-          <MacroCell label="Cal" value={day.calories} />
-          <MacroCell label="Protein" value={day.protein} unit="g" />
-          <MacroCell label="Carbs" value={day.carbs} unit="g" />
-          <MacroCell label="Fats" value={day.fats} unit="g" />
-        </div>
+        <>
+          <div className="grid grid-cols-4 gap-2">
+            <MacroCell label="Cal" value={day.calories} />
+            <MacroCell label="Protein" value={day.protein} unit="g" />
+            <MacroCell label="Carbs" value={day.carbs} unit="g" />
+            <MacroCell label="Fats" value={day.fats} unit="g" />
+          </div>
+          {day.notes && day.notes.trim() ? (
+            <MealPlanDisplay text={day.notes} />
+          ) : null}
+        </>
       ) : (
         <div className="text-xs text-muted-foreground">Not set.</div>
       )}
     </div>
   );
-}
-
-function pickDay(days: Day[], keywords: string[]): Day | undefined {
-  for (const d of days) {
-    const label = (d.day_label || "").toLowerCase();
-    if (keywords.some((k) => label.includes(k))) return d;
-  }
-  return undefined;
 }
 
 export function AssignedPlanSummary() {
@@ -84,10 +83,6 @@ export function AssignedPlanSummary() {
   }
 
   const days: Day[] = plan.days ?? [];
-  const training = pickDay(days, ["training"]) ?? days.find((d) => !/non|high|rest/i.test(d.day_label));
-  const nonTraining = pickDay(days, ["non-training", "non training", "rest"]);
-  const high = pickDay(days, ["high"]);
-  const daily = days.length === 1 ? days[0] : undefined;
 
   return (
     <div className="px-4 md:px-6">
@@ -96,21 +91,28 @@ export function AssignedPlanSummary() {
           <div className="grid h-9 w-9 place-items-center rounded-lg bg-primary/15 text-primary">
             <ClipboardList className="h-4 w-4" />
           </div>
-          <div>
+          <div className="flex-1">
             <div className="text-sm font-black uppercase tracking-widest">Your Nutrition Plan</div>
             <div className="text-[11px] text-muted-foreground">
               {[plan.phase, plan.goal, plan.structure].filter(Boolean).join(" · ") || "Assigned by your coach"}
             </div>
           </div>
+          {plan.pdf_signed_url && (
+            <Button asChild size="sm" variant="outline" className="gap-1.5">
+              <a href={plan.pdf_signed_url} target="_blank" rel="noreferrer">
+                <FileText className="h-3.5 w-3.5" /> {plan.pdf_name || "Open PDF"}
+              </a>
+            </Button>
+          )}
         </div>
 
-        {daily ? (
-          <DayBlock title="Daily Targets" day={daily} />
+        {days.length === 0 ? (
+          <div className="text-xs text-muted-foreground">No meal days set yet.</div>
         ) : (
-          <div className="space-y-4">
-            <DayBlock title="Training Day" day={training} />
-            <DayBlock title="Non-Training Day" day={nonTraining} />
-            <DayBlock title="High Day" day={high} />
+          <div className="space-y-5">
+            {days.map((d, i) => (
+              <DayBlock key={d.id ?? i} title={d.day_label || `Day ${i + 1}`} day={d} />
+            ))}
           </div>
         )}
 
