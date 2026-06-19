@@ -2110,7 +2110,7 @@ function SetRow({
   targetReps, targetRpe, targetRir, suggestedWeight,
   repTarget, rpeTarget, rirTarget,
   hasUncompletedAfter, onApplyToRemaining,
-  readonly = false, unit = "kg", focusMode = false, onChange, onSetCompleted,
+  readonly = false, unit = "kg", hideWeight = false, focusMode = false, onChange, onSetCompleted,
   setCount, measurementType = "reps", prescribedDurationSeconds = null,
 }: {
   rowId: string;
@@ -2135,6 +2135,7 @@ function SetRow({
   onApplyToRemaining?: (fromSetIndex: number, payload: { load: string; reps: string; rpe: string; unit: "kg" | "lb" }) => Promise<void> | void;
   readonly?: boolean;
   unit?: "kg" | "lb";
+  hideWeight?: boolean;
   focusMode?: boolean;
   onChange: () => void;
   onSetCompleted?: (setIndex: number) => void;
