@@ -1030,7 +1030,17 @@ function WorkoutDay({
           (week as any)?.phase || null,
           day.focus || null,
         ].filter(Boolean).join(" · ")}
-        actions={!readonly ? <UndoButton /> : undefined}
+        actions={
+          !readonly ? (
+            <div className="flex items-center gap-2">
+              <WorkoutTimer
+                startedAt={completion?.started_at ?? completion?.in_progress_at ?? null}
+                completedAt={completion?.completed_at ?? null}
+              />
+              <UndoButton />
+            </div>
+          ) : undefined
+        }
       />
       <div className="p-4 md:p-8 space-y-4 pb-[calc(var(--bottom-nav-clearance,96px)+env(safe-area-inset-bottom)+24px)] md:pb-8">
 
