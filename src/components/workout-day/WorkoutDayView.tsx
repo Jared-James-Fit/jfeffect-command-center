@@ -1577,6 +1577,14 @@ function ExerciseBlock({ row, dayId, dayTitle, clientId, blockId, existingResult
   const hasGuide = Boolean(exerciseId || video);
   const cues = exercise?.cues ?? null;
   const setCount = Math.max(1, row.sets ?? 1);
+  // Effective measurement type: prefer the row's explicit setting; otherwise
+  // fall back to the exercise's default (e.g. planks/holds default to "time").
+  const effectiveMeasurementType: "reps" | "time" =
+    (row as any).measurement_type === "time"
+      ? "time"
+      : ((row as any).exercises?.default_measurement_type === "time" ? "time" : "reps");
+  const effectivePrescribedDurationSec: number | null =
+    (row as any).duration_seconds ?? (row as any).exercises?.duration_seconds ?? null;
   const exMeta: ExerciseMeta | null = exercise
     ? {
         exercise_category: exercise.exercise_category ?? null,
