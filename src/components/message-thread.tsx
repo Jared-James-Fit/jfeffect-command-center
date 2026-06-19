@@ -1574,6 +1574,19 @@ export function MessageThread({
               placeholder={role === "client" ? "Message Coach Jared…" : "Reply to client…"}
               rows={1}
               className="min-h-[40px] max-h-40 flex-1 resize-none rounded-full border-border/60 bg-background/60 px-4 py-2 text-sm leading-snug focus-visible:ring-1 focus-visible:ring-border focus-visible:border-border"
+              onFocus={() => {
+                // When the on-screen keyboard opens (composer focus), the
+                // outer chat container shrinks via --vv-h. Pin the scroller
+                // to the bottom across the next few frames so the latest
+                // message stays glued above the keyboard.
+                const el = scrollerRef.current;
+                if (!el) return;
+                const pin = () => { el.scrollTop = el.scrollHeight; };
+                pin();
+                requestAnimationFrame(pin);
+                setTimeout(pin, 150);
+                setTimeout(pin, 350);
+              }}
               onKeyDown={(e) => {
                 if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
                   e.preventDefault(); onSend();
