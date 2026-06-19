@@ -41,7 +41,11 @@ export const GOOGLE_SCOPES = [
 ];
 
 function signingSecret(): string {
-  return process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_PUBLISHABLE_KEY || "fallback-state-secret";
+  const s = process.env.GOOGLE_OAUTH_STATE_SECRET;
+  if (!s || s.length < 32) {
+    throw new Error("GOOGLE_OAUTH_STATE_SECRET is not configured (must be at least 32 chars).");
+  }
+  return s;
 }
 
 export function signOAuthState(payload: Record<string, unknown>): string {
