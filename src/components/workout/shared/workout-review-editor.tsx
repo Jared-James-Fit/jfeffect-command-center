@@ -48,6 +48,8 @@ type Props = {
   hasCoach?: boolean;
   initial?: ReviewInitial | null;
   onSaved?: () => void;
+  /** Admin/coach POV: submit on behalf of this client id. */
+  actAsClientId?: string | null;
 };
 
 export function WorkoutReviewEditor({
@@ -57,6 +59,7 @@ export function WorkoutReviewEditor({
   hasCoach,
   initial,
   onSaved,
+  actAsClientId,
 }: Props) {
   const submit = useServerFn(submitOrEditReview);
   const isEdit = !!initial?.submittedAt;
@@ -89,6 +92,7 @@ export function WorkoutReviewEditor({
           painArea: null,
           painNote: null,
           clientNote: note.trim() ? note.trim() : null,
+          actAsClientId: actAsClientId ?? null,
         },
       });
     },
