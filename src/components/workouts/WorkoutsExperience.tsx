@@ -310,7 +310,7 @@ function statusDotClass(status: WorkoutStatus | "none"): string {
       return "bg-emerald-500";
     case "today": return "bg-primary";
     case "in_progress": return "bg-amber-500";
-    case "missed": return "bg-amber-500";
+    case "missed": return "bg-rose-500";
     case "upcoming": return "bg-muted-foreground/60";
     case "available":
     case "not_started":
