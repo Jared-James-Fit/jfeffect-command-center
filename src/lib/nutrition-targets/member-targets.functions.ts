@@ -112,12 +112,27 @@ export const getActiveMemberTargets = createServerFn({ method: "GET" })
 /** Member: read the coach-assigned nutrition meal plan (phases, days, notes, PDF). */
 export const getCoachAssignedMealPlan = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
-  .handler(async ({ context }) => {
+  .inputValidator((d) =>
+    z.object({ viewAsUserId: z.string().uuid().optional() }).parse(d ?? {}),
+  )
+  .handler(async ({ data, context }) => {
     const { supabase, userId } = context;
+    // Resolve which client we are reading for. Admin/coach can pass
+    // viewAsUserId to read as that client (POV mode); regular members read
+    // their own data.
+    let effectiveUserId = userId;
+    if (data?.viewAsUserId && data.viewAsUserId !== userId) {
+      const [{ data: isAdmin }, { data: isCoach }] = await Promise.all([
+        supabase.rpc("has_role", { _user_id: userId, _role: "admin" }),
+        supabase.rpc("has_role", { _user_id: userId, _role: "coach" }),
+      ]);
+      if (!isAdmin && !isCoach) throw new Error("Forbidden");
+      effectiveUserId = data.viewAsUserId;
+    }
     const { data: client } = await supabase
       .from("clients")
       .select("id")
-      .eq("user_id", userId)
+      .eq("user_id", effectiveUserId)
       .maybeSingle();
     if (!client?.id) return null;
     const { data: target } = await supabase
