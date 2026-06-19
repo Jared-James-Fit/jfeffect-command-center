@@ -65,14 +65,13 @@ export function ClientRow({ r, onArchive }: { r: DirectoryRow; onArchive?: (r: D
         .eq("id", r.id)
         .single();
       if (error) throw error;
-      if (!data?.user_id) {
-        toast.error("This client has no account yet — send a setup link first.");
-        return;
-      }
       impersonation.start(
-        { id: r.id, user_id: data.user_id, full_name: data.full_name ?? r.full_name },
+        { id: r.id, user_id: data?.user_id ?? null, full_name: data?.full_name ?? r.full_name },
         typeof window !== "undefined" ? window.location.pathname + window.location.search : "/admin/clients",
       );
+      if (!data?.user_id) {
+        toast.message("Entering POV preview — client account isn't set up yet, so personal data will be empty.");
+      }
       navigate({ to: "/portal" });
     } catch (e: any) {
       toast.error(e?.message ?? "Could not enter POV");

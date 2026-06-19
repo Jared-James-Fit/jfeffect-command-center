@@ -105,5 +105,9 @@ export function useClientImpersonation() {
 export function usePortalUserId(): string | undefined {
   const { user } = useAuth();
   const { client } = useClientImpersonation();
-  return client?.user_id ?? user?.id;
+  // When impersonating, always use the client's user_id — even if null/undefined
+  // (account not yet set up). Returning the admin's own id here would mix their
+  // personal data into the client POV, which is wrong.
+  if (client) return client.user_id ?? undefined;
+  return user?.id;
 }
