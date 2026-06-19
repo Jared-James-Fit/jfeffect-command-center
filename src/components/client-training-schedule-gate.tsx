@@ -18,10 +18,19 @@ export function ClientTrainingScheduleGate({ children }: { children: ReactNode }
   const { data: client, isLoading } = useQuery({
     queryKey: ["my-client-schedule-gate", user?.id],
     enabled: !!user && !isImpersonating,
+    // Keep fresh for a few minutes — gate is checked on every portal route
+    // and the schedule rarely changes. Avoids re-hitting the wide clients
+    // table on every nav.
+    staleTime: 5 * 60_000,
+    gcTime: 30 * 60_000,
     queryFn: async () => {
+      // Only the columns the gate + TrainingScheduleCard actually render.
+      // `clients` has 170+ columns; `select *` here was the slow path.
       const { data, error } = await supabase
         .from("clients")
-        .select("*")
+        .select(
+          "id, training_schedule_completed, training_schedule_last_updated, schedule_updated_at, committed_training_frequency, committed_training_days, preferred_training_days, preferred_rest_days, preferred_high_days, schedule_notes, available_training_days, unavailable_training_days, preferred_training_time, schedule_changes_weekly",
+        )
         .eq("user_id", user!.id)
         .maybeSingle();
       if (error) throw error;
