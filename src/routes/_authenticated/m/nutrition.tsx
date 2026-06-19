@@ -10,6 +10,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { NutritionDashboard, type NutritionTargets } from "@/components/nutrition/NutritionDashboard";
 import { getActiveMemberTargets } from "@/lib/nutrition-targets/member-targets.functions";
 import { DailyNutritionPanel } from "@/components/nutrition/DailyNutritionPanel";
+import { MemberMealPlanPanel } from "@/components/nutrition/MemberMealPlanPanel";
 
 export const Route = createFileRoute("/_authenticated/m/nutrition")({
   component: MemberNutrition,
@@ -60,6 +61,7 @@ function MemberNutrition() {
         title="Nutrition"
         subtitle="Targets, recipes, and recovery — all in one place."
       />
+      <MemberMealPlanPanel />
       <DailyNutritionPanel />
       {showSetupCta && (
         <div className="p-4 md:p-6 pb-0">

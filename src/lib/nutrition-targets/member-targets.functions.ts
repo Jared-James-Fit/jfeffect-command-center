@@ -109,6 +109,64 @@ export const getActiveMemberTargets = createServerFn({ method: "GET" })
     };
   });
 
+/** Member: read the coach-assigned nutrition meal plan (phases, days, notes, PDF). */
+export const getCoachAssignedMealPlan = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const { supabase, userId } = context;
+    const { data: client } = await supabase
+      .from("clients")
+      .select("id")
+      .eq("user_id", userId)
+      .maybeSingle();
+    if (!client?.id) return null;
+    const { data: target } = await supabase
+      .from("nutrition_targets")
+      .select(
+        "id, phase, custom_phase, goal, custom_goal, structure, status, start_date, end_date, water, client_notes, pdf_url, pdf_name, visible_to_client, nutrition_target_days(id, day_label, calories, protein, carbs, fats, fibre, notes, sort_order)",
+      )
+      .eq("client_id", client.id)
+      .eq("visible_to_client", true)
+      .neq("status", "Archived")
+      .order("start_date", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (!target) return null;
+    const days = ((target as any).nutrition_target_days ?? [])
+      .slice()
+      .sort((a: any, b: any) => (a.sort_order ?? 0) - (b.sort_order ?? 0));
+    let pdf_signed_url: string | null = null;
+    if ((target as any).pdf_url) {
+      const { data: signed } = await supabase.storage
+        .from("nutrition-plans")
+        .createSignedUrl((target as any).pdf_url, 60 * 60);
+      pdf_signed_url = signed?.signedUrl ?? null;
+    }
+    return {
+      id: (target as any).id,
+      phase: (target as any).custom_phase || (target as any).phase || null,
+      goal: (target as any).custom_goal || (target as any).goal || null,
+      structure: (target as any).structure ?? null,
+      status: (target as any).status ?? null,
+      start_date: (target as any).start_date ?? null,
+      end_date: (target as any).end_date ?? null,
+      water: (target as any).water ?? null,
+      client_notes: (target as any).client_notes ?? null,
+      pdf_name: (target as any).pdf_name ?? null,
+      pdf_signed_url,
+      days: days.map((d: any) => ({
+        id: d.id,
+        day_label: d.day_label,
+        calories: d.calories ?? null,
+        protein: d.protein ?? null,
+        carbs: d.carbs ?? null,
+        fats: d.fats ?? null,
+        fibre: d.fibre ?? null,
+        notes: d.notes ?? null,
+      })),
+    };
+  });
+
 /** Calculate + save active targets for the current member. */
 export const saveCalculatedTargets = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
