@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
-import { Scale, TrendingDown, TrendingUp, Minus, Trash2 } from "lucide-react";
+import { Scale, TrendingDown, TrendingUp, Minus, Trash2, Loader2 } from "lucide-react";
 import { format } from "date-fns";
 import { parseLocalDate, todayLocalISO } from "@/lib/today";
 import { toast } from "sonner";
