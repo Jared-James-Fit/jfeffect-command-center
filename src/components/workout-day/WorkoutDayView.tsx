@@ -1735,7 +1735,7 @@ function ExerciseBlock({ row, dayId, dayTitle, clientId, blockId, existingResult
           sets: row.sets,
           repsText: row.reps_text,
           suggestedWeight,
-          unit,
+          unit: activeUnit,
           percentage: row.percentage,
           percentageBasis: row.percentage_basis,
           manualOverride: row.manual_override,
@@ -1753,17 +1753,17 @@ function ExerciseBlock({ row, dayId, dayTitle, clientId, blockId, existingResult
             convertWeight(
               (row.load_kg ?? row.load_lb) as number,
               row.load_kg ? "kg" : "lb",
-              unit,
+              activeUnit,
             ).toFixed(1),
           )}
-          unit={unit}
+          unit={activeUnit}
           exerciseName={name}
         />
       )}
       {!row.manual_override && computed && computed.status === "ok" && computed.load != null && (
         <SuggestedLoadBadge
-          load={Number(convertWeight(computed.load, computed.unit, unit).toFixed(1))}
-          unit={unit}
+          load={Number(convertWeight(computed.load, computed.unit, activeUnit).toFixed(1))}
+          unit={activeUnit}
           exerciseName={name}
         />
       )}
@@ -1780,7 +1780,7 @@ function ExerciseBlock({ row, dayId, dayTitle, clientId, blockId, existingResult
             clientId={clientId}
             exerciseId={exerciseId}
             exerciseName={name}
-            displayUnit={unit}
+            displayUnit={activeUnit}
           />
         )}
         {hasGuide && (
