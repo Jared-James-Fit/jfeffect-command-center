@@ -1820,7 +1820,7 @@ function ExerciseBlock({ row, dayId, dayTitle, clientId, blockId, existingResult
         <div className={cn("grid items-center gap-1.5 border-b border-builder-card-border bg-builder-card/60 px-2.5 py-1.5 text-[10px] font-bold uppercase tracking-wider text-muted-foreground", focusMode ? "grid-cols-[36px_1.1fr_1.1fr_1fr_52px] text-xs" : "grid-cols-[28px_1.1fr_1.1fr_1fr_44px]")}>
           <span>Set</span>
           <span>{(row as any).measurement_type === "time" ? "Time" : "Reps"}</span>
-          <span className="truncate">Wt ({unit.toUpperCase()})</span>
+          <span className="truncate">Wt ({activeUnit.toUpperCase()})</span>
           <span>{showRir ? "RIR" : "RPE"}</span>
           <span className="text-right">Status</span>
         </div>
