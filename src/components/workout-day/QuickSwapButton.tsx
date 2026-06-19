@@ -43,25 +43,12 @@ type ExerciseLite = {
   thumbnail_url?: string | null;
   cues?: string | null;
   common_mistakes?: string | null;
+  default_measurement_type?: string | null;
+  primary_movement_pattern?: string | null;
 };
 
 type RankedSuggestion = { ex: ExerciseLite; reason: string };
 
-/**
- * Deterministic ranker. Uses whatever metadata the row actually has —
- * `category` is the strongest squat-bucket signal in this library, then
- * `muscle_group` (treated as a tokenized set since values like
- * "Quads, glutes, adductors, core" share tokens across variants), then a
- * keyword fallback on the source name's distinctive token (Squat, Press,
- * Deadlift, Row, etc).
- *
- * Buckets, in order, dedupe across:
- *   1. same category + same equipment           → "Closest match"
- *   2. same category + same difficulty          → "Same movement"
- *   3. same category (any equipment)            → "Same movement"
- *   4. shared muscle-group tokens               → "Same muscles"
- *   5. shared distinctive keyword in name       → "Similar"
- */
 function tokenize(s: string | null | undefined): string[] {
   if (!s) return [];
   return s
@@ -80,9 +67,93 @@ const KEYWORD_STOPWORDS = new Set([
 
 function distinctiveKeyword(name: string): string | null {
   const toks = tokenize(name).filter((t) => !KEYWORD_STOPWORDS.has(t));
-  // Prefer the last token, which is usually the movement noun
-  // ("Competition Squat" → "squat", "Romanian Deadlift" → "deadlift").
   return toks[toks.length - 1] ?? null;
+}
+
+/**
+ * Movement-pattern synonym groups. When the source exercise's name (or
+ * primary_movement_pattern) matches one of `keywords`, we treat every
+ * `synonyms` entry as an equally valid alternate — so Leg Press finds
+ * Hack/Pendulum/Belt Squat even though the library has no shared
+ * `category` or muscle metadata to tie them together.
+ */
+const MOVEMENT_GROUPS: { label: string; keywords: string[]; synonyms: string[] }[] = [
+  { label: "Machine squat / leg press",
+    keywords: ["leg press","hack squat","pendulum squat","belt squat","smith squat"],
+    synonyms: ["leg press","hack squat","pendulum squat","belt squat","smith squat"] },
+  { label: "Squat",
+    keywords: ["back squat","front squat","goblet squat","safety bar squat","competition squat","paused squat","box squat","tempo squat"],
+    synonyms: ["squat"] },
+  { label: "Lunge / split squat",
+    keywords: ["lunge","split squat","bulgarian","step-up","step up"],
+    synonyms: ["lunge","split squat","bulgarian","step-up","step up"] },
+  { label: "Hip hinge",
+    keywords: ["deadlift","romanian deadlift","rdl","stiff leg","good morning","hip thrust","glute bridge","back extension","45 extension","hyperextension"],
+    synonyms: ["deadlift","rdl","romanian","good morning","hip thrust","glute bridge","extension"] },
+  { label: "Horizontal row",
+    keywords: ["chest supported row","cable row","dumbbell row","barbell row","seal row","pendlay row","t-bar row","tbar row","machine row","seated row","bent over row","bent-over row","meadows row"],
+    synonyms: ["row"] },
+  { label: "Vertical pull",
+    keywords: ["pull-up","pull up","pullup","chin-up","chin up","chinup","lat pulldown","pulldown"],
+    synonyms: ["pull-up","pull up","pullup","chin","pulldown","lat pull"] },
+  { label: "Horizontal push",
+    keywords: ["bench press","push-up","push up","pushup","dumbbell press","db press","machine chest press","chest press","incline press","decline press","floor press","pec deck","cable fly","chest fly"],
+    synonyms: ["bench","press","push-up","push up","pushup","chest press","fly","pec deck"] },
+  { label: "Overhead press",
+    keywords: ["overhead press","ohp","shoulder press","military press","seated press","arnold press","landmine press"],
+    synonyms: ["overhead","shoulder press","military","ohp"] },
+  { label: "Side delt",
+    keywords: ["lateral raise","side raise","cable lateral","db lateral","y raise"],
+    synonyms: ["lateral raise","side raise","y raise"] },
+  { label: "Rear delt",
+    keywords: ["rear delt","reverse fly","face pull","rear fly"],
+    synonyms: ["rear delt","reverse fly","face pull","rear fly"] },
+  { label: "Biceps",
+    keywords: ["curl","hammer curl","preacher curl","incline curl","spider curl","ez curl","cable curl","drag curl","bayesian"],
+    synonyms: ["curl","biceps"] },
+  { label: "Triceps",
+    keywords: ["pushdown","tricep extension","triceps extension","skull crusher","skullcrusher","jm press","close grip bench","dip","overhead extension","kickback"],
+    synonyms: ["tricep","pushdown","skull crusher","jm press","dip","kickback","extension"] },
+  { label: "Calf",
+    keywords: ["calf raise","standing calf","seated calf","donkey calf"],
+    synonyms: ["calf"] },
+  { label: "Adductor / Copenhagen",
+    keywords: ["copenhagen","adductor","hip adduction"],
+    synonyms: ["copenhagen","adductor","hip adduction","side plank"] },
+  { label: "Abductor",
+    keywords: ["abductor","hip abduction","banded walk","monster walk"],
+    synonyms: ["abductor","hip abduction","banded walk","monster walk","clam"] },
+  { label: "Side plank / oblique",
+    keywords: ["side plank","oblique","copenhagen","windshield wiper","russian twist"],
+    synonyms: ["side plank","oblique","copenhagen","windshield wiper","russian twist"] },
+  { label: "Plank / anti-extension",
+    keywords: ["plank","ab wheel","rollout","dead bug","hollow"],
+    synonyms: ["plank","ab wheel","rollout","dead bug","hollow"] },
+  { label: "Hamstring curl",
+    keywords: ["leg curl","hamstring curl","nordic","slider curl"],
+    synonyms: ["leg curl","hamstring curl","nordic"] },
+  { label: "Quad isolation",
+    keywords: ["leg extension","sissy squat","cyclist squat"],
+    synonyms: ["leg extension","sissy","cyclist"] },
+];
+
+function matchMovementGroups(src: ExerciseLite): typeof MOVEMENT_GROUPS {
+  const haystack = `${src.name ?? ""} ${src.primary_movement_pattern ?? ""}`.toLowerCase();
+  return MOVEMENT_GROUPS.filter((g) => g.keywords.some((k) => haystack.includes(k)));
+}
+
+/** Coarse equipment family so "Machine" ≈ "Leg press" ≈ "Cable machine". */
+function equipmentFamily(equipment: string | null | undefined): string {
+  const eq = (equipment ?? "").toLowerCase();
+  if (!eq) return "unknown";
+  if (/bodyweight/.test(eq)) return "bodyweight";
+  if (/barbell/.test(eq)) return "barbell";
+  if (/dumbbell/.test(eq)) return "dumbbell";
+  if (/kettlebell/.test(eq)) return "kettlebell";
+  if (/band/.test(eq)) return "band";
+  if (/cable/.test(eq)) return "cable";
+  if (/smith|hack|pendulum|leg press|belt squat|machine|pec deck/.test(eq)) return "machine";
+  return "other";
 }
 
 function rankSuggestions(src: ExerciseLite, pool: ExerciseLite[]): RankedSuggestion[] {
@@ -96,11 +167,30 @@ function rankSuggestions(src: ExerciseLite, pool: ExerciseLite[]): RankedSuggest
     if (srcTokens.size === 0) return false;
     return tokenize(e.muscle_group).some((t) => srcTokens.has(t));
   };
+  const srcGroups = matchMovementGroups(src);
+  const srcGroupKey = new Set(srcGroups.map((g) => g.label));
+  const inSameGroup = (e: ExerciseLite) => {
+    if (srcGroupKey.size === 0) return false;
+    const groups = matchMovementGroups(e);
+    return groups.some((g) => srcGroupKey.has(g.label));
+  };
+  const srcFamily = equipmentFamily(src.equipment);
+  const sameFamily = (e: ExerciseLite) => equipmentFamily(e.equipment) === srcFamily && srcFamily !== "unknown";
+  const sameTracking = (e: ExerciseLite) =>
+    !!src.default_measurement_type &&
+    e.default_measurement_type === src.default_measurement_type;
 
   const buckets: Array<[ExerciseLite[], string]> = [
+    // Movement-group matches come first — these are the curated synonyms
+    // (Leg Press ↔ Hack/Pendulum/Belt Squat, Copenhagen ↔ side plank, etc.)
+    [cand.filter((e) => inSameGroup(e) && sameFamily(e) && sameTracking(e)).sort(byName), "Same pattern · same equipment"],
+    [cand.filter((e) => inSameGroup(e) && sameFamily(e)).sort(byName), "Same pattern · similar equipment"],
+    [cand.filter((e) => inSameGroup(e) && sameTracking(e)).sort(byName), "Same pattern"],
+    [cand.filter(inSameGroup).sort(byName), "Same pattern"],
     [cand.filter((e) => sameCat(e) && e.equipment === src.equipment).sort(byName), "Closest match"],
-    [cand.filter((e) => sameCat(e) && e.difficulty && e.difficulty === src.difficulty).sort(byName), "Same movement"],
+    [cand.filter((e) => sameCat(e) && sameFamily(e)).sort(byName), "Same category · similar equipment"],
     [cand.filter(sameCat).sort(byName), "Same movement"],
+    [cand.filter((e) => sharedMuscles(e) && sameTracking(e)).sort(byName), "Same muscles"],
     [cand.filter(sharedMuscles).sort(byName), "Same muscles"],
     [
       kw
@@ -116,12 +206,12 @@ function rankSuggestions(src: ExerciseLite, pool: ExerciseLite[]): RankedSuggest
   const seen = new Set<string>();
   for (const [bucket, reason] of buckets) {
     for (const e of bucket) {
-      if (out.length >= 12) break;
+      if (out.length >= 16) break;
       if (seen.has(e.id)) continue;
       seen.add(e.id);
       out.push({ ex: e, reason });
     }
-    if (out.length >= 12) break;
+    if (out.length >= 16) break;
   }
   return out;
 }
@@ -157,7 +247,7 @@ function matchesChip(chip: EquipmentChip, equipment: string | null): boolean {
   }
 }
 
-const SELECT_COLS = "id,name,muscle_group,category,equipment,difficulty,vimeo_embed_url,youtube_url,thumbnail_url,cues,common_mistakes";
+const SELECT_COLS = "id,name,muscle_group,category,equipment,difficulty,vimeo_embed_url,youtube_url,thumbnail_url,cues,common_mistakes,default_measurement_type,primary_movement_pattern";
 const PAGE_SIZE = 20;
 
 function useDebounced<T>(value: T, ms: number): T {
@@ -343,7 +433,7 @@ export function QuickSwapButton({
     retry: 1,
     queryFn: async () => {
       if (!exerciseId) return [] as RankedSuggestion[];
-      const src: ExerciseLite = {
+      let src: ExerciseLite = {
         id: exerciseId,
         name: exerciseName,
         muscle_group: muscleGroup ?? null,
@@ -352,15 +442,49 @@ export function QuickSwapButton({
         difficulty: difficulty ?? null,
       };
 
-      // Tier 1: same category — cheap, indexed, and the strongest signal
-      // in this library ("Squat" buckets all squat variants together).
-      // PostgREST .or() treats commas in values as separators, so we
-      // call .eq() per filter and merge client-side instead.
+      // Pull authoritative source metadata so ranking has the full
+      // picture (default_measurement_type, primary_movement_pattern,
+      // canonical muscle_group string) even when the row only carried
+      // an exerciseId.
+      const { data: srcRow } = await supabase
+        .from("exercises")
+        .select(SELECT_COLS)
+        .eq("id", exerciseId)
+        .maybeSingle();
+      if (srcRow) src = { ...src, ...(srcRow as ExerciseLite), id: exerciseId, name: srcRow.name ?? exerciseName };
+
       const pool = new Map<string, ExerciseLite>();
       const ingest = (rows: ExerciseLite[] | null | undefined) => {
         for (const r of rows ?? []) if (r.id !== exerciseId) pool.set(r.id, r);
       };
 
+      // Tier 0: pull every exercise whose name matches a synonym of any
+      // movement group the source belongs to. This is what makes
+      // Leg Press → Hack/Pendulum/Belt Squat work even with no shared
+      // category. PostgREST's .or() needs ilike.*pattern* and commas
+      // would split values, so issue parallel queries instead.
+      const srcGroups = matchMovementGroups(src);
+      const synonyms = Array.from(
+        new Set(srcGroups.flatMap((g) => g.synonyms.map((s) => s.toLowerCase()))),
+      );
+      if (synonyms.length > 0) {
+        const results = await Promise.all(
+          synonyms.map((syn) =>
+            supabase
+              .from("exercises")
+              .select(SELECT_COLS)
+              .eq("archived", false)
+              .ilike("name", `%${syn}%`)
+              .neq("id", exerciseId)
+              .limit(40)
+              .then((r) => (r.error ? [] : ((r.data ?? []) as ExerciseLite[]))),
+          ),
+        );
+        for (const rows of results) ingest(rows);
+      }
+
+      // Tier 1: same category — still the strongest signal when the
+      // movement-group net misses (e.g. "Abdominals" catches a lot).
       if (src.category) {
         const { data, error } = await supabase
           .from("exercises")
@@ -374,8 +498,6 @@ export function QuickSwapButton({
       }
 
       // Tier 2: keyword fallback on the distinctive movement noun
-      // ("Competition Squat" → "squat") — catches squats whose category
-      // string differs ("Legs" vs "Squat") and bulks out thin pools.
       const kw = distinctiveKeyword(src.name);
       if (kw && pool.size < 24) {
         const { data, error } = await supabase
