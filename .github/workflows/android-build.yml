@@ -63,7 +63,9 @@ jobs:
 
       - name: Run cap sync (generates capacitor.settings.gradle)
         run: |
-          npx cap sync android --no-build
+          # cap sync copies config and generates capacitor.settings.gradle
+          # The app uses server.url so no web dist is needed
+          npx cap sync android
           echo "✅ cap sync complete"
           ls android/capacitor.settings.gradle 2>/dev/null && echo "capacitor.settings.gradle exists" || echo "WARNING: capacitor.settings.gradle missing"
 
