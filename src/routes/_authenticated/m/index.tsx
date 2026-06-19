@@ -188,14 +188,3 @@ function MemberHome() {
     </div>
   );
 }
-
-function QuickCard({ to, icon: Icon, label }: { to: string; icon: any; label: string }) {
-  return (
-    <Link to={to}>
-      <Card className="p-5 transition hover:bg-muted/40">
-        <Icon className="h-5 w-5 text-primary" />
-        <div className="mt-3 text-sm font-semibold">{label}</div>
-      </Card>
-    </Link>
-  );
-}
