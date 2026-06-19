@@ -2693,68 +2693,88 @@ function RowEditor({ row, setRow, onDelete, exercises, compact, onMoveUp, onMove
         </Field>
         <Field className="col-span-3" label=" ">
           {(() => {
-            const isTime = (row as any).measurement_type === "time";
-            const toggle = (next: "reps" | "time") => {
-              if (next === ((row as any).measurement_type ?? "reps")) return;
+            // Three explicit tracking types: reps + weight, reps only, time only.
+            // The prescription drives what the client logs — no name-based guesses.
+            const tracking: "reps_weight" | "reps" | "time" =
+              (row as any).tracking_type === "reps"
+                ? "reps"
+                : (row as any).tracking_type === "time" || (row as any).measurement_type === "time"
+                  ? "time"
+                  : "reps_weight";
+            const isTime = tracking === "time";
+            const setTracking = (next: "reps_weight" | "reps" | "time") => {
+              if (next === tracking) return;
               if (next === "time") {
-                // reps -> time: snapshot reps, restore prior duration if any
                 const restored = (row as any).duration_seconds_backup ?? null;
                 setRow({
                   ...row,
+                  tracking_type: "time",
                   measurement_type: "time",
                   reps_text_backup: row.reps_text || (row as any).reps_text_backup || null,
                   reps_text: "",
                   duration_seconds: restored,
+                  // time-only: no loaded weight
+                  load_kg: null,
+                  load_lb: null,
+                  percentage: null,
+                  percentage_basis: "none",
+                  manual_override: false,
                 });
-              } else {
-                // time -> reps: snapshot duration, restore prior reps if any
+              } else if (next === "reps") {
                 const restored = (row as any).reps_text_backup ?? "";
                 setRow({
                   ...row,
+                  tracking_type: "reps",
                   measurement_type: "reps",
                   duration_seconds_backup: (row as any).duration_seconds ?? (row as any).duration_seconds_backup ?? null,
                   duration_seconds: null,
-                  reps_text: restored,
+                  reps_text: row.reps_text || restored,
+                  // reps-only: no weight
+                  load_kg: null,
+                  load_lb: null,
+                  percentage: null,
+                  percentage_basis: "none",
+                  manual_override: false,
+                });
+              } else {
+                const restored = (row as any).reps_text_backup ?? "";
+                setRow({
+                  ...row,
+                  tracking_type: "reps_weight",
+                  measurement_type: "reps",
+                  duration_seconds_backup: (row as any).duration_seconds ?? (row as any).duration_seconds_backup ?? null,
+                  duration_seconds: null,
+                  reps_text: row.reps_text || restored,
                 });
               }
             };
-            // Subtle pill toggle used as the field's title. Sits above the
-            // input box, blends with the card surface, and reads as a label
-            // rather than a heavy segmented control.
+            const PillBtn = ({ value, label, title }: { value: "reps_weight" | "reps" | "time"; label: string; title: string }) => (
+              <button
+                type="button"
+                onClick={() => setTracking(value)}
+                className={cn(
+                  "px-2 py-1 transition border-l first:border-l-0 border-border/40",
+                  tracking === value
+                    ? "bg-primary/15 text-primary"
+                    : "text-muted-foreground hover:text-foreground",
+                )}
+                title={title}
+                aria-pressed={tracking === value}
+              >{label}</button>
+            );
             return (
               <div className="flex flex-col gap-0.5 min-w-0">
                 <div
                   className="inline-flex shrink-0 self-start overflow-hidden rounded-md border border-border/40 bg-muted/30 text-[11px] font-semibold uppercase tracking-wide leading-none"
                   role="group"
-                  aria-label="Measurement type"
+                  aria-label="Tracking type"
                 >
-                  <button
-                    type="button"
-                    onClick={() => toggle("reps")}
-                    className={cn(
-                      "px-2 py-1 transition",
-                      !isTime
-                        ? "bg-primary/15 text-primary"
-                        : "text-muted-foreground hover:text-foreground",
-                    )}
-                    title="Programmed in reps"
-                    aria-pressed={!isTime}
-                  >Reps</button>
-                  <button
-                    type="button"
-                    onClick={() => toggle("time")}
-                    className={cn(
-                      "px-2 py-1 transition border-l border-border/40",
-                      isTime
-                        ? "bg-primary/15 text-primary"
-                        : "text-muted-foreground hover:text-foreground",
-                    )}
-                    title="Programmed in time"
-                    aria-pressed={isTime}
-                  >Time</button>
+                  <PillBtn value="reps_weight" label="Reps + Wt" title="Programmed in reps with weight" />
+                  <PillBtn value="reps" label="Reps" title="Programmed in reps only (bodyweight)" />
+                  <PillBtn value="time" label="Time" title="Programmed in time" />
                 </div>
                 <div className="flex items-stretch gap-1">
-                  {(row as any).measurement_type === "time" ? (
+                  {isTime ? (
                     <>
                       <DurationInput
                         valueSeconds={(row as any).duration_seconds ?? null}
