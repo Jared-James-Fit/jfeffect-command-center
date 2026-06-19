@@ -5732,11 +5732,11 @@ export type Database = {
           id: string
           ip_address: unknown
           legal_acceptance_ids: string[]
-          password_hash: string
           phone: string | null
           session_id: string
           sms_consent: boolean
           user_agent: string | null
+          user_id: string | null
         }
         Insert: {
           acknowledgement_text?: string | null
@@ -5747,11 +5747,11 @@ export type Database = {
           id?: string
           ip_address?: unknown
           legal_acceptance_ids?: string[]
-          password_hash: string
           phone?: string | null
           session_id: string
           sms_consent?: boolean
           user_agent?: string | null
+          user_id?: string | null
         }
         Update: {
           acknowledgement_text?: string | null
@@ -5762,11 +5762,11 @@ export type Database = {
           id?: string
           ip_address?: unknown
           legal_acceptance_ids?: string[]
-          password_hash?: string
           phone?: string | null
           session_id?: string
           sms_consent?: boolean
           user_agent?: string | null
+          user_id?: string | null
         }
         Relationships: []
       }
