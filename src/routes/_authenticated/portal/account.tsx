@@ -8,7 +8,8 @@ import { useAuth } from "@/lib/auth";
 import { PageHeader } from "@/components/app-shell";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { ShieldAlert, CreditCard, Settings } from "lucide-react";
+import { ShieldAlert, CreditCard, Settings, Trash2 } from "lucide-react";
+import { isNative } from "@/platform";
 import { toast } from "sonner";
 import { createCustomerPortalSession } from "@/lib/stripe-checkout.functions";
 import { ProfilePictureCapture } from "@/components/profile-picture-capture";
@@ -246,10 +247,28 @@ function AccountPage() {
           </SectionErrorBoundary>
         </div>
 
-        {/* ── Billing & Subscription ─────────────────────────────────────── */}
-        <SectionErrorBoundary label="Billing & Subscription" className="md:col-span-3">
-          <BillingSection clientId={client?.id} />
-        </SectionErrorBoundary>
+        {/* ── Billing & Subscription — hidden on native (purchases not available in Android app) ── */}
+        {!isNative() && (
+          <SectionErrorBoundary label="Billing & Subscription" className="md:col-span-3">
+            <BillingSection clientId={client?.id} />
+          </SectionErrorBoundary>
+        )}
+
+        {/* ── Delete Account — required by Google Play and Apple App Store policies ── */}
+        <div className="md:col-span-3">
+          <Card className="border-destructive/30 bg-card p-6 space-y-3">
+            <div className="flex items-center gap-2">
+              <Trash2 className="h-4 w-4 text-destructive" />
+              <h3 className="text-xs uppercase tracking-widest text-muted-foreground">Delete Account</h3>
+            </div>
+            <p className="text-sm text-muted-foreground">
+              Permanently delete your JF Effect account and all associated data. This action cannot be undone.
+            </p>
+            <Button variant="destructive" size="sm" asChild>
+              <a href="/account-deletion">Delete my account</a>
+            </Button>
+          </Card>
+        </div>
       </div>
     </>
   );

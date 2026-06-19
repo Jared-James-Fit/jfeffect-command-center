@@ -9,7 +9,8 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { CancelFlow } from "@/components/billing/cancel-flow";
 import { toast } from "sonner";
-import { CreditCard, RefreshCw, ExternalLink, AlertTriangle, ShieldAlert } from "lucide-react";
+import { CreditCard, RefreshCw, ExternalLink, AlertTriangle, ShieldAlert, Info as InfoIcon } from "lucide-react";
+import { isNative } from "@/platform";
 
 export const Route = createFileRoute("/_authenticated/m/billing")({ component: BillingPage });
 
@@ -36,6 +37,7 @@ function BillingPage() {
   const keepFn = useServerFn(keepMembership);
   const restartFn = useServerFn(restartMembership);
   const syncFn = useServerFn(syncMyStripeStatus);
+  const native = isNative();
 
   const { data, isLoading } = useQuery({ queryKey: ["my-jf-billing"], queryFn: () => fn() });
   const [cancelOpen, setCancelOpen] = useState(false);
@@ -90,6 +92,19 @@ function BillingPage() {
     <div className="space-y-5 p-4 md:p-6">
       <PageHeader title="Billing" subtitle="Manage your JF Membership subscription." />
 
+      {/* Native: inform user that billing changes must be done on the web */}
+      {native && (
+        <Card className="flex items-start gap-3 border-amber-500/30 bg-amber-500/10 p-4 text-sm">
+          <InfoIcon className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" />
+          <div>
+            <div className="font-semibold">Manage billing at jfeffect.com</div>
+            <div className="text-muted-foreground text-xs mt-0.5">
+              Subscription changes, payment updates, and cancellations are handled at jfeffect.com. Your access updates automatically in the app.
+            </div>
+          </div>
+        </Card>
+      )}
+
       <Card className="p-5 space-y-3">
         {showCrossAccountLock && (
           <div className="rounded border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-200 flex gap-2">
@@ -114,9 +129,11 @@ function BillingPage() {
                 Your access remains active until <span className="font-semibold">{fmt(graceEndsAt)}</span>.
                 After that date your membership features will be paused until payment is recovered.
               </div>
-              <Button size="sm" className="mt-2" onClick={() => portal.mutate()} disabled={portal.isPending}>
-                <CreditCard className="mr-1 h-3.5 w-3.5" /> Update Payment Method
-              </Button>
+              {!native && (
+                <Button size="sm" className="mt-2" onClick={() => portal.mutate()} disabled={portal.isPending}>
+                  <CreditCard className="mr-1 h-3.5 w-3.5" /> Update Payment Method
+                </Button>
+              )}
             </div>
           </div>
         )}
@@ -124,9 +141,11 @@ function BillingPage() {
           <div className="rounded border border-rose-600/40 bg-rose-600/15 p-3 text-sm text-rose-200">
             <div className="font-medium">Access restricted</div>
             <div className="text-xs opacity-90">Your grace period ended. Your account, history, and progress are preserved — update your payment method to restore full access.</div>
-            <Button size="sm" className="mt-2" onClick={() => portal.mutate()} disabled={portal.isPending}>
-              <CreditCard className="mr-1 h-3.5 w-3.5" /> Update Payment Method
-            </Button>
+            {!native && (
+              <Button size="sm" className="mt-2" onClick={() => portal.mutate()} disabled={portal.isPending}>
+                <CreditCard className="mr-1 h-3.5 w-3.5" /> Update Payment Method
+              </Button>
+            )}
           </div>
         )}
 
@@ -139,9 +158,11 @@ function BillingPage() {
             <Button variant="outline" size="sm" onClick={() => sync.mutate()} disabled={sync.isPending}>
               <RefreshCw className={`mr-1 h-3.5 w-3.5 ${sync.isPending ? "animate-spin" : ""}`} /> Sync
             </Button>
-            <Button variant="outline" size="sm" onClick={() => portal.mutate()} disabled={portal.isPending}>
-              <ExternalLink className="mr-1 h-3.5 w-3.5" /> Stripe Portal
-            </Button>
+            {!native && (
+              <Button variant="outline" size="sm" onClick={() => portal.mutate()} disabled={portal.isPending}>
+                <ExternalLink className="mr-1 h-3.5 w-3.5" /> Stripe Portal
+              </Button>
+            )}
           </div>
         </div>
 
@@ -150,7 +171,7 @@ function BillingPage() {
           <Info
             label="Price"
             value={isHold ? (s?.hold_price_display ?? "$9/month USD") : (s?.monthly_price_display ?? "$29/month USD")}
-            hint="Taxes calculated at checkout where applicable."
+            hint={native ? undefined : "Taxes calculated at checkout where applicable."}
           />
           {status === "Trialing" && <Info label="Trial ends" value={fmt(m.trial_end_at)} />}
           <Info label="Next billing date" value={fmt(m.current_period_end)} />
@@ -158,26 +179,29 @@ function BillingPage() {
           {m.paused_until && <Info label="Resumes on" value={fmt(m.paused_until)} />}
         </div>
 
-        <div className="flex flex-wrap gap-2 pt-3 border-t border-border">
-          {!isCancelled && !isPaused && !isHold && !showKeep && (
-            <Button variant="destructive" size="sm" onClick={() => setCancelOpen(true)}>Cancel Membership</Button>
-          )}
-          {showKeep && (
-            <Button size="sm" onClick={() => keep.mutate()} disabled={keep.isPending}>
-              <CreditCard className="mr-1 h-3.5 w-3.5" /> Keep Membership
-            </Button>
-          )}
-          {showRestart && !showCrossAccountLock && (
-            <Button size="sm" onClick={() => restart.mutate()} disabled={restart.isPending}>
-              <CreditCard className="mr-1 h-3.5 w-3.5" /> Restart Membership
-            </Button>
-          )}
-          {(isHold || isPaused) && (
-            <Button size="sm" onClick={() => reactivate.mutate()} disabled={reactivate.isPending}>
-              <CreditCard className="mr-1 h-3.5 w-3.5" /> Reactivate Full Membership
-            </Button>
-          )}
-        </div>
+        {/* Payment action buttons — hidden on native */}
+        {!native && (
+          <div className="flex flex-wrap gap-2 pt-3 border-t border-border">
+            {!isCancelled && !isPaused && !isHold && !showKeep && (
+              <Button variant="destructive" size="sm" onClick={() => setCancelOpen(true)}>Cancel Membership</Button>
+            )}
+            {showKeep && (
+              <Button size="sm" onClick={() => keep.mutate()} disabled={keep.isPending}>
+                <CreditCard className="mr-1 h-3.5 w-3.5" /> Keep Membership
+              </Button>
+            )}
+            {showRestart && !showCrossAccountLock && (
+              <Button size="sm" onClick={() => restart.mutate()} disabled={restart.isPending}>
+                <CreditCard className="mr-1 h-3.5 w-3.5" /> Restart Membership
+              </Button>
+            )}
+            {(isHold || isPaused) && (
+              <Button size="sm" onClick={() => reactivate.mutate()} disabled={reactivate.isPending}>
+                <CreditCard className="mr-1 h-3.5 w-3.5" /> Reactivate Full Membership
+              </Button>
+            )}
+          </div>
+        )}
       </Card>
 
       {s?.refund_policy && (
@@ -187,7 +211,9 @@ function BillingPage() {
         </Card>
       )}
 
-      <CancelFlow open={cancelOpen} onOpenChange={setCancelOpen} holdPriceDisplay={s?.hold_price_display ?? "$9/month USD"} onDone={() => qc.invalidateQueries({ queryKey: ["my-jf-billing"] })} />
+      {!native && (
+        <CancelFlow open={cancelOpen} onOpenChange={setCancelOpen} holdPriceDisplay={s?.hold_price_display ?? "$9/month USD"} onDone={() => qc.invalidateQueries({ queryKey: ["my-jf-billing"] })} />
+      )}
     </div>
   );
 }

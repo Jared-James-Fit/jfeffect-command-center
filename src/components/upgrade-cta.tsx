@@ -2,6 +2,7 @@ import { Link } from "@tanstack/react-router";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Lock, Sparkles } from "lucide-react";
+import { isNative } from "@/platform";
 
 type Props = {
   title?: string;
@@ -16,6 +17,8 @@ export function UpgradeCTA({
   inline = false,
   perks,
 }: Props) {
+  const native = isNative();
+
   if (inline) {
     return (
       <div className="flex items-center justify-between gap-3 rounded-md border border-amber-500/30 bg-amber-500/10 p-3">
@@ -24,7 +27,9 @@ export function UpgradeCTA({
           <span className="font-medium">{title}</span>
           <span className="text-muted-foreground hidden sm:inline">— {subtitle}</span>
         </div>
-        <Link to="/m/upgrade"><Button size="sm">Upgrade</Button></Link>
+        {/* Upgrade button is web-only; on native, direct users to jfeffect.com */}
+        {!native && <Link to="/m/upgrade"><Button size="sm">Upgrade</Button></Link>}
+        {native && <span className="text-xs text-muted-foreground">Available at jfeffect.com</span>}
       </div>
     );
   }
@@ -40,9 +45,16 @@ export function UpgradeCTA({
               {perks.map((p) => <li key={p} className="flex items-center gap-2">✓ <span>{p}</span></li>)}
             </ul>
           )}
-          <Link to="/m/upgrade" className="mt-4 inline-block">
-            <Button>See plans & upgrade</Button>
-          </Link>
+          {!native && (
+            <Link to="/m/upgrade" className="mt-4 inline-block">
+              <Button>See plans & upgrade</Button>
+            </Link>
+          )}
+          {native && (
+            <p className="mt-3 text-xs text-muted-foreground">
+              An existing JF Effect account is required. Purchases are not available inside the app.
+            </p>
+          )}
         </div>
       </div>
     </Card>

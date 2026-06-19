@@ -25,6 +25,7 @@ export const Route = createFileRoute("/app")({
 function AppEntry() {
   const navigate = useNavigate();
   const [state, setState] = useState<"loading" | "guest">("loading");
+  const native = isNative();
 
   useEffect(() => {
     let cancelled = false;
@@ -62,7 +63,7 @@ function AppEntry() {
     );
   }
 
-  const installed = isStandalone() || isNative();
+  const installed = isStandalone() || native;
 
   return (
     <div className="min-h-screen bg-background px-4 py-12">
@@ -75,7 +76,9 @@ function AppEntry() {
             Open JF Effect
           </h1>
           <p className="text-sm text-muted-foreground">
-            Sign in to continue your training, check-ins, and coaching chat.
+            {native
+              ? "An existing JF Effect account is required."
+              : "Sign in to continue your training, check-ins, and coaching chat."}
           </p>
         </header>
 
@@ -86,9 +89,12 @@ function AppEntry() {
               Sign in
             </Link>
           </Button>
-          <Button asChild variant="outline" className="w-full" size="lg">
-            <Link to="/membership">Become a member</Link>
-          </Button>
+          {/* Membership purchase is web-only — not available inside the Android app */}
+          {!native && (
+            <Button asChild variant="outline" className="w-full" size="lg">
+              <Link to="/membership">Become a member</Link>
+            </Button>
+          )}
         </Card>
 
         {!installed && (

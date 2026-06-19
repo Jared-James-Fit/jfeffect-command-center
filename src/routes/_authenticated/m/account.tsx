@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { useEffect, useState } from "react";
@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
+import { Trash2 } from "lucide-react";
 
 export const Route = createFileRoute("/_authenticated/m/account")({ component: AccountPage });
 
@@ -110,6 +111,21 @@ function AccountPage() {
           </p>
         </div>
       </Card>
+
+      {/* Delete account — required by Google Play and Apple App Store policies */}
+      <Card className="p-6 border-destructive/30">
+        <div className="flex items-center gap-2 mb-3">
+          <Trash2 className="h-4 w-4 text-destructive" />
+          <div className="text-xs uppercase tracking-wider text-muted-foreground">Delete account</div>
+        </div>
+        <p className="text-sm text-muted-foreground mb-4">
+          Permanently delete your JF Effect account and all associated data. This action cannot be undone.
+        </p>
+        <Button variant="destructive" size="sm" asChild>
+          <Link to="/account-deletion">Delete my account</Link>
+        </Button>
+      </Card>
+
       <Button variant="outline" onClick={() => signOut()}>Sign out</Button>
     </div>
   );

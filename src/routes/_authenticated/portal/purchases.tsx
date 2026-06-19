@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { ChevronRight, ShoppingCart, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { createCheckoutSession } from "@/lib/stripe-checkout.functions";
+import { isNative } from "@/platform";
 
 function statusBadgeClass(s?: string | null) {
   if (s === "Paid" || s === "Active Subscription") return "border-green-500/40 text-green-500 bg-green-500/10";
@@ -36,13 +37,14 @@ export const Route = createFileRoute("/_authenticated/portal/purchases")({
 function MyPurchases() {
   const portalUserId = usePortalUserId();
   const search = useSearch({ from: "/_authenticated/portal/purchases" });
+  const native = isNative();
 
-  // Show success toast when returning from Stripe Checkout
+  // Show success toast when returning from Stripe Checkout (web only)
   useEffect(() => {
-    if (search.checkout === "success") {
+    if (!native && search.checkout === "success") {
       toast.success("Payment successful! Your access has been updated.", { duration: 6000 });
     }
-  }, [search.checkout]);
+  }, [search.checkout, native]);
 
   const { data: client } = useQuery({
     queryKey: ["my-client", portalUserId],
@@ -64,8 +66,10 @@ function MyPurchases() {
       ).data ?? [],
   });
 
+  // Only load available plans on web — purchase flow is not available in the Android app
   const { data: availablePlans = [] } = useQuery({
     queryKey: ["available-coaching-products"],
+    enabled: !native,
     queryFn: async () =>
       (
         await supabase
@@ -87,8 +91,8 @@ function MyPurchases() {
       />
       <div className="p-6 md:p-8 space-y-8">
 
-        {/* ── Available Plans ──────────────────────────────────────────────── */}
-        {availablePlans.length > 0 && (
+        {/* ── Available Plans — web only; purchases not available in Android app ── */}
+        {!native && availablePlans.length > 0 && (
           <section>
             <h2 className="text-xs uppercase tracking-widest text-muted-foreground mb-3">Available Plans</h2>
             <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
@@ -190,6 +194,7 @@ function PlanCard({ plan }: { plan: any }) {
           ))}
         </ul>
       )}
+      {/* Buy button — web only */}
       <Button onClick={buy} disabled={loading} className="mt-auto gap-2">
         {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <ShoppingCart className="h-4 w-4" />}
         {loading ? "Opening checkout…" : "Buy now"}
