@@ -302,7 +302,25 @@ function ClientDetail() {
     }
   }, [form, data]);
 
-  if (!form) return <div className="p-10 text-muted-foreground">Loading…</div>;
+  if (!form) {
+    return (
+      <div className="space-y-4 p-6" aria-busy="true" aria-label="Loading client profile">
+        <div className="flex items-center gap-3">
+          <div className="h-12 w-12 animate-pulse rounded-full bg-muted" />
+          <div className="flex-1 space-y-2">
+            <div className="h-5 w-1/3 animate-pulse rounded bg-muted" />
+            <div className="h-3 w-1/4 animate-pulse rounded bg-muted" />
+          </div>
+        </div>
+        <div className="grid gap-3 md:grid-cols-3">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <div key={i} className="h-24 animate-pulse rounded-lg bg-muted" />
+          ))}
+        </div>
+        <div className="h-64 animate-pulse rounded-lg bg-muted" />
+      </div>
+    );
+  }
 
   const save = async () => {
     if (saving) return;
