@@ -267,8 +267,8 @@ function QuickApply() {
       <Section className="!py-6 md:!py-10">
         <div className="mx-auto w-full max-w-xl">
           <div className="mb-4 flex items-center justify-between gap-3">
-            <Link to="/coaching" className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground">
-              <ArrowLeft className="h-3 w-3" /> Back
+            <Link to="/coaching" className="inline-flex items-center gap-1 rounded-md border border-border bg-background px-2.5 py-1.5 text-xs font-semibold text-foreground hover:bg-muted">
+              <X className="h-3 w-3" /> Exit
             </Link>
             <div className="text-[11px] uppercase tracking-widest text-muted-foreground">
               Step {step + 1} of {total}
