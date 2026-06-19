@@ -25,7 +25,7 @@ function ExerciseLibrary() {
   const [category, setCategory] = useState("all");
   const [selected, setSelected] = useState<any>(null);
 
-  const { data: exercises = [] } = useQuery({
+  const { data: exercises = [], isLoading: exercisesLoading } = useQuery({
     queryKey: ["exercises"],
     queryFn: async () => {
       const { data } = await supabase.from("exercises").select("*").order("name");
