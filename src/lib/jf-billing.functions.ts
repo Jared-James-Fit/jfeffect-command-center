@@ -364,15 +364,43 @@ export const createJfSignupCheckout = createServerFn({ method: "POST" })
       }
     }
 
-    // Note: password_hash column actually stores the raw password temporarily.
-    // The jf_pending_signups table is service-role only (no end-user RLS policies),
-    // and the row is deleted immediately after Supabase Auth user creation.
-    // 24h expiry is enforced by expires_at + a cleanup job (admin-run).
-    const passwordHash = data.password;
-
-    // Pre-store pending signup keyed by checkout session id — we'll insert AFTER session creation
-    // First create the checkout session
+    // Resolve or create the Supabase Auth user up-front so we never have to
+    // store the raw password (or a hash of it) anywhere in our database.
+    // If the email already has an auth user we reuse it (without touching
+    // their existing password); otherwise we create the user now with the
+    // password they chose at /join.
     const fullName = `${data.first_name} ${data.last_name}`.trim();
+    let signupUserId: string | null = null;
+    try {
+      const { data: existingUsers } = await (supabaseAdmin as any).auth.admin.listUsers({
+        page: 1,
+        perPage: 200,
+      });
+      const matched = existingUsers?.users?.find(
+        (u: any) => (u.email || "").toLowerCase() === emailLc,
+      );
+      if (matched) signupUserId = matched.id;
+    } catch (e) {
+      console.error("[jf-checkout] listUsers failed", e);
+    }
+    if (!signupUserId) {
+      const { data: created, error: createErr } = await (supabaseAdmin as any).auth.admin.createUser({
+        email: emailLc,
+        password: data.password,
+        email_confirm: true,
+        user_metadata: { full_name: fullName, phone: phoneE164 },
+      });
+      if (createErr) {
+        console.error("[jf-checkout] auth createUser failed", createErr.message);
+        throw new Error("We couldn't create your account. Please try a different email or contact support.");
+      }
+      signupUserId = created?.user?.id ?? null;
+    }
+    if (!signupUserId) {
+      throw new Error("We couldn't create your account. Please contact support.");
+    }
+
+    // First create the checkout session
     const sessionBody = formEncode({
       mode: "subscription",
       customer_email: emailLc,
@@ -433,7 +461,7 @@ export const createJfSignupCheckout = createServerFn({ method: "POST" })
       email: emailLc,
       full_name: fullName,
       phone: phoneE164,
-      password_hash: passwordHash,
+      user_id: signupUserId,
       sms_consent: !!data.sms_consent,
       // Phase 4 — remember which legal versions were accepted at /join.
       // These are turned into legal_acceptances rows in completeJfSignup once
