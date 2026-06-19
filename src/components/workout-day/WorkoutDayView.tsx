@@ -2176,6 +2176,11 @@ function SetRow({
   }, [draftKey, hydrated, existing]);
 
   // Reset from server when the persisted result changes (but never while typing)
+  // When the active unit toggles, convert the currently-displayed load value
+  // (typed or hydrated) instead of wiping it. Stored values are read back from
+  // the matching kg/lb column when the row reloads, so old logs are never
+  // corrupted — this only affects the in-progress UI value.
+  const lastUnitRef = useRef<"kg" | "lb">(unit);
   useEffect(() => {
     const kg = existing?.actual_load_kg;
     const lb = existing?.actual_load_lb;
@@ -2191,11 +2196,6 @@ function SetRow({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [existing?.id, existing?.actual_load_kg, existing?.actual_load_lb, existing?.actual_load, existing?.actual_reps, existing?.actual_rpe_num, existing?.actual_rpe]);
 
-  // When the active unit toggles, convert the currently-displayed load value
-  // (typed or hydrated) instead of wiping it. Stored values are read back from
-  // the matching kg/lb column when the row reloads, so old logs are never
-  // corrupted — this only affects the in-progress UI value.
-  const lastUnitRef = useRef<"kg" | "lb">(unit);
   useEffect(() => {
     if (lastUnitRef.current === unit) return;
     const from = lastUnitRef.current;
