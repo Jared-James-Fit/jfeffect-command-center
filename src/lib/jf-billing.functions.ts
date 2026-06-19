@@ -498,20 +498,10 @@ export const createJfSignupCheckout = createServerFn({ method: "POST" })
     return { url: session.url as string, used_trial: useTrial };
   });
 
-// completeJfSignup: called from /m/welcome. Requires the user to sign in first,
-// because we created the user account post-checkout. Actually we create-account-here:
-// we cannot create auth user without password — we stored a SHA-256 hash, but
-// supabase requires raw password. SO: we instead use a magic-link flow.
-// Simpler: store the raw password encrypted at rest is risky. Better approach:
-// after Stripe success, we have the email — we generate a one-time session token
-// and email a magic link. But to keep instant access we instead create the
-// account immediately using the password we stashed (kept only briefly).
-//
-// To keep this honest: we keep the raw password in jf_pending_signups (which is
-// service-role only, RLS-locked, and we delete the row after account creation).
-// Update plan: store the password as plaintext, delete on completion, expire in 24h.
-// We'll re-issue the migration column accordingly — but for now use password_hash
-// column to store the raw password (column is text; name kept for back-compat).
+// completeJfSignup: called from /m/welcome after Stripe checkout completes.
+// The auth user was already created in createJfSignupCheckout, so this just
+// finalizes the app_members row, applies entitlements, and issues a
+// magic-link token the welcome page uses to sign the new member in.
 
 const CompleteInput = z.object({ session_id: z.string().min(5) });
 
@@ -560,15 +550,13 @@ export const completeJfSignup = createServerFn({ method: "POST" })
 
     if (!userId) {
       if (!pending) throw new Error("Signup data missing. Please contact support with your checkout reference.");
-      const password = pending.password_hash; // raw password stashed (see note above)
-      const { data: created, error: createErr } = await (supabaseAdmin as any).auth.admin.createUser({
-        email: emailLc,
-        password,
-        email_confirm: true,
-        user_metadata: { full_name: pending.full_name, phone: pending.phone },
-      });
-      if (createErr) throw new Error(createErr.message);
-      userId = created.user.id;
+      // The auth user is created up-front in createJfSignupCheckout and the
+      // pending row carries its id. If listUsers() didn't find them above
+      // (paging miss), fall back to the stashed id.
+      userId = pending.user_id ?? null;
+      if (!userId) {
+        throw new Error("We couldn't find your account. Please contact support with your checkout reference.");
+      }
     }
 
     // Upsert app_members row
