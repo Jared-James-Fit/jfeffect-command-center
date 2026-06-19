@@ -154,12 +154,17 @@ export const applyBulkScheduleChange = createServerFn({ method: "POST" })
     const batchId = crypto.randomUUID();
     const applied: Array<{ dayId: string; prev: string | null; next: string; prevSource: string | null }> = [];
 
+    // pl_days RLS grants UPDATE to admins/assigned coaches only — clients
+    // have SELECT. resolveActorAccess() above is the authorization
+    // boundary that permits clients to move their own scheduled dates.
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+
     try {
       for (const m of data.moves) {
         const d: any = dayById.get(m.dayId);
         if (!d) continue;
         if (d.scheduled_date === m.newDate) continue;
-        const { error } = await supabase
+        const { error } = await supabaseAdmin
           .from("pl_days")
           .update({ scheduled_date: m.newDate, schedule_source: "manual" })
           .eq("id", m.dayId);
@@ -173,7 +178,7 @@ export const applyBulkScheduleChange = createServerFn({ method: "POST" })
       }
     } catch (err: any) {
       for (const a of applied) {
-        await supabase
+        await supabaseAdmin
           .from("pl_days")
           .update({ scheduled_date: a.prev, schedule_source: a.prevSource ?? "auto" })
           .eq("id", a.dayId);
@@ -197,11 +202,11 @@ export const applyBulkScheduleChange = createServerFn({ method: "POST" })
       changed_by: userId,
       changed_by_role: role,
     }));
-    const { error: auditErr } = await supabase
+    const { error: auditErr } = await supabaseAdmin
       .from("pl_schedule_audit").insert(auditRows);
     if (auditErr) {
       for (const a of applied) {
-        await supabase
+        await supabaseAdmin
           .from("pl_days")
           .update({ scheduled_date: a.prev, schedule_source: a.prevSource ?? "auto" })
           .eq("id", a.dayId);
