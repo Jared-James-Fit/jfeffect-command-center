@@ -1,4 +1,5 @@
 import { useMemo, useRef, useState, type ReactNode } from "react";
+import { useNavigate } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
@@ -779,10 +780,12 @@ function FormRequestCard({ att, mine }: { att: SharedAttachment; mine: boolean }
   const formId = att.form_id;
   const clientIds = att.assignment_client_ids ?? [];
   // Admin/coach jump straight to the form management page; clients open the
-  // portal URL we stored on the attachment (which carries identity params
-  // for external Fillout forms via the portal page's buildFilloutUrl()).
+  // form IN-APP so the portal renderer can attach their identity to the URL
+  // (client_id / first_name / last_name / email) via buildFilloutUrl().
+  // Opening it in a new tab loses those params and leaves the form blank.
   const { role } = useAuth();
   const isStaff = role === "admin" || role === "coach" || role === "media_manager";
+  const navigate = useNavigate();
   const { data: form } = useQuery({
     queryKey: ["chat-req-form", formId],
     enabled: !!formId,
@@ -839,6 +842,10 @@ function FormRequestCard({ att, mine }: { att: SharedAttachment; mine: boolean }
       onOpen={() => {
         if (isStaff) {
           if (formId) window.open(`/admin/native-forms`, "_blank");
+          return;
+        }
+        if (formId) {
+          navigate({ to: "/portal/check-ins/$formId", params: { formId } });
           return;
         }
         if (att.url) window.open(att.url, "_blank");
