@@ -202,6 +202,7 @@ const EXERCISE_ROW_CLONE_FIELDS = [
   "sets",
   "reps_text",
   "measurement_type",
+  "tracking_type",
   "duration_seconds",
   "reps_text_backup",
   "duration_seconds_backup",
