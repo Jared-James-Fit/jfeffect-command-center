@@ -19,7 +19,7 @@ async function resolveActorAccess(
   const { supabase, userId } = ctx;
   const { data: client } = await supabase
     .from("clients")
-    .select("id, user_id, schedule_locked, coach_id, full_name")
+    .select("id, user_id, schedule_locked, assigned_coach_id, full_name")
     .eq("id", clientId)
     .maybeSingle();
   if (!client) throw new Error("Client not found.");
@@ -28,7 +28,14 @@ async function resolveActorAccess(
     _user_id: userId, _role: "admin",
   });
   if (isAdmin === true) return { role: "admin", client };
-  if (client.coach_id && client.coach_id === userId) return { role: "coach", client };
+  if (client.assigned_coach_id) {
+    const { data: coach } = await supabase
+      .from("coaches")
+      .select("id, user_id")
+      .eq("id", client.assigned_coach_id)
+      .maybeSingle();
+    if (coach?.user_id && coach.user_id === userId) return { role: "coach", client };
+  }
   if (client.user_id === userId) {
     if (client.schedule_locked) {
       throw new Error("Schedule editing is locked for this account.");
