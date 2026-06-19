@@ -285,6 +285,36 @@ export function WorkoutDayView({
 
 const sb = supabase as any;
 
+/**
+ * Derive the swap-persistence target for an exercise row. Members
+ * persist swaps in `member_exercise_swaps` keyed by (enrollment, week,
+ * day, exercise_index); coaches/clients persist by mutating
+ * `pl_exercise_rows`. Returns `undefined` when the adapter is missing
+ * or the row id can't be decoded (defaults to the client write path).
+ */
+function swapContextForRow(
+  adapter: WorkoutContextAdapter | undefined,
+  dayId: string,
+  rowId: string,
+):
+  | { kind: "client" }
+  | { kind: "member"; enrollmentId: string; weekIndex: number; dayIndex: number; exerciseIndex: number }
+  | undefined {
+  if (!adapter) return undefined;
+  if (adapter.kind !== "member") return { kind: "client" };
+  const enrollmentId = (adapter.ref as any).enrollmentId as string | undefined;
+  if (!enrollmentId) return undefined;
+  const [wRaw, dRaw] = dayId.split(":");
+  const weekIndex = Number(wRaw);
+  const dayIndex = Number(dRaw);
+  const m = /^ex:(\d+)$/.exec(rowId);
+  const exerciseIndex = m ? Number(m[1]) : NaN;
+  if (!Number.isFinite(weekIndex) || !Number.isFinite(dayIndex) || !Number.isFinite(exerciseIndex)) {
+    return undefined;
+  }
+  return { kind: "member", enrollmentId, weekIndex, dayIndex, exerciseIndex };
+}
+
 function WorkoutDay({
   dayId,
   search,
