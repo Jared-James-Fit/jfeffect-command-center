@@ -871,6 +871,61 @@ function WorkoutDay({
 
   if (!day) return <div className="p-8 text-sm text-muted-foreground">Loading…</div>;
 
+  // Shared workout summary for the pinned status bar AND the inline quality badge.
+  const statusSummary = (() => {
+    try {
+      const required: RequiredRowSpec[] = (rows as any[])
+        .filter((r: any) => !r?.skipped)
+        .map((r: any) => ({
+          rowId: String(r.id),
+          prescribedSets: Math.max(1, Number(r.sets) || 1),
+          skipped: !!r.skipped,
+          metricKind: "load_reps" as RowMetricKind,
+        }));
+      const logged: LoggedSetSpec[] = (results as any[]).map((x: any) => ({
+        rowId: String(x.row_id),
+        setIndex: x.set_index ?? 0,
+        reps: x.actual_reps,
+        loadLb: x.actual_load_unit === "kg" ? null : x.actual_load,
+        loadKg: x.actual_load_unit === "kg" ? x.actual_load : null,
+        rpe: x.actual_rpe_num ?? x.actual_rpe,
+      }));
+      const sum = required.length > 0 ? summarizeCompleteness(required, logged) : null;
+      // Per-row sets logged → derive exercises done.
+      const loggedByRow = new Map<string, number>();
+      for (const s of logged) {
+        // Only count confirmed (completed_at) sets toward exercise-done.
+        const raw = (results as any[]).find(
+          (x: any) => String(x.row_id) === s.rowId && (x.set_index ?? 0) === s.setIndex,
+        );
+        if (!raw?.completed_at) continue;
+        loggedByRow.set(s.rowId, (loggedByRow.get(s.rowId) ?? 0) + 1);
+      }
+      let exercisesDone = 0;
+      for (const r of required) {
+        const need = Math.max(1, Number(r.prescribedSets) || 1);
+        if ((loggedByRow.get(r.rowId) ?? 0) >= need) exercisesDone++;
+      }
+      // Confirmed sets count (for the status bar).
+      let confirmedSets = 0;
+      for (const n of loggedByRow.values()) confirmedSets += n;
+      return {
+        summary: sum,
+        exercisesDone,
+        exercisesTotal: required.length,
+        setsDone: confirmedSets,
+        setsTotal: sum?.requiredSets ?? 0,
+      };
+    } catch {
+      return { summary: null, exercisesDone: 0, exercisesTotal: 0, setsDone: 0, setsTotal: 0 };
+    }
+  })();
+
+  const statusBarVisible =
+    !readonly &&
+    statusSummary.exercisesTotal > 0 &&
+    (!!completion?.started_at || !!completion?.in_progress_at || !!completion?.completed_at);
+
   return (
     <>
       {focusMode && (
@@ -886,6 +941,18 @@ function WorkoutDay({
               <Minimize2 className="mr-1 h-4 w-4" /> Exit Full Screen
             </Button>
           </div>
+          {statusBarVisible && (
+            <WorkoutStatusBar
+              title={cleanDayTitle(day.title, day.day_index)}
+              exercisesDone={statusSummary.exercisesDone}
+              exercisesTotal={statusSummary.exercisesTotal}
+              setsDone={statusSummary.setsDone}
+              setsTotal={statusSummary.setsTotal}
+              startedAt={completion?.started_at ?? completion?.in_progress_at ?? null}
+              completedAt={completion?.completed_at ?? null}
+              className="top-[52px]"
+            />
+          )}
           <div className="mx-auto max-w-3xl p-4 md:p-6">
             <WorkoutLoadBoundary clientId={client?.id ?? null} clientName={(client as any)?.full_name ?? null} dayId={dayId} route={`/portal/workouts/${dayId}`}>
               <div className="space-y-4 rounded-lg bg-builder-canvas p-3 sm:p-4 ring-1 ring-builder-card-border/40">
