@@ -60,7 +60,7 @@ function CommunicationWorkspace() {
 
   return (
     <div
-      className="flex flex-col"
+      className="flex flex-col md:mb-0 mb-[calc(-140px-env(safe-area-inset-bottom))]"
       style={{
         // Subtract both the AppShell mobile top bar AND the bottom-nav
         // clearance so the messenger composer always lands exactly above
