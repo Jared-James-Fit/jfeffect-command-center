@@ -9,7 +9,7 @@ import {
 } from "date-fns";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { ChevronLeft, ChevronRight, CheckCircle2, Clock, AlertCircle, GripVertical, Calendar as CalIcon } from "lucide-react";
+import { ChevronLeft, ChevronRight, CheckCircle2, Clock, AlertCircle, GripVertical, Calendar as CalIcon, CalendarPlus } from "lucide-react";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
 
@@ -22,10 +22,11 @@ export type ScheduleWeek = { id: string; week_index: number; block_id: string };
 export type ScheduleBlock = { id: string; name: string | null; start_date: string | null; end_date: string | null };
 export type ScheduleCompletion = { day_id: string; completed_at: string | null; in_progress_at: string | null };
 
-type Status = "completed" | "in-progress" | "overdue" | "rescheduled" | "scheduled";
+type Status = "completed" | "in-progress" | "overdue" | "rescheduled" | "scheduled" | "unscheduled";
 function statusOf(day: ScheduleDay, comp: ScheduleCompletion | null): Status {
   if (comp?.completed_at) return "completed";
   if (comp?.in_progress_at) return "in-progress";
+  if (!day.scheduled_date) return "unscheduled";
   if (day.scheduled_date && isBefore(parseISO(day.scheduled_date), startOfToday())) return "overdue";
   if (day.schedule_source === "manual") return "rescheduled";
   return "scheduled";
@@ -36,6 +37,7 @@ function statusBadge(s: Status) {
     case "in-progress": return <Badge variant="outline" className="gap-1"><Clock className="h-3 w-3" /> In progress</Badge>;
     case "overdue": return <Badge variant="destructive" className="gap-1"><AlertCircle className="h-3 w-3" /> Overdue</Badge>;
     case "rescheduled": return <Badge variant="outline" className="gap-1"><CalIcon className="h-3 w-3" /> Moved</Badge>;
+    case "unscheduled": return <Badge variant="outline" className="gap-1"><CalendarPlus className="h-3 w-3" /> Unscheduled</Badge>;
     default: return <Badge variant="outline">Scheduled</Badge>;
   }
 }
@@ -157,6 +159,11 @@ export function ScheduleCalendar(props: ScheduleCalendarProps) {
       .slice(0, 30);
   }, [days]);
 
+  const unscheduled = useMemo(
+    () => days.filter((d) => !d.scheduled_date).sort((a, b) => a.day_index - b.day_index),
+    [days],
+  );
+
   const handleDragEnd = (e: DragEndEvent) => {
     setDragId(null);
     if (!e.over || !e.active) return;
@@ -233,8 +240,38 @@ export function ScheduleCalendar(props: ScheduleCalendarProps) {
 
         <TabsContent value="list" className="mt-0">
           <div className="space-y-2">
+            {unscheduled.length > 0 && (
+              <div className="space-y-2 rounded-md border border-dashed border-border bg-secondary/20 p-2">
+                <div className="flex items-center gap-2 px-1 text-xs font-semibold uppercase text-muted-foreground">
+                  <CalendarPlus className="h-3.5 w-3.5" /> Unscheduled
+                </div>
+                {unscheduled.map((d) => {
+                  const wk = weekMap.get(d.week_id);
+                  const blk = wk ? blockMap.get(wk.block_id) : null;
+                  return (
+                    <div
+                      key={d.id}
+                      className="flex items-center justify-between gap-3 rounded-md border border-border bg-card p-3 cursor-pointer hover:bg-accent/40"
+                      onClick={() => onSelectDay?.(d.id)}
+                    >
+                      <div className="flex-1 min-w-0">
+                        <div className="font-medium truncate">{d.title?.trim() || `Day ${d.day_index}`}</div>
+                        <div className="text-xs text-muted-foreground">
+                          {blk?.name ?? "Block"} · Week {wk?.week_index ?? "?"} · Day {d.day_index}
+                        </div>
+                      </div>
+                      <Button size="sm" variant="outline" disabled={!canEdit}>
+                        Pick date
+                      </Button>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
             {upcoming.length === 0 && (
-              <div className="text-sm text-muted-foreground text-center py-8">No upcoming workouts scheduled.</div>
+              <div className="text-sm text-muted-foreground text-center py-8">
+                {unscheduled.length ? "No upcoming workouts scheduled." : "No upcoming workouts scheduled."}
+              </div>
             )}
             {upcoming.map(({ d, date }) => {
               const wk = weekMap.get(d.week_id);
