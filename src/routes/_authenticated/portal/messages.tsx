@@ -22,6 +22,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Phone, MessageSquare, AlertTriangle } from "lucide-react";
+import { UserAvatar } from "@/components/user-avatar";
 
 export const Route = createFileRoute("/_authenticated/portal/messages")({
   component: ClientMessages,
@@ -56,7 +57,7 @@ function ClientMessages() {
     queryFn: async () => {
       const { data } = await supabase
         .from("coaches")
-        .select("id, full_name, phone")
+        .select("id, full_name, phone, profile_picture_url")
         .eq("id", client!.assigned_coach_id!)
         .maybeSingle();
       return data;
@@ -83,10 +84,12 @@ function ClientMessages() {
         style={{ paddingTop: "max(env(safe-area-inset-top), 0.75rem)" }}
       >
         <span className="relative shrink-0">
-          <img
-            src="/logo.png"
-            alt={coachName}
-            className="h-10 w-10 rounded-full object-cover ring-1 ring-border"
+          <UserAvatar
+            src={coach?.profile_picture_url ?? null}
+            name={coachName}
+            size={40}
+            ring
+            expandable={false}
           />
           {coachLive && (
             <span className="absolute bottom-0 right-0"><LiveDot /></span>
