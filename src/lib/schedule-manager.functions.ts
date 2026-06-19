@@ -25,7 +25,7 @@ async function resolveActorAccess(
 
   const { data: client, error } = await supabase
     .from("clients")
-    .select("id, user_id, schedule_locked, coach_id, full_name")
+    .select("id, user_id, schedule_locked, assigned_coach_id, full_name")
     .eq("id", clientId)
     .maybeSingle();
   if (error || !client) throw new Error("Client not found.");
@@ -35,9 +35,17 @@ async function resolveActorAccess(
     .rpc("has_role", { _user_id: userId, _role: "admin" });
   if (adminRow === true) return { role: "admin", client };
 
-  // Coach assigned to this client.
-  if (client.coach_id && client.coach_id === userId) {
-    return { role: "coach", client };
+  // Coach assigned to this client. `assigned_coach_id` points to coaches.id;
+  // resolve it to the coach's auth user_id before comparing.
+  if (client.assigned_coach_id) {
+    const { data: coach } = await supabase
+      .from("coaches")
+      .select("id, user_id")
+      .eq("id", client.assigned_coach_id)
+      .maybeSingle();
+    if (coach?.user_id && coach.user_id === userId) {
+      return { role: "coach", client };
+    }
   }
 
   // The client themselves.
