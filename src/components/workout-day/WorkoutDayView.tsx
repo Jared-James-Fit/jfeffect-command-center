@@ -2185,7 +2185,30 @@ function SetRow({
     setLoad(display);
     setReps(existing?.actual_reps?.toString() ?? "");
     setRpe(existing?.actual_rpe_num != null ? String(existing.actual_rpe_num) : (existing?.actual_rpe ?? ""));
-  }, [existing?.id, existing?.actual_load_kg, existing?.actual_load_lb, existing?.actual_load, existing?.actual_reps, existing?.actual_rpe_num, existing?.actual_rpe, unit]);
+    // Track the unit at the moment of (re)hydration so unit-conversion
+    // effect doesn't re-convert the freshly-set display value.
+    lastUnitRef.current = unit;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [existing?.id, existing?.actual_load_kg, existing?.actual_load_lb, existing?.actual_load, existing?.actual_reps, existing?.actual_rpe_num, existing?.actual_rpe]);
+
+  // When the active unit toggles, convert the currently-displayed load value
+  // (typed or hydrated) instead of wiping it. Stored values are read back from
+  // the matching kg/lb column when the row reloads, so old logs are never
+  // corrupted — this only affects the in-progress UI value.
+  const lastUnitRef = useRef<"kg" | "lb">(unit);
+  useEffect(() => {
+    if (lastUnitRef.current === unit) return;
+    const from = lastUnitRef.current;
+    lastUnitRef.current = unit;
+    setLoad((cur) => {
+      if (!cur) return cur;
+      const n = Number(cur);
+      if (!isFinite(n) || n === 0) return cur;
+      const converted = convertWeight(n, from, unit);
+      const step = weightIncrement(unit);
+      return fmtNum(Math.round(converted / step) * step);
+    });
+  }, [unit]);
 
   const value = useMemo(() => ({ load, reps, rpe, unit }), [load, reps, rpe, unit]);
   const save = useAutosave({
