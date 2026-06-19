@@ -4,11 +4,7 @@ export const Route = createFileRoute("/api/public/hooks/nutrition-tick")({
   server: {
     handlers: {
       POST: async ({ request }) => {
-        const apikey = request.headers.get("apikey");
-        const expected = process.env.SUPABASE_PUBLISHABLE_KEY || process.env.VITE_SUPABASE_PUBLISHABLE_KEY;
-        if (!apikey || apikey !== expected) {
-          return new Response("Unauthorized", { status: 401 });
-        }
+        if (!authorizeWorker(request)) return new Response("Unauthorized", { status: 401 });
         const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
         const { data: targets } = await supabaseAdmin
           .from("nutrition_targets")
@@ -24,3 +20,13 @@ export const Route = createFileRoute("/api/public/hooks/nutrition-tick")({
     },
   },
 });
+
+function authorizeWorker(request: Request): boolean {
+  const expected = process.env.SCHEDULED_WORKER_SECRET ?? "";
+  if (!expected) return false;
+  const provided = request.headers.get("x-worker-secret") ?? "";
+  if (!provided || provided.length !== expected.length) return false;
+  let diff = 0;
+  for (let i = 0; i < provided.length; i++) diff |= provided.charCodeAt(i) ^ expected.charCodeAt(i);
+  return diff === 0;
+}
