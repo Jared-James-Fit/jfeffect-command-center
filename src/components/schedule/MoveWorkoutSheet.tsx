@@ -49,6 +49,12 @@ export interface MoveWorkoutSheetProps {
   /** Optional pre-selected target date (used when arriving from drag-drop). */
   initialTargetDate?: Date | null;
   /**
+   * The date the workout currently appears on in the calling UI. Used as a
+   * fallback when `pl_days.scheduled_date` is null so the modal mirrors what
+   * the user saw on the workout card (e.g. derived from week + day_index).
+   */
+  currentScheduledDate?: Date | null;
+  /**
    * When provided (coach/admin viewing a client schedule), reveals a
    * "View what they logged" action on completed / in-progress workouts.
    * Clicking it enters Client POV as that client and opens the workout
@@ -71,6 +77,7 @@ export function MoveWorkoutSheet({
   open,
   onOpenChange,
   initialTargetDate,
+  currentScheduledDate,
   viewWorkoutAs,
 }: MoveWorkoutSheetProps) {
   const queryClient = useQueryClient();
@@ -102,8 +109,9 @@ export function MoveWorkoutSheet({
   const initialFromCtx = useMemo(() => {
     if (initialTargetDate) return initialTargetDate;
     if (ctx?.day?.scheduled_date) return parseISO(ctx.day.scheduled_date);
+    if (currentScheduledDate) return currentScheduledDate;
     return null;
-  }, [ctx?.day?.scheduled_date, initialTargetDate]);
+  }, [ctx?.day?.scheduled_date, initialTargetDate, currentScheduledDate]);
 
   const effectiveTarget = target ?? initialFromCtx;
 
@@ -256,7 +264,9 @@ export function MoveWorkoutSheet({
   const title = ctx?.day?.title?.trim() || (ctx ? `Day ${ctx.day.day_index}` : "Workout");
   const currentDateLabel = ctx?.day?.scheduled_date
     ? format(parseISO(ctx.day.scheduled_date), "EEE, MMM d")
-    : "Unscheduled";
+    : currentScheduledDate
+      ? format(currentScheduledDate, "EEE, MMM d")
+      : "Unscheduled";
 
   return (
     <Drawer open={open} onOpenChange={onOpenChange}>
@@ -282,6 +292,28 @@ export function MoveWorkoutSheet({
           {ctxQuery.isLoading && (
             <div className="flex items-center gap-2 py-6 text-sm text-muted-foreground">
               <Loader2 className="h-4 w-4 animate-spin" /> Loading…
+            </div>
+          )}
+
+          {!ctxQuery.isLoading && ctxQuery.isError && (
+            <div className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-sm">
+              <div className="flex items-start gap-2">
+                <AlertTriangle className="mt-0.5 h-4 w-4 text-destructive" />
+                <div className="flex-1">
+                  <div className="font-medium">Unable to load available dates.</div>
+                  <div className="mt-1 text-xs text-muted-foreground">
+                    {(ctxQuery.error as any)?.message ?? "Something went wrong."}
+                  </div>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="mt-2 h-7"
+                    onClick={() => ctxQuery.refetch()}
+                  >
+                    <RotateCcw className="mr-1 h-3.5 w-3.5" /> Retry
+                  </Button>
+                </div>
+              </div>
             </div>
           )}
 
@@ -412,6 +444,7 @@ export function MoveWorkoutSheet({
             className="flex-1"
             disabled={
               !effectiveTarget ||
+              !!ctxQuery.isError ||
               moveMutation.isPending ||
               swapMutation.isPending ||
               (isCompleted && !confirmCompleted)
