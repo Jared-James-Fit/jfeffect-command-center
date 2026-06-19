@@ -136,3 +136,61 @@ export function summarizeCompleteness(
     completedWithMissingLogs,
   };
 }
+
+/**
+ * Estimated workout duration in minutes, derived from prescribed sets +
+ * per-row rest. Used by the workout-open screen's time pill so the
+ * estimate adapts to what's actually programmed instead of a static
+ * coach-entered value. Formula per row:
+ *
+ *   sets × (avgSetSeconds + restSecondsForCategory)
+ *
+ * Defaults to a 40s work set and a category-aware rest midpoint when the
+ * row doesn't carry an explicit `rest_seconds` value.
+ */
+export interface EstimatedDurationRow {
+  prescribedSets?: number | null;
+  restSeconds?: number | null;
+  category?: string | null;
+  /** Average work time per set, defaults to 40s for strength rows. */
+  avgSetSeconds?: number | null;
+  skipped?: boolean | null;
+}
+
+const REST_MIDPOINT_BY_CATEGORY: Record<string, number> = {
+  squat: 180, deadlift: 180, bench: 150, "bench press": 150,
+  compound: 150, strength: 120, hypertrophy: 75, accessory: 75,
+  isolation: 60, core: 45, cardio: 30, conditioning: 30,
+};
+
+function restMidpoint(category?: string | null): number {
+  if (!category) return 90;
+  const key = String(category).trim().toLowerCase();
+  return REST_MIDPOINT_BY_CATEGORY[key] ?? 90;
+}
+
+export function estimateWorkoutDurationMinutes(rows: EstimatedDurationRow[]): number {
+  let totalSeconds = 0;
+  for (const r of rows) {
+    if (r.skipped) continue;
+    const sets = Math.max(1, Number(r.prescribedSets) || 1);
+    const avgSet = Number.isFinite(Number(r.avgSetSeconds)) && Number(r.avgSetSeconds) > 0
+      ? Number(r.avgSetSeconds)
+      : 40;
+    const rest = Number.isFinite(Number(r.restSeconds)) && Number(r.restSeconds) > 0
+      ? Number(r.restSeconds)
+      : restMidpoint(r.category);
+    totalSeconds += sets * (avgSet + rest);
+  }
+  return Math.max(5, Math.round(totalSeconds / 60));
+}
+
+/** Display range "low–high min" suitable for a pill badge. */
+export function estimatedDurationLabel(rows: EstimatedDurationRow[]): string | null {
+  if (!rows || rows.length === 0) return null;
+  const min = estimateWorkoutDurationMinutes(rows);
+  if (!Number.isFinite(min) || min <= 0) return null;
+  const low = Math.max(5, Math.round((min * 0.9) / 5) * 5);
+  const high = Math.round((min * 1.1) / 5) * 5;
+  return low === high ? `${min} min` : `${low}–${high} min`;
+}

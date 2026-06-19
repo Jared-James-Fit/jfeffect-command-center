@@ -64,7 +64,14 @@ import { WorkoutTimerSheet, QuickConfirmDuration, type TimerCompletionPayload } 
 import { formatDuration } from "@/lib/duration";
 import { Timer } from "lucide-react";
 import type { WorkoutContextAdapter } from "@/lib/workout-context";
-import { summarizeCompleteness, type RequiredRowSpec, type LoggedSetSpec, type RowMetricKind } from "@/lib/workout-completeness";
+import {
+  summarizeCompleteness,
+  estimatedDurationLabel,
+  type RequiredRowSpec,
+  type LoggedSetSpec,
+  type RowMetricKind,
+  type EstimatedDurationRow,
+} from "@/lib/workout-completeness";
 import { useWorkoutHeartbeat, readHeartbeatTimestamps, clearHeartbeatTimestamps } from "@/hooks/use-workout-heartbeat";
 import { computeActiveSeconds } from "@/lib/workout-duration";
 import { LoggingQualityBadge } from "@/components/workout/shared/logging-quality-badge";
@@ -1032,7 +1039,21 @@ function WorkoutDay({
         />
 
         <div className="flex flex-wrap items-center gap-2">
-          <Badge variant="outline"><Clock className="mr-1 h-3 w-3" /> {durationRange(day.duration_override_min ?? day.duration_estimate_min ?? 60)}</Badge>
+          <Badge variant="outline"><Clock className="mr-1 h-3 w-3" /> {(() => {
+            // Prefer a coach-set override; otherwise derive from prescribed
+            // sets + per-row rest so the pill matches what's actually
+            // programmed instead of a stale 60-min default.
+            if (day.duration_override_min) return durationRange(day.duration_override_min);
+            const estRows: EstimatedDurationRow[] = (rows as any[]).map((r: any) => ({
+              prescribedSets: Number(r.sets) || 1,
+              restSeconds: r.rest_seconds ?? null,
+              category: r.exercises?.category ?? r.category ?? null,
+              skipped: !!r.skipped,
+            }));
+            const derived = estimatedDurationLabel(estRows);
+            if (derived) return derived;
+            return durationRange(day.duration_estimate_min ?? 60);
+          })()}</Badge>
           {completion?.completed_at && <Badge variant="outline" className="text-green-500 border-green-500/30 bg-green-500/10"><CheckCircle2 className="mr-1 h-3 w-3" /> Completed</Badge>}
           {completion && !completion.completed_at && (completion.in_progress_at || completion.started_at) && (
             <Badge variant="outline" className="border-amber-500/30 bg-amber-500/10 text-amber-500">In progress</Badge>
