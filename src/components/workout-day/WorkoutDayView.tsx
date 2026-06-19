@@ -1855,7 +1855,7 @@ function ExerciseBlock({ row, dayId, dayTitle, clientId, blockId, existingResult
               hasUncompletedAfter={hasUncompletedAfter}
               onApplyToRemaining={applyToRemaining}
               readonly={readonly}
-              unit={unit}
+              unit={activeUnit}
               focusMode={focusMode}
               onChange={onChange}
               onSetCompleted={bumpRestTimer}
