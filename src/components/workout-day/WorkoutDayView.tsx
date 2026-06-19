@@ -1563,6 +1563,16 @@ function ExerciseBlock({ row, dayId, dayTitle, clientId, blockId, existingResult
   const name = row.exercises?.name ?? row.exercise_name_override ?? "Exercise";
   const exercise = row.exercises ?? null;
   const exerciseId = exercise?.id ?? null;
+  // Local mirror of the active unit so the per-exercise KG/LB toggle is always
+  // instantly responsive — even if the parent's resolved-unit state takes a
+  // tick to recompute or the persistence call is slow. Stays in sync with the
+  // incoming prop so external changes (history hydration, undo) still apply.
+  const [activeUnit, setActiveUnit] = useState<"kg" | "lb">(unit);
+  useEffect(() => { setActiveUnit(unit); }, [unit]);
+  const handleUnitToggle = (u: "kg" | "lb") => {
+    setActiveUnit(u);
+    onUnitChange?.(u);
+  };
   const video = exercise?.video_url ?? exercise?.vimeo_embed_url ?? null;
   const hasGuide = Boolean(exerciseId || video);
   const cues = exercise?.cues ?? null;
