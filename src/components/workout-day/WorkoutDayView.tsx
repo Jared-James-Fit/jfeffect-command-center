@@ -69,6 +69,7 @@ import { useWorkoutHeartbeat, readHeartbeatTimestamps, clearHeartbeatTimestamps 
 import { computeActiveSeconds } from "@/lib/workout-duration";
 import { LoggingQualityBadge } from "@/components/workout/shared/logging-quality-badge";
 import { CompletedWorkoutActions } from "@/components/workout/shared/completed-workout-actions";
+import { WorkoutStatusBar } from "@/components/workout-day/WorkoutStatusBar";
 
 /* -------------------------------------------------------------------------- */
 /* Target-parsing helpers (Suggested → Draft → Confirmed fast-logging)         */
