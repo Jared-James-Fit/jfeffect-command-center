@@ -624,6 +624,7 @@ function SelectedDayCard({
           dayId={item.day.id}
           open={moveOpen}
           onOpenChange={setMoveOpen}
+          currentScheduledDate={date}
         />
       )}
 
