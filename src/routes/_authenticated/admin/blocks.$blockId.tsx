@@ -37,7 +37,7 @@ const ROW_FIELDS = [
   // measurement_type and duration_seconds, so the toggle silently reverts
   // back to reps on reload. The *_backup columns preserve the last value
   // entered in the inactive mode so flipping back restores it.
-  "measurement_type","duration_seconds",
+  "measurement_type","duration_seconds","tracking_type",
   "reps_text_backup","duration_seconds_backup",
 ] as const;
 
