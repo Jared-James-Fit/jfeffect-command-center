@@ -1,7 +1,7 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { SalesPageShell, Section } from "@/components/sales/sales-page-shell";
 import {
   ArrowLeft, ArrowRight, CheckCircle2, CalendarClock, Loader2, Clock, Video,
@@ -176,6 +176,7 @@ function QuickApply() {
     return EMPTY;
   });
   const [step, setStep] = useState(0);
+  const suppressAutoAdvanceRef = useRef(false);
   const [result, setResult] = useState<Awaited<ReturnType<typeof submit>> | null>(null);
 
   const set = <K extends keyof FormState>(k: K, v: FormState[K]) => setForm((f) => ({ ...f, [k]: v }));
@@ -221,6 +222,7 @@ function QuickApply() {
   }
   function back() {
     if (step > 0) {
+      suppressAutoAdvanceRef.current = true;
       setStep(step - 1);
       window.scrollTo({ top: 0, behavior: "smooth" });
     }
@@ -228,6 +230,10 @@ function QuickApply() {
 
   // Auto-advance for steps that say so
   useEffect(() => {
+    if (suppressAutoAdvanceRef.current) {
+      suppressAutoAdvanceRef.current = false;
+      return;
+    }
     if (!cur.autoAdvance) return;
     if (!cur.valid()) return;
     const t = setTimeout(() => {
