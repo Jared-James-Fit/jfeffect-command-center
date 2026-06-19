@@ -26,6 +26,8 @@ type Props = {
   onReviewSaved?: () => void;
   /** Optional: id of an element to scroll to when "View Log" is clicked. */
   logAnchorId?: string;
+  /** Admin/coach POV: submit on behalf of this client id. */
+  actAsClientId?: string | null;
 };
 
 export function CompletedWorkoutActions({
@@ -34,6 +36,7 @@ export function CompletedWorkoutActions({
   initialReview,
   onReviewSaved,
   logAnchorId,
+  actAsClientId,
 }: Props) {
   const [reviewOpen, setReviewOpen] = useState(false);
   const hasReview = !!initialReview?.submittedAt;
@@ -90,6 +93,7 @@ export function CompletedWorkoutActions({
         hasCoach={hasCoach}
         initial={initialReview ?? null}
         onSaved={onReviewSaved}
+        actAsClientId={actAsClientId ?? null}
       />
     </>
   );

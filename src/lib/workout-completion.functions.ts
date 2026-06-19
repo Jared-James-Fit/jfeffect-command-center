@@ -624,6 +624,11 @@ const ReviewInput = z.intersection(
     painArea: z.string().nullable().optional(),
     painNote: z.string().nullable().optional(),
     clientNote: z.string().nullable().optional(),
+    // When an admin/coach is in Client POV mode, the signed-in user has no
+    // `clients` row of their own. Pass the impersonated client's id and we
+    // resolve scope from that — after verifying the caller really is an
+    // admin or coach.
+    actAsClientId: z.string().uuid().nullable().optional(),
   }),
 );
 
@@ -635,7 +640,27 @@ export const submitOrEditReview = createServerFn({ method: "POST" })
     const nowIso = new Date().toISOString();
 
     if (data.kind === "client") {
-      const clientId = await resolveClientId(supabase, userId);
+      let clientId: string;
+      let usedOverride = false;
+      if (data.actAsClientId) {
+        const [{ data: isAdmin }, { data: isCoach }] = await Promise.all([
+          supabase.rpc("has_role", { _user_id: userId, _role: "admin" }),
+          supabase.rpc("has_role", { _user_id: userId, _role: "coach" }),
+        ]);
+        if (!isAdmin && !isCoach) {
+          throw new Error("Only admins or coaches can submit a review on behalf of a client");
+        }
+        clientId = data.actAsClientId;
+        usedOverride = true;
+      } else {
+        clientId = await resolveClientId(supabase, userId);
+      }
+      // Admin/coach POV writes bypass RLS via the service-role client because
+      // pl_workout_feedback's INSERT/UPDATE policies are scoped to the client's
+      // own auth.uid.
+      const writer = usedOverride
+        ? (await import("@/integrations/supabase/client.server")).supabaseAdmin
+        : supabase;
       const { data: completion } = await supabase
         .from("pl_day_completions")
         .select("id")
@@ -644,7 +669,7 @@ export const submitOrEditReview = createServerFn({ method: "POST" })
         .maybeSingle();
       if (!completion?.id) throw new Error("Cannot submit review before completion exists");
 
-      const { data: existing } = await supabase
+      const { data: existing } = await writer
         .from("pl_workout_feedback")
         .select("id, review_edit_count, review_submitted_at")
         .eq("completion_id", completion.id)
@@ -664,7 +689,7 @@ export const submitOrEditReview = createServerFn({ method: "POST" })
       };
 
       if (existing?.id) {
-        const { data: row, error } = await supabase
+        const { data: row, error } = await writer
           .from("pl_workout_feedback")
           .update({
             ...base,
@@ -678,7 +703,7 @@ export const submitOrEditReview = createServerFn({ method: "POST" })
         if (error) throw error;
         return { id: row.id, edited: true };
       }
-      const { data: row, error } = await supabase
+      const { data: row, error } = await writer
         .from("pl_workout_feedback")
         .insert({
           ...base,
