@@ -1013,6 +1013,18 @@ function WorkoutDay({
       />
       <div className="p-4 md:p-8 space-y-4 pb-[calc(var(--bottom-nav-clearance,96px)+env(safe-area-inset-bottom)+24px)] md:pb-8">
 
+        {statusBarVisible && (
+          <WorkoutStatusBar
+            title={cleanDayTitle(day.title, day.day_index)}
+            exercisesDone={statusSummary.exercisesDone}
+            exercisesTotal={statusSummary.exercisesTotal}
+            setsDone={statusSummary.setsDone}
+            setsTotal={statusSummary.setsTotal}
+            startedAt={completion?.started_at ?? completion?.in_progress_at ?? null}
+            completedAt={completion?.completed_at ?? null}
+          />
+        )}
+
         <WorkoutSyncBanner
           clientId={client?.id ?? null}
           workoutId={dayId}
