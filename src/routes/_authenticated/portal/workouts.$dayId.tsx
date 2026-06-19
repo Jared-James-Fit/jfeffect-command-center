@@ -1,5 +1,9 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useMemo } from "react";
+import { useMemo, useEffect } from "react";
+import { Link, useRouter } from "@tanstack/react-router";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { AlertTriangle } from "lucide-react";
 import { WorkoutDayView } from "@/components/workout-day/WorkoutDayView";
 import { createClientAdapter } from "@/lib/workout-context/client-adapter";
 import { usePortalUserId, useClientImpersonation } from "@/lib/client-impersonation";
@@ -15,7 +19,46 @@ export const Route = createFileRoute("/_authenticated/portal/workouts/$dayId")({
     review: s.review === 1 || s.review === "1" || s.review === true ? 1 : undefined,
   }),
   component: RouteComponent,
+  // Capture render/load errors on this route so the page degrades gracefully
+  // on mobile instead of showing a hard crash screen, and surface the stack
+  // to the console so we can diagnose the cause from the next session.
+  errorComponent: WorkoutDayErrorFallback,
 });
+
+function WorkoutDayErrorFallback({ error, reset }: { error: Error; reset: () => void }) {
+  const router = useRouter();
+  useEffect(() => {
+    // eslint-disable-next-line no-console
+    console.error("[workouts/$dayId] route error:", error, error?.stack);
+  }, [error]);
+  return (
+    <div className="p-6">
+      <Card className="space-y-3 p-6">
+        <div className="flex items-center gap-2 text-base font-bold">
+          <AlertTriangle className="h-5 w-5 text-amber-500" />
+          Something went wrong opening this workout
+        </div>
+        <div className="text-sm text-muted-foreground">
+          {error?.message || "Unexpected error."} You can retry, or go back to the schedule.
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Button
+            size="sm"
+            onClick={() => {
+              router.invalidate();
+              reset();
+            }}
+          >
+            Retry
+          </Button>
+          <Button asChild size="sm" variant="outline">
+            <Link to="/portal/workouts">Back to workouts</Link>
+          </Button>
+        </div>
+      </Card>
+    </div>
+  );
+}
 
 function RouteComponent() {
   const { dayId } = Route.useParams();
