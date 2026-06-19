@@ -1,7 +1,7 @@
 import { Link } from "@tanstack/react-router";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Flame, Beef, Clock, Users } from "lucide-react";
+import { Flame, Beef, Clock, Users, ChevronRight } from "lucide-react";
 import type { Recipe } from "@/lib/recipes";
 import { getRecipeCardMeta } from "@/lib/recipe-meta";
 
@@ -27,8 +27,13 @@ export function RecipeCard({
   const accent = CATEGORY_ACCENT[recipe.category] ?? "from-primary/30 to-primary/0";
 
   return (
-    <Link to={to.pathname as any} params={to.params as any}>
-      <Card className="group relative flex h-full flex-col gap-3 overflow-hidden p-4 transition-all hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-md">
+    <Link
+      to={to.pathname as any}
+      params={to.params as any}
+      aria-label={`View recipe: ${recipe.title}`}
+      className="block h-full focus:outline-none focus-visible:ring-2 focus-visible:ring-primary rounded-lg"
+    >
+      <Card className="group relative flex h-full cursor-pointer flex-col gap-3 overflow-hidden p-4 transition-all hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-md active:scale-[0.99]">
         {recipe.image_url ? (
           <div className="relative -mx-4 -mt-4 mb-1 aspect-[16/9] overflow-hidden bg-secondary">
             <img
@@ -65,6 +70,11 @@ export function RecipeCard({
             ))}
           </div>
         )}
+
+        <div className="relative mt-1 flex items-center justify-between rounded-md border border-primary/30 bg-primary/10 px-3 py-2 text-primary">
+          <span className="text-[11px] font-black uppercase tracking-widest">View Recipe</span>
+          <ChevronRight className="h-4 w-4" />
+        </div>
       </Card>
     </Link>
   );
