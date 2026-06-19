@@ -77,12 +77,12 @@ export function QuickActionsMenu({ r }: { r: DirectoryRow }) {
         <DropdownMenuLabel className="text-xs">Nutrition &amp; Cardio</DropdownMenuLabel>
         <DropdownMenuItem asChild>
           <Link to="/admin/clients/$id" params={{ id: r.id }} search={{ tab: "nutrition" } as any} className="flex items-center gap-2">
-            <Apple className="h-4 w-4" /> {r.nut_end ? "Update Nutrition" : "Add Nutrition"}
+            <Apple className="h-4 w-4" /> {!r.f_missing_nutrition ? "Update Nutrition" : "Add Nutrition"}
           </Link>
         </DropdownMenuItem>
         <DropdownMenuItem asChild>
           <Link to="/admin/clients/$id" params={{ id: r.id }} search={{ tab: "cardio" } as any} className="flex items-center gap-2">
-            <HeartPulse className="h-4 w-4" /> {r.card_end ? "Update Cardio" : "Add Cardio"}
+            <HeartPulse className="h-4 w-4" /> {!r.f_missing_cardio ? "Update Cardio" : "Add Cardio"}
           </Link>
         </DropdownMenuItem>
 
