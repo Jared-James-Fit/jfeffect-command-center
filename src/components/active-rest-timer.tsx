@@ -1,7 +1,4 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
-import { Pause, Play, RotateCcw, Timer, Plus, X } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { cn } from "@/lib/utils";
 import { defaultRestRange, type ExerciseCategory } from "@/lib/exercise-metadata";
 
 /**
