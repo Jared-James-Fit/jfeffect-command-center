@@ -1,66 +1,116 @@
-## Scope
+## Offline Mode v1 — implementation plan
 
-This request spans 8 major areas across the existing workout stack (`WorkoutDayView` 2,607 lines, `QuickSwapButton` 703 lines, client + member adapters ~1,500 lines, `WorkoutsExperience` 821 lines, plus scheduling/timezone logic). Doing it all in one pass is high-risk and expensive. I propose phased delivery, with QA pause after each phase as you requested.
+### Architecture (one shared layer, used by all features)
 
-I also want to flag: **items 4 (estimated time), 5 (actual duration), 6 (completion quality badge), and partial completion stats already exist** in the codebase (`workout-completeness.ts`, `member_workout_completions` columns like duration/sets/volume, `WorkoutRestTimer` component). They're built but not always surfaced in the UI. The fixes are mostly wiring, not new systems.
+```
+┌─ Service Worker (vite-plugin-pwa, NetworkFirst HTML, CacheFirst assets) ─┐
+│  Caches: app shell + last-fetched API responses for whitelisted reads     │
+└────────────────────────────────────────────────────────────────────────────┘
+              ▲                                       ▲
+              │ navigation                            │ data reads
+              │                                       │
+        React app  ◄──── useOnlineStatus() ────►  OfflineBanner / chips
+              │
+              ▼ writes
+┌─ offline-queue (IndexedDB via idb) ───────────────────────────────────────┐
+│  enqueue({ kind, payload, clientOpId, createdAt })                        │
+│  drain() runs on online + every 30s + on focus                            │
+│  per-kind handlers call existing server fns; idempotent via clientOpId    │
+└────────────────────────────────────────────────────────────────────────────┘
+              │
+              ▼
+        React Query optimistic updates → UI stays consistent
+```
 
----
+One queue, one banner, one status hook. Every feature plugs in by registering a handler.
 
-## Phase 1 — Reliability fixes (ship first, then QA pause)
+### What gets cached by the service worker
 
-**1. Swap persistence (the actual reported bug).**
-- `quick-swap.functions.ts` only writes to `pl_exercise_rows`. For **members**, rows are synthetic `ex:<index>` ids backed by `member_plan_enrollments` JSON — `applySwap` silently no-ops (or 500s) and the UI never updates. Toast lies.
-- Fix: branch `applySwap` / `getSwapImpact` by adapter kind. Add a member path that persists the swap into the enrollment's plan structure (new column or override map on `member_plan_enrollments`, applied at adapter read time).
-- Invalidate the correct query keys for both contexts after success; verify the row re-renders with the new exercise name + media.
-- Verify with Playwright on `/m/workouts/...`.
+- App shell (HTML, JS, CSS, fonts, logos, icons)
+- Last-seen GET responses for:
+  - `/portal` dashboard data
+  - today's workout day (`pl_days`, `pl_exercise_rows`, `pl_block_set_rows`, completion)
+  - bodyweight + water + nutrition latest reads
+- Excluded: auth, payments, admin, messaging, uploads, anything POST/PUT/DELETE
 
-**2. Workout "not showing up" audit.**
-- Audit `getEnrollmentSchedule` + `getClientWorkouts` + `workout-today.ts` for timezone handling (member tz vs UTC vs coach tz), week rollover, and day-of-week math. Produce a written diff of any drift bugs and fix them.
-- Add a "Today" pinned card on `/m` and `/portal/workouts` that uses the same resolver everywhere.
+Stale-while-revalidate so the user always sees their last known state offline.
 
-**Pause for QA here.** You confirm 1 & 2 are clean before I touch the rest.
+### IndexedDB queue (one table)
 
----
+`pending_ops` rows:
+- `id` (uuid), `client_op_id` (uuid — server-side dedup key)
+- `kind` — e.g. `set_log`, `workout_complete`, `bodyweight`, `water`, `nutrition_log`, `habit_tick`, `progress_metric`, `note`
+- `payload` (JSON)
+- `created_at`, `attempts`, `last_error`, `status` (`pending` | `syncing` | `failed`)
 
-## Phase 2 — Visible timers + status bar
+Per-kind handler maps `payload` → existing server function call. Server functions get a small change: accept optional `client_op_id`, upsert on it to prevent duplicates.
 
-**3. Pinned Workout Status Bar** (persists across the workout page, sticky top):
-   `Chest Day | 5/8 Exercises | 18/27 Sets | 43:21`
-   - Workout timer starts on first "Start Set" tap (or explicit **Start Workout** if none logged yet) and is stored in `member_workout_completions.started_at` / `pl_day_completions.started_at` so refresh/reload preserves it.
-   - Exercise/set counters derive from existing `workout-completeness.ts`.
+### Feature wiring (each is ~30 lines once queue exists)
 
-**4. Auto rest timer after set log.**
-   - `WorkoutRestTimer` already exists. After a set is logged, auto-mount it inline with a one-tap "Start 2:00 Rest" button using the assigned rest (`pl_exercise_rows.rest_seconds` → fallback to category midpoint). Presets: 30s/60s/90s/2m/3m/5m.
-   - Visible without any menu dive.
+| Feature | Queue kind | Server fn touched |
+|---|---|---|
+| Workout set logs | `set_log` | upsert `member_set_logs` / `pl_row_results` by `client_op_id` |
+| Workout completion + duration | `workout_complete` | `pl_day_completions` upsert |
+| Workout review/notes | `workout_review` | existing review fn |
+| Bodyweight | `bodyweight` | `progress_bodyweight` insert |
+| Water | `water` | `progress_water_entries` insert |
+| Nutrition meal log | `nutrition_log` | `member_meal_logs` insert |
+| Habits / supplements | `habit_tick` | `member_supplement_logs` insert |
+| Progress metric | `progress_metric` | `progress_metrics` insert |
+| Progress photo *metadata only* | `progress_photo_meta` | `progress_media` row (binary upload deferred until online) |
 
----
+Progress photo blobs are NOT queued — too risky for IndexedDB quotas. Metadata + a "Pending upload" marker is queued; the file itself is held in memory only while the tab is open, with a clear "this photo will upload when you're back online — don't close the tab" warning.
 
-## Phase 3 — Pre/post workout surfaces
+### Action gating (no codebase-wide audit)
 
-**5. Estimated time pill** on the workout-open screen: `sets × (avg_set_seconds + rest_seconds)` using a single helper in `workout-completeness.ts`.
+A small `<RequiresOnline>` wrapper + `useRequireOnline()` hook. Applied surgically to: payments buttons, signup CTA, messaging composer, video upload, coach/admin program edits. Offline → disabled + tooltip + toast.
 
-**6. Completion summary screen** (already-persisted data, just surface it):
-   - Duration, sets logged X/Y, exercises X/Y, total volume.
-   - Quality badge 🟢/🟡/🔴 driven by existing `categorizeLoggingQuality()`.
-   - Block "Mark Complete" or require confirm when < 75% so members can't fake completions.
+### UI status
 
----
+- Top banner when offline: "Offline — your changes are saved and will sync when you're back online."
+- Per-action chip on save: "Saved offline" → "Syncing" → "Synced" / "Sync failed — Retry"
+- Sync queue drawer (`/portal/settings/offline`) shows pending ops + manual retry
 
-## Out of scope unless you confirm
+### Conflict policy (per your choice)
 
-- Coach-side "assign default rest per exercise" UI — column already exists (`pl_exercise_rows.rest_seconds`); the editor surface for it is a separate task.
-- Redesigning the workout list page beyond adding the Today card.
+Always save. If `client_op_id` upsert hits a target row that was archived/reassigned, server fn still writes the log but stamps `needs_review = true` on the parent so coach sees it. No client-side block.
 
----
+### Phasing (this is what I'll actually do, in order)
 
-## Technical notes
+**Phase 1 — Foundations (this batch)**
+1. `vite-plugin-pwa` set up with the preview-safe registration guard from the PWA skill.
+2. `src/lib/offline/queue.ts` — IndexedDB queue + `useOfflineQueue`.
+3. `src/lib/offline/online-status.ts` — `useOnlineStatus` hook.
+4. `OfflineBanner` mounted in `_authenticated/route.tsx`.
+5. `<RequiresOnline>` wrapper + `useRequireOnline` hook.
+6. Migration: add `client_op_id` (uuid, unique nullable) to the 8 target write tables.
 
-- Single source of truth: extend `WorkoutContextAdapter` with `applySwap`, `getStartedAt`, `setStartedAt` so both `client-adapter` and `member-adapter` implement the same contract. No parallel system, no duplicated components — `WorkoutDayView` stays the only workout UI.
-- New DB column likely needed: `member_plan_enrollments.row_overrides jsonb` (or a small `member_exercise_swaps` table) to persist member swaps without forking the plan template. Migration will include `GRANT`s + RLS.
-- All toast confirmations driven by mutation `onSuccess`, never optimistic-only, so "did it save?" is always truthful.
+**Phase 2 — Wire workout logging (the most important flow)**
+7. Set logging in `WorkoutDayView` enqueues when offline; server fn dedups by `client_op_id`.
+8. Workout completion + duration enqueue when offline.
+9. Save chips on each set row.
 
----
+**Phase 3 — Wire the rest**
+10. Bodyweight, water, nutrition log, habit tick, progress metric.
+11. Progress photo metadata path + "don't close tab" warning.
 
-## Recommended next step
+**Phase 4 — Polish**
+12. Sync queue drawer at `/portal/settings/offline`.
+13. Apply `<RequiresOnline>` to payments, signup, messaging, uploads, coach edits.
+14. Test airplane-mode flow end to end.
 
-Approve Phase 1 only. I'll implement, run Playwright against `/m/workouts/...` for the swap repro and a date/timezone audit, then hand back for QA before starting Phase 2.
+### Out of scope (will not do)
+
+- No new offline-first design pages.
+- No real-time conflict resolution UI for clients.
+- No offline support for admin dashboards, analytics, or coach inboxes.
+- No background sync via Periodic Background Sync API (browser support too patchy).
+- No photo binary persistence across tab closes.
+
+### Credit estimate
+
+Phase 1+2 alone is substantial — service worker setup, IndexedDB layer, migration on 8 tables, and one feature wired end to end is the bulk of the work. Phases 3 and 4 are mostly repetition once Phase 2 lands.
+
+I will commit Phase 1 and 2 in this turn, then check in before continuing to Phase 3 so you can see it working in airplane mode first. If anything looks off, we adjust before I template the same pattern across the remaining features — that's the credit-cheapest path.
+
+Approve to proceed.
