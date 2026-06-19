@@ -162,6 +162,7 @@ const EMPTY: FormState = {
 };
 
 const STORAGE_KEY = "jf:quickapply:v1";
+const STORAGE_STEP_KEY = "jf:quickapply-step:v1";
 
 /* ────────────────── component ────────────────── */
 
@@ -170,12 +171,19 @@ function QuickApply() {
   const [form, setForm] = useState<FormState>(() => {
     if (typeof window === "undefined") return EMPTY;
     try {
-      const raw = sessionStorage.getItem(STORAGE_KEY);
+      const raw = localStorage.getItem(STORAGE_KEY);
       if (raw) return { ...EMPTY, ...JSON.parse(raw) };
     } catch { /* noop */ }
     return EMPTY;
   });
-  const [step, setStep] = useState(0);
+  const [step, setStep] = useState(() => {
+    if (typeof window === "undefined") return 0;
+    try {
+      const raw = localStorage.getItem(STORAGE_STEP_KEY);
+      const n = raw ? parseInt(raw, 10) : 0;
+      return Number.isFinite(n) && n >= 0 ? n : 0;
+    } catch { return 0; }
+  });
   const suppressAutoAdvanceRef = useRef(false);
   const [result, setResult] = useState<Awaited<ReturnType<typeof submit>> | null>(null);
 
@@ -183,8 +191,13 @@ function QuickApply() {
 
   useEffect(() => {
     if (result) return;
-    try { sessionStorage.setItem(STORAGE_KEY, JSON.stringify(form)); } catch { /* noop */ }
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(form)); } catch { /* noop */ }
   }, [form, result]);
+
+  useEffect(() => {
+    if (result) return;
+    try { localStorage.setItem(STORAGE_STEP_KEY, String(step)); } catch { /* noop */ }
+  }, [step, result]);
 
   const mut = useMutation({
     mutationFn: () => submit({ data: {
@@ -195,7 +208,10 @@ function QuickApply() {
     } as any }),
     onSuccess: (r) => {
       setResult(r);
-      try { sessionStorage.removeItem(STORAGE_KEY); } catch { /* noop */ }
+      try {
+        localStorage.removeItem(STORAGE_KEY);
+        localStorage.removeItem(STORAGE_STEP_KEY);
+      } catch { /* noop */ }
       window.scrollTo({ top: 0, behavior: "smooth" });
     },
     onError: (e: any) => toast.error(e?.message ?? "Couldn't submit application."),
@@ -206,9 +222,12 @@ function QuickApply() {
   /* Step definitions — each step returns its own JSX, has a `valid()` predicate,
      and may opt into auto-advance for single-choice answers. */
   const steps = useMemo(() => buildSteps(form, set), [form]);
-  const cur = steps[step];
-
   const total = steps.length;
+  const safeStep = Math.min(step, total - 1);
+  const cur = steps[safeStep];
+  useEffect(() => {
+    if (step > total - 1) setStep(total - 1);
+  }, [step, total]);
   const pct = Math.round(((step + 1) / total) * 100);
 
   function next() {

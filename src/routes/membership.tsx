@@ -85,10 +85,27 @@ export function SignupJf({ floatingHeader = false }: { floatingHeader?: boolean 
   const formRef = useRef<HTMLDivElement>(null);
   const scrollToForm = () => formRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
 
-  const [form, setForm] = useState({
-    first_name: "", last_name: "", email: "", phone: "",
-    password: "", confirm: "",
+  const SIGNUP_DRAFT_KEY = "jf:signup-draft:v1";
+  const [form, setForm] = useState(() => {
+    const empty = { first_name: "", last_name: "", email: "", phone: "", password: "", confirm: "" };
+    if (typeof window === "undefined") return empty;
+    try {
+      const raw = localStorage.getItem(SIGNUP_DRAFT_KEY);
+      if (raw) {
+        const saved = JSON.parse(raw);
+        // Never restore passwords from storage
+        return { ...empty, ...saved, password: "", confirm: "" };
+      }
+    } catch { /* noop */ }
+    return empty;
   });
+  // Persist non-sensitive fields so users can resume where they left off
+  useEffect(() => {
+    try {
+      const { password: _p, confirm: _c, ...safe } = form;
+      localStorage.setItem(SIGNUP_DRAFT_KEY, JSON.stringify(safe));
+    } catch { /* noop */ }
+  }, [form.first_name, form.last_name, form.email, form.phone]);
   const [bundledAccepted, setBundledAccepted] = useState(false);
   const [busy, setBusy] = useState(false);
   const [showPw, setShowPw] = useState(false);
@@ -236,6 +253,7 @@ export function SignupJf({ floatingHeader = false }: { floatingHeader?: boolean 
         user_agent: typeof navigator !== "undefined" ? navigator.userAgent : "",
         codes: appliedCodes.map((c) => c.code),
       }});
+      try { localStorage.removeItem(SIGNUP_DRAFT_KEY); } catch { /* noop */ }
       window.location.assign(r.url);
     } catch (e: any) {
       toast.error(e?.message ?? "Couldn't start checkout.");
