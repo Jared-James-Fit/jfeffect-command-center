@@ -11,11 +11,9 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # ── 1. Checkout ──────────────────────────────────────────────────────────
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # ── 2. Node.js + npm install ─────────────────────────────────────────────
       - name: Setup Node.js 22
         uses: actions/setup-node@v4
         with:
@@ -24,85 +22,51 @@ jobs:
       - name: Install npm dependencies
         run: npm install --legacy-peer-deps
 
-      # ── 3. Java 17 ───────────────────────────────────────────────────────────
       - name: Setup Java 17
         uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
           java-version: '17'
 
-      # ── 4. Android SDK ───────────────────────────────────────────────────────
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
 
       - name: Accept Android SDK licenses
         run: yes | sdkmanager --licenses || true
 
-      - name: Install Android build tools and platform
-        run: |
-          sdkmanager \
-            "platforms;android-35" \
-            "build-tools;35.0.0" \
-            "platform-tools" \
-            2>&1 | tail -5
+      - name: Install Android platform and build tools
+        run: sdkmanager "platforms;android-35" "build-tools;35.0.0" "platform-tools" 2>&1 | tail -3
 
-      # ── 5. Install Capacitor CLI ─────────────────────────────────────────────
-      - name: Install Capacitor CLI globally
+      - name: Install Capacitor CLI
         run: npm install -g @capacitor/cli
 
-      # ── 6. Add Android platform ──────────────────────────────────────────────
       - name: Add Android platform
         run: |
           rm -rf android
           npx cap add android
-          echo "✅ Android platform added"
           ls android/
 
-      # ── 7. Create assets directory and capacitor config ──────────────────────
-      - name: Create Android assets directory and capacitor config
-        run: |
-          mkdir -p android/app/src/main/assets
-          python3 -c "
-import json
-config = {
-  'appId': 'com.jfeffect.app',
-  'appName': 'JF Effect',
-  'webDir': 'dist',
-  'server': {'url': 'https://jfeffect.com', 'cleartext': False},
-  'plugins': {
-    'Keyboard': {'resize': 'native', 'resizeOnFullScreen': True},
-    'StatusBar': {'style': 'DARK', 'backgroundColor': '#0B0B0F'},
-    'SplashScreen': {'launchShowDuration': 2000, 'backgroundColor': '#0B0B0F', 'showSpinner': False}
-  }
-}
-with open('android/app/src/main/assets/capacitor.config.json', 'w') as f:
-  json.dump(config, f, indent=2)
-print('capacitor.config.json written')
-"
-          echo "✅ capacitor.config.json created"
+      - name: Create Android assets directory
+        run: mkdir -p android/app/src/main/assets
 
-      # ── 8. Run cap sync ──────────────────────────────────────────────────────
+      - name: Write capacitor.config.json
+        run: >
+          echo '{"appId":"com.jfeffect.app","appName":"JF Effect","webDir":"dist","server":{"url":"https://jfeffect.com","cleartext":false},"plugins":{"Keyboard":{"resize":"native","resizeOnFullScreen":true},"StatusBar":{"style":"DARK","backgroundColor":"#0B0B0F"},"SplashScreen":{"launchShowDuration":2000,"backgroundColor":"#0B0B0F","showSpinner":false}}}'
+          > android/app/src/main/assets/capacitor.config.json
+
       - name: Run cap sync
         run: |
           npx cap sync android 2>&1 | tail -10
-          ls android/capacitor.settings.gradle 2>/dev/null && echo "✅ capacitor.settings.gradle exists" || echo "WARNING: missing"
+          ls android/capacitor.settings.gradle && echo "capacitor.settings.gradle OK"
 
-      # ── 9. Inspect generated build.gradle ────────────────────────────────────
-      - name: Inspect generated build.gradle
-        run: |
-          echo "=== android/app/build.gradle ==="
-          cat android/app/build.gradle
-          echo "=== android/build.gradle ==="
-          cat android/build.gradle 2>/dev/null || echo "no root build.gradle"
+      - name: Show generated build.gradle
+        run: cat android/app/build.gradle
 
-      # ── 10. Restore signing keystore ─────────────────────────────────────────
-      - name: Restore Android signing keystore
+      - name: Restore signing keystore
         run: |
           echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 --decode > android/app/jfeffect-upload.jks
-          echo "Keystore size: $(wc -c < android/app/jfeffect-upload.jks) bytes"
+          echo "Keystore: $(wc -c < android/app/jfeffect-upload.jks) bytes"
 
-      # ── 11. Build signed release AAB ─────────────────────────────────────────
-      # Pass version code/name as Gradle properties to avoid patching build.gradle
       - name: Build signed release AAB
         working-directory: android
         env:
@@ -118,31 +82,22 @@ print('capacitor.config.json written')
             -Pandroid.injected.signing.store.password="$ANDROID_KEYSTORE_PASSWORD" \
             -Pandroid.injected.signing.key.alias="$ANDROID_KEY_ALIAS" \
             -Pandroid.injected.signing.key.password="$ANDROID_KEY_PASSWORD" \
-            --no-daemon \
-            2>&1 | tail -50
+            --no-daemon 2>&1 | tail -50
 
-      # ── 12. Verify and upload AAB ────────────────────────────────────────────
-      - name: Verify AAB exists
+      - name: Verify AAB
         run: |
-          echo "Searching for AAB files..."
           find android -name "*.aab" 2>/dev/null
-          AAB_PATH="android/app/build/outputs/bundle/release/app-release.aab"
-          if [ -f "$AAB_PATH" ]; then
-            echo "✅ AAB found: $(ls -lh $AAB_PATH)"
-          else
-            echo "❌ AAB not found"
-            find android/app/build -type f 2>/dev/null | head -20 || echo "No build outputs"
-            exit 1
-          fi
+          AAB=android/app/build/outputs/bundle/release/app-release.aab
+          test -f "$AAB" && echo "AAB OK: $(ls -lh $AAB)" || (echo "AAB missing"; find android/app/build -type f 2>/dev/null | head -10; exit 1)
 
-      - name: Upload signed AAB artifact
+      - name: Upload signed AAB
         uses: actions/upload-artifact@v4
         with:
           name: JFEffect-release-aab-v1.0.0
           path: android/app/build/outputs/bundle/release/app-release.aab
           retention-days: 30
 
-      - name: Upload keystore backup artifact
+      - name: Upload keystore backup
         uses: actions/upload-artifact@v4
         if: always()
         with:
