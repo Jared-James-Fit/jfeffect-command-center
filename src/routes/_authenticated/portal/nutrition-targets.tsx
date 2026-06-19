@@ -37,7 +37,7 @@ function PortalNutrition() {
   });
 
   const planQ = useQuery({
-    queryKey: ["portal-coach-meal-plan", portalUserId],
+    queryKey: ["portal-coach-meal-plan", portalUserId, impersonatedClient?.user_id ?? null],
     enabled: !!portalUserId,
     queryFn: () =>
       getPlanFn({
