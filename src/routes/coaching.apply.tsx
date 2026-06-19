@@ -4,7 +4,7 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { SalesPageShell, Section } from "@/components/sales/sales-page-shell";
 import {
-  ArrowLeft, ArrowRight, CheckCircle2, CalendarClock, Loader2, Clock, Video,
+  ArrowLeft, ArrowRight, X, CheckCircle2, CalendarClock, Loader2, Clock, Video,
 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
