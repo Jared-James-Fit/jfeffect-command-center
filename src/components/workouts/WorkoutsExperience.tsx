@@ -583,15 +583,21 @@ function SelectedDayCard({
             </Link>
           </Button>
           {cta.secondary && (
-            <Button asChild size="sm" variant="outline">
-              <Link
-                to="/portal/workouts/$dayId"
-                params={{ dayId: item.day.id }}
-                search={cta.secondary.search as any}
-              >
+            cta.secondary.label === "Reschedule" ? (
+              <Button size="sm" variant="outline" onClick={() => setMoveOpen(true)}>
                 {cta.secondary.label}
-              </Link>
-            </Button>
+              </Button>
+            ) : (
+              <Button asChild size="sm" variant="outline">
+                <Link
+                  to="/portal/workouts/$dayId"
+                  params={{ dayId: item.day.id }}
+                  search={cta.secondary.search as any}
+                >
+                  {cta.secondary.label}
+                </Link>
+              </Button>
+            )
           )}
           {!readonly && status.status !== "completed_today"
             && status.status !== "completed_on_scheduled"

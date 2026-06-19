@@ -9,7 +9,7 @@ import {
 } from "date-fns";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { ChevronLeft, ChevronRight, CheckCircle2, Clock, AlertCircle, GripVertical, Calendar as CalIcon } from "lucide-react";
+import { ChevronLeft, ChevronRight, CheckCircle2, Clock, AlertCircle, GripVertical, Calendar as CalIcon, CalendarPlus } from "lucide-react";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
 
@@ -22,10 +22,11 @@ export type ScheduleWeek = { id: string; week_index: number; block_id: string };
 export type ScheduleBlock = { id: string; name: string | null; start_date: string | null; end_date: string | null };
 export type ScheduleCompletion = { day_id: string; completed_at: string | null; in_progress_at: string | null };
 
-type Status = "completed" | "in-progress" | "overdue" | "rescheduled" | "scheduled";
+type Status = "completed" | "in-progress" | "overdue" | "rescheduled" | "scheduled" | "unscheduled";
 function statusOf(day: ScheduleDay, comp: ScheduleCompletion | null): Status {
   if (comp?.completed_at) return "completed";
   if (comp?.in_progress_at) return "in-progress";
+  if (!day.scheduled_date) return "unscheduled";
   if (day.scheduled_date && isBefore(parseISO(day.scheduled_date), startOfToday())) return "overdue";
   if (day.schedule_source === "manual") return "rescheduled";
   return "scheduled";
@@ -36,6 +37,7 @@ function statusBadge(s: Status) {
     case "in-progress": return <Badge variant="outline" className="gap-1"><Clock className="h-3 w-3" /> In progress</Badge>;
     case "overdue": return <Badge variant="destructive" className="gap-1"><AlertCircle className="h-3 w-3" /> Overdue</Badge>;
     case "rescheduled": return <Badge variant="outline" className="gap-1"><CalIcon className="h-3 w-3" /> Moved</Badge>;
+    case "unscheduled": return <Badge variant="outline" className="gap-1"><CalendarPlus className="h-3 w-3" /> Unscheduled</Badge>;
     default: return <Badge variant="outline">Scheduled</Badge>;
   }
 }
@@ -157,6 +159,11 @@ export function ScheduleCalendar(props: ScheduleCalendarProps) {
       .slice(0, 30);
   }, [days]);
 
+  const unscheduled = useMemo(
+    () => days.filter((d) => !d.scheduled_date).sort((a, b) => a.day_index - b.day_index),
+    [days],
+  );
+
   const handleDragEnd = (e: DragEndEvent) => {
     setDragId(null);
     if (!e.over || !e.active) return;
@@ -174,6 +181,37 @@ export function ScheduleCalendar(props: ScheduleCalendarProps) {
       onDragCancel={() => setDragId(null)}
       onDragEnd={handleDragEnd}
     >
+      {unscheduled.length > 0 && (
+        <div className="mb-3 space-y-2 rounded-md border border-dashed border-border bg-secondary/20 p-2">
+          <div className="flex items-center gap-2 px-1 text-xs font-semibold uppercase text-muted-foreground">
+            <CalendarPlus className="h-3.5 w-3.5" /> Unscheduled workouts
+          </div>
+          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+            {unscheduled.map((d) => {
+              const wk = weekMap.get(d.week_id);
+              const blk = wk ? blockMap.get(wk.block_id) : null;
+              return (
+                <button
+                  key={d.id}
+                  type="button"
+                  disabled={!canEdit}
+                  onClick={() => onSelectDay?.(d.id)}
+                  className="flex items-center justify-between gap-3 rounded-md border border-border bg-card p-3 text-left text-sm transition hover:bg-accent/40 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  <span className="min-w-0">
+                    <span className="block truncate font-medium">{d.title?.trim() || `Day ${d.day_index}`}</span>
+                    <span className="block text-xs text-muted-foreground">
+                      {blk?.name ?? "Block"} · Week {wk?.week_index ?? "?"} · Day {d.day_index}
+                    </span>
+                  </span>
+                  <span className="shrink-0 rounded-md border border-border px-2 py-1 text-xs font-semibold">Pick date</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       <Tabs value={view} onValueChange={(v) => setView(v as any)}>
         <div className="flex items-center justify-between gap-2 mb-3">
           <TabsList>
