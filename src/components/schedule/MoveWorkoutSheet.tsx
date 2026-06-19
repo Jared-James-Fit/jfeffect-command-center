@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { useNavigate } from "@tanstack/react-router";
@@ -90,11 +90,15 @@ export function MoveWorkoutSheet({
   const today = startOfToday();
   const ctx = ctxQuery.data;
 
-  const [target, setTarget] = useState<Date | null>(initialTargetDate ?? null);
+  const [target, setTarget] = useState<Date | null>(null);
   const [confirmCompleted, setConfirmCompleted] = useState(false);
 
-  // Reset target when the sheet closes so the next open uses fresh data.
-  // Using useMemo for derived state is cleaner than an effect here.
+  useEffect(() => {
+    if (!open) return;
+    setTarget(initialTargetDate ?? null);
+    setConfirmCompleted(false);
+  }, [dayId, initialTargetDate, open]);
+
   const initialFromCtx = useMemo(() => {
     if (initialTargetDate) return initialTargetDate;
     if (ctx?.day?.scheduled_date) return parseISO(ctx.day.scheduled_date);
