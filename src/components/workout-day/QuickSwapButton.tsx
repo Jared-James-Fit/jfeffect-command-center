@@ -438,16 +438,41 @@ export function QuickSwapButton({
 
   // Pull "how many future workouts" for the scope step.
   const { data: impact, isLoading: impactLoading } = useQuery({
-    queryKey: ["quick-swap-impact", rowId],
+    queryKey: ["quick-swap-impact", rowId, isMember],
     enabled: open && mode === "scope" && !!pending,
     staleTime: 30_000,
-    queryFn: () => getImpactFn({ data: { rowId } }),
+    queryFn: async () => {
+      if (isMember && swapContext && swapContext.kind === "member") {
+        return getImpactFnMember({
+          data: {
+            enrollmentId: swapContext.enrollmentId,
+            weekIndex: swapContext.weekIndex,
+            dayIndex: swapContext.dayIndex,
+            exerciseIndex: swapContext.exerciseIndex,
+          },
+        });
+      }
+      return getImpactFnClient({ data: { rowId } });
+    },
   });
 
   const swapMutation = useMutation({
-    mutationFn: (vars: { newExerciseId: string; scope: "today" | "future" }) =>
-      applySwapFn({ data: { rowId, ...vars } }),
-    onSuccess: (res, vars) => {
+    mutationFn: async (vars: { newExerciseId: string; scope: "today" | "future" }) => {
+      if (isMember && swapContext && swapContext.kind === "member") {
+        return applySwapFnMember({
+          data: {
+            enrollmentId: swapContext.enrollmentId,
+            weekIndex: swapContext.weekIndex,
+            dayIndex: swapContext.dayIndex,
+            exerciseIndex: swapContext.exerciseIndex,
+            newExerciseId: vars.newExerciseId,
+            scope: vars.scope,
+          },
+        });
+      }
+      return applySwapFnClient({ data: { rowId, ...vars } });
+    },
+    onSuccess: (res: { count: number }, vars) => {
       toast.success(
         vars.scope === "future"
           ? `Swapped across ${res.count} workout${res.count === 1 ? "" : "s"}`
