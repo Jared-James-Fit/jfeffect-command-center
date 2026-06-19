@@ -3,26 +3,13 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 export function StickyMobileCta({ label, onClick, href, disabled, paused }: { label: string; onClick?: () => void; href?: string; disabled?: boolean; paused?: boolean }) {
-  // Only reveal the sticky CTA once the visitor has scrolled past the hero /
-  // primary inline CTA, then keep it visible until they're near the footer.
-  // This avoids the bar covering content the moment the page loads.
-  // Reveal once the user has scrolled a little past the hero, then keep the
-  // bar pinned for the rest of the page. Previously we hid it again near the
-  // footer, which made the submit button disappear right when the user
-  // reached the form on /join (where the inline submit is desktop-only) and
-  // on /coaching. Once visible, it stays visible.
   const [visible, setVisible] = useState(false);
   useEffect(() => {
     if (typeof window === "undefined") return;
-    let revealed = false;
+    const threshold = (window.innerHeight || 800) * 0.5;
     const compute = () => {
-      if (revealed) return;
-      const vh = window.innerHeight || 800;
       const y = window.scrollY || window.pageYOffset || 0;
-      if (y > vh * 0.5) {
-        revealed = true;
-        setVisible(true);
-      }
+      setVisible(y > threshold);
     };
     compute();
     window.addEventListener("scroll", compute, { passive: true });
