@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft } from "lucide-react";
 import { getRecipe, markRecipeSeen } from "@/lib/recipes";
-import { RecipeBodyView } from "@/components/recipe-body-view";
+import { RecipeDetailView } from "@/components/nutrition/RecipeDetailView";
 import { usePortalUserId } from "@/lib/client-impersonation";
 
 export const Route = createFileRoute("/_authenticated/portal/recipes/$recipeId")({
@@ -26,7 +26,17 @@ function PortalRecipeDetail() {
   }, [recipe?.id, userId]);
 
   if (isLoading) return <div className="p-6 text-sm text-muted-foreground">Loading…</div>;
-  if (!recipe) return <div className="p-6 text-sm text-muted-foreground">Recipe not found.</div>;
+  if (!recipe)
+    return (
+      <div className="mx-auto max-w-3xl space-y-4 p-4 md:p-6">
+        <Button variant="ghost" size="sm" asChild>
+          <Link to="/portal/recipes"><ArrowLeft className="mr-1 h-4 w-4" /> All Recipes</Link>
+        </Button>
+        <Card className="p-6 text-center text-sm text-muted-foreground">
+          This recipe isn't available. It may have been removed or you don't have access.
+        </Card>
+      </div>
+    );
 
   return (
     <div className="mx-auto max-w-3xl space-y-4 p-4 md:p-6">
@@ -40,7 +50,7 @@ function PortalRecipeDetail() {
             <Badge variant="outline" className="text-[10px]">{recipe.category}</Badge>
           </div>
         </div>
-        <RecipeBodyView body={recipe.body} videoUrl={recipe.video_url} />
+        <RecipeDetailView recipe={recipe} />
       </Card>
     </div>
   );
