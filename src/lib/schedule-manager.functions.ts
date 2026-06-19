@@ -132,7 +132,12 @@ export const moveWorkout = createServerFn({ method: "POST" })
 
     const batchId = crypto.randomUUID();
 
-    const { error: updErr } = await supabase
+    // Writes go through the service-role client because pl_days RLS
+    // only grants UPDATE to admins/assigned coaches — clients have
+    // SELECT only. resolveActorAccess() above is the authorization
+    // boundary that allows the client to move their own scheduled date.
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { error: updErr } = await supabaseAdmin
       .from("pl_days")
       .update({
         scheduled_date: data.newDate,
@@ -141,7 +146,7 @@ export const moveWorkout = createServerFn({ method: "POST" })
       .eq("id", data.dayId);
     if (updErr) throw new Error(`Could not save the new date: ${updErr.message}`);
 
-    const { error: auditErr } = await supabase.from("pl_schedule_audit").insert({
+    const { error: auditErr } = await supabaseAdmin.from("pl_schedule_audit").insert({
       batch_id: batchId,
       day_id: data.dayId,
       client_id: block.client_id,
@@ -155,7 +160,7 @@ export const moveWorkout = createServerFn({ method: "POST" })
     });
     if (auditErr) {
       // Roll back the date change so we never have an unaudited move.
-      await supabase
+      await supabaseAdmin
         .from("pl_days")
         .update({
           scheduled_date: day.scheduled_date,
@@ -210,45 +215,46 @@ export const swapWorkouts = createServerFn({ method: "POST" })
     const aPrev = a.day.scheduled_date;
     const bPrev = b.day.scheduled_date;
 
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     // Two updates inside one logical operation. We park A's date on a
     // sentinel (null) first so a uniqueness constraint, if ever added,
     // wouldn't trip mid-swap.
-    const { error: e1 } = await supabase
+    const { error: e1 } = await supabaseAdmin
       .from("pl_days")
       .update({ scheduled_date: null })
       .eq("id", data.dayIdA);
     if (e1) throw new Error(`Swap failed: ${e1.message}`);
 
-    const { error: e2 } = await supabase
+    const { error: e2 } = await supabaseAdmin
       .from("pl_days")
       .update({ scheduled_date: aPrev, schedule_source: "manual" })
       .eq("id", data.dayIdB);
     if (e2) {
-      await supabase
+      await supabaseAdmin
         .from("pl_days")
         .update({ scheduled_date: aPrev })
         .eq("id", data.dayIdA);
       throw new Error(`Swap failed: ${e2.message}`);
     }
 
-    const { error: e3 } = await supabase
+    const { error: e3 } = await supabaseAdmin
       .from("pl_days")
       .update({ scheduled_date: bPrev, schedule_source: "manual" })
       .eq("id", data.dayIdA);
     if (e3) {
       // Best-effort rollback.
-      await supabase
+      await supabaseAdmin
         .from("pl_days")
         .update({ scheduled_date: bPrev, schedule_source: b.day.schedule_source })
         .eq("id", data.dayIdB);
-      await supabase
+      await supabaseAdmin
         .from("pl_days")
         .update({ scheduled_date: aPrev })
         .eq("id", data.dayIdA);
       throw new Error(`Swap failed: ${e3.message}`);
     }
 
-    await supabase.from("pl_schedule_audit").insert([
+    await supabaseAdmin.from("pl_schedule_audit").insert([
       {
         batch_id: batchId,
         day_id: data.dayIdA,
@@ -305,8 +311,9 @@ export const undoScheduleChange = createServerFn({ method: "POST" })
 
     const newBatchId = crypto.randomUUID();
     let undone = 0;
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     for (const r of rows) {
-      const { error: uerr } = await supabase
+      const { error: uerr } = await supabaseAdmin
         .from("pl_days")
         .update({
           scheduled_date: r.previous_date,
@@ -314,7 +321,7 @@ export const undoScheduleChange = createServerFn({ method: "POST" })
         })
         .eq("id", r.day_id);
       if (uerr) continue;
-      await supabase.from("pl_schedule_audit").insert({
+      await supabaseAdmin.from("pl_schedule_audit").insert({
         batch_id: newBatchId,
         day_id: r.day_id,
         client_id: r.client_id,
