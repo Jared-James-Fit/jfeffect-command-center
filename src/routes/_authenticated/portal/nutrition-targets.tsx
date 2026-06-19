@@ -10,7 +10,7 @@ import { ClipboardList, FileText, Target, Utensils, Droplets } from "lucide-reac
 import { MealPlanDisplay } from "@/components/meal-plan-display";
 import { RecipeBrowser } from "@/components/nutrition/RecipeBrowser";
 import { getCoachAssignedMealPlan } from "@/lib/nutrition-targets/member-targets.functions";
-import { usePortalUserId } from "@/lib/client-impersonation";
+import { usePortalUserId, useClientImpersonation } from "@/lib/client-impersonation";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/_authenticated/portal/nutrition-targets")({
@@ -19,6 +19,7 @@ export const Route = createFileRoute("/_authenticated/portal/nutrition-targets")
 
 function PortalNutrition() {
   const portalUserId = usePortalUserId();
+  const { client: impersonatedClient } = useClientImpersonation();
   const getPlanFn = useServerFn(getCoachAssignedMealPlan);
 
   const ctxQ = useQuery({
@@ -37,7 +38,13 @@ function PortalNutrition() {
 
   const planQ = useQuery({
     queryKey: ["portal-coach-meal-plan", portalUserId],
-    queryFn: () => getPlanFn({}),
+    enabled: !!portalUserId,
+    queryFn: () =>
+      getPlanFn({
+        data: impersonatedClient?.user_id
+          ? { viewAsUserId: impersonatedClient.user_id }
+          : {},
+      }),
     staleTime: 60_000,
   });
 
