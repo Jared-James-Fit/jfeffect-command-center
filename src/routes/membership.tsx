@@ -253,6 +253,7 @@ export function SignupJf({ floatingHeader = false }: { floatingHeader?: boolean 
         user_agent: typeof navigator !== "undefined" ? navigator.userAgent : "",
         codes: appliedCodes.map((c) => c.code),
       }});
+      try { localStorage.removeItem(SIGNUP_DRAFT_KEY); } catch { /* noop */ }
       window.location.assign(r.url);
     } catch (e: any) {
       toast.error(e?.message ?? "Couldn't start checkout.");
