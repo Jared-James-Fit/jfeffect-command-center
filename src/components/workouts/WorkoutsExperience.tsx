@@ -184,6 +184,14 @@ export function WorkoutsExperience({
 
       <div className="space-y-4 p-4 pb-32 md:p-6">
 
+        {client && (
+          <TrainingScheduleCard
+            client={client as any}
+            editable={mode === "self"}
+            compact
+          />
+        )}
+
         <Tabs defaultValue="calendar" className="space-y-4">
           <TabsList className="grid w-full grid-cols-2 sm:w-auto sm:inline-flex">
             <TabsTrigger value="calendar" className="gap-1">
