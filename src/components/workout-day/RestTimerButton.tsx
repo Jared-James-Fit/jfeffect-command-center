@@ -62,14 +62,14 @@ export function RestTimerButton({
       disabled={!seconds || seconds <= 0}
       aria-label={running ? `Rest timer ${display} remaining` : `Start rest timer for ${label}`}
       className={cn(
-        "inline-flex w-full items-center justify-center gap-2 rounded-xl border-2 px-4 py-3 text-base font-bold tabular-nums shadow-sm transition active:scale-[0.98] disabled:opacity-50 disabled:active:scale-100",
+        "inline-flex w-full items-center justify-center gap-2 rounded-lg border px-3 py-2 text-sm font-semibold tabular-nums shadow-sm transition active:scale-[0.98] disabled:opacity-50 disabled:active:scale-100",
         running
           ? "border-primary bg-primary text-primary-foreground"
-          : "border-primary/60 bg-primary/10 text-foreground hover:bg-primary/20",
+          : "border-primary/40 bg-primary/10 text-foreground hover:bg-primary/20",
         className,
       )}
     >
-      {running ? <Clock className="h-5 w-5" /> : <Play className="h-5 w-5" />}
+      {running ? <Clock className="h-4 w-4" /> : <Play className="h-4 w-4" />}
       <span>{running ? display : `Rest: ${label} — Tap to start`}</span>
     </button>
   );
