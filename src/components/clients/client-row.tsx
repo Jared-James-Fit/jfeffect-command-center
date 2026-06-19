@@ -256,8 +256,12 @@ function AssignmentStatusStrip({
   range: string | null;
 }) {
   const hasProgram = !!r.block_id;
-  const hasNutrition = !!r.nut_end && !r.f_missing_nutrition;
-  const hasCardio = !!r.card_end && !r.f_missing_cardio;
+  // Nutrition/cardio targets are often assigned open-ended (no end_date),
+  // so `nut_end`/`card_end` may be null even when an active plan exists.
+  // Rely on the missing-flags from the RPC, which already treat a null
+  // end_date as still-active.
+  const hasNutrition = !r.f_missing_nutrition;
+  const hasCardio = !r.f_missing_cardio;
   const [sheet, setSheet] = useState<QuickPanelKind | null>(null);
   const [assignProgramOpen, setAssignProgramOpen] = useState(false);
 
