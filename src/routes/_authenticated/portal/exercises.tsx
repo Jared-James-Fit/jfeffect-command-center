@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/app-shell";
 import { Card } from "@/components/ui/card";
@@ -21,9 +21,16 @@ const CATEGORIES = ["Squat", "Bench", "Deadlift", "Upper Body", "Lower Body", "B
 
 function ExerciseLibrary() {
   const { id: focusId } = Route.useSearch();
+  const [searchInput, setSearchInput] = useState("");
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState("all");
   const [selected, setSelected] = useState<any>(null);
+
+  // Debounce search input (300ms) so filtering doesn't run on every keystroke
+  useEffect(() => {
+    const t = setTimeout(() => setSearch(searchInput), 300);
+    return () => clearTimeout(t);
+  }, [searchInput]);
 
   const { data: exercises = [], isLoading: exercisesLoading } = useQuery({
     queryKey: ["exercises"],
@@ -42,10 +49,32 @@ function ExerciseLibrary() {
     }
   }, [focusId, exercises]);
 
-  const filtered = exercises.filter((e) =>
-    (category === "all" || e.category === category) &&
-    (!search || e.name.toLowerCase().includes(search.toLowerCase()))
-  );
+  const filtered = useMemo(() => {
+    const q = search.toLowerCase();
+    return exercises.filter((e: any) =>
+      (category === "all" || e.category === category) &&
+      (!q || e.name.toLowerCase().includes(q))
+    );
+  }, [exercises, category, search]);
+
+  // Windowed rendering — only render a slice at a time. Load more on scroll
+  // via IntersectionObserver. Keeps the 1700+ exercise library snappy.
+  const PAGE = 80;
+  const [visibleCount, setVisibleCount] = useState(PAGE);
+  useEffect(() => { setVisibleCount(PAGE); }, [search, category]);
+  const sentinelRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    const node = sentinelRef.current;
+    if (!node) return;
+    const io = new IntersectionObserver((entries) => {
+      if (entries.some((e) => e.isIntersecting)) {
+        setVisibleCount((c) => Math.min(c + PAGE, filtered.length));
+      }
+    }, { rootMargin: "600px 0px" });
+    io.observe(node);
+    return () => io.disconnect();
+  }, [filtered.length]);
+  const visible = filtered.slice(0, visibleCount);
 
   return (
     <>
@@ -55,7 +84,7 @@ function ExerciseLibrary() {
           <div className="flex flex-wrap gap-3">
             <div className="relative flex-1 min-w-[240px]">
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-              <Input className="pl-9" placeholder="Search exercises…" value={search} onChange={(e) => setSearch(e.target.value)} />
+              <Input className="pl-9" placeholder="Search exercises…" value={searchInput} onChange={(e) => setSearchInput(e.target.value)} />
             </div>
             <Select value={category} onValueChange={setCategory}>
               <SelectTrigger className="w-56"><SelectValue /></SelectTrigger>
@@ -95,7 +124,7 @@ function ExerciseLibrary() {
                   </div>
                 </Card>
               ))
-            : filtered.map((e) => (
+            : visible.map((e) => (
             <button key={e.id} onClick={() => setSelected(e)} className="text-left">
               <Card className="group h-full border-border bg-card p-4 transition hover:border-primary hover:shadow-glow">
                 <div className="flex items-start gap-3">
@@ -112,6 +141,9 @@ function ExerciseLibrary() {
             <div className="col-span-full rounded-md border border-dashed border-border p-8 text-center text-sm text-muted-foreground">No exercises yet.</div>
           )}
         </div>
+        {!exercisesLoading && visibleCount < filtered.length && (
+          <div ref={sentinelRef} className="h-10 w-full" aria-hidden="true" />
+        )}
       </div>
     </>
   );
