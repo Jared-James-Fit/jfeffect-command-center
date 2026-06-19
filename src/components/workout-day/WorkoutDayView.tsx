@@ -53,6 +53,7 @@ import { WorkoutUndoProvider, useWorkoutUndo, UndoButton } from "@/lib/workout-u
 import { WorkoutSyncBanner } from "@/components/workout-sync-banner";
 import { writePlanCache, cachedInitialData } from "@/lib/workout-plan-cache";
 import { enqueueOfflineWrite, registerQueueHandler } from "@/lib/workout-offline-queue";
+import { saveOfflineCompletion } from "@/lib/offline/workout-completion-store";
 import { ActiveRestTimerProvider, useRestTimer } from "@/components/active-rest-timer";
 import { RestTimerButton } from "@/components/workout-day/RestTimerButton";
 import { ExerciseHistoryButton } from "@/components/exercise-history-sheet";
