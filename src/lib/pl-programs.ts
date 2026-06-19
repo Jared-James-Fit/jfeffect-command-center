@@ -1259,7 +1259,13 @@ export function getTemplateWeeks(tpl: any): number {
 export function computeEndDateFromStart(startDate: string, weeks: number): string {
   const d = new Date(startDate + "T00:00:00");
   d.setDate(d.getDate() + weeks * 7 - 1);
-  return d.toISOString().slice(0, 10);
+  // Format in local time. `toISOString().slice(0,10)` shifts to UTC and
+  // returns the previous day for any user east of UTC, producing off-by-one
+  // block end dates and "missing today's workout" symptoms.
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
 }
 
 async function insertWeekTree(blockId: string, weekIndex: number, w: any) {
