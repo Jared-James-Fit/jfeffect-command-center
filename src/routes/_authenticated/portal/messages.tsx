@@ -88,8 +88,8 @@ function ClientMessages() {
             src={coach?.profile_picture_url ?? null}
             name={coachName}
             size={40}
-            fallbackSrc="/logo.png"
-            className="ring-1 ring-border"
+            ring
+            expandable={false}
           />
           {coachLive && (
             <span className="absolute bottom-0 right-0"><LiveDot /></span>
