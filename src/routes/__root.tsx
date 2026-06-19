@@ -27,6 +27,7 @@ import { OnlineOfflineBanner } from "@/components/pwa/online-offline-banner";
 // Side-effect import: registers durable-queue handlers for cross-feature
 // offline writes (bodyweight, water, …) so pending items can drain at boot.
 import "@/lib/offline/data-handlers";
+import "@/lib/offline/workout-completion-sync";
 
 function NotFoundComponent() {
   return (
