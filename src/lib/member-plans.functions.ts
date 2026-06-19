@@ -19,10 +19,44 @@ function dayOffsetsForWeek(daysPerWeek: number): number[] {
   return presets[Math.max(1, Math.min(7, daysPerWeek))] ?? [0, 2, 4];
 }
 
-function defaultScheduledDate(startISO: string, weekIndex: number, dayIndex: number, daysPerWeek: number): string {
-  const start = new Date(startISO);
-  // anchor to start of day, UTC-safe by parsing the date portion
-  const base = new Date(Date.UTC(start.getUTCFullYear(), start.getUTCMonth(), start.getUTCDate()));
+/**
+ * Resolve the anchor date for a plan start, in the member's timezone.
+ *
+ * - When `startISO` is already a date-only string (`YYYY-MM-DD`, from a
+ *   `date` column), use it verbatim — timezone is meaningless.
+ * - When `startISO` is a timestamp, project it into the supplied tz so a
+ *   member in `America/Los_Angeles` whose start fires at 03:00Z still
+ *   anchors on the previous calendar day instead of the UTC one.
+ */
+function anchorDateYMD(startISO: string, timezone?: string | null): { y: number; m: number; d: number } {
+  if (/^\d{4}-\d{2}-\d{2}$/.test(startISO)) {
+    const [y, m, d] = startISO.split("-").map((n) => parseInt(n, 10));
+    return { y, m, d };
+  }
+  const dt = new Date(startISO);
+  const tz = timezone || "UTC";
+  try {
+    const parts = new Intl.DateTimeFormat("en-US", {
+      timeZone: tz, year: "numeric", month: "2-digit", day: "2-digit",
+    }).formatToParts(dt);
+    const get = (t: string) => parseInt(parts.find((p) => p.type === t)?.value || "0", 10);
+    return { y: get("year"), m: get("month"), d: get("day") };
+  } catch {
+    return { y: dt.getUTCFullYear(), m: dt.getUTCMonth() + 1, d: dt.getUTCDate() };
+  }
+}
+
+function defaultScheduledDate(
+  startISO: string,
+  weekIndex: number,
+  dayIndex: number,
+  daysPerWeek: number,
+  timezone?: string | null,
+): string {
+  const { y, m, d } = anchorDateYMD(startISO, timezone);
+  // Use UTC arithmetic on the anchor (date-only); the tz is only used to
+  // resolve which calendar day the start timestamp falls on.
+  const base = new Date(Date.UTC(y, m - 1, d));
   const offsets = dayOffsetsForWeek(daysPerWeek);
   const di = Math.max(0, Math.min(offsets.length - 1, dayIndex - 1));
   const totalDays = (weekIndex - 1) * 7 + offsets[di];
