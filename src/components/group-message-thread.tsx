@@ -983,6 +983,15 @@ export function GroupMessageThread({
                 placeholder={`Message ${groupName}…`}
                 rows={1}
                 className="min-h-10 max-h-40 flex-1 resize-none rounded-2xl border-input bg-background px-3 py-2 text-base sm:text-sm"
+                onFocus={() => {
+                  const el = scrollerRef.current;
+                  if (!el) return;
+                  const pin = () => { el.scrollTop = el.scrollHeight; };
+                  pin();
+                  requestAnimationFrame(pin);
+                  setTimeout(pin, 150);
+                  setTimeout(pin, 350);
+                }}
                 onKeyDown={(e) => {
                   if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
                     e.preventDefault();
