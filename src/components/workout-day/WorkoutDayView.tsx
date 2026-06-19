@@ -1714,9 +1714,10 @@ function ExerciseBlock({ row, dayId, dayTitle, clientId, blockId, existingResult
             <StickyNote className="h-2.5 w-2.5" /> Note
           </span>
         )}
-        <span className="ml-auto inline-flex items-center gap-1 rounded-md bg-secondary/40 px-1.5 py-0.5 font-semibold text-foreground">
-          <Clock className="h-3 w-3" /> Rest: {restDisplay}
-        </span>
+      </div>
+      {/* Big, dummy-proof rest timer — tap to start, auto-resets at 0 */}
+      <div className="mt-2">
+        <RestTimerButton seconds={effectiveRest ?? null} label={restDisplay} />
       </div>
       {/* Standardized prescription line: Sets × Reps @ Weight | RPE */}
       <div className="mt-1 text-sm font-semibold text-foreground leading-snug break-words">
