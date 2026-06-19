@@ -1338,6 +1338,35 @@ function WorkoutDay({
             )}
           </Card>
         )}
+
+        {completion?.completed_at && client?.id && (
+          <CompletedWorkoutActions
+            ctx={{ kind: "client", dayId }}
+            hasCoach
+            actAsClientId={isImpersonating ? client.id : null}
+            initialReview={
+              existingReview
+                ? {
+                    overallRating: existingReview.overall_rating ?? null,
+                    sessionRpe: existingReview.session_rpe ?? null,
+                    pain: existingReview.pain ?? false,
+                    painLevel: existingReview.pain_level ?? null,
+                    painArea: existingReview.pain_area ?? null,
+                    painNote: existingReview.pain_note ?? null,
+                    clientNote: existingReview.client_note ?? null,
+                    editCount: existingReview.review_edit_count ?? 0,
+                    submittedAt:
+                      existingReview.review_submitted_at ??
+                      existingReview.created_at ??
+                      null,
+                  }
+                : null
+            }
+            onReviewSaved={() =>
+              qc.invalidateQueries({ queryKey: ["pl-workout-feedback", dayId, client.id] })
+            }
+          />
+        )}
       </div>
 
       {/* Minimal post-workout completion sheet. Readonly (admin POV) never opens it. */}
