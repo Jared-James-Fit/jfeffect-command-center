@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useRef, useState, type ReactNode } from "react";
 import { Link } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Card } from "@/components/ui/card";
@@ -36,6 +36,7 @@ export function ProgressSummaryCard({
   viewerRole,
   progressHref,
   title = "Progress Snapshot",
+  extraActions,
 }: {
   userId: string;
   currentUserId: string;
@@ -45,6 +46,13 @@ export function ProgressSummaryCard({
     | { kind: "member" }
     | { kind: "admin-client"; clientId: string };
   title?: string;
+  /**
+   * Optional quick-action tiles rendered inside the same card, just above the
+   * "View Full Progress" CTA. Used by the client + member home dashboards to
+   * combine the Progress Snapshot with primary quick actions in one section,
+   * so we never duplicate items that already live in the bottom tab bar.
+   */
+  extraActions?: ReactNode;
 }) {
   void currentUserId; void viewerRole;
   const qc = useQueryClient();
@@ -360,6 +368,10 @@ export function ProgressSummaryCard({
               : <Plus className="h-3.5 w-3.5" />}
           </button>
         </div>
+
+        {extraActions ? (
+          <div className="pt-1">{extraActions}</div>
+        ) : null}
 
         <ViewCta />
       </div>
