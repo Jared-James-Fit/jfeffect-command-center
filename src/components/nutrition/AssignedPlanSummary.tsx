@@ -53,14 +53,6 @@ function DayBlock({ title, day }: { title: string; day: Day | undefined }) {
   );
 }
 
-function pickDay(days: Day[], keywords: string[]): Day | undefined {
-  for (const d of days) {
-    const label = (d.day_label || "").toLowerCase();
-    if (keywords.some((k) => label.includes(k))) return d;
-  }
-  return undefined;
-}
-
 export function AssignedPlanSummary() {
   const fn = useServerFn(getCoachAssignedMealPlan);
   const q = useQuery({
