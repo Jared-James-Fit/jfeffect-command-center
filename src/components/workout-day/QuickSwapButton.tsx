@@ -433,7 +433,7 @@ export function QuickSwapButton({
     retry: 1,
     queryFn: async () => {
       if (!exerciseId) return [] as RankedSuggestion[];
-      const src: ExerciseLite = {
+      let src: ExerciseLite = {
         id: exerciseId,
         name: exerciseName,
         muscle_group: muscleGroup ?? null,
@@ -442,15 +442,49 @@ export function QuickSwapButton({
         difficulty: difficulty ?? null,
       };
 
-      // Tier 1: same category — cheap, indexed, and the strongest signal
-      // in this library ("Squat" buckets all squat variants together).
-      // PostgREST .or() treats commas in values as separators, so we
-      // call .eq() per filter and merge client-side instead.
+      // Pull authoritative source metadata so ranking has the full
+      // picture (default_measurement_type, primary_movement_pattern,
+      // canonical muscle_group string) even when the row only carried
+      // an exerciseId.
+      const { data: srcRow } = await supabase
+        .from("exercises")
+        .select(SELECT_COLS)
+        .eq("id", exerciseId)
+        .maybeSingle();
+      if (srcRow) src = { ...src, ...(srcRow as ExerciseLite), id: exerciseId, name: srcRow.name ?? exerciseName };
+
       const pool = new Map<string, ExerciseLite>();
       const ingest = (rows: ExerciseLite[] | null | undefined) => {
         for (const r of rows ?? []) if (r.id !== exerciseId) pool.set(r.id, r);
       };
 
+      // Tier 0: pull every exercise whose name matches a synonym of any
+      // movement group the source belongs to. This is what makes
+      // Leg Press → Hack/Pendulum/Belt Squat work even with no shared
+      // category. PostgREST's .or() needs ilike.*pattern* and commas
+      // would split values, so issue parallel queries instead.
+      const srcGroups = matchMovementGroups(src);
+      const synonyms = Array.from(
+        new Set(srcGroups.flatMap((g) => g.synonyms.map((s) => s.toLowerCase()))),
+      );
+      if (synonyms.length > 0) {
+        const results = await Promise.all(
+          synonyms.map((syn) =>
+            supabase
+              .from("exercises")
+              .select(SELECT_COLS)
+              .eq("archived", false)
+              .ilike("name", `%${syn}%`)
+              .neq("id", exerciseId)
+              .limit(40)
+              .then((r) => (r.error ? [] : ((r.data ?? []) as ExerciseLite[]))),
+          ),
+        );
+        for (const rows of results) ingest(rows);
+      }
+
+      // Tier 1: same category — still the strongest signal when the
+      // movement-group net misses (e.g. "Abdominals" catches a lot).
       if (src.category) {
         const { data, error } = await supabase
           .from("exercises")
@@ -464,8 +498,6 @@ export function QuickSwapButton({
       }
 
       // Tier 2: keyword fallback on the distinctive movement noun
-      // ("Competition Squat" → "squat") — catches squats whose category
-      // string differs ("Legs" vs "Squat") and bulks out thin pools.
       const kw = distinctiveKeyword(src.name);
       if (kw && pool.size < 24) {
         const { data, error } = await supabase
