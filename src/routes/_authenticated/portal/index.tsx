@@ -382,6 +382,9 @@ function PortalHome() {
           <SetupChecklistBanner clientId={client.id} userId={portalUserId} />
         )}
 
+        {/* Action Centre — pinned to the top so urgent items are seen first */}
+        <ActionCentre items={actions} />
+
         {/* 3 — Progress summary */}
         {portalUserId && (
           <ProgressSummaryCard
@@ -430,9 +433,6 @@ function PortalHome() {
             subtitle="Review everything you’ve filled out — sign-up intake & in-app forms"
           />
         )}
-
-        {/* 4 — Action Centre */}
-        <ActionCentre items={actions} />
 
         {/* 5 — Current Training Block */}
         {activePhase && <TrainingBlockCard phase={activePhase} />}
