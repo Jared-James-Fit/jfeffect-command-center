@@ -121,36 +121,37 @@ export function computeTodayState(
     return { kind: "workout_today", item: todayItem };
   }
 
-  // Missed: a scheduled day in the past, uncompleted
-  const missed = undone.find((it) => {
-    const sd = dayScheduledDate(it);
-    return sd && sd < today;
-  });
-  if (missed) {
-    const sd = dayScheduledDate(missed)!;
-    const diff = Math.round((today.getTime() - sd.getTime()) / 86400000);
-    const whenLabel = diff === 1 ? "yesterday" : `${diff} days ago`;
-    return { kind: "missed", item: missed, whenLabel };
+  // The top "What do I do?" card should NEVER surface a workout that
+  // already passed — past uncompleted days are visible in the calendar
+  // and block view instead. From here on we only consider future or
+  // today-scheduled undone workouts.
+  const future = undone
+    .map((it) => ({ it, sd: dayScheduledDate(it) }))
+    .filter((x): x is { it: WorkoutItem; sd: Date } => !!x.sd && x.sd >= today)
+    .sort((a, b) => a.sd.getTime() - b.sd.getTime());
+
+  // No upcoming work left → treat as block complete so the hero card
+  // surfaces "Nice work" rather than a stale past day.
+  if (future.length === 0) {
+    const block = items[items.length - 1]?.block;
+    return { kind: "block_complete", block };
   }
 
   // Rest day if today is a rest day or not a training day at all
   if (isRestDayToday(client?.preferred_rest_days) ||
      (client?.preferred_training_days?.length && !isTrainingDayToday(client?.preferred_training_days))) {
-    const next = undone[0];
-    return { kind: "rest_day", next };
+    return { kind: "rest_day", next: future[0].it };
   }
 
   // Otherwise, upcoming next workout
-  const next = undone[0];
-  const sd = dayScheduledDate(next);
-  let whenLabel = "Soon";
-  if (sd) {
-    const diff = Math.round((sd.getTime() - today.getTime()) / 86400000);
-    if (diff <= 0) whenLabel = "Today";
-    else if (diff === 1) whenLabel = "Tomorrow";
-    else if (diff < 7) whenLabel = format(sd, "EEEE");
-    else whenLabel = format(sd, "MMM d");
-  }
+  const next = future[0].it;
+  const sd = future[0].sd;
+  const diff = Math.round((sd.getTime() - today.getTime()) / 86400000);
+  const whenLabel =
+    diff <= 0 ? "Today"
+    : diff === 1 ? "Tomorrow"
+    : diff < 7 ? format(sd, "EEEE")
+    : format(sd, "MMM d");
   return { kind: "upcoming", item: next, whenLabel };
 }
 
