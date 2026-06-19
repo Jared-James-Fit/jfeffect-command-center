@@ -1409,6 +1409,37 @@ function WorkoutDay({
               const resolvedDurationMin = Number.isFinite(typedMin) && typedMin > 0
                 ? typedMin
                 : completion?.actual_duration_min ?? null;
+              // Phase 2: offline-safe completion. If the client is offline,
+              // persist the completion payload locally so it survives reload.
+              // Phase 3 will register a sync handler that drains this store.
+              if (typeof navigator !== "undefined" && navigator.onLine === false) {
+                saveOfflineCompletion({
+                  id: `${dayId}:${client.id}`,
+                  dayId,
+                  clientId: client.id,
+                  payload: {
+                    kind: "client",
+                    dayId,
+                    requiredRows,
+                    activityTimestamps: heartbeats,
+                    completionMethod: "manual",
+                    completionSource: "workout_view",
+                    sessionRating: payload.session_rating ?? null,
+                    notes: payload.client_notes ?? completion?.client_notes ?? null,
+                    actualDurationMin: resolvedDurationMin,
+                    sessionWeightTotal: computed.totalLifted > 0 ? computed.totalLifted : null,
+                    sessionWeightUnit: computed.totalLifted > 0 ? displayUnit : null,
+                    confirmedMissingLogs: true,
+                  },
+                });
+                setCompleteOpen(false);
+                setLastSummary(computed);
+                setSummaryOpen(true);
+                toast.message("Workout saved offline", {
+                  description: "We'll sync it when you're back online.",
+                });
+                return;
+              }
               await completeWorkoutSrv({
                 data: {
                   kind: "client",
