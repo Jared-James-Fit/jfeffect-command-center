@@ -118,11 +118,17 @@ function ClientMessages() {
 
   return (
     <div
-      className="fixed inset-x-0 top-0 z-30 flex flex-col bg-background md:static md:inset-auto md:z-auto md:h-full md:flex-1"
+      className="fixed inset-x-0 z-30 flex flex-col bg-background md:static md:inset-auto md:z-auto md:h-full md:flex-1"
       style={{
-        // On mobile, use the dynamic viewport so the chat tracks the
-        // visible area (URL bar collapse + on-screen keyboard).
-        height: "calc(100dvh - var(--bottom-nav-clearance, 0px))",
+        // Anchor the chat to the iOS Visual Viewport. --vv-h / --vv-top are
+        // updated live by useKeyboardOpen() so the container shrinks and
+        // re-positions when the on-screen keyboard opens (100dvh alone does
+        // NOT shrink on iOS Safari, which is what creates the dead black
+        // gap above the keyboard). Falls back to 100dvh on browsers without
+        // the Visual Viewport API.
+        top: "var(--vv-top, 0px)",
+        height:
+          "calc(var(--vv-h, 100dvh) - var(--bottom-nav-clearance, 0px))",
       }}
     >
       {/* Slim chat header — coach identity, not a giant page hero */}
