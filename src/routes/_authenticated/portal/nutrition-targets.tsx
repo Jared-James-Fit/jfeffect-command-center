@@ -5,7 +5,6 @@ import { PageHeader } from "@/components/app-shell";
 import { supabase } from "@/integrations/supabase/client";
 import { NutritionDashboard, type NutritionTargets } from "@/components/nutrition/NutritionDashboard";
 import { getActiveMemberTargets } from "@/lib/nutrition-targets/member-targets.functions";
-import { MemberMealPlanPanel } from "@/components/nutrition/MemberMealPlanPanel";
 import { AssignedPlanSummary } from "@/components/nutrition/AssignedPlanSummary";
 import { usePortalUserId } from "@/lib/client-impersonation";
 
@@ -52,7 +51,6 @@ function PortalNutrition() {
     <>
       <PageHeader title="Nutrition" subtitle="Your plan, targets, and recipes — set by your coach." />
       <AssignedPlanSummary />
-      <MemberMealPlanPanel />
       <NutritionDashboard
         viewer="client"
         userId={portalUserId ?? undefined}
