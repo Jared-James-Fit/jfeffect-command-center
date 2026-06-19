@@ -1462,6 +1462,7 @@ function WorkoutDay({
         dayId={dayId}
         open={moveOpen}
         onOpenChange={setMoveOpen}
+        currentScheduledDate={scheduledDate}
       />
     </>
   );
