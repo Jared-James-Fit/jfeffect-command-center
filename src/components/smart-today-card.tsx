@@ -1,11 +1,13 @@
 import { Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
+import { useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Play, ArrowRight, Coffee, AlertCircle, CheckCircle2, Clock, Crosshair, RotateCcw } from "lucide-react";
+import { Play, ArrowRight, Coffee, AlertCircle, CheckCircle2, Clock, Crosshair, RotateCcw, CircleDot } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { WorkoutStatusSheet } from "@/components/workout-status-sheet";
 import {
   computeTodayState,
   dayDisplayTitle,
@@ -34,10 +36,11 @@ export function SmartTodayCard({
   const state = computeTodayState(items, client as any);
   if (state.kind === "no_program") return null;
 
-  return <SmartTodayCardInner state={state} />;
+  return <SmartTodayCardInner state={state} clientId={clientId} />;
 }
 
-function SmartTodayCardInner({ state }: { state: TodayState }) {
+function SmartTodayCardInner({ state, clientId }: { state: TodayState; clientId: string }) {
+  const [statusOpen, setStatusOpen] = useState(false);
   const view = render(state);
   // Pull block / week / day title out of state where available so the hero
   // hierarchy (Block → Day → Week/Status → CTA) is always front and centre.
@@ -105,8 +108,28 @@ function SmartTodayCardInner({ state }: { state: TodayState }) {
         <div className="flex flex-wrap items-center gap-2 pt-1 [&_a]:w-full [&_a]:sm:w-auto [&_button]:w-full [&_button]:sm:w-auto">
           {view.primary}
           {view.secondary}
+          {it?.day?.id && (
+            <Button
+              size="lg"
+              variant="outline"
+              className="font-bold uppercase border-white/20 bg-white/5 text-white hover:bg-white/10"
+              onClick={() => setStatusOpen(true)}
+            >
+              <CircleDot className="mr-2 h-4 w-4" /> Mark Status
+            </Button>
+          )}
         </div>
       </div>
+      {it?.day?.id && (
+        <WorkoutStatusSheet
+          open={statusOpen}
+          onOpenChange={setStatusOpen}
+          dayId={it.day.id}
+          clientId={clientId}
+          completion={it.completion}
+          invalidateKeys={[["my-workouts", clientId], ["my-workouts-page"]]}
+        />
+      )}
     </Card>
   );
 }
