@@ -144,7 +144,7 @@ function ReviewPage() {
               <div className="text-[10px] uppercase text-muted-foreground">Photos</div>
               <div className="grid grid-cols-3 gap-1 mt-1">
                 {sub.progress_photo_urls.map((u: string, i: number) => (
-                  <a key={i} href={u} target="_blank" rel="noreferrer"><img src={u} alt={`Progress ${i + 1}`} className="rounded border object-cover aspect-square" /></a>
+                  <a key={i} href={u} target="_blank" rel="noreferrer"><img loading="lazy" src={u} alt={`Progress ${i + 1}`} className="rounded border object-cover aspect-square" /></a>
                 ))}
               </div>
             </div>

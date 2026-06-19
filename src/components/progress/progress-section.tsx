@@ -318,7 +318,7 @@ function MediaThumb({ m }: { m: ProgressMedia }) {
       </div>
     );
   }
-  return <img src={url} alt={m.angle} loading="lazy" className="h-full w-full object-cover" />;
+  return <img loading="lazy" src={url} alt={m.angle} loading="lazy" className="h-full w-full object-cover" />;
 }
 
 // ============== Photo submission dialog ==============
@@ -1065,7 +1065,7 @@ function ComparePane({ subId, angle }: { subId: string; angle: ProgressAngle }) 
   return (
     <div>
       <div className="aspect-square bg-muted rounded overflow-hidden">
-        {url ? <img src={url} alt={angle} className="h-full w-full object-cover" /> : <div className="flex h-full items-center justify-center text-xs text-muted-foreground">No {ANGLE_LABEL[angle]} photo</div>}
+        {url ? <img loading="lazy" src={url} alt={angle} className="h-full w-full object-cover" /> : <div className="flex h-full items-center justify-center text-xs text-muted-foreground">No {ANGLE_LABEL[angle]} photo</div>}
       </div>
       <p className="text-xs text-muted-foreground mt-1">
         {sub ? fmtDate(sub.submission_date) : ""} {sub?.bodyweight ? `· ${sub.bodyweight} ${sub.weight_unit}` : ""}
@@ -1187,7 +1187,7 @@ function DetailMediaPane({ angle, media }: { angle: ProgressAngle; media?: Progr
         ) : url ? (
           media.media_type === "video"
             ? <video controls src={url} className="h-full w-full object-contain bg-black" />
-            : <img src={url} alt={angle} className="h-full w-full object-cover" />
+            : <img loading="lazy" src={url} alt={angle} className="h-full w-full object-cover" />
         ) : (
           <div className="flex h-full items-center justify-center"><Loader2 className="h-4 w-4 animate-spin" /></div>
         )}

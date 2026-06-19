@@ -839,7 +839,7 @@ function FileTile({ file }: { file: { id: string; name: string | null; mime: str
     return (
       <a href={file.url} target="_blank" rel="noreferrer" className="block group">
         <div className="border border-border rounded overflow-hidden bg-muted/40 aspect-video">
-          <img src={file.url} alt={file.name ?? "Attachment"} className="w-full h-full object-cover group-hover:opacity-80"
+          <img loading="lazy" src={file.url} alt={file.name ?? "Attachment"} className="w-full h-full object-cover group-hover:opacity-80"
             onError={() => setImgError(true)} />
         </div>
         <div className="mt-1 text-[11px] truncate text-muted-foreground">{file.name ?? "Image"} · {sizeKb}</div>

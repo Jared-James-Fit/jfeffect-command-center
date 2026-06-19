@@ -258,7 +258,7 @@ function ClientLiftVideos() {
                   )}
                   <div className="relative h-14 w-20 shrink-0 overflow-hidden rounded-xl bg-secondary">
                     {v.thumbnail_url ? (
-                      <img src={v.thumbnail_url} alt="" className="h-full w-full object-cover" />
+                      <img loading="lazy" src={v.thumbnail_url} alt="" className="h-full w-full object-cover" />
                     ) : (
                       <div className="grid h-full w-full place-items-center text-muted-foreground">
                         <Video className="h-5 w-5" />

@@ -513,7 +513,7 @@ export function PaymentLinksPage({ embedded = false }: { embedded?: boolean } = 
                 )}
                 <div className="h-24 w-24 shrink-0 rounded-md bg-muted overflow-hidden">
                   {p.image_signed_url ? (
-                    <img src={p.image_signed_url} alt={p.name} className="h-full w-full object-cover" />
+                    <img loading="lazy" src={p.image_signed_url} alt={p.name} className="h-full w-full object-cover" />
                   ) : (
                     <div className="h-full w-full grid place-items-center text-muted-foreground text-xs">No image</div>
                   )}
@@ -825,7 +825,7 @@ function ProductFormDialog({
               <Label>Product image</Label>
               <label className="mt-1 flex h-32 w-32 cursor-pointer items-center justify-center rounded-md border border-dashed bg-muted/30 overflow-hidden">
                 {form.imagePreview ? (
-                  <img src={form.imagePreview} alt="" className="h-full w-full object-cover" />
+                  <img loading="lazy" src={form.imagePreview} alt="" className="h-full w-full object-cover" />
                 ) : (
                   <ImagePlus className="h-6 w-6 text-muted-foreground" />
                 )}

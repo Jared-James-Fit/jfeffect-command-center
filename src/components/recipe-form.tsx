@@ -262,7 +262,7 @@ export function RecipeForm({ open, onOpenChange, initial, onSaved }: Props) {
               />
               {imageUrl && (
                 <div className="mt-1 aspect-[16/9] w-full max-w-xs overflow-hidden rounded-md border border-border bg-secondary">
-                  <img src={imageUrl} alt="Cover preview" className="h-full w-full object-cover" />
+                  <img loading="lazy" src={imageUrl} alt="Cover preview" className="h-full w-full object-cover" />
                 </div>
               )}
             </div>

@@ -97,7 +97,7 @@ export function SalesPageEditor({ pageKey }: { pageKey: PageKey }) {
           <Label>Hero image URL <span className="text-muted-foreground">(paste any image URL)</span></Label>
           <div className="flex gap-2">
             <Input value={draft.hero_image_url ?? ""} onChange={(e) => update({ hero_image_url: e.target.value || null })} placeholder="https://…" />
-            {draft.hero_image_url && <img src={draft.hero_image_url} alt="" className="h-10 w-10 rounded object-cover border border-border" />}
+            {draft.hero_image_url && <img loading="lazy" src={draft.hero_image_url} alt="" className="h-10 w-10 rounded object-cover border border-border" />}
           </div>
         </div>
       </Card>
@@ -179,7 +179,7 @@ export function SalesPageEditor({ pageKey }: { pageKey: PageKey }) {
           {(draft.visuals ?? []).map((v: any, i: number) => (
             <div key={i} className="grid gap-2 rounded-md border border-border p-3 md:grid-cols-[80px_1fr_140px_120px_auto]">
               <div className="grid h-12 w-12 place-items-center overflow-hidden rounded bg-muted">
-                {v.url ? <img src={v.url} alt="" className="h-full w-full object-cover" /> : <ImageIcon className="h-4 w-4 text-muted-foreground" />}
+                {v.url ? <img loading="lazy" src={v.url} alt="" className="h-full w-full object-cover" /> : <ImageIcon className="h-4 w-4 text-muted-foreground" />}
               </div>
               <Input value={v.url} placeholder="Image URL" onChange={(e) => { const list = [...draft.visuals]; list[i] = { ...list[i], url: e.target.value }; update({ visuals: list }); }} />
               <Input value={v.alt ?? ""} placeholder="Alt text / label" onChange={(e) => { const list = [...draft.visuals]; list[i] = { ...list[i], alt: e.target.value }; update({ visuals: list }); }} />

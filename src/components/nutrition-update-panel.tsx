@@ -229,7 +229,7 @@ export function NutritionUpdatePanel() {
                   <div className="grid grid-cols-3 gap-2">
                     {form.progress_photo_urls.map((u: string, i: number) => (
                       <div key={i} className="relative aspect-square">
-                        <img src={u} alt={`Photo ${i + 1}`} className="rounded object-cover w-full h-full" />
+                        <img loading="lazy" src={u} alt={`Photo ${i + 1}`} className="rounded object-cover w-full h-full" />
                         <button type="button" onClick={() => setForm((f: any) => ({ ...f, progress_photo_urls: f.progress_photo_urls.filter((_: any, x: number) => x !== i) }))} className="absolute top-1 right-1 bg-black/70 rounded-full p-0.5">
                           <X className="h-3 w-3 text-white" />
                         </button>

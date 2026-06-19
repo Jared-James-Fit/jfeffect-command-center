@@ -17,7 +17,7 @@ export function ProofWall({
       {i.length > 0 && (
         <div className="mb-6 grid grid-cols-2 gap-2 md:grid-cols-4">
           {i.map((x, idx) => (
-            <img key={idx} src={x.url} alt={x.alt ?? ""} loading="lazy" className="aspect-square w-full rounded-lg object-cover" />
+            <img loading="lazy" key={idx} src={x.url} alt={x.alt ?? ""} loading="lazy" className="aspect-square w-full rounded-lg object-cover" />
           ))}
         </div>
       )}
@@ -27,7 +27,7 @@ export function ProofWall({
             <Card key={idx} className="p-5">
               <p className="text-sm leading-relaxed">"{x.quote}"</p>
               <div className="mt-3 flex items-center gap-2">
-                {x.image_url ? <img src={x.image_url} alt="" className="h-8 w-8 rounded-full object-cover" /> : <div className="h-8 w-8 rounded-full bg-muted" />}
+                {x.image_url ? <img loading="lazy" src={x.image_url} alt="" className="h-8 w-8 rounded-full object-cover" /> : <div className="h-8 w-8 rounded-full bg-muted" />}
                 <div className="text-xs font-semibold">{x.name}</div>
               </div>
             </Card>
