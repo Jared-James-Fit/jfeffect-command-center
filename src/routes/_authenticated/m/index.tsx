@@ -10,7 +10,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
-import { BookOpen, ClipboardCheck, ChefHat, Wrench, PlayCircle } from "lucide-react";
+import { BookOpen, Wrench, PlayCircle, Megaphone, HelpCircle } from "lucide-react";
 import { Star } from "lucide-react";
 import { UpgradeCTA } from "@/components/upgrade-cta";
 import { SetupChecklist } from "@/components/member/setup-checklist-card";
@@ -18,6 +18,7 @@ import { ProgressSummaryCard } from "@/components/progress/progress-summary-card
 import { HomeWaterCard } from "@/components/home/home-water-card";
 import { HomeBodyweightCard } from "@/components/home/home-bodyweight-card";
 import { MemberTodayCard } from "@/components/member/member-today-card";
+import { HomeActionTiles, type HomeActionTile } from "@/components/portal/home-action-tiles";
 
 export const Route = createFileRoute("/_authenticated/m/")({
   component: MemberHome,
@@ -122,6 +123,15 @@ function MemberHome() {
           currentUserId={me.member.user_id}
           viewerRole="owner"
           progressHref={{ kind: "member" }}
+          extraActions={
+            <HomeActionTiles
+              tiles={[
+                { to: "/m/tools", label: "Tools", icon: Wrench, emphasis: true },
+                { to: "/m/announcements", label: "Announcements", icon: Megaphone },
+                { to: "/m/support", label: "Support", icon: HelpCircle },
+              ] as HomeActionTile[]}
+            />
+          }
         />
       )}
       {me?.member?.user_id && (
@@ -138,12 +148,6 @@ function MemberHome() {
           surface="member"
         />
       )}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <QuickCard to="/m/my-plans" icon={ClipboardCheck} label="My Plans" />
-        <QuickCard to="/m/plans" icon={BookOpen} label="Program Library" />
-        <QuickCard to="/m/nutrition" icon={ChefHat} label="Nutrition & Recipes" />
-        <QuickCard to="/m/tools" icon={Wrench} label="Tools" />
-      </div>
       {featured.length > 0 && (
         <Card className="p-6">
           <div className="mb-3 flex items-center gap-2">
@@ -182,16 +186,5 @@ function MemberHome() {
         </div>
       </Card>
     </div>
-  );
-}
-
-function QuickCard({ to, icon: Icon, label }: { to: string; icon: any; label: string }) {
-  return (
-    <Link to={to}>
-      <Card className="p-5 transition hover:bg-muted/40">
-        <Icon className="h-5 w-5 text-primary" />
-        <div className="mt-3 text-sm font-semibold">{label}</div>
-      </Card>
-    </Link>
   );
 }

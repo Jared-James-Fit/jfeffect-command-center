@@ -4,7 +4,7 @@ import { useAuth } from "@/lib/auth";
 import { supabase } from "@/integrations/supabase/client";
 import { usePortalUserId } from "@/lib/client-impersonation";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Bell, ClipboardCheck, ShieldAlert, MessageCircle, Mail, CheckCheck, AlertTriangle, Dumbbell, Settings, Receipt, FileSignature, Calendar as CalendarIcon, Target } from "lucide-react";
+import { Bell, ClipboardCheck, ShieldAlert, MessageCircle, Mail, CheckCheck, AlertTriangle, Dumbbell, Settings, Receipt, FileSignature, Calendar as CalendarIcon, Target, Video } from "lucide-react";
 import { isGoalsSetupComplete, type ClientGoalsSetupRow } from "@/lib/client-goals/schema";
 import type { TrainingPhase } from "@/lib/training-phases";
 import { derivePhase } from "@/lib/training-phases";
@@ -15,7 +15,7 @@ import { listFormsForClient, pickWeeklyCheckInForm } from "@/lib/native-forms";
 import { ManualCheckInReviewModal } from "@/components/manual-check-in-review-modal";
 import { ClientActionRequestModal } from "@/components/client-action-request-modal";
 import { UpcomingEventsPanel } from "@/components/events/upcoming-events-panel";
-import { QuickActionsGrid } from "@/components/portal/quick-actions-grid";
+import { HomeActionTiles, type HomeActionTile } from "@/components/portal/home-action-tiles";
 import { InstallAppCard } from "@/components/portal/install-app-card";
 import { IntakeAnswersBigButton } from "@/components/clients/intake-answers-dialog";
 import { ActionCentre, type ActionItem } from "@/components/portal/action-centre";
@@ -392,6 +392,24 @@ function PortalHome() {
             currentUserId={portalUserId}
             viewerRole="owner"
             progressHref={{ kind: "portal" }}
+            extraActions={
+              client ? (
+                <HomeActionTiles
+                  tiles={[
+                    {
+                      to: pickWeeklyCheckInForm(assignedForms as any)?.id
+                        ? `/portal/check-ins/${pickWeeklyCheckInForm(assignedForms as any)!.id}`
+                        : "/portal/check-ins",
+                      label: "Submit Check-In",
+                      icon: ClipboardCheck,
+                      badge: (assignedForms as any[])?.length || undefined,
+                      emphasis: true,
+                    },
+                    { to: "/portal/lift-videos", label: "Upload Lift", icon: Video },
+                  ] as HomeActionTile[]}
+                />
+              ) : null
+            }
           />
         )}
 
@@ -409,15 +427,6 @@ function PortalHome() {
           <BodyweightSummaryCard
             clientId={client.id}
             defaultUnit={((client as any)?.preferred_weight_unit as WeightUnit) ?? "lb"}
-          />
-        )}
-
-        {/* 4 — Quick Actions */}
-        {client && (
-          <QuickActionsGrid
-            messageBadge={unreadMsgs.length}
-            checkInBadge={(assignedForms as any[])?.length || undefined}
-            weeklyCheckInFormId={pickWeeklyCheckInForm(assignedForms as any)?.id}
           />
         )}
 
