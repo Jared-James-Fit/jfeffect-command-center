@@ -1572,8 +1572,8 @@ export function MessageThread({
               value={body}
               onChange={(e) => setBody(e.target.value)}
               placeholder={role === "client" ? "Message Coach Jared…" : "Reply to client…"}
-              rows={2}
-              className="min-h-[52px] max-h-44 flex-1 resize-none rounded-2xl border-input bg-background px-3.5 py-2.5 text-base leading-snug sm:text-sm"
+              rows={1}
+              className="min-h-[40px] max-h-40 flex-1 resize-none rounded-full border-border/60 bg-background/60 px-4 py-2 text-sm leading-snug focus-visible:ring-1 focus-visible:ring-border focus-visible:border-border"
               onKeyDown={(e) => {
                 if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
                   e.preventDefault(); onSend();
@@ -1598,7 +1598,7 @@ export function MessageThread({
                 disabled={sending || uploading}
                 aria-busy={sending || uploading || undefined}
                 size="icon"
-                className="h-10 w-10 shrink-0 rounded-full bg-primary transition-transform active:scale-90"
+                className="h-9 w-9 shrink-0 rounded-full bg-primary transition-transform active:scale-90"
               >
                 {sending || uploading ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
@@ -1608,7 +1608,7 @@ export function MessageThread({
               </Button>
               </>
             ) : (
-              <Button type="button" variant="ghost" size="icon" className="h-10 w-10 shrink-0 rounded-full"
+              <Button type="button" variant="ghost" size="icon" className="h-9 w-9 shrink-0 rounded-full"
                 onClick={async () => {
                   try { await recorder.start(); }
                   catch (e: any) { toast.error(e?.message ?? "Mic permission needed"); }

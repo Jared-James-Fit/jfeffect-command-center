@@ -168,7 +168,7 @@ export function ComposerPlusMenu({
             variant="default"
             size="icon"
             disabled={disabled}
-            className="h-11 w-11 shrink-0 rounded-full bg-primary text-primary-foreground shadow-sm transition-transform active:scale-90"
+            className="h-9 w-9 shrink-0 rounded-full bg-primary text-primary-foreground shadow-sm transition-transform active:scale-90"
             title="Attach or send"
           >
             <Plus className={cn("h-5 w-5 transition-transform", open && "rotate-45")} />
