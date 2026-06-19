@@ -458,7 +458,7 @@ function WorkoutDay({
     queryFn: async () => {
       const r = adapter
         ? await adapter.listRowsRaw(dayId)
-        : (await sb.from("pl_exercise_rows").select("*, exercises(id,name,video_url,vimeo_embed_url,secondary_vimeo_embed_url,active_video_set,thumbnail_url,cues,common_mistakes,muscle_group,category,pl_lift_group,warmup_protocol_id,is_powerlifting,warmup_notes,default_load_unit,exercise_category,is_competition_lift,competition_lift_type)").eq("day_id", dayId).order("sort_order")).data ?? [];
+        : (await sb.from("pl_exercise_rows").select("*, exercises(id,name,video_url,vimeo_embed_url,secondary_vimeo_embed_url,active_video_set,thumbnail_url,cues,common_mistakes,muscle_group,category,pl_lift_group,warmup_protocol_id,is_powerlifting,warmup_notes,default_load_unit,exercise_category,is_competition_lift,competition_lift_type,default_measurement_type,duration_seconds)").eq("day_id", dayId).order("sort_order")).data ?? [];
       writePlanCache(cacheScope, "rows", r);
       return r;
     },
@@ -1577,6 +1577,14 @@ function ExerciseBlock({ row, dayId, dayTitle, clientId, blockId, existingResult
   const hasGuide = Boolean(exerciseId || video);
   const cues = exercise?.cues ?? null;
   const setCount = Math.max(1, row.sets ?? 1);
+  // Effective measurement type: prefer the row's explicit setting; otherwise
+  // fall back to the exercise's default (e.g. planks/holds default to "time").
+  const effectiveMeasurementType: "reps" | "time" =
+    (row as any).measurement_type === "time"
+      ? "time"
+      : ((row as any).exercises?.default_measurement_type === "time" ? "time" : "reps");
+  const effectivePrescribedDurationSec: number | null =
+    (row as any).duration_seconds ?? (row as any).exercises?.duration_seconds ?? null;
   const exMeta: ExerciseMeta | null = exercise
     ? {
         exercise_category: exercise.exercise_category ?? null,
@@ -1741,8 +1749,8 @@ function ExerciseBlock({ row, dayId, dayTitle, clientId, blockId, existingResult
           manualOverride: row.manual_override,
           rpe: row.rpe,
           rir: row.rir,
-          measurementType: (row as any).measurement_type === "time" ? "time" : "reps",
-          durationSeconds: (row as any).duration_seconds ?? null,
+          measurementType: effectiveMeasurementType,
+          durationSeconds: effectivePrescribedDurationSec,
         })}
         {row.tempo && <span className="ml-2 text-xs font-normal text-muted-foreground">tempo {row.tempo}</span>}
       </div>
@@ -1819,7 +1827,7 @@ function ExerciseBlock({ row, dayId, dayTitle, clientId, blockId, existingResult
       <div className={cn("mt-3 overflow-hidden rounded-md border border-builder-card-border bg-builder-inset", focusMode && "text-base")}>
         <div className={cn("grid items-center gap-1.5 border-b border-builder-card-border bg-builder-card/60 px-2.5 py-1.5 text-[10px] font-bold uppercase tracking-wider text-muted-foreground", focusMode ? "grid-cols-[36px_1.1fr_1.1fr_1fr_52px] text-xs" : "grid-cols-[28px_1.1fr_1.1fr_1fr_44px]")}>
           <span>Set</span>
-          <span>{(row as any).measurement_type === "time" ? "Time" : "Reps"}</span>
+          <span>{effectiveMeasurementType === "time" ? "Time" : "Reps"}</span>
           <span className="truncate">Wt ({activeUnit.toUpperCase()})</span>
           <span>{showRir ? "RIR" : "RPE"}</span>
           <span className="text-right">Status</span>
@@ -1841,8 +1849,8 @@ function ExerciseBlock({ row, dayId, dayTitle, clientId, blockId, existingResult
               clientId={clientId}
               setIndex={i + 1}
               setCount={setCount}
-              measurementType={((row as any).measurement_type === "time") ? "time" : "reps"}
-              prescribedDurationSeconds={(row as any).duration_seconds ?? null}
+              measurementType={effectiveMeasurementType}
+              prescribedDurationSeconds={effectivePrescribedDurationSec}
               existing={existing}
               prevExisting={prevExisting}
               targetReps={row.reps_text}
