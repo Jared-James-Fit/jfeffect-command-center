@@ -130,7 +130,9 @@ export function createMemberAdapter(ref: WorkoutContextRef): WorkoutContextAdapt
       canEditTemplate: false,
       canEditOwnLogs: true,
       canReschedule: true,
-      canSubstituteExercise: false, // membership programs are static library entries
+      // Members can swap an exercise; the swap is persisted in
+      // `member_exercise_swaps` and overlaid by `listRowsRaw`.
+      canSubstituteExercise: true,
       canSeeCoachNotes: false,
       canSeeCoachIntel: false,
       canLeaveCoachFeedback: false,
