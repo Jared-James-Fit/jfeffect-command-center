@@ -247,7 +247,7 @@ function matchesChip(chip: EquipmentChip, equipment: string | null): boolean {
   }
 }
 
-const SELECT_COLS = "id,name,muscle_group,category,equipment,difficulty,vimeo_embed_url,youtube_url,thumbnail_url,cues,common_mistakes";
+const SELECT_COLS = "id,name,muscle_group,category,equipment,difficulty,vimeo_embed_url,youtube_url,thumbnail_url,cues,common_mistakes,default_measurement_type,primary_movement_pattern";
 const PAGE_SIZE = 20;
 
 function useDebounced<T>(value: T, ms: number): T {
