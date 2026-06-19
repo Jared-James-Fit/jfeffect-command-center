@@ -222,9 +222,12 @@ function QuickApply() {
   /* Step definitions — each step returns its own JSX, has a `valid()` predicate,
      and may opt into auto-advance for single-choice answers. */
   const steps = useMemo(() => buildSteps(form, set), [form]);
-  const cur = steps[step];
-
   const total = steps.length;
+  const safeStep = Math.min(step, total - 1);
+  const cur = steps[safeStep];
+  useEffect(() => {
+    if (step > total - 1) setStep(total - 1);
+  }, [step, total]);
   const pct = Math.round(((step + 1) / total) * 100);
 
   function next() {
