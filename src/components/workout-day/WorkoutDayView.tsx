@@ -1563,6 +1563,16 @@ function ExerciseBlock({ row, dayId, dayTitle, clientId, blockId, existingResult
   const name = row.exercises?.name ?? row.exercise_name_override ?? "Exercise";
   const exercise = row.exercises ?? null;
   const exerciseId = exercise?.id ?? null;
+  // Local mirror of the active unit so the per-exercise KG/LB toggle is always
+  // instantly responsive — even if the parent's resolved-unit state takes a
+  // tick to recompute or the persistence call is slow. Stays in sync with the
+  // incoming prop so external changes (history hydration, undo) still apply.
+  const [activeUnit, setActiveUnit] = useState<"kg" | "lb">(unit);
+  useEffect(() => { setActiveUnit(unit); }, [unit]);
+  const handleUnitToggle = (u: "kg" | "lb") => {
+    setActiveUnit(u);
+    onUnitChange?.(u);
+  };
   const video = exercise?.video_url ?? exercise?.vimeo_embed_url ?? null;
   const hasGuide = Boolean(exerciseId || video);
   const cues = exercise?.cues ?? null;
@@ -1633,18 +1643,18 @@ function ExerciseBlock({ row, dayId, dayTitle, clientId, blockId, existingResult
   // This is "Suggested" only — it never auto-confirms a set.
   const suggestedWeight: number | null = useMemo(() => {
     if (row.manual_override) {
-      if (unit === "kg" && row.load_kg) return Number(row.load_kg);
-      if (unit === "lb" && row.load_lb) return Number(row.load_lb);
+      if (activeUnit === "kg" && row.load_kg) return Number(row.load_kg);
+      if (activeUnit === "lb" && row.load_lb) return Number(row.load_lb);
     }
     if (computed && computed.status === "ok" && computed.load != null) {
-      const inUnit = unit === "kg" ? computed.load : computed.load * 2.2046226218;
-      const step = weightIncrement(unit);
+      const inUnit = activeUnit === "kg" ? computed.load : computed.load * 2.2046226218;
+      const step = weightIncrement(activeUnit);
       return Math.round(inUnit / step) * step;
     }
-    if (unit === "kg" && row.load_kg) return Number(row.load_kg);
-    if (unit === "lb" && row.load_lb) return Number(row.load_lb);
+    if (activeUnit === "kg" && row.load_kg) return Number(row.load_kg);
+    if (activeUnit === "lb" && row.load_lb) return Number(row.load_lb);
     return null;
-  }, [row.manual_override, row.load_kg, row.load_lb, computed, unit]);
+  }, [row.manual_override, row.load_kg, row.load_lb, computed, activeUnit]);
 
   const repTarget = useMemo(() => parseRepTarget(row.reps_text), [row.reps_text]);
   const rpeTarget = useMemo(() => parseEffortTarget(row.rpe), [row.rpe]);
@@ -1700,7 +1710,7 @@ function ExerciseBlock({ row, dayId, dayTitle, clientId, blockId, existingResult
         <div className="min-w-0 flex-1 font-bold leading-snug break-words text-sm sm:text-base">{name}</div>
         {!readonly && onUnitChange && (
           <div className="shrink-0">
-            <UnitToggle unit={unit} onChange={onUnitChange} compact />
+            <UnitToggle unit={activeUnit} onChange={handleUnitToggle} compact />
           </div>
         )}
       </div>
@@ -1725,7 +1735,7 @@ function ExerciseBlock({ row, dayId, dayTitle, clientId, blockId, existingResult
           sets: row.sets,
           repsText: row.reps_text,
           suggestedWeight,
-          unit,
+          unit: activeUnit,
           percentage: row.percentage,
           percentageBasis: row.percentage_basis,
           manualOverride: row.manual_override,
@@ -1743,17 +1753,17 @@ function ExerciseBlock({ row, dayId, dayTitle, clientId, blockId, existingResult
             convertWeight(
               (row.load_kg ?? row.load_lb) as number,
               row.load_kg ? "kg" : "lb",
-              unit,
+              activeUnit,
             ).toFixed(1),
           )}
-          unit={unit}
+          unit={activeUnit}
           exerciseName={name}
         />
       )}
       {!row.manual_override && computed && computed.status === "ok" && computed.load != null && (
         <SuggestedLoadBadge
-          load={Number(convertWeight(computed.load, computed.unit, unit).toFixed(1))}
-          unit={unit}
+          load={Number(convertWeight(computed.load, computed.unit, activeUnit).toFixed(1))}
+          unit={activeUnit}
           exerciseName={name}
         />
       )}
@@ -1770,7 +1780,7 @@ function ExerciseBlock({ row, dayId, dayTitle, clientId, blockId, existingResult
             clientId={clientId}
             exerciseId={exerciseId}
             exerciseName={name}
-            displayUnit={unit}
+            displayUnit={activeUnit}
           />
         )}
         {hasGuide && (
@@ -1810,7 +1820,7 @@ function ExerciseBlock({ row, dayId, dayTitle, clientId, blockId, existingResult
         <div className={cn("grid items-center gap-1.5 border-b border-builder-card-border bg-builder-card/60 px-2.5 py-1.5 text-[10px] font-bold uppercase tracking-wider text-muted-foreground", focusMode ? "grid-cols-[36px_1.1fr_1.1fr_1fr_52px] text-xs" : "grid-cols-[28px_1.1fr_1.1fr_1fr_44px]")}>
           <span>Set</span>
           <span>{(row as any).measurement_type === "time" ? "Time" : "Reps"}</span>
-          <span className="truncate">Wt ({unit.toUpperCase()})</span>
+          <span className="truncate">Wt ({activeUnit.toUpperCase()})</span>
           <span>{showRir ? "RIR" : "RPE"}</span>
           <span className="text-right">Status</span>
         </div>
@@ -1845,7 +1855,7 @@ function ExerciseBlock({ row, dayId, dayTitle, clientId, blockId, existingResult
               hasUncompletedAfter={hasUncompletedAfter}
               onApplyToRemaining={applyToRemaining}
               readonly={readonly}
-              unit={unit}
+              unit={activeUnit}
               focusMode={focusMode}
               onChange={onChange}
               onSetCompleted={bumpRestTimer}
