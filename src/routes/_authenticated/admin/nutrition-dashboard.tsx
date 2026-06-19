@@ -20,7 +20,22 @@ import { listPendingTargets, approveMemberTargets } from "@/lib/nutrition-dashbo
 
 export const Route = createFileRoute("/_authenticated/admin/nutrition-dashboard")({
   component: NutritionDashboard,
+  pendingComponent: NutritionDashboardSkeleton,
 });
+
+function NutritionDashboardSkeleton() {
+  return (
+    <div className="space-y-4 p-3 sm:p-4 md:p-6">
+      <div className="h-10 w-64 animate-pulse rounded bg-muted" />
+      <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-4">
+        {Array.from({ length: 4 }).map((_, i) => (
+          <div key={i} className="h-24 w-full animate-pulse rounded bg-muted" />
+        ))}
+      </div>
+      <div className="h-96 w-full animate-pulse rounded bg-muted" />
+    </div>
+  );
+}
 
 const STATUS_META: Record<string, { label: string; tone: string }> = {
   overdue: { label: "Overdue", tone: "bg-red-500/15 text-red-400 border-red-500/30" },
