@@ -7,7 +7,7 @@ import {
 } from "date-fns";
 import {
   Calendar as CalendarIcon, ChevronLeft, ChevronRight, ClipboardList,
-  History, Loader2, Move, MoreVertical, Play, Pencil, Sun, Activity,
+  History, Loader2, Move, MoreVertical, Play, Pencil, Sun, Activity, Download,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/app-shell";
@@ -23,7 +23,7 @@ import {
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
-import { getClientWorkouts, durationRange } from "@/lib/pl-programs";
+import { getClientWorkouts, durationRange, getBlockTree } from "@/lib/pl-programs";
 import { cleanDayTitle, type WorkoutItem, dayScheduledDate } from "@/lib/workout-today";
 import { getWorkoutStatus, type WorkoutStatus } from "@/lib/workout-status";
 import { localStartOfToday, toLocalISO } from "@/lib/today";
@@ -34,6 +34,7 @@ import { ClientBlockView } from "@/components/client-block-view";
 import { WorkoutStatusSheet } from "@/components/workout-status-sheet";
 import { CircleDot } from "lucide-react";
 import { TrainingScheduleCard } from "@/components/training-schedule-card";
+import { toast } from "sonner";
 // Lazy: this card pulls recharts (~120KB). Defer it so the main Workouts
 // view can render without waiting on the chart bundle.
 const TrainingAnalyticsPreviewCard = lazy(() =>
@@ -113,7 +114,71 @@ export function WorkoutsExperience({
   const [selectedDate, setSelectedDate] = useState<Date>(today);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [calView, setCalView] = useState<"week" | "month">("week");
+  const [downloadingPdf, setDownloadingPdf] = useState(false);
   const navigate = useNavigate();
+
+  const handleDownloadPdf = async () => {
+    if (!headerBlock?.id) {
+      toast.error("No active block to download yet.");
+      return;
+    }
+    setDownloadingPdf(true);
+    try {
+      const tree = await getBlockTree(headerBlock.id);
+      if (!tree) throw new Error("Block not found");
+      const { downloadWorkoutPdf } = await import("@/lib/workouts/workout-pdf");
+      const weeksSorted = (tree.weeks ?? [])
+        .slice()
+        .sort((a: any, b: any) => (a.week_index ?? 0) - (b.week_index ?? 0));
+      const daysByWeek = new Map<string, any[]>();
+      for (const d of tree.days ?? []) {
+        const list = daysByWeek.get(d.week_id) ?? [];
+        list.push(d);
+        daysByWeek.set(d.week_id, list);
+      }
+      const rowsByDay = new Map<string, any[]>();
+      for (const r of tree.rows ?? []) {
+        const list = rowsByDay.get(r.day_id) ?? [];
+        list.push(r);
+        rowsByDay.set(r.day_id, list);
+      }
+      downloadWorkoutPdf({
+        client_name:
+          clientName ||
+          [(client as any)?.first_name, (client as any)?.last_name]
+            .filter(Boolean)
+            .join(" ") ||
+          null,
+        program_name: tree.block?.name ?? null,
+        block_name: tree.block?.name ?? null,
+        block_status: tree.block?.status ?? null,
+        block_start: tree.block?.start_date ?? null,
+        block_end: tree.block?.end_date ?? null,
+        weeks: weeksSorted.map((w: any) => ({
+          id: w.id,
+          week_index: w.week_index,
+          notes: w.notes ?? null,
+          days: (daysByWeek.get(w.id) ?? [])
+            .slice()
+            .sort((a: any, b: any) => (a.day_index ?? 0) - (b.day_index ?? 0))
+            .map((d: any) => ({
+              id: d.id,
+              day_index: d.day_index,
+              title: cleanDayTitle(d.title) ?? d.title ?? null,
+              notes: d.notes ?? null,
+              notes_client_visible: d.notes_client_visible ?? null,
+              scheduled_date: d.scheduled_date ?? null,
+              rows: rowsByDay.get(d.id) ?? [],
+            })),
+        })),
+      });
+    } catch (err) {
+      console.error("Workout PDF download failed", err);
+      toast.error("Could not generate workout PDF. Please try again.");
+    } finally {
+      setDownloadingPdf(false);
+    }
+  };
 
   return (
     <>
@@ -122,6 +187,21 @@ export function WorkoutsExperience({
         subtitle={subtitle || undefined}
         actions={
           <div className="flex items-center gap-1.5">
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-8 gap-1"
+              onClick={handleDownloadPdf}
+              disabled={downloadingPdf || !headerBlock?.id}
+              aria-label="Download workout plan as PDF"
+            >
+              {downloadingPdf ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <Download className="h-3.5 w-3.5" />
+              )}
+              <span className="hidden sm:inline">PDF</span>
+            </Button>
             <Button
               size="sm"
               variant="outline"
