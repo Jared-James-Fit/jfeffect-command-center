@@ -379,6 +379,8 @@ export function SignupJf({ floatingHeader = false }: { floatingHeader?: boolean 
         images={(p?.visuals ?? []).filter((v) => v.slot === "proof")}
       /></Reveal>
 
+      <Reveal><TransformationsGallery /></Reveal>
+
       {/* 6. Membership vs Coaching — one-line low-priority cross-sell */}
       <Section>
         <p className="mx-auto max-w-3xl text-center text-sm text-muted-foreground md:text-base">
