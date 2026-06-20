@@ -351,6 +351,8 @@ function PortalHome() {
   // error boundary so a single failure can't take the whole dashboard down.
   const clientLoading = clientPending || (!!portalUserId && !clientSettled && !client);
 
+  if (offlineNoCache) return <DashboardOfflineEmpty />;
+
   return (
     <>
       {/* Background gates / popups — keep wired exactly as before. */}
