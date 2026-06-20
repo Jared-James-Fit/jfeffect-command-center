@@ -125,14 +125,14 @@ function SelkirkPage() {
       {/* SECTION 2 — Nervous */}
       <Section>
         <div className="mx-auto max-w-2xl text-center">
-          <h2 className="text-3xl font-black tracking-tight md:text-4xl">Nervous About Going To The Gym?</h2>
+          <h2 className="text-3xl font-black tracking-tight md:text-4xl">Nervous About The Gym?</h2>
         </div>
         <div className="mx-auto mt-8 max-w-2xl space-y-4 text-base leading-relaxed text-muted-foreground md:text-lg">
-          <p className="font-semibold text-foreground">You're not alone.</p>
-          <p>Most people don't struggle because they're lazy. They struggle because they don't know where to start.</p>
-          <p>The internet gives conflicting advice. Gym equipment feels confusing. And walking into a gym can feel intimidating.</p>
-          <p className="font-semibold text-foreground">That's why the first goal isn't getting you into shape. The first goal is helping you feel comfortable.</p>
-          <p>You'll learn exactly what to do, how to do it, and why you're doing it.</p>
+          <p className="font-semibold text-foreground">You're not the only one.</p>
+          <p>Most people don't struggle because they're lazy. They struggle because nobody ever showed them where to start.</p>
+          <p>The internet contradicts itself. The equipment looks confusing. And walking in that first time feels intimidating.</p>
+          <p className="font-semibold text-foreground">So the first goal isn't getting you in shape. It's getting you comfortable.</p>
+          <p>You'll learn what to do, how to do it, and why — every step.</p>
           <p>No guessing. No random workouts. No feeling lost.</p>
         </div>
       </Section>
