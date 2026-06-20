@@ -362,7 +362,7 @@ function PhotosTab({
       ) : !subs.length ? (
         <EmptyState
           icon={Camera} title="No progress photos yet"
-          body="Upload Front, Left, Back, and Right photos. We'll keep them grouped together by date."
+          body="Upload front, left, back, and right photos."
           actionLabel="Take First Photos" onAction={onNew}
         />
       ) : (
