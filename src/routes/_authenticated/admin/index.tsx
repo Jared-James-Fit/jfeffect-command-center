@@ -31,6 +31,8 @@ import { getCoachIntel, filterIntel, LABEL_META } from "@/lib/coach-intel";
 import { getCoachingApplicationsMetrics } from "@/lib/coaching-applications.functions";
 import { useServerFn } from "@tanstack/react-start";
 import { Inbox, Flame, CalendarCheck, TrendingUp } from "lucide-react";
+import { DashboardRefreshIndicator } from "@/components/portal/dashboard-refresh-indicator";
+import { DashboardOfflineEmpty, useIsOfflineWithoutCache } from "@/components/portal/dashboard-offline-empty";
 
 function CoachingApplicationsTiles() {
   const fetchMetrics = useServerFn(getCoachingApplicationsMetrics);
@@ -212,6 +214,7 @@ function ActionsSheet({ actions, trigger }: { actions: { label: string; to: stri
 
 function AdminDashboard() {
   const [sellTo, setSellTo] = useState<{ id: string; name: string } | null>(null);
+  const offlineNoCache = useIsOfflineWithoutCache();
 
   // ---------- Data (unchanged sources) ----------
   const { data: clients = [] } = useQuery({
