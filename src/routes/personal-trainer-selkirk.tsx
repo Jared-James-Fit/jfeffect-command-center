@@ -115,9 +115,8 @@ function SelkirkPage() {
             <p className="mt-4 text-sm font-semibold md:text-base">
               Located at Iron Image Gym in Selkirk, Manitoba. Sessions start at $100. Package options available.
             </p>
-            <div className="mt-7 flex flex-col items-stretch justify-center gap-3 sm:flex-row sm:items-center">
+            <div className="mt-7 flex justify-center">
               <PrimaryCta />
-              <GhostCta>Get Started</GhostCta>
             </div>
           </div>
         </div>
@@ -278,7 +277,7 @@ function SelkirkPage() {
             </p>
             <div className="mt-5">
               <a href={BOOK_HREF}>
-                <Button className="w-full">Book Free Consultation</Button>
+                <Button className="w-full">Apply Now</Button>
               </a>
             </div>
           </Card>
@@ -318,9 +317,8 @@ function SelkirkPage() {
             You don't need to be in shape before you start. You just need a plan.
           </p>
           <p className="mt-2 text-base font-semibold md:text-lg">Book your free consultation today.</p>
-          <div className="mt-6 flex flex-col items-stretch justify-center gap-3 sm:flex-row sm:items-center">
+          <div className="mt-6 flex justify-center">
             <PrimaryCta />
-            <GhostCta href={EXTERNAL_HREF}>Visit JaredJamesFit.com</GhostCta>
           </div>
           <p className="mt-6 text-xs text-muted-foreground">
             Serving Selkirk, Manitoba and surrounding areas · Personal trainer · Fitness coach · Weight loss coach · Strength coach
