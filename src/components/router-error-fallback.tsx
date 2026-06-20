@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "@tanstack/react-router";
+import { isChunkLoadError, attemptChunkReload } from "@/lib/chunk-recovery";
 
 type Props = {
   error: Error;
@@ -14,8 +15,18 @@ type Props = {
 export function RouterErrorFallback({ error, reset }: Props) {
   const router = useRouter();
   const [autoRetried, setAutoRetried] = useState(false);
+  const chunkError = isChunkLoadError(error);
 
   useEffect(() => {
+    if (!chunkError) return;
+    // Try a one-time recovery reload. If the guard is already set,
+    // attemptChunkReload returns false and we fall through to the
+    // "Refresh App" UI below — no infinite loop.
+    attemptChunkReload("router-error-boundary");
+  }, [chunkError]);
+
+  useEffect(() => {
+    if (chunkError) return;
     if (autoRetried) return;
     setAutoRetried(true);
     // Surface the underlying error so we can see why routes fail in
@@ -29,6 +40,35 @@ export function RouterErrorFallback({ error, reset }: Props) {
     return () => window.clearTimeout(id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  if (chunkError) {
+    return (
+      <div className="flex min-h-[60vh] items-center justify-center px-4">
+        <div className="max-w-md text-center">
+          <h2 className="text-xl font-semibold text-foreground">
+            The app needs to refresh to finish updating.
+          </h2>
+          <p className="mt-2 text-sm text-muted-foreground">
+            A new version is available. Tap below to load it.
+          </p>
+          <div className="mt-6 flex justify-center">
+            <button
+              type="button"
+              onClick={() => {
+                try {
+                  window.sessionStorage.removeItem("jfe_chunk_reload_v1");
+                } catch {}
+                window.location.reload();
+              }}
+              className="inline-flex items-center justify-center rounded-md bg-primary px-6 py-3 text-base font-semibold text-primary-foreground transition-colors hover:bg-primary/90"
+            >
+              Refresh App
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   if (!autoRetried) {
     return (

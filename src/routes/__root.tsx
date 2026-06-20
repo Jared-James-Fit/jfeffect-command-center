@@ -29,6 +29,7 @@ import { reportLovableError } from "../lib/lovable-error-reporting";
 import "@/hooks/use-pwa-install";
 import { registerServiceWorker } from "@/lib/pwa/register-sw";
 import { initNativeShell } from "@/platform/native-init";
+import { initChunkRecovery } from "@/lib/chunk-recovery";
 import { PwaUpdateToast } from "@/components/pwa/pwa-update-toast";
 import { OnlineOfflineBanner } from "@/components/pwa/online-offline-banner";
 // Side-effect import: registers durable-queue handlers for cross-feature
@@ -278,6 +279,8 @@ function RootComponent() {
   useEffect(() => {
     // Dev-only: app shell is mounted and visible.
     void import("@/lib/perf-timing").then((m) => m.logPerf("app shell visible"));
+    // Install one-time recovery for failed/outdated chunk loads (post-deploy).
+    initChunkRecovery();
     registerServiceWorker();
     void initNativeShell();
   }, []);
