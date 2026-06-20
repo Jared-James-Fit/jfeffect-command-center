@@ -1,6 +1,6 @@
 import {
   LayoutDashboard, Users, CreditCard, DollarSign,
-  Package, FileText, Dumbbell, FolderOpen, Calendar, Layers,
+  Package, Dumbbell, FolderOpen, Calendar, Layers,
   Settings, Briefcase, Apple, ClipboardCheck, UserCog, MessageCircle, Video,
   UserCheck, FileSignature, Film,
   ClipboardList, FileEdit,
