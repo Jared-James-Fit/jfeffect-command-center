@@ -794,6 +794,19 @@ function SelectedDayCard({
                 <DropdownMenuItem onSelect={() => setStatusOpen(true)}>
                   <CircleDot className="mr-2 h-4 w-4" /> Change status
                 </DropdownMenuItem>
+                {isCompleted && (
+                  <DropdownMenuItem onSelect={() => setReviewOpen(true)}>
+                    {hasReview ? (
+                      <>
+                        <Pencil className="mr-2 h-4 w-4" /> Edit workout review
+                      </>
+                    ) : (
+                      <>
+                        <MessageSquare className="mr-2 h-4 w-4" /> Add workout review
+                      </>
+                    )}
+                  </DropdownMenuItem>
+                )}
                 <DropdownMenuItem
                   onSelect={(e) => {
                     e.preventDefault();
