@@ -314,7 +314,7 @@ function SelkirkPage() {
         <div className="mx-auto max-w-3xl rounded-2xl border border-primary/30 bg-gradient-to-br from-primary/15 via-card to-card p-8 text-center md:p-12">
           <h2 className="text-3xl font-black tracking-tight md:text-5xl">Ready To Feel Comfortable In The Gym?</h2>
           <p className="mt-4 text-base text-muted-foreground md:text-lg">
-            You don't need to be in shape before you start. You just need a plan.
+            You don't need to be in shape to start. You just need a plan.
           </p>
           <p className="mt-2 text-base font-semibold md:text-lg">Book your free consultation today.</p>
           <div className="mt-6 flex justify-center">
