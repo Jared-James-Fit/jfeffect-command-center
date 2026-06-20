@@ -616,9 +616,49 @@ function SelectedDayCard({
   const [statusOpen, setStatusOpen] = useState(false);
   const [resetOpen, setResetOpen] = useState(false);
   const [resetting, setResetting] = useState(false);
+  const [reviewOpen, setReviewOpen] = useState(false);
   const qc = useQueryClient();
 
   const dayId = item?.day?.id;
+  const isCompleted =
+    item ? (() => {
+      const s = getWorkoutStatus(item).status;
+      return s === "completed_today" || s === "completed_on_scheduled" || s === "completed_different_day";
+    })() : false;
+
+  const { data: existingReview } = useQuery({
+    queryKey: ["pl-workout-feedback", dayId, clientId],
+    enabled: !!dayId && !!clientId && isCompleted,
+    staleTime: 60_000,
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("pl_workout_feedback")
+        .select("*")
+        .eq("day_id", dayId!)
+        .eq("client_id", clientId)
+        .maybeSingle();
+      return data as any;
+    },
+  });
+  const reviewInitial: ReviewInitial | null = existingReview
+    ? {
+        overallRating: existingReview.overall_rating ?? null,
+        sessionRpe: existingReview.session_rpe ?? null,
+        pain: existingReview.pain ?? false,
+        painLevel: existingReview.pain_level ?? null,
+        painArea: existingReview.pain_area ?? null,
+        painNote: existingReview.pain_note ?? null,
+        clientNote: existingReview.client_note ?? null,
+        strengthFeel: existingReview.strength_feel ?? null,
+        fatigueFeel: existingReview.fatigue_feel ?? null,
+        hitTarget: existingReview.hit_target ?? null,
+        editCount: existingReview.review_edit_count ?? 0,
+        submittedAt:
+          existingReview.review_submitted_at ?? existingReview.created_at ?? null,
+      }
+    : null;
+  const hasReview = !!reviewInitial?.submittedAt;
+
   const handleReset = async () => {
     if (!dayId) return;
     setResetting(true);
