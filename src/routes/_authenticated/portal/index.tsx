@@ -47,9 +47,40 @@ function PortalHome() {
   const { user } = useAuth();
   const portalUserId = usePortalUserId();
   const offlineNoCache = useIsOfflineWithoutCache();
+  const qc = useQueryClient();
 
   // Dev-only first-load timing.
   useEffect(() => { logPerf("dashboard mounted"); }, []);
+
+  // Bootstrap query — collapses the dashboard startup waterfall.
+  // Previously each dependent query (training_phases, client_goals_setup, etc.)
+  // waited on the client row in series. This single query fetches the client,
+  // then runs the two heaviest dependents in parallel and primes the React
+  // Query cache under their existing keys so the per-section useQuery hooks
+  // render from cache immediately on first paint.
+  useQuery({
+    queryKey: ["portal-bootstrap", portalUserId],
+    enabled: !!portalUserId,
+    staleTime: 30_000,
+    queryFn: async () => {
+      const { data: clientRow } = await supabase
+        .from("clients").select("*").eq("user_id", portalUserId!).maybeSingle();
+      qc.setQueryData(["my-client", portalUserId], clientRow ?? null);
+      if (!clientRow?.id) return { client: null, phases: [] as TrainingPhase[], goalsSetup: null as ClientGoalsSetupRow | null };
+      const [phasesRes, goalsRes] = await Promise.all([
+        supabase
+          .from("training_phases").select("*").eq("client_id", clientRow.id)
+          .order("start_date", { ascending: false }),
+        (supabase as any)
+          .from("client_goals_setup").select("*").eq("client_id", clientRow.id).maybeSingle(),
+      ]);
+      const phases = (phasesRes.data ?? []) as TrainingPhase[];
+      const goalsSetup = (goalsRes.data ?? null) as ClientGoalsSetupRow | null;
+      qc.setQueryData(["my-phases", clientRow.id], phases);
+      qc.setQueryData(["client-goals-setup", clientRow.id], goalsSetup);
+      return { client: clientRow, phases, goalsSetup };
+    },
+  });
 
   const { data: client, isPending: clientPending, isSuccess: clientSettled } = useQuery({
     queryKey: ["my-client", portalUserId],
@@ -192,8 +223,6 @@ function PortalHome() {
     const s = derivePhase(p).state;
     return s === "active" || s === "ending-soon" || s === "due-today";
   }) ?? phases.find((p) => derivePhase(p).state === "upcoming") ?? null;
-
-  const qc = useQueryClient();
 
   // Compact upcoming appointment (single, only if within ~14 days).
   const fetchPortalAppointments = useServerFn(listMyPortalAppointments);
