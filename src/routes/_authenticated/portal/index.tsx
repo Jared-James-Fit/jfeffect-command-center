@@ -447,12 +447,14 @@ function PortalHome() {
 
         {/* 3b — Bodyweight tracker (syncs with Progress > Weight tracker) */}
         {client?.id ? (
-          <SectionErrorBoundary label="Bodyweight">
-            <BodyweightSummaryCard
-              clientId={client.id}
-              defaultUnit={((client as any)?.preferred_weight_unit as WeightUnit) ?? "lb"}
-            />
-          </SectionErrorBoundary>
+          <DeferRender placeholderHeight="h-52">
+            <SectionErrorBoundary label="Bodyweight">
+              <BodyweightSummaryCard
+                clientId={client.id}
+                defaultUnit={((client as any)?.preferred_weight_unit as WeightUnit) ?? "lb"}
+              />
+            </SectionErrorBoundary>
+          </DeferRender>
         ) : clientLoading ? (
           <SectionSkeleton height="h-52" />
         ) : null}
@@ -484,9 +486,11 @@ function PortalHome() {
         {nextAppointment && <UpcomingAppointmentRow appt={nextAppointment} />}
 
         {/* 8 — Events panel (only renders when there's something) */}
-        <SectionErrorBoundary label="Events">
-          <UpcomingEventsPanel audience="client" />
-        </SectionErrorBoundary>
+        <DeferRender placeholderHeight="h-24">
+          <SectionErrorBoundary label="Events">
+            <UpcomingEventsPanel audience="client" />
+          </SectionErrorBoundary>
+        </DeferRender>
 
         {/* 9 — Secondary links */}
         {client && (
