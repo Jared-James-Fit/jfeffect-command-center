@@ -17,6 +17,7 @@ import {
   Target, ClipboardCheck, Utensils, MessageCircle,
 } from "lucide-react";
 import { Reveal } from "@/components/sales/reveal";
+import { TransformationsGallery } from "@/components/sales/transformations-gallery";
 
 function HeroSkeleton() {
   return (
@@ -134,6 +135,8 @@ function CoachingPage() {
         testimonials={p?.testimonials ?? []}
         images={(p?.visuals ?? []).filter((v) => v.slot === "proof")}
       /></Reveal>
+
+      <Reveal><TransformationsGallery /></Reveal>
 
       {/* 8. Coaching vs Membership */}
       <Reveal><CoachingVsMembership onApply={handleApply} /></Reveal>
