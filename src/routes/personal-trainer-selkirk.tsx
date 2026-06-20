@@ -243,16 +243,16 @@ function SelkirkPage() {
 
       {/* SECTION 7 — Goals */}
       <Section className="bg-card/30">
-        <SectionTitle title="What Clients Usually Want Help With" />
+        <SectionTitle title="What Clients Come For" />
         <div className="mx-auto grid max-w-5xl gap-3 sm:grid-cols-2 lg:grid-cols-4">
           {[
             { Icon: Scale, label: "Weight Loss" },
             { Icon: Dumbbell, label: "Build Muscle" },
-            { Icon: Sparkles, label: "Improve Confidence" },
-            { Icon: Brain, label: "Learn Gym Equipment" },
+            { Icon: Sparkles, label: "More Confidence" },
+            { Icon: Brain, label: "Learning the Equipment" },
             { Icon: Trophy, label: "Strength Training" },
             { Icon: ShieldCheck, label: "Powerlifting Coaching" },
-            { Icon: Apple, label: "Healthy Habits" },
+            { Icon: Apple, label: "Better Habits" },
             { Icon: Users, label: "Accountability" },
           ].map(({ Icon, label }) => (
             <Card key={label} className="flex flex-col items-center p-5 text-center">
@@ -267,7 +267,7 @@ function SelkirkPage() {
 
       {/* SECTION 8 — In person or online */}
       <Section>
-        <SectionTitle title="Train In Person Or Get Coaching Online" />
+        <SectionTitle title="Train In Person Or Online" />
         <div className="mx-auto grid max-w-4xl gap-4 md:grid-cols-2">
           <Card className="p-6">
             <MapPin className="h-7 w-7 text-primary" />
