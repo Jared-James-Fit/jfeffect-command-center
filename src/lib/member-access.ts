@@ -29,7 +29,12 @@ export function useMemberAccess(): MemberAccessSummary {
       .filter((a) => a.active && (!a.expires_at || Date.parse(a.expires_at) > now))
       .map((a) => a.access_level_key as string),
   );
-  const subscriptionActive = isSubscriptionActive(member?.status);
+  // Admin manual override: kill switch wins, then override grants access
+  // regardless of Stripe/subscription status.
+  const manualDisabled = member?.manual_access_disabled === true;
+  const manualOverride = member?.manual_access_override === true && !manualDisabled;
+  const subscriptionActive = !manualDisabled
+    && (manualOverride || isSubscriptionActive(member?.status));
   return {
     loading: isLoading,
     member,
@@ -38,6 +43,10 @@ export function useMemberAccess(): MemberAccessSummary {
     subscriptionStatus: member?.subscription_status ?? null,
     subscriptionActive,
     granted,
-    hasAccess: (key: string) => subscriptionActive && granted.has(key),
+    // Manual override grants every access key (admin has explicitly enabled
+    // access regardless of Stripe). Otherwise require an active subscription
+    // AND a matching granted access level.
+    hasAccess: (key: string) =>
+      !manualDisabled && (manualOverride || (subscriptionActive && granted.has(key))),
   };
 }
