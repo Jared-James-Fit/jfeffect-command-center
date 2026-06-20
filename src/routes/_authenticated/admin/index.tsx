@@ -469,6 +469,8 @@ function AdminDashboard() {
     { name: "SignNow", url: "https://signnow.com" },
   ];
 
+  if (offlineNoCache) return <DashboardOfflineEmpty />;
+
   return (
     <>
       <PageHeader title="Today" subtitle="What needs your attention." />
@@ -477,6 +479,9 @@ function AdminDashboard() {
         className="w-full max-w-full space-y-4 overflow-x-hidden p-4 md:p-6"
         style={{ paddingBottom: "max(env(safe-area-inset-bottom), 6rem)" }}
       >
+        <div className="flex justify-end">
+          <DashboardRefreshIndicator />
+        </div>
         <DriveSetupBanner />
 
         {/* TODAY PRIORITY */}
