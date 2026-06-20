@@ -80,7 +80,7 @@ export function MemberMealPlanPanel() {
             )}
             <Button
               size="sm"
-              variant="outline"
+              variant={plan.pdf_signed_url ? "outline" : "default"}
               className="gap-1.5"
               onClick={handleDownload}
               disabled={downloading}
@@ -90,7 +90,7 @@ export function MemberMealPlanPanel() {
               ) : (
                 <Download className="h-3.5 w-3.5" />
               )}
-              {downloading ? "Preparing…" : "Download PDF"}
+              {downloading ? "Preparing…" : "Download Plan"}
             </Button>
           </div>
         </div>
