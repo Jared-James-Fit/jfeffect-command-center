@@ -276,6 +276,8 @@ function RootComponent() {
   const { queryClient } = Route.useRouteContext();
 
   useEffect(() => {
+    // Dev-only: app shell is mounted and visible.
+    void import("@/lib/perf-timing").then((m) => m.logPerf("app shell visible"));
     registerServiceWorker();
     void initNativeShell();
   }, []);

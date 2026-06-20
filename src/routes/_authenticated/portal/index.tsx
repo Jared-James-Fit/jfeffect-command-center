@@ -31,6 +31,8 @@ import { format, parseISO, isToday, isTomorrow } from "date-fns";
 import { SectionErrorBoundary } from "@/components/section-error-boundary";
 import { DashboardRefreshIndicator } from "@/components/portal/dashboard-refresh-indicator";
 import { DashboardOfflineEmpty, useIsOfflineWithoutCache } from "@/components/portal/dashboard-offline-empty";
+import { DeferRender } from "@/components/defer-render";
+import { logPerf } from "@/lib/perf-timing";
 
 export const Route = createFileRoute("/_authenticated/portal/")({ component: PortalHome });
 
@@ -46,6 +48,9 @@ function PortalHome() {
   const portalUserId = usePortalUserId();
   const offlineNoCache = useIsOfflineWithoutCache();
 
+  // Dev-only first-load timing.
+  useEffect(() => { logPerf("dashboard mounted"); }, []);
+
   const { data: client, isPending: clientPending, isSuccess: clientSettled } = useQuery({
     queryKey: ["my-client", portalUserId],
     enabled: !!portalUserId,
@@ -54,6 +59,7 @@ function PortalHome() {
       return data;
     },
   });
+  useEffect(() => { if (client) logPerf("card:client loaded"); }, [client]);
 
   const { data: assignedForms = [] } = useQuery({
     queryKey: ["nf-forms-for-client", client?.id],
@@ -180,6 +186,7 @@ function PortalHome() {
       };
     },
   });
+  useEffect(() => { if (coachUpdates) logPerf("card:coach-updates loaded"); }, [coachUpdates]);
 
   const activePhase = phases.find((p) => {
     const s = derivePhase(p).state;
@@ -197,6 +204,7 @@ function PortalHome() {
       return (res?.upcoming ?? []) as any[];
     },
   });
+  useEffect(() => { if (appts) logPerf("card:appointments loaded"); }, [appts]);
   const nextAppointment: any = (appts as any[])[0] ?? null;
 
   const markAgreementComplete = async (id: string) => {
@@ -439,12 +447,14 @@ function PortalHome() {
 
         {/* 3b — Bodyweight tracker (syncs with Progress > Weight tracker) */}
         {client?.id ? (
-          <SectionErrorBoundary label="Bodyweight">
-            <BodyweightSummaryCard
-              clientId={client.id}
-              defaultUnit={((client as any)?.preferred_weight_unit as WeightUnit) ?? "lb"}
-            />
-          </SectionErrorBoundary>
+          <DeferRender placeholderHeight="h-52">
+            <SectionErrorBoundary label="Bodyweight">
+              <BodyweightSummaryCard
+                clientId={client.id}
+                defaultUnit={((client as any)?.preferred_weight_unit as WeightUnit) ?? "lb"}
+              />
+            </SectionErrorBoundary>
+          </DeferRender>
         ) : clientLoading ? (
           <SectionSkeleton height="h-52" />
         ) : null}
@@ -476,9 +486,11 @@ function PortalHome() {
         {nextAppointment && <UpcomingAppointmentRow appt={nextAppointment} />}
 
         {/* 8 — Events panel (only renders when there's something) */}
-        <SectionErrorBoundary label="Events">
-          <UpcomingEventsPanel audience="client" />
-        </SectionErrorBoundary>
+        <DeferRender placeholderHeight="h-24">
+          <SectionErrorBoundary label="Events">
+            <UpcomingEventsPanel audience="client" />
+          </SectionErrorBoundary>
+        </DeferRender>
 
         {/* 9 — Secondary links */}
         {client && (

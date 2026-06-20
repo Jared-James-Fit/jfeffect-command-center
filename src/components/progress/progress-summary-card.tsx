@@ -1,6 +1,6 @@
 import { useRef, useState, type ReactNode } from "react";
 import { Link } from "@tanstack/react-router";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQueryClient } from "@tanstack/react-query";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -12,7 +12,6 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import {
-  listSubmissions, listMeasurements,
   logMeasurement,
   createSubmission, createMedia, uploadProgressFile,
   MEASUREMENT_FIELDS,
@@ -53,19 +52,6 @@ export function ProgressSummaryCard({
   const qc = useQueryClient();
   const ownerType: "client" | "member" =
     progressHref.kind === "member" ? "member" : "client";
-
-  const { data: photos = [] } = useQuery({
-    queryKey: ["progress-subs-photo", userId],
-    enabled: !!userId,
-    queryFn: () => listSubmissions({ userId, type: "photo" }),
-    staleTime: 30_000,
-  });
-  const { data: meas = [] } = useQuery({
-    queryKey: ["progress-meas", userId],
-    enabled: !!userId,
-    queryFn: () => listMeasurements(userId),
-    staleTime: 30_000,
-  });
 
   const ctaClass = "mt-3 h-10 w-full text-xs font-bold uppercase tracking-wide";
   const cta = (

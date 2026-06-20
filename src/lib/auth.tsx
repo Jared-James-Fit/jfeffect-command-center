@@ -4,6 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useRouter } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { markClientSignedIn } from "@/lib/activity";
+import { logPerf } from "@/lib/perf-timing";
 
 export type AppRole = "admin" | "coach" | "media_manager" | "client" | "member";
 
@@ -29,6 +30,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [role, setRole] = useState<AppRole | null>(null);
   const [loading, setLoading] = useState(true);
   const router = useRouter();
+
+  // Dev-only: log when auth finishes resolving (role known or no session).
+  useEffect(() => {
+    if (!loading) logPerf("auth resolved");
+  }, [loading]);
+
   const queryClient = useQueryClient();
   const lastUserIdRef = useRef<string | null>(null);
   const roleLoadedForRef = useRef<string | null>(null);
