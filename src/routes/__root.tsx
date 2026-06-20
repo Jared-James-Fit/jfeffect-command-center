@@ -235,6 +235,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { property: "og:title", content: "JF Effect" },
       { property: "og:description", content: "The JF Effect system — structured training, nutrition, progress tracking, and private coaching for men who are done starting over." },
       { property: "og:type", content: "website" },
+      { property: "og:site_name", content: "JF Effect" },
       { name: "twitter:card", content: "summary_large_image" },
       { name: "twitter:title", content: "JF Effect" },
       { name: "twitter:description", content: "The JF Effect system — structured training, nutrition, progress tracking, and private coaching for men who are done starting over." },
@@ -250,6 +251,36 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       {
         rel: "stylesheet",
         href: appCss,
+      },
+    ],
+    scripts: [
+      {
+        type: "application/ld+json",
+        children: JSON.stringify({
+          "@context": "https://schema.org",
+          "@type": "Organization",
+          name: "JF Effect",
+          url: "https://jfeffect.com",
+          logo: "https://jfeffect.com/logo.png",
+          founder: { "@type": "Person", name: "Jared James" },
+          sameAs: ["https://jaredjamesfit.com"],
+          contactPoint: [{
+            "@type": "ContactPoint",
+            telephone: "+1-204-229-4913",
+            contactType: "customer support",
+            areaServed: "CA",
+            availableLanguage: ["English"],
+          }],
+        }),
+      },
+      {
+        type: "application/ld+json",
+        children: JSON.stringify({
+          "@context": "https://schema.org",
+          "@type": "WebSite",
+          name: "JF Effect",
+          url: "https://jfeffect.com",
+        }),
       },
     ],
   }),
