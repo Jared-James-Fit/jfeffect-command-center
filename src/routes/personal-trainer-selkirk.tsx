@@ -141,15 +141,15 @@ function SelkirkPage() {
       <Section className="bg-card/30">
         <SectionTitle title="Who This Is Perfect For" />
         <div className="mx-auto grid max-w-4xl gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {[
-            "Never been to a gym",
+        {[
+            "Never set foot in a gym",
             "Starting over after years away",
-            "Wanting to lose weight",
-            "Wanting more confidence",
-            "Looking to build muscle",
-            "Wanting accountability",
+            "Want to lose weight",
+            "Want more confidence",
+            "Want to build muscle",
+            "Want accountability",
             "Busy professionals",
-            "Men and women of all fitness levels",
+            "Men and women, every level",
             "Strength and powerlifting athletes",
           ].map((label) => (
             <Card key={label} className="flex items-start gap-3 p-5">
@@ -165,8 +165,8 @@ function SelkirkPage() {
         <SectionTitle eyebrow="What to expect" title="What Your First Session Looks Like" />
         <div className="mx-auto grid max-w-4xl gap-3 md:grid-cols-5">
           {[
-            { t: "Talk about your goals", b: "We'll start with a real conversation about what you want." },
-            { t: "Assess your fitness", b: "A simple check-in to know where we're starting from." },
+            { t: "Talk through your goals", b: "A real conversation about what you actually want." },
+            { t: "Check your starting point", b: "A simple assessment so we know where we're beginning." },
             { t: "Learn the equipment", b: "I'll show you how to use it correctly and safely." },
             { t: "Build your plan", b: "Designed around your schedule and your life." },
             { t: "Leave with a plan", b: "You'll know exactly what to do next." },
@@ -181,7 +181,7 @@ function SelkirkPage() {
           ))}
         </div>
         <p className="mx-auto mt-8 max-w-xl text-center text-base font-semibold md:text-lg">
-          No pressure. No judgment. No experience required.
+          No pressure. No judgment. No experience needed.
         </p>
       </Section>
 
