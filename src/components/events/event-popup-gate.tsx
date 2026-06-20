@@ -19,7 +19,7 @@ export function EventPopupGate() {
     queryFn: async () => {
       const today = todayLocalISO();
       const { data: u } = await supabase.auth.getUser();
-      if (!u.user) return { events: [] as EventRow[], acks: new Set<string>() };
+      if (!u.user) return { events: [] as EventRow[], ackKeys: [] as string[] };
       const { data: events } = await (supabase.from("events") as any)
         .select("*")
         .eq("status", "Active")
@@ -28,8 +28,10 @@ export function EventPopupGate() {
         .order("event_date").limit(20);
       const { data: acks } = await (supabase.from("event_popup_acks") as any)
         .select("event_id, offset_key").eq("user_id", u.user.id);
-      const set = new Set((acks ?? []).map((a: any) => `${a.event_id}:${a.offset_key}`));
-      return { events: (events ?? []) as EventRow[], acks: set };
+      return {
+        events: (events ?? []) as EventRow[],
+        ackKeys: (acks ?? []).map((a: any) => `${a.event_id}:${a.offset_key}`) as string[],
+      };
     },
     staleTime: 60_000,
   });
@@ -38,12 +40,13 @@ export function EventPopupGate() {
 
   const next = (() => {
     if (!data) return null;
+    const acknowledged = new Set(Array.isArray((data as any).ackKeys) ? (data as any).ackKeys : []);
     for (const ev of data.events) {
       const c = computeCountdown(ev.event_date);
       const match = matchMilestone(c.daysRemaining);
       if (!match) continue;
       const key = `${ev.id}:${match}`;
-      if (data.acks.has(key) || dismissed.has(key)) continue;
+      if (acknowledged.has(key) || dismissed.has(key)) continue;
       return { ev, offset: match, countdown: c };
     }
     return null;
