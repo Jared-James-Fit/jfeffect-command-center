@@ -1,5 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { SalesPageShell, Section, SectionTitle } from "@/components/sales/sales-page-shell";
+import { TransformationsGallery } from "@/components/sales/transformations-gallery";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
@@ -229,6 +230,8 @@ function SelkirkPage() {
           </Card>
         </div>
       </Section>
+
+      <TransformationsGallery eyebrow="Results" title="Real clients. Real transformations." />
 
       {/* SECTION 6 — Pricing */}
       <Section>
