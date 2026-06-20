@@ -20,9 +20,21 @@ function PortalRecipes() {
     queryKey: ["my-client-recipes", portalUserId],
     enabled: !!portalUserId,
     queryFn: async () =>
-      (await supabase.from("clients").select("goals").eq("user_id", portalUserId!).maybeSingle()).data,
+      (
+        await supabase
+          .from("clients")
+          .select("goals, goals_tags, food_restrictions, dietary_preferences")
+          .eq("user_id", portalUserId!)
+          .maybeSingle()
+      ).data,
   });
-  const goals = (client as any)?.goals ? [String((client as any).goals)] : [];
+  const c = client as any;
+  const goalsTags: string[] = Array.isArray(c?.goals_tags) ? c.goals_tags : [];
+  const goals: string[] = goalsTags.length
+    ? goalsTags
+    : c?.goals
+    ? [String(c.goals)]
+    : [];
 
   const getTargetsFn = useServerFn(getActiveMemberTargets);
   const targetsQ = useQuery({
@@ -31,6 +43,13 @@ function PortalRecipes() {
     staleTime: 60_000,
   });
   const t = targetsQ.data as any;
+  const profile = {
+    goals,
+    foodRestrictions: Array.isArray(c?.food_restrictions) ? c.food_restrictions : [],
+    dietaryPreferences: Array.isArray(c?.dietary_preferences) ? c.dietary_preferences : [],
+    proteinTarget: t?.protein_g ?? null,
+    maxPrepMinutes: null as number | null,
+  };
 
   return (
     <>
@@ -73,7 +92,7 @@ function PortalRecipes() {
       )}
       <div className="p-4 pb-28 md:p-6 md:pb-12">
         <div className="mb-3 text-xs font-black uppercase tracking-widest text-muted-foreground">Recipes</div>
-        <RecipeBrowser viewer="client" userId={portalUserId ?? undefined} goals={goals} />
+        <RecipeBrowser viewer="client" userId={portalUserId ?? undefined} goals={goals} profile={profile} />
       </div>
     </>
   );
