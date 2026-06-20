@@ -371,6 +371,14 @@ function WorkoutDay({
       if (p.id) {
         const { error } = await sb.from(p.table).update(p.payload).eq("id", p.id);
         if (error) throw error;
+      } else if (p.table === "pl_row_results") {
+        const { error } = await sb.from(p.table)
+          .upsert(p.payload, { onConflict: "row_id,client_id,set_index" });
+        if (error) throw error;
+      } else if (p.table === "pl_day_completions") {
+        const { error } = await sb.from(p.table)
+          .upsert(p.payload, { onConflict: "day_id,client_id" });
+        if (error) throw error;
       } else {
         const { error } = await sb.from(p.table).insert(p.payload);
         if (error) throw error;
