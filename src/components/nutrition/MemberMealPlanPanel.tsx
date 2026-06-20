@@ -3,10 +3,11 @@ import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { FileText, Utensils } from "lucide-react";
+import { Download, FileText, Loader2, Utensils } from "lucide-react";
 import { MealPlanDisplay } from "@/components/meal-plan-display";
 import { getCoachAssignedMealPlan } from "@/lib/nutrition-targets/member-targets.functions";
 import { cn } from "@/lib/utils";
+import { toast } from "sonner";
 
 export function MemberMealPlanPanel() {
   const fn = useServerFn(getCoachAssignedMealPlan);
@@ -22,6 +23,34 @@ export function MemberMealPlanPanel() {
   const idx = Math.min(activeIdx, Math.max(0, days.length - 1));
   const active = days[idx];
   const anyNotes = useMemo(() => days.some((d: any) => d.notes && String(d.notes).trim()), [days]);
+  const [downloading, setDownloading] = useState(false);
+
+  const handleDownload = async () => {
+    if (!plan) return;
+    setDownloading(true);
+    try {
+      const { downloadMealPlanPdf } = await import(
+        "@/lib/nutrition-targets/meal-plan-pdf"
+      );
+      downloadMealPlanPdf({
+        client_name: (plan as any).client_name ?? null,
+        coach_name: (plan as any).coach_name ?? null,
+        updated_at: (plan as any).updated_at ?? null,
+        start_date: (plan as any).start_date ?? null,
+        phase: plan.phase ?? null,
+        goal: plan.goal ?? null,
+        structure: plan.structure ?? null,
+        water: plan.water ?? null,
+        client_notes: plan.client_notes ?? null,
+        days: days as any[],
+      });
+    } catch (err) {
+      console.error("Failed to generate meal plan PDF", err);
+      toast.error("Could not generate PDF. Please try again.");
+    } finally {
+      setDownloading(false);
+    }
+  };
 
   if (q.isLoading || !plan) return null;
   if (!days.length && !plan.pdf_signed_url && !plan.client_notes) return null;
@@ -41,13 +70,29 @@ export function MemberMealPlanPanel() {
               </div>
             </div>
           </div>
-          {plan.pdf_signed_url && (
-            <Button asChild size="sm" variant="outline" className="gap-1.5">
-              <a href={plan.pdf_signed_url} target="_blank" rel="noreferrer">
-                <FileText className="h-3.5 w-3.5" /> {plan.pdf_name || "Open PDF"}
-              </a>
+          <div className="flex flex-wrap items-center gap-2">
+            {plan.pdf_signed_url && (
+              <Button asChild size="sm" variant="outline" className="gap-1.5">
+                <a href={plan.pdf_signed_url} target="_blank" rel="noreferrer">
+                  <FileText className="h-3.5 w-3.5" /> {plan.pdf_name || "Open PDF"}
+                </a>
+              </Button>
+            )}
+            <Button
+              size="sm"
+              variant="outline"
+              className="gap-1.5"
+              onClick={handleDownload}
+              disabled={downloading}
+            >
+              {downloading ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <Download className="h-3.5 w-3.5" />
+              )}
+              {downloading ? "Preparing…" : "Download PDF"}
             </Button>
-          )}
+          </div>
         </div>
 
         {days.length > 1 && (
