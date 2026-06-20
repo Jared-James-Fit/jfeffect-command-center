@@ -15,12 +15,16 @@ import img48 from "@/assets/transformations/48.png.asset.json";
 import img71 from "@/assets/transformations/71.png.asset.json";
 import img98 from "@/assets/transformations/98.png.asset.json";
 import img108 from "@/assets/transformations/108.png.asset.json";
+import img16 from "@/assets/transformations/16.png.asset.json";
+import img21 from "@/assets/transformations/21.png.asset.json";
+import img26 from "@/assets/transformations/26.png.asset.json";
+import img53 from "@/assets/transformations/53.png.asset.json";
 
-const PHOTOS = [img1, img2, img18, img22, img23, img31, img35, img38, img15, img102, img42, img44, img48, img71, img98, img108];
+const PHOTOS = [img1, img2, img16, img18, img21, img22, img23, img26, img31, img35, img38, img15, img53, img102, img42, img44, img48, img71, img98, img108];
 
 export function TransformationsGallery({
   eyebrow = "Transformations",
-  title = "Real clients. Real transformations.",
+  title = "Transformed 100+ lives",
 }: {
   eyebrow?: string;
   title?: string;
