@@ -6,13 +6,14 @@ import { PageHeader } from "@/components/app-shell";
 import { supabase } from "@/integrations/supabase/client";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { ClipboardList, FileText, Target, Utensils, Droplets } from "lucide-react";
+import { ClipboardList, Download, FileText, Loader2, Target, Utensils, Droplets } from "lucide-react";
 import { MealPlanDisplay } from "@/components/meal-plan-display";
 import { RecipeBrowser } from "@/components/nutrition/RecipeBrowser";
 import { getCoachAssignedMealPlan } from "@/lib/nutrition-targets/member-targets.functions";
 import { usePortalUserId, useClientImpersonation } from "@/lib/client-impersonation";
 import { cn } from "@/lib/utils";
 import { SectionErrorBoundary } from "@/components/section-error-boundary";
+import { toast } from "sonner";
 
 export const Route = createFileRoute("/_authenticated/portal/nutrition-targets")({
   component: PortalNutrition,
@@ -61,6 +62,50 @@ function PortalNutrition() {
   const [dayIdx, setDayIdx] = useState(0);
   const idx = Math.min(dayIdx, Math.max(0, days.length - 1));
   const day = days[idx];
+
+  const [downloading, setDownloading] = useState(false);
+  const handleDownload = async () => {
+    if (!plan) return;
+    setDownloading(true);
+    try {
+      const { downloadMealPlanPdf } = await import(
+        "@/lib/nutrition-targets/meal-plan-pdf"
+      );
+      downloadMealPlanPdf({
+        client_name: plan.client_name ?? null,
+        coach_name: plan.coach_name ?? null,
+        updated_at: plan.updated_at ?? null,
+        start_date: plan.start_date ?? null,
+        phase: plan.phase ?? null,
+        goal: plan.goal ?? null,
+        structure: plan.structure ?? null,
+        water: plan.water ?? null,
+        client_notes: plan.client_notes ?? null,
+        days: days as any[],
+      });
+    } catch (err) {
+      console.error("Failed to generate meal plan PDF", err);
+      toast.error("Could not generate PDF. Please try again.");
+    } finally {
+      setDownloading(false);
+    }
+  };
+  const DownloadBtn = (
+    <Button
+      size="sm"
+      variant="outline"
+      className="gap-1.5"
+      onClick={handleDownload}
+      disabled={downloading || !plan}
+    >
+      {downloading ? (
+        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+      ) : (
+        <Download className="h-3.5 w-3.5" />
+      )}
+      {downloading ? "Preparing…" : "Download PDF"}
+    </Button>
+  );
 
   const headerLine = useMemo(
     () =>
@@ -111,13 +156,16 @@ function PortalNutrition() {
                   )}
                 </div>
               </div>
-              {plan.pdf_signed_url && (
-                <Button asChild size="sm" variant="outline" className="gap-1.5">
-                  <a href={plan.pdf_signed_url} target="_blank" rel="noreferrer">
-                    <FileText className="h-3.5 w-3.5" /> {plan.pdf_name || "Open PDF"}
-                  </a>
-                </Button>
-              )}
+              <div className="flex flex-wrap items-center gap-2">
+                {plan.pdf_signed_url && (
+                  <Button asChild size="sm" variant="outline" className="gap-1.5">
+                    <a href={plan.pdf_signed_url} target="_blank" rel="noreferrer">
+                      <FileText className="h-3.5 w-3.5" /> {plan.pdf_name || "Open PDF"}
+                    </a>
+                  </Button>
+                )}
+                {DownloadBtn}
+              </div>
             </div>
 
             {/* 3. Day type selector */}
@@ -180,16 +228,19 @@ function PortalNutrition() {
         {plan && day && (
         <SectionErrorBoundary label="Meal plan">
           <Card className="p-4 md:p-5 space-y-3">
-            <div className="flex items-center gap-2">
-              <div className="grid h-9 w-9 place-items-center rounded-lg bg-primary/15 text-primary">
-                <Utensils className="h-4 w-4" />
-              </div>
-              <div>
-                <div className="text-sm font-black uppercase tracking-widest">Meal Plan</div>
-                <div className="text-[11px] text-muted-foreground">
-                  {day.day_label || `Day ${idx + 1}`}
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div className="flex items-center gap-2">
+                <div className="grid h-9 w-9 place-items-center rounded-lg bg-primary/15 text-primary">
+                  <Utensils className="h-4 w-4" />
+                </div>
+                <div>
+                  <div className="text-sm font-black uppercase tracking-widest">Meal Plan</div>
+                  <div className="text-[11px] text-muted-foreground">
+                    {day.day_label || `Day ${idx + 1}`}
+                  </div>
                 </div>
               </div>
+              {DownloadBtn}
             </div>
             {day.notes && String(day.notes).trim() ? (
               <MealPlanDisplay text={day.notes} />
