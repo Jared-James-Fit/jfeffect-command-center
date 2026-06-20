@@ -28,6 +28,7 @@ import { useEffect, useState } from "react";
 import { listMyPortalAppointments } from "@/lib/appointments.functions";
 import { useServerFn } from "@tanstack/react-start";
 import { format, parseISO, isToday, isTomorrow } from "date-fns";
+import { SectionErrorBoundary } from "@/components/section-error-boundary";
 
 export const Route = createFileRoute("/_authenticated/portal/")({ component: PortalHome });
 
