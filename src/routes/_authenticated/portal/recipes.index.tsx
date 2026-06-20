@@ -10,7 +10,7 @@ import { getActiveMemberTargets } from "@/lib/nutrition-targets/member-targets.f
 import { Card } from "@/components/ui/card";
 import { Target } from "lucide-react";
 
-export const Route = createFileRoute("/_authenticated/portal/recipes")({
+export const Route = createFileRoute("/_authenticated/portal/recipes/")({
   component: PortalRecipes,
 });
 
