@@ -233,6 +233,7 @@ function SelkirkPage() {
       </Section>
 
       <TransformationsGallery eyebrow="Results" title="Transformed 100+ lives" />
+      <CoachTimelineSection />
 
       {/* SECTION 6 — Pricing */}
       <Section>

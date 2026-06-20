@@ -138,6 +138,7 @@ function CoachingPage() {
       /></Reveal>
 
       <Reveal><TransformationsGallery /></Reveal>
+      <Reveal><CoachTimelineSection /></Reveal>
 
       {/* 8. Coaching vs Membership */}
       <Reveal><CoachingVsMembership onApply={handleApply} /></Reveal>

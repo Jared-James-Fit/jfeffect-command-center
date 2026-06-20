@@ -382,6 +382,7 @@ export function SignupJf({ floatingHeader = false }: { floatingHeader?: boolean 
       /></Reveal>
 
       <Reveal><TransformationsGallery /></Reveal>
+      <Reveal><CoachTimelineSection /></Reveal>
 
       {/* 6. Membership vs Coaching — one-line low-priority cross-sell */}
       <Section>
