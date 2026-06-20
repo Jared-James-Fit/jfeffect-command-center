@@ -272,12 +272,16 @@ html[data-keyboard-open="true"] { --bottom-nav-clearance: 0px; }
 
 /* Height of the AppShell mobile top bar (logo + actions row).
    Mirrors the actual rendered height of the <header> in src/components/app-shell.tsx:
-   py-3 (24px) + h-8 logo (32px) + 1px border ≈ 57px. Pages that render their own
-   viewport-tall surface (chat, messenger) subtract this so content + topbar +
-   bottom nav add up to 100dvh and the body never has to scroll. */
+   pt: env(safe-area-inset-top) + 0.75rem, pb-3 (12px), h-8 logo (32px), 1px border
+   ≈ env(safe-area-inset-top) + 57px. Pages that render their own viewport-tall
+   surface (chat, messenger) subtract this so content + topbar + bottom nav add
+   up to 100dvh and the body never has to scroll. The safe-area inset is part of
+   the topbar's rendered height on notched iPhones — omitting it left the admin
+   messenger ~34–47px too tall, which pushed the composer behind the on-screen
+   keyboard and produced a large dead gap above it. */
 :root { --shell-topbar-h: 0px; }
 @media (max-width: 768px) {
-  :root { --shell-topbar-h: 57px; }
+  :root { --shell-topbar-h: calc(env(safe-area-inset-top, 0px) + 57px); }
 }
 
 /* Prevent iOS auto-zoom on focus: ensure inputs are at least 16px */
