@@ -64,14 +64,18 @@ function CommunicationWorkspace() {
       htmlOverflow: html.style.overflow,
       bodyOverflow: body.style.overflow,
       bodyOverscroll: body.style.overscrollBehavior,
+      lockAttr: html.getAttribute("data-messenger-scroll-locked"),
     };
     const apply = () => {
       if (!mq.matches) {
         html.style.overflow = previous.htmlOverflow;
         body.style.overflow = previous.bodyOverflow;
         body.style.overscrollBehavior = previous.bodyOverscroll;
+        if (previous.lockAttr === null) html.removeAttribute("data-messenger-scroll-locked");
+        else html.setAttribute("data-messenger-scroll-locked", previous.lockAttr);
         return;
       }
+      html.setAttribute("data-messenger-scroll-locked", "true");
       html.style.overflow = "hidden";
       body.style.overflow = "hidden";
       body.style.overscrollBehavior = "none";
@@ -83,6 +87,8 @@ function CommunicationWorkspace() {
       html.style.overflow = previous.htmlOverflow;
       body.style.overflow = previous.bodyOverflow;
       body.style.overscrollBehavior = previous.bodyOverscroll;
+      if (previous.lockAttr === null) html.removeAttribute("data-messenger-scroll-locked");
+      else html.setAttribute("data-messenger-scroll-locked", previous.lockAttr);
     };
   }, [viewportLockedTab]);
 

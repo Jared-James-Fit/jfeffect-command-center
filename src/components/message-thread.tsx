@@ -639,8 +639,10 @@ export function MessageThread({
         if (document.body.style.pointerEvents === "none") {
           document.body.style.pointerEvents = "";
         }
-        document.body.style.removeProperty("overflow");
-        document.body.removeAttribute("data-scroll-locked");
+        if (document.documentElement.getAttribute("data-messenger-scroll-locked") !== "true") {
+          document.body.style.removeProperty("overflow");
+          document.body.removeAttribute("data-scroll-locked");
+        }
       } catch {}
     }, 350);
     return () => window.clearTimeout(t);
