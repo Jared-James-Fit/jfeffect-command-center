@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useIsFetching, useQueryClient } from "@tanstack/react-query";
-import { Loader2, AlertTriangle } from "lucide-react";
+import { Loader2, AlertTriangle, WifiOff } from "lucide-react";
+import { useOnlineStatus } from "@/hooks/use-online-status";
 
 /**
  * Subtle dashboard-refresh status pill.
@@ -15,6 +16,7 @@ export function DashboardRefreshIndicator() {
   const qc = useQueryClient();
   const [staleWarn, setStaleWarn] = useState(false);
   const wasFetchingRef = useRef(false);
+  const online = useOnlineStatus();
 
   useEffect(() => {
     const isFetching = fetching > 0;
@@ -35,6 +37,18 @@ export function DashboardRefreshIndicator() {
     );
     setStaleWarn(hasStaleAfterError);
   }, [fetching, qc, staleWarn]);
+
+  if (!online) {
+    return (
+      <span
+        className="inline-flex items-center gap-1.5 rounded-full bg-amber-500/10 px-2 py-0.5 text-xs text-amber-500"
+        title="You're offline — showing your last saved dashboard."
+      >
+        <WifiOff className="h-3 w-3" aria-hidden />
+        Offline mode — showing last saved version.
+      </span>
+    );
+  }
 
   if (fetching > 0) {
     return (

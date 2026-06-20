@@ -31,6 +31,8 @@ import { getCoachIntel, filterIntel, LABEL_META } from "@/lib/coach-intel";
 import { getCoachingApplicationsMetrics } from "@/lib/coaching-applications.functions";
 import { useServerFn } from "@tanstack/react-start";
 import { Inbox, Flame, CalendarCheck, TrendingUp } from "lucide-react";
+import { DashboardRefreshIndicator } from "@/components/portal/dashboard-refresh-indicator";
+import { DashboardOfflineEmpty, useIsOfflineWithoutCache } from "@/components/portal/dashboard-offline-empty";
 
 function CoachingApplicationsTiles() {
   const fetchMetrics = useServerFn(getCoachingApplicationsMetrics);
@@ -212,6 +214,7 @@ function ActionsSheet({ actions, trigger }: { actions: { label: string; to: stri
 
 function AdminDashboard() {
   const [sellTo, setSellTo] = useState<{ id: string; name: string } | null>(null);
+  const offlineNoCache = useIsOfflineWithoutCache();
 
   // ---------- Data (unchanged sources) ----------
   const { data: clients = [] } = useQuery({
@@ -466,6 +469,8 @@ function AdminDashboard() {
     { name: "SignNow", url: "https://signnow.com" },
   ];
 
+  if (offlineNoCache) return <DashboardOfflineEmpty />;
+
   return (
     <>
       <PageHeader title="Today" subtitle="What needs your attention." />
@@ -474,6 +479,9 @@ function AdminDashboard() {
         className="w-full max-w-full space-y-4 overflow-x-hidden p-4 md:p-6"
         style={{ paddingBottom: "max(env(safe-area-inset-bottom), 6rem)" }}
       >
+        <div className="flex justify-end">
+          <DashboardRefreshIndicator />
+        </div>
         <DriveSetupBanner />
 
         {/* TODAY PRIORITY */}

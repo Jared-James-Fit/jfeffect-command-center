@@ -30,6 +30,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { format, parseISO, isToday, isTomorrow } from "date-fns";
 import { SectionErrorBoundary } from "@/components/section-error-boundary";
 import { DashboardRefreshIndicator } from "@/components/portal/dashboard-refresh-indicator";
+import { DashboardOfflineEmpty, useIsOfflineWithoutCache } from "@/components/portal/dashboard-offline-empty";
 
 export const Route = createFileRoute("/_authenticated/portal/")({ component: PortalHome });
 
@@ -43,6 +44,7 @@ function greeting() {
 function PortalHome() {
   const { user } = useAuth();
   const portalUserId = usePortalUserId();
+  const offlineNoCache = useIsOfflineWithoutCache();
 
   const { data: client, isPending: clientPending, isSuccess: clientSettled } = useQuery({
     queryKey: ["my-client", portalUserId],
@@ -348,6 +350,8 @@ function PortalHome() {
   // never blocks waiting on one query. Each section is wrapped in a local
   // error boundary so a single failure can't take the whole dashboard down.
   const clientLoading = clientPending || (!!portalUserId && !clientSettled && !client);
+
+  if (offlineNoCache) return <DashboardOfflineEmpty />;
 
   return (
     <>

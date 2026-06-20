@@ -16,6 +16,8 @@ const ShareProgramSheet = lazy(() =>
   import("@/components/programs/share-program-sheet").then((m) => ({ default: m.ShareProgramSheet })),
 );
 import { DestinationBadges } from "@/components/programs/destination-badges";
+import { DashboardRefreshIndicator } from "@/components/portal/dashboard-refresh-indicator";
+import { DashboardOfflineEmpty, useIsOfflineWithoutCache } from "@/components/portal/dashboard-offline-empty";
 import {
   listShares, listSharedWithMe, listMySubmissions,
   duplicateToMyLibrary, summarizeShares, destinationLabel,
@@ -28,15 +30,21 @@ export const Route = createFileRoute("/_authenticated/coach/programs")({
 
 function CoachPrograms() {
   const [tab, setTab] = useState<"mine" | "shared" | "team" | "submissions">("mine");
+  const offlineNoCache = useIsOfflineWithoutCache();
   const { data: me } = useQuery({
     queryKey: ["auth-user"],
     queryFn: async () => (await supabase.auth.getUser()).data.user,
   });
 
+  if (offlineNoCache) return <DashboardOfflineEmpty />;
+
   return (
     <>
       <PageHeader title="My Programs" subtitle="Your library, programs shared with you, and submissions" />
       <div className="p-6 md:p-8 space-y-4">
+        <div className="flex justify-end">
+          <DashboardRefreshIndicator />
+        </div>
         <Tabs value={tab} onValueChange={(v) => setTab(v as any)}>
           <TabsList>
             <TabsTrigger value="mine">My Library</TabsTrigger>

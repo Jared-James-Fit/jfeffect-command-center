@@ -19,6 +19,8 @@ import { HomeWaterCard } from "@/components/home/home-water-card";
 import { HomeBodyweightCard } from "@/components/home/home-bodyweight-card";
 import { MemberTodayCard } from "@/components/member/member-today-card";
 import { HomeActionTiles, type HomeActionTile } from "@/components/portal/home-action-tiles";
+import { DashboardRefreshIndicator } from "@/components/portal/dashboard-refresh-indicator";
+import { DashboardOfflineEmpty, useIsOfflineWithoutCache } from "@/components/portal/dashboard-offline-empty";
 
 export const Route = createFileRoute("/_authenticated/m/")({
   component: MemberHome,
@@ -29,6 +31,7 @@ function MemberHome() {
   const fetchMe = useServerFn(getCurrentMember);
   const search = useSearch({ from: "/_authenticated/m/" });
   const qc = useQueryClient();
+  const offlineNoCache = useIsOfflineWithoutCache();
   useEffect(() => {
     if (search.upgrade === "success") {
       toast.success("Payment received — your new access will appear in a few seconds.");
@@ -73,6 +76,8 @@ function MemberHome() {
     ? Math.round(((activeEnrollment.workouts_completed ?? 0) / Math.max(activeEnrollment.workouts_total ?? 1, 1)) * 100)
     : 0;
 
+  if (offlineNoCache) return <DashboardOfflineEmpty />;
+
   return (
     <div className="space-y-6">
       <PageHeader
@@ -80,6 +85,9 @@ function MemberHome() {
         subtitle="Your training, plans, and resources."
         actions={<Badge variant="outline">{subscriptionStatus}</Badge>}
       />
+      <div className="-mt-3 flex justify-end">
+        <DashboardRefreshIndicator />
+      </div>
       {showUpgrade && (
         <UpgradeCTA
           title={hasAnyAccess ? "Unlock the full App Member experience" : "Activate your membership"}
