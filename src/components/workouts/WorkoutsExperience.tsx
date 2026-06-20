@@ -886,6 +886,19 @@ function SelectedDayCard({
         date={date}
       />
 
+      {isCompleted && (
+        <WorkoutReviewEditor
+          open={reviewOpen}
+          onOpenChange={setReviewOpen}
+          ctx={{ kind: "client", dayId: item.day.id }}
+          hasCoach
+          initial={reviewInitial}
+          onSaved={() =>
+            qc.invalidateQueries({ queryKey: ["pl-workout-feedback", item.day.id, clientId] })
+          }
+        />
+      )}
+
       <AlertDialog open={resetOpen} onOpenChange={(o) => !resetting && setResetOpen(o)}>
         <AlertDialogContent>
           <AlertDialogHeader>
