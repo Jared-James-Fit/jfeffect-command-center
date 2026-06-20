@@ -11,6 +11,7 @@ import { NutritionDashboard, type NutritionTargets } from "@/components/nutritio
 import { getActiveMemberTargets } from "@/lib/nutrition-targets/member-targets.functions";
 import { DailyNutritionPanel } from "@/components/nutrition/DailyNutritionPanel";
 import { MemberMealPlanPanel } from "@/components/nutrition/MemberMealPlanPanel";
+import { SectionErrorBoundary } from "@/components/section-error-boundary";
 
 export const Route = createFileRoute("/_authenticated/m/nutrition/")({
   component: MemberNutrition,
@@ -21,39 +22,45 @@ function MemberNutrition() {
   const { data } = useQuery({
     queryKey: ["m-nutrition-context"],
     queryFn: async () => {
-      const { data: auth } = await supabase.auth.getUser();
-      if (!auth.user) return { userId: undefined as string | undefined, goals: [] as string[] };
-      const { data: m } = await (supabase as any)
-        .from("app_members")
-        .select("goals_tags, goals")
-        .eq("user_id", auth.user.id)
-        .maybeSingle();
-      const goalsTags = (m?.goals_tags ?? []) as string[];
-      return {
-        userId: auth.user.id,
-        goals: goalsTags,
-      };
+      try {
+        const { data: auth } = await supabase.auth.getUser();
+        if (!auth?.user) return { userId: undefined as string | undefined, goals: [] as string[] };
+        const { data: m } = await (supabase as any)
+          .from("app_members")
+          .select("goals_tags, goals")
+          .eq("user_id", auth.user.id)
+          .maybeSingle();
+        const goalsTags = Array.isArray(m?.goals_tags) ? (m!.goals_tags as string[]) : [];
+        return { userId: auth.user.id, goals: goalsTags };
+      } catch (e) {
+        console.error("[nutrition] context query failed", e);
+        return { userId: undefined as string | undefined, goals: [] as string[] };
+      }
     },
+    retry: false,
   });
 
   const targetsQ = useQuery({
     queryKey: ["m-nutrition-targets"],
     queryFn: () => getTargetsFn({}),
+    retry: false,
   });
 
-  const saved = targetsQ.data;
+  const saved = targetsQ.data ?? null;
   const targets: NutritionTargets | undefined = saved
     ? {
-        calories: saved.calories,
-        protein: saved.protein_g,
-        carbs: saved.carbs_g,
-        fats: saved.fat_g,
-        water: saved.water_ml ? `${(saved.water_ml / 1000).toFixed(1)}L` : null,
+        calories: (saved as any).calories ?? null,
+        protein: (saved as any).protein_g ?? null,
+        carbs: (saved as any).carbs_g ?? null,
+        fats: (saved as any).fat_g ?? null,
+        water: (saved as any).water_ml
+          ? `${(Number((saved as any).water_ml) / 1000).toFixed(1)}L`
+          : null,
         sleep: "8h",
       }
     : undefined;
 
-  const showSetupCta = !targetsQ.isLoading && !saved;
+  const showSetupCta = !targetsQ.isLoading && !targetsQ.isError && !saved;
 
   return (
     <>
@@ -61,8 +68,12 @@ function MemberNutrition() {
         title="Nutrition"
         subtitle="Targets, recipes, and recovery — all in one place."
       />
-      <MemberMealPlanPanel />
-      <DailyNutritionPanel />
+      <SectionErrorBoundary label="Meal plan">
+        <MemberMealPlanPanel />
+      </SectionErrorBoundary>
+      <SectionErrorBoundary label="Daily nutrition">
+        <DailyNutritionPanel />
+      </SectionErrorBoundary>
       {showSetupCta && (
         <div className="p-4 md:p-6 pb-0">
           <Card className="flex flex-col items-start gap-3 border-primary/40 bg-gradient-to-br from-primary/10 to-card p-5 sm:flex-row sm:items-center sm:justify-between">
@@ -83,16 +94,22 @@ function MemberNutrition() {
           </Card>
         </div>
       )}
-      <NutritionDashboard
-        viewer="member"
-        userId={data?.userId}
-        goals={data?.goals}
-        targets={targets}
-      />
+      <SectionErrorBoundary label="Nutrition dashboard" className="mx-4 md:mx-6">
+        <NutritionDashboard
+          viewer="member"
+          userId={data?.userId}
+          goals={data?.goals}
+          targets={targets}
+        />
+      </SectionErrorBoundary>
       {saved && (
         <div className="px-4 md:px-6 -mt-2 mb-4 text-xs text-muted-foreground flex items-center gap-2">
           <span className="rounded-full bg-secondary px-2 py-0.5 uppercase tracking-wide text-[10px] font-semibold">
-            {saved.source === "coach" ? "Set by coach" : saved.source === "manual" ? "Manual" : "Calculated"}
+            {(saved as any).source === "coach"
+              ? "Set by coach"
+              : (saved as any).source === "manual"
+              ? "Manual"
+              : "Calculated"}
           </span>
           <Link to="/m/nutrition/targets-manage" className="underline hover:text-foreground">
             Manage targets
