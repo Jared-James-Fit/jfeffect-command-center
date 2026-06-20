@@ -12,6 +12,7 @@ import { MacroBreakdown } from "./MacroBreakdown";
 import { TargetsHistorySparkline } from "./TargetsHistorySparkline";
 import { CoachTargetChangeBanner } from "./CoachTargetChangeBanner";
 import { RecentAdherenceWidget } from "./RecentAdherenceWidget";
+import { SectionErrorBoundary } from "@/components/section-error-boundary";
 
 /**
  * Shared nutrition dashboard surface used by members and coaching clients.
@@ -46,17 +47,35 @@ export function NutritionDashboard({
 }) {
   return (
     <div className="space-y-6 p-4 pb-28 md:p-6 md:pb-12">
-      {viewer === "member" && <CoachTargetChangeBanner />}
+      {viewer === "member" && (
+        <SectionErrorBoundary label="Coach updates">
+          <CoachTargetChangeBanner />
+        </SectionErrorBoundary>
+      )}
       <div id="targets" className="scroll-mt-20">
-        <TargetsStrip targets={targets} userId={userId} />
+        <SectionErrorBoundary label="Targets">
+          <TargetsStrip targets={targets} userId={userId} />
+        </SectionErrorBoundary>
       </div>
-      <MacroBreakdown targets={targets} />
-      {viewer === "member" && <TargetsHistorySparkline />}
-      {viewer === "client" && <RecentAdherenceWidget />}
+      <SectionErrorBoundary label="Macro breakdown">
+        <MacroBreakdown targets={targets} />
+      </SectionErrorBoundary>
+      {viewer === "member" && (
+        <SectionErrorBoundary label="Target history">
+          <TargetsHistorySparkline />
+        </SectionErrorBoundary>
+      )}
+      {viewer === "client" && (
+        <SectionErrorBoundary label="Adherence">
+          <RecentAdherenceWidget />
+        </SectionErrorBoundary>
+      )}
       <QuickActions viewer={viewer} recipesAnchorId={recipesAnchorId} />
       {children}
       <div id={recipesAnchorId} className="scroll-mt-20">
-        <RecipeBrowser viewer={viewer} userId={userId} goals={goals} />
+        <SectionErrorBoundary label="Recipes">
+          <RecipeBrowser viewer={viewer} userId={userId} goals={goals} />
+        </SectionErrorBoundary>
       </div>
     </div>
   );

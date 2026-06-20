@@ -51,6 +51,7 @@ export function CoachTargetChangeBanner() {
     queryKey: ["coach-target-change"],
     queryFn: () => fetchChange(),
     staleTime: 60_000,
+    retry: false,
   });
 
   const ack = useMutation({
@@ -64,6 +65,16 @@ export function CoachTargetChangeBanner() {
   const current = data.current as Row;
   const previous = (data.previous ?? null) as Row | null;
   const note = current.input_snapshot?.note ?? null;
+  const createdAtLabel = (() => {
+    if (!current.created_at) return "";
+    const d = new Date(current.created_at);
+    if (isNaN(d.getTime())) return "";
+    try {
+      return d.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
+    } catch {
+      return "";
+    }
+  })();
 
   return (
     <Card className="border-primary/40 bg-primary/5 p-4">
@@ -75,8 +86,8 @@ export function CoachTargetChangeBanner() {
           <div>
             <p className="text-sm font-semibold">Your coach updated your targets</p>
             <p className="text-xs text-muted-foreground">
-              {new Date(current.created_at).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}
-              {current.goal ? ` · goal: ${current.goal}` : ""}
+              {createdAtLabel}
+              {current.goal ? `${createdAtLabel ? " · " : ""}goal: ${current.goal}` : ""}
             </p>
           </div>
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">

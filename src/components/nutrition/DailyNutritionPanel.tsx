@@ -25,6 +25,17 @@ function todayISO() {
   return new Date().toISOString().slice(0, 10);
 }
 
+function safeFormat(value: unknown, pattern: string, fallback = "") {
+  if (!value || typeof value !== "string") return fallback;
+  try {
+    const d = parseISO(value);
+    if (isNaN(d.getTime())) return fallback;
+    return format(d, pattern);
+  } catch {
+    return fallback;
+  }
+}
+
 function sumMacros(meals: any[]) {
   return meals.reduce(
     (acc, m) => ({
@@ -45,12 +56,13 @@ export function DailyNutritionPanel() {
   const dashQ = useQuery({
     queryKey: ["nutrition-dashboard", date],
     queryFn: () => getDashboard({ data: { date } }),
+    retry: false,
   });
 
-  const meals = dashQ.data?.meals ?? [];
-  const presets = dashQ.data?.presets ?? [];
-  const supplements = dashQ.data?.supplements ?? [];
-  const supplementLogs = dashQ.data?.supplementLogs ?? [];
+  const meals = Array.isArray(dashQ.data?.meals) ? dashQ.data!.meals : [];
+  const presets = Array.isArray(dashQ.data?.presets) ? dashQ.data!.presets : [];
+  const supplements = Array.isArray(dashQ.data?.supplements) ? dashQ.data!.supplements : [];
+  const supplementLogs = Array.isArray(dashQ.data?.supplementLogs) ? dashQ.data!.supplementLogs : [];
   const target = dashQ.data?.target as any;
   const pendingTarget = dashQ.data?.pendingTarget as any;
 
@@ -74,7 +86,7 @@ export function DailyNutritionPanel() {
           <div>
             <div className="text-lg font-bold">Today's intake</div>
             <div className="text-xs text-muted-foreground">
-              {format(parseISO(date), "EEEE, MMM d")}
+              {safeFormat(date, "EEEE, MMM d")}
             </div>
           </div>
           <div className="flex items-center gap-2">
@@ -225,7 +237,7 @@ function MealRow({ meal, onChanged }: { meal: any; onChanged: () => void }) {
         <div className="font-medium truncate">{meal.name}</div>
         <div className="text-xs text-muted-foreground flex items-center gap-2">
           <Clock className="h-3 w-3" />
-          {format(parseISO(meal.logged_at), "p")} · {meal.calories} kcal · P{Math.round(meal.protein_g)}/C{Math.round(meal.carbs_g)}/F{Math.round(meal.fat_g)}
+          {safeFormat(meal?.logged_at, "p", "—")} · {Number(meal?.calories ?? 0)} kcal · P{Math.round(Number(meal?.protein_g ?? 0))}/C{Math.round(Number(meal?.carbs_g ?? 0))}/F{Math.round(Number(meal?.fat_g ?? 0))}
         </div>
       </div>
       <Button size="icon" variant="ghost" onClick={() => mutation.mutate()} disabled={mutation.isPending}>
