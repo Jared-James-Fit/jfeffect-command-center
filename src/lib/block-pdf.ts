@@ -3,15 +3,34 @@ import autoTable from "jspdf-autotable";
 import { format, parseISO } from "date-fns";
 import type { BlockAnalytics } from "./block-analytics";
 
+function formatGeneratedDate(d: Date): string {
+  const months = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+  return `Generated ${months[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()}`;
+}
+
 /** Generate a PDF summary of a block's analytics and trigger a download. */
 export function exportBlockPDF(a: BlockAnalytics): void {
   const doc = new jsPDF({ unit: "pt", format: "letter" });
   const margin = 40;
   let y = margin;
 
+  // Brand header
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(16);
+  doc.setTextColor(20);
+  doc.text("JF Effect", margin, y);
+  y += 16;
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(9);
+  doc.setTextColor(120);
+  doc.text(formatGeneratedDate(new Date()), margin, y);
+  y += 16;
+  doc.setTextColor(0);
+  doc.setFont("helvetica", "bold");
   doc.setFontSize(16);
   doc.text(a.block.name ?? "Training Block", margin, y);
   y += 18;
+  doc.setFont("helvetica", "normal");
   doc.setFontSize(10);
   doc.setTextColor(120);
   const subtitleParts: string[] = [];
@@ -91,6 +110,21 @@ export function exportBlockPDF(a: BlockAnalytics): void {
       headStyles: { fillColor: [40, 40, 40] },
       margin: { left: margin, right: margin },
     });
+  }
+
+  // Footer on every page
+  const pageCount = doc.getNumberOfPages();
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const pageHeight = doc.internal.pageSize.getHeight();
+  const footerText = "Generated from JF Effect Client Portal";
+  for (let i = 1; i <= pageCount; i++) {
+    doc.setPage(i);
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(8);
+    doc.setTextColor(128);
+    const w = doc.getTextWidth(footerText);
+    doc.text(footerText, (pageWidth - w) / 2, pageHeight - 16);
+    doc.setTextColor(0);
   }
 
   doc.save(`${(a.block.name ?? "block").replace(/\s+/g, "-")}-summary.pdf`);
