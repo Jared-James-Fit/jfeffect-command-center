@@ -30,6 +30,7 @@ import appPreviewRecipes from "@/assets/app-preview-recipes.jpg.asset.json";
 import appPreviewAnalyticsOverview from "@/assets/app-preview-analytics-overview.png.asset.json";
 import appPreviewRecentPrs from "@/assets/app-preview-recent-prs.png.asset.json";
 import appPreview1rmChart from "@/assets/app-preview-1rm-chart.png.asset.json";
+import { TransformationsGallery } from "@/components/sales/transformations-gallery";
 
 function HeroSkeleton() {
   return (
