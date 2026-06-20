@@ -144,7 +144,7 @@ export function WorkoutsExperience({
       }
       downloadWorkoutPdf({
         client_name:
-          clientName ??
+          clientName ||
           [(client as any)?.first_name, (client as any)?.last_name]
             .filter(Boolean)
             .join(" ") ||
