@@ -1,5 +1,5 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useMemo } from "react";
+import { useEffect, useMemo } from "react";
 import { PageHeader } from "@/components/app-shell";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -49,10 +49,48 @@ export const Route = createFileRoute("/_authenticated/admin/communication")({
 function CommunicationWorkspace() {
   const { tab, client, sub } = Route.useSearch();
   const navigate = useNavigate();
+  const viewportLockedTab = tab === "messages" || tab === "support-inbox" || tab === "support-alerts";
 
   useMemo(() => {
     try { window.localStorage.setItem(LAST_TAB_KEY, tab); } catch {}
   }, [tab]);
+
+  useEffect(() => {
+    if (!viewportLockedTab || typeof window === "undefined") return;
+    const mq = window.matchMedia("(max-width: 767px)");
+    const html = document.documentElement;
+    const body = document.body;
+    const previous = {
+      htmlOverflow: html.style.overflow,
+      bodyOverflow: body.style.overflow,
+      bodyOverscroll: body.style.overscrollBehavior,
+      lockAttr: html.getAttribute("data-messenger-scroll-locked"),
+    };
+    const apply = () => {
+      if (!mq.matches) {
+        html.style.overflow = previous.htmlOverflow;
+        body.style.overflow = previous.bodyOverflow;
+        body.style.overscrollBehavior = previous.bodyOverscroll;
+        if (previous.lockAttr === null) html.removeAttribute("data-messenger-scroll-locked");
+        else html.setAttribute("data-messenger-scroll-locked", previous.lockAttr);
+        return;
+      }
+      html.setAttribute("data-messenger-scroll-locked", "true");
+      html.style.overflow = "hidden";
+      body.style.overflow = "hidden";
+      body.style.overscrollBehavior = "none";
+    };
+    apply();
+    mq.addEventListener("change", apply);
+    return () => {
+      mq.removeEventListener("change", apply);
+      html.style.overflow = previous.htmlOverflow;
+      body.style.overflow = previous.bodyOverflow;
+      body.style.overscrollBehavior = previous.bodyOverscroll;
+      if (previous.lockAttr === null) html.removeAttribute("data-messenger-scroll-locked");
+      else html.setAttribute("data-messenger-scroll-locked", previous.lockAttr);
+    };
+  }, [viewportLockedTab]);
 
   const setTab = (next: TabKey) => {
     navigate({ to: "/admin/communication", search: { tab: next } as any, replace: false });
@@ -60,7 +98,10 @@ function CommunicationWorkspace() {
 
   return (
     <div
-      className="flex flex-col md:mb-0 mb-[calc(-140px-env(safe-area-inset-bottom))]"
+      className={cn(
+        "flex flex-col overflow-hidden bg-background md:static md:inset-auto md:z-auto md:mb-0",
+        viewportLockedTab ? "fixed inset-x-0 z-30" : "relative mb-[calc(-140px-env(safe-area-inset-bottom))]",
+      )}
       style={{
         // Anchor the entire communication workspace to the iOS Visual
         // Viewport. `100dvh` does NOT shrink on iOS Safari when the soft
@@ -71,6 +112,9 @@ function CommunicationWorkspace() {
         // subtract the topbar and bottom-nav clearance; when the keyboard
         // opens, --bottom-nav-clearance collapses to 0 (the nav is
         // hidden), so the math stays correct.
+        top: viewportLockedTab
+          ? "calc(var(--vv-top, 0px) + var(--shell-topbar-h, 0px))"
+          : undefined,
         height:
           "calc(var(--vv-h, 100dvh) - var(--shell-topbar-h, 0px) - var(--bottom-nav-clearance, 0px))",
       }}
@@ -111,7 +155,7 @@ function CommunicationWorkspace() {
       {/* Chat-like tabs own their own scroll (inbox list + thread).
           Page-style tabs scroll the whole panel. Mixing the two causes the
           messenger header/sidebar to drift as the outer container scrolls. */}
-      {tab === "messages" || tab === "support-inbox" || tab === "support-alerts" ? (
+      {viewportLockedTab ? (
         <div className="min-h-0 flex-1 overflow-hidden">
           {tab === "messages" && <MessagesInbox initialClient={client} embedded />}
           {tab === "support-inbox" && <SupportInbox embedded />}

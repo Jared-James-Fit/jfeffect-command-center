@@ -639,8 +639,10 @@ export function MessageThread({
         if (document.body.style.pointerEvents === "none") {
           document.body.style.pointerEvents = "";
         }
-        document.body.style.removeProperty("overflow");
-        document.body.removeAttribute("data-scroll-locked");
+        if (document.documentElement.getAttribute("data-messenger-scroll-locked") !== "true") {
+          document.body.style.removeProperty("overflow");
+          document.body.removeAttribute("data-scroll-locked");
+        }
       } catch {}
     }, 350);
     return () => window.clearTimeout(t);
@@ -1078,7 +1080,7 @@ export function MessageThread({
     <div className={cn(
       "flex flex-col",
       fullBleed
-        ? "h-full min-h-0 flex-1 bg-background"
+        ? "relative isolate h-full min-h-0 flex-1 overflow-hidden bg-background"
         : "h-[min(80vh,640px)] rounded-md border border-border bg-card",
     )}>
       {/* Admin status/priority controls intentionally removed — kept simple like the client thread.
@@ -1487,7 +1489,7 @@ export function MessageThread({
         className={cn(
           "space-y-2 border-t border-border",
           fullBleed
-            ? "bg-background/95 px-3 pt-2 backdrop-blur supports-[backdrop-filter]:bg-background/80 sm:px-6 sm:pt-3 pb-[max(env(safe-area-inset-bottom),0.5rem)]"
+            ? "shrink-0 bg-background/95 px-3 pt-2 pb-[var(--composer-bottom-pad)] backdrop-blur supports-[backdrop-filter]:bg-background/80 sm:px-6 sm:pt-3"
             : "bg-card p-2 sm:p-3",
         )}
       >

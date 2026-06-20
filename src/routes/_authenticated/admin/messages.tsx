@@ -369,7 +369,7 @@ export function MessagesInbox({
       {/* Conversation pane */}
       <section
         className={cn(
-          "flex min-w-0 flex-1 flex-col",
+          "flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden",
           selected ? "flex" : "hidden md:flex",
         )}
       >
