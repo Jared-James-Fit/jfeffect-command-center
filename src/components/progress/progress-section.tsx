@@ -107,7 +107,7 @@ export type ProgressInitialAction =
 export function ProgressSection({
   ctx, initialAction,
 }: { ctx: ProgressContext; initialAction?: ProgressInitialAction }) {
-  const [tab, setTab] = useState<string>(initialAction === "history" ? "timeline" : initialAction === "bodyweight" ? "bodyweight" : "photos");
+  const [tab, setTab] = useState<string>(initialAction === "history" ? "timeline" : initialAction === "bodyweight" || initialAction === "weight" ? "bodyweight" : "overview");
   const [photoDialog, setPhotoDialog] = useState(false);
   const [videoDialog, setVideoDialog] = useState(false);
   const [weightDialog, setWeightDialog] = useState(false);
@@ -128,7 +128,7 @@ export function ProgressSection({
   }, [initialAction]);
 
   return (
-    <div className="space-y-4 p-3 pb-28 md:p-6 md:pb-12">
+    <div className="space-y-4 p-3 pb-[max(5rem,env(safe-area-inset-bottom))] md:p-6 md:pb-12">
       {/* Always-visible quick actions so logging is one tap from any tab */}
       <div className="grid grid-cols-3 gap-2">
         <Button
@@ -157,7 +157,8 @@ export function ProgressSection({
         </Button>
       </div>
       <Tabs value={tab} onValueChange={setTab} className="space-y-4">
-        <TabsList className="grid w-full grid-cols-3 md:grid-cols-6 h-auto">
+        <TabsList className="grid w-full grid-cols-4 md:grid-cols-7 h-auto">
+          <TabsTrigger value="overview">Overview</TabsTrigger>
           <TabsTrigger value="photos">Photos</TabsTrigger>
           <TabsTrigger value="videos">Videos</TabsTrigger>
           <TabsTrigger value="bodyweight">Weight</TabsTrigger>
@@ -166,6 +167,9 @@ export function ProgressSection({
           <TabsTrigger value="timeline">History</TabsTrigger>
         </TabsList>
 
+        <TabsContent value="overview">
+          <OverviewTab ctx={ctx} onLogWeight={() => setWeightDialog(true)} onAddPhotos={() => setPhotoDialog(true)} onAddVideo={() => setVideoDialog(true)} onAddMeasurements={() => setMeasureDialog(true)} onViewTab={setTab} />
+        </TabsContent>
         <TabsContent value="photos">
           <PhotosTab ctx={ctx} onNew={() => setPhotoDialog(true)} onOpen={setDetailId} onCompare={() => setCompareDialog(true)} />
         </TabsContent>
@@ -206,6 +210,133 @@ export function ProgressSection({
   );
 }
 
+
+// ============== Overview tab ==============
+
+function OverviewTab({
+  ctx, onLogWeight, onAddPhotos, onAddVideo, onAddMeasurements, onViewTab,
+}: {
+  ctx: ProgressContext;
+  onLogWeight: () => void;
+  onAddPhotos: () => void;
+  onAddVideo: () => void;
+  onAddMeasurements: () => void;
+  onViewTab: (tab: string) => void;
+}) {
+  const { data: bwRows = [] } = useQuery({ queryKey: ["progress-bw", ctx.userId], queryFn: () => listBodyweight(ctx.userId) });
+  const { data: photoSubs = [] } = useQuery({ queryKey: ["progress-subs-photo", ctx.userId], queryFn: () => listSubmissions({ userId: ctx.userId, type: "photo" }) });
+  const { data: videoSubs = [] } = useQuery({ queryKey: ["progress-subs-video", ctx.userId], queryFn: () => listSubmissions({ userId: ctx.userId, type: "video" }) });
+  const { data: measRows = [] } = useQuery({ queryKey: ["progress-meas", ctx.userId], queryFn: () => listMeasurements(ctx.userId) });
+
+  const stats = bodyweightStats(bwRows);
+  const latestPhotoSub = photoSubs[0];
+  const latestVideoSub = videoSubs[0];
+  const latestMeas = measRows[0];
+
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-4 gap-2">
+        <Button variant="outline" className="h-auto flex-col gap-1 py-3 text-[10px] font-bold" onClick={onLogWeight}>
+          <Scale className="h-4 w-4" />
+          Log Weight
+        </Button>
+        <Button variant="outline" className="h-auto flex-col gap-1 py-3 text-[10px] font-bold" onClick={onAddPhotos}>
+          <Camera className="h-4 w-4" />
+          Add Photos
+        </Button>
+        <Button variant="outline" className="h-auto flex-col gap-1 py-3 text-[10px] font-bold" onClick={onAddVideo}>
+          <VideoIcon className="h-4 w-4" />
+          Add Video
+        </Button>
+        <Button variant="outline" className="h-auto flex-col gap-1 py-3 text-[10px] font-bold" onClick={onAddMeasurements}>
+          <Ruler className="h-4 w-4" />
+          Add Measurements
+        </Button>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <Card className="p-3">
+          <div className="flex items-center justify-between">
+            <h3 className="text-sm font-semibold">Weight</h3>
+            <button onClick={() => onViewTab("bodyweight")} className="text-xs text-primary font-medium hover:underline">View all</button>
+          </div>
+          {stats?.latest ? (
+            <div className="mt-2">
+              <p className="text-2xl font-bold">{stats.latest} {stats.unit}</p>
+              {stats.avg7 != null && <p className="text-xs text-muted-foreground">7-day avg {stats.avg7} {stats.unit}</p>}
+            </div>
+          ) : (
+            <p className="mt-2 text-sm text-muted-foreground">No weight logged yet.</p>
+          )}
+        </Card>
+
+        <Card className="p-3">
+          <div className="flex items-center justify-between">
+            <h3 className="text-sm font-semibold">Photos</h3>
+            <button onClick={() => onViewTab("photos")} className="text-xs text-primary font-medium hover:underline">View all</button>
+          </div>
+          {latestPhotoSub ? (
+            <div className="mt-2">
+              <p className="text-xs text-muted-foreground">{fmtDate(latestPhotoSub.submission_date)}</p>
+              <LatestMediaThumb sub={latestPhotoSub} />
+            </div>
+          ) : (
+            <p className="mt-2 text-sm text-muted-foreground">No photos yet.</p>
+          )}
+        </Card>
+
+        <Card className="p-3">
+          <div className="flex items-center justify-between">
+            <h3 className="text-sm font-semibold">Videos</h3>
+            <button onClick={() => onViewTab("videos")} className="text-xs text-primary font-medium hover:underline">View all</button>
+          </div>
+          {latestVideoSub ? (
+            <div className="mt-2">
+              <p className="text-xs text-muted-foreground">{fmtDate(latestVideoSub.submission_date)}</p>
+              <LatestMediaThumb sub={latestVideoSub} />
+            </div>
+          ) : (
+            <p className="mt-2 text-sm text-muted-foreground">No videos yet.</p>
+          )}
+        </Card>
+
+        <Card className="p-3">
+          <div className="flex items-center justify-between">
+            <h3 className="text-sm font-semibold">Measurements</h3>
+            <button onClick={() => onViewTab("measurements")} className="text-xs text-primary font-medium hover:underline">View all</button>
+          </div>
+          {latestMeas ? (
+            <div className="mt-2">
+              <p className="text-xs text-muted-foreground">{fmtDate(latestMeas.measured_date)}</p>
+              <div className="mt-1 grid grid-cols-2 gap-x-2 gap-y-1 text-sm">
+                {Object.entries(latestMeas.fields).filter(([, v]) => v != null && v !== "").slice(0, 4).map(([k, v]) => {
+                  const label = MEASUREMENT_FIELDS.find((f) => f.key === k)?.label ?? k;
+                  return <div key={k}><span className="text-muted-foreground text-xs">{label}</span> <strong>{String(v)}</strong></div>;
+                })}
+              </div>
+            </div>
+          ) : (
+            <p className="mt-2 text-sm text-muted-foreground">No measurements yet.</p>
+          )}
+        </Card>
+      </div>
+    </div>
+  );
+}
+
+function LatestMediaThumb({ sub }: { sub: ProgressSubmission }) {
+  const { data: media = [] } = useQuery({
+    queryKey: ["progress-media", sub.id],
+    queryFn: () => listMediaForSubmission(sub.id),
+  });
+  const firstReady = media.find((m) => m.upload_status !== "draft");
+  if (!firstReady) return <div className="mt-2 text-xs text-muted-foreground">No preview available</div>;
+  return (
+    <div className="mt-2 aspect-square rounded bg-muted overflow-hidden max-h-[120px]">
+      <MediaThumb m={firstReady} />
+    </div>
+  );
+}
 
 // ============== Photos tab ==============
 
