@@ -233,7 +233,7 @@ function AdminDashboard() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("training_phases")
-        .select("id, client_id, end_date, start_date, status, phase, clients(id, full_name)")
+        .select("*, clients(id, full_name)")
         .order("end_date", { ascending: true });
       if (error) throw error;
       return data as Array<TrainingPhase & { clients: { id: string; full_name: string } | null }>;
