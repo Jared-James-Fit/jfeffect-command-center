@@ -109,17 +109,49 @@ const db = supabase as any;
  * they never appear in either the admin or client thread as normal bubbles.
  * Those are surfaced separately by listPendingMessages() in the admin strip.
  */
-export async function listMessages(clientId: string, opts: { includeInternal?: boolean } = {}) {
+export async function listMessages(
+  clientId: string,
+  opts: { includeInternal?: boolean; limit?: number } = {},
+) {
+  const limit = opts.limit ?? 100;
+  // Fetch the most recent N rows (desc + limit), then return in chronological
+  // (ascending) order so the bubble timeline keeps its existing shape.
   let q = db
     .from("messages")
     .select("*")
     .eq("client_id", clientId)
     .in("delivery_status", ["sent", "sending"])
-    .order("created_at", { ascending: true });
+    .order("created_at", { ascending: false })
+    .limit(limit);
   if (!opts.includeInternal) q = q.eq("is_internal_note", false);
   const { data, error } = await q;
   if (error) throw error;
-  return (data ?? []) as Message[];
+  return ((data ?? []) as Message[]).slice().reverse();
+}
+
+/**
+ * Load older delivered messages for a conversation, strictly before the given
+ * ISO timestamp. Returns rows in chronological (ascending) order so callers
+ * can prepend them directly to the existing thread.
+ */
+export async function listOlderMessages(
+  clientId: string,
+  beforeCreatedAt: string,
+  limit: number = 50,
+  opts: { includeInternal?: boolean } = {},
+) {
+  let q = db
+    .from("messages")
+    .select("*")
+    .eq("client_id", clientId)
+    .in("delivery_status", ["sent", "sending"])
+    .lt("created_at", beforeCreatedAt)
+    .order("created_at", { ascending: false })
+    .limit(limit);
+  if (!opts.includeInternal) q = q.eq("is_internal_note", false);
+  const { data, error } = await q;
+  if (error) throw error;
+  return ((data ?? []) as Message[]).slice().reverse();
 }
 
 /**
