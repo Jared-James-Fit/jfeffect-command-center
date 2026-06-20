@@ -8963,6 +8963,8 @@ export type Database = {
           created_at: string
           day_index: number
           enrollment_id: string
+          fatigue_feel: string | null
+          hit_target: string | null
           id: string
           overall_rating: number
           pain: boolean
@@ -8976,6 +8978,7 @@ export type Database = {
           reviewed_at: string | null
           reviewed_by: string | null
           session_rpe: number
+          strength_feel: string | null
           updated_at: string
           week_index: number
         }
@@ -8985,6 +8988,8 @@ export type Database = {
           created_at?: string
           day_index: number
           enrollment_id: string
+          fatigue_feel?: string | null
+          hit_target?: string | null
           id?: string
           overall_rating: number
           pain?: boolean
@@ -8998,6 +9003,7 @@ export type Database = {
           reviewed_at?: string | null
           reviewed_by?: string | null
           session_rpe: number
+          strength_feel?: string | null
           updated_at?: string
           week_index: number
         }
@@ -9007,6 +9013,8 @@ export type Database = {
           created_at?: string
           day_index?: number
           enrollment_id?: string
+          fatigue_feel?: string | null
+          hit_target?: string | null
           id?: string
           overall_rating?: number
           pain?: boolean
@@ -9020,6 +9028,7 @@ export type Database = {
           reviewed_at?: string | null
           reviewed_by?: string | null
           session_rpe?: number
+          strength_feel?: string | null
           updated_at?: string
           week_index?: number
         }
@@ -13162,6 +13171,8 @@ export type Database = {
           completion_id: string
           created_at: string
           day_id: string
+          fatigue_feel: string | null
+          hit_target: string | null
           id: string
           overall_rating: number
           pain: boolean
@@ -13175,6 +13186,7 @@ export type Database = {
           reviewed_at: string | null
           reviewed_by: string | null
           session_rpe: number
+          strength_feel: string | null
           updated_at: string
         }
         Insert: {
@@ -13183,6 +13195,8 @@ export type Database = {
           completion_id: string
           created_at?: string
           day_id: string
+          fatigue_feel?: string | null
+          hit_target?: string | null
           id?: string
           overall_rating: number
           pain?: boolean
@@ -13196,6 +13210,7 @@ export type Database = {
           reviewed_at?: string | null
           reviewed_by?: string | null
           session_rpe: number
+          strength_feel?: string | null
           updated_at?: string
         }
         Update: {
@@ -13204,6 +13219,8 @@ export type Database = {
           completion_id?: string
           created_at?: string
           day_id?: string
+          fatigue_feel?: string | null
+          hit_target?: string | null
           id?: string
           overall_rating?: number
           pain?: boolean
@@ -13217,6 +13234,7 @@ export type Database = {
           reviewed_at?: string | null
           reviewed_by?: string | null
           session_rpe?: number
+          strength_feel?: string | null
           updated_at?: string
         }
         Relationships: [
@@ -16666,6 +16684,8 @@ export type Database = {
           completion_id: string
           created_at: string
           day_id: string
+          fatigue_feel: string | null
+          hit_target: string | null
           id: string
           overall_rating: number
           pain: boolean
@@ -16679,6 +16699,7 @@ export type Database = {
           reviewed_at: string | null
           reviewed_by: string | null
           session_rpe: number
+          strength_feel: string | null
           updated_at: string
         }
         SetofOptions: {
