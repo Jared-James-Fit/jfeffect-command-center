@@ -192,14 +192,14 @@ function SelkirkPage() {
           <Card className="p-6">
             <ul className="space-y-3">
               {[
-                "Full-time fitness coach since 2022",
-                "Helped 100+ clients",
-                "Beginner-friendly coaching approach",
+                "Coaching since 2019, full-time since 2022",
+                "100+ clients helped",
+                "A coaching approach built for beginners",
                 "Strength and physique specialist",
                 "Competitive powerlifter",
-                "Personalized coaching",
+                "Coaching made personal",
                 "Local to Selkirk",
-                "Training available at Iron Image Gym",
+                "Training at Iron Image Gym",
               ].map((line) => (
                 <li key={line} className="flex items-start gap-3 text-sm md:text-base">
                   <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-primary" />
@@ -233,7 +233,7 @@ function SelkirkPage() {
             $100<span className="text-base font-semibold text-muted-foreground"> / session</span>
           </div>
           <p className="mt-3 text-sm text-muted-foreground md:text-base">
-            Bulk session packages available. Book a free consultation to find the best option for your goals.
+            Bulk packages available. Book a free consultation and we'll find the right fit for your goals.
           </p>
           <div className="mt-6 flex justify-center">
             <PrimaryCta />
