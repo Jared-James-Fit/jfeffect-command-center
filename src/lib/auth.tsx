@@ -109,16 +109,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (cancelled) return;
         if (roleErr) throw roleErr;
         const roles = (roleRows ?? []).map((r: any) => r.role as AppRole);
-        setRole(
+        const resolvedRole: AppRole =
           roles.includes("admin") ? "admin"
           : roles.includes("coach") ? "coach"
           : roles.includes("media_manager") ? "media_manager"
           : memberRow ? "member"
           : roles.includes("client") || clientRow ? "client"
-          : "client",
-        );
+          : "client";
+        setRole(resolvedRole);
         roleLoadedForRef.current = uid;
         setLoading(false);
+        // Warm the client record cache so the dashboard doesn't waterfall
+        if (resolvedRole === "client") {
+          queryClient.prefetchQuery({
+            queryKey: ["my-client", uid],
+            queryFn: async () => {
+              const { data } = await supabase.from("clients").select("*").eq("user_id", uid).maybeSingle();
+              return data;
+            },
+            staleTime: 30_000,
+          });
+        }
       } catch (err) {
         // Transient network failure — DO NOT sign the user out. Retry with
         // backoff. After max attempts give up but keep the auth session;
