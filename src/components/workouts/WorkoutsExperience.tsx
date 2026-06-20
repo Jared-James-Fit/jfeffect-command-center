@@ -8,7 +8,7 @@ import {
 import {
   Calendar as CalendarIcon, ChevronLeft, ChevronRight, ClipboardList,
   History, Loader2, Move, MoreVertical, Play, Pencil, Sun, Activity, Download,
-  RotateCcw,
+  RotateCcw, MessageSquare,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/app-shell";
@@ -37,6 +37,10 @@ import { CircleDot } from "lucide-react";
 import { TrainingScheduleCard } from "@/components/training-schedule-card";
 import { toast } from "sonner";
 import { ClientCardioSection } from "@/components/cardio/ClientCardioSection";
+import {
+  WorkoutReviewEditor,
+  type ReviewInitial,
+} from "@/components/workout/shared/workout-review-editor";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader,
