@@ -3,6 +3,7 @@ import { useState } from "react";
 import {
   Dumbbell, Plus, BookOpen, CalendarDays, Apple, HeartPulse,
   MessageSquare, ClipboardCheck, CreditCard, User, Zap, Eye, Archive,
+  Download, Loader2,
 } from "lucide-react";
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem,
@@ -13,12 +14,123 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import type { DirectoryRow } from "@/lib/clients-directory.functions";
 import { AssignProgramDialog } from "./assign-program-dialog";
 import { WorkoutArchiveDialog } from "./workout-archive-dialog";
+import { toast } from "sonner";
+import { getBlockTree } from "@/lib/pl-programs";
+import { getClientMealPlanForCoach } from "@/lib/nutrition-targets/admin-meal-plan.functions";
+import { useServerFn } from "@tanstack/react-start";
+
+function useClientPdfDownloads(r: DirectoryRow) {
+  const [workoutPending, setWorkoutPending] = useState(false);
+  const [mealPending, setMealPending] = useState(false);
+  const fetchMealPlan = useServerFn(getClientMealPlanForCoach);
+
+  const downloadWorkout = async () => {
+    if (!r.block_id) {
+      toast.error(`${r.full_name ?? "Client"} has no active program.`);
+      return;
+    }
+    setWorkoutPending(true);
+    const toastId = toast.loading("Generating workout PDF…");
+    try {
+      const tree = await getBlockTree(r.block_id);
+      if (!tree) throw new Error("Block not found");
+      const { downloadWorkoutPdf } = await import(
+        "@/lib/workouts/workout-pdf"
+      );
+      const weeksSorted = (tree.weeks ?? [])
+        .slice()
+        .sort((a: any, b: any) => (a.week_index ?? 0) - (b.week_index ?? 0));
+      const daysByWeek = new Map<string, any[]>();
+      for (const d of tree.days ?? []) {
+        const list = daysByWeek.get(d.week_id) ?? [];
+        list.push(d);
+        daysByWeek.set(d.week_id, list);
+      }
+      const rowsByDay = new Map<string, any[]>();
+      for (const rw of tree.rows ?? []) {
+        const list = rowsByDay.get(rw.day_id) ?? [];
+        list.push(rw);
+        rowsByDay.set(rw.day_id, list);
+      }
+      downloadWorkoutPdf({
+        client_name: r.full_name ?? null,
+        program_name: (tree as any).block?.name ?? null,
+        block_name: (tree as any).block?.name ?? null,
+        block_status: (tree as any).block?.status ?? null,
+        block_start: (tree as any).block?.start_date ?? null,
+        block_end: (tree as any).block?.end_date ?? null,
+        weeks: weeksSorted.map((w: any) => ({
+          id: w.id,
+          week_index: w.week_index,
+          notes: w.notes ?? null,
+          days: (daysByWeek.get(w.id) ?? [])
+            .slice()
+            .sort((a: any, b: any) => (a.day_index ?? 0) - (b.day_index ?? 0))
+            .map((d: any) => ({
+              id: d.id,
+              day_index: d.day_index,
+              title: d.title ?? null,
+              notes: d.notes ?? null,
+              notes_client_visible: d.notes_client_visible ?? null,
+              scheduled_date: d.scheduled_date ?? null,
+              rows: rowsByDay.get(d.id) ?? [],
+            })),
+        })),
+      });
+      toast.success("Workout PDF downloaded", { id: toastId });
+    } catch (err) {
+      console.error("Workout PDF download failed", err);
+      toast.error("Could not generate workout PDF.", { id: toastId });
+    } finally {
+      setWorkoutPending(false);
+    }
+  };
+
+  const downloadMealPlan = async () => {
+    setMealPending(true);
+    const toastId = toast.loading("Generating meal plan PDF…");
+    try {
+      const plan = await fetchMealPlan({ data: { clientId: r.id } });
+      if (!plan) {
+        toast.error(
+          `${r.full_name ?? "Client"} has no visible meal plan assigned.`,
+          { id: toastId },
+        );
+        return;
+      }
+      const { downloadMealPlanPdf } = await import(
+        "@/lib/nutrition-targets/meal-plan-pdf"
+      );
+      downloadMealPlanPdf({
+        client_name: plan.client_name ?? r.full_name ?? null,
+        coach_name: plan.coach_name ?? null,
+        updated_at: plan.updated_at ?? null,
+        start_date: plan.start_date ?? null,
+        phase: plan.phase ?? null,
+        goal: plan.goal ?? null,
+        structure: plan.structure ?? null,
+        water: plan.water ?? null,
+        client_notes: plan.client_notes ?? null,
+        days: (plan.days ?? []) as any[],
+      });
+      toast.success("Meal plan PDF downloaded", { id: toastId });
+    } catch (err) {
+      console.error("Meal plan PDF download failed", err);
+      toast.error("Could not generate meal plan PDF.", { id: toastId });
+    } finally {
+      setMealPending(false);
+    }
+  };
+
+  return { workoutPending, mealPending, downloadWorkout, downloadMealPlan };
+}
 
 /** Compact "Quick Actions" launcher for a client row. */
 export function QuickActionsMenu({ r }: { r: DirectoryRow }) {
   const hasProgram = !!r.block_id;
   const [assignOpen, setAssignOpen] = useState(false);
   const [archiveOpen, setArchiveOpen] = useState(false);
+  const pdfs = useClientPdfDownloads(r);
   return (
     <>
     <DropdownMenu>
@@ -72,6 +184,17 @@ export function QuickActionsMenu({ r }: { r: DirectoryRow }) {
         <DropdownMenuItem onSelect={(e) => { e.preventDefault(); setArchiveOpen(true); }}>
           <Archive className="mr-2 h-4 w-4" /> Workout Archive
         </DropdownMenuItem>
+        <DropdownMenuItem
+          disabled={pdfs.workoutPending}
+          onSelect={(e) => { e.preventDefault(); pdfs.downloadWorkout(); }}
+        >
+          {pdfs.workoutPending ? (
+            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+          ) : (
+            <Download className="mr-2 h-4 w-4" />
+          )}
+          Download Workout PDF
+        </DropdownMenuItem>
 
         <DropdownMenuSeparator />
         <DropdownMenuLabel className="text-xs">Nutrition &amp; Cardio</DropdownMenuLabel>
@@ -84,6 +207,17 @@ export function QuickActionsMenu({ r }: { r: DirectoryRow }) {
           <Link to="/admin/clients/$id" params={{ id: r.id }} search={{ tab: "cardio" } as any} className="flex items-center gap-2">
             <HeartPulse className="h-4 w-4" /> {!r.f_missing_cardio ? "Update Cardio" : "Add Cardio"}
           </Link>
+        </DropdownMenuItem>
+        <DropdownMenuItem
+          disabled={pdfs.mealPending}
+          onSelect={(e) => { e.preventDefault(); pdfs.downloadMealPlan(); }}
+        >
+          {pdfs.mealPending ? (
+            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+          ) : (
+            <Download className="mr-2 h-4 w-4" />
+          )}
+          Download Meal Plan PDF
         </DropdownMenuItem>
 
         <DropdownMenuSeparator />
@@ -145,6 +279,7 @@ export function ClientMoreMenu({
 }) {
   const [assignOpen, setAssignOpen] = useState(false);
   const [archiveOpen, setArchiveOpen] = useState(false);
+  const pdfs = useClientPdfDownloads(r);
   return (
     <>
     <DropdownMenu>
@@ -190,6 +325,17 @@ export function ClientMoreMenu({
         <DropdownMenuItem onSelect={(e) => { e.preventDefault(); setArchiveOpen(true); }}>
           <Archive className="mr-2 h-4 w-4" /> Workout Archive
         </DropdownMenuItem>
+        <DropdownMenuItem
+          disabled={pdfs.workoutPending}
+          onSelect={(e) => { e.preventDefault(); pdfs.downloadWorkout(); }}
+        >
+          {pdfs.workoutPending ? (
+            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+          ) : (
+            <Download className="mr-2 h-4 w-4" />
+          )}
+          Download Workout PDF
+        </DropdownMenuItem>
 
         <DropdownMenuSeparator />
         <DropdownMenuLabel className="text-xs">Coaching</DropdownMenuLabel>
@@ -202,6 +348,17 @@ export function ClientMoreMenu({
           <Link to="/admin/clients/$id" params={{ id: r.id }} search={{ tab: "cardio" } as any} className="flex items-center gap-2">
             <HeartPulse className="h-4 w-4" /> {!r.f_missing_cardio ? "Update Cardio" : "Add Cardio"}
           </Link>
+        </DropdownMenuItem>
+        <DropdownMenuItem
+          disabled={pdfs.mealPending}
+          onSelect={(e) => { e.preventDefault(); pdfs.downloadMealPlan(); }}
+        >
+          {pdfs.mealPending ? (
+            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+          ) : (
+            <Download className="mr-2 h-4 w-4" />
+          )}
+          Download Meal Plan PDF
         </DropdownMenuItem>
         <DropdownMenuItem asChild>
           <Link to="/admin/clients/$id" params={{ id: r.id }} search={{ tab: "messages" } as any} className="flex items-center gap-2">
