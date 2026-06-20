@@ -1,4 +1,11 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { PersistQueryClientProvider } from "@tanstack/react-query-persist-client";
+import {
+  createQueryPersister,
+  QUERY_PERSIST_BUSTER,
+  QUERY_PERSIST_MAX_AGE,
+  shouldPersistQueryKey,
+} from "@/lib/query-persister";
 import { Toaster } from "sonner";
 import { AuthProvider } from "@/lib/auth";
 import { ClientImpersonationProvider } from "@/lib/client-impersonation";
@@ -273,20 +280,45 @@ function RootComponent() {
     void initNativeShell();
   }, []);
 
+  // Build the localStorage persister once on the client. On the server we
+  // fall back to the plain QueryClientProvider so SSR never touches window.
+  const persister = useMemo(() => createQueryPersister(), []);
+
+  const inner = (
+    <AuthProvider>
+      <ClientImpersonationProvider>
+        {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
+        <Outlet />
+        <Toaster position="top-right" theme="dark" richColors />
+        <ProgressDrawer />
+        <GlobalHighlight />
+        <OnlineOfflineBanner />
+        <PwaUpdateToast />
+      </ClientImpersonationProvider>
+    </AuthProvider>
+  );
+
+  if (persister) {
+    return (
+      <PersistQueryClientProvider
+        client={queryClient}
+        persistOptions={{
+          persister,
+          maxAge: QUERY_PERSIST_MAX_AGE,
+          buster: QUERY_PERSIST_BUSTER,
+          dehydrateOptions: {
+            shouldDehydrateQuery: (q) =>
+              q.state.status === "success" && shouldPersistQueryKey(q.queryKey),
+          },
+        }}
+      >
+        {inner}
+      </PersistQueryClientProvider>
+    );
+  }
+
   return (
-    <QueryClientProvider client={queryClient}>
-      <AuthProvider>
-        <ClientImpersonationProvider>
-          {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
-          <Outlet />
-          <Toaster position="top-right" theme="dark" richColors />
-          <ProgressDrawer />
-          <GlobalHighlight />
-          <OnlineOfflineBanner />
-          <PwaUpdateToast />
-        </ClientImpersonationProvider>
-      </AuthProvider>
-    </QueryClientProvider>
+    <QueryClientProvider client={queryClient}>{inner}</QueryClientProvider>
   );
 }
 
