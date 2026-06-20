@@ -38,12 +38,13 @@ export function EventPopupGate() {
 
   const next = (() => {
     if (!data) return null;
+    const acknowledged = data.acks instanceof Set ? data.acks : new Set<string>();
     for (const ev of data.events) {
       const c = computeCountdown(ev.event_date);
       const match = matchMilestone(c.daysRemaining);
       if (!match) continue;
       const key = `${ev.id}:${match}`;
-      if (data.acks.has(key) || dismissed.has(key)) continue;
+      if (acknowledged.has(key) || dismissed.has(key)) continue;
       return { ev, offset: match, countdown: c };
     }
     return null;

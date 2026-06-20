@@ -123,9 +123,10 @@ export function FormPopupGate() {
 
   const eligible = useMemo(() => {
     const dow = new Date().getDay(); // 0 = Sunday
+    const dismissed = dismissedIds instanceof Set ? dismissedIds : new Set<string>();
     return (forms as PopupForm[]).filter((f) => {
       if (!f.popup_enabled) return false;
-      if (dismissedIds.has(f.id)) return false;
+      if (dismissed.has(f.id)) return false;
       const days = f.popup_weekdays ?? [];
       if (days.length > 0 && !days.includes(dow)) return false;
       if (!inDateRange(f.popup_start_date, f.popup_end_date)) return false;
