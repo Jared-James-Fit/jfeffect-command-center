@@ -649,6 +649,9 @@ export function MessageThread({
   const { data: messages = [] } = useQuery({
     queryKey: ["messages", clientId, role],
     enabled: !!clientId,
+    staleTime: 0,
+    refetchOnWindowFocus: false,
+    refetchOnMount: false,
     queryFn: () => listMessages(clientId, { includeInternal: role === "admin", limit: 100 }),
   });
 
@@ -773,6 +776,11 @@ export function MessageThread({
   };
 
   // Realtime
+  const messageIdsRef = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    messageIdsRef.current = new Set(allMessages.map((m) => m.id));
+  }, [allMessages]);
+
   useEffect(() => {
     if (!clientId) return;
     const ch = supabase
@@ -782,8 +790,11 @@ export function MessageThread({
         qc.invalidateQueries({ queryKey: ["conversation-states"] });
         qc.invalidateQueries({ queryKey: ["notifications"] });
       })
-      .on("postgres_changes", { event: "*", schema: "public", table: "message_reactions" }, () => {
-        qc.invalidateQueries({ queryKey: ["message-reactions", clientId] });
+      .on("postgres_changes", { event: "*", schema: "public", table: "message_reactions" }, (payload: any) => {
+        const msgId = payload.new?.message_id ?? payload.old?.message_id;
+        if (msgId && messageIdsRef.current.has(msgId)) {
+          qc.invalidateQueries({ queryKey: ["message-reactions", clientId] });
+        }
       })
       .subscribe();
     return () => { supabase.removeChannel(ch); };
