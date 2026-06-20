@@ -1,6 +1,6 @@
 import {
   LayoutDashboard, Users, CreditCard, DollarSign,
-  Package, FileText, Dumbbell, FolderOpen, Calendar, Layers,
+  Package, Dumbbell, FolderOpen, Calendar, Layers,
   Settings, Briefcase, Apple, ClipboardCheck, UserCog, MessageCircle, Video,
   UserCheck, FileSignature, Film,
   ClipboardList, FileEdit,
@@ -185,7 +185,6 @@ export const clientNav: NavItem[] = [
   { to: "/portal/calendar", label: "Calendar", icon: Calendar },
   { to: "/portal/appointments", label: "Appointments", icon: Calendar },
   { to: "/portal/events", label: "Events", icon: Calendar },
-  { to: "/portal/documents", label: "Documents", icon: FileText },
   { to: "/portal/account", label: "Account Settings", icon: Settings },
 ];
 

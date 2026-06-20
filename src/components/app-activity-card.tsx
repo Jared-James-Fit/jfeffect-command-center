@@ -169,7 +169,6 @@ function prettyRoute(path: string): string {
     "/portal/calendar": "Calendar",
     "/portal/agreements": "Agreements",
     "/portal/purchases": "Purchases",
-    "/portal/documents": "Documents",
     "/portal/account": "Account",
     "/portal/nutrition-targets": "Nutrition",
     "/portal/exercises": "Exercises",
