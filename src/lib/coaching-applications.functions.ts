@@ -44,6 +44,10 @@ const submitSchema = z.object({
   // Bot trap
   honeypot: z.string().max(0).optional().default(""),
 
+  // Marketing attribution
+  source_page: z.string().trim().max(80).optional().default(""),
+  page_url: z.string().trim().max(500).optional().default(""),
+
   // Legacy fields still accepted for back-compat but ignored
   last_name: z.string().trim().max(60).optional().default(""),
 }).refine((d) => d.consent_contact === true, { message: "Consent required", path: ["consent_contact"] })
@@ -272,16 +276,51 @@ export const submitCoachingApplication = createServerFn({ method: "POST" })
       const isPriority = scored.qualification_label === "Priority Lead";
       const reviewLink = `https://jfeffect.com/admin/forms?tab=coaching-applications`;
       const startLabel = (data.timeline || "no timeline").replace(/_/g, " ");
-      const smsBody = `New JF Effect application: ${data.first_name} — ${scored.qualification_label}, score ${scored.score}. Goal: ${data.main_goal}. Start: ${startLabel}. Review: ${reviewLink}`;
+      const submittedAt = new Date();
+      const submittedAtStr = submittedAt.toLocaleString("en-CA", {
+        timeZone: "America/Winnipeg", dateStyle: "medium", timeStyle: "short",
+      }) + " CT";
+      const sourceLabel = data.source_page
+        ? data.source_page.replace(/_/g, " ")
+        : "coaching apply";
+      const pageRef = data.page_url || `/${data.source_page || "coaching/apply"}`;
+      const smsBody =
+        `New JF Effect application (${sourceLabel}): ${data.first_name} — ${scored.qualification_label}, score ${scored.score}. ` +
+        `Goal: ${data.main_goal}. Start: ${startLabel}. Phone: ${data.phone}. Submitted: ${submittedAtStr}. Review: ${reviewLink}`;
       const emailBody = [
+        `New coaching application received.`,
+        ``,
+        `Submitted: ${submittedAtStr}`,
+        `Source page: ${sourceLabel}`,
+        `Page URL: ${pageRef}`,
+        ``,
+        `── Lead ──`,
         `Name: ${full_name}`,
-        `Score: ${scored.score} (${scored.qualification_label})`,
-        `Goal: ${data.main_goal}`,
-        `Start: ${startLabel}`,
-        `Coaching interest: ${data.coaching_interest || "not specified"}`,
-        `Preferred contact: ${data.preferred_contact || "not specified"}`,
-        `Phone: ${data.phone}`,
         `Email: ${data.email}`,
+        `Phone: ${data.phone}`,
+        `Instagram: ${data.instagram || "—"}`,
+        `Preferred contact: ${data.preferred_contact || "not specified"}`,
+        `Best time: ${data.best_time || "not specified"}`,
+        ``,
+        `── Application ──`,
+        `Main goal: ${data.main_goal}`,
+        `Target outcome: ${data.target_outcome || "—"}`,
+        `Obstacle: ${data.obstacle || "—"}${data.obstacle_other ? ` (${data.obstacle_other})` : ""}`,
+        `Training location: ${data.training_location || "—"}`,
+        `Days/week: ${data.days_per_week ?? "—"}`,
+        `Start: ${startLabel}`,
+        `Coaching interest: ${data.coaching_interest || "—"}`,
+        `Readiness: ${data.readiness || "—"}`,
+        `Tracking willingness: ${data.tracking_willingness || "—"}`,
+        `Investment readiness: ${data.investment_readiness || "—"}`,
+        `Why now: ${data.why_now || "—"}`,
+        `Why-now tags: ${(data.why_now_tags || []).join(", ") || "—"}`,
+        ``,
+        `── Scoring ──`,
+        `Score: ${scored.score} (${scored.qualification_label})`,
+        `Temperature: ${scored.temperature}`,
+        `Recommended offer: ${scored.recommended_offer}`,
+        ``,
         `Review: ${reviewLink}`,
       ].join("\n");
       await notifyCoachingAppRecipients(supabaseAdmin, {
@@ -289,11 +328,28 @@ export const submitCoachingApplication = createServerFn({ method: "POST" })
         event_key: inserted.id,
         priority: isPriority,
         smsBody,
-        emailSubject: `New Coaching Application — ${data.first_name} — ${scored.qualification_label}`,
+        emailSubject: `New Coaching Application (${sourceLabel}) — ${data.first_name} — ${scored.qualification_label}`,
         emailBody,
       });
     } catch (e) {
       console.warn("[coaching-app] notify failed", e);
+    }
+
+    // Send confirmation email to applicant (best-effort)
+    try {
+      const { sendApplicantConfirmationEmail } = await import("./coaching-app-notify.server");
+      await sendApplicantConfirmationEmail(supabaseAdmin, {
+        to: data.email,
+        firstName: data.first_name,
+        applicationId: inserted.id,
+        submittedAtStr: new Date().toLocaleString("en-CA", {
+          timeZone: "America/Winnipeg", dateStyle: "medium", timeStyle: "short",
+        }) + " CT",
+        sourcePage: data.source_page || "coaching/apply",
+        mainGoal: data.main_goal,
+      });
+    } catch (e) {
+      console.warn("[coaching-app] applicant confirmation failed", e);
     }
 
     const canBook = !!bookingSlug && (scored.temperature !== "cold" || allowCold);
