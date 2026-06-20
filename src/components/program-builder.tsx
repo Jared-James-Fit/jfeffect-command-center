@@ -650,8 +650,6 @@ function exerciseMatchesFilter(ex: ExerciseRef, f: string): boolean {
   return hay.includes(needle);
 }
 
-}
-
 export function ExerciseLibraryPanel({
   exercises,
   recentIds = [],
