@@ -25,6 +25,22 @@ export function RouterErrorFallback({ error, reset }: Props) {
     attemptChunkReload("router-error-boundary");
   }, [chunkError]);
 
+  useEffect(() => {
+    if (chunkError) return;
+    if (autoRetried) return;
+    setAutoRetried(true);
+    // Surface the underlying error so we can see why routes fail in
+    // production logs (Sentry/console). Without this the fallback UI is
+    // the only signal that something went wrong.
+    // eslint-disable-next-line no-console
+    console.error("[router-error]", error);
+    const id = window.setTimeout(() => {
+      void router.invalidate().then(() => reset());
+    }, 600);
+    return () => window.clearTimeout(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   if (chunkError) {
     return (
       <div className="flex min-h-[60vh] items-center justify-center px-4">
@@ -53,21 +69,6 @@ export function RouterErrorFallback({ error, reset }: Props) {
       </div>
     );
   }
-
-  useEffect(() => {
-    if (autoRetried) return;
-    setAutoRetried(true);
-    // Surface the underlying error so we can see why routes fail in
-    // production logs (Sentry/console). Without this the fallback UI is
-    // the only signal that something went wrong.
-    // eslint-disable-next-line no-console
-    console.error("[router-error]", error);
-    const id = window.setTimeout(() => {
-      void router.invalidate().then(() => reset());
-    }, 600);
-    return () => window.clearTimeout(id);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
 
   if (!autoRetried) {
     return (
