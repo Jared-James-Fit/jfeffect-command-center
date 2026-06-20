@@ -5,12 +5,14 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Apple, Plus, Pencil, Trash2, Copy, Droplet } from "lucide-react";
+import { Download } from "lucide-react";
 import { toast } from "sonner";
 import { NutritionTargetDialog } from "./nutrition-target-dialog";
 import { deriveTarget } from "@/lib/nutrition-cardio";
 import { WaterTargetDialog } from "@/components/progress/water-target-dialog";
 import { ensureWaterTarget, formatWater } from "@/lib/water";
 import { useAuth } from "@/lib/auth";
+import { downloadNutritionTargetsPdf } from "@/lib/nutrition-targets-pdf";
 
 export function NutritionTargetsPanel({ clientId }: { clientId: string }) {
   const qc = useQueryClient();
@@ -75,6 +77,33 @@ export function NutritionTargetsPanel({ clientId }: { clientId: string }) {
     toast.success("Duplicated");
   };
 
+  const downloadPdf = (t: any) => {
+    try {
+      const days: any[] = t.nutrition_target_days ?? [];
+      const valued = days.filter((d) => d.calories != null || d.protein != null || d.carbs != null || d.fats != null);
+      const avg = (key: string) => {
+        if (!valued.length) return 0;
+        const sum = valued.reduce((acc, d) => acc + (Number(d[key]) || 0), 0);
+        return sum / valued.length;
+      };
+      const phaseName = t.phase === "Custom" ? t.custom_phase : t.phase;
+      const goalName = t.goal === "Custom" ? t.custom_goal : t.goal;
+      downloadNutritionTargetsPdf({
+        name: [phaseName, goalName].filter(Boolean).join(" · "),
+        calories: avg("calories"),
+        protein: avg("protein"),
+        carbs: avg("carbs"),
+        fats: avg("fats"),
+        water: waterTarget?.active_ml ?? undefined,
+        notes: t.notes ?? undefined,
+        updatedAt: t.updated_at ? new Date(t.updated_at).toLocaleDateString() : undefined,
+      });
+    } catch (err) {
+      console.error("Nutrition targets PDF failed", err);
+      toast.error("Couldn't generate PDF. Please try again.");
+    }
+  };
+
   return (
     <Card className="border-border bg-card p-6 md:col-span-3 space-y-4">
       <div className="flex items-center justify-between">
@@ -121,6 +150,7 @@ export function NutritionTargetsPanel({ clientId }: { clientId: string }) {
                   </div>
                   <div className="flex gap-1">
                     <Button size="sm" variant="ghost" onClick={() => duplicate(t)}><Copy className="h-4 w-4" /></Button>
+                    <Button size="sm" variant="ghost" onClick={() => downloadPdf(t)} title="Download PDF"><Download className="h-4 w-4" /></Button>
                     <Button size="sm" variant="ghost" onClick={() => { setEditing(t); setOpen(true); }}><Pencil className="h-4 w-4" /></Button>
                     <Button size="sm" variant="ghost" className="text-destructive" onClick={() => del(t)}><Trash2 className="h-4 w-4" /></Button>
                   </div>
