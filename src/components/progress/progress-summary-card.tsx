@@ -75,7 +75,7 @@ export function ProgressSummaryCard({
       const { data } = await supabase
         .from("lift_videos")
         .select("created_at")
-        .eq("user_id", userId)
+        .eq("uploaded_by", userId)
         .order("created_at", { ascending: false })
         .limit(1)
         .maybeSingle();
