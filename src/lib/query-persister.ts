@@ -20,6 +20,8 @@ const DO_NOT_PERSIST_PREFIXES = [
   "setup-prompts-",
   "broadcasts-",
   "admin-",
+  "chat-gif-favorites",
+  "chat-sound-favorites",
 ];
 
 export function shouldPersistQueryKey(queryKey: readonly unknown[]): boolean {
