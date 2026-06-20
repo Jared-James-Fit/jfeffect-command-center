@@ -837,8 +837,8 @@ export function MessageThread({
   }, [clientId]);
 
   const visibleMessages = useMemo(
-    () => role === "admin" ? messages : messages.filter((m) => !m.is_internal_note),
-    [messages, role],
+    () => role === "admin" ? allMessages : allMessages.filter((m) => !m.is_internal_note),
+    [allMessages, role],
   );
 
   // Id of the latest message I sent (for inline "Read/Sent" receipt).
