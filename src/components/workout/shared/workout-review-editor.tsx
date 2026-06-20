@@ -287,3 +287,42 @@ export function WorkoutReviewEditor({
     </Sheet>
   );
 }
+
+function PillQuestion({
+  legend,
+  options,
+  value,
+  onChange,
+}: {
+  legend: string;
+  options: string[];
+  value: string | null;
+  onChange: (v: string | null) => void;
+}) {
+  return (
+    <fieldset className="space-y-2">
+      <legend className="text-sm font-bold">{legend}</legend>
+      <div className="grid grid-cols-3 gap-2">
+        {options.map((opt) => {
+          const active = value === opt;
+          return (
+            <button
+              key={opt}
+              type="button"
+              onClick={() => onChange(active ? null : opt)}
+              aria-pressed={active}
+              className={cn(
+                "h-11 rounded-xl border text-sm font-bold transition-colors",
+                active
+                  ? "border-primary bg-primary text-primary-foreground"
+                  : "border-border bg-card text-muted-foreground hover:bg-secondary/40",
+              )}
+            >
+              {opt}
+            </button>
+          );
+        })}
+      </div>
+    </fieldset>
+  );
+}
