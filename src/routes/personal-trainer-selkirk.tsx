@@ -10,21 +10,24 @@ import {
   ShieldCheck, Scale, Trophy, Brain, Apple,
 } from "lucide-react";
 
-const TITLE = "Personal Trainer Selkirk MB | Beginner Friendly Personal Training";
+const TITLE = "Personal Trainer Selkirk MB | JF Effect Coaching";
 const DESCRIPTION =
-  "Looking for a personal trainer in Selkirk? Jared James helps beginners lose weight, build confidence, learn the gym, gain strength, and create lasting fitness habits. Sessions start at $100.";
+  "Personal training in Selkirk, Manitoba for fat loss, strength, muscle building, powerlifting, and bodybuilding. Work with JF Effect online or in person at Iron Image Gym.";
 const URL = "https://jfeffect.com/personal-trainer-selkirk";
+const OG_IMAGE = "https://jfeffect.com/icon-1024.png";
 
 const BOOK_HREF = "/coaching/apply?from=selkirk";
 const EXTERNAL_HREF = "https://jaredjamesfit.com";
 
 const faq = [
-  { q: "How much does personal training cost in Selkirk?", a: "Personal training sessions are $100 each. Package options are available." },
-  { q: "Do I need gym experience?", a: "No. Most beginners start with little or no experience." },
-  { q: "Will I be judged?", a: "Absolutely not. The entire process is designed to help people feel comfortable and confident." },
-  { q: "Can you help me lose weight?", a: "Yes. Weight loss is one of the most common goals clients have." },
-  { q: "Do you coach advanced lifters too?", a: "Yes. Jared also coaches strength athletes and powerlifters." },
-  { q: "Where are sessions located?", a: "Iron Image Gym in Selkirk, Manitoba." },
+  { q: "Do you offer personal training in Selkirk?", a: "Yes. JF Effect offers one-on-one personal training in Selkirk, Manitoba for beginners through advanced lifters." },
+  { q: "Where do sessions take place?", a: "In-person sessions are held at Iron Image Gym in Selkirk, Manitoba." },
+  { q: "Do you offer online coaching too?", a: "Yes. If you can't train in person, JF Effect online coaching covers training, nutrition, and accountability from anywhere." },
+  { q: "Can beginners work with JF Effect?", a: "Absolutely. Most clients start with little or no gym experience. The whole process is built to make beginners feel comfortable and confident." },
+  { q: "Do you help with fat loss?", a: "Yes. Fat loss is one of the most common goals clients come in with, and coaching combines training, nutrition, and habits to make it sustainable." },
+  { q: "Do you coach powerlifting and bodybuilding?", a: "Yes. Jared is a competitive powerlifter and coaches strength, powerlifting, and bodybuilding-focused clients alongside general fitness." },
+  { q: "How much does personal training cost in Selkirk?", a: "Personal training sessions are $100 each. Package options are available — book a free consultation to find the right fit." },
+  { q: "How do I get started?", a: "Apply through the form on this page. We'll reach out to book your free consultation and map out the plan." },
 ];
 
 export const Route = createFileRoute("/personal-trainer-selkirk")({
@@ -33,14 +36,18 @@ export const Route = createFileRoute("/personal-trainer-selkirk")({
     meta: [
       { title: TITLE },
       { name: "description", content: DESCRIPTION },
-      { name: "keywords", content: "personal trainer Selkirk, fitness coach Selkirk, beginner personal trainer Selkirk, weight loss coach Selkirk, gym coaching Selkirk, strength coach Selkirk, personal training Selkirk Manitoba" },
       { property: "og:title", content: TITLE },
       { property: "og:description", content: DESCRIPTION },
       { property: "og:type", content: "website" },
       { property: "og:url", content: URL },
+      { property: "og:image", content: OG_IMAGE },
+      { property: "og:site_name", content: "JF Effect" },
       { name: "twitter:card", content: "summary_large_image" },
       { name: "twitter:title", content: TITLE },
       { name: "twitter:description", content: DESCRIPTION },
+      { name: "twitter:image", content: OG_IMAGE },
+      { name: "geo.region", content: "CA-MB" },
+      { name: "geo.placename", content: "Selkirk, Manitoba" },
     ],
     links: [{ rel: "canonical", href: URL }],
     scripts: [
@@ -48,11 +55,12 @@ export const Route = createFileRoute("/personal-trainer-selkirk")({
         type: "application/ld+json",
         children: JSON.stringify({
           "@context": "https://schema.org",
-          "@type": "LocalBusiness",
-          name: "Jared James — Personal Training Selkirk",
-          image: "https://jfeffect.com/og-default.jpg",
+          "@type": ["LocalBusiness", "ProfessionalService", "HealthAndBeautyBusiness"],
+          "@id": URL + "#business",
+          name: "JF Effect — Personal Training Selkirk",
+          image: OG_IMAGE,
           url: URL,
-          telephone: "",
+          telephone: "+1-204-229-4913",
           priceRange: "$100",
           address: {
             "@type": "PostalAddress",
@@ -61,8 +69,39 @@ export const Route = createFileRoute("/personal-trainer-selkirk")({
             addressRegion: "MB",
             addressCountry: "CA",
           },
-          areaServed: "Selkirk, Manitoba",
+          areaServed: [
+            { "@type": "City", name: "Selkirk" },
+            { "@type": "AdministrativeArea", name: "Manitoba" },
+          ],
+          serviceType: [
+            "Personal Training",
+            "Fitness Coaching",
+            "Strength Coaching",
+            "Fat Loss Coaching",
+            "Powerlifting Coaching",
+            "Bodybuilding Coaching",
+            "Online Coaching",
+          ],
+          hasOfferCatalog: {
+            "@type": "OfferCatalog",
+            name: "Personal Training Services",
+            itemListElement: [
+              { "@type": "Offer", itemOffered: { "@type": "Service", name: "In-Person Personal Training (Selkirk, MB)" } },
+              { "@type": "Offer", itemOffered: { "@type": "Service", name: "Online Coaching" } },
+              { "@type": "Offer", itemOffered: { "@type": "Service", name: "Fat Loss Coaching" } },
+              { "@type": "Offer", itemOffered: { "@type": "Service", name: "Strength & Powerlifting Coaching" } },
+              { "@type": "Offer", itemOffered: { "@type": "Service", name: "Bodybuilding Coaching" } },
+            ],
+          },
+          sameAs: ["https://jaredjamesfit.com"],
           description: DESCRIPTION,
+          provider: {
+            "@type": "Person",
+            name: "Jared James",
+            jobTitle: "Personal Trainer & Strength Coach",
+            url: "https://jaredjamesfit.com",
+            worksFor: { "@type": "Organization", name: "JF Effect" },
+          },
         }),
       },
       {
@@ -75,6 +114,18 @@ export const Route = createFileRoute("/personal-trainer-selkirk")({
             name: f.q,
             acceptedAnswer: { "@type": "Answer", text: f.a },
           })),
+        }),
+      },
+      {
+        type: "application/ld+json",
+        children: JSON.stringify({
+          "@context": "https://schema.org",
+          "@type": "BreadcrumbList",
+          itemListElement: [
+            { "@type": "ListItem", position: 1, name: "Home", item: "https://jfeffect.com/" },
+            { "@type": "ListItem", position: 2, name: "Coaching", item: "https://jfeffect.com/coaching" },
+            { "@type": "ListItem", position: 3, name: "Personal Trainer Selkirk", item: URL },
+          ],
         }),
       },
     ],
