@@ -66,7 +66,6 @@ import { Route as AuthenticatedPortalLiftVideosRouteImport } from './routes/_aut
 import { Route as AuthenticatedPortalGoalsSetupRouteImport } from './routes/_authenticated/portal/goals-setup'
 import { Route as AuthenticatedPortalExercisesRouteImport } from './routes/_authenticated/portal/exercises'
 import { Route as AuthenticatedPortalEventsRouteImport } from './routes/_authenticated/portal/events'
-import { Route as AuthenticatedPortalDocumentsRouteImport } from './routes/_authenticated/portal/documents'
 import { Route as AuthenticatedPortalCheckInsRouteImport } from './routes/_authenticated/portal/check-ins'
 import { Route as AuthenticatedPortalCheckInRouteImport } from './routes/_authenticated/portal/check-in'
 import { Route as AuthenticatedPortalCalendarRouteImport } from './routes/_authenticated/portal/calendar'
@@ -567,12 +566,6 @@ const AuthenticatedPortalEventsRoute =
   AuthenticatedPortalEventsRouteImport.update({
     id: '/events',
     path: '/events',
-    getParentRoute: () => AuthenticatedPortalRouteRoute,
-  } as any)
-const AuthenticatedPortalDocumentsRoute =
-  AuthenticatedPortalDocumentsRouteImport.update({
-    id: '/documents',
-    path: '/documents',
     getParentRoute: () => AuthenticatedPortalRouteRoute,
   } as any)
 const AuthenticatedPortalCheckInsRoute =
@@ -1893,7 +1886,6 @@ export interface FileRoutesByFullPath {
   '/portal/calendar': typeof AuthenticatedPortalCalendarRoute
   '/portal/check-in': typeof AuthenticatedPortalCheckInRoute
   '/portal/check-ins': typeof AuthenticatedPortalCheckInsRouteWithChildren
-  '/portal/documents': typeof AuthenticatedPortalDocumentsRoute
   '/portal/events': typeof AuthenticatedPortalEventsRouteWithChildren
   '/portal/exercises': typeof AuthenticatedPortalExercisesRoute
   '/portal/goals-setup': typeof AuthenticatedPortalGoalsSetupRoute
@@ -2147,7 +2139,6 @@ export interface FileRoutesByTo {
   '/portal/calendar': typeof AuthenticatedPortalCalendarRoute
   '/portal/check-in': typeof AuthenticatedPortalCheckInRoute
   '/portal/check-ins': typeof AuthenticatedPortalCheckInsRouteWithChildren
-  '/portal/documents': typeof AuthenticatedPortalDocumentsRoute
   '/portal/events': typeof AuthenticatedPortalEventsRouteWithChildren
   '/portal/exercises': typeof AuthenticatedPortalExercisesRoute
   '/portal/goals-setup': typeof AuthenticatedPortalGoalsSetupRoute
@@ -2408,7 +2399,6 @@ export interface FileRoutesById {
   '/_authenticated/portal/calendar': typeof AuthenticatedPortalCalendarRoute
   '/_authenticated/portal/check-in': typeof AuthenticatedPortalCheckInRoute
   '/_authenticated/portal/check-ins': typeof AuthenticatedPortalCheckInsRouteWithChildren
-  '/_authenticated/portal/documents': typeof AuthenticatedPortalDocumentsRoute
   '/_authenticated/portal/events': typeof AuthenticatedPortalEventsRouteWithChildren
   '/_authenticated/portal/exercises': typeof AuthenticatedPortalExercisesRoute
   '/_authenticated/portal/goals-setup': typeof AuthenticatedPortalGoalsSetupRoute
@@ -2669,7 +2659,6 @@ export interface FileRouteTypes {
     | '/portal/calendar'
     | '/portal/check-in'
     | '/portal/check-ins'
-    | '/portal/documents'
     | '/portal/events'
     | '/portal/exercises'
     | '/portal/goals-setup'
@@ -2923,7 +2912,6 @@ export interface FileRouteTypes {
     | '/portal/calendar'
     | '/portal/check-in'
     | '/portal/check-ins'
-    | '/portal/documents'
     | '/portal/events'
     | '/portal/exercises'
     | '/portal/goals-setup'
@@ -3183,7 +3171,6 @@ export interface FileRouteTypes {
     | '/_authenticated/portal/calendar'
     | '/_authenticated/portal/check-in'
     | '/_authenticated/portal/check-ins'
-    | '/_authenticated/portal/documents'
     | '/_authenticated/portal/events'
     | '/_authenticated/portal/exercises'
     | '/_authenticated/portal/goals-setup'
@@ -3760,13 +3747,6 @@ declare module '@tanstack/react-router' {
       path: '/events'
       fullPath: '/portal/events'
       preLoaderRoute: typeof AuthenticatedPortalEventsRouteImport
-      parentRoute: typeof AuthenticatedPortalRouteRoute
-    }
-    '/_authenticated/portal/documents': {
-      id: '/_authenticated/portal/documents'
-      path: '/documents'
-      fullPath: '/portal/documents'
-      preLoaderRoute: typeof AuthenticatedPortalDocumentsRouteImport
       parentRoute: typeof AuthenticatedPortalRouteRoute
     }
     '/_authenticated/portal/check-ins': {
@@ -5789,7 +5769,6 @@ interface AuthenticatedPortalRouteRouteChildren {
   AuthenticatedPortalCalendarRoute: typeof AuthenticatedPortalCalendarRoute
   AuthenticatedPortalCheckInRoute: typeof AuthenticatedPortalCheckInRoute
   AuthenticatedPortalCheckInsRoute: typeof AuthenticatedPortalCheckInsRouteWithChildren
-  AuthenticatedPortalDocumentsRoute: typeof AuthenticatedPortalDocumentsRoute
   AuthenticatedPortalEventsRoute: typeof AuthenticatedPortalEventsRouteWithChildren
   AuthenticatedPortalExercisesRoute: typeof AuthenticatedPortalExercisesRoute
   AuthenticatedPortalGoalsSetupRoute: typeof AuthenticatedPortalGoalsSetupRoute
@@ -5821,7 +5800,6 @@ const AuthenticatedPortalRouteRouteChildren: AuthenticatedPortalRouteRouteChildr
     AuthenticatedPortalCheckInRoute: AuthenticatedPortalCheckInRoute,
     AuthenticatedPortalCheckInsRoute:
       AuthenticatedPortalCheckInsRouteWithChildren,
-    AuthenticatedPortalDocumentsRoute: AuthenticatedPortalDocumentsRoute,
     AuthenticatedPortalEventsRoute: AuthenticatedPortalEventsRouteWithChildren,
     AuthenticatedPortalExercisesRoute: AuthenticatedPortalExercisesRoute,
     AuthenticatedPortalGoalsSetupRoute: AuthenticatedPortalGoalsSetupRoute,
