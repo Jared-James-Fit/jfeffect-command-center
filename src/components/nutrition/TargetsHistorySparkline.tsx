@@ -20,13 +20,18 @@ export function TargetsHistorySparkline() {
     queryKey: ["m-targets-history"],
     queryFn: () => fn({}) as Promise<Row[]>,
     staleTime: 60_000,
+    retry: false,
   });
 
-  if (isLoading || !data || data.length < 2) return null;
+  if (isLoading || !Array.isArray(data) || data.length < 2) return null;
 
   // Server returns newest first — flip to chronological for the chart.
   const rows = [...data].reverse();
-  const values = rows.map((r) => Number(r.calories ?? 0));
+  const values = rows.map((r) => {
+    const n = Number(r?.calories ?? 0);
+    return Number.isFinite(n) ? n : 0;
+  });
+  if (!values.length) return null;
   const min = Math.min(...values);
   const max = Math.max(...values);
   const range = Math.max(1, max - min);
@@ -46,10 +51,16 @@ export function TargetsHistorySparkline() {
     delta > 0 ? "text-emerald-500" : delta < 0 ? "text-amber-500" : "text-muted-foreground";
 
   const latest = rows[rows.length - 1];
-  const latestDate = new Date(latest.created_at).toLocaleDateString(undefined, {
-    month: "short",
-    day: "numeric",
-  });
+  const latestDate = (() => {
+    if (!latest?.created_at) return "";
+    const d = new Date(latest.created_at);
+    if (isNaN(d.getTime())) return "";
+    try {
+      return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+    } catch {
+      return "";
+    }
+  })();
 
   return (
     <Card className="p-4">
