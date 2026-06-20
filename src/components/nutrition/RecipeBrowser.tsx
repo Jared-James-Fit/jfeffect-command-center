@@ -89,11 +89,12 @@ export function RecipeBrowser({ viewer, userId, goals = [] }: RecipeBrowserProps
     queryFn: listRecipesForViewer,
   });
 
-  const { data: unseen = new Set<string>() } = useQuery({
+  const { data: unseenIds = [] } = useQuery({
     queryKey: ["nutrition-recipes-unseen", userId],
     enabled: !!userId,
-    queryFn: () => listRecipeUnseen(userId!),
+    queryFn: async () => Array.from(await listRecipeUnseen(userId!)),
   });
+  const unseen = useMemo(() => new Set(unseenIds), [unseenIds]);
 
   const filtered = useMemo(() => {
     const term = q.trim().toLowerCase();
