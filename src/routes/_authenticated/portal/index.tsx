@@ -29,6 +29,7 @@ import { listMyPortalAppointments } from "@/lib/appointments.functions";
 import { useServerFn } from "@tanstack/react-start";
 import { format, parseISO, isToday, isTomorrow } from "date-fns";
 import { SectionErrorBoundary } from "@/components/section-error-boundary";
+import { DashboardRefreshIndicator } from "@/components/portal/dashboard-refresh-indicator";
 
 export const Route = createFileRoute("/_authenticated/portal/")({ component: PortalHome });
 
@@ -368,6 +369,9 @@ function PortalHome() {
           avatarUrl={(client as any)?.profile_picture_url ?? null}
           unreadCount={unreadMsgs.length}
         />
+        <div className="-mt-2 flex justify-end">
+          <DashboardRefreshIndicator />
+        </div>
 
         {/* 2 — Profile-missing fallback (workouts moved off the dashboard
             for perf — clients reach training via Quick Actions / nav). */}
