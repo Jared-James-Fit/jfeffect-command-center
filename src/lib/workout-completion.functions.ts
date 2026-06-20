@@ -624,6 +624,9 @@ const ReviewInput = z.intersection(
     painArea: z.string().nullable().optional(),
     painNote: z.string().nullable().optional(),
     clientNote: z.string().nullable().optional(),
+    strengthFeel: z.string().nullable().optional(),
+    fatigueFeel: z.string().nullable().optional(),
+    hitTarget: z.string().nullable().optional(),
     // When an admin/coach is in Client POV mode, the signed-in user has no
     // `clients` row of their own. Pass the impersonated client's id and we
     // resolve scope from that — after verifying the caller really is an
@@ -686,6 +689,9 @@ export const submitOrEditReview = createServerFn({ method: "POST" })
         pain_area: data.pain ? data.painArea ?? null : null,
         pain_note: data.pain ? data.painNote ?? null : null,
         client_note: data.clientNote ?? null,
+        strength_feel: data.strengthFeel ?? null,
+        fatigue_feel: data.fatigueFeel ?? null,
+        hit_target: data.hitTarget ?? null,
       };
 
       if (existing?.id) {
@@ -747,6 +753,9 @@ export const submitOrEditReview = createServerFn({ method: "POST" })
       pain_area: data.pain ? data.painArea ?? null : null,
       pain_note: data.pain ? data.painNote ?? null : null,
       client_note: data.clientNote ?? null,
+      strength_feel: data.strengthFeel ?? null,
+      fatigue_feel: data.fatigueFeel ?? null,
+      hit_target: data.hitTarget ?? null,
     };
 
     if (existing?.id) {
