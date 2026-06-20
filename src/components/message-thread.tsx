@@ -8,6 +8,7 @@ import {
   detectAttachmentType, MESSAGE_TYPES, PRIORITIES, QUICK_REPLIES, priorityTone,
   editMessage, deleteMessageForEveryone,
   listReactions, toggleReaction, REACTION_EMOJIS,
+  listOlderMessages,
   type Message, type MessageAttachment, type SenderRole, type ConversationState,
   type MessageReaction,
 } from "@/lib/messages";
@@ -648,8 +649,47 @@ export function MessageThread({
   const { data: messages = [] } = useQuery({
     queryKey: ["messages", clientId, role],
     enabled: !!clientId,
-    queryFn: () => listMessages(clientId, { includeInternal: role === "admin" }),
+    queryFn: () => listMessages(clientId, { includeInternal: role === "admin", limit: 100 }),
   });
+
+  const [olderMessages, setOlderMessages] = useState<Message[]>([]);
+  const [loadingOlder, setLoadingOlder] = useState(false);
+  // Reset the older-messages buffer when switching conversations or roles.
+  useEffect(() => {
+    setOlderMessages([]);
+  }, [clientId, role]);
+
+  const allMessages = useMemo(() => {
+    if (olderMessages.length === 0) return messages;
+    const seen = new Set(messages.map((m) => m.id));
+    const uniqueOlder = olderMessages.filter((m) => !seen.has(m.id));
+    return [...uniqueOlder, ...messages];
+  }, [olderMessages, messages]);
+
+  const canLoadOlder = messages.length >= 100;
+
+  const loadOlder = async () => {
+    if (loadingOlder) return;
+    const earliest = allMessages[0];
+    if (!earliest) return;
+    setLoadingOlder(true);
+    try {
+      const older = await listOlderMessages(clientId, earliest.created_at, 50, {
+        includeInternal: role === "admin",
+      });
+      if (older.length) {
+        setOlderMessages((prev) => {
+          const seen = new Set([...prev, ...messages].map((m) => m.id));
+          const fresh = older.filter((m) => !seen.has(m.id));
+          return [...fresh, ...prev];
+        });
+      }
+    } catch (e: any) {
+      toast.error(e?.message ?? "Could not load earlier messages");
+    } finally {
+      setLoadingOlder(false);
+    }
+  };
 
   const { data: reactions = [] } = useQuery({
     queryKey: ["message-reactions", clientId],
@@ -797,8 +837,8 @@ export function MessageThread({
   }, [clientId]);
 
   const visibleMessages = useMemo(
-    () => role === "admin" ? messages : messages.filter((m) => !m.is_internal_note),
-    [messages, role],
+    () => role === "admin" ? allMessages : allMessages.filter((m) => !m.is_internal_note),
+    [allMessages, role],
   );
 
   // Id of the latest message I sent (for inline "Read/Sent" receipt).
@@ -1044,6 +1084,24 @@ export function MessageThread({
         onTouchEnd={onSwipeTouchEnd}
         onTouchCancel={onSwipeTouchEnd}
       >
+        {canLoadOlder && (
+          <div className="flex justify-center pb-1">
+            <Button
+              type="button"
+              size="sm"
+              variant="ghost"
+              className="h-7 rounded-full px-3 text-xs text-muted-foreground"
+              onClick={loadOlder}
+              disabled={loadingOlder}
+            >
+              {loadingOlder ? (
+                <><Loader2 className="mr-1.5 h-3 w-3 animate-spin" /> Loading…</>
+              ) : (
+                "Load earlier messages"
+              )}
+            </Button>
+          </div>
+        )}
         {visibleMessages.length === 0 ? (
           <div className="grid h-full place-items-center text-sm text-muted-foreground">
             {role === "client" ? "Send your coach a message to start the conversation." : "No messages yet."}
