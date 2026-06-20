@@ -1,7 +1,7 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { useAuth } from "@/lib/auth";
-import { AuthSplash } from "@/components/auth-splash";
+import { DashboardSplash } from "@/components/dashboard-splash";
 import { useClientImpersonation } from "@/lib/client-impersonation";
 
 export const Route = createFileRoute("/")({
@@ -50,5 +50,5 @@ function IndexRedirect() {
     }
   }, [user, role, loading, navigate, isImpersonating, hydrated]);
 
-  return <AuthSplash />;
+  return <DashboardSplash />;
 }
