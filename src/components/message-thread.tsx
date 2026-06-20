@@ -1084,6 +1084,24 @@ export function MessageThread({
         onTouchEnd={onSwipeTouchEnd}
         onTouchCancel={onSwipeTouchEnd}
       >
+        {canLoadOlder && (
+          <div className="flex justify-center pb-1">
+            <Button
+              type="button"
+              size="sm"
+              variant="ghost"
+              className="h-7 rounded-full px-3 text-xs text-muted-foreground"
+              onClick={loadOlder}
+              disabled={loadingOlder}
+            >
+              {loadingOlder ? (
+                <><Loader2 className="mr-1.5 h-3 w-3 animate-spin" /> Loading…</>
+              ) : (
+                "Load earlier messages"
+              )}
+            </Button>
+          </div>
+        )}
         {visibleMessages.length === 0 ? (
           <div className="grid h-full place-items-center text-sm text-muted-foreground">
             {role === "client" ? "Send your coach a message to start the conversation." : "No messages yet."}
