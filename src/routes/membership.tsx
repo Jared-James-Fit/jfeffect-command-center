@@ -31,6 +31,7 @@ import appPreviewAnalyticsOverview from "@/assets/app-preview-analytics-overview
 import appPreviewRecentPrs from "@/assets/app-preview-recent-prs.png.asset.json";
 import appPreview1rmChart from "@/assets/app-preview-1rm-chart.png.asset.json";
 import { TransformationsGallery } from "@/components/sales/transformations-gallery";
+import { CoachTimelineSection } from "@/components/sales/coach-timeline-section";
 
 function HeroSkeleton() {
   return (
@@ -381,6 +382,7 @@ export function SignupJf({ floatingHeader = false }: { floatingHeader?: boolean 
       /></Reveal>
 
       <Reveal><TransformationsGallery /></Reveal>
+      <Reveal><CoachTimelineSection /></Reveal>
 
       {/* 6. Membership vs Coaching — one-line low-priority cross-sell */}
       <Section>

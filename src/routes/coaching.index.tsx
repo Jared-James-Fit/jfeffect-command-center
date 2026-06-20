@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import { Reveal } from "@/components/sales/reveal";
 import { TransformationsGallery } from "@/components/sales/transformations-gallery";
+import { CoachTimelineSection } from "@/components/sales/coach-timeline-section";
 
 function HeroSkeleton() {
   return (
@@ -137,6 +138,7 @@ function CoachingPage() {
       /></Reveal>
 
       <Reveal><TransformationsGallery /></Reveal>
+      <Reveal><CoachTimelineSection /></Reveal>
 
       {/* 8. Coaching vs Membership */}
       <Reveal><CoachingVsMembership onApply={handleApply} /></Reveal>
