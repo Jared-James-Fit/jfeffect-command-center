@@ -39,17 +39,48 @@ export const Route = createFileRoute("/coaching/")({
   component: CoachingPage,
   head: () => ({
     meta: [
-      { title: "Private Coaching · By Application | JF Effect" },
-      { name: "description", content: "A plan built around your life. A coaching team that knows your numbers. Real progress, held to a standard. By application — limited spots." },
-      { property: "og:title", content: "Private Coaching · By Application | JF Effect" },
-      { property: "og:description", content: "A plan built around your life. A coaching team that knows your numbers. Real progress, held to a standard. By application — limited spots." },
+      { title: "Private 1:1 Fitness Coaching by Application | JF Effect" },
+      { name: "description", content: "Private 1:1 online fitness coaching for strength, fat loss, muscle, and powerlifting. A plan built around your life, weekly check-ins, and a coach who knows your numbers. By application." },
+      { property: "og:title", content: "Private 1:1 Fitness Coaching by Application | JF Effect" },
+      { property: "og:description", content: "Private 1:1 online fitness coaching for strength, fat loss, muscle, and powerlifting. A plan built around your life, weekly check-ins, and a coach who knows your numbers. By application." },
       { property: "og:type", content: "website" },
       { property: "og:url", content: "https://jfeffect.com/coaching" },
+      { property: "og:site_name", content: "JF Effect" },
       { name: "twitter:card", content: "summary_large_image" },
-      { name: "twitter:title", content: "Private Coaching · By Application | JF Effect" },
-      { name: "twitter:description", content: "A plan built around your life. A coaching team that knows your numbers. Real progress, held to a standard. By application — limited spots." },
+      { name: "twitter:title", content: "Private 1:1 Fitness Coaching by Application | JF Effect" },
+      { name: "twitter:description", content: "Private 1:1 online fitness coaching for strength, fat loss, muscle, and powerlifting. A plan built around your life, weekly check-ins, and a coach who knows your numbers. By application." },
     ],
     links: [{ rel: "canonical", href: "https://jfeffect.com/coaching" }],
+    scripts: [
+      {
+        type: "application/ld+json",
+        children: JSON.stringify({
+          "@context": "https://schema.org",
+          "@type": "Service",
+          name: "JF Effect Private Coaching",
+          serviceType: "Online Fitness Coaching",
+          provider: {
+            "@type": "Organization",
+            name: "JF Effect",
+            url: "https://jfeffect.com",
+          },
+          areaServed: { "@type": "Country", name: "Canada" },
+          url: "https://jfeffect.com/coaching",
+          description: "Private 1:1 online fitness coaching for strength, fat loss, muscle, and powerlifting.",
+        }),
+      },
+      {
+        type: "application/ld+json",
+        children: JSON.stringify({
+          "@context": "https://schema.org",
+          "@type": "BreadcrumbList",
+          itemListElement: [
+            { "@type": "ListItem", position: 1, name: "Home", item: "https://jfeffect.com/" },
+            { "@type": "ListItem", position: 2, name: "Coaching", item: "https://jfeffect.com/coaching" },
+          ],
+        }),
+      },
+    ],
   }),
 });
 
