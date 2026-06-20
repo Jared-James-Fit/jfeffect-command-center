@@ -8,6 +8,7 @@ import {
   detectAttachmentType, MESSAGE_TYPES, PRIORITIES, QUICK_REPLIES, priorityTone,
   editMessage, deleteMessageForEveryone,
   listReactions, toggleReaction, REACTION_EMOJIS,
+  listOlderMessages,
   type Message, type MessageAttachment, type SenderRole, type ConversationState,
   type MessageReaction,
 } from "@/lib/messages";
@@ -648,8 +649,47 @@ export function MessageThread({
   const { data: messages = [] } = useQuery({
     queryKey: ["messages", clientId, role],
     enabled: !!clientId,
-    queryFn: () => listMessages(clientId, { includeInternal: role === "admin" }),
+    queryFn: () => listMessages(clientId, { includeInternal: role === "admin", limit: 100 }),
   });
+
+  const [olderMessages, setOlderMessages] = useState<Message[]>([]);
+  const [loadingOlder, setLoadingOlder] = useState(false);
+  // Reset the older-messages buffer when switching conversations or roles.
+  useEffect(() => {
+    setOlderMessages([]);
+  }, [clientId, role]);
+
+  const allMessages = useMemo(() => {
+    if (olderMessages.length === 0) return messages;
+    const seen = new Set(messages.map((m) => m.id));
+    const uniqueOlder = olderMessages.filter((m) => !seen.has(m.id));
+    return [...uniqueOlder, ...messages];
+  }, [olderMessages, messages]);
+
+  const canLoadOlder = messages.length >= 100;
+
+  const loadOlder = async () => {
+    if (loadingOlder) return;
+    const earliest = allMessages[0];
+    if (!earliest) return;
+    setLoadingOlder(true);
+    try {
+      const older = await listOlderMessages(clientId, earliest.created_at, 50, {
+        includeInternal: role === "admin",
+      });
+      if (older.length) {
+        setOlderMessages((prev) => {
+          const seen = new Set([...prev, ...messages].map((m) => m.id));
+          const fresh = older.filter((m) => !seen.has(m.id));
+          return [...fresh, ...prev];
+        });
+      }
+    } catch (e: any) {
+      toast.error(e?.message ?? "Could not load earlier messages");
+    } finally {
+      setLoadingOlder(false);
+    }
+  };
 
   const { data: reactions = [] } = useQuery({
     queryKey: ["message-reactions", clientId],
