@@ -39,6 +39,9 @@ export type ReviewInitial = {
   clientNote?: string | null;
   editCount?: number | null;
   submittedAt?: string | null;
+  strengthFeel?: string | null;
+  fatigueFeel?: string | null;
+  hitTarget?: string | null;
 };
 
 type Props = {
@@ -69,6 +72,9 @@ export function WorkoutReviewEditor({
   const [pain, setPain] = useState<boolean>(!!initial?.pain);
   const [painLevel, setPainLevel] = useState<number | null>(initial?.painLevel ?? null);
   const [note, setNote] = useState<string>(initial?.clientNote ?? "");
+  const [strengthFeel, setStrengthFeel] = useState<string | null>(initial?.strengthFeel ?? null);
+  const [fatigueFeel, setFatigueFeel] = useState<string | null>(initial?.fatigueFeel ?? null);
+  const [hitTarget, setHitTarget] = useState<string | null>(initial?.hitTarget ?? null);
 
   useEffect(() => {
     if (!open) return;
@@ -77,6 +83,9 @@ export function WorkoutReviewEditor({
     setPain(!!initial?.pain);
     setPainLevel(initial?.painLevel ?? null);
     setNote(initial?.clientNote ?? "");
+    setStrengthFeel(initial?.strengthFeel ?? null);
+    setFatigueFeel(initial?.fatigueFeel ?? null);
+    setHitTarget(initial?.hitTarget ?? null);
   }, [open, initial?.submittedAt]);
 
   const mutation = useMutation({
@@ -92,6 +101,9 @@ export function WorkoutReviewEditor({
           painArea: null,
           painNote: null,
           clientNote: note.trim() ? note.trim() : null,
+          strengthFeel,
+          fatigueFeel,
+          hitTarget,
           actAsClientId: actAsClientId ?? null,
         },
       });
@@ -221,6 +233,25 @@ export function WorkoutReviewEditor({
               </div>
             )}
           </fieldset>
+
+          <PillQuestion
+            legend="How did your strength feel?"
+            options={["Weak", "Normal", "Strong"]}
+            value={strengthFeel}
+            onChange={setStrengthFeel}
+          />
+          <PillQuestion
+            legend="How tired did you feel?"
+            options={["Fresh", "Normal", "Drained"]}
+            value={fatigueFeel}
+            onChange={setFatigueFeel}
+          />
+          <PillQuestion
+            legend="Did you hit the target reps/RIR?"
+            options={["Yes", "Mostly", "No"]}
+            value={hitTarget}
+            onChange={setHitTarget}
+          />
 
           <div className="space-y-2">
             <Label htmlFor="review-note" className="text-sm font-bold">
