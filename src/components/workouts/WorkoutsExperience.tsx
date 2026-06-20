@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, lazy, Suspense } from "react";
 import { Link, useNavigate } from "@tanstack/react-router";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   addDays, addWeeks, format, isSameDay, isSameMonth, startOfWeek,
   addMonths, startOfMonth, endOfMonth, endOfWeek, eachDayOfInterval,
@@ -8,6 +8,7 @@ import {
 import {
   Calendar as CalendarIcon, ChevronLeft, ChevronRight, ClipboardList,
   History, Loader2, Move, MoreVertical, Play, Pencil, Sun, Activity, Download,
+  RotateCcw,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/app-shell";
@@ -36,6 +37,11 @@ import { CircleDot } from "lucide-react";
 import { TrainingScheduleCard } from "@/components/training-schedule-card";
 import { toast } from "sonner";
 import { ClientCardioSection } from "@/components/cardio/ClientCardioSection";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 // Lazy: this card pulls recharts (~120KB). Defer it so the main Workouts
 // view can render without waiting on the chart bundle.
 const TrainingAnalyticsPreviewCard = lazy(() =>
@@ -604,6 +610,90 @@ function SelectedDayCard({
   const [previewOpen, setPreviewOpen] = useState(false);
   const [moveOpen, setMoveOpen] = useState(false);
   const [statusOpen, setStatusOpen] = useState(false);
+  const [resetOpen, setResetOpen] = useState(false);
+  const [resetting, setResetting] = useState(false);
+  const qc = useQueryClient();
+
+  const dayId = item?.day?.id;
+  const handleReset = async () => {
+    if (!dayId) return;
+    setResetting(true);
+    try {
+      // 1) Look up the exercise row ids for this workout day so we can scope
+      //    the row_results delete (pl_row_results has row_id but no day_id).
+      const { data: rows, error: rowsErr } = await supabase
+        .from("pl_exercise_rows")
+        .select("id")
+        .eq("day_id", dayId);
+      if (rowsErr) throw rowsErr;
+      const rowIds = (rows ?? []).map((r: any) => r.id);
+
+      // 2) Delete this client's logged sets (reps / weight / RPE / set notes
+      //    / per-set timer) for the selected day only. Other days, other
+      //    clients, and the programming rows themselves are untouched.
+      if (rowIds.length) {
+        const { error } = await supabase
+          .from("pl_row_results")
+          .delete()
+          .eq("client_id", clientId)
+          .in("row_id", rowIds);
+        if (error) throw error;
+      }
+
+      // 3) Delete the client-authored per-exercise notes for this day.
+      //    Coach/admin programming notes live on pl_exercise_rows / pl_days
+      //    and are not affected.
+      const { error: notesErr } = await supabase
+        .from("pl_exercise_notes")
+        .delete()
+        .eq("client_id", clientId)
+        .eq("day_id", dayId);
+      if (notesErr) throw notesErr;
+
+      // 4) Delete the post-workout review/feedback (session RPE, pain,
+      //    client notes, rating) for this day.
+      const { error: fbErr } = await supabase
+        .from("pl_workout_feedback")
+        .delete()
+        .eq("client_id", clientId)
+        .eq("day_id", dayId);
+      if (fbErr) throw fbErr;
+
+      // 5) Delete the completion row last — this clears completion status,
+      //    workout-level notes, and the workout timer/duration, and makes
+      //    the day available to log again.
+      const { error: complErr } = await supabase
+        .from("pl_day_completions")
+        .delete()
+        .eq("client_id", clientId)
+        .eq("day_id", dayId);
+      if (complErr) throw complErr;
+
+      // Refresh the workouts schedule, analytics, and per-day caches so the
+      // UI immediately reflects the reset state.
+      qc.invalidateQueries({ queryKey: ["my-workouts", clientId] });
+      qc.invalidateQueries({ queryKey: ["workouts-experience-client", clientId] });
+      qc.invalidateQueries({ predicate: (q) => {
+        const k = q.queryKey?.[0];
+        return typeof k === "string" && (
+          k.startsWith("pl-") ||
+          k.startsWith("workout-") ||
+          k.startsWith("training-analytics") ||
+          k === "weight-lifted" ||
+          k === "day-completion" ||
+          k === "workout-feedback"
+        );
+      } });
+
+      toast.success("Workout inputs reset");
+      setResetOpen(false);
+    } catch (e: any) {
+      console.error("[reset-workout]", e);
+      toast.error(e?.message || "Could not reset workout");
+    } finally {
+      setResetting(false);
+    }
+  };
 
   if (!item) {
     return (
@@ -659,6 +749,15 @@ function SelectedDayCard({
                 </DropdownMenuItem>
                 <DropdownMenuItem onSelect={() => setStatusOpen(true)}>
                   <CircleDot className="mr-2 h-4 w-4" /> Change status
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onSelect={(e) => {
+                    e.preventDefault();
+                    setResetOpen(true);
+                  }}
+                  className="text-destructive focus:text-destructive"
+                >
+                  <RotateCcw className="mr-2 h-4 w-4" /> Reset workout inputs
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
@@ -729,6 +828,34 @@ function SelectedDayCard({
         item={item}
         date={date}
       />
+
+      <AlertDialog open={resetOpen} onOpenChange={(o) => !resetting && setResetOpen(o)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Reset workout inputs?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will clear the workout data you entered for this day. This cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={resetting}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => {
+                e.preventDefault();
+                void handleReset();
+              }}
+              disabled={resetting}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {resetting ? (
+                <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Resetting…</>
+              ) : (
+                "Reset"
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   );
 }
