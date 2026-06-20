@@ -35,6 +35,7 @@ import { WorkoutStatusSheet } from "@/components/workout-status-sheet";
 import { CircleDot } from "lucide-react";
 import { TrainingScheduleCard } from "@/components/training-schedule-card";
 import { toast } from "sonner";
+import { ClientCardioSection } from "@/components/cardio/ClientCardioSection";
 // Lazy: this card pulls recharts (~120KB). Defer it so the main Workouts
 // view can render without waiting on the chart bundle.
 const TrainingAnalyticsPreviewCard = lazy(() =>
@@ -352,7 +353,10 @@ export function WorkoutsExperience({
         </Tabs>
 
         {mode === "self" && (
-          <DeferredAnalytics clientId={clientId} />
+          <>
+            <ClientCardioSection clientId={clientId} hideWhenEmpty />
+            <DeferredAnalytics clientId={clientId} />
+          </>
         )}
       </div>
 
