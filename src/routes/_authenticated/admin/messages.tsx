@@ -86,15 +86,31 @@ export function MessagesInbox({
   });
 
   const { data: lastMessages = [] } = useQuery({
-    queryKey: ["last-messages"],
+    queryKey: ["last-messages", states.map((s) => s.client_id).sort().join(",")],
+    enabled: states.length > 0,
     queryFn: async () => {
-      const { data, error } = await (supabase.from("messages") as any)
-        .select("id, client_id, body, sender_role, created_at, read_by_admin_at, is_internal_note")
-        .eq("is_internal_note", false)
-        .order("created_at", { ascending: false })
-        .limit(500);
-      if (error) throw error;
-      return (data ?? []) as Message[];
+      const clientIds = Array.from(new Set(states.map((s) => s.client_id))).filter(Boolean);
+      const results: Message[] = [];
+      const batchSize = 20;
+      for (let i = 0; i < clientIds.length; i += batchSize) {
+        const batch = clientIds.slice(i, i + batchSize);
+        const batchResults = await Promise.all(
+          batch.map(async (clientId) => {
+            const { data, error } = await (supabase.from("messages") as any)
+              .select("id, client_id, body, sender_role, created_at, read_by_admin_at, is_internal_note")
+              .eq("client_id", clientId)
+              .eq("is_internal_note", false)
+              .in("delivery_status", ["sent", "sending"])
+              .order("created_at", { ascending: false })
+              .limit(1)
+              .maybeSingle();
+            if (error) throw error;
+            return data as Message | null;
+          }),
+        );
+        for (const m of batchResults) if (m) results.push(m);
+      }
+      return results;
     },
   });
 
