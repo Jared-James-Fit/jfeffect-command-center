@@ -160,8 +160,9 @@ function SelkirkPage() {
               You don't need to be fit to start.
             </p>
             <p className="mt-3 text-base text-muted-foreground md:text-lg">
-              Whether you want to lose weight, build confidence, get stronger, or just learn how to use a gym the right way,
-              Jared James makes fitness simple, structured, and built for beginners.
+              Whether your goal is fat loss, building muscle, getting stronger, powerlifting, bodybuilding, or just learning
+              how to use a gym the right way, Jared James makes personal training in Selkirk simple, structured, and built
+              around you — in person or online.
             </p>
             <p className="mt-4 text-sm font-semibold md:text-base">
               At Iron Image Gym in Selkirk, Manitoba. Sessions from $100. Packages available.
@@ -322,9 +323,9 @@ function SelkirkPage() {
         <div className="mx-auto grid max-w-4xl gap-4 md:grid-cols-2">
           <Card className="p-6">
             <MapPin className="h-7 w-7 text-primary" />
-            <h3 className="mt-3 text-xl font-bold">Personal Training</h3>
+            <h3 className="mt-3 text-xl font-bold">In-Person Personal Training in Selkirk</h3>
             <p className="mt-2 text-sm text-muted-foreground md:text-base">
-              One-on-one coaching at Iron Image Gym in Selkirk, Manitoba.
+              One-on-one coaching at Iron Image Gym in Selkirk, Manitoba. Strength, fat loss, muscle building, powerlifting, and bodybuilding clients welcome.
             </p>
             <div className="mt-5">
               <a href={BOOK_HREF}>
@@ -334,9 +335,9 @@ function SelkirkPage() {
           </Card>
           <Card className="p-6">
             <Calendar className="h-7 w-7 text-primary" />
-            <h3 className="mt-3 text-xl font-bold">Online Coaching</h3>
+            <h3 className="mt-3 text-xl font-bold">Online Fitness Coaching</h3>
             <p className="mt-2 text-sm text-muted-foreground md:text-base">
-              Workout plans, nutrition guidance, accountability, and app access through JF Effect.
+              Train from anywhere with JF Effect online coaching: custom programming, nutrition guidance, weekly accountability, and the full app experience. <Link to="/coaching" className="underline underline-offset-4">Learn more about coaching →</Link>
             </p>
             <div className="mt-5">
               <a href={EXTERNAL_HREF} target="_blank" rel="noopener noreferrer">
@@ -373,6 +374,12 @@ function SelkirkPage() {
           </div>
           <p className="mt-6 text-xs text-muted-foreground">
             Serving Selkirk, Manitoba and surrounding areas · Personal trainer · Fitness coach · Weight loss coach · Strength coach
+          </p>
+          <p className="mt-3 text-xs text-muted-foreground">
+            More from JF Effect:{" "}
+            <Link to="/coaching" className="underline underline-offset-4">Private Coaching</Link>
+            {" · "}
+            <Link to="/join" className="underline underline-offset-4">Self-Guided Membership</Link>
           </p>
         </div>
       </Section>
