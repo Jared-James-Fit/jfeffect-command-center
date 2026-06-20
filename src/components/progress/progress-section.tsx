@@ -95,7 +95,14 @@ export type ProgressContext = {
 };
 
 /** Quick-action requested from a Home dashboard via `?action=...`. */
-export type ProgressInitialAction = "photo" | "weight" | "bodyweight" | "measure" | "history";
+export type ProgressInitialAction =
+  | "photo"
+  | "video"
+  | "lift"
+  | "weight"
+  | "bodyweight"
+  | "measure"
+  | "history";
 
 export function ProgressSection({
   ctx, initialAction,
@@ -116,6 +123,8 @@ export function ProgressSection({
     else if (initialAction === "bodyweight") setTab("bodyweight");
     else if (initialAction === "measure") setMeasureDialog(true);
     else if (initialAction === "history") setTab("timeline");
+    else if (initialAction === "video") setVideoDialog(true);
+    else if (initialAction === "lift") { setTab("videos"); setVideoDialog(true); }
   }, [initialAction]);
 
   return (

@@ -1,6 +1,7 @@
 import { useRef, useState, type ReactNode } from "react";
 import { Link } from "@tanstack/react-router";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -8,7 +9,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import {
-  Camera, Scale, Ruler, ArrowRight, Loader2, Plus,
+  Camera, Scale, Ruler, ArrowRight, Loader2, Plus, Video, Dumbbell,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -52,6 +53,57 @@ export function ProgressSummaryCard({
   const qc = useQueryClient();
   const ownerType: "client" | "member" =
     progressHref.kind === "member" ? "member" : "client";
+
+  // ---------- Stat tiles: days since last video / lift ----------
+  const { data: latestVideoAt } = useQuery({
+    queryKey: ["progress-latest-video", userId],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("progress_submissions")
+        .select("submission_date, created_at")
+        .eq("user_id", userId)
+        .eq("submission_type", "video")
+        .order("submission_date", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      return (data?.submission_date ?? data?.created_at ?? null) as string | null;
+    },
+  });
+  const { data: latestLiftAt } = useQuery({
+    queryKey: ["progress-latest-lift", userId],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("lift_videos")
+        .select("created_at")
+        .eq("user_id", userId)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      return (data?.created_at ?? null) as string | null;
+    },
+  });
+
+  const daysSince = (iso: string | null | undefined): string => {
+    if (!iso) return "—";
+    const t = new Date(iso).getTime();
+    if (Number.isNaN(t)) return "—";
+    const days = Math.max(0, Math.floor((Date.now() - t) / 86400000));
+    return days === 0 ? "Today" : `${days}d`;
+  };
+
+  const progressTo =
+    progressHref.kind === "member" ? "/m/progress" : "/portal/progress";
+
+  const StatTile = ({
+    icon: Icon, label, value,
+  }: { icon: typeof Video; label: string; value: string }) => (
+    <div className="rounded-lg border border-border bg-secondary/30 p-3">
+      <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+        <Icon className="h-3.5 w-3.5" /> {label}
+      </div>
+      <div className="mt-1 text-lg font-bold">{value}</div>
+    </div>
+  );
 
   const ctaClass = "mt-3 h-10 w-full text-xs font-bold uppercase tracking-wide";
   const cta = (
@@ -145,6 +197,12 @@ export function ProgressSummaryCard({
       </div>
       <div className="p-4 space-y-4">
 
+        {/* Stat tiles */}
+        <div className="grid grid-cols-2 gap-2">
+          <StatTile icon={Video} label="Latest video" value={daysSince(latestVideoAt)} />
+          <StatTile icon={Dumbbell} label="Latest lift" value={daysSince(latestLiftAt)} />
+        </div>
+
         {/* Inline quick log — measurement */}
         <div className="rounded-xl border border-border bg-secondary/30 p-5">
           <button
@@ -223,6 +281,36 @@ export function ProgressSummaryCard({
               : <Plus className="h-5 w-5" />}
           </button>
         </div>
+
+        {/* Inline quick add — progress video */}
+        <Link
+          to={progressTo}
+          search={{ action: "video" }}
+          className="block rounded-xl border border-border bg-secondary/30 p-5"
+        >
+          <span className="flex w-full items-center justify-between text-xs font-bold uppercase tracking-widest text-muted-foreground">
+            <span className="flex items-center gap-2">
+              <Video className="h-5 w-5 text-primary" />
+              Add progress video
+            </span>
+            <Plus className="h-5 w-5" />
+          </span>
+        </Link>
+
+        {/* Inline quick add — lift video */}
+        <Link
+          to={progressTo}
+          search={{ action: "lift" }}
+          className="block rounded-xl border border-border bg-secondary/30 p-5"
+        >
+          <span className="flex w-full items-center justify-between text-xs font-bold uppercase tracking-widest text-muted-foreground">
+            <span className="flex items-center gap-2">
+              <Dumbbell className="h-5 w-5 text-primary" />
+              Upload lift video
+            </span>
+            <Plus className="h-5 w-5" />
+          </span>
+        </Link>
 
         {extraActions ? (
           <div className="pt-1">{extraActions}</div>
