@@ -20,10 +20,23 @@ export function useKeyboardOpen() {
     if (!vv) return;
 
     let raf = 0;
+    // Track the tallest visualViewport.height we've seen as the
+    // "no-keyboard" baseline. In iOS PWA / standalone mode both
+    // window.innerHeight AND visualViewport.height shrink when the soft
+    // keyboard opens, so the classic `innerHeight - vv.height` inset
+    // calculation reads 0 and the hook never fires. Comparing against the
+    // baseline detects the keyboard reliably in Safari AND in installed
+    // PWAs.
+    let baseline = vv.height;
     const update = () => {
       raf = 0;
-      const inset = Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
-      const open = inset > 80; // threshold to avoid URL-bar collapse false positives
+      if (vv.height > baseline) baseline = vv.height;
+      const layoutInset = Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
+      const baselineInset = Math.max(0, baseline - vv.height);
+      const inset = Math.max(layoutInset, baselineInset);
+      // 120px threshold avoids URL-bar collapse / toolbar show-hide
+      // false positives while still firing for every real keyboard.
+      const open = inset > 120;
       root.style.setProperty("--keyboard-inset", `${open ? inset : 0}px`);
       root.style.setProperty("--vv-h", `${Math.round(vv.height)}px`);
       root.style.setProperty("--vv-top", `${Math.round(vv.offsetTop)}px`);

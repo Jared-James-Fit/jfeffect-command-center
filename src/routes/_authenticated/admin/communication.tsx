@@ -62,12 +62,17 @@ function CommunicationWorkspace() {
     <div
       className="flex flex-col md:mb-0 mb-[calc(-140px-env(safe-area-inset-bottom))]"
       style={{
-        // Subtract both the AppShell mobile top bar AND the bottom-nav
-        // clearance so the messenger composer always lands exactly above
-        // the bottom tab bar — no body scroll, no glitch where the topbar
-        // and composer fight for the same vertical space.
+        // Anchor the entire communication workspace to the iOS Visual
+        // Viewport. `100dvh` does NOT shrink on iOS Safari when the soft
+        // keyboard opens, which leaves a huge dead gap between the
+        // composer and the keyboard. `--vv-h` (updated live by
+        // useKeyboardOpen()) does shrink, so the composer always sits
+        // exactly above the keyboard with no body scroll. We also
+        // subtract the topbar and bottom-nav clearance; when the keyboard
+        // opens, --bottom-nav-clearance collapses to 0 (the nav is
+        // hidden), so the math stays correct.
         height:
-          "calc(100dvh - var(--shell-topbar-h, 0px) - var(--bottom-nav-clearance, 0px))",
+          "calc(var(--vv-h, 100dvh) - var(--shell-topbar-h, 0px) - var(--bottom-nav-clearance, 0px))",
       }}
     >
       {/* Desktop-only page header. On mobile the screen jumps straight to the
