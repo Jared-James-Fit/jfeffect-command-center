@@ -106,7 +106,7 @@ export function FormPopupGate() {
 
   const today = todayISO();
 
-  const { data: dismissedIds = new Set<string>() } = useQuery({
+  const { data: dismissedIds = [] } = useQuery({
     queryKey: ["form-popup-dismissals", userId, today],
     enabled: !!userId,
     staleTime: 60_000,
@@ -117,13 +117,13 @@ export function FormPopupGate() {
         .eq("user_id", userId!)
         .eq("occurrence_date", today);
       if (error) throw error;
-      return new Set<string>(((data ?? []) as any[]).map((r) => r.form_id as string));
+      return ((data ?? []) as any[]).map((r) => r.form_id as string);
     },
   });
 
   const eligible = useMemo(() => {
     const dow = new Date().getDay(); // 0 = Sunday
-    const dismissed = dismissedIds instanceof Set ? dismissedIds : new Set<string>();
+    const dismissed = new Set(Array.isArray(dismissedIds) ? dismissedIds : []);
     return (forms as PopupForm[]).filter((f) => {
       if (!f.popup_enabled) return false;
       if (dismissed.has(f.id)) return false;
