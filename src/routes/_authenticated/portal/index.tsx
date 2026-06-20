@@ -487,37 +487,6 @@ function SectionSkeleton({ height = "h-32" }: { height?: string }) {
   return <div className={`rounded-2xl border border-border bg-card animate-pulse ${height}`} />;
 }
 
-function PortalHomeSkeleton() {
-  return (
-    <div className="space-y-5 animate-fade-in">
-      {/* Greeting */}
-      <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3">
-        <div className="h-11 w-11 shrink-0 rounded-full border border-border bg-secondary/40 animate-pulse" />
-        <div className="min-w-0 space-y-2">
-          <div className="h-5 w-48 rounded bg-secondary/50 animate-pulse" />
-          <div className="h-3 w-32 rounded bg-secondary/30 animate-pulse" />
-        </div>
-        <div className="h-11 w-11 rounded-full border border-border bg-card" />
-      </div>
-      {/* Today's primary action */}
-      <div className="h-44 rounded-2xl border border-border bg-card animate-pulse" />
-      {/* Quick actions grid */}
-      <div className="grid grid-cols-2 gap-3">
-        {Array.from({ length: 6 }).map((_, i) => (
-          <div key={i} className="h-24 rounded-2xl border border-border bg-card animate-pulse" />
-        ))}
-      </div>
-      {/* Action Centre */}
-      <div className="space-y-3">
-        <div className="h-5 w-32 rounded bg-secondary/40 animate-pulse" />
-        <div className="h-16 rounded-2xl border border-border bg-card animate-pulse" />
-      </div>
-      {/* Bodyweight */}
-      <div className="h-52 rounded-2xl border border-border bg-card animate-pulse" />
-    </div>
-  );
-}
-
 function GreetingHeader({
   firstName, avatarUrl, unreadCount,
 }: { firstName: string; avatarUrl: string | null; unreadCount: number }) {
