@@ -1,6 +1,8 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { WEEK_DAYS, type WeekDay } from "@/lib/training-schedule";
+import { addDays, format, parseISO } from "date-fns";
 
 // ───────────────────────────────────────────────────────────────────────────
 // Phase 3-5 server fns: bulk reschedules, coach overrides, schedule lock.
@@ -9,6 +11,16 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 // ───────────────────────────────────────────────────────────────────────────
 
 const isoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Expected YYYY-MM-DD");
+
+const WEEKDAY_INDEX: Record<WeekDay, number> = {
+  Monday: 1, Tuesday: 2, Wednesday: 3, Thursday: 4,
+  Friday: 5, Saturday: 6, Sunday: 0,
+};
+
+function weekdayFromDate(dateISO: string): WeekDay | null {
+  const dow = parseISO(dateISO).getDay();
+  return (WEEK_DAYS.find((wd) => WEEKDAY_INDEX[wd] === dow) ?? null) as WeekDay | null;
+}
 
 type Role = "client" | "member" | "coach" | "admin";
 
