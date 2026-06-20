@@ -106,14 +106,14 @@ function SelkirkPage() {
               Personal Training in Selkirk for Beginners Who Want Real Results
             </h1>
             <p className="mt-5 text-base text-muted-foreground md:text-xl">
-              You don't need to be fit before starting.
+              You don't need to be fit to start.
             </p>
             <p className="mt-3 text-base text-muted-foreground md:text-lg">
-              Whether you're trying to lose weight, build confidence, get stronger, or simply learn how to use a gym properly,
-              Jared James helps make fitness simple, structured, and beginner friendly.
+              Whether you want to lose weight, build confidence, get stronger, or just learn how to use a gym the right way,
+              Jared James makes fitness simple, structured, and built for beginners.
             </p>
             <p className="mt-4 text-sm font-semibold md:text-base">
-              Located at Iron Image Gym in Selkirk, Manitoba. Sessions start at $100. Package options available.
+              At Iron Image Gym in Selkirk, Manitoba. Sessions from $100. Packages available.
             </p>
             <div className="mt-7 flex justify-center">
               <PrimaryCta />
@@ -125,14 +125,14 @@ function SelkirkPage() {
       {/* SECTION 2 — Nervous */}
       <Section>
         <div className="mx-auto max-w-2xl text-center">
-          <h2 className="text-3xl font-black tracking-tight md:text-4xl">Nervous About Going To The Gym?</h2>
+          <h2 className="text-3xl font-black tracking-tight md:text-4xl">Nervous About The Gym?</h2>
         </div>
         <div className="mx-auto mt-8 max-w-2xl space-y-4 text-base leading-relaxed text-muted-foreground md:text-lg">
-          <p className="font-semibold text-foreground">You're not alone.</p>
-          <p>Most people don't struggle because they're lazy. They struggle because they don't know where to start.</p>
-          <p>The internet gives conflicting advice. Gym equipment feels confusing. And walking into a gym can feel intimidating.</p>
-          <p className="font-semibold text-foreground">That's why the first goal isn't getting you into shape. The first goal is helping you feel comfortable.</p>
-          <p>You'll learn exactly what to do, how to do it, and why you're doing it.</p>
+          <p className="font-semibold text-foreground">You're not the only one.</p>
+          <p>Most people don't struggle because they're lazy. They struggle because nobody ever showed them where to start.</p>
+          <p>The internet contradicts itself. The equipment looks confusing. And walking in that first time feels intimidating.</p>
+          <p className="font-semibold text-foreground">So the first goal isn't getting you in shape. It's getting you comfortable.</p>
+          <p>You'll learn what to do, how to do it, and why — every step.</p>
           <p>No guessing. No random workouts. No feeling lost.</p>
         </div>
       </Section>
@@ -141,15 +141,15 @@ function SelkirkPage() {
       <Section className="bg-card/30">
         <SectionTitle title="Who This Is Perfect For" />
         <div className="mx-auto grid max-w-4xl gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {[
-            "Never been to a gym",
+        {[
+            "Never set foot in a gym",
             "Starting over after years away",
-            "Wanting to lose weight",
-            "Wanting more confidence",
-            "Looking to build muscle",
-            "Wanting accountability",
+            "Want to lose weight",
+            "Want more confidence",
+            "Want to build muscle",
+            "Want accountability",
             "Busy professionals",
-            "Men and women of all fitness levels",
+            "Men and women, every level",
             "Strength and powerlifting athletes",
           ].map((label) => (
             <Card key={label} className="flex items-start gap-3 p-5">
@@ -165,8 +165,8 @@ function SelkirkPage() {
         <SectionTitle eyebrow="What to expect" title="What Your First Session Looks Like" />
         <div className="mx-auto grid max-w-4xl gap-3 md:grid-cols-5">
           {[
-            { t: "Talk about your goals", b: "We'll start with a real conversation about what you want." },
-            { t: "Assess your fitness", b: "A simple check-in to know where we're starting from." },
+            { t: "Talk through your goals", b: "A real conversation about what you actually want." },
+            { t: "Check your starting point", b: "A simple assessment so we know where we're beginning." },
             { t: "Learn the equipment", b: "I'll show you how to use it correctly and safely." },
             { t: "Build your plan", b: "Designed around your schedule and your life." },
             { t: "Leave with a plan", b: "You'll know exactly what to do next." },
@@ -181,7 +181,7 @@ function SelkirkPage() {
           ))}
         </div>
         <p className="mx-auto mt-8 max-w-xl text-center text-base font-semibold md:text-lg">
-          No pressure. No judgment. No experience required.
+          No pressure. No judgment. No experience needed.
         </p>
       </Section>
 
@@ -192,14 +192,14 @@ function SelkirkPage() {
           <Card className="p-6">
             <ul className="space-y-3">
               {[
-                "Full-time fitness coach since 2022",
-                "Helped 100+ clients",
-                "Beginner-friendly coaching approach",
+                "Coaching since 2019, full-time since 2022",
+                "100+ clients helped",
+                "A coaching approach built for beginners",
                 "Strength and physique specialist",
                 "Competitive powerlifter",
-                "Personalized coaching",
+                "Coaching made personal",
                 "Local to Selkirk",
-                "Training available at Iron Image Gym",
+                "Training at Iron Image Gym",
               ].map((line) => (
                 <li key={line} className="flex items-start gap-3 text-sm md:text-base">
                   <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-primary" />
@@ -211,17 +211,17 @@ function SelkirkPage() {
           <Card className="p-6">
             <HeartHandshake className="h-8 w-8 text-primary" />
             <p className="mt-4 text-base leading-relaxed text-muted-foreground md:text-lg">
-              Most trainers are good with people who already know what they're doing.
+              Most trainers are great with people who already know what they're doing.
             </p>
             <p className="mt-3 text-base leading-relaxed text-muted-foreground md:text-lg">
-              The real skill is helping someone go from overwhelmed and uncertain to confident and consistent.
+              The real skill is taking someone from overwhelmed and unsure to confident and consistent.
             </p>
-            <p className="mt-3 text-base font-semibold md:text-lg">That's where Jared specializes.</p>
+            <p className="mt-3 text-base font-semibold md:text-lg">That's what Jared does best.</p>
           </Card>
         </div>
       </Section>
 
-      <TransformationsGallery eyebrow="Results" title="Transformed 100+ lives" />
+      <TransformationsGallery eyebrow="Results" title="100+ lives changed" />
       <CoachTimelineSection />
 
       {/* SECTION 6 — Pricing */}
@@ -233,7 +233,7 @@ function SelkirkPage() {
             $100<span className="text-base font-semibold text-muted-foreground"> / session</span>
           </div>
           <p className="mt-3 text-sm text-muted-foreground md:text-base">
-            Bulk session packages available. Book a free consultation to find the best option for your goals.
+            Bulk packages available. Book a free consultation and we'll find the right fit for your goals.
           </p>
           <div className="mt-6 flex justify-center">
             <PrimaryCta />
@@ -243,16 +243,16 @@ function SelkirkPage() {
 
       {/* SECTION 7 — Goals */}
       <Section className="bg-card/30">
-        <SectionTitle title="What Clients Usually Want Help With" />
+        <SectionTitle title="What Clients Come For" />
         <div className="mx-auto grid max-w-5xl gap-3 sm:grid-cols-2 lg:grid-cols-4">
           {[
             { Icon: Scale, label: "Weight Loss" },
             { Icon: Dumbbell, label: "Build Muscle" },
-            { Icon: Sparkles, label: "Improve Confidence" },
-            { Icon: Brain, label: "Learn Gym Equipment" },
+            { Icon: Sparkles, label: "More Confidence" },
+            { Icon: Brain, label: "Learning the Equipment" },
             { Icon: Trophy, label: "Strength Training" },
             { Icon: ShieldCheck, label: "Powerlifting Coaching" },
-            { Icon: Apple, label: "Healthy Habits" },
+            { Icon: Apple, label: "Better Habits" },
             { Icon: Users, label: "Accountability" },
           ].map(({ Icon, label }) => (
             <Card key={label} className="flex flex-col items-center p-5 text-center">
@@ -267,7 +267,7 @@ function SelkirkPage() {
 
       {/* SECTION 8 — In person or online */}
       <Section>
-        <SectionTitle title="Train In Person Or Get Coaching Online" />
+        <SectionTitle title="Train In Person Or Online" />
         <div className="mx-auto grid max-w-4xl gap-4 md:grid-cols-2">
           <Card className="p-6">
             <MapPin className="h-7 w-7 text-primary" />
@@ -314,7 +314,7 @@ function SelkirkPage() {
         <div className="mx-auto max-w-3xl rounded-2xl border border-primary/30 bg-gradient-to-br from-primary/15 via-card to-card p-8 text-center md:p-12">
           <h2 className="text-3xl font-black tracking-tight md:text-5xl">Ready To Feel Comfortable In The Gym?</h2>
           <p className="mt-4 text-base text-muted-foreground md:text-lg">
-            You don't need to be in shape before you start. You just need a plan.
+            You don't need to be in shape to start. You just need a plan.
           </p>
           <p className="mt-2 text-base font-semibold md:text-lg">Book your free consultation today.</p>
           <div className="mt-6 flex justify-center">
