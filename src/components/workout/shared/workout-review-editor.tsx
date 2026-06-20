@@ -39,6 +39,9 @@ export type ReviewInitial = {
   clientNote?: string | null;
   editCount?: number | null;
   submittedAt?: string | null;
+  strengthFeel?: string | null;
+  fatigueFeel?: string | null;
+  hitTarget?: string | null;
 };
 
 type Props = {
@@ -69,6 +72,9 @@ export function WorkoutReviewEditor({
   const [pain, setPain] = useState<boolean>(!!initial?.pain);
   const [painLevel, setPainLevel] = useState<number | null>(initial?.painLevel ?? null);
   const [note, setNote] = useState<string>(initial?.clientNote ?? "");
+  const [strengthFeel, setStrengthFeel] = useState<string | null>(initial?.strengthFeel ?? null);
+  const [fatigueFeel, setFatigueFeel] = useState<string | null>(initial?.fatigueFeel ?? null);
+  const [hitTarget, setHitTarget] = useState<string | null>(initial?.hitTarget ?? null);
 
   useEffect(() => {
     if (!open) return;
@@ -77,6 +83,9 @@ export function WorkoutReviewEditor({
     setPain(!!initial?.pain);
     setPainLevel(initial?.painLevel ?? null);
     setNote(initial?.clientNote ?? "");
+    setStrengthFeel(initial?.strengthFeel ?? null);
+    setFatigueFeel(initial?.fatigueFeel ?? null);
+    setHitTarget(initial?.hitTarget ?? null);
   }, [open, initial?.submittedAt]);
 
   const mutation = useMutation({
@@ -92,6 +101,9 @@ export function WorkoutReviewEditor({
           painArea: null,
           painNote: null,
           clientNote: note.trim() ? note.trim() : null,
+          strengthFeel,
+          fatigueFeel,
+          hitTarget,
           actAsClientId: actAsClientId ?? null,
         },
       });
@@ -222,6 +234,25 @@ export function WorkoutReviewEditor({
             )}
           </fieldset>
 
+          <PillQuestion
+            legend="How did your strength feel?"
+            options={["Weak", "Normal", "Strong"]}
+            value={strengthFeel}
+            onChange={setStrengthFeel}
+          />
+          <PillQuestion
+            legend="How tired did you feel?"
+            options={["Fresh", "Normal", "Drained"]}
+            value={fatigueFeel}
+            onChange={setFatigueFeel}
+          />
+          <PillQuestion
+            legend="Did you hit the target reps/RIR?"
+            options={["Yes", "Mostly", "No"]}
+            value={hitTarget}
+            onChange={setHitTarget}
+          />
+
           <div className="space-y-2">
             <Label htmlFor="review-note" className="text-sm font-bold">
               {hasCoach ? "Anything your coach should know?" : "Anything you want to note?"}
@@ -254,5 +285,44 @@ export function WorkoutReviewEditor({
         </SheetFooter>
       </SheetContent>
     </Sheet>
+  );
+}
+
+function PillQuestion({
+  legend,
+  options,
+  value,
+  onChange,
+}: {
+  legend: string;
+  options: string[];
+  value: string | null;
+  onChange: (v: string | null) => void;
+}) {
+  return (
+    <fieldset className="space-y-2">
+      <legend className="text-sm font-bold">{legend}</legend>
+      <div className="grid grid-cols-3 gap-2">
+        {options.map((opt) => {
+          const active = value === opt;
+          return (
+            <button
+              key={opt}
+              type="button"
+              onClick={() => onChange(active ? null : opt)}
+              aria-pressed={active}
+              className={cn(
+                "h-11 rounded-xl border text-sm font-bold transition-colors",
+                active
+                  ? "border-primary bg-primary text-primary-foreground"
+                  : "border-border bg-card text-muted-foreground hover:bg-secondary/40",
+              )}
+            >
+              {opt}
+            </button>
+          );
+        })}
+      </div>
+    </fieldset>
   );
 }

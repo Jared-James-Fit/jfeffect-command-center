@@ -1368,6 +1368,9 @@ function WorkoutDay({
                     painArea: existingReview.pain_area ?? null,
                     painNote: existingReview.pain_note ?? null,
                     clientNote: existingReview.client_note ?? null,
+                    strengthFeel: existingReview.strength_feel ?? null,
+                    fatigueFeel: existingReview.fatigue_feel ?? null,
+                    hitTarget: existingReview.hit_target ?? null,
                     editCount: existingReview.review_edit_count ?? 0,
                     submittedAt:
                       existingReview.review_submitted_at ??
