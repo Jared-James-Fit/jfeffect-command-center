@@ -94,7 +94,7 @@ function CommunicationWorkspace() {
     <div
       className={cn(
         "flex flex-col overflow-hidden bg-background md:static md:inset-auto md:z-auto md:mb-0",
-        viewportLockedTab ? "fixed inset-x-0 z-30" : "relative",
+        viewportLockedTab ? "fixed inset-x-0 z-30" : "relative mb-[calc(-140px-env(safe-area-inset-bottom))]",
       )}
       style={{
         // Anchor the entire communication workspace to the iOS Visual
