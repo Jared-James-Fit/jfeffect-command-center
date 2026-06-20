@@ -15,7 +15,7 @@ const DESCRIPTION =
   "Looking for a personal trainer in Selkirk? Jared James helps beginners lose weight, build confidence, learn the gym, gain strength, and create lasting fitness habits. Sessions start at $100.";
 const URL = "https://jfeffect.com/personal-trainer-selkirk";
 
-const BOOK_HREF = "/apply";
+const BOOK_HREF = "/coaching/apply?from=selkirk";
 const EXTERNAL_HREF = "https://jaredjamesfit.com";
 
 const faq = [
@@ -81,7 +81,7 @@ export const Route = createFileRoute("/personal-trainer-selkirk")({
   }),
 });
 
-function PrimaryCta({ children = "Book Free Consultation" }: { children?: React.ReactNode }) {
+function PrimaryCta({ children = "Apply Now" }: { children?: React.ReactNode }) {
   return (
     <a href={BOOK_HREF}>
       <Button size="lg" className="h-14 w-full px-7 text-base font-bold sm:w-auto">
@@ -91,19 +91,9 @@ function PrimaryCta({ children = "Book Free Consultation" }: { children?: React.
   );
 }
 
-function GhostCta({ children = "Get Started", href = BOOK_HREF }: { children?: React.ReactNode; href?: string }) {
-  return (
-    <a href={href}>
-      <Button size="lg" variant="outline" className="h-14 w-full px-7 text-base sm:w-auto">
-        {children}
-      </Button>
-    </a>
-  );
-}
-
 function SelkirkPage() {
   return (
-    <SalesPageShell pageId="personal-trainer-selkirk">
+    <SalesPageShell pageId="personal-trainer-selkirk" hideMarketingNav>
       {/* HERO */}
       <section className="relative overflow-hidden">
         <div className="absolute inset-0 -z-10 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-primary/15 via-background to-background" />
@@ -125,9 +115,8 @@ function SelkirkPage() {
             <p className="mt-4 text-sm font-semibold md:text-base">
               Located at Iron Image Gym in Selkirk, Manitoba. Sessions start at $100. Package options available.
             </p>
-            <div className="mt-7 flex flex-col items-stretch justify-center gap-3 sm:flex-row sm:items-center">
+            <div className="mt-7 flex justify-center">
               <PrimaryCta />
-              <GhostCta>Get Started</GhostCta>
             </div>
           </div>
         </div>
@@ -288,7 +277,7 @@ function SelkirkPage() {
             </p>
             <div className="mt-5">
               <a href={BOOK_HREF}>
-                <Button className="w-full">Book Free Consultation</Button>
+                <Button className="w-full">Apply Now</Button>
               </a>
             </div>
           </Card>
@@ -328,9 +317,8 @@ function SelkirkPage() {
             You don't need to be in shape before you start. You just need a plan.
           </p>
           <p className="mt-2 text-base font-semibold md:text-lg">Book your free consultation today.</p>
-          <div className="mt-6 flex flex-col items-stretch justify-center gap-3 sm:flex-row sm:items-center">
+          <div className="mt-6 flex justify-center">
             <PrimaryCta />
-            <GhostCta href={EXTERNAL_HREF}>Visit JaredJamesFit.com</GhostCta>
           </div>
           <p className="mt-6 text-xs text-muted-foreground">
             Serving Selkirk, Manitoba and surrounding areas · Personal trainer · Fitness coach · Weight loss coach · Strength coach

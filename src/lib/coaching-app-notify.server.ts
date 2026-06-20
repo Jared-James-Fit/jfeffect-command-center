@@ -166,3 +166,60 @@ export async function notifyCoachingAppRecipients(supabaseAdmin: any, ctx: Notif
 export async function sendOneTwilioSms(to: string, from: string, body: string) {
   return sendTwilioSms(to, from, body);
 }
+
+/** Send a confirmation email to the applicant. Idempotent via communication_log.source. */
+export async function sendApplicantConfirmationEmail(
+  supabaseAdmin: any,
+  args: {
+    to: string;
+    firstName: string;
+    applicationId: string;
+    submittedAtStr: string;
+    sourcePage: string;
+    mainGoal: string;
+  },
+) {
+  const dedupeKey = `applicant_confirmation:${args.applicationId}`;
+  const { data: existing } = await supabaseAdmin
+    .from("communication_log").select("id")
+    .eq("source", dedupeKey).limit(1).maybeSingle();
+  if (existing) return { skipped: true };
+
+  const subject = "We received your JF Effect application";
+  const body = [
+    `Hi ${args.firstName},`,
+    ``,
+    `Thanks for applying to JF Effect coaching — your application is in.`,
+    ``,
+    `Submitted: ${args.submittedAtStr}`,
+    `Main goal: ${args.mainGoal}`,
+    `Reference #: ${args.applicationId}`,
+    ``,
+    `Coach Jared (or a member of the team) will personally review your answers and reach out within 24–48 hours to follow up on next steps.`,
+    ``,
+    `If you need to reach us in the meantime, just reply to this email.`,
+    ``,
+    `— Coach Jared`,
+    `JF Effect`,
+    `https://jfeffect.com`,
+  ].join("\n");
+
+  try {
+    await sendEmailViaProvider(supabaseAdmin, args.to, subject, body);
+    try {
+      await supabaseAdmin.from("communication_log").insert({
+        channel: "email", recipient: args.to,
+        subject, body, status: "sent", source: dedupeKey,
+      });
+    } catch { /* schema variance */ }
+    return { sent: true };
+  } catch (e: any) {
+    try {
+      await supabaseAdmin.from("communication_log").insert({
+        channel: "email", recipient: args.to,
+        subject, body, status: "failed", source: dedupeKey,
+      });
+    } catch { /* schema variance */ }
+    throw e;
+  }
+}

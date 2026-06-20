@@ -148,6 +148,7 @@ type FormState = {
   best_time: "morning" | "afternoon" | "evening" | "flexible" | "";
   consent_contact: boolean;
   honeypot: string;
+  source_page: string;
 };
 
 const EMPTY: FormState = {
@@ -159,6 +160,7 @@ const EMPTY: FormState = {
   first_name: "", phone: "", email: "", instagram: "",
   preferred_contact: "", best_time: "",
   consent_contact: false, honeypot: "",
+  source_page: "",
 };
 
 const STORAGE_KEY = "jf:quickapply:v1";
@@ -189,6 +191,16 @@ function QuickApply() {
 
   const set = <K extends keyof FormState>(k: K, v: FormState[K]) => setForm((f) => ({ ...f, [k]: v }));
 
+  // Capture marketing-source query param (e.g. /coaching/apply?from=selkirk)
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const from = params.get("from");
+      if (from) setForm((f) => (f.source_page ? f : { ...f, source_page: from }));
+    } catch { /* noop */ }
+  }, []);
+
   useEffect(() => {
     if (result) return;
     try { localStorage.setItem(STORAGE_KEY, JSON.stringify(form)); } catch { /* noop */ }
@@ -205,6 +217,8 @@ function QuickApply() {
       days_per_week: form.days_per_week ?? undefined,
       preferred_contact: form.preferred_contact || undefined,
       best_time: form.best_time || undefined,
+      source_page: form.source_page || undefined,
+      page_url: typeof window !== "undefined" ? window.location.href : undefined,
     } as any }),
     onSuccess: (r) => {
       setResult(r);
