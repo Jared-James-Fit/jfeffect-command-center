@@ -281,6 +281,8 @@ function BlockEditor() {
       ((await supabase
         .from("exercises")
         .select("id, name, muscle_group, category, tags, equipment, exercise_category, is_competition_lift, competition_lift_type")
+        .eq("archived", false)
+        .limit(5000)
         .order("name")).data ?? []) as any,
   });
 
