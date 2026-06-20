@@ -131,14 +131,14 @@ export const getCoachAssignedMealPlan = createServerFn({ method: "GET" })
     }
     const { data: client } = await supabase
       .from("clients")
-      .select("id")
+      .select("id, first_name, last_name, full_name")
       .eq("user_id", effectiveUserId)
       .maybeSingle();
     if (!client?.id) return null;
     const { data: target } = await supabase
       .from("nutrition_targets")
       .select(
-        "id, phase, custom_phase, goal, custom_goal, structure, status, start_date, end_date, water, client_notes, pdf_url, pdf_name, visible_to_client, nutrition_target_days(id, day_label, calories, protein, carbs, fats, fibre, notes, sort_order)",
+        "id, phase, custom_phase, goal, custom_goal, structure, status, start_date, end_date, water, client_notes, pdf_url, pdf_name, visible_to_client, updated_at, last_updated_at, assigned_coach_id, nutrition_target_days(id, day_label, calories, protein, carbs, fats, fibre, notes, sort_order)",
       )
       .eq("client_id", client.id)
       .eq("visible_to_client", true)
@@ -157,8 +157,36 @@ export const getCoachAssignedMealPlan = createServerFn({ method: "GET" })
         .createSignedUrl((target as any).pdf_url, 60 * 60);
       pdf_signed_url = signed?.signedUrl ?? null;
     }
+    let coach_name: string | null = null;
+    const coachId = (target as any).assigned_coach_id as string | null;
+    if (coachId) {
+      const { data: coachRow } = await supabase
+        .from("coaches")
+        .select("full_name, first_name, last_name")
+        .eq("id", coachId)
+        .maybeSingle();
+      if (coachRow) {
+        coach_name =
+          (coachRow as any).full_name ||
+          [((coachRow as any).first_name ?? ""), ((coachRow as any).last_name ?? "")]
+            .filter(Boolean)
+            .join(" ")
+            .trim() ||
+          null;
+      }
+    }
+    const clientName =
+      (client as any).full_name ||
+      [((client as any).first_name ?? ""), ((client as any).last_name ?? "")]
+        .filter(Boolean)
+        .join(" ")
+        .trim() ||
+      null;
     return {
       id: (target as any).id,
+      client_name: clientName,
+      coach_name,
+      updated_at: (target as any).last_updated_at ?? (target as any).updated_at ?? null,
       phase: (target as any).custom_phase || (target as any).phase || null,
       goal: (target as any).custom_goal || (target as any).goal || null,
       structure: (target as any).structure ?? null,
