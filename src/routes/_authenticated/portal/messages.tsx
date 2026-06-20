@@ -1,6 +1,6 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { usePortalUserId } from "@/lib/client-impersonation";
 import { Card } from "@/components/ui/card";
@@ -33,7 +33,6 @@ function ClientMessages() {
   const [tab, setTab] = useState<"coach" | "groups">("coach");
   const groupSummary = useMyGroupSummary();
   const [confirm, setConfirm] = useState<null | "call" | "sms">(null);
-  const navigate = useNavigate();
 
   const { data: client } = useQuery({
     queryKey: ["my-client-id", portalUserId],
@@ -51,52 +50,6 @@ function ClientMessages() {
   });
 
   const { peerLive: coachLive } = useChatPresence(client?.id ?? null, "client");
-
-  /**
-   * Auto-open the most recent unsubmitted form the coach has shared in chat.
-   * Fires at most once per browser session per message id, so re-entering
-   * the page doesn't hijack a client who already chose to back out.
-   * Routes through /portal/check-ins/$formId so the renderer can attach
-   * client identity (id, first/last name, email) to the form URL.
-   */
-  useEffect(() => {
-    if (!client?.id) return;
-    let cancelled = false;
-    (async () => {
-      const { data: msgs } = await supabase
-        .from("messages")
-        .select("id, created_at, attachments")
-        .eq("client_id", client.id)
-        .eq("sender_role", "admin")
-        .eq("is_internal_note", false)
-        .order("created_at", { ascending: false })
-        .limit(20);
-      if (cancelled) return;
-      const latest = (msgs ?? [])
-        .flatMap((m: any) =>
-          ((m.attachments ?? []) as any[])
-            .filter((a) => a?.kind === "form_request" && a?.form_id)
-            .map((a) => ({ msgId: m.id as string, formId: a.form_id as string })),
-        )[0];
-      if (!latest) return;
-      const ackKey = `jf:auto-form-open:${latest.msgId}`;
-      try { if (sessionStorage.getItem(ackKey)) return; } catch {}
-      const { data: sub } = await supabase
-        .from("nf_submissions")
-        .select("status")
-        .eq("form_id", latest.formId)
-        .eq("client_id", client.id)
-        .order("updated_at", { ascending: false })
-        .limit(1)
-        .maybeSingle();
-      const status = (sub as any)?.status;
-      if (status === "submitted" || status === "reviewed" || status === "pending_review") return;
-      try { sessionStorage.setItem(ackKey, "1"); } catch {}
-      if (cancelled) return;
-      navigate({ to: "/portal/check-ins/$formId", params: { formId: latest.formId } });
-    })();
-    return () => { cancelled = true; };
-  }, [client?.id, navigate]);
 
   const { data: coach } = useQuery({
     queryKey: ["my-assigned-coach", client?.assigned_coach_id],
