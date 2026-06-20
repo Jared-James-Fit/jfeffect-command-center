@@ -72,15 +72,15 @@ export function MemberMealPlanPanel() {
           </div>
           <div className="flex flex-wrap items-center gap-2">
             {plan.pdf_signed_url && (
-              <Button asChild size="sm" variant="outline" className="gap-1.5">
-                <a href={plan.pdf_signed_url} target="_blank" rel="noreferrer">
-                  <FileText className="h-3.5 w-3.5" /> {plan.pdf_name || "Open PDF"}
+              <Button asChild size="sm" variant="default" className="gap-1.5">
+                <a href={plan.pdf_signed_url} target="_blank" rel="noreferrer" download={plan.pdf_name || "meal-plan.pdf"}>
+                  <FileText className="h-3.5 w-3.5" /> Download PDF
                 </a>
               </Button>
             )}
             <Button
               size="sm"
-              variant="outline"
+              variant={plan.pdf_signed_url ? "outline" : "default"}
               className="gap-1.5"
               onClick={handleDownload}
               disabled={downloading}
@@ -90,7 +90,7 @@ export function MemberMealPlanPanel() {
               ) : (
                 <Download className="h-3.5 w-3.5" />
               )}
-              {downloading ? "Preparing…" : "Download PDF"}
+              {downloading ? "Preparing…" : "Download Plan"}
             </Button>
           </div>
         </div>
