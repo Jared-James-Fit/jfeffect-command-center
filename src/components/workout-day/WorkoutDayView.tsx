@@ -456,6 +456,7 @@ function WorkoutDay({
   const { data: rows = [], isSuccess: rowsLoaded } = useQuery({
     queryKey: ["pl-day-rows", dayId, adapter?.kind ?? null, adapter?.ref.ownerId ?? null],
     initialData: cachedInitialData<any[]>(cacheScope, "rows"),
+    staleTime: 5 * 60_000,
     queryFn: async () => {
       const r = adapter
         ? await adapter.listRowsRaw(dayId)
@@ -475,6 +476,7 @@ function WorkoutDay({
     queryKey: ["pl-day-results", dayId, client?.id, adapter?.kind ?? null, adapter?.ref.ownerId ?? null],
     enabled: !!client?.id && (rows as any[]).length > 0,
     initialData: client?.id ? cachedInitialData<any[]>(cacheScope, `results:${client.id}`) : undefined,
+    staleTime: 30_000,
     queryFn: async () => {
       const rowIds = (rows as any[]).map((r) => r.id);
       if (!rowIds.length) return [];
@@ -538,6 +540,7 @@ function WorkoutDay({
   const { data: exerciseNotes = [] } = useQuery({
     queryKey: ["pl-day-exercise-notes", dayId, client?.id, adapter?.kind ?? null],
     enabled: !!client?.id,
+    staleTime: 60_000,
     queryFn: async () =>
       adapter
         ? await adapter.listExerciseNotesRaw(dayId)
@@ -549,6 +552,7 @@ function WorkoutDay({
   const { data: existingReview } = useQuery({
     queryKey: ["pl-workout-feedback", dayId, client?.id, adapter?.kind ?? null],
     enabled: !!client?.id && !!completion?.completed_at,
+    staleTime: 60_000,
     queryFn: async () => {
       if (adapter) {
         return (await adapter.getWorkoutFeedbackRaw(dayId)) as any;
@@ -676,6 +680,7 @@ function WorkoutDay({
   const { data: historyRows = [] } = useQuery({
     queryKey: ["client-exercise-unit-history", client?.id, exerciseIds.join(",")],
     enabled: !!client?.id && exerciseIds.length > 0,
+    staleTime: 5 * 60_000,
     queryFn: async () => (await sb
       .from("pl_row_results")
       .select("actual_load_unit, pl_exercise_rows!inner(exercise_id)")
