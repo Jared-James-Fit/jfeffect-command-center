@@ -415,7 +415,7 @@ export const rescheduleFromCommittedDays = createServerFn({ method: "POST" })
 
     for (const block of blockList) {
       const dur = (block as any).week_duration_days ?? 7;
-      const startDate = parseISO(block.start_date);
+      const startDate = parseISO(block.start_date as string);
       const blockWeeks = weekList
         .filter((w: any) => w.block_id === block.id)
         .sort((a: any, b: any) => a.week_index - b.week_index);
