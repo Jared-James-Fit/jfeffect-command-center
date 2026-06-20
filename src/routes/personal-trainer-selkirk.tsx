@@ -211,17 +211,17 @@ function SelkirkPage() {
           <Card className="p-6">
             <HeartHandshake className="h-8 w-8 text-primary" />
             <p className="mt-4 text-base leading-relaxed text-muted-foreground md:text-lg">
-              Most trainers are good with people who already know what they're doing.
+              Most trainers are great with people who already know what they're doing.
             </p>
             <p className="mt-3 text-base leading-relaxed text-muted-foreground md:text-lg">
-              The real skill is helping someone go from overwhelmed and uncertain to confident and consistent.
+              The real skill is taking someone from overwhelmed and unsure to confident and consistent.
             </p>
-            <p className="mt-3 text-base font-semibold md:text-lg">That's where Jared specializes.</p>
+            <p className="mt-3 text-base font-semibold md:text-lg">That's what Jared does best.</p>
           </Card>
         </div>
       </Section>
 
-      <TransformationsGallery eyebrow="Results" title="Transformed 100+ lives" />
+      <TransformationsGallery eyebrow="Results" title="100+ lives changed" />
       <CoachTimelineSection />
 
       {/* SECTION 6 — Pricing */}
