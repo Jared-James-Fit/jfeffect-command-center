@@ -31,6 +31,8 @@ import { format, parseISO, isToday, isTomorrow } from "date-fns";
 import { SectionErrorBoundary } from "@/components/section-error-boundary";
 import { DashboardRefreshIndicator } from "@/components/portal/dashboard-refresh-indicator";
 import { DashboardOfflineEmpty, useIsOfflineWithoutCache } from "@/components/portal/dashboard-offline-empty";
+import { DeferRender } from "@/components/defer-render";
+import { logPerf } from "@/lib/perf-timing";
 
 export const Route = createFileRoute("/_authenticated/portal/")({ component: PortalHome });
 
@@ -46,6 +48,9 @@ function PortalHome() {
   const portalUserId = usePortalUserId();
   const offlineNoCache = useIsOfflineWithoutCache();
 
+  // Dev-only first-load timing.
+  useEffect(() => { logPerf("dashboard mounted"); }, []);
+
   const { data: client, isPending: clientPending, isSuccess: clientSettled } = useQuery({
     queryKey: ["my-client", portalUserId],
     enabled: !!portalUserId,
@@ -54,6 +59,7 @@ function PortalHome() {
       return data;
     },
   });
+  useEffect(() => { if (client) logPerf("card:client loaded"); }, [client]);
 
   const { data: assignedForms = [] } = useQuery({
     queryKey: ["nf-forms-for-client", client?.id],
@@ -180,6 +186,7 @@ function PortalHome() {
       };
     },
   });
+  useEffect(() => { if (coachUpdates) logPerf("card:coach-updates loaded"); }, [coachUpdates]);
 
   const activePhase = phases.find((p) => {
     const s = derivePhase(p).state;
@@ -197,6 +204,7 @@ function PortalHome() {
       return (res?.upcoming ?? []) as any[];
     },
   });
+  useEffect(() => { if (appts) logPerf("card:appointments loaded"); }, [appts]);
   const nextAppointment: any = (appts as any[])[0] ?? null;
 
   const markAgreementComplete = async (id: string) => {
