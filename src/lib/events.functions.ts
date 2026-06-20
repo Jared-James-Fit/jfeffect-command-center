@@ -21,14 +21,14 @@ const SaveEventSchema = z.object({
 });
 
 function nextDate(date: string) {
-  const d = new Date(`${date}T00:00:00Z`);
+  const d = new Date(`${date}T00:00:00`);
   d.setUTCDate(d.getUTCDate() + 1);
   return d.toISOString().slice(0, 10);
 }
 
 function addOneHour(date: string, time: string) {
   const [h, m] = time.split(":").map((v) => Number(v));
-  const d = new Date(`${date}T00:00:00Z`);
+  const d = new Date(`${date}T00:00:00`);
   d.setUTCHours(Number.isFinite(h) ? h : 0, Number.isFinite(m) ? m : 0, 0, 0);
   d.setUTCHours(d.getUTCHours() + 1);
   return `${String(d.getUTCHours()).padStart(2, "0")}:${String(d.getUTCMinutes()).padStart(2, "0")}`;
