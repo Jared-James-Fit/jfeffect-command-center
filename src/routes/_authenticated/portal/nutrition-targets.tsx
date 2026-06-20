@@ -12,6 +12,7 @@ import { RecipeBrowser } from "@/components/nutrition/RecipeBrowser";
 import { getCoachAssignedMealPlan } from "@/lib/nutrition-targets/member-targets.functions";
 import { usePortalUserId, useClientImpersonation } from "@/lib/client-impersonation";
 import { cn } from "@/lib/utils";
+import { SectionErrorBoundary } from "@/components/section-error-boundary";
 
 export const Route = createFileRoute("/_authenticated/portal/nutrition-targets")({
   component: PortalNutrition,
@@ -26,14 +27,20 @@ function PortalNutrition() {
     queryKey: ["portal-nutrition-ctx", portalUserId],
     enabled: !!portalUserId,
     queryFn: async () => {
-      const { data } = await (supabase as any)
-        .from("clients")
-        .select("goals")
-        .eq("user_id", portalUserId!)
-        .maybeSingle();
-      const goals = data?.goals ? [String(data.goals)] : [];
-      return { goals };
+      try {
+        const { data } = await (supabase as any)
+          .from("clients")
+          .select("goals")
+          .eq("user_id", portalUserId!)
+          .maybeSingle();
+        const goals = data?.goals ? [String(data.goals)] : [];
+        return { goals };
+      } catch (e) {
+        console.error("[portal-nutrition] ctx query failed", e);
+        return { goals: [] as string[] };
+      }
     },
+    retry: false,
   });
 
   const planQ = useQuery({
@@ -46,10 +53,11 @@ function PortalNutrition() {
           : {},
       }),
     staleTime: 60_000,
+    retry: false,
   });
 
-  const plan = planQ.data as any | null | undefined;
-  const days: any[] = plan?.days ?? [];
+  const plan = (planQ.data ?? null) as any | null;
+  const days: any[] = Array.isArray(plan?.days) ? plan.days : [];
   const [dayIdx, setDayIdx] = useState(0);
   const idx = Math.min(dayIdx, Math.max(0, days.length - 1));
   const day = days[idx];
@@ -68,9 +76,10 @@ function PortalNutrition() {
 
       <div className="px-4 md:px-6 pt-4 space-y-4">
         {/* 1. Nutrition Targets card */}
+        <SectionErrorBoundary label="Nutrition targets">
         {planQ.isLoading ? (
           <Card className="p-5 text-sm text-muted-foreground">Loading your nutrition plan…</Card>
-        ) : !plan ? (
+        ) : planQ.isError || !plan ? (
           <Card className="p-5">
             <div className="flex items-center gap-2">
               <div className="grid h-9 w-9 place-items-center rounded-lg bg-muted text-muted-foreground">
@@ -78,7 +87,9 @@ function PortalNutrition() {
               </div>
               <div>
                 <div className="text-sm font-black uppercase tracking-widest">Nutrition Targets</div>
-                <div className="text-[12px] text-muted-foreground">No nutrition targets assigned yet.</div>
+                <div className="text-[12px] text-muted-foreground">
+                  {planQ.isError ? "We couldn't load your plan right now." : "No nutrition targets assigned yet."}
+                </div>
               </div>
             </div>
           </Card>
@@ -163,9 +174,11 @@ function PortalNutrition() {
             )}
           </Card>
         )}
+        </SectionErrorBoundary>
 
         {/* 2. Meal Plan section */}
         {plan && day && (
+        <SectionErrorBoundary label="Meal plan">
           <Card className="p-4 md:p-5 space-y-3">
             <div className="flex items-center gap-2">
               <div className="grid h-9 w-9 place-items-center rounded-lg bg-primary/15 text-primary">
@@ -186,6 +199,7 @@ function PortalNutrition() {
               </div>
             )}
           </Card>
+        </SectionErrorBoundary>
         )}
 
         {plan?.client_notes && (
@@ -206,7 +220,9 @@ function PortalNutrition() {
         <div className="mb-3 text-xs font-black uppercase tracking-widest text-muted-foreground">
           Recipes
         </div>
-        <RecipeBrowser viewer="client" userId={portalUserId ?? undefined} goals={ctxQ.data?.goals ?? []} />
+        <SectionErrorBoundary label="Recipes">
+          <RecipeBrowser viewer="client" userId={portalUserId ?? undefined} goals={ctxQ.data?.goals ?? []} />
+        </SectionErrorBoundary>
       </div>
     </>
   );
