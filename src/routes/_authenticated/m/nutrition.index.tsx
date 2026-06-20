@@ -12,7 +12,7 @@ import { getActiveMemberTargets } from "@/lib/nutrition-targets/member-targets.f
 import { DailyNutritionPanel } from "@/components/nutrition/DailyNutritionPanel";
 import { MemberMealPlanPanel } from "@/components/nutrition/MemberMealPlanPanel";
 
-export const Route = createFileRoute("/_authenticated/m/nutrition")({
+export const Route = createFileRoute("/_authenticated/m/nutrition/")({
   component: MemberNutrition,
 });
 

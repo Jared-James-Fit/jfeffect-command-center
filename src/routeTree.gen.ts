@@ -56,7 +56,6 @@ import { Route as ApiPublicBulkExerciseImportRouteImport } from './routes/api/pu
 import { Route as ApiPublic_replay73ae9c8e4bcdc04ea9fd65f84f0752daRouteImport } from './routes/api/public/__replay-73ae9c8e4bcdc04ea9fd65f84f0752da'
 import { Route as AuthenticatedPortalScheduleRouteImport } from './routes/_authenticated/portal/schedule'
 import { Route as AuthenticatedPortalResourcesRouteImport } from './routes/_authenticated/portal/resources'
-import { Route as AuthenticatedPortalRecipesRouteImport } from './routes/_authenticated/portal/recipes'
 import { Route as AuthenticatedPortalPurchasesRouteImport } from './routes/_authenticated/portal/purchases'
 import { Route as AuthenticatedPortalProgressMetricsRouteImport } from './routes/_authenticated/portal/progress-metrics'
 import { Route as AuthenticatedPortalProgressRouteImport } from './routes/_authenticated/portal/progress'
@@ -96,7 +95,6 @@ import { Route as AuthenticatedMSupportRouteImport } from './routes/_authenticat
 import { Route as AuthenticatedMResourcesRouteImport } from './routes/_authenticated/m/resources'
 import { Route as AuthenticatedMProgressRouteImport } from './routes/_authenticated/m/progress'
 import { Route as AuthenticatedMPlansRouteImport } from './routes/_authenticated/m/plans'
-import { Route as AuthenticatedMNutritionRouteImport } from './routes/_authenticated/m/nutrition'
 import { Route as AuthenticatedMMyPlansRouteImport } from './routes/_authenticated/m/my-plans'
 import { Route as AuthenticatedMBillingRouteImport } from './routes/_authenticated/m/billing'
 import { Route as AuthenticatedMAnnouncementsRouteImport } from './routes/_authenticated/m/announcements'
@@ -170,7 +168,9 @@ import { Route as AuthenticatedAdminApprovalsRouteImport } from './routes/_authe
 import { Route as AuthenticatedAdminAppointmentsRouteImport } from './routes/_authenticated/admin/appointments'
 import { Route as AuthenticatedAdminAccountRouteImport } from './routes/_authenticated/admin/account'
 import { Route as AuthenticatedPortalWorkoutsIndexRouteImport } from './routes/_authenticated/portal/workouts.index'
+import { Route as AuthenticatedPortalRecipesIndexRouteImport } from './routes/_authenticated/portal/recipes.index'
 import { Route as AuthenticatedPortalAgreementsIndexRouteImport } from './routes/_authenticated/portal/agreements.index'
+import { Route as AuthenticatedMNutritionIndexRouteImport } from './routes/_authenticated/m/nutrition.index'
 import { Route as AuthenticatedAdminSalesIndexRouteImport } from './routes/_authenticated/admin/sales.index'
 import { Route as AuthenticatedAdminMembershipIndexRouteImport } from './routes/_authenticated/admin/membership.index'
 import { Route as AuthenticatedAdminMembersIndexRouteImport } from './routes/_authenticated/admin/members.index'
@@ -509,12 +509,6 @@ const AuthenticatedPortalResourcesRoute =
     path: '/resources',
     getParentRoute: () => AuthenticatedPortalRouteRoute,
   } as any)
-const AuthenticatedPortalRecipesRoute =
-  AuthenticatedPortalRecipesRouteImport.update({
-    id: '/recipes',
-    path: '/recipes',
-    getParentRoute: () => AuthenticatedPortalRouteRoute,
-  } as any)
 const AuthenticatedPortalPurchasesRoute =
   AuthenticatedPortalPurchasesRouteImport.update({
     id: '/purchases',
@@ -740,11 +734,6 @@ const AuthenticatedMProgressRoute = AuthenticatedMProgressRouteImport.update({
 const AuthenticatedMPlansRoute = AuthenticatedMPlansRouteImport.update({
   id: '/plans',
   path: '/plans',
-  getParentRoute: () => AuthenticatedMRouteRoute,
-} as any)
-const AuthenticatedMNutritionRoute = AuthenticatedMNutritionRouteImport.update({
-  id: '/nutrition',
-  path: '/nutrition',
   getParentRoute: () => AuthenticatedMRouteRoute,
 } as any)
 const AuthenticatedMMyPlansRoute = AuthenticatedMMyPlansRouteImport.update({
@@ -1174,11 +1163,23 @@ const AuthenticatedPortalWorkoutsIndexRoute =
     path: '/workouts/',
     getParentRoute: () => AuthenticatedPortalRouteRoute,
   } as any)
+const AuthenticatedPortalRecipesIndexRoute =
+  AuthenticatedPortalRecipesIndexRouteImport.update({
+    id: '/recipes/',
+    path: '/recipes/',
+    getParentRoute: () => AuthenticatedPortalRouteRoute,
+  } as any)
 const AuthenticatedPortalAgreementsIndexRoute =
   AuthenticatedPortalAgreementsIndexRouteImport.update({
     id: '/agreements/',
     path: '/agreements/',
     getParentRoute: () => AuthenticatedPortalRouteRoute,
+  } as any)
+const AuthenticatedMNutritionIndexRoute =
+  AuthenticatedMNutritionIndexRouteImport.update({
+    id: '/nutrition/',
+    path: '/nutrition/',
+    getParentRoute: () => AuthenticatedMRouteRoute,
   } as any)
 const AuthenticatedAdminSalesIndexRoute =
   AuthenticatedAdminSalesIndexRouteImport.update({
@@ -1347,9 +1348,9 @@ const AuthenticatedPortalWorkoutsDayIdRoute =
   } as any)
 const AuthenticatedPortalRecipesRecipeIdRoute =
   AuthenticatedPortalRecipesRecipeIdRouteImport.update({
-    id: '/$recipeId',
-    path: '/$recipeId',
-    getParentRoute: () => AuthenticatedPortalRecipesRoute,
+    id: '/recipes/$recipeId',
+    path: '/recipes/$recipeId',
+    getParentRoute: () => AuthenticatedPortalRouteRoute,
   } as any)
 const AuthenticatedPortalPurchasesIdRoute =
   AuthenticatedPortalPurchasesIdRouteImport.update({
@@ -1395,21 +1396,21 @@ const AuthenticatedMPlansPlanIdRoute =
   } as any)
 const AuthenticatedMNutritionTargetsSetupRoute =
   AuthenticatedMNutritionTargetsSetupRouteImport.update({
-    id: '/targets-setup',
-    path: '/targets-setup',
-    getParentRoute: () => AuthenticatedMNutritionRoute,
+    id: '/nutrition/targets-setup',
+    path: '/nutrition/targets-setup',
+    getParentRoute: () => AuthenticatedMRouteRoute,
   } as any)
 const AuthenticatedMNutritionTargetsManageRoute =
   AuthenticatedMNutritionTargetsManageRouteImport.update({
-    id: '/targets-manage',
-    path: '/targets-manage',
-    getParentRoute: () => AuthenticatedMNutritionRoute,
+    id: '/nutrition/targets-manage',
+    path: '/nutrition/targets-manage',
+    getParentRoute: () => AuthenticatedMRouteRoute,
   } as any)
 const AuthenticatedMNutritionRecipeIdRoute =
   AuthenticatedMNutritionRecipeIdRouteImport.update({
-    id: '/$recipeId',
-    path: '/$recipeId',
-    getParentRoute: () => AuthenticatedMNutritionRoute,
+    id: '/nutrition/$recipeId',
+    path: '/nutrition/$recipeId',
+    getParentRoute: () => AuthenticatedMRouteRoute,
   } as any)
 const AuthenticatedMMyPlansEnrollmentIdRoute =
   AuthenticatedMMyPlansEnrollmentIdRouteImport.update({
@@ -1864,7 +1865,6 @@ export interface FileRoutesByFullPath {
   '/m/announcements': typeof AuthenticatedMAnnouncementsRoute
   '/m/billing': typeof AuthenticatedMBillingRoute
   '/m/my-plans': typeof AuthenticatedMMyPlansRouteWithChildren
-  '/m/nutrition': typeof AuthenticatedMNutritionRouteWithChildren
   '/m/plans': typeof AuthenticatedMPlansRouteWithChildren
   '/m/progress': typeof AuthenticatedMProgressRoute
   '/m/resources': typeof AuthenticatedMResourcesRouteWithChildren
@@ -1904,7 +1904,6 @@ export interface FileRoutesByFullPath {
   '/portal/progress': typeof AuthenticatedPortalProgressRoute
   '/portal/progress-metrics': typeof AuthenticatedPortalProgressMetricsRoute
   '/portal/purchases': typeof AuthenticatedPortalPurchasesRouteWithChildren
-  '/portal/recipes': typeof AuthenticatedPortalRecipesRouteWithChildren
   '/portal/resources': typeof AuthenticatedPortalResourcesRoute
   '/portal/schedule': typeof AuthenticatedPortalScheduleRoute
   '/api/public': typeof ApiPublic_replay73ae9c8e4bcdc04ea9fd65f84f0752daRoute
@@ -2002,7 +2001,9 @@ export interface FileRoutesByFullPath {
   '/admin/members/': typeof AuthenticatedAdminMembersIndexRoute
   '/admin/membership/': typeof AuthenticatedAdminMembershipIndexRoute
   '/admin/sales/': typeof AuthenticatedAdminSalesIndexRoute
+  '/m/nutrition/': typeof AuthenticatedMNutritionIndexRoute
   '/portal/agreements/': typeof AuthenticatedPortalAgreementsIndexRoute
+  '/portal/recipes/': typeof AuthenticatedPortalRecipesIndexRoute
   '/portal/workouts/': typeof AuthenticatedPortalWorkoutsIndexRoute
   '/admin/client-programs/$clientId/analytics': typeof AuthenticatedAdminClientProgramsClientIdAnalyticsRoute
   '/admin/client-programs/$clientId/history': typeof AuthenticatedAdminClientProgramsClientIdHistoryRoute
@@ -2118,7 +2119,6 @@ export interface FileRoutesByTo {
   '/m/announcements': typeof AuthenticatedMAnnouncementsRoute
   '/m/billing': typeof AuthenticatedMBillingRoute
   '/m/my-plans': typeof AuthenticatedMMyPlansRouteWithChildren
-  '/m/nutrition': typeof AuthenticatedMNutritionRouteWithChildren
   '/m/plans': typeof AuthenticatedMPlansRouteWithChildren
   '/m/progress': typeof AuthenticatedMProgressRoute
   '/m/resources': typeof AuthenticatedMResourcesRouteWithChildren
@@ -2158,7 +2158,6 @@ export interface FileRoutesByTo {
   '/portal/progress': typeof AuthenticatedPortalProgressRoute
   '/portal/progress-metrics': typeof AuthenticatedPortalProgressMetricsRoute
   '/portal/purchases': typeof AuthenticatedPortalPurchasesRouteWithChildren
-  '/portal/recipes': typeof AuthenticatedPortalRecipesRouteWithChildren
   '/portal/resources': typeof AuthenticatedPortalResourcesRoute
   '/portal/schedule': typeof AuthenticatedPortalScheduleRoute
   '/api/public': typeof ApiPublic_replay73ae9c8e4bcdc04ea9fd65f84f0752daRoute
@@ -2256,7 +2255,9 @@ export interface FileRoutesByTo {
   '/admin/members': typeof AuthenticatedAdminMembersIndexRoute
   '/admin/membership': typeof AuthenticatedAdminMembershipIndexRoute
   '/admin/sales': typeof AuthenticatedAdminSalesIndexRoute
+  '/m/nutrition': typeof AuthenticatedMNutritionIndexRoute
   '/portal/agreements': typeof AuthenticatedPortalAgreementsIndexRoute
+  '/portal/recipes': typeof AuthenticatedPortalRecipesIndexRoute
   '/portal/workouts': typeof AuthenticatedPortalWorkoutsIndexRoute
   '/admin/client-programs/$clientId/analytics': typeof AuthenticatedAdminClientProgramsClientIdAnalyticsRoute
   '/admin/client-programs/$clientId/history': typeof AuthenticatedAdminClientProgramsClientIdHistoryRoute
@@ -2379,7 +2380,6 @@ export interface FileRoutesById {
   '/_authenticated/m/announcements': typeof AuthenticatedMAnnouncementsRoute
   '/_authenticated/m/billing': typeof AuthenticatedMBillingRoute
   '/_authenticated/m/my-plans': typeof AuthenticatedMMyPlansRouteWithChildren
-  '/_authenticated/m/nutrition': typeof AuthenticatedMNutritionRouteWithChildren
   '/_authenticated/m/plans': typeof AuthenticatedMPlansRouteWithChildren
   '/_authenticated/m/progress': typeof AuthenticatedMProgressRoute
   '/_authenticated/m/resources': typeof AuthenticatedMResourcesRouteWithChildren
@@ -2419,7 +2419,6 @@ export interface FileRoutesById {
   '/_authenticated/portal/progress': typeof AuthenticatedPortalProgressRoute
   '/_authenticated/portal/progress-metrics': typeof AuthenticatedPortalProgressMetricsRoute
   '/_authenticated/portal/purchases': typeof AuthenticatedPortalPurchasesRouteWithChildren
-  '/_authenticated/portal/recipes': typeof AuthenticatedPortalRecipesRouteWithChildren
   '/_authenticated/portal/resources': typeof AuthenticatedPortalResourcesRoute
   '/_authenticated/portal/schedule': typeof AuthenticatedPortalScheduleRoute
   '/api/public/__replay-73ae9c8e4bcdc04ea9fd65f84f0752da': typeof ApiPublic_replay73ae9c8e4bcdc04ea9fd65f84f0752daRoute
@@ -2517,7 +2516,9 @@ export interface FileRoutesById {
   '/_authenticated/admin/members/': typeof AuthenticatedAdminMembersIndexRoute
   '/_authenticated/admin/membership/': typeof AuthenticatedAdminMembershipIndexRoute
   '/_authenticated/admin/sales/': typeof AuthenticatedAdminSalesIndexRoute
+  '/_authenticated/m/nutrition/': typeof AuthenticatedMNutritionIndexRoute
   '/_authenticated/portal/agreements/': typeof AuthenticatedPortalAgreementsIndexRoute
+  '/_authenticated/portal/recipes/': typeof AuthenticatedPortalRecipesIndexRoute
   '/_authenticated/portal/workouts/': typeof AuthenticatedPortalWorkoutsIndexRoute
   '/_authenticated/admin/client-programs/$clientId/analytics': typeof AuthenticatedAdminClientProgramsClientIdAnalyticsRoute
   '/_authenticated/admin/client-programs/$clientId/history': typeof AuthenticatedAdminClientProgramsClientIdHistoryRoute
@@ -2640,7 +2641,6 @@ export interface FileRouteTypes {
     | '/m/announcements'
     | '/m/billing'
     | '/m/my-plans'
-    | '/m/nutrition'
     | '/m/plans'
     | '/m/progress'
     | '/m/resources'
@@ -2680,7 +2680,6 @@ export interface FileRouteTypes {
     | '/portal/progress'
     | '/portal/progress-metrics'
     | '/portal/purchases'
-    | '/portal/recipes'
     | '/portal/resources'
     | '/portal/schedule'
     | '/api/public'
@@ -2778,7 +2777,9 @@ export interface FileRouteTypes {
     | '/admin/members/'
     | '/admin/membership/'
     | '/admin/sales/'
+    | '/m/nutrition/'
     | '/portal/agreements/'
+    | '/portal/recipes/'
     | '/portal/workouts/'
     | '/admin/client-programs/$clientId/analytics'
     | '/admin/client-programs/$clientId/history'
@@ -2894,7 +2895,6 @@ export interface FileRouteTypes {
     | '/m/announcements'
     | '/m/billing'
     | '/m/my-plans'
-    | '/m/nutrition'
     | '/m/plans'
     | '/m/progress'
     | '/m/resources'
@@ -2934,7 +2934,6 @@ export interface FileRouteTypes {
     | '/portal/progress'
     | '/portal/progress-metrics'
     | '/portal/purchases'
-    | '/portal/recipes'
     | '/portal/resources'
     | '/portal/schedule'
     | '/api/public'
@@ -3032,7 +3031,9 @@ export interface FileRouteTypes {
     | '/admin/members'
     | '/admin/membership'
     | '/admin/sales'
+    | '/m/nutrition'
     | '/portal/agreements'
+    | '/portal/recipes'
     | '/portal/workouts'
     | '/admin/client-programs/$clientId/analytics'
     | '/admin/client-programs/$clientId/history'
@@ -3154,7 +3155,6 @@ export interface FileRouteTypes {
     | '/_authenticated/m/announcements'
     | '/_authenticated/m/billing'
     | '/_authenticated/m/my-plans'
-    | '/_authenticated/m/nutrition'
     | '/_authenticated/m/plans'
     | '/_authenticated/m/progress'
     | '/_authenticated/m/resources'
@@ -3194,7 +3194,6 @@ export interface FileRouteTypes {
     | '/_authenticated/portal/progress'
     | '/_authenticated/portal/progress-metrics'
     | '/_authenticated/portal/purchases'
-    | '/_authenticated/portal/recipes'
     | '/_authenticated/portal/resources'
     | '/_authenticated/portal/schedule'
     | '/api/public/__replay-73ae9c8e4bcdc04ea9fd65f84f0752da'
@@ -3292,7 +3291,9 @@ export interface FileRouteTypes {
     | '/_authenticated/admin/members/'
     | '/_authenticated/admin/membership/'
     | '/_authenticated/admin/sales/'
+    | '/_authenticated/m/nutrition/'
     | '/_authenticated/portal/agreements/'
+    | '/_authenticated/portal/recipes/'
     | '/_authenticated/portal/workouts/'
     | '/_authenticated/admin/client-programs/$clientId/analytics'
     | '/_authenticated/admin/client-programs/$clientId/history'
@@ -3691,13 +3692,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedPortalResourcesRouteImport
       parentRoute: typeof AuthenticatedPortalRouteRoute
     }
-    '/_authenticated/portal/recipes': {
-      id: '/_authenticated/portal/recipes'
-      path: '/recipes'
-      fullPath: '/portal/recipes'
-      preLoaderRoute: typeof AuthenticatedPortalRecipesRouteImport
-      parentRoute: typeof AuthenticatedPortalRouteRoute
-    }
     '/_authenticated/portal/purchases': {
       id: '/_authenticated/portal/purchases'
       path: '/purchases'
@@ -3969,13 +3963,6 @@ declare module '@tanstack/react-router' {
       path: '/plans'
       fullPath: '/m/plans'
       preLoaderRoute: typeof AuthenticatedMPlansRouteImport
-      parentRoute: typeof AuthenticatedMRouteRoute
-    }
-    '/_authenticated/m/nutrition': {
-      id: '/_authenticated/m/nutrition'
-      path: '/nutrition'
-      fullPath: '/m/nutrition'
-      preLoaderRoute: typeof AuthenticatedMNutritionRouteImport
       parentRoute: typeof AuthenticatedMRouteRoute
     }
     '/_authenticated/m/my-plans': {
@@ -4489,12 +4476,26 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedPortalWorkoutsIndexRouteImport
       parentRoute: typeof AuthenticatedPortalRouteRoute
     }
+    '/_authenticated/portal/recipes/': {
+      id: '/_authenticated/portal/recipes/'
+      path: '/recipes'
+      fullPath: '/portal/recipes/'
+      preLoaderRoute: typeof AuthenticatedPortalRecipesIndexRouteImport
+      parentRoute: typeof AuthenticatedPortalRouteRoute
+    }
     '/_authenticated/portal/agreements/': {
       id: '/_authenticated/portal/agreements/'
       path: '/agreements'
       fullPath: '/portal/agreements/'
       preLoaderRoute: typeof AuthenticatedPortalAgreementsIndexRouteImport
       parentRoute: typeof AuthenticatedPortalRouteRoute
+    }
+    '/_authenticated/m/nutrition/': {
+      id: '/_authenticated/m/nutrition/'
+      path: '/nutrition'
+      fullPath: '/m/nutrition/'
+      preLoaderRoute: typeof AuthenticatedMNutritionIndexRouteImport
+      parentRoute: typeof AuthenticatedMRouteRoute
     }
     '/_authenticated/admin/sales/': {
       id: '/_authenticated/admin/sales/'
@@ -4694,10 +4695,10 @@ declare module '@tanstack/react-router' {
     }
     '/_authenticated/portal/recipes/$recipeId': {
       id: '/_authenticated/portal/recipes/$recipeId'
-      path: '/$recipeId'
+      path: '/recipes/$recipeId'
       fullPath: '/portal/recipes/$recipeId'
       preLoaderRoute: typeof AuthenticatedPortalRecipesRecipeIdRouteImport
-      parentRoute: typeof AuthenticatedPortalRecipesRoute
+      parentRoute: typeof AuthenticatedPortalRouteRoute
     }
     '/_authenticated/portal/purchases/$id': {
       id: '/_authenticated/portal/purchases/$id'
@@ -4750,24 +4751,24 @@ declare module '@tanstack/react-router' {
     }
     '/_authenticated/m/nutrition/targets-setup': {
       id: '/_authenticated/m/nutrition/targets-setup'
-      path: '/targets-setup'
+      path: '/nutrition/targets-setup'
       fullPath: '/m/nutrition/targets-setup'
       preLoaderRoute: typeof AuthenticatedMNutritionTargetsSetupRouteImport
-      parentRoute: typeof AuthenticatedMNutritionRoute
+      parentRoute: typeof AuthenticatedMRouteRoute
     }
     '/_authenticated/m/nutrition/targets-manage': {
       id: '/_authenticated/m/nutrition/targets-manage'
-      path: '/targets-manage'
+      path: '/nutrition/targets-manage'
       fullPath: '/m/nutrition/targets-manage'
       preLoaderRoute: typeof AuthenticatedMNutritionTargetsManageRouteImport
-      parentRoute: typeof AuthenticatedMNutritionRoute
+      parentRoute: typeof AuthenticatedMRouteRoute
     }
     '/_authenticated/m/nutrition/$recipeId': {
       id: '/_authenticated/m/nutrition/$recipeId'
-      path: '/$recipeId'
+      path: '/nutrition/$recipeId'
       fullPath: '/m/nutrition/$recipeId'
       preLoaderRoute: typeof AuthenticatedMNutritionRecipeIdRouteImport
-      parentRoute: typeof AuthenticatedMNutritionRoute
+      parentRoute: typeof AuthenticatedMRouteRoute
     }
     '/_authenticated/m/my-plans/$enrollmentId': {
       id: '/_authenticated/m/my-plans/$enrollmentId'
@@ -5618,26 +5619,6 @@ const AuthenticatedMMyPlansRouteWithChildren =
     AuthenticatedMMyPlansRouteChildren,
   )
 
-interface AuthenticatedMNutritionRouteChildren {
-  AuthenticatedMNutritionRecipeIdRoute: typeof AuthenticatedMNutritionRecipeIdRoute
-  AuthenticatedMNutritionTargetsManageRoute: typeof AuthenticatedMNutritionTargetsManageRoute
-  AuthenticatedMNutritionTargetsSetupRoute: typeof AuthenticatedMNutritionTargetsSetupRoute
-}
-
-const AuthenticatedMNutritionRouteChildren: AuthenticatedMNutritionRouteChildren =
-  {
-    AuthenticatedMNutritionRecipeIdRoute: AuthenticatedMNutritionRecipeIdRoute,
-    AuthenticatedMNutritionTargetsManageRoute:
-      AuthenticatedMNutritionTargetsManageRoute,
-    AuthenticatedMNutritionTargetsSetupRoute:
-      AuthenticatedMNutritionTargetsSetupRoute,
-  }
-
-const AuthenticatedMNutritionRouteWithChildren =
-  AuthenticatedMNutritionRoute._addFileChildren(
-    AuthenticatedMNutritionRouteChildren,
-  )
-
 interface AuthenticatedMPlansRouteChildren {
   AuthenticatedMPlansPlanIdRoute: typeof AuthenticatedMPlansPlanIdRoute
 }
@@ -5668,7 +5649,6 @@ interface AuthenticatedMRouteRouteChildren {
   AuthenticatedMAnnouncementsRoute: typeof AuthenticatedMAnnouncementsRoute
   AuthenticatedMBillingRoute: typeof AuthenticatedMBillingRoute
   AuthenticatedMMyPlansRoute: typeof AuthenticatedMMyPlansRouteWithChildren
-  AuthenticatedMNutritionRoute: typeof AuthenticatedMNutritionRouteWithChildren
   AuthenticatedMPlansRoute: typeof AuthenticatedMPlansRouteWithChildren
   AuthenticatedMProgressRoute: typeof AuthenticatedMProgressRoute
   AuthenticatedMResourcesRoute: typeof AuthenticatedMResourcesRouteWithChildren
@@ -5676,6 +5656,10 @@ interface AuthenticatedMRouteRouteChildren {
   AuthenticatedMToolsRoute: typeof AuthenticatedMToolsRoute
   AuthenticatedMUpgradeRoute: typeof AuthenticatedMUpgradeRoute
   AuthenticatedMIndexRoute: typeof AuthenticatedMIndexRoute
+  AuthenticatedMNutritionRecipeIdRoute: typeof AuthenticatedMNutritionRecipeIdRoute
+  AuthenticatedMNutritionTargetsManageRoute: typeof AuthenticatedMNutritionTargetsManageRoute
+  AuthenticatedMNutritionTargetsSetupRoute: typeof AuthenticatedMNutritionTargetsSetupRoute
+  AuthenticatedMNutritionIndexRoute: typeof AuthenticatedMNutritionIndexRoute
   AuthenticatedMWorkoutsEnrollmentIdWeekDayRoute: typeof AuthenticatedMWorkoutsEnrollmentIdWeekDayRoute
 }
 
@@ -5684,7 +5668,6 @@ const AuthenticatedMRouteRouteChildren: AuthenticatedMRouteRouteChildren = {
   AuthenticatedMAnnouncementsRoute: AuthenticatedMAnnouncementsRoute,
   AuthenticatedMBillingRoute: AuthenticatedMBillingRoute,
   AuthenticatedMMyPlansRoute: AuthenticatedMMyPlansRouteWithChildren,
-  AuthenticatedMNutritionRoute: AuthenticatedMNutritionRouteWithChildren,
   AuthenticatedMPlansRoute: AuthenticatedMPlansRouteWithChildren,
   AuthenticatedMProgressRoute: AuthenticatedMProgressRoute,
   AuthenticatedMResourcesRoute: AuthenticatedMResourcesRouteWithChildren,
@@ -5692,6 +5675,12 @@ const AuthenticatedMRouteRouteChildren: AuthenticatedMRouteRouteChildren = {
   AuthenticatedMToolsRoute: AuthenticatedMToolsRoute,
   AuthenticatedMUpgradeRoute: AuthenticatedMUpgradeRoute,
   AuthenticatedMIndexRoute: AuthenticatedMIndexRoute,
+  AuthenticatedMNutritionRecipeIdRoute: AuthenticatedMNutritionRecipeIdRoute,
+  AuthenticatedMNutritionTargetsManageRoute:
+    AuthenticatedMNutritionTargetsManageRoute,
+  AuthenticatedMNutritionTargetsSetupRoute:
+    AuthenticatedMNutritionTargetsSetupRoute,
+  AuthenticatedMNutritionIndexRoute: AuthenticatedMNutritionIndexRoute,
   AuthenticatedMWorkoutsEnrollmentIdWeekDayRoute:
     AuthenticatedMWorkoutsEnrollmentIdWeekDayRoute,
 }
@@ -5793,21 +5782,6 @@ const AuthenticatedPortalPurchasesRouteWithChildren =
     AuthenticatedPortalPurchasesRouteChildren,
   )
 
-interface AuthenticatedPortalRecipesRouteChildren {
-  AuthenticatedPortalRecipesRecipeIdRoute: typeof AuthenticatedPortalRecipesRecipeIdRoute
-}
-
-const AuthenticatedPortalRecipesRouteChildren: AuthenticatedPortalRecipesRouteChildren =
-  {
-    AuthenticatedPortalRecipesRecipeIdRoute:
-      AuthenticatedPortalRecipesRecipeIdRoute,
-  }
-
-const AuthenticatedPortalRecipesRouteWithChildren =
-  AuthenticatedPortalRecipesRoute._addFileChildren(
-    AuthenticatedPortalRecipesRouteChildren,
-  )
-
 interface AuthenticatedPortalRouteRouteChildren {
   AuthenticatedPortalAccountRoute: typeof AuthenticatedPortalAccountRoute
   AuthenticatedPortalAnnouncementsRoute: typeof AuthenticatedPortalAnnouncementsRoute
@@ -5826,13 +5800,14 @@ interface AuthenticatedPortalRouteRouteChildren {
   AuthenticatedPortalProgressRoute: typeof AuthenticatedPortalProgressRoute
   AuthenticatedPortalProgressMetricsRoute: typeof AuthenticatedPortalProgressMetricsRoute
   AuthenticatedPortalPurchasesRoute: typeof AuthenticatedPortalPurchasesRouteWithChildren
-  AuthenticatedPortalRecipesRoute: typeof AuthenticatedPortalRecipesRouteWithChildren
   AuthenticatedPortalResourcesRoute: typeof AuthenticatedPortalResourcesRoute
   AuthenticatedPortalScheduleRoute: typeof AuthenticatedPortalScheduleRoute
   AuthenticatedPortalIndexRoute: typeof AuthenticatedPortalIndexRoute
+  AuthenticatedPortalRecipesRecipeIdRoute: typeof AuthenticatedPortalRecipesRecipeIdRoute
   AuthenticatedPortalWorkoutsDayIdRoute: typeof AuthenticatedPortalWorkoutsDayIdRoute
   AuthenticatedPortalWorkoutsAnalyticsRoute: typeof AuthenticatedPortalWorkoutsAnalyticsRoute
   AuthenticatedPortalAgreementsIndexRoute: typeof AuthenticatedPortalAgreementsIndexRoute
+  AuthenticatedPortalRecipesIndexRoute: typeof AuthenticatedPortalRecipesIndexRoute
   AuthenticatedPortalWorkoutsIndexRoute: typeof AuthenticatedPortalWorkoutsIndexRoute
 }
 
@@ -5860,17 +5835,18 @@ const AuthenticatedPortalRouteRouteChildren: AuthenticatedPortalRouteRouteChildr
       AuthenticatedPortalProgressMetricsRoute,
     AuthenticatedPortalPurchasesRoute:
       AuthenticatedPortalPurchasesRouteWithChildren,
-    AuthenticatedPortalRecipesRoute:
-      AuthenticatedPortalRecipesRouteWithChildren,
     AuthenticatedPortalResourcesRoute: AuthenticatedPortalResourcesRoute,
     AuthenticatedPortalScheduleRoute: AuthenticatedPortalScheduleRoute,
     AuthenticatedPortalIndexRoute: AuthenticatedPortalIndexRoute,
+    AuthenticatedPortalRecipesRecipeIdRoute:
+      AuthenticatedPortalRecipesRecipeIdRoute,
     AuthenticatedPortalWorkoutsDayIdRoute:
       AuthenticatedPortalWorkoutsDayIdRoute,
     AuthenticatedPortalWorkoutsAnalyticsRoute:
       AuthenticatedPortalWorkoutsAnalyticsRoute,
     AuthenticatedPortalAgreementsIndexRoute:
       AuthenticatedPortalAgreementsIndexRoute,
+    AuthenticatedPortalRecipesIndexRoute: AuthenticatedPortalRecipesIndexRoute,
     AuthenticatedPortalWorkoutsIndexRoute:
       AuthenticatedPortalWorkoutsIndexRoute,
   }
