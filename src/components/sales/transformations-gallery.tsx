@@ -9,8 +9,14 @@ import img31 from "@/assets/transformations/31.png.asset.json";
 import img35 from "@/assets/transformations/35.png.asset.json";
 import img38 from "@/assets/transformations/38.png.asset.json";
 import img102 from "@/assets/transformations/102.png.asset.json";
+import img42 from "@/assets/transformations/42.png.asset.json";
+import img44 from "@/assets/transformations/44.png.asset.json";
+import img48 from "@/assets/transformations/48.png.asset.json";
+import img71 from "@/assets/transformations/71.png.asset.json";
+import img98 from "@/assets/transformations/98.png.asset.json";
+import img108 from "@/assets/transformations/108.png.asset.json";
 
-const PHOTOS = [img1, img2, img18, img22, img23, img31, img35, img38, img15, img102];
+const PHOTOS = [img1, img2, img18, img22, img23, img31, img35, img38, img15, img102, img42, img44, img48, img71, img98, img108];
 
 export function TransformationsGallery({
   eyebrow = "Transformations",
