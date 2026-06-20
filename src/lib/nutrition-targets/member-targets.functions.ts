@@ -162,12 +162,12 @@ export const getCoachAssignedMealPlan = createServerFn({ method: "GET" })
     if (coachId) {
       const { data: coachRow } = await supabase
         .from("coaches")
-        .select("display_name, first_name, last_name")
+        .select("full_name, first_name, last_name")
         .eq("id", coachId)
         .maybeSingle();
       if (coachRow) {
         coach_name =
-          (coachRow as any).display_name ||
+          (coachRow as any).full_name ||
           [((coachRow as any).first_name ?? ""), ((coachRow as any).last_name ?? "")]
             .filter(Boolean)
             .join(" ")
