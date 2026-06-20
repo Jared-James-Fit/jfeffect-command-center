@@ -264,11 +264,17 @@ html[data-keyboard-open="true"] [data-mobile-bottom-nav] {
 
 /* Clearance under sticky composers so they sit above the mobile bottom nav,
    and collapse to 0 when the keyboard is open (nav is hidden). */
-:root { --bottom-nav-clearance: 0px; }
+:root {
+  --bottom-nav-clearance: 0px;
+  --composer-bottom-pad: max(env(safe-area-inset-bottom), 0.5rem);
+}
 @media (max-width: 768px) {
   :root { --bottom-nav-clearance: 92px; }
 }
-html[data-keyboard-open="true"] { --bottom-nav-clearance: 0px; }
+html[data-keyboard-open="true"] {
+  --bottom-nav-clearance: 0px;
+  --composer-bottom-pad: 0.5rem;
+}
 
 /* Height of the AppShell mobile top bar (logo + actions row).
    Mirrors the actual rendered height of the <header> in src/components/app-shell.tsx:
