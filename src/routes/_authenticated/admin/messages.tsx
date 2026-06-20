@@ -78,6 +78,7 @@ export function MessagesInbox({
 
   const { data: states = [] } = useQuery({
     queryKey: ["conversation-states"],
+    staleTime: 30_000,
     queryFn: async () => {
       const { data, error } = await (supabase.from("conversation_state") as any).select("*");
       if (error) throw error;

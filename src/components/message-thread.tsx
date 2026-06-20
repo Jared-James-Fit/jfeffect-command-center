@@ -649,6 +649,9 @@ export function MessageThread({
   const { data: messages = [] } = useQuery({
     queryKey: ["messages", clientId, role],
     enabled: !!clientId,
+    staleTime: 0,
+    refetchOnWindowFocus: false,
+    refetchOnMount: false,
     queryFn: () => listMessages(clientId, { includeInternal: role === "admin", limit: 100 }),
   });
 
