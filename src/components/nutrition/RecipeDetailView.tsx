@@ -1,10 +1,13 @@
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Flame, Beef, Wheat, Droplet, Clock, Users } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Flame, Beef, Wheat, Droplet, Clock, Users, Download } from "lucide-react";
 import { RecipeBodyView } from "@/components/recipe-body-view";
 import { getRecipeCardMeta } from "@/lib/recipe-meta";
 import { parseRecipeBody } from "@/lib/recipe-format";
 import type { Recipe } from "@/lib/recipes";
+import { downloadRecipePdf } from "@/lib/recipes/recipe-pdf";
+import { toast } from "sonner";
 
 export function RecipeDetailView({ recipe }: { recipe: Recipe }) {
   const meta = getRecipeCardMeta(recipe);
@@ -27,6 +30,24 @@ export function RecipeDetailView({ recipe }: { recipe: Recipe }) {
 
   return (
     <div className="space-y-5">
+      <div className="flex justify-end">
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => {
+            try {
+              downloadRecipePdf(recipe);
+            } catch (err) {
+              console.error("Recipe PDF generation failed", err);
+              toast.error("Couldn't generate PDF. Please try again.");
+            }
+          }}
+        >
+          <Download className="mr-2 h-4 w-4" />
+          Download Recipe PDF
+        </Button>
+      </div>
+
       {hasAnyMeta && (
         <div className="grid grid-cols-3 gap-2 sm:grid-cols-6">
           <Stat icon={Users} label="Servings" value={meta.servings} />
