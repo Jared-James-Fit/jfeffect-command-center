@@ -789,14 +789,14 @@ export function MessageThread({
     return () => { supabase.removeChannel(ch); };
   }, [clientId, role, qc]);
 
-  // Mark read on open / when messages change
+  // Mark read when conversation is first opened or switches
   useEffect(() => {
     if (!clientId || !messages.length) return;
     markRead(clientId, role).then(() => {
       qc.invalidateQueries({ queryKey: ["conversation-states"] });
       qc.invalidateQueries({ queryKey: ["notifications"] });
     });
-  }, [clientId, role, messages.length, qc]);
+  }, [clientId, role, qc]);
 
   // Pin the scroller to the bottom after layout settles. Setting scrollTop
   // synchronously inside the effect runs BEFORE the new bubble's height is
