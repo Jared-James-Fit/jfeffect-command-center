@@ -58,7 +58,7 @@ export function ExercisesAdmin({ embedded = false }: { embedded?: boolean } = {}
   const { data: exercises = [] } = useQuery({
     queryKey: ["exercises"],
     queryFn: async () => {
-      const { data, error } = await supabase.from("exercises").select("*").order("name");
+      const { data, error } = await supabase.from("exercises").select("*").order("name").limit(5000);
       if (error) throw error;
       return data;
     },

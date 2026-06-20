@@ -494,6 +494,8 @@ function TemplateEditor() {
       (await supabase
         .from("exercises")
         .select("id, name, muscle_group, category, tags, exercise_category, is_competition_lift, competition_lift_type, video_url, youtube_url, vimeo_url")
+        .eq("archived", false)
+        .limit(5000)
         .order("name")).data ?? [],
   });
 

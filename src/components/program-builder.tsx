@@ -635,11 +635,19 @@ const QUICK_FILTERS = [
 ];
 
 function exerciseMatchesFilter(ex: ExerciseRef, f: string): boolean {
-  const hay = [ex.name, ex.muscle_group, ex.category, ...(ex.tags ?? [])]
+  const hay = [ex.name, ex.muscle_group, ex.category, ex.equipment, ...(ex.tags ?? [])]
     .filter(Boolean)
     .join(" ")
     .toLowerCase();
-  return hay.includes(f.toLowerCase());
+  let needle = f.toLowerCase().trim();
+  const aliases: Record<string, string> = {
+    rdl: "romanian deadlift",
+    db: "dumbbell",
+    bb: "barbell",
+    kb: "kettlebell",
+  };
+  if (aliases[needle]) needle = aliases[needle];
+  return hay.includes(needle);
 }
 
 export function ExerciseLibraryPanel({

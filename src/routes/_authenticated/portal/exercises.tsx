@@ -35,7 +35,7 @@ function ExerciseLibrary() {
   const { data: exercises = [], isLoading: exercisesLoading } = useQuery({
     queryKey: ["exercises"],
     queryFn: async () => {
-      const { data } = await supabase.from("exercises").select("*").order("name");
+      const { data } = await supabase.from("exercises").select("*").order("name").limit(5000);
       return data ?? [];
     },
   });
