@@ -15,6 +15,7 @@ import {
 import { ChefHat, Sparkles, SlidersHorizontal, X } from "lucide-react";
 import { listRecipesForViewer, listRecipeUnseen, type Recipe } from "@/lib/recipes";
 import { RecipeCard } from "./RecipeCard";
+import { getRecipeCardMeta } from "@/lib/recipe-meta";
 
 /**
  * Single recipe browser used by both members (/m/nutrition) and coaching
@@ -59,13 +60,47 @@ function matchesFilter(recipe: Recipe, filter: string): boolean {
   return aliases.some((a: string) => tags.includes(a));
 }
 
-function scoreRecipe(recipe: Recipe, goals: string[]): number {
+export type RecipeProfile = {
+  goals?: string[];
+  foodRestrictions?: string[];
+  dietaryPreferences?: string[];
+  proteinTarget?: number | null; // grams
+  maxPrepMinutes?: number | null;
+};
+
+function scoreRecipe(recipe: Recipe, profile: RecipeProfile): number {
   const tags = (recipe.tags ?? []).map((t) => t.toLowerCase());
+  const meta = getRecipeCardMeta(recipe);
   let score = 0;
-  for (const g of goals) {
+
+  // Goal tag matching (existing logic, preserved)
+  for (const g of profile.goals ?? []) {
     const wanted = GOAL_TAG_MAP[g.toLowerCase()] ?? [];
     for (const w of wanted) if (tags.includes(w)) score += 2;
   }
+
+  // Protein target bonus: if recipe protein >= 80% of target per serving
+  if (profile.proteinTarget && meta.protein) {
+    if (meta.protein >= profile.proteinTarget * 0.8) score += 3;
+    else if (meta.protein >= profile.proteinTarget * 0.5) score += 1;
+  }
+
+  // Prep time bonus: prefer quick meals
+  if (profile.maxPrepMinutes && meta.prepMinutes) {
+    if (meta.prepMinutes <= profile.maxPrepMinutes) score += 1;
+  }
+
+  // Dietary restriction penalty: exclude recipes with restricted tags
+  for (const restriction of profile.foodRestrictions ?? []) {
+    const r = restriction.toLowerCase();
+    if (tags.some((t) => t.includes(r))) score -= 10; // effectively excludes
+  }
+
+  // Dietary preference bonus
+  for (const pref of profile.dietaryPreferences ?? []) {
+    if (tags.some((t) => t.includes(pref.toLowerCase()))) score += 1;
+  }
+
   return score;
 }
 
@@ -76,9 +111,12 @@ export type RecipeBrowserProps = {
   userId?: string;
   /** Free-text goal labels driving Recommended ordering. */
   goals?: string[];
+  /** Optional richer profile for scoring. Falls back to { goals } if omitted. */
+  profile?: RecipeProfile;
 };
 
-export function RecipeBrowser({ viewer, userId, goals = [] }: RecipeBrowserProps) {
+export function RecipeBrowser({ viewer, userId, goals = [], profile }: RecipeBrowserProps) {
+  const effectiveProfile: RecipeProfile = profile ?? { goals };
   const [q, setQ] = useState("");
   const [active, setActive] = useState<Category>("Recommended");
   const [filters, setFilters] = useState<string[]>([]);
@@ -108,9 +146,15 @@ export function RecipeBrowser({ viewer, userId, goals = [] }: RecipeBrowserProps
 
   const display = useMemo(() => {
     if (active === "Recommended") {
-      if (goals.length === 0) return filtered.slice(0, 10);
+      const hasProfile =
+        (effectiveProfile.goals?.length ?? 0) > 0 ||
+        (effectiveProfile.foodRestrictions?.length ?? 0) > 0 ||
+        (effectiveProfile.dietaryPreferences?.length ?? 0) > 0 ||
+        !!effectiveProfile.proteinTarget ||
+        !!effectiveProfile.maxPrepMinutes;
+      if (!hasProfile) return filtered.slice(0, 10);
       const scored = filtered
-        .map((r) => ({ r, s: scoreRecipe(r, goals) }))
+        .map((r) => ({ r, s: scoreRecipe(r, effectiveProfile) }))
         .filter((x) => x.s > 0)
         .sort((a, b) => b.s - a.s)
         .map((x) => x.r)
@@ -119,7 +163,7 @@ export function RecipeBrowser({ viewer, userId, goals = [] }: RecipeBrowserProps
     }
     if (active === "All") return filtered;
     return filtered.filter((r) => r.category === active);
-  }, [filtered, active, goals]);
+  }, [filtered, active, effectiveProfile]);
 
   const toggle = (v: string) =>
     setFilters((cur) => (cur.includes(v) ? cur.filter((x) => x !== v) : [...cur, v]));
