@@ -45,7 +45,6 @@ function PortalHome() {
   const { user } = useAuth();
   const portalUserId = usePortalUserId();
   const offlineNoCache = useIsOfflineWithoutCache();
-  if (offlineNoCache) return <DashboardOfflineEmpty />;
 
   const { data: client, isPending: clientPending, isSuccess: clientSettled } = useQuery({
     queryKey: ["my-client", portalUserId],
