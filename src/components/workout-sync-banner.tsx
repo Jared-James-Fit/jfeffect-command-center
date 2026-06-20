@@ -1,14 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { AlertTriangle, CheckCircle2, CloudOff, Loader2, RefreshCw, Wifi, WifiOff } from "lucide-react";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
-import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { useAuth } from "@/lib/auth";
 import {
   retryAllNow,
   setStuckListener,
   useQueueAggregateStatus,
-  type QueueStatus,
 } from "@/lib/workout-offline-queue";
 import { reportWorkoutSyncStuck } from "@/lib/workout-sync-failure.functions";
 
@@ -37,26 +35,22 @@ function useOnline(): boolean {
   return online;
 }
 
-const META: Record<QueueStatus, { label: string; tone: string; Icon: any }> = {
-  synced: { label: "Synced", tone: "text-green-500", Icon: CheckCircle2 },
-  syncing: { label: "Syncing…", tone: "text-muted-foreground", Icon: Loader2 },
-  idle: { label: "Saved on device", tone: "text-amber-500", Icon: CloudOff },
-  failed: { label: "Saved on device · will retry", tone: "text-amber-500", Icon: CloudOff },
-  stuck: { label: "Failed to sync", tone: "text-destructive", Icon: AlertTriangle },
-};
-
-/**
- * Aggregate sync-state banner for the open workout. Shows nothing while
- * everything is synced; expands into a clear retry + fallback message if
- * writes are stuck.
- */
 export function WorkoutSyncBanner({ clientId, workoutId, pageRoute, className }: Props) {
   const { status, pending, stuck } = useQueueAggregateStatus();
   const online = useOnline();
+  const { role } = useAuth();
   const reportFn = useServerFn(reportWorkoutSyncStuck);
   const reportedRef = useRef<Set<string>>(new Set());
+  const [manualRetry, setManualRetry] = useState(false);
 
-  // Listen for stuck items and escalate (once per item id per session).
+  const isAdmin = role === "admin" || role === "coach";
+
+  useEffect(() => {
+    if (status !== "syncing") {
+      setManualRetry(false);
+    }
+  }, [status]);
+
   useEffect(() => {
     setStuckListener((item) => {
       if (reportedRef.current.has(item.id)) return;
@@ -90,105 +84,98 @@ export function WorkoutSyncBanner({ clientId, workoutId, pageRoute, className }:
     return () => setStuckListener(null);
   }, [clientId, workoutId, pageRoute, online, reportFn]);
 
-  const meta = META[status];
-  const Icon = meta.Icon;
-
-  // Don't render when there's nothing to say.
   const hidden = status === "synced" && online;
-  const banner = useMemo(() => {
-    if (status === "stuck") return "stuck";
-    if (!online) return "offline";
-    if (status === "idle" || status === "failed") return "pending";
-    return null;
-  }, [status, online]);
 
-  if (hidden) return null;
+  const pill = useMemo(() => {
+    if (hidden) return null;
+
+    if (status === "syncing") {
+      return {
+        text: manualRetry ? "Retrying…" : "Saving…",
+        variant: "gray" as const,
+        tappable: false,
+      };
+    }
+
+    if (status === "stuck") {
+      return {
+        text: "Sync issue · Tap for help",
+        variant: "red" as const,
+        tappable: true,
+      };
+    }
+
+    if ((status === "idle" || status === "failed") && !online) {
+      return {
+        text: "Saved offline · Tap to sync",
+        variant: "amber" as const,
+        tappable: true,
+      };
+    }
+
+    if (status === "idle" || status === "failed") {
+      return {
+        text: "Saving…",
+        variant: "gray" as const,
+        tappable: false,
+      };
+    }
+
+    return null;
+  }, [status, online, manualRetry, hidden]);
+
+  if (!pill) return null;
+
+  const handleTap = () => {
+    if (!pill.tappable) return;
+    setManualRetry(true);
+    retryAllNow();
+    toast("Retrying sync…");
+  };
 
   return (
     <div
       className={cn(
-        "rounded-lg border p-3 text-sm",
-        banner === "stuck"
-          ? "border-destructive/40 bg-destructive/5 text-destructive"
-          : banner === "offline"
-          ? "border-amber-500/40 bg-amber-500/5"
-          : "border-border bg-muted/40",
+        "fixed bottom-[max(4rem,env(safe-area-inset-bottom))] right-3 z-50 flex flex-col items-end",
         className,
       )}
       role="status"
       aria-live="polite"
     >
-      <div className="flex items-start gap-2">
-        <Icon
-          className={cn(
-            "mt-0.5 h-4 w-4 shrink-0",
-            meta.tone,
-            status === "syncing" && "animate-spin",
-          )}
-        />
-        <div className="flex-1 space-y-1">
-          <div className="flex items-center gap-2 font-medium">
-            <span>{meta.label}</span>
-            {pending > 0 && (
-              <span className="text-xs text-muted-foreground">
-                · {pending} pending
-              </span>
-            )}
-            {online ? (
-              <Wifi className="ml-auto h-3.5 w-3.5 text-muted-foreground" />
-            ) : (
-              <WifiOff className="ml-auto h-3.5 w-3.5 text-amber-500" />
-            )}
+      <button
+        type="button"
+        onClick={handleTap}
+        disabled={!pill.tappable}
+        className={cn(
+          "text-xs select-none transition-opacity",
+          pill.variant === "gray" && "text-muted-foreground",
+          pill.variant === "amber" &&
+            "bg-amber-500/10 text-amber-600 border border-amber-500/20 rounded-full px-2.5 py-1 cursor-pointer active:opacity-70",
+          pill.variant === "red" &&
+            "bg-destructive/10 text-destructive border border-destructive/20 rounded-full px-2.5 py-1 cursor-pointer active:opacity-70",
+        )}
+      >
+        {pill.text}
+      </button>
+
+      {isAdmin && stuck.length > 0 && (
+        <details className="mt-1.5">
+          <summary className="text-[10px] text-muted-foreground cursor-pointer select-none list-none text-right">
+            Developer details
+          </summary>
+          <div className="mt-1 max-w-[16rem] text-[10px] font-mono text-muted-foreground bg-muted/60 rounded-md p-2 space-y-1">
+            {stuck.map((item) => (
+              <div key={item.id} className="break-all">
+                <div className="font-semibold">{item.label}</div>
+                <div>attempts: {item.attempts}</div>
+                {item.lastError && (
+                  <div className="text-destructive">{item.lastError}</div>
+                )}
+              </div>
+            ))}
           </div>
-          {banner === "offline" && (
-            <p className="text-xs text-muted-foreground">
-              You're offline. Keep logging — your entries are saved on this
-              device and will sync automatically when you reconnect.
-            </p>
-          )}
-          {banner === "pending" && (
-            <p className="text-xs text-muted-foreground">
-              Your workout is saved on this device, but it has not fully synced
-              yet. Keep this page open or reconnect to WiFi/data so it can
-              submit.
-            </p>
-          )}
-          {banner === "stuck" && (
-            <div className="space-y-2 text-xs">
-              <p>
-                Your workout is saved on this device, but it has not fully
-                synced after multiple tries. Keep this page open or reconnect
-                to WiFi/data so it can submit.
-              </p>
-              <p className="text-destructive/80">
-                If this does not submit after reconnecting, screenshot this
-                workout and message your coach.
-              </p>
-              {stuck[0]?.lastError && (
-                <p className="text-[11px] opacity-70 font-mono break-all">
-                  {stuck[0].lastError}
-                </p>
-              )}
-            </div>
-          )}
-          {(banner === "pending" || banner === "stuck") && (
-            <div className="pt-1">
-              <Button
-                size="sm"
-                variant={banner === "stuck" ? "destructive" : "outline"}
-                onClick={() => {
-                  retryAllNow();
-                  toast("Retrying sync…");
-                }}
-                className="gap-1.5"
-              >
-                <RefreshCw className="h-3.5 w-3.5" />
-                Try Sync Again
-              </Button>
-            </div>
-          )}
-        </div>
-      </div>
+        </details>
+      )}
     </div>
   );
 }
