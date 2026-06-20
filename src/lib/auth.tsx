@@ -137,6 +137,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // Stop in-flight queries before clearing the session so they don't 401.
     try { await queryClient.cancelQueries(); } catch { /* best-effort */ }
     queryClient.clear();
+    // Wipe persisted RQ cache so the next signed-in user on this device
+    // never sees the previous user's cached dashboard data.
+    try {
+      const { clearPersistedQueryCache } = await import("@/lib/query-persister");
+      clearPersistedQueryCache();
+    } catch { /* best-effort */ }
     await supabase.auth.signOut();
     setSession(null);
     setUser(null);
