@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
+import { useServerFn } from "@tanstack/react-start";
 import { supabase } from "@/integrations/supabase/client";
+import { rescheduleFromCommittedDays } from "@/lib/schedule-bulk.functions";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -37,6 +39,7 @@ type Props = {
 
 export function TrainingScheduleCard({ client, editable = true, compact = false, defaultEditing = false }: Props) {
   const qc = useQueryClient();
+  const reschedule = useServerFn(rescheduleFromCommittedDays);
   const [editing, setEditing] = useState(defaultEditing);
   const [saving, setSaving] = useState(false);
   // Committed (mandatory) fields — only fields the client fills out
@@ -87,11 +90,27 @@ export function TrainingScheduleCard({ client, editable = true, compact = false,
     }
     setSaving(false);
     if (error) return toast.error(error.message);
-    toast.success("Schedule saved");
+    // Realign future auto-scheduled workouts onto the new committed days.
+    // Manually moved, locked, started, and completed workouts are preserved.
+    let movedCount = 0;
+    try {
+      const res = await reschedule({ data: { clientId: client.id } });
+      movedCount = (res as any)?.applied ?? 0;
+    } catch (e: any) {
+      toast.error(`Saved, but could not realign workouts: ${e?.message ?? "unknown error"}`);
+    }
+    toast.success(
+      movedCount > 0
+        ? `Schedule saved · ${movedCount} workout${movedCount === 1 ? "" : "s"} moved`
+        : "Schedule saved",
+    );
     qc.invalidateQueries({ queryKey: ["client", client.id] });
     qc.invalidateQueries({ queryKey: ["my-client"] });
     qc.invalidateQueries({ queryKey: ["my-client-schedule-gate"] });
     qc.invalidateQueries({ queryKey: ["workouts-experience-client", client.id] });
+    qc.invalidateQueries({ queryKey: ["client-schedule", client.id] });
+    qc.invalidateQueries({ queryKey: ["pl-days"] });
+    qc.invalidateQueries({ queryKey: ["workout-today"] });
     setEditing(false);
   };
 

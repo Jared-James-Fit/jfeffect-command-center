@@ -1,6 +1,8 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { WEEK_DAYS, type WeekDay } from "@/lib/training-schedule";
+import { addDays, format, parseISO } from "date-fns";
 
 // ───────────────────────────────────────────────────────────────────────────
 // Phase 3-5 server fns: bulk reschedules, coach overrides, schedule lock.
@@ -9,6 +11,16 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 // ───────────────────────────────────────────────────────────────────────────
 
 const isoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Expected YYYY-MM-DD");
+
+const WEEKDAY_INDEX: Record<WeekDay, number> = {
+  Monday: 1, Tuesday: 2, Wednesday: 3, Thursday: 4,
+  Friday: 5, Saturday: 6, Sunday: 0,
+};
+
+function weekdayFromDate(dateISO: string): WeekDay | null {
+  const dow = parseISO(dateISO).getDay();
+  return (WEEK_DAYS.find((wd) => WEEKDAY_INDEX[wd] === dow) ?? null) as WeekDay | null;
+}
 
 type Role = "client" | "member" | "coach" | "admin";
 
@@ -309,4 +321,193 @@ export const setScheduleLock = createServerFn({ method: "POST" })
       .from("clients").update({ schedule_locked: data.locked }).eq("id", data.clientId);
     if (error) throw new Error(error.message);
     return { ok: true as const, locked: data.locked };
+  });
+
+// ───────────────────────────────────────────────────────────────────────────
+// rescheduleFromCommittedDays — realign future auto-scheduled workouts onto
+// the client's currently committed training days. Skips:
+//   • workouts already in the past
+//   • workouts with schedule_locked = true (coach-locked)
+//   • workouts with schedule_source = 'manual' (manually moved by anyone)
+//   • workouts that have a completion row (started, in-progress, or completed)
+// Preserved workouts consume their weekday from the pool, so movable
+// workouts in the same week land on the remaining committed days in order.
+// ───────────────────────────────────────────────────────────────────────────
+
+export const rescheduleFromCommittedDays = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((i: unknown) =>
+    z.object({ clientId: z.string().uuid() }).parse(i),
+  )
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context;
+    const { role } = await resolveActorAccess(
+      { supabase, userId }, data.clientId,
+    );
+
+    const { data: clientRow } = await supabase
+      .from("clients")
+      .select("committed_training_days")
+      .eq("id", data.clientId)
+      .maybeSingle();
+    const committed: WeekDay[] = WEEK_DAYS.filter((d) =>
+      ((clientRow?.committed_training_days as string[] | null) ?? []).includes(d),
+    );
+    if (committed.length === 0) {
+      return { ok: true as const, applied: 0, batchId: null, noop: true };
+    }
+
+    const { data: blocks } = await supabase
+      .from("pl_blocks")
+      .select("id, start_date, week_duration_days, status")
+      .eq("client_id", data.clientId)
+      .neq("status", "Archived");
+    const blockList = (blocks ?? []).filter((b: any) => b.start_date);
+    if (blockList.length === 0) {
+      return { ok: true as const, applied: 0, batchId: null, noop: true };
+    }
+
+    const blockIds = blockList.map((b: any) => b.id);
+    const { data: weeks } = await supabase
+      .from("pl_weeks")
+      .select("id, week_index, block_id")
+      .in("block_id", blockIds)
+      .order("week_index");
+    const weekList = weeks ?? [];
+    const weekIds = weekList.map((w: any) => w.id);
+    if (weekIds.length === 0) {
+      return { ok: true as const, applied: 0, batchId: null, noop: true };
+    }
+    const { data: days } = await supabase
+      .from("pl_days")
+      .select("id, day_index, week_id, scheduled_date, schedule_source, schedule_locked, archived")
+      .in("week_id", weekIds)
+      .eq("archived", false)
+      .order("day_index");
+    const dayList = days ?? [];
+    const dayIds = dayList.map((d: any) => d.id);
+    const { data: completions } = dayIds.length
+      ? await supabase
+          .from("pl_day_completions")
+          .select("day_id, completed_at, in_progress_at, started_at")
+          .in("day_id", dayIds)
+      : { data: [] as any[] };
+    const touchedDayIds = new Set<string>();
+    for (const c of (completions ?? []) as any[]) {
+      if (c.completed_at || c.in_progress_at || c.started_at) touchedDayIds.add(c.day_id);
+    }
+
+    const todayISO = format(new Date(), "yyyy-MM-dd");
+
+    const daysByWeek = new Map<string, any[]>();
+    for (const d of dayList) {
+      const list = daysByWeek.get(d.week_id) ?? [];
+      list.push(d);
+      daysByWeek.set(d.week_id, list);
+    }
+
+    const moves: Array<{
+      dayId: string;
+      prev: string | null;
+      next: string;
+      prevSource: string | null;
+    }> = [];
+
+    for (const block of blockList) {
+      const dur = (block as any).week_duration_days ?? 7;
+      const startDate = parseISO(block.start_date as string);
+      const blockWeeks = weekList
+        .filter((w: any) => w.block_id === block.id)
+        .sort((a: any, b: any) => a.week_index - b.week_index);
+
+      for (const w of blockWeeks) {
+        const weekStart = addDays(startDate, Math.max(0, (w.week_index ?? 1) - 1) * dur);
+        const weekEndISO = format(addDays(weekStart, 6), "yyyy-MM-dd");
+        if (weekEndISO < todayISO) continue; // past week
+
+        const weekDays = (daysByWeek.get(w.id) ?? [])
+          .slice()
+          .sort((a: any, b: any) => a.day_index - b.day_index);
+
+        const committedDates = committed.map((wd) =>
+          format(addDays(weekStart, (WEEKDAY_INDEX[wd] + 6) % 7), "yyyy-MM-dd"),
+        );
+
+        // Classify days as preserved vs movable.
+        const consumed = new Set<string>();
+        const movable: any[] = [];
+        for (const d of weekDays) {
+          const isLocked = !!d.schedule_locked;
+          const isManual = d.schedule_source === "manual";
+          const isTouched = touchedDayIds.has(d.id);
+          const isPast = d.scheduled_date && d.scheduled_date < todayISO;
+          const preserved = isLocked || isManual || isTouched || isPast;
+          if (preserved) {
+            if (d.scheduled_date) consumed.add(d.scheduled_date);
+          } else {
+            movable.push(d);
+          }
+        }
+
+        const pool = committedDates.filter(
+          (dt) => !consumed.has(dt) && dt >= todayISO,
+        );
+        let cursor = 0;
+        for (const d of movable) {
+          if (cursor >= pool.length) break;
+          const next = pool[cursor++];
+          if (d.scheduled_date === next) continue;
+          moves.push({
+            dayId: d.id,
+            prev: d.scheduled_date ?? null,
+            next,
+            prevSource: d.schedule_source ?? null,
+          });
+        }
+      }
+    }
+
+    if (moves.length === 0) {
+      return { ok: true as const, applied: 0, batchId: null, noop: true };
+    }
+
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const batchId = crypto.randomUUID();
+    const applied: typeof moves = [];
+    try {
+      for (const m of moves) {
+        const { error } = await supabaseAdmin
+          .from("pl_days")
+          .update({ scheduled_date: m.next, schedule_source: "auto" })
+          .eq("id", m.dayId);
+        if (error) throw new Error(error.message);
+        applied.push(m);
+      }
+    } catch (err) {
+      for (const a of applied) {
+        await supabaseAdmin
+          .from("pl_days")
+          .update({ scheduled_date: a.prev, schedule_source: a.prevSource ?? "auto" })
+          .eq("id", a.dayId);
+      }
+      throw err;
+    }
+
+    await supabaseAdmin.from("pl_schedule_audit").insert(
+      applied.map((a) => ({
+        batch_id: batchId,
+        day_id: a.dayId,
+        client_id: data.clientId,
+        previous_date: a.prev,
+        new_date: a.next,
+        previous_source: a.prevSource,
+        new_source: "auto",
+        scope: "committed-schedule-change",
+        changed_by: userId,
+        changed_by_role: role,
+        note: "Auto-realigned after committed training days change.",
+      })),
+    );
+
+    return { ok: true as const, applied: applied.length, batchId };
   });
