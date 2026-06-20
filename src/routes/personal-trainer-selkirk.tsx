@@ -231,7 +231,7 @@ function SelkirkPage() {
         </div>
       </Section>
 
-      <TransformationsGallery eyebrow="Results" title="Real clients. Real transformations." />
+      <TransformationsGallery eyebrow="Results" title="Transformed 100+ lives" />
 
       {/* SECTION 6 — Pricing */}
       <Section>
