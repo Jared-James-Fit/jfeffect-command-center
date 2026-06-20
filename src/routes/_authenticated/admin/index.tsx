@@ -217,7 +217,12 @@ function AdminDashboard() {
   const { data: clients = [] } = useQuery({
     queryKey: ["admin-clients"],
     queryFn: async () => {
-      const { data, error } = await supabase.from("clients").select("*").eq("archived", false);
+      const { data, error } = await supabase
+        .from("clients")
+        .select(
+          "id, full_name, email, status, payment_status, profile_picture_url, invite_expires_at, invite_sent_at, account_created_at, needs_admin_help, archived"
+        )
+        .eq("archived", false);
       if (error) throw error;
       return data;
     },
@@ -258,7 +263,7 @@ function AdminDashboard() {
       const { data } = await (supabase.from("messages") as any)
         .select("client_id, body, created_at, sender_role, is_internal_note")
         .eq("is_internal_note", false).eq("sender_role", "client")
-        .order("created_at", { ascending: false }).limit(200);
+        .order("created_at", { ascending: false }).limit(60);
       return (data ?? []) as Message[];
     },
   });
