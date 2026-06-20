@@ -18,6 +18,11 @@ export function RouterErrorFallback({ error, reset }: Props) {
   useEffect(() => {
     if (autoRetried) return;
     setAutoRetried(true);
+    // Surface the underlying error so we can see why routes fail in
+    // production logs (Sentry/console). Without this the fallback UI is
+    // the only signal that something went wrong.
+    // eslint-disable-next-line no-console
+    console.error("[router-error]", error);
     const id = window.setTimeout(() => {
       void router.invalidate().then(() => reset());
     }, 600);
