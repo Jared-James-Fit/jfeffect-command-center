@@ -5,6 +5,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Card } from "@/components/ui/card";
 import { Flame, Beef, Wheat, Cookie, Droplets, Moon, ChefHat, HelpCircle, Calculator, Sparkles } from "lucide-react";
 import { RecipeBrowser } from "./RecipeBrowser";
+import type { RecipeProfile } from "./RecipeBrowser";
 import { ensureWaterTarget, formatWater } from "@/lib/water";
 import { WaterTargetDialog } from "@/components/progress/water-target-dialog";
 import { useAuth } from "@/lib/auth";
@@ -37,6 +38,7 @@ export function NutritionDashboard({
   targets,
   recipesAnchorId = "recipes",
   children,
+  profile,
 }: {
   viewer: "member" | "client";
   userId?: string;
@@ -44,6 +46,7 @@ export function NutritionDashboard({
   targets?: NutritionTargets;
   recipesAnchorId?: string;
   children?: ReactNode;
+  profile?: RecipeProfile;
 }) {
   return (
     <div className="space-y-6 p-4 pb-28 md:p-6 md:pb-12">
@@ -74,7 +77,7 @@ export function NutritionDashboard({
       {children}
       <div id={recipesAnchorId} className="scroll-mt-20">
         <SectionErrorBoundary label="Recipes">
-          <RecipeBrowser viewer={viewer} userId={userId} goals={goals} />
+          <RecipeBrowser viewer={viewer} userId={userId} goals={goals} profile={profile} />
         </SectionErrorBoundary>
       </div>
     </div>
