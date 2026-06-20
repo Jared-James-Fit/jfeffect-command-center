@@ -28,6 +28,7 @@ import { useEffect, useState } from "react";
 import { listMyPortalAppointments } from "@/lib/appointments.functions";
 import { useServerFn } from "@tanstack/react-start";
 import { format, parseISO, isToday, isTomorrow } from "date-fns";
+import { SectionErrorBoundary } from "@/components/section-error-boundary";
 
 export const Route = createFileRoute("/_authenticated/portal/")({ component: PortalHome });
 
@@ -342,10 +343,10 @@ function PortalHome() {
     } as any);
   }
 
-  // While the core client record is loading, render a steady skeleton in the
-  // same layout shape as the real portal so the dashboard fades in once
-  // instead of popping in piece-by-piece.
-  const initialLoading = clientPending || (!!portalUserId && !clientSettled && !client);
+  // We render the shell + per-section skeletons immediately so the dashboard
+  // never blocks waiting on one query. Each section is wrapped in a local
+  // error boundary so a single failure can't take the whole dashboard down.
+  const clientLoading = clientPending || (!!portalUserId && !clientSettled && !client);
 
   return (
     <>
@@ -361,11 +362,7 @@ function PortalHome() {
       )}
 
       <div className="mx-auto w-full max-w-2xl space-y-5 px-4 pb-24 pt-4 md:max-w-5xl md:px-8 md:pt-6 animate-fade-in">
-        {initialLoading ? (
-          <PortalHomeSkeleton />
-        ) : (
-          <>
-        {/* 1 — Compact greeting header */}
+        {/* 1 — Compact greeting header (renders immediately) */}
         <GreetingHeader
           firstName={firstName}
           avatarUrl={(client as any)?.profile_picture_url ?? null}
@@ -379,79 +376,101 @@ function PortalHome() {
         {/* 2b — Non-blocking onboarding checklist (replaces the old hard-lock
             gates for profile picture / basic info / training schedule / goals). */}
         {client?.id && portalUserId && (
-          <SetupChecklistBanner clientId={client.id} userId={portalUserId} />
+          <SectionErrorBoundary label="Setup checklist">
+            <SetupChecklistBanner clientId={client.id} userId={portalUserId} />
+          </SectionErrorBoundary>
         )}
 
         {/* Action Centre — pinned to the top so urgent items are seen first */}
-        <ActionCentre items={actions} />
+        <SectionErrorBoundary label="Action centre">
+          <ActionCentre items={actions} />
+        </SectionErrorBoundary>
 
         {/* 3 — Progress summary */}
-        {portalUserId && (
-          <ProgressSummaryCard
-            userId={portalUserId}
-            currentUserId={portalUserId}
-            viewerRole="owner"
-            progressHref={{ kind: "portal" }}
-            extraActions={
-              client ? (
-                <HomeActionTiles
-                  tiles={[
-                    {
-                      to: pickWeeklyCheckInForm(assignedForms as any)?.id
-                        ? `/portal/check-ins/${pickWeeklyCheckInForm(assignedForms as any)!.id}`
-                        : "/portal/check-ins",
-                      label: "Submit Check-In",
-                      icon: ClipboardCheck,
-                      badge: (assignedForms as any[])?.length || undefined,
-                      emphasis: true,
-                    },
-                    { to: "/portal/lift-videos", label: "Upload Lift", icon: Video },
-                  ] as HomeActionTile[]}
-                />
-              ) : null
-            }
-          />
+        {portalUserId ? (
+          <SectionErrorBoundary label="Progress">
+            <ProgressSummaryCard
+              userId={portalUserId}
+              currentUserId={portalUserId}
+              viewerRole="owner"
+              progressHref={{ kind: "portal" }}
+              extraActions={
+                client ? (
+                  <HomeActionTiles
+                    tiles={[
+                      {
+                        to: pickWeeklyCheckInForm(assignedForms as any)?.id
+                          ? `/portal/check-ins/${pickWeeklyCheckInForm(assignedForms as any)!.id}`
+                          : "/portal/check-ins",
+                        label: "Submit Check-In",
+                        icon: ClipboardCheck,
+                        badge: (assignedForms as any[])?.length || undefined,
+                        emphasis: true,
+                      },
+                      { to: "/portal/lift-videos", label: "Upload Lift", icon: Video },
+                    ] as HomeActionTile[]}
+                  />
+                ) : null
+              }
+            />
+          </SectionErrorBoundary>
+        ) : (
+          <SectionSkeleton height="h-44" />
         )}
 
         {/* 3a — Water Today */}
         {portalUserId && (
-          <HomeWaterCard
-            userId={portalUserId}
-            currentUserId={portalUserId}
-            surface="portal"
-          />
+          <SectionErrorBoundary label="Water">
+            <HomeWaterCard
+              userId={portalUserId}
+              currentUserId={portalUserId}
+              surface="portal"
+            />
+          </SectionErrorBoundary>
         )}
 
         {/* 3b — Bodyweight tracker (syncs with Progress > Weight tracker) */}
-        {client?.id && (
-          <BodyweightSummaryCard
-            clientId={client.id}
-            defaultUnit={((client as any)?.preferred_weight_unit as WeightUnit) ?? "lb"}
-          />
-        )}
+        {client?.id ? (
+          <SectionErrorBoundary label="Bodyweight">
+            <BodyweightSummaryCard
+              clientId={client.id}
+              defaultUnit={((client as any)?.preferred_weight_unit as WeightUnit) ?? "lb"}
+            />
+          </SectionErrorBoundary>
+        ) : clientLoading ? (
+          <SectionSkeleton height="h-52" />
+        ) : null}
 
         {/* 3a — Install JF Effect on Your Phone (permanent action) */}
         {client && <InstallAppCard />}
 
         {/* 3b — Intake & form answers (one-tap access for the client) */}
         {client && (
-          <IntakeAnswersBigButton
-            clientId={client.id}
-            clientName={client.full_name ?? null}
-            label="My Intake & Form Answers"
-            subtitle="Review everything you’ve filled out — sign-up intake & in-app forms"
-          />
+          <SectionErrorBoundary label="Intake answers">
+            <IntakeAnswersBigButton
+              clientId={client.id}
+              clientName={client.full_name ?? null}
+              label="My Intake & Form Answers"
+              subtitle="Review everything you’ve filled out — sign-up intake & in-app forms"
+            />
+          </SectionErrorBoundary>
         )}
 
         {/* 5 — Current Training Block */}
-        {activePhase && <TrainingBlockCard phase={activePhase} />}
+        {activePhase && (
+          <SectionErrorBoundary label="Training block">
+            <TrainingBlockCard phase={activePhase} />
+          </SectionErrorBoundary>
+        )}
 
 
         {/* 7 — Upcoming appointment (compact, only if exists) */}
         {nextAppointment && <UpcomingAppointmentRow appt={nextAppointment} />}
 
         {/* 8 — Events panel (only renders when there's something) */}
-        <UpcomingEventsPanel audience="client" />
+        <SectionErrorBoundary label="Events">
+          <UpcomingEventsPanel audience="client" />
+        </SectionErrorBoundary>
 
         {/* 9 — Secondary links */}
         {client && (
@@ -459,42 +478,13 @@ function PortalHome() {
             handleAgreementComplete={markAgreementComplete}
           />
         )}
-          </>
-        )}
       </div>
     </>
   );
 }
 
-function PortalHomeSkeleton() {
-  return (
-    <div className="space-y-5 animate-fade-in">
-      {/* Greeting */}
-      <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3">
-        <div className="h-11 w-11 shrink-0 rounded-full border border-border bg-secondary/40 animate-pulse" />
-        <div className="min-w-0 space-y-2">
-          <div className="h-5 w-48 rounded bg-secondary/50 animate-pulse" />
-          <div className="h-3 w-32 rounded bg-secondary/30 animate-pulse" />
-        </div>
-        <div className="h-11 w-11 rounded-full border border-border bg-card" />
-      </div>
-      {/* Today's primary action */}
-      <div className="h-44 rounded-2xl border border-border bg-card animate-pulse" />
-      {/* Quick actions grid */}
-      <div className="grid grid-cols-2 gap-3">
-        {Array.from({ length: 6 }).map((_, i) => (
-          <div key={i} className="h-24 rounded-2xl border border-border bg-card animate-pulse" />
-        ))}
-      </div>
-      {/* Action Centre */}
-      <div className="space-y-3">
-        <div className="h-5 w-32 rounded bg-secondary/40 animate-pulse" />
-        <div className="h-16 rounded-2xl border border-border bg-card animate-pulse" />
-      </div>
-      {/* Bodyweight */}
-      <div className="h-52 rounded-2xl border border-border bg-card animate-pulse" />
-    </div>
-  );
+function SectionSkeleton({ height = "h-32" }: { height?: string }) {
+  return <div className={`rounded-2xl border border-border bg-card animate-pulse ${height}`} />;
 }
 
 function GreetingHeader({
