@@ -106,14 +106,14 @@ function SelkirkPage() {
               Personal Training in Selkirk for Beginners Who Want Real Results
             </h1>
             <p className="mt-5 text-base text-muted-foreground md:text-xl">
-              You don't need to be fit before starting.
+              You don't need to be fit to start.
             </p>
             <p className="mt-3 text-base text-muted-foreground md:text-lg">
-              Whether you're trying to lose weight, build confidence, get stronger, or simply learn how to use a gym properly,
-              Jared James helps make fitness simple, structured, and beginner friendly.
+              Whether you want to lose weight, build confidence, get stronger, or just learn how to use a gym the right way,
+              Jared James makes fitness simple, structured, and built for beginners.
             </p>
             <p className="mt-4 text-sm font-semibold md:text-base">
-              Located at Iron Image Gym in Selkirk, Manitoba. Sessions start at $100. Package options available.
+              At Iron Image Gym in Selkirk, Manitoba. Sessions from $100. Packages available.
             </p>
             <div className="mt-7 flex justify-center">
               <PrimaryCta />
