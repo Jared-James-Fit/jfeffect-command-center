@@ -13,7 +13,8 @@ function MemberLayout() {
   const { role, loading } = useAuth();
   const navigate = useNavigate();
   const pov = getPovFlag();
-  const { status, subscriptionStatus, subscriptionActive, hasAccess, loading: accessLoading, accountType } = useMemberAccess();
+  const { status, subscriptionStatus, subscriptionActive, hasAccess, loading: accessLoading, accountType, member } = useMemberAccess();
+  const manualOverride = member?.manual_access_override === true && member?.manual_access_disabled !== true;
   const location = useLocation();
   const allowList = ["/m/billing", "/m/welcome", "/m/account"];
   const isAllowed = allowList.some((p) => location.pathname.startsWith(p));
@@ -42,6 +43,7 @@ function MemberLayout() {
     <AppShell items={memberNav} bottomItems={memberBottomNav} title="Member">
       {showToggle && <PovQuickToggle variant="banner" />}
       {(accountType === "jf_member"
+        && !manualOverride
         && (!subscriptionActive
             || (subscriptionStatus && !["Trialing", "Active"].includes(subscriptionStatus)))) && (
         <div className="px-4 pt-4 md:px-6 md:pt-6">
