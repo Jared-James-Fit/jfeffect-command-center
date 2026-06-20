@@ -89,10 +89,11 @@ export function MessagesInbox({
   const { data: lastMessages = [] } = useQuery({
     queryKey: ["last-messages", states.map((s) => s.client_id).sort().join(",")],
     enabled: states.length > 0,
+    staleTime: 30_000,
     queryFn: async () => {
       const clientIds = Array.from(new Set(states.map((s) => s.client_id))).filter(Boolean);
       const results: Message[] = [];
-      const batchSize = 20;
+      const batchSize = 10;
       for (let i = 0; i < clientIds.length; i += batchSize) {
         const batch = clientIds.slice(i, i + batchSize);
         const batchResults = await Promise.all(
