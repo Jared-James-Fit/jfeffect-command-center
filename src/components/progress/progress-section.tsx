@@ -645,8 +645,7 @@ function AngleUploadCard({
       <input
         ref={fileRef} type="file"
         accept={mediaType === "photo" ? "image/*" : "video/*"}
-        // Photos: open rear camera directly. Videos: let user choose camera or gallery.
-        capture={mediaType === "photo" ? "environment" : undefined}
+        // No `capture` attribute — lets the user pick from their photo library or take a new photo.
         className="hidden"
         onChange={(e) => { const f = e.target.files?.[0]; if (f) onFile(f); e.target.value = ""; }}
       />
