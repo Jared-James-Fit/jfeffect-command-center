@@ -11,6 +11,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMemo } from "react";
 import { WorkoutDayView } from "@/components/workout-day/WorkoutDayView";
+import { ClientCardioSection } from "@/components/cardio/ClientCardioSection";
 import { buildWorkoutAdapter } from "@/lib/workout-context";
 import { useAuth } from "@/lib/auth";
 
@@ -68,6 +69,15 @@ function MemberWorkoutRoute() {
         // CTAs from the shared workout view route there.
         messagesPath: "/m/support",
       }}
-    />
+    >
+      {user?.id && (
+        <ClientCardioSection
+          clientId={user.id}
+          dayContext="training"
+          date={new Date()}
+          hideWhenEmpty
+        />
+      )}
+    </WorkoutDayView>
   );
 }

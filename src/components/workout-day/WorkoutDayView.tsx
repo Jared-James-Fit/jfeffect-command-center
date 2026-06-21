@@ -269,6 +269,7 @@ export function WorkoutDayView({
   search,
   adapter,
   navigation,
+  children,
 }: {
   dayId: string;
   search: WorkoutDayViewSearch;
@@ -282,13 +283,16 @@ export function WorkoutDayView({
    */
   adapter?: WorkoutContextAdapter;
   navigation: WorkoutDayViewNavigation;
+  children?: ReactNode;
 }) {
   return (
     <WorkoutNavigationContext.Provider value={navigation}>
       <WorkoutAdapterContext.Provider value={adapter ?? null}>
         <WorkoutUndoProvider>
           <ActiveRestTimerProvider>
-            <WorkoutDay dayId={dayId} search={search} adapter={adapter} navigation={navigation} />
+            <WorkoutDay dayId={dayId} search={search} adapter={adapter} navigation={navigation}>
+              {children}
+            </WorkoutDay>
           </ActiveRestTimerProvider>
         </WorkoutUndoProvider>
       </WorkoutAdapterContext.Provider>
@@ -333,11 +337,13 @@ function WorkoutDay({
   search,
   adapter,
   navigation,
+  children,
 }: {
   dayId: string;
   search: WorkoutDayViewSearch;
   adapter?: WorkoutContextAdapter;
   navigation: WorkoutDayViewNavigation;
+  children?: ReactNode;
 }) {
   const portalUserId = usePortalUserId();
   // Phase B turn 2: day/rows/results reads route through the adapter when
@@ -1389,6 +1395,7 @@ function WorkoutDay({
             }
           />
         )}
+        {children}
       </div>
 
       {/* Minimal post-workout completion sheet. Readonly (admin POV) never opens it. */}
