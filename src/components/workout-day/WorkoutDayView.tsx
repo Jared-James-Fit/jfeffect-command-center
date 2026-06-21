@@ -337,11 +337,13 @@ function WorkoutDay({
   search,
   adapter,
   navigation,
+  children,
 }: {
   dayId: string;
   search: WorkoutDayViewSearch;
   adapter?: WorkoutContextAdapter;
   navigation: WorkoutDayViewNavigation;
+  children?: ReactNode;
 }) {
   const portalUserId = usePortalUserId();
   // Phase B turn 2: day/rows/results reads route through the adapter when
