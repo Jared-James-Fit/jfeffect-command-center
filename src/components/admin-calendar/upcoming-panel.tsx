@@ -5,6 +5,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { listUpcomingUnified, type UnifiedRow } from "@/lib/calendar-upcoming.functions";
 import { markAppointmentStatus, cancelAppointment } from "@/lib/appointments.functions";
 import { assignGoogleEventToClient, getGoogleConnectionStatus } from "@/lib/google-cal.functions";
+import { resyncAppointmentToGoogle } from "@/lib/appointments.functions";
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/app-shell";
 import { Card } from "@/components/ui/card";
@@ -15,7 +16,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetFooter } from "@/components/ui/sheet";
 import {
   Calendar as CalendarIcon, RefreshCw, Search, ExternalLink, Video, Copy,
-  CheckCircle2, AlertTriangle, X, CalendarClock, User, Link2 as LinkIcon, Filter, UserPlus,
+  CheckCircle2, AlertTriangle, X, CalendarClock, User, Link2 as LinkIcon, Filter, UserPlus, Loader2,
 } from "lucide-react";
 import { toast } from "sonner";
 import { runJob } from "@/lib/progress-jobs";
@@ -264,6 +265,9 @@ function UpcomingRow({ row, onChanged }: { row: UnifiedRow; onChanged: () => voi
 
   const isAppt = row.source === "appointment";
   const isGoogleOnly = row.source === "google";
+  const gcalStatusFn = useServerFn(getGoogleConnectionStatus);
+  const { data: gcalStatus } = useQuery({ queryKey: ["gcal-status"], queryFn: () => gcalStatusFn(), staleTime: 5 * 60_000 });
+  const gcalConnected = !!gcalStatus?.connected;
 
   async function markStatus(s: "Completed" | "NoShow" | "Cancelled") {
     if (!isAppt || busy) return;
@@ -388,6 +392,9 @@ function UpcomingRow({ row, onChanged }: { row: UnifiedRow; onChanged: () => voi
             <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => setAssignOpen(true)}>
               <UserPlus className="mr-1 h-3 w-3" /> Assign Client
             </Button>
+          )}
+          {isAppt && !row.google_event_id && gcalConnected && (
+            <ResyncButton appointmentId={row.source_id} onSynced={onChanged} />
           )}
         </div>
       </div>
@@ -517,5 +524,30 @@ function AssignClientSheet({
         </SheetFooter>
       </SheetContent>
     </Sheet>
+  );
+}
+
+function ResyncButton({ appointmentId, onSynced }: { appointmentId: string; onSynced: () => void }) {
+  const resyncFn = useServerFn(resyncAppointmentToGoogle);
+  const [busy, setBusy] = useState(false);
+
+  const handleResync = async () => {
+    setBusy(true);
+    try {
+      await resyncFn({ data: { id: appointmentId } });
+      toast.success("Synced to Google Calendar");
+      onSynced();
+    } catch (e: any) {
+      toast.error(e?.message ?? "Sync failed");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Button size="sm" variant="outline" className="h-7 text-xs border-amber-500/30 text-amber-300 hover:bg-amber-500/10" onClick={handleResync} disabled={busy}>
+      {busy ? <Loader2 className="mr-1 h-3 w-3 animate-spin" /> : <RefreshCw className="mr-1 h-3 w-3" />}
+      {busy ? "Syncing…" : "Re-sync"}
+    </Button>
   );
 }

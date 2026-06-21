@@ -529,3 +529,76 @@ export const listUpcomingForBell = createServerFn({ method: "GET" })
       .limit(10);
     return data ?? [];
   });
+
+/** Force re-sync a single appointment to Google Calendar.
+ *  Used when the initial sync failed (no google_event_id set).
+ *  Safe to call multiple times — idempotent.
+ */
+export const resyncAppointmentToGoogle = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => z.object({ id: z.string().uuid() }).parse(d))
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context as any;
+    const { data: appt } = await supabase
+      .from("appointments")
+      .select("*")
+      .eq("id", data.id)
+      .maybeSingle();
+    if (!appt) throw new Error("Appointment not found");
+
+    // If already synced, just update it
+    const { gcalCreateEvent, gcalUpdateEvent } = await import("./google-cal.server");
+    try {
+      let googleEventId = appt.google_event_id ?? null;
+      let meetLink = appt.meet_link ?? null;
+
+      if (googleEventId) {
+        // Update existing event
+        await gcalUpdateEvent(appt.host_coach_id, googleEventId, {
+          summary: appt.title,
+          location: appt.location,
+          start: { dateTime: appt.starts_at, timeZone: appt.timezone },
+          end: { dateTime: appt.ends_at, timeZone: appt.timezone },
+        });
+      } else {
+        // Create new event
+        const attendeeEmail = appt.external_email ?? null;
+        const attendeeName = appt.external_name ?? null;
+        const created = await gcalCreateEvent(appt.host_coach_id, {
+          summary: appt.title,
+          description: appt.attendee_notes ?? undefined,
+          startISO: appt.starts_at,
+          endISO: appt.ends_at,
+          timezone: appt.timezone,
+          location: appt.location ?? undefined,
+          attendees: attendeeEmail ? [{ email: attendeeEmail, displayName: attendeeName ?? undefined }] : undefined,
+          meet: false,
+        });
+        if (created) {
+          googleEventId = created.id;
+          meetLink = created.meetLink ?? null;
+        }
+      }
+
+      if (googleEventId) {
+        await supabase.from("appointments")
+          .update({ google_event_id: googleEventId, meet_link: meetLink })
+          .eq("id", appt.id);
+      }
+
+      const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+      await supabaseAdmin.from("appointment_audit_log").insert({
+        appointment_id: appt.id, actor_user_id: userId, action: "google_sync_success",
+        details: { google_event_id: googleEventId, method: appt.google_event_id ? "update" : "create" },
+      });
+
+      return { ok: true, google_event_id: googleEventId };
+    } catch (e: any) {
+      const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+      await supabaseAdmin.from("appointment_audit_log").insert({
+        appointment_id: appt.id, actor_user_id: userId, action: "google_sync_failed",
+        details: { error: String(e?.message ?? e), phase: "resync" },
+      });
+      throw new Error(`Google sync failed: ${e?.message ?? "Unknown error"}`);
+    }
+  });
