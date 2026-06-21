@@ -14,6 +14,7 @@ import { usePortalUserId, useClientImpersonation } from "@/lib/client-impersonat
 import { cn } from "@/lib/utils";
 import { SectionErrorBoundary } from "@/components/section-error-boundary";
 import { toast } from "sonner";
+import { NutritionDashboard, type NutritionTargets } from "@/components/nutrition/NutritionDashboard";
 
 export const Route = createFileRoute("/_authenticated/portal/nutrition-targets")({
   component: PortalNutrition,
@@ -114,6 +115,18 @@ function PortalNutrition() {
         : "",
     [plan],
   );
+
+  // Derive shared dashboard targets from the coach-assigned plan when present.
+  const dashboardTargets: NutritionTargets | undefined = day
+    ? {
+        calories: day.calories ?? null,
+        protein: day.protein ?? null,
+        carbs: day.carbs ?? null,
+        fats: day.fats ?? null,
+        water: plan?.water ?? null,
+        sleep: "8h",
+      }
+    : undefined;
 
   return (
     <>
@@ -266,15 +279,16 @@ function PortalNutrition() {
         )}
       </div>
 
-      {/* 4. Recipes below */}
-      <div className="p-4 pb-28 md:p-6 md:pb-12">
-        <div className="mb-3 text-xs font-black uppercase tracking-widest text-muted-foreground">
-          Recipes
-        </div>
-        <SectionErrorBoundary label="Recipes">
-          <RecipeBrowser viewer="client" userId={portalUserId ?? undefined} goals={ctxQ.data?.goals ?? []} />
-        </SectionErrorBoundary>
-      </div>
+      {/* Shared dashboard: macro breakdown, adherence, quick actions, recipes */}
+      <SectionErrorBoundary label="Nutrition dashboard">
+        <NutritionDashboard
+          viewer="client"
+          userId={portalUserId ?? undefined}
+          goals={ctxQ.data?.goals ?? []}
+          targets={dashboardTargets}
+          hasCoachApprovedTargets={!!plan}
+        />
+      </SectionErrorBoundary>
     </>
   );
 }
