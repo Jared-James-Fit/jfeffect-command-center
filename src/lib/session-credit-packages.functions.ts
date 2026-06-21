@@ -159,9 +159,22 @@ export const getClientSessionCredits = createServerFn({ method: "POST" })
         .order("created_at", { ascending: false }),
       supabase.rpc("session_balance", { _client_id: data.client_id }),
     ]);
+    const events = eventsRes.data ?? [];
+    const apptIds = Array.from(
+      new Set(events.map((e: any) => e.appointment_id).filter(Boolean)),
+    );
+    let appointmentsById: Record<string, any> = {};
+    if (apptIds.length > 0) {
+      const { data: appts } = await supabase
+        .from("appointments")
+        .select("id, scheduled_at, title, status")
+        .in("id", apptIds);
+      appointmentsById = Object.fromEntries((appts ?? []).map((a: any) => [a.id, a]));
+    }
     return {
       ok: true,
-      events: eventsRes.data ?? [],
+      events,
+      appointments: appointmentsById,
       balance: balRes.data ?? [],
     };
   });
