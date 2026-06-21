@@ -14,7 +14,6 @@ import { cn } from "@/lib/utils";
 import { SectionErrorBoundary } from "@/components/section-error-boundary";
 import { toast } from "sonner";
 import { NutritionDashboard, type NutritionTargets } from "@/components/nutrition/NutritionDashboard";
-import { DailyNutritionPanel } from "@/components/nutrition/DailyNutritionPanel";
 
 export const Route = createFileRoute("/_authenticated/portal/nutrition-targets")({
   component: PortalNutrition,
@@ -280,9 +279,6 @@ function PortalNutrition() {
       </div>
 
       {/* Shared dashboard: macro breakdown, adherence, quick actions, recipes */}
-      <SectionErrorBoundary label="Daily nutrition">
-        <DailyNutritionPanel />
-      </SectionErrorBoundary>
       <SectionErrorBoundary label="Nutrition dashboard">
         <NutritionDashboard
           viewer="client"
