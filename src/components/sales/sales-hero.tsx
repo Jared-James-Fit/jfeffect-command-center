@@ -15,7 +15,9 @@ export function SalesHero({
   return (
     <section className="relative overflow-hidden">
       <div className="absolute inset-0 -z-10 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-primary/10 via-background to-background" />
-      <div className="container mx-auto grid gap-10 px-4 py-14 md:py-20 lg:grid-cols-2 lg:items-center">
+      <div
+        className="container mx-auto grid gap-10 px-4 py-14 md:py-20 lg:grid-cols-2 lg:items-center motion-safe:[animation:fade-in_600ms_ease-out_both]"
+      >
         <div>
           {eyebrow && (
             <div className="inline-flex items-center gap-1 rounded-full border border-primary/30 bg-primary/10 px-3 py-1 text-xs font-semibold text-primary">
@@ -53,7 +55,7 @@ export function SalesHero({
 }
 
 export function HeroCta({ children, ...props }: React.ComponentProps<typeof Button>) {
-  return <Button size="lg" className="h-12 px-6 text-base font-bold" {...props}>{children}</Button>;
+  return <Button size="lg" className="h-12 px-6 text-base font-bold hover:scale-[1.02] active:scale-[0.98] transition-transform duration-150" {...props}>{children}</Button>;
 }
 
 export function HeroCtaGhost({ children, ...props }: React.ComponentProps<typeof Button>) {
