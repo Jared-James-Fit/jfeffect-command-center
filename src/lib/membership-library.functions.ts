@@ -2,6 +2,39 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { assertMemberCanReadProtected } from "@/lib/jf-access.server";
+import { isMemberAccessActive } from "@/lib/memberAccess";
+
+// Membership program-library access keys. A plan tagged with any of these
+// is reachable by a member that holds any other key in the set — they all
+// represent "this member can browse and start library programs".
+const PROGRAM_LIBRARY_KEYS = new Set([
+  "app_membership",
+  "program_library",
+  "jf_membership",
+]);
+
+// True when the member should be allowed to see/start a library plan with
+// the given required access level. Combines the canonical access helper
+// (which respects manual override, grace, subscription, expiry) with the
+// explicit `member_access` rows, and treats the program-library keys as
+// interchangeable so a `program_only` or jf_member without an explicit
+// `app_membership` row can still reach membership-tagged programs.
+function canAccessPlan(
+  member: any,
+  accessKeys: Set<string>,
+  requiredKey: string,
+  audienceMode: string,
+): boolean {
+  if (audienceMode === "all_active") return isMemberAccessActive(member);
+  if (accessKeys.has(requiredKey)) return true;
+  if (PROGRAM_LIBRARY_KEYS.has(requiredKey)) {
+    for (const k of accessKeys) if (PROGRAM_LIBRARY_KEYS.has(k)) return true;
+    // Fall back to canonical access (active subscription / manual override)
+    // so newly-signed-up members aren't blocked by missing access rows.
+    if (isMemberAccessActive(member)) return true;
+  }
+  return false;
+}
 
 async function assertAdmin(ctx: any) {
   const { supabase, userId } = ctx;
@@ -335,7 +368,10 @@ export const listMembershipLibrary = createServerFn({ method: "GET" })
     // listings if no listing exists yet.
     try { await syncSharedTemplatesToLibrary(supabaseAdmin); } catch { /* best-effort */ }
     const { data: member } = await supabaseAdmin
-      .from("app_members").select("id").eq("user_id", userId).maybeSingle();
+      .from("app_members")
+      .select("id, status, subscription_status, account_type, manual_access_override, manual_access_disabled, access_end_date, in_grace")
+      .eq("user_id", userId)
+      .maybeSingle();
     if (!member) return { plans: [] };
     // member_plans IS the source of truth for the Membership Library listing.
     // status='Published' + membership_status='live' means the admin has
@@ -355,9 +391,9 @@ export const listMembershipLibrary = createServerFn({ method: "GET" })
         .eq("member_id", (member as any).id)
         .eq("active", true),
     ]);
-    const keys = new Set((access ?? []).map((a: any) => a.access_level_key));
+    const keys = new Set<string>((access ?? []).map((a: any) => a.access_level_key as string));
     const visible = (plans ?? []).filter((p: any) =>
-      p.audience_mode === "all_active" || keys.has(p.required_access_level),
+      canAccessPlan(member, keys, p.required_access_level, p.audience_mode),
     );
     visible.sort((a: any, b: any) =>
       (b.featured ? 1 : 0) - (a.featured ? 1 : 0)
@@ -368,17 +404,22 @@ export const listMembershipLibrary = createServerFn({ method: "GET" })
 
 async function memberAccessGate(supabase: any, userId: string, planId: string) {
   const [{ data: member }, { data: plan }] = await Promise.all([
-    supabase.from("app_members").select("id").eq("user_id", userId).maybeSingle(),
+    supabase
+      .from("app_members")
+      .select("id, status, subscription_status, account_type, manual_access_override, manual_access_disabled, access_end_date, in_grace")
+      .eq("user_id", userId)
+      .maybeSingle(),
     supabase.from("member_plans").select("*").eq("id", planId).maybeSingle(),
   ]);
   if (!member) throw new Error("Not a member");
   if (!plan) throw new Error("Plan not found");
   if (plan.status !== "Published") throw new Error("Plan not available");
-  if (plan.audience_mode === "all_active") return { member, plan };
   const { data: access } = await supabase
     .from("member_access").select("access_level_key").eq("member_id", member.id).eq("active", true);
-  const keys = new Set((access ?? []).map((a: any) => a.access_level_key));
-  if (!keys.has(plan.required_access_level)) throw new Error("You don't have access to this plan");
+  const keys = new Set<string>((access ?? []).map((a: any) => a.access_level_key as string));
+  if (!canAccessPlan(member, keys, plan.required_access_level, plan.audience_mode)) {
+    throw new Error("You don't have access to this plan");
+  }
   return { member, plan };
 }
 
