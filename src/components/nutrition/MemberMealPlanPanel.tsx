@@ -41,7 +41,9 @@ export function MemberMealPlanPanel() {
         goal: plan.goal ?? null,
         structure: plan.structure ?? null,
         water: plan.water ?? null,
+        sleep: plan.sleep ?? null,
         client_notes: plan.client_notes ?? null,
+        disclaimer: "Consult a healthcare professional before starting any new diet or nutrition program.",
         days: days as any[],
       });
     } catch (err) {
