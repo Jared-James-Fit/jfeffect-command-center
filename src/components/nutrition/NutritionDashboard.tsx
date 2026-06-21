@@ -15,6 +15,7 @@ import { RecentAdherenceWidget } from "./RecentAdherenceWidget";
 import { SectionErrorBoundary } from "@/components/section-error-boundary";
 import { MacroCalculatorDialog } from "./MacroCalculatorDialog";
 import { NutritionHelpSheet } from "./NutritionHelpSheet";
+import { DailyNutritionPanel } from "./DailyNutritionPanel";
 
 /**
  * Shared nutrition dashboard surface used by members and coaching clients.
@@ -78,6 +79,9 @@ export function NutritionDashboard({
       )}
       <QuickActions viewer={viewer} recipesAnchorId={recipesAnchorId} hasCoachApprovedTargets={hasCoachApprovedTargets} />
       {children}
+      <SectionErrorBoundary label="Daily nutrition">
+        <DailyNutritionPanel />
+      </SectionErrorBoundary>
       <div id={recipesAnchorId} className="scroll-mt-20">
         <SectionErrorBoundary label="Recipes">
           <RecipeBrowser
