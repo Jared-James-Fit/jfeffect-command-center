@@ -11,6 +11,7 @@ import {
   logSupplement,
   undoSupplementLog,
   upsertSupplement,
+  deleteSupplement,
 } from "@/lib/nutrition-dashboard.functions";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -19,6 +20,17 @@ import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import { Plus, Trash2, Sparkles, Pill, Flame, Beef, Wheat, Droplet, Clock } from "lucide-react";
 
 function todayISO() {
@@ -177,11 +189,14 @@ export function DailyNutritionPanel() {
                       {count}/{s.daily_target_count} today
                     </div>
                   </div>
-                  <SupplementCounter
-                    supplement={s}
-                    count={count}
-                    onChange={invalidate}
-                  />
+                  <div className="flex items-center gap-1">
+                    <SupplementCounter
+                      supplement={s}
+                      count={count}
+                      onChange={invalidate}
+                    />
+                    <DeleteSupplementButton supplement={s} onDeleted={invalidate} />
+                  </div>
                 </li>
               );
             })}
