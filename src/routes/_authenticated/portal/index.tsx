@@ -407,7 +407,7 @@ function PortalHome() {
         />
       )}
 
-      <div className="mx-auto w-full max-w-2xl space-y-5 px-4 pb-24 pt-4 md:max-w-5xl md:px-8 md:pt-6 animate-fade-in">
+      <div className="mx-auto w-full max-w-2xl space-y-5 px-4 pb-32 pt-4 md:max-w-5xl md:px-8 md:pt-6 animate-fade-in">
         {/* 1 — Compact greeting header (renders immediately) */}
         <GreetingHeader
           firstName={firstName}
@@ -447,6 +447,7 @@ function PortalHome() {
                 client ? (
                   <HomeActionTiles
                     tiles={[
+                      { to: "/portal/lift-videos", label: "Upload Lift for Review", icon: Video },
                       {
                         to: pickWeeklyCheckInForm(assignedForms as any)?.id
                           ? `/portal/check-ins/${pickWeeklyCheckInForm(assignedForms as any)!.id}`
@@ -456,7 +457,6 @@ function PortalHome() {
                         badge: (assignedForms as any[])?.length || undefined,
                         emphasis: true,
                       },
-                      { to: "/portal/lift-videos", label: "Upload Lift for Review", icon: Video },
                     ] as HomeActionTile[]}
                   />
                 ) : null
