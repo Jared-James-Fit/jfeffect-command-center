@@ -15019,6 +15019,54 @@ export type Database = {
           },
         ]
       }
+      session_credit_packages: {
+        Row: {
+          active: boolean
+          created_at: string
+          created_by: string | null
+          currency: string
+          description: string | null
+          id: string
+          name: string
+          session_count: number
+          sort_order: number
+          total_price_minor: number
+          unit_price_minor: number
+          updated_at: string
+          validity_days: number | null
+        }
+        Insert: {
+          active?: boolean
+          created_at?: string
+          created_by?: string | null
+          currency?: string
+          description?: string | null
+          id?: string
+          name: string
+          session_count: number
+          sort_order?: number
+          total_price_minor: number
+          unit_price_minor: number
+          updated_at?: string
+          validity_days?: number | null
+        }
+        Update: {
+          active?: boolean
+          created_at?: string
+          created_by?: string | null
+          currency?: string
+          description?: string | null
+          id?: string
+          name?: string
+          session_count?: number
+          sort_order?: number
+          total_price_minor?: number
+          unit_price_minor?: number
+          updated_at?: string
+          validity_days?: number | null
+        }
+        Relationships: []
+      }
       session_ledger_events: {
         Row: {
           appointment_id: string | null
