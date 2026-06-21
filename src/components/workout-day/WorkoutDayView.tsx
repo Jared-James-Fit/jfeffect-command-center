@@ -226,6 +226,7 @@ export type WorkoutDayViewSearch = {
   readonly?: 1;
   edit?: 1;
   review?: 1;
+  recap?: 1;
 };
 
 /**
