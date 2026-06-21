@@ -368,7 +368,10 @@ export const listMembershipLibrary = createServerFn({ method: "GET" })
     // listings if no listing exists yet.
     try { await syncSharedTemplatesToLibrary(supabaseAdmin); } catch { /* best-effort */ }
     const { data: member } = await supabaseAdmin
-      .from("app_members").select("id").eq("user_id", userId).maybeSingle();
+      .from("app_members")
+      .select("id, status, subscription_status, account_type, manual_access_override, manual_access_disabled, access_end_date, in_grace")
+      .eq("user_id", userId)
+      .maybeSingle();
     if (!member) return { plans: [] };
     // member_plans IS the source of truth for the Membership Library listing.
     // status='Published' + membership_status='live' means the admin has
@@ -390,7 +393,7 @@ export const listMembershipLibrary = createServerFn({ method: "GET" })
     ]);
     const keys = new Set((access ?? []).map((a: any) => a.access_level_key));
     const visible = (plans ?? []).filter((p: any) =>
-      p.audience_mode === "all_active" || keys.has(p.required_access_level),
+      canAccessPlan(member, keys, p.required_access_level, p.audience_mode),
     );
     visible.sort((a: any, b: any) =>
       (b.featured ? 1 : 0) - (a.featured ? 1 : 0)
