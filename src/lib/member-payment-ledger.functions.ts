@@ -67,8 +67,8 @@ export const recordManualPayment = createServerFn({ method: "POST" })
   .inputValidator((d: unknown) => RecordManualPaymentInput.parse(d))
   .handler(async ({ data, context }) => {
     await assertAdminOrCoach(context);
-    const { supabase, userId } = context as any;
-    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { userId } = context as any;
+    const supabaseAdmin = (await import("@/integrations/supabase/client.server")).supabaseAdmin as any;
 
     const now = new Date();
     const accessStart = now.toISOString();
@@ -120,7 +120,7 @@ export const addLedgerNote = createServerFn({ method: "POST" })
   .inputValidator((d: unknown) => AddLedgerNoteInput.parse(d))
   .handler(async ({ data, context }) => {
     await assertAdminOrCoach(context);
-    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const supabaseAdmin = (await import("@/integrations/supabase/client.server")).supabaseAdmin as any;
     const { error } = await supabaseAdmin
       .from("member_payment_ledger")
       .update({ manual_note: data.note })
