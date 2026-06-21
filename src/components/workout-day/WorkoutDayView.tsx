@@ -696,7 +696,8 @@ function WorkoutDay({
       .in("pl_exercise_rows.exercise_id", exerciseIds)
       .not("actual_load_unit", "is", null)
       .order("created_at", { ascending: false })
-      .limit(500)).data ?? [],
+      // 50 is enough — we only need the most recent unit per exercise (not full history).
+      .limit(50)).data ?? [],
   });
 
   // Map exercise_id -> resolved unit, recomputed when inputs change.

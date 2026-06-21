@@ -96,12 +96,14 @@ function PortalHome() {
   const { data: assignedForms = [] } = useQuery({
     queryKey: ["nf-forms-for-client", client?.id],
     enabled: !!client?.id,
+    staleTime: 2 * 60_000,
     queryFn: () => listFormsForClient(client!.id),
   });
 
   const { data: outstandingAgreements = [] } = useQuery({
     queryKey: ["portal-outstanding-agreements", client?.id],
     enabled: !!client?.id,
+    staleTime: 2 * 60_000,
     queryFn: async () => {
       const { data } = await (supabase
         .from("agreements") as any)
@@ -116,6 +118,7 @@ function PortalHome() {
   const { data: purchases = [] } = useQuery({
     queryKey: ["portal-purchases", client?.id],
     enabled: !!client?.id,
+    staleTime: 5 * 60_000,
     queryFn: async () => {
       const { data } = await supabase
         .from("purchase_records")

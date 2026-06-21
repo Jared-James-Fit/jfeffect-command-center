@@ -217,7 +217,7 @@ export function useNotificationFeed() {
   const query = useQuery({
     queryKey: ["notifications", role, user?.id],
     enabled: !!user && !!role,
-    staleTime: 15_000,
+    staleTime: 60_000,  // 60s — reduces refetch frequency; realtime channel handles live updates
     queryFn: async () => {
       // ---- Collect raw items (source-implicit unread or noteworthy) -----
       const raw: Omit<BellItem, "isRead" | "isArchived">[] = [];

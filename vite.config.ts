@@ -27,6 +27,8 @@ export default defineConfig({
   vite: {
     build: {
       sourcemap: false,
+      // Raise the warning threshold — large admin pages are expected.
+      chunkSizeWarningLimit: 800,
       rollupOptions: {
         onwarn(warning, warn) {
           if (warning.code === "MODULE_LEVEL_DIRECTIVE") return;
@@ -35,6 +37,37 @@ export default defineConfig({
         onLog(level, log, handler) {
           if (log.code === "MODULE_LEVEL_DIRECTIVE") return;
           handler(level, log);
+        },
+        output: {
+          // Split heavy vendor libs into separate cacheable chunks.
+          // This keeps the main app bundle lean and lets browsers cache
+          // libraries independently from app code.
+          manualChunks(id) {
+            // Recharts + d3 — only loaded on analytics pages
+            if (id.includes("recharts") || id.includes("d3-") || id.includes("victory")) {
+              return "vendor-charts";
+            }
+            // React Email renderer — only loaded for email previews
+            if (id.includes("@react-email") || id.includes("react-email")) {
+              return "vendor-email";
+            }
+            // PDF generation — only loaded when a PDF is requested
+            if (id.includes("pdfmake") || id.includes("jspdf") || id.includes("pdf-lib")) {
+              return "vendor-pdf";
+            }
+            // Supabase client — shared but large
+            if (id.includes("@supabase")) {
+              return "vendor-supabase";
+            }
+            // TanStack core libs
+            if (id.includes("@tanstack")) {
+              return "vendor-tanstack";
+            }
+            // Radix UI components
+            if (id.includes("@radix-ui")) {
+              return "vendor-radix";
+            }
+          },
         },
       },
     },
