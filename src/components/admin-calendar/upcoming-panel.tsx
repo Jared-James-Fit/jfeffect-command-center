@@ -4,15 +4,18 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { listUpcomingUnified, type UnifiedRow } from "@/lib/calendar-upcoming.functions";
 import { markAppointmentStatus, cancelAppointment } from "@/lib/appointments.functions";
+import { assignGoogleEventToClient, getGoogleConnectionStatus } from "@/lib/google-cal.functions";
+import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/app-shell";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetFooter } from "@/components/ui/sheet";
 import {
   Calendar as CalendarIcon, RefreshCw, Search, ExternalLink, Video, Copy,
-  CheckCircle2, AlertTriangle, X, CalendarClock, User, Link2 as LinkIcon, Filter,
+  CheckCircle2, AlertTriangle, X, CalendarClock, User, Link2 as LinkIcon, Filter, UserPlus,
 } from "lucide-react";
 import { toast } from "sonner";
 import { runJob } from "@/lib/progress-jobs";
@@ -42,6 +45,12 @@ export function UpcomingPanel() {
   const search = useSearch({ from: "/_authenticated/admin/calendar" }) as any;
   const list = useServerFn(listUpcomingUnified);
   const qc = useQueryClient();
+  const statusFn = useServerFn(getGoogleConnectionStatus);
+  const { data: gcalStatus } = useQuery({
+    queryKey: ["gcal-status"],
+    queryFn: () => statusFn(),
+    staleTime: 60_000,
+  });
 
   const q: string = search.q ?? "";
   const fSource: string = search.source ?? "all";
@@ -125,9 +134,12 @@ export function UpcomingPanel() {
         title="Upcoming"
         subtitle="Unified view of appointments, PT sessions, and Google Calendar events."
         actions={
-          <Button size="sm" variant="outline" onClick={handleRefresh} disabled={isFetching}>
-            <RefreshCw className={`mr-2 h-4 w-4 ${isFetching ? "animate-spin" : ""}`} /> Refresh
-          </Button>
+          <div className="flex items-center gap-2">
+            <GcalSyncBadge connected={!!gcalStatus?.connected} />
+            <Button size="sm" variant="outline" onClick={handleRefresh} disabled={isFetching}>
+              <RefreshCw className={`mr-2 h-4 w-4 ${isFetching ? "animate-spin" : ""}`} /> Refresh
+            </Button>
+          </div>
         }
       />
       <div className="p-3 sm:p-6 md:p-8 space-y-4">
@@ -247,6 +259,7 @@ function UpcomingRow({ row, onChanged }: { row: UnifiedRow; onChanged: () => voi
   const markFn = useServerFn(markAppointmentStatus);
   const [reOpen, setReOpen] = useState(false);
   const [cancelOpen, setCancelOpen] = useState(false);
+  const [assignOpen, setAssignOpen] = useState(false);
   const [busy, setBusy] = useState(false);
 
   const isAppt = row.source === "appointment";
@@ -371,6 +384,11 @@ function UpcomingRow({ row, onChanged }: { row: UnifiedRow; onChanged: () => voi
               </Button>
             </>
           )}
+          {isGoogleOnly && !row.client_id && (
+            <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => setAssignOpen(true)}>
+              <UserPlus className="mr-1 h-3 w-3" /> Assign Client
+            </Button>
+          )}
         </div>
       </div>
       {isAppt && apptForDialog && (
@@ -379,6 +397,125 @@ function UpcomingRow({ row, onChanged }: { row: UnifiedRow; onChanged: () => voi
           <CancelAppointmentDialog open={cancelOpen} onOpenChange={setCancelOpen} appointment={apptForDialog as any} onCancelled={onChanged} />
         </>
       )}
+      {isGoogleOnly && (
+        <AssignClientSheet
+          open={assignOpen}
+          onOpenChange={setAssignOpen}
+          row={row}
+          onAssigned={onChanged}
+        />
+      )}
     </Card>
+  );
+}
+
+function GcalSyncBadge({ connected }: { connected: boolean }) {
+  if (connected) {
+    return (
+      <Badge variant="outline" className="border-emerald-500/30 bg-emerald-500/10 text-emerald-300">
+        <span className="mr-1.5 inline-block h-2 w-2 rounded-full bg-emerald-400" />
+        Connected
+      </Badge>
+    );
+  }
+  return (
+    <Badge variant="outline" className="border-border text-muted-foreground">
+      <span className="mr-1.5 inline-block h-2 w-2 rounded-full bg-muted-foreground/60" />
+      Not configured
+    </Badge>
+  );
+}
+
+function AssignClientSheet({
+  open,
+  onOpenChange,
+  row,
+  onAssigned,
+}: {
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+  row: UnifiedRow;
+  onAssigned: () => void;
+}) {
+  const assignFn = useServerFn(assignGoogleEventToClient);
+  const [q, setQ] = useState("");
+  const [selected, setSelected] = useState<{ id: string; full_name: string } | null>(null);
+  const [saving, setSaving] = useState(false);
+
+  const { data: clients = [] } = useQuery({
+    queryKey: ["assign-client-search", q],
+    enabled: open,
+    queryFn: async () => {
+      let query = supabase.from("clients").select("id, full_name, email").eq("archived", false).order("full_name").limit(25);
+      const term = q.trim();
+      if (term) query = query.ilike("full_name", `%${term}%`);
+      const { data } = await query;
+      return (data ?? []) as Array<{ id: string; full_name: string; email: string | null }>;
+    },
+  });
+
+  async function save() {
+    if (!selected || !row.google_event_id) return;
+    setSaving(true);
+    try {
+      await assignFn({
+        data: {
+          googleEventId: row.google_event_id,
+          googleEventTitle: row.title || "Untitled event",
+          googleEventStartsAt: row.starts_at,
+          googleEventEndsAt: row.ends_at,
+          clientId: selected.id,
+          coachId: row.host_coach_id ?? undefined,
+        } as any,
+      });
+      toast.success(`Assigned to ${selected.full_name}`);
+      onAssigned();
+      onOpenChange(false);
+      setSelected(null);
+      setQ("");
+    } catch (e: any) {
+      toast.error(e?.message || "Failed to assign client");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <Sheet open={open} onOpenChange={onOpenChange}>
+      <SheetContent side="right" className="w-full sm:max-w-md">
+        <SheetHeader>
+          <SheetTitle>Assign Client</SheetTitle>
+          <SheetDescription className="truncate">{row.title}</SheetDescription>
+        </SheetHeader>
+        <div className="mt-4 space-y-3">
+          <Input placeholder="Search clients by name…" value={q} onChange={(e) => setQ(e.target.value)} />
+          <div className="max-h-[50vh] overflow-y-auto rounded border border-border divide-y divide-border">
+            {clients.length === 0 ? (
+              <div className="p-4 text-sm text-muted-foreground">No clients found.</div>
+            ) : (
+              clients.map((c) => (
+                <button
+                  key={c.id}
+                  type="button"
+                  onClick={() => setSelected({ id: c.id, full_name: c.full_name })}
+                  className={`flex w-full items-center justify-between p-3 text-left text-sm hover:bg-muted/40 ${
+                    selected?.id === c.id ? "bg-primary/10" : ""
+                  }`}
+                >
+                  <span className="truncate">{c.full_name}</span>
+                  {c.email && <span className="ml-2 truncate text-xs text-muted-foreground">{c.email}</span>}
+                </button>
+              ))
+            )}
+          </div>
+        </div>
+        <SheetFooter className="mt-4">
+          <Button variant="ghost" onClick={() => onOpenChange(false)} disabled={saving}>Cancel</Button>
+          <Button onClick={save} disabled={!selected || saving}>
+            {saving ? "Saving…" : "Save"}
+          </Button>
+        </SheetFooter>
+      </SheetContent>
+    </Sheet>
   );
 }

@@ -29,10 +29,86 @@ export const getGoogleConnectionStatus = createServerFn({ method: "GET" })
 export const beginGoogleConnect = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) => z.object({ origin: z.string().url() }).parse(d))
-  .handler(async ({ data, context }) => {
+  .handler(async () => {
     // Workspace mode: per-coach OAuth is disabled; the workspace Google
     // Calendar connector is shared across all coaches.
-    throw new Error("Google Calendar is connected at the workspace level via the Lovable connector. Manage it in Project Settings → Connectors.");
+    return {
+      mode: "workspace" as const,
+      message:
+        "Google Calendar is connected at the workspace level. No per-coach setup needed.",
+    };
+  });
+
+export const assignGoogleEventToClient = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) =>
+    z
+      .object({
+        googleEventId: z.string().min(1),
+        googleEventTitle: z.string().min(1),
+        googleEventStartsAt: z.string().min(1),
+        googleEventEndsAt: z.string().min(1),
+        clientId: z.string().uuid(),
+        coachId: z.string().uuid().optional().nullable(),
+      })
+      .parse(d),
+  )
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context as any;
+
+    // Resolve coach: explicit > current user's coach > any coach (admin-safe fallback)
+    let coachId = data.coachId ?? null;
+    if (!coachId) {
+      const { data: c } = await supabase
+        .from("coaches")
+        .select("id")
+        .eq("user_id", userId)
+        .maybeSingle();
+      coachId = c?.id ?? null;
+    }
+    if (!coachId) {
+      const { data: anyCoach } = await supabase
+        .from("coaches")
+        .select("id")
+        .order("created_at", { ascending: true })
+        .limit(1)
+        .maybeSingle();
+      coachId = anyCoach?.id ?? null;
+    }
+    if (!coachId) throw new Error("No coach available to host this appointment.");
+
+    const { data: existing } = await supabase
+      .from("appointments")
+      .select("id")
+      .eq("google_event_id", data.googleEventId)
+      .maybeSingle();
+
+    if (existing?.id) {
+      const { error } = await supabase
+        .from("appointments")
+        .update({ client_id: data.clientId })
+        .eq("id", existing.id);
+      if (error) throw error;
+      return { id: existing.id as string, created: false };
+    }
+
+    const { data: inserted, error: insertErr } = await supabase
+      .from("appointments")
+      .insert({
+        host_coach_id: coachId,
+        client_id: data.clientId,
+        appointment_type: "Coaching Call",
+        title: data.googleEventTitle,
+        starts_at: data.googleEventStartsAt,
+        ends_at: data.googleEventEndsAt,
+        status: "Scheduled",
+        source: "external",
+        google_event_id: data.googleEventId,
+      })
+      .select("id")
+      .single();
+    if (insertErr) throw insertErr;
+    return { id: inserted!.id as string, created: true };
   });
 
 export const disconnectGoogle = createServerFn({ method: "POST" })
