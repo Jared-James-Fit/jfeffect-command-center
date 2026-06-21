@@ -29,13 +29,13 @@ export function SessionsCard({ clientId, nextAppointmentAt }: Props) {
   const active = (balance ?? [])[0];
   // Look up the show_value flag for this purchase
   const { data: purchase } = useQuery<{ show_value_to_client: boolean; full_payable_amount: number | null; currency: string | null } | null>({
-    queryKey: ["my-session-purchase", active.purchase_id],
+    queryKey: ["my-session-purchase", active?.purchase_id ?? null],
     enabled: !!active?.purchase_id,
     queryFn: async () => {
       const { data } = await supabase
         .from("purchase_records")
         .select("show_value_to_client, full_payable_amount, currency")
-        .eq("id", active.purchase_id)
+        .eq("id", active!.purchase_id)
         .maybeSingle();
       return (data as any) ?? null;
     },
