@@ -221,6 +221,40 @@ export function GraphDotDetail({ point, clientId, onClose, canOpenLog = false }:
             </div>
           )}
 
+          {/* ── Cardio ── */}
+          {clientId && (
+            <div className="rounded-lg border border-border bg-muted/30 p-3 space-y-2">
+              <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold flex items-center gap-1">
+                <Heart className="h-3 w-3" /> Cardio
+              </div>
+              {cardio ? (
+                <div className="space-y-1 text-sm">
+                  <div className="flex items-center gap-2">
+                    <span className="text-muted-foreground">Type:</span>
+                    <span className="font-semibold">{cardio.cardio_type || "—"}</span>
+                  </div>
+                  {cardio.duration_minutes != null && (
+                    <div className="flex items-center gap-2">
+                      <span className="text-muted-foreground">Duration:</span>
+                      <span className="font-semibold">{cardio.duration_minutes} min</span>
+                    </div>
+                  )}
+                  {cardio.rpe != null && (
+                    <div className="flex items-center gap-2">
+                      <span className="text-muted-foreground">RPE:</span>
+                      <span className="font-semibold">{cardio.rpe}</span>
+                    </div>
+                  )}
+                  {cardio.notes && (
+                    <p className="text-xs text-muted-foreground whitespace-pre-wrap">{cardio.notes}</p>
+                  )}
+                </div>
+              ) : (
+                <p className="text-sm text-muted-foreground">No cardio logged</p>
+              )}
+            </div>
+          )}
+
           {/* ── Action buttons ── */}
           <div className="flex flex-col gap-2 pt-2 border-t border-border">
             {canOpenLog && clientId && point.day_id && (
