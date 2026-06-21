@@ -1,5 +1,4 @@
 import { type ReactNode } from "react";
-import { Link } from "@tanstack/react-router";
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Card } from "@/components/ui/card";
@@ -14,6 +13,8 @@ import { TargetsHistorySparkline } from "./TargetsHistorySparkline";
 import { CoachTargetChangeBanner } from "./CoachTargetChangeBanner";
 import { RecentAdherenceWidget } from "./RecentAdherenceWidget";
 import { SectionErrorBoundary } from "@/components/section-error-boundary";
+import { MacroCalculatorDialog } from "./MacroCalculatorDialog";
+import { NutritionHelpSheet } from "./NutritionHelpSheet";
 
 /**
  * Shared nutrition dashboard surface used by members and coaching clients.
@@ -39,6 +40,7 @@ export function NutritionDashboard({
   recipesAnchorId = "recipes",
   children,
   profile,
+  hasCoachApprovedTargets,
 }: {
   viewer: "member" | "client";
   userId?: string;
@@ -47,6 +49,7 @@ export function NutritionDashboard({
   recipesAnchorId?: string;
   children?: ReactNode;
   profile?: RecipeProfile;
+  hasCoachApprovedTargets?: boolean;
 }) {
   return (
     <div className="space-y-6 p-4 pb-28 md:p-6 md:pb-12">
@@ -73,7 +76,7 @@ export function NutritionDashboard({
           <RecentAdherenceWidget />
         </SectionErrorBoundary>
       )}
-      <QuickActions viewer={viewer} recipesAnchorId={recipesAnchorId} />
+      <QuickActions viewer={viewer} recipesAnchorId={recipesAnchorId} hasCoachApprovedTargets={hasCoachApprovedTargets} />
       {children}
       <div id={recipesAnchorId} className="scroll-mt-20">
         <SectionErrorBoundary label="Recipes">
@@ -184,11 +187,14 @@ function TargetsStrip({ targets, userId }: { targets?: NutritionTargets; userId?
 function QuickActions({
   viewer,
   recipesAnchorId,
+  hasCoachApprovedTargets,
 }: {
   viewer: "member" | "client";
   recipesAnchorId: string;
+  hasCoachApprovedTargets?: boolean;
 }) {
-  const faqTo = viewer === "member" ? "/m/resources" : "/portal/resources";
+  const [calcOpen, setCalcOpen] = useState(false);
+  const [helpOpen, setHelpOpen] = useState(false);
   return (
     <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
       <a
@@ -201,27 +207,36 @@ function QuickActions({
           <div className="text-[11px] text-muted-foreground">Jump to the recipe library</div>
         </div>
       </a>
-      <Link
-        to={faqTo}
-        className="flex items-center gap-3 rounded-xl border border-border bg-card p-4 transition hover:border-primary/40 active:scale-[0.98]"
+      <button
+        type="button"
+        onClick={() => setHelpOpen(true)}
+        className="flex items-center gap-3 rounded-xl border border-border bg-card p-4 text-left transition hover:border-primary/40 active:scale-[0.98]"
       >
         <HelpCircle className="h-6 w-6 text-foreground" />
         <div>
           <div className="text-sm font-bold leading-tight">Nutrition Help</div>
           <div className="text-[11px] text-muted-foreground">FAQ & resources</div>
         </div>
-      </Link>
-      <Link
-        to="/m/nutrition/targets-setup"
-        className="flex items-center gap-3 rounded-xl border border-primary/30 bg-gradient-to-br from-primary/10 to-card p-4 transition hover:border-primary active:scale-[0.98]"
+      </button>
+      <button
+        type="button"
+        onClick={() => setCalcOpen(true)}
+        className="flex items-center gap-3 rounded-xl border border-primary/30 bg-gradient-to-br from-primary/10 to-card p-4 text-left transition hover:border-primary active:scale-[0.98]"
       >
         <Calculator className="h-6 w-6 text-primary" />
         <div>
           <div className="text-sm font-bold leading-tight">Macro Calculator</div>
           <div className="text-[11px] text-muted-foreground">Calculate your targets</div>
         </div>
-      </Link>
+      </button>
       <ComingSoonTile icon={Sparkles} title="Meal Builder" />
+      <MacroCalculatorDialog
+        open={calcOpen}
+        onOpenChange={setCalcOpen}
+        viewer={viewer}
+        hasCoachApprovedTargets={hasCoachApprovedTargets}
+      />
+      <NutritionHelpSheet open={helpOpen} onOpenChange={setHelpOpen} viewer={viewer} />
     </div>
   );
 }
