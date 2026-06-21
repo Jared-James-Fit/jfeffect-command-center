@@ -1,11 +1,11 @@
 import { useMemo, useState } from "react";
 import { Link } from "@tanstack/react-router";
-import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetClose } from "@/components/ui/sheet";
 import { Input } from "@/components/ui/input";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
-import { MessageCircle, Search } from "lucide-react";
+import { MessageCircle, Search, ArrowLeft, X } from "lucide-react";
 import { NUTRITION_FAQS, NUTRITION_RESOURCES } from "@/content/nutrition-help";
 
 export function NutritionHelpSheet({
@@ -32,9 +32,25 @@ export function NutritionHelpSheet({
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent side="bottom" className="h-[92vh] overflow-y-auto p-0">
         <div className="sticky top-0 z-10 bg-background border-b">
-          <SheetHeader className="p-4">
-            <SheetTitle>Nutrition Help</SheetTitle>
-            <SheetDescription>FAQs, guides, and food-logging help.</SheetDescription>
+          <SheetHeader className="p-4 pr-14">
+            <div className="flex items-center gap-2">
+              <SheetClose
+                aria-label="Back"
+                className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-border bg-secondary/40 hover:bg-secondary"
+              >
+                <ArrowLeft className="h-4 w-4" />
+              </SheetClose>
+              <div className="flex-1 text-left">
+                <SheetTitle>Nutrition Help</SheetTitle>
+                <SheetDescription>FAQs, guides, and food-logging help.</SheetDescription>
+              </div>
+              <SheetClose
+                aria-label="Close"
+                className="inline-flex h-8 w-8 items-center justify-center rounded-md hover:bg-secondary"
+              >
+                <X className="h-4 w-4" />
+              </SheetClose>
+            </div>
           </SheetHeader>
           <div className="px-4 pb-3">
             <div className="relative">
