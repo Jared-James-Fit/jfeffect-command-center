@@ -23,6 +23,7 @@ import { TrainingBlockCard } from "@/components/portal/training-block-card";
 import { ProgressSummaryCard } from "@/components/progress/progress-summary-card";
 import { HomeWaterCard } from "@/components/home/home-water-card";
 import { BodyweightSummaryCard } from "@/components/portal/bodyweight-summary-card";
+import { SessionsCard } from "@/components/portal/sessions-card";
 import { SetupChecklistBanner } from "@/components/portal/setup-checklist-banner";
 import { useEffect, useState } from "react";
 import { listMyPortalAppointments } from "@/lib/appointments.functions";
