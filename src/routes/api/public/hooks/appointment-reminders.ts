@@ -6,11 +6,8 @@ export const Route = createFileRoute("/api/public/hooks/appointment-reminders")(
       POST: async ({ request }) => {
         // ---------- Worker secret guard ----------
         const expected = process.env.SCHEDULED_WORKER_SECRET ?? "";
-        const url = new URL(request.url);
         const provided =
-          request.headers.get("x-worker-secret") ??
-          url.searchParams.get("secret") ??
-          "";
+          request.headers.get("x-worker-secret") ?? "";
         if (
           !expected ||
           !provided ||
