@@ -26,6 +26,12 @@ import { toast } from "sonner";
 import { Plus, Pencil, Trash2, Gift } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
+import { ChevronDown } from "lucide-react";
+import {
   listSessionCreditPackages,
   createSessionCreditPackage,
   updateSessionCreditPackage,
@@ -70,6 +76,7 @@ export function SessionCreditsPanel({ clientId }: { clientId: string }) {
     0,
   );
   const events = (summaryQ.data?.events ?? []) as any[];
+  const appointments = (summaryQ.data?.appointments ?? {}) as Record<string, any>;
   const granted = events
     .filter((e) => e.event_type === "granted")
     .reduce((s, e) => s + Number(e.session_count ?? 0), 0);
@@ -267,46 +274,112 @@ export function SessionCreditsPanel({ clientId }: { clientId: string }) {
       </div>
 
       {/* Event history */}
-      <div>
-        <div className="text-xs uppercase tracking-widest text-muted-foreground mb-2">
-          Credit history
-        </div>
+      <LedgerHistory events={events} appointments={appointments} />
+    </Card>
+  );
+}
+
+function LedgerHistory({
+  events,
+  appointments,
+}: {
+  events: any[];
+  appointments: Record<string, any>;
+}) {
+  const [open, setOpen] = useState(false);
+  return (
+    <Collapsible open={open} onOpenChange={setOpen}>
+      <CollapsibleTrigger asChild>
+        <button
+          type="button"
+          className="flex w-full items-center justify-between rounded border border-border bg-muted/30 px-3 py-2 text-left hover:bg-muted/50"
+        >
+          <span className="text-xs uppercase tracking-widest text-muted-foreground">
+            Ledger history ({events.length})
+          </span>
+          <ChevronDown
+            className={`h-4 w-4 transition-transform ${open ? "rotate-180" : ""}`}
+          />
+        </button>
+      </CollapsibleTrigger>
+      <CollapsibleContent className="pt-3">
         {events.length === 0 ? (
-          <p className="text-sm text-muted-foreground py-4">No session credit activity yet.</p>
+          <p className="text-sm text-muted-foreground py-4">
+            No session credit activity yet.
+          </p>
         ) : (
           <div className="overflow-x-auto rounded border border-border">
             <table className="w-full text-sm">
               <thead className="bg-muted/40 text-xs uppercase">
                 <tr>
                   <th className="p-2 text-left">Date</th>
-                  <th className="p-2 text-left">Event</th>
-                  <th className="p-2 text-right">Count</th>
-                  <th className="p-2 text-left">Expires</th>
-                  <th className="p-2 text-left">Source</th>
+                  <th className="p-2 text-left">Change type</th>
+                  <th className="p-2 text-right">Sessions Δ</th>
+                  <th className="p-2 text-right">Value Δ</th>
+                  <th className="p-2 text-left">Appointment</th>
                   <th className="p-2 text-left">Note</th>
                 </tr>
               </thead>
               <tbody>
-                {events.map((e) => (
-                  <tr key={e.id} className="border-t border-border">
-                    <td className="p-2">{e.effective_date ?? "—"}</td>
-                    <td className="p-2">{e.event_type}</td>
-                    <td
-                      className={`p-2 text-right font-mono ${Number(e.session_count) < 0 ? "text-destructive" : ""}`}
-                    >
-                      {e.session_count > 0 ? `+${e.session_count}` : e.session_count}
-                    </td>
-                    <td className="p-2 text-xs">{e.expires_at ?? "—"}</td>
-                    <td className="p-2 text-xs text-muted-foreground">{e.source ?? "—"}</td>
-                    <td className="p-2 text-xs text-muted-foreground">{e.note ?? ""}</td>
-                  </tr>
-                ))}
+                {events.map((e) => {
+                  const sessions = Number(e.session_count ?? 0);
+                  const unit = Number(e.unit_value_minor ?? 0);
+                  const valueDelta = sessions * unit;
+                  const appt = e.appointment_id ? appointments[e.appointment_id] : null;
+                  return (
+                    <tr key={e.id} className="border-t border-border align-top">
+                      <td className="p-2 text-xs whitespace-nowrap">
+                        {e.effective_date ?? "—"}
+                      </td>
+                      <td className="p-2 text-xs">
+                        <Badge variant="outline" className="font-normal">
+                          {e.event_type}
+                        </Badge>
+                        {e.source ? (
+                          <div className="text-[10px] text-muted-foreground mt-0.5">
+                            {e.source}
+                          </div>
+                        ) : null}
+                      </td>
+                      <td
+                        className={`p-2 text-right font-mono ${sessions < 0 ? "text-destructive" : sessions > 0 ? "text-primary" : ""}`}
+                      >
+                        {sessions > 0 ? `+${sessions}` : sessions}
+                      </td>
+                      <td
+                        className={`p-2 text-right font-mono ${valueDelta < 0 ? "text-destructive" : ""}`}
+                      >
+                        {unit > 0 ? fmt(valueDelta, e.currency ?? "CAD") : "—"}
+                      </td>
+                      <td className="p-2 text-xs">
+                        {appt ? (
+                          <a
+                            href={`/admin/appointments/${appt.id}`}
+                            className="underline hover:no-underline"
+                          >
+                            {appt.title ?? "Appointment"}
+                            {appt.scheduled_at ? (
+                              <span className="block text-[10px] text-muted-foreground">
+                                {new Date(appt.scheduled_at).toLocaleString()}
+                              </span>
+                            ) : null}
+                          </a>
+                        ) : (
+                          <span className="text-muted-foreground">—</span>
+                        )}
+                      </td>
+                      <td className="p-2 text-xs text-muted-foreground max-w-[20rem]">
+                        {e.note ?? ""}
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
         )}
-      </div>
-    </Card>
+      </CollapsibleContent>
+    </Collapsible>
   );
 }
 
