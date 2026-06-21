@@ -38,9 +38,6 @@ export function ProgressSummaryCard({
 }) {
   void currentUserId; void viewerRole;
 
-  const progressTo =
-    progressHref.kind === "member" ? "/m/progress" : "/portal/progress";
-
   // ---------- Recent status (latest entry per category only — fast) ----------
   const { data: latestBw } = useQuery({
     queryKey: ["progress-latest-bw", userId],
@@ -211,8 +208,6 @@ export function ProgressSummaryCard({
           <CoachCheckinReplies />
         </div>
       </div>
-      {/* Used only by member/admin entry points that omit extraActions. */}
-      <span className="sr-only">{progressTo}</span>
     </Card>
   );
 }
