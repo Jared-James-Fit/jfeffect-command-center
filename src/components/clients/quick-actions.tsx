@@ -3,8 +3,9 @@ import { useState } from "react";
 import {
   Dumbbell, Plus, BookOpen, CalendarDays, Apple, HeartPulse,
   MessageSquare, ClipboardCheck, CreditCard, User, Zap, Eye, Archive,
-  Download, Loader2,
+  Download, Loader2, ShoppingCart,
 } from "lucide-react";
+import { QuickSellSheet } from "./quick-sell-sheet";
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem,
   DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger,
@@ -130,6 +131,7 @@ export function QuickActionsMenu({ r }: { r: DirectoryRow }) {
   const hasProgram = !!r.block_id;
   const [assignOpen, setAssignOpen] = useState(false);
   const [archiveOpen, setArchiveOpen] = useState(false);
+  const [sellOpen, setSellOpen] = useState(false);
   const pdfs = useClientPdfDownloads(r);
   return (
     <>
@@ -239,6 +241,9 @@ export function QuickActionsMenu({ r }: { r: DirectoryRow }) {
             <CalendarDays className="h-4 w-4" /> Book Session
           </Link>
         </DropdownMenuItem>
+        <DropdownMenuItem onSelect={(e) => { e.preventDefault(); setSellOpen(true); }}>
+          <ShoppingCart className="mr-2 h-4 w-4 text-primary" /> Quick Sell / Send Payment Link
+        </DropdownMenuItem>
         <DropdownMenuItem asChild>
           <Link to="/admin/clients/$id" params={{ id: r.id }} search={{ tab: "billing" } as any} className="flex items-center gap-2">
             <CreditCard className="h-4 w-4" /> Add Payment
@@ -263,6 +268,12 @@ export function QuickActionsMenu({ r }: { r: DirectoryRow }) {
       clientId={r.id}
       clientName={r.full_name}
     />
+    <QuickSellSheet
+      open={sellOpen}
+      onOpenChange={setSellOpen}
+      clientId={r.id}
+      clientName={r.full_name}
+    />
     </>
   );
 }
@@ -279,6 +290,7 @@ export function ClientMoreMenu({
 }) {
   const [assignOpen, setAssignOpen] = useState(false);
   const [archiveOpen, setArchiveOpen] = useState(false);
+  const [sellOpen, setSellOpen] = useState(false);
   const pdfs = useClientPdfDownloads(r);
   return (
     <>
@@ -373,6 +385,9 @@ export function ClientMoreMenu({
 
         <DropdownMenuSeparator />
         <DropdownMenuLabel className="text-xs">Billing</DropdownMenuLabel>
+        <DropdownMenuItem onSelect={(e) => { e.preventDefault(); setSellOpen(true); }}>
+          <ShoppingCart className="mr-2 h-4 w-4 text-primary" /> Quick Sell / Send Payment Link
+        </DropdownMenuItem>
         <DropdownMenuItem asChild>
           <Link to="/admin/clients/$id" params={{ id: r.id }} search={{ tab: "billing" } as any} className="flex items-center gap-2">
             <CreditCard className="h-4 w-4" /> View Payments
@@ -424,6 +439,12 @@ export function ClientMoreMenu({
     <WorkoutArchiveDialog
       open={archiveOpen}
       onOpenChange={setArchiveOpen}
+      clientId={r.id}
+      clientName={r.full_name}
+    />
+    <QuickSellSheet
+      open={sellOpen}
+      onOpenChange={setSellOpen}
       clientId={r.id}
       clientName={r.full_name}
     />
