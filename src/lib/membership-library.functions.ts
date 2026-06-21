@@ -391,7 +391,7 @@ export const listMembershipLibrary = createServerFn({ method: "GET" })
         .eq("member_id", (member as any).id)
         .eq("active", true),
     ]);
-    const keys = new Set((access ?? []).map((a: any) => a.access_level_key));
+    const keys = new Set<string>((access ?? []).map((a: any) => a.access_level_key as string));
     const visible = (plans ?? []).filter((p: any) =>
       canAccessPlan(member, keys, p.required_access_level, p.audience_mode),
     );
