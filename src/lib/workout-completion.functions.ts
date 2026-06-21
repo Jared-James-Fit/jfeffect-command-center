@@ -478,11 +478,11 @@ export const completeWorkout = createServerFn({ method: "POST" })
         logging_percentage: summary.loggingPercentage,
         logging_quality: summary.loggingQuality,
         completed_with_missing_logs: summary.completedWithMissingLogs,
-        // Post-workout review fields
-        ...(data.strengthFeel !== undefined && { strength_feel: data.strengthFeel ?? null }),
-        ...(data.fatigueFeel !== undefined && { fatigue_feel: data.fatigueFeel ?? null }),
-        ...(data.pain !== undefined && { pain: data.pain ?? null }),
-        ...(data.hitTarget !== undefined && { hit_target: data.hitTarget ?? null }),
+      // Post-workout review fields (strength_feel / fatigue_feel / pain /
+      // hit_target) are NOT columns on pl_day_completions — they live on
+      // pl_workout_feedback and are persisted by submitOrEditReview. Writing
+      // them here used to fail the upsert with "column does not exist",
+      // which surfaced as "Save failed" and blocked the recap popup.
       };
       const { data: row, error } = await supabase
         .from("pl_day_completions")
