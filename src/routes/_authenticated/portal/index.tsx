@@ -515,6 +515,13 @@ function PortalHome() {
         {/* 7 — Upcoming appointment (compact, only if exists) */}
         {nextAppointment && <UpcomingAppointmentRow appt={nextAppointment} />}
 
+        {/* 7b — Sessions package summary (only if active package) */}
+        {client?.id && (
+          <SectionErrorBoundary label="Sessions">
+            <SessionsCard clientId={client.id} nextAppointmentAt={nextAppointment?.starts_at ?? null} />
+          </SectionErrorBoundary>
+        )}
+
         {/* 8 — Events panel (only renders when there's something) */}
         <DeferRender placeholderHeight="h-24">
           <SectionErrorBoundary label="Events">
