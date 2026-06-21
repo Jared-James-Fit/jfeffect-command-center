@@ -321,6 +321,189 @@ function Tile({ label, value, highlight }: { label: string; value: string; highl
   );
 }
 
+const SERVICE_TYPES = [
+  "In-Person Training",
+  "Online Coaching",
+  "Hybrid",
+  "Nutrition",
+  "Custom",
+] as const;
+
+function AddCreditsDialog({ clientId, onDone }: { clientId: string; onDone: () => void }) {
+  const fn = useServerFn(addClientSessionCredits);
+  const [open, setOpen] = useState(false);
+  const [serviceType, setServiceType] = useState<string>("In-Person Training");
+  const [customType, setCustomType] = useState("");
+  const [sessions, setSessions] = useState("");
+  const [cost, setCost] = useState("");
+  const [currency, setCurrency] = useState("CAD");
+  const [validity, setValidity] = useState("");
+  const [note, setNote] = useState("");
+
+  const sessionsNum = parseInt(sessions, 10);
+  const costNum = parseFloat(cost);
+  const totalValue =
+    Number.isFinite(sessionsNum) && Number.isFinite(costNum)
+      ? sessionsNum * costNum
+      : 0;
+
+  const effectiveType =
+    serviceType === "Custom" ? customType.trim() : serviceType;
+
+  const m = useMutation({
+    mutationFn: async () =>
+      fn({
+        data: {
+          client_id: clientId,
+          service_type: effectiveType,
+          session_count: sessionsNum,
+          cost_per_session_minor: Math.round(costNum * 100),
+          currency,
+          validity_days: validity ? parseInt(validity, 10) : null,
+          payment_note: note || null,
+        },
+      }),
+    onSuccess: () => {
+      toast.success("Credits added");
+      setOpen(false);
+      setSessions("");
+      setCost("");
+      setNote("");
+      setCustomType("");
+      setServiceType("In-Person Training");
+      setValidity("");
+      onDone();
+    },
+    onError: (e: any) => toast.error(e.message),
+  });
+
+  const valid =
+    !!effectiveType &&
+    Number.isFinite(sessionsNum) &&
+    sessionsNum > 0 &&
+    Number.isFinite(costNum) &&
+    costNum >= 0;
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <Button size="sm">
+          <Plus className="mr-2 h-4 w-4" />
+          Add credits
+        </Button>
+      </DialogTrigger>
+      <DialogContent className="max-w-lg">
+        <DialogHeader>
+          <DialogTitle>Add session credits</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-4">
+          <div>
+            <Label className="mb-2 block">Service type</Label>
+            <div className="flex flex-wrap gap-2">
+              {SERVICE_TYPES.map((t) => (
+                <Button
+                  key={t}
+                  type="button"
+                  size="sm"
+                  variant={serviceType === t ? "default" : "outline"}
+                  onClick={() => setServiceType(t)}
+                >
+                  {t}
+                </Button>
+              ))}
+            </div>
+            {serviceType === "Custom" && (
+              <Input
+                className="mt-2"
+                placeholder="Custom service name"
+                value={customType}
+                onChange={(e) => setCustomType(e.target.value)}
+                maxLength={100}
+              />
+            )}
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <Label>Total sessions</Label>
+              <Input
+                type="number"
+                min={1}
+                step={1}
+                value={sessions}
+                onChange={(e) => setSessions(e.target.value)}
+                placeholder="10"
+              />
+            </div>
+            <div>
+              <Label>Cost per session</Label>
+              <Input
+                type="number"
+                min={0}
+                step="0.01"
+                value={cost}
+                onChange={(e) => setCost(e.target.value)}
+                placeholder="85.00"
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <Label>Currency</Label>
+              <Select value={currency} onValueChange={setCurrency}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {["CAD", "USD", "EUR", "GBP", "AUD"].map((c) => (
+                    <SelectItem key={c} value={c}>
+                      {c}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label>Validity (days, optional)</Label>
+              <Input
+                type="number"
+                min={1}
+                value={validity}
+                onChange={(e) => setValidity(e.target.value)}
+                placeholder="e.g. 90"
+              />
+            </div>
+          </div>
+
+          <div className="rounded border border-border bg-muted/30 px-3 py-2 text-sm">
+            <span className="text-muted-foreground">Total value: </span>
+            <span className="font-mono font-semibold">
+              {fmt(Math.round(totalValue * 100), currency)}
+            </span>
+          </div>
+
+          <div>
+            <Label>Payment note (optional)</Label>
+            <Textarea
+              rows={2}
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
+              placeholder="e.g. Paid by e-transfer, invoice #1234"
+              maxLength={2000}
+            />
+          </div>
+        </div>
+        <DialogFooter>
+          <Button onClick={() => m.mutate()} disabled={!valid || m.isPending}>
+            Add credits
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 function GrantPackageDialog({
   clientId,
   packages,
