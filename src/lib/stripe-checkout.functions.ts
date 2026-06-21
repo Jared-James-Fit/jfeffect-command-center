@@ -149,10 +149,16 @@ export const createCheckoutSession = createServerFn({ method: "POST" })
       success_url: `${data.origin}/portal/purchases?checkout=success&session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${data.origin}/portal/purchases`,
       allow_promotion_codes: "true",
+      // Stripe Tax: calculate GST/HST automatically from billing address
+      "automatic_tax[enabled]": "true",
+      // Require billing address so Stripe Tax can determine the correct rate
+      billing_address_collection: "required",
     };
 
     if (stripeCustomerId) {
       sessionParams["customer"] = stripeCustomerId;
+      // Auto-update customer address from checkout so future sessions use it
+      sessionParams["customer_update[address]"] = "auto";
     } else if (client?.email) {
       sessionParams["customer_email"] = client.email;
     }
@@ -339,9 +345,15 @@ export const createCheckoutSessionForAssignment = createServerFn({ method: "POST
       "metadata[client_id]": client.id,
       "metadata[offer_id]": purchase.offer_id ?? "",
       "metadata[assigned_by]": userId,
+      // Stripe Tax: calculate GST/HST automatically from billing address
+      "automatic_tax[enabled]": "true",
+      // Require billing address so Stripe Tax can determine the correct rate
+      billing_address_collection: "required",
     };
     if (stripeCustomerId) {
       sessionParams["customer"] = stripeCustomerId;
+      // Auto-update customer address from checkout so future sessions use it
+      sessionParams["customer_update[address]"] = "auto";
     } else if (client.email) {
       sessionParams["customer_email"] = client.email;
     }
@@ -426,6 +438,10 @@ export const createPreviewCheckoutSession = createServerFn({ method: "POST" })
         "metadata[preview]": "true",
         "metadata[previewed_by]": userId,
         "metadata[product_id]": data.productId,
+        // Stripe Tax: calculate GST/HST automatically from billing address
+        "automatic_tax[enabled]": "true",
+        // Require billing address so Stripe Tax can determine the correct rate
+        billing_address_collection: "required",
       }),
     });
 

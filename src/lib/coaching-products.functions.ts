@@ -123,6 +123,8 @@ export const createCoachingProduct = createServerFn({ method: "POST" })
         product: product.id,
         unit_amount: data.priceCents,
         currency: data.currency.toLowerCase(),
+        // Exclusive tax: price shown before tax; Stripe Tax adds GST/HST on top
+        tax_behavior: "exclusive",
       };
       if (isSubscription && data.billingInterval) {
         priceParams["recurring[interval]"] = data.billingInterval;
@@ -136,6 +138,12 @@ export const createCoachingProduct = createServerFn({ method: "POST" })
         body: formEncode({
           "line_items[0][price]": price.id,
           "line_items[0][quantity]": 1,
+          // Stripe Tax: calculate GST/HST automatically from billing address
+          "automatic_tax[enabled]": "true",
+          // Require billing address so Stripe Tax can determine the correct rate
+          billing_address_collection: "required",
+          allow_promotion_codes: "true",
+          "metadata[product_id]": data.name,
         }),
       });
       stripe_product_id = product.id;
@@ -253,6 +261,8 @@ export const updateCoachingProduct = createServerFn({ method: "POST" })
           product: stripeProductId,
           unit_amount: newAmount,
           currency: newCurrency.toLowerCase(),
+          // Exclusive tax: price shown before tax; Stripe Tax adds GST/HST on top
+          tax_behavior: "exclusive",
         };
         if (recurring) {
           priceParams["recurring[interval]"] = recurring.interval;
@@ -416,6 +426,10 @@ export const generatePaymentLinkForProduct = createServerFn({ method: "POST" })
         "line_items[0][quantity]": 1,
         allow_promotion_codes: true,
         "metadata[product_id]": product.id,
+        // Stripe Tax: calculate GST/HST automatically from billing address
+        "automatic_tax[enabled]": "true",
+        // Require billing address so Stripe Tax can determine the correct rate
+        billing_address_collection: "required",
       }),
     });
 

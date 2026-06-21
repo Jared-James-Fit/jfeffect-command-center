@@ -907,30 +907,35 @@ function ProductFormDialog({
           <div className="md:col-span-2 rounded-md border border-primary/20 bg-primary/5 p-3 space-y-3">
             <div className="text-xs font-semibold uppercase tracking-widest text-primary">Stripe Checkout Session</div>
 
+            {/* Tax notice */}
+            <div className="rounded-md border border-emerald-500/30 bg-emerald-500/5 px-3 py-2 text-xs text-emerald-700 flex items-start gap-2">
+              <CheckCircle2 className="h-3.5 w-3.5 shrink-0 mt-0.5" />
+              <span><strong>Taxes are calculated automatically from the customer's billing address and displayed before payment.</strong> GST/HST is added on top of the entered price. Billing address is required at checkout.</span>
+            </div>
+
             {/* Auto-create toggle */}
             {!product && (
               <div className="rounded-md border border-border bg-secondary/30 p-3 space-y-2">
                 <div className="flex items-center gap-3">
                   <Switch checked={form.generateStripeProduct} onCheckedChange={(v) => set("generateStripeProduct", v)} />
                   <div>
-                    <Label className="text-sm">Auto-create Stripe Product &amp; Price</Label>
-                    <p className="text-xs text-muted-foreground">Creates a Stripe Product and Price automatically using the name, price, currency, and billing interval below. The Stripe Price ID is saved to this product.</p>
+                    <Label className="text-sm">Auto-create Stripe Product &amp; Payment Link</Label>
+                    <p className="text-xs text-muted-foreground">Creates a Stripe Product, Price, and Payment Link automatically. Tax is exclusive (added on top). Billing address required. Promotion codes enabled.</p>
                   </div>
                 </div>
                 {form.generateStripeProduct && (
                   <div>
-                    <Label className="text-xs">Billing interval (leave blank for one-time)</Label>
+                    <Label className="text-xs">Payment type</Label>
                     <Select value={form.billingInterval || "__none"} onValueChange={(v) => set("billingInterval", (v === "__none" ? "" : v) as any)}>
-                      <SelectTrigger><SelectValue placeholder="One-time (no interval)" /></SelectTrigger>
+                      <SelectTrigger><SelectValue placeholder="One-time payment" /></SelectTrigger>
                       <SelectContent>
                         <SelectItem value="__none">One-time payment</SelectItem>
-                        <SelectItem value="month">Monthly</SelectItem>
-                        <SelectItem value="year">Annual</SelectItem>
                         <SelectItem value="week">Weekly</SelectItem>
-                        <SelectItem value="day">Daily</SelectItem>
+                        <SelectItem value="month">Monthly</SelectItem>
+                        <SelectItem value="year">Yearly</SelectItem>
                       </SelectContent>
                     </Select>
-                    <p className="text-xs text-muted-foreground mt-1">For subscriptions, choose the billing interval. For paid-in-full packages, leave blank.</p>
+                    <p className="text-xs text-muted-foreground mt-1">One-time for packages. Monthly/Weekly/Yearly for recurring coaching.</p>
                   </div>
                 )}
               </div>
@@ -1032,8 +1037,11 @@ function ProductFormDialog({
           <div className="md:col-span-2 flex justify-end gap-2">
             <Button type="button" variant="ghost" onClick={onClose}>Cancel</Button>
             <Button type="submit" disabled={submitting} className="bg-gradient-primary font-bold uppercase tracking-wide">
-              {submitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Plus className="mr-2 h-4 w-4" />}
-              Save Product / Link
+              {submitting ? (
+                <><Loader2 className="mr-2 h-4 w-4 animate-spin" />{form.generateStripeProduct ? "Creating product and payment link…" : "Saving…"}</>
+              ) : (
+                <><Plus className="mr-2 h-4 w-4" />{form.generateStripeProduct && !product ? "Create Product + Payment Link" : "Save Product / Link"}</>
+              )}
             </Button>
           </div>
         </form>
