@@ -319,26 +319,16 @@ export function MacroCalculatorDialog({
               <div className="grid grid-cols-2 gap-2 pt-2">
                 <Button variant="outline" onClick={handleReset}>Recalculate</Button>
                 <Button variant="outline" onClick={handleClose}>Cancel</Button>
-                {viewer === "client" && hasCoachApprovedTargets ? (
-                  <Button onClick={handleSendToCoach} className="col-span-2 gap-1.5">
-                    <MessageCircle className="h-4 w-4" /> Send to Coach for Review
-                  </Button>
-                ) : viewer === "client" ? (
-                  <>
-                    <Button onClick={handleSave} disabled={saving} className="col-span-2">
-                      {saving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
-                      Save My Targets
-                    </Button>
-                    <Button variant="ghost" onClick={handleSendToCoach} asChild className="col-span-2 gap-1.5">
-                      <Link to="/portal/messages" onClick={() => handleSendToCoach()}>
-                        <MessageCircle className="h-4 w-4" /> Send to Coach for Review
-                      </Link>
-                    </Button>
-                  </>
-                ) : (
+                {viewer === "member" ? (
                   <Button onClick={handleSave} disabled={saving} className="col-span-2">
                     {saving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
                     Save My Targets
+                  </Button>
+                ) : (
+                  <Button asChild className="col-span-2 gap-1.5" onClick={handleSendToCoach}>
+                    <Link to="/portal/messages">
+                      <MessageCircle className="h-4 w-4" /> Send to Coach for Review
+                    </Link>
                   </Button>
                 )}
               </div>
