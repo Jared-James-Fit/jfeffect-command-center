@@ -42,7 +42,12 @@ function splitName(full: string | null | undefined): { first: string; last: stri
 export function buildFilloutUrl(
   baseUrl: string | null | undefined,
   client: FilloutClient | null | undefined,
-  opts: { force?: boolean } = {},
+  opts: {
+    force?: boolean;
+    assignmentId?: string | null;
+    formId?: string | null;
+    periodStart?: string | null;
+  } = {},
 ): string {
   if (!baseUrl) return "";
   if (!client?.id) return baseUrl;
@@ -59,6 +64,9 @@ export function buildFilloutUrl(
       first_name: firstName,
       last_name: lastName,
     };
+    if (opts.assignmentId) params.assignment_id = opts.assignmentId;
+    if (opts.formId) params.form_id = opts.formId;
+    if (opts.periodStart) params.period_start = opts.periodStart;
     for (const [k, v] of Object.entries(params)) {
       if (v) url.searchParams.set(k, v);
     }
