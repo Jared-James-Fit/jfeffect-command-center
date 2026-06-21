@@ -771,6 +771,27 @@ function NutritionStep({ value, setField }: StepProps) {
         )}
       </div>
       <div className="space-y-3">
+        <Q>Are there any foods you strongly dislike?</Q>
+        <Sub>We'll use this to improve your recipe recommendations. Separate with commas.</Sub>
+        <Input
+          placeholder="e.g. Mushrooms, Olives, Cilantro"
+          value={(value.food_dislikes ?? []).join(", ")}
+          onChange={(e) => {
+            const list = e.target.value.split(",").map(s => s.trim()).filter(Boolean);
+            setField("food_dislikes", list);
+          }}
+        />
+      </div>
+      <div className="space-y-3">
+        <Q>What is your cooking skill level?</Q>
+        <ChipGrid
+          options={["beginner", "intermediate", "advanced"]}
+          value={value.cooking_skill ?? null}
+          onChange={(v) => setField("cooking_skill", v as any)}
+          labelFor={(v) => v.charAt(0).toUpperCase() + v.slice(1)}
+        />
+      </div>
+      <div className="space-y-3">
         <Q>What is your biggest nutrition challenge?</Q>
         <Sub>Select up to {NUTRITION_CHALLENGES_MAX}.</Sub>
         <ChipGrid

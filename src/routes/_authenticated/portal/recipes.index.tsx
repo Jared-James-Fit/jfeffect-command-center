@@ -23,7 +23,7 @@ function PortalRecipes() {
       (
         await supabase
           .from("clients")
-          .select("goals, goals_tags, food_restrictions, dietary_preferences")
+          .select("goals, goals_tags, food_restrictions, dietary_preferences, food_dislikes, cooking_skill")
           .eq("user_id", portalUserId!)
           .maybeSingle()
       ).data,
@@ -47,12 +47,11 @@ function PortalRecipes() {
     goals,
     foodRestrictions: Array.isArray(c?.food_restrictions) ? c.food_restrictions : [],
     dietaryPreferences: Array.isArray(c?.dietary_preferences) ? c.dietary_preferences : [],
-    // food_dislikes and cooking_skill will be populated when those columns are added to the clients table
-    foodDislikes: [] as string[],
+    foodDislikes: Array.isArray(c?.food_dislikes) ? c.food_dislikes : [],
     proteinTarget: t?.protein_g ?? null,
     calorieTarget: t?.calories ?? null,
     maxPrepMinutes: null as number | null,
-    cookingSkill: null as ("beginner" | "intermediate" | "advanced" | null),
+    cookingSkill: (c?.cooking_skill as any) ?? null,
   };
 
   return (

@@ -133,6 +133,8 @@ export const clientGoalsSetupSchema = z.object({
   food_restrictions_has: z.boolean().optional(),
   food_restrictions_details: z.string().trim().max(800).nullable().optional(),
   nutrition_challenges: z.array(z.string().max(80)).max(NUTRITION_CHALLENGES_MAX).nullable().optional(),
+  cooking_skill: z.enum(["beginner", "intermediate", "advanced"]).nullable().optional(),
+  food_dislikes: z.array(z.string().max(80)).max(20).nullable().optional(),
 
   injuries_has: z.boolean().optional(),
   injuries_details: z.string().trim().max(2000).nullable().optional(),
@@ -165,6 +167,8 @@ export const EDITABLE_GOALS_FIELDS = [
   "food_restrictions_has",
   "food_restrictions_details",
   "nutrition_challenges",
+  "cooking_skill",
+  "food_dislikes",
   "injuries_has",
   "injuries_details",
   "final_notes",
@@ -191,6 +195,8 @@ export type ClientGoalsSetupRow = {
   food_restrictions_has: boolean;
   food_restrictions_details: string | null;
   nutrition_challenges: string[];
+  cooking_skill: "beginner" | "intermediate" | "advanced" | null;
+  food_dislikes: string[];
   injuries_has: boolean;
   injuries_details: string | null;
   final_notes: string | null;
