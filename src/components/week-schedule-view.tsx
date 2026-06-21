@@ -103,6 +103,8 @@ function buildCells(
     c.enabled !== false && c.visible_to_client !== false && (c.status ?? "Active") === "Active",
   );
   for (const c of activeCardio) {
+    // Skip empty/incomplete targets
+    if (!c.duration_minutes && !c.intensity && !c.frequency_per_week) continue;
     // Date-window guard
     if (c.start_date && c.start_date > weekDates[6]) continue;
     if (c.end_date && c.end_date < weekDates[0]) continue;
