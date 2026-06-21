@@ -48,7 +48,7 @@ export const createCheckinThread = createServerFn({ method: "POST" })
   .inputValidator((d: unknown) => CreateThreadInput.parse(d))
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context as any;
-    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const supabaseAdmin = (await import("@/integrations/supabase/client.server")).supabaseAdmin as any;
 
     const clientId = await getMyClientId(supabase, userId);
     const memberId = await getMyMemberId(supabase, userId);
@@ -156,7 +156,7 @@ export const replyToCheckinThread = createServerFn({ method: "POST" })
   .inputValidator((d: unknown) => ReplyInput.parse(d))
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context as any;
-    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const supabaseAdmin = (await import("@/integrations/supabase/client.server")).supabaseAdmin as any;
 
     // Determine sender role
     const { data: profile } = await supabase.from("profiles").select("role").eq("id", userId).maybeSingle();
@@ -186,7 +186,7 @@ export const archiveCheckinThread = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) => ArchiveInput.parse(d))
   .handler(async ({ data, context }) => {
-    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const supabaseAdmin = (await import("@/integrations/supabase/client.server")).supabaseAdmin as any;
     const field = data.archiveFor === "client" ? "client_archived_at" : "admin_archived_at";
     const { error } = await supabaseAdmin
       .from("weekly_checkin_threads")

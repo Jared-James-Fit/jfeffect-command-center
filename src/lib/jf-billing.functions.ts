@@ -1268,13 +1268,17 @@ export const adminGrantTemporaryAccess = createServerFn({ method: "POST" })
       .update({ active: true, expires_at: expiresAt })
       .eq("member_id", data.member_id);
     // Record transition
-    await supabaseAdmin.from("member_access_transitions").insert({
-      member_id: data.member_id,
-      transition_type: "admin_grant_temporary",
-      new_status: "Active",
-      note: data.note ?? `Temporary access granted for ${data.days} day(s)`,
-      triggered_by: "admin",
-    }).catch(() => {}); // non-fatal if table doesn't exist yet
+    try {
+      await (supabaseAdmin as any).from("member_access_transitions").insert({
+        member_id: data.member_id,
+        transition_type: "admin_grant_temporary",
+        new_status: "Active",
+        note: data.note ?? `Temporary access granted for ${data.days} day(s)`,
+        triggered_by: "admin",
+      });
+    } catch {
+      // non-fatal if table doesn't exist yet
+    }
     return { ok: true, access_end_date: expiresAt };
   });
 
@@ -1367,12 +1371,16 @@ export const adminRevokeAccess = createServerFn({ method: "POST" })
       .from("member_access")
       .update({ active: false })
       .eq("member_id", data.member_id);
-    await supabaseAdmin.from("member_access_transitions").insert({
-      member_id: data.member_id,
-      transition_type: "admin_revoke",
-      new_status: "Deactivated",
-      note: data.note ?? "Access revoked by admin",
-      triggered_by: "admin",
-    }).catch(() => {});
+    try {
+      await (supabaseAdmin as any).from("member_access_transitions").insert({
+        member_id: data.member_id,
+        transition_type: "admin_revoke",
+        new_status: "Deactivated",
+        note: data.note ?? "Access revoked by admin",
+        triggered_by: "admin",
+      });
+    } catch {
+      // non-fatal
+    }
     return { ok: true };
   });

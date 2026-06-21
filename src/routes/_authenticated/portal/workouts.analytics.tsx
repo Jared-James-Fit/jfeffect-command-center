@@ -100,6 +100,19 @@ function PortalAnalytics() {
   const [prFilter, setPrFilter] = useState<string>("all");
   const [selectedDot, setSelectedDot] = useState<GraphDotPoint | null>(null);
 
+  const history = useMemo(() => buildExerciseHistory(results as any), [results]);
+  const volume = useMemo(
+    () => weeklyMuscleVolume(results as any[], volumeDays),
+    [results, volumeDays],
+  );
+  const prs = useMemo(
+    () => recentPRs(results as any[], rangeDays),
+    [results, rangeDays],
+  );
+
+  const activeEx = selectedEx || history[0]?.name || "";
+  const activeSeries = history.find((h) => h.name === activeEx);
+
   const handleDotClick = useCallback((data: any) => {
     if (!data || !data.activePayload?.[0]) return;
     const d = data.activePayload[0].payload;
@@ -124,19 +137,6 @@ function PortalAnalytics() {
       displayLoad: d.load,
     });
   }, [activeSeries, activeEx, displayUnit]);
-
-  const history = useMemo(() => buildExerciseHistory(results as any), [results]);
-  const volume = useMemo(
-    () => weeklyMuscleVolume(results as any[], volumeDays),
-    [results, volumeDays],
-  );
-  const prs = useMemo(
-    () => recentPRs(results as any[], rangeDays),
-    [results, rangeDays],
-  );
-
-  const activeEx = selectedEx || history[0]?.name || "";
-  const activeSeries = history.find((h) => h.name === activeEx);
 
   const conv = (v: number) => convertWeight(Number(v) || 0, sourceUnit, displayUnit);
 

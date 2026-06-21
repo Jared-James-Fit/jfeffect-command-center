@@ -32,6 +32,7 @@ function AnalyticsPage() {
   const [selectedEx, setSelectedEx] = useState<string>("");
   const [selectedDot, setSelectedDot] = useState<GraphDotPoint | null>(null);
   const activeEx = selectedEx || history[0]?.name || "";
+  const activeSeries = history.find((h) => h.name === activeEx);
 
   const handleDotClick = useCallback((data: any) => {
     if (!data || !data.activePayload?.[0]) return;
@@ -57,7 +58,6 @@ function AnalyticsPage() {
       displayLoad: d.load,
     });
   }, [activeSeries, activeEx]);
-  const activeSeries = history.find((h) => h.name === activeEx);
   const activeColor = exerciseColor(activeEx, activeSeries?.points?.[0]?.muscle_group);
 
   const exerciseOptions: SearchableOption[] = useMemo(
