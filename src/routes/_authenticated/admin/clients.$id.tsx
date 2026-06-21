@@ -80,6 +80,7 @@ const AssignedProgramsCard = lazyDefault(() => import("@/components/assigned-pro
 const ClientWarmupCard = lazyDefault(() => import("@/components/client-warmup-card"), "ClientWarmupCard");
 const ClientBillingPanel = lazyDefault(() => import("@/components/admin/client-billing-panel"), "ClientBillingPanel");
 const GoalsSetupPanel = lazyDefault(() => import("@/components/clients/goals-setup-panel"), "GoalsSetupPanel");
+const SessionCreditsPanel = lazyDefault(() => import("@/components/admin/session-credits-panel"), "SessionCreditsPanel");
 
 function TabFallback() {
   return <div className="md:col-span-3 p-6 text-sm text-muted-foreground">Loading…</div>;
@@ -969,6 +970,8 @@ function ClientDetail() {
         <TabsContent value="sessions" className="grid gap-6 md:grid-cols-3">
           <Suspense fallback={<TabFallback />}>
           <PtSessionsPanel clientId={id} client={form} />
+
+        <SessionCreditsPanel clientId={id} />
 
         <Card className="border-border bg-card p-6 md:col-span-3 space-y-4">
           <h3 className="text-xs uppercase tracking-widest text-muted-foreground">Time Zone & Sessions</h3>
