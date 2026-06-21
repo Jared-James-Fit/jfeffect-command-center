@@ -27,8 +27,6 @@ export function SessionsCard({ clientId, nextAppointmentAt }: Props) {
   });
 
   const active = (balance ?? [])[0];
-  if (!active) return null;
-
   // Look up the show_value flag for this purchase
   const { data: purchase } = useQuery<{ show_value_to_client: boolean; full_payable_amount: number | null; currency: string | null } | null>({
     queryKey: ["my-session-purchase", active.purchase_id],
@@ -42,6 +40,8 @@ export function SessionsCard({ clientId, nextAppointmentAt }: Props) {
       return (data as any) ?? null;
     },
   });
+
+  if (!active) return null;
 
   return (
     <Link to="/portal/appointments" className="block">
