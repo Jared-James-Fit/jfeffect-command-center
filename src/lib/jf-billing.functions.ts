@@ -1234,3 +1234,145 @@ export const adminCompAccess = createServerFn({ method: "POST" })
     await supabaseAdmin.from("member_access").update({ active: true, expires_at: expiresAt }).eq("member_id", data.member_id);
     return { ok: true };
   });
+
+/* ─────────────────────────────────────────────────────────────────────
+   Admin: Grant temporary access (manual override with expiry date)
+   ───────────────────────────────────────────────────────────────────── */
+
+const GrantTempAccessInput = z.object({
+  member_id: z.string().uuid(),
+  days: z.number().int().min(1).max(3650),
+  note: z.string().optional(),
+});
+
+export const adminGrantTemporaryAccess = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => GrantTempAccessInput.parse(d))
+  .handler(async ({ data, context }) => {
+    await assertAdmin(context);
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const expiresAt = new Date(Date.now() + data.days * 86_400_000).toISOString();
+    await supabaseAdmin
+      .from("app_members")
+      .update({
+        manual_access_override: true,
+        manual_access_disabled: false,
+        access_end_date: expiresAt,
+        admin_access_note: data.note ?? null,
+        status: "Active",
+      })
+      .eq("id", data.member_id);
+    // Ensure member_access rows are active for the grant period
+    await supabaseAdmin
+      .from("member_access")
+      .update({ active: true, expires_at: expiresAt })
+      .eq("member_id", data.member_id);
+    // Record transition
+    await supabaseAdmin.from("member_access_transitions").insert({
+      member_id: data.member_id,
+      transition_type: "admin_grant_temporary",
+      new_status: "Active",
+      note: data.note ?? `Temporary access granted for ${data.days} day(s)`,
+      triggered_by: "admin",
+    }).catch(() => {}); // non-fatal if table doesn't exist yet
+    return { ok: true, access_end_date: expiresAt };
+  });
+
+/* ─────────────────────────────────────────────────────────────────────
+   Admin: Extend trial by N days
+   ───────────────────────────────────────────────────────────────────── */
+
+const ExtendTrialInput = z.object({
+  member_id: z.string().uuid(),
+  days: z.number().int().min(1).max(365),
+});
+
+export const adminExtendTrial = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => ExtendTrialInput.parse(d))
+  .handler(async ({ data, context }) => {
+    await assertAdmin(context);
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const m = await loadMemberOrThrow(data.member_id);
+    const currentTrialEnd = m.trial_end_at ? new Date(m.trial_end_at) : new Date();
+    const newTrialEnd = new Date(
+      Math.max(currentTrialEnd.getTime(), Date.now()) + data.days * 86_400_000,
+    ).toISOString();
+    await supabaseAdmin
+      .from("app_members")
+      .update({ trial_end_at: newTrialEnd, status: "Trialing" })
+      .eq("id", data.member_id);
+    if (m.stripe_subscription_id) {
+      const s = await loadSettings();
+      const { apiKey } = resolveStripeKey(s, "adminExtendTrial");
+      await stripeFetch(`/subscriptions/${m.stripe_subscription_id}`, {
+        method: "POST",
+        body: formEncode({ trial_end: String(Math.floor(new Date(newTrialEnd).getTime() / 1000)) }),
+        apiKey,
+      }).catch(() => {}); // best-effort Stripe update
+    }
+    return { ok: true, trial_end_at: newTrialEnd };
+  });
+
+/* ─────────────────────────────────────────────────────────────────────
+   Admin: Set hard access end date
+   ───────────────────────────────────────────────────────────────────── */
+
+const SetAccessEndDateInput = z.object({
+  member_id: z.string().uuid(),
+  access_end_date: z.string().nullable(),
+  note: z.string().optional(),
+});
+
+export const adminSetAccessEndDate = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => SetAccessEndDateInput.parse(d))
+  .handler(async ({ data, context }) => {
+    await assertAdmin(context);
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    await supabaseAdmin
+      .from("app_members")
+      .update({
+        access_end_date: data.access_end_date,
+        admin_access_note: data.note ?? null,
+      })
+      .eq("id", data.member_id);
+    return { ok: true };
+  });
+
+/* ─────────────────────────────────────────────────────────────────────
+   Admin: Revoke access (kill switch)
+   ───────────────────────────────────────────────────────────────────── */
+
+const RevokeAccessInput = z.object({
+  member_id: z.string().uuid(),
+  note: z.string().optional(),
+});
+
+export const adminRevokeAccess = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => RevokeAccessInput.parse(d))
+  .handler(async ({ data, context }) => {
+    await assertAdmin(context);
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    await supabaseAdmin
+      .from("app_members")
+      .update({
+        manual_access_disabled: true,
+        manual_access_override: false,
+        admin_access_note: data.note ?? "Access revoked by admin",
+      })
+      .eq("id", data.member_id);
+    await supabaseAdmin
+      .from("member_access")
+      .update({ active: false })
+      .eq("member_id", data.member_id);
+    await supabaseAdmin.from("member_access_transitions").insert({
+      member_id: data.member_id,
+      transition_type: "admin_revoke",
+      new_status: "Deactivated",
+      note: data.note ?? "Access revoked by admin",
+      triggered_by: "admin",
+    }).catch(() => {});
+    return { ok: true };
+  });

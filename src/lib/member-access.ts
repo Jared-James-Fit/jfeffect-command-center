@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { getCurrentMember } from "@/lib/members.functions";
 import { isSubscriptionActive, type AccountType } from "@/lib/membership";
+import { isMemberAccessActive } from "@/lib/memberAccess";
 
 export type MemberAccessSummary = {
   loading: boolean;
@@ -29,12 +30,16 @@ export function useMemberAccess(): MemberAccessSummary {
       .filter((a) => a.active && (!a.expires_at || Date.parse(a.expires_at) > now))
       .map((a) => a.access_level_key as string),
   );
-  // Admin manual override: kill switch wins, then override grants access
-  // regardless of Stripe/subscription status.
-  const manualDisabled = member?.manual_access_disabled === true;
-  const manualOverride = member?.manual_access_override === true && !manualDisabled;
-  const subscriptionActive = !manualDisabled
-    && (manualOverride || isSubscriptionActive(member?.status));
+
+  // Use the canonical access helper as the single source of truth.
+  // isMemberAccessActive respects: kill switch, manual override, grace period,
+  // hard expiry date, and subscription status — in that priority order.
+  const canonicalAccess = isMemberAccessActive(member);
+
+  // subscriptionActive is kept for backwards-compat with components that read it,
+  // but hasAccess now uses the canonical helper.
+  const subscriptionActive = isSubscriptionActive(member?.status);
+
   return {
     loading: isLoading,
     member,
@@ -43,10 +48,14 @@ export function useMemberAccess(): MemberAccessSummary {
     subscriptionStatus: member?.subscription_status ?? null,
     subscriptionActive,
     granted,
-    // Manual override grants every access key (admin has explicitly enabled
-    // access regardless of Stripe). Otherwise require an active subscription
-    // AND a matching granted access level.
-    hasAccess: (key: string) =>
-      !manualDisabled && (manualOverride || (subscriptionActive && granted.has(key))),
+    // Canonical access: respects manual overrides, grace periods, hard expiry.
+    // Manual override grants every key; otherwise require canonical access AND
+    // a matching granted access level.
+    hasAccess: (key: string) => {
+      if (!canonicalAccess) return false;
+      // If admin manually overrode access, grant all keys without checking rows.
+      if (member?.manual_access_override === true && member?.manual_access_disabled !== true) return true;
+      return granted.has(key);
+    },
   };
 }

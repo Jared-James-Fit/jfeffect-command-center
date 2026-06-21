@@ -2,16 +2,82 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { listMemberOffers, createMemberCheckoutSession } from "@/lib/member-checkout.functions";
+import { getMyJfBilling, openBillingPortal, restartMembership } from "@/lib/jf-billing.functions";
 import { PageHeader } from "@/components/app-shell";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { useState } from "react";
-import { Check, ArrowLeft, Info } from "lucide-react";
+import { Check, ArrowLeft, Info, CreditCard, RefreshCw, Mail } from "lucide-react";
 import { isNative } from "@/platform";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 
 export const Route = createFileRoute("/_authenticated/m/upgrade")({ component: UpgradePage });
+
+function NoOffersSection({ native }: { native: boolean }) {
+  const qc = useQueryClient();
+  const billingFn = useServerFn(getMyJfBilling);
+  const portalFn = useServerFn(openBillingPortal);
+  const restartFn = useServerFn(restartMembership);
+
+  const { data: billingData } = useQuery({ queryKey: ["my-jf-billing"], queryFn: () => billingFn() });
+  const lc = (billingData as any)?.lifecycle;
+  const isCancelled = lc?.subscription_ended || lc?.status === "Cancelled" || lc?.status === "Expired";
+  const showRestart = lc?.action === "restart_membership" || isCancelled;
+
+  const portal = useMutation({
+    mutationFn: () => portalFn({ data: { return_url: window.location.href } }),
+    onSuccess: (r: any) => window.location.assign(r.url),
+    onError: (e: any) => toast.error(e?.message ?? "Could not open billing portal"),
+  });
+  const restart = useMutation({
+    mutationFn: () => restartFn({ data: { origin: window.location.origin } }),
+    onSuccess: (r: any) => { if (r?.url) window.location.assign(r.url); else { toast.success("Membership restarted"); qc.invalidateQueries({ queryKey: ["my-jf-billing"] }); } },
+    onError: (e: any) => toast.error(e?.message ?? "Could not restart membership"),
+  });
+
+  return (
+    <div className="space-y-4">
+      <Card className="p-6 space-y-4">
+        <div className="flex items-start gap-3">
+          <Info className="mt-0.5 h-5 w-5 shrink-0 text-muted-foreground" />
+          <div>
+            <div className="font-semibold text-sm">No active plans are available right now</div>
+            <div className="text-xs text-muted-foreground mt-0.5">
+              Your coach will set up available plans shortly. In the meantime, use the options below to manage your membership.
+            </div>
+          </div>
+        </div>
+
+        {!native && (
+          <div className="flex flex-col gap-2 pt-2 border-t border-border">
+            {showRestart && (
+              <Button className="w-full" onClick={() => restart.mutate()} disabled={restart.isPending}>
+                <RefreshCw className="mr-2 h-4 w-4" />
+                {restart.isPending ? "Processing…" : "Reactivate Membership"}
+              </Button>
+            )}
+            <Button variant="outline" className="w-full" onClick={() => portal.mutate()} disabled={portal.isPending}>
+              <CreditCard className="mr-2 h-4 w-4" />
+              {portal.isPending ? "Opening…" : "Update Payment Method"}
+            </Button>
+            <Button variant="outline" className="w-full" asChild>
+              <a href="mailto:jared@jfeffect.com">
+                <Mail className="mr-2 h-4 w-4" /> Contact Coach / Support
+              </a>
+            </Button>
+          </div>
+        )}
+        {native && (
+          <div className="pt-2 border-t border-border text-sm text-muted-foreground">
+            To manage your membership, visit <span className="font-semibold">jfeffect.com</span> in your browser.
+          </div>
+        )}
+      </Card>
+    </div>
+  );
+}
 
 function formatPrice(cents: number, currency: string) {
   try { return new Intl.NumberFormat("en-US", { style: "currency", currency: currency.toUpperCase() }).format(cents / 100); }
@@ -54,7 +120,7 @@ function UpgradePage() {
         </Card>
       )}
       {offers.length === 0 ? (
-        <Card className="p-6 text-sm text-muted-foreground">No upgrade options available right now. Check back soon.</Card>
+        <NoOffersSection native={native} />
       ) : (
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
           {offers.map((o) => (

@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { getCurrentMember, updateMyMarketingPrefs } from "@/lib/members.functions";
 import { useAuth } from "@/lib/auth";
+import { isMemberAccessActive } from "@/lib/memberAccess";
 import { PageHeader } from "@/components/app-shell";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -71,11 +72,20 @@ function AccountPage() {
         </div>
       </Card>
       <Card className="p-6">
-        <div className="text-xs uppercase tracking-wider text-muted-foreground">Active access</div>
-        <div className="mt-2 flex flex-wrap gap-2">
-          {(me?.access ?? []).length === 0 && <div className="text-sm text-muted-foreground">No active access.</div>}
+        <div className="text-xs uppercase tracking-wider text-muted-foreground">Membership access</div>
+        <div className="mt-2 flex flex-wrap gap-2 items-center">
+          {isMemberAccessActive(me?.member) ? (
+            <Badge className="bg-emerald-500/15 text-emerald-300 border-emerald-500/30">Access Active</Badge>
+          ) : (
+            <Badge variant="outline" className="text-muted-foreground">No active access</Badge>
+          )}
           {(me?.access ?? []).map((a: any) => <Badge key={a.id} variant="secondary">{a.access_level_key}</Badge>)}
         </div>
+        {!isMemberAccessActive(me?.member) && (
+          <div className="mt-3 text-xs text-muted-foreground">
+            Your membership is not currently active. Visit <a href="/m/billing" className="underline font-medium">Billing</a> to reactivate or update your payment method.
+          </div>
+        )}
       </Card>
       <Card className="p-6">
         <div className="text-xs uppercase tracking-wider text-muted-foreground">Notifications &amp; marketing</div>

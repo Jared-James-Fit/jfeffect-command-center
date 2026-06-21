@@ -5,6 +5,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
 import { getCurrentMember } from "@/lib/members.functions";
 import { supabase } from "@/integrations/supabase/client";
+import { isMemberAccessActive } from "@/lib/memberAccess";
 import { PageHeader } from "@/components/app-shell";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -57,7 +58,10 @@ function MemberHome() {
 
   const accessKeys = new Set((me?.access ?? []).map((a: any) => a.access_level_key));
   const hasAnyAccess = accessKeys.size > 0;
-  const showUpgrade = !hasAnyAccess || me?.member?.account_type === "program_only";
+  // Use canonical access helper: respects manual overrides, grace periods, hard expiry.
+  // Do NOT show the upsell if the member has canonical access (even if raw access rows are empty).
+  const canonicalAccess = isMemberAccessActive(me?.member);
+  const showUpgrade = (!hasAnyAccess && !canonicalAccess) || me?.member?.account_type === "program_only";
 
   const { data: featured = [] } = useQuery({
     queryKey: ["m-featured"],

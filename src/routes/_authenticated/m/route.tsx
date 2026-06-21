@@ -14,10 +14,10 @@ function MemberLayout() {
   const navigate = useNavigate();
   const pov = getPovFlag();
   const { status, subscriptionStatus, subscriptionActive, hasAccess, loading: accessLoading, accountType, member } = useMemberAccess();
-  const manualOverride = member?.manual_access_override === true && member?.manual_access_disabled !== true;
   const location = useLocation();
   const allowList = ["/m/billing", "/m/welcome", "/m/account"];
   const isAllowed = allowList.some((p) => location.pathname.startsWith(p));
+
   useEffect(() => {
     if (loading) return;
     if (role === "client") navigate({ to: "/portal", replace: true });
@@ -27,7 +27,8 @@ function MemberLayout() {
     }
   }, [role, loading, navigate, pov.active]);
 
-  // Hard gate: JF members without active subscription get sent to billing for paid routes.
+  // Hard gate: JF members without active access get sent to billing for paid routes.
+  // hasAccess now uses the canonical helper (respects manual override, grace, expiry).
   useEffect(() => {
     if (loading || accessLoading) return;
     if (accountType === "jf_member" && !hasAccess("app_membership") && !isAllowed) {
@@ -39,13 +40,17 @@ function MemberLayout() {
     return <div className="grid min-h-screen place-items-center text-muted-foreground">Loading…</div>;
   }
   const showToggle = role === "admin" || role === "coach";
+
+  // Show the restricted banner only when canonical access is denied AND the
+  // subscription status indicates a problem (not just a loading state).
+  const showBanner = accountType === "jf_member"
+    && !hasAccess("app_membership")
+    && (subscriptionStatus && !["Trialing", "Active"].includes(subscriptionStatus));
+
   return (
     <AppShell items={memberNav} bottomItems={memberBottomNav} title="Member">
       {showToggle && <PovQuickToggle variant="banner" />}
-      {(accountType === "jf_member"
-        && !manualOverride
-        && (!subscriptionActive
-            || (subscriptionStatus && !["Trialing", "Active"].includes(subscriptionStatus)))) && (
+      {showBanner && (
         <div className="px-4 pt-4 md:px-6 md:pt-6">
           <SubscriptionRestrictedBanner status={status} subscriptionStatus={subscriptionStatus} />
         </div>
