@@ -8,7 +8,7 @@ import {
 import {
   Calendar as CalendarIcon, ChevronLeft, ChevronRight, ClipboardList,
   History, Loader2, Move, MoreVertical, Play, Pencil, Sun, Activity, Download,
-  RotateCcw, MessageSquare,
+  RotateCcw, MessageSquare, Heart,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/app-shell";
@@ -739,17 +739,56 @@ function SelectedDayCard({
     }
   };
 
+  const { data: restDayCardio = [] } = useQuery({
+    queryKey: ["client-cardio-rest-day", clientId],
+    enabled: !!clientId && !item,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("cardio_targets")
+        .select("id")
+        .eq("client_id", clientId)
+        .eq("visible_to_client", true)
+        .eq("enabled", true)
+        .eq("status", "Active")
+        .eq("day_type", "Rest Day")
+        .limit(1);
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+  const hasRestDayCardio = restDayCardio.length > 0;
+
   if (!item) {
     return (
-      <Card className="p-6 text-center">
-        <div className="mx-auto grid h-10 w-10 place-items-center rounded-full bg-muted">
-          <Sun className="h-5 w-5 text-muted-foreground" />
-        </div>
-        <div className="mt-3 text-base font-bold">No workout scheduled</div>
-        <div className="text-xs text-muted-foreground">
-          {format(date, "EEEE, MMMM d")} · rest day
-        </div>
-      </Card>
+      <>
+        {hasRestDayCardio ? (
+          <Card className="p-6 text-center">
+            <div className="mx-auto grid h-10 w-10 place-items-center rounded-full bg-muted">
+              <Heart className="h-5 w-5 text-muted-foreground" />
+            </div>
+            <div className="mt-3 text-base font-bold">Cardio Day</div>
+            <div className="text-xs text-muted-foreground">
+              {format(date, "EEEE, MMMM d")}
+            </div>
+          </Card>
+        ) : (
+          <Card className="p-6 text-center">
+            <div className="mx-auto grid h-10 w-10 place-items-center rounded-full bg-muted">
+              <Sun className="h-5 w-5 text-muted-foreground" />
+            </div>
+            <div className="mt-3 text-base font-bold">No workout scheduled</div>
+            <div className="text-xs text-muted-foreground">
+              {format(date, "EEEE, MMMM d")} · rest day
+            </div>
+          </Card>
+        )}
+        <ClientCardioSection
+          clientId={clientId}
+          readonly={readonly}
+          dayContext="rest"
+          date={date}
+        />
+      </>
     );
   }
 
@@ -858,6 +897,13 @@ function SelectedDayCard({
             )}
         </div>
       </Card>
+
+      <ClientCardioSection
+        clientId={clientId}
+        readonly={readonly}
+        dayContext="training"
+        date={date}
+      />
 
       {!readonly && (
         <MoveWorkoutSheet

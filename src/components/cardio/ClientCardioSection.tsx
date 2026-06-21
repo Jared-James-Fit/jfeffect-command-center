@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -22,9 +23,15 @@ import { dayTypeLabel, dayTypeTone } from "@/lib/training-schedule";
 export function ClientCardioSection({
   clientId,
   hideWhenEmpty = false,
+  dayContext,
+  date,
+  readonly,
 }: {
   clientId: string;
   hideWhenEmpty?: boolean;
+  dayContext?: "rest" | "training";
+  date?: Date;
+  readonly?: boolean;
 }) {
   const { data: targets = [], isLoading } = useQuery({
     queryKey: ["client-cardio-visible", clientId],
@@ -45,6 +52,17 @@ export function ClientCardioSection({
     },
   });
 
+  const filteredTargets = useMemo(() => {
+    if (!dayContext) return targets;
+    const restTypes = ["Rest Day", "General"];
+    const trainingTypes = ["Training Day", "High Day", "General"];
+    return targets.filter((t: any) => {
+      if (dayContext === "rest") return restTypes.includes(t.day_type);
+      if (dayContext === "training") return trainingTypes.includes(t.day_type);
+      return true;
+    });
+  }, [targets, dayContext]);
+
   if (isLoading) {
     return (
       <Card className="flex items-center gap-2 p-4 text-sm text-muted-foreground">
@@ -53,7 +71,7 @@ export function ClientCardioSection({
     );
   }
 
-  if (!targets.length) {
+  if (!filteredTargets.length) {
     if (hideWhenEmpty) return null;
     return (
       <Card className="p-4 sm:p-6">
@@ -67,7 +85,7 @@ export function ClientCardioSection({
 
   // Group by program_name so multi-week programs render under a heading.
   const groups: Record<string, any[]> = {};
-  for (const t of targets as any[]) {
+  for (const t of filteredTargets as any[]) {
     const key = t.program_name || "__single__";
     (groups[key] ??= []).push(t);
   }
