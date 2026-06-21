@@ -31,6 +31,7 @@ import appPreviewAnalyticsOverview from "@/assets/app-preview-analytics-overview
 import appPreviewRecentPrs from "@/assets/app-preview-recent-prs.png.asset.json";
 import appPreview1rmChart from "@/assets/app-preview-1rm-chart.png.asset.json";
 import { TransformationsGallery } from "@/components/sales/transformations-gallery";
+import { TransformationsStrip } from "@/components/sales/transformations-strip";
 import { CoachTimelineSection } from "@/components/sales/coach-timeline-section";
 
 function HeroSkeleton() {
@@ -345,6 +346,17 @@ export function SignupJf({ floatingHeader = false }: { floatingHeader?: boolean 
           </div>
         </Link>
       </Section>
+
+      {/* Early social proof — transformations under the hero/coaching callout */}
+      <Reveal>
+        <TransformationsStrip
+          eyebrow="Real members"
+          headline="100+ lives transformed"
+          sub="Real progress from members training inside the app."
+          ctaLabel="Start Free Trial"
+          onCta={scrollToForm}
+        />
+      </Reveal>
 
       {/* 2. The library — core value, visual grid */}
       <div ref={featuresRef} id="features" />
