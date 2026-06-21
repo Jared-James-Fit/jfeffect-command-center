@@ -233,6 +233,9 @@ function NewAppointmentDialog({ open, onOpenChange, onCreated, presetDate }: { o
       attendee_notes: "",
       internal_notes: "",
       sms_reminders_enabled: true,
+      use_session_credit: false,
+      session_credit_package_id: "",
+      credits_used: 1,
     };
   }
 
@@ -256,6 +259,8 @@ function NewAppointmentDialog({ open, onOpenChange, onCreated, presetDate }: { o
         attendee_notes: form.attendee_notes || null,
         internal_notes: form.internal_notes || null,
         sms_reminders_enabled: form.sms_reminders_enabled,
+        session_credit_package_id: form.use_session_credit ? (form.session_credit_package_id || null) : null,
+        credits_used: form.use_session_credit ? Math.max(1, Number(form.credits_used) || 1) : 1,
       } as any });
     },
     onSuccess: () => { toast.success("Appointment created"); onOpenChange(false); setForm(defaultForm()); onCreated(); },
