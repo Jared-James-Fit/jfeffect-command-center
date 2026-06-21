@@ -8,7 +8,7 @@ import {
 import {
   Calendar as CalendarIcon, ChevronLeft, ChevronRight, ClipboardList,
   History, Loader2, Move, MoreVertical, Play, Pencil, Sun, Activity, Download,
-  RotateCcw, MessageSquare,
+  RotateCcw, MessageSquare, Heart,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/app-shell";
