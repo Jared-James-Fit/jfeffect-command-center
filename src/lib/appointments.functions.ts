@@ -338,6 +338,8 @@ export const cancelAppointment = createServerFn({ method: "POST" })
       cancelled_reason: data.reason || null,
     }).eq("id", data.id);
     if (error) throw new Error(error.message);
+    // Return any previously-deducted session credit
+    await reverseAppointmentCredit(data.id);
     if (existing.google_event_id) {
       try {
         const { gcalDeleteEvent } = await import("./google-cal.server");
@@ -366,6 +368,12 @@ export const markAppointmentStatus = createServerFn({ method: "POST" })
     if (!before) throw new Error("Appointment not found");
     const { error } = await supabase.from("appointments").update({ status: data.status }).eq("id", data.id);
     if (error) throw new Error(error.message);
+    // Session credit side-effects (only act when explicit package linked; never auto on imports)
+    if (data.status === "Completed" && before.status !== "Completed") {
+      try { await applyAppointmentCredit(data.id); } catch (e) { console.error("applyAppointmentCredit failed", e); }
+    } else if ((data.status === "Cancelled" || data.status === "NoShow") && before.status === "Completed") {
+      try { await reverseAppointmentCredit(data.id); } catch (e) { console.error("reverseAppointmentCredit failed", e); }
+    }
     await writeApptCrmActivity({
       appt: before,
       newStatus: data.status,
