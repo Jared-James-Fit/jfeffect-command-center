@@ -509,9 +509,26 @@ function ExternalFormView({
   onBack: () => void;
 }) {
   const [iframeFailed, setIframeFailed] = useState(false);
+  const { data: assignmentId } = useQuery({
+    queryKey: ["nf-assignment-for", form.id, client?.id],
+    enabled: !!client?.id && !!form?.id,
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("nf_assignments")
+        .select("id")
+        .eq("form_id", form.id)
+        .eq("client_id", client.id)
+        .maybeSingle();
+      return (data as any)?.id ?? null;
+    },
+  });
   const rawUrl = form.external_url as string | null;
   const url = rawUrl && form.requires_client_identity !== false
-    ? buildFilloutUrl(rawUrl, client)
+    ? buildFilloutUrl(rawUrl, client, {
+        assignmentId: assignmentId ?? null,
+        formId: form.id,
+        periodStart: submission?.period_start ?? null,
+      })
     : rawUrl;
   const openStyle = (form.open_style ?? "embed") as "embed" | "modal" | "new_tab";
   const submitted = submission.status !== "in_progress";
