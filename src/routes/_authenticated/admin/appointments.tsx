@@ -192,6 +192,16 @@ function NewAppointmentDialog({ open, onOpenChange, onCreated, presetDate }: { o
   });
 
   const [form, setForm] = useState<any>(() => defaultForm());
+  // Active session-credit packages for the selected client
+  const { data: clientPackages = [] } = useQuery<any[]>({
+    queryKey: ["client-session-packages", form.client_id],
+    enabled: !!form.client_id,
+    queryFn: async () => {
+      const { data, error } = await (supabase as any).rpc("session_balance", { _client_id: form.client_id });
+      if (error) return [];
+      return (data ?? []).filter((p: any) => (p.remaining ?? 0) > 0);
+    },
+  });
   useEffect(() => {
     if (open && presetDate) setForm((f: any) => ({ ...f, date: presetDate }));
   }, [open, presetDate]);
