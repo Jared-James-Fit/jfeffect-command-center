@@ -23,10 +23,12 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
+import { isMemberAccessActive } from "@/lib/memberAccess";
 
 export const Route = createFileRoute("/_authenticated/m/plans/$planId")({ component: PlanDetail });
 
 const WEEK_DAYS = ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];
+const PROGRAM_LIBRARY_KEYS = new Set(["app_membership", "program_library", "jf_membership"]);
 
 function PlanDetail() {
   const { planId } = Route.useParams();
@@ -67,7 +69,11 @@ function PlanDetail() {
 
   if (!plan) return <div className="p-6 text-sm text-muted-foreground">Loading…</div>;
   const accessKeys = new Set((me?.access ?? []).map((a: any) => a.access_level_key));
-  const unlocked = plan.audience_mode === "all_active" || accessKeys.has(plan.required_access_level);
+  const memberActive = isMemberAccessActive(me?.member);
+  const unlocked = plan.audience_mode === "all_active"
+    ? memberActive
+    : accessKeys.has(plan.required_access_level)
+      || (PROGRAM_LIBRARY_KEYS.has(plan.required_access_level) && memberActive);
   const weeks = plan.published_payload?.weeks_data ?? [];
 
   const submitStart = async (confirmReplace = false) => {
