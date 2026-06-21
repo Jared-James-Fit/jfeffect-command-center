@@ -4,15 +4,18 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { listUpcomingUnified, type UnifiedRow } from "@/lib/calendar-upcoming.functions";
 import { markAppointmentStatus, cancelAppointment } from "@/lib/appointments.functions";
+import { assignGoogleEventToClient, getGoogleConnectionStatus } from "@/lib/google-cal.functions";
+import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/app-shell";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetFooter } from "@/components/ui/sheet";
 import {
   Calendar as CalendarIcon, RefreshCw, Search, ExternalLink, Video, Copy,
-  CheckCircle2, AlertTriangle, X, CalendarClock, User, Link2 as LinkIcon, Filter,
+  CheckCircle2, AlertTriangle, X, CalendarClock, User, Link2 as LinkIcon, Filter, UserPlus,
 } from "lucide-react";
 import { toast } from "sonner";
 import { runJob } from "@/lib/progress-jobs";
@@ -42,6 +45,12 @@ export function UpcomingPanel() {
   const search = useSearch({ from: "/_authenticated/admin/calendar" }) as any;
   const list = useServerFn(listUpcomingUnified);
   const qc = useQueryClient();
+  const statusFn = useServerFn(getGoogleConnectionStatus);
+  const { data: gcalStatus } = useQuery({
+    queryKey: ["gcal-status"],
+    queryFn: () => statusFn(),
+    staleTime: 60_000,
+  });
 
   const q: string = search.q ?? "";
   const fSource: string = search.source ?? "all";
@@ -125,9 +134,12 @@ export function UpcomingPanel() {
         title="Upcoming"
         subtitle="Unified view of appointments, PT sessions, and Google Calendar events."
         actions={
-          <Button size="sm" variant="outline" onClick={handleRefresh} disabled={isFetching}>
-            <RefreshCw className={`mr-2 h-4 w-4 ${isFetching ? "animate-spin" : ""}`} /> Refresh
-          </Button>
+          <div className="flex items-center gap-2">
+            <GcalSyncBadge connected={!!gcalStatus?.connected} />
+            <Button size="sm" variant="outline" onClick={handleRefresh} disabled={isFetching}>
+              <RefreshCw className={`mr-2 h-4 w-4 ${isFetching ? "animate-spin" : ""}`} /> Refresh
+            </Button>
+          </div>
         }
       />
       <div className="p-3 sm:p-6 md:p-8 space-y-4">
