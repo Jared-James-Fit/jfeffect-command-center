@@ -33,6 +33,7 @@ import {
   grantSessionCreditPackage,
   getClientSessionCredits,
   adjustSessionCredits,
+  addClientSessionCredits,
 } from "@/lib/session-credit-packages.functions";
 
 function fmt(amountMinor: number | null | undefined, currency = "CAD") {
@@ -146,6 +147,7 @@ export function SessionCreditsPanel({ clientId }: { clientId: string }) {
           </p>
         </div>
         <div className="flex gap-2 flex-wrap">
+          <AddCreditsDialog clientId={clientId} onDone={invalidate} />
           <GrantPackageDialog
             clientId={clientId}
             packages={activePackages}
