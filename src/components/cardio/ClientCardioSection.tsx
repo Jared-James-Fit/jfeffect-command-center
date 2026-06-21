@@ -71,7 +71,7 @@ export function ClientCardioSection({
     );
   }
 
-  if (!targets.length) {
+  if (!filteredTargets.length) {
     if (hideWhenEmpty) return null;
     return (
       <Card className="p-4 sm:p-6">
@@ -85,7 +85,7 @@ export function ClientCardioSection({
 
   // Group by program_name so multi-week programs render under a heading.
   const groups: Record<string, any[]> = {};
-  for (const t of targets as any[]) {
+  for (const t of filteredTargets as any[]) {
     const key = t.program_name || "__single__";
     (groups[key] ??= []).push(t);
   }
