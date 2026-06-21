@@ -739,7 +739,7 @@ export function createMemberAdapter(ref: WorkoutContextRef): WorkoutContextAdapt
         const { data: exs } = await supabase
           .from("exercises")
           .select(
-            "id, name, video_url, vimeo_embed_url, secondary_vimeo_embed_url, active_video_set, thumbnail_url, cues, common_mistakes, muscle_group, category, pl_lift_group, warmup_protocol_id, is_powerlifting, warmup_notes, default_load_unit, exercise_category, is_competition_lift, competition_lift_type",
+            "id, name, video_url, vimeo_embed_url, secondary_vimeo_embed_url, active_video_set, thumbnail_url, cues, common_mistakes, muscle_group, category, pl_lift_group, warmup_protocol_id, is_powerlifting, warmup_notes, default_load_unit, exercise_category, is_competition_lift, competition_lift_type, default_measurement_type, duration_seconds",
           )
           .in("id", swapIds);
         for (const e of (exs ?? []) as any[]) exerciseById.set(e.id, e);
@@ -772,6 +772,8 @@ export function createMemberAdapter(ref: WorkoutContextRef): WorkoutContextAdapt
           exercise_category: ex?.exercise_category ?? null,
           is_competition_lift: ex?.is_competition_lift ?? false,
           competition_lift_type: ex?.competition_lift_type ?? null,
+          // Pass through default_measurement_type so time-based exercises auto-show timer
+          default_measurement_type: ex?.default_measurement_type ?? null,
         };
         return memberRowToPlRow({ row: merged, exerciseIndex: ei, dayId });
       });
@@ -956,7 +958,13 @@ export function memberRowToPlRow(args: {
       exercise_category: r.exercise_category ?? null,
       is_competition_lift: r.is_competition_lift ?? false,
       competition_lift_type: r.competition_lift_type ?? null,
+      default_measurement_type: r.default_measurement_type ?? null,
+      duration_seconds: r.duration_seconds ?? null,
     },
+    // Pass through tracking_type and measurement_type from the row
+    tracking_type: r.tracking_type ?? (r.default_measurement_type === "time" ? "time" : "reps_weight"),
+    measurement_type: r.measurement_type ?? (r.default_measurement_type === "time" ? "time" : "reps"),
+    duration_seconds: r.duration_seconds ?? null,
   } as PlRowRaw;
 }
 

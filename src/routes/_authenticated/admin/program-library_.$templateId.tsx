@@ -1715,15 +1715,24 @@ function DayEditor({ day, setDay, exercises, compact, dayKey }: { day: any; setD
   };
   const insertExercise = (exId: string, atIndex?: number) => {
     const ex = (exercises as any[]).find((x) => x.id === exId);
-    // Default: NO suggested load. Coach opts in explicitly per row.
-    // Prescription fields stay empty. Rest auto-fills from exercise category.
-    const newRow = {
+    // Auto-detect tracking type from exercise.default_measurement_type.
+    // Coaches can override per-row in the builder, but time-based exercises
+    // (planks, carries, holds) should show the timer automatically.
+    const autoTrackingType: "reps_weight" | "reps" | "time" =
+      ex?.default_measurement_type === "time" ? "time" : "reps_weight";
+    const newRow: Record<string, any> = {
       sort_order: 0,
       time_profile: "accessory_compound",
       percentage_basis: "none",
       exercise_id: exId,
       exercise_name_override: ex?.name,
       rest_seconds: defaultRestSeconds(ex as any),
+      tracking_type: autoTrackingType,
+      measurement_type: autoTrackingType === "time" ? "time" : "reps",
+      // For time-based exercises, auto-fill duration from exercise default
+      ...(autoTrackingType === "time" && ex?.duration_seconds
+        ? { duration_seconds: ex.duration_seconds }
+        : {}),
     };
     const next = [...rows];
     const idx = atIndex ?? next.length;

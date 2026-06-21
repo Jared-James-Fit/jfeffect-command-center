@@ -61,6 +61,7 @@ import { QuickSwapButton } from "@/components/workout-day/QuickSwapButton";
 import { convertWeight } from "@/lib/progress-metrics";
 import { WorkoutCompleteSheet, type WorkoutCompletePayload } from "@/components/workout-complete-sheet";
 import { submitOrEditReview } from "@/lib/workout-completion.functions";
+import { DurationTimerInCard } from "@/components/workout-day/DurationTimerInCard";
 import { WorkoutSubmissionSummary } from "@/components/workout-submission-summary";
 import { computeWorkoutSummary, type WorkoutSummary } from "@/lib/workout-summary";
 import { WorkoutTimerSheet, QuickConfirmDuration, type TimerCompletionPayload } from "@/components/workout-timer-sheet";
@@ -1663,15 +1664,24 @@ function ExerciseBlock({ row, dayId, dayTitle, clientId, blockId, existingResult
   const hasGuide = Boolean(exerciseId || video);
   const cues = exercise?.cues ?? null;
   const setCount = Math.max(1, row.sets ?? 1);
-  // Tracking type comes ONLY from the prescription. We do not guess from the
-  // exercise name or the exercise's default measurement type — coaches must
-  // explicitly mark a row as reps+weight, reps only, or time only.
+  // Tracking type resolution priority:
+  //   1. Explicit row.tracking_type (set by coach in the builder)
+  //   2. row.measurement_type (legacy field, same table)
+  //   3. exercise.default_measurement_type (auto-detect from exercise definition)
+  //   4. Default: reps_weight
+  //
+  // This ensures time-based exercises (planks, carries, holds) automatically
+  // show the duration timer without the coach having to manually configure
+  // each row. Coaches can still override by setting tracking_type explicitly.
+  const exerciseDefaultMeasurementType = (exercise as any)?.default_measurement_type ?? null;
   const trackingType: "reps_weight" | "reps" | "time" =
     (row as any).tracking_type === "reps"
       ? "reps"
       : ((row as any).tracking_type === "time" || (row as any).measurement_type === "time")
         ? "time"
-        : "reps_weight";
+        : exerciseDefaultMeasurementType === "time"
+          ? "time"
+          : "reps_weight";
   const effectiveMeasurementType: "reps" | "time" = trackingType === "time" ? "time" : "reps";
   const effectivePrescribedDurationSec: number | null =
     trackingType === "time" ? ((row as any).duration_seconds ?? null) : null;
@@ -2538,48 +2548,23 @@ function SetRow({
       isDraft && "bg-amber-500/[0.07] border-l-2 border-l-amber-500/60",
     )}>
     <div className={cn(
-      "grid items-center gap-1.5 px-2.5 py-1.5",
-      hideWeight
-        ? (focusMode ? "grid-cols-[36px_1.6fr_1fr_52px]" : "grid-cols-[28px_1.6fr_1fr_44px]")
-        : (focusMode ? "grid-cols-[36px_1.1fr_1.1fr_1fr_52px]" : "grid-cols-[28px_1.1fr_1.1fr_1fr_44px]"),
+      "grid items-start gap-1.5 px-2.5 py-1.5",
+      isTime
+        ? "grid-cols-[28px_1fr]"
+        : hideWeight
+          ? (focusMode ? "grid-cols-[36px_1.6fr_1fr_52px]" : "grid-cols-[28px_1.6fr_1fr_44px]")
+          : (focusMode ? "grid-cols-[36px_1.1fr_1.1fr_1fr_52px]" : "grid-cols-[28px_1.1fr_1.1fr_1fr_44px]"),
     )}>
-      <span className={cn("font-mono text-muted-foreground", focusMode ? "text-sm" : "text-xs")}>{setIndex}</span>
+      <span className={cn("font-mono text-muted-foreground pt-1.5", focusMode ? "text-sm" : "text-xs")}>{setIndex}</span>
       {isTime ? (
-        <div className="flex items-center gap-1">
-          <button
-            type="button"
-            disabled={readonly || !prescribedSec}
-            onClick={() => setTimerOpen(true)}
-            aria-label={`Start countdown for set ${setIndex}${prescribedSec ? ` (${formatDuration(prescribedSec)})` : ""}`}
-            className={cn(
-              "inline-flex flex-1 items-center justify-center gap-1 rounded-md border px-2 font-bold tabular-nums transition-colors",
-              focusMode ? "h-9 text-sm" : "h-8 text-xs",
-              isConfirmed
-                ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-600"
-                : "border-primary/40 bg-primary/10 text-primary hover:bg-primary/20",
-              (!prescribedSec || readonly) && "cursor-not-allowed opacity-60",
-            )}
-          >
-            <Timer className="h-3.5 w-3.5" />
-            {isConfirmed && completedSec != null
-              ? formatDuration(completedSec)
-              : (prescribedSec ? formatDuration(prescribedSec) : "—")}
-          </button>
-          {!readonly && !isConfirmed && prescribedSec ? (
-            <button
-              type="button"
-              onClick={() => setQuickOpen(true)}
-              aria-label="Mark complete without timer"
-              className={cn(
-                "inline-flex shrink-0 items-center justify-center rounded-md border border-border bg-background text-muted-foreground hover:bg-secondary",
-                focusMode ? "h-9 w-9" : "h-8 w-8",
-              )}
-              title="Mark complete without timer"
-            >
-              <CheckCircle2 className="h-3.5 w-3.5" />
-            </button>
-          ) : null}
-        </div>
+        <DurationTimerInCard
+          prescribedSeconds={prescribedSec}
+          isConfirmed={isConfirmed}
+          completedSeconds={completedSec}
+          readonly={readonly}
+          focusMode={focusMode}
+          onComplete={(secs, method) => void saveTimeCompletion(secs, { method })}
+        />
       ) : (
       <Input
         className={cn(focusMode ? "h-9 text-base px-2" : "h-8 text-sm px-2", "bg-white text-black placeholder:text-gray-500")}
@@ -2758,29 +2743,7 @@ function SetRow({
       </div>
     )}
 
-    {isTime && prescribedSec && (
-      <>
-        <WorkoutTimerSheet
-          open={timerOpen}
-          onOpenChange={setTimerOpen}
-          exerciseName={exerciseName ?? "Exercise"}
-          setIndex={setIndex}
-          setCount={setCount ?? 1}
-          prescribedSeconds={prescribedSec}
-          resumeKey={`${rowId}:${setIndex}:${clientId ?? "anon"}`}
-          onComplete={onTimerComplete}
-        />
-        <QuickConfirmDuration
-          open={quickOpen}
-          onOpenChange={setQuickOpen}
-          prescribedSeconds={prescribedSec}
-          onConfirm={(secs, method) => {
-            setQuickOpen(false);
-            void saveTimeCompletion(secs, { method });
-          }}
-        />
-      </>
-    )}
+    {/* WorkoutTimerSheet replaced by DurationTimerInCard (in-card timer, no overlay) */}
     </div>
   );
 }

@@ -502,7 +502,8 @@ function PhotoSubmissionDialog({ ctx, open, onOpenChange }: { ctx: ProgressConte
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>New Progress Photos</DialogTitle>
+          <DialogTitle>Add Progress Photos</DialogTitle>
+          <p className="text-sm text-muted-foreground">Upload one photo per angle. Use consistent lighting and distance for accurate comparisons.</p>
         </DialogHeader>
 
         <div className="space-y-4">
@@ -631,7 +632,7 @@ function AngleUploadCard({
             className="absolute inset-0 flex flex-col items-center justify-center gap-2 text-xs text-muted-foreground hover:bg-accent active:bg-accent"
           >
             {mediaType === "video" ? <VideoIcon className="h-8 w-8" /> : <Camera className="h-8 w-8" />}
-            <span className="font-medium">Tap to {mediaType === "video" ? "record or upload" : "upload"}</span>
+            <span className="font-medium">{mediaType === "video" ? "Tap to record or upload" : "Tap to take or upload photo"}</span>
           </button>
         )}
         {progress != null && (
@@ -644,7 +645,8 @@ function AngleUploadCard({
       <input
         ref={fileRef} type="file"
         accept={mediaType === "photo" ? "image/*" : "video/*"}
-        capture={mediaType === "video" ? undefined : "environment" as any}
+        // Photos: open rear camera directly. Videos: let user choose camera or gallery.
+        capture={mediaType === "photo" ? "environment" : undefined}
         className="hidden"
         onChange={(e) => { const f = e.target.files?.[0]; if (f) onFile(f); e.target.value = ""; }}
       />
@@ -665,7 +667,8 @@ function AngleUploadCard({
 
 function VideoSubmissionDialog({ ctx, open, onOpenChange }: { ctx: ProgressContext; open: boolean; onOpenChange: (b: boolean) => void }) {
   const qc = useQueryClient();
-  const [format, setFormat] = useState<ProgressVideoFormat>("four_angle");
+  // Default to single video upload. Four-angle is an advanced option.
+  const [format, setFormat] = useState<ProgressVideoFormat>("continuous");
   const [subId, setSubId] = useState<string | null>(null);
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
   const [label, setLabel] = useState("Weekly Check-In");
@@ -705,7 +708,10 @@ function VideoSubmissionDialog({ ctx, open, onOpenChange }: { ctx: ProgressConte
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-        <DialogHeader><DialogTitle>New Progress Video</DialogTitle></DialogHeader>
+        <DialogHeader>
+          <DialogTitle>Add Progress Video</DialogTitle>
+          <p className="text-sm text-muted-foreground">Record or upload one video. Optional: switch to 4-angle format for a full physique breakdown.</p>
+        </DialogHeader>
         <div className="space-y-4">
           <div className={`grid gap-3 ${angles.length === 1 ? "grid-cols-1" : "grid-cols-2"}`}>
             {angles.map((a) => (
@@ -719,11 +725,11 @@ function VideoSubmissionDialog({ ctx, open, onOpenChange }: { ctx: ProgressConte
               <div>
                 <Label className="text-xs">Format</Label>
                 <div className="grid grid-cols-2 gap-2 mt-1">
-                  <Button size="sm" variant={format === "four_angle" ? "default" : "outline"} onClick={() => setFormat("four_angle")}>
-                    Four Angles
-                  </Button>
                   <Button size="sm" variant={format === "continuous" ? "default" : "outline"} onClick={() => setFormat("continuous")}>
-                    One Continuous
+                    Single Video
+                  </Button>
+                  <Button size="sm" variant={format === "four_angle" ? "default" : "outline"} onClick={() => setFormat("four_angle")}>
+                    4-Angle Physique
                   </Button>
                 </div>
               </div>
