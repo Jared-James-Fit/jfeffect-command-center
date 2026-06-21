@@ -17,6 +17,7 @@ import { Card } from "@/components/ui/card";
 import { Loader2, Heart } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { CardioCompletionCard } from "./CardioCompletionCard";
+import { CARDIO_DAY_TYPES, dayTypeLabel } from "@/lib/training-schedule";
 
 type DayContext = "training" | "rest" | "unknown";
 
@@ -53,15 +54,19 @@ export function ClientCardioSection({
     },
   });
 
-  // Filter targets by day context
+  // Filter targets by day context (case-insensitive, aligned with CARDIO_DAY_TYPES)
+  function dayTypeMatches(value: string | null | undefined, candidates: string[]): boolean {
+    const normalized = (value ?? "General").toLowerCase();
+    return candidates.some((c) => c.toLowerCase() === normalized);
+  }
+
   const filteredTargets = targets.filter((t: any) => {
     if (dayContext === "unknown") return true;
-    const dt = (t.day_type ?? "General").toLowerCase();
     if (dayContext === "training") {
-      return dt === "training day" || dt === "general" || dt === "high day";
+      return dayTypeMatches(t.day_type, ["Training Day", "High Day", "General"]);
     }
     if (dayContext === "rest") {
-      return dt === "rest day" || dt === "general";
+      return dayTypeMatches(t.day_type, ["Rest Day", "General"]);
     }
     return true;
   });
@@ -95,10 +100,10 @@ export function ClientCardioSection({
       <h2 className="flex items-center gap-2 text-xs uppercase tracking-widest text-muted-foreground px-0.5">
         <Heart className="h-4 w-4 shrink-0" /> Cardio
         {dayContext === "training" && (
-          <span className="text-primary font-bold">· Training Day</span>
+          <span className="text-primary font-bold">· {dayTypeLabel({ day_type: "Training Day" })}</span>
         )}
         {dayContext === "rest" && (
-          <span className="text-muted-foreground font-bold">· Rest Day</span>
+          <span className="text-muted-foreground font-bold">· {dayTypeLabel({ day_type: "Rest Day" })}</span>
         )}
       </h2>
       {filteredTargets.map((t: any) => (
