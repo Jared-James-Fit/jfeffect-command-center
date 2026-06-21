@@ -54,15 +54,19 @@ export function ClientCardioSection({
     },
   });
 
-  // Filter targets by day context
+  // Filter targets by day context (case-insensitive, aligned with CARDIO_DAY_TYPES)
+  function dayTypeMatches(value: string | null | undefined, candidates: string[]): boolean {
+    const normalized = (value ?? "General").toLowerCase();
+    return candidates.some((c) => c.toLowerCase() === normalized);
+  }
+
   const filteredTargets = targets.filter((t: any) => {
     if (dayContext === "unknown") return true;
-    const dt = (t.day_type ?? "General").toLowerCase();
     if (dayContext === "training") {
-      return dt === "training day" || dt === "general" || dt === "high day";
+      return dayTypeMatches(t.day_type, ["Training Day", "High Day", "General"]);
     }
     if (dayContext === "rest") {
-      return dt === "rest day" || dt === "general";
+      return dayTypeMatches(t.day_type, ["Rest Day", "General"]);
     }
     return true;
   });
