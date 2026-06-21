@@ -230,7 +230,7 @@ function SyntheticAppPreview() {
 
 export function MemberHeroCta({ children, ...props }: React.ComponentProps<typeof Button>) {
   return (
-    <Button size="lg" className="h-12 px-6 text-base font-bold shadow-[0_10px_30px_-10px_rgba(220,38,38,0.55)]" {...props}>
+    <Button size="lg" className="h-12 px-6 text-base font-bold shadow-[0_10px_30px_-10px_rgba(220,38,38,0.55)] hover:scale-[1.02] active:scale-[0.98] transition-transform duration-150" {...props}>
       {children}
     </Button>
   );

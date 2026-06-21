@@ -7,12 +7,14 @@ import { useEffect, useRef, useState, type ReactNode, type CSSProperties } from 
 export function Reveal({
   children,
   delay = 0,
+  stagger = 0,
   y = 16,
   as: Tag = "div",
   className,
 }: {
   children: ReactNode;
   delay?: number;
+  stagger?: number;
   y?: number;
   as?: any;
   className?: string;
@@ -42,9 +44,10 @@ export function Reveal({
     return () => io.disconnect();
   }, []);
 
+  const effectiveDelay = delay + stagger * 100;
   const style: CSSProperties = {
     transition: "opacity 700ms cubic-bezier(0.16, 1, 0.3, 1), transform 700ms cubic-bezier(0.16, 1, 0.3, 1)",
-    transitionDelay: `${delay}ms`,
+    transitionDelay: `${effectiveDelay}ms`,
     opacity: shown ? 1 : 0,
     transform: shown ? "translate3d(0,0,0)" : `translate3d(0,${y}px,0)`,
     willChange: "opacity, transform",

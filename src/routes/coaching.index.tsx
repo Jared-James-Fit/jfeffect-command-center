@@ -148,45 +148,45 @@ function CoachingPage() {
       )}
 
       {/* 2. Authority bar */}
-      <Reveal><AuthorityBar items={authority} /></Reveal>
+      <Reveal stagger={0}><AuthorityBar items={authority} /></Reveal>
 
       {/* 3. Why most people fail */}
-      <Reveal><WhyMostFail /></Reveal>
+      <Reveal stagger={1}><WhyMostFail /></Reveal>
 
       {/* 4. Who this is for / not for */}
-      <Reveal><WhoForNotFor whoFor={whoFor} notFor={notFor} /></Reveal>
+      <Reveal stagger={2}><WhoForNotFor whoFor={whoFor} notFor={notFor} /></Reveal>
 
       {/* 5. What coaching includes */}
-      <Reveal><WhatCoachingIncludes /></Reveal>
+      <Reveal stagger={3}><WhatCoachingIncludes /></Reveal>
 
       {/* 6. How it works */}
-      <Reveal><HowItWorks items={howItWorks} /></Reveal>
+      <Reveal stagger={4}><HowItWorks items={howItWorks} /></Reveal>
 
       {/* 7. Proof wall */}
-      <Reveal><ProofWall
+      <Reveal stagger={4}><ProofWall
         testimonials={p?.testimonials ?? []}
         images={(p?.visuals ?? []).filter((v) => v.slot === "proof")}
       /></Reveal>
 
-      <Reveal><TransformationsGallery /></Reveal>
-      <Reveal><CoachTimelineSection /></Reveal>
+      <Reveal stagger={4}><TransformationsGallery /></Reveal>
+      <Reveal stagger={4}><CoachTimelineSection /></Reveal>
 
       {/* 8. Coaching vs Membership */}
-      <Reveal><CoachingVsMembership onApply={handleApply} /></Reveal>
+      <Reveal stagger={4}><CoachingVsMembership onApply={handleApply} /></Reveal>
 
       {/* 9. The Jared story */}
-      <Reveal><JaredStory /></Reveal>
+      <Reveal stagger={4}><JaredStory /></Reveal>
 
       {/* 10. FAQ */}
-      <Reveal><FaqAccordion items={faqItems} /></Reveal>
+      <Reveal stagger={4}><FaqAccordion items={faqItems} /></Reveal>
 
       <div id="cta" />
       {/* 11. Final CTA */}
-      <Reveal><FinalCta
+      <Reveal stagger={4}><FinalCta
         headline={s.final_cta?.headline ?? "Raise the standard."}
         primary={
           <div className="flex flex-col items-center gap-2">
-            <Button size="lg" onClick={handleApply} className="h-12 px-6 text-base font-bold">
+            <Button size="lg" onClick={handleApply} className="h-12 px-6 text-base font-bold hover:scale-[1.02] active:scale-[0.98] transition-transform duration-150">
               {s.final_cta?.primary_label ?? "Apply for Coaching"}
             </Button>
             <p className="text-[11px] uppercase tracking-[0.22em] text-muted-foreground">
