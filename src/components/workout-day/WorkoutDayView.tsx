@@ -626,6 +626,13 @@ function WorkoutDay({
   const startedRef = useRef(false);
   useEffect(() => {
     if (!client?.id || startedRef.current) return;
+    // Client POV (coach/admin viewing as client) is review-only — never auto-
+    // start a workout from this session. The server fn resolves clients.id
+    // from auth.uid(), which in POV is the coach, not the client; calling it
+    // here would either fail silently or write a pl_day_completions row
+    // against the coach's own client_id. Reviewers must use the explicit
+    // "Set workout status" controls instead.
+    if (isImpersonating) { startedRef.current = true; return; }
     if (completion?.started_at) { startedRef.current = true; return; }
     startedRef.current = true;
     (async () => {
@@ -637,11 +644,14 @@ function WorkoutDay({
         console.warn("startWorkout failed", err);
       }
     })();
-  }, [client?.id, completion?.id, completion?.started_at, dayId, qc, startWorkoutSrv]);
+  }, [client?.id, completion?.id, completion?.started_at, dayId, qc, startWorkoutSrv, isImpersonating]);
 
   // Mark in_progress when any meaningful entry occurs
   const markInProgress = async () => {
     if (!client?.id) return;
+    // Same POV safety as startWorkout above — coach/admin reviewing a
+    // client's workout must not flip the client's in_progress timestamp.
+    if (isImpersonating) return;
     if (completion?.in_progress_at) return;
     try {
       await startWorkoutSrv({ data: { kind: "client", dayId } });
