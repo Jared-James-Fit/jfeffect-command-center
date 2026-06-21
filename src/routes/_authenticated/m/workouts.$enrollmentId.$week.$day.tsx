@@ -69,6 +69,15 @@ function MemberWorkoutRoute() {
         // CTAs from the shared workout view route there.
         messagesPath: "/m/support",
       }}
-    />
+    >
+      {user?.id && (
+        <ClientCardioSection
+          clientId={user.id}
+          dayContext="training"
+          date={new Date()}
+          hideWhenEmpty
+        />
+      )}
+    </WorkoutDayView>
   );
 }
