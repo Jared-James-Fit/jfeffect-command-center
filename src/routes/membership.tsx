@@ -347,6 +347,17 @@ export function SignupJf({ floatingHeader = false }: { floatingHeader?: boolean 
         </Link>
       </Section>
 
+      {/* Early social proof — transformations under the hero/coaching callout */}
+      <Reveal>
+        <TransformationsStrip
+          eyebrow="Real members"
+          headline="100+ lives transformed"
+          sub="Real progress from members training inside the app."
+          ctaLabel="Start Free Trial"
+          onCta={scrollToForm}
+        />
+      </Reveal>
+
       {/* 2. The library — core value, visual grid */}
       <div ref={featuresRef} id="features" />
       <Reveal><ProgramLibraryShowcase categories={Array.isArray(s.library_categories) && s.library_categories.length > 0 ? s.library_categories : DEFAULT_LIBRARY} programCount={s.program_count ?? ""} /></Reveal>
