@@ -24,6 +24,7 @@ import {
 } from "@/components/ui/select";
 import { toast } from "sonner";
 import { Plus, Pencil, Trash2, Gift } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 import {
   listSessionCreditPackages,
   createSessionCreditPackage,
@@ -77,6 +78,61 @@ export function SessionCreditsPanel({ clientId }: { clientId: string }) {
 
   const packages = (packagesQ.data?.packages ?? []) as any[];
   const activePackages = packages.filter((p) => p.active);
+
+  // Build per-grant package rows with FIFO attribution of usage/expiry/adjustments.
+  const grants = events
+    .filter((e) => e.event_type === "granted" && Number(e.session_count) > 0)
+    .slice()
+    .sort((a, b) => {
+      const da = (a.effective_date ?? "") + (a.created_at ?? "");
+      const db = (b.effective_date ?? "") + (b.created_at ?? "");
+      return da.localeCompare(db); // oldest first for FIFO
+    })
+    .map((g) => ({
+      id: g.id,
+      effective_date: g.effective_date,
+      expires_at: g.expires_at,
+      currency: g.currency ?? "CAD",
+      unit_value_minor: Number(g.unit_value_minor ?? 0),
+      total_sessions: Number(g.session_count ?? 0),
+      used: 0,
+      adjusted: 0,
+      note: g.note ?? "",
+      service_type:
+        (g.note ?? "").replace(/^Granted package:\s*/i, "").trim() || "Session package",
+      source: g.source ?? "",
+    }));
+
+  // FIFO allocate any negative (used/consumed/adjusted) events across grants.
+  const consumptions = events
+    .filter(
+      (e) =>
+        e.event_type === "used" ||
+        e.event_type === "consumed" ||
+        (e.event_type === "adjusted" && Number(e.session_count) < 0),
+    )
+    .map((e) => Math.abs(Number(e.session_count ?? 0)));
+  let pool = consumptions.reduce((s, n) => s + n, 0);
+  for (const g of grants) {
+    if (pool <= 0) break;
+    const take = Math.min(pool, g.total_sessions);
+    g.used = take;
+    pool -= take;
+  }
+
+  const today = new Date().toISOString().slice(0, 10);
+  const grantRows = grants.map((g) => {
+    const remaining = Math.max(0, g.total_sessions - g.used);
+    const expired = !!g.expires_at && g.expires_at < today;
+    const status: "Active" | "Expired" | "Depleted" = expired
+      ? "Expired"
+      : remaining === 0
+        ? "Depleted"
+        : "Active";
+    return { ...g, remaining, value_remaining_minor: remaining * g.unit_value_minor, status };
+  });
+  // newest first for display
+  grantRows.reverse();
 
   return (
     <Card className="border-border bg-card p-6 md:col-span-3 space-y-6">
@@ -142,6 +198,71 @@ export function SessionCreditsPanel({ clientId }: { clientId: string }) {
           </div>
         </div>
       )}
+
+      {/* Active package grants */}
+      <div>
+        <div className="text-xs uppercase tracking-widest text-muted-foreground mb-2">
+          Packages granted
+        </div>
+        {grantRows.length === 0 ? (
+          <p className="text-sm text-muted-foreground py-4">
+            No session packages granted yet. Use "Grant package" to add one.
+          </p>
+        ) : (
+          <div className="overflow-x-auto rounded border border-border">
+            <table className="w-full text-sm">
+              <thead className="bg-muted/40 text-xs uppercase">
+                <tr>
+                  <th className="p-2 text-left">Service</th>
+                  <th className="p-2 text-left">Granted</th>
+                  <th className="p-2 text-left">Expires</th>
+                  <th className="p-2 text-right">Total</th>
+                  <th className="p-2 text-right">Used</th>
+                  <th className="p-2 text-right">Remaining</th>
+                  <th className="p-2 text-right">Cost / session</th>
+                  <th className="p-2 text-right">Value remaining</th>
+                  <th className="p-2 text-left">Payment note</th>
+                  <th className="p-2 text-left">Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {grantRows.map((g) => (
+                  <tr key={g.id} className="border-t border-border align-top">
+                    <td className="p-2 font-medium">{g.service_type}</td>
+                    <td className="p-2 text-xs">{g.effective_date ?? "—"}</td>
+                    <td className="p-2 text-xs">{g.expires_at ?? "—"}</td>
+                    <td className="p-2 text-right font-mono">{g.total_sessions}</td>
+                    <td className="p-2 text-right font-mono">{g.used}</td>
+                    <td className="p-2 text-right font-mono">{g.remaining}</td>
+                    <td className="p-2 text-right font-mono">
+                      {fmt(g.unit_value_minor, g.currency)}
+                    </td>
+                    <td className="p-2 text-right font-mono">
+                      {fmt(g.value_remaining_minor, g.currency)}
+                    </td>
+                    <td className="p-2 text-xs text-muted-foreground max-w-[16rem] truncate">
+                      {g.note}
+                    </td>
+                    <td className="p-2">
+                      <Badge
+                        variant={
+                          g.status === "Active"
+                            ? "default"
+                            : g.status === "Expired"
+                              ? "destructive"
+                              : "secondary"
+                        }
+                      >
+                        {g.status}
+                      </Badge>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
 
       {/* Event history */}
       <div>
