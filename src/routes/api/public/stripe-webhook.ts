@@ -486,6 +486,47 @@ export const Route = createFileRoute("/api/public/stripe-webhook")({
                   await provisionMemberFromPurchase(supabase, { ...purchase, stripe_customer_id: obj.customer ?? purchase.stripe_customer_id });
                 }
               }
+
+              // ── Fixed-term subscription schedule ─────────────────────────
+              // When a checkout completes for a fixed-term plan (plan_type=fixed_term
+              // in price metadata), wrap the new subscription in a Subscription Schedule
+              // so it ends automatically after exactly N payments.
+              if (obj.mode === "subscription" && obj.subscription && obj.payment_status === "paid") {
+                try {
+                  // Fetch the price metadata to check if this is a fixed-term plan
+                  const lineItems = await stripeFetch(
+                    `/checkout/sessions/${obj.id}/line_items?limit=1`,
+                  );
+                  const priceId = lineItems?.data?.[0]?.price?.id;
+                  if (priceId) {
+                    const price = await stripeFetch(`/prices/${priceId}`);
+                    const paymentCount = price?.metadata?.payment_count ? parseInt(price.metadata.payment_count, 10) : null;
+                    const planType = price?.metadata?.plan_type;
+                    if (planType === "fixed_term" && paymentCount && paymentCount > 0) {
+                      // Create a Subscription Schedule to enforce the exact payment count
+                      // The schedule wraps the existing subscription and cancels after N iterations
+                      await stripeFetch("/subscription_schedules", {
+                        method: "POST",
+                        idempotencyKey: `sched_${obj.subscription}_${paymentCount}`,
+                        body: new URLSearchParams({
+                          from_subscription: obj.subscription,
+                          "end_behavior": "cancel",
+                          "phases[0][items][0][price]": priceId,
+                          "phases[0][items][0][quantity]": "1",
+                          "phases[0][iterations]": String(paymentCount),
+                          "phases[0][metadata[plan_type]]": "fixed_term",
+                          "phases[0][metadata[payment_count]]": String(paymentCount),
+                          "phases[0][automatic_tax][enabled]": "true",
+                        }).toString(),
+                      });
+                      console.log(`[stripe-webhook] Created subscription schedule for ${obj.subscription} — ${paymentCount} payments`);
+                    }
+                  }
+                } catch (scheduleErr) {
+                  // Non-fatal — log but don't fail the webhook
+                  console.error("[stripe-webhook] subscription schedule creation failed", scheduleErr);
+                }
+              }
               break;
             }
 

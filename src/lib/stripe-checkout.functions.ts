@@ -155,6 +155,11 @@ export const createCheckoutSession = createServerFn({ method: "POST" })
       billing_address_collection: "required",
     };
 
+    // Enable invoice creation for one-time payments so customers receive a tax receipt
+    if (checkoutMode === "payment") {
+      sessionParams["invoice_creation[enabled]"] = "true";
+    }
+
     if (stripeCustomerId) {
       sessionParams["customer"] = stripeCustomerId;
       // Auto-update customer address from checkout so future sessions use it
@@ -350,6 +355,10 @@ export const createCheckoutSessionForAssignment = createServerFn({ method: "POST
       // Require billing address so Stripe Tax can determine the correct rate
       billing_address_collection: "required",
     };
+    // Enable invoice creation for one-time payments so customers receive a tax receipt
+    if (checkoutMode === "payment") {
+      sessionParams["invoice_creation[enabled]"] = "true";
+    }
     if (stripeCustomerId) {
       sessionParams["customer"] = stripeCustomerId;
       // Auto-update customer address from checkout so future sessions use it
