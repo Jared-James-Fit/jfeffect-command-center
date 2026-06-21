@@ -828,7 +828,19 @@ function WorkoutDay({
     key: draftKey,
     value: { notes, actualMin },
     delay: 1000,
-    enabled: !!client?.id && draftHydrated && (notes.length > 0 || actualMin.length > 0),
+    // Only autosave once both local-draft and server-completion hydration
+    // have run AND the current value actually differs from what's persisted
+    // on the completion row. Without this, opening a completed workout
+    // hydrates the fields from the server and then immediately re-saves
+    // the same values back — producing a constant "Saving…/Saved" flicker.
+    enabled:
+      !!client?.id &&
+      draftHydrated &&
+      completionHydrated &&
+      (
+        notes !== (completion?.client_notes ?? "") ||
+        actualMin !== (completion?.actual_duration_min != null ? String(completion.actual_duration_min) : "")
+      ),
     onPermanentFailure: ({ value }) => {
       if (!client?.id) return;
       enqueueOfflineWrite({
