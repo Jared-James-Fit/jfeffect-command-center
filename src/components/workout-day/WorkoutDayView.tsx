@@ -1606,7 +1606,15 @@ function WorkoutDay({
           summary={lastSummary}
           workoutTitle={day?.title ?? null}
           durationMin={completion?.actual_duration_min ?? null}
-          onClose={() => navigate({ to: navigation.listPath })}
+          onClose={() => {
+            // Only navigate to the list when the summary was opened as the
+            // post-submission celebration. When opened from the "View workout
+            // recap" deep link (?recap=1), keep the user on the workout page.
+            if (recapFromSubmitRef.current) {
+              recapFromSubmitRef.current = false;
+              navigate({ to: navigation.listPath });
+            }
+          }}
         />
       )}
       <MoveWorkoutSheet
