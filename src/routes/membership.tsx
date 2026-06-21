@@ -31,6 +31,7 @@ import appPreviewAnalyticsOverview from "@/assets/app-preview-analytics-overview
 import appPreviewRecentPrs from "@/assets/app-preview-recent-prs.png.asset.json";
 import appPreview1rmChart from "@/assets/app-preview-1rm-chart.png.asset.json";
 import { TransformationsGallery } from "@/components/sales/transformations-gallery";
+import { TransformationsStrip } from "@/components/sales/transformations-strip";
 import { CoachTimelineSection } from "@/components/sales/coach-timeline-section";
 
 function HeroSkeleton() {
