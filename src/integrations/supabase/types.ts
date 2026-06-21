@@ -10558,8 +10558,11 @@ export type Database = {
       }
       nf_submissions: {
         Row: {
+          assignment_id: string | null
+          client_confirmed_at: string | null
           client_id: string
           created_at: string
+          fillout_submission_id: string | null
           form_id: string
           form_version_id: string | null
           form_version_number: number | null
@@ -10571,10 +10574,14 @@ export type Database = {
           status: string
           submitted_at: string | null
           updated_at: string
+          verification_source: string | null
         }
         Insert: {
+          assignment_id?: string | null
+          client_confirmed_at?: string | null
           client_id: string
           created_at?: string
+          fillout_submission_id?: string | null
           form_id: string
           form_version_id?: string | null
           form_version_number?: number | null
@@ -10586,10 +10593,14 @@ export type Database = {
           status?: string
           submitted_at?: string | null
           updated_at?: string
+          verification_source?: string | null
         }
         Update: {
+          assignment_id?: string | null
+          client_confirmed_at?: string | null
           client_id?: string
           created_at?: string
+          fillout_submission_id?: string | null
           form_id?: string
           form_version_id?: string | null
           form_version_number?: number | null
@@ -10601,8 +10612,16 @@ export type Database = {
           status?: string
           submitted_at?: string | null
           updated_at?: string
+          verification_source?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "nf_submissions_assignment_id_fkey"
+            columns: ["assignment_id"]
+            isOneToOne: false
+            referencedRelation: "nf_assignments"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "nf_submissions_form_id_fkey"
             columns: ["form_id"]
