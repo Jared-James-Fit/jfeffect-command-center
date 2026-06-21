@@ -2,6 +2,39 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { assertMemberCanReadProtected } from "@/lib/jf-access.server";
+import { isMemberAccessActive } from "@/lib/memberAccess";
+
+// Membership program-library access keys. A plan tagged with any of these
+// is reachable by a member that holds any other key in the set — they all
+// represent "this member can browse and start library programs".
+const PROGRAM_LIBRARY_KEYS = new Set([
+  "app_membership",
+  "program_library",
+  "jf_membership",
+]);
+
+// True when the member should be allowed to see/start a library plan with
+// the given required access level. Combines the canonical access helper
+// (which respects manual override, grace, subscription, expiry) with the
+// explicit `member_access` rows, and treats the program-library keys as
+// interchangeable so a `program_only` or jf_member without an explicit
+// `app_membership` row can still reach membership-tagged programs.
+function canAccessPlan(
+  member: any,
+  accessKeys: Set<string>,
+  requiredKey: string,
+  audienceMode: string,
+): boolean {
+  if (audienceMode === "all_active") return isMemberAccessActive(member);
+  if (accessKeys.has(requiredKey)) return true;
+  if (PROGRAM_LIBRARY_KEYS.has(requiredKey)) {
+    for (const k of accessKeys) if (PROGRAM_LIBRARY_KEYS.has(k)) return true;
+    // Fall back to canonical access (active subscription / manual override)
+    // so newly-signed-up members aren't blocked by missing access rows.
+    if (isMemberAccessActive(member)) return true;
+  }
+  return false;
+}
 
 async function assertAdmin(ctx: any) {
   const { supabase, userId } = ctx;
