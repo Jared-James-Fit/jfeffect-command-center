@@ -269,6 +269,7 @@ export function WorkoutDayView({
   search,
   adapter,
   navigation,
+  children,
 }: {
   dayId: string;
   search: WorkoutDayViewSearch;
@@ -282,13 +283,16 @@ export function WorkoutDayView({
    */
   adapter?: WorkoutContextAdapter;
   navigation: WorkoutDayViewNavigation;
+  children?: ReactNode;
 }) {
   return (
     <WorkoutNavigationContext.Provider value={navigation}>
       <WorkoutAdapterContext.Provider value={adapter ?? null}>
         <WorkoutUndoProvider>
           <ActiveRestTimerProvider>
-            <WorkoutDay dayId={dayId} search={search} adapter={adapter} navigation={navigation} />
+            <WorkoutDay dayId={dayId} search={search} adapter={adapter} navigation={navigation}>
+              {children}
+            </WorkoutDay>
           </ActiveRestTimerProvider>
         </WorkoutUndoProvider>
       </WorkoutAdapterContext.Provider>
