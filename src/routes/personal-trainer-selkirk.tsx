@@ -9,6 +9,7 @@ import {
   CheckCircle2, MapPin, Sparkles, HeartHandshake, Dumbbell, Users, Calendar,
   ShieldCheck, Scale, Trophy, Brain, Apple,
 } from "lucide-react";
+import { Reveal } from "@/components/sales/reveal";
 
 const TITLE = "Personal Trainer Selkirk MB | JF Effect Coaching";
 const DESCRIPTION =
@@ -135,7 +136,7 @@ export const Route = createFileRoute("/personal-trainer-selkirk")({
 function PrimaryCta({ children = "Apply Now" }: { children?: React.ReactNode }) {
   return (
     <a href={BOOK_HREF}>
-      <Button size="lg" className="h-14 w-full px-7 text-base font-bold sm:w-auto">
+      <Button size="lg" className="h-14 w-full px-7 text-base font-bold sm:w-auto hover:scale-[1.02] active:scale-[0.98] transition-transform duration-150">
         {children}
       </Button>
     </a>
@@ -175,7 +176,7 @@ function SelkirkPage() {
       </section>
 
       {/* SECTION 2 — Nervous */}
-      <Section>
+      <Reveal stagger={1}><Section>
         <div className="mx-auto max-w-2xl text-center">
           <h2 className="text-3xl font-black tracking-tight md:text-4xl">Nervous About The Gym?</h2>
         </div>
@@ -187,10 +188,10 @@ function SelkirkPage() {
           <p>You'll learn what to do, how to do it, and why — every step.</p>
           <p>No guessing. No random workouts. No feeling lost.</p>
         </div>
-      </Section>
+      </Section></Reveal>
 
       {/* SECTION 3 — Who this is for */}
-      <Section className="bg-card/30">
+      <Reveal stagger={2}><Section className="bg-card/30">
         <SectionTitle title="Who This Is Perfect For" />
         <div className="mx-auto grid max-w-4xl gap-3 sm:grid-cols-2 lg:grid-cols-3">
         {[
@@ -210,10 +211,10 @@ function SelkirkPage() {
             </Card>
           ))}
         </div>
-      </Section>
+      </Section></Reveal>
 
       {/* SECTION 4 — First session */}
-      <Section>
+      <Reveal stagger={3}><Section>
         <SectionTitle eyebrow="What to expect" title="What Your First Session Looks Like" />
         <div className="mx-auto grid max-w-4xl gap-3 md:grid-cols-5">
           {[
@@ -235,10 +236,10 @@ function SelkirkPage() {
         <p className="mx-auto mt-8 max-w-xl text-center text-base font-semibold md:text-lg">
           No pressure. No judgment. No experience needed.
         </p>
-      </Section>
+      </Section></Reveal>
 
       {/* SECTION 5 — Why Jared */}
-      <Section className="bg-card/30">
+      <Reveal stagger={4}><Section className="bg-card/30">
         <SectionTitle eyebrow="About your coach" title="Why Beginners Work With Jared" />
         <div className="mx-auto grid max-w-5xl gap-6 md:grid-cols-2">
           <Card className="p-6">
@@ -271,13 +272,13 @@ function SelkirkPage() {
             <p className="mt-3 text-base font-semibold md:text-lg">That's what Jared does best.</p>
           </Card>
         </div>
-      </Section>
+      </Section></Reveal>
 
-      <TransformationsGallery eyebrow="Results" title="100+ lives changed" />
-      <CoachTimelineSection />
+      <Reveal stagger={4}><TransformationsGallery eyebrow="Results" title="100+ lives changed" /></Reveal>
+      <Reveal stagger={4}><CoachTimelineSection /></Reveal>
 
       {/* SECTION 6 — Pricing */}
-      <Section>
+      <Reveal stagger={4}><Section>
         <div className="mx-auto max-w-2xl rounded-2xl border border-primary/30 bg-gradient-to-br from-primary/10 via-card to-card p-8 text-center md:p-12">
           <div className="text-[11px] font-bold uppercase tracking-[0.2em] text-primary">Personal Training Pricing</div>
           <h2 className="mt-3 text-3xl font-black tracking-tight md:text-5xl">Simple.</h2>
@@ -291,10 +292,10 @@ function SelkirkPage() {
             <PrimaryCta />
           </div>
         </div>
-      </Section>
+      </Section></Reveal>
 
       {/* SECTION 7 — Goals */}
-      <Section className="bg-card/30">
+      <Reveal stagger={4}><Section className="bg-card/30">
         <SectionTitle title="What Clients Come For" />
         <div className="mx-auto grid max-w-5xl gap-3 sm:grid-cols-2 lg:grid-cols-4">
           {[
@@ -315,10 +316,10 @@ function SelkirkPage() {
             </Card>
           ))}
         </div>
-      </Section>
+      </Section></Reveal>
 
       {/* SECTION 8 — In person or online */}
-      <Section>
+      <Reveal stagger={4}><Section>
         <SectionTitle title="Train In Person Or Online" />
         <div className="mx-auto grid max-w-4xl gap-4 md:grid-cols-2">
           <Card className="p-6">
@@ -346,10 +347,10 @@ function SelkirkPage() {
             </div>
           </Card>
         </div>
-      </Section>
+      </Section></Reveal>
 
       {/* SECTION 9 — FAQ */}
-      <Section className="bg-card/30">
+      <Reveal stagger={4}><Section className="bg-card/30">
         <SectionTitle eyebrow="FAQ" title="Frequently asked questions" />
         <Accordion type="single" collapsible className="mx-auto max-w-2xl">
           {faq.map((it, i) => (
@@ -359,10 +360,10 @@ function SelkirkPage() {
             </AccordionItem>
           ))}
         </Accordion>
-      </Section>
+      </Section></Reveal>
 
       {/* FINAL CTA */}
-      <Section className="!pt-6">
+      <Reveal stagger={4}><Section className="!pt-6">
         <div className="mx-auto max-w-3xl rounded-2xl border border-primary/30 bg-gradient-to-br from-primary/15 via-card to-card p-8 text-center md:p-12">
           <h2 className="text-3xl font-black tracking-tight md:text-5xl">Ready To Feel Comfortable In The Gym?</h2>
           <p className="mt-4 text-base text-muted-foreground md:text-lg">
@@ -383,6 +384,7 @@ function SelkirkPage() {
           </p>
         </div>
       </Section>
+      </Reveal>
     </SalesPageShell>
   );
 }
