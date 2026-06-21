@@ -194,3 +194,91 @@ export const adjustSessionCredits = createServerFn({ method: "POST" })
     if (error) throw new Error(error.message);
     return { ok: true, event: ev };
   });
+
+// -------- Add credits (create package + grant to client in one step) --------
+const AddCredits = z.object({
+  client_id: z.string().uuid(),
+  service_type: z.string().min(1).max(100),
+  session_count: z.number().int().positive(),
+  cost_per_session_minor: z.number().int().nonnegative(),
+  currency: z.string().min(3).max(3).default("CAD"),
+  validity_days: z.number().int().positive().nullable().optional(),
+  payment_note: z.string().max(2000).optional().nullable(),
+  effective_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+});
+
+export const addClientSessionCredits = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => AddCredits.parse(d))
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context as any;
+    await assertAdmin(supabase, userId);
+
+    const total = data.cost_per_session_minor * data.session_count;
+    const name = `${data.service_type} · ${data.session_count} sessions`;
+
+    const { data: pkg, error: pErr } = await supabase
+      .from("session_credit_packages")
+      .insert({
+        name,
+        description: data.service_type,
+        session_count: data.session_count,
+        unit_price_minor: data.cost_per_session_minor,
+        total_price_minor: total,
+        currency: data.currency,
+        validity_days: data.validity_days ?? null,
+        active: false, // ad-hoc per-client package, not part of public catalog
+        sort_order: 0,
+        created_by: userId,
+      })
+      .select("*")
+      .single();
+    if (pErr || !pkg) throw new Error(pErr?.message ?? "Failed to create package");
+
+    const effective = data.effective_date ?? new Date().toISOString().slice(0, 10);
+    const expires = pkg.validity_days
+      ? new Date(new Date(effective).getTime() + pkg.validity_days * 86400000)
+          .toISOString()
+          .slice(0, 10)
+      : null;
+
+    const { data: ev, error } = await supabase
+      .from("session_ledger_events")
+      .insert({
+        client_id: data.client_id,
+        event_type: "granted",
+        session_count: pkg.session_count,
+        unit_value_minor: pkg.unit_price_minor,
+        currency: pkg.currency,
+        effective_date: effective,
+        expires_at: expires,
+        source: "package_grant",
+        note: data.payment_note?.trim()
+          ? `Granted package: ${data.service_type} — ${data.payment_note.trim()}`
+          : `Granted package: ${data.service_type}`,
+        created_by: userId,
+      })
+      .select("*")
+      .single();
+    if (error) throw new Error(error.message);
+
+    await supabase.from("financial_audit_events").insert({
+      client_id: data.client_id,
+      actor_user_id: userId,
+      actor_role: "admin",
+      action: "session_credits_granted",
+      record_type: "session_ledger_events",
+      record_id: ev.id,
+      after_state: {
+        package_id: pkg.id,
+        service_type: data.service_type,
+        session_count: pkg.session_count,
+        unit_price_minor: pkg.unit_price_minor,
+        total_price_minor: pkg.total_price_minor,
+        currency: pkg.currency,
+      },
+      reason: data.payment_note ?? null,
+    });
+
+    return { ok: true, package: pkg, event: ev };
+  });
