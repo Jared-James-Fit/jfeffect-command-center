@@ -1519,6 +1519,7 @@ function WorkoutDay({
                 });
                 setCompleteOpen(false);
                 setLastSummary(computed);
+                recapFromSubmitRef.current = true;
                 setSummaryOpen(true);
                 toast.message("Workout saved offline", {
                   description: "We'll sync it when you're back online.",
