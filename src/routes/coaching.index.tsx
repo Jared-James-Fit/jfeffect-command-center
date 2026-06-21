@@ -17,7 +17,6 @@ import {
   Target, ClipboardCheck, Utensils, MessageCircle,
 } from "lucide-react";
 import { Reveal } from "@/components/sales/reveal";
-import { TransformationsGallery } from "@/components/sales/transformations-gallery";
 import { TransformationsStrip } from "@/components/sales/transformations-strip";
 import { CoachTimelineSection } from "@/components/sales/coach-timeline-section";
 
@@ -154,7 +153,7 @@ function CoachingPage() {
       {/* Early social proof — transformations above the fold */}
       <Reveal stagger={1}>
         <TransformationsStrip
-          eyebrow="Real results"
+          eyebrow="REAL RESULTS"
           headline="100+ clients coached. Real transformations."
           sub="Members and 1:1 clients who showed up and did the work."
           ctaLabel="Apply for Coaching"
@@ -180,7 +179,6 @@ function CoachingPage() {
         images={(p?.visuals ?? []).filter((v) => v.slot === "proof")}
       /></Reveal>
 
-      <Reveal stagger={4}><TransformationsGallery /></Reveal>
       <Reveal stagger={4}><CoachTimelineSection /></Reveal>
 
       {/* 8. Coaching vs Membership */}

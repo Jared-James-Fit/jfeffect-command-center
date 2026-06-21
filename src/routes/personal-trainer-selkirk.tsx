@@ -1,6 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { SalesPageShell, Section, SectionTitle } from "@/components/sales/sales-page-shell";
-import { TransformationsGallery } from "@/components/sales/transformations-gallery";
 import { TransformationsStrip } from "@/components/sales/transformations-strip";
 import { CoachTimelineSection } from "@/components/sales/coach-timeline-section";
 import { StickyMobileCta } from "@/components/sales/sticky-mobile-cta";
@@ -180,9 +179,9 @@ function SelkirkPage() {
       {/* Early social proof — transformations right under the hero */}
       <Reveal stagger={0}>
         <TransformationsStrip
-          eyebrow="Selkirk results"
-          headline="Real people. Real progress."
-          sub="Clients from Selkirk and beyond who started where you are."
+          eyebrow="REAL RESULTS"
+          headline="100+ clients coached. Real transformations."
+          sub="Members and 1:1 clients who showed up and did the work."
           ctaLabel="Apply Now"
           ctaHref={BOOK_HREF}
         />
@@ -287,7 +286,6 @@ function SelkirkPage() {
         </div>
       </Section></Reveal>
 
-      <Reveal stagger={4}><TransformationsGallery eyebrow="Results" title="100+ lives changed" /></Reveal>
       <Reveal stagger={4}><CoachTimelineSection /></Reveal>
 
       {/* SECTION 6 — Pricing */}
