@@ -9,8 +9,9 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import {
-  Camera, Scale, Ruler, ArrowRight, Loader2, Plus, Video, Dumbbell,
+  Camera, Scale, Ruler, ArrowRight, Loader2, Plus, Video, Dumbbell, MessageSquare,
 } from "lucide-react";
+import { CoachCheckinReplies } from "./coach-checkin-replies";
 import { toast } from "sonner";
 import {
   logMeasurement,
@@ -297,24 +298,18 @@ export function ProgressSummaryCard({
           </span>
         </Link>
 
-        {/* Inline quick add — lift video */}
-        <Link
-          to={progressTo}
-          search={{ action: "lift" }}
-          className="block rounded-xl border border-border bg-secondary/30 p-5"
-        >
-          <span className="flex w-full items-center justify-between text-xs font-bold uppercase tracking-widest text-muted-foreground">
-            <span className="flex items-center gap-2">
-              <Dumbbell className="h-5 w-5 text-primary" />
-              Upload lift video
-            </span>
-            <Plus className="h-5 w-5" />
-          </span>
-        </Link>
-
         {extraActions ? (
           <div className="pt-1">{extraActions}</div>
         ) : null}
+
+        {/* Coach Check-In Replies section */}
+        <div className="rounded-xl border border-border bg-secondary/30 p-4">
+          <div className="flex items-center gap-2 mb-3">
+            <MessageSquare className="h-4 w-4 text-primary" />
+            <span className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Coach Check-In Replies</span>
+          </div>
+          <CoachCheckinReplies />
+        </div>
 
         <ViewCta />
       </div>

@@ -35,9 +35,9 @@ export function QuickActionsGrid({
     { to: "/portal/workouts", label: "Workouts", icon: Activity, emphasis: true },
     { to: "/portal/messages", label: "Message Coach", icon: MessageCircle, badge: messageBadge },
     ...(showCheckIn
-      ? [{ to: checkInTo, label: "Submit Check-In", icon: ClipboardCheck, badge: checkInBadge } as Tile]
+      ? [{ to: checkInTo, label: "Submit Weekly Check-In", icon: ClipboardCheck, badge: checkInBadge } as Tile]
       : []),
-    { to: "/portal/lift-videos", label: "Upload Lift", icon: Video },
+    { to: "/portal/lift-videos", label: "Upload Lift for Review", icon: Video },
     { to: "/portal/nutrition-targets", label: "Nutrition", icon: Apple },
   ];
 

@@ -448,12 +448,12 @@ function PortalHome() {
                         to: pickWeeklyCheckInForm(assignedForms as any)?.id
                           ? `/portal/check-ins/${pickWeeklyCheckInForm(assignedForms as any)!.id}`
                           : "/portal/check-ins",
-                        label: "Submit Check-In",
+                        label: "Submit Weekly Check-In",
                         icon: ClipboardCheck,
                         badge: (assignedForms as any[])?.length || undefined,
                         emphasis: true,
                       },
-                      { to: "/portal/lift-videos", label: "Upload Lift", icon: Video },
+                      { to: "/portal/lift-videos", label: "Upload Lift for Review", icon: Video },
                     ] as HomeActionTile[]}
                   />
                 ) : null

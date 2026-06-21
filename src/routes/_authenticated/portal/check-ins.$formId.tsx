@@ -316,7 +316,7 @@ function ClientFormRenderer() {
                   className="bg-gradient-primary font-bold"
                   icon={<Send className="h-4 w-4" />}
                 >
-                  Submit Check-In
+                  Submit Weekly Check-In
                 </ActionButton>
               </div>
             </Card>
