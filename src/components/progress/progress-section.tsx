@@ -507,29 +507,6 @@ function PhotoSubmissionDialog({ ctx, open, onOpenChange }: { ctx: ProgressConte
 
         <div className="space-y-4">
           <div className="grid grid-cols-2 gap-3">
-            <DateField value={date} onChange={setDate} />
-            <div>
-              <Label className="text-xs">Label</Label>
-              <Select value={label} onValueChange={setLabel}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {CHECK_IN_LABELS.map((l) => <SelectItem key={l} value={l}>{l}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-
-          <details className="rounded-md border border-border p-3 text-sm">
-            <summary className="cursor-pointer font-medium">Photo consistency tips</summary>
-            <ul className="mt-2 list-disc space-y-1 pl-5 text-xs text-muted-foreground">
-              <li>Use similar lighting</li>
-              <li>Use the same camera distance</li>
-              <li>Same four angles, stand in a consistent position</li>
-              <li>Take photos at a similar time of day</li>
-            </ul>
-          </details>
-
-          <div className="grid grid-cols-2 gap-3">
             {PHOTO_ANGLES.map((a) => (
               <AngleUploadCard
                 key={a} angle={a} mediaType="photo" ctx={ctx}
@@ -538,22 +515,44 @@ function PhotoSubmissionDialog({ ctx, open, onOpenChange }: { ctx: ProgressConte
             ))}
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <Label className="text-xs">Bodyweight (optional)</Label>
-              <div className="flex gap-2">
-                <Input type="number" inputMode="decimal" value={bw} onChange={(e) => setBw(e.target.value)} placeholder="—" />
-                <Select value={unit} onValueChange={(v: any) => setUnit(v)}>
-                  <SelectTrigger className="w-20"><SelectValue /></SelectTrigger>
-                  <SelectContent><SelectItem value="kg">kg</SelectItem><SelectItem value="lb">lb</SelectItem></SelectContent>
-                </Select>
+          <details className="rounded-md border border-border p-3 text-sm">
+            <summary className="cursor-pointer font-medium">Details (optional)</summary>
+            <div className="mt-3 space-y-3">
+              <div className="grid grid-cols-2 gap-3">
+                <DateField value={date} onChange={setDate} />
+                <div>
+                  <Label className="text-xs">Label</Label>
+                  <Select value={label} onValueChange={setLabel}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {CHECK_IN_LABELS.map((l) => <SelectItem key={l} value={l}>{l}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label className="text-xs">Bodyweight</Label>
+                  <div className="flex gap-2">
+                    <Input type="number" inputMode="decimal" value={bw} onChange={(e) => setBw(e.target.value)} placeholder="—" />
+                    <Select value={unit} onValueChange={(v: any) => setUnit(v)}>
+                      <SelectTrigger className="w-20"><SelectValue /></SelectTrigger>
+                      <SelectContent><SelectItem value="kg">kg</SelectItem><SelectItem value="lb">lb</SelectItem></SelectContent>
+                    </Select>
+                  </div>
+                </div>
+                <div>
+                  <Label className="text-xs">Notes</Label>
+                  <Textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} />
+                </div>
+              </div>
+              <ul className="list-disc space-y-1 pl-5 text-xs text-muted-foreground">
+                <li>Use similar lighting and camera distance</li>
+                <li>Same four angles, stand in a consistent position</li>
+                <li>Take photos at a similar time of day</li>
+              </ul>
             </div>
-            <div>
-              <Label className="text-xs">Notes (optional)</Label>
-              <Textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} />
-            </div>
-          </div>
+          </details>
         </div>
 
         <DialogFooter className="flex-col gap-2 sm:flex-row">
@@ -623,16 +622,16 @@ function AngleUploadCard({
         <p className="text-sm font-medium">{ANGLE_LABEL[angle]}</p>
         {existing && existing.upload_status === "ready" && <CheckCircle2 className="h-4 w-4 text-emerald-500" />}
       </div>
-      <div className="aspect-square rounded bg-muted relative overflow-hidden">
+      <div className="min-h-32 sm:min-h-40 aspect-square rounded bg-muted relative overflow-hidden">
         {existing ? (
           <MediaThumb m={existing} />
         ) : (
           <button
             onClick={() => fileRef.current?.click()}
-            className="absolute inset-0 flex flex-col items-center justify-center gap-1 text-xs text-muted-foreground hover:bg-accent"
+            className="absolute inset-0 flex flex-col items-center justify-center gap-2 text-xs text-muted-foreground hover:bg-accent active:bg-accent"
           >
-            <ImagePlus className="h-6 w-6" />
-            Tap to upload
+            {mediaType === "video" ? <Video className="h-8 w-8" /> : <Camera className="h-8 w-8" />}
+            <span className="font-medium">Tap to {mediaType === "video" ? "record or upload" : "upload"}</span>
           </button>
         )}
         {progress != null && (
@@ -708,50 +707,56 @@ function VideoSubmissionDialog({ ctx, open, onOpenChange }: { ctx: ProgressConte
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader><DialogTitle>New Progress Video</DialogTitle></DialogHeader>
         <div className="space-y-4">
-          <div className="grid grid-cols-2 gap-2">
-            <Button variant={format === "four_angle" ? "default" : "outline"} onClick={() => setFormat("four_angle")}>
-              Four Angles
-            </Button>
-            <Button variant={format === "continuous" ? "default" : "outline"} onClick={() => setFormat("continuous")}>
-              One Continuous
-            </Button>
-          </div>
-
-          <div className="grid grid-cols-2 gap-3">
-            <DateField value={date} onChange={setDate} />
-            <div>
-              <Label className="text-xs">Label</Label>
-              <Select value={label} onValueChange={setLabel}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {CHECK_IN_LABELS.map((l) => <SelectItem key={l} value={l}>{l}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-
           <div className={`grid gap-3 ${angles.length === 1 ? "grid-cols-1" : "grid-cols-2"}`}>
             {angles.map((a) => (
               <AngleUploadCard key={a} angle={a} mediaType="video" ctx={ctx} getSubId={ensureSub} subId={subId} />
             ))}
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <Label className="text-xs">Bodyweight (optional)</Label>
-              <div className="flex gap-2">
-                <Input type="number" inputMode="decimal" value={bw} onChange={(e) => setBw(e.target.value)} />
-                <Select value={unit} onValueChange={(v: any) => setUnit(v)}>
-                  <SelectTrigger className="w-20"><SelectValue /></SelectTrigger>
-                  <SelectContent><SelectItem value="kg">kg</SelectItem><SelectItem value="lb">lb</SelectItem></SelectContent>
-                </Select>
+          <details className="rounded-md border border-border p-3 text-sm" open>
+            <summary className="cursor-pointer font-medium">Details (optional)</summary>
+            <div className="mt-3 space-y-3">
+              <div>
+                <Label className="text-xs">Format</Label>
+                <div className="grid grid-cols-2 gap-2 mt-1">
+                  <Button size="sm" variant={format === "four_angle" ? "default" : "outline"} onClick={() => setFormat("four_angle")}>
+                    Four Angles
+                  </Button>
+                  <Button size="sm" variant={format === "continuous" ? "default" : "outline"} onClick={() => setFormat("continuous")}>
+                    One Continuous
+                  </Button>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <DateField value={date} onChange={setDate} />
+                <div>
+                  <Label className="text-xs">Label</Label>
+                  <Select value={label} onValueChange={setLabel}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {CHECK_IN_LABELS.map((l) => <SelectItem key={l} value={l}>{l}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label className="text-xs">Bodyweight</Label>
+                  <div className="flex gap-2">
+                    <Input type="number" inputMode="decimal" value={bw} onChange={(e) => setBw(e.target.value)} />
+                    <Select value={unit} onValueChange={(v: any) => setUnit(v)}>
+                      <SelectTrigger className="w-20"><SelectValue /></SelectTrigger>
+                      <SelectContent><SelectItem value="kg">kg</SelectItem><SelectItem value="lb">lb</SelectItem></SelectContent>
+                    </Select>
+                  </div>
+                </div>
+                <div>
+                  <Label className="text-xs">Notes</Label>
+                  <Textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} />
+                </div>
               </div>
             </div>
-            <div>
-              <Label className="text-xs">Notes</Label>
-              <Textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} />
-            </div>
-          </div>
+          </details>
         </div>
         <DialogFooter className="flex-col gap-2 sm:flex-row">
           <Button variant="outline" onClick={() => save(true)}>Save Draft</Button>
