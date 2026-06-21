@@ -51,6 +51,17 @@ export function ClientCardioSection({
     },
   });
 
+  const filteredTargets = useMemo(() => {
+    if (!dayContext) return targets;
+    const restTypes = ["Rest Day", "General"];
+    const trainingTypes = ["Training Day", "High Day", "General"];
+    return targets.filter((t: any) => {
+      if (dayContext === "rest") return restTypes.includes(t.day_type);
+      if (dayContext === "training") return trainingTypes.includes(t.day_type);
+      return true;
+    });
+  }, [targets, dayContext]);
+
   if (isLoading) {
     return (
       <Card className="flex items-center gap-2 p-4 text-sm text-muted-foreground">
