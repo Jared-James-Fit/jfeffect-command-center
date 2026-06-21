@@ -17,6 +17,7 @@ export const Route = createFileRoute("/_authenticated/portal/workouts/$dayId")({
     // and auto-opens the feedback sheet when the user wants to edit a review.
     edit: s.edit === 1 || s.edit === "1" || s.edit === true ? 1 : undefined,
     review: s.review === 1 || s.review === "1" || s.review === true ? 1 : undefined,
+    recap: s.recap === 1 || s.recap === "1" || s.recap === true ? 1 : undefined,
   }),
   component: RouteComponent,
   // Capture render/load errors on this route so the page degrades gracefully
