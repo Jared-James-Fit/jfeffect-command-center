@@ -386,6 +386,9 @@ function SelkirkPage() {
         </div>
       </Section>
       </Reveal>
+
+      <div className="pb-24 md:pb-0" />
+      <StickyMobileCta label="Apply Now" href={BOOK_HREF} />
     </SalesPageShell>
   );
 }
