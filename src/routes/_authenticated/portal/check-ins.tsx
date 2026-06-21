@@ -15,6 +15,7 @@ import {
   statusTone,
   pickWeeklyCheckInForm,
   pickNutritionUpdateForm,
+  currentPeriodStart,
   type NfForm,
 } from "@/lib/native-forms";
 import { listManualReviewsForClient } from "@/lib/manual-check-in-reviews";
@@ -52,6 +53,21 @@ function ClientCheckInsList() {
     queryKey: ["nf-submissions-for-client", client?.id],
     enabled: !!client?.id,
     queryFn: () => listSubmissionsForClient(client!.id),
+  });
+
+  // Map form_id → nf_assignments.id so Fillout URLs can carry assignment_id.
+  const { data: assignmentMap } = useQuery({
+    queryKey: ["nf-assignments-for-client", client?.id],
+    enabled: !!client?.id,
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("nf_assignments")
+        .select("id, form_id")
+        .eq("client_id", client!.id);
+      const m = new Map<string, string>();
+      (data ?? []).forEach((r: any) => m.set(r.form_id, r.id));
+      return m;
+    },
   });
 
   const { data: manualReviews = [] } = useQuery({
@@ -165,7 +181,18 @@ function ClientCheckInsList() {
                     f.external_url ? (
                       <Button asChild className="bg-gradient-primary font-bold">
                         <a
-                          href={(f as any).requires_client_identity === false ? f.external_url : buildFilloutUrl(f.external_url, client)}
+                          href={
+                            (f as any).requires_client_identity === false
+                              ? f.external_url
+                              : buildFilloutUrl(f.external_url, client, {
+                                  assignmentId: assignmentMap?.get(f.id) ?? null,
+                                  formId: f.id,
+                                  periodStart:
+                                    f.recurrence === "none"
+                                      ? null
+                                      : currentPeriodStart(f.recurrence, f.recurrence_day),
+                                })
+                          }
                           target="_blank"
                           rel="noreferrer"
                           onClick={() => {
