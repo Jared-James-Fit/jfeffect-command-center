@@ -898,6 +898,13 @@ function SelectedDayCard({
         </div>
       </Card>
 
+      <ClientCardioSection
+        clientId={clientId}
+        readonly={readonly}
+        dayContext="training"
+        date={date}
+      />
+
       {!readonly && (
         <MoveWorkoutSheet
           dayId={item.day.id}
