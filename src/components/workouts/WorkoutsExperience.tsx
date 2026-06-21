@@ -813,6 +813,17 @@ function SelectedDayCard({
                     )}
                   </DropdownMenuItem>
                 )}
+                {isCompleted && (
+                  <DropdownMenuItem asChild>
+                    <Link
+                      to="/portal/workouts/$dayId"
+                      params={{ dayId: item.day.id }}
+                      search={{ recap: 1 } as any}
+                    >
+                      <Trophy className="mr-2 h-4 w-4" /> View workout recap
+                    </Link>
+                  </DropdownMenuItem>
+                )}
                 <DropdownMenuItem
                   onSelect={(e) => {
                     e.preventDefault();
