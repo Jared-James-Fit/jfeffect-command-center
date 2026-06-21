@@ -495,8 +495,9 @@ function TemplateEditor() {
         .from("exercises")
         .select("id, name, muscle_group, category, tags, exercise_category, is_competition_lift, competition_lift_type, video_url, youtube_url, vimeo_url")
         .eq("archived", false)
-        .limit(5000)
+        .limit(10000)
         .order("name")).data ?? [],
+    staleTime: 5 * 60_000,
   });
 
   // local working state
