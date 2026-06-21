@@ -15,7 +15,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sh
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { format } from "date-fns";
-import { ExternalLink, Star, FileText, Clock, Dumbbell, Activity } from "lucide-react";
+import { ExternalLink, Star, FileText, Clock, Dumbbell, Activity, Heart } from "lucide-react";
 import { fmtNum } from "@/lib/analytics-format";
 import { Link } from "@tanstack/react-router";
 
