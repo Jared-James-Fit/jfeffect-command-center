@@ -121,8 +121,100 @@ export function CardioDashboard({ embedded = false }: { embedded?: boolean } = {
             </ul>
           )}
         </Card>
+        <CardioComplianceSection />
       </div>
       <CardioTargetDialog open={open} onOpenChange={setOpen} clients={clients} initial={editing ?? undefined} />
     </>
+  );
+}
+
+function CardioComplianceSection() {
+  const today = new Date();
+  const start = new Date();
+  start.setDate(today.getDate() - 6);
+  const startStr = start.toISOString().slice(0, 10);
+  const endStr = today.toISOString().slice(0, 10);
+
+  const { data, isLoading } = useQuery({
+    queryKey: ["cardio-compliance-7d", startStr, endStr],
+    staleTime: 60_000,
+    queryFn: async () => {
+      // Active targets in window (end_date null or >= today, start_date <= today)
+      const { data: targets, error: tErr } = await supabase
+        .from("cardio_targets")
+        .select("id, client_id, frequency_per_week, start_date, end_date, clients(id, full_name)")
+        .lte("start_date", endStr);
+      if (tErr) throw tErr;
+      const active = (targets ?? []).filter((t: any) => !t.end_date || t.end_date >= endStr);
+      const clientIds = Array.from(new Set(active.map((t: any) => t.client_id)));
+      if (clientIds.length === 0) return [] as any[];
+
+      const { data: completions, error: cErr } = await supabase
+        .from("cardio_completions")
+        .select("client_id, completed_date, completed")
+        .in("client_id", clientIds)
+        .gte("completed_date", startStr)
+        .lte("completed_date", endStr)
+        .eq("completed", true);
+      if (cErr) throw cErr;
+
+      const byClient = new Map<string, { name: string; assigned: number; daysSet: Set<string>; last: string | null }>();
+      for (const t of active) {
+        const id = t.client_id;
+        const prev = byClient.get(id);
+        const freq = Math.min(Number(t.frequency_per_week) || 0, 7);
+        const assigned = Math.max(prev?.assigned ?? 0, freq);
+        byClient.set(id, {
+          name: t.clients?.full_name ?? "Unknown",
+          assigned: assigned || 7,
+          daysSet: prev?.daysSet ?? new Set(),
+          last: prev?.last ?? null,
+        });
+      }
+      for (const c of completions ?? []) {
+        const entry = byClient.get(c.client_id);
+        if (!entry) continue;
+        entry.daysSet.add(c.completed_date);
+        if (!entry.last || c.completed_date > entry.last) entry.last = c.completed_date;
+      }
+      const rows = Array.from(byClient.entries()).map(([clientId, v]) => {
+        const completedDays = v.daysSet.size;
+        const rate = v.assigned > 0 ? completedDays / v.assigned : 0;
+        return { clientId, name: v.name, completedDays, assigned: v.assigned, last: v.last, rate };
+      });
+      rows.sort((a, b) => a.rate - b.rate || a.name.localeCompare(b.name));
+      return rows.slice(0, 20);
+    },
+  });
+
+  return (
+    <Card className="border-border bg-card p-3 sm:p-4">
+      <div className="mb-3 flex items-center justify-between">
+        <div>
+          <h3 className="text-sm font-bold uppercase tracking-wide">Recent Compliance</h3>
+          <p className="text-xs text-muted-foreground">Last 7 days · lowest compliance first · top 20</p>
+        </div>
+      </div>
+      {isLoading ? (
+        <div className="py-6 text-center text-xs text-muted-foreground">Loading…</div>
+      ) : !data || data.length === 0 ? (
+        <div className="rounded-md border border-dashed border-border p-6 text-center text-xs text-muted-foreground">No active cardio targets.</div>
+      ) : (
+        <ul className="divide-y divide-border">
+          {data.map((r: any) => {
+            const tone = r.rate < 0.5 ? "text-destructive" : r.rate < 0.85 ? "text-amber-500" : "text-emerald-500";
+            return (
+              <li key={r.clientId} className="flex items-center justify-between gap-3 py-2">
+                <Link to="/admin/clients/$id" params={{ id: r.clientId }} className="truncate text-sm font-semibold text-primary hover:underline">{r.name}</Link>
+                <div className="flex shrink-0 items-center gap-3 text-xs">
+                  <span className={`font-bold ${tone}`}>{r.completedDays}/{r.assigned} days</span>
+                  <span className="text-muted-foreground">{r.last ? `last ${r.last}` : "no logs"}</span>
+                </div>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </Card>
   );
 }

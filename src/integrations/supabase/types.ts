@@ -1314,6 +1314,66 @@ export type Database = {
         }
         Relationships: []
       }
+      cardio_completions: {
+        Row: {
+          cardio_target_id: string | null
+          cardio_type: string | null
+          client_id: string
+          completed: boolean
+          completed_date: string
+          created_at: string
+          day_type: string | null
+          duration_minutes: number | null
+          id: string
+          notes: string | null
+          rpe: number | null
+          updated_at: string
+        }
+        Insert: {
+          cardio_target_id?: string | null
+          cardio_type?: string | null
+          client_id: string
+          completed?: boolean
+          completed_date?: string
+          created_at?: string
+          day_type?: string | null
+          duration_minutes?: number | null
+          id?: string
+          notes?: string | null
+          rpe?: number | null
+          updated_at?: string
+        }
+        Update: {
+          cardio_target_id?: string | null
+          cardio_type?: string | null
+          client_id?: string
+          completed?: boolean
+          completed_date?: string
+          created_at?: string
+          day_type?: string | null
+          duration_minutes?: number | null
+          id?: string
+          notes?: string | null
+          rpe?: number | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cardio_completions_cardio_target_id_fkey"
+            columns: ["cardio_target_id"]
+            isOneToOne: false
+            referencedRelation: "cardio_targets"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cardio_completions_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       cardio_program_templates: {
         Row: {
           archived: boolean
