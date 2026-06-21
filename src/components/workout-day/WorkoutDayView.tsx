@@ -395,7 +395,7 @@ function WorkoutDay({
     });
   }, [adapter]);
 
-  const { data: client } = useQuery({
+  const { data: clientFromQuery } = useQuery({
     queryKey: [
       "workout-subject",
       adapter?.kind ?? null,
@@ -413,6 +413,23 @@ function WorkoutDay({
       ).data;
     },
   });
+  // Desktop Client POV regression fix: when a coach/admin enters Client POV
+  // and `adapter.getActiveSubject()` returns null (e.g. RLS edge, transient
+  // hiccup), the previous code left `client` undefined which disabled every
+  // downstream `enabled: !!client?.id` query (results, completion, notes,
+  // feedback) — the page rendered exercise rows but no logged values. On
+  // mobile this was masked by stale localStorage plan-cache; on desktop the
+  // coach saw an empty workout. The adapter already carries the canonical
+  // clients.id as `adapter.ref.ownerId`, so synthesize a minimal subject
+  // from it whenever the subject query has not produced one yet. Real
+  // `getActiveSubject` data still wins (provides full_name + weight unit).
+  const client = useMemo(() => {
+    if (clientFromQuery) return clientFromQuery as any;
+    if (adapter && adapter.kind === "client" && adapter.ref.ownerId) {
+      return { id: adapter.ref.ownerId, full_name: null, preferred_weight_unit: null } as any;
+    }
+    return clientFromQuery as any;
+  }, [clientFromQuery, adapter]);
 
   const { data: day } = useQuery({
     queryKey: ["pl-day", dayId, adapter?.kind ?? null, adapter?.ref.ownerId ?? null],
@@ -609,6 +626,13 @@ function WorkoutDay({
   const startedRef = useRef(false);
   useEffect(() => {
     if (!client?.id || startedRef.current) return;
+    // Client POV (coach/admin viewing as client) is review-only — never auto-
+    // start a workout from this session. The server fn resolves clients.id
+    // from auth.uid(), which in POV is the coach, not the client; calling it
+    // here would either fail silently or write a pl_day_completions row
+    // against the coach's own client_id. Reviewers must use the explicit
+    // "Set workout status" controls instead.
+    if (isImpersonating) { startedRef.current = true; return; }
     if (completion?.started_at) { startedRef.current = true; return; }
     startedRef.current = true;
     (async () => {
@@ -620,11 +644,14 @@ function WorkoutDay({
         console.warn("startWorkout failed", err);
       }
     })();
-  }, [client?.id, completion?.id, completion?.started_at, dayId, qc, startWorkoutSrv]);
+  }, [client?.id, completion?.id, completion?.started_at, dayId, qc, startWorkoutSrv, isImpersonating]);
 
   // Mark in_progress when any meaningful entry occurs
   const markInProgress = async () => {
     if (!client?.id) return;
+    // Same POV safety as startWorkout above — coach/admin reviewing a
+    // client's workout must not flip the client's in_progress timestamp.
+    if (isImpersonating) return;
     if (completion?.in_progress_at) return;
     try {
       await startWorkoutSrv({ data: { kind: "client", dayId } });
