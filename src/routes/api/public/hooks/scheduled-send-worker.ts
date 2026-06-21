@@ -309,11 +309,8 @@ export const Route = createFileRoute("/api/public/hooks/scheduled-send-worker")(
       POST: async ({ request }) => {
         // ---------- 0. Worker secret guard ----------
         const expected = process.env.SCHEDULED_WORKER_SECRET ?? "";
-        const url = new URL(request.url);
         const provided =
-          request.headers.get("x-worker-secret") ??
-          url.searchParams.get("secret") ??
-          "";
+          request.headers.get("x-worker-secret") ?? "";
         if (!expected) {
           // Misconfiguration — fail closed.
           return new Response("worker not configured", { status: 503 });

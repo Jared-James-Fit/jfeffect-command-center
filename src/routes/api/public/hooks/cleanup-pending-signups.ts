@@ -86,9 +86,8 @@ export const Route = createFileRoute("/api/public/hooks/cleanup-pending-signups"
 function authorizeWorker(request: Request): boolean {
   const expected = process.env.SCHEDULED_WORKER_SECRET ?? "";
   if (!expected) return false;
-  const url = new URL(request.url);
   const provided =
-    request.headers.get("x-worker-secret") ?? url.searchParams.get("secret") ?? "";
+    request.headers.get("x-worker-secret") ?? "";
   if (!provided || provided.length !== expected.length) return false;
   let diff = 0;
   for (let i = 0; i < provided.length; i++) diff |= provided.charCodeAt(i) ^ expected.charCodeAt(i);
