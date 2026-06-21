@@ -100,10 +100,10 @@ export function ClientCardioSection({
       <h2 className="flex items-center gap-2 text-xs uppercase tracking-widest text-muted-foreground px-0.5">
         <Heart className="h-4 w-4 shrink-0" /> Cardio
         {dayContext === "training" && (
-          <span className="text-primary font-bold">· Training Day</span>
+          <span className="text-primary font-bold">· {dayTypeLabel({ day_type: "Training Day" })}</span>
         )}
         {dayContext === "rest" && (
-          <span className="text-muted-foreground font-bold">· Rest Day</span>
+          <span className="text-muted-foreground font-bold">· {dayTypeLabel({ day_type: "Rest Day" })}</span>
         )}
       </h2>
       {filteredTargets.map((t: any) => (
