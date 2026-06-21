@@ -22,9 +22,15 @@ import { dayTypeLabel, dayTypeTone } from "@/lib/training-schedule";
 export function ClientCardioSection({
   clientId,
   hideWhenEmpty = false,
+  dayContext,
+  date,
+  readonly,
 }: {
   clientId: string;
   hideWhenEmpty?: boolean;
+  dayContext?: "rest" | "training";
+  date?: Date;
+  readonly?: boolean;
 }) {
   const { data: targets = [], isLoading } = useQuery({
     queryKey: ["client-cardio-visible", clientId],
