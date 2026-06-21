@@ -102,6 +102,8 @@ const CreateInput = z.object({
   internal_notes: z.string().trim().max(2000).optional().nullable(),
   sms_reminders_enabled: z.boolean().default(true),
   reminder_offsets_minutes: z.array(z.number().int().positive()).optional(),
+  session_credit_package_id: z.string().uuid().nullable().optional(),
+  credits_used: z.number().int().min(1).max(20).optional(),
 });
 
 export const createAppointment = createServerFn({ method: "POST" })
@@ -143,6 +145,8 @@ export const createAppointment = createServerFn({ method: "POST" })
       sms_reminders_enabled: data.sms_reminders_enabled,
       source: "manual",
       created_by: userId,
+      session_credit_package_id: data.session_credit_package_id || null,
+      credits_used: data.credits_used ?? 1,
     }).select("*").single();
     if (error) throw new Error(error.message);
 
