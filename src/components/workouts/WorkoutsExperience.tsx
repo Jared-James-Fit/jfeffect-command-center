@@ -8,7 +8,7 @@ import {
 import {
   Calendar as CalendarIcon, ChevronLeft, ChevronRight, ClipboardList,
   History, Loader2, Move, MoreVertical, Play, Pencil, Sun, Activity, Download,
-  RotateCcw, MessageSquare,
+  RotateCcw, MessageSquare, Trophy,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/app-shell";
@@ -811,6 +811,17 @@ function SelectedDayCard({
                         <MessageSquare className="mr-2 h-4 w-4" /> Add workout review
                       </>
                     )}
+                  </DropdownMenuItem>
+                )}
+                {isCompleted && (
+                  <DropdownMenuItem asChild>
+                    <Link
+                      to="/portal/workouts/$dayId"
+                      params={{ dayId: item.day.id }}
+                      search={{ recap: 1 } as any}
+                    >
+                      <Trophy className="mr-2 h-4 w-4" /> View workout recap
+                    </Link>
                   </DropdownMenuItem>
                 )}
                 <DropdownMenuItem

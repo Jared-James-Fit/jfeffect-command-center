@@ -226,6 +226,7 @@ export type WorkoutDayViewSearch = {
   readonly?: 1;
   edit?: 1;
   review?: 1;
+  recap?: 1;
 };
 
 /**
@@ -905,6 +906,33 @@ function WorkoutDay({
     setCompleteOpen(true);
   }, [reviewParam, completion?.completed_at]);
 
+  // ?recap=1 deep-link → open the workout score/recap dialog for an
+  // already-completed workout (read-only). Reuses the same summary modal
+  // shown right after submission so coaches and clients see the same view.
+  const recapParam = search.recap === 1;
+  const autoOpenedRecapRef = useRef(false);
+  const recapFromSubmitRef = useRef(false);
+  useEffect(() => {
+    if (!recapParam) { autoOpenedRecapRef.current = false; return; }
+    if (autoOpenedRecapRef.current) return;
+    if (!completion?.completed_at) return;
+    if ((rows as any[]).length === 0) return;
+    autoOpenedRecapRef.current = true;
+    recapFromSubmitRef.current = false;
+    const displayUnit: "kg" | "lb" =
+      ((client as any)?.preferred_weight_unit === "kg" ? "kg" : "lb");
+    const computed = computeWorkoutSummary(
+      rows as any[],
+      results as any[],
+      {
+        displayUnit,
+        hasNote: !!completion?.client_notes,
+      },
+    );
+    setLastSummary(computed);
+    setSummaryOpen(true);
+  }, [recapParam, completion?.completed_at, completion?.client_notes, rows, results, client]);
+
   const refreshNotes = () => {
     qc.invalidateQueries({ queryKey: ["pl-day-exercise-notes", dayId] });
     qc.invalidateQueries({ queryKey: ["client-exercise-notes", client?.id] });
@@ -1491,6 +1519,7 @@ function WorkoutDay({
                 });
                 setCompleteOpen(false);
                 setLastSummary(computed);
+                recapFromSubmitRef.current = true;
                 setSummaryOpen(true);
                 toast.message("Workout saved offline", {
                   description: "We'll sync it when you're back online.",
@@ -1552,6 +1581,7 @@ function WorkoutDay({
 
               setCompleteOpen(false);
               setLastSummary(computed);
+              recapFromSubmitRef.current = true;
               setSummaryOpen(true);
               toast.success(
                 `Workout submitted — Score: ${computed.score}/100`,
@@ -1576,7 +1606,15 @@ function WorkoutDay({
           summary={lastSummary}
           workoutTitle={day?.title ?? null}
           durationMin={completion?.actual_duration_min ?? null}
-          onClose={() => navigate({ to: navigation.listPath })}
+          onClose={() => {
+            // Only navigate to the list when the summary was opened as the
+            // post-submission celebration. When opened from the "View workout
+            // recap" deep link (?recap=1), keep the user on the workout page.
+            if (recapFromSubmitRef.current) {
+              recapFromSubmitRef.current = false;
+              navigate({ to: navigation.listPath });
+            }
+          }}
         />
       )}
       <MoveWorkoutSheet

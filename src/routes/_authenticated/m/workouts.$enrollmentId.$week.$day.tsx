@@ -23,6 +23,7 @@ export const Route = createFileRoute("/_authenticated/m/workouts/$enrollmentId/$
     readonly: s.readonly === 1 || s.readonly === "1" || s.readonly === true ? 1 : undefined,
     edit: s.edit === 1 || s.edit === "1" || s.edit === true ? 1 : undefined,
     review: s.review === 1 || s.review === "1" || s.review === true ? 1 : undefined,
+    recap: s.recap === 1 || s.recap === "1" || s.recap === true ? 1 : undefined,
   }),
   component: MemberWorkoutRoute,
 });
