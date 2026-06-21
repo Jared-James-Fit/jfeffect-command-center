@@ -804,7 +804,7 @@ function SelectedDayCard({
                   <DropdownMenuItem onSelect={() => setReviewOpen(true)}>
                     {hasReview ? (
                       <>
-                        <Pencil className="mr-2 h-4 w-4" /> Edit workout review
+                        <MessageSquare className="mr-2 h-4 w-4" /> View workout review
                       </>
                     ) : (
                       <>
