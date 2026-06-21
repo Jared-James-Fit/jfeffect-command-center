@@ -1,24 +1,10 @@
-import { useRef, useState, type ReactNode } from "react";
+import { type ReactNode, type ComponentType } from "react";
 import { Link } from "@tanstack/react-router";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
-} from "@/components/ui/select";
-import {
-  Camera, Scale, Ruler, ArrowRight, Loader2, Plus, Video, Dumbbell, MessageSquare,
-} from "lucide-react";
+import { Camera, Scale, Ruler, ArrowRight, Video, MessageSquare } from "lucide-react";
 import { CoachCheckinReplies } from "./coach-checkin-replies";
-import { toast } from "sonner";
-import {
-  logMeasurement,
-  createSubmission, createMedia, uploadProgressFile,
-  MEASUREMENT_FIELDS,
-} from "@/lib/progress";
-import { todayLocalISO } from "@/lib/today";
 
 /**
  * Progress Snapshot card for client + member home dashboards.
@@ -43,21 +29,48 @@ export function ProgressSummaryCard({
     | { kind: "admin-client"; clientId: string };
   title?: string;
   /**
-   * Optional quick-action tiles rendered inside the same card, just above the
-   * "View Full Progress" CTA. Used by the client + member home dashboards to
-   * combine the Progress Snapshot with primary quick actions in one section,
-   * so we never duplicate items that already live in the bottom tab bar.
+   * Optional secondary action tiles rendered below the primary 4-up grid.
+   * Used by the client + member home dashboards to surface flow-specific
+   * shortcuts (e.g. Submit Weekly Check-In) that need data only the host
+   * route has.
    */
   extraActions?: ReactNode;
 }) {
   void currentUserId; void viewerRole;
-  const qc = useQueryClient();
-  const ownerType: "client" | "member" =
-    progressHref.kind === "member" ? "member" : "client";
 
-  // ---------- Stat tiles: days since last video / lift ----------
+  // ---------- Recent status (latest entry per category only — fast) ----------
+  const { data: latestBw } = useQuery({
+    queryKey: ["progress-latest-bw", userId],
+    staleTime: 60_000,
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("progress_bodyweight")
+        .select("logged_date, weight_value, weight_unit")
+        .eq("user_id", userId)
+        .order("logged_date", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      return (data ?? null) as { logged_date: string; weight_value: number; weight_unit: string | null } | null;
+    },
+  });
+  const { data: latestPhotoAt } = useQuery({
+    queryKey: ["progress-latest-photo", userId],
+    staleTime: 60_000,
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("progress_submissions")
+        .select("submission_date, created_at")
+        .eq("user_id", userId)
+        .eq("submission_type", "photo")
+        .order("submission_date", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      return (data?.submission_date ?? data?.created_at ?? null) as string | null;
+    },
+  });
   const { data: latestVideoAt } = useQuery({
     queryKey: ["progress-latest-video", userId],
+    staleTime: 60_000,
     queryFn: async () => {
       const { data } = await supabase
         .from("progress_submissions")
@@ -70,123 +83,77 @@ export function ProgressSummaryCard({
       return (data?.submission_date ?? data?.created_at ?? null) as string | null;
     },
   });
-  const { data: latestLiftAt } = useQuery({
-    queryKey: ["progress-latest-lift", userId],
+  const { data: latestMeasAt } = useQuery({
+    queryKey: ["progress-latest-meas", userId],
+    staleTime: 60_000,
     queryFn: async () => {
       const { data } = await supabase
-        .from("lift_videos")
-        .select("created_at")
-        .eq("uploaded_by", userId)
-        .order("created_at", { ascending: false })
+        .from("progress_measurements")
+        .select("measured_date")
+        .eq("user_id", userId)
+        .order("measured_date", { ascending: false })
         .limit(1)
         .maybeSingle();
-      return (data?.created_at ?? null) as string | null;
+      return (data?.measured_date ?? null) as string | null;
     },
   });
 
-  const daysSince = (iso: string | null | undefined): string => {
+  const fmtDate = (iso: string | null | undefined): string => {
     if (!iso) return "—";
-    const t = new Date(iso).getTime();
-    if (Number.isNaN(t)) return "—";
-    const days = Math.max(0, Math.floor((Date.now() - t) / 86400000));
-    return days === 0 ? "Today" : `${days}d`;
+    const d = new Date(iso.length === 10 ? `${iso}T00:00:00` : iso);
+    if (Number.isNaN(d.getTime())) return "—";
+    return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
   };
 
-  const progressTo =
-    progressHref.kind === "member" ? "/m/progress" : "/portal/progress";
+  type Primary = { label: string; icon: ComponentType<{ className?: string }>; action: "bodyweight" | "photo" | "video" | "measure" };
+  const primary: Primary[] = [
+    { label: "Log Weight", icon: Scale, action: "bodyweight" },
+    { label: "Add Photos", icon: Camera, action: "photo" },
+    { label: "Add Video", icon: Video, action: "video" },
+    { label: "Add Measurements", icon: Ruler, action: "measure" },
+  ];
 
-  const StatTile = ({
-    icon: Icon, label, value,
-  }: { icon: typeof Video; label: string; value: string }) => (
-    <div className="rounded-lg border border-border bg-secondary/30 p-3">
-      <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
-        <Icon className="h-3.5 w-3.5" /> {label}
+  const PrimaryTile = ({ p }: { p: Primary }) => {
+    const Icon = p.icon;
+    const inner = (
+      <div className="flex h-full flex-col items-center justify-center gap-2 rounded-xl border border-border bg-secondary/30 p-4 text-center transition active:bg-secondary/60 hover:border-primary/40">
+        <Icon className="h-6 w-6 text-primary" />
+        <span className="text-xs font-bold uppercase tracking-wide">{p.label}</span>
       </div>
-      <div className="mt-1 text-lg font-bold">{value}</div>
-    </div>
-  );
-
-  const ctaClass = "mt-3 h-10 w-full text-xs font-bold uppercase tracking-wide";
-  const cta = (
-    <Button variant="outline" className={ctaClass}>
-      View Full Progress <ArrowRight className="ml-1.5 h-4 w-4" />
-    </Button>
-  );
-
-  const ViewCta = () => {
-    if (progressHref.kind === "portal") return <Link to="/portal/progress">{cta}</Link>;
-    if (progressHref.kind === "member") return <Link to="/m/progress">{cta}</Link>;
+    );
+    if (progressHref.kind === "member") {
+      return <Link to="/m/progress" search={{ action: p.action } as never}>{inner}</Link>;
+    }
+    if (progressHref.kind === "portal") {
+      return <Link to="/portal/progress" search={{ action: p.action } as never}>{inner}</Link>;
+    }
     return (
-      <Link to="/admin/clients/$id/progress" params={{ id: progressHref.clientId }}>{cta}</Link>
+      <Link to="/admin/clients/$id/progress" params={{ id: progressHref.clientId }} search={{ action: p.action } as never}>
+        {inner}
+      </Link>
     );
   };
 
-  // ---------- Inline quick-add: measurement ----------
-  const [measOpen, setMeasOpen] = useState(false);
-  const [measField, setMeasField] = useState<string>(MEASUREMENT_FIELDS[0].key);
-  const [measValue, setMeasValue] = useState("");
-  const [measUnit, setMeasUnit] = useState<"cm" | "in">("in");
-  const [measSaving, setMeasSaving] = useState(false);
+  const recentRows: { label: string; value: string; show: boolean }[] = [
+    {
+      label: "Latest weight",
+      value: latestBw
+        ? `${Number(latestBw.weight_value).toFixed(1)} ${latestBw.weight_unit ?? "lb"} · ${fmtDate(latestBw.logged_date)}`
+        : "—",
+      show: !!latestBw,
+    },
+    { label: "Last photo", value: fmtDate(latestPhotoAt), show: !!latestPhotoAt },
+    { label: "Last video", value: fmtDate(latestVideoAt), show: !!latestVideoAt },
+    { label: "Last measurement", value: fmtDate(latestMeasAt), show: !!latestMeasAt },
+  ];
+  const anyRecent = recentRows.some((r) => r.show);
 
-  const saveMeasurement = async () => {
-    const v = Number(measValue);
-    if (!measValue || Number.isNaN(v) || v <= 0) {
-      toast.error("Enter a valid measurement.");
-      return;
-    }
-    try {
-      setMeasSaving(true);
-      await logMeasurement({
-        user_id: userId,
-        unit: measUnit,
-        fields: { [measField]: v },
-        measured_date: todayLocalISO(),
-      });
-      setMeasValue("");
-      toast.success("Measurement saved");
-      qc.invalidateQueries({ queryKey: ["progress-meas", userId] });
-      setMeasOpen(false);
-    } catch (e: any) {
-      toast.error(e?.message ?? "Could not save measurement.");
-    } finally {
-      setMeasSaving(false);
-    }
-  };
-
-  // ---------- Inline quick-add: photo ----------
-  const photoRef = useRef<HTMLInputElement | null>(null);
-  const [photoUploading, setPhotoUploading] = useState(false);
-
-  const uploadPhoto = async (file: File) => {
-    try {
-      setPhotoUploading(true);
-      const sub = await createSubmission({
-        user_id: userId,
-        owner_type: ownerType,
-        submission_type: "photo",
-        review_status: ownerType === "client" ? "draft" : "self_tracking",
-      });
-      const uploaded = await uploadProgressFile({ file, userId });
-      await createMedia({
-        submission_id: sub.id,
-        user_id: userId,
-        media_type: "photo",
-        angle: "all",
-        original_filename: file.name,
-        file_size_bytes: uploaded.sizeBytes,
-        mime_type: uploaded.mimeType,
-        storage_path: uploaded.path,
-        upload_status: "ready",
-      });
-      toast.success("Photo added");
-      qc.invalidateQueries({ queryKey: ["progress-subs-photo", userId] });
-    } catch (e: any) {
-      toast.error(e?.message ?? "Photo upload failed.");
-    } finally {
-      setPhotoUploading(false);
-      if (photoRef.current) photoRef.current.value = "";
-    }
-  };
+  const viewHubInner = (
+    <div className="flex items-center justify-between rounded-xl border border-border bg-secondary/30 px-4 py-3 text-xs font-bold uppercase tracking-wide transition active:bg-secondary/60 hover:border-primary/40">
+      <span>View Progress Hub</span>
+      <ArrowRight className="h-4 w-4" />
+    </div>
+  );
 
   return (
     <Card className="overflow-hidden">
@@ -198,111 +165,41 @@ export function ProgressSummaryCard({
       </div>
       <div className="p-4 space-y-4">
 
-        {/* Stat tiles */}
+        {/* Primary quick actions */}
         <div className="grid grid-cols-2 gap-2">
-          <StatTile icon={Video} label="Latest video" value={daysSince(latestVideoAt)} />
-          <StatTile icon={Dumbbell} label="Latest lift" value={daysSince(latestLiftAt)} />
+          {primary.map((p) => <PrimaryTile key={p.action} p={p} />)}
         </div>
 
-        {/* Inline quick log — measurement */}
-        <div className="rounded-xl border border-border bg-secondary/30 p-5">
-          <button
-            type="button"
-            onClick={() => setMeasOpen((v) => !v)}
-            className="flex w-full items-center justify-between text-xs font-bold uppercase tracking-widest text-muted-foreground"
-          >
-            <span className="flex items-center gap-2">
-              <Ruler className="h-5 w-5 text-primary" /> Add measurement
-            </span>
-            <Plus className={`h-5 w-5 transition ${measOpen ? "rotate-45" : ""}`} />
-          </button>
-          {measOpen && (
-            <div className="mt-3 grid grid-cols-[1fr_1fr_72px_auto] gap-2">
-              <Select value={measField} onValueChange={setMeasField}>
-                <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {MEASUREMENT_FIELDS.map((f) => (
-                    <SelectItem key={f.key} value={f.key}>{f.label}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <Input
-                type="number"
-                step="0.1"
-                inputMode="decimal"
-                placeholder={measUnit === "cm" ? "e.g. 86" : "e.g. 34"}
-                value={measValue}
-                onChange={(e) => setMeasValue(e.target.value)}
-                onKeyDown={(e) => { if (e.key === "Enter") void saveMeasurement(); }}
-                className="h-10"
-              />
-              <Select value={measUnit} onValueChange={(v) => setMeasUnit(v as "cm" | "in")}>
-                <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="in">in</SelectItem>
-                  <SelectItem value="cm">cm</SelectItem>
-                </SelectContent>
-              </Select>
-              <Button
-                onClick={() => void saveMeasurement()}
-                disabled={measSaving || !measValue}
-                className="h-10 px-3 font-bold uppercase"
-              >
-                {measSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : "Save"}
-              </Button>
-            </div>
+        {/* Secondary quick actions from host (Upload Lift, Submit Weekly Check-In) */}
+        {extraActions ? <div>{extraActions}</div> : null}
+
+        {/* View Progress Hub */}
+        {progressHref.kind === "portal" && <Link to="/portal/progress">{viewHubInner}</Link>}
+        {progressHref.kind === "member" && <Link to="/m/progress">{viewHubInner}</Link>}
+        {progressHref.kind === "admin-client" && (
+          <Link to="/admin/clients/$id/progress" params={{ id: progressHref.clientId }}>{viewHubInner}</Link>
+        )}
+
+        {/* Recent status */}
+        <div className="rounded-xl border border-border bg-secondary/20 p-3">
+          <div className="mb-2 text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+            Recent status
+          </div>
+          {anyRecent ? (
+            <ul className="divide-y divide-border/60">
+              {recentRows.filter((r) => r.show).map((r) => (
+                <li key={r.label} className="flex items-center justify-between py-1.5 text-xs">
+                  <span className="text-muted-foreground">{r.label}</span>
+                  <span className="font-semibold">{r.value}</span>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="py-1 text-xs text-muted-foreground">No progress logged yet.</p>
           )}
         </div>
 
-        {/* Inline quick add — photo */}
-        <div className="rounded-xl border border-border bg-secondary/30 p-5">
-          <input
-            ref={photoRef}
-            type="file"
-            accept="image/*"
-            capture="environment"
-            className="hidden"
-            onChange={(e) => {
-              const f = e.target.files?.[0];
-              if (f) void uploadPhoto(f);
-            }}
-          />
-          <button
-            type="button"
-            onClick={() => photoRef.current?.click()}
-            disabled={photoUploading}
-            className="flex w-full items-center justify-between text-xs font-bold uppercase tracking-widest text-muted-foreground disabled:opacity-60"
-          >
-            <span className="flex items-center gap-2">
-              <Camera className="h-5 w-5 text-primary" />
-              {photoUploading ? "Uploading…" : "Add progress photo"}
-            </span>
-            {photoUploading
-              ? <Loader2 className="h-5 w-5 animate-spin" />
-              : <Plus className="h-5 w-5" />}
-          </button>
-        </div>
-
-        {/* Inline quick add — progress video */}
-        <Link
-          to={progressTo}
-          search={{ action: "video" }}
-          className="block rounded-xl border border-border bg-secondary/30 p-5"
-        >
-          <span className="flex w-full items-center justify-between text-xs font-bold uppercase tracking-widest text-muted-foreground">
-            <span className="flex items-center gap-2">
-              <Video className="h-5 w-5 text-primary" />
-              Add progress video
-            </span>
-            <Plus className="h-5 w-5" />
-          </span>
-        </Link>
-
-        {extraActions ? (
-          <div className="pt-1">{extraActions}</div>
-        ) : null}
-
-        {/* Coach Check-In Replies section */}
+        {/* Coach Check-In Replies — keep, it's a real surface */}
         <div className="rounded-xl border border-border bg-secondary/30 p-4">
           <div className="flex items-center gap-2 mb-3">
             <MessageSquare className="h-4 w-4 text-primary" />
@@ -310,8 +207,6 @@ export function ProgressSummaryCard({
           </div>
           <CoachCheckinReplies />
         </div>
-
-        <ViewCta />
       </div>
     </Card>
   );
