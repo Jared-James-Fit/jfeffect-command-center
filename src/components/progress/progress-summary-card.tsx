@@ -47,14 +47,13 @@ export function ProgressSummaryCard({
     staleTime: 60_000,
     queryFn: async () => {
       const { data } = await supabase
-        .from("progress_metrics")
-        .select("entry_date, bodyweight, bodyweight_unit")
+        .from("progress_bodyweight")
+        .select("logged_date, weight_value, weight_unit")
         .eq("user_id", userId)
-        .not("bodyweight", "is", null)
-        .order("entry_date", { ascending: false })
+        .order("logged_date", { ascending: false })
         .limit(1)
         .maybeSingle();
-      return (data ?? null) as { entry_date: string; bodyweight: number; bodyweight_unit: string | null } | null;
+      return (data ?? null) as { logged_date: string; weight_value: number; weight_unit: string | null } | null;
     },
   });
   const { data: latestPhotoAt } = useQuery({
@@ -142,7 +141,7 @@ export function ProgressSummaryCard({
     {
       label: "Latest weight",
       value: latestBw
-        ? `${Number(latestBw.bodyweight).toFixed(1)} ${latestBw.bodyweight_unit ?? "lb"} · ${fmtDate(latestBw.entry_date)}`
+        ? `${Number(latestBw.weight_value).toFixed(1)} ${latestBw.weight_unit ?? "lb"} · ${fmtDate(latestBw.logged_date)}`
         : "—",
       show: !!latestBw,
     },
