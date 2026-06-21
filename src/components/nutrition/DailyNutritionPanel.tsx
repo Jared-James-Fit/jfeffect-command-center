@@ -541,6 +541,61 @@ function AddSupplementButton({ onAdded }: { onAdded: () => void }) {
   );
 }
 
+function DeleteSupplementButton({
+  supplement,
+  onDeleted,
+}: {
+  supplement: any;
+  onDeleted: () => void;
+}) {
+  const del = useServerFn(deleteSupplement);
+  const [open, setOpen] = useState(false);
+  const mutation = useMutation({
+    mutationFn: () => del({ data: { id: supplement.id } }),
+    onSuccess: () => {
+      toast.success(`Removed ${supplement.name}`);
+      setOpen(false);
+      onDeleted();
+    },
+    onError: (e: any) => toast.error(e?.message ?? "Couldn't remove"),
+  });
+  return (
+    <AlertDialog open={open} onOpenChange={setOpen}>
+      <AlertDialogTrigger asChild>
+        <Button
+          size="icon"
+          variant="ghost"
+          aria-label={`Remove ${supplement.name}`}
+          className="text-muted-foreground hover:text-destructive"
+        >
+          <Trash2 className="h-4 w-4" />
+        </Button>
+      </AlertDialogTrigger>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Remove {supplement.name}?</AlertDialogTitle>
+          <AlertDialogDescription>
+            This stops tracking {supplement.name} going forward. Your past logs stay in your history.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel disabled={mutation.isPending}>Cancel</AlertDialogCancel>
+          <AlertDialogAction
+            onClick={(e) => {
+              e.preventDefault();
+              mutation.mutate();
+            }}
+            disabled={mutation.isPending}
+            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+          >
+            {mutation.isPending ? "Removing…" : "Remove"}
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+  );
+}
+
 function WeeklyTrendCard({ weekMeals, target }: { weekMeals: any[]; target: any }) {
   // Group by date
   const byDay = new Map<string, { calories: number; protein: number; carbs: number; fat: number }>();
