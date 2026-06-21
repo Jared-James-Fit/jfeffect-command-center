@@ -9,7 +9,6 @@ import { PageHeader } from "@/components/app-shell";
 import { supabase } from "@/integrations/supabase/client";
 import { NutritionDashboard, type NutritionTargets } from "@/components/nutrition/NutritionDashboard";
 import { getActiveMemberTargets } from "@/lib/nutrition-targets/member-targets.functions";
-import { DailyNutritionPanel } from "@/components/nutrition/DailyNutritionPanel";
 import { MemberMealPlanPanel } from "@/components/nutrition/MemberMealPlanPanel";
 import { SectionErrorBoundary } from "@/components/section-error-boundary";
 
@@ -70,9 +69,6 @@ function MemberNutrition() {
       />
       <SectionErrorBoundary label="Meal plan">
         <MemberMealPlanPanel />
-      </SectionErrorBoundary>
-      <SectionErrorBoundary label="Daily nutrition">
-        <DailyNutritionPanel />
       </SectionErrorBoundary>
       {showSetupCta && (
         <div className="p-4 md:p-6 pb-0">
