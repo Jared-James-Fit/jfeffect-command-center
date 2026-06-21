@@ -364,7 +364,13 @@ export function WorkoutsExperience({
 
         {mode === "self" && (
           <>
-            <ClientCardioSection clientId={clientId} hideWhenEmpty />
+            <ClientCardioSection
+              clientId={clientId}
+              hideWhenEmpty
+              // Determine day context: training day if today has a scheduled workout
+              dayContext={todayItem ? "training" : "rest"}
+              date={today}
+            />
             <DeferredAnalytics clientId={clientId} />
           </>
         )}
