@@ -630,7 +630,7 @@ function AngleUploadCard({
             onClick={() => fileRef.current?.click()}
             className="absolute inset-0 flex flex-col items-center justify-center gap-2 text-xs text-muted-foreground hover:bg-accent active:bg-accent"
           >
-            {mediaType === "video" ? <Video className="h-8 w-8" /> : <Camera className="h-8 w-8" />}
+            {mediaType === "video" ? <VideoIcon className="h-8 w-8" /> : <Camera className="h-8 w-8" />}
             <span className="font-medium">Tap to {mediaType === "video" ? "record or upload" : "upload"}</span>
           </button>
         )}
