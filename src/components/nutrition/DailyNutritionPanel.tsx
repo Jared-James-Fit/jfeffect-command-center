@@ -11,6 +11,7 @@ import {
   logSupplement,
   undoSupplementLog,
   upsertSupplement,
+  deleteSupplement,
 } from "@/lib/nutrition-dashboard.functions";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -19,6 +20,17 @@ import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import { Plus, Trash2, Sparkles, Pill, Flame, Beef, Wheat, Droplet, Clock } from "lucide-react";
 
 function todayISO() {
@@ -177,11 +189,14 @@ export function DailyNutritionPanel() {
                       {count}/{s.daily_target_count} today
                     </div>
                   </div>
-                  <SupplementCounter
-                    supplement={s}
-                    count={count}
-                    onChange={invalidate}
-                  />
+                  <div className="flex items-center gap-1">
+                    <SupplementCounter
+                      supplement={s}
+                      count={count}
+                      onChange={invalidate}
+                    />
+                    <DeleteSupplementButton supplement={s} onDeleted={invalidate} />
+                  </div>
                 </li>
               );
             })}
@@ -523,6 +538,61 @@ function AddSupplementButton({ onAdded }: { onAdded: () => void }) {
         </div>
       </SheetContent>
     </Sheet>
+  );
+}
+
+function DeleteSupplementButton({
+  supplement,
+  onDeleted,
+}: {
+  supplement: any;
+  onDeleted: () => void;
+}) {
+  const del = useServerFn(deleteSupplement);
+  const [open, setOpen] = useState(false);
+  const mutation = useMutation({
+    mutationFn: () => del({ data: { id: supplement.id } }),
+    onSuccess: () => {
+      toast.success(`Removed ${supplement.name}`);
+      setOpen(false);
+      onDeleted();
+    },
+    onError: (e: any) => toast.error(e?.message ?? "Couldn't remove"),
+  });
+  return (
+    <AlertDialog open={open} onOpenChange={setOpen}>
+      <AlertDialogTrigger asChild>
+        <Button
+          size="icon"
+          variant="ghost"
+          aria-label={`Remove ${supplement.name}`}
+          className="text-muted-foreground hover:text-destructive"
+        >
+          <Trash2 className="h-4 w-4" />
+        </Button>
+      </AlertDialogTrigger>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Remove {supplement.name}?</AlertDialogTitle>
+          <AlertDialogDescription>
+            This stops tracking {supplement.name} going forward. Your past logs stay in your history.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel disabled={mutation.isPending}>Cancel</AlertDialogCancel>
+          <AlertDialogAction
+            onClick={(e) => {
+              e.preventDefault();
+              mutation.mutate();
+            }}
+            disabled={mutation.isPending}
+            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+          >
+            {mutation.isPending ? "Removing…" : "Remove"}
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
   );
 }
 
