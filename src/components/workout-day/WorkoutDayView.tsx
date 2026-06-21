@@ -828,7 +828,19 @@ function WorkoutDay({
     key: draftKey,
     value: { notes, actualMin },
     delay: 1000,
-    enabled: !!client?.id && draftHydrated && (notes.length > 0 || actualMin.length > 0),
+    // Only autosave once both local-draft and server-completion hydration
+    // have run AND the current value actually differs from what's persisted
+    // on the completion row. Without this, opening a completed workout
+    // hydrates the fields from the server and then immediately re-saves
+    // the same values back — producing a constant "Saving…/Saved" flicker.
+    enabled:
+      !!client?.id &&
+      draftHydrated &&
+      completionHydrated &&
+      (
+        notes !== (completion?.client_notes ?? "") ||
+        actualMin !== (completion?.actual_duration_min != null ? String(completion.actual_duration_min) : "")
+      ),
     onPermanentFailure: ({ value }) => {
       if (!client?.id) return;
       enqueueOfflineWrite({
@@ -2331,6 +2343,21 @@ function SetRow({
     key: draftKey,
     value,
     delay: 800,
+    // Toggling KG/LB converts the displayed `load` but the underlying
+    // weight is unchanged. Compare in normalized kg so a unit toggle
+    // alone does not mark the set dirty / trigger a save loop.
+    equals: (a, b) => {
+      if (a.reps !== b.reps || a.rpe !== b.rpe) return false;
+      const toKg = (v: string, u: "kg" | "lb") => {
+        if (!v) return null;
+        const n = Number(v);
+        if (!isFinite(n)) return v; // fall back to string compare on garbage
+        return Math.round(convertWeight(n, u, "kg") * 1000) / 1000;
+      };
+      const ak = toKg(a.load, a.unit);
+      const bk = toKg(b.load, b.unit);
+      return ak === bk;
+    },
     enabled: !readonly && !!clientId && hydrated && (load.length > 0 || reps.length > 0 || rpe.length > 0 || !!existing),
     onPermanentFailure: ({ value }) => {
       if (!clientId) return;
