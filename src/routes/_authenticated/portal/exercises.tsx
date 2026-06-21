@@ -35,9 +35,10 @@ function ExerciseLibrary() {
   const { data: exercises = [], isLoading: exercisesLoading } = useQuery({
     queryKey: ["exercises"],
     queryFn: async () => {
-      const { data } = await supabase.from("exercises").select("*").order("name").limit(5000);
+      const { data } = await supabase.from("exercises").select("*").eq("archived", false).order("name").limit(10000);
       return data ?? [];
     },
+    staleTime: 5 * 60_000,
   });
 
   useEffect(() => {
