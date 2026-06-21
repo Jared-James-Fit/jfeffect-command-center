@@ -64,41 +64,90 @@ export type RecipeProfile = {
   goals?: string[];
   foodRestrictions?: string[];
   dietaryPreferences?: string[];
-  proteinTarget?: number | null; // grams
+  foodDislikes?: string[];          // specific foods to avoid
+  proteinTarget?: number | null;    // grams per meal
+  calorieTarget?: number | null;    // kcal per day
   maxPrepMinutes?: number | null;
+  cookingSkill?: "beginner" | "intermediate" | "advanced" | null;
+  seenRecipeIds?: Set<string>;      // for variety bonus
 };
 
+/**
+ * Score a recipe against a user profile.
+ * Higher = better match. Negative = effectively excluded.
+ *
+ * Scoring weights:
+ *   +4  goal tag exact match
+ *   +3  protein target met (>=80%)
+ *   +2  calorie target match (within 20%)
+ *   +2  dietary preference match
+ *   +1  prep time within limit
+ *   +1  unseen recipe (variety bonus)
+ *   -10 food restriction violation (excludes recipe)
+ *   -5  food dislike match
+ *   -2  skill mismatch (advanced recipe for beginner)
+ */
 function scoreRecipe(recipe: Recipe, profile: RecipeProfile): number {
   const tags = (recipe.tags ?? []).map((t) => t.toLowerCase());
   const meta = getRecipeCardMeta(recipe);
   let score = 0;
 
-  // Goal tag matching (existing logic, preserved)
+  // 1. Goal tag matching
   for (const g of profile.goals ?? []) {
     const wanted = GOAL_TAG_MAP[g.toLowerCase()] ?? [];
-    for (const w of wanted) if (tags.includes(w)) score += 2;
+    for (const w of wanted) if (tags.includes(w)) score += 4;
   }
 
-  // Protein target bonus: if recipe protein >= 80% of target per serving
+  // 2. Protein target bonus
   if (profile.proteinTarget && meta.protein) {
-    if (meta.protein >= profile.proteinTarget * 0.8) score += 3;
-    else if (meta.protein >= profile.proteinTarget * 0.5) score += 1;
+    const perMeal = profile.proteinTarget / 4; // assume 4 meals/day
+    if (meta.protein >= perMeal * 0.8) score += 3;
+    else if (meta.protein >= perMeal * 0.5) score += 1;
   }
 
-  // Prep time bonus: prefer quick meals
+  // 3. Calorie target match (per-meal estimate = daily / 4)
+  if (profile.calorieTarget && meta.calories) {
+    const perMeal = profile.calorieTarget / 4;
+    const ratio = meta.calories / perMeal;
+    if (ratio >= 0.8 && ratio <= 1.2) score += 2; // within 20%
+    else if (ratio >= 0.6 && ratio <= 1.4) score += 1;
+  }
+
+  // 4. Prep time bonus
   if (profile.maxPrepMinutes && meta.prepMinutes) {
     if (meta.prepMinutes <= profile.maxPrepMinutes) score += 1;
   }
 
-  // Dietary restriction penalty: exclude recipes with restricted tags
+  // 5. Dietary restriction penalty (hard exclude)
   for (const restriction of profile.foodRestrictions ?? []) {
     const r = restriction.toLowerCase();
-    if (tags.some((t) => t.includes(r))) score -= 10; // effectively excludes
+    if (tags.some((t) => t.includes(r))) score -= 10;
   }
 
-  // Dietary preference bonus
+  // 6. Food dislike penalty (soft exclude)
+  for (const dislike of profile.foodDislikes ?? []) {
+    const d = dislike.toLowerCase();
+    if (tags.some((t) => t.includes(d)) || recipe.title.toLowerCase().includes(d)) {
+      score -= 5;
+    }
+  }
+
+  // 7. Dietary preference bonus
   for (const pref of profile.dietaryPreferences ?? []) {
-    if (tags.some((t) => t.includes(pref.toLowerCase()))) score += 1;
+    if (tags.some((t) => t.includes(pref.toLowerCase()))) score += 2;
+  }
+
+  // 8. Cooking skill match
+  if (profile.cookingSkill === "beginner") {
+    if (tags.includes("advanced") || tags.includes("complex")) score -= 2;
+    if (tags.includes("easy") || tags.includes("beginner") || tags.includes("simple")) score += 1;
+  } else if (profile.cookingSkill === "advanced") {
+    if (tags.includes("advanced") || tags.includes("complex")) score += 1;
+  }
+
+  // 9. Variety bonus: unseen recipes get a small boost
+  if (profile.seenRecipeIds && !profile.seenRecipeIds.has(recipe.id)) {
+    score += 1;
   }
 
   return score;
@@ -150,20 +199,39 @@ export function RecipeBrowser({ viewer, userId, goals = [], profile }: RecipeBro
         (effectiveProfile.goals?.length ?? 0) > 0 ||
         (effectiveProfile.foodRestrictions?.length ?? 0) > 0 ||
         (effectiveProfile.dietaryPreferences?.length ?? 0) > 0 ||
+        (effectiveProfile.foodDislikes?.length ?? 0) > 0 ||
         !!effectiveProfile.proteinTarget ||
-        !!effectiveProfile.maxPrepMinutes;
-      if (!hasProfile) return filtered.slice(0, 10);
+        !!effectiveProfile.calorieTarget ||
+        !!effectiveProfile.maxPrepMinutes ||
+        !!effectiveProfile.cookingSkill;
+      // Build profile with variety data
+      // `unseen` = Set of recipe IDs the user has NOT seen yet
+      // We pass the SEEN ids to scoreRecipe so unseen recipes get the +1 bonus
+      const seenIds = new Set(recipes.map(r => r.id).filter(id => !unseen.has(id)));
+      const profileWithVariety: RecipeProfile = {
+        ...effectiveProfile,
+        seenRecipeIds: seenIds,
+      };
+      if (!hasProfile) {
+        // No profile: show unseen recipes first, then rest
+        const unseenFirst = [...filtered].sort((a, b) => {
+          const aUnseen = unseen.has(a.id) ? 1 : 0;
+          const bUnseen = unseen.has(b.id) ? 1 : 0;
+          return bUnseen - aUnseen;
+        });
+        return unseenFirst.slice(0, 12);
+      }
       const scored = filtered
-        .map((r) => ({ r, s: scoreRecipe(r, effectiveProfile) }))
-        .filter((x) => x.s > 0)
+        .map((r) => ({ r, s: scoreRecipe(r, profileWithVariety) }))
+        .filter((x) => x.s > -5) // allow soft dislikes but exclude hard restrictions
         .sort((a, b) => b.s - a.s)
         .map((x) => x.r)
-        .slice(0, 10);
-      return scored.length > 0 ? scored : filtered.slice(0, 10);
+        .slice(0, 12);
+      return scored.length > 0 ? scored : filtered.slice(0, 12);
     }
     if (active === "All") return filtered;
     return filtered.filter((r) => r.category === active);
-  }, [filtered, active, effectiveProfile]);
+  }, [filtered, active, effectiveProfile, unseen, recipes]);
 
   const toggle = (v: string) =>
     setFilters((cur) => (cur.includes(v) ? cur.filter((x) => x !== v) : [...cur, v]));

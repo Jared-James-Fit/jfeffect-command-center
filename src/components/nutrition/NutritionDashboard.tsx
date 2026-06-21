@@ -77,7 +77,17 @@ export function NutritionDashboard({
       {children}
       <div id={recipesAnchorId} className="scroll-mt-20">
         <SectionErrorBoundary label="Recipes">
-          <RecipeBrowser viewer={viewer} userId={userId} goals={goals} profile={profile} />
+          <RecipeBrowser
+            viewer={viewer}
+            userId={userId}
+            goals={goals}
+            profile={profile ?? {
+              goals,
+              // Build a basic profile from targets when no explicit profile is passed
+              proteinTarget: targets?.protein != null ? Number(targets.protein) : null,
+              calorieTarget: targets?.calories != null ? Number(targets.calories) : null,
+            }}
+          />
         </SectionErrorBoundary>
       </div>
     </div>

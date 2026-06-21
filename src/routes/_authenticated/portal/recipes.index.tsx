@@ -47,8 +47,12 @@ function PortalRecipes() {
     goals,
     foodRestrictions: Array.isArray(c?.food_restrictions) ? c.food_restrictions : [],
     dietaryPreferences: Array.isArray(c?.dietary_preferences) ? c.dietary_preferences : [],
+    // food_dislikes and cooking_skill will be populated when those columns are added to the clients table
+    foodDislikes: [] as string[],
     proteinTarget: t?.protein_g ?? null,
+    calorieTarget: t?.calories ?? null,
     maxPrepMinutes: null as number | null,
+    cookingSkill: null as ("beginner" | "intermediate" | "advanced" | null),
   };
 
   return (
