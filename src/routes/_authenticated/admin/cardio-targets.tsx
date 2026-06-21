@@ -142,8 +142,7 @@ function CardioComplianceSection() {
       // Active targets in window (end_date null or >= today, start_date <= today)
       const { data: targets, error: tErr } = await supabase
         .from("cardio_targets")
-        .select("id, client_id, frequency_per_week, start_date, end_date, archived, clients(id, full_name)")
-        .eq("archived", false)
+        .select("id, client_id, frequency_per_week, start_date, end_date, clients(id, full_name)")
         .lte("start_date", endStr);
       if (tErr) throw tErr;
       const active = (targets ?? []).filter((t: any) => !t.end_date || t.end_date >= endStr);
