@@ -1,116 +1,99 @@
-## Offline Mode v1 — implementation plan
+# Fix Form Due Status, Completion Sync & Actionable Notifications
 
-### Architecture (one shared layer, used by all features)
+## Current architecture (confirmed)
 
-```
-┌─ Service Worker (vite-plugin-pwa, NetworkFirst HTML, CacheFirst assets) ─┐
-│  Caches: app shell + last-fetched API responses for whitelisted reads     │
-└────────────────────────────────────────────────────────────────────────────┘
-              ▲                                       ▲
-              │ navigation                            │ data reads
-              │                                       │
-        React app  ◄──── useOnlineStatus() ────►  OfflineBanner / chips
-              │
-              ▼ writes
-┌─ offline-queue (IndexedDB via idb) ───────────────────────────────────────┐
-│  enqueue({ kind, payload, clientOpId, createdAt })                        │
-│  drain() runs on online + every 30s + on focus                            │
-│  per-kind handlers call existing server fns; idempotent via clientOpId    │
-└────────────────────────────────────────────────────────────────────────────┘
-              │
-              ▼
-        React Query optimistic updates → UI stays consistent
-```
+- `nf_forms` — form definition (`kind`: native vs fillout, `external_url`, `recurrence`)
+- `nf_assignments` — recurring assignment (form_id + client_id + recurrence + next_due_at)
+- `form_client_assignments` — one-off assignment (form_id + client_id)
+- `nf_submissions` — native submission per period (status, period_start, started/submitted/reviewed_at) ← already the right shape
+- `fillout_submissions` — Fillout payload, **not linked to any assignment, never writes to nf_submissions**
 
-One queue, one banner, one status hook. Every feature plugs in by registering a handler.
+**Root causes**
+1. Fillout submissions live in their own table → no status screen using `nf_submissions` ever sees them as "Submitted".
+2. Webhook only matches `client_id`; no `assignment_id` / `form_id` / `period_start` correlation.
+3. Each screen (Action Centre, Progress Hub, check-ins, bell) computes status independently.
+4. Notifications don't carry `assignment_id`, so taps don't deep-link to the exact form.
 
-### What gets cached by the service worker
+## Plan
 
-- App shell (HTML, JS, CSS, fonts, logos, icons)
-- Last-seen GET responses for:
-  - `/portal` dashboard data
-  - today's workout day (`pl_days`, `pl_exercise_rows`, `pl_block_set_rows`, completion)
-  - bodyweight + water + nutrition latest reads
-- Excluded: auth, payments, admin, messaging, uploads, anything POST/PUT/DELETE
+### 1. Shared status resolver (new, ~150 LOC, no schema change)
 
-Stale-while-revalidate so the user always sees their last known state offline.
+Create `src/lib/form-status.ts` with:
+- `resolveAssignmentStatus({ assignment, submission, nowInClientTz })` → one of `upcoming | due | due_today | overdue | in_progress | submitted | reviewed | waived`.
+- `getOutstandingFormActions(clientId)` server fn that joins `nf_assignments` + latest `nf_submissions` for the current period and returns one unified list. Used by Action Centre, bell, progress hub.
+- Period key = ISO week start in client tz (existing `client_timezone` on `clients` table — fall back to business tz).
 
-### IndexedDB queue (one table)
+Status rules per spec: in_progress only when a saved draft row exists; submitted immediately on insert; reviewed when `reviewed_at` set; completed/reviewed/waived never appear in outstanding.
 
-`pending_ops` rows:
-- `id` (uuid), `client_op_id` (uuid — server-side dedup key)
-- `kind` — e.g. `set_log`, `workout_complete`, `bodyweight`, `water`, `nutrition_log`, `habit_tick`, `progress_metric`, `note`
-- `payload` (JSON)
-- `created_at`, `attempts`, `last_error`, `status` (`pending` | `syncing` | `failed`)
+### 2. Fillout webhook → nf_submissions (smallest repair)
 
-Per-kind handler maps `payload` → existing server function call. Server functions get a small change: accept optional `client_op_id`, upsert on it to prevent duplicates.
+Migration:
+- Add `assignment_id uuid`, `period_start date`, `fillout_submission_id text unique` to `nf_submissions`.
+- Add partial unique index on `(assignment_id, period_start)` where status in ('submitted','reviewed') to prevent dupes.
 
-### Feature wiring (each is ~30 lines once queue exists)
+Rewrite `src/routes/api/public/hooks/fillout.ts`:
+- Read `assignment_id`, `client_id`, `form_id`, `period_start` from urlParameters/hiddenFields.
+- Idempotent upsert into `nf_submissions` keyed by `fillout_submission_id`.
+- Still write the raw payload row to `fillout_submissions` for archive/admin debugging (unchanged).
+- Mark related due notifications resolved.
 
-| Feature | Queue kind | Server fn touched |
-|---|---|---|
-| Workout set logs | `set_log` | upsert `member_set_logs` / `pl_row_results` by `client_op_id` |
-| Workout completion + duration | `workout_complete` | `pl_day_completions` upsert |
-| Workout review/notes | `workout_review` | existing review fn |
-| Bodyweight | `bodyweight` | `progress_bodyweight` insert |
-| Water | `water` | `progress_water_entries` insert |
-| Nutrition meal log | `nutrition_log` | `member_meal_logs` insert |
-| Habits / supplements | `habit_tick` | `member_supplement_logs` insert |
-| Progress metric | `progress_metric` | `progress_metrics` insert |
-| Progress photo *metadata only* | `progress_photo_meta` | `progress_media` row (binary upload deferred until online) |
+### 3. Fillout URL builder
 
-Progress photo blobs are NOT queued — too risky for IndexedDB quotas. Metadata + a "Pending upload" marker is queued; the file itself is held in memory only while the tab is open, with a clear "this photo will upload when you're back online — don't close the tab" warning.
+Update `src/lib/fillout.ts` / `form-links.ts` to always append:
+`?assignment_id=…&client_id=…&form_id=…&period_start=YYYY-MM-DD`
+when constructing the Fillout open URL from an assignment context.
 
-### Action gating (no codebase-wide audit)
+### 4. Native form completion (repair existing flow)
 
-A small `<RequiresOnline>` wrapper + `useRequireOnline()` hook. Applied surgically to: payments buttons, signup CTA, messaging composer, video upload, coach/admin program edits. Offline → disabled + tooltip + toast.
+In `src/lib/native-forms.functions.ts` submit handler:
+- Ensure `assignment_id` + `period_start` are written.
+- Return updated status so client can optimistically refresh (`router.invalidate()` + `queryClient.invalidateQueries(['form-status'])`).
+- Guard against duplicate submits with `ON CONFLICT (assignment_id, period_start) DO NOTHING` when status='submitted'.
 
-### UI status
+### 5. Notifications — make taps actionable
 
-- Top banner when offline: "Offline — your changes are saved and will sync when you're back online."
-- Per-action chip on save: "Saved offline" → "Syncing" → "Synced" / "Sync failed — Retry"
-- Sync queue drawer (`/portal/settings/offline`) shows pending ops + manual retry
+- Add `assignment_id` to notification metadata when a form notification is created.
+- Update the bell click handler (`src/components/...notification list`) to route to `/client/forms/:assignmentId` (existing route) when present.
+- Dedupe: one notification per (assignment_id, kind) per period.
 
-### Conflict policy (per your choice)
+### 6. Action Centre
 
-Always save. If `client_op_id` upsert hits a target row that was archived/reassigned, server fn still writes the log but stamps `needs_review = true` on the parent so coach sees it. No client-side block.
+Replace its current independent status calc with `getOutstandingFormActions(clientId)`. Sort: overdue → due_today → due → in_progress. Hide submitted/reviewed/waived.
 
-### Phasing (this is what I'll actually do, in order)
+### 7. Return-from-Fillout confirmation page
 
-**Phase 1 — Foundations (this batch)**
-1. `vite-plugin-pwa` set up with the preview-safe registration guard from the PWA skill.
-2. `src/lib/offline/queue.ts` — IndexedDB queue + `useOfflineQueue`.
-3. `src/lib/offline/online-status.ts` — `useOnlineStatus` hook.
-4. `OfflineBanner` mounted in `_authenticated/route.tsx`.
-5. `<RequiresOnline>` wrapper + `useRequireOnline` hook.
-6. Migration: add `client_op_id` (uuid, unique nullable) to the 8 target write tables.
+Add `/client/forms/$assignmentId/complete` route that:
+- Re-queries assignment status with a 10s retry-on-Due fallback (poll every 1.5s) to absorb webhook latency.
+- Shows "Syncing…" then "Submitted" or a manual "Confirm Submission" fallback (records `client_confirmed=true`).
 
-**Phase 2 — Wire workout logging (the most important flow)**
-7. Set logging in `WorkoutDayView` enqueues when offline; server fn dedups by `client_op_id`.
-8. Workout completion + duration enqueue when offline.
-9. Save chips on each set row.
+### 8. Coach/admin view
 
-**Phase 3 — Wire the rest**
-10. Bodyweight, water, nutrition log, habit tick, progress metric.
-11. Progress photo metadata path + "don't close tab" warning.
+Extend existing assignment row in `admin/clients.$id.tsx` and `admin/forms.tsx` to surface: form type, assigned/due/submitted dates, status, fillout_submission_id, verification source (webhook vs client_confirmed).
 
-**Phase 4 — Polish**
-12. Sync queue drawer at `/portal/settings/offline`.
-13. Apply `<RequiresOnline>` to payments, signup, messaging, uploads, coach edits.
-14. Test airplane-mode flow end to end.
+## Out of scope (will not touch)
 
-### Out of scope (will not do)
+- Workout / nutrition systems
+- Form builder UI, question editor
+- Replacing Fillout
+- Historical responses
+- Recurrence schedule definitions
 
-- No new offline-first design pages.
-- No real-time conflict resolution UI for clients.
-- No offline support for admin dashboards, analytics, or coach inboxes.
-- No background sync via Periodic Background Sync API (browser support too patchy).
-- No photo binary persistence across tab closes.
+## Verification
 
-### Credit estimate
+Manual test path on `exercisetutorials@gmail.com`:
+1. Native weekly check-in → submit → confirm disappears from Action Centre, bell shows resolved, response viewable.
+2. Fillout nutrition update → open from bell → submit in Fillout → return URL shows "Syncing" → flips to "Submitted" once webhook lands → Action Centre clears.
+3. New week rolls over → previous submission stays, new assignment shows "Due".
 
-Phase 1+2 alone is substantial — service worker setup, IndexedDB layer, migration on 8 tables, and one feature wired end to end is the bulk of the work. Phases 3 and 4 are mostly repetition once Phase 2 lands.
+## Files touched (estimate)
 
-I will commit Phase 1 and 2 in this turn, then check in before continuing to Phase 3 so you can see it working in airplane mode first. If anything looks off, we adjust before I template the same pattern across the remaining features — that's the credit-cheapest path.
+- New: `src/lib/form-status.ts`, `src/routes/_authenticated/m/forms.$assignmentId.complete.tsx`
+- Migration: 1 (nf_submissions columns + indexes)
+- Edited: `fillout.ts` webhook, `fillout.ts` URL builder, `native-forms.functions.ts`, Action Centre component, notification bell component, `form-links.ts`, admin client/forms views
+- Estimated ~10 files, ~600 LOC net change
 
-Approve to proceed.
+## Questions before I start
+
+1. **Fillout webhook secret** — is `FILLOUT_WEBHOOK_SECRET` already set in Lovable Cloud secrets, and is the webhook configured in Fillout's dashboard pointing at `/api/public/hooks/fillout`? If not I'll need you to (a) confirm the secret exists and (b) reconfigure each Fillout form's webhook headers — I can't do that from code.
+2. **Client timezone** — should I use `clients.timezone` if present and fall back to a single business tz (which one?), or always use one business tz?
+3. **Confirmation page redirect** — Fillout supports a per-form "redirect URL after submit". You'll need to set that to `https://jfeffect.com/m/forms/{assignment_id}/complete` on each form. OK to proceed assuming you'll set this, or should I skip the return page and rely purely on webhook + Action Centre refresh?
