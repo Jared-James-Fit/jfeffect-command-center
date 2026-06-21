@@ -259,6 +259,7 @@ import { Route as AuthenticatedAdminAgreementsNativeNewRouteImport } from './rou
 import { Route as AuthenticatedAdminAgreementsNativePackageIdRouteImport } from './routes/_authenticated/admin/agreements-native.$packageId'
 import { Route as AuthenticatedAdminCrmContactsIndexRouteImport } from './routes/_authenticated/admin/crm.contacts.index'
 import { Route as ApiPublicGoogleOauthCallbackRouteImport } from './routes/api/public/google/oauth/callback'
+import { Route as AuthenticatedMFormsAssignmentIdCompleteRouteImport } from './routes/_authenticated/m/forms.$assignmentId.complete'
 import { Route as AuthenticatedAdminSettingsNotificationsCoachingApplicationsRouteImport } from './routes/_authenticated/admin/settings_.notifications.coaching-applications'
 import { Route as AuthenticatedAdminNutritionDashboardReviewSubmissionIdRouteImport } from './routes/_authenticated/admin/nutrition-dashboard.review.$submissionId'
 import { Route as AuthenticatedAdminCrmContactsIdRouteImport } from './routes/_authenticated/admin/crm.contacts.$id'
@@ -1705,6 +1706,12 @@ const ApiPublicGoogleOauthCallbackRoute =
     path: '/api/public/google/oauth/callback',
     getParentRoute: () => rootRouteImport,
   } as any)
+const AuthenticatedMFormsAssignmentIdCompleteRoute =
+  AuthenticatedMFormsAssignmentIdCompleteRouteImport.update({
+    id: '/forms/$assignmentId/complete',
+    path: '/forms/$assignmentId/complete',
+    getParentRoute: () => AuthenticatedMRouteRoute,
+  } as any)
 const AuthenticatedAdminSettingsNotificationsCoachingApplicationsRoute =
   AuthenticatedAdminSettingsNotificationsCoachingApplicationsRouteImport.update(
     {
@@ -2011,6 +2018,7 @@ export interface FileRoutesByFullPath {
   '/admin/crm/contacts/$id': typeof AuthenticatedAdminCrmContactsIdRoute
   '/admin/nutrition-dashboard/review/$submissionId': typeof AuthenticatedAdminNutritionDashboardReviewSubmissionIdRoute
   '/admin/settings/notifications/coaching-applications': typeof AuthenticatedAdminSettingsNotificationsCoachingApplicationsRoute
+  '/m/forms/$assignmentId/complete': typeof AuthenticatedMFormsAssignmentIdCompleteRoute
   '/api/public/google/oauth/callback': typeof ApiPublicGoogleOauthCallbackRoute
   '/admin/crm/contacts/': typeof AuthenticatedAdminCrmContactsIndexRoute
   '/m/workouts/$enrollmentId/$week/$day': typeof AuthenticatedMWorkoutsEnrollmentIdWeekDayRoute
@@ -2265,6 +2273,7 @@ export interface FileRoutesByTo {
   '/admin/crm/contacts/$id': typeof AuthenticatedAdminCrmContactsIdRoute
   '/admin/nutrition-dashboard/review/$submissionId': typeof AuthenticatedAdminNutritionDashboardReviewSubmissionIdRoute
   '/admin/settings/notifications/coaching-applications': typeof AuthenticatedAdminSettingsNotificationsCoachingApplicationsRoute
+  '/m/forms/$assignmentId/complete': typeof AuthenticatedMFormsAssignmentIdCompleteRoute
   '/api/public/google/oauth/callback': typeof ApiPublicGoogleOauthCallbackRoute
   '/admin/crm/contacts': typeof AuthenticatedAdminCrmContactsIndexRoute
   '/m/workouts/$enrollmentId/$week/$day': typeof AuthenticatedMWorkoutsEnrollmentIdWeekDayRoute
@@ -2526,6 +2535,7 @@ export interface FileRoutesById {
   '/_authenticated/admin/crm/contacts/$id': typeof AuthenticatedAdminCrmContactsIdRoute
   '/_authenticated/admin/nutrition-dashboard/review/$submissionId': typeof AuthenticatedAdminNutritionDashboardReviewSubmissionIdRoute
   '/_authenticated/admin/settings_/notifications/coaching-applications': typeof AuthenticatedAdminSettingsNotificationsCoachingApplicationsRoute
+  '/_authenticated/m/forms/$assignmentId/complete': typeof AuthenticatedMFormsAssignmentIdCompleteRoute
   '/api/public/google/oauth/callback': typeof ApiPublicGoogleOauthCallbackRoute
   '/_authenticated/admin/crm/contacts/': typeof AuthenticatedAdminCrmContactsIndexRoute
   '/_authenticated/m/workouts/$enrollmentId/$week/$day': typeof AuthenticatedMWorkoutsEnrollmentIdWeekDayRoute
@@ -2787,6 +2797,7 @@ export interface FileRouteTypes {
     | '/admin/crm/contacts/$id'
     | '/admin/nutrition-dashboard/review/$submissionId'
     | '/admin/settings/notifications/coaching-applications'
+    | '/m/forms/$assignmentId/complete'
     | '/api/public/google/oauth/callback'
     | '/admin/crm/contacts/'
     | '/m/workouts/$enrollmentId/$week/$day'
@@ -3041,6 +3052,7 @@ export interface FileRouteTypes {
     | '/admin/crm/contacts/$id'
     | '/admin/nutrition-dashboard/review/$submissionId'
     | '/admin/settings/notifications/coaching-applications'
+    | '/m/forms/$assignmentId/complete'
     | '/api/public/google/oauth/callback'
     | '/admin/crm/contacts'
     | '/m/workouts/$enrollmentId/$week/$day'
@@ -3301,6 +3313,7 @@ export interface FileRouteTypes {
     | '/_authenticated/admin/crm/contacts/$id'
     | '/_authenticated/admin/nutrition-dashboard/review/$submissionId'
     | '/_authenticated/admin/settings_/notifications/coaching-applications'
+    | '/_authenticated/m/forms/$assignmentId/complete'
     | '/api/public/google/oauth/callback'
     | '/_authenticated/admin/crm/contacts/'
     | '/_authenticated/m/workouts/$enrollmentId/$week/$day'
@@ -5113,6 +5126,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicGoogleOauthCallbackRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/_authenticated/m/forms/$assignmentId/complete': {
+      id: '/_authenticated/m/forms/$assignmentId/complete'
+      path: '/forms/$assignmentId/complete'
+      fullPath: '/m/forms/$assignmentId/complete'
+      preLoaderRoute: typeof AuthenticatedMFormsAssignmentIdCompleteRouteImport
+      parentRoute: typeof AuthenticatedMRouteRoute
+    }
     '/_authenticated/admin/settings_/notifications/coaching-applications': {
       id: '/_authenticated/admin/settings_/notifications/coaching-applications'
       path: '/settings/notifications/coaching-applications'
@@ -5660,6 +5680,7 @@ interface AuthenticatedMRouteRouteChildren {
   AuthenticatedMNutritionTargetsManageRoute: typeof AuthenticatedMNutritionTargetsManageRoute
   AuthenticatedMNutritionTargetsSetupRoute: typeof AuthenticatedMNutritionTargetsSetupRoute
   AuthenticatedMNutritionIndexRoute: typeof AuthenticatedMNutritionIndexRoute
+  AuthenticatedMFormsAssignmentIdCompleteRoute: typeof AuthenticatedMFormsAssignmentIdCompleteRoute
   AuthenticatedMWorkoutsEnrollmentIdWeekDayRoute: typeof AuthenticatedMWorkoutsEnrollmentIdWeekDayRoute
 }
 
@@ -5681,6 +5702,8 @@ const AuthenticatedMRouteRouteChildren: AuthenticatedMRouteRouteChildren = {
   AuthenticatedMNutritionTargetsSetupRoute:
     AuthenticatedMNutritionTargetsSetupRoute,
   AuthenticatedMNutritionIndexRoute: AuthenticatedMNutritionIndexRoute,
+  AuthenticatedMFormsAssignmentIdCompleteRoute:
+    AuthenticatedMFormsAssignmentIdCompleteRoute,
   AuthenticatedMWorkoutsEnrollmentIdWeekDayRoute:
     AuthenticatedMWorkoutsEnrollmentIdWeekDayRoute,
 }
