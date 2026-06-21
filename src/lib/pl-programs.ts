@@ -788,7 +788,7 @@ export interface LiftResultPoint {
 export async function getClientResults(clientId: string) {
   const { data, error } = await sb
     .from("pl_row_results")
-    .select("id, set_index, actual_load, actual_load_unit, entered_value, entered_unit, normalized_lb, normalized_kg, actual_reps, actual_rpe, completed_at, row_id, pl_exercise_rows(exercise_id, exercise_name_override, exercises(name, muscle_group, category))")
+    .select("id, set_index, actual_load, actual_load_unit, entered_value, entered_unit, normalized_lb, normalized_kg, actual_reps, actual_rpe, actual_rir, notes, completed_at, completed_duration_seconds, row_id, pl_exercise_rows(exercise_id, exercise_name_override, day_id, exercises(name, muscle_group, category))")
     .eq("client_id", clientId)
     .not("actual_reps", "is", null)
     .order("completed_at", { ascending: true });
@@ -818,7 +818,12 @@ export async function getClientResults(clientId: string) {
         // converting to the viewer's preferred unit before rendering.
         load: loadLb,
         reps: Number(r.actual_reps) || 0,
-        rpe: r.actual_rpe,
+        rpe: r.actual_rpe ?? null,
+        rir: r.actual_rir ?? null,
+        exercise_note: r.notes ?? null,
+        duration_seconds: r.completed_duration_seconds ?? null,
+        row_id: r.row_id,
+        day_id: r.pl_exercise_rows?.day_id ?? null,
         date: r.completed_at,
         est_1rm: epley1RM(loadLb, Number(r.actual_reps) || 0),
         exercise_name: r.pl_exercise_rows?.exercises?.name ?? r.pl_exercise_rows?.exercise_name_override ?? "Unknown",

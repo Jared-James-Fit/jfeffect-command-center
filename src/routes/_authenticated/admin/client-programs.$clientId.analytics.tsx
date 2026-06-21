@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
+import { useMemo, useState, useCallback } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/app-shell";
@@ -11,6 +11,7 @@ import { getClientResults, buildExerciseHistory, weeklyMuscleVolume, recentPRs }
 import { format } from "date-fns";
 import { SearchableSelect, type SearchableOption } from "@/components/analytics/searchable-select";
 import { ANALYTICS_COLORS, exerciseColor, exerciseGroup, fmtNum, fmtDelta, muscleColor, shortMuscleLabel } from "@/lib/analytics-format";
+import { GraphDotDetail, type GraphDotPoint } from "@/components/analytics/graph-dot-detail";
 
 export const Route = createFileRoute("/_authenticated/admin/client-programs/$clientId/analytics")({ component: AnalyticsPage });
 
@@ -29,7 +30,33 @@ function AnalyticsPage() {
   const volume = useMemo(() => weeklyMuscleVolume(results as any[], 7), [results]);
   const prs = useMemo(() => recentPRs(results as any[], 30), [results]);
   const [selectedEx, setSelectedEx] = useState<string>("");
+  const [selectedDot, setSelectedDot] = useState<GraphDotPoint | null>(null);
   const activeEx = selectedEx || history[0]?.name || "";
+
+  const handleDotClick = useCallback((data: any) => {
+    if (!data || !data.activePayload?.[0]) return;
+    const d = data.activePayload[0].payload;
+    const idx = d.idx ?? 0;
+    const rawPoint = activeSeries?.points?.[idx];
+    if (!rawPoint) return;
+    setSelectedDot({
+      id: rawPoint.id,
+      row_id: rawPoint.row_id,
+      day_id: rawPoint.day_id ?? null,
+      date: rawPoint.date,
+      exercise_name: activeEx,
+      load: rawPoint.load,
+      reps: rawPoint.reps,
+      est_1rm: rawPoint.est_1rm,
+      rpe: rawPoint.rpe ?? null,
+      rir: rawPoint.rir ?? null,
+      exercise_note: rawPoint.exercise_note ?? null,
+      duration_seconds: rawPoint.duration_seconds ?? null,
+      set_index: rawPoint.set_index ?? idx,
+      displayUnit: "lb",
+      displayLoad: d.load,
+    });
+  }, [activeSeries, activeEx]);
   const activeSeries = history.find((h) => h.name === activeEx);
   const activeColor = exerciseColor(activeEx, activeSeries?.points?.[0]?.muscle_group);
 
@@ -141,7 +168,7 @@ function AnalyticsPage() {
                   </div>
                   <div className="h-64">
                     <ResponsiveContainer width="100%" height="100%">
-                      <LineChart data={activeSeries.points.map((p) => ({ date: format(new Date(p.date), "MMM d"), est: Number(p.est_1rm.toFixed(1)), load: Number(p.load.toFixed(1)), reps: p.reps }))} margin={{ top: 8, right: 8, left: -10, bottom: 0 }}>
+                      <LineChart data={activeSeries.points.map((p, i) => ({ idx: i, date: format(new Date(p.date), "MMM d"), est: Number(p.est_1rm.toFixed(1)), load: Number(p.load.toFixed(1)), reps: p.reps }))} margin={{ top: 8, right: 8, left: -10, bottom: 0 }} onClick={handleDotClick} style={{ cursor: "pointer" }}>
                         <CartesianGrid strokeDasharray="3 3" stroke={gridStroke} />
                         <XAxis dataKey="date" stroke={axisColor} fontSize={11} minTickGap={20} />
                         <YAxis stroke={axisColor} fontSize={11} tickFormatter={(v) => fmtNum(v)} width={40} />
@@ -159,7 +186,7 @@ function AnalyticsPage() {
                             );
                           }}
                         />
-                        <Line type="monotone" dataKey="est" stroke={activeColor} strokeWidth={2.5} dot={{ r: 3, fill: activeColor, strokeWidth: 0 }} activeDot={{ r: 5 }} />
+                        <Line type="monotone" dataKey="est" stroke={activeColor} strokeWidth={2.5} dot={{ r: 3, fill: activeColor, strokeWidth: 0 }} activeDot={{ r: 8, strokeWidth: 2, stroke: "var(--background)", fill: activeColor, cursor: "pointer" }} />
                       </LineChart>
                     </ResponsiveContainer>
                   </div>
@@ -208,6 +235,14 @@ function AnalyticsPage() {
           </>
         )}
       </div>
+
+      {/* Graph dot detail bottom sheet — lazy-loaded on tap */}
+      <GraphDotDetail
+        point={selectedDot}
+        clientId={clientId}
+        onClose={() => setSelectedDot(null)}
+        canOpenLog={true}
+      />
     </>
   );
 }

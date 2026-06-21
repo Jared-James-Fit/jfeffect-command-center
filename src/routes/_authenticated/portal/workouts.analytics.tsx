@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useCallback } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { usePortalUserId } from "@/lib/client-impersonation";
@@ -22,6 +22,7 @@ import {
 } from "@/components/analytics/searchable-select";
 import { PlannedVsActualCard } from "@/components/analytics/planned-vs-actual-card";
 import { WeightLiftedCard } from "@/components/analytics/weight-lifted-card";
+import { GraphDotDetail, type GraphDotPoint } from "@/components/analytics/graph-dot-detail";
 import { getClientAnalyticsSettings } from "@/lib/analytics/settings";
 import {
   ANALYTICS_COLORS,
@@ -97,6 +98,32 @@ function PortalAnalytics() {
   const [volumeDays, setVolumeDays] = useState<number>(7);
   const [selectedEx, setSelectedEx] = useState<string>("");
   const [prFilter, setPrFilter] = useState<string>("all");
+  const [selectedDot, setSelectedDot] = useState<GraphDotPoint | null>(null);
+
+  const handleDotClick = useCallback((data: any) => {
+    if (!data || !data.activePayload?.[0]) return;
+    const d = data.activePayload[0].payload;
+    const idx = d.idx ?? 0;
+    const rawPoint = activeSeries?.points?.[idx];
+    if (!rawPoint) return;
+    setSelectedDot({
+      id: rawPoint.id,
+      row_id: rawPoint.row_id,
+      day_id: rawPoint.day_id ?? null,
+      date: rawPoint.date,
+      exercise_name: activeEx,
+      load: rawPoint.load,
+      reps: rawPoint.reps,
+      est_1rm: rawPoint.est_1rm,
+      rpe: rawPoint.rpe ?? null,
+      rir: rawPoint.rir ?? null,
+      exercise_note: rawPoint.exercise_note ?? null,
+      duration_seconds: rawPoint.duration_seconds ?? null,
+      set_index: rawPoint.set_index ?? idx,
+      displayUnit,
+      displayLoad: d.load,
+    });
+  }, [activeSeries, activeEx, displayUnit]);
 
   const history = useMemo(() => buildExerciseHistory(results as any), [results]);
   const volume = useMemo(
@@ -495,6 +522,8 @@ function PortalAnalytics() {
                           <ComposedChart
                             data={lineData}
                             margin={{ top: 12, right: 12, left: -10, bottom: 4 }}
+                            onClick={handleDotClick}
+                            style={{ cursor: "pointer" }}
                           >
                             <defs>
                               <linearGradient
@@ -571,7 +600,7 @@ function PortalAnalytics() {
                               stroke={activeColor}
                               strokeWidth={2.5}
                               dot={{ r: 3.5, fill: activeColor, strokeWidth: 0 }}
-                              activeDot={{ r: 6, strokeWidth: 0 }}
+                              activeDot={{ r: 8, strokeWidth: 2, stroke: "var(--background)", fill: activeColor, cursor: "pointer" }}
                             />
                             {activePr && lineData.length > 1 && (
                               <ReferenceDot
@@ -693,6 +722,14 @@ function PortalAnalytics() {
           </>
         )}
       </div>
+
+      {/* Graph dot detail bottom sheet — lazy-loaded on tap */}
+      <GraphDotDetail
+        point={selectedDot}
+        clientId={client?.id}
+        onClose={() => setSelectedDot(null)}
+        canOpenLog={false}
+      />
     </>
   );
 }
