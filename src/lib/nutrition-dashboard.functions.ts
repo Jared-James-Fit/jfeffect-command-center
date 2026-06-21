@@ -8,7 +8,59 @@ async function loadMember(supabase: any, userId: string) {
     .select("id, user_id")
     .eq("user_id", userId)
     .maybeSingle();
-  return data;
+  if (data?.id) return data;
+
+  // No app_members row yet (e.g. coaching-only client). Lazily provision one
+  // via the admin client so the same nutrition tracker works for everyone.
+  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+
+  // Re-check with admin in case RLS hid an existing row.
+  const existing = await supabaseAdmin
+    .from("app_members")
+    .select("id, user_id")
+    .eq("user_id", userId)
+    .maybeSingle();
+  if (existing.data?.id) return existing.data;
+
+  const { data: authUser } = await supabaseAdmin.auth.admin.getUserById(userId);
+  const email =
+    authUser?.user?.email ??
+    `${userId}@placeholder.local`;
+  const fullName =
+    (authUser?.user?.user_metadata as any)?.full_name ??
+    (authUser?.user?.user_metadata as any)?.name ??
+    null;
+
+  // Reuse any pre-existing row that matches this email (case-insensitive),
+  // since app_members has a unique lower(email) index.
+  const { data: byEmail } = await supabaseAdmin
+    .from("app_members")
+    .select("id, user_id")
+    .ilike("email", email)
+    .maybeSingle();
+  if (byEmail?.id) {
+    if (!byEmail.user_id) {
+      await supabaseAdmin
+        .from("app_members")
+        .update({ user_id: userId })
+        .eq("id", byEmail.id);
+    }
+    return { id: byEmail.id, user_id: userId };
+  }
+
+  const { data: created, error } = await supabaseAdmin
+    .from("app_members")
+    .insert({
+      user_id: userId,
+      email,
+      full_name: fullName,
+      account_type: "program_only",
+      status: "Active",
+    })
+    .select("id, user_id")
+    .single();
+  if (error) return null;
+  return created;
 }
 
 function dayBoundsUTC(dateISO: string) {
