@@ -1395,6 +1395,7 @@ function WorkoutDay({
             }
           />
         )}
+        {children}
       </div>
 
       {/* Minimal post-workout completion sheet. Readonly (admin POV) never opens it. */}
