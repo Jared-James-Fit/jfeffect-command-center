@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import { Reveal } from "@/components/sales/reveal";
 import { TransformationsGallery } from "@/components/sales/transformations-gallery";
+import { TransformationsStrip } from "@/components/sales/transformations-strip";
 import { CoachTimelineSection } from "@/components/sales/coach-timeline-section";
 
 function HeroSkeleton() {
@@ -149,6 +150,17 @@ function CoachingPage() {
 
       {/* 2. Authority bar */}
       <Reveal stagger={0}><AuthorityBar items={authority} /></Reveal>
+
+      {/* Early social proof — transformations above the fold */}
+      <Reveal stagger={1}>
+        <TransformationsStrip
+          eyebrow="Real results"
+          headline="100+ clients coached. Real transformations."
+          sub="Members and 1:1 clients who showed up and did the work."
+          ctaLabel="Apply for Coaching"
+          onCta={handleApply}
+        />
+      </Reveal>
 
       {/* 3. Why most people fail */}
       <Reveal stagger={1}><WhyMostFail /></Reveal>
