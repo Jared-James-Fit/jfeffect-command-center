@@ -1,6 +1,8 @@
 // Server-side gate for member-facing data. Throws when the caller is a
 // JF Member without a verified Active/Trialing Stripe subscription.
 // Coaches, admins, and non-JF account types pass through unchanged.
+import { isMemberAccessActive } from "@/lib/memberAccess";
+
 export async function assertMemberCanReadProtected(supabase: any, userId: string) {
   // Admins/coaches always allowed
   const { data: roleRow } = await supabase
@@ -12,13 +14,16 @@ export async function assertMemberCanReadProtected(supabase: any, userId: string
 
   // Member?
   const { data: m } = await supabase
-    .from("app_members").select("account_type,subscription_status,status").eq("user_id", userId).maybeSingle();
+    .from("app_members")
+    .select("account_type,subscription_status,status,manual_access_override,manual_access_disabled,access_end_date,in_grace")
+    .eq("user_id", userId)
+    .maybeSingle();
   if (!m) {
     // Not a member at all — let other queries return their own empty/auth errors
     return;
   }
   if (m.account_type === "jf_member") {
-    const ok = ["Trialing", "Active"].includes(m.subscription_status ?? "") && m.status === "Active";
+    const ok = isMemberAccessActive(m);
     if (!ok) throw new Error("Your JF Membership isn't active. Please update billing.");
   }
 }
