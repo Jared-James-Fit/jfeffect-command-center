@@ -11,6 +11,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMemo } from "react";
 import { WorkoutDayView } from "@/components/workout-day/WorkoutDayView";
+import { ClientCardioSection } from "@/components/cardio/ClientCardioSection";
 import { buildWorkoutAdapter } from "@/lib/workout-context";
 import { useAuth } from "@/lib/auth";
 
