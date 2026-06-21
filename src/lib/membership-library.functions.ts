@@ -404,17 +404,22 @@ export const listMembershipLibrary = createServerFn({ method: "GET" })
 
 async function memberAccessGate(supabase: any, userId: string, planId: string) {
   const [{ data: member }, { data: plan }] = await Promise.all([
-    supabase.from("app_members").select("id").eq("user_id", userId).maybeSingle(),
+    supabase
+      .from("app_members")
+      .select("id, status, subscription_status, account_type, manual_access_override, manual_access_disabled, access_end_date, in_grace")
+      .eq("user_id", userId)
+      .maybeSingle(),
     supabase.from("member_plans").select("*").eq("id", planId).maybeSingle(),
   ]);
   if (!member) throw new Error("Not a member");
   if (!plan) throw new Error("Plan not found");
   if (plan.status !== "Published") throw new Error("Plan not available");
-  if (plan.audience_mode === "all_active") return { member, plan };
   const { data: access } = await supabase
     .from("member_access").select("access_level_key").eq("member_id", member.id).eq("active", true);
   const keys = new Set((access ?? []).map((a: any) => a.access_level_key));
-  if (!keys.has(plan.required_access_level)) throw new Error("You don't have access to this plan");
+  if (!canAccessPlan(member, keys, plan.required_access_level, plan.audience_mode)) {
+    throw new Error("You don't have access to this plan");
+  }
   return { member, plan };
 }
 
