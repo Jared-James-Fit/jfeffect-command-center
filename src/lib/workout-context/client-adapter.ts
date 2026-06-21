@@ -474,9 +474,13 @@ export function createClientAdapter(ref: WorkoutContextRef): WorkoutContextAdapt
         if (error) throw new Error(error.message);
         return input.id;
       }
+      // Use upsert with onConflict to prevent duplicate key errors on retry.
+      // The unique constraint is (client_id, row_id, set_index).
+      // If the set was already saved (e.g. partial sync), this updates it
+      // instead of inserting a duplicate.
       const { data, error } = await sb
         .from("pl_row_results")
-        .insert(payload)
+        .upsert(payload, { onConflict: "client_id,row_id,set_index" })
         .select("id")
         .maybeSingle();
       if (error) throw new Error(error.message);

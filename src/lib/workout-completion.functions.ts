@@ -371,6 +371,11 @@ const CompleteInput = z.intersection(
     actualDurationMin: z.number().int().nonnegative().nullable().optional(),
     sessionWeightTotal: z.number().nullable().optional(),
     sessionWeightUnit: z.enum(["kg", "lb"]).nullable().optional(),
+    // Post-workout review fields
+    strengthFeel: z.string().nullable().optional(),
+    fatigueFeel: z.string().nullable().optional(),
+    pain: z.boolean().nullable().optional(),
+    hitTarget: z.string().nullable().optional(),
   }),
 );
 
@@ -473,6 +478,11 @@ export const completeWorkout = createServerFn({ method: "POST" })
         logging_percentage: summary.loggingPercentage,
         logging_quality: summary.loggingQuality,
         completed_with_missing_logs: summary.completedWithMissingLogs,
+        // Post-workout review fields
+        ...(data.strengthFeel !== undefined && { strength_feel: data.strengthFeel ?? null }),
+        ...(data.fatigueFeel !== undefined && { fatigue_feel: data.fatigueFeel ?? null }),
+        ...(data.pain !== undefined && { pain: data.pain ?? null }),
+        ...(data.hitTarget !== undefined && { hit_target: data.hitTarget ?? null }),
       };
       const { data: row, error } = await supabase
         .from("pl_day_completions")

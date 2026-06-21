@@ -60,6 +60,7 @@ import { ExerciseHistoryButton } from "@/components/exercise-history-sheet";
 import { QuickSwapButton } from "@/components/workout-day/QuickSwapButton";
 import { convertWeight } from "@/lib/progress-metrics";
 import { WorkoutCompleteSheet, type WorkoutCompletePayload } from "@/components/workout-complete-sheet";
+import { submitOrEditReview } from "@/lib/workout-completion.functions";
 import { WorkoutSubmissionSummary } from "@/components/workout-submission-summary";
 import { computeWorkoutSummary, type WorkoutSummary } from "@/lib/workout-summary";
 import { WorkoutTimerSheet, QuickConfirmDuration, type TimerCompletionPayload } from "@/components/workout-timer-sheet";
@@ -1396,6 +1397,11 @@ function WorkoutDay({
           initial={completion ? {
             session_rating: (completion as any).session_rating ?? undefined,
             client_notes: completion.client_notes ?? undefined,
+            // Pre-fill from existing review if available
+            strength_feel: existingReview?.strength_feel ?? undefined,
+            fatigue_feel: existingReview?.fatigue_feel ?? undefined,
+            pain: existingReview?.pain ?? undefined,
+            hit_target: existingReview?.hit_target ?? undefined,
           } : undefined}
           onSubmit={async (payload: WorkoutCompletePayload) => {
             if (!client?.id) return;
@@ -1471,6 +1477,11 @@ function WorkoutDay({
                   sessionWeightTotal: computed.totalLifted > 0 ? computed.totalLifted : null,
                   sessionWeightUnit: computed.totalLifted > 0 ? displayUnit : null,
                   confirmedMissingLogs: true,
+                  // Post-workout review fields from the new sheet
+                  strengthFeel: payload.strength_feel ?? null,
+                  fatigueFeel: payload.fatigue_feel ?? null,
+                  pain: payload.pain ?? null,
+                  hitTarget: payload.hit_target ?? null,
                 },
               });
               if (draftKey) clearLocalDraft(draftKey);
@@ -1478,6 +1489,30 @@ function WorkoutDay({
               setNotes("");
               setActualMin("");
               await qc.invalidateQueries({ queryKey: ["pl-day-completion", dayId] });
+
+              // Submit the post-workout review if any review fields were filled in
+              const hasReviewData = payload.strength_feel || payload.fatigue_feel ||
+                payload.pain != null || payload.hit_target;
+              if (hasReviewData) {
+                try {
+                  await submitOrEditReview({
+                    data: {
+                      kind: "client",
+                      dayId,
+                      overallRating: payload.session_rating,
+                      sessionRpe: payload.session_rating * 2, // map 1-5 → 2-10
+                      pain: payload.pain ?? false,
+                      strengthFeel: payload.strength_feel ?? null,
+                      fatigueFeel: payload.fatigue_feel ?? null,
+                      hitTarget: payload.hit_target ?? null,
+                      clientNote: payload.client_notes ?? null,
+                    },
+                  });
+                } catch {
+                  // Review save is best-effort — don't fail the completion
+                }
+              }
+
               setCompleteOpen(false);
               setLastSummary(computed);
               setSummaryOpen(true);
