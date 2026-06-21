@@ -100,6 +100,7 @@ function MemberNutrition() {
           userId={data?.userId}
           goals={data?.goals}
           targets={targets}
+          hasCoachApprovedTargets={(saved as any)?.source === "coach"}
         />
       </SectionErrorBoundary>
       {saved && (
