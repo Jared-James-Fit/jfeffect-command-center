@@ -17,6 +17,7 @@ import { Card } from "@/components/ui/card";
 import { Loader2, Heart } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { CardioCompletionCard } from "./CardioCompletionCard";
+import { CARDIO_DAY_TYPES, dayTypeLabel } from "@/lib/training-schedule";
 
 type DayContext = "training" | "rest" | "unknown";
 
