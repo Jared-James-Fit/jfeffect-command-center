@@ -2,6 +2,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { SalesPageShell, Section, SectionTitle } from "@/components/sales/sales-page-shell";
 import { TransformationsGallery } from "@/components/sales/transformations-gallery";
 import { CoachTimelineSection } from "@/components/sales/coach-timeline-section";
+import { StickyMobileCta } from "@/components/sales/sticky-mobile-cta";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
@@ -385,6 +386,9 @@ function SelkirkPage() {
         </div>
       </Section>
       </Reveal>
+
+      <div className="pb-24 md:pb-0" />
+      <StickyMobileCta label="Apply Now" href={BOOK_HREF} />
     </SalesPageShell>
   );
 }
