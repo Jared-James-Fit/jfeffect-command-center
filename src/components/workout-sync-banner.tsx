@@ -113,13 +113,20 @@ export function WorkoutSyncBanner({ clientId, workoutId, pageRoute, className }:
       };
     }
 
-    if (status === "idle" || status === "failed") {
+    if (status === "failed") {
+      // Online + the queue has items that errored. Surface a retry pill.
       return {
-        text: "Saving…",
-        variant: "gray" as const,
-        tappable: false,
+        text: "Save failed · Tap to retry",
+        variant: "amber" as const,
+        tappable: true,
       };
     }
+
+    // status === "idle" while online is a transient state between enqueue
+    // and runQueue() picking it up. Don't flash "Saving…" — the per-field
+    // SaveStatus pills (and the syncing branch above) already cover real
+    // in-flight saves. Showing it here caused the bug where the workout
+    // header repeatedly ping-ponged between "Saving…" and "Saved".
 
     return null;
   }, [status, online, manualRetry, hidden]);
