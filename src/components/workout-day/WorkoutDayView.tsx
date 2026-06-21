@@ -906,6 +906,33 @@ function WorkoutDay({
     setCompleteOpen(true);
   }, [reviewParam, completion?.completed_at]);
 
+  // ?recap=1 deep-link → open the workout score/recap dialog for an
+  // already-completed workout (read-only). Reuses the same summary modal
+  // shown right after submission so coaches and clients see the same view.
+  const recapParam = search.recap === 1;
+  const autoOpenedRecapRef = useRef(false);
+  const recapFromSubmitRef = useRef(false);
+  useEffect(() => {
+    if (!recapParam) { autoOpenedRecapRef.current = false; return; }
+    if (autoOpenedRecapRef.current) return;
+    if (!completion?.completed_at) return;
+    if ((rows as any[]).length === 0) return;
+    autoOpenedRecapRef.current = true;
+    recapFromSubmitRef.current = false;
+    const displayUnit: "kg" | "lb" =
+      ((client as any)?.preferred_weight_unit === "kg" ? "kg" : "lb");
+    const computed = computeWorkoutSummary(
+      rows as any[],
+      results as any[],
+      {
+        displayUnit,
+        hasNote: !!completion?.client_notes,
+      },
+    );
+    setLastSummary(computed);
+    setSummaryOpen(true);
+  }, [recapParam, completion?.completed_at, completion?.client_notes, rows, results, client]);
+
   const refreshNotes = () => {
     qc.invalidateQueries({ queryKey: ["pl-day-exercise-notes", dayId] });
     qc.invalidateQueries({ queryKey: ["client-exercise-notes", client?.id] });
