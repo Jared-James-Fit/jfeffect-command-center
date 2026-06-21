@@ -818,6 +818,8 @@ export type Database = {
           client_id: string | null
           created_at: string
           created_by: string | null
+          credit_deducted: boolean
+          credits_used: number
           ends_at: string
           external_email: string | null
           external_name: string | null
@@ -829,6 +831,7 @@ export type Database = {
           internal_notes: string | null
           location: string | null
           meet_link: string | null
+          session_credit_package_id: string | null
           sms_reminders_enabled: boolean
           source: Database["public"]["Enums"]["appointment_source"]
           starts_at: string
@@ -847,6 +850,8 @@ export type Database = {
           client_id?: string | null
           created_at?: string
           created_by?: string | null
+          credit_deducted?: boolean
+          credits_used?: number
           ends_at: string
           external_email?: string | null
           external_name?: string | null
@@ -858,6 +863,7 @@ export type Database = {
           internal_notes?: string | null
           location?: string | null
           meet_link?: string | null
+          session_credit_package_id?: string | null
           sms_reminders_enabled?: boolean
           source?: Database["public"]["Enums"]["appointment_source"]
           starts_at: string
@@ -876,6 +882,8 @@ export type Database = {
           client_id?: string | null
           created_at?: string
           created_by?: string | null
+          credit_deducted?: boolean
+          credits_used?: number
           ends_at?: string
           external_email?: string | null
           external_name?: string | null
@@ -887,6 +895,7 @@ export type Database = {
           internal_notes?: string | null
           location?: string | null
           meet_link?: string | null
+          session_credit_package_id?: string | null
           sms_reminders_enabled?: boolean
           source?: Database["public"]["Enums"]["appointment_source"]
           starts_at?: string
@@ -922,6 +931,13 @@ export type Database = {
             columns: ["host_coach_id"]
             isOneToOne: false
             referencedRelation: "coaches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "appointments_session_credit_package_id_fkey"
+            columns: ["session_credit_package_id"]
+            isOneToOne: false
+            referencedRelation: "purchase_records"
             referencedColumns: ["id"]
           },
         ]
@@ -14170,6 +14186,7 @@ export type Database = {
           sessions_purchased: number | null
           sessions_used: number | null
           short_description: string | null
+          show_value_to_client: boolean
           status: string
           stripe_checkout_session_id: string | null
           stripe_customer_id: string | null
@@ -14251,6 +14268,7 @@ export type Database = {
           sessions_purchased?: number | null
           sessions_used?: number | null
           short_description?: string | null
+          show_value_to_client?: boolean
           status?: string
           stripe_checkout_session_id?: string | null
           stripe_customer_id?: string | null
@@ -14332,6 +14350,7 @@ export type Database = {
           sessions_purchased?: number | null
           sessions_used?: number | null
           short_description?: string | null
+          show_value_to_client?: boolean
           status?: string
           stripe_checkout_session_id?: string | null
           stripe_customer_id?: string | null
@@ -15002,6 +15021,7 @@ export type Database = {
       }
       session_ledger_events: {
         Row: {
+          appointment_id: string | null
           client_id: string
           created_at: string
           created_by: string | null
@@ -15019,6 +15039,7 @@ export type Database = {
           unit_value_minor: number | null
         }
         Insert: {
+          appointment_id?: string | null
           client_id: string
           created_at?: string
           created_by?: string | null
@@ -15036,6 +15057,7 @@ export type Database = {
           unit_value_minor?: number | null
         }
         Update: {
+          appointment_id?: string | null
           client_id?: string
           created_at?: string
           created_by?: string | null
@@ -15053,6 +15075,13 @@ export type Database = {
           unit_value_minor?: number | null
         }
         Relationships: [
+          {
+            foreignKeyName: "session_ledger_events_appointment_id_fkey"
+            columns: ["appointment_id"]
+            isOneToOne: false
+            referencedRelation: "appointments"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "session_ledger_events_client_id_fkey"
             columns: ["client_id"]

@@ -192,6 +192,16 @@ function NewAppointmentDialog({ open, onOpenChange, onCreated, presetDate }: { o
   });
 
   const [form, setForm] = useState<any>(() => defaultForm());
+  // Active session-credit packages for the selected client
+  const { data: clientPackages = [] } = useQuery<any[]>({
+    queryKey: ["client-session-packages", form.client_id],
+    enabled: !!form.client_id,
+    queryFn: async () => {
+      const { data, error } = await (supabase as any).rpc("session_balance", { _client_id: form.client_id });
+      if (error) return [];
+      return (data ?? []).filter((p: any) => (p.remaining ?? 0) > 0);
+    },
+  });
   useEffect(() => {
     if (open && presetDate) setForm((f: any) => ({ ...f, date: presetDate }));
   }, [open, presetDate]);
@@ -233,6 +243,9 @@ function NewAppointmentDialog({ open, onOpenChange, onCreated, presetDate }: { o
       attendee_notes: "",
       internal_notes: "",
       sms_reminders_enabled: true,
+      use_session_credit: false,
+      session_credit_package_id: "",
+      credits_used: 1,
     };
   }
 
@@ -256,6 +269,8 @@ function NewAppointmentDialog({ open, onOpenChange, onCreated, presetDate }: { o
         attendee_notes: form.attendee_notes || null,
         internal_notes: form.internal_notes || null,
         sms_reminders_enabled: form.sms_reminders_enabled,
+        session_credit_package_id: form.use_session_credit ? (form.session_credit_package_id || null) : null,
+        credits_used: form.use_session_credit ? Math.max(1, Number(form.credits_used) || 1) : 1,
       } as any });
     },
     onSuccess: () => { toast.success("Appointment created"); onOpenChange(false); setForm(defaultForm()); onCreated(); },
@@ -357,6 +372,54 @@ function NewAppointmentDialog({ open, onOpenChange, onCreated, presetDate }: { o
             <div><div className="font-semibold text-sm">Send SMS reminders</div><div className="text-xs text-muted-foreground">24h, 2h before (15m if Meet).</div></div>
             <Switch checked={form.sms_reminders_enabled} onCheckedChange={(v) => setForm({ ...form, sms_reminders_enabled: v })} />
           </div>
+          {form.client_id && (
+            <div className="md:col-span-2 rounded-md border border-border p-3 space-y-3">
+              <div className="flex items-center justify-between">
+                <div>
+                  <div className="font-semibold text-sm">Use session credit?</div>
+                  <div className="text-xs text-muted-foreground">Deducts from an active package when marked Completed.</div>
+                </div>
+                <Switch
+                  checked={form.use_session_credit}
+                  onCheckedChange={(v) => setForm({ ...form, use_session_credit: v })}
+                  disabled={!clientPackages.length}
+                />
+              </div>
+              {form.use_session_credit && (
+                clientPackages.length === 0 ? (
+                  <div className="text-xs text-muted-foreground">No active packages with remaining sessions for this client.</div>
+                ) : (
+                  <div className="grid gap-2 md:grid-cols-2">
+                    <div>
+                      <Label>Package</Label>
+                      <Select
+                        value={form.session_credit_package_id}
+                        onValueChange={(v) => setForm({ ...form, session_credit_package_id: v })}
+                      >
+                        <SelectTrigger><SelectValue placeholder="Choose a package" /></SelectTrigger>
+                        <SelectContent>
+                          {clientPackages.map((p: any) => (
+                            <SelectItem key={p.purchase_id} value={p.purchase_id}>
+                              {p.offer_name} — {p.remaining} left
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div>
+                      <Label>Credits to use</Label>
+                      <Input
+                        type="number"
+                        min={1}
+                        value={form.credits_used}
+                        onChange={(e) => setForm({ ...form, credits_used: Number(e.target.value) || 1 })}
+                      />
+                    </div>
+                  </div>
+                )
+              )}
+            </div>
+          )}
           <div className="md:col-span-2"><Label>Attendee notes (visible to attendee)</Label><Textarea value={form.attendee_notes} onChange={(e) => setForm({ ...form, attendee_notes: e.target.value })} /></div>
           <div className="md:col-span-2"><Label>Internal coach notes</Label><Textarea value={form.internal_notes} onChange={(e) => setForm({ ...form, internal_notes: e.target.value })} /></div>
         </div>

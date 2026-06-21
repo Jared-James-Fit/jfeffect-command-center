@@ -45,6 +45,89 @@ async function clearPendingReminders(appointmentId: string) {
   await supabaseAdmin.from("appointment_reminders").delete().eq("appointment_id", appointmentId).eq("status", "pending");
 }
 
+/**
+ * Deduct a session credit from the linked package on appointment completion.
+ * Idempotent: skips when already deducted, when no package linked, or when
+ * the appointment was imported (source != 'manual' and credit_deducted = false
+ * but no explicit package — never auto-deducts on Google-imported events).
+ */
+async function applyAppointmentCredit(appointmentId: string) {
+  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+  const { data: appt } = await supabaseAdmin
+    .from("appointments")
+    .select("id, client_id, session_credit_package_id, credits_used, credit_deducted, source")
+    .eq("id", appointmentId)
+    .maybeSingle();
+  if (!appt) return;
+  if (!appt.session_credit_package_id) return;
+  if (appt.credit_deducted) return;
+  const delta = Math.max(1, appt.credits_used ?? 1);
+
+  const { data: pkg } = await supabaseAdmin
+    .from("purchase_records")
+    .select("id, client_id, sessions_used")
+    .eq("id", appt.session_credit_package_id)
+    .maybeSingle();
+  if (!pkg) return;
+
+  await supabaseAdmin.from("purchase_records")
+    .update({ sessions_used: (pkg.sessions_used ?? 0) + delta })
+    .eq("id", pkg.id);
+
+  await supabaseAdmin.from("session_ledger_events").insert({
+    client_id: pkg.client_id,
+    purchase_id: pkg.id,
+    appointment_id: appt.id,
+    event_type: "used",
+    session_count: -delta,
+    source: "auto_use_on_appointment",
+    note: `Appointment completed (${delta} credit${delta === 1 ? "" : "s"})`,
+  });
+
+  await supabaseAdmin.from("appointments")
+    .update({ credit_deducted: true })
+    .eq("id", appt.id);
+}
+
+/** Reverse a previously-applied appointment credit. Idempotent. */
+async function reverseAppointmentCredit(appointmentId: string) {
+  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+  const { data: appt } = await supabaseAdmin
+    .from("appointments")
+    .select("id, session_credit_package_id, credits_used, credit_deducted")
+    .eq("id", appointmentId)
+    .maybeSingle();
+  if (!appt) return;
+  if (!appt.session_credit_package_id) return;
+  if (!appt.credit_deducted) return;
+  const delta = Math.max(1, appt.credits_used ?? 1);
+
+  const { data: pkg } = await supabaseAdmin
+    .from("purchase_records")
+    .select("id, client_id, sessions_used")
+    .eq("id", appt.session_credit_package_id)
+    .maybeSingle();
+  if (!pkg) return;
+
+  await supabaseAdmin.from("purchase_records")
+    .update({ sessions_used: Math.max(0, (pkg.sessions_used ?? 0) - delta) })
+    .eq("id", pkg.id);
+
+  await supabaseAdmin.from("session_ledger_events").insert({
+    client_id: pkg.client_id,
+    purchase_id: pkg.id,
+    appointment_id: appt.id,
+    event_type: "unused",
+    session_count: delta,
+    source: "auto_unuse_on_appointment_cancel",
+    note: `Appointment cancelled (${delta} credit${delta === 1 ? "" : "s"} returned)`,
+  });
+
+  await supabaseAdmin.from("appointments")
+    .update({ credit_deducted: false })
+    .eq("id", appt.id);
+}
+
 export const listAppointments = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) => z.object({
@@ -102,6 +185,8 @@ const CreateInput = z.object({
   internal_notes: z.string().trim().max(2000).optional().nullable(),
   sms_reminders_enabled: z.boolean().default(true),
   reminder_offsets_minutes: z.array(z.number().int().positive()).optional(),
+  session_credit_package_id: z.string().uuid().nullable().optional(),
+  credits_used: z.number().int().min(1).max(20).optional(),
 });
 
 export const createAppointment = createServerFn({ method: "POST" })
@@ -143,6 +228,8 @@ export const createAppointment = createServerFn({ method: "POST" })
       sms_reminders_enabled: data.sms_reminders_enabled,
       source: "manual",
       created_by: userId,
+      session_credit_package_id: data.session_credit_package_id || null,
+      credits_used: data.credits_used ?? 1,
     }).select("*").single();
     if (error) throw new Error(error.message);
 
@@ -251,6 +338,8 @@ export const cancelAppointment = createServerFn({ method: "POST" })
       cancelled_reason: data.reason || null,
     }).eq("id", data.id);
     if (error) throw new Error(error.message);
+    // Return any previously-deducted session credit
+    await reverseAppointmentCredit(data.id);
     if (existing.google_event_id) {
       try {
         const { gcalDeleteEvent } = await import("./google-cal.server");
@@ -279,6 +368,12 @@ export const markAppointmentStatus = createServerFn({ method: "POST" })
     if (!before) throw new Error("Appointment not found");
     const { error } = await supabase.from("appointments").update({ status: data.status }).eq("id", data.id);
     if (error) throw new Error(error.message);
+    // Session credit side-effects (only act when explicit package linked; never auto on imports)
+    if (data.status === "Completed" && before.status !== "Completed") {
+      try { await applyAppointmentCredit(data.id); } catch (e) { console.error("applyAppointmentCredit failed", e); }
+    } else if ((data.status === "Cancelled" || data.status === "NoShow") && before.status === "Completed") {
+      try { await reverseAppointmentCredit(data.id); } catch (e) { console.error("reverseAppointmentCredit failed", e); }
+    }
     await writeApptCrmActivity({
       appt: before,
       newStatus: data.status,

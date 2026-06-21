@@ -23,6 +23,7 @@ import { TrainingBlockCard } from "@/components/portal/training-block-card";
 import { ProgressSummaryCard } from "@/components/progress/progress-summary-card";
 import { HomeWaterCard } from "@/components/home/home-water-card";
 import { BodyweightSummaryCard } from "@/components/portal/bodyweight-summary-card";
+import { SessionsCard } from "@/components/portal/sessions-card";
 import { SetupChecklistBanner } from "@/components/portal/setup-checklist-banner";
 import { useEffect, useState } from "react";
 import { listMyPortalAppointments } from "@/lib/appointments.functions";
@@ -513,6 +514,13 @@ function PortalHome() {
 
         {/* 7 — Upcoming appointment (compact, only if exists) */}
         {nextAppointment && <UpcomingAppointmentRow appt={nextAppointment} />}
+
+        {/* 7b — Sessions package summary (only if active package) */}
+        {client?.id && (
+          <SectionErrorBoundary label="Sessions">
+            <SessionsCard clientId={client.id} nextAppointmentAt={nextAppointment?.starts_at ?? null} />
+          </SectionErrorBoundary>
+        )}
 
         {/* 8 — Events panel (only renders when there's something) */}
         <DeferRender placeholderHeight="h-24">
