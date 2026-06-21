@@ -30,7 +30,6 @@ import appPreviewRecipes from "@/assets/app-preview-recipes.jpg.asset.json";
 import appPreviewAnalyticsOverview from "@/assets/app-preview-analytics-overview.png.asset.json";
 import appPreviewRecentPrs from "@/assets/app-preview-recent-prs.png.asset.json";
 import appPreview1rmChart from "@/assets/app-preview-1rm-chart.png.asset.json";
-import { TransformationsGallery } from "@/components/sales/transformations-gallery";
 import { TransformationsStrip } from "@/components/sales/transformations-strip";
 import { CoachTimelineSection } from "@/components/sales/coach-timeline-section";
 
@@ -350,9 +349,9 @@ export function SignupJf({ floatingHeader = false }: { floatingHeader?: boolean 
       {/* Early social proof — transformations under the hero/coaching callout */}
       <Reveal>
         <TransformationsStrip
-          eyebrow="Real members"
-          headline="100+ lives transformed"
-          sub="Real progress from members training inside the app."
+          eyebrow="REAL RESULTS"
+          headline="100+ clients coached. Real transformations."
+          sub="Members and 1:1 clients who showed up and did the work."
           ctaLabel="Start Free Trial"
           onCta={scrollToForm}
         />
@@ -393,7 +392,6 @@ export function SignupJf({ floatingHeader = false }: { floatingHeader?: boolean 
         images={(p?.visuals ?? []).filter((v) => v.slot === "proof")}
       /></Reveal>
 
-      <Reveal><TransformationsGallery /></Reveal>
       <Reveal><CoachTimelineSection /></Reveal>
 
       {/* 6. Membership vs Coaching — one-line low-priority cross-sell */}
