@@ -544,6 +544,9 @@ function WorkoutDay({
   const { data: completion } = useQuery({
     queryKey: ["pl-day-completion", dayId, client?.id, adapter?.kind ?? null],
     enabled: !!client?.id,
+    // Completion state is critical — always fetch fresh to prevent stuck UI states
+    // where the workout appears both completed and incomplete simultaneously.
+    staleTime: 0,
     initialData: client?.id ? cachedInitialData<any>(cacheScope, `completion:${client.id}`) : undefined,
     queryFn: async () => {
       const c = adapter
@@ -1305,7 +1308,11 @@ function WorkoutDay({
         </WorkoutLoadBoundary>
         )}
 
-        {!readonly && (
+        {/* Finish Workout card — only show when workout is NOT yet completed.
+             Guard: !completion?.completed_at prevents the glitchy state where
+             both the completion card and the finish button are visible at once.
+             This was the root cause of the Nicolas Galli stuck-state bug. */}
+        {!readonly && !completion?.completed_at && (
         <Card ref={generalNotesRef} className="p-4 space-y-3">
           <div className="flex items-center justify-between">
             <div className="text-sm font-bold">Workout Notes</div>
@@ -1332,6 +1339,11 @@ function WorkoutDay({
               icon={<CheckCircle2 className="h-4 w-4" />}
               onAction={async () => {
                 if (!client?.id) return;
+                // Guard: if already completed, open Edit Review instead of re-completing
+                if (completion?.completed_at) {
+                  qc.invalidateQueries({ queryKey: ["pl-day-completion", dayId] });
+                  return;
+                }
                 await metaSave.flush();
                 // Ensure a draft row + started_at/in_progress_at exist before the
                 // complete sheet opens. startWorkout is idempotent.
@@ -1498,7 +1510,10 @@ function WorkoutDay({
               clearHeartbeatTimestamps(completion?.id ?? null);
               setNotes("");
               setActualMin("");
-              await qc.invalidateQueries({ queryKey: ["pl-day-completion", dayId] });
+              // Use refetchQueries (not invalidateQueries) so the UI updates
+              // immediately — prevents the stuck state where Finish Workout
+              // button remains visible after completion.
+              await qc.refetchQueries({ queryKey: ["pl-day-completion", dayId] });
 
               // Submit the post-workout review if any review fields were filled in
               const hasReviewData = payload.strength_feel || payload.fatigue_feel ||
