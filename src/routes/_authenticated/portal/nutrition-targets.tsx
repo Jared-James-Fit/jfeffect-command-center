@@ -8,7 +8,6 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { ClipboardList, Download, FileText, Loader2, Target, Utensils, Droplets } from "lucide-react";
 import { MealPlanDisplay } from "@/components/meal-plan-display";
-import { RecipeBrowser } from "@/components/nutrition/RecipeBrowser";
 import { getCoachAssignedMealPlan } from "@/lib/nutrition-targets/member-targets.functions";
 import { usePortalUserId, useClientImpersonation } from "@/lib/client-impersonation";
 import { cn } from "@/lib/utils";
