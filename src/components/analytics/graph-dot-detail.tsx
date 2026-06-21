@@ -102,6 +102,25 @@ export function GraphDotDetail({ point, clientId, onClose, canOpenLog = false }:
     staleTime: 60_000,
   });
 
+  // Lazy-fetch cardio completion for the date this set was logged
+  const dateStr = point ? format(new Date(point.date), "yyyy-MM-dd") : "";
+  const { data: cardio } = useQuery({
+    queryKey: ["cardio-completion-for-dot", clientId, dateStr],
+    enabled: open && !!clientId && !!dateStr,
+    queryFn: async () => {
+      const { data } = await (supabase as any)
+        .from("cardio_completions")
+        .select("cardio_type, duration_minutes, rpe, notes")
+        .eq("client_id", clientId)
+        .eq("completed_date", dateStr)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      return data ?? null;
+    },
+    staleTime: 60_000,
+  });
+
   const noteContent = point?.exercise_note ?? exerciseNote?.content ?? null;
   const displayUnit = point?.displayUnit ?? "lb";
   const displayLoad = point?.displayLoad ?? point?.load ?? 0;
