@@ -416,7 +416,7 @@ async function memberAccessGate(supabase: any, userId: string, planId: string) {
   if (plan.status !== "Published") throw new Error("Plan not available");
   const { data: access } = await supabase
     .from("member_access").select("access_level_key").eq("member_id", member.id).eq("active", true);
-  const keys = new Set((access ?? []).map((a: any) => a.access_level_key));
+  const keys = new Set<string>((access ?? []).map((a: any) => a.access_level_key as string));
   if (!canAccessPlan(member, keys, plan.required_access_level, plan.audience_mode)) {
     throw new Error("You don't have access to this plan");
   }
