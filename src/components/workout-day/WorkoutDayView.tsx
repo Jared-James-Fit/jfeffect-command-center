@@ -1580,6 +1580,7 @@ function WorkoutDay({
 
               setCompleteOpen(false);
               setLastSummary(computed);
+              recapFromSubmitRef.current = true;
               setSummaryOpen(true);
               toast.success(
                 `Workout submitted — Score: ${computed.score}/100`,
