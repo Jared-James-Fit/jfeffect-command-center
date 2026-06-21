@@ -395,7 +395,7 @@ function WorkoutDay({
     });
   }, [adapter]);
 
-  const { data: client } = useQuery({
+  const { data: clientFromQuery } = useQuery({
     queryKey: [
       "workout-subject",
       adapter?.kind ?? null,
@@ -413,6 +413,23 @@ function WorkoutDay({
       ).data;
     },
   });
+  // Desktop Client POV regression fix: when a coach/admin enters Client POV
+  // and `adapter.getActiveSubject()` returns null (e.g. RLS edge, transient
+  // hiccup), the previous code left `client` undefined which disabled every
+  // downstream `enabled: !!client?.id` query (results, completion, notes,
+  // feedback) — the page rendered exercise rows but no logged values. On
+  // mobile this was masked by stale localStorage plan-cache; on desktop the
+  // coach saw an empty workout. The adapter already carries the canonical
+  // clients.id as `adapter.ref.ownerId`, so synthesize a minimal subject
+  // from it whenever the subject query has not produced one yet. Real
+  // `getActiveSubject` data still wins (provides full_name + weight unit).
+  const client = useMemo(() => {
+    if (clientFromQuery) return clientFromQuery as any;
+    if (adapter && adapter.kind === "client" && adapter.ref.ownerId) {
+      return { id: adapter.ref.ownerId, full_name: null, preferred_weight_unit: null } as any;
+    }
+    return clientFromQuery as any;
+  }, [clientFromQuery, adapter]);
 
   const { data: day } = useQuery({
     queryKey: ["pl-day", dayId, adapter?.kind ?? null, adapter?.ref.ownerId ?? null],
