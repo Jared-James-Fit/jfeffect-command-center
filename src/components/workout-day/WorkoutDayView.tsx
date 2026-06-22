@@ -2484,10 +2484,17 @@ function SetRow({
   // Ref to the current focused field — used in the effect below without
   // causing the effect to re-run when focus changes.
   const focusedFieldRef = useRef<"load" | "reps" | "rpe" | null>(null);
+  // After a successful save, block the server-reset effect for 3 s so a fast
+  // server response can never overwrite what the user is still typing.
+  const recentlySavedRef = useRef(false);
+  const recentlySavedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => { focusedFieldRef.current = focusedField; }, [focusedField]);
   useEffect(() => {
-    // Never overwrite a field the user is actively typing in.
+    // Never overwrite a field the user is actively typing in, and never
+    // overwrite within 3 s of a save completing (prevents fast server
+    // responses from clobbering partially-typed values on mobile).
     const focused = focusedFieldRef.current;
+    if (recentlySavedRef.current) return;
     const kg = existing?.actual_load_kg;
     const lb = existing?.actual_load_lb;
     const display = unit === "kg"
@@ -2520,7 +2527,7 @@ function SetRow({
   const save = useAutosave({
     key: draftKey,
     value,
-    delay: 800,
+    delay: 1500, // 1.5 s — prevents premature save after first digit on mobile
     // Toggling KG/LB converts the displayed `load` but the underlying
     // weight is unchanged. Compare in normalized kg so a unit toggle
     // alone does not mark the set dirty / trigger a save loop.
@@ -2628,6 +2635,13 @@ function SetRow({
         }
       }
       onChange();
+      // Block the server-reset effect for 3 s after a successful save so the
+      // query refetch triggered by onChange() can never overwrite what the
+      // user is still typing (e.g. typing '110' — save fires at '1', server
+      // responds, reset effect would clobber '10' back to '1').
+      recentlySavedRef.current = true;
+      if (recentlySavedTimerRef.current) clearTimeout(recentlySavedTimerRef.current);
+      recentlySavedTimerRef.current = setTimeout(() => { recentlySavedRef.current = false; }, 3000);
       // Auto-start the per-exercise rest timer when this set transitions
       // into a fully-valid completed state. Avoid re-triggering on idempotent
       // updates that were already completed.
