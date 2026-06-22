@@ -45,14 +45,17 @@ function PaymentLinksRedirect() {
 }
 
 const PRODUCT_TYPES = [
-  "Online Coaching", "In-Person Personal Training", "In-Person Session Package",
-  "Hybrid Coaching", "Powerlifting Coaching", "Program Review",
-  "Custom Training Program", "Nutrition Targets Setup", "Consultation",
-  "Digital Product", "Add-On Service", "Custom",
+  // Simplified service categories (delivery method is a separate filter)
+  "Coaching", "Personal Training", "Training Programs",
+  "Nutrition", "Consultations", "Digital Products", "Add-Ons", "Custom",
+];
+const DELIVERY_METHODS = [
+  "Online", "In Person", "Hybrid",
 ];
 const PAYMENT_STRUCTURES = [
-  "One-time payment", "Monthly recurring", "Weekly recurring",
-  "Payment plan", "Paid in full", "Deposit + remaining balance", "Custom",
+  "One-time payment", "Weekly subscription", "Biweekly subscription",
+  "Monthly subscription", "Annual subscription",
+  "Installment plan", "Deposit + remaining balance", "Custom",
 ];
 const TERM_UNITS = ["Days", "Weeks", "Months", "Years", "Session package", "One-time", "Ongoing", "Custom"];
 const STATUSES = ["Active", "Draft", "Archived"] as const;
@@ -338,8 +341,46 @@ export function PaymentLinksPage({ embedded = false }: { embedded?: boolean } = 
 
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | "Active" | "Draft" | "Archived">("all");
-  const [typeFilter, setTypeFilter] = useState<string>("all");
+    const [typeFilter, setTypeFilter] = useState<string>("all");
+  const [deliveryFilter, setDeliveryFilter] = useState<string>("all");
   const [structureFilter, setStructureFilter] = useState<string>("all");
+
+  // Map legacy product_type values to new simplified categories
+  const normalizeProductType = (t: string | null): string => {
+    if (!t) return "Custom";
+    const lower = t.toLowerCase();
+    if (lower.includes("personal training") || lower.includes("session package")) return "Personal Training";
+    if (lower.includes("coaching") || lower.includes("powerlifting")) return "Coaching";
+    if (lower.includes("program") || lower.includes("custom training")) return "Training Programs";
+    if (lower.includes("nutrition")) return "Nutrition";
+    if (lower.includes("consultation")) return "Consultations";
+    if (lower.includes("digital")) return "Digital Products";
+    if (lower.includes("add-on") || lower.includes("addon")) return "Add-Ons";
+    return t;
+  };
+
+  // Map legacy payment_structure values to new simplified options
+  const normalizePaymentStructure = (s: string | null): string => {
+    if (!s) return "One-time payment";
+    const lower = s.toLowerCase();
+    if (lower.includes("paid in full") || lower.includes("one-time")) return "One-time payment";
+    if (lower.includes("biweekly") || lower.includes("bi-weekly") || lower.includes("every 2 week")) return "Biweekly subscription";
+    if (lower.includes("weekly")) return "Weekly subscription";
+    if (lower.includes("annual") || lower.includes("year")) return "Annual subscription";
+    if (lower.includes("monthly") || lower.includes("month")) return "Monthly subscription";
+    if (lower.includes("payment plan") || lower.includes("installment")) return "Installment plan";
+    if (lower.includes("deposit")) return "Deposit + remaining balance";
+    return s;
+  };
+
+  // Infer delivery method from product_type
+  const inferDelivery = (t: string | null): string => {
+    if (!t) return "Online";
+    const lower = t.toLowerCase();
+    if (lower.includes("in-person") || lower.includes("in person")) return "In Person";
+    if (lower.includes("hybrid")) return "Hybrid";
+    return "Online";
+  };
 
   const filteredItems = useMemo(() => {
     return items.filter((p) => {
@@ -351,15 +392,14 @@ export function PaymentLinksPage({ embedded = false }: { embedded?: boolean } = 
         (p.product_type ?? "").toLowerCase().includes(q) ||
         (p.payment_structure ?? "").toLowerCase().includes(q);
       const matchesStatus = statusFilter === "all" || s === statusFilter;
-      const matchesType = typeFilter === "all" || (p.product_type ?? "") === typeFilter;
-      const matchesStructure = structureFilter === "all" || (p.payment_structure ?? "") === structureFilter;
-      return matchesSearch && matchesStatus && matchesType && matchesStructure;
+      const matchesType = typeFilter === "all" || normalizeProductType(p.product_type) === typeFilter;
+      const matchesDelivery = deliveryFilter === "all" || inferDelivery(p.product_type) === deliveryFilter;
+      const matchesStructure = structureFilter === "all" || normalizePaymentStructure(p.payment_structure) === structureFilter;
+      return matchesSearch && matchesStatus && matchesType && matchesDelivery && matchesStructure;
     });
-  }, [items, searchQuery, statusFilter, typeFilter, structureFilter]);
-
+  }, [items, searchQuery, statusFilter, typeFilter, deliveryFilter, structureFilter]);
   const visible = filteredItems;
-
-  const hasFilters = searchQuery || statusFilter !== "all" || typeFilter !== "all" || structureFilter !== "all";
+  const hasFilters = searchQuery || statusFilter !== "all" || typeFilter !== "all" || deliveryFilter !== "all" || structureFilter !== "all";
 
   const toggleSelected = (id: string) =>
     setSelected((prev) => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
@@ -473,23 +513,30 @@ export function PaymentLinksPage({ embedded = false }: { embedded?: boolean } = 
             <Badge variant={statusFilter === "Draft" ? "default" : "outline"} className="cursor-pointer" onClick={() => setStatusFilter("Draft")}>Draft</Badge>
             <Badge variant={statusFilter === "Archived" ? "default" : "outline"} className="cursor-pointer" onClick={() => setStatusFilter("Archived")}>Archived</Badge>
             {hasFilters && (
-              <Button size="sm" variant="ghost" className="h-6 px-2 text-xs" onClick={() => { setSearchQuery(""); setStatusFilter("all"); setTypeFilter("all"); setStructureFilter("all"); }}>
+              <Button size="sm" variant="ghost" className="h-6 px-2 text-xs" onClick={() => { setSearchQuery(""); setStatusFilter("all"); setTypeFilter("all"); setDeliveryFilter("all"); setStructureFilter("all"); }}>
                 <X className="h-3 w-3 mr-1" /> Clear filters
               </Button>
             )}
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <Select value={typeFilter} onValueChange={setTypeFilter}>
-              <SelectTrigger className="w-auto min-w-[160px] h-8 text-xs"><SelectValue placeholder="Product type" /></SelectTrigger>
+              <SelectTrigger className="w-auto min-w-[150px] h-8 text-xs"><SelectValue placeholder="All services" /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">All types</SelectItem>
+                <SelectItem value="all">All services</SelectItem>
                 {PRODUCT_TYPES.map((t) => (<SelectItem key={t} value={t}>{t}</SelectItem>))}
               </SelectContent>
             </Select>
-            <Select value={structureFilter} onValueChange={setStructureFilter}>
-              <SelectTrigger className="w-auto min-w-[180px] h-8 text-xs"><SelectValue placeholder="Payment structure" /></SelectTrigger>
+            <Select value={deliveryFilter} onValueChange={setDeliveryFilter}>
+              <SelectTrigger className="w-auto min-w-[140px] h-8 text-xs"><SelectValue placeholder="All delivery" /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">All structures</SelectItem>
+                <SelectItem value="all">All delivery methods</SelectItem>
+                {DELIVERY_METHODS.map((d) => (<SelectItem key={d} value={d}>{d}</SelectItem>))}
+              </SelectContent>
+            </Select>
+            <Select value={structureFilter} onValueChange={setStructureFilter}>
+              <SelectTrigger className="w-auto min-w-[180px] h-8 text-xs"><SelectValue placeholder="All payment options" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All payment options</SelectItem>
                 {PAYMENT_STRUCTURES.map((s) => (<SelectItem key={s} value={s}>{s}</SelectItem>))}
               </SelectContent>
             </Select>
@@ -531,7 +578,7 @@ export function PaymentLinksPage({ embedded = false }: { embedded?: boolean } = 
                         )}
                       </div>
                       <div className="text-xs text-muted-foreground">
-                        {p.product_type ?? "Product"}{p.payment_structure ? ` · ${p.payment_structure}` : ""}{termLabel(p) ? ` · ${termLabel(p)}` : ""}
+                        {normalizeProductType(p.product_type)}{inferDelivery(p.product_type) !== "Online" ? ` · ${inferDelivery(p.product_type)}` : ""}{p.payment_structure ? ` · ${normalizePaymentStructure(p.payment_structure)}` : ""}{termLabel(p) ? ` · ${termLabel(p)}` : ""}
                       </div>
                       {/* Subtitle: use description if it contains frequency/payment info, otherwise show price */}
                       {p.description && /every|payment|week|month|year/i.test(p.description) ? (

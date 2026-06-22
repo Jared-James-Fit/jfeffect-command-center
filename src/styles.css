@@ -82,15 +82,18 @@
   --secondary: oklch(0.26 0.008 280);
   --secondary-foreground: oklch(0.97 0.005 280);
   --muted: oklch(0.24 0.006 280);
-  --muted-foreground: oklch(0.68 0.01 280);
+  /* Readability: was 0.68 — brighter secondary text for better contrast on dark bg */
+  --muted-foreground: oklch(0.74 0.01 280);
   --accent: oklch(0.28 0.01 280);
   --accent-foreground: oklch(0.97 0.005 280);
   --destructive: oklch(0.62 0.22 25);
   --destructive-foreground: oklch(0.98 0.005 280);
   --success: oklch(0.68 0.16 150);
   --warning: oklch(0.78 0.15 75);
-  --border: oklch(0.28 0.008 280);
-  --input: oklch(0.24 0.008 280);
+  /* Readability: was 0.28 — stronger border for better form field visibility */
+  --border: oklch(0.32 0.008 280);
+  /* Readability: was 0.24 — slightly lighter input bg for better contrast */
+  --input: oklch(0.27 0.008 280);
   --ring: oklch(0.62 0.22 25);
   --chart-1: oklch(0.62 0.22 25);
   --chart-2: oklch(0.70 0.18 60);
