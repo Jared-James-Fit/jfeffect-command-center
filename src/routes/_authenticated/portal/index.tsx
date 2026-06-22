@@ -15,7 +15,6 @@ import { listFormsForClient, pickWeeklyCheckInForm } from "@/lib/native-forms";
 import { ManualCheckInReviewModal } from "@/components/manual-check-in-review-modal";
 import { ClientActionRequestModal } from "@/components/client-action-request-modal";
 import { UpcomingEventsPanel } from "@/components/events/upcoming-events-panel";
-import { HomeActionTiles, type HomeActionTile } from "@/components/portal/home-action-tiles";
 import { InstallAppCard } from "@/components/portal/install-app-card";
 import { IntakeAnswersBigButton } from "@/components/clients/intake-answers-dialog";
 import { ActionCentre, type ActionItem } from "@/components/portal/action-centre";
@@ -375,6 +374,10 @@ function PortalHome() {
   }
   // Surface the nearest due check-in form into Action Centre.
   const dueForm = (assignedForms ?? [])[0];
+  const weeklyCheckInForm = pickWeeklyCheckInForm(assignedForms as any);
+  const weeklyCheckInHref = weeklyCheckInForm?.id
+    ? `/portal/check-ins/${weeklyCheckInForm.id}`
+    : "/portal/check-ins";
   if (dueForm) {
     actions.push({
       key: `form-${dueForm.id}`,
@@ -443,24 +446,8 @@ function PortalHome() {
               currentUserId={portalUserId}
               viewerRole="owner"
               progressHref={{ kind: "portal" }}
-              extraActions={
-                client ? (
-                  <HomeActionTiles
-                    tiles={[
-                      { to: "/portal/lift-videos", label: "Upload Lift for Review", icon: Video },
-                      {
-                        to: pickWeeklyCheckInForm(assignedForms as any)?.id
-                          ? `/portal/check-ins/${pickWeeklyCheckInForm(assignedForms as any)!.id}`
-                          : "/portal/check-ins",
-                        label: "Submit Weekly Check-In",
-                        icon: ClipboardCheck,
-                        badge: (assignedForms as any[])?.length || undefined,
-                        emphasis: true,
-                      },
-                    ] as HomeActionTile[]}
-                  />
-                ) : null
-              }
+              liftHref="/portal/lift-videos"
+              checkInHref={weeklyCheckInHref}
             />
           </SectionErrorBoundary>
         ) : (

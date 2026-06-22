@@ -3,7 +3,7 @@ import { Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card } from "@/components/ui/card";
-import { Camera, Scale, Ruler, ArrowRight, Video, MessageSquare } from "lucide-react";
+import { Camera, Scale, Ruler, ArrowRight, Video, MessageSquare, Dumbbell, ClipboardCheck } from "lucide-react";
 import { CoachCheckinReplies } from "./coach-checkin-replies";
 
 /**
@@ -18,6 +18,8 @@ export function ProgressSummaryCard({
   viewerRole,
   progressHref,
   title = "Progress Snapshot",
+  liftHref,
+  checkInHref,
   extraActions,
 }: {
   userId: string;
@@ -29,10 +31,20 @@ export function ProgressSummaryCard({
     | { kind: "admin-client"; clientId: string };
   title?: string;
   /**
-   * Optional secondary action tiles rendered below the primary 4-up grid.
+   * Optional href to a lift upload flow surfaced as a secondary action.
+   * Omit to hide the Upload Lift shortcut (e.g. member dashboards).
+   */
+  liftHref?: string;
+  /**
+   * Optional href to a check-in submission flow surfaced as a secondary action.
+   * Omit to hide the Submit Check-In shortcut (e.g. member dashboards).
+   */
+  checkInHref?: string;
+  /**
+   * Optional secondary action tiles rendered below the built-in secondary row.
    * Used by the client + member home dashboards to surface flow-specific
-   * shortcuts (e.g. Submit Weekly Check-In) that need data only the host
-   * route has.
+   * shortcuts (e.g. member Tools/Announcements/Support) that need data only the
+   * host route has.
    */
   extraActions?: ReactNode;
 }) {
@@ -127,24 +139,31 @@ export function ProgressSummaryCard({
 
   const recentRows: { label: string; value: string; show: boolean }[] = [
     {
-      label: "Latest weight",
+      label: "Weight",
       value: latestBw
         ? `${Number(latestBw.weight_value).toFixed(1)} ${latestBw.weight_unit ?? "lb"} · ${fmtDate(latestBw.logged_date)}`
         : "—",
       show: !!latestBw,
     },
-    { label: "Last photo", value: fmtDate(latestPhotoAt), show: !!latestPhotoAt },
-    { label: "Last video", value: fmtDate(latestVideoAt), show: !!latestVideoAt },
-    { label: "Last measurement", value: fmtDate(latestMeasAt), show: !!latestMeasAt },
+    { label: "Photo", value: fmtDate(latestPhotoAt), show: !!latestPhotoAt },
+    { label: "Video", value: fmtDate(latestVideoAt), show: !!latestVideoAt },
+    { label: "Measurements", value: fmtDate(latestMeasAt), show: !!latestMeasAt },
   ];
   const anyRecent = recentRows.some((r) => r.show);
 
-  const viewHubInner = (
-    <div className="flex items-center justify-between rounded-xl border border-border bg-secondary/30 px-4 py-3 text-xs font-bold uppercase tracking-wide transition active:bg-secondary/60 hover:border-primary/40">
-      <span>View Progress Hub</span>
-      <ArrowRight className="h-4 w-4" />
-    </div>
-  );
+  const progressHubHref =
+    progressHref.kind === "member"
+      ? "/m/progress"
+      : progressHref.kind === "portal"
+      ? "/portal/progress"
+      : `/admin/clients/${progressHref.clientId}/progress`;
+
+  type SecondaryAction = { label: string; icon: ComponentType<{ className?: string }>; to: string };
+  const secondary: SecondaryAction[] = [
+    ...(liftHref ? [{ label: "Upload Lift", icon: Dumbbell, to: liftHref }] : []),
+    ...(checkInHref ? [{ label: "Submit Check-In", icon: ClipboardCheck, to: checkInHref }] : []),
+    { label: "View Progress Hub", icon: ArrowRight, to: progressHubHref },
+  ];
 
   return (
     <Card className="overflow-hidden">
@@ -161,34 +180,46 @@ export function ProgressSummaryCard({
           {primary.map((p) => <PrimaryTile key={p.action} p={p} />)}
         </div>
 
-        {/* Secondary quick actions from host (Upload Lift, Submit Weekly Check-In) */}
-        {extraActions ? <div>{extraActions}</div> : null}
-
-        {/* View Progress Hub */}
-        {progressHref.kind === "portal" && <Link to="/portal/progress">{viewHubInner}</Link>}
-        {progressHref.kind === "member" && <Link to="/m/progress">{viewHubInner}</Link>}
-        {progressHref.kind === "admin-client" && (
-          <Link to="/admin/clients/$id/progress" params={{ id: progressHref.clientId }}>{viewHubInner}</Link>
+        {/* Secondary quick actions */}
+        {secondary.length > 0 && (
+          <div className="flex flex-wrap gap-2">
+            {secondary.map((s) => {
+              const Icon = s.icon;
+              return (
+                <Link
+                  key={s.label}
+                  to={s.to}
+                  className="inline-flex items-center gap-2 rounded-full border border-border bg-secondary/30 px-3 py-2 text-xs font-semibold transition hover:border-primary/40 hover:bg-secondary/50 active:bg-secondary/60"
+                >
+                  <Icon className="h-3.5 w-3.5 text-primary" />
+                  <span>{s.label}</span>
+                </Link>
+              );
+            })}
+          </div>
         )}
 
-        {/* Recent status */}
-        <div className="rounded-xl border border-border bg-secondary/20 p-3">
-          <div className="mb-2 text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
-            Recent status
-          </div>
-          {anyRecent ? (
-            <ul className="divide-y divide-border/60">
-              {recentRows.filter((r) => r.show).map((r) => (
-                <li key={r.label} className="flex items-center justify-between py-1.5 text-xs">
+        {/* Optional host-specific secondary tiles */}
+        {extraActions ? <div>{extraActions}</div> : null}
+
+        {/* Recent status pills */}
+        {anyRecent ? (
+          <div className="flex flex-wrap gap-2">
+            {recentRows
+              .filter((r) => r.show)
+              .map((r) => (
+                <span
+                  key={r.label}
+                  className="inline-flex items-baseline gap-1.5 rounded-full border border-border bg-secondary/20 px-2.5 py-1 text-xs"
+                >
                   <span className="text-muted-foreground">{r.label}</span>
-                  <span className="font-semibold">{r.value}</span>
-                </li>
+                  <span className="font-medium text-foreground">{r.value}</span>
+                </span>
               ))}
-            </ul>
-          ) : (
-            <p className="py-1 text-xs text-muted-foreground">No progress logged yet.</p>
-          )}
-        </div>
+          </div>
+        ) : (
+          <p className="text-xs text-muted-foreground">No progress logged yet.</p>
+        )}
 
         {/* Coach Check-In Replies — keep, it's a real surface */}
         <div className="rounded-xl border border-border bg-secondary/30 p-4">
