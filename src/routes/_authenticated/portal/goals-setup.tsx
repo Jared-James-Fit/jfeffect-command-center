@@ -79,8 +79,8 @@ function PortalGoalsSetupPage() {
   return (
     <div className="space-y-4 p-3 sm:p-4">
       <PageHeader
-        title="Goals & Setup"
-        subtitle="Quick answers so your coach can build the right program for you."
+        title="Profile & Goals"
+        subtitle="Your goals, training setup, and coaching information. Your coach sees this to build your program."
       />
 
       {setup?.update_requested_at && (

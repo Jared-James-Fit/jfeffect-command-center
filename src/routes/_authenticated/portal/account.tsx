@@ -1,8 +1,9 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { supabase } from "@/integrations/supabase/client";
+import { Badge } from "@/components/ui/badge";
 import { usePortalUserId } from "@/lib/client-impersonation";
 import { useAuth } from "@/lib/auth";
 import { PageHeader } from "@/components/app-shell";
@@ -235,6 +236,28 @@ function AccountPage() {
           </SectionErrorBoundary>
         </div>
 
+        {/* Goals & Training Setup — links to the dedicated goals-setup page */}
+        <div className="md:col-span-3">
+          <Card className="border-border bg-card p-6 space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-xs uppercase tracking-widest text-muted-foreground">Goals &amp; Training Setup</h3>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  Your training goals, experience level, equipment, nutrition preferences, and coaching setup.
+                </p>
+              </div>
+              {client && (
+                <GoalsSetupStatusBadge clientId={(client as any).id} />
+              )}
+            </div>
+            <Link to="/portal/goals-setup">
+              <Button className="w-full sm:w-auto" size="lg">
+                View &amp; Update Profile &amp; Goals
+              </Button>
+            </Link>
+          </Card>
+        </div>
+
         <div className="md:col-span-3">
           <SectionErrorBoundary label="Legal & Safety">
             <ClientLegalSafety />
@@ -341,4 +364,25 @@ function BillingSection({ clientId }: { clientId?: string }) {
       )}
     </Card>
   );
+}
+
+/** Lightweight badge showing goals setup completion status — loads only when the Goals card is visible */
+function GoalsSetupStatusBadge({ clientId }: { clientId: string }) {
+  const { data } = useQuery({
+    queryKey: ["client-goals-setup-status", clientId],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("client_goals_setup")
+        .select("completed_at, main_goal")
+        .eq("client_id", clientId)
+        .maybeSingle();
+      return data;
+    },
+    staleTime: 5 * 60_000,
+  });
+
+  if (!data) return <Badge variant="outline" className="text-xs text-amber-500 border-amber-500/30">Not started</Badge>;
+  if (data.completed_at) return <Badge variant="outline" className="text-xs text-emerald-500 border-emerald-500/30">Complete</Badge>;
+  if (data.main_goal) return <Badge variant="outline" className="text-xs text-amber-500 border-amber-500/30">In progress</Badge>;
+  return <Badge variant="outline" className="text-xs text-muted-foreground">Not started</Badge>;
 }
