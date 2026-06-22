@@ -374,6 +374,9 @@ function PortalHome() {
   }
   // Surface the nearest due check-in form into Action Centre.
   const dueForm = (assignedForms ?? [])[0];
+  const weeklyCheckInHref = dueForm
+    ? `/portal/check-ins/${dueForm.id}`
+    : "/portal/check-ins";
   if (dueForm) {
     actions.push({
       key: `form-${dueForm.id}`,
@@ -442,24 +445,8 @@ function PortalHome() {
               currentUserId={portalUserId}
               viewerRole="owner"
               progressHref={{ kind: "portal" }}
-              extraActions={
-                client ? (
-                  <HomeActionTiles
-                    tiles={[
-                      { to: "/portal/lift-videos", label: "Upload Lift for Review", icon: Video },
-                      {
-                        to: pickWeeklyCheckInForm(assignedForms as any)?.id
-                          ? `/portal/check-ins/${pickWeeklyCheckInForm(assignedForms as any)!.id}`
-                          : "/portal/check-ins",
-                        label: "Submit Weekly Check-In",
-                        icon: ClipboardCheck,
-                        badge: (assignedForms as any[])?.length || undefined,
-                        emphasis: true,
-                      },
-                    ] as HomeActionTile[]}
-                  />
-                ) : null
-              }
+              liftHref="/portal/lift-videos"
+              checkInHref={weeklyCheckInHref}
             />
           </SectionErrorBoundary>
         ) : (
