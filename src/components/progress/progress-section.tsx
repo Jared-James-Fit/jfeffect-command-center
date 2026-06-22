@@ -223,15 +223,88 @@ function OverviewTab({
   onAddMeasurements: () => void;
   onViewTab: (tab: string) => void;
 }) {
-  const { data: bwRows = [] } = useQuery({ queryKey: ["progress-bw", ctx.userId], queryFn: () => listBodyweight(ctx.userId) });
-  const { data: photoSubs = [] } = useQuery({ queryKey: ["progress-subs-photo", ctx.userId], queryFn: () => listSubmissions({ userId: ctx.userId, type: "photo" }) });
-  const { data: videoSubs = [] } = useQuery({ queryKey: ["progress-subs-video", ctx.userId], queryFn: () => listSubmissions({ userId: ctx.userId, type: "video" }) });
-  const { data: measRows = [] } = useQuery({ queryKey: ["progress-meas", ctx.userId], queryFn: () => listMeasurements(ctx.userId) });
+  const { data: bwRows = [] } = useQuery({
+    queryKey: ["progress-bw", ctx.userId],
+    queryFn: () => listBodyweight(ctx.userId),
+    staleTime: 60_000,
+  });
+  const { data: photoSubs = [] } = useQuery({
+    queryKey: ["progress-subs-photo", ctx.userId],
+    queryFn: () => listSubmissions({ userId: ctx.userId, type: "photo" }),
+    staleTime: 60_000,
+  });
+  const { data: videoSubs = [] } = useQuery({
+    queryKey: ["progress-subs-video", ctx.userId],
+    queryFn: () => listSubmissions({ userId: ctx.userId, type: "video" }),
+    staleTime: 60_000,
+  });
+  const { data: measRows = [] } = useQuery({
+    queryKey: ["progress-meas", ctx.userId],
+    queryFn: () => listMeasurements(ctx.userId),
+    staleTime: 60_000,
+  });
 
   const stats = bodyweightStats(bwRows);
-  const latestPhotoSub = photoSubs[0];
-  const latestVideoSub = videoSubs[0];
-  const latestMeas = measRows[0];
+
+  const weightChart = useMemo(() => {
+    if (!bwRows.length) return [];
+    const unit = stats?.unit ?? bwRows[0].weight_unit;
+    const convert = (r: ProgressBodyweight) =>
+      r.weight_unit === unit
+        ? r.weight_value
+        : r.weight_unit === "kg"
+        ? +(r.weight_value * 2.20462).toFixed(2)
+        : +(r.weight_value / 2.20462).toFixed(2);
+    return [...bwRows]
+      .sort((a, b) => a.logged_date.localeCompare(b.logged_date))
+      .slice(-14)
+      .map((r) => ({ d: r.logged_date, v: convert(r) }));
+  }, [bwRows, stats]);
+
+  const activities = useMemo(() => {
+    const items: {
+      type: "weight" | "photo" | "video" | "measurement";
+      id: string;
+      date: string;
+      label: string;
+      detail?: string;
+    }[] = [];
+    bwRows.forEach((r) =>
+      items.push({
+        type: "weight",
+        id: r.id,
+        date: r.logged_date,
+        label: `${r.weight_value.toFixed(1)} ${r.weight_unit}`,
+      })
+    );
+    photoSubs.forEach((s) =>
+      items.push({
+        type: "photo",
+        id: s.id,
+        date: s.submission_date,
+        label: s.check_in_label || "Progress Photos",
+        detail: s.bodyweight ? `${s.bodyweight} ${s.weight_unit}` : undefined,
+      })
+    );
+    videoSubs.forEach((s) =>
+      items.push({
+        type: "video",
+        id: s.id,
+        date: s.submission_date,
+        label: s.check_in_label || "Progress Video",
+        detail: s.bodyweight ? `${s.bodyweight} ${s.weight_unit}` : undefined,
+      })
+    );
+    measRows.forEach((r) =>
+      items.push({
+        type: "measurement",
+        id: r.id,
+        date: r.measured_date,
+        label: "Measurements",
+      })
+    );
+    return items.sort((a, b) => b.date.localeCompare(a.date)).slice(0, 5);
+  }, [bwRows, photoSubs, videoSubs, measRows]);
 
   return (
     <div className="space-y-4">
@@ -255,87 +328,118 @@ function OverviewTab({
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        {/* Latest weight + mini trend */}
         <Card className="p-3">
           <div className="flex items-center justify-between">
             <h3 className="text-sm font-semibold">Weight</h3>
             <button onClick={() => onViewTab("bodyweight")} className="text-xs text-primary font-medium hover:underline">View all</button>
           </div>
-          {stats?.latest ? (
+          {stats ? (
             <div className="mt-2">
               <p className="text-2xl font-bold">{stats.latest} {stats.unit}</p>
               {stats.avg7 != null && <p className="text-xs text-muted-foreground">7-day avg {stats.avg7} {stats.unit}</p>}
+              {weightChart.length >= 2 && (
+                <div className="mt-3 h-[80px]">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <AreaChart data={weightChart} margin={{ top: 4, right: 0, left: 0, bottom: 0 }}>
+                      <defs>
+                        <linearGradient id="overviewBwArea" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="0%" stopColor="var(--primary)" stopOpacity={0.35} />
+                          <stop offset="100%" stopColor="var(--primary)" stopOpacity={0} />
+                        </linearGradient>
+                      </defs>
+                      <XAxis dataKey="d" hide />
+                      <YAxis hide domain={["auto", "auto"]} />
+                      <Tooltip
+                        contentStyle={{ fontSize: 12, padding: 6 }}
+                        labelFormatter={() => ""}
+                        formatter={(v: any) => [`${v} ${stats.unit}`, "Weight"]}
+                      />
+                      <Area
+                        type="monotone"
+                        dataKey="v"
+                        stroke="var(--primary)"
+                        strokeWidth={2}
+                        fill="url(#overviewBwArea)"
+                        isAnimationActive={false}
+                      />
+                    </AreaChart>
+                  </ResponsiveContainer>
+                </div>
+              )}
             </div>
           ) : (
             <p className="mt-2 text-sm text-muted-foreground">No weight logged yet.</p>
           )}
         </Card>
 
+        {/* Latest 2 progress photos */}
         <Card className="p-3">
           <div className="flex items-center justify-between">
-            <h3 className="text-sm font-semibold">Photos</h3>
+            <h3 className="text-sm font-semibold">Latest Photos</h3>
             <button onClick={() => onViewTab("photos")} className="text-xs text-primary font-medium hover:underline">View all</button>
           </div>
-          {latestPhotoSub ? (
-            <div className="mt-2">
-              <p className="text-xs text-muted-foreground">{fmtDate(latestPhotoSub.submission_date)}</p>
-              <LatestMediaThumb sub={latestPhotoSub} />
+          {photoSubs.length > 0 ? (
+            <div className="mt-2 grid grid-cols-2 gap-2">
+              {photoSubs.slice(0, 2).map((sub) => (
+                <button
+                  key={sub.id}
+                  onClick={() => onViewTab("photos")}
+                  className="relative aspect-square overflow-hidden rounded bg-muted text-left"
+                >
+                  <SubmissionThumb sub={sub} />
+                </button>
+              ))}
             </div>
           ) : (
             <p className="mt-2 text-sm text-muted-foreground">No photos yet.</p>
           )}
         </Card>
-
-        <Card className="p-3">
-          <div className="flex items-center justify-between">
-            <h3 className="text-sm font-semibold">Videos</h3>
-            <button onClick={() => onViewTab("videos")} className="text-xs text-primary font-medium hover:underline">View all</button>
-          </div>
-          {latestVideoSub ? (
-            <div className="mt-2">
-              <p className="text-xs text-muted-foreground">{fmtDate(latestVideoSub.submission_date)}</p>
-              <LatestMediaThumb sub={latestVideoSub} />
-            </div>
-          ) : (
-            <p className="mt-2 text-sm text-muted-foreground">No videos yet.</p>
-          )}
-        </Card>
-
-        <Card className="p-3">
-          <div className="flex items-center justify-between">
-            <h3 className="text-sm font-semibold">Measurements</h3>
-            <button onClick={() => onViewTab("measurements")} className="text-xs text-primary font-medium hover:underline">View all</button>
-          </div>
-          {latestMeas ? (
-            <div className="mt-2">
-              <p className="text-xs text-muted-foreground">{fmtDate(latestMeas.measured_date)}</p>
-              <div className="mt-1 grid grid-cols-2 gap-x-2 gap-y-1 text-sm">
-                {Object.entries(latestMeas.fields).filter(([, v]) => v != null && v !== "").slice(0, 4).map(([k, v]) => {
-                  const label = MEASUREMENT_FIELDS.find((f) => f.key === k)?.label ?? k;
-                  return <div key={k}><span className="text-muted-foreground text-xs">{label}</span> <strong>{String(v)}</strong></div>;
-                })}
-              </div>
-            </div>
-          ) : (
-            <p className="mt-2 text-sm text-muted-foreground">No measurements yet.</p>
-          )}
-        </Card>
       </div>
+
+      {/* Recent activity list */}
+      <Card className="p-3">
+        <h3 className="text-sm font-semibold">Recent Activity</h3>
+        {activities.length > 0 ? (
+          <ul className="mt-2 divide-y divide-border/60">
+            {activities.map((a) => {
+              const Icon =
+                a.type === "weight" ? Scale :
+                a.type === "photo" ? Camera :
+                a.type === "video" ? VideoIcon :
+                Ruler;
+              return (
+                <li key={`${a.type}-${a.id}`} className="flex items-center justify-between gap-3 py-2 text-sm">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <Icon className="h-4 w-4 shrink-0 text-primary" />
+                    <span className="truncate">{a.label}</span>
+                  </div>
+                  <div className="text-xs text-muted-foreground shrink-0">
+                    {fmtDate(a.date)}{a.detail ? ` · ${a.detail}` : ""}
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+        ) : (
+          <p className="mt-2 text-sm text-muted-foreground">No activity yet.</p>
+        )}
+      </Card>
     </div>
   );
 }
 
-function LatestMediaThumb({ sub }: { sub: ProgressSubmission }) {
+function SubmissionThumb({ sub }: { sub: ProgressSubmission }) {
   const { data: media = [] } = useQuery({
     queryKey: ["progress-media", sub.id],
     queryFn: () => listMediaForSubmission(sub.id),
+    staleTime: 60 * 60 * 1000,
   });
   const firstReady = media.find((m) => m.upload_status !== "draft");
-  if (!firstReady) return <div className="mt-2 text-xs text-muted-foreground">No preview available</div>;
-  return (
-    <div className="mt-2 aspect-square rounded bg-muted overflow-hidden max-h-[120px]">
-      <MediaThumb m={firstReady} />
-    </div>
-  );
+  if (!firstReady) {
+    return <div className="flex h-full w-full items-center justify-center text-[10px] text-muted-foreground">No preview</div>;
+  }
+  return <MediaThumb m={firstReady} />;
 }
 
 // ============== Photos tab ==============
