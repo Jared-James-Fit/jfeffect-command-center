@@ -476,6 +476,34 @@ function SubmissionThumb({ sub }: { sub: ProgressSubmission }) {
   return <MediaThumb m={firstReady} />;
 }
 
+function MiniEmpty({ body, actionLabel, onAction }: { body: string; actionLabel: string; onAction: () => void }) {
+  return (
+    <div className="mt-2 flex items-center justify-between gap-2">
+      <p className="text-xs text-muted-foreground">{body}</p>
+      <Button size="sm" variant="outline" className="h-7 px-2 text-xs" onClick={onAction}>
+        <Plus className="h-3 w-3 mr-1" />{actionLabel}
+      </Button>
+    </div>
+  );
+}
+
+/** Defer mounting children until the placeholder scrolls near the viewport. */
+function LazyMount({ children, className, rootMargin = "200px" }: { children: React.ReactNode; className?: string; rootMargin?: string }) {
+  const ref = useRef<HTMLDivElement | null>(null);
+  const [visible, setVisible] = useState(false);
+  useEffect(() => {
+    if (visible || !ref.current) return;
+    const el = ref.current;
+    if (typeof IntersectionObserver === "undefined") { setVisible(true); return; }
+    const io = new IntersectionObserver((entries) => {
+      if (entries.some((e) => e.isIntersecting)) { setVisible(true); io.disconnect(); }
+    }, { rootMargin });
+    io.observe(el);
+    return () => io.disconnect();
+  }, [visible, rootMargin]);
+  return <div ref={ref} className={className}>{visible ? children : null}</div>;
+}
+
 // ============== Photos tab ==============
 
 function PhotosTab({
