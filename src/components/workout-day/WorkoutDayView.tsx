@@ -2436,6 +2436,9 @@ function SetRow({
   // Hydrate from any unsynced local draft on first mount for this set
   const draftKey = clientId ? `workout-set:${rowId}:${clientId}:${setIndex}` : null;
   const [hydrated, setHydrated] = useState(false);
+  // Track which field (if any) is currently focused so we never overwrite
+  // what the user is actively typing with a stale server refetch.
+  const [focusedField, setFocusedField] = useState<"load" | "reps" | "rpe" | null>(null);
   useEffect(() => {
     if (!draftKey || hydrated) return;
     const d = readLocalDraft<{ load: string; reps: string; rpe: string }>(draftKey);
@@ -2456,15 +2459,21 @@ function SetRow({
   // the matching kg/lb column when the row reloads, so old logs are never
   // corrupted — this only affects the in-progress UI value.
   const lastUnitRef = useRef<"kg" | "lb">(unit);
+  // Ref to the current focused field — used in the effect below without
+  // causing the effect to re-run when focus changes.
+  const focusedFieldRef = useRef<"load" | "reps" | "rpe" | null>(null);
+  useEffect(() => { focusedFieldRef.current = focusedField; }, [focusedField]);
   useEffect(() => {
+    // Never overwrite a field the user is actively typing in.
+    const focused = focusedFieldRef.current;
     const kg = existing?.actual_load_kg;
     const lb = existing?.actual_load_lb;
     const display = unit === "kg"
       ? (kg != null ? String(kg) : (existing?.actual_load != null ? String(existing.actual_load) : ""))
       : (lb != null ? String(lb) : (existing?.actual_load != null ? String(existing.actual_load) : ""));
-    setLoad(display);
-    setReps(existing?.actual_reps?.toString() ?? "");
-    setRpe(existing?.actual_rpe_num != null ? String(existing.actual_rpe_num) : (existing?.actual_rpe ?? ""));
+    if (focused !== "load") setLoad(display);
+    if (focused !== "reps") setReps(existing?.actual_reps?.toString() ?? "");
+    if (focused !== "rpe") setRpe(existing?.actual_rpe_num != null ? String(existing.actual_rpe_num) : (existing?.actual_rpe ?? ""));
     // Track the unit at the moment of (re)hydration so unit-conversion
     // effect doesn't re-convert the freshly-set display value.
     lastUnitRef.current = unit;
@@ -2765,7 +2774,7 @@ function SetRow({
         />
       ) : (
       <Input
-        className={cn(focusMode ? "h-9 text-base px-2" : "h-8 text-sm px-2", "bg-white text-black placeholder:text-gray-500")}
+        className={cn(focusMode ? "h-9 text-base px-2" : "h-8 text-sm px-2")}
         inputMode="numeric"
         type="text"
         pattern="[0-9]*"
@@ -2773,15 +2782,16 @@ function SetRow({
         aria-label={`Set ${setIndex} reps`}
         value={reps}
         onChange={(e) => setReps(e.target.value.replace(/[^0-9]/g, ""))}
+        onFocus={() => setFocusedField("reps")}
         onKeyDown={onEnter}
-        onBlur={() => save.flush()}
+        onBlur={() => { setFocusedField(null); save.flush(); }}
         readOnly={readonly}
         disabled={readonly}
       />
       )}
       {!hideWeight && (
       <Input
-        className={cn(focusMode ? "h-9 text-base px-2" : "h-8 text-sm px-2", "bg-white text-black placeholder:text-gray-500")}
+        className={cn(focusMode ? "h-9 text-base px-2" : "h-8 text-sm px-2")}
         inputMode="decimal"
         type="text"
         pattern="[0-9]*\.?[0-9]*"
@@ -2789,14 +2799,15 @@ function SetRow({
         aria-label={`Set ${setIndex} weight in ${unit}`}
         value={load}
         onChange={(e) => setLoad(e.target.value.replace(/[^0-9.]/g, ""))}
+        onFocus={() => setFocusedField("load")}
         onKeyDown={onEnter}
-        onBlur={() => save.flush()}
+        onBlur={() => { setFocusedField(null); save.flush(); }}
         readOnly={readonly}
         disabled={readonly}
       />
       )}
       <Input
-        className={cn(focusMode ? "h-9 text-base px-2" : "h-8 text-sm px-2", "bg-white text-black placeholder:text-gray-500")}
+        className={cn(focusMode ? "h-9 text-base px-2" : "h-8 text-sm px-2")}
         inputMode="decimal"
         type="text"
         pattern="[0-9]*\.?[0-9]*"
@@ -2814,8 +2825,9 @@ function SetRow({
           }
           setRpe(cleaned);
         }}
+        onFocus={() => setFocusedField("rpe")}
         onKeyDown={onEnter}
-        onBlur={() => save.flush()}
+        onBlur={() => { setFocusedField(null); save.flush(); }}
         readOnly={readonly}
         disabled={readonly}
       />
