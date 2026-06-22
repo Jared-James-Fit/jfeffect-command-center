@@ -113,8 +113,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           roles.includes("admin") ? "admin"
           : roles.includes("coach") ? "coach"
           : roles.includes("media_manager") ? "media_manager"
-          : memberRow ? "member"
           : roles.includes("client") || clientRow ? "client"
+          : memberRow ? "member"
           : "client";
         setRole(resolvedRole);
         roleLoadedForRef.current = uid;
