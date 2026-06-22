@@ -47,7 +47,7 @@ function MemberProgress() {
   }
 
   return (
-    <>
+    <div className="pb-safe-bottom">
       <PageHeader title="Progress" subtitle="Photos, videos, weight, and measurements — saved to your account." />
       <ProgressSection
         initialAction={action}
@@ -62,6 +62,6 @@ function MemberProgress() {
           canRequestReview: review?.allowed ?? false,
         }}
       />
-    </>
+    </div>
   );
 }

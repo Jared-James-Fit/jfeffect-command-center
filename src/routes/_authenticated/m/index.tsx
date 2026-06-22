@@ -83,7 +83,7 @@ function MemberHome() {
   if (offlineNoCache) return <DashboardOfflineEmpty />;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 pb-safe-bottom">
       <PageHeader
         title={`Welcome${me?.member?.full_name ? `, ${me.member.full_name.split(" ")[0]}` : ""}`}
         subtitle="Your training, plans, and resources."
