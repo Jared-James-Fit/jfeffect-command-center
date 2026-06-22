@@ -386,6 +386,10 @@ mark.gh-mark.gh-flash { animation: ghFlashPulse 1.4s ease-out 2; }
   .safe-min-h-screen { min-height: 100svh; }
 }
 
+/* Padding that clears the fixed mobile bottom nav + safe-area.
+   Use on page/section containers so the last card isn't hidden behind the tab bar. */
+.pb-safe-bottom { padding-bottom: calc(var(--bottom-nav-clearance, 0px) + env(safe-area-inset-bottom) + 0.75rem); }
+
 /* Standalone-only tweaks: hide elements that only make sense in the browser
    tab (e.g. "Install" prompts) when the user is already in the installed app. */
 @media (display-mode: standalone) {
