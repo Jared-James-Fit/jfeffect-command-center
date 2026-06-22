@@ -62,7 +62,7 @@ function PortalProgress() {
           canRequestReview: true,
         }}
       />
-      <div className="px-3 md:px-6 pb-6">
+      <div className="px-3 md:px-6 pb-safe-bottom">
         <CheckInScheduleCard
           userId={userId}
           title="Your progress reminders"
