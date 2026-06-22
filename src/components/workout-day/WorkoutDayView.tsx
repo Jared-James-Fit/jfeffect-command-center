@@ -2114,12 +2114,12 @@ function ExerciseBlock({ row, dayId, dayTitle, clientId, blockId, existingResult
           "grid items-center gap-1.5 border-b border-builder-card-border bg-builder-card/60 px-2.5 py-1.5 text-[10px] font-bold uppercase tracking-wider text-muted-foreground",
           hideWeight
             ? (focusMode ? "grid-cols-[36px_1.6fr_1fr_52px] text-xs" : "grid-cols-[28px_1.6fr_1fr_44px]")
-            : (focusMode ? "grid-cols-[36px_1.1fr_1.1fr_1fr_52px] text-xs" : "grid-cols-[28px_1.1fr_1.1fr_1fr_44px]"),
+            : (focusMode ? "grid-cols-[36px_1fr_1fr_1.3fr_52px] text-xs" : "grid-cols-[28px_1fr_1fr_1.3fr_44px]"),
         )}>
           <span>Set</span>
           <span>{effectiveMeasurementType === "time" ? "Time" : "Reps"}</span>
-          {!hideWeight && <span className="truncate">Wt ({activeUnit.toUpperCase()})</span>}
           <span>{showRir ? "RIR" : "RPE"}</span>
+          {!hideWeight && <span className="truncate">Wt ({activeUnit.toUpperCase()})</span>}
           <span className="text-right">Status</span>
         </div>
         {Array.from({ length: setCount }).map((_, i) => {
@@ -2785,7 +2785,7 @@ function SetRow({
         ? "grid-cols-[28px_1fr]"
         : hideWeight
           ? (focusMode ? "grid-cols-[36px_1.6fr_1fr_52px]" : "grid-cols-[28px_1.6fr_1fr_44px]")
-          : (focusMode ? "grid-cols-[36px_1.1fr_1.1fr_1fr_52px]" : "grid-cols-[28px_1.1fr_1.1fr_1fr_44px]"),
+          : (focusMode ? "grid-cols-[36px_1fr_1fr_1.3fr_52px]" : "grid-cols-[28px_1fr_1fr_1.3fr_44px]"),
     )}>
       <span className={cn("font-mono text-muted-foreground pt-1.5", focusMode ? "text-sm" : "text-xs")}>{setIndex}</span>
       {isTime ? (
@@ -2835,23 +2835,6 @@ function SetRow({
         </button>
       )
       )}
-      {!hideWeight && (
-      <Input
-        className={cn(focusMode ? "h-9 text-base px-2" : "h-8 text-sm px-2")}
-        inputMode="decimal"
-        type="text"
-        pattern="[0-9]*\.?[0-9]*"
-        placeholder={unit}
-        aria-label={`Set ${setIndex} weight in ${unit}`}
-        value={load}
-        onChange={(e) => setLoad(e.target.value.replace(/[^0-9.]/g, ""))}
-        onFocus={() => setFocusedField("load")}
-        onKeyDown={onEnter}
-        onBlur={() => { setFocusedField(null); save.flush(); }}
-        readOnly={readonly}
-        disabled={readonly}
-      />
-      )}
       {/* Quick Log RPE chip — tap to edit */}
       {rpeChipOpen ? (
         <Input autoFocus
@@ -2888,6 +2871,23 @@ function SetRow({
         >
           {rpe ? (showRir ? String(Math.max(0, 10 - Number(rpe))) : rpe) : "—"}
         </button>
+      )}
+      {!hideWeight && (
+      <Input
+        className={cn(focusMode ? "h-9 text-base px-2" : "h-8 text-sm px-2")}
+        inputMode="decimal"
+        type="text"
+        pattern="[0-9]*\.?[0-9]*"
+        placeholder={unit}
+        aria-label={`Set ${setIndex} weight in ${unit}`}
+        value={load}
+        onChange={(e) => setLoad(e.target.value.replace(/[^0-9.]/g, ""))}
+        onFocus={() => setFocusedField("load")}
+        onKeyDown={onEnter}
+        onBlur={() => { setFocusedField(null); save.flush(); }}
+        readOnly={readonly}
+        disabled={readonly}
+      />
       )}
       <div className="flex items-center justify-end gap-1">
         {!readonly && <SaveStatus state={save.state} savedAt={save.savedAt} compact />}
