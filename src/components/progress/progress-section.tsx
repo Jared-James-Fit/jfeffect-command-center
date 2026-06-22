@@ -527,9 +527,9 @@ function PhotosTab({
         <p className="text-sm text-muted-foreground">Loading…</p>
       ) : !subs.length ? (
         <EmptyState
-          icon={Camera} title="No progress photos yet"
-          body="Upload front, left, back, and right photos."
-          actionLabel="Take First Photos" onAction={onNew}
+          icon={Camera} title="No photos"
+          body="Upload progress photos."
+          actionLabel="Add Photos" onAction={onNew}
         />
       ) : (
         <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
@@ -557,9 +557,9 @@ function VideosTab({
         <p className="text-sm text-muted-foreground">Loading…</p>
       ) : !subs.length ? (
         <EmptyState
-          icon={VideoIcon} title="No progress videos yet"
-          body="Record four angles separately, or one continuous all-angle video."
-          actionLabel="Add First Video" onAction={onNew}
+          icon={VideoIcon} title="No videos"
+          body="Record or upload a video."
+          actionLabel="Add Video" onAction={onNew}
         />
       ) : (
         <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
@@ -1115,7 +1115,7 @@ function BodyweightTab({
         </Card>
       )}
       {!combinedRows.length ? (
-        <EmptyState icon={Scale} title="No entries yet" body="Track your bodyweight to see trends over time." actionLabel="Log Weight" onAction={onLog} />
+        <EmptyState icon={Scale} title="No weight logged" body="Log weight to see trends." actionLabel="Log Weight" onAction={onLog} />
       ) : (
         <Card className="divide-y">
           {combinedRows.slice(0, 50).map((r) => (
@@ -1229,7 +1229,7 @@ function MeasurementsTab({ ctx, onAdd }: { ctx: ProgressContext; onAdd: () => vo
         <Button size="sm" onClick={onAdd}><Plus className="h-4 w-4 mr-1" />Add</Button>
       </div>
       {!rows.length ? (
-        <EmptyState icon={Ruler} title="No measurements yet" body="Track waist, hips, arms, and more." actionLabel="Add Measurements" onAction={onAdd} />
+        <EmptyState icon={Ruler} title="No measurements" body="Track waist, hips, arms, etc." actionLabel="Add" onAction={onAdd} />
       ) : (
         <div className="space-y-2">
           {rows.map((r) => (
@@ -1592,13 +1592,19 @@ function TimelineTab({ ctx, onOpen }: { ctx: ProgressContext; onOpen: (id: strin
 
 // ============== Empty / utils ==============
 
-function EmptyState({ icon: Icon, title, body, actionLabel, onAction }: { icon: any; title: string; body: string; actionLabel: string; onAction: () => void }) {
+function EmptyState({ icon: Icon, title, body, actionLabel, onAction }: { icon: any; title: string; body?: string; actionLabel: string; onAction: () => void }) {
   return (
-    <Card className="p-8 text-center">
-      <Icon className="mx-auto h-10 w-10 text-primary" />
-      <p className="mt-3 font-semibold">{title}</p>
-      <p className="mt-1 text-sm text-muted-foreground">{body}</p>
-      <Button className="mt-4" onClick={onAction}>{actionLabel}</Button>
+    <Card className="p-3">
+      <div className="flex items-center gap-3">
+        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/10">
+          <Icon className="h-4 w-4 text-primary" />
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className="text-sm font-semibold leading-tight">{title}</p>
+          {body && <p className="text-xs text-muted-foreground leading-tight">{body}</p>}
+        </div>
+        <Button size="sm" onClick={onAction}>{actionLabel}</Button>
+      </div>
     </Card>
   );
 }
