@@ -80,6 +80,7 @@ const AssignedProgramsCard = lazyDefault(() => import("@/components/assigned-pro
 const ClientWarmupCard = lazyDefault(() => import("@/components/client-warmup-card"), "ClientWarmupCard");
 const ClientBillingPanel = lazyDefault(() => import("@/components/admin/client-billing-panel"), "ClientBillingPanel");
 const GoalsSetupPanel = lazyDefault(() => import("@/components/clients/goals-setup-panel"), "GoalsSetupPanel");
+const ProfileGoalsAdminPanel = lazyDefault(() => import("@/components/clients/profile-goals-admin-panel"), "ProfileGoalsAdminPanel");
 const SessionCreditsPanel = lazyDefault(() => import("@/components/admin/session-credits-panel"), "SessionCreditsPanel");
 
 function TabFallback() {
@@ -192,7 +193,7 @@ function AssignedCoachSelect({ value, onChange }: { value: string | null; onChan
   );
 }
 
-const TAB_VALUES = ["summary", "info", "goals-setup", "coaching", "account", "training", "nutrition", "cardio", "metrics", "messages", "lift-videos", "documents", "sessions", "purchases", "billing", "agreements", "notes"] as const;
+const TAB_VALUES = ["summary", "profile", "info", "goals-setup", "coaching", "account", "training", "nutrition", "cardio", "metrics", "messages", "lift-videos", "documents", "sessions", "purchases", "billing", "agreements", "notes"] as const;
 type TabValue = typeof TAB_VALUES[number];
 
 type SectionId = "client-profile" | "training" | "nutrition" | "communication" | "business";
@@ -200,6 +201,7 @@ type TabDef = { value: TabValue; label: string; description?: string; icon?: Com
 const SECTIONS: { id: SectionId; label: string; description: string; icon: ComponentType<any>; tabs: TabDef[] }[] = [
   { id: "client-profile", label: "Client Profile", description: "Overview, personal info, goals, coaching setup & login", icon: UserIcon, tabs: [
     { value: "summary", label: "Overview", description: "Snapshot & quick actions", icon: LayoutDashboard },
+    { value: "profile", label: "Profile & Goals", description: "Unified profile status, info & goals", icon: UserIcon },
     { value: "info", label: "Personal Info", description: "Identity, contact, address & emergency", icon: IdCard },
     { value: "goals-setup", label: "Goals & Intake", description: "Goals, intake answers & lifting", icon: Target },
     { value: "coaching", label: "Coaching Setup", description: "Coach, package, schedule & links", icon: Settings2 },
@@ -687,6 +689,12 @@ function ClientDetail() {
             onRequestUpdate={requestUpdate}
             onGoToTab={(t: TabValue) => navigate({ to: ".", params: { id }, search: { tab: t }, replace: true })}
           />
+        </TabsContent>
+
+        <TabsContent value="profile" className="grid gap-6">
+          <Suspense fallback={<TabFallback />}>
+            <ProfileGoalsAdminPanel clientId={id} />
+          </Suspense>
         </TabsContent>
 
         <TabsContent value="coaching" className="grid gap-6 md:grid-cols-3">
