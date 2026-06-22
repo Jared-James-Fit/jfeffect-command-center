@@ -2828,7 +2828,7 @@ function SetRow({
             readonly && "cursor-default",
           )}
         >
-          {reps ? `${reps}r` : "—"}
+          {reps || "—"}
         </button>
       )
       )}
@@ -2883,7 +2883,7 @@ function SetRow({
             readonly && "cursor-default",
           )}
         >
-          {rpe ? (showRir ? `${String(Math.max(0, 10 - Number(rpe)))} rir` : `@${rpe}`) : "—"}
+          {rpe ? (showRir ? String(Math.max(0, 10 - Number(rpe))) : rpe) : "—"}
         </button>
       )}
       <div className="flex items-center justify-end gap-1">
@@ -2893,103 +2893,24 @@ function SetRow({
     </div>
 
     {/* Quick-fill chip row — Suggested values are visible but never auto-confirm */}
-    {!readonly && !isConfirmed && hasAnyTarget && (
-      <div className="px-3 pb-2 space-y-1.5">
-        {/* Weight quick controls */}
-        {suggestedWeight != null && (
-          <div className="flex flex-wrap items-center gap-1">
-            <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mr-1">Weight</span>
-            <button type="button" onClick={() => bumpWeight(-weightIncrement(unit))}
-              aria-label={`Decrease weight by ${weightIncrement(unit)} ${unit}`}
-              className="h-7 min-w-[36px] rounded-md border border-border bg-background px-2 text-xs font-bold hover:bg-secondary">
-              −{weightIncrement(unit)}
-            </button>
-            <button type="button" onClick={applySuggestedWeight}
-              aria-label={`Use suggested ${suggestedWeight} ${unit} — programmed target`}
-              className="h-7 rounded-md border border-primary/40 bg-primary/10 px-2 text-xs font-bold text-primary hover:bg-primary/20">
-              Use {fmtNum(suggestedWeight)} {unit}
-            </button>
-            <button type="button" onClick={() => bumpWeight(weightIncrement(unit))}
-              aria-label={`Increase weight by ${weightIncrement(unit)} ${unit}`}
-              className="h-7 min-w-[36px] rounded-md border border-border bg-background px-2 text-xs font-bold hover:bg-secondary">
-              +{weightIncrement(unit)}
-            </button>
-          </div>
-        )}
-
-        {/* Reps quick controls */}
-        {repChipValues.length > 0 && (
-          <div className="flex flex-wrap items-center gap-1">
-            <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mr-1">Reps</span>
-            {repChipValues.map((v) => {
-              const isTarget = repTarget?.exact === v;
-              return (
-                <button key={v} type="button" onClick={() => setReps(String(v))}
-                  aria-label={`Select ${v} reps${isTarget ? " — programmed target" : ""}`}
-                  className={cn(
-                    "h-7 min-w-[34px] rounded-md border px-2 text-xs font-bold hover:bg-secondary",
-                    isTarget ? "border-primary/40 bg-primary/10 text-primary" : "border-border bg-background",
-                  )}>
-                  {v}{isTarget && <span className="ml-1 text-[9px] font-normal opacity-70">★</span>}
-                </button>
-              );
-            })}
-          </div>
-        )}
-
-        {/* RPE quick controls */}
-        {rpeChipValues.length > 0 && (
-          <div className="flex flex-wrap items-center gap-1">
-            <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mr-1">RPE</span>
-            {rpeChipValues.map((v) => {
-              const isTarget = rpeTarget?.exact === v;
-              return (
-                <button key={v} type="button" onClick={() => setRpe(String(v))}
-                  aria-label={`Select RPE ${v}${isTarget ? " — programmed target" : ""}`}
-                  className={cn(
-                    "h-7 min-w-[34px] rounded-md border px-2 text-xs font-bold hover:bg-secondary",
-                    isTarget ? "border-primary/40 bg-primary/10 text-primary" : "border-border bg-background",
-                  )}>
-                  {fmtNum(v)}{isTarget && <span className="ml-1 text-[9px] font-normal opacity-70">★</span>}
-                </button>
-              );
-            })}
-          </div>
-        )}
-
-        {/* RIR quick controls (only when RIR is programmed and RPE isn't) */}
-        {showRir && rirChipValues.length > 0 && (
-          <div className="flex flex-wrap items-center gap-1">
-            <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mr-1">RIR</span>
-            {rirChipValues.map((v) => {
-              const isTarget = rirTarget?.exact === v;
-              return (
-                <button key={v} type="button" onClick={() => setRpe(String(Math.max(0, 10 - v)))}
-                  aria-label={`Select ${v} RIR${isTarget ? " — programmed target" : ""}`}
-                  className={cn(
-                    "h-7 min-w-[34px] rounded-md border px-2 text-xs font-bold hover:bg-secondary",
-                    isTarget ? "border-primary/40 bg-primary/10 text-primary" : "border-border bg-background",
-                  )}>
-                  {v}{isTarget && <span className="ml-1 text-[9px] font-normal opacity-70">★</span>}
-                </button>
-              );
-            })}
-          </div>
-        )}
-
-        {/* Row actions */}
-        <div className="flex flex-wrap items-center gap-1 pt-0.5">
-          <Button size="sm" variant="outline" onClick={useTargets} className="h-7 px-2 text-[11px]">
-            Quick Inputs
-          </Button>
-          {setIndex > 1 && prevExisting?.completed_at && (
-            <Button size="sm" variant="outline" onClick={copyPrevious} className="h-7 px-2 text-[11px]">
-              Copy Previous
-            </Button>
-          )}
+    {/* Copy Previous — compact secondary action for set 2+ */}
+    {!readonly && !isConfirmed && setIndex > 1 && prevExisting?.completed_at && (() => {
+      const prevWeight = unit === "kg"
+        ? (prevExisting.actual_load_kg ?? prevExisting.actual_load)
+        : (prevExisting.actual_load_lb ?? prevExisting.actual_load);
+      if (prevWeight == null) return null;
+      return (
+        <div className="px-3 pb-1.5">
+          <button
+            type="button"
+            onClick={copyPrevious}
+            className="h-7 rounded-md border border-border/60 bg-transparent px-2.5 text-[11px] text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors"
+          >
+            Copy Previous ({fmtNum(Number(prevWeight))} {unit})
+          </button>
         </div>
-      </div>
-    )}
+      );
+    })()}
 
     {/* Apply to remaining sets (visible after this set is confirmed) */}
     {!readonly && isConfirmed && hasUncompletedAfter && onApplyToRemaining && (
