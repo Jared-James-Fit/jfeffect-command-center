@@ -533,7 +533,12 @@ export function PaymentLinksPage({ embedded = false }: { embedded?: boolean } = 
                       <div className="text-xs text-muted-foreground">
                         {p.product_type ?? "Product"}{p.payment_structure ? ` · ${p.payment_structure}` : ""}{termLabel(p) ? ` · ${termLabel(p)}` : ""}
                       </div>
-                      <div className="text-lg font-black mt-1">{p.currency.toUpperCase()} {formatPrice(p.price_cents, p.currency)}</div>
+                      {/* Subtitle: use description if it contains frequency/payment info, otherwise show price */}
+                      {p.description && /every|payment|week|month|year/i.test(p.description) ? (
+                        <div className="text-sm font-semibold mt-1">{p.description}</div>
+                      ) : (
+                        <div className="text-lg font-black mt-1">{p.currency.toUpperCase()} {formatPrice(p.price_cents, p.currency)}</div>
+                      )}
                     </div>
                   </div>
                   <div className="mt-2 flex flex-wrap gap-1.5">
@@ -1072,9 +1077,14 @@ function SharePaymentLinkDialog({
             <div>
               <div className="text-sm font-semibold">{product.name}</div>
               <div className="text-xs text-muted-foreground">
-                {product.currency.toUpperCase()} {formatPrice(product.price_cents, product.currency)}
-                {product.payment_structure ? ` · ${product.payment_structure}` : ""}
+                {product.description && /every|payment|week|month|year/i.test(product.description)
+                  ? product.description
+                  : `${product.currency.toUpperCase()} ${formatPrice(product.price_cents, product.currency)}${product.payment_structure ? ` · ${product.payment_structure}` : ""}`
+                }
               </div>
+              {product.notes && /total/i.test(product.notes) && (
+                <div className="text-xs text-muted-foreground mt-0.5">{product.notes}</div>
+              )}
             </div>
             <div>
               <Label className="text-xs">Payment link URL</Label>
