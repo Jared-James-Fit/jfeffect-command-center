@@ -2665,7 +2665,10 @@ function SetRow({
   // State labels: Suggested (no draft, no confirm), Draft (typed but not all valid yet
   // OR explicitly saved with completed_at=null), Confirmed (existing.completed_at set).
   const isConfirmed = Boolean(existing?.completed_at);
-  const hasAnyEntry = load.length > 0 || reps.length > 0 || rpe.length > 0;
+  // hasAnyEntry only counts weight (the field the client must enter) and
+  // manually-edited reps/RPE. Pre-filled prescription values do NOT count
+  // as draft data — otherwise every unlogged set shows the amber border.
+  const hasAnyEntry = load.length > 0 || repsEdited || rpeEdited;
   const isDraft = !isConfirmed && (hasAnyEntry || (existing && !existing.completed_at));
 
   // Quick-fill helpers — these only update local state, never auto-confirm.

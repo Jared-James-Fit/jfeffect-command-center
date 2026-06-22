@@ -77,8 +77,11 @@ export function WorkoutSyncBanner({ clientId, workoutId, pageRoute, className }:
       }).catch(() => {
         /* best-effort — no toast, banner already surfaces the issue */
       });
-      toast.error("Workout not syncing", {
-        description: "Your coach has been notified. Keep this page open.",
+      // Use a quiet, non-alarming message — sync issues are temporary
+      // and the client's data is already saved locally.
+      toast.warning("Sync delayed", {
+        description: "Your data is saved. We'll sync when the connection improves.",
+        duration: 5000,
       });
     });
     return () => setStuckListener(null);
