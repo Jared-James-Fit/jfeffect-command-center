@@ -2462,10 +2462,12 @@ export type Database = {
           available_weekdays: string[]
           client_id: string
           completed_at: string | null
+          cooking_skill: string | null
           created_at: string
           equipment: string[]
           equipment_by_location: Json
           final_notes: string | null
+          food_dislikes: string[] | null
           food_restrictions_details: string | null
           food_restrictions_has: boolean
           goal_target: string | null
@@ -2493,10 +2495,12 @@ export type Database = {
           available_weekdays?: string[]
           client_id: string
           completed_at?: string | null
+          cooking_skill?: string | null
           created_at?: string
           equipment?: string[]
           equipment_by_location?: Json
           final_notes?: string | null
+          food_dislikes?: string[] | null
           food_restrictions_details?: string | null
           food_restrictions_has?: boolean
           goal_target?: string | null
@@ -2524,10 +2528,12 @@ export type Database = {
           available_weekdays?: string[]
           client_id?: string
           completed_at?: string | null
+          cooking_skill?: string | null
           created_at?: string
           equipment?: string[]
           equipment_by_location?: Json
           final_notes?: string | null
+          food_dislikes?: string[] | null
           food_restrictions_details?: string | null
           food_restrictions_has?: boolean
           goal_target?: string | null
@@ -2750,6 +2756,7 @@ export type Database = {
           compliance_status_updated_at: string | null
           compliance_tracking_enabled: boolean
           converted_to_client_at: string | null
+          cooking_skill: string | null
           country: string | null
           created_at: string
           date_of_birth: string | null
@@ -2764,6 +2771,7 @@ export type Database = {
           emergency_contact_phone: string | null
           facebook: string | null
           first_name: string | null
+          food_dislikes: string[] | null
           full_name: string
           goals: string | null
           height_cm: number | null
@@ -2928,6 +2936,7 @@ export type Database = {
           compliance_status_updated_at?: string | null
           compliance_tracking_enabled?: boolean
           converted_to_client_at?: string | null
+          cooking_skill?: string | null
           country?: string | null
           created_at?: string
           date_of_birth?: string | null
@@ -2942,6 +2951,7 @@ export type Database = {
           emergency_contact_phone?: string | null
           facebook?: string | null
           first_name?: string | null
+          food_dislikes?: string[] | null
           full_name: string
           goals?: string | null
           height_cm?: number | null
@@ -3106,6 +3116,7 @@ export type Database = {
           compliance_status_updated_at?: string | null
           compliance_tracking_enabled?: boolean
           converted_to_client_at?: string | null
+          cooking_skill?: string | null
           country?: string | null
           created_at?: string
           date_of_birth?: string | null
@@ -3120,6 +3131,7 @@ export type Database = {
           emergency_contact_phone?: string | null
           facebook?: string | null
           first_name?: string | null
+          food_dislikes?: string[] | null
           full_name?: string
           goals?: string | null
           height_cm?: number | null
@@ -8175,6 +8187,74 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "member_nutrition_targets_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: false
+            referencedRelation: "app_members"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      member_payment_ledger: {
+        Row: {
+          access_end_date: string | null
+          access_granted: boolean
+          access_start_date: string | null
+          admin_user_id: string | null
+          amount_cents: number | null
+          created_at: string
+          currency: string
+          id: string
+          manual_note: string | null
+          member_id: string
+          payment_date: string
+          payment_method: string | null
+          service_product: string | null
+          status: string
+          stripe_invoice_id: string | null
+          stripe_payment_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          access_end_date?: string | null
+          access_granted?: boolean
+          access_start_date?: string | null
+          admin_user_id?: string | null
+          amount_cents?: number | null
+          created_at?: string
+          currency?: string
+          id?: string
+          manual_note?: string | null
+          member_id: string
+          payment_date?: string
+          payment_method?: string | null
+          service_product?: string | null
+          status?: string
+          stripe_invoice_id?: string | null
+          stripe_payment_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          access_end_date?: string | null
+          access_granted?: boolean
+          access_start_date?: string | null
+          admin_user_id?: string | null
+          amount_cents?: number | null
+          created_at?: string
+          currency?: string
+          id?: string
+          manual_note?: string | null
+          member_id?: string
+          payment_date?: string
+          payment_method?: string | null
+          service_product?: string | null
+          status?: string
+          stripe_invoice_id?: string | null
+          stripe_payment_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "member_payment_ledger_member_id_fkey"
             columns: ["member_id"]
             isOneToOne: false
             referencedRelation: "app_members"
@@ -16334,6 +16414,105 @@ export type Database = {
           visible_to_client?: boolean
         }
         Relationships: []
+      }
+      weekly_checkin_messages: {
+        Row: {
+          client_deleted_at: string | null
+          created_at: string
+          id: string
+          message_text: string
+          sender_role: string
+          sender_user_id: string
+          thread_id: string
+          updated_at: string
+        }
+        Insert: {
+          client_deleted_at?: string | null
+          created_at?: string
+          id?: string
+          message_text: string
+          sender_role: string
+          sender_user_id: string
+          thread_id: string
+          updated_at?: string
+        }
+        Update: {
+          client_deleted_at?: string | null
+          created_at?: string
+          id?: string
+          message_text?: string
+          sender_role?: string
+          sender_user_id?: string
+          thread_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "weekly_checkin_messages_thread_id_fkey"
+            columns: ["thread_id"]
+            isOneToOne: false
+            referencedRelation: "weekly_checkin_threads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      weekly_checkin_threads: {
+        Row: {
+          admin_archived_at: string | null
+          auto_archive_at: string | null
+          client_archived_at: string | null
+          client_id: string | null
+          created_at: string
+          id: string
+          member_id: string | null
+          submission_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          admin_archived_at?: string | null
+          auto_archive_at?: string | null
+          client_archived_at?: string | null
+          client_id?: string | null
+          created_at?: string
+          id?: string
+          member_id?: string | null
+          submission_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          admin_archived_at?: string | null
+          auto_archive_at?: string | null
+          client_archived_at?: string | null
+          client_id?: string | null
+          created_at?: string
+          id?: string
+          member_id?: string | null
+          submission_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "weekly_checkin_threads_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "weekly_checkin_threads_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: false
+            referencedRelation: "app_members"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "weekly_checkin_threads_submission_id_fkey"
+            columns: ["submission_id"]
+            isOneToOne: false
+            referencedRelation: "nf_submissions"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       worker_runs: {
         Row: {
