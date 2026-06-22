@@ -9,7 +9,8 @@ import { useAuth } from "@/lib/auth";
 import { PageHeader } from "@/components/app-shell";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { ShieldAlert, CreditCard, Settings, Trash2 } from "lucide-react";
+import { ShieldAlert, CreditCard, Settings, Trash2, CheckCircle2, AlertTriangle, Clock, Briefcase, Calendar } from "lucide-react";
+import { isBasicInfoComplete } from "@/lib/basic-info";
 import { isNative } from "@/platform";
 import { toast } from "sonner";
 import { createCustomerPortalSession } from "@/lib/stripe-checkout.functions";
@@ -58,6 +59,34 @@ function AccountPage() {
   }, [client]);
 
   const set = (k: string, v: any) => setForm({ ...(form ?? {}), [k]: v });
+
+  const { data: goalsStatus } = useQuery({
+    queryKey: ["client-goals-setup-status", client?.id],
+    enabled: !!client?.id,
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("client_goals_setup")
+        .select("completed_at, main_goal")
+        .eq("client_id", client!.id)
+        .maybeSingle();
+      return data;
+    },
+    staleTime: 5 * 60_000,
+  });
+
+  const { data: assignedCoach } = useQuery({
+    queryKey: ["coach", client?.assigned_coach_id],
+    enabled: !!client?.assigned_coach_id,
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("coaches")
+        .select("id, full_name")
+        .eq("id", client!.assigned_coach_id!)
+        .maybeSingle();
+      return data;
+    },
+    staleTime: 10 * 60_000,
+  });
 
   const buildPatch = (current: any) => {
     const updatedFields = PROFILE_FIELDS.filter((f) => current[f] !== client?.[f]);
@@ -165,6 +194,15 @@ function AccountPage() {
         actions={<SavedIndicator state={saveState} />}
       />
       <div className="grid gap-6 p-6 md:p-8 md:grid-cols-3">
+        {/* ── Profile Status ── */}
+        <div className="md:col-span-3">
+          <ProfileStatusCard
+            client={client}
+            goalsStatus={goalsStatus}
+            infoUpdateRequested={!!form?.info_update_requested}
+          />
+        </div>
+
         {form.info_update_requested && (
           <Card className="border-warning/40 bg-warning/10 p-4 md:col-span-3">
             <div className="flex items-start gap-3">
@@ -258,6 +296,13 @@ function AccountPage() {
           </Card>
         </div>
 
+        {/* ── Coaching Setup (read-only) ── */}
+        {client && (client.assigned_coach_id || client.coaching_type || client.coaching_package || client.start_date || client.status) && (
+          <div className="md:col-span-3">
+            <CoachingSetupSection client={client as any} coach={assignedCoach ?? null} />
+          </div>
+        )}
+
         <div className="md:col-span-3">
           <SectionErrorBoundary label="Legal & Safety">
             <ClientLegalSafety />
@@ -296,6 +341,106 @@ function AccountPage() {
     </>
   );
 
+}
+
+function ProfileStatusCard({
+  client,
+  goalsStatus,
+  infoUpdateRequested,
+}: {
+  client: any;
+  goalsStatus: { completed_at: string | null; main_goal: string | null } | null | undefined;
+  infoUpdateRequested: boolean;
+}) {
+  if (!client) return null;
+
+  const basicOk = isBasicInfoComplete(client);
+  const goalsOk = !!(goalsStatus?.completed_at || goalsStatus?.main_goal);
+
+  let status: "complete" | "missing" | "review";
+  if (infoUpdateRequested) {
+    status = "review";
+  } else if (!basicOk || !goalsOk) {
+    status = "missing";
+  } else {
+    status = "complete";
+  }
+
+  const missingItems: string[] = [];
+  if (!client.first_name || !client.last_name) missingItems.push("Full name");
+  if (!client.phone) missingItems.push("Phone number");
+  if (!client.date_of_birth) missingItems.push("Date of birth");
+  if (!client.timezone) missingItems.push("Timezone");
+  if (!goalsOk) missingItems.push("Goals & Training setup");
+
+  return (
+    <Card className={[
+      "p-4 flex flex-col sm:flex-row sm:items-center gap-3",
+      status === "complete" ? "border-emerald-500/30 bg-emerald-500/5" :
+      status === "review" ? "border-amber-500/30 bg-amber-500/5" :
+      "border-amber-500/30 bg-amber-500/5",
+    ].join(" ")}>
+      <div className="flex items-center gap-2 flex-1">
+        {status === "complete" && <CheckCircle2 className="h-5 w-5 shrink-0 text-emerald-500" />}
+        {status === "review" && <Clock className="h-5 w-5 shrink-0 text-amber-500" />}
+        {status === "missing" && <AlertTriangle className="h-5 w-5 shrink-0 text-amber-500" />}
+        <div>
+          <div className="font-semibold text-sm">
+            {status === "complete" && "Profile Complete"}
+            {status === "review" && "Needs Review"}
+            {status === "missing" && "Information Missing"}
+          </div>
+          {missingItems.length > 0 && (
+            <div className="text-xs text-muted-foreground mt-0.5">
+              Missing: {missingItems.join(", ")}
+            </div>
+          )}
+        </div>
+      </div>
+      {status !== "complete" && (
+        <Badge
+          variant="outline"
+          className={status === "review"
+            ? "border-amber-500/40 text-amber-600 dark:text-amber-400 shrink-0"
+            : "border-amber-500/40 text-amber-600 dark:text-amber-400 shrink-0"}
+        >
+          {status === "review" ? "Needs Review" : "Information Missing"}
+        </Badge>
+      )}
+    </Card>
+  );
+}
+
+function CoachingSetupSection({ client, coach }: { client: any; coach: any }) {
+  const rows: { label: string; value: string | null | undefined }[] = [
+    { label: "Assigned coach", value: coach?.full_name ?? (client.assigned_coach_id ? "—" : null) },
+    { label: "Coaching type", value: client.coaching_type },
+    { label: "Current service", value: client.coaching_package },
+    { label: "Start date", value: client.start_date ? new Date(client.start_date).toLocaleDateString() : null },
+    { label: "Coaching status", value: client.status },
+  ].filter((r) => r.value);
+
+  if (rows.length === 0) return null;
+
+  return (
+    <Card className="p-6 space-y-4">
+      <div className="flex items-center gap-2">
+        <Briefcase className="h-4 w-4 text-muted-foreground" />
+        <h3 className="text-xs uppercase tracking-widest text-muted-foreground">Coaching Setup</h3>
+      </div>
+      <div className="grid gap-3 sm:grid-cols-2">
+        {rows.map(({ label, value }) => (
+          <div key={label}>
+            <div className="text-[10px] uppercase tracking-wider text-muted-foreground">{label}</div>
+            <div className="mt-0.5 text-sm font-medium">{value}</div>
+          </div>
+        ))}
+      </div>
+      <p className="text-[11px] text-muted-foreground">
+        Coaching information is managed by your coach. Contact us if anything looks incorrect.
+      </p>
+    </Card>
+  );
 }
 
 function BillingSection({ clientId }: { clientId?: string }) {

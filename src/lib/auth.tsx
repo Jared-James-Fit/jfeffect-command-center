@@ -5,6 +5,7 @@ import { useRouter } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { markClientSignedIn } from "@/lib/activity";
 import { logPerf } from "@/lib/perf-timing";
+import { clearLastRoute } from "@/lib/route-persistence";
 
 export type AppRole = "admin" | "coach" | "media_manager" | "client" | "member";
 
@@ -153,6 +154,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [user?.id]);
 
   const signOut = async () => {
+    // Capture the user id before clearing state.
+    const uid = user?.id ?? null;
     // Stop in-flight queries before clearing the session so they don't 401.
     try { await queryClient.cancelQueries(); } catch { /* best-effort */ }
     queryClient.clear();
@@ -168,6 +171,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setRole(null);
     roleLoadedForRef.current = null;
     lastUserIdRef.current = null;
+    // Remove the persisted last-route so the next user on this device
+    // never lands in a previous user's workout or profile.
+    if (uid) clearLastRoute(uid);
     // Clear app-shell caches and offline drafts so the next signed-in user
     // never sees the previous user's cached data.
     try {

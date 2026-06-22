@@ -7,7 +7,7 @@ import {
   shouldPersistQueryKey,
 } from "@/lib/query-persister";
 import { Toaster } from "sonner";
-import { AuthProvider } from "@/lib/auth";
+import { AuthProvider, useAuth } from "@/lib/auth";
 import { ClientImpersonationProvider } from "@/lib/client-impersonation";
 import { ProgressDrawer } from "@/components/progress-drawer";
 import { GlobalHighlight } from "@/components/global-highlight";
@@ -16,11 +16,13 @@ import {
   Link,
   createRootRouteWithContext,
   useRouter,
+  useLocation,
   HeadContent,
   Scripts,
 } from "@tanstack/react-router";
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { supabase } from "../integrations/supabase/client";
+import { saveLastRoute } from "@/lib/route-persistence";
 
 import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
@@ -290,6 +292,27 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
   errorComponent: ErrorComponent,
 });
 
+/**
+ * Tracks the current authenticated pathname and persists it to localStorage
+ * so the app can restore the user's last location after a full PWA restart.
+ * Renders nothing — pure side effect.
+ */
+function RouteTracker() {
+  const { user, loading } = useAuth();
+  const location = useLocation();
+  const lastPathRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (loading || !user?.id) return;
+    const { pathname } = location;
+    if (pathname === lastPathRef.current) return;
+    lastPathRef.current = pathname;
+    saveLastRoute(user.id, pathname);
+  }, [user?.id, loading, location.pathname]);
+
+  return null;
+}
+
 function RootShell({ children }: { children: ReactNode }) {
   return (
     <html lang="en">
@@ -325,6 +348,7 @@ function RootComponent() {
       <ClientImpersonationProvider>
         {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
         <Outlet />
+        <RouteTracker />
         <Toaster position="top-right" theme="dark" richColors />
         <ProgressDrawer />
         <GlobalHighlight />
