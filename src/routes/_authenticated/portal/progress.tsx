@@ -23,6 +23,8 @@ function PortalProgress() {
   const { data: client, isLoading } = useQuery({
     queryKey: ["my-client-progress-ctx", userId],
     enabled: !!userId,
+    staleTime: 5 * 60_000,
+    gcTime: 30 * 60_000,
     queryFn: async () => {
       const { data } = await supabase
         .from("clients")

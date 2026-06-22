@@ -24,6 +24,8 @@ function AdminClientProgress() {
   const { role } = useAuth();
   const { data: client } = useQuery({
     queryKey: ["admin-client-progress", id],
+    staleTime: 5 * 60_000,
+    gcTime: 30 * 60_000,
     queryFn: async () => {
       const { data } = await supabase
         .from("clients")

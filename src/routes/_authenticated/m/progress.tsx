@@ -19,7 +19,12 @@ export const Route = createFileRoute("/_authenticated/m/progress")({
 function MemberProgress() {
   const fetchMe = useServerFn(getCurrentMember);
   const { action } = Route.useSearch();
-  const { data: me } = useQuery({ queryKey: ["m-me"], queryFn: () => fetchMe() });
+  const { data: me } = useQuery({
+    queryKey: ["m-me"],
+    queryFn: () => fetchMe(),
+    staleTime: 5 * 60_000,
+    gcTime: 30 * 60_000,
+  });
   const member: any = me?.member;
 
   // Members get review access only when an active client_access_entitlements
