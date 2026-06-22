@@ -38,65 +38,56 @@ export function ProgressSummaryCard({
 }) {
   void currentUserId; void viewerRole;
 
-  // ---------- Recent status (latest entry per category only — fast) ----------
-  const { data: latestBw } = useQuery({
-    queryKey: ["progress-latest-bw", userId],
+  // ---------- Recent status (single parallel fetch — one cache entry) ----------
+  const { data: latest } = useQuery({
+    queryKey: ["progress-snapshot-latest", userId],
     staleTime: 60_000,
+    enabled: !!userId,
     queryFn: async () => {
-      const { data } = await supabase
-        .from("progress_bodyweight")
-        .select("logged_date, weight_value, weight_unit")
-        .eq("user_id", userId)
-        .order("logged_date", { ascending: false })
-        .limit(1)
-        .maybeSingle();
-      return (data ?? null) as { logged_date: string; weight_value: number; weight_unit: string | null } | null;
+      const [bwRes, photoRes, videoRes, measRes] = await Promise.all([
+        supabase
+          .from("progress_bodyweight")
+          .select("logged_date, weight_value, weight_unit")
+          .eq("user_id", userId)
+          .order("logged_date", { ascending: false })
+          .limit(1)
+          .maybeSingle(),
+        supabase
+          .from("progress_submissions")
+          .select("submission_date, created_at")
+          .eq("user_id", userId)
+          .eq("submission_type", "photo")
+          .order("submission_date", { ascending: false })
+          .limit(1)
+          .maybeSingle(),
+        supabase
+          .from("progress_submissions")
+          .select("submission_date, created_at")
+          .eq("user_id", userId)
+          .eq("submission_type", "video")
+          .order("submission_date", { ascending: false })
+          .limit(1)
+          .maybeSingle(),
+        supabase
+          .from("progress_measurements")
+          .select("measured_date")
+          .eq("user_id", userId)
+          .order("measured_date", { ascending: false })
+          .limit(1)
+          .maybeSingle(),
+      ]);
+      return {
+        bw: (bwRes.data ?? null) as { logged_date: string; weight_value: number; weight_unit: string | null } | null,
+        photoAt: (photoRes.data?.submission_date ?? photoRes.data?.created_at ?? null) as string | null,
+        videoAt: (videoRes.data?.submission_date ?? videoRes.data?.created_at ?? null) as string | null,
+        measAt: (measRes.data?.measured_date ?? null) as string | null,
+      };
     },
   });
-  const { data: latestPhotoAt } = useQuery({
-    queryKey: ["progress-latest-photo", userId],
-    staleTime: 60_000,
-    queryFn: async () => {
-      const { data } = await supabase
-        .from("progress_submissions")
-        .select("submission_date, created_at")
-        .eq("user_id", userId)
-        .eq("submission_type", "photo")
-        .order("submission_date", { ascending: false })
-        .limit(1)
-        .maybeSingle();
-      return (data?.submission_date ?? data?.created_at ?? null) as string | null;
-    },
-  });
-  const { data: latestVideoAt } = useQuery({
-    queryKey: ["progress-latest-video", userId],
-    staleTime: 60_000,
-    queryFn: async () => {
-      const { data } = await supabase
-        .from("progress_submissions")
-        .select("submission_date, created_at")
-        .eq("user_id", userId)
-        .eq("submission_type", "video")
-        .order("submission_date", { ascending: false })
-        .limit(1)
-        .maybeSingle();
-      return (data?.submission_date ?? data?.created_at ?? null) as string | null;
-    },
-  });
-  const { data: latestMeasAt } = useQuery({
-    queryKey: ["progress-latest-meas", userId],
-    staleTime: 60_000,
-    queryFn: async () => {
-      const { data } = await supabase
-        .from("progress_measurements")
-        .select("measured_date")
-        .eq("user_id", userId)
-        .order("measured_date", { ascending: false })
-        .limit(1)
-        .maybeSingle();
-      return (data?.measured_date ?? null) as string | null;
-    },
-  });
+  const latestBw = latest?.bw ?? null;
+  const latestPhotoAt = latest?.photoAt ?? null;
+  const latestVideoAt = latest?.videoAt ?? null;
+  const latestMeasAt = latest?.measAt ?? null;
 
   const fmtDate = (iso: string | null | undefined): string => {
     if (!iso) return "—";
