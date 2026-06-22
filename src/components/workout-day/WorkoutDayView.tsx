@@ -2431,8 +2431,30 @@ function SetRow({
     return existing.actual_load != null ? String(existing.actual_load) : "";
   })();
   const [load, setLoad] = useState(initialDisplayLoad);
-  const [reps, setReps] = useState(existing?.actual_reps?.toString() ?? "");
-  const [rpe, setRpe] = useState(existing?.actual_rpe_num != null ? String(existing.actual_rpe_num) : (existing?.actual_rpe ?? ""));
+  // Derive the prescribed reps/RPE for Quick Log auto-fill.
+  const prescribedRepsStr = (() => {
+    if (repTarget?.exact != null) return String(repTarget.exact);
+    if (repTarget?.min != null) return String(repTarget.min);
+    if (targetReps) return String(targetReps).replace(/[^0-9]/g, "").slice(0, 3);
+    return "";
+  })();
+  const prescribedRpeStr = (() => {
+    if (rpeTarget?.exact != null) return String(rpeTarget.exact);
+    if (rpeTarget?.min != null) return String(rpeTarget.min);
+    if (targetRpe) return String(targetRpe).replace(/[^0-9.]/g, "").slice(0, 4);
+    if (rirTarget?.exact != null) return String(Math.min(10, Math.max(0, 10 - rirTarget.exact)));
+    if (rirTarget?.max != null) return String(Math.min(10, Math.max(0, 10 - rirTarget.max)));
+    return "";
+  })();
+  // Initialize reps/RPE from actual (if logged) OR fall back to prescribed (Quick Log).
+  const [reps, setReps] = useState(existing?.actual_reps?.toString() ?? prescribedRepsStr);
+  const [rpe, setRpe] = useState(existing?.actual_rpe_num != null ? String(existing.actual_rpe_num) : (existing?.actual_rpe ?? prescribedRpeStr));
+  // Track whether the client has manually edited reps/RPE away from the prescription.
+  const [repsEdited, setRepsEdited] = useState(Boolean(existing?.actual_reps));
+  const [rpeEdited, setRpeEdited] = useState(Boolean(existing?.actual_rpe_num != null || existing?.actual_rpe));
+  // Chip open state — when false, show tappable chip; when true, show inline input.
+  const [repsChipOpen, setRepsChipOpen] = useState(false);
+  const [rpeChipOpen, setRpeChipOpen] = useState(false);
   // Hydrate from any unsynced local draft on first mount for this set
   const draftKey = clientId ? `workout-set:${rowId}:${clientId}:${setIndex}` : null;
   const [hydrated, setHydrated] = useState(false);
@@ -2472,8 +2494,8 @@ function SetRow({
       ? (kg != null ? String(kg) : (existing?.actual_load != null ? String(existing.actual_load) : ""))
       : (lb != null ? String(lb) : (existing?.actual_load != null ? String(existing.actual_load) : ""));
     if (focused !== "load") setLoad(display);
-    if (focused !== "reps") setReps(existing?.actual_reps?.toString() ?? "");
-    if (focused !== "rpe") setRpe(existing?.actual_rpe_num != null ? String(existing.actual_rpe_num) : (existing?.actual_rpe ?? ""));
+    if (focused !== "reps") setReps(existing?.actual_reps?.toString() ?? prescribedRepsStr);
+    if (focused !== "rpe") setRpe(existing?.actual_rpe_num != null ? String(existing.actual_rpe_num) : (existing?.actual_rpe ?? prescribedRpeStr));
     // Track the unit at the moment of (re)hydration so unit-conversion
     // effect doesn't re-convert the freshly-set display value.
     lastUnitRef.current = unit;
@@ -2773,21 +2795,42 @@ function SetRow({
           onComplete={(secs, method) => void saveTimeCompletion(secs, { method })}
         />
       ) : (
-      <Input
-        className={cn(focusMode ? "h-9 text-base px-2" : "h-8 text-sm px-2")}
-        inputMode="numeric"
-        type="text"
-        pattern="[0-9]*"
-        placeholder="reps"
-        aria-label={`Set ${setIndex} reps`}
-        value={reps}
-        onChange={(e) => setReps(e.target.value.replace(/[^0-9]/g, ""))}
-        onFocus={() => setFocusedField("reps")}
-        onKeyDown={onEnter}
-        onBlur={() => { setFocusedField(null); save.flush(); }}
-        readOnly={readonly}
-        disabled={readonly}
-      />
+      /* Quick Log reps chip — tap to edit */
+      repsChipOpen ? (
+        <Input
+          autoFocus
+          className={cn(focusMode ? "h-9 text-base px-2" : "h-8 text-sm px-2")}
+          inputMode="numeric"
+          type="text"
+          pattern="[0-9]*"
+          placeholder="reps"
+          aria-label={`Set ${setIndex} reps`}
+          value={reps}
+          onChange={(e) => { setReps(e.target.value.replace(/[^0-9]/g, "")); setRepsEdited(true); }}
+          onFocus={() => setFocusedField("reps")}
+          onKeyDown={onEnter}
+          onBlur={() => { setFocusedField(null); setRepsChipOpen(false); save.flush(); }}
+          readOnly={readonly}
+          disabled={readonly}
+        />
+      ) : (
+        <button
+          type="button"
+          onClick={() => { if (!readonly) setRepsChipOpen(true); }}
+          aria-label={`Set ${setIndex} reps — tap to edit`}
+          className={cn(
+            "flex items-center justify-center rounded-md border px-2 text-sm font-medium transition-colors whitespace-nowrap",
+            focusMode ? "h-9 text-base" : "h-8",
+            repsEdited
+              ? "border-primary/40 bg-primary/10 text-foreground"
+              : "border-border/60 bg-muted/40 text-muted-foreground",
+            !readonly && "hover:border-primary/60 hover:bg-primary/15 cursor-pointer",
+            readonly && "cursor-default",
+          )}
+        >
+          {reps ? `${reps}r` : "—"}
+        </button>
+      )
       )}
       {!hideWeight && (
       <Input
@@ -2806,31 +2849,43 @@ function SetRow({
         disabled={readonly}
       />
       )}
-      <Input
-        className={cn(focusMode ? "h-9 text-base px-2" : "h-8 text-sm px-2")}
-        inputMode="decimal"
-        type="text"
-        pattern="[0-9]*\.?[0-9]*"
-        placeholder={showRir ? "rir" : "rpe"}
-        aria-label={`Set ${setIndex} ${showRir ? "RIR" : "RPE"}`}
-        value={showRir && rpe !== "" ? String(Math.max(0, 10 - Number(rpe))) : rpe}
-        onChange={(e) => {
-          const cleaned = e.target.value.replace(/[^0-9.]/g, "");
-          if (showRir && cleaned !== "") {
-            const n = Number(cleaned);
-            if (isFinite(n)) {
-              setRpe(String(Math.max(0, Math.min(10, 10 - n))));
-              return;
+      {/* Quick Log RPE chip — tap to edit */}
+      {rpeChipOpen ? (
+        <Input autoFocus
+          className={cn(focusMode ? "h-9 text-base px-2" : "h-8 text-sm px-2")}
+          inputMode="decimal" type="text" pattern="[0-9]*\.?[0-9]*"
+          placeholder={showRir ? "rir" : "rpe"}
+          aria-label={`Set ${setIndex} ${showRir ? "RIR" : "RPE"}`}
+          value={showRir && rpe !== "" ? String(Math.max(0, 10 - Number(rpe))) : rpe}
+          onChange={(e) => {
+            const cleaned = e.target.value.replace(/[^0-9.]/g, "");
+            setRpeEdited(true);
+            if (showRir && cleaned !== "") {
+              const n = Number(cleaned);
+              if (isFinite(n)) { setRpe(String(Math.max(0, Math.min(10, 10 - n)))); return; }
             }
-          }
-          setRpe(cleaned);
-        }}
-        onFocus={() => setFocusedField("rpe")}
-        onKeyDown={onEnter}
-        onBlur={() => { setFocusedField(null); save.flush(); }}
-        readOnly={readonly}
-        disabled={readonly}
-      />
+            setRpe(cleaned);
+          }}
+          onFocus={() => setFocusedField("rpe")}
+          onKeyDown={onEnter}
+          onBlur={() => { setFocusedField(null); setRpeChipOpen(false); save.flush(); }}
+          readOnly={readonly} disabled={readonly}
+        />
+      ) : (
+        <button type="button"
+          onClick={() => { if (!readonly) setRpeChipOpen(true); }}
+          aria-label={`Set ${setIndex} ${showRir ? "RIR" : "RPE"} — tap to edit`}
+          className={cn(
+            "flex items-center justify-center rounded-md border px-2 text-sm font-medium transition-colors whitespace-nowrap",
+            focusMode ? "h-9 text-base" : "h-8",
+            rpeEdited ? "border-primary/40 bg-primary/10 text-foreground" : "border-border/60 bg-muted/40 text-muted-foreground",
+            !readonly && "hover:border-primary/60 hover:bg-primary/15 cursor-pointer",
+            readonly && "cursor-default",
+          )}
+        >
+          {rpe ? (showRir ? `${String(Math.max(0, 10 - Number(rpe)))} rir` : `@${rpe}`) : "—"}
+        </button>
+      )}
       <div className="flex items-center justify-end gap-1">
         {!readonly && <SaveStatus state={save.state} savedAt={save.savedAt} compact />}
         {isConfirmed && <CheckCircle2 className="h-4 w-4 text-green-500" />}
