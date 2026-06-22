@@ -328,11 +328,11 @@ function OverviewTab({
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-        {/* Latest weight + mini trend */}
+        {/* Weight */}
         <Card className="p-3">
           <div className="flex items-center justify-between">
             <h3 className="text-sm font-semibold">Weight</h3>
-            <button onClick={() => onViewTab("bodyweight")} className="text-xs text-primary font-medium hover:underline">View all</button>
+            {stats && <button onClick={() => onViewTab("bodyweight")} className="text-xs text-primary font-medium hover:underline">View all</button>}
           </div>
           {stats ? (
             <div className="mt-2">
@@ -369,15 +369,15 @@ function OverviewTab({
               )}
             </div>
           ) : (
-            <p className="mt-2 text-sm text-muted-foreground">No weight logged yet.</p>
+            <MiniEmpty body="No weight logged." actionLabel="Log weight" onAction={onLogWeight} />
           )}
         </Card>
 
-        {/* Latest 2 progress photos */}
+        {/* Photos */}
         <Card className="p-3">
           <div className="flex items-center justify-between">
-            <h3 className="text-sm font-semibold">Latest Photos</h3>
-            <button onClick={() => onViewTab("photos")} className="text-xs text-primary font-medium hover:underline">View all</button>
+            <h3 className="text-sm font-semibold">Photos</h3>
+            {photoSubs.length > 0 && <button onClick={() => onViewTab("photos")} className="text-xs text-primary font-medium hover:underline">View all</button>}
           </div>
           {photoSubs.length > 0 ? (
             <div className="mt-2 grid grid-cols-2 gap-2">
@@ -387,12 +387,46 @@ function OverviewTab({
                   onClick={() => onViewTab("photos")}
                   className="relative aspect-square overflow-hidden rounded bg-muted text-left"
                 >
-                  <SubmissionThumb sub={sub} />
+                  <LazyMount className="h-full w-full">
+                    <SubmissionThumb sub={sub} />
+                  </LazyMount>
                 </button>
               ))}
             </div>
           ) : (
-            <p className="mt-2 text-sm text-muted-foreground">No photos yet.</p>
+            <MiniEmpty body="No photos yet." actionLabel="Add photos" onAction={onAddPhotos} />
+          )}
+        </Card>
+
+        {/* Videos */}
+        <Card className="p-3">
+          <div className="flex items-center justify-between">
+            <h3 className="text-sm font-semibold">Videos</h3>
+            {videoSubs.length > 0 && <button onClick={() => onViewTab("videos")} className="text-xs text-primary font-medium hover:underline">View all</button>}
+          </div>
+          {videoSubs.length > 0 ? (
+            <p className="mt-2 text-sm">
+              <span className="font-semibold">{videoSubs.length}</span>{" "}
+              <span className="text-muted-foreground">total · last {fmtDate(videoSubs[0].submission_date)}</span>
+            </p>
+          ) : (
+            <MiniEmpty body="No videos yet." actionLabel="Add video" onAction={onAddVideo} />
+          )}
+        </Card>
+
+        {/* Measurements */}
+        <Card className="p-3">
+          <div className="flex items-center justify-between">
+            <h3 className="text-sm font-semibold">Measurements</h3>
+            {measRows.length > 0 && <button onClick={() => onViewTab("measurements")} className="text-xs text-primary font-medium hover:underline">View all</button>}
+          </div>
+          {measRows.length > 0 ? (
+            <p className="mt-2 text-sm">
+              <span className="font-semibold">{measRows.length}</span>{" "}
+              <span className="text-muted-foreground">entries · last {fmtDate(measRows[0].measured_date)}</span>
+            </p>
+          ) : (
+            <MiniEmpty body="No measurements yet." actionLabel="Add measurements" onAction={onAddMeasurements} />
           )}
         </Card>
       </div>
