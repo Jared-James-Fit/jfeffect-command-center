@@ -57,6 +57,7 @@ export type DirectoryRow = {
   f_missing_cardio: boolean;
   priority: number;
   next_action: DirectoryNextAction;
+  last_active_at: string | null;
 };
 
 export type DirectoryCounts = {

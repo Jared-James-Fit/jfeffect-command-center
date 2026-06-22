@@ -12,7 +12,7 @@ import { cn } from "@/lib/utils";
 import { BADGE_TONE, ACTION_ICON, actionStyle, rowBadges } from "./clients-status";
 import type { DirectoryRow } from "@/lib/clients-directory.functions";
 import type { DirectoryNextAction } from "@/lib/clients-directory.functions";
-import { format, parseISO, differenceInDays } from "date-fns";
+import { format, parseISO, differenceInDays, formatDistanceToNow } from "date-fns";
 import { QuickActionsMenu, ClientMoreMenu } from "./quick-actions";
 import { ClientQuickSheet, type QuickPanelKind } from "./client-quick-sheet";
 import { AssignProgramDialog } from "./assign-program-dialog";
@@ -65,17 +65,26 @@ export function ClientRow({ r, onArchive }: { r: DirectoryRow; onArchive?: (r: D
         .eq("id", r.id)
         .single();
       if (error) throw error;
+      const returnTo = typeof window !== "undefined" ? window.location.pathname + window.location.search : "/admin/clients";
       impersonation.start(
         { id: r.id, user_id: data?.user_id ?? null, full_name: data?.full_name ?? r.full_name },
-        typeof window !== "undefined" ? window.location.pathname + window.location.search : "/admin/clients",
+        returnTo,
       );
       if (!data?.user_id) {
         toast.message("Entering POV preview — client account isn't set up yet, so personal data will be empty.");
       }
-      navigate({ to: "/portal" });
+      // Use window.location.href instead of navigate() to force a full page reload.
+      // This ensures the sessionStorage/localStorage POV state is read on mount
+      // and the React context is fully initialized before the portal renders.
+      // Using navigate() causes a race condition where the portal renders before
+      // the impersonation context state update propagates.
+      if (typeof window !== "undefined") {
+        window.location.href = "/portal";
+      } else {
+        navigate({ to: "/portal" });
+      }
     } catch (e: any) {
       toast.error(e?.message ?? "Could not enter POV");
-    } finally {
       setPovBusy(false);
     }
   };
@@ -116,6 +125,11 @@ export function ClientRow({ r, onArchive }: { r: DirectoryRow; onArchive?: (r: D
               {r.coach_name && (
                 <span className="rounded-full border border-border bg-muted/40 px-1.5 py-0.5">
                   Coach · {r.coach_name}
+                </span>
+              )}
+              {r.last_active_at && (
+                <span className="rounded-full border border-border bg-muted/40 px-1.5 py-0.5" title={format(parseISO(r.last_active_at), "MMM d, yyyy h:mm a")}>
+                  Active {formatDistanceToNow(parseISO(r.last_active_at), { addSuffix: true })}
                 </span>
               )}
             </div>
