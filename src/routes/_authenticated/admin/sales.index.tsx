@@ -74,7 +74,7 @@ function SalesWorkspace() {
         subtitle="Manage your pipeline, offers, checkout, promotions, and sales assets."
       />
       <div className="border-b border-border bg-background/50">
-        <div className="-mb-px flex gap-1 overflow-x-auto px-2 md:px-4">
+        <div className="-mb-px flex flex-wrap gap-1 overflow-x-hidden px-2 md:px-4">
           {visibleTabs.map((t) => {
             const active = t.value === activeTab;
             return (
@@ -172,7 +172,7 @@ function SubTabs({
 }) {
   return (
     <div className="border-b border-border bg-muted/20">
-      <div className="-mb-px flex gap-1 overflow-x-auto px-2 md:px-4">
+      <div className="-mb-px flex flex-wrap gap-1 overflow-x-hidden px-2 md:px-4">
         {items.map((t) => {
           const isActive = t.value === active;
           return (

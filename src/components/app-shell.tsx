@@ -708,7 +708,7 @@ export function AppShell({ items, bottomItems: customBottomItems, title, childre
           </div>
         </header>
 
-        <main className="min-w-0 flex-1 overflow-x-hidden pb-[calc(140px+env(safe-area-inset-bottom))] md:pb-0">
+        <main className="w-full max-w-full box-border min-w-0 flex-1 overflow-x-hidden pb-[calc(140px+env(safe-area-inset-bottom))] md:pb-0">
           {children}
         </main>
 

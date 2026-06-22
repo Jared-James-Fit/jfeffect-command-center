@@ -420,7 +420,7 @@ export function PaymentLinksPage({ embedded = false }: { embedded?: boolean } = 
         }
       />}
       {embedded && (
-        <div className="flex justify-end gap-2 px-6 pt-4 md:px-8">
+        <div className="flex justify-end gap-2 px-4 pt-4 md:px-8">
           {!manageMode ? (
             <>
               <Button variant="outline" onClick={() => setManageMode(true)}>
@@ -435,7 +435,7 @@ export function PaymentLinksPage({ embedded = false }: { embedded?: boolean } = 
           )}
         </div>
       )}
-      <div className="p-6 md:p-8 space-y-6">
+      <div className="p-4 md:p-8 space-y-6">
         {manageMode && (
           <Card className="border-primary/30 bg-primary/5 p-3 flex flex-wrap items-center gap-3">
             <div className="flex items-center gap-2">
@@ -505,7 +505,7 @@ export function PaymentLinksPage({ embedded = false }: { embedded?: boolean } = 
         ) : (
           <div className="grid gap-4 md:grid-cols-2">
             {visible.map((p) => (
-              <Card key={p.id} className={`border-border bg-card p-4 flex gap-4 ${selected.has(p.id) ? "ring-2 ring-primary" : ""}`}>
+              <Card key={p.id} className={`border-border bg-card p-4 flex gap-4 w-full ${selected.has(p.id) ? "ring-2 ring-primary" : ""}`}>
                 {manageMode && (
                   <div className="pt-1">
                     <Checkbox checked={selected.has(p.id)} onCheckedChange={() => toggleSelected(p.id)} />
