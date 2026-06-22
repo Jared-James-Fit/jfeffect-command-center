@@ -218,7 +218,7 @@ export function ProgressSummaryCard({
               ))}
           </div>
         ) : (
-          <p className="text-xs text-muted-foreground">No progress logged yet.</p>
+          <p className="text-xs text-muted-foreground">No progress logged yet. Start with weight, photos, or measurements.</p>
         )}
 
         {/* Coach Check-In Replies — keep, it's a real surface */}
