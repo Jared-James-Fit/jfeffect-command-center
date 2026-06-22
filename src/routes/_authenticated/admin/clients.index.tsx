@@ -33,7 +33,7 @@ import { AddClientDialog } from "@/components/clients/add-client-dialog";
 
 const searchSchema = z.object({
   search:        fallback(z.string(),                                                       "").default(""),
-  status:        fallback(z.enum(["all","needs_setup","needs_review","program_ending","payment_issues","new_clients"]), "all").default("all"),
+  status:        fallback(z.enum(["all","needs_setup","needs_review","program_ending","payment_issues","new_clients","missed_workouts","inactive"]), "all").default("all"),
   coachingType:  fallback(z.string(),                                                       "all").default("all"),
   coachId:       fallback(z.string().uuid().optional(),                                     undefined as any),
   sort:          fallback(z.enum(["attention","recent","name","ending","activity"]),       "attention").default("attention"),

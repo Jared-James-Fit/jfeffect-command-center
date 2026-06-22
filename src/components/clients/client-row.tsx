@@ -127,9 +127,33 @@ export function ClientRow({ r, onArchive }: { r: DirectoryRow; onArchive?: (r: D
                   Coach · {r.coach_name}
                 </span>
               )}
-              {r.last_active_at && (
-                <span className="rounded-full border border-border bg-muted/40 px-1.5 py-0.5" title={format(parseISO(r.last_active_at), "MMM d, yyyy h:mm a")}>
+              {/* Last active — show with color coding based on recency */}
+              {r.last_active_at ? (
+                <span
+                  className={[
+                    "rounded-full border px-1.5 py-0.5",
+                    (r.days_inactive ?? 0) >= 14
+                      ? "border-destructive/40 bg-destructive/10 text-destructive"
+                      : (r.days_inactive ?? 0) >= 7
+                      ? "border-amber-500/40 bg-amber-500/10 text-amber-600"
+                      : "border-border bg-muted/40",
+                  ].join(" ")}
+                  title={format(parseISO(r.last_active_at), "MMM d, yyyy h:mm a")}
+                >
                   Active {formatDistanceToNow(parseISO(r.last_active_at), { addSuffix: true })}
+                </span>
+              ) : r.last_login_at ? (
+                <span
+                  className="rounded-full border border-border bg-muted/40 px-1.5 py-0.5"
+                  title={format(parseISO(r.last_login_at), "MMM d, yyyy h:mm a")}
+                >
+                  Signed in {formatDistanceToNow(parseISO(r.last_login_at), { addSuffix: true })}
+                </span>
+              ) : null}
+              {/* Missed workouts badge */}
+              {r.f_missed_workouts && r.missed_workouts_count > 0 && (
+                <span className="rounded-full border border-amber-500/40 bg-amber-500/10 px-1.5 py-0.5 text-amber-600 font-medium">
+                  {r.missed_workouts_count} missed
                 </span>
               )}
             </div>

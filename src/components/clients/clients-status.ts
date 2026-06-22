@@ -10,6 +10,8 @@ import {
   UserPlus,
   Users,
   CheckCircle2,
+  XCircle,
+  Clock,
   type LucideIcon,
 } from "lucide-react";
 import type { DirectoryNextAction, DirectoryRow } from "@/lib/clients-directory.functions";
@@ -20,18 +22,22 @@ export type StatusKey =
   | "needs_review"
   | "program_ending"
   | "payment_issues"
-  | "new_clients";
+  | "new_clients"
+  | "missed_workouts"
+  | "inactive";
 
 export const STATUS_META: Record<
   StatusKey,
   { label: string; icon: LucideIcon; tone: "neutral" | "warn" | "danger" | "ok" | "info"; hint?: string }
 > = {
-  all:            { label: "All Clients",     icon: Users,           tone: "neutral" },
-  needs_setup:    { label: "Needs Setup",     icon: UserRoundCog,    tone: "info",   hint: "Account not yet active" },
-  needs_review:   { label: "Needs Review",    icon: ClipboardCheck,  tone: "warn",   hint: "Check-in awaiting review" },
-  program_ending: { label: "Program Ending",  icon: CalendarClock,   tone: "warn",   hint: "Current block ends within 14d" },
-  payment_issues: { label: "Payment Issues",  icon: CreditCard,      tone: "danger", hint: "Failed or overdue payment" },
-  new_clients:    { label: "New Clients",     icon: UserPlus,        tone: "ok",     hint: "Joined in the last 30 days" },
+  all:              { label: "All Clients",       icon: Users,           tone: "neutral" },
+  needs_setup:      { label: "Needs Setup",       icon: UserRoundCog,    tone: "info",   hint: "Account not yet active" },
+  needs_review:     { label: "Needs Review",      icon: ClipboardCheck,  tone: "warn",   hint: "Check-in awaiting review" },
+  program_ending:   { label: "Program Ending",    icon: CalendarClock,   tone: "warn",   hint: "Current block ends within 14d" },
+  payment_issues:   { label: "Payment Issues",    icon: CreditCard,      tone: "danger", hint: "Failed or overdue payment" },
+  new_clients:      { label: "New Clients",       icon: UserPlus,        tone: "ok",     hint: "Joined in the last 30 days" },
+  missed_workouts:  { label: "Missed Workouts",   icon: XCircle,         tone: "warn",   hint: "2+ missed workouts in last 14 days" },
+  inactive:         { label: "Inactive",          icon: Clock,           tone: "warn",   hint: "No activity in 7+ days with active program" },
 };
 
 export const TONE_CLASSES: Record<string, { bg: string; text: string; ring: string; iconBg: string }> = {
@@ -50,6 +56,10 @@ export function rowBadges(r: DirectoryRow): BadgeDef[] {
   if (r.f_payment_issue)       out.push({ label: "Payment Issue", tone: "danger", icon: CreditCard });
   if (r.f_needs_setup)         out.push({ label: "Needs Setup",   tone: "info",   icon: UserRoundCog });
   if (r.f_needs_review)        out.push({ label: "Review Due",    tone: "warn",   icon: ClipboardCheck });
+  // NEW: missed workouts and inactive flags
+  if (r.f_missed_workouts && r.missed_workouts_count > 0)
+                               out.push({ label: `${r.missed_workouts_count} Missed`, tone: "warn", icon: XCircle });
+  if (r.f_inactive)            out.push({ label: "Inactive",      tone: "warn",   icon: Clock });
   if (r.f_program_ending)      out.push({ label: "Ending Soon",   tone: "warn",   icon: CalendarClock });
   if (r.f_missing_program)     out.push({ label: "No Program",    tone: "warn",   icon: Dumbbell });
   if (r.f_new_client && out.length < 2) out.push({ label: "New",  tone: "ok",     icon: UserPlus });

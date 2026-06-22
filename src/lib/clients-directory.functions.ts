@@ -58,6 +58,11 @@ export type DirectoryRow = {
   priority: number;
   next_action: DirectoryNextAction;
   last_active_at: string | null;
+  last_login_at: string | null;
+  missed_workouts_count: number;
+  days_inactive: number | null;
+  f_missed_workouts: boolean;
+  f_inactive: boolean;
 };
 
 export type DirectoryCounts = {
@@ -67,6 +72,8 @@ export type DirectoryCounts = {
   program_ending: number;
   payment_issues: number;
   new_clients: number;
+  missed_workouts: number;
+  inactive: number;
 };
 
 export type DirectoryResult = {
