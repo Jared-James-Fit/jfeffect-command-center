@@ -44,7 +44,7 @@ function PortalProgress() {
   }
 
   return (
-    <>
+    <div className="pb-safe-bottom">
       <PageHeader title="Progress" subtitle="Track visual, physical, and performance progress." />
       <div className="px-3 md:px-6 pt-3">
         <StreakCelebration userId={userId} />
@@ -62,13 +62,13 @@ function PortalProgress() {
           canRequestReview: true,
         }}
       />
-      <div className="px-3 md:px-6 pb-safe-bottom">
+      <div className="px-3 md:px-6 pb-6">
         <CheckInScheduleCard
           userId={userId}
           title="Your progress reminders"
           subtitle="Pick how often you want to be reminded to update each part of your progress."
         />
       </div>
-    </>
+    </div>
   );
 }
