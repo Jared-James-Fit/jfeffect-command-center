@@ -11,7 +11,7 @@ import { derivePhase } from "@/lib/training-phases";
 import { toast } from "sonner";
 import type { WeightUnit } from "@/lib/progress-metrics";
 import { HomeScreenSetupCard } from "@/components/home-screen-setup-card";
-import { listFormsForClient } from "@/lib/native-forms";
+import { listFormsForClient, pickWeeklyCheckInForm } from "@/lib/native-forms";
 import { ManualCheckInReviewModal } from "@/components/manual-check-in-review-modal";
 import { ClientActionRequestModal } from "@/components/client-action-request-modal";
 import { UpcomingEventsPanel } from "@/components/events/upcoming-events-panel";
@@ -374,8 +374,9 @@ function PortalHome() {
   }
   // Surface the nearest due check-in form into Action Centre.
   const dueForm = (assignedForms ?? [])[0];
-  const weeklyCheckInHref = dueForm
-    ? `/portal/check-ins/${dueForm.id}`
+  const weeklyCheckInForm = pickWeeklyCheckInForm(assignedForms as any);
+  const weeklyCheckInHref = weeklyCheckInForm?.id
+    ? `/portal/check-ins/${weeklyCheckInForm.id}`
     : "/portal/check-ins";
   if (dueForm) {
     actions.push({
