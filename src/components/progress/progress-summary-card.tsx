@@ -3,7 +3,7 @@ import { Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card } from "@/components/ui/card";
-import { Camera, Scale, Ruler, ArrowRight, Video, MessageSquare } from "lucide-react";
+import { Camera, Scale, Ruler, ArrowRight, Video, MessageSquare, Dumbbell, ClipboardCheck } from "lucide-react";
 import { CoachCheckinReplies } from "./coach-checkin-replies";
 
 /**
@@ -18,6 +18,8 @@ export function ProgressSummaryCard({
   viewerRole,
   progressHref,
   title = "Progress Snapshot",
+  liftHref,
+  checkInHref,
   extraActions,
 }: {
   userId: string;
@@ -29,10 +31,20 @@ export function ProgressSummaryCard({
     | { kind: "admin-client"; clientId: string };
   title?: string;
   /**
-   * Optional secondary action tiles rendered below the primary 4-up grid.
+   * Optional href to a lift upload flow surfaced as a secondary action.
+   * Omit to hide the Upload Lift shortcut (e.g. member dashboards).
+   */
+  liftHref?: string;
+  /**
+   * Optional href to a check-in submission flow surfaced as a secondary action.
+   * Omit to hide the Submit Check-In shortcut (e.g. member dashboards).
+   */
+  checkInHref?: string;
+  /**
+   * Optional secondary action tiles rendered below the built-in secondary row.
    * Used by the client + member home dashboards to surface flow-specific
-   * shortcuts (e.g. Submit Weekly Check-In) that need data only the host
-   * route has.
+   * shortcuts (e.g. member Tools/Announcements/Support) that need data only the
+   * host route has.
    */
   extraActions?: ReactNode;
 }) {
