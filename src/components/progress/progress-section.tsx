@@ -327,52 +327,55 @@ function OverviewTab({
         </Button>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-        {/* Weight */}
-        <Card className="p-3">
-          <div className="flex items-center justify-between">
-            <h3 className="text-sm font-semibold">Weight</h3>
-            {stats && <button onClick={() => onViewTab("bodyweight")} className="text-xs text-primary font-medium hover:underline">View all</button>}
-          </div>
-          {stats ? (
-            <div className="mt-2">
-              <p className="text-2xl font-bold">{stats.latest} {stats.unit}</p>
-              {stats.avg7 != null && <p className="text-xs text-muted-foreground">7-day avg {stats.avg7} {stats.unit}</p>}
-              {weightChart.length >= 2 && (
-                <div className="mt-3 h-[80px]">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <AreaChart data={weightChart} margin={{ top: 4, right: 0, left: 0, bottom: 0 }}>
-                      <defs>
-                        <linearGradient id="overviewBwArea" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="0%" stopColor="var(--primary)" stopOpacity={0.35} />
-                          <stop offset="100%" stopColor="var(--primary)" stopOpacity={0} />
-                        </linearGradient>
-                      </defs>
-                      <XAxis dataKey="d" hide />
-                      <YAxis hide domain={["auto", "auto"]} />
-                      <Tooltip
-                        contentStyle={{ fontSize: 12, padding: 6 }}
-                        labelFormatter={() => ""}
-                        formatter={(v: any) => [`${v} ${stats.unit}`, "Weight"]}
-                      />
-                      <Area
-                        type="monotone"
-                        dataKey="v"
-                        stroke="var(--primary)"
-                        strokeWidth={2}
-                        fill="url(#overviewBwArea)"
-                        isAnimationActive={false}
-                      />
-                    </AreaChart>
-                  </ResponsiveContainer>
+      {/* Weight — full-width hero card with bigger graph and change from start */}
+      <Card className="p-4">
+        <div className="flex items-center justify-between mb-2">
+          <h3 className="text-sm font-semibold">Weight</h3>
+          {stats && <button onClick={() => onViewTab("bodyweight")} className="text-xs text-primary font-medium hover:underline">View all</button>}
+        </div>
+        {stats ? (
+          <div>
+            <div className="flex items-end gap-3">
+              <div>
+                <p className="text-3xl font-black tabular-nums leading-none">{stats.latest}</p>
+                <p className="text-sm text-muted-foreground mt-0.5">{stats.unit}{stats.avg7 != null ? ` · 7-day avg ${stats.avg7}` : ""}</p>
+              </div>
+              {stats.count > 1 && (
+                <div className={`ml-auto text-right pb-0.5 ${stats.change < 0 ? "text-emerald-400" : stats.change > 0 ? "text-amber-400" : "text-muted-foreground"}`}>
+                  <p className="text-xl font-bold tabular-nums leading-none">{stats.change > 0 ? "+" : ""}{stats.change} {stats.unit}</p>
+                  <p className="text-[10px] text-muted-foreground mt-0.5">from start ({stats.startWeight} {stats.unit})</p>
                 </div>
               )}
             </div>
-          ) : (
-            <MiniEmpty body="No weight logged." actionLabel="Log weight" onAction={onLogWeight} />
-          )}
-        </Card>
+            {weightChart.length >= 2 && (
+              <div className="mt-3 h-[120px]">
+                <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart data={weightChart} margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
+                    <defs>
+                      <linearGradient id="overviewBwArea" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor="var(--primary)" stopOpacity={0.35} />
+                        <stop offset="100%" stopColor="var(--primary)" stopOpacity={0} />
+                      </linearGradient>
+                    </defs>
+                    <XAxis dataKey="d" hide />
+                    <YAxis hide domain={["auto", "auto"]} />
+                    <Tooltip
+                      contentStyle={{ fontSize: 12, padding: 6 }}
+                      labelFormatter={(d: string) => d}
+                      formatter={(v: any) => [`${v} ${stats.unit}`, "Weight"]}
+                    />
+                    <Area type="monotone" dataKey="v" stroke="var(--primary)" strokeWidth={2} fill="url(#overviewBwArea)" isAnimationActive={false} />
+                  </AreaChart>
+                </ResponsiveContainer>
+              </div>
+            )}
+          </div>
+        ) : (
+          <MiniEmpty body="No weight logged." actionLabel="Log weight" onAction={onLogWeight} />
+        )}
+      </Card>
 
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
         {/* Photos */}
         <Card className="p-3">
           <div className="flex items-center justify-between">
@@ -414,18 +417,33 @@ function OverviewTab({
           )}
         </Card>
 
-        {/* Measurements */}
+        {/* Body Composition — show actual latest measurement values */}
         <Card className="p-3">
           <div className="flex items-center justify-between">
-            <h3 className="text-sm font-semibold">Measurements</h3>
+            <h3 className="text-sm font-semibold">Body Composition</h3>
             {measRows.length > 0 && <button onClick={() => onViewTab("measurements")} className="text-xs text-primary font-medium hover:underline">View all</button>}
           </div>
-          {measRows.length > 0 ? (
-            <p className="mt-2 text-sm">
-              <span className="font-semibold">{measRows.length}</span>{" "}
-              <span className="text-muted-foreground">entries · last {fmtDate(measRows[0].measured_date)}</span>
-            </p>
-          ) : (
+          {measRows.length > 0 ? (() => {
+            const latest = measRows[0];
+            const unit = latest.unit;
+            const keyFields = ["waist", "hips", "chest", "arm_l", "thigh_l"] as const;
+            const shown = keyFields.filter((k) => latest.fields[k] != null && Number(latest.fields[k]) > 0);
+            const LABELS: Record<string, string> = { waist: "Waist", hips: "Hips", chest: "Chest", arm_l: "Arm", thigh_l: "Thigh" };
+            if (!shown.length) return <MiniEmpty body="No measurements yet." actionLabel="Add measurements" onAction={onAddMeasurements} />;
+            return (
+              <div className="mt-2">
+                <p className="text-[10px] text-muted-foreground mb-2">Last logged {fmtDate(latest.measured_date)}</p>
+                <div className="grid grid-cols-2 gap-x-4 gap-y-1.5">
+                  {shown.map((k) => (
+                    <div key={k} className="flex items-baseline justify-between">
+                      <span className="text-xs text-muted-foreground">{LABELS[k]}</span>
+                      <span className="text-sm font-bold tabular-nums">{Number(latest.fields[k]).toFixed(1)} <span className="text-[10px] font-normal text-muted-foreground">{unit}</span></span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            );
+          })() : (
             <MiniEmpty body="No measurements yet." actionLabel="Add measurements" onAction={onAddMeasurements} />
           )}
         </Card>

@@ -6,12 +6,13 @@ import { PageHeader } from "@/components/app-shell";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Calendar as CalIcon, ExternalLink, MapPin, Clock, AlertTriangle, ChevronDown } from "lucide-react";
+import { Calendar as CalIcon, ExternalLink, MapPin, Clock, AlertTriangle, ChevronDown, Heart } from "lucide-react";
 import { statusTone, fmtTimeRange } from "@/lib/pt-sessions";
 import { CalendarBoard } from "@/components/calendar/calendar-board";
 import { useClientCalendarSources } from "@/lib/calendar-sources";
 import { ClientTodayPanel } from "@/components/calendar/today-panel";
 import { todayLocalISO } from "@/lib/today";
+import { dayTypeLabel, dayTypeTone } from "@/lib/training-schedule";
 
 export const Route = createFileRoute("/_authenticated/portal/calendar")({ component: CalendarPage });
 
@@ -53,9 +54,34 @@ function CalendarPage() {
     },
   });
 
+  // Fetch active cardio targets to show on the calendar page
+  const { data: cardioTargets = [] } = useQuery({
+    queryKey: ["cardio-targets", client?.id],
+    enabled: !!client?.id,
+    staleTime: 5 * 60_000,
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("cardio_targets")
+        .select("*")
+        .eq("client_id", client!.id)
+        .eq("status", "Active")
+        .eq("enabled", true)
+        .is("program_name", null);
+      return data ?? [];
+    },
+  });
+
   const today = todayLocalISO();
   const upcoming = sessions.filter((s: any) => s.session_date >= today && s.status === "Scheduled");
   const past = sessions.filter((s: any) => s.session_date < today || s.status !== "Scheduled");
+
+  // Determine if today is a training day (has a workout scheduled)
+  const hasTodayWorkout = items.some((i) => i.kind === "workout" && i.date === today);
+  const todayDayContext = hasTodayWorkout ? "Training Day" : "Rest Day";
+  // Show cardio targets that match today's day type or are General
+  const todayCardio = (cardioTargets as any[]).filter((t) =>
+    t.day_type === todayDayContext || t.day_type === "General" || !t.day_type
+  );
 
   return (
     <>
@@ -79,6 +105,35 @@ function CalendarPage() {
         )}
 
         <ClientTodayPanel items={items} nutritionUpdatedAt={nutritionUpdated ?? null} />
+
+        {/* Cardio targets for today */}
+        {todayCardio.length > 0 && (
+          <div>
+            <div className="mb-2 flex items-center gap-2">
+              <h3 className="text-xs font-black uppercase tracking-[0.18em] text-muted-foreground">Today's Cardio</h3>
+              <Badge variant="outline" className="text-[10px]">{todayDayContext}</Badge>
+            </div>
+            <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+              {todayCardio.map((t: any) => (
+                <Card key={t.id} className="flex items-start gap-3 border border-rose-500/20 bg-card p-3">
+                  <span className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-rose-500/15 text-rose-300">
+                    <Heart className="h-4 w-4" />
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <span className="text-sm font-semibold">{t.cardio_type === "Custom" ? t.custom_type : t.cardio_type}</span>
+                      <Badge variant="outline" className={`text-[10px] ${dayTypeTone(t.day_type)}`}>{dayTypeLabel(t)}</Badge>
+                    </div>
+                    <p className="mt-0.5 text-xs text-muted-foreground">
+                      {[t.frequency_per_week ? `${t.frequency_per_week}x/wk` : null, t.duration_minutes ? `${t.duration_minutes} min` : null, t.intensity].filter(Boolean).join(" · ")}
+                    </p>
+                    {t.client_notes && <p className="mt-1 text-xs text-foreground/70 line-clamp-2">{t.client_notes}</p>}
+                  </div>
+                </Card>
+              ))}
+            </div>
+          </div>
+        )}
 
         <CalendarBoard
           items={items}
