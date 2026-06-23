@@ -1639,7 +1639,13 @@ function WorkoutDay({
                 rowId: String(r.id),
                 prescribedSets: Math.max(1, Number(r.sets) || 1),
                 skipped: !!r.skipped,
-                metricKind: "load_reps" as RowMetricKind,
+                metricKind: ((
+                  r?.tracking_type === "time" ||
+                  r?.measurement_type === "time" ||
+                  (r as any)?.exercises?.default_measurement_type === "time" ||
+                  (r?.duration_seconds != null && Number(r.duration_seconds) > 0) ||
+                  /\b(sec(onds?)?|min(utes?)?)\b/i.test(String(r?.reps_text ?? ""))
+                ) ? "timed" : "load_reps") as RowMetricKind,
               }));
               const heartbeats = readHeartbeatTimestamps(completion?.id ?? null);
               // Prefer the value the user just typed into the duration input
