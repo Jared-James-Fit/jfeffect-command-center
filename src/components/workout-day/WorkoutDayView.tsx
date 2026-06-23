@@ -517,6 +517,9 @@ function WorkoutDay({
     initialData: client?.id ? cachedInitialData<any[]>(cacheScope, `results:${client.id}`) : undefined,
     staleTime: 2 * 60_000,
     gcTime: 10 * 60_000,
+    // Override global refetchOnWindowFocus:false — when the user switches from
+    // iPad to iPhone (app resume / tab focus) we want the latest set data.
+    refetchOnWindowFocus: true,
     queryFn: async () => {
       const rowIds = (rows as any[]).map((r) => r.id);
       if (!rowIds.length) return [];
@@ -527,6 +530,42 @@ function WorkoutDay({
       return r;
     },
   });
+
+  // ── Cross-device real-time sync ──────────────────────────────────────────
+  // Subscribe to Supabase Realtime for pl_row_results so that when a set is
+  // saved on one device (e.g. iPad) every other device (e.g. iPhone) gets an
+  // instant cache invalidation and re-fetches the latest results within ~1 s.
+  const rowIds = useMemo(() => (rows as any[]).map((r: any) => r.id as string), [rows]);
+  useEffect(() => {
+    if (!client?.id || rowIds.length === 0) return;
+    const channelName = `workout-results:${dayId}:${client.id}`;
+    const channel = supabase
+      .channel(channelName)
+      .on(
+        // @ts-ignore — "postgres_changes" is a valid Realtime event type
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "pl_row_results",
+          filter: `client_id=eq.${client.id}`,
+        },
+        (payload: any) => {
+          // Only invalidate when the changed row belongs to this workout day.
+          const changedRowId: string | undefined =
+            payload?.new?.row_id ?? payload?.old?.row_id;
+          if (!changedRowId || rowIds.includes(changedRowId)) {
+            qc.invalidateQueries({ queryKey: ["pl-day-results", dayId] });
+          }
+        }
+      )
+      .subscribe();
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [client?.id, dayId, rowIds.join(","), qc]);
+  // ────────────────────────────────────────────────────────────────────────
 
   // Slice 3 client fail-safe. A row "is unsupported" when it carries
   // any non-Straight block, or more than one block — i.e. anything the
