@@ -12855,6 +12855,7 @@ export type Database = {
           client_id: string
           completed_at: string | null
           completed_duration_seconds: number | null
+          completion_method: string | null
           created_at: string
           entered_unit: string | null
           entered_value: number | null
@@ -12865,6 +12866,8 @@ export type Database = {
           notes: string | null
           row_id: string
           set_index: number
+          timer_completed_at: string | null
+          timer_started_at: string | null
           updated_at: string
           video_url: string | null
         }
@@ -12880,6 +12883,7 @@ export type Database = {
           client_id: string
           completed_at?: string | null
           completed_duration_seconds?: number | null
+          completion_method?: string | null
           created_at?: string
           entered_unit?: string | null
           entered_value?: number | null
@@ -12890,6 +12894,8 @@ export type Database = {
           notes?: string | null
           row_id: string
           set_index: number
+          timer_completed_at?: string | null
+          timer_started_at?: string | null
           updated_at?: string
           video_url?: string | null
         }
@@ -12905,6 +12911,7 @@ export type Database = {
           client_id?: string
           completed_at?: string | null
           completed_duration_seconds?: number | null
+          completion_method?: string | null
           created_at?: string
           entered_unit?: string | null
           entered_value?: number | null
@@ -12915,6 +12922,8 @@ export type Database = {
           notes?: string | null
           row_id?: string
           set_index?: number
+          timer_completed_at?: string | null
+          timer_started_at?: string | null
           updated_at?: string
           video_url?: string | null
         }
