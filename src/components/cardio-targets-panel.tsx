@@ -56,7 +56,7 @@ export function CardioTargetsPanel({ clientId }: { clientId: string }) {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("nutrition_targets")
-        .select("id,status,nutrition_target_days(day_label)")
+        .select("id,status,nutrition_target_days(id,day_label,sort_order)")
         .eq("client_id", clientId)
         .neq("status", "Archived")
         .order("start_date", { ascending: false });
@@ -228,7 +228,14 @@ export function CardioTargetsPanel({ clientId }: { clientId: string }) {
       <CardioTargetDialog open={open} onOpenChange={setOpen} clientId={clientId} initial={editing ?? undefined} defaultDayType={defaultDayType} />
       <CardioProgramBuilderDialog open={builderOpen} onOpenChange={setBuilderOpen} clientId={clientId} client={client as any} />
       <CardioProgramTemplatesDialog open={templatesOpen} onOpenChange={setTemplatesOpen} clientId={clientId} />
-      <CardioApplyDefaultsDialog open={defaultsOpen} onOpenChange={setDefaultsOpen} clientId={clientId} existing={targets as any[]} nutritionLabels={nutritionLabels} />
+      <CardioApplyDefaultsDialog
+        open={defaultsOpen}
+        onOpenChange={setDefaultsOpen}
+        clientId={clientId}
+        existing={targets as any[]}
+        nutritionLabels={nutritionLabels}
+        nutritionDays={(nutritionTargets as any[])[0]?.nutrition_target_days ?? []}
+      />
       <CardioSyncRenameDialog open={renameOpen} onOpenChange={setRenameOpen} clientId={clientId} orphaned={orphaned} nutritionLabels={nutritionLabels.length ? nutritionLabels : ["Training Day","Rest Day","High Day"]} />
     </Card>
   );
