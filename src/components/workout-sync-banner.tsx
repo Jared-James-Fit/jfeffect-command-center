@@ -77,12 +77,18 @@ export function WorkoutSyncBanner({ clientId, workoutId, pageRoute, className }:
       }).catch(() => {
         /* best-effort — no toast, banner already surfaces the issue */
       });
-      // Use a quiet, non-alarming message — sync issues are temporary
-      // and the client's data is already saved locally.
-      toast.warning("Sync delayed", {
-        description: "Your data is saved. We'll sync when the connection improves.",
-        duration: 5000,
-      });
+      // Only surface the toast when we are actually offline. While online,
+      // the persistent pill in the corner already signals the issue and
+      // showing a toast on every 10s retry was spammy. The pill stays
+      // visible until the queue drains.
+      if (!online) {
+        toast.warning("Sync delayed", {
+          description:
+            "Your data is saved. We'll sync when the connection improves.",
+          duration: 5000,
+          id: `sync-delayed:${item.id}`,
+        });
+      }
     });
     return () => setStuckListener(null);
   }, [clientId, workoutId, pageRoute, online, reportFn]);
