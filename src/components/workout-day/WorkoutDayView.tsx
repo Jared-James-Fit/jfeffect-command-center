@@ -1903,15 +1903,29 @@ function ExerciseBlock({ row, dayId, dayTitle, clientId, blockId, existingResult
         ? "time"
         : exerciseDefaultMeasurementType === "time"
           ? "time"
-          // Auto-detect: if the row has duration_seconds prescribed, it's a time-based
-          // exercise even if tracking_type was never explicitly set (e.g. Copenhagen Plank
-          // programmed with 30 s but no tracking_type field filled in by the coach).
+          // Auto-detect via duration_seconds: if the row has a duration
+          // prescribed, it's time-based even without explicit tracking_type.
           : ((row as any).duration_seconds != null && Number((row as any).duration_seconds) > 0)
             ? "time"
-            : "reps_weight";
+            // Auto-detect via reps_text: if the coach typed "30 seconds",
+            // "45 sec", "1 min" etc. in the reps field, treat as time-based.
+            : /\b(sec(onds?)?|min(utes?)?)\b/i.test(String((row as any).reps_text ?? ""))
+              ? "time"
+              : "reps_weight";
   const effectiveMeasurementType: "reps" | "time" = trackingType === "time" ? "time" : "reps";
+  // When the row is time-based but duration_seconds is null (coach typed
+  // "30 seconds" in reps_text instead of using the duration field), parse
+  // the numeric value from reps_text as the prescribed seconds.
+  const repsTextParsedSec: number | null = (() => {
+    if (trackingType !== "time") return null;
+    const rt = String((row as any).reps_text ?? "");
+    const m = rt.match(/(\d+(?:\.\d+)?)\s*(min(utes?)?|sec(onds?)?)/);
+    if (!m) return null;
+    const n = Number(m[1]);
+    return /min/i.test(m[2]) ? Math.round(n * 60) : Math.round(n);
+  })();
   const effectivePrescribedDurationSec: number | null =
-    trackingType === "time" ? ((row as any).duration_seconds ?? null) : null;
+    trackingType === "time" ? ((row as any).duration_seconds ?? repsTextParsedSec ?? null) : null;
   // Hide the weight column for reps-only and time-only prescriptions.
   const hideWeight = trackingType !== "reps_weight";
   const exMeta: ExerciseMeta | null = exercise
