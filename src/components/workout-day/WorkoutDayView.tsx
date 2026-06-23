@@ -2421,14 +2421,21 @@ function SetRow({
   // Display weight is always shown in the active unit.
   // existing stores normalized kg + lb columns (Stage 1 trigger keeps them in sync),
   // plus the original actual_load/actual_load_unit pair. We pick whichever matches `unit`.
+  // Helper to format a weight value for display — rounds to 4 sig figs and
+  // strips trailing zeros to avoid showing '110.0001' instead of '110'.
+  const fmtLoad = (v: number | null | undefined): string => {
+    if (v == null) return "";
+    const rounded = Math.round(v * 10000) / 10000; // 4 decimal places max
+    return fmtNum(rounded);
+  };
   const initialDisplayLoad = (() => {
     if (!existing) return "";
     const kg = existing.actual_load_kg;
     const lb = existing.actual_load_lb;
-    if (unit === "kg" && kg != null) return String(kg);
-    if (unit === "lb" && lb != null) return String(lb);
+    if (unit === "kg" && kg != null) return fmtLoad(kg);
+    if (unit === "lb" && lb != null) return fmtLoad(lb);
     // Fallback to raw actual_load when normalized columns aren't populated yet.
-    return existing.actual_load != null ? String(existing.actual_load) : "";
+    return existing.actual_load != null ? fmtLoad(existing.actual_load) : "";
   })();
   const [load, setLoad] = useState(initialDisplayLoad);
   // Derive the prescribed reps/RPE for Quick Log auto-fill.
@@ -2498,8 +2505,8 @@ function SetRow({
     const kg = existing?.actual_load_kg;
     const lb = existing?.actual_load_lb;
     const display = unit === "kg"
-      ? (kg != null ? String(kg) : (existing?.actual_load != null ? String(existing.actual_load) : ""))
-      : (lb != null ? String(lb) : (existing?.actual_load != null ? String(existing.actual_load) : ""));
+      ? (kg != null ? fmtLoad(kg) : (existing?.actual_load != null ? fmtLoad(existing.actual_load) : ""))
+      : (lb != null ? fmtLoad(lb) : (existing?.actual_load != null ? fmtLoad(existing.actual_load) : ""));
     if (focused !== "load") setLoad(display);
     if (focused !== "reps") setReps(existing?.actual_reps?.toString() ?? prescribedRepsStr);
     if (focused !== "rpe") setRpe(existing?.actual_rpe_num != null ? String(existing.actual_rpe_num) : (existing?.actual_rpe ?? prescribedRpeStr));
