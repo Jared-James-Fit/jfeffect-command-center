@@ -2872,7 +2872,19 @@ function SetRow({
           onChange={(e) => { setReps(e.target.value.replace(/[^0-9]/g, "")); setRepsEdited(true); }}
           onFocus={() => setFocusedField("reps")}
           onKeyDown={onEnter}
-          onBlur={() => { setFocusedField(null); setRepsChipOpen(false); save.flush(); }}
+          onBlur={() => {
+            // Block server-reset effect immediately (optimistic guard) so the
+            // refetch triggered by flush() can never overwrite what was typed.
+            recentlySavedRef.current = true;
+            if (recentlySavedTimerRef.current) clearTimeout(recentlySavedTimerRef.current);
+            recentlySavedTimerRef.current = setTimeout(() => { recentlySavedRef.current = false; }, 3000);
+            // Clear focus AFTER setting the guard so the server-reset effect
+            // (which checks focusedField) cannot fire between null-focus and save.
+            save.flush().finally(() => {
+              setFocusedField(null);
+              setRepsChipOpen(false);
+            });
+          }}
           readOnly={readonly}
           disabled={readonly}
         />
@@ -2914,7 +2926,15 @@ function SetRow({
           }}
           onFocus={() => setFocusedField("rpe")}
           onKeyDown={onEnter}
-          onBlur={() => { setFocusedField(null); setRpeChipOpen(false); save.flush(); }}
+          onBlur={() => {
+            recentlySavedRef.current = true;
+            if (recentlySavedTimerRef.current) clearTimeout(recentlySavedTimerRef.current);
+            recentlySavedTimerRef.current = setTimeout(() => { recentlySavedRef.current = false; }, 3000);
+            save.flush().finally(() => {
+              setFocusedField(null);
+              setRpeChipOpen(false);
+            });
+          }}
           readOnly={readonly} disabled={readonly}
         />
       ) : (
@@ -2944,7 +2964,12 @@ function SetRow({
         onChange={(e) => setLoad(e.target.value.replace(/[^0-9.]/g, ""))}
         onFocus={() => setFocusedField("load")}
         onKeyDown={onEnter}
-        onBlur={() => { setFocusedField(null); save.flush(); }}
+        onBlur={() => {
+          recentlySavedRef.current = true;
+          if (recentlySavedTimerRef.current) clearTimeout(recentlySavedTimerRef.current);
+          recentlySavedTimerRef.current = setTimeout(() => { recentlySavedRef.current = false; }, 3000);
+          save.flush().finally(() => { setFocusedField(null); });
+        }}
         readOnly={readonly}
         disabled={readonly}
       />
