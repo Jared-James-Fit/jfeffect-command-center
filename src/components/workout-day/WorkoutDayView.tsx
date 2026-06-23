@@ -1903,7 +1903,12 @@ function ExerciseBlock({ row, dayId, dayTitle, clientId, blockId, existingResult
         ? "time"
         : exerciseDefaultMeasurementType === "time"
           ? "time"
-          : "reps_weight";
+          // Auto-detect: if the row has duration_seconds prescribed, it's a time-based
+          // exercise even if tracking_type was never explicitly set (e.g. Copenhagen Plank
+          // programmed with 30 s but no tracking_type field filled in by the coach).
+          : ((row as any).duration_seconds != null && Number((row as any).duration_seconds) > 0)
+            ? "time"
+            : "reps_weight";
   const effectiveMeasurementType: "reps" | "time" = trackingType === "time" ? "time" : "reps";
   const effectivePrescribedDurationSec: number | null =
     trackingType === "time" ? ((row as any).duration_seconds ?? null) : null;
@@ -2151,15 +2156,17 @@ function ExerciseBlock({ row, dayId, dayTitle, clientId, blockId, existingResult
       <div className={cn("mt-3 overflow-hidden rounded-md border border-builder-card-border bg-builder-inset", focusMode && "text-base")}>
         <div className={cn(
           "grid items-center gap-1.5 border-b border-builder-card-border bg-builder-card/60 px-2.5 py-1.5 text-[10px] font-bold uppercase tracking-wider text-muted-foreground",
-          hideWeight
-            ? (focusMode ? "grid-cols-[36px_1.6fr_1fr_52px] text-xs" : "grid-cols-[28px_1.6fr_1fr_44px]")
-            : (focusMode ? "grid-cols-[36px_1fr_1fr_1.3fr_52px] text-xs" : "grid-cols-[28px_1fr_1fr_1.3fr_44px]"),
+          effectiveMeasurementType === "time"
+            ? (focusMode ? "grid-cols-[36px_1fr] text-xs" : "grid-cols-[28px_1fr]")
+            : hideWeight
+              ? (focusMode ? "grid-cols-[36px_1.6fr_1fr_52px] text-xs" : "grid-cols-[28px_1.6fr_1fr_44px]")
+              : (focusMode ? "grid-cols-[36px_1fr_1fr_1.3fr_52px] text-xs" : "grid-cols-[28px_1fr_1fr_1.3fr_44px]"),
         )}>
           <span>Set</span>
           <span>{effectiveMeasurementType === "time" ? "Time" : "Reps"}</span>
-          <span>{showRir ? "RIR" : "RPE"}</span>
-          {!hideWeight && <span className="truncate">Wt ({activeUnit.toUpperCase()})</span>}
-          <span className="text-right">Status</span>
+          {effectiveMeasurementType !== "time" && <span>{showRir ? "RIR" : "RPE"}</span>}
+          {effectiveMeasurementType !== "time" && !hideWeight && <span className="truncate">Wt ({activeUnit.toUpperCase()})</span>}
+          {effectiveMeasurementType !== "time" && <span className="text-right">Status</span>}
         </div>
         {Array.from({ length: setCount }).map((_, i) => {
           const existing = existingResults.find((x) => x.set_index === i + 1);
@@ -2481,7 +2488,10 @@ function SetRow({
   const prescribedRepsStr = (() => {
     if (repTarget?.exact != null) return String(repTarget.exact);
     if (repTarget?.min != null) return String(repTarget.min);
-    if (targetReps) return String(targetReps).replace(/[^0-9]/g, "").slice(0, 3);
+    // Extract only the FIRST number from the reps_text. Patterns like "12, 6, 12"
+    // (drop sets) must not be stripped of commas and concatenated — that turns
+    // "12, 6, 12" into "126" which is then displayed as the pre-filled reps value.
+    if (targetReps) { const m = String(targetReps).match(/(\d+)/); return m ? m[1] : ""; }
     return "";
   })();
   const prescribedRpeStr = (() => {
