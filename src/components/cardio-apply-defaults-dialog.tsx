@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { ActionButton } from "@/components/action-button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -8,6 +9,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { findDefaultFor, CARDIO_INTENSITIES } from "@/lib/nutrition-cardio";
+import { Lock } from "lucide-react";
 
 type Props = {
   open: boolean;
@@ -20,8 +22,7 @@ type Props = {
   nutritionDays?: any[];
 };
 
-/** Count how many times each day_label appears in nutrition_target_days.
- *  Each row = one day of the week, so count = days/week for that label. */
+/** Count how many times each day_label appears in nutrition_target_days. */
 function countByLabel(days: any[]): Record<string, number> {
   const out: Record<string, number> = {};
   for (const d of days) {
@@ -93,14 +94,26 @@ function defaultConfigFor(label: string) {
   };
 }
 
+/**
+ * RowDraft uses string for frequency_per_week so the input is uncontrolled
+ * while typing. We only parse to number on blur / apply.
+ */
 type RowDraft = {
   day_type: string;
   enabled: boolean;
-  frequency_per_week: number;
+  /** String so the input doesn't clamp while the user is mid-type. */
+  frequency_str: string;
+  /** Whether this row's frequency is locked (auto-calculated as remainder). */
+  locked: boolean;
   duration_minutes: number;
   cardio_type: string;
   intensity: string;
 };
+
+function parseFreq(s: string): number {
+  const n = parseInt(s, 10);
+  return Number.isFinite(n) && n >= 0 ? n : 0;
+}
 
 export function CardioApplyDefaultsDialog({
   open,
@@ -115,6 +128,21 @@ export function CardioApplyDefaultsDialog({
   const [mode, setMode] = useState<"update" | "create">("create");
   const [rows, setRows] = useState<RowDraft[]>([]);
 
+  // Fetch client schedule data to determine training days
+  const { data: clientPrefs } = useQuery({
+    queryKey: ["client-prefs-cardio-dialog", clientId],
+    enabled: open && !!clientId,
+    staleTime: 5 * 60_000,
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("clients")
+        .select("committed_training_frequency, preferred_training_days, preferred_high_days")
+        .eq("id", clientId)
+        .maybeSingle();
+      return data;
+    },
+  });
+
   // Count how many days/week each label occupies in the nutrition plan
   const labelCounts = useMemo(() => countByLabel(nutritionDays), [nutritionDays]);
 
@@ -124,50 +152,115 @@ export function CardioApplyDefaultsDialog({
     return ["Training Day", "Rest Day"];
   }, [nutritionLabels]);
 
-  // Total days currently assigned across all enabled rows
-  const totalDays = rows.filter((r) => r.enabled).reduce((s, r) => s + r.frequency_per_week, 0);
-  const remaining = 7 - totalDays;
-  const isValid = totalDays === 7;
+  // Derive training days from workout schedule
+  const trainingDaysCount = useMemo(() => {
+    // Priority: committed_training_frequency > preferred_training_days.length > nutrition count
+    if (clientPrefs?.committed_training_frequency != null) {
+      return clientPrefs.committed_training_frequency;
+    }
+    if ((clientPrefs?.preferred_training_days ?? []).length > 0) {
+      return (clientPrefs!.preferred_training_days as string[]).length;
+    }
+    return labelCounts["Training Day"] ?? 0;
+  }, [clientPrefs, labelCounts]);
+
+  // Derive high days from meal plan (nutrition_target_days count)
+  const highDaysCount = useMemo(() => {
+    return labelCounts["High Day"] ?? (clientPrefs?.preferred_high_days ?? []).length ?? 0;
+  }, [labelCounts, clientPrefs]);
 
   const anyExisting = existing.some(
     (e) => effectiveLabels.includes(e.day_type) && !e.program_name,
   );
 
-  // Initialise rows whenever the dialog opens
+  // Initialise rows whenever the dialog opens or client data loads
   useEffect(() => {
     if (!open) return;
+
     const init: RowDraft[] = effectiveLabels.map((label) => {
       const existingRow = findDefaultFor(existing, label);
       const cfg = defaultConfigFor(label);
-      // Frequency priority: nutrition plan count → existing cardio row → smart default
-      const nutritionCount = labelCounts[label] ?? 0;
-      const freq =
-        nutritionCount > 0
-          ? nutritionCount
-          : existingRow?.frequency_per_week ??
-            (label === "Training Day" ? 4 : label === "High Day" ? 2 : 3);
+
+      // Determine frequency for this label
+      let freq: number;
+      let locked = false;
+
+      if (label === "Training Day") {
+        // Training days come from the workout schedule — locked
+        freq = trainingDaysCount > 0 ? trainingDaysCount : (existingRow?.frequency_per_week ?? 4);
+        locked = trainingDaysCount > 0;
+      } else if (label === "High Day") {
+        // High days come from the meal plan — locked
+        freq = highDaysCount > 0 ? highDaysCount : (existingRow?.frequency_per_week ?? 1);
+        locked = highDaysCount > 0;
+      } else if (label === "Rest Day" || label === "Non-Training Day") {
+        // Rest/non-training days = remainder after training + high days
+        // Will be recalculated after all rows are set
+        freq = existingRow?.frequency_per_week ?? 3;
+        locked = false; // will be recalculated
+      } else {
+        // Other day types: use nutrition count or existing
+        const nutritionCount = labelCounts[label] ?? 0;
+        freq = nutritionCount > 0 ? nutritionCount : (existingRow?.frequency_per_week ?? 1);
+        locked = nutritionCount > 0;
+      }
+
       return {
         day_type: label,
         enabled: true,
-        frequency_per_week: freq,
+        frequency_str: String(freq),
+        locked,
         duration_minutes: existingRow?.duration_minutes ?? cfg.duration_minutes,
         cardio_type: existingRow?.cardio_type ?? cfg.cardio_type,
         intensity: existingRow?.intensity ?? cfg.intensity,
       };
     });
+
+    // Auto-calculate the remainder for Rest/Non-Training Day
+    const lockedTotal = init
+      .filter((r) => r.locked && r.enabled)
+      .reduce((s, r) => s + parseFreq(r.frequency_str), 0);
+    const restIdx = init.findIndex(
+      (r) => r.day_type === "Rest Day" || r.day_type === "Non-Training Day",
+    );
+    if (restIdx !== -1 && (trainingDaysCount > 0 || highDaysCount > 0)) {
+      const remainder = Math.max(0, 7 - lockedTotal);
+      init[restIdx] = { ...init[restIdx], frequency_str: String(remainder), locked: true };
+    }
+
     setRows(init);
     setMode(anyExisting ? "update" : "create");
-  }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [open, trainingDaysCount, highDaysCount]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Total days currently assigned across all enabled rows
+  const totalDays = rows
+    .filter((r) => r.enabled)
+    .reduce((s, r) => s + parseFreq(r.frequency_str), 0);
+  const remaining = 7 - totalDays;
+  const isValid = totalDays === 7;
 
   const updateRow = (idx: number, patch: Partial<RowDraft>) => {
-    setRows((prev) => prev.map((r, i) => (i === idx ? { ...r, ...patch } : r)));
+    setRows((prev) => {
+      const next = prev.map((r, i) => (i === idx ? { ...r, ...patch } : r));
+
+      // Auto-recalculate the rest/non-training day remainder whenever a non-locked row changes
+      const restIdx = next.findIndex(
+        (r) => r.day_type === "Rest Day" || r.day_type === "Non-Training Day",
+      );
+      if (restIdx !== -1 && next[restIdx].locked && restIdx !== idx) {
+        const otherTotal = next
+          .filter((r, i) => i !== restIdx && r.enabled)
+          .reduce((s, r) => s + parseFreq(r.frequency_str), 0);
+        const remainder = Math.max(0, 7 - otherTotal);
+        next[restIdx] = { ...next[restIdx], frequency_str: String(remainder) };
+      }
+      return next;
+    });
   };
 
   const apply = async () => {
     if (!isValid) {
-      toast.error(
-        `Frequencies must add up to exactly 7 days/week. Currently: ${totalDays}`,
-      );
+      toast.error(`Frequencies must add up to exactly 7 days/week. Currently: ${totalDays}`);
       return;
     }
     setSaving(true);
@@ -175,6 +268,8 @@ export function CardioApplyDefaultsDialog({
     const updates: Array<{ id: string; patch: any }> = [];
     for (const row of rows) {
       if (!row.enabled) continue;
+      const freq = parseFreq(row.frequency_str);
+      if (freq <= 0) continue;
       const existingRow = findDefaultFor(existing, row.day_type);
       const cfg = defaultConfigFor(row.day_type);
       const payload = {
@@ -184,7 +279,7 @@ export function CardioApplyDefaultsDialog({
         cardio_type: row.cardio_type,
         custom_type: null,
         intensity: row.intensity,
-        frequency_per_week: row.frequency_per_week,
+        frequency_per_week: freq,
         duration_minutes: row.duration_minutes,
         calorie_target_min: cfg.calorie_target_min,
         calorie_target_max: cfg.calorie_target_max,
@@ -199,9 +294,7 @@ export function CardioApplyDefaultsDialog({
       };
       if (existingRow) {
         if (mode === "update") {
-          // Don't overwrite start_date or client_id on updates
-          const { client_id: _cid, start_date: _sd, program_name: _pn, ...patch } =
-            payload as any;
+          const { client_id: _cid, start_date: _sd, program_name: _pn, ...patch } = payload as any;
           updates.push({ id: existingRow.id, patch });
         }
       } else {
@@ -214,19 +307,13 @@ export function CardioApplyDefaultsDialog({
         if (error) throw error;
       }
       for (const u of updates) {
-        const { error } = await supabase
-          .from("cardio_targets")
-          .update(u.patch)
-          .eq("id", u.id);
+        const { error } = await supabase.from("cardio_targets").update(u.patch).eq("id", u.id);
         if (error) throw error;
       }
-      const msg =
-        [
-          inserts.length ? `Created ${inserts.length}` : "",
-          updates.length ? `Updated ${updates.length}` : "",
-        ]
-          .filter(Boolean)
-          .join(" · ") || "Nothing to apply";
+      const msg = [
+        inserts.length ? `Created ${inserts.length}` : "",
+        updates.length ? `Updated ${updates.length}` : "",
+      ].filter(Boolean).join(" · ") || "Nothing to apply";
       toast.success(msg);
       qc.invalidateQueries({ queryKey: ["cardio-targets", clientId] });
       qc.invalidateQueries({ queryKey: ["cardio-targets"] });
@@ -244,28 +331,19 @@ export function CardioApplyDefaultsDialog({
         <DialogHeader>
           <DialogTitle>Apply Default Cardio</DialogTitle>
           <DialogDescription>
-            Synced with your client's nutrition day types. Frequencies must add
-            up to exactly 7 days/week.
+            Training days are pulled from the workout schedule. High days from the meal plan.
+            Non-training days fill the remaining 7-day balance automatically.
           </DialogDescription>
         </DialogHeader>
 
         {anyExisting && (
           <div className="rounded-md border border-warning/40 bg-warning/10 px-3 py-2 text-xs text-warning">
-            Default cardio targets already exist for one or more day types. Choose
-            how to handle them:
+            Default cardio targets already exist for one or more day types. Choose how to handle them:
             <div className="mt-2 flex gap-2">
-              <ActionButton
-                size="sm"
-                variant={mode === "update" ? "default" : "outline"}
-                onClick={() => setMode("update")}
-              >
+              <ActionButton size="sm" variant={mode === "update" ? "default" : "outline"} onClick={() => setMode("update")}>
                 Update existing
               </ActionButton>
-              <ActionButton
-                size="sm"
-                variant={mode === "create" ? "default" : "outline"}
-                onClick={() => setMode("create")}
-              >
+              <ActionButton size="sm" variant={mode === "create" ? "default" : "outline"} onClick={() => setMode("create")}>
                 Keep existing, add missing
               </ActionButton>
             </div>
@@ -273,26 +351,14 @@ export function CardioApplyDefaultsDialog({
         )}
 
         {/* 7-day total indicator */}
-        <div
-          className={`flex items-center justify-between rounded-md border px-3 py-2 text-sm font-medium ${
-            isValid
-              ? "border-success/40 bg-success/10 text-success"
-              : "border-warning/40 bg-warning/10 text-warning"
-          }`}
-        >
+        <div className={`flex items-center justify-between rounded-md border px-3 py-2 text-sm font-medium ${
+          isValid ? "border-success/40 bg-success/10 text-success" : "border-warning/40 bg-warning/10 text-warning"
+        }`}>
           <span>Weekly total</span>
           <span className="font-bold tabular-nums">
             {totalDays} / 7 days
-            {!isValid && remaining > 0 && (
-              <span className="ml-2 text-xs font-normal">
-                ({remaining} unassigned)
-              </span>
-            )}
-            {!isValid && remaining < 0 && (
-              <span className="ml-2 text-xs font-normal">
-                ({Math.abs(remaining)} over)
-              </span>
-            )}
+            {!isValid && remaining > 0 && <span className="ml-2 text-xs font-normal">({remaining} unassigned)</span>}
+            {!isValid && remaining < 0 && <span className="ml-2 text-xs font-normal">({Math.abs(remaining)} over)</span>}
           </span>
         </div>
 
@@ -304,9 +370,7 @@ export function CardioApplyDefaultsDialog({
               <li
                 key={row.day_type}
                 className={`rounded-md border p-3 transition-colors ${
-                  row.enabled
-                    ? "border-border bg-secondary/30"
-                    : "border-border/40 bg-secondary/10 opacity-60"
+                  row.enabled ? "border-border bg-secondary/30" : "border-border/40 bg-secondary/10 opacity-60"
                 }`}
               >
                 <div className="flex items-start gap-3">
@@ -318,34 +382,27 @@ export function CardioApplyDefaultsDialog({
                   />
                   <div className="flex-1 space-y-2">
                     <div className="flex flex-wrap items-center gap-2">
-                      <label
-                        htmlFor={`def-${row.day_type}`}
-                        className="cursor-pointer font-bold"
-                      >
+                      <label htmlFor={`def-${row.day_type}`} className="cursor-pointer font-bold">
                         {row.day_type} Cardio
                       </label>
-                      {existingRow && (
-                        <Badge variant="outline" className="text-[10px]">
-                          Exists
+                      {existingRow && <Badge variant="outline" className="text-[10px]">Exists</Badge>}
+                      {row.locked && (
+                        <Badge variant="outline" className="border-primary/40 text-[10px] text-primary flex items-center gap-1">
+                          <Lock className="h-2.5 w-2.5" />
+                          {row.day_type === "Training Day" ? "From schedule" :
+                           row.day_type === "High Day" ? "From meal plan" : "Auto-calculated"}
                         </Badge>
                       )}
-                      {nutritionCount > 0 && (
-                        <Badge
-                          variant="outline"
-                          className="border-primary/40 text-[10px] text-primary"
-                        >
+                      {nutritionCount > 0 && !row.locked && (
+                        <Badge variant="outline" className="border-primary/40 text-[10px] text-primary">
                           {nutritionCount}×/wk in nutrition
                         </Badge>
                       )}
-                      {nutritionLabels.length > 0 &&
-                        !nutritionLabels.includes(row.day_type) && (
-                          <Badge
-                            variant="outline"
-                            className="border-muted-foreground/40 text-[10px] text-muted-foreground"
-                          >
-                            Not in nutrition plan
-                          </Badge>
-                        )}
+                      {nutritionLabels.length > 0 && !nutritionLabels.includes(row.day_type) && (
+                        <Badge variant="outline" className="border-muted-foreground/40 text-[10px] text-muted-foreground">
+                          Not in nutrition plan
+                        </Badge>
+                      )}
                     </div>
 
                     {row.enabled && (
@@ -354,21 +411,27 @@ export function CardioApplyDefaultsDialog({
                           <p className="mb-1 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
                             Days/wk
                           </p>
-                          <Input
-                            type="number"
-                            min={1}
-                            max={7}
-                            value={row.frequency_per_week}
-                            onChange={(e) =>
-                              updateRow(idx, {
-                                frequency_per_week: Math.max(
-                                  1,
-                                  Math.min(7, Number(e.target.value) || 1),
-                                ),
-                              })
-                            }
-                            className="h-8 text-sm"
-                          />
+                          {row.locked ? (
+                            // Locked rows show a read-only display
+                            <div className="flex h-8 items-center rounded-md border border-border/60 bg-muted/40 px-2 text-sm font-bold tabular-nums">
+                              {row.frequency_str}
+                            </div>
+                          ) : (
+                            // Editable rows use string state — no clamping while typing
+                            <Input
+                              type="number"
+                              min={0}
+                              max={7}
+                              value={row.frequency_str}
+                              onChange={(e) => updateRow(idx, { frequency_str: e.target.value })}
+                              onBlur={(e) => {
+                                // Clamp only on blur, not on every keystroke
+                                const n = Math.max(0, Math.min(7, parseInt(e.target.value, 10) || 0));
+                                updateRow(idx, { frequency_str: String(n) });
+                              }}
+                              className="h-8 text-sm"
+                            />
+                          )}
                         </div>
                         <div>
                           <p className="mb-1 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
@@ -380,19 +443,10 @@ export function CardioApplyDefaultsDialog({
                               min={5}
                               max={120}
                               value={row.duration_minutes}
-                              onChange={(e) =>
-                                updateRow(idx, {
-                                  duration_minutes: Math.max(
-                                    5,
-                                    Number(e.target.value) || 25,
-                                  ),
-                                })
-                              }
+                              onChange={(e) => updateRow(idx, { duration_minutes: Math.max(5, Number(e.target.value) || 25) })}
                               className="h-8 text-sm"
                             />
-                            <span className="shrink-0 text-xs text-muted-foreground">
-                              min
-                            </span>
+                            <span className="shrink-0 text-xs text-muted-foreground">min</span>
                           </div>
                         </div>
                         <div>
@@ -401,15 +455,11 @@ export function CardioApplyDefaultsDialog({
                           </p>
                           <select
                             value={row.intensity}
-                            onChange={(e) =>
-                              updateRow(idx, { intensity: e.target.value })
-                            }
+                            onChange={(e) => updateRow(idx, { intensity: e.target.value })}
                             className="h-8 w-full rounded-md border border-input bg-background px-2 text-sm"
                           >
                             {CARDIO_INTENSITIES.map((i) => (
-                              <option key={i} value={i}>
-                                {i}
-                              </option>
+                              <option key={i} value={i}>{i}</option>
                             ))}
                           </select>
                         </div>
@@ -423,9 +473,7 @@ export function CardioApplyDefaultsDialog({
         </ul>
 
         <DialogFooter>
-          <ActionButton variant="outline" onClick={() => onOpenChange(false)}>
-            Cancel
-          </ActionButton>
+          <ActionButton variant="outline" onClick={() => onOpenChange(false)}>Cancel</ActionButton>
           <ActionButton
             onClick={apply}
             jobLabel="Applying default cardio"
