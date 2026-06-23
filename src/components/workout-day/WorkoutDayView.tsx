@@ -2191,7 +2191,7 @@ function ExerciseBlock({ row, dayId, dayTitle, clientId, blockId, existingResult
         <div className={cn(
           "grid items-center gap-1.5 border-b border-builder-card-border bg-builder-card/60 px-2.5 py-1.5 text-[10px] font-bold uppercase tracking-wider text-muted-foreground",
           effectiveMeasurementType === "time"
-            ? (focusMode ? "grid-cols-[36px_1fr] text-xs" : "grid-cols-[28px_1fr]")
+            ? (focusMode ? "grid-cols-[36px_1fr_44px] text-xs" : "grid-cols-[28px_1fr_36px]")
             : hideWeight
               ? (focusMode ? "grid-cols-[36px_1.6fr_1fr_52px] text-xs" : "grid-cols-[28px_1.6fr_1fr_44px]")
               : (focusMode ? "grid-cols-[36px_1fr_1fr_1.3fr_52px] text-xs" : "grid-cols-[28px_1fr_1fr_1.3fr_44px]"),
@@ -2200,7 +2200,7 @@ function ExerciseBlock({ row, dayId, dayTitle, clientId, blockId, existingResult
           <span>{effectiveMeasurementType === "time" ? "Time" : "Reps"}</span>
           {effectiveMeasurementType !== "time" && <span>{showRir ? "RIR" : "RPE"}</span>}
           {effectiveMeasurementType !== "time" && !hideWeight && <span className="truncate">Wt ({activeUnit.toUpperCase()})</span>}
-          {effectiveMeasurementType !== "time" && <span className="text-right">Status</span>}
+          <span className="text-right">Status</span>
         </div>
         {Array.from({ length: setCount }).map((_, i) => {
           const existing = existingResults.find((x) => x.set_index === i + 1);
@@ -2886,7 +2886,7 @@ function SetRow({
     <div className={cn(
       "grid items-start gap-1.5 px-2.5 py-1.5",
       isTime
-        ? "grid-cols-[28px_1fr]"
+        ? (focusMode ? "grid-cols-[36px_1fr_44px]" : "grid-cols-[28px_1fr_36px]")
         : hideWeight
           ? (focusMode ? "grid-cols-[36px_1.6fr_1fr_52px]" : "grid-cols-[28px_1.6fr_1fr_44px]")
           : (focusMode ? "grid-cols-[36px_1fr_1fr_1.3fr_52px]" : "grid-cols-[28px_1fr_1fr_1.3fr_44px]"),
