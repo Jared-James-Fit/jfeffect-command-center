@@ -68,7 +68,11 @@ export default defineConfig({
             /^\/_server\//,
           ],
           cleanupOutdatedCaches: true,
-          skipWaiting: false,    // we wait for the user to tap Update
+          // skipWaiting:true activates new SW versions immediately on next navigate
+          // instead of waiting for all tabs to close. This prevents the "blank screen
+          // after deploy" scenario where the old SW serves stale HTML that references
+          // chunks that no longer exist on the CDN.
+          skipWaiting: true,
           clientsClaim: true,
           // Precache only the app shell: index.html, manifest, and the icon set
           // shipped from /public. JS/CSS chunks and other assets are cached
@@ -93,7 +97,9 @@ export default defineConfig({
               handler: "NetworkFirst",
               options: {
                 cacheName: "jf-html",
-                networkTimeoutSeconds: 4,
+                // 3s timeout: on slow mobile connections, fall back to the cached
+                // HTML faster so the app shell appears immediately.
+                networkTimeoutSeconds: 3,
                 expiration: { maxEntries: 32, maxAgeSeconds: 60 * 60 * 24 },
               },
             },

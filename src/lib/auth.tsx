@@ -9,6 +9,34 @@ import { clearLastRoute } from "@/lib/route-persistence";
 
 export type AppRole = "admin" | "coach" | "media_manager" | "client" | "member";
 
+// ── Role cache helpers ────────────────────────────────────────────────────────
+// Persist the resolved role to localStorage so PWA resume is instant.
+// The cache is keyed by user ID and expires after 24 hours.
+const ROLE_CACHE_PREFIX = "jf:role:";
+const ROLE_CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
+
+function readCachedRole(uid: string): AppRole | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = localStorage.getItem(ROLE_CACHE_PREFIX + uid);
+    if (!raw) return null;
+    const { role, ts } = JSON.parse(raw) as { role: AppRole; ts: number };
+    if (Date.now() - ts > ROLE_CACHE_TTL_MS) { localStorage.removeItem(ROLE_CACHE_PREFIX + uid); return null; }
+    return role;
+  } catch { return null; }
+}
+
+function writeCachedRole(uid: string, role: AppRole): void {
+  if (typeof window === "undefined") return;
+  try { localStorage.setItem(ROLE_CACHE_PREFIX + uid, JSON.stringify({ role, ts: Date.now() })); } catch { /* storage full */ }
+}
+
+function clearCachedRole(uid: string): void {
+  if (typeof window === "undefined") return;
+  try { localStorage.removeItem(ROLE_CACHE_PREFIX + uid); } catch {}
+}
+// ─────────────────────────────────────────────────────────────────────────────
+
 interface AuthState {
   user: User | null;
   session: Session | null;
@@ -28,8 +56,36 @@ const AuthCtx = createContext<AuthState>({
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [user, setUser] = useState<User | null>(null);
-  const [role, setRole] = useState<AppRole | null>(null);
-  const [loading, setLoading] = useState(true);
+  // Initialize role from localStorage cache for instant PWA resume.
+  const [role, setRole] = useState<AppRole | null>(() => {
+    if (typeof window === "undefined") return null;
+    try {
+      const sessionKey = Object.keys(localStorage).find((k) => k.startsWith("sb-") && k.endsWith("-auth-token"));
+      if (!sessionKey) return null;
+      const raw = localStorage.getItem(sessionKey);
+      if (!raw) return null;
+      const uid = JSON.parse(raw)?.user?.id;
+      return uid ? readCachedRole(uid) : null;
+    } catch { return null; }
+  });
+  // Start loading=false if we have a cached session+role in localStorage.
+  // This makes PWA resume instant — the splash clears immediately and the
+  // user lands on their dashboard while the role re-validates in the background.
+  const [loading, setLoading] = useState(() => {
+    if (typeof window === "undefined") return true;
+    try {
+      // Supabase persists the session under this key by default
+      const sessionKey = Object.keys(localStorage).find((k) => k.startsWith("sb-") && k.endsWith("-auth-token"));
+      if (!sessionKey) return true;
+      const raw = localStorage.getItem(sessionKey);
+      if (!raw) return true;
+      const parsed = JSON.parse(raw);
+      const uid = parsed?.user?.id;
+      if (!uid) return true;
+      const cachedRole = readCachedRole(uid);
+      return cachedRole === null; // if we have a cached role, start non-loading
+    } catch { return true; }
+  });
   const router = useRouter();
 
   // Dev-only: log when auth finishes resolving (role known or no session).
@@ -120,6 +176,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           : "client";
         setRole(resolvedRole);
         roleLoadedForRef.current = uid;
+        writeCachedRole(uid, resolvedRole); // persist for instant PWA resume
         setLoading(false);
         // Warm the client record cache so the dashboard doesn't waterfall
         if (resolvedRole === "client") {
@@ -171,6 +228,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setRole(null);
     roleLoadedForRef.current = null;
     lastUserIdRef.current = null;
+    if (uid) clearCachedRole(uid); // clear role cache on sign-out
     // Remove the persisted last-route so the next user on this device
     // never lands in a previous user's workout or profile.
     if (uid) clearLastRoute(uid);
