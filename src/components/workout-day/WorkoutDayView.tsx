@@ -1037,13 +1037,19 @@ function WorkoutDay({
   // Shared workout summary for the pinned status bar AND the inline quality badge.
   const statusSummary = (() => {
     try {
+      const detectTimed = (r: any): boolean => {
+        if (r?.tracking_type === "time" || r?.measurement_type === "time") return true;
+        if ((r as any)?.exercises?.default_measurement_type === "time") return true;
+        if (r?.duration_seconds != null && Number(r.duration_seconds) > 0) return true;
+        return /\b(sec(onds?)?|min(utes?)?)\b/i.test(String(r?.reps_text ?? ""));
+      };
       const required: RequiredRowSpec[] = (rows as any[])
         .filter((r: any) => !r?.skipped)
         .map((r: any) => ({
           rowId: String(r.id),
           prescribedSets: Math.max(1, Number(r.sets) || 1),
           skipped: !!r.skipped,
-          metricKind: "load_reps" as RowMetricKind,
+          metricKind: (detectTimed(r) ? "timed" : "load_reps") as RowMetricKind,
         }));
       const logged: LoggedSetSpec[] = (results as any[]).map((x: any) => ({
         rowId: String(x.row_id),
@@ -1052,6 +1058,7 @@ function WorkoutDay({
         loadLb: x.actual_load_unit === "kg" ? null : x.actual_load,
         loadKg: x.actual_load_unit === "kg" ? x.actual_load : null,
         rpe: x.actual_rpe_num ?? x.actual_rpe,
+        completedDurationSeconds: x.completed_duration_seconds ?? null,
       }));
       const sum = required.length > 0 ? summarizeCompleteness(required, logged) : null;
       // Per-row sets logged → derive exercises done.
