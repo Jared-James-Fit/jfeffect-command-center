@@ -1317,7 +1317,13 @@ function WorkoutDay({
                 rowId: String(r.id),
                 prescribedSets: Math.max(1, Number(r.sets) || 1),
                 skipped: !!r.skipped,
-                metricKind: "load_reps" as RowMetricKind,
+                metricKind: ((
+                  r?.tracking_type === "time" ||
+                  r?.measurement_type === "time" ||
+                  (r as any)?.exercises?.default_measurement_type === "time" ||
+                  (r?.duration_seconds != null && Number(r.duration_seconds) > 0) ||
+                  /\b(sec(onds?)?|min(utes?)?)\b/i.test(String(r?.reps_text ?? ""))
+                ) ? "timed" : "load_reps") as RowMetricKind,
               }));
               const logged: LoggedSetSpec[] = (results as any[]).map((x: any) => ({
                 rowId: String(x.row_id),
@@ -1326,6 +1332,7 @@ function WorkoutDay({
                 loadLb: x.actual_load_unit === "kg" ? null : x.actual_load,
                 loadKg: x.actual_load_unit === "kg" ? x.actual_load : null,
                 rpe: x.actual_rpe_num ?? x.actual_rpe,
+                completedDurationSeconds: x.completed_duration_seconds ?? null,
               }));
               if (required.length === 0) return null;
               const sum = summarizeCompleteness(required, logged);
