@@ -11,7 +11,7 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Sparkles, ArrowRight, Search as SearchIcon } from "lucide-react";
+import { Sparkles, ArrowRight, Search as SearchIcon, LayoutGrid, List as ListIcon } from "lucide-react";
 import { listMembershipLibrary, enrollLibraryPlan } from "@/lib/membership-library.functions";
 import { getMyGoalsSetupFn } from "@/lib/client-goals/goals.functions";
 import { deriveFacets } from "@/lib/programs/facets";
@@ -22,6 +22,9 @@ import { rankRecommendations, isProfileReady } from "@/lib/programs/recommend";
 import { ProgramCard } from "@/components/programs/program-card";
 import { CategoryRail } from "@/components/programs/category-rail";
 import { FiltersSheet, ActiveFilterChips, type FilterState } from "@/components/programs/filters-sheet";
+import { ProgramFinder, type FinderItem } from "@/components/programs/program-finder";
+import { supabase } from "@/integrations/supabase/client";
+import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/_authenticated/m/plans")({ component: PlanLibrary });
 
@@ -56,6 +59,7 @@ function PlanLibrary() {
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
   const [pendingId, setPendingId] = useState<string | null>(null);
   const [conflictPlan, setConflictPlan] = useState<LibraryPlan | null>(null);
+  const [view, setView] = useState<"grid" | "finder">("grid");
 
   const { data, isLoading } = useQuery({
     queryKey: ["m-membership-library"],
@@ -146,6 +150,29 @@ function PlanLibrary() {
   return (
     <div className="space-y-5 pb-24">
       <PageHeader title="Program Library" subtitle="Find a program built around your goals." />
+
+      <div className="flex items-center gap-1 rounded-md border border-border bg-muted/30 p-0.5 w-fit">
+        <button
+          type="button"
+          onClick={() => setView("grid")}
+          className={cn("flex items-center gap-1.5 rounded px-2.5 py-1 text-xs font-medium transition-colors",
+            view === "grid" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground")}
+        >
+          <LayoutGrid className="h-3.5 w-3.5" /> Grid
+        </button>
+        <button
+          type="button"
+          onClick={() => setView("finder")}
+          className={cn("flex items-center gap-1.5 rounded px-2.5 py-1 text-xs font-medium transition-colors",
+            view === "finder" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground")}
+        >
+          <ListIcon className="h-3.5 w-3.5" /> Finder
+        </button>
+      </div>
+
+      {view === "finder" ? (
+        <MemberFinderView plans={plans} loading={isLoading} pendingId={pendingId} onAdd={addToTraining} />
+      ) : (<>
 
       {/* Top Picks for You */}
       {effectiveCategory === "recommended" && (
