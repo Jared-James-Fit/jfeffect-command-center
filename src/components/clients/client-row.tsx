@@ -4,7 +4,7 @@ import { UserAvatar } from "@/components/user-avatar";
 import { Button } from "@/components/ui/button";
 import {
   ChevronRight, MoreHorizontal, CalendarDays, Dumbbell,
-  Apple, HeartPulse, CheckCircle2, AlertCircle, Plus, Eye, ArrowRight,
+  Apple, HeartPulse, CheckCircle2, AlertCircle, Plus, Star, ArrowRight, Clock,
 } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Progress } from "@/components/ui/progress";
@@ -179,11 +179,21 @@ export function ClientRow({ r, onArchive }: { r: DirectoryRow; onArchive?: (r: D
           })}
         </div>
 
-        {/* Program summary */}
+                {/* Program summary */}
         <div className="min-w-0 space-y-1.5">
           <AssignmentStatusStrip r={r} prog={prog} range={range} />
         </div>
-
+        {/* Last signed in — shown below program summary */}
+        {(r.last_active_at || r.last_login_at) && (
+          <div className="flex items-center gap-1 text-[11px] text-muted-foreground">
+            <Clock className="h-3 w-3 shrink-0" aria-hidden />
+            <span>
+              {r.last_active_at
+                ? `Last seen ${formatDistanceToNow(parseISO(r.last_active_at), { addSuffix: true })}`
+                : `Signed in ${formatDistanceToNow(parseISO(r.last_login_at!), { addSuffix: true })}`}
+            </span>
+          </div>
+        )}
         {/* Next best action */}
         <div className="flex items-center justify-end gap-1.5">
           {canPov && (
@@ -196,7 +206,7 @@ export function ClientRow({ r, onArchive }: { r: DirectoryRow; onArchive?: (r: D
                   aria-label={`Enter ${r.full_name ?? "client"} POV`}
                   className="h-11 w-11 border border-warning/50 bg-warning/15 text-warning shadow-sm hover:bg-warning/25 md:h-10 md:w-10"
                 >
-                  <Eye className="h-5 w-5" />
+                  <Star className="h-5 w-5" />
                 </Button>
               </TooltipTrigger>
               <TooltipContent side="top">Enter Client POV</TooltipContent>

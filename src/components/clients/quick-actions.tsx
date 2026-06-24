@@ -2,7 +2,7 @@ import { Link } from "@tanstack/react-router";
 import { useState } from "react";
 import {
   Dumbbell, Plus, BookOpen, CalendarDays, Apple, HeartPulse,
-  MessageSquare, ClipboardCheck, CreditCard, User, Zap, Eye, Archive,
+  MessageSquare, ClipboardCheck, CreditCard, User, Zap, Star, Archive,
   Download, Loader2, ShoppingCart,
 } from "lucide-react";
 import { QuickSellSheet } from "./quick-sell-sheet";
@@ -300,7 +300,7 @@ export function ClientMoreMenu({
         <DropdownMenuLabel className="text-xs">{r.full_name}</DropdownMenuLabel>
         <DropdownMenuItem asChild>
           <Link to="/admin/clients/$id" params={{ id: r.id }} className="flex items-center gap-2">
-            <Eye className="h-4 w-4" /> Open Client
+            <Star className="h-4 w-4" /> Open Client
           </Link>
         </DropdownMenuItem>
         <DropdownMenuItem asChild>
