@@ -12,7 +12,7 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { ClipboardList, MessageSquare, Pencil } from "lucide-react";
+import { MessageSquare, Pencil } from "lucide-react";
 import {
   WorkoutReviewEditor,
   type ReviewInitial,
@@ -41,32 +41,12 @@ export function CompletedWorkoutActions({
   const [reviewOpen, setReviewOpen] = useState(false);
   const hasReview = !!initialReview?.submittedAt;
 
-  const scrollToLog = () => {
-    if (logAnchorId) {
-      const el = document.getElementById(logAnchorId);
-      if (el) {
-        el.scrollIntoView({ behavior: "smooth", block: "start" });
-        return;
-      }
-    }
-    window.scrollTo({ top: 0, behavior: "smooth" });
-  };
-
   return (
     <>
       <Card className="flex flex-wrap items-center gap-2 border-emerald-500/30 bg-emerald-500/5 p-3">
         <div className="mr-auto text-sm font-bold text-emerald-700 dark:text-emerald-300">
           Workout completed
         </div>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={scrollToLog}
-          className="h-9 gap-1.5"
-        >
-          <ClipboardList className="h-4 w-4" />
-          View / Edit Log
-        </Button>
         <Button
           variant={hasReview ? "outline" : "default"}
           size="sm"

@@ -462,19 +462,22 @@ mark.gh-mark.gh-flash { animation: ghFlashPulse 1.4s ease-out 2; }
    ============================================================ */
 @media (max-width: 768px) {
   @media not (prefers-reduced-motion: reduce) {
-    /* The workout page body is the scroll container */
+    /* Full screen mode: the fixed overlay IS the scroll container.
+       Proximity snap so cards settle gently without feeling sticky. */
     .workout-scroll-container {
-      /* Proximity snap: only snaps when the user is already close to a snap
-         point. Fast flick-scrolling passes through without snapping. */
       scroll-snap-type: y proximity;
-      /* Offset so cards don't land under the bottom nav */
       scroll-padding-bottom: calc(var(--bottom-nav-clearance, 96px) + env(safe-area-inset-bottom) + 8px);
-      scroll-padding-top: 8px;
+      scroll-padding-top: 56px; /* height of the sticky header */
+      /* Lock horizontal axis: prevents side-to-side wiggle */
+      overflow-x: hidden !important;
     }
 
-    /* Each exercise card snaps to start (top of card aligns with viewport top).
-       Using 'start' rather than 'center' so the card header is always visible. */
+    /* Each exercise card snaps to start so the card header is always visible.
+       workout-snap-list is the direct parent of exercise cards inside fullscreen. */
     .workout-scroll-container > * {
+      scroll-snap-align: start;
+    }
+    .workout-snap-list > * {
       scroll-snap-align: start;
     }
   }

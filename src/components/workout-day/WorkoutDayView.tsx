@@ -1100,7 +1100,7 @@ function WorkoutDay({
     <>
       {focusMode && (
         <div
-          className="fixed inset-0 z-40 overflow-y-auto bg-background"
+          className="fixed inset-0 z-40 overflow-y-auto overflow-x-hidden bg-background workout-scroll-container"
           data-workout-focus
         >
           <div className="sticky top-0 z-10 flex items-center justify-between border-b border-border bg-background/95 px-4 py-3 backdrop-blur">
@@ -1122,7 +1122,7 @@ function WorkoutDay({
           )}
           <div className="mx-auto max-w-3xl p-4 md:p-6">
             <WorkoutLoadBoundary clientId={client?.id ?? null} clientName={(client as any)?.full_name ?? null} dayId={dayId} route={`/portal/workouts/${dayId}`}>
-              <div className="space-y-4 rounded-lg bg-builder-canvas p-3 sm:p-4 ring-1 ring-builder-card-border/40">
+              <div className="space-y-4 rounded-lg bg-builder-canvas p-3 sm:p-4 ring-1 ring-builder-card-border/40 workout-snap-list">
               {rowsLoaded && (rows as any[]).length === 0 ? (
                 <WorkoutEmptyCard
                   clientId={client?.id ?? null}
@@ -1266,7 +1266,7 @@ function WorkoutDay({
           ) : undefined
         }
       />
-      <div className="p-4 md:p-8 space-y-4 pb-[calc(var(--bottom-nav-clearance,96px)+env(safe-area-inset-bottom)+24px)] md:pb-8 workout-scroll-container">
+      <div className="p-4 md:p-8 space-y-4 pb-[calc(var(--bottom-nav-clearance,96px)+env(safe-area-inset-bottom)+24px)] md:pb-8">
 
         {statusBarVisible && (
           <WorkoutStatusBar
