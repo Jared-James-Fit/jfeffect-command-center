@@ -15,7 +15,7 @@ import { supabase } from "@/integrations/supabase/client";
 type TabKey = "programs" | "browse" | "exercises" | "cardio" | "warmups" | "recipes";
 const TABS: { value: TabKey; label: string }[] = [
   { value: "programs", label: "Programs" },
-  { value: "browse", label: "Browse" },
+  { value: "browse", label: "List" },
   { value: "exercises", label: "Exercises" },
   { value: "cardio", label: "Cardio" },
   { value: "warmups", label: "Warm-Ups" },
