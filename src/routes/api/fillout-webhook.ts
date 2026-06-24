@@ -81,7 +81,7 @@ export const Route = createFileRoute("/api/fillout-webhook")({
         // ── 4. Mark assignment as completed ──────────────────────────────────
         try {
           const admin = getAdminClient();
-          const { data, error } = await (admin as ReturnType<typeof createClient> & { rpc: Function }).rpc(
+          const { data, error } = await (admin as unknown as { rpc: (fn: string, args: Record<string, unknown>) => Promise<{ data: unknown; error: unknown }> }).rpc(
             "mark_form_assignment_completed",
             {
               p_assignment_id:   assignmentId ?? "00000000-0000-0000-0000-000000000000",
