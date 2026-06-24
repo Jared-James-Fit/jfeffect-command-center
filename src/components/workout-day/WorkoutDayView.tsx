@@ -2553,31 +2553,34 @@ function ExerciseNotesSheet({ open, onOpenChange, clientId, dayId, dayTitle, row
               if (!clientId) return;
               const trimmed = draft.trim();
               if (!trimmed) throw new Error("Note is empty");
-              if (existingNote) {
-                const payload = { content: trimmed, status: "edited", coach_seen_at: null };
-                if (adapter) {
-                  await adapter.upsertPlExerciseNoteRaw(payload, existingNote.id);
+              const doSave = async () => {
+                if (existingNote) {
+                  const payload = { content: trimmed, status: "edited", coach_seen_at: null };
+                  if (adapter) {
+                    await adapter.upsertPlExerciseNoteRaw(payload, existingNote.id);
+                  } else {
+                    const { error } = await sb.from("pl_exercise_notes").update(payload).eq("id", existingNote.id);
+                    if (error) throw error;
+                  }
                 } else {
-                  const { error } = await sb.from("pl_exercise_notes").update(payload).eq("id", existingNote.id);
-                  if (error) throw error;
+                  const payload = {
+                    client_id: clientId,
+                    day_id: dayId,
+                    row_id: rowId,
+                    exercise_id: exerciseId,
+                    exercise_name: exerciseName,
+                    content: trimmed,
+                    status: "new",
+                  };
+                  if (adapter) {
+                    await adapter.upsertPlExerciseNoteRaw(payload, null);
+                  } else {
+                    const { error } = await sb.from("pl_exercise_notes").insert(payload);
+                    if (error) throw error;
+                  }
                 }
-              } else {
-                const payload = {
-                  client_id: clientId,
-                  day_id: dayId,
-                  row_id: rowId,
-                  exercise_id: exerciseId,
-                  exercise_name: exerciseName,
-                  content: trimmed,
-                  status: "new",
-                };
-                if (adapter) {
-                  await adapter.upsertPlExerciseNoteRaw(payload, null);
-                } else {
-                  const { error } = await sb.from("pl_exercise_notes").insert(payload);
-                  if (error) throw error;
-                }
-              }
+              };
+              await saveExerciseNoteWithRetry(doSave);
               onSaved();
             }}
           >
