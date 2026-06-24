@@ -38,15 +38,70 @@ type Folder = {
 
 function norm(s?: string | null) { return (s ?? "").toLowerCase().trim(); }
 function styleOf(it: FinderItem) { return norm(it.trainingStyle); }
-function levelOf(it: FinderItem) {
-  const l = norm(it.level);
-  const t = norm(it.title);
-  const hay = `${l} ${t}`;
-  if (hay.includes("advanced-elite") || hay.includes("advanced/elite") || hay.includes("advanced elite")) return "advanced-elite";
+
+// ---------- Standardized title parsing ----------
+// Format: "[Name] — [Level] • [Frequency] • [Primary Type]"
+// Level slugs: beginner, beginner-intermediate, intermediate,
+// intermediate-advanced, advanced, advanced-elite, elite, all-levels.
+const LEVEL_LABELS: Record<string, string> = {
+  "beginner": "Beginner",
+  "beginner-intermediate": "Beginner–Intermediate",
+  "intermediate": "Intermediate",
+  "intermediate-advanced": "Intermediate–Advanced",
+  "advanced": "Advanced",
+  "advanced-elite": "Advanced–Elite",
+  "elite": "Elite",
+  "all-levels": "All Levels",
+};
+const LEVEL_BADGE_CLS: Record<string, string> = {
+  "beginner": "border-emerald-500/40 bg-emerald-500/15 text-emerald-300",
+  "beginner-intermediate": "border-teal-500/40 bg-teal-500/15 text-teal-300",
+  "intermediate": "border-blue-500/40 bg-blue-500/15 text-blue-300",
+  "intermediate-advanced": "border-indigo-500/40 bg-indigo-500/15 text-indigo-300",
+  "advanced": "border-orange-500/40 bg-orange-500/15 text-orange-300",
+  "advanced-elite": "border-purple-500/40 bg-purple-500/15 text-purple-300",
+  "elite": "border-purple-700/50 bg-purple-700/20 text-purple-200",
+  "all-levels": "border-border bg-muted/40 text-muted-foreground",
+};
+function tagLookup(it: FinderItem, prefix: string): string | null {
+  const t = (it.tags ?? []).find((x) => norm(x).startsWith(prefix));
+  return t ? norm(t).slice(prefix.length) : null;
+}
+function levelOf(it: FinderItem): string {
+  const tagged = tagLookup(it, "level:");
+  if (tagged) return tagged;
+  const hay = `${norm(it.level)} ${norm(it.title)}`;
+  if (hay.includes("all levels") || hay.includes("all-levels")) return "all-levels";
+  if (hay.includes("intermediate-advanced") || hay.includes("intermediate–advanced") || hay.includes("intermediate/advanced")) return "intermediate-advanced";
+  if (hay.includes("beginner-intermediate") || hay.includes("beginner–intermediate") || hay.includes("beginner/intermediate")) return "beginner-intermediate";
+  if (hay.includes("advanced-elite") || hay.includes("advanced–elite") || hay.includes("advanced/elite") || hay.includes("advanced elite")) return "advanced-elite";
+  if (hay.includes("elite")) return "elite";
   if (hay.includes("advanced")) return "advanced";
   if (hay.includes("intermediate")) return "intermediate";
-  if (hay.includes("beginner")) return "beginner";
-  return l;
+  if (hay.includes("beginner") || hay.includes("novice")) return "beginner";
+  return "";
+}
+function freqOf(it: FinderItem): number | null {
+  const tagged = tagLookup(it, "freq:");
+  if (tagged) {
+    const m = tagged.match(/(\d+)/);
+    if (m) return Number(m[1]);
+  }
+  if (typeof it.daysPerWeek === "number") return it.daysPerWeek;
+  return null;
+}
+function typeOf(it: FinderItem): string {
+  const tagged = tagLookup(it, "type:");
+  if (tagged) return tagged;
+  return styleOf(it);
+}
+function typeLabel(t: string): string {
+  if (!t) return "";
+  return t.charAt(0).toUpperCase() + t.slice(1);
+}
+function freqAliases(n: number | null): string[] {
+  if (!n) return [];
+  return [`${n}-day`, `${n} day`, `${n}d`, `${n}x`, `${n}x per week`, `${n} days/week`, `${n}/week`];
 }
 
 const FOLDERS: Folder[] = [
