@@ -83,7 +83,7 @@ export function TrainingIntelPage({ embedded = false }: { embedded?: boolean } =
   return (
     <>
       {!embedded && <PageHeader title="Training Intelligence" subtitle="Action dashboard — see issue, take action, mark reviewed." />}
-      <div className="p-6 md:p-8 space-y-6">
+      <div className="p-4 md:p-8 space-y-6 overflow-x-hidden">
         <div className="grid gap-3 grid-cols-2 md:grid-cols-3 lg:grid-cols-7">
           <SummaryStat icon={Activity} label="Clients" value={summary.total} />
           <SummaryStat icon={ClipboardList} label="Open follow-ups" value={summary.followups} tone="amber" />
@@ -207,7 +207,7 @@ function ClientActionCard({ c, focus, allFollowups }: { c: ClientIntel; focus?: 
   const myFollowups = (allFollowups ?? c.open_followups).filter((f: any) => f.client_id === c.client_id && f.status === "open");
 
   return (
-    <Card className="p-4 space-y-3">
+    <Card className="p-4 space-y-3 overflow-hidden min-w-0">
       <ClientHeader c={c} />
 
       <div className="grid grid-cols-2 gap-2 text-xs">

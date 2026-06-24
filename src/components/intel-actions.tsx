@@ -25,15 +25,15 @@ function invalidate(qc: any, clientId: string) {
 /** Common "Message + Profile + Program" link cluster. */
 export function ClientQuickLinks({ c, compact = false }: { c: { client_id: string; full_name?: string }; compact?: boolean }) {
   return (
-    <div className="flex flex-wrap gap-1">
+    <div className="flex shrink-0 gap-1">
       <Link to="/admin/messages" search={{ client: c.client_id }}>
-        <Button size="sm" variant="outline"><MessageSquare className="mr-1 h-3.5 w-3.5" />{compact ? "" : "Message"}</Button>
+        <Button size="sm" variant="outline" className="h-7 px-2"><MessageSquare className="h-3.5 w-3.5" /></Button>
       </Link>
       <Link to="/admin/clients/$id" params={{ id: c.client_id }}>
-        <Button size="sm" variant="ghost"><UserCircle className="h-4 w-4" /></Button>
+        <Button size="sm" variant="ghost" className="h-7 px-2"><UserCircle className="h-4 w-4" /></Button>
       </Link>
       <Link to="/admin/client-programs/$clientId" params={{ clientId: c.client_id }}>
-        <Button size="sm" variant="ghost"><Dumbbell className="h-4 w-4" /></Button>
+        <Button size="sm" variant="ghost" className="h-7 px-2"><Dumbbell className="h-4 w-4" /></Button>
       </Link>
     </div>
   );
@@ -72,20 +72,20 @@ export function PainFlagActions({ flag, clientId }: { flag: PainFlag; clientId: 
   const [open, setOpen] = useState(false);
   const navigate = useNavigate();
   return (
-    <div className="flex flex-wrap items-center gap-1">
+    <div className="flex items-center gap-1 min-w-0">
       <Select value={flag.status} onValueChange={async (v) => {
         try { await setPainFlagStatus(flag.id, v as any); invalidate(qc, clientId); toast.success("Status updated"); }
         catch (e: any) { toast.error(e.message ?? "Failed"); }
       }}>
-        <SelectTrigger className="h-7 w-32 text-xs"><SelectValue /></SelectTrigger>
+        <SelectTrigger className="h-7 w-28 min-w-0 shrink text-xs"><SelectValue /></SelectTrigger>
         <SelectContent>
           {PAIN_STATUSES.map((s) => <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>)}
         </SelectContent>
       </Select>
-      <Button size="sm" variant="ghost" onClick={() => navigate({ to: "/admin/messages", search: { client: clientId } })}>
+      <Button size="sm" variant="ghost" className="shrink-0 px-2" onClick={() => navigate({ to: "/admin/messages", search: { client: clientId } })}>
         <MessageSquare className="h-3.5 w-3.5" />
       </Button>
-      <Button size="sm" variant="ghost" onClick={() => setOpen(true)}>
+      <Button size="sm" variant="ghost" className="shrink-0 px-2" onClick={() => setOpen(true)}>
         <ClipboardCheck className="mr-1 h-3.5 w-3.5" /> Follow-up
       </Button>
       <FollowupDialog open={open} onOpenChange={setOpen} clientId={clientId} defaultReason={`Pain flag: ${(flag.matched_keywords ?? []).join(", ")}`} defaultSource="pain" />
