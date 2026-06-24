@@ -1266,7 +1266,7 @@ function WorkoutDay({
           ) : undefined
         }
       />
-      <div className="p-4 md:p-8 space-y-4 pb-[calc(var(--bottom-nav-clearance,96px)+env(safe-area-inset-bottom)+24px)] md:pb-8">
+      <div className="p-4 md:p-8 space-y-4 pb-[calc(var(--bottom-nav-clearance,96px)+env(safe-area-inset-bottom)+24px)] md:pb-8 workout-scroll-container">
 
         {statusBarVisible && (
           <WorkoutStatusBar
@@ -2127,8 +2127,9 @@ function ExerciseBlock({ row, dayId, dayTitle, clientId, blockId, existingResult
   };
 
   return (
-    <Card className="relative overflow-hidden border border-builder-card-border bg-builder-card p-4 pl-5 shadow-builder-card transition-colors hover:border-builder-card-border-strong sm:p-5 sm:pl-6">
-      <div className={`absolute left-0 top-0 h-full w-1.5 ${accent}`} aria-hidden />
+    <Card className="relative overflow-hidden border border-builder-card-border bg-card p-4 pl-5 shadow-builder-card transition-colors hover:border-builder-card-border-strong sm:p-5 sm:pl-6 rounded-[18px]">
+      {/* Left stripe: inset top/bottom so it doesn't visually connect between cards */}
+      <div className={`absolute left-0 top-2 bottom-2 w-1.5 rounded-full ${accent}`} aria-hidden />
       {/* Row 1 — name + unit toggle */}
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0 flex-1 font-bold leading-snug break-words text-sm sm:text-base">{name}</div>
@@ -2197,8 +2198,8 @@ function ExerciseBlock({ row, dayId, dayTitle, clientId, blockId, existingResult
         </div>
       )}
       {row.notes && <p className="mt-1 text-xs text-muted-foreground italic">{row.notes}</p>}
-      {/* Row 3 — compact horizontal action row */}
-      <div className="mt-2 flex flex-wrap items-center gap-1">
+      {/* Row 3 — compact horizontal action row (secondary controls: lighter weight) */}
+      <div className="mt-2 flex flex-wrap items-center gap-1 opacity-70 hover:opacity-100 transition-opacity">
         {clientId && exerciseId && (
           <ExerciseHistoryButton
             clientId={clientId}

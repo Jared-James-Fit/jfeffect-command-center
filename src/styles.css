@@ -452,3 +452,38 @@ mark.gh-mark.gh-flash { animation: ghFlashPulse 1.4s ease-out 2; }
 @media not all and (display-mode: standalone) {
   .show-only-in-standalone { display: none !important; }
 }
+
+/* ============================================================
+   Workout card scroll snap — mobile-first, proximity only.
+   Cards gently settle into view when scrolling slows.
+   Does NOT force snap; fast flick-scrolling still works freely.
+   Respects prefers-reduced-motion.
+   ============================================================ */
+@media (max-width: 768px) {
+  @media not (prefers-reduced-motion: reduce) {
+    /* The workout page body is the scroll container */
+    .workout-scroll-container {
+      /* Proximity snap: only snaps when the user is already close to a snap
+         point. Fast flick-scrolling passes through without snapping. */
+      scroll-snap-type: y proximity;
+      /* Offset so cards don't land under the bottom nav */
+      scroll-padding-bottom: calc(var(--bottom-nav-clearance, 96px) + env(safe-area-inset-bottom) + 8px);
+      scroll-padding-top: 8px;
+    }
+
+    /* Each exercise card snaps to start (top of card aligns with viewport top).
+       Using 'start' rather than 'center' so the card header is always visible. */
+    .workout-scroll-container > * {
+      scroll-snap-align: start;
+    }
+  }
+}
+
+/* ============================================================
+   Workout card visual polish — shadow utility for light theme.
+   Applied via shadow-builder-card which maps to --shadow-builder-card.
+   In light mode this is a subtle 1px border + soft drop shadow.
+   ============================================================ */
+@utility shadow-workout-card {
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.06);
+}
