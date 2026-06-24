@@ -183,17 +183,17 @@ export function ClientRow({ r, onArchive }: { r: DirectoryRow; onArchive?: (r: D
         <div className="min-w-0 space-y-1.5">
           <AssignmentStatusStrip r={r} prog={prog} range={range} />
         </div>
-        {/* Last signed in — shown below program summary */}
-        {(r.last_active_at || r.last_login_at) && (
-          <div className="flex items-center gap-1 text-[11px] text-muted-foreground">
-            <Clock className="h-3 w-3 shrink-0" aria-hidden />
-            <span>
-              {r.last_active_at
-                ? `Last seen ${formatDistanceToNow(parseISO(r.last_active_at), { addSuffix: true })}`
-                : `Signed in ${formatDistanceToNow(parseISO(r.last_login_at!), { addSuffix: true })}`}
-            </span>
-          </div>
-        )}
+        {/* Last signed in — always shown, falls back to 'Never signed in' */}
+        <div className="flex items-center gap-1 text-[11px] text-muted-foreground">
+          <Clock className="h-3 w-3 shrink-0" aria-hidden />
+          <span>
+            {r.last_active_at
+              ? `Last seen ${formatDistanceToNow(parseISO(r.last_active_at), { addSuffix: true })}`
+              : r.last_login_at
+              ? `Signed in ${formatDistanceToNow(parseISO(r.last_login_at), { addSuffix: true })}`
+              : "Never signed in"}
+          </span>
+        </div>
         {/* Next best action */}
         <div className="flex items-center justify-end gap-1.5">
           {canPov && (
