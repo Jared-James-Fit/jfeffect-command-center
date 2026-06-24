@@ -12,9 +12,9 @@ import {
 } from "lucide-react";
 import { Reveal } from "@/components/sales/reveal";
 
-const TITLE = "Personal Trainer Selkirk MB | JF Effect Coaching";
+const TITLE = "Personal Trainer Selkirk MB | Online Fitness Coaching Selkirk & Winnipeg | JF Effect";
 const DESCRIPTION =
-  "Personal training in Selkirk, Manitoba for fat loss, strength, muscle building, powerlifting, and bodybuilding. Work with JF Effect online or in person at Iron Image Gym.";
+  "#1 personal trainer in Selkirk, MB. In-person training at Iron Image Gym + online fitness coaching serving Selkirk, Winnipeg, and all of Manitoba. Strength, fat loss, muscle building, powerlifting, and bodybuilding coaching by Jared James Fit.";
 const URL = "https://jfeffect.com/personal-trainer-selkirk";
 const OG_IMAGE = "https://jfeffect.com/icon-1024.png";
 
@@ -71,8 +71,14 @@ export const Route = createFileRoute("/personal-trainer-selkirk")({
             addressRegion: "MB",
             addressCountry: "CA",
           },
+          geo: {
+            "@type": "GeoCoordinates",
+            latitude: 50.1436,
+            longitude: -96.8839,
+          },
           areaServed: [
-            { "@type": "City", name: "Selkirk" },
+            { "@type": "City", name: "Selkirk", containedInPlace: { "@type": "State", name: "Manitoba" } },
+            { "@type": "City", name: "Winnipeg", containedInPlace: { "@type": "State", name: "Manitoba" } },
             { "@type": "AdministrativeArea", name: "Manitoba" },
           ],
           serviceType: [
