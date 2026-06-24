@@ -1,13 +1,13 @@
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { ChevronRight, ChevronDown, Folder, FolderOpen, FileText, X } from "lucide-react";
+import { ChevronRight, ChevronDown, Folder, FolderOpen, FileText, Search, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription,
 } from "@/components/ui/sheet";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { ScrollArea } from "@/components/ui/scroll-area";
+import { Input } from "@/components/ui/input";
 import type { ReactNode } from "react";
 
 export type FinderItem = {
@@ -128,10 +128,24 @@ function rowReps(r: any) {
   return r?.reps_text || r?.reps || "—";
 }
 
+function highlight(text: string, q: string): ReactNode {
+  if (!q) return text;
+  const idx = text.toLowerCase().indexOf(q);
+  if (idx === -1) return text;
+  return (
+    <>
+      {text.slice(0, idx)}
+      <mark className="rounded-sm bg-primary/30 px-0.5 text-foreground">{text.slice(idx, idx + q.length)}</mark>
+      {text.slice(idx + q.length)}
+    </>
+  );
+}
+
 export function ProgramFinder({ items, loadPayload, renderActions, loading }: Props) {
   const [folderId, setFolderId] = useState<string>("all");
   const [expanded, setExpanded] = useState<Record<string, boolean>>({ bodybuilding: true });
   const [open, setOpen] = useState<FinderItem | null>(null);
+  const [query, setQuery] = useState("");
 
   const allFolders = useMemo(() => {
     const flat: { folder: Folder; depth: number }[] = [];
@@ -151,16 +165,29 @@ export function ProgramFinder({ items, loadPayload, renderActions, loading }: Pr
   };
 
   const current = findFolder(folderId) ?? FOLDERS[0];
-  const rows = useMemo(() => items.filter((it) => current.match(it)), [items, current]);
+  const q = query.trim().toLowerCase();
+  const rows = useMemo(() => {
+    const base = items.filter((it) => current.match(it));
+    if (!q) return base;
+    return base.filter((it) => {
+      const hay = [it.title, it.level, it.goal, it.trainingStyle].filter(Boolean).join(" ").toLowerCase();
+      return hay.includes(q);
+    });
+  }, [items, current, q]);
 
   const counts = useMemo(() => {
     const out: Record<string, number> = {};
+    const matchQuery = (it: FinderItem) => {
+      if (!q) return true;
+      const hay = [it.title, it.level, it.goal, it.trainingStyle].filter(Boolean).join(" ").toLowerCase();
+      return hay.includes(q);
+    };
     for (const f of FOLDERS) {
-      out[f.id] = items.filter((it) => f.match(it)).length;
-      if (f.children) for (const c of f.children) out[c.id] = items.filter((it) => c.match(it)).length;
+      out[f.id] = items.filter((it) => f.match(it) && matchQuery(it)).length;
+      if (f.children) for (const c of f.children) out[c.id] = items.filter((it) => c.match(it) && matchQuery(it)).length;
     }
     return out;
-  }, [items]);
+  }, [items, q]);
 
   return (
     <div className="grid h-[calc(100vh-220px)] min-h-[480px] max-h-[800px] grid-cols-[220px_minmax(0,1fr)] overflow-hidden rounded-lg border border-border bg-background/40">
@@ -187,6 +214,28 @@ export function ProgramFinder({ items, loadPayload, renderActions, loading }: Pr
 
       {/* Right: list */}
       <section className="flex h-full min-h-0 min-w-0 flex-col">
+        <div className="flex items-center gap-2 border-b border-border bg-muted/20 px-3 py-2">
+          <div className="relative flex-1">
+            <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search programs by name, level, goal…"
+              className="h-8 pl-8 pr-8 text-sm"
+            />
+            {query && (
+              <button
+                type="button"
+                onClick={() => setQuery("")}
+                className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground"
+                aria-label="Clear search"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            )}
+          </div>
+          <span className="shrink-0 text-xs tabular-nums text-muted-foreground">{rows.length} result{rows.length === 1 ? "" : "s"}</span>
+        </div>
         <div className="grid grid-cols-[minmax(0,2fr)_90px_70px_70px_minmax(0,1.2fr)] gap-3 border-b border-border bg-muted/30 px-4 py-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
           <div>Program</div><div>Level</div><div>Weeks</div><div>Days/wk</div><div>Goal</div>
         </div>
@@ -194,7 +243,7 @@ export function ProgramFinder({ items, loadPayload, renderActions, loading }: Pr
           {loading ? (
             <div className="p-6 text-sm text-muted-foreground">Loading…</div>
           ) : rows.length === 0 ? (
-            <div className="p-6 text-sm text-muted-foreground">No programs in this folder.</div>
+            <div className="p-6 text-sm text-muted-foreground">{q ? `No programs match "${query}".` : "No programs in this folder."}</div>
           ) : (
             <ul className="divide-y divide-border/60">
               {rows.map((it) => (
@@ -205,12 +254,12 @@ export function ProgramFinder({ items, loadPayload, renderActions, loading }: Pr
                 >
                   <div className="flex min-w-0 items-center gap-2">
                     <FileText className="h-4 w-4 shrink-0 text-muted-foreground" />
-                    <span className="truncate font-medium text-foreground">{it.title}</span>
+                    <span className="truncate font-medium text-foreground">{highlight(it.title, q)}</span>
                   </div>
-                  <div className="truncate text-xs text-muted-foreground">{it.level || "—"}</div>
+                  <div className="truncate text-xs text-muted-foreground">{it.level ? highlight(it.level, q) : "—"}</div>
                   <div className="text-xs tabular-nums text-muted-foreground">{it.weeks ?? "—"}</div>
                   <div className="text-xs tabular-nums text-muted-foreground">{it.daysPerWeek ?? "—"}</div>
-                  <div className="truncate text-xs text-muted-foreground">{it.goal || "—"}</div>
+                  <div className="truncate text-xs text-muted-foreground">{it.goal ? highlight(it.goal, q) : "—"}</div>
                 </li>
               ))}
             </ul>
