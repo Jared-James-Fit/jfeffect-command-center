@@ -2476,6 +2476,42 @@ function toEmbedUrl(url: string): string {
   return url;
 }
 
+/**
+ * Save an exercise note with a single automatic retry when the database
+ * connection reports "current transaction is aborted, commands ignored
+ * until end of transaction block" (Postgres SQLSTATE 25P02). That state
+ * is left behind on a pooled connection when a prior statement on the
+ * same transaction failed; the next request on the same connection will
+ * keep failing until the transaction is rolled back. PostgREST resets
+ * the connection between requests, so a short delay + one retry is
+ * enough to land the upsert cleanly.
+ */
+async function saveExerciseNoteWithRetry(doSave: () => Promise<void>) {
+  const isAbortError = (err: unknown) => {
+    const e = err as { code?: string; message?: string } | null | undefined;
+    if (!e) return false;
+    if (e.code === "25P02") return true;
+    const msg = String(e.message ?? "").toLowerCase();
+    return msg.includes("current transaction is aborted");
+  };
+  try {
+    await doSave();
+  } catch (err) {
+    if (!isAbortError(err)) throw err;
+    // Give the pooled connection a beat to roll back before retrying.
+    await new Promise((r) => setTimeout(r, 200));
+    try {
+      await doSave();
+    } catch (retryErr) {
+      // Surface a friendlier message; original error is preserved upstream
+      // via console for debugging.
+      // eslint-disable-next-line no-console
+      console.error("Exercise note save failed after retry", retryErr);
+      throw retryErr;
+    }
+  }
+}
+
 function ExerciseNotesSheet({ open, onOpenChange, clientId, dayId, dayTitle, rowId, exerciseId, exerciseName, existingNote, loading = false, onSaved }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
