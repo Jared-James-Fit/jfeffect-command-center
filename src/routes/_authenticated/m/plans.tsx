@@ -320,6 +320,7 @@ function PlanLibrary() {
           </Button>
         </div>
       )}
+      </>)}
 
       <AlertDialog open={!!conflictPlan} onOpenChange={(o) => !o && setConflictPlan(null)}>
         <AlertDialogContent>
