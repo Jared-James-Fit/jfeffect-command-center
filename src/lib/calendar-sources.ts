@@ -17,7 +17,8 @@ export type CalendarKind =
   | "workout"
   | "check_in"
   | "google_event"
-  | "membership_event";
+  | "membership_event"
+  | "cardio";
 
 export type CalendarItem = {
   id: string;             // stable unique id (kind-prefixed)
@@ -42,9 +43,10 @@ export const KIND_META: Record<CalendarKind, { label: string; chip: string; dot:
   appointment:    { label: "Appointment",  chip: "bg-blue-500/15 text-blue-300 border-blue-500/30",             dot: "bg-blue-400" },
   pt_session:     { label: "PT Session",   chip: "bg-violet-500/15 text-violet-300 border-violet-500/30",       dot: "bg-violet-400" },
   workout:        { label: "Workout",      chip: "bg-emerald-500/15 text-emerald-300 border-emerald-500/30",    dot: "bg-emerald-400" },
-  check_in:       { label: "Check-In",     chip: "bg-rose-500/15 text-rose-300 border-rose-500/30",             dot: "bg-rose-400" },
+  check_in:       { label: "Check-In",     chip: "bg-amber-500/15 text-amber-300 border-amber-500/30",           dot: "bg-amber-400" },
   google_event:   { label: "Google",       chip: "bg-sky-500/15 text-sky-300 border-sky-500/30",                dot: "bg-sky-400" },
   membership_event: { label: "Membership", chip: "bg-fuchsia-500/15 text-fuchsia-300 border-fuchsia-500/30",    dot: "bg-fuchsia-400" },
+  cardio:           { label: "Cardio",      chip: "bg-rose-500/15 text-rose-300 border-rose-500/30",              dot: "bg-rose-400" },
 };
 
 /** Per-kind action label so clients/admins see the *thing they can do*, not just "Open". */
@@ -57,6 +59,7 @@ export const CTA_LABELS: Record<CalendarKind, string> = {
   check_in:       "Submit Check-In",
   google_event:   "Open in Google",
   membership_event: "Open Member",
+  cardio:           "View Cardio",
 };
 export function ctaLabel(item: { kind: CalendarKind; raw?: any }): string {
   if (item.kind === "event") {
@@ -163,6 +166,34 @@ export function useClientCalendarSources(clientId: string | null | undefined) {
     },
   });
 
+  // Fetch active cardio targets + client schedule to generate calendar events
+  const cardioQ = useQuery({
+    queryKey: ["cal-client-cardio", clientId],
+    enabled,
+    staleTime: 5 * 60_000,
+    queryFn: async () => {
+      const [targetsRes, clientRes] = await Promise.all([
+        supabase
+          .from("cardio_targets")
+          .select("id,day_type,custom_day_type,cardio_type,custom_type,duration_minutes,intensity,frequency_per_week,status,enabled,visible_to_client,client_notes")
+          .eq("client_id", clientId!)
+          .eq("status", "Active")
+          .eq("enabled", true)
+          .eq("visible_to_client", true)
+          .is("program_name", null),
+        supabase
+          .from("clients")
+          .select("preferred_training_days,preferred_rest_days,preferred_high_days")
+          .eq("id", clientId!)
+          .maybeSingle(),
+      ]);
+      return {
+        targets: (targetsRes.data ?? []) as any[],
+        schedule: clientRes.data as any,
+      };
+    },
+  });
+
   const items: CalendarItem[] = useMemo(() => {
     const out: CalendarItem[] = [];
 
@@ -252,8 +283,65 @@ export function useClientCalendarSources(clientId: string | null | undefined) {
       });
     }
 
+    // Generate cardio calendar events for the current week ± 4 weeks
+    const cardioTargets = cardioQ.data?.targets ?? [];
+    const schedule = cardioQ.data?.schedule;
+    if (cardioTargets.length > 0) {
+      // Day-of-week arrays from client schedule (e.g. ["Monday","Wednesday"])
+      const WEEKDAY_NAMES = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
+      const trainingDays: string[] = (schedule?.preferred_training_days ?? []).map((d: string) => d.trim());
+      const restDays: string[] = (schedule?.preferred_rest_days ?? []).map((d: string) => d.trim());
+      const highDays: string[] = (schedule?.preferred_high_days ?? []).map((d: string) => d.trim());
+
+      // Map day_type to the relevant day-of-week array
+      function daysForType(dayType: string): string[] {
+        const t = dayType.toLowerCase();
+        if (t.includes("training")) return trainingDays;
+        if (t.includes("high")) return highDays;
+        if (t.includes("rest") || t.includes("non-training") || t.includes("non training")) return restDays;
+        return []; // General / unknown — skip (shown in today panel instead)
+      }
+
+      // Generate events for 5 weeks: 2 past + current + 2 future
+      const today = new Date();
+      const startOfRange = new Date(today);
+      startOfRange.setDate(today.getDate() - today.getDay() - 14); // 2 weeks back from Sunday
+      const endOfRange = new Date(startOfRange);
+      endOfRange.setDate(startOfRange.getDate() + 35); // 5 weeks
+
+      for (const target of cardioTargets) {
+        const targetDays = daysForType(target.day_type ?? "");
+        if (targetDays.length === 0) continue;
+        const cardioName = target.cardio_type === "Custom" ? (target.custom_type || "Cardio") : (target.cardio_type || "Cardio");
+        const subtitle = [target.duration_minutes ? `${target.duration_minutes} min` : null, target.intensity].filter(Boolean).join(" · ");
+
+        // Walk each day in the range and emit an event for matching weekdays
+        const cursor = new Date(startOfRange);
+        while (cursor <= endOfRange) {
+          const dayName = WEEKDAY_NAMES[cursor.getDay()];
+          if (targetDays.includes(dayName)) {
+            const y = cursor.getFullYear();
+            const m = String(cursor.getMonth() + 1).padStart(2, "0");
+            const d = String(cursor.getDate()).padStart(2, "0");
+            const dateStr = `${y}-${m}-${d}`;
+            out.push({
+              id: `cardio:${target.id}:${dateStr}`,
+              kind: "cardio",
+              date: dateStr,
+              title: cardioName,
+              subtitle,
+              status: null,
+              href: { to: "/portal/workouts" },
+              raw: { ...target, _date: dateStr },
+            });
+          }
+          cursor.setDate(cursor.getDate() + 1);
+        }
+      }
+    }
+
     return out.sort((a, b) => (a.date + (a.startsAt ?? "")).localeCompare(b.date + (b.startsAt ?? "")));
-  }, [eventsQ.data, importantQ.data, apptsQ.data, ptQ.data, workoutsQ.data, checkinsQ.data]);
+  }, [eventsQ.data, importantQ.data, apptsQ.data, ptQ.data, workoutsQ.data, checkinsQ.data, cardioQ.data]);
 
   return {
     items,
