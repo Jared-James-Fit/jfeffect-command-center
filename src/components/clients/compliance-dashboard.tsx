@@ -140,7 +140,7 @@ export function ComplianceDashboard() {
       const { data: clients, error } = await supabase
         .from("clients")
         .select("id,full_name,email,last_active_at,missed_workouts_count,days_inactive,f_missed_workouts,f_inactive")
-        .eq("client_status", "Active")
+        .eq("archived", false)
         .order("full_name", { ascending: true });
       if (error) throw error;
 
@@ -154,7 +154,7 @@ export function ComplianceDashboard() {
       const { data: clientUsers } = await supabase
         .from("clients")
         .select("id,user_id")
-        .eq("client_status", "Active");
+        .eq("archived", false);
 
       const userIdToClientId = new Map<string, string>(
         (clientUsers ?? []).map((c: any) => [c.user_id, c.id])

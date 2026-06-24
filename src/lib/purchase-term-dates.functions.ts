@@ -3,7 +3,7 @@
  * Handles start/end date assignment, history tracking, and auto-calculation.
  */
 import { createServerFn } from "@tanstack/react-start";
-import { requireSupabaseAuth } from "@/lib/server-middleware";
+import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { z } from "zod";
 
 // ── Update term dates (with history) ────────────────────────────────────────
@@ -20,7 +20,7 @@ export const updatePurchaseTermDates = createServerFn({ method: "POST" })
   )
   .handler(async ({ data, context }) => {
     const { supabase } = context;
-    const { data: result, error } = await supabase.rpc(
+    const { data: result, error } = await (supabase as any).rpc(
       "update_purchase_term_dates",
       {
         _purchase_id: data.purchaseId,
@@ -48,7 +48,7 @@ export const autoCalculatePurchaseTermDates = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const { supabase } = context;
     const today = new Date().toISOString().split("T")[0];
-    const { data: result, error } = await supabase.rpc(
+    const { data: result, error } = await (supabase as any).rpc(
       "auto_calculate_purchase_term_dates",
       {
         _purchase_id: data.purchaseId,

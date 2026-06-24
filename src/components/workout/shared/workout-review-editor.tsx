@@ -170,8 +170,6 @@ export function WorkoutReviewEditor({
 
   const selectedCard = STATUS_CARDS.find((c) => c.key === status) ?? null;
   const showNotes = status === "minor" || status === "attention";
-  const canSubmit = status !== null && !mutation.isPending;
-
   const mutation = useMutation({
     mutationFn: async () => {
       if (!selectedCard) throw new Error("Please select a workout status");
@@ -200,8 +198,10 @@ export function WorkoutReviewEditor({
       onSaved?.();
       onOpenChange(false);
     },
-    onError: (e: any) => toast.error(e?.message || "Couldn't save review"),
+        onError: (e: any) => toast.error(e?.message || "Couldn't save review"),
   });
+
+  const canSubmit = status !== null && !mutation.isPending;
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>

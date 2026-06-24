@@ -15,99 +15,109 @@
  *   3. Add hidden fields to each Fillout form:
  *      - jf_assignment_id  (pre-filled with the nf_assignments.id UUID)
  *      - jf_client_id      (pre-filled with the clients.id UUID)
- *   4. Remove the TODO_ACTIVATE comment below and uncomment the signature verification
  *
  * Status: ARCHITECTURE READY — awaiting Fillout credentials and form configuration.
  */
 
-import { createAPIFileRoute } from "@tanstack/react-start/api";
-import { supabase as adminSupabase } from "@/integrations/supabase/client";
+import { createFileRoute } from "@tanstack/react-router";
+import { createClient } from "@supabase/supabase-js";
 
-// TODO_ACTIVATE: Set this in Supabase env vars when Fillout is configured
 const FILLOUT_WEBHOOK_SECRET = process.env.FILLOUT_WEBHOOK_SECRET ?? null;
 
-export const APIRoute = createAPIFileRoute("/api/fillout-webhook")({
-  POST: async ({ request }) => {
-    // ── 1. Signature verification (activate when secret is configured) ──────
-    if (FILLOUT_WEBHOOK_SECRET) {
-      const signature = request.headers.get("x-fillout-signature") ?? "";
-      // TODO_ACTIVATE: Implement HMAC-SHA256 verification here
-      // const isValid = verifyFilloutSignature(await request.text(), signature, FILLOUT_WEBHOOK_SECRET);
-      // if (!isValid) return new Response("Unauthorized", { status: 401 });
-    }
+function getAdminClient() {
+  const url = process.env.SUPABASE_URL ?? process.env.VITE_SUPABASE_URL ?? "";
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY ?? "";
+  return createClient(url, key);
+}
 
-    // ── 2. Parse payload ─────────────────────────────────────────────────────
-    let body: any;
-    try {
-      body = await request.json();
-    } catch {
-      return new Response("Invalid JSON", { status: 400 });
-    }
+export const Route = createFileRoute("/api/fillout-webhook")({
+  server: {
+    handlers: {
+      POST: async ({ request }: { request: Request }) => {
+        // ── 1. Signature verification (activate when secret is configured) ──
+        if (FILLOUT_WEBHOOK_SECRET) {
+          const signature = request.headers.get("x-fillout-signature") ?? "";
+          // TODO_ACTIVATE: Implement HMAC-SHA256 verification here
+          void signature;
+        }
 
-    // Fillout webhook payload structure:
-    // { submissionId, formId, submittedAt, responses: [{ field, value }] }
-    const submissionId: string = body?.submissionId ?? body?.id ?? "";
-    const formId: string = body?.formId ?? "";
-    const submittedAt: string = body?.submittedAt ?? new Date().toISOString();
-    const responses: { field?: string; label?: string; value?: any }[] = body?.responses ?? [];
+        // ── 2. Parse payload ─────────────────────────────────────────────────
+        let body: Record<string, unknown>;
+        try {
+          body = await request.json() as Record<string, unknown>;
+        } catch {
+          return new Response("Invalid JSON", { status: 400 });
+        }
 
-    if (!submissionId) {
-      return new Response("Missing submissionId", { status: 400 });
-    }
+        const submissionId: string = String(body?.submissionId ?? body?.id ?? "");
+        const formId: string = String(body?.formId ?? "");
+        const submittedAt: string = String(body?.submittedAt ?? new Date().toISOString());
+        const responses: Array<{ field?: string; label?: string; value?: unknown }> =
+          Array.isArray(body?.responses) ? (body.responses as Array<{ field?: string; label?: string; value?: unknown }>) : [];
 
-    // ── 3. Extract hidden matching fields from responses ─────────────────────
-    function findField(key: string): string | null {
-      const r = responses.find(
-        (r) => r.field === key || r.label?.toLowerCase() === key.toLowerCase()
-      );
-      return r?.value ? String(r.value).trim() : null;
-    }
+        if (!submissionId) {
+          return new Response("Missing submissionId", { status: 400 });
+        }
 
-    const assignmentId = findField("jf_assignment_id");
-    const clientId = findField("jf_client_id");
+        // ── 3. Extract hidden matching fields ────────────────────────────────
+        function findField(key: string): string | null {
+          const r = responses.find(
+            (r) => r.field === key || r.label?.toLowerCase() === key.toLowerCase()
+          );
+          return r?.value != null ? String(r.value).trim() : null;
+        }
 
-    if (!clientId) {
-      // Cannot match without client_id — log and return 200 to prevent Fillout retries
-      console.warn("[fillout-webhook] Missing jf_client_id in submission", { submissionId, formId });
-      return new Response(
-        JSON.stringify({ success: false, reason: "missing_client_id" }),
-        { status: 200, headers: { "Content-Type": "application/json" } }
-      );
-    }
+        const assignmentId = findField("jf_assignment_id");
+        const clientId = findField("jf_client_id");
 
-    // ── 4. Mark assignment as completed ──────────────────────────────────────
-    try {
-      const { data, error } = await (adminSupabase as any).rpc("mark_form_assignment_completed", {
-        p_assignment_id:   assignmentId ?? "00000000-0000-0000-0000-000000000000",
-        p_client_id:       clientId,
-        p_submission_id:   submissionId,
-        p_fillout_form_id: formId || null,
-        p_completed_at:    submittedAt,
-      });
+        if (!clientId) {
+          console.warn("[fillout-webhook] Missing jf_client_id", { submissionId, formId });
+          return new Response(
+            JSON.stringify({ success: false, reason: "missing_client_id" }),
+            { status: 200, headers: { "Content-Type": "application/json" } }
+          );
+        }
 
-      if (error) throw error;
+        // ── 4. Mark assignment as completed ──────────────────────────────────
+        try {
+          const admin = getAdminClient();
+          const { data, error } = await (admin as ReturnType<typeof createClient> & { rpc: Function }).rpc(
+            "mark_form_assignment_completed",
+            {
+              p_assignment_id:   assignmentId ?? "00000000-0000-0000-0000-000000000000",
+              p_client_id:       clientId,
+              p_submission_id:   submissionId,
+              p_fillout_form_id: formId || null,
+              p_completed_at:    submittedAt,
+            }
+          );
 
-      const result = data as { success: boolean; matched_by: string; rows_updated: number };
-      console.info("[fillout-webhook] Processed", { submissionId, clientId, assignmentId, result });
+          if (error) throw error;
 
-      return new Response(
-        JSON.stringify({ success: result.success, matched_by: result.matched_by }),
-        { status: 200, headers: { "Content-Type": "application/json" } }
-      );
-    } catch (err: any) {
-      console.error("[fillout-webhook] DB error", err);
-      return new Response(
-        JSON.stringify({ success: false, error: err?.message }),
-        { status: 500, headers: { "Content-Type": "application/json" } }
-      );
-    }
+          const result = data as { success: boolean; matched_by: string; rows_updated: number };
+          console.info("[fillout-webhook] Processed", { submissionId, clientId, assignmentId, result });
+
+          return new Response(
+            JSON.stringify({ success: result.success, matched_by: result.matched_by }),
+            { status: 200, headers: { "Content-Type": "application/json" } }
+          );
+        } catch (err: unknown) {
+          const msg = err instanceof Error ? err.message : "Unknown error";
+          console.error("[fillout-webhook] DB error", err);
+          return new Response(
+            JSON.stringify({ success: false, error: msg }),
+            { status: 500, headers: { "Content-Type": "application/json" } }
+          );
+        }
+      },
+
+      GET: async () => {
+        return new Response(
+          JSON.stringify({ status: "ready", endpoint: "fillout-webhook" }),
+          { status: 200, headers: { "Content-Type": "application/json" } }
+        );
+      },
+    },
   },
-
-  // Fillout may send HEAD requests to verify the endpoint
-  GET: async () => {
-    return new Response(
-      JSON.stringify({ status: "ready", endpoint: "fillout-webhook" }),
-      { status: 200, headers: { "Content-Type": "application/json" } }
-    );
-  },
+  component: () => null,
 });
