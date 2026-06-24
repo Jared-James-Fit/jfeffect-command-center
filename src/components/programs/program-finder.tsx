@@ -225,23 +225,32 @@ export function ProgramFinder({ items, loadPayload, renderActions, loading }: Pr
   const q = query.trim().toLowerCase();
   const hasFullBody = (it: FinderItem) =>
     (it.tags ?? []).some((t) => norm(t) === "full-body" || norm(t) === "full body");
+  const haystackFor = (it: FinderItem): string => {
+    const lvl = levelOf(it);
+    const fr = freqOf(it);
+    const ty = typeOf(it);
+    return [
+      it.title,
+      it.level,
+      it.goal,
+      it.trainingStyle,
+      LEVEL_LABELS[lvl] ?? lvl,
+      lvl,
+      ty,
+      ...freqAliases(fr),
+      ...((it.tags ?? []) as string[]),
+    ].filter(Boolean).join(" ").toLowerCase();
+  };
   const rows = useMemo(() => {
     let base = items.filter((it) => current.match(it));
     if (fullBodyOnly) base = base.filter(hasFullBody);
     if (!q) return base;
-    return base.filter((it) => {
-      const hay = [it.title, it.level, it.goal, it.trainingStyle].filter(Boolean).join(" ").toLowerCase();
-      return hay.includes(q);
-    });
+    return base.filter((it) => haystackFor(it).includes(q));
   }, [items, current, q, fullBodyOnly]);
 
   const counts = useMemo(() => {
     const out: Record<string, number> = {};
-    const matchQuery = (it: FinderItem) => {
-      if (!q) return true;
-      const hay = [it.title, it.level, it.goal, it.trainingStyle].filter(Boolean).join(" ").toLowerCase();
-      return hay.includes(q);
-    };
+    const matchQuery = (it: FinderItem) => (!q ? true : haystackFor(it).includes(q));
     const matchFb = (it: FinderItem) => (fullBodyOnly ? hasFullBody(it) : true);
     for (const f of FOLDERS) {
       out[f.id] = items.filter((it) => f.match(it) && matchQuery(it) && matchFb(it)).length;
