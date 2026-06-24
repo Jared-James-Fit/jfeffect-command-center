@@ -103,7 +103,8 @@
   /* Borders & inputs */
   --border: oklch(0.90 0.005 80);                  /* #E5E7EB subtle light grey */
   --input: oklch(0.97 0.003 80);                   /* near-white input bg */
-  --ring: oklch(0.62 0.22 25);
+  /* Focus ring: blue so focused inputs don't look like errors */
+  --ring: oklch(0.55 0.18 250);                    /* #3B82F6 blue */
 
   /* Charts */
   --chart-1: oklch(0.62 0.22 25);
