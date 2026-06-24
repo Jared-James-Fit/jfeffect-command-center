@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useMemo, useRef, useState } from "react";
+import React, { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { useAuth } from "@/lib/auth";
@@ -651,7 +651,8 @@ export function MessageThread({
   const { data: messages = [] } = useQuery({
     queryKey: ["messages", clientId, role],
     enabled: !!clientId,
-    staleTime: 0,
+    staleTime: 30_000,       // 30s: prevents re-render flicker on tab focus
+    gcTime: 5 * 60_000,
     refetchOnWindowFocus: false,
     refetchOnMount: false,
     queryFn: () => listMessages(clientId, { includeInternal: role === "admin", limit: 100 }),
@@ -811,29 +812,46 @@ export function MessageThread({
     });
   }, [clientId, role, qc]);
 
-  // Pin the scroller to the bottom after layout settles. Setting scrollTop
-  // synchronously inside the effect runs BEFORE the new bubble's height is
-  // measured (and before async media like avatars/images take their final
-  // size), which is what produced the "first message clipped at the top /
-  // composer hidden behind the bottom nav" glitch on initial open. We wait
-  // for the next two animation frames so the browser has finished layout,
-  // and also watch the scroller with a ResizeObserver to re-pin while the
-  // user is already at (or near) the bottom — covers late image loads and
-  // viewport changes from the on-screen keyboard.
+  // Track whether the initial scroll has fired for this clientId.
+  // On initial open: scroll instantly to bottom (no animation = no glitch).
+  // On new message: only scroll if already near the bottom (within 200px).
+  const initialScrollDoneRef = React.useRef<string | null>(null);
+
   useEffect(() => {
     const el = scrollerRef.current;
-    if (!el) return;
-    let raf1 = 0;
-    let raf2 = 0;
-    raf1 = requestAnimationFrame(() => {
-      raf2 = requestAnimationFrame(() => {
-        el.scrollTop = el.scrollHeight;
+    if (!el || !messages.length) return;
+
+    const isInitialLoad = initialScrollDoneRef.current !== clientId;
+
+    if (isInitialLoad) {
+      // Initial open: use 4 RAFs to wait for full layout (images, avatars, keyboard).
+      // No smooth scroll — instant jump prevents the visible glitch.
+      let r1 = 0, r2 = 0, r3 = 0, r4 = 0;
+      r1 = requestAnimationFrame(() => {
+        r2 = requestAnimationFrame(() => {
+          r3 = requestAnimationFrame(() => {
+            r4 = requestAnimationFrame(() => {
+              el.scrollTop = el.scrollHeight;
+              initialScrollDoneRef.current = clientId ?? null;
+            });
+          });
+        });
       });
-    });
-    return () => {
-      cancelAnimationFrame(raf1);
-      cancelAnimationFrame(raf2);
-    };
+      return () => {
+        cancelAnimationFrame(r1); cancelAnimationFrame(r2);
+        cancelAnimationFrame(r3); cancelAnimationFrame(r4);
+      };
+    } else {
+      // New message arrived: only auto-scroll if user is near the bottom.
+      const distance = el.scrollHeight - el.scrollTop - el.clientHeight;
+      if (distance < 200) {
+        let r1 = 0, r2 = 0;
+        r1 = requestAnimationFrame(() => {
+          r2 = requestAnimationFrame(() => { el.scrollTop = el.scrollHeight; });
+        });
+        return () => { cancelAnimationFrame(r1); cancelAnimationFrame(r2); };
+      }
+    }
   }, [messages.length, clientId]);
 
   useEffect(() => {
@@ -1034,40 +1052,40 @@ export function MessageThread({
     const atts = [...attachments, ...(opts?.extraAttachments ?? [])];
     if (!text && atts.length === 0) return null;
     
-    return runJob({ title: "Sending message" }, async () => {
-      // Auto-detect plain URLs typed inline → optional link attachments
-      const linkAtts: MessageAttachment[] = [];
-      const matches = text.match(LINK_RE);
-      if (matches) {
-        for (const u of matches.slice(0, 3)) {
-          if (atts.some((a) => a.url === u)) continue;
-          linkAtts.push({ type: detectAttachmentType(u), url: u });
-        }
+    // Direct send — no ProgressDrawer popup for simple messages.
+    // The button spinner (Loader2) provides sufficient feedback.
+    const linkAtts: MessageAttachment[] = [];
+    const matches = text.match(LINK_RE);
+    if (matches) {
+      for (const u of matches.slice(0, 3)) {
+        if (atts.some((a) => a.url === u)) continue;
+        linkAtts.push({ type: detectAttachmentType(u), url: u });
       }
-      setSending(true);
-      try {
-        const sent = await sendMessage({
-          clientId,
-          senderId: user.id,
-          senderRole: role,
-          body: text,
-          attachments: [...atts, ...linkAtts],
-          messageType,
-          isInternalNote: role === "admin" ? internalNote : false,
-          priority: role === "admin" ? priority : undefined,
-        });
-        setBody("");
-        setAttachments([]);
-        setInternalNote(false);
-        qc.invalidateQueries({ queryKey: ["messages", clientId, role] });
-        return sent;
-      } finally {
-        setSending(false);
-      }
-    }).catch((e: any) => {
+    }
+    setSending(true);
+    try {
+      const sent = await sendMessage({
+        clientId,
+        senderId: user.id,
+        senderRole: role,
+        body: text,
+        attachments: [...atts, ...linkAtts],
+        messageType,
+        isInternalNote: role === "admin" ? internalNote : false,
+        priority: role === "admin" ? priority : undefined,
+      });
+      setBody("");
+      setAttachments([]);
+      setInternalNote(false);
+      qc.invalidateQueries({ queryKey: ["messages", clientId, role] });
+      return sent;
+    } catch (e: any) {
       toast.error(e?.message ?? "Failed to send");
       return null;
-    });  };
+    } finally {
+      setSending(false);
+    }
+  };
 
   const onSend = () => doSend();
 
