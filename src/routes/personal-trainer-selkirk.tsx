@@ -162,15 +162,13 @@ function SelkirkPage() {
               <MapPin className="h-3 w-3" /> Selkirk, Manitoba · Iron Image Gym
             </div>
             <h1 className="mt-5 text-4xl font-black tracking-tight md:text-6xl">
-              Personal Training in Selkirk for Beginners Who Want Real Results
+              New to the gym? Start here.
             </h1>
             <p className="mt-5 text-base text-muted-foreground md:text-xl">
-              You don't need to be fit to start.
+              You don't need to know what you're doing yet. That's the whole point.
             </p>
             <p className="mt-3 text-base text-muted-foreground md:text-lg">
-              Whether your goal is fat loss, building muscle, getting stronger, powerlifting, bodybuilding, or just learning
-              how to use a gym the right way, Jared James makes personal training in Selkirk simple, structured, and built
-              around you — in person or online.
+              Jared James takes you from unsure to confident — with a plan that fits your life, in person in Selkirk or online.
             </p>
             <p className="mt-4 text-sm font-semibold md:text-base">
               At Iron Image Gym in Selkirk, Manitoba. Sessions from $100. Packages available.
