@@ -1113,13 +1113,6 @@ export function MessageThread({
         onTouchStart={onSwipeTouchStart}
         onTouchMove={onSwipeTouchMove}
         onTouchEnd={onSwipeTouchEnd}
-        onScroll={() => {
-          // Dismiss keyboard on scroll (iMessage-style) — blurs the active
-          // input so the iOS keyboard closes when the user scrolls up.
-          if (document.activeElement instanceof HTMLElement) {
-            document.activeElement.blur();
-          }
-        }}
         onTouchCancel={onSwipeTouchEnd}
       >
         {canLoadOlder && (
