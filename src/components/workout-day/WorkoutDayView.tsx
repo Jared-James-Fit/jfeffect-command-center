@@ -2729,7 +2729,7 @@ function SetRow({
   const save = useAutosave({
     key: draftKey,
     value,
-    delay: 1500, // 1.5 s — prevents premature save after first digit on mobile
+    delay: 800, // 0.8 s — fast enough to save before user taps away on mobile
     // Toggling KG/LB converts the displayed `load` but the underlying
     // weight is unchanged. Compare in normalized kg so a unit toggle
     // alone does not mark the set dirty / trigger a save loop.
@@ -2745,7 +2745,12 @@ function SetRow({
       const bk = toKg(b.load, b.unit);
       return ak === bk;
     },
-    enabled: !readonly && !!clientId && hydrated && (load.length > 0 || reps.length > 0 || rpe.length > 0 || !!existing),
+    // NOTE: hydrated is intentionally excluded from this condition.
+    // hydrated only gates the draft-restore optimization; it must not
+    // gate whether saves work. If a user types before the draft-restore
+    // effect fires (common on fast mobile taps), their value would never
+    // save because enabled=false means the baseline is never established.
+    enabled: !readonly && !!clientId && (load.length > 0 || reps.length > 0 || rpe.length > 0 || !!existing),
     onPermanentFailure: ({ value }) => {
       if (!clientId) return;
       const loadNum = value.load ? Number(value.load) : null;
