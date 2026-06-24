@@ -619,7 +619,7 @@ function WorkoutDay({
   });
 
   // Exercise notes for this day
-  const { data: exerciseNotes = [] } = useQuery({
+  const { data: exerciseNotes = [], isLoading: notesLoading } = useQuery({
     queryKey: ["pl-day-exercise-notes", dayId, client?.id, adapter?.kind ?? null],
     enabled: !!client?.id,
     staleTime: 60_000,
@@ -1150,6 +1150,7 @@ function WorkoutDay({
                   blockId={blockId}
                   existingResults={(results as any[]).filter((x) => x.row_id === r.id)}
                   existingNote={notesByRowId.get(r.id)}
+                  notesLoading={notesLoading}
                   readonly={readonly}
                   unit={unitForRow(r)}
                   onUnitChange={(u) => setExerciseUnit(r.exercises?.id ?? null, r.id, u)}
@@ -1496,6 +1497,7 @@ function WorkoutDay({
                 blockId={blockId}
                 existingResults={(results as any[]).filter((x) => x.row_id === r.id)}
                 existingNote={notesByRowId.get(r.id)}
+                notesLoading={notesLoading}
                 readonly={readonly}
                 unit={unitForRow(r)}
                 onUnitChange={(u) => setExerciseUnit(r.exercises?.id ?? null, r.id, u)}
@@ -1887,7 +1889,7 @@ function UnsupportedExerciseCard({ row }: { row: any }) {
   );
 }
 
-function ExerciseBlock({ row, dayId, dayTitle, clientId, blockId, existingResults, existingNote, readonly = false, unit = "kg", onUnitChange, focusMode = false, onChange, onNoteChange, purposeLabel = null, swapContext = undefined }: { row: any; dayId: string; dayTitle: string; clientId: string | undefined; blockId?: string | null; existingResults: any[]; existingNote?: any; readonly?: boolean; unit?: "kg" | "lb"; onUnitChange?: (u: "kg" | "lb") => void; focusMode?: boolean; onChange: () => void; onNoteChange: () => void; purposeLabel?: string | null; swapContext?: { kind: "client" } | { kind: "member"; enrollmentId: string; weekIndex: number; dayIndex: number; exerciseIndex: number } | undefined }) {
+function ExerciseBlock({ row, dayId, dayTitle, clientId, blockId, existingResults, existingNote, notesLoading = false, readonly = false, unit = "kg", onUnitChange, focusMode = false, onChange, onNoteChange, purposeLabel = null, swapContext = undefined }: { row: any; dayId: string; dayTitle: string; clientId: string | undefined; blockId?: string | null; existingResults: any[]; existingNote?: any; notesLoading?: boolean; readonly?: boolean; unit?: "kg" | "lb"; onUnitChange?: (u: "kg" | "lb") => void; focusMode?: boolean; onChange: () => void; onNoteChange: () => void; purposeLabel?: string | null; swapContext?: { kind: "client" } | { kind: "member"; enrollmentId: string; weekIndex: number; dayIndex: number; exerciseIndex: number } | undefined }) {
   const adapter = useOptionalAdapter();
   const name = row.exercises?.name ?? row.exercise_name_override ?? "Exercise";
   const exercise = row.exercises ?? null;
@@ -2364,6 +2366,7 @@ function ExerciseBlock({ row, dayId, dayTitle, clientId, blockId, existingResult
         exerciseId={exerciseId}
         exerciseName={name}
         existingNote={existingNote}
+        loading={notesLoading}
         onSaved={onNoteChange}
       />
     </Card>
@@ -2473,7 +2476,43 @@ function toEmbedUrl(url: string): string {
   return url;
 }
 
-function ExerciseNotesSheet({ open, onOpenChange, clientId, dayId, dayTitle, rowId, exerciseId, exerciseName, existingNote, onSaved }: {
+/**
+ * Save an exercise note with a single automatic retry when the database
+ * connection reports "current transaction is aborted, commands ignored
+ * until end of transaction block" (Postgres SQLSTATE 25P02). That state
+ * is left behind on a pooled connection when a prior statement on the
+ * same transaction failed; the next request on the same connection will
+ * keep failing until the transaction is rolled back. PostgREST resets
+ * the connection between requests, so a short delay + one retry is
+ * enough to land the upsert cleanly.
+ */
+async function saveExerciseNoteWithRetry(doSave: () => Promise<void>) {
+  const isAbortError = (err: unknown) => {
+    const e = err as { code?: string; message?: string } | null | undefined;
+    if (!e) return false;
+    if (e.code === "25P02") return true;
+    const msg = String(e.message ?? "").toLowerCase();
+    return msg.includes("current transaction is aborted");
+  };
+  try {
+    await doSave();
+  } catch (err) {
+    if (!isAbortError(err)) throw err;
+    // Give the pooled connection a beat to roll back before retrying.
+    await new Promise((r) => setTimeout(r, 200));
+    try {
+      await doSave();
+    } catch (retryErr) {
+      // Surface a friendlier message; original error is preserved upstream
+      // via console for debugging.
+      // eslint-disable-next-line no-console
+      console.error("Exercise note save failed after retry", retryErr);
+      throw retryErr;
+    }
+  }
+}
+
+function ExerciseNotesSheet({ open, onOpenChange, clientId, dayId, dayTitle, rowId, exerciseId, exerciseName, existingNote, loading = false, onSaved }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
   clientId: string | undefined;
@@ -2483,6 +2522,7 @@ function ExerciseNotesSheet({ open, onOpenChange, clientId, dayId, dayTitle, row
   exerciseId: string | null;
   exerciseName: string;
   existingNote?: any;
+  loading?: boolean;
   onSaved: () => void;
 }) {
   const [draft, setDraft] = useState(existingNote?.content ?? "");
@@ -2499,15 +2539,32 @@ function ExerciseNotesSheet({ open, onOpenChange, clientId, dayId, dayTitle, row
         <div className="px-5 py-4 space-y-4 pb-32">
           <div>
             <label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Your note</label>
-            <Textarea
-              value={draft}
-              onChange={(e) => setDraft(e.target.value)}
-              rows={6}
-              placeholder="How did this exercise feel? Form cues, pain, PRs, equipment notes…"
-              className="mt-1"
-            />
+            {loading && !existingNote ? (
+              <div className="mt-1 h-[140px] w-full animate-pulse rounded-md border border-border bg-muted/40" aria-busy="true" aria-label="Loading note" />
+            ) : (
+              <Textarea
+                value={draft}
+                onChange={(e) => setDraft(e.target.value)}
+                rows={6}
+                placeholder="How did this exercise feel? Form cues, pain, PRs, equipment notes…"
+                className="mt-1"
+              />
+            )}
           </div>
-          {existingNote && (
+          {loading && !existingNote ? (
+            <section className="rounded-md border border-border bg-secondary/30 p-3">
+              <div className="flex items-center gap-2">
+                <div className="h-3 w-3 animate-pulse rounded-sm bg-muted-foreground/30" />
+                <div className="h-3 w-24 animate-pulse rounded bg-muted-foreground/30" />
+                <div className="h-3 w-32 animate-pulse rounded bg-muted-foreground/20" />
+              </div>
+              <div className="mt-2 space-y-1.5">
+                <div className="h-3 w-full animate-pulse rounded bg-muted-foreground/20" />
+                <div className="h-3 w-5/6 animate-pulse rounded bg-muted-foreground/20" />
+                <div className="h-3 w-2/3 animate-pulse rounded bg-muted-foreground/20" />
+              </div>
+            </section>
+          ) : existingNote && (
             <section className="rounded-md border border-border bg-secondary/30 p-3">
               <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
                 <StickyNote className="h-3 w-3" />
@@ -2532,31 +2589,34 @@ function ExerciseNotesSheet({ open, onOpenChange, clientId, dayId, dayTitle, row
               if (!clientId) return;
               const trimmed = draft.trim();
               if (!trimmed) throw new Error("Note is empty");
-              if (existingNote) {
-                const payload = { content: trimmed, status: "edited", coach_seen_at: null };
-                if (adapter) {
-                  await adapter.upsertPlExerciseNoteRaw(payload, existingNote.id);
+              const doSave = async () => {
+                if (existingNote) {
+                  const payload = { content: trimmed, status: "edited", coach_seen_at: null };
+                  if (adapter) {
+                    await adapter.upsertPlExerciseNoteRaw(payload, existingNote.id);
+                  } else {
+                    const { error } = await sb.from("pl_exercise_notes").update(payload).eq("id", existingNote.id);
+                    if (error) throw error;
+                  }
                 } else {
-                  const { error } = await sb.from("pl_exercise_notes").update(payload).eq("id", existingNote.id);
-                  if (error) throw error;
+                  const payload = {
+                    client_id: clientId,
+                    day_id: dayId,
+                    row_id: rowId,
+                    exercise_id: exerciseId,
+                    exercise_name: exerciseName,
+                    content: trimmed,
+                    status: "new",
+                  };
+                  if (adapter) {
+                    await adapter.upsertPlExerciseNoteRaw(payload, null);
+                  } else {
+                    const { error } = await sb.from("pl_exercise_notes").insert(payload);
+                    if (error) throw error;
+                  }
                 }
-              } else {
-                const payload = {
-                  client_id: clientId,
-                  day_id: dayId,
-                  row_id: rowId,
-                  exercise_id: exerciseId,
-                  exercise_name: exerciseName,
-                  content: trimmed,
-                  status: "new",
-                };
-                if (adapter) {
-                  await adapter.upsertPlExerciseNoteRaw(payload, null);
-                } else {
-                  const { error } = await sb.from("pl_exercise_notes").insert(payload);
-                  if (error) throw error;
-                }
-              }
+              };
+              await saveExerciseNoteWithRetry(doSave);
               onSaved();
             }}
           >
