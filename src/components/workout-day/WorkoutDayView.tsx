@@ -2476,7 +2476,7 @@ function toEmbedUrl(url: string): string {
   return url;
 }
 
-function ExerciseNotesSheet({ open, onOpenChange, clientId, dayId, dayTitle, rowId, exerciseId, exerciseName, existingNote, onSaved }: {
+function ExerciseNotesSheet({ open, onOpenChange, clientId, dayId, dayTitle, rowId, exerciseId, exerciseName, existingNote, loading = false, onSaved }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
   clientId: string | undefined;
@@ -2486,6 +2486,7 @@ function ExerciseNotesSheet({ open, onOpenChange, clientId, dayId, dayTitle, row
   exerciseId: string | null;
   exerciseName: string;
   existingNote?: any;
+  loading?: boolean;
   onSaved: () => void;
 }) {
   const [draft, setDraft] = useState(existingNote?.content ?? "");
@@ -2502,15 +2503,32 @@ function ExerciseNotesSheet({ open, onOpenChange, clientId, dayId, dayTitle, row
         <div className="px-5 py-4 space-y-4 pb-32">
           <div>
             <label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Your note</label>
-            <Textarea
-              value={draft}
-              onChange={(e) => setDraft(e.target.value)}
-              rows={6}
-              placeholder="How did this exercise feel? Form cues, pain, PRs, equipment notes…"
-              className="mt-1"
-            />
+            {loading && !existingNote ? (
+              <div className="mt-1 h-[140px] w-full animate-pulse rounded-md border border-border bg-muted/40" aria-busy="true" aria-label="Loading note" />
+            ) : (
+              <Textarea
+                value={draft}
+                onChange={(e) => setDraft(e.target.value)}
+                rows={6}
+                placeholder="How did this exercise feel? Form cues, pain, PRs, equipment notes…"
+                className="mt-1"
+              />
+            )}
           </div>
-          {existingNote && (
+          {loading && !existingNote ? (
+            <section className="rounded-md border border-border bg-secondary/30 p-3">
+              <div className="flex items-center gap-2">
+                <div className="h-3 w-3 animate-pulse rounded-sm bg-muted-foreground/30" />
+                <div className="h-3 w-24 animate-pulse rounded bg-muted-foreground/30" />
+                <div className="h-3 w-32 animate-pulse rounded bg-muted-foreground/20" />
+              </div>
+              <div className="mt-2 space-y-1.5">
+                <div className="h-3 w-full animate-pulse rounded bg-muted-foreground/20" />
+                <div className="h-3 w-5/6 animate-pulse rounded bg-muted-foreground/20" />
+                <div className="h-3 w-2/3 animate-pulse rounded bg-muted-foreground/20" />
+              </div>
+            </section>
+          ) : existingNote && (
             <section className="rounded-md border border-border bg-secondary/30 p-3">
               <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
                 <StickyNote className="h-3 w-3" />
