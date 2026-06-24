@@ -23,7 +23,7 @@ const EXTERNAL_HREF = "https://jaredjamesfit.com";
 
 const faq = [
   { q: "Do you offer personal training in Selkirk?", a: "Yes. JF Effect offers one-on-one personal training in Selkirk, Manitoba for beginners through advanced lifters." },
-  { q: "Where do sessions take place?", a: "In-person sessions are held at Iron Image Gym in Selkirk, Manitoba." },
+  { q: "Where do sessions take place?", a: "In-person sessions are held at Iron Image Barbell Club (Iron Image Gym), 511 Robinson Ave, Selkirk, Manitoba R1A 1E5. Iron Image is Selkirk's largest gym with 15,000 sq/ft of space and 24/7 member access. Visit ironimage.ca for more info about the facility." },
   { q: "Do you offer online coaching too?", a: "Yes. If you can't train in person, JF Effect online coaching covers training, nutrition, and accountability from anywhere." },
   { q: "Can beginners work with JF Effect?", a: "Absolutely. Most clients start with little or no gym experience. The whole process is built to make beginners feel comfortable and confident." },
   { q: "Do you help with fat loss?", a: "Yes. Fat loss is one of the most common goals clients come in with, and coaching combines training, nutrition, and habits to make it sustainable." },
@@ -66,15 +66,30 @@ export const Route = createFileRoute("/personal-trainer-selkirk")({
           priceRange: "$100",
           address: {
             "@type": "PostalAddress",
-            streetAddress: "Iron Image Gym",
+            streetAddress: "511 Robinson Ave",
             addressLocality: "Selkirk",
             addressRegion: "MB",
+            postalCode: "R1A 1E5",
             addressCountry: "CA",
           },
           geo: {
             "@type": "GeoCoordinates",
             latitude: 50.1436,
             longitude: -96.8839,
+          },
+          containedInPlace: {
+            "@type": "SportsActivityLocation",
+            name: "Iron Image Barbell Club",
+            url: "https://www.ironimage.ca",
+            telephone: "+1-204-481-0000",
+            address: {
+              "@type": "PostalAddress",
+              streetAddress: "511 Robinson Ave",
+              addressLocality: "Selkirk",
+              addressRegion: "MB",
+              postalCode: "R1A 1E5",
+              addressCountry: "CA",
+            },
           },
           areaServed: [
             { "@type": "City", name: "Selkirk", containedInPlace: { "@type": "State", name: "Manitoba" } },
@@ -341,7 +356,9 @@ function SelkirkPage() {
             <MapPin className="h-7 w-7 text-primary" />
             <h3 className="mt-3 text-xl font-bold">In-Person Personal Training in Selkirk</h3>
             <p className="mt-2 text-sm text-muted-foreground md:text-base">
-              One-on-one coaching at Iron Image Gym in Selkirk, Manitoba. Strength, fat loss, muscle building, powerlifting, and bodybuilding clients welcome.
+              One-on-one coaching at{" "}
+              <a href="https://www.ironimage.ca" target="_blank" rel="noopener noreferrer" className="underline underline-offset-4 text-foreground font-medium">Iron Image Barbell Club</a>
+              , 511 Robinson Ave, Selkirk, MB. Selkirk's largest gym — 15,000 sq/ft, 24/7 access. Strength, fat loss, muscle building, powerlifting, and bodybuilding clients welcome.
             </p>
             <div className="mt-5">
               <a href={BOOK_HREF}>
