@@ -2366,6 +2366,7 @@ function ExerciseBlock({ row, dayId, dayTitle, clientId, blockId, existingResult
         exerciseId={exerciseId}
         exerciseName={name}
         existingNote={existingNote}
+        loading={notesLoading}
         onSaved={onNoteChange}
       />
     </Card>
