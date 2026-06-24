@@ -2931,7 +2931,8 @@ function SetRow({
     completedAt?: string;
     finishedEarly?: boolean;
   }) => {
-    if (readonly || !clientId || !prescribedSec) return;
+    // Allow saving even when prescribedSec is null (e.g. reps_text-detected time exercises)
+    if (readonly || !clientId) return;
     const nowIso = opts.completedAt ?? new Date().toISOString();
     const payload: Record<string, any> = {
       row_id: rowId,
@@ -2962,7 +2963,7 @@ function SetRow({
       onChange();
       if (!existing?.completed_at) onSetCompleted?.(setIndex);
       toast.success(
-        opts.finishedEarly
+        opts.finishedEarly && prescribedSec
           ? `Saved ${formatDuration(completedSeconds)} of ${formatDuration(prescribedSec)}`
           : `Set ${setIndex} complete · ${formatDuration(completedSeconds)}`,
       );
@@ -3061,8 +3062,8 @@ function SetRow({
         </button>
       )
       )}
-      {/* Quick Log RPE chip — tap to edit */}
-      {rpeChipOpen ? (
+      {/* Quick Log RPE chip — tap to edit (hidden for time rows: timer handles the full middle column) */}
+      {!isTime && rpeChipOpen ? (
         <Input autoFocus
           className={cn(focusMode ? "h-9 text-base px-2" : "h-8 text-sm px-2")}
           inputMode="decimal" type="text" pattern="[0-9]*\.?[0-9]*"
@@ -3106,7 +3107,7 @@ function SetRow({
           {rpe ? (showRir ? String(Math.max(0, 10 - Number(rpe))) : rpe) : "—"}
         </button>
       )}
-      {!hideWeight && (
+      {!isTime && !hideWeight && (
       <Input
         className={cn(focusMode ? "h-9 text-base px-2" : "h-8 text-sm px-2")}
         inputMode="decimal"
