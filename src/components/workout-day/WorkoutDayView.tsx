@@ -619,7 +619,7 @@ function WorkoutDay({
   });
 
   // Exercise notes for this day
-  const { data: exerciseNotes = [] } = useQuery({
+  const { data: exerciseNotes = [], isLoading: notesLoading } = useQuery({
     queryKey: ["pl-day-exercise-notes", dayId, client?.id, adapter?.kind ?? null],
     enabled: !!client?.id,
     staleTime: 60_000,
