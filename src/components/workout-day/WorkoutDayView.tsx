@@ -2777,15 +2777,31 @@ function SetRow({
     lastUnitRef.current = unit;
     setLoad((cur) => {
       if (!cur) return cur;
+      // Prefer the matching column from the saved row — it's the exact value
+      // logged in the new unit, with no lossy rounding.
+      const fromExisting = unit === "kg"
+        ? (existing?.actual_load_kg ?? null)
+        : (existing?.actual_load_lb ?? null);
+      if (fromExisting != null) return fmtLoad(fromExisting);
       const n = Number(cur);
       if (!isFinite(n) || n === 0) return cur;
       const converted = convertWeight(n, from, unit);
       const step = weightIncrement(unit);
       return fmtNum(Math.round(converted / step) * step);
     });
+    // The KG/LB toggle is a *display* concern. The underlying weight has not
+    // changed, so the autosave baseline must adopt the converted display
+    // value without firing a save. Otherwise rounding to display step makes
+    // the value look "dirty" in kg-normalized terms and triggers a phantom
+    // save that can hang on a previously-aborted pooled transaction.
+    // Defer one tick so the setLoad above has flushed into `value`.
+    queueMicrotask(() => { saveRef.current?.markClean(); });
   }, [unit]);
 
   const value = useMemo(() => ({ load, reps, rpe, unit }), [load, reps, rpe, unit]);
+  // Forward-ref to the autosave handle so effects defined above can call
+  // markClean() without a TDZ error.
+  const saveRef = useRef<ReturnType<typeof useAutosave<typeof value>> | null>(null);
   const save = useAutosave({
     key: draftKey,
     value,
@@ -2872,6 +2888,25 @@ function SetRow({
         completed_at: allValid ? new Date().toISOString() : null,
       };
       let savedId: string | null = existing?.id ?? null;
+      // PostgREST keeps a pooled connection in "current transaction is
+      // aborted" (SQLSTATE 25P02) state if a prior statement on the same
+      // connection failed. Detect that and retry exactly once after a brief
+      // pause so the pool can roll back; if it still fails, surface the
+      // error so the autosave's backoff / timeout path takes over.
+      const isAbortError = (err: any) => {
+        if (!err) return false;
+        if (err.code === "25P02") return true;
+        return String(err.message ?? "").toLowerCase().includes("current transaction is aborted");
+      };
+      const writeWithAbortRetry = async (fn: () => Promise<any>) => {
+        try {
+          return await fn();
+        } catch (err) {
+          if (!isAbortError(err)) throw err;
+          await new Promise((r) => setTimeout(r, 200));
+          return await fn();
+        }
+      };
       // Snapshot "before" in the display unit so the audit diff is meaningful.
       const before = existing
         ? {
@@ -2886,19 +2921,24 @@ function SetRow({
         : { weight: null, reps: null, rpe: null, unit: null, status: null };
       if (existing) {
         if (adapter) {
-          await adapter.upsertPlRowResultRaw(payload, existing.id);
+          await writeWithAbortRetry(() => adapter.upsertPlRowResultRaw(payload, existing.id));
         } else {
-          const { error } = await sb.from("pl_row_results").update(payload).eq("id", existing.id);
-          if (error) throw error;
+          await writeWithAbortRetry(async () => {
+            const { error } = await sb.from("pl_row_results").update(payload).eq("id", existing.id);
+            if (error) throw error;
+          });
         }
       } else {
         if (adapter) {
-          const res = await adapter.upsertPlRowResultRaw(payload, null);
-          savedId = res.id;
+          const res = await writeWithAbortRetry(() => adapter.upsertPlRowResultRaw(payload, null));
+          savedId = (res as any)?.id ?? null;
         } else {
-          const { data: inserted, error } = await sb.from("pl_row_results").insert(payload).select("id").maybeSingle();
-          if (error) throw error;
-          savedId = inserted?.id ?? null;
+          const inserted = await writeWithAbortRetry(async () => {
+            const { data, error } = await sb.from("pl_row_results").insert(payload).select("id").maybeSingle();
+            if (error) throw error;
+            return data;
+          });
+          savedId = (inserted as any)?.id ?? null;
         }
       }
       onChange();
@@ -2938,6 +2978,10 @@ function SetRow({
       }
     },
   });
+
+  // Keep the forward-ref synced with the latest autosave handle so the
+  // unit-toggle effect above can call markClean() / retry() safely.
+  saveRef.current = save;
 
   const onEnter: React.KeyboardEventHandler<HTMLInputElement> = (e) => {
     if (e.key === "Enter") { e.preventDefault(); (e.target as HTMLInputElement).blur(); save.flush(); }
@@ -3205,7 +3249,14 @@ function SetRow({
       )}
       <div className="flex items-center justify-end gap-1">
         {/* When confirmed, show only the green checkmark — not the save spinner too */}
-        {!readonly && !isConfirmed && <SaveStatus state={save.state} savedAt={save.savedAt} compact />}
+        {!readonly && !isConfirmed && (
+          <SaveStatus
+            state={save.state}
+            savedAt={save.savedAt}
+            compact={save.state !== "error"}
+            onRetry={save.retry}
+          />
+        )}
         {isConfirmed && <CheckCircle2 className="h-4 w-4 text-green-500" />}
       </div>
     </div>

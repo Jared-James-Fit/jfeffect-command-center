@@ -19,6 +19,10 @@ type Options<T> = {
   onPermanentFailure?: (info: { value: T; attempt: number; error: unknown }) => void;
   /** Threshold for onPermanentFailure (default 3). */
   permanentFailureAfter?: number;
+  /** Hard timeout per save attempt (ms). Defaults to 8000. After this elapses
+   * the save is considered failed (no more spinner) and normal retry/backoff
+   * kicks in. Set to 0 to disable. */
+  timeoutMs?: number;
 };
 
 const DRAFT_PREFIX = "lov:draft:";
@@ -38,6 +42,7 @@ export function useAutosave<T>({
   enabled = true,
   onPermanentFailure,
   permanentFailureAfter = 3,
+  timeoutMs = 8000,
 }: Options<T>) {
   const [state, setState] = useState<SaveState>("idle");
   const [savedAt, setSavedAt] = useState<number | null>(null);
@@ -92,7 +97,26 @@ export function useAutosave<T>({
     inflight.current = true;
     setState("saving");
     try {
-      await onSaveRef.current(v);
+      // Hard timeout — a hung save (e.g. PostgREST stuck on an aborted
+      // pooled transaction) must never spin forever. Race the user-provided
+      // save against an 8s timeout; the loser still resolves in the
+      // background but the UI moves on to the error/retry path.
+      if (timeoutMs && timeoutMs > 0) {
+        await new Promise<void>((resolve, reject) => {
+          let done = false;
+          const t = setTimeout(() => {
+            if (done) return;
+            done = true;
+            reject(new Error("Save timed out — will retry"));
+          }, timeoutMs);
+          Promise.resolve()
+            .then(() => onSaveRef.current(v))
+            .then(() => { if (done) return; done = true; clearTimeout(t); resolve(); })
+            .catch((e) => { if (done) return; done = true; clearTimeout(t); reject(e); });
+        });
+      } else {
+        await onSaveRef.current(v);
+      }
       lastSaved.current = v;
       lastSavedSet.current = true;
       retryAttempt.current = 0;
@@ -121,7 +145,7 @@ export function useAutosave<T>({
     } finally {
       inflight.current = false;
     }
-  }, [equals, online, writeDraft, clearDraft, permanentFailureAfter]);
+  }, [equals, online, writeDraft, clearDraft, permanentFailureAfter, timeoutMs]);
 
   const schedule = useCallback(() => {
     if (timer.current) clearTimeout(timer.current);
@@ -187,7 +211,24 @@ export function useAutosave<T>({
     return !equals(lastSaved.current, pendingValue.current);
   }, [equals]);
 
-  return { state, savedAt, online, flush, hasPending };
+  /** Adopt the current value as the synced baseline WITHOUT firing a save.
+   * Use this when a value-change is purely cosmetic (e.g. KG/LB display
+   * conversion) and must not trigger persistence. */
+  const markClean = useCallback(() => {
+    if (timer.current) { clearTimeout(timer.current); timer.current = null; }
+    lastSaved.current = pendingValue.current;
+    lastSavedSet.current = true;
+    setState((s) => (s === "saving" ? s : "idle"));
+  }, []);
+
+  /** Manual retry for callers showing an error state. */
+  const retry = useCallback(() => {
+    retryAttempt.current = 0;
+    reportedFailRef.current = false;
+    void doSave();
+  }, [doSave]);
+
+  return { state, savedAt, online, flush, hasPending, markClean, retry };
 }
 
 /** Read a previously-saved local draft for the given key. */
