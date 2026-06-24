@@ -15,6 +15,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { createAgreement } from "@/lib/agreements.functions";
 import { createCheckoutSessionForAssignment } from "@/lib/stripe-checkout.functions";
 import { runJob } from "@/lib/progress-jobs";
+import { autoCalculatePurchaseTermDates } from "@/lib/purchase-term-dates.functions";
 
 export function AssignOfferDialog({ offer, onClose, fixedClientId }: { offer: any | null; onClose: () => void; fixedClientId?: string }) {
   const qc = useQueryClient();
@@ -27,6 +28,7 @@ export function AssignOfferDialog({ offer, onClose, fixedClientId }: { offer: an
   const [createAgreementOnAssign, setCreateAgreementOnAssign] = useState<boolean>(!!offerDefaultTemplateId);
   const createAgreementFn = useServerFn(createAgreement);
   const createCheckoutFn = useServerFn(createCheckoutSessionForAssignment);
+  const autoCalcTermDatesFn = useServerFn(autoCalculatePurchaseTermDates);
   const [checkoutUrl, setCheckoutUrl] = useState<string | null>(null);
 
   const { data: templates = [] } = useQuery({
@@ -82,7 +84,21 @@ export function AssignOfferDialog({ offer, onClose, fixedClientId }: { offer: an
       if (error) throw error;
       
       job.completeStep(3); // Save purchase record
-      
+
+      // Auto-calculate term dates from product term (start = today, end = today + term)
+      // Best-effort — don't fail the whole assignment if this fails
+      if (purchase?.id) {
+        try {
+          await autoCalcTermDatesFn({
+            data: {
+              purchaseId: purchase.id,
+              termLength: offer?.term_length ?? null,
+              termUnit: offer?.term_unit ?? null,
+            },
+          });
+        } catch { /* non-fatal */ }
+      }
+
       let generatedUrl: string | null = null;
       if (!recordPaid && purchase?.id && offer?.stripe_price_id) {
         const res = await createCheckoutFn({
