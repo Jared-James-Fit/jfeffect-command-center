@@ -44,9 +44,12 @@ export function ExerciseHistorySheet({
   const [showPartial, setShowPartial] = useState(!excludePartial);
   const [days, setDays] = useState<number | null>(null);
 
-  const { data: rows = [], isLoading } = useQuery({
+  const { data: rows = [], isLoading, isFetching } = useQuery({
     queryKey: ["exercise-history", clientId, exerciseId, days],
     enabled: !!clientId && !!exerciseId && open,
+    staleTime: 2 * 60_000,   // cache for 2 min — avoids re-fetch on every open
+    gcTime: 10 * 60_000,
+    retry: 1,
     queryFn: async () => {
       let q = sb
         .from("pl_row_results")
@@ -142,10 +145,20 @@ export function ExerciseHistorySheet({
         </div>
 
         <div className="mt-4 space-y-3">
-          {isLoading && <p className="text-sm text-muted-foreground">Loading history…</p>}
+          {isLoading && (
+            <div className="space-y-2">
+              {[1, 2, 3].map((i) => (
+                <div key={i} className="h-20 animate-pulse rounded-xl bg-muted" />
+              ))}
+            </div>
+          )}
           {!isLoading && grouped.length === 0 && (
-            <Card className="p-6 text-center text-sm text-muted-foreground">
-              No history yet for this exercise.
+            <Card className="p-6 text-center">
+              <div className="text-2xl mb-2">🏋️</div>
+              <div className="text-sm font-semibold mb-1">No history yet</div>
+              <div className="text-xs text-muted-foreground">
+                This is your first time logging this exercise. Complete a set and it will appear here next time.
+              </div>
             </Card>
           )}
           {grouped.map((g) => (

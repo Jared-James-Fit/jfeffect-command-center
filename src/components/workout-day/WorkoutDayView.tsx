@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, Clock, CheckCircle2, Play, StickyNote, NotebookPen, Info, Maximize2, Minimize2, AlertTriangle, RefreshCw, Send, MessageCircle, ChevronDown, ChevronUp, Move } from "lucide-react";
+import { ArrowLeft, Clock, CheckCircle2, Play, StickyNote, NotebookPen, Info, Maximize2, Minimize2, AlertTriangle, RefreshCw, Send, MessageCircle, ChevronDown, ChevronUp, Move, Zap } from "lucide-react";
 import { MoveWorkoutSheet } from "@/components/schedule/MoveWorkoutSheet";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
@@ -2037,6 +2037,59 @@ function ExerciseBlock({ row, dayId, dayTitle, clientId, blockId, existingResult
   // into all later un-completed sets of this same exercise. Never overwrites
   // a confirmed (completed_at != null) set.
   const qc = useQueryClient();
+
+  // ── Quick-fill: fill ALL sets with the same weight and mark as completed ──
+  const [quickFillOpen, setQuickFillOpen] = useState(false);
+  const [quickFillWeight, setQuickFillWeight] = useState<string>(
+    suggestedWeight != null ? String(suggestedWeight) : ""
+  );
+  const [quickFillLoading, setQuickFillLoading] = useState(false);
+
+  const fillAllSets = async () => {
+    if (!clientId || !quickFillWeight) return;
+    const loadNum = Number(quickFillWeight);
+    if (!isFinite(loadNum) || loadNum <= 0) { toast.error("Enter a valid weight"); return; }
+    const repsNum = repTarget?.min ?? repTarget?.exact ?? null;
+    const nowIso = new Date().toISOString();
+    setQuickFillLoading(true);
+    try {
+      const tasks: Array<Promise<any>> = [];
+      for (let i = 1; i <= setCount; i++) {
+        const ex = existingResults.find((x: any) => x.set_index === i);
+        if (ex?.completed_at) continue; // never overwrite confirmed sets
+        const body: Record<string, any> = {
+          row_id: row.id,
+          client_id: clientId,
+          set_index: i,
+          actual_load: loadNum,
+          actual_load_unit: activeUnit,
+          entered_value: loadNum,
+          entered_unit: activeUnit,
+          actual_reps: repsNum,
+          actual_rpe: null,
+          actual_rpe_num: null,
+          completed_at: nowIso,
+        };
+        if (adapter) {
+          tasks.push(adapter.upsertPlRowResultRaw(body, ex?.id ?? null));
+        } else {
+          if (ex?.id) tasks.push(sb.from("pl_row_results").update(body).eq("id", ex.id));
+          else tasks.push(sb.from("pl_row_results").insert(body));
+        }
+      }
+      if (!tasks.length) { toast.info("All sets already completed"); return; }
+      await Promise.all(tasks);
+      onChange();
+      qc.invalidateQueries({ queryKey: ["pl-day-results"] });
+      toast.success(`✅ ${tasks.length} set${tasks.length === 1 ? "" : "s"} filled with ${loadNum} ${activeUnit} and marked complete`);
+      setQuickFillOpen(false);
+    } catch (e: any) {
+      toast.error(e?.message ?? "Failed to fill sets");
+    } finally {
+      setQuickFillLoading(false);
+    }
+  };
+
   const applyToRemaining = async (fromSetIndex: number, payload: { load: string; reps: string; rpe: string; unit: "kg" | "lb" }) => {
     if (!clientId) return;
     const loadNum = payload.load ? Number(payload.load) : null;
@@ -2180,6 +2233,63 @@ function ExerciseBlock({ row, dayId, dayTitle, clientId, blockId, existingResult
         )}
         <TrainingHelpButton size="sm" variant="ghost" className="h-7 px-2 text-xs ml-auto" />
       </div>
+
+      {/* Quick-fill weight button — only show when not readonly and there are uncompleted sets */}
+      {!readonly && !trackingType.includes("time") && clientId && (() => {
+        const uncompletedCount = Array.from({ length: setCount }, (_, i) => i + 1)
+          .filter((i) => !existingResults.find((x: any) => x.set_index === i && x.completed_at)).length;
+        if (uncompletedCount === 0) return null;
+        return (
+          <div className="mt-2">
+            {!quickFillOpen ? (
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => {
+                  setQuickFillWeight(suggestedWeight != null ? String(suggestedWeight) : "");
+                  setQuickFillOpen(true);
+                }}
+                className="w-full h-8 text-xs font-bold border-primary/30 text-primary hover:bg-primary/10 gap-1.5"
+              >
+                <Zap className="h-3.5 w-3.5" />
+                Fill All {uncompletedCount} Set{uncompletedCount !== 1 ? "s" : ""} — Quick Input
+              </Button>
+            ) : (
+              <div className="flex items-center gap-2 rounded-lg border border-primary/30 bg-primary/5 px-3 py-2">
+                <Zap className="h-4 w-4 shrink-0 text-primary" />
+                <span className="text-xs font-bold text-primary whitespace-nowrap">Fill all {uncompletedCount} sets at:</span>
+                <Input
+                  autoFocus
+                  type="number"
+                  inputMode="decimal"
+                  placeholder={suggestedWeight != null ? String(suggestedWeight) : "Weight"}
+                  value={quickFillWeight}
+                  onChange={(e) => setQuickFillWeight(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === "Enter") void fillAllSets(); if (e.key === "Escape") setQuickFillOpen(false); }}
+                  className="h-8 w-24 text-sm font-bold text-center"
+                />
+                <span className="text-xs text-muted-foreground">{activeUnit}</span>
+                <Button
+                  size="sm"
+                  onClick={() => void fillAllSets()}
+                  disabled={!quickFillWeight || quickFillLoading}
+                  className="h-8 px-3 text-xs font-bold bg-primary text-primary-foreground shrink-0"
+                >
+                  {quickFillLoading ? "Saving…" : "Apply"}
+                </Button>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => setQuickFillOpen(false)}
+                  className="h-8 px-2 text-xs text-muted-foreground"
+                >
+                  Cancel
+                </Button>
+              </div>
+            )}
+          </div>
+        );
+      })()}
 
       {cues && cuesOpen && (
         <p className="mt-2 text-[11px] leading-relaxed text-muted-foreground border-l-2 border-border pl-2">
@@ -3019,7 +3129,8 @@ function SetRow({
       />
       )}
       <div className="flex items-center justify-end gap-1">
-        {!readonly && <SaveStatus state={save.state} savedAt={save.savedAt} compact />}
+        {/* When confirmed, show only the green checkmark — not the save spinner too */}
+        {!readonly && !isConfirmed && <SaveStatus state={save.state} savedAt={save.savedAt} compact />}
         {isConfirmed && <CheckCircle2 className="h-4 w-4 text-green-500" />}
       </div>
     </div>
