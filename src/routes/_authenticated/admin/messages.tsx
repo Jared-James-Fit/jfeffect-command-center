@@ -237,9 +237,9 @@ export function MessagesInbox({
           : {
               // Track the iOS Visual Viewport so the chat shrinks above the
               // keyboard instead of leaving a dead gap. See useKeyboardOpen().
-              top: "var(--vv-top, 0px)",
+              top: "calc(var(--vv-top, 0px) + var(--shell-topbar-h, 0px))",
               height:
-                "calc(var(--vv-h, 100dvh) - var(--bottom-nav-clearance, 0px))",
+                "calc(var(--vv-h, 100dvh) - var(--shell-topbar-h, 0px) - var(--bottom-nav-clearance, 0px))",
             }
       }
     >

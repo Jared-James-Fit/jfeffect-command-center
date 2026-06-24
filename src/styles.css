@@ -349,6 +349,11 @@ html[data-keyboard-open="true"] {
 @media (max-width: 768px) {
   :root { --shell-topbar-h: 57px; }
 }
+/* When keyboard is open, collapse the topbar height so the messenger
+   container fills the full visual viewport without dead space at the top. */
+html[data-keyboard-open="true"] {
+  --shell-topbar-h: 0px;
+}
 
 /* Prevent iOS auto-zoom on focus: ensure inputs are at least 16px */
 @media (max-width: 768px) {

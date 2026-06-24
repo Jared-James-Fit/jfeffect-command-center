@@ -79,9 +79,9 @@ function ClientMessages() {
         // NOT shrink on iOS Safari, which is what creates the dead black
         // gap above the keyboard). Falls back to 100dvh on browsers without
         // the Visual Viewport API.
-        top: "var(--vv-top, 0px)",
+        top: "calc(var(--vv-top, 0px) + var(--shell-topbar-h, 0px))",
         height:
-          "calc(var(--vv-h, 100dvh) - var(--bottom-nav-clearance, 0px))",
+          "calc(var(--vv-h, 100dvh) - var(--shell-topbar-h, 0px) - var(--bottom-nav-clearance, 0px))",
       }}
     >
       {/* Slim chat header — coach identity, not a giant page hero */}
