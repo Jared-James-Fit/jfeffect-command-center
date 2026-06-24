@@ -113,7 +113,7 @@ export async function listMessages(
   clientId: string,
   opts: { includeInternal?: boolean; limit?: number } = {},
 ) {
-  const limit = opts.limit ?? 100;
+  const limit = opts.limit ?? 25;
   // Fetch the most recent N rows (desc + limit), then return in chronological
   // (ascending) order so the bubble timeline keeps its existing shape.
   let q = db

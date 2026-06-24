@@ -672,7 +672,7 @@ export function MessageThread({
     return [...uniqueOlder, ...messages];
   }, [olderMessages, messages]);
 
-  const canLoadOlder = messages.length >= 100;
+  const canLoadOlder = messages.length >= 25;
 
   const loadOlder = async () => {
     if (loadingOlder) return;
@@ -786,12 +786,39 @@ export function MessageThread({
 
   useEffect(() => {
     if (!clientId) return;
+    const key = ["messages", clientId, role] as const;
     const ch = supabase
       .channel(`messages-${clientId}-${role}`)
-      .on("postgres_changes", { event: "*", schema: "public", table: "messages", filter: `client_id=eq.${clientId}` }, () => {
-        qc.invalidateQueries({ queryKey: ["messages", clientId, role] });
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "messages", filter: `client_id=eq.${clientId}` }, (payload: any) => {
+        // Append the new message directly to the cache — no full refetch needed.
+        // This is the primary performance fix: instead of invalidating the entire
+        // query (which triggers a 25-message DB fetch), we splice the new row in.
+        const newMsg = payload.new as Message;
+        if (!newMsg?.id) return;
+        qc.setQueryData(key, (prev: Message[] | undefined) => {
+          const existing = prev ?? [];
+          // Deduplicate: skip if already in cache (e.g. our own optimistic send)
+          if (existing.some((m) => m.id === newMsg.id)) return existing;
+          return [...existing, newMsg];
+        });
+        // Still update conversation state and notification counts
         qc.invalidateQueries({ queryKey: ["conversation-states"] });
         qc.invalidateQueries({ queryKey: ["notifications"] });
+      })
+      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "messages", filter: `client_id=eq.${clientId}` }, (payload: any) => {
+        // For edits/deletes, patch the specific message in cache
+        const updated = payload.new as Message;
+        if (!updated?.id) return;
+        qc.setQueryData(key, (prev: Message[] | undefined) =>
+          (prev ?? []).map((m) => m.id === updated.id ? updated : m)
+        );
+      })
+      .on("postgres_changes", { event: "DELETE", schema: "public", table: "messages", filter: `client_id=eq.${clientId}` }, (payload: any) => {
+        const deletedId = payload.old?.id;
+        if (!deletedId) return;
+        qc.setQueryData(key, (prev: Message[] | undefined) =>
+          (prev ?? []).filter((m) => m.id !== deletedId)
+        );
       })
       .on("postgres_changes", { event: "*", schema: "public", table: "message_reactions" }, (payload: any) => {
         const msgId = payload.new?.message_id ?? payload.old?.message_id;
