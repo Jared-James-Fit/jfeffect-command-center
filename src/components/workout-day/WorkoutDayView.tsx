@@ -2692,8 +2692,9 @@ function SetRow({
   useEffect(() => { focusedFieldRef.current = focusedField; }, [focusedField]);
   useEffect(() => {
     // Never overwrite a field the user is actively typing in, and never
-    // overwrite within 3 s of a save completing (prevents fast server
-    // responses from clobbering partially-typed values on mobile).
+    // overwrite within 8 s of a save completing (prevents server responses
+    // and window-focus refetches from clobbering typed values on mobile).
+    // 8s covers: save latency + Realtime invalidation + window-focus refetch.
     const focused = focusedFieldRef.current;
     if (recentlySavedRef.current) return;
     const kg = existing?.actual_load_kg;
@@ -2842,7 +2843,7 @@ function SetRow({
       // responds, reset effect would clobber '10' back to '1').
       recentlySavedRef.current = true;
       if (recentlySavedTimerRef.current) clearTimeout(recentlySavedTimerRef.current);
-      recentlySavedTimerRef.current = setTimeout(() => { recentlySavedRef.current = false; }, 3000);
+      recentlySavedTimerRef.current = setTimeout(() => { recentlySavedRef.current = false; }, 8000);
       // Auto-start the per-exercise rest timer when this set transitions
       // into a fully-valid completed state. Avoid re-triggering on idempotent
       // updates that were already completed.
@@ -3033,7 +3034,7 @@ function SetRow({
             // refetch triggered by flush() can never overwrite what was typed.
             recentlySavedRef.current = true;
             if (recentlySavedTimerRef.current) clearTimeout(recentlySavedTimerRef.current);
-            recentlySavedTimerRef.current = setTimeout(() => { recentlySavedRef.current = false; }, 3000);
+            recentlySavedTimerRef.current = setTimeout(() => { recentlySavedRef.current = false; }, 8000);
             // Clear focus AFTER setting the guard so the server-reset effect
             // (which checks focusedField) cannot fire between null-focus and save.
             save.flush().finally(() => {
@@ -3085,7 +3086,7 @@ function SetRow({
           onBlur={() => {
             recentlySavedRef.current = true;
             if (recentlySavedTimerRef.current) clearTimeout(recentlySavedTimerRef.current);
-            recentlySavedTimerRef.current = setTimeout(() => { recentlySavedRef.current = false; }, 3000);
+            recentlySavedTimerRef.current = setTimeout(() => { recentlySavedRef.current = false; }, 8000);
             save.flush().finally(() => {
               setFocusedField(null);
               setRpeChipOpen(false);
@@ -3118,12 +3119,19 @@ function SetRow({
         aria-label={`Set ${setIndex} weight in ${unit}`}
         value={load}
         onChange={(e) => setLoad(e.target.value.replace(/[^0-9.]/g, ""))}
-        onFocus={() => setFocusedField("load")}
+        onFocus={() => {
+          setFocusedField("load");
+          // Set guard on focus too — prevents window-focus refetches from
+          // overwriting the value while the user is actively typing weight.
+          recentlySavedRef.current = true;
+          if (recentlySavedTimerRef.current) clearTimeout(recentlySavedTimerRef.current);
+          recentlySavedTimerRef.current = setTimeout(() => { recentlySavedRef.current = false; }, 8000);
+        }}
         onKeyDown={onEnter}
         onBlur={() => {
           recentlySavedRef.current = true;
           if (recentlySavedTimerRef.current) clearTimeout(recentlySavedTimerRef.current);
-          recentlySavedTimerRef.current = setTimeout(() => { recentlySavedRef.current = false; }, 3000);
+          recentlySavedTimerRef.current = setTimeout(() => { recentlySavedRef.current = false; }, 8000);
           save.flush().finally(() => { setFocusedField(null); });
         }}
         readOnly={readonly}
