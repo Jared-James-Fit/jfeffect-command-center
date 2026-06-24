@@ -395,6 +395,7 @@ function MemberFinderView({
     weeks: p.weeks,
     daysPerWeek: p.days_per_week,
     goal: p.goal,
+    tags: p.tags ?? null,
     raw: p,
   })), [plans]);
   return (
