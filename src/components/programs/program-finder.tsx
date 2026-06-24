@@ -128,6 +128,19 @@ function rowReps(r: any) {
   return r?.reps_text || r?.reps || "—";
 }
 
+function highlight(text: string, q: string): ReactNode {
+  if (!q) return text;
+  const idx = text.toLowerCase().indexOf(q);
+  if (idx === -1) return text;
+  return (
+    <>
+      {text.slice(0, idx)}
+      <mark className="rounded-sm bg-primary/30 px-0.5 text-foreground">{text.slice(idx, idx + q.length)}</mark>
+      {text.slice(idx + q.length)}
+    </>
+  );
+}
+
 export function ProgramFinder({ items, loadPayload, renderActions, loading }: Props) {
   const [folderId, setFolderId] = useState<string>("all");
   const [expanded, setExpanded] = useState<Record<string, boolean>>({ bodybuilding: true });
