@@ -7,10 +7,15 @@ import { ExercisesAdmin } from "./exercises";
 import { CardioDashboard } from "./cardio-targets";
 import { WarmupProtocolsAdmin } from "./warmup-protocols";
 import { AdminRecipes } from "./recipes";
+import { ProgramFinder, type FinderItem } from "@/components/programs/program-finder";
+import { useQuery } from "@tanstack/react-query";
+import { listTemplates } from "@/lib/pl-programs";
+import { supabase } from "@/integrations/supabase/client";
 
-type TabKey = "programs" | "exercises" | "cardio" | "warmups" | "recipes";
+type TabKey = "programs" | "browse" | "exercises" | "cardio" | "warmups" | "recipes";
 const TABS: { value: TabKey; label: string }[] = [
   { value: "programs", label: "Programs" },
+  { value: "browse", label: "Browse" },
   { value: "exercises", label: "Exercises" },
   { value: "cardio", label: "Cardio" },
   { value: "warmups", label: "Warm-Ups" },
@@ -68,11 +73,41 @@ function ProgrammingWorkspace() {
       </div>
       <div>
         {tab === "programs" && <ProgramLibrary embedded />}
+        {tab === "browse" && <AdminProgramBrowser />}
         {tab === "exercises" && <ExercisesAdmin embedded />}
         {tab === "cardio" && <CardioDashboard embedded />}
         {tab === "warmups" && <WarmupProtocolsAdmin embedded />}
         {tab === "recipes" && <AdminRecipes embedded />}
       </div>
     </>
+  );
+}
+
+function AdminProgramBrowser() {
+  const { data, isLoading } = useQuery({
+    queryKey: ["admin-finder-templates"],
+    queryFn: () => listTemplates({ type: "all", style: "all" }),
+  });
+  const items: FinderItem[] = useMemo(() => (data ?? []).map((t: any) => ({
+    id: t.id,
+    title: t.name,
+    trainingStyle: t.training_style,
+    level: t.difficulty ?? t.training_focus,
+    weeks: t.weeks,
+    daysPerWeek: t.days_per_week,
+    goal: t.goal ?? t.training_focus,
+    raw: t,
+  })), [data]);
+  return (
+    <div className="p-3 sm:p-4 md:p-6">
+      <ProgramFinder
+        items={items}
+        loading={isLoading}
+        loadPayload={async (it) => {
+          const { data } = await supabase.from("pl_templates").select("payload").eq("id", it.id).maybeSingle();
+          return (data as any)?.payload ?? null;
+        }}
+      />
+    </div>
   );
 }
