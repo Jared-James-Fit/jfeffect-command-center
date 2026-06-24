@@ -182,7 +182,9 @@ export function WorkoutReviewEditor({
           sessionRpe: selectedCard.sessionRpe,
           pain: selectedCard.pain,
           painLevel: selectedCard.painLevel,
-          painArea: null,
+          // Constraint pl_workout_feedback_pain_consistency requires:
+          // pain=true → pain_level IS NOT NULL AND pain_area IS NOT NULL
+          painArea: selectedCard.pain ? "General" : null,
           painNote: null,
           clientNote: note.trim() ? note.trim() : null,
           // Preserve legacy optional fields as null (hidden from UI but kept in DB)

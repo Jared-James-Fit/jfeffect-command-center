@@ -1113,6 +1113,13 @@ export function MessageThread({
         onTouchStart={onSwipeTouchStart}
         onTouchMove={onSwipeTouchMove}
         onTouchEnd={onSwipeTouchEnd}
+        onScroll={() => {
+          // Dismiss keyboard on scroll (iMessage-style) — blurs the active
+          // input so the iOS keyboard closes when the user scrolls up.
+          if (document.activeElement instanceof HTMLElement) {
+            document.activeElement.blur();
+          }
+        }}
         onTouchCancel={onSwipeTouchEnd}
       >
         {canLoadOlder && (
@@ -1662,6 +1669,7 @@ export function MessageThread({
               onChange={(e) => setBody(e.target.value)}
               placeholder={role === "client" ? "Message Coach Jared…" : "Reply to client…"}
               rows={1}
+              enterKeyHint="send"
               className="min-h-[40px] max-h-40 flex-1 resize-none rounded-full border-border/60 bg-background/60 px-4 py-2 text-sm leading-snug focus-visible:ring-1 focus-visible:ring-border focus-visible:border-border"
               onFocus={() => {
                 // When the on-screen keyboard opens (composer focus), the
