@@ -2979,6 +2979,10 @@ function SetRow({
     },
   });
 
+  // Keep the forward-ref synced with the latest autosave handle so the
+  // unit-toggle effect above can call markClean() / retry() safely.
+  saveRef.current = save;
+
   const onEnter: React.KeyboardEventHandler<HTMLInputElement> = (e) => {
     if (e.key === "Enter") { e.preventDefault(); (e.target as HTMLInputElement).blur(); save.flush(); }
   };
