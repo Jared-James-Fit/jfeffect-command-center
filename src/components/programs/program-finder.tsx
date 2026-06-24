@@ -320,8 +320,8 @@ export function ProgramFinder({ items, loadPayload, renderActions, loading }: Pr
           )}
           <span className="shrink-0 text-xs tabular-nums text-muted-foreground">{rows.length} result{rows.length === 1 ? "" : "s"}</span>
         </div>
-        <div className="grid grid-cols-[minmax(0,2fr)_90px_70px_70px_minmax(0,1.2fr)] gap-3 border-b border-border bg-muted/30 px-4 py-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-          <div>Program</div><div>Level</div><div>Weeks</div><div>Days/wk</div><div>Goal</div>
+        <div className="grid grid-cols-[minmax(0,2fr)_minmax(0,1.4fr)_60px_70px_minmax(0,1fr)] gap-3 border-b border-border bg-muted/30 px-4 py-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+          <div>Program</div><div>Tags</div><div>Weeks</div><div>Days/wk</div><div>Goal</div>
         </div>
         <div className="flex-1 min-h-0 overflow-y-auto">
           {loading ? (
@@ -330,22 +330,46 @@ export function ProgramFinder({ items, loadPayload, renderActions, loading }: Pr
             <div className="p-6 text-sm text-muted-foreground">{q ? `No programs match "${query}".` : "No programs in this folder."}</div>
           ) : (
             <ul className="divide-y divide-border/60">
-              {rows.map((it) => (
-                <li
-                  key={it.id}
-                  onClick={() => setOpen(it)}
-                  className="grid cursor-pointer grid-cols-[minmax(0,2fr)_90px_70px_70px_minmax(0,1.2fr)] items-center gap-3 px-4 py-2.5 text-sm transition-colors hover:bg-primary/5"
-                >
-                  <div className="flex min-w-0 items-center gap-2">
-                    <FileText className="h-4 w-4 shrink-0 text-muted-foreground" />
-                    <span className="truncate font-medium text-foreground">{highlight(it.title, q)}</span>
-                  </div>
-                  <div className="truncate text-xs text-muted-foreground">{it.level ? highlight(it.level, q) : "—"}</div>
-                  <div className="text-xs tabular-nums text-muted-foreground">{it.weeks ?? "—"}</div>
-                  <div className="text-xs tabular-nums text-muted-foreground">{it.daysPerWeek ?? "—"}</div>
-                  <div className="truncate text-xs text-muted-foreground">{it.goal ? highlight(it.goal, q) : "—"}</div>
-                </li>
-              ))}
+              {rows.map((it) => {
+                const lvl = levelOf(it);
+                const fr = freqOf(it);
+                const ty = typeOf(it);
+                return (
+                  <li
+                    key={it.id}
+                    onClick={() => setOpen(it)}
+                    className="grid cursor-pointer grid-cols-[minmax(0,2fr)_minmax(0,1.4fr)_60px_70px_minmax(0,1fr)] items-center gap-3 px-4 py-2.5 text-sm transition-colors hover:bg-primary/5"
+                  >
+                    <div className="flex min-w-0 items-center gap-2">
+                      <FileText className="h-4 w-4 shrink-0 text-muted-foreground" />
+                      <span className="truncate font-medium text-foreground">{highlight(it.title, q)}</span>
+                    </div>
+                    <div className="flex min-w-0 flex-wrap items-center gap-1">
+                      {lvl && (
+                        <span className={cn(
+                          "rounded-full border px-1.5 py-px text-[10px] font-medium leading-4",
+                          LEVEL_BADGE_CLS[lvl] ?? "border-border bg-muted/40 text-muted-foreground",
+                        )}>
+                          {LEVEL_LABELS[lvl] ?? lvl}
+                        </span>
+                      )}
+                      {fr != null && (
+                        <span className="rounded-full border border-border bg-muted/40 px-1.5 py-px text-[10px] font-medium leading-4 text-muted-foreground">
+                          {fr}-Day
+                        </span>
+                      )}
+                      {ty && (
+                        <span className="rounded-full border border-border bg-muted/40 px-1.5 py-px text-[10px] font-medium leading-4 text-muted-foreground">
+                          {typeLabel(ty)}
+                        </span>
+                      )}
+                    </div>
+                    <div className="text-xs tabular-nums text-muted-foreground">{it.weeks ?? "—"}</div>
+                    <div className="text-xs tabular-nums text-muted-foreground">{it.daysPerWeek ?? "—"}</div>
+                    <div className="truncate text-xs text-muted-foreground">{it.goal ? highlight(it.goal, q) : "—"}</div>
+                  </li>
+                );
+              })}
             </ul>
           )}
         </div>
