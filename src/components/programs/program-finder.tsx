@@ -18,6 +18,7 @@ export type FinderItem = {
   weeks?: number | null;
   daysPerWeek?: number | null;
   goal?: string | null;
+  tags?: string[] | null;
   raw?: any;
 };
 
@@ -146,6 +147,7 @@ export function ProgramFinder({ items, loadPayload, renderActions, loading }: Pr
   const [expanded, setExpanded] = useState<Record<string, boolean>>({ bodybuilding: true });
   const [open, setOpen] = useState<FinderItem | null>(null);
   const [query, setQuery] = useState("");
+  const [fullBodyOnly, setFullBodyOnly] = useState(false);
 
   const allFolders = useMemo(() => {
     const flat: { folder: Folder; depth: number }[] = [];
@@ -166,14 +168,17 @@ export function ProgramFinder({ items, loadPayload, renderActions, loading }: Pr
 
   const current = findFolder(folderId) ?? FOLDERS[0];
   const q = query.trim().toLowerCase();
+  const hasFullBody = (it: FinderItem) =>
+    (it.tags ?? []).some((t) => norm(t) === "full-body" || norm(t) === "full body");
   const rows = useMemo(() => {
-    const base = items.filter((it) => current.match(it));
+    let base = items.filter((it) => current.match(it));
+    if (fullBodyOnly) base = base.filter(hasFullBody);
     if (!q) return base;
     return base.filter((it) => {
       const hay = [it.title, it.level, it.goal, it.trainingStyle].filter(Boolean).join(" ").toLowerCase();
       return hay.includes(q);
     });
-  }, [items, current, q]);
+  }, [items, current, q, fullBodyOnly]);
 
   const counts = useMemo(() => {
     const out: Record<string, number> = {};
@@ -182,12 +187,15 @@ export function ProgramFinder({ items, loadPayload, renderActions, loading }: Pr
       const hay = [it.title, it.level, it.goal, it.trainingStyle].filter(Boolean).join(" ").toLowerCase();
       return hay.includes(q);
     };
+    const matchFb = (it: FinderItem) => (fullBodyOnly ? hasFullBody(it) : true);
     for (const f of FOLDERS) {
-      out[f.id] = items.filter((it) => f.match(it) && matchQuery(it)).length;
-      if (f.children) for (const c of f.children) out[c.id] = items.filter((it) => c.match(it) && matchQuery(it)).length;
+      out[f.id] = items.filter((it) => f.match(it) && matchQuery(it) && matchFb(it)).length;
+      if (f.children) for (const c of f.children) out[c.id] = items.filter((it) => c.match(it) && matchQuery(it) && matchFb(it)).length;
     }
     return out;
-  }, [items, q]);
+  }, [items, q, fullBodyOnly]);
+
+  const fullBodyAvailable = useMemo(() => items.some(hasFullBody), [items]);
 
   return (
     <div className="grid h-[calc(100vh-220px)] min-h-[480px] max-h-[800px] grid-cols-[220px_minmax(0,1fr)] overflow-hidden rounded-lg border border-border bg-background/40">
@@ -234,6 +242,18 @@ export function ProgramFinder({ items, loadPayload, renderActions, loading }: Pr
               </button>
             )}
           </div>
+          {fullBodyAvailable && (
+            <Button
+              type="button"
+              size="sm"
+              variant={fullBodyOnly ? "default" : "outline"}
+              onClick={() => setFullBodyOnly((v) => !v)}
+              className="h-8 shrink-0 px-2.5 text-xs"
+              aria-pressed={fullBodyOnly}
+            >
+              Full Body
+            </Button>
+          )}
           <span className="shrink-0 text-xs tabular-nums text-muted-foreground">{rows.length} result{rows.length === 1 ? "" : "s"}</span>
         </div>
         <div className="grid grid-cols-[minmax(0,2fr)_90px_70px_70px_minmax(0,1.2fr)] gap-3 border-b border-border bg-muted/30 px-4 py-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">

@@ -96,6 +96,7 @@ function AdminProgramBrowser() {
     weeks: t.weeks,
     daysPerWeek: t.days_per_week,
     goal: t.goal ?? t.training_focus,
+    tags: t.tags ?? null,
     raw: t,
   })), [data]);
   return (
