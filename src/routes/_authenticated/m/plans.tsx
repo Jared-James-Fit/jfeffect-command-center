@@ -378,3 +378,48 @@ function GroupedSection({
     </section>
   );
 }
+
+function MemberFinderView({
+  plans, loading, pendingId, onAdd,
+}: {
+  plans: LibraryPlan[];
+  loading: boolean;
+  pendingId: string | null;
+  onAdd: (p: LibraryPlan) => void;
+}) {
+  const items: FinderItem[] = useMemo(() => plans.map((p) => ({
+    id: p.id,
+    title: p.public_title || p.name,
+    trainingStyle: p.training_style,
+    level: p.difficulty,
+    weeks: p.weeks,
+    daysPerWeek: p.days_per_week,
+    goal: p.goal,
+    raw: p,
+  })), [plans]);
+  return (
+    <ProgramFinder
+      items={items}
+      loading={loading}
+      loadPayload={async (it) => {
+        const { data } = await supabase
+          .from("member_plans")
+          .select("published_payload")
+          .eq("id", it.id)
+          .maybeSingle();
+        return (data as any)?.published_payload ?? null;
+      }}
+      renderActions={(it) => {
+        const p = it.raw as LibraryPlan;
+        if (p?.allow_full_program === false) return null;
+        return (
+          <Button size="sm" onClick={() => onAdd(p)} disabled={pendingId === p.id}>
+            {pendingId === p.id ? "Adding…" : "Add to my training"}
+          </Button>
+        );
+      }}
+    />
+  );
+}
+
+type FinderItemType = FinderItem;
