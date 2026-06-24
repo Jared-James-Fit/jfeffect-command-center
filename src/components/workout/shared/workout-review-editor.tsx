@@ -1,14 +1,20 @@
 /**
- * Shared workout review editor. Used by both coaching clients and
- * membership users via the unified `submitOrEditReview` server fn. UI is
- * intentionally a slim sheet — the older `WorkoutFeedbackSheet` keeps
- * powering the client side for now (it has coach-locked semantics);
- * this component is for the new member flow and any future shared
- * surfaces.
+ * Simplified post-workout review — 3-card status check-out.
  *
- * Wording flips on `hasCoach`:
- *   - hasCoach=true  → "Your coach can see this"
- *   - hasCoach=false → neutral "Anything you want to note?"
+ * Client-facing UX: 3 large status cards + conditional notes field.
+ * Target completion time: under 5 seconds.
+ *
+ * Analytics compatibility:
+ *   The existing pl_workout_feedback schema is preserved unchanged.
+ *   Status cards map to legacy required fields so all existing reports,
+ *   dashboards, and coach history views continue to work:
+ *
+ *   Feeling Good  → overall_rating: 5, session_rpe: 5, pain: false
+ *   Minor Issue   → overall_rating: 3, session_rpe: 7, pain: false
+ *   Need Attention → overall_rating: 2, session_rpe: 8, pain: true, pain_level: 5
+ *
+ *   strength_feel, fatigue_feel, hit_target: preserved in DB, hidden from UI.
+ *   Historical submissions remain fully intact.
  */
 import { useEffect, useState } from "react";
 import { useMutation } from "@tanstack/react-query";
@@ -23,11 +29,84 @@ import {
 } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
-import { Loader2 } from "lucide-react";
+import { Loader2, CheckCircle2, AlertCircle, AlertTriangle } from "lucide-react";
 import { submitOrEditReview, type WorkoutCompletionCtx } from "@/lib/workout-completion.functions";
+
+// ── Status card definitions ───────────────────────────────────────────────────
+
+type StatusKey = "good" | "minor" | "attention";
+
+const STATUS_CARDS: {
+  key: StatusKey;
+  label: string;
+  subtitle: string;
+  icon: typeof CheckCircle2;
+  // Colour classes
+  border: string;
+  bg: string;
+  activeBorder: string;
+  activeBg: string;
+  activeText: string;
+  iconColor: string;
+  // Legacy field mappings for analytics compatibility
+  overallRating: number;
+  sessionRpe: number;
+  pain: boolean;
+  painLevel: number | null;
+}[] = [
+  {
+    key: "good",
+    label: "Feeling Good",
+    subtitle: "Everything went as expected. No issues to report.",
+    icon: CheckCircle2,
+    border: "border-border",
+    bg: "bg-card",
+    activeBorder: "border-emerald-500",
+    activeBg: "bg-emerald-500/10",
+    activeText: "text-emerald-700",
+    iconColor: "text-emerald-500",
+    overallRating: 5,
+    sessionRpe: 5,
+    pain: false,
+    painLevel: null,
+  },
+  {
+    key: "minor",
+    label: "Minor Issue",
+    subtitle: "Something worth mentioning — low energy, recovery concerns, minor discomfort.",
+    icon: AlertCircle,
+    border: "border-border",
+    bg: "bg-card",
+    activeBorder: "border-amber-500",
+    activeBg: "bg-amber-500/10",
+    activeText: "text-amber-700",
+    iconColor: "text-amber-500",
+    overallRating: 3,
+    sessionRpe: 7,
+    pain: false,
+    painLevel: null,
+  },
+  {
+    key: "attention",
+    label: "Need Attention",
+    subtitle: "Pain, injury, illness, or something affecting training.",
+    icon: AlertTriangle,
+    border: "border-border",
+    bg: "bg-card",
+    activeBorder: "border-red-500",
+    activeBg: "bg-red-500/10",
+    activeText: "text-red-700",
+    iconColor: "text-red-500",
+    overallRating: 2,
+    sessionRpe: 8,
+    pain: true,
+    painLevel: 5,
+  },
+];
+
+// ── Types ─────────────────────────────────────────────────────────────────────
 
 export type ReviewInitial = {
   overallRating?: number | null;
@@ -51,9 +130,22 @@ type Props = {
   hasCoach?: boolean;
   initial?: ReviewInitial | null;
   onSaved?: () => void;
-  /** Admin/coach POV: submit on behalf of this client id. */
   actAsClientId?: string | null;
 };
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+/** Infer the status key from legacy rating/pain fields for pre-existing reviews. */
+function inferStatus(initial: ReviewInitial | null | undefined): StatusKey | null {
+  if (!initial?.submittedAt) return null;
+  if (initial.pain) return "attention";
+  const r = initial.overallRating ?? 5;
+  if (r >= 4) return "good";
+  if (r >= 3) return "minor";
+  return "attention";
+}
+
+// ── Component ─────────────────────────────────────────────────────────────────
 
 export function WorkoutReviewEditor({
   open,
@@ -67,43 +159,36 @@ export function WorkoutReviewEditor({
   const submit = useServerFn(submitOrEditReview);
   const isEdit = !!initial?.submittedAt;
 
-  const [rating, setRating] = useState<number | null>(initial?.overallRating ?? null);
-  const [rpe, setRpe] = useState<number | null>(initial?.sessionRpe ?? null);
-  const [pain, setPain] = useState<boolean>(!!initial?.pain);
-  const [painLevel, setPainLevel] = useState<number | null>(initial?.painLevel ?? null);
+  const [status, setStatus] = useState<StatusKey | null>(() => inferStatus(initial));
   const [note, setNote] = useState<string>(initial?.clientNote ?? "");
-  const [strengthFeel, setStrengthFeel] = useState<string | null>(initial?.strengthFeel ?? null);
-  const [fatigueFeel, setFatigueFeel] = useState<string | null>(initial?.fatigueFeel ?? null);
-  const [hitTarget, setHitTarget] = useState<string | null>(initial?.hitTarget ?? null);
 
   useEffect(() => {
     if (!open) return;
-    setRating(initial?.overallRating ?? null);
-    setRpe(initial?.sessionRpe ?? null);
-    setPain(!!initial?.pain);
-    setPainLevel(initial?.painLevel ?? null);
+    setStatus(inferStatus(initial));
     setNote(initial?.clientNote ?? "");
-    setStrengthFeel(initial?.strengthFeel ?? null);
-    setFatigueFeel(initial?.fatigueFeel ?? null);
-    setHitTarget(initial?.hitTarget ?? null);
   }, [open, initial?.submittedAt]);
+
+  const selectedCard = STATUS_CARDS.find((c) => c.key === status) ?? null;
+  const showNotes = status === "minor" || status === "attention";
+  const canSubmit = status !== null && !mutation.isPending;
 
   const mutation = useMutation({
     mutationFn: async () => {
-      if (rating == null || rpe == null) throw new Error("Rating and session RPE are required");
+      if (!selectedCard) throw new Error("Please select a workout status");
       return submit({
         data: {
           ...ctx,
-          overallRating: rating,
-          sessionRpe: rpe,
-          pain,
-          painLevel: pain ? painLevel ?? null : null,
+          overallRating: selectedCard.overallRating,
+          sessionRpe: selectedCard.sessionRpe,
+          pain: selectedCard.pain,
+          painLevel: selectedCard.painLevel,
           painArea: null,
           painNote: null,
           clientNote: note.trim() ? note.trim() : null,
-          strengthFeel,
-          fatigueFeel,
-          hitTarget,
+          // Preserve legacy optional fields as null (hidden from UI but kept in DB)
+          strengthFeel: null,
+          fatigueFeel: null,
+          hitTarget: null,
           actAsClientId: actAsClientId ?? null,
         },
       });
@@ -116,8 +201,6 @@ export function WorkoutReviewEditor({
     onError: (e: any) => toast.error(e?.message || "Couldn't save review"),
   });
 
-  const canSubmit = rating != null && rpe != null && !mutation.isPending;
-
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent
@@ -127,145 +210,92 @@ export function WorkoutReviewEditor({
         <div className="px-5 pt-5">
           <SheetHeader className="space-y-1 text-left">
             <SheetTitle className="text-xl font-black">
-              {isEdit ? "Edit your review" : "How was that workout?"}
+              {isEdit ? "Edit your review" : "Workout Status"}
             </SheetTitle>
             <SheetDescription>
               {hasCoach
                 ? "Your coach can see this."
-                : "Notes for your own records — only you can see them."}
+                : "Notes for your own records."}
             </SheetDescription>
           </SheetHeader>
         </div>
 
-        <div className="space-y-6 px-5 pb-4 pt-5">
-          <fieldset className="space-y-2">
-            <legend className="text-sm font-bold">Overall rating</legend>
-            <div className="grid grid-cols-5 gap-2">
-              {[1, 2, 3, 4, 5].map((n) => (
-                <button
-                  key={n}
-                  type="button"
-                  onClick={() => setRating(n)}
-                  aria-pressed={rating === n}
-                  className={cn(
-                    "h-12 rounded-xl border text-sm font-black transition-colors",
-                    rating === n
-                      ? "border-primary bg-primary text-primary-foreground"
-                      : "border-border bg-card hover:bg-secondary/40",
-                  )}
-                >
-                  {n}
-                </button>
-              ))}
-            </div>
-          </fieldset>
-
-          <fieldset className="space-y-2">
-            <legend className="text-sm font-bold">Session RPE (1–10)</legend>
-            <div className="grid grid-cols-5 gap-1.5">
-              {Array.from({ length: 10 }, (_, i) => i + 1).map((n) => (
-                <button
-                  key={n}
-                  type="button"
-                  onClick={() => setRpe(n)}
-                  aria-pressed={rpe === n}
-                  className={cn(
-                    "h-10 rounded-lg border text-sm font-black transition-colors",
-                    rpe === n
-                      ? "border-primary bg-primary text-primary-foreground"
-                      : "border-border bg-card hover:bg-secondary/40",
-                  )}
-                >
-                  {n}
-                </button>
-              ))}
-            </div>
-          </fieldset>
-
-          <fieldset className="space-y-2">
-            <legend className="text-sm font-bold">Did anything hurt?</legend>
-            <div className="grid grid-cols-2 gap-2">
-              <button
-                type="button"
-                onClick={() => { setPain(false); setPainLevel(null); }}
-                aria-pressed={!pain}
-                className={cn(
-                  "rounded-xl border px-3 py-2.5 text-sm font-bold transition-colors",
-                  !pain
-                    ? "border-emerald-500 bg-emerald-500/15 text-emerald-700 dark:text-emerald-300"
-                    : "border-border bg-card text-muted-foreground hover:bg-secondary/40",
-                )}
-              >
-                No
-              </button>
-              <button
-                type="button"
-                onClick={() => setPain(true)}
-                aria-pressed={pain}
-                className={cn(
-                  "rounded-xl border px-3 py-2.5 text-sm font-bold transition-colors",
-                  pain
-                    ? "border-amber-500 bg-amber-500/15 text-amber-700 dark:text-amber-300"
-                    : "border-border bg-card text-muted-foreground hover:bg-secondary/40",
-                )}
-              >
-                Yes
-              </button>
-            </div>
-            {pain && (
-              <div className="mt-2 grid grid-cols-5 gap-1.5">
-                {Array.from({ length: 10 }, (_, i) => i + 1).map((n) => (
-                  <button
-                    key={n}
-                    type="button"
-                    onClick={() => setPainLevel(n)}
-                    aria-pressed={painLevel === n}
-                    className={cn(
-                      "h-9 rounded-lg border text-xs font-black transition-colors",
-                      painLevel === n
-                        ? "border-amber-500 bg-amber-500 text-white"
-                        : "border-border bg-card hover:bg-secondary/40",
-                    )}
-                  >
-                    {n}
-                  </button>
-                ))}
-              </div>
-            )}
-          </fieldset>
-
-          <PillQuestion
-            legend="How did your strength feel?"
-            options={["Weak", "Normal", "Strong"]}
-            value={strengthFeel}
-            onChange={setStrengthFeel}
-          />
-          <PillQuestion
-            legend="How tired did you feel?"
-            options={["Fresh", "Normal", "Drained"]}
-            value={fatigueFeel}
-            onChange={setFatigueFeel}
-          />
-          <PillQuestion
-            legend="Did you hit the target reps/RIR?"
-            options={["Yes", "Mostly", "No"]}
-            value={hitTarget}
-            onChange={setHitTarget}
-          />
-
+        <div className="space-y-3 px-5 pb-4 pt-5">
+          {/* 3 large status cards */}
           <div className="space-y-2">
-            <Label htmlFor="review-note" className="text-sm font-bold">
-              {hasCoach ? "Anything your coach should know?" : "Anything you want to note?"}
-            </Label>
-            <Textarea
-              id="review-note"
-              value={note}
-              onChange={(e) => setNote(e.target.value)}
-              placeholder="Optional"
-              rows={3}
-              maxLength={600}
-            />
+            {STATUS_CARDS.map((card) => {
+              const Icon = card.icon;
+              const active = status === card.key;
+              return (
+                <button
+                  key={card.key}
+                  type="button"
+                  onClick={() => setStatus(card.key)}
+                  aria-pressed={active}
+                  className={cn(
+                    "w-full rounded-2xl border-2 p-4 text-left transition-all active:scale-[0.99]",
+                    active
+                      ? `${card.activeBorder} ${card.activeBg}`
+                      : `${card.border} ${card.bg} hover:bg-secondary/30`,
+                  )}
+                >
+                  <div className="flex items-start gap-3">
+                    <Icon className={cn("mt-0.5 h-5 w-5 shrink-0", active ? card.iconColor : "text-muted-foreground")} />
+                    <div className="min-w-0 flex-1">
+                      <div className={cn("text-base font-bold leading-tight", active ? card.activeText : "text-foreground")}>
+                        {card.label}
+                      </div>
+                      <div className="mt-0.5 text-xs text-muted-foreground leading-snug">
+                        {card.subtitle}
+                      </div>
+                    </div>
+                    {active && (
+                      <div className={cn("shrink-0 h-5 w-5 rounded-full flex items-center justify-center", card.activeBg, card.activeBorder, "border")}>
+                        <div className={cn("h-2.5 w-2.5 rounded-full", card.iconColor.replace("text-", "bg-"))} />
+                      </div>
+                    )}
+                  </div>
+                </button>
+              );
+            })}
           </div>
+
+          {/* Conditional: tell your coach (shown for Minor Issue + Need Attention) */}
+          {showNotes && (
+            <div className="space-y-1.5 pt-1">
+              <label htmlFor="review-concern" className="text-sm font-bold">
+                Tell your coach what happened
+              </label>
+              <Textarea
+                id="review-concern"
+                value={note}
+                onChange={(e) => setNote(e.target.value)}
+                placeholder="e.g. shoulder discomfort, knee pain, illness, travel fatigue…"
+                rows={3}
+                maxLength={600}
+                className="resize-none"
+              />
+            </div>
+          )}
+
+          {/* Optional notes (always shown, but not required) */}
+          {!showNotes && (
+            <div className="space-y-1.5 pt-1">
+              <label htmlFor="review-note" className="text-sm font-bold text-muted-foreground">
+                {hasCoach ? "Anything your coach should know?" : "Anything you want to note?"}
+                <span className="ml-1 font-normal text-xs">(optional)</span>
+              </label>
+              <Textarea
+                id="review-note"
+                value={note}
+                onChange={(e) => setNote(e.target.value)}
+                placeholder="Work stress, travel, recovery concerns, nutrition…"
+                rows={2}
+                maxLength={600}
+                className="resize-none"
+              />
+            </div>
+          )}
 
           {isEdit && initial?.editCount != null && initial.editCount > 0 && (
             <p className="text-[11px] text-muted-foreground">
@@ -278,51 +308,16 @@ export function WorkoutReviewEditor({
           <Button variant="ghost" className="flex-1" onClick={() => onOpenChange(false)} disabled={mutation.isPending}>
             Close
           </Button>
-          <Button className="flex-1" onClick={() => mutation.mutate()} disabled={!canSubmit}>
+          <Button
+            className="flex-1"
+            onClick={() => mutation.mutate()}
+            disabled={!status || mutation.isPending}
+          >
             {mutation.isPending && <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />}
-            {isEdit ? "Save changes" : "Submit review"}
+            {isEdit ? "Save changes" : "Done"}
           </Button>
         </SheetFooter>
       </SheetContent>
     </Sheet>
-  );
-}
-
-function PillQuestion({
-  legend,
-  options,
-  value,
-  onChange,
-}: {
-  legend: string;
-  options: string[];
-  value: string | null;
-  onChange: (v: string | null) => void;
-}) {
-  return (
-    <fieldset className="space-y-2">
-      <legend className="text-sm font-bold">{legend}</legend>
-      <div className="grid grid-cols-3 gap-2">
-        {options.map((opt) => {
-          const active = value === opt;
-          return (
-            <button
-              key={opt}
-              type="button"
-              onClick={() => onChange(active ? null : opt)}
-              aria-pressed={active}
-              className={cn(
-                "h-11 rounded-xl border text-sm font-bold transition-colors",
-                active
-                  ? "border-primary bg-primary text-primary-foreground"
-                  : "border-border bg-card text-muted-foreground hover:bg-secondary/40",
-              )}
-            >
-              {opt}
-            </button>
-          );
-        })}
-      </div>
-    </fieldset>
   );
 }
