@@ -1150,6 +1150,7 @@ function WorkoutDay({
                   blockId={blockId}
                   existingResults={(results as any[]).filter((x) => x.row_id === r.id)}
                   existingNote={notesByRowId.get(r.id)}
+                  notesLoading={notesLoading}
                   readonly={readonly}
                   unit={unitForRow(r)}
                   onUnitChange={(u) => setExerciseUnit(r.exercises?.id ?? null, r.id, u)}
@@ -1496,6 +1497,7 @@ function WorkoutDay({
                 blockId={blockId}
                 existingResults={(results as any[]).filter((x) => x.row_id === r.id)}
                 existingNote={notesByRowId.get(r.id)}
+                notesLoading={notesLoading}
                 readonly={readonly}
                 unit={unitForRow(r)}
                 onUnitChange={(u) => setExerciseUnit(r.exercises?.id ?? null, r.id, u)}
