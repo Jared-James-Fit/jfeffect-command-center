@@ -344,32 +344,33 @@ function PortalHome() {
       chip: "New",
     });
   }
-  for (const p of (coachUpdates?.liftPings ?? []).slice(0, 5)) {
+  // Aggregate lift video feedback into a single grouped item (prevents notification fatigue)
+  const liftPings = coachUpdates?.liftPings ?? [];
+  if (liftPings.length > 0) {
+    const count = liftPings.length;
+    const firstExercise = liftPings[0]?.exercise || "Lift video";
     actions.push({
-      key: `lift-${p.videoId}`,
+      key: "lift-reviews-grouped",
       icon: Dumbbell,
       tone: "primary",
-      title: `Coach feedback on ${p.exercise}`,
-      message: p.preview,
+      title: count === 1 ? `Coach feedback on ${firstExercise}` : `${count} New Lift Reviews`,
+      message: count === 1 ? (liftPings[0]?.preview || "Coach reviewed your video.") : `Coach reviewed ${count} videos. Tap to view.`,
       to: "/portal/lift-videos",
-      chip: "New",
+      chip: count > 1 ? String(count) : "New",
     });
   }
-  for (const r of coachUpdates?.checkInReviews ?? []) {
+  // Aggregate check-in reviews into a single grouped item
+  const checkInReviews = coachUpdates?.checkInReviews ?? [];
+  if (checkInReviews.length > 0) {
+    const count = checkInReviews.length;
     actions.push({
-      key: `review-${r.id}`,
+      key: "checkin-reviews-grouped",
       icon: ClipboardCheck,
       tone: "primary",
-      title: r.title || "New Check-In review",
-      message: r.message || "Open to read your coach's review.",
-      chip: "New",
-      onClick: async () => {
-        await (supabase.from("manual_check_in_reviews") as any)
-          .update({ read_at: new Date().toISOString() })
-          .eq("id", r.id);
-        qc.invalidateQueries({ queryKey: ["portal-coach-updates", client?.id] });
-        qc.invalidateQueries({ queryKey: ["notifications"] });
-      },
+      title: count === 1 ? (checkInReviews[0]?.title || "New Check-In review") : `${count} New Check-In Reviews`,
+      message: count === 1 ? (checkInReviews[0]?.message || "Open to read your coach's review.") : `Coach reviewed ${count} check-ins. Tap to view.`,
+      chip: count > 1 ? String(count) : "New",
+      to: "/portal/check-ins",
     });
   }
   // Surface the nearest due check-in form into Action Centre.
@@ -435,7 +436,7 @@ function PortalHome() {
 
         {/* Action Centre — pinned to the top so urgent items are seen first */}
         <SectionErrorBoundary label="Action centre">
-          <ActionCentre items={actions} />
+          <ActionCentre items={actions.slice(0, 5)} />
         </SectionErrorBoundary>
 
         {/* 3 — Progress summary */}

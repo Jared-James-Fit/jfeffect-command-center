@@ -172,6 +172,75 @@ function ClientLiftVideos() {
           </Card>
         )}
 
+        {/* ── Video Review Hub ─────────────────────────────────────────── */}
+        {(() => {
+          const reviewedGroups = groups.filter((g) => {
+            const fb = feedbackLabel(g.clips);
+            return fb === "Reviewed by Jared" || fb === "Feedback Added";
+          });
+          const unreadCount = reviewedGroups.filter((g) =>
+            g.clips.some((c) => c.reviewed_at && (!c.client_last_viewed_at || new Date(c.client_last_viewed_at) < new Date(c.reviewed_at!)))
+          ).length;
+          if (reviewedGroups.length === 0) return null;
+          return (
+            <Card className="border-primary/20 bg-card p-4">
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2">
+                  <Video className="h-4 w-4 text-primary" />
+                  <h3 className="text-sm font-bold">Video Reviews</h3>
+                  {unreadCount > 0 && (
+                    <span className="rounded-full bg-primary/15 px-2 py-0.5 text-[10px] font-bold uppercase tracking-widest text-primary">
+                      {unreadCount} unread
+                    </span>
+                  )}
+                </div>
+                <div className="text-xs text-muted-foreground">
+                  {reviewedGroups.length} reviewed
+                </div>
+              </div>
+              <ul className="divide-y divide-border/60">
+                {reviewedGroups.slice(0, 5).map((g) => {
+                  const v = g.clips[0];
+                  const isUnread = v.reviewed_at && (!v.client_last_viewed_at || new Date(v.client_last_viewed_at) < new Date(v.reviewed_at!));
+                  return (
+                    <li key={g.key}>
+                      <button
+                        type="button"
+                        onClick={() => setDetailKey(g.key)}
+                        className="flex w-full items-center gap-3 py-2.5 text-left hover:bg-secondary/20 rounded-lg px-2 -mx-2 transition-colors"
+                      >
+                        {v.thumbnail_url ? (
+                          <img src={v.thumbnail_url} alt="" className="h-10 w-16 shrink-0 rounded object-cover bg-muted" />
+                        ) : (
+                          <div className="flex h-10 w-16 shrink-0 items-center justify-center rounded bg-muted">
+                            <Video className="h-4 w-4 text-muted-foreground" />
+                          </div>
+                        )}
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-2">
+                            <span className="truncate text-sm font-semibold">{v.exercise || "Lift video"}</span>
+                            {isUnread && <span className="h-2 w-2 shrink-0 rounded-full bg-primary" />}
+                          </div>
+                          <div className="text-[11px] text-muted-foreground">
+                            {v.reviewed_at ? formatDistanceToNow(parseISO(v.reviewed_at), { addSuffix: true }) : ""}
+                            {v.date_performed ? ` · ${v.date_performed}` : ""}
+                          </div>
+                        </div>
+                        <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+              {reviewedGroups.length > 5 && (
+                <div className="mt-2 text-center text-xs text-muted-foreground">
+                  +{reviewedGroups.length - 5} more reviewed videos below
+                </div>
+              )}
+            </Card>
+          );
+        })()}
+
         {groups.length > 0 && (
           <div className="flex items-center justify-between px-1">
             <div className="text-xs text-muted-foreground">

@@ -19,7 +19,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { UserPlus, Users } from "lucide-react";
+import { UserPlus, Users, ShieldAlert } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import { listClientsDirectoryFn } from "@/lib/clients-directory.functions";
 import { archiveClient } from "@/lib/clients.functions";
@@ -30,6 +30,8 @@ import { ClientRow, ClientRowSkeleton } from "@/components/clients/client-row";
 import { Pager } from "@/components/clients/pager";
 import type { StatusKey } from "@/components/clients/clients-status";
 import { AddClientDialog } from "@/components/clients/add-client-dialog";
+import { ComplianceDashboard } from "@/components/clients/compliance-dashboard";
+import { cn } from "@/lib/utils";
 
 const searchSchema = z.object({
   search:        fallback(z.string(),                                                       "").default(""),
@@ -39,12 +41,12 @@ const searchSchema = z.object({
   sort:          fallback(z.enum(["attention","recent","name","ending","activity"]),       "attention").default("attention"),
   page:          fallback(z.number().int().min(1),                                          1).default(1),
   size:          fallback(z.union([z.literal(15), z.literal(25), z.literal(50)]),           15).default(15),
+  view:          fallback(z.enum(["clients", "compliance"]),                                "clients").default("clients"),
 });
 
 export const Route = createFileRoute("/_authenticated/admin/clients/")({
   validateSearch: zodValidator(searchSchema),
   component: ClientsDirectoryPage,
-  // Skeleton shown while the route's code-split chunk is loading.
   pendingComponent: AdminRouteSkeleton,
 });
 
@@ -73,6 +75,8 @@ function ClientsDirectoryPage() {
   const [archiveTarget, setArchiveTarget] = useState<DirectoryRow | null>(null);
   const [addOpen, setAddOpen] = useState(false);
 
+  const activeView = search.view ?? "clients";
+
   const { data, isFetching, isError, refetch } = useQuery({
     queryKey: ["clients-directory", search],
     queryFn: () =>
@@ -89,6 +93,7 @@ function ClientsDirectoryPage() {
       }),
     placeholderData: (prev) => prev,
     staleTime: 10_000,
+    enabled: activeView === "clients",
   });
 
   const { data: coaches = [] } = useQuery({
@@ -107,6 +112,11 @@ function ClientsDirectoryPage() {
       ? "No clients match"
       : `${total} client${total === 1 ? "" : "s"}`;
 
+  const TABS = [
+    { key: "clients" as const, label: "Clients", icon: Users },
+    { key: "compliance" as const, label: "Compliance", icon: ShieldAlert },
+  ];
+
   return (
     <>
       <PageHeader
@@ -115,7 +125,7 @@ function ClientsDirectoryPage() {
           counts ? `${counts.all} active client${counts.all === 1 ? "" : "s"}` : undefined
         }
         actions={
-          isAdmin && (
+          isAdmin && activeView === "clients" && (
             <Button className="h-10" onClick={() => setAddOpen(true)}>
               <UserPlus className="mr-2 h-4 w-4" />
               Add Client
@@ -125,38 +135,67 @@ function ClientsDirectoryPage() {
       />
 
       <div className="space-y-4 p-3 sm:p-4 md:p-6">
-        <SummaryCards counts={counts} active={search.status as StatusKey} loading={!data && isFetching} />
+        {/* Tab switcher */}
+        <div className="flex gap-1 rounded-xl border border-border bg-card/60 p-1 w-fit">
+          {TABS.map((tab) => {
+            const Icon = tab.icon;
+            return (
+              <button
+                key={tab.key}
+                type="button"
+                onClick={() => navigate({ search: (prev) => ({ ...prev, view: tab.key }) })}
+                className={cn(
+                  "flex items-center gap-1.5 rounded-lg px-4 py-1.5 text-sm font-semibold transition-colors",
+                  activeView === tab.key
+                    ? "bg-primary text-primary-foreground"
+                    : "text-muted-foreground hover:text-foreground hover:bg-secondary/40",
+                )}
+              >
+                <Icon className="h-4 w-4" />
+                {tab.label}
+              </button>
+            );
+          })}
+        </div>
 
-        <ClientToolbar
-          search={search.search}
-          coachingType={search.coachingType}
-          coachId={(search.coachId as string | undefined) ?? null}
-          coaches={coaches as { id: string; full_name: string | null }[]}
-          sort={search.sort}
-          isAdmin={isAdmin}
-          totalLabel={totalLabel}
-        />
-
-        {isError ? (
-          <Card className="p-8 text-center">
-            <div className="mb-2 text-sm font-semibold text-destructive">Couldn't load clients</div>
-            <Button onClick={() => refetch()} variant="outline" size="sm">Try again</Button>
-          </Card>
-        ) : !data && isFetching ? (
-          <ul className="space-y-2">
-            {Array.from({ length: 6 }).map((_, i) => <ClientRowSkeleton key={i} />)}
-          </ul>
-        ) : rows.length === 0 ? (
-          <EmptyState hasFilters={!!(search.search || search.status !== "all" || search.coachingType !== "all" || search.coachId)} onClear={() => navigate({ search: () => ({}) })} />
+        {activeView === "compliance" ? (
+          <ComplianceDashboard />
         ) : (
-          <ul className="space-y-2">
-            {rows.map((r) => (
-              <ClientRow key={r.id} r={r} onArchive={isAdmin ? setArchiveTarget : undefined} />
-            ))}
-          </ul>
-        )}
+          <>
+            <SummaryCards counts={counts} active={search.status as StatusKey} loading={!data && isFetching} />
 
-        {total > 0 && <Pager page={search.page} size={search.size} total={total} />}
+            <ClientToolbar
+              search={search.search}
+              coachingType={search.coachingType}
+              coachId={(search.coachId as string | undefined) ?? null}
+              coaches={coaches as { id: string; full_name: string | null }[]}
+              sort={search.sort}
+              isAdmin={isAdmin}
+              totalLabel={totalLabel}
+            />
+
+            {isError ? (
+              <Card className="p-8 text-center">
+                <div className="mb-2 text-sm font-semibold text-destructive">Couldn't load clients</div>
+                <Button onClick={() => refetch()} variant="outline" size="sm">Try again</Button>
+              </Card>
+            ) : !data && isFetching ? (
+              <ul className="space-y-2">
+                {Array.from({ length: 6 }).map((_, i) => <ClientRowSkeleton key={i} />)}
+              </ul>
+            ) : rows.length === 0 ? (
+              <EmptyState hasFilters={!!(search.search || search.status !== "all" || search.coachingType !== "all" || search.coachId)} onClear={() => navigate({ search: () => ({}) })} />
+            ) : (
+              <ul className="space-y-2">
+                {rows.map((r) => (
+                  <ClientRow key={r.id} r={r} onArchive={isAdmin ? setArchiveTarget : undefined} />
+                ))}
+              </ul>
+            )}
+
+            {total > 0 && <Pager page={search.page} size={search.size} total={total} />}
+          </>
+        )}
       </div>
 
       <AddClientDialog
