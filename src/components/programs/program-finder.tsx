@@ -162,11 +162,11 @@ export function ProgramFinder({ items, loadPayload, renderActions, loading }: Pr
   }, [items]);
 
   return (
-    <div className="grid h-[calc(100vh-220px)] min-h-[480px] grid-cols-[220px_minmax(0,1fr)] overflow-hidden rounded-lg border border-border bg-background/40">
+    <div className="grid h-[calc(100vh-220px)] min-h-[480px] max-h-[800px] grid-cols-[220px_minmax(0,1fr)] overflow-hidden rounded-lg border border-border bg-background/40">
       {/* Left: folder tree */}
-      <aside className="flex h-full flex-col border-r border-border bg-muted/20">
+      <aside className="flex h-full min-h-0 flex-col border-r border-border bg-muted/20">
         <div className="px-3 py-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Library</div>
-        <ScrollArea className="flex-1 px-1.5 pb-2">
+        <div className="flex-1 min-h-0 overflow-y-auto px-1.5 pb-2">
           <div className="space-y-0.5">
             {allFolders.map(({ folder, depth }) => (
               <FolderRow
@@ -181,15 +181,15 @@ export function ProgramFinder({ items, loadPayload, renderActions, loading }: Pr
               />
             ))}
           </div>
-        </ScrollArea>
+        </div>
       </aside>
 
       {/* Right: list */}
-      <section className="flex h-full min-w-0 flex-col">
+      <section className="flex h-full min-h-0 min-w-0 flex-col">
         <div className="grid grid-cols-[minmax(0,2fr)_90px_70px_70px_minmax(0,1.2fr)] gap-3 border-b border-border bg-muted/30 px-4 py-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
           <div>Program</div><div>Level</div><div>Weeks</div><div>Days/wk</div><div>Goal</div>
         </div>
-        <ScrollArea className="flex-1">
+        <div className="flex-1 min-h-0 overflow-y-auto">
           {loading ? (
             <div className="p-6 text-sm text-muted-foreground">Loading…</div>
           ) : rows.length === 0 ? (
@@ -214,7 +214,7 @@ export function ProgramFinder({ items, loadPayload, renderActions, loading }: Pr
               ))}
             </ul>
           )}
-        </ScrollArea>
+        </div>
       </section>
 
       <ProgramDetailSheet item={open} onClose={() => setOpen(null)} loadPayload={loadPayload} renderActions={renderActions} />
