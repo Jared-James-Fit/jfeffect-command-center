@@ -40,10 +40,11 @@ function styleOf(it: FinderItem) { return norm(it.trainingStyle); }
 function levelOf(it: FinderItem) {
   const l = norm(it.level);
   const t = norm(it.title);
-  if (l.includes("advanced-elite") || t.includes("[advanced-elite]")) return "advanced-elite";
-  if (l.includes("advanced") || t.includes("[advanced]")) return "advanced";
-  if (l.includes("intermediate") || t.includes("[intermediate]")) return "intermediate";
-  if (l.includes("beginner") || t.includes("[beginner]")) return "beginner";
+  const hay = `${l} ${t}`;
+  if (hay.includes("advanced-elite") || hay.includes("advanced/elite") || hay.includes("advanced elite")) return "advanced-elite";
+  if (hay.includes("advanced")) return "advanced";
+  if (hay.includes("intermediate")) return "intermediate";
+  if (hay.includes("beginner")) return "beginner";
   return l;
 }
 
