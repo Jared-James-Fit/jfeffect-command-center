@@ -3,7 +3,7 @@
  * Handles start/end date assignment, history tracking, and auto-calculation.
  */
 import { createServerFn } from "@tanstack/react-start";
-import { requireSupabaseAuth } from "@/lib/server-middleware";
+import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { z } from "zod";
 
 // ── Update term dates (with history) ────────────────────────────────────────
