@@ -143,7 +143,7 @@ function ClientsDirectoryPage() {
               <button
                 key={tab.key}
                 type="button"
-                onClick={() => navigate({ search: (prev) => ({ ...prev, view: tab.key }) })}
+                onClick={() => navigate({ search: (prev: Record<string, unknown>) => ({ ...prev, view: tab.key }) })}
                 className={cn(
                   "flex items-center gap-1.5 rounded-lg px-4 py-1.5 text-sm font-semibold transition-colors",
                   activeView === tab.key
