@@ -3322,7 +3322,7 @@ function SetRow({
       )}
       <div className="flex items-center justify-end gap-1">
         {/* When confirmed, show only the green checkmark — not the save spinner too */}
-        {!readonly && !isConfirmed && save.state !== "saved" && (
+        {!readonly && !isConfirmed && ["saving", "error", "offline"].includes(save.state) && (
           <SaveStatus
             state={save.state}
             savedAt={save.savedAt}
