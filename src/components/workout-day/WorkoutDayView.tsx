@@ -2773,11 +2773,6 @@ function SetRow({
   const focusClearTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const clearEditGuard = () => {
     setFocusedField(null);
-    recentlySavedRef.current = false;
-    if (recentlySavedTimerRef.current) {
-      clearTimeout(recentlySavedTimerRef.current);
-      recentlySavedTimerRef.current = null;
-    }
   };
   useEffect(() => {
     if (focusClearTimerRef.current) clearTimeout(focusClearTimerRef.current);
@@ -3044,7 +3039,7 @@ function SetRow({
       e.preventDefault();
       (e.target as HTMLInputElement).blur();
       clearEditGuard();
-      queueMicrotask(() => { void save.flush(); });
+      setTimeout(() => { void save.flush(); }, 0);
     }
   };
 
