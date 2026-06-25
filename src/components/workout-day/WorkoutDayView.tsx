@@ -2776,6 +2776,26 @@ function SetRow({
   // Forward-ref to the autosave handle so effects defined above can call
   // markClean() without a TDZ error.
   const saveRef = useRef<ReturnType<typeof useAutosave<typeof value>> | null>(null);
+  const persistedUnitForValue = (loadValue: string, nextUnit: "kg" | "lb"): "kg" | "lb" => {
+    const existingUnit =
+      existing?.entered_unit === "kg" || existing?.entered_unit === "lb"
+        ? existing.entered_unit
+        : existing?.actual_load_unit === "kg" || existing?.actual_load_unit === "lb"
+          ? existing.actual_load_unit
+          : null;
+    if (!existing) return nextUnit;
+    const nextLoad = loadValue ? Number(loadValue) : null;
+    const currentLoad = existing.actual_load != null ? Number(existing.actual_load) : null;
+    const loadUnchanged =
+      nextLoad == null && currentLoad == null
+        ? true
+        : nextLoad != null && currentLoad != null && Math.abs(nextLoad - currentLoad) < 0.0001;
+    // If the raw number did not change, preserve the original entered unit.
+    // This prevents reps/RPE/status edits after a display-unit toggle from
+    // rewriting actual_load_unit and causing database normalization to convert
+    // historical values under the wrong unit.
+    return loadUnchanged ? (existingUnit ?? nextUnit) : nextUnit;
+  };
   const save = useAutosave({
     key: draftKey,
     value,
@@ -2797,6 +2817,7 @@ function SetRow({
       const loadNum = value.load ? Number(value.load) : null;
       const repsNum = value.reps ? parseInt(value.reps, 10) : null;
       const rpeNum = value.rpe ? Number(value.rpe) : null;
+      const loadUnit = persistedUnitForValue(value.load, value.unit);
       enqueueOfflineWrite({
         id: `portal_set:${rowId}:${clientId}:${setIndex}`,
         label: `Saved set ${setIndex}`,
@@ -2809,9 +2830,9 @@ function SetRow({
             client_id: clientId,
             set_index: setIndex,
             actual_load: loadNum,
-            actual_load_unit: value.unit,
+            actual_load_unit: loadUnit,
             entered_value: loadNum,
-            entered_unit: value.unit,
+            entered_unit: loadUnit,
             actual_reps: repsNum,
             actual_rpe: value.rpe || null,
             actual_rpe_num: rpeNum,
@@ -2830,14 +2851,15 @@ function SetRow({
       if (load && (loadNum == null || !isFinite(loadNum) || loadNum < 0)) throw new Error("Weight must be a number");
       if (reps && (repsNum == null || !isFinite(repsNum) || repsNum < 0)) throw new Error("Reps must be a whole number");
       if (rpe && (rpeNum == null || !isFinite(rpeNum) || rpeNum < 0 || rpeNum > 10)) throw new Error("RPE must be 0–10");
+      const loadUnit = persistedUnitForValue(load, unit);
       const payload = {
         row_id: rowId,
         client_id: clientId,
         set_index: setIndex,
         actual_load: loadNum,
-        actual_load_unit: unit,
+        actual_load_unit: loadUnit,
         entered_value: loadNum,
-        entered_unit: unit,
+        entered_unit: loadUnit,
         actual_reps: repsNum,
         actual_rpe: rpe || null,
         actual_rpe_num: rpeNum,
@@ -2909,7 +2931,7 @@ function SetRow({
           weight: loadNum,
           reps: repsNum,
           rpe: rpeNum,
-          unit,
+          unit: loadUnit,
           status: existing?.completed_at ? "completed" : "saved",
         };
         void writeSetEditAudit(before, after, {
