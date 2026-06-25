@@ -1,0 +1,1 @@
+UPDATE public.pl_templates SET training_style = lower(training_style) WHERE training_style IS NOT NULL AND training_style <> lower(training_style);

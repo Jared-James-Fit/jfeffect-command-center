@@ -1088,7 +1088,7 @@ export async function listTemplates(opts: {
   if (!(opts as any).includeArchived) q = q.eq("archived", false);
   else if ((opts as any).onlyArchived) q = q.eq("archived", true);
   if (opts.type && opts.type !== "all") q = q.eq("template_type", opts.type);
-  if (opts.style && opts.style !== "all") q = q.eq("training_style", opts.style);
+  if (opts.style && opts.style !== "all") q = q.ilike("training_style", opts.style);
   if (opts.q && opts.q.trim()) {
     const term = `%${opts.q.trim()}%`;
     // Match name OR training_focus OR notes OR training_style OR any tag.
