@@ -37,6 +37,10 @@ export interface ProgramFacets {
   equipmentNeeded: string[];
   audienceTags: string[];
   rawTags: string[];
+  /** True when the program is classified as a full-body split via
+   * structured metadata (tags / training_split / is_full_body / training_focus).
+   * Title text alone is NOT used as the sole signal. */
+  isFullBody: boolean;
 }
 
 /** Loose row shape covering the union of fields read from
@@ -55,6 +59,8 @@ export interface ProgramRowLike {
   est_duration_min?: number | null;
   equipment_needed?: string[] | string | null;
   tags?: string[] | string | null;
+  training_split?: string | null;
+  is_full_body?: boolean | null;
 }
 
 function toStrArray(v: unknown): string[] {
@@ -154,7 +160,50 @@ export function deriveFacets(row: ProgramRowLike): ProgramFacets {
     equipmentNeeded: equipment,
     audienceTags: parseAudience(tags),
     rawTags: tags,
+    isFullBody: isFullBodyRow(row, tags),
   };
+}
+
+/** Tokens treated as a full-body search query. Members can type any of these
+ * and they all resolve to the same structured full-body filter. */
+export const FULL_BODY_QUERY_ALIASES: string[] = [
+  "full body", "full-body", "fullbody",
+  "total body", "total-body", "totalbody",
+  "whole body", "whole-body", "wholebody",
+];
+
+function normTag(s: string): string {
+  return s.toLowerCase().replace(/[\s_\-]+/g, "");
+}
+
+const FULL_BODY_TAG_SET = new Set([
+  "fullbody", "totalbody", "wholebody",
+]);
+
+/** Structured full-body detection. Reads (in order):
+ *  1. `is_full_body` flag
+ *  2. `training_split` column == FULL_BODY (any casing/spacing)
+ *  3. tag tokens: full-body, full_body, total-body, whole-body, ...
+ *  4. training_focus / training_style normalized to full-body
+ * Title text is intentionally NOT used as the sole signal. */
+export function isFullBodyRow(row: ProgramRowLike, tagsArg?: string[]): boolean {
+  if (row.is_full_body === true) return true;
+  const split = row.training_split ? normTag(String(row.training_split)) : "";
+  if (split && FULL_BODY_TAG_SET.has(split)) return true;
+  const tags = tagsArg ?? toStrArray(row.tags);
+  for (const t of tags) {
+    if (FULL_BODY_TAG_SET.has(normTag(t))) return true;
+  }
+  const focus = row.training_focus ? normTag(String(row.training_focus)) : "";
+  if (focus && FULL_BODY_TAG_SET.has(focus)) return true;
+  return false;
+}
+
+/** True when the user's search query is a full-body alias. */
+export function isFullBodyQuery(q: string): boolean {
+  const n = q.toLowerCase().trim().replace(/\s+/g, " ");
+  if (!n) return false;
+  return FULL_BODY_QUERY_ALIASES.some((a) => n.includes(a));
 }
 
 /** Alias kept for back-compat with earlier component imports. */
