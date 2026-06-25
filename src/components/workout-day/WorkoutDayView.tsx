@@ -2771,6 +2771,14 @@ function SetRow({
   // focus. If focus stays set for too long we'll never autosave because the
   // enabled guard blocks. Clear stale focus after 6s of no activity.
   const focusClearTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const clearEditGuard = () => {
+    setFocusedField(null);
+    recentlySavedRef.current = false;
+    if (recentlySavedTimerRef.current) {
+      clearTimeout(recentlySavedTimerRef.current);
+      recentlySavedTimerRef.current = null;
+    }
+  };
   useEffect(() => {
     if (focusClearTimerRef.current) clearTimeout(focusClearTimerRef.current);
     if (!focusedField) return;
@@ -2921,7 +2929,7 @@ function SetRow({
       if (reps && (repsNum == null || !isFinite(repsNum) || repsNum < 0)) throw new Error("Reps must be a whole number");
       if (rpe && (rpeNum == null || !isFinite(rpeNum) || rpeNum < 0 || rpeNum > 10)) throw new Error("RPE must be 0–10");
       const loadUnit = persistedUnitForValue(load, unit, existing);
-      const payload = {
+      const payload = withMemberWorkoutIndexes({
         row_id: rowId,
         client_id: clientId,
         set_index: setIndex,
@@ -2932,7 +2940,7 @@ function SetRow({
         actual_reps: repsNum,
         actual_rpe: rpe || null,
         actual_rpe_num: rpeNum,
-      };
+      }, adapter, workoutId);
       let savedId: string | null = existing?.id ?? null;
       // PostgREST keeps a pooled connection in "current transaction is
       // aborted" (SQLSTATE 25P02) state if a prior statement on the same
@@ -2985,6 +2993,7 @@ function SetRow({
           savedId = (inserted as any)?.id ?? null;
         }
       }
+      await qc.refetchQueries({ queryKey: ["pl-day-results", workoutId] });
       onChange();
       // Block the server-reset effect for 3 s after a successful save so the
       // query refetch triggered by onChange() can never overwrite what the
@@ -3083,21 +3092,20 @@ function SetRow({
   const saveCompletionStatus = async () => {
     if (readonly || !clientId || statusSaving) return;
     const nextCompletedAt = isConfirmed ? null : new Date().toISOString();
-    const payload: Record<string, any> = {
+      let payload: Record<string, any> = {
       row_id: rowId,
       client_id: clientId,
       set_index: setIndex,
+        actual_load: loadNum,
+        actual_load_unit: loadUnit,
+        entered_value: loadNum,
+        entered_unit: loadUnit,
+        actual_reps: repsNum,
+        actual_rpe: rpe || null,
+        actual_rpe_num: rpeNum,
       completed_at: nextCompletedAt,
     };
-    if (adapter?.kind === "member") {
-      const [weekIndexRaw, dayIndexRaw] = String(workoutId ?? "").split(":");
-      const weekIndex = Number(weekIndexRaw);
-      const dayIndex = Number(dayIndexRaw);
-      if (Number.isFinite(weekIndex) && Number.isFinite(dayIndex)) {
-        payload.week_index = weekIndex;
-        payload.day_index = dayIndex;
-      }
-    }
+      payload = withMemberWorkoutIndexes(payload, adapter, workoutId);
     setStatusSaving(true);
     setStatusError(null);
     try {
@@ -3106,7 +3114,7 @@ function SetRow({
           await withStatusTimeout(writeStatusWithAbortRetry(() => adapter.upsertPlRowResultRaw(payload, existing.id)));
         } else {
           await withStatusTimeout(writeStatusWithAbortRetry(async () => {
-            const { error } = await sb.from("pl_row_results").update({ completed_at: nextCompletedAt }).eq("id", existing.id);
+            const { error } = await sb.from("pl_row_results").update(payload).eq("id", existing.id);
             if (error) throw error;
           }));
         }
@@ -3120,8 +3128,8 @@ function SetRow({
           if (error) throw error;
         }));
       }
+      await qc.refetchQueries({ queryKey: ["pl-day-results", workoutId] });
       onChange();
-      qc.invalidateQueries({ queryKey: ["pl-day-results"] });
       if (nextCompletedAt) onSetCompleted?.(setIndex);
     } catch (err: any) {
       const message = err?.message ?? "Set status failed to save";
@@ -3181,7 +3189,7 @@ function SetRow({
     // Allow saving even when prescribedSec is null (e.g. reps_text-detected time exercises)
     if (readonly || !clientId) return;
     const nowIso = opts.completedAt ?? new Date().toISOString();
-    const payload: Record<string, any> = {
+      const payload: Record<string, any> = withMemberWorkoutIndexes({
       row_id: rowId,
       client_id: clientId,
       set_index: setIndex,
@@ -3190,7 +3198,7 @@ function SetRow({
       timer_completed_at: nowIso,
       completion_method: opts.method,
       completed_at: nowIso,
-    };
+      }, adapter, workoutId);
     try {
       if (existing?.id) {
         if (adapter) {
@@ -3207,6 +3215,7 @@ function SetRow({
           if (error) throw error;
         }
       }
+      await qc.refetchQueries({ queryKey: ["pl-day-results", workoutId] });
       onChange();
       if (!existing?.completed_at) onSetCompleted?.(setIndex);
       toast.success(
@@ -3281,7 +3290,7 @@ function SetRow({
             recentlySavedRef.current = true;
             if (recentlySavedTimerRef.current) clearTimeout(recentlySavedTimerRef.current);
             recentlySavedTimerRef.current = setTimeout(() => { recentlySavedRef.current = false; }, 8000);
-            setFocusedField(null);
+            clearEditGuard();
             setRepsChipOpen(false);
           }}
           readOnly={readonly}
@@ -3329,7 +3338,7 @@ function SetRow({
             recentlySavedRef.current = true;
             if (recentlySavedTimerRef.current) clearTimeout(recentlySavedTimerRef.current);
             recentlySavedTimerRef.current = setTimeout(() => { recentlySavedRef.current = false; }, 8000);
-            setFocusedField(null);
+            clearEditGuard();
             setRpeChipOpen(false);
           }}
           readOnly={readonly} disabled={readonly}
@@ -3369,10 +3378,7 @@ function SetRow({
         }}
         onKeyDown={onEnter}
         onBlur={() => {
-          recentlySavedRef.current = true;
-          if (recentlySavedTimerRef.current) clearTimeout(recentlySavedTimerRef.current);
-          recentlySavedTimerRef.current = setTimeout(() => { recentlySavedRef.current = false; }, 8000);
-          setFocusedField(null);
+          clearEditGuard();
         }}
         readOnly={readonly}
         disabled={readonly}
