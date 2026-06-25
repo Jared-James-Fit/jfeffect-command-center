@@ -1,15 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
-import { useNavigate } from "@tanstack/react-router";
-import { useQuery } from "@tanstack/react-query";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { ListChecks } from "lucide-react";
-import { useAuth } from "@/lib/auth";
-import { fetchTasks, QUADRANTS, countOpen, type TaskQuadrant, type TaskScope } from "@/lib/tasks";
+import { type TaskQuadrant } from "@/lib/tasks";
 
-const KEY_ADMIN = "jf-tasks-popup-seen-day";
-const KEY_MM = "jf-tasks-popup-seen-day-mm";
 const ENABLED_KEY_ADMIN = "jf-tasks-popup-enabled-admin";
 const ENABLED_KEY_MM = "jf-tasks-popup-enabled-mm";
 
@@ -50,13 +40,6 @@ export function readQuadStyles(): Record<TaskQuadrant, QuadStyle> {
 }
 export function writeQuadStyles(s: Record<TaskQuadrant, QuadStyle>) {
   try { localStorage.setItem(QUAD_STYLE_KEY, JSON.stringify(s)); } catch {}
-}
-function tintStyle(color: string): React.CSSProperties {
-  return { backgroundColor: `${color}1A`, borderColor: `${color}80` };
-}
-function todayKey(): string {
-  const d = new Date();
-  return `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`;
 }
 
 /** Show a one-shot task summary popup the first time an admin/coach (or media manager) lands in their dashboard per day. */
