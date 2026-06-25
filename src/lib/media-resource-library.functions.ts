@@ -160,7 +160,7 @@ export const createResource = createServerFn({ method: "POST" })
       created_by: context.userId,
     };
     const { data: row, error } = await context.supabase
-      .from("media_resources").insert(payload)
+      .from("media_resources").insert(payload as any)
       .select("id,folder_id,name,description,tags,storage_path,external_url,mime_type,file_size,thumbnail_path,created_by,created_at,updated_at").single();
     if (error) throw new Error(error.message);
     return { resource: row };
