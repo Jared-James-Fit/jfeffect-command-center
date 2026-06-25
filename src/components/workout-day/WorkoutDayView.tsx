@@ -1107,12 +1107,6 @@ function WorkoutDay({
     markInProgress();
   };
 
-  // Sticky general-notes shortcut: scroll to the bottom notes card and focus textarea
-  const generalNotesRef = useRef<HTMLDivElement>(null);
-  const focusGeneralNotes = () => {
-    generalNotesRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
-    setTimeout(() => generalNotesRef.current?.querySelector("textarea")?.focus(), 350);
-  };
 
   if (!day) {
     return (
@@ -1457,7 +1451,6 @@ function WorkoutDay({
                 <Maximize2 className="h-5 w-5" /> Full Screen
               </Button>
             )}
-            <SaveStatus state={metaSave.state} savedAt={metaSave.savedAt} />
           </div>
         </div>
 
@@ -1611,7 +1604,7 @@ function WorkoutDay({
              both the completion card and the finish button are visible at once.
              This was the root cause of the Nicolas Galli stuck-state bug. */}
         {!readonly && !completion?.completed_at && (
-          <Card ref={generalNotesRef} className="p-4">
+          <Card className="p-4">
             <ActionButton
               className="w-full"
               loadingLabel="Saving…"
@@ -1642,7 +1635,6 @@ function WorkoutDay({
             </ActionButton>
           </Card>
         )}
-
 
         {completion?.completed_at && client?.id && (
           <CompletedWorkoutActions
