@@ -29,10 +29,10 @@ const DRAFT_PREFIX = "lov:draft:";
 const defaultEquals = <T,>(a: T, b: T) => JSON.stringify(a) === JSON.stringify(b);
 
 /**
- * Manual-save draft helper. Emergency safety lock 2026-06-25:
- * this hook must not schedule background writes on value changes, mount,
- * hydration, reconnect, failures, or unmount. Only explicit flush()/retry()
- * calls may write to the backend.
+ * Manual-save helper. Emergency safety lock 2026-06-25:
+ * this hook must not persist anything on value changes, mount, hydration,
+ * reconnect, failures, or unmount. Only explicit flush()/retry() calls may
+ * write to the backend or local draft storage.
  */
 export function useAutosave<T>({
   key,
@@ -148,8 +148,8 @@ export function useAutosave<T>({
     }
   }, [equals, online, writeDraft, clearDraft, permanentFailureAfter, timeoutMs]);
 
-  // Track value changes for explicit manual saves only. Do not schedule any
-  // backend writes from hydration, typing, unit toggles, reconnects, or refetches.
+  // Track value changes for explicit manual saves only. Do not persist anything
+  // from hydration, typing, unit toggles, reconnects, or refetches.
   useEffect(() => {
     pendingValue.current = value;
     if (!lastSavedSet.current) {
@@ -157,7 +157,6 @@ export function useAutosave<T>({
       lastSavedSet.current = true;
       return;
     }
-    writeDraft(value);
     setState((s) => (s === "saving" || s === "error" || equals(lastSaved.current, value) ? s : "idle"));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [value, enabled]);

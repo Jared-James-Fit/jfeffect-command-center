@@ -7,6 +7,7 @@ describe("emergency autosave lock", () => {
 
     expect(source).not.toContain("setTimeout(() => { void doSave(); }");
     expect(source).not.toContain("schedule();");
+    expect(source).not.toContain("writeDraft(value);");
     expect(source).not.toContain("if (online && state === \"offline\") schedule()");
     expect(source).not.toContain("void doSave();\n    }\n  }, [doSave, equals]);");
   });
