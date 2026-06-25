@@ -102,7 +102,18 @@ export function useAutosave<T>({
     try { window.localStorage.removeItem(DRAFT_PREFIX + key); } catch {}
   }, [key]);
 
+  const scheduleSave = useCallback((ms?: number) => {
+    if (timer.current) { clearTimeout(timer.current); timer.current = null; }
+    if (!enabledRef.current) return;
+    const wait = Math.max(0, ms ?? delayRef.current);
+    timer.current = setTimeout(() => {
+      timer.current = null;
+      void doSaveRef.current?.();
+    }, wait);
+  }, []);
+
   const doSave = useCallback(async () => {
+    if (!enabledRef.current) return;
     if (inflight.current) return;
     const v = pendingValue.current;
     if (lastSavedSet.current && equals(lastSaved.current, v)) {
@@ -143,10 +154,9 @@ export function useAutosave<T>({
       reportedFailRef.current = false;
       setSavedAt(Date.now());
       clearDraft();
-      // If value changed mid-save, leave it pending for the next explicit
-      // Save tap. Never schedule a follow-up write automatically.
       if (!equals(pendingValue.current, v)) {
         setState("idle");
+        scheduleSave(delayRef.current);
       } else {
         setState("saved");
       }
@@ -154,18 +164,21 @@ export function useAutosave<T>({
       console.error("[useAutosave] save failed", err);
       setState("error");
       writeDraft(v);
-      // Manual-save mode: never retry in the background. Retrying requires an
-      // explicit user action via retry()/flush(). This prevents hydration/page
-      // load from repeatedly overwriting workout rows.
       retryAttempt.current = Math.min(retryAttempt.current + 1, 5);
       if (retryAttempt.current >= permanentFailureAfter && !reportedFailRef.current) {
         reportedFailRef.current = true;
         try { onPermFailRef.current?.({ value: v, attempt: retryAttempt.current, error: err }); } catch {}
       }
+      const retryDelay = Math.min(30_000, 1000 * 2 ** retryAttempt.current);
+      scheduleSave(retryDelay);
     } finally {
       inflight.current = false;
     }
-  }, [equals, online, writeDraft, clearDraft, permanentFailureAfter, timeoutMs]);
+  }, [equals, online, writeDraft, clearDraft, permanentFailureAfter, timeoutMs, scheduleSave]);
+
+  useEffect(() => {
+    doSaveRef.current = doSave;
+  }, [doSave]);
 
   // Track value changes for explicit manual saves only. Do not persist anything
   // from hydration, typing, unit toggles, reconnects, or refetches.
