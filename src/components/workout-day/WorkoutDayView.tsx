@@ -49,6 +49,7 @@ import { useAuth } from "@/lib/auth";
 import { useClientImpersonation } from "@/lib/client-impersonation";
 import { writeSetEditAudit } from "@/lib/logged-set-audit";
 import { resolveExerciseUnit, modeUnit, saveExerciseUnitPref, type WUnit } from "@/lib/exercise-unit-prefs";
+import { persistedUnitForValue } from "@/lib/workout-unit-persistence";
 import { WorkoutUndoProvider, useWorkoutUndo, UndoButton } from "@/lib/workout-undo";
 import { WorkoutSyncBanner } from "@/components/workout-sync-banner";
 import { writePlanCache, cachedInitialData } from "@/lib/workout-plan-cache";
@@ -2781,26 +2782,8 @@ function SetRow({
   // Forward-ref to the autosave handle so effects defined above can call
   // markClean() without a TDZ error.
   const saveRef = useRef<ReturnType<typeof useAutosave<typeof value>> | null>(null);
-  const persistedUnitForValue = (loadValue: string, nextUnit: "kg" | "lb"): "kg" | "lb" => {
-    const existingUnit =
-      existing?.entered_unit === "kg" || existing?.entered_unit === "lb"
-        ? existing.entered_unit
-        : existing?.actual_load_unit === "kg" || existing?.actual_load_unit === "lb"
-          ? existing.actual_load_unit
-          : null;
-    if (!existing) return nextUnit;
-    const nextLoad = loadValue ? Number(loadValue) : null;
-    const currentLoad = existing.actual_load != null ? Number(existing.actual_load) : null;
-    const loadUnchanged =
-      nextLoad == null && currentLoad == null
-        ? true
-        : nextLoad != null && currentLoad != null && Math.abs(nextLoad - currentLoad) < 0.0001;
-    // If the raw number did not change, preserve the original entered unit.
-    // This prevents reps/RPE/status edits after a display-unit toggle from
-    // rewriting actual_load_unit and causing database normalization to convert
-    // historical values under the wrong unit.
-    return loadUnchanged ? (existingUnit ?? nextUnit) : nextUnit;
-  };
+  // persistedUnitForValue is a pure helper — see src/lib/workout-unit-persistence.ts
+  // for the full contract and regression-test coverage.
   const save = useAutosave({
     key: draftKey,
     value,
