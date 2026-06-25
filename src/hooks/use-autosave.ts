@@ -29,10 +29,12 @@ const DRAFT_PREFIX = "lov:draft:";
 const defaultEquals = <T,>(a: T, b: T) => JSON.stringify(a) === JSON.stringify(b);
 
 /**
- * Manual-save helper. Emergency safety lock 2026-06-25:
- * this hook must not persist anything on value changes, mount, hydration,
- * reconnect, failures, or unmount. Only explicit flush()/retry() calls may
- * write to the backend or local draft storage.
+ * Debounced autosave helper with a local draft fallback.
+ *
+ * Contract for workout rows: callers gate `enabled` while an input is focused;
+ * once focus clears, the latest value is saved after `delay`. Failed saves keep
+ * the draft locally and retry with backoff so transient backend/network issues
+ * do not leave the row permanently stuck.
  */
 export function useAutosave<T>({
   key,
@@ -53,8 +55,13 @@ export function useAutosave<T>({
   const retryAttempt = useRef(0);
   const pendingValue = useRef<T>(value);
   const inflight = useRef(false);
+  const enabledRef = useRef(enabled);
+  const delayRef = useRef(delay);
+  const doSaveRef = useRef<(() => Promise<void>) | null>(null);
   const onSaveRef = useRef(onSave);
   onSaveRef.current = onSave;
+  enabledRef.current = enabled;
+  delayRef.current = delay;
   const onPermFailRef = useRef(onPermanentFailure);
   onPermFailRef.current = onPermanentFailure;
   const reportedFailRef = useRef(false);
