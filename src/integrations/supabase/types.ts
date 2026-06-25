@@ -7649,6 +7649,124 @@ export type Database = {
           },
         ]
       }
+      media_draft_versions: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          draft_id: string
+          id: string
+          snapshot: Json
+          version: number
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          draft_id: string
+          id?: string
+          snapshot: Json
+          version: number
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          draft_id?: string
+          id?: string
+          snapshot?: Json
+          version?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "media_draft_versions_draft_id_fkey"
+            columns: ["draft_id"]
+            isOneToOne: false
+            referencedRelation: "media_drafts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      media_drafts: {
+        Row: {
+          archived_at: string | null
+          assignee: string | null
+          body: string | null
+          campaign: string | null
+          caption: string | null
+          content_pillar: string | null
+          converted_content_id: string | null
+          created_at: string
+          created_by: string | null
+          cta: string | null
+          current_version: number
+          draft_type: string
+          hook: string | null
+          id: string
+          is_archived: boolean
+          linked_asset_ids: string[]
+          notes: string | null
+          platform: string | null
+          reference_links: Json
+          status: string
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          archived_at?: string | null
+          assignee?: string | null
+          body?: string | null
+          campaign?: string | null
+          caption?: string | null
+          content_pillar?: string | null
+          converted_content_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          cta?: string | null
+          current_version?: number
+          draft_type?: string
+          hook?: string | null
+          id?: string
+          is_archived?: boolean
+          linked_asset_ids?: string[]
+          notes?: string | null
+          platform?: string | null
+          reference_links?: Json
+          status?: string
+          title?: string
+          updated_at?: string
+        }
+        Update: {
+          archived_at?: string | null
+          assignee?: string | null
+          body?: string | null
+          campaign?: string | null
+          caption?: string | null
+          content_pillar?: string | null
+          converted_content_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          cta?: string | null
+          current_version?: number
+          draft_type?: string
+          hook?: string | null
+          id?: string
+          is_archived?: boolean
+          linked_asset_ids?: string[]
+          notes?: string | null
+          platform?: string | null
+          reference_links?: Json
+          status?: string
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "media_drafts_converted_content_id_fkey"
+            columns: ["converted_content_id"]
+            isOneToOne: false
+            referencedRelation: "media_content_records"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       media_drive_settings: {
         Row: {
           created_at: string
@@ -8069,6 +8187,143 @@ export type Database = {
           urgent_flag?: boolean
         }
         Relationships: []
+      }
+      media_templates: {
+        Row: {
+          archived_at: string | null
+          attached_campaign: string | null
+          body: string | null
+          category: string
+          created_at: string
+          created_by: string | null
+          id: string
+          is_archived: boolean
+          metadata: Json
+          tags: string[]
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          archived_at?: string | null
+          attached_campaign?: string | null
+          body?: string | null
+          category: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          is_archived?: boolean
+          metadata?: Json
+          tags?: string[]
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          archived_at?: string | null
+          attached_campaign?: string | null
+          body?: string | null
+          category?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          is_archived?: boolean
+          metadata?: Json
+          tags?: string[]
+          title?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      media_testimonials: {
+        Row: {
+          after_measurement: string | null
+          archived_at: string | null
+          before_measurement: string | null
+          campaign: string | null
+          client_name: string
+          connected_page: string | null
+          converted_content_id: string | null
+          created_at: string
+          created_by: string | null
+          date_received: string | null
+          headline: string | null
+          id: string
+          is_archived: boolean
+          media_resource_ids: string[]
+          notes: string | null
+          permission_notes: string | null
+          permission_status: string
+          quote: string | null
+          result: string | null
+          source: string | null
+          tags: string[]
+          testimonial_type: string
+          timeframe: string | null
+          updated_at: string
+          visibility: string
+        }
+        Insert: {
+          after_measurement?: string | null
+          archived_at?: string | null
+          before_measurement?: string | null
+          campaign?: string | null
+          client_name: string
+          connected_page?: string | null
+          converted_content_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          date_received?: string | null
+          headline?: string | null
+          id?: string
+          is_archived?: boolean
+          media_resource_ids?: string[]
+          notes?: string | null
+          permission_notes?: string | null
+          permission_status?: string
+          quote?: string | null
+          result?: string | null
+          source?: string | null
+          tags?: string[]
+          testimonial_type?: string
+          timeframe?: string | null
+          updated_at?: string
+          visibility?: string
+        }
+        Update: {
+          after_measurement?: string | null
+          archived_at?: string | null
+          before_measurement?: string | null
+          campaign?: string | null
+          client_name?: string
+          connected_page?: string | null
+          converted_content_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          date_received?: string | null
+          headline?: string | null
+          id?: string
+          is_archived?: boolean
+          media_resource_ids?: string[]
+          notes?: string | null
+          permission_notes?: string | null
+          permission_status?: string
+          quote?: string | null
+          result?: string | null
+          source?: string | null
+          tags?: string[]
+          testimonial_type?: string
+          timeframe?: string | null
+          updated_at?: string
+          visibility?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "media_testimonials_converted_content_id_fkey"
+            columns: ["converted_content_id"]
+            isOneToOne: false
+            referencedRelation: "media_content_records"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       medical_clearance_documents: {
         Row: {

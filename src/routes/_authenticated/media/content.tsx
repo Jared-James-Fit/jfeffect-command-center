@@ -1,173 +1,260 @@
-import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useMemo } from "react";
-import { z } from "zod";
-import { useQuery } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
+import { createFileRoute } from "@tanstack/react-router";
+import { useMemo, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
+import { MediaHeader } from "@/components/media/media-header";
+import { useContentDrawer } from "@/components/media/content-drawer";
 import { Card } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { TasksPage as SharedTasksPage } from "@/components/tasks/tasks-page";
-import { ShareToolbar } from "@/components/sales/share-toolbar";
-import { ExternalLink, FolderOpen, Sparkles, Upload } from "lucide-react";
-
-const TABS = ["inbox", "tasks", "campaigns", "pages", "library", "resources", "testimonials", "archive"] as const;
-type Tab = typeof TABS[number];
+import { Checkbox } from "@/components/ui/checkbox";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  listContent, createContent, archiveContent, patchContent, deleteContent,
+  PRODUCTION_STAGES, STAGE_LABELS, APPROVAL_LABELS, type ContentRecord, type ProductionStatus,
+} from "@/lib/media-content";
+import {
+  Plus, LayoutGrid, List as ListIcon, Archive, Trash2, ChevronDown,
+} from "lucide-react";
+import {
+  DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem,
+} from "@/components/ui/dropdown-menu";
 
 export const Route = createFileRoute("/_authenticated/media/content")({
-  validateSearch: (s) => z.object({ tab: z.enum(TABS).optional() }).parse(s),
-  component: ContentWorkspace,
+  component: ContentLibraryPage,
 });
 
-function ContentWorkspace() {
-  const { tab } = Route.useSearch();
-  const navigate = useNavigate();
-  const active: Tab = tab ?? "inbox";
-  const setTab = (t: Tab) => navigate({ to: "/media/content", search: { tab: t }, replace: true });
+type View = "grid" | "list";
+type SortKey = "updated" | "due" | "publish" | "title";
 
-  return (
-    <div className="mx-auto max-w-6xl space-y-4 p-4 md:p-6">
-      <header>
-        <h1 className="text-2xl md:text-3xl font-black tracking-tight">Content</h1>
-        <p className="text-sm text-muted-foreground">Marketing media, tasks, campaigns, and resources.</p>
-      </header>
-      <Tabs value={active} onValueChange={(v) => setTab(v as Tab)}>
-        <TabsList className="flex h-auto flex-wrap">
-          <TabsTrigger value="inbox">Inbox</TabsTrigger>
-          <TabsTrigger value="tasks">Tasks</TabsTrigger>
-          <TabsTrigger value="campaigns">Campaigns</TabsTrigger>
-          <TabsTrigger value="pages">Pages</TabsTrigger>
-          <TabsTrigger value="library">Library</TabsTrigger>
-          <TabsTrigger value="resources">Resources</TabsTrigger>
-          <TabsTrigger value="testimonials">Testimonials</TabsTrigger>
-          <TabsTrigger value="archive">Archive</TabsTrigger>
-        </TabsList>
-        <TabsContent value="inbox" className="mt-4"><InboxTab /></TabsContent>
-        <TabsContent value="tasks" className="mt-4">
-          <SharedTasksPage title="Tasks" subtitle="Media work to do." storagePrefix="jf-media" scope="media" />
-        </TabsContent>
-        <TabsContent value="campaigns" className="mt-4"><CampaignsTab /></TabsContent>
-        <TabsContent value="pages" className="mt-4"><PagesTab /></TabsContent>
-        <TabsContent value="library" className="mt-4"><LibraryTab /></TabsContent>
-        <TabsContent value="resources" className="mt-4"><ResourcesTab /></TabsContent>
-        <TabsContent value="testimonials" className="mt-4"><TestimonialsTab /></TabsContent>
-        <TabsContent value="archive" className="mt-4"><ArchiveTab /></TabsContent>
-      </Tabs>
-    </div>
-  );
-}
+function ContentLibraryPage() {
+  const qc = useQueryClient();
+  const { open } = useContentDrawer();
+  const [view, setView] = useState<View>("grid");
+  const [filter, setFilter] = useState("");
+  const [platform, setPlatform] = useState<string>("all");
+  const [status, setStatus] = useState<string>("all");
+  const [approval, setApproval] = useState<string>("all");
+  const [sort, setSort] = useState<SortKey>("updated");
+  const [archived, setArchived] = useState(false);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
 
-function InboxTab() {
   const { data, isLoading } = useQuery({
-    queryKey: ["media-inbox-mm"],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("media_items")
-        .select("id, file_name, media_type, created_at, thumbnail_url, drive_url, marketing_visibility")
-        .in("marketing_visibility", ["marketing", "public"])
-        .order("created_at", { ascending: false });
-      if (error) throw error;
-      return data ?? [];
-    },
+    queryKey: ["media-content-records", "library", archived],
+    queryFn: () => listContent({ archived, limit: 1000 }),
+    staleTime: 15_000,
   });
+
+  const filtered = useMemo(() => {
+    const q = filter.toLowerCase().trim();
+    let rows = (data ?? []).filter((r) => {
+      if (status !== "all" && r.production_status !== status) return false;
+      if (approval !== "all" && r.approval_status !== approval) return false;
+      if (platform !== "all" && (r.platform ?? "") !== platform) return false;
+      if (!q) return true;
+      return (
+        r.title.toLowerCase().includes(q) ||
+        (r.description ?? "").toLowerCase().includes(q) ||
+        (r.platform ?? "").toLowerCase().includes(q) ||
+        (r.pillar ?? "").toLowerCase().includes(q)
+      );
+    });
+    rows.sort((a, b) => {
+      if (sort === "title") return a.title.localeCompare(b.title);
+      if (sort === "due") return (a.due_date ?? "9999").localeCompare(b.due_date ?? "9999");
+      if (sort === "publish") return (a.publish_date ?? "9999").localeCompare(b.publish_date ?? "9999");
+      return (b.updated_at ?? "").localeCompare(a.updated_at ?? "");
+    });
+    return rows;
+  }, [data, filter, status, approval, platform, sort]);
+
+  const platforms = useMemo(() => {
+    const s = new Set<string>();
+    (data ?? []).forEach((r) => { if (r.platform) s.add(r.platform); });
+    return Array.from(s).sort();
+  }, [data]);
+
+  const allOnPage = filtered.map((r) => r.id);
+  const allSelected = allOnPage.length > 0 && allOnPage.every((id) => selected.has(id));
+
+  function toggleAll() {
+    setSelected((cur) => {
+      const next = new Set(cur);
+      if (allSelected) allOnPage.forEach((id) => next.delete(id));
+      else allOnPage.forEach((id) => next.add(id));
+      return next;
+    });
+  }
+  function toggleOne(id: string) {
+    setSelected((cur) => {
+      const next = new Set(cur);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  }
+
+  async function onNew() {
+    const c = await createContent({ title: "Untitled content", production_status: "idea" });
+    qc.invalidateQueries({ queryKey: ["media-content-records"] });
+    open(c.id);
+  }
+
+  async function bulkArchive(value: boolean) {
+    if (selected.size === 0) return;
+    await archiveContent(Array.from(selected), value);
+    setSelected(new Set());
+    toast.success(value ? "Archived" : "Restored");
+    qc.invalidateQueries({ queryKey: ["media-content-records"] });
+  }
+  async function bulkDelete() {
+    if (selected.size === 0) return;
+    if (!confirm(`Permanently delete ${selected.size} content item(s)?`)) return;
+    await Promise.all(Array.from(selected).map(deleteContent));
+    setSelected(new Set());
+    toast.success("Deleted");
+    qc.invalidateQueries({ queryKey: ["media-content-records"] });
+  }
+  async function bulkStatus(s: ProductionStatus) {
+    await Promise.all(Array.from(selected).map((id) => patchContent(id, { production_status: s } as any)));
+    setSelected(new Set());
+    qc.invalidateQueries({ queryKey: ["media-content-records"] });
+  }
+  async function bulkSetField(field: "campaign_id" | "assignee_id", value: string) {
+    await Promise.all(Array.from(selected).map((id) => patchContent(id, { [field]: value || null } as any)));
+    setSelected(new Set());
+    qc.invalidateQueries({ queryKey: ["media-content-records"] });
+  }
+
   return (
-    <div className="space-y-3">
-      <p className="text-sm text-muted-foreground">Files tagged marketing or public.</p>
-      {isLoading && <div className="text-sm text-muted-foreground">Loading…</div>}
-      {!isLoading && (data ?? []).length === 0 && (
-        <Card className="p-4 text-sm text-muted-foreground">No marketing media yet.</Card>
+    <div className="mx-auto w-full max-w-7xl p-4 md:p-6">
+      <MediaHeader
+        title="Content Library"
+        description="Every content project — drafts, in-production, scheduled, and published."
+        actions={
+          <Button size="sm" onClick={onNew}>
+            <Plus className="mr-1.5 h-4 w-4" /> New Content
+          </Button>
+        }
+      />
+      <div className="mb-3 flex flex-wrap items-center gap-2">
+        <Input
+          value={filter}
+          onChange={(e) => setFilter(e.target.value)}
+          placeholder="Search content…"
+          className="h-9 w-64"
+        />
+        <Select value={status} onValueChange={setStatus}>
+          <SelectTrigger className="h-9 w-[150px]"><SelectValue placeholder="Status" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All statuses</SelectItem>
+            {PRODUCTION_STAGES.map((s) => (
+              <SelectItem key={s} value={s}>{STAGE_LABELS[s]}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <Select value={approval} onValueChange={setApproval}>
+          <SelectTrigger className="h-9 w-[160px]"><SelectValue placeholder="Approval" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All approvals</SelectItem>
+            {Object.entries(APPROVAL_LABELS).map(([k, v]) => (
+              <SelectItem key={k} value={k}>{v}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <Select value={platform} onValueChange={setPlatform}>
+          <SelectTrigger className="h-9 w-[140px]"><SelectValue placeholder="Platform" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All platforms</SelectItem>
+            {platforms.map((p) => <SelectItem key={p} value={p}>{p}</SelectItem>)}
+          </SelectContent>
+        </Select>
+        <Select value={sort} onValueChange={(v) => setSort(v as SortKey)}>
+          <SelectTrigger className="h-9 w-[140px]"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="updated">Recently updated</SelectItem>
+            <SelectItem value="due">Due date</SelectItem>
+            <SelectItem value="publish">Publish date</SelectItem>
+            <SelectItem value="title">Title (A→Z)</SelectItem>
+          </SelectContent>
+        </Select>
+        <Button
+          variant={archived ? "default" : "outline"}
+          size="sm"
+          onClick={() => setArchived((v) => !v)}
+        >
+          <Archive className="mr-1 h-4 w-4" /> {archived ? "Archived" : "Active"}
+        </Button>
+        <div className="ml-auto flex gap-1">
+          <Button variant={view === "grid" ? "default" : "outline"} size="icon" onClick={() => setView("grid")} aria-label="Grid">
+            <LayoutGrid className="h-4 w-4" />
+          </Button>
+          <Button variant={view === "list" ? "default" : "outline"} size="icon" onClick={() => setView("list")} aria-label="List">
+            <ListIcon className="h-4 w-4" />
+          </Button>
+        </div>
+      </div>
+
+      <div className="mb-3 flex flex-wrap items-center gap-2 rounded-md border bg-muted/40 px-3 py-2 text-sm">
+        <Checkbox checked={allSelected} onCheckedChange={toggleAll} aria-label="Select all" />
+        <span className="text-muted-foreground">
+          {selected.size > 0 ? `${selected.size} selected` : "Select all on page"}
+        </span>
+        {selected.size > 0 && (
+          <div className="ml-auto flex flex-wrap gap-2">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button size="sm" variant="outline">
+                  Bulk status <ChevronDown className="ml-1 h-3 w-3" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent>
+                {PRODUCTION_STAGES.map((s) => (
+                  <DropdownMenuItem key={s} onSelect={() => bulkStatus(s)}>
+                    {STAGE_LABELS[s]}
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+            <BulkInline label="Bulk assign" onSubmit={(v) => bulkSetField("assignee_id", v)} placeholder="user id" />
+            <BulkInline label="Bulk campaign" onSubmit={(v) => bulkSetField("campaign_id", v)} placeholder="campaign id" />
+            <Button size="sm" variant="outline" onClick={() => bulkArchive(!archived)}>
+              <Archive className="mr-1 h-4 w-4" /> {archived ? "Restore" : "Archive"}
+            </Button>
+            <Button size="sm" variant="destructive" onClick={bulkDelete}>
+              <Trash2 className="mr-1 h-4 w-4" /> Delete
+            </Button>
+          </div>
+        )}
+      </div>
+
+      {isLoading && <Card className="p-6 text-sm text-muted-foreground">Loading…</Card>}
+      {!isLoading && filtered.length === 0 && (
+        <Card className="p-8 text-center text-sm text-muted-foreground">No content. Create one to begin.</Card>
       )}
-      <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-3">
-        {(data ?? []).map((m: any) => (
-          <Card key={m.id} className="p-3">
-            {m.thumbnail_url && <img loading="lazy" src={m.thumbnail_url} alt="" className="mb-2 h-32 w-full rounded object-cover" />}
-            <div className="truncate font-medium text-sm">{m.file_name || m.media_type}</div>
-            <div className="text-xs text-muted-foreground">{new Date(m.created_at).toLocaleDateString()}</div>
-          </Card>
-        ))}
-      </div>
-    </div>
-  );
-}
 
-function CampaignsTab() {
-  return (
-    <div className="space-y-3">
-      <Card className="p-4 text-sm text-muted-foreground">
-        Active promo campaigns. Connects to sales pages and broadcast drafts.
-      </Card>
-      <div className="grid gap-3 md:grid-cols-2">
-        <Card className="p-4 space-y-2">
-          <h3 className="font-semibold text-sm flex items-center gap-2"><Sparkles className="h-4 w-4" /> Promo Links</h3>
-          <p className="text-xs text-muted-foreground">Public share links for /membership and /coaching.</p>
-          <ShareToolbar slug="join" />
-          <ShareToolbar slug="coaching" />
-        </Card>
-      </div>
-    </div>
-  );
-}
-
-function PagesTab() {
-  return (
-    <div className="grid gap-3 md:grid-cols-2">
-      <Link to="/media/sales/coaching">
-        <Card className="p-4 flex items-center gap-3 hover:bg-accent">
-          <ExternalLink className="h-5 w-5 text-primary" />
-          <span className="text-sm font-medium">Coaching Sales Page</span>
-        </Card>
-      </Link>
-      <Link to="/media/sales/membership">
-        <Card className="p-4 flex items-center gap-3 hover:bg-accent">
-          <ExternalLink className="h-5 w-5 text-primary" />
-          <span className="text-sm font-medium">JF Membership Page</span>
-        </Card>
-      </Link>
-    </div>
-  );
-}
-
-function LibraryTab() {
-  return (
-    <Card className="p-4 text-sm text-muted-foreground space-y-2">
-      <div className="flex items-center gap-2 font-medium text-foreground"><Upload className="h-4 w-4" /> Uploads</div>
-      Upload tools for marketing/public assets coming soon. For now, ask admin to upload and tag files as marketing or public.
-    </Card>
-  );
-}
-
-function ResourcesTab() {
-  return (
-    <Card className="p-4 space-y-2">
-      <div className="flex items-center gap-2 font-medium"><FolderOpen className="h-4 w-4" /> Resource Library</div>
-      <p className="text-sm text-muted-foreground">Private files for the media manager team — folders, comments, and uploads.</p>
-      <Link to="/media/resources" className="text-sm underline text-primary">Open library →</Link>
-    </Card>
-  );
-}
-
-function TestimonialsTab() {
-  const { data } = useQuery({
-    queryKey: ["media-testimonials"],
-    queryFn: async () => {
-      const { data } = await supabase
-        .from("media_items")
-        .select("id, file_name, thumbnail_url, drive_url, created_at")
-        .in("marketing_visibility", ["marketing", "public"])
-        .ilike("media_type", "%testimonial%");
-      return data ?? [];
-    },
-  });
-  return (
-    <div>
-      {(data ?? []).length === 0 ? (
-        <Card className="p-4 text-sm text-muted-foreground">No testimonials tagged yet.</Card>
+      {view === "grid" ? (
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+          {filtered.map((r) => (
+            <ContentCard
+              key={r.id}
+              record={r}
+              selected={selected.has(r.id)}
+              onSelect={() => toggleOne(r.id)}
+              onOpen={() => open(r.id)}
+            />
+          ))}
+        </div>
       ) : (
-        <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-3">
-          {(data ?? []).map((m: any) => (
-            <Card key={m.id} className="p-3">
-              <div className="truncate font-medium text-sm">{m.file_name}</div>
-              {m.drive_url && <a href={m.drive_url} target="_blank" rel="noreferrer" className="text-xs underline">Open</a>}
-            </Card>
+        <div className="rounded-md border divide-y">
+          {filtered.map((r) => (
+            <ContentRow
+              key={r.id}
+              record={r}
+              selected={selected.has(r.id)}
+              onSelect={() => toggleOne(r.id)}
+              onOpen={() => open(r.id)}
+            />
           ))}
         </div>
       )}
@@ -175,31 +262,74 @@ function TestimonialsTab() {
   );
 }
 
-function ArchiveTab() {
-  const { data, isLoading } = useQuery({
-    queryKey: ["media-archives-mm"],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("media_archives")
-        .select("id, file_name, drive_url, created_at, marketing_visibility")
-        .in("marketing_visibility", ["marketing", "public"])
-        .order("created_at", { ascending: false });
-      if (error) throw error;
-      return data ?? [];
-    },
-  });
+function ContentCard({
+  record, selected, onSelect, onOpen,
+}: { record: ContentRecord; selected: boolean; onSelect: () => void; onOpen: () => void }) {
   return (
-    <div className="space-y-2">
-      {isLoading && <div className="text-sm text-muted-foreground">Loading…</div>}
-      {!isLoading && (data ?? []).length === 0 && (
-        <Card className="p-4 text-sm text-muted-foreground">No archived marketing media yet.</Card>
-      )}
-      {(data ?? []).map((m: any) => (
-        <Card key={m.id} className="p-3 flex items-center justify-between">
-          <span className="truncate">{m.file_name || "Untitled"}</span>
-          {m.drive_url && <a href={m.drive_url} target="_blank" rel="noreferrer" className="text-xs underline">Open</a>}
-        </Card>
-      ))}
+    <Card className="overflow-hidden">
+      <div className="relative aspect-[16/9] bg-muted">
+        {record.thumbnail_url ? (
+          <img src={record.thumbnail_url} alt="" className="h-full w-full object-cover" loading="lazy" />
+        ) : (
+          <div className="flex h-full items-center justify-center text-xs text-muted-foreground">No thumbnail</div>
+        )}
+        <div className="absolute left-2 top-2">
+          <Checkbox checked={selected} onCheckedChange={onSelect} aria-label="Select" className="bg-background/80" />
+        </div>
+      </div>
+      <button onClick={onOpen} className="block w-full p-3 text-left hover:bg-accent">
+        <div className="truncate font-medium text-sm">{record.title}</div>
+        <div className="mt-1 flex flex-wrap gap-1 text-[10px]">
+          <Badge variant="secondary">{STAGE_LABELS[record.production_status as ProductionStatus] ?? record.production_status}</Badge>
+          <Badge variant="outline">{APPROVAL_LABELS[record.approval_status as keyof typeof APPROVAL_LABELS] ?? record.approval_status}</Badge>
+          {record.platform && <Badge variant="outline">{record.platform}</Badge>}
+        </div>
+        <div className="mt-2 grid grid-cols-2 gap-x-2 gap-y-0.5 text-[11px] text-muted-foreground">
+          {record.campaign_id && <span className="truncate">Campaign</span>}
+          {record.assignee_id && <span className="truncate">Assigned</span>}
+          {record.due_date && <span>Due {record.due_date}</span>}
+          {record.publish_date && <span>Publish {record.publish_date}</span>}
+          <span className="col-span-2">{(record.linked_task_ids?.length ?? 0)} task(s)</span>
+        </div>
+      </button>
+    </Card>
+  );
+}
+
+function ContentRow({
+  record, selected, onSelect, onOpen,
+}: { record: ContentRecord; selected: boolean; onSelect: () => void; onOpen: () => void }) {
+  return (
+    <div className="flex items-center gap-3 p-3 hover:bg-accent">
+      <Checkbox checked={selected} onCheckedChange={onSelect} aria-label="Select" />
+      <button onClick={onOpen} className="flex-1 min-w-0 text-left">
+        <div className="truncate text-sm font-medium">{record.title}</div>
+        <div className="text-xs text-muted-foreground truncate">
+          {STAGE_LABELS[record.production_status as ProductionStatus] ?? record.production_status}
+          {" · "}
+          {APPROVAL_LABELS[record.approval_status as keyof typeof APPROVAL_LABELS] ?? record.approval_status}
+          {record.platform ? ` · ${record.platform}` : ""}
+          {record.due_date ? ` · Due ${record.due_date}` : ""}
+          {record.publish_date ? ` · Publish ${record.publish_date}` : ""}
+        </div>
+      </button>
+    </div>
+  );
+}
+
+function BulkInline({
+  label, onSubmit, placeholder,
+}: { label: string; onSubmit: (v: string) => void; placeholder?: string }) {
+  const [open, setOpen] = useState(false);
+  const [v, setV] = useState("");
+  if (!open) {
+    return <Button size="sm" variant="outline" onClick={() => setOpen(true)}>{label}</Button>;
+  }
+  return (
+    <div className="flex items-center gap-1">
+      <Input value={v} onChange={(e) => setV(e.target.value)} placeholder={placeholder} className="h-8 w-40" />
+      <Button size="sm" onClick={() => { onSubmit(v); setOpen(false); setV(""); }}>Apply</Button>
+      <Button size="sm" variant="ghost" onClick={() => { setOpen(false); setV(""); }}>Cancel</Button>
     </div>
   );
 }
