@@ -1177,6 +1177,10 @@ function WorkoutDay({
                       value={actualMin}
                       onChange={(e) => setActualMin(e.target.value)}
                     />
+                    <Button type="button" variant="outline" size="sm" onClick={() => void metaSave.flush()}>
+                      <Save className="h-4 w-4" />
+                      Save
+                    </Button>
                     <ActionButton
                       loadingLabel="Saving…"
                       successLabel="Finish Workout"
@@ -1526,6 +1530,10 @@ function WorkoutDay({
               value={actualMin}
               onChange={(e) => setActualMin(e.target.value)}
             />
+            <Button type="button" variant="outline" size="sm" onClick={() => void metaSave.flush()}>
+              <Save className="h-4 w-4" />
+              Save
+            </Button>
             <ActionButton
               loadingLabel="Saving…"
               successLabel="Finish Workout"
@@ -1539,9 +1547,8 @@ function WorkoutDay({
                   return;
                 }
                 await metaSave.flush();
-        await metaSave.flush();
-        // Ensure a draft row + started_at/in_progress_at exist before the
-        // complete sheet opens. startWorkout is idempotent.
+                // Ensure a draft row + started_at/in_progress_at exist before the
+                // complete sheet opens. startWorkout is idempotent.
                 try {
                   await startWorkoutSrv({ data: { kind: "client", dayId } });
                 } catch (err) {
