@@ -2805,7 +2805,7 @@ function SetRow({
       const loadNum = value.load ? Number(value.load) : null;
       const repsNum = value.reps ? parseInt(value.reps, 10) : null;
       const rpeNum = value.rpe ? Number(value.rpe) : null;
-      const loadUnit = persistedUnitForValue(value.load, value.unit);
+      const loadUnit = persistedUnitForValue(value.load, value.unit, existing);
       enqueueOfflineWrite({
         id: `portal_set:${rowId}:${clientId}:${setIndex}`,
         label: `Saved set ${setIndex}`,
@@ -2839,7 +2839,7 @@ function SetRow({
       if (load && (loadNum == null || !isFinite(loadNum) || loadNum < 0)) throw new Error("Weight must be a number");
       if (reps && (repsNum == null || !isFinite(repsNum) || repsNum < 0)) throw new Error("Reps must be a whole number");
       if (rpe && (rpeNum == null || !isFinite(rpeNum) || rpeNum < 0 || rpeNum > 10)) throw new Error("RPE must be 0–10");
-      const loadUnit = persistedUnitForValue(load, unit);
+      const loadUnit = persistedUnitForValue(load, unit, existing);
       const payload = {
         row_id: rowId,
         client_id: clientId,
