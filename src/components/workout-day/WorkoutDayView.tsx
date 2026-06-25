@@ -1839,8 +1839,9 @@ function WorkoutDay({
 
               setCompleteOpen(false);
               setLastSummary(computed);
+              setLastSessionRating(payload.session_rating ?? null);
               recapFromSubmitRef.current = true;
-              setSummaryOpen(true);
+              setTimeout(() => setSummaryOpen(true), 280);
               toast.success(
                 `Workout submitted — Score: ${computed.score}/100`,
                 {
