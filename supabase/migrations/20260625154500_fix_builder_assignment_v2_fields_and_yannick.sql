@@ -1,61 +1,6 @@
 -- Fix builder-template assignment compatibility for schema v2 rows.
 -- v2 rows use title/reps/weight while the assignment RPC previously copied
--- only legacy exercise_name_override/reps_text/load_lb fields, creating empty
--- or unusable client programs.
-
-CREATE OR REPLACE FUNCTION public.pl_jsonb_first_text(p_json jsonb, VARIADIC p_keys text[])
-RETURNS text
-LANGUAGE plpgsql
-IMMUTABLE
-SET search_path = public
-AS $$
-DECLARE
-  k text;
-  v text;
-BEGIN
-  IF p_json IS NULL THEN
-    RETURN NULL;
-  END IF;
-  FOREACH k IN ARRAY p_keys LOOP
-    v := NULLIF(btrim(p_json->>k), '');
-    IF v IS NOT NULL THEN
-      RETURN v;
-    END IF;
-  END LOOP;
-  RETURN NULL;
-END;
-$$;
-
-CREATE OR REPLACE FUNCTION public.pl_jsonb_first_numeric(p_json jsonb, VARIADIC p_keys text[])
-RETURNS numeric
-LANGUAGE plpgsql
-IMMUTABLE
-SET search_path = public
-AS $$
-DECLARE
-  k text;
-  v text;
-  m text[];
-BEGIN
-  IF p_json IS NULL THEN
-    RETURN NULL;
-  END IF;
-  FOREACH k IN ARRAY p_keys LOOP
-    v := NULLIF(btrim(p_json->>k), '');
-    IF v IS NOT NULL THEN
-      BEGIN
-        RETURN v::numeric;
-      EXCEPTION WHEN invalid_text_representation THEN
-        m := regexp_match(v, '-?\d+(?:\.\d+)?');
-        IF m IS NOT NULL THEN
-          RETURN m[1]::numeric;
-        END IF;
-      END;
-    END IF;
-  END LOOP;
-  RETURN NULL;
-END;
-$$;
+-- only legacy exercise_name_override/reps_text/load_lb fields.
 
 CREATE OR REPLACE FUNCTION public.pl_assign_template_to_client(p_template_id uuid, p_client_id uuid, p_placement jsonb, p_name text, p_client_visible boolean, p_start_date date, p_end_date date, p_selected_block_ids text[], p_start_from_block_id text)
  RETURNS jsonb
@@ -204,15 +149,15 @@ BEGIN
                 v_day_id,
                 COALESCE((v_r->>'sort_order')::int, v_sort),
                 NULLIF(v_r->>'exercise_id','')::uuid,
-                public.pl_jsonb_first_text(v_r, 'exercise_name_override', 'title', 'name', 'exercise_name'),
+                COALESCE(NULLIF(v_r->>'exercise_name_override',''), NULLIF(v_r->>'title',''), NULLIF(v_r->>'name',''), NULLIF(v_r->>'exercise_name','')),
                 public.pl_safe_first_int(v_r->>'sets'),
-                public.pl_jsonb_first_text(v_r, 'reps_text', 'reps', 'rep_range'),
+                COALESCE(NULLIF(v_r->>'reps_text',''), NULLIF(v_r->>'reps',''), NULLIF(v_r->>'rep_range','')),
                 NULLIF(v_r->>'rpe',''),
                 NULLIF(v_r->>'rir',''),
                 NULLIF(v_r->>'percentage','')::numeric,
                 NULLIF(v_r->>'percentage_basis',''),
-                COALESCE(public.pl_jsonb_first_numeric(v_r, 'load_kg', 'weight_kg'), CASE WHEN lower(COALESCE(v_r->>'weight_unit', v_r->>'load_unit', v_r->>'unit')) = 'kg' THEN public.pl_jsonb_first_numeric(v_r, 'weight', 'load') END),
-                COALESCE(public.pl_jsonb_first_numeric(v_r, 'load_lb', 'weight_lb'), CASE WHEN lower(COALESCE(v_r->>'weight_unit', v_r->>'load_unit', v_r->>'unit', 'lb')) IN ('lb','lbs','pound','pounds') THEN public.pl_jsonb_first_numeric(v_r, 'weight', 'load') END),
+                NULLIF(COALESCE(v_r->>'load_kg', v_r->>'weight_kg', CASE WHEN lower(COALESCE(v_r->>'weight_unit', v_r->>'load_unit', v_r->>'unit')) = 'kg' THEN v_r->>'weight' END), '')::numeric,
+                NULLIF(COALESCE(v_r->>'load_lb', v_r->>'weight_lb', CASE WHEN lower(COALESCE(v_r->>'weight_unit', v_r->>'load_unit', v_r->>'unit', 'lb')) IN ('lb','lbs','pound','pounds') THEN v_r->>'weight' END), '')::numeric,
                 public.pl_safe_first_int(COALESCE(v_r->>'rest_seconds', v_r->>'rest')),
                 NULLIF(v_r->>'tempo',''),
                 COALESCE(NULLIF(v_r->>'time_profile',''), 'accessory_compound'),
@@ -261,15 +206,15 @@ BEGIN
             v_day_id,
             COALESCE((v_r->>'sort_order')::int, v_sort),
             NULLIF(v_r->>'exercise_id','')::uuid,
-            public.pl_jsonb_first_text(v_r, 'exercise_name_override', 'title', 'name', 'exercise_name'),
+            COALESCE(NULLIF(v_r->>'exercise_name_override',''), NULLIF(v_r->>'title',''), NULLIF(v_r->>'name',''), NULLIF(v_r->>'exercise_name','')),
             public.pl_safe_first_int(v_r->>'sets'),
-            public.pl_jsonb_first_text(v_r, 'reps_text', 'reps', 'rep_range'),
+            COALESCE(NULLIF(v_r->>'reps_text',''), NULLIF(v_r->>'reps',''), NULLIF(v_r->>'rep_range','')),
             NULLIF(v_r->>'rpe',''),
             NULLIF(v_r->>'rir',''),
             NULLIF(v_r->>'percentage','')::numeric,
             NULLIF(v_r->>'percentage_basis',''),
-            COALESCE(public.pl_jsonb_first_numeric(v_r, 'load_kg', 'weight_kg'), CASE WHEN lower(COALESCE(v_r->>'weight_unit', v_r->>'load_unit', v_r->>'unit')) = 'kg' THEN public.pl_jsonb_first_numeric(v_r, 'weight', 'load') END),
-            COALESCE(public.pl_jsonb_first_numeric(v_r, 'load_lb', 'weight_lb'), CASE WHEN lower(COALESCE(v_r->>'weight_unit', v_r->>'load_unit', v_r->>'unit', 'lb')) IN ('lb','lbs','pound','pounds') THEN public.pl_jsonb_first_numeric(v_r, 'weight', 'load') END),
+            NULLIF(COALESCE(v_r->>'load_kg', v_r->>'weight_kg', CASE WHEN lower(COALESCE(v_r->>'weight_unit', v_r->>'load_unit', v_r->>'unit')) = 'kg' THEN v_r->>'weight' END), '')::numeric,
+            NULLIF(COALESCE(v_r->>'load_lb', v_r->>'weight_lb', CASE WHEN lower(COALESCE(v_r->>'weight_unit', v_r->>'load_unit', v_r->>'unit', 'lb')) IN ('lb','lbs','pound','pounds') THEN v_r->>'weight' END), '')::numeric,
             public.pl_safe_first_int(COALESCE(v_r->>'rest_seconds', v_r->>'rest')),
             NULLIF(v_r->>'tempo',''),
             COALESCE(NULLIF(v_r->>'time_profile',''), 'accessory_compound'),
@@ -335,15 +280,15 @@ BEGIN
               v_day_id,
               COALESCE((v_r->>'sort_order')::int, v_sort),
               NULLIF(v_r->>'exercise_id','')::uuid,
-              public.pl_jsonb_first_text(v_r, 'exercise_name_override', 'title', 'name', 'exercise_name'),
+              COALESCE(NULLIF(v_r->>'exercise_name_override',''), NULLIF(v_r->>'title',''), NULLIF(v_r->>'name',''), NULLIF(v_r->>'exercise_name','')),
               public.pl_safe_first_int(v_r->>'sets'),
-              public.pl_jsonb_first_text(v_r, 'reps_text', 'reps', 'rep_range'),
+              COALESCE(NULLIF(v_r->>'reps_text',''), NULLIF(v_r->>'reps',''), NULLIF(v_r->>'rep_range','')),
               NULLIF(v_r->>'rpe',''),
               NULLIF(v_r->>'rir',''),
               NULLIF(v_r->>'percentage','')::numeric,
               NULLIF(v_r->>'percentage_basis',''),
-              COALESCE(public.pl_jsonb_first_numeric(v_r, 'load_kg', 'weight_kg'), CASE WHEN lower(COALESCE(v_r->>'weight_unit', v_r->>'load_unit', v_r->>'unit')) = 'kg' THEN public.pl_jsonb_first_numeric(v_r, 'weight', 'load') END),
-              COALESCE(public.pl_jsonb_first_numeric(v_r, 'load_lb', 'weight_lb'), CASE WHEN lower(COALESCE(v_r->>'weight_unit', v_r->>'load_unit', v_r->>'unit', 'lb')) IN ('lb','lbs','pound','pounds') THEN public.pl_jsonb_first_numeric(v_r, 'weight', 'load') END),
+              NULLIF(COALESCE(v_r->>'load_kg', v_r->>'weight_kg', CASE WHEN lower(COALESCE(v_r->>'weight_unit', v_r->>'load_unit', v_r->>'unit')) = 'kg' THEN v_r->>'weight' END), '')::numeric,
+              NULLIF(COALESCE(v_r->>'load_lb', v_r->>'weight_lb', CASE WHEN lower(COALESCE(v_r->>'weight_unit', v_r->>'load_unit', v_r->>'unit', 'lb')) IN ('lb','lbs','pound','pounds') THEN v_r->>'weight' END), '')::numeric,
               public.pl_safe_first_int(COALESCE(v_r->>'rest_seconds', v_r->>'rest')),
               NULLIF(v_r->>'tempo',''),
               COALESCE(NULLIF(v_r->>'time_profile',''), 'accessory_compound'),
@@ -412,15 +357,15 @@ BEGIN
             v_day_id,
             COALESCE((v_r->>'sort_order')::int, v_sort),
             NULLIF(v_r->>'exercise_id','')::uuid,
-            public.pl_jsonb_first_text(v_r, 'exercise_name_override', 'title', 'name', 'exercise_name'),
+            COALESCE(NULLIF(v_r->>'exercise_name_override',''), NULLIF(v_r->>'title',''), NULLIF(v_r->>'name',''), NULLIF(v_r->>'exercise_name','')),
             public.pl_safe_first_int(v_r->>'sets'),
-            public.pl_jsonb_first_text(v_r, 'reps_text', 'reps', 'rep_range'),
+            COALESCE(NULLIF(v_r->>'reps_text',''), NULLIF(v_r->>'reps',''), NULLIF(v_r->>'rep_range','')),
             NULLIF(v_r->>'rpe',''),
             NULLIF(v_r->>'rir',''),
             NULLIF(v_r->>'percentage','')::numeric,
             NULLIF(v_r->>'percentage_basis',''),
-            COALESCE(public.pl_jsonb_first_numeric(v_r, 'load_kg', 'weight_kg'), CASE WHEN lower(COALESCE(v_r->>'weight_unit', v_r->>'load_unit', v_r->>'unit')) = 'kg' THEN public.pl_jsonb_first_numeric(v_r, 'weight', 'load') END),
-            COALESCE(public.pl_jsonb_first_numeric(v_r, 'load_lb', 'weight_lb'), CASE WHEN lower(COALESCE(v_r->>'weight_unit', v_r->>'load_unit', v_r->>'unit', 'lb')) IN ('lb','lbs','pound','pounds') THEN public.pl_jsonb_first_numeric(v_r, 'weight', 'load') END),
+            NULLIF(COALESCE(v_r->>'load_kg', v_r->>'weight_kg', CASE WHEN lower(COALESCE(v_r->>'weight_unit', v_r->>'load_unit', v_r->>'unit')) = 'kg' THEN v_r->>'weight' END), '')::numeric,
+            NULLIF(COALESCE(v_r->>'load_lb', v_r->>'weight_lb', CASE WHEN lower(COALESCE(v_r->>'weight_unit', v_r->>'load_unit', v_r->>'unit', 'lb')) IN ('lb','lbs','pound','pounds') THEN v_r->>'weight' END), '')::numeric,
             public.pl_safe_first_int(COALESCE(v_r->>'rest_seconds', v_r->>'rest')),
             NULLIF(v_r->>'tempo',''),
             COALESCE(NULLIF(v_r->>'time_profile',''), 'accessory_compound'),
@@ -449,15 +394,15 @@ BEGIN
           v_day_id,
           COALESCE((v_r->>'sort_order')::int, v_sort),
           NULLIF(v_r->>'exercise_id','')::uuid,
-          public.pl_jsonb_first_text(v_r, 'exercise_name_override', 'title', 'name', 'exercise_name'),
+          COALESCE(NULLIF(v_r->>'exercise_name_override',''), NULLIF(v_r->>'title',''), NULLIF(v_r->>'name',''), NULLIF(v_r->>'exercise_name','')),
           public.pl_safe_first_int(v_r->>'sets'),
-          public.pl_jsonb_first_text(v_r, 'reps_text', 'reps', 'rep_range'),
+          COALESCE(NULLIF(v_r->>'reps_text',''), NULLIF(v_r->>'reps',''), NULLIF(v_r->>'rep_range','')),
           NULLIF(v_r->>'rpe',''),
           NULLIF(v_r->>'rir',''),
           NULLIF(v_r->>'percentage','')::numeric,
           NULLIF(v_r->>'percentage_basis',''),
-          COALESCE(public.pl_jsonb_first_numeric(v_r, 'load_kg', 'weight_kg'), CASE WHEN lower(COALESCE(v_r->>'weight_unit', v_r->>'load_unit', v_r->>'unit')) = 'kg' THEN public.pl_jsonb_first_numeric(v_r, 'weight', 'load') END),
-          COALESCE(public.pl_jsonb_first_numeric(v_r, 'load_lb', 'weight_lb'), CASE WHEN lower(COALESCE(v_r->>'weight_unit', v_r->>'load_unit', v_r->>'unit', 'lb')) IN ('lb','lbs','pound','pounds') THEN public.pl_jsonb_first_numeric(v_r, 'weight', 'load') END),
+          NULLIF(COALESCE(v_r->>'load_kg', v_r->>'weight_kg', CASE WHEN lower(COALESCE(v_r->>'weight_unit', v_r->>'load_unit', v_r->>'unit')) = 'kg' THEN v_r->>'weight' END), '')::numeric,
+          NULLIF(COALESCE(v_r->>'load_lb', v_r->>'weight_lb', CASE WHEN lower(COALESCE(v_r->>'weight_unit', v_r->>'load_unit', v_r->>'unit', 'lb')) IN ('lb','lbs','pound','pounds') THEN v_r->>'weight' END), '')::numeric,
           public.pl_safe_first_int(COALESCE(v_r->>'rest_seconds', v_r->>'rest')),
           NULLIF(v_r->>'tempo',''),
           COALESCE(NULLIF(v_r->>'time_profile',''), 'accessory_compound'),
@@ -479,15 +424,15 @@ BEGIN
       ) VALUES (
         v_target_day_id, v_sort,
         NULLIF(v_payload->>'exercise_id','')::uuid,
-        public.pl_jsonb_first_text(v_payload, 'exercise_name_override', 'title', 'name', 'exercise_name'),
+        COALESCE(NULLIF(v_payload->>'exercise_name_override',''), NULLIF(v_payload->>'title',''), NULLIF(v_payload->>'name',''), NULLIF(v_payload->>'exercise_name','')),
         public.pl_safe_first_int(v_payload->>'sets'),
-        public.pl_jsonb_first_text(v_payload, 'reps_text', 'reps', 'rep_range'),
+        COALESCE(NULLIF(v_payload->>'reps_text',''), NULLIF(v_payload->>'reps',''), NULLIF(v_payload->>'rep_range','')),
         NULLIF(v_payload->>'rpe',''),
         NULLIF(v_payload->>'rir',''),
         NULLIF(v_payload->>'percentage','')::numeric,
         NULLIF(v_payload->>'percentage_basis',''),
-        COALESCE(public.pl_jsonb_first_numeric(v_payload, 'load_kg', 'weight_kg'), CASE WHEN lower(COALESCE(v_payload->>'weight_unit', v_payload->>'load_unit', v_payload->>'unit')) = 'kg' THEN public.pl_jsonb_first_numeric(v_payload, 'weight', 'load') END),
-        COALESCE(public.pl_jsonb_first_numeric(v_payload, 'load_lb', 'weight_lb'), CASE WHEN lower(COALESCE(v_payload->>'weight_unit', v_payload->>'load_unit', v_payload->>'unit', 'lb')) IN ('lb','lbs','pound','pounds') THEN public.pl_jsonb_first_numeric(v_payload, 'weight', 'load') END),
+        NULLIF(COALESCE(v_payload->>'load_kg', v_payload->>'weight_kg', CASE WHEN lower(COALESCE(v_payload->>'weight_unit', v_payload->>'load_unit', v_payload->>'unit')) = 'kg' THEN v_payload->>'weight' END), '')::numeric,
+        NULLIF(COALESCE(v_payload->>'load_lb', v_payload->>'weight_lb', CASE WHEN lower(COALESCE(v_payload->>'weight_unit', v_payload->>'load_unit', v_payload->>'unit', 'lb')) IN ('lb','lbs','pound','pounds') THEN v_payload->>'weight' END), '')::numeric,
         public.pl_safe_first_int(COALESCE(v_payload->>'rest_seconds', v_payload->>'rest')),
         NULLIF(v_payload->>'tempo',''),
         COALESCE(NULLIF(v_payload->>'time_profile',''), 'accessory_compound'),
@@ -527,15 +472,15 @@ BEGIN
           v_day_id,
           COALESCE((v_r->>'sort_order')::int, v_sort),
           NULLIF(v_r->>'exercise_id','')::uuid,
-          public.pl_jsonb_first_text(v_r, 'exercise_name_override', 'title', 'name', 'exercise_name'),
+          COALESCE(NULLIF(v_r->>'exercise_name_override',''), NULLIF(v_r->>'title',''), NULLIF(v_r->>'name',''), NULLIF(v_r->>'exercise_name','')),
           public.pl_safe_first_int(v_r->>'sets'),
-          public.pl_jsonb_first_text(v_r, 'reps_text', 'reps', 'rep_range'),
+          COALESCE(NULLIF(v_r->>'reps_text',''), NULLIF(v_r->>'reps',''), NULLIF(v_r->>'rep_range','')),
           NULLIF(v_r->>'rpe',''),
           NULLIF(v_r->>'rir',''),
           NULLIF(v_r->>'percentage','')::numeric,
           NULLIF(v_r->>'percentage_basis',''),
-          COALESCE(public.pl_jsonb_first_numeric(v_r, 'load_kg', 'weight_kg'), CASE WHEN lower(COALESCE(v_r->>'weight_unit', v_r->>'load_unit', v_r->>'unit')) = 'kg' THEN public.pl_jsonb_first_numeric(v_r, 'weight', 'load') END),
-          COALESCE(public.pl_jsonb_first_numeric(v_r, 'load_lb', 'weight_lb'), CASE WHEN lower(COALESCE(v_r->>'weight_unit', v_r->>'load_unit', v_r->>'unit', 'lb')) IN ('lb','lbs','pound','pounds') THEN public.pl_jsonb_first_numeric(v_r, 'weight', 'load') END),
+          NULLIF(COALESCE(v_r->>'load_kg', v_r->>'weight_kg', CASE WHEN lower(COALESCE(v_r->>'weight_unit', v_r->>'load_unit', v_r->>'unit')) = 'kg' THEN v_r->>'weight' END), '')::numeric,
+          NULLIF(COALESCE(v_r->>'load_lb', v_r->>'weight_lb', CASE WHEN lower(COALESCE(v_r->>'weight_unit', v_r->>'load_unit', v_r->>'unit', 'lb')) IN ('lb','lbs','pound','pounds') THEN v_r->>'weight' END), '')::numeric,
           public.pl_safe_first_int(COALESCE(v_r->>'rest_seconds', v_r->>'rest')),
           NULLIF(v_r->>'tempo',''),
           COALESCE(NULLIF(v_r->>'time_profile',''), 'accessory_compound'),
