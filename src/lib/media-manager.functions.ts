@@ -29,6 +29,68 @@ function getOrigin() {
   return process.env.PUBLIC_APP_URL || process.env.SITE_URL || "";
 }
 
+const TWILIO_GATEWAY_URL = "https://connector-gateway.lovable.dev/twilio";
+
+function normalizePhone(raw: string | null | undefined): string | null {
+  if (!raw) return null;
+  const cleaned = String(raw).replace(/[^\d+]/g, "");
+  if (!cleaned) return null;
+  if (cleaned.startsWith("+")) return cleaned;
+  if (/^\d{10}$/.test(cleaned)) return "+1" + cleaned;
+  if (/^1\d{10}$/.test(cleaned)) return "+" + cleaned;
+  return "+" + cleaned;
+}
+
+/** Send a staff setup SMS via Twilio. Returns { sent, reason? }. Never throws — invite UX must succeed even if SMS fails. */
+async function sendStaffInviteSms(opts: {
+  toPhone: string | null | undefined;
+  firstName: string | null | undefined;
+  link: string;
+}): Promise<{ sent: boolean; reason?: string; sid?: string }> {
+  const toPhone = normalizePhone(opts.toPhone);
+  if (!toPhone) return { sent: false, reason: "no_phone" };
+  try {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { data: settings } = await supabaseAdmin
+      .from("sms_settings").select("*").eq("singleton", true).maybeSingle();
+    if (!settings?.enabled) return { sent: false, reason: "sms_disabled" };
+    if (!settings?.from_phone) return { sent: false, reason: "no_from_phone" };
+    const lovableKey = process.env.LOVABLE_API_KEY;
+    const twilioKey = process.env.TWILIO_API_KEY;
+    if (!lovableKey || !twilioKey) return { sent: false, reason: "twilio_not_configured" };
+    const name = (opts.firstName || "").trim();
+    const greeting = name ? `Hi ${name}, ` : "";
+    const body = `${greeting}you've been invited as JF Effect Media Manager. Finish setup here: ${opts.link} (link expires in 7 days).`;
+    const res = await fetch(`${TWILIO_GATEWAY_URL}/Messages.json`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${lovableKey}`,
+        "X-Connection-Api-Key": twilioKey,
+        "Content-Type": "application/x-www-form-urlencoded",
+      },
+      body: new URLSearchParams({ To: toPhone, From: settings.from_phone, Body: body }).toString(),
+    });
+    const data: any = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      console.warn("[media-manager invite SMS] twilio error", res.status, data?.message);
+      return { sent: false, reason: `twilio_${res.status}` };
+    }
+    try {
+      await (supabaseAdmin.from("sms_log") as any).insert({
+        to_phone: toPhone,
+        body,
+        kind: "manual",
+        status: "sent",
+        twilio_sid: data?.sid ?? null,
+      });
+    } catch {}
+    return { sent: true, sid: data?.sid };
+  } catch (e: any) {
+    console.warn("[media-manager invite SMS] failed", e?.message || e);
+    return { sent: false, reason: "exception" };
+  }
+}
+
 /* ---------- Staff invites ---------- */
 
 export const listStaff = createServerFn({ method: "GET" })
@@ -92,7 +154,8 @@ export const inviteMediaManager = createServerFn({ method: "POST" })
     if (error) throw new Error(error.message);
     const origin = getOrigin();
     const link = `${origin}/staff-setup?token=${setup_token}`;
-    return { invite: row, link };
+    const sms = await sendStaffInviteSms({ toPhone: row.phone, firstName: row.first_name, link });
+    return { invite: row, link, sms };
   });
 
 export const resendStaffInvite = createServerFn({ method: "POST" })
@@ -105,9 +168,11 @@ export const resendStaffInvite = createServerFn({ method: "POST" })
     const setup_token_expires_at = new Date(Date.now() + 7 * 24 * 3600 * 1000).toISOString();
     const { data: row, error } = await supabaseAdmin
       .from("staff_invites").update({ setup_token, setup_token_expires_at, status: "pending" })
-      .eq("id", data.inviteId).select("email").single();
+      .eq("id", data.inviteId).select("email, phone, first_name").single();
     if (error) throw new Error(error.message);
-    return { link: `${getOrigin()}/staff-setup?token=${setup_token}`, email: row.email };
+    const link = `${getOrigin()}/staff-setup?token=${setup_token}`;
+    const sms = await sendStaffInviteSms({ toPhone: (row as any).phone, firstName: (row as any).first_name, link });
+    return { link, email: row.email, sms };
   });
 
 export const revokeStaffInvite = createServerFn({ method: "POST" })

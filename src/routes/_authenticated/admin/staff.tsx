@@ -37,12 +37,25 @@ export function StaffPage({ embedded = false }: { embedded?: boolean } = {}) {
   const hasPending = (data?.invites ?? []).some((i: any) => i.status === "pending");
   const inviteDisabled = hasActive || hasPending;
 
+  function smsMessage(sms: { sent: boolean; reason?: string } | undefined, action: "Invite" | "New link") {
+    if (sms?.sent) return `${action} sent by SMS · link also copied`;
+    const reasonMap: Record<string, string> = {
+      no_phone: "no phone on file — link copied",
+      sms_disabled: "SMS disabled in settings — link copied",
+      no_from_phone: "no Twilio From number set — link copied",
+      twilio_not_configured: "Twilio not connected — link copied",
+      exception: "SMS failed — link copied",
+    };
+    const tail = reasonMap[sms?.reason ?? ""] ?? "SMS not sent — link copied";
+    return `${action} created · ${tail}`;
+  }
+
   async function handleInvite() {
     if (!form.email || !form.first_name || !form.last_name) return toast.error("Name and email required");
     try {
       const res = await invite({ data: { ...form, phone: form.phone || null } });
       await navigator.clipboard.writeText(res.link);
-      toast.success("Invite created — setup link copied to clipboard");
+      toast.success(smsMessage(res.sms, "Invite"));
       setForm({ email: "", first_name: "", last_name: "", phone: "" });
       qc.invalidateQueries({ queryKey: ["staff"] });
     } catch (e: any) { toast.error(e.message); }
@@ -104,7 +117,7 @@ export function StaffPage({ embedded = false }: { embedded?: boolean } = {}) {
                 try {
                   const r = await resend({ data: { inviteId: i.id } });
                   await navigator.clipboard.writeText(r.link);
-                  toast.success("New setup link copied");
+                  toast.success(smsMessage(r.sms, "New link"));
                   qc.invalidateQueries({ queryKey: ["staff"] });
                 } catch (e: any) { toast.error(e.message); }
               }}>Resend</Button>
