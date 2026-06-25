@@ -157,7 +157,14 @@ export function useAutosave<T>({
       lastSavedSet.current = true;
       return;
     }
-    setState((s) => (s === "saving" || s === "error" || equals(lastSaved.current, value) ? s : "idle"));
+    // If the value changed, drop out of a sticky "error" state back to
+    // "idle" so the next flush() (e.g. onBlur) attempts a fresh save with
+    // the new value instead of being silently suppressed.
+    setState((s) => {
+      if (s === "saving") return s;
+      if (equals(lastSaved.current, value)) return s;
+      return "idle";
+    });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [value, enabled]);
 

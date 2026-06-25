@@ -2749,6 +2749,21 @@ function SetRow({
   // Track which field (if any) is currently focused so we never overwrite
   // what the user is actively typing with a stale server refetch.
   const [focusedField, setFocusedField] = useState<"load" | "reps" | "rpe" | null>(null);
+  // iOS / mobile safety: blur events occasionally fail to fire when an input
+  // is removed from the DOM, the keyboard auto-dismisses, or the page loses
+  // focus. If focus stays set for too long we'll never autosave because the
+  // enabled guard blocks. Clear stale focus after 6s of no activity.
+  const focusClearTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    if (focusClearTimerRef.current) clearTimeout(focusClearTimerRef.current);
+    if (!focusedField) return;
+    focusClearTimerRef.current = setTimeout(() => {
+      setFocusedField(null);
+    }, 6000);
+    return () => {
+      if (focusClearTimerRef.current) clearTimeout(focusClearTimerRef.current);
+    };
+  }, [focusedField, load, reps, rpe]);
   useEffect(() => {
     if (!draftKey || hydrated) return;
     const d = readLocalDraft<{ load: string; reps: string; rpe: string }>(draftKey);
@@ -3327,14 +3342,10 @@ function SetRow({
       />
       )}
       <div className="flex items-center justify-end gap-1">
-        {/* When confirmed, show only the green checkmark — not the save spinner too */}
-        {!readonly && !isConfirmed && ["saving", "error", "offline"].includes(save.state) && (
-          <SaveStatus
-            state={save.state}
-            savedAt={save.savedAt}
-            compact={save.state !== "error"}
-            onRetry={save.retry}
-          />
+        {/* Compact spinner only — full error label renders below the row to
+            avoid overlapping the weight input. */}
+        {!readonly && !isConfirmed && (save.state === "saving" || save.state === "offline") && (
+          <SaveStatus state={save.state} savedAt={save.savedAt} compact />
         )}
         {!readonly ? (
           <button
@@ -3367,6 +3378,15 @@ function SetRow({
         )}
       </div>
     </div>
+    {!readonly && !isConfirmed && save.state === "error" && (
+      <div className="flex items-center justify-between gap-2 px-3 pb-1.5">
+        <SaveStatus
+          state={save.state}
+          savedAt={save.savedAt}
+          onRetry={save.retry}
+        />
+      </div>
+    )}
     {statusError && (
       <div className="px-3 pb-1.5 text-[11px] font-medium text-destructive">
         Status failed to save. Tap the status icon to retry.
