@@ -13,7 +13,7 @@ import { listTemplates, listTemplateAssignments, deletePrep, deleteBlock } from 
 import { supabase } from "@/integrations/supabase/client";
 import { validateTemplatePayload } from "@/lib/pl-template-validation";
 import { Button } from "@/components/ui/button";
-import { UserPlus, Users, Trash2 } from "lucide-react";
+import { UserPlus, Users, Trash2, Pencil } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/lib/auth";
 
@@ -167,6 +167,11 @@ function AdminProgramBrowser() {
             <div className="flex flex-wrap items-center gap-2">
               <Button size="sm" onClick={() => setAssignTpl(it.raw ?? { id: it.id, name: it.title })}>
                 <UserPlus className="mr-1 h-3.5 w-3.5" /> Assign to client
+              </Button>
+              <Button size="sm" variant="outline" asChild>
+                <Link to="/admin/program-library/$templateId" params={{ templateId: it.id }}>
+                  <Pencil className="mr-1 h-3.5 w-3.5" /> Edit in builder
+                </Link>
               </Button>
               {it.membershipPublished && (
                 <span className="rounded-full border border-rose-500/40 bg-rose-500/15 px-2 py-0.5 text-[10px] font-medium text-rose-300">
