@@ -3342,14 +3342,10 @@ function SetRow({
       />
       )}
       <div className="flex items-center justify-end gap-1">
-        {/* When confirmed, show only the green checkmark — not the save spinner too */}
-        {!readonly && !isConfirmed && ["saving", "error", "offline"].includes(save.state) && (
-          <SaveStatus
-            state={save.state}
-            savedAt={save.savedAt}
-            compact={save.state !== "error"}
-            onRetry={save.retry}
-          />
+        {/* Compact spinner only — full error label renders below the row to
+            avoid overlapping the weight input. */}
+        {!readonly && !isConfirmed && (save.state === "saving" || save.state === "offline") && (
+          <SaveStatus state={save.state} savedAt={save.savedAt} compact />
         )}
         {!readonly ? (
           <button
@@ -3382,6 +3378,15 @@ function SetRow({
         )}
       </div>
     </div>
+    {!readonly && !isConfirmed && save.state === "error" && (
+      <div className="flex items-center justify-between gap-2 px-3 pb-1.5">
+        <SaveStatus
+          state={save.state}
+          savedAt={save.savedAt}
+          onRetry={save.retry}
+        />
+      </div>
+    )}
     {statusError && (
       <div className="px-3 pb-1.5 text-[11px] font-medium text-destructive">
         Status failed to save. Tap the status icon to retry.
