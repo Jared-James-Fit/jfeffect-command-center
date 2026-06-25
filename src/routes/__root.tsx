@@ -38,11 +38,11 @@ import { OnlineOfflineBanner } from "@/components/pwa/online-offline-banner";
 // offline writes (bodyweight, water, …) so pending items can drain at boot.
 import "@/lib/offline/data-handlers";
 import "@/lib/offline/workout-completion-sync";
-// Side-effect import: HTML5 drag-and-drop polyfill for touch devices.
-// program-builder.tsx still uses the native HTML5 drag API (dataTransfer);
-// without this polyfill, drag is unresponsive on phones/tablets. The polyfill
-// synthesizes pointer/touch into HTML5 drag events at low cost.
-import "drag-drop-touch";
+// HTML5 drag-and-drop polyfill for touch devices. Loaded only in the browser
+// because the package touches `document` at module scope and crashes SSR.
+if (typeof document !== "undefined") {
+  import("drag-drop-touch");
+}
 
 function NotFoundComponent() {
   return (
