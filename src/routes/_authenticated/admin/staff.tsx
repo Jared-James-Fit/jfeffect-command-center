@@ -10,6 +10,8 @@ import { toast } from "sonner";
 import {
   listStaff, inviteMediaManager, resendStaffInvite, revokeStaffInvite, deactivateMediaManager,
 } from "@/lib/media-manager.functions";
+import { useTeamImpersonation } from "@/lib/team-impersonation";
+import { Eye } from "lucide-react";
 
 export const Route = createFileRoute("/_authenticated/admin/staff")({
   component: StaffRedirect,
@@ -30,6 +32,8 @@ export function StaffPage({ embedded = false }: { embedded?: boolean } = {}) {
   const revoke = useServerFn(revokeStaffInvite);
   const deactivate = useServerFn(deactivateMediaManager);
   const qc = useQueryClient();
+  const navigateRouter = useNavigate();
+  const teamPov = useTeamImpersonation();
   const { data, isLoading } = useQuery({ queryKey: ["staff"], queryFn: () => list() });
 
   const [form, setForm] = useState({ email: "", first_name: "", last_name: "", phone: "" });
@@ -97,11 +101,33 @@ export function StaffPage({ embedded = false }: { embedded?: boolean } = {}) {
               <div className="font-medium">{m.profile?.full_name || m.profile?.email || m.user_id}</div>
               <div className="text-xs text-muted-foreground">{m.profile?.email}</div>
             </div>
-            <Button size="sm" variant="outline" onClick={async () => {
+            <div className="flex items-center gap-2">
+              <Button
+                size="sm"
+                variant="outline"
+                className="text-sky-600 hover:bg-sky-500/10"
+                title="Enter this team member's POV"
+                onClick={() => {
+                  teamPov.start(
+                    {
+                      user_id: m.user_id,
+                      full_name: m.profile?.full_name ?? null,
+                      email: m.profile?.email ?? null,
+                      role: "media_manager",
+                    },
+                    typeof window !== "undefined" ? window.location.pathname + window.location.search : null,
+                  );
+                  navigateRouter({ to: "/media" });
+                }}
+              >
+                <Eye className="mr-1 h-3.5 w-3.5" /> Enter POV
+              </Button>
+              <Button size="sm" variant="outline" onClick={async () => {
               if (!confirm("Revoke this Media Manager's access?")) return;
               try { await deactivate({ data: { userId: m.user_id } }); qc.invalidateQueries({ queryKey: ["staff"] }); toast.success("Access revoked"); }
               catch (e: any) { toast.error(e.message); }
-            }}>Revoke access</Button>
+              }}>Revoke access</Button>
+            </div>
           </Card>
         ))}
       </section>

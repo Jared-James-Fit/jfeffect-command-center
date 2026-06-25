@@ -7,6 +7,7 @@ import { DashboardModeSwitcher } from "@/components/dashboard-mode-switcher";
 import { setDashboardMode, useDashboardMode } from "@/lib/dashboard-mode";
 import { TaskPopupGate } from "@/components/tasks/task-popup-gate";
 import { ContentDrawerProvider } from "@/components/media/content-drawer";
+import { TeamPovBanner } from "@/components/team-pov-banner";
 
 export const Route = createFileRoute("/_authenticated/media")({
   component: MediaLayout,
@@ -49,6 +50,7 @@ function MediaLayout() {
   return (
     <AppShell items={nav} bottomItems={bottomItems} title="Media Manager">
       {role === "admin" && <DashboardModeSwitcher />}
+      <TeamPovBanner />
       <ContentDrawerProvider>
         <Outlet />
         <TaskPopupGate scope="media_manager" />

@@ -18,6 +18,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { ClientPovQuickPicker } from "@/components/client-pov-quick-picker";
+import { TeamPovQuickPicker } from "@/components/team-pov-quick-picker";
 import {
   Tooltip, TooltipContent, TooltipProvider, TooltipTrigger,
 } from "@/components/ui/tooltip";
@@ -850,6 +851,7 @@ export function AppShell({ items, bottomItems: customBottomItems, title, childre
         role={(role as AdminRole | null) ?? null}
       />
       <ClientPovQuickPicker />
+      <TeamPovQuickPicker />
     </div>
     </TooltipProvider>
   );

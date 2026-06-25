@@ -9,6 +9,7 @@ import {
 import { Toaster } from "sonner";
 import { AuthProvider, useAuth } from "@/lib/auth";
 import { ClientImpersonationProvider } from "@/lib/client-impersonation";
+import { TeamImpersonationProvider } from "@/lib/team-impersonation";
 import { ProgressDrawer } from "@/components/progress-drawer";
 import { GlobalHighlight } from "@/components/global-highlight";
 import {
@@ -388,14 +389,16 @@ function RootComponent() {
   const inner = (
     <AuthProvider>
       <ClientImpersonationProvider>
-        {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
-        <Outlet />
-        <RouteTracker />
-        <Toaster position="top-right" theme="dark" richColors />
-        <ProgressDrawer />
-        <GlobalHighlight />
-        <OnlineOfflineBanner />
-        <PwaUpdateToast />
+        <TeamImpersonationProvider>
+          {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
+          <Outlet />
+          <RouteTracker />
+          <Toaster position="top-right" theme="dark" richColors />
+          <ProgressDrawer />
+          <GlobalHighlight />
+          <OnlineOfflineBanner />
+          <PwaUpdateToast />
+        </TeamImpersonationProvider>
       </ClientImpersonationProvider>
     </AuthProvider>
   );

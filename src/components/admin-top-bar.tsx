@@ -30,6 +30,7 @@ export function AdminTopBar({ showDashboardMode = true }: { showDashboardMode?: 
   const isMemberView = pov.active || location.pathname.startsWith("/m");
   const { role } = useAuth();
   const canClientPov = role === "admin" || role === "coach";
+  const canTeamPov = role === "admin";
 
   // The messaging surface is an immersive, full-bleed chat view (mobile
   // overlays the whole screen; desktop uses full vertical height). The
@@ -145,6 +146,20 @@ export function AdminTopBar({ showDashboardMode = true }: { showDashboardMode?: 
           >
             <Eye className="h-3.5 w-3.5" />
             <span className="hidden sm:inline">Client POV</span>
+          </button>
+        )}
+        {canTeamPov && (
+          <button
+            type="button"
+            onClick={() => {
+              try { window.dispatchEvent(new CustomEvent("open-team-pov-picker")); } catch {}
+            }}
+            className="ml-0.5 flex items-center gap-1.5 rounded border-l border-border px-2.5 py-1 text-xs font-semibold text-sky-600 hover:bg-sky-500/10"
+            aria-label="Enter Team POV"
+            title="Enter Team POV"
+          >
+            <Eye className="h-3.5 w-3.5" />
+            <span className="hidden sm:inline">Team POV</span>
           </button>
         )}
       </div>
