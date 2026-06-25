@@ -1279,48 +1279,30 @@ function WorkoutDay({
 
             {/* Finish Workout + Completed Actions inside fullscreen mode */}
             {!readonly && !completion?.completed_at && (
-              <div className="mx-auto max-w-3xl px-4 pb-4 space-y-3">
-                <Card className="p-4 space-y-3">
-                  <div className="flex items-center justify-between">
-                    <div className="text-sm font-bold">Workout Notes</div>
-                    <SaveStatus state={metaSave.state} savedAt={metaSave.savedAt} />
-                  </div>
-                  <Textarea
-                    value={notes}
-                    onChange={(e) => { setNotes(e.target.value); if (!completion?.in_progress_at) markInProgress(); }}
-                    placeholder={completion?.client_notes || "How did it feel? Any pain, PRs, surprises?"}
-                  />
-                  <div className="flex items-center gap-2">
-                    <Input
-                      type="number"
-                      inputMode="numeric"
-                      className="w-32"
-                      placeholder={completion?.actual_duration_min ? `${completion.actual_duration_min} min` : "Actual min"}
-                      value={actualMin}
-                      onChange={(e) => setActualMin(e.target.value)}
-                    />
-                    <ActionButton
-                      loadingLabel="Saving…"
-                      successLabel="Finish Workout"
-                      successToast="Tap to finish"
-                      icon={<CheckCircle2 className="h-4 w-4" />}
-                      onAction={async () => {
-                        if (!client?.id) return;
-                        if (completion?.completed_at) {
-                          qc.invalidateQueries({ queryKey: ["pl-day-completion", dayId] });
-                          return;
-                        }
-                        await metaSave.flush();
-                        try { await startWorkoutSrv({ data: { kind: "client", dayId } }); } catch {}
-                        if (draftKey) clearLocalDraft(draftKey);
-                        refresh();
-                        setFocusMode(false);
-                        setCompleteOpen(true);
-                      }}
-                    >
-                      Finish Workout
-                    </ActionButton>
-                  </div>
+              <div className="mx-auto max-w-3xl px-4 pb-4">
+                <Card className="p-4">
+                  <ActionButton
+                    className="w-full"
+                    loadingLabel="Saving…"
+                    successLabel="Finish Workout"
+                    successToast="Tap to finish"
+                    icon={<CheckCircle2 className="h-4 w-4" />}
+                    onAction={async () => {
+                      if (!client?.id) return;
+                      if (completion?.completed_at) {
+                        qc.invalidateQueries({ queryKey: ["pl-day-completion", dayId] });
+                        return;
+                      }
+                      await metaSave.flush();
+                      try { await startWorkoutSrv({ data: { kind: "client", dayId } }); } catch {}
+                      if (draftKey) clearLocalDraft(draftKey);
+                      refresh();
+                      setFocusMode(false);
+                      setCompleteOpen(true);
+                    }}
+                  >
+                    Finish Workout
+                  </ActionButton>
                 </Card>
               </div>
             )}
