@@ -2757,8 +2757,8 @@ function SetRow({
     if (focused !== "load") setLoad(display);
     if (focused !== "reps") setReps(existing?.actual_reps?.toString() ?? prescribedRepsStr);
     if (focused !== "rpe") setRpe(existing?.actual_rpe_num != null ? String(existing.actual_rpe_num) : (existing?.actual_rpe ?? prescribedRpeStr));
-    // Track the unit at the moment of (re)hydration so unit-conversion
-    // effect doesn't re-convert the freshly-set display value.
+    // Track the display unit at hydration so later preference changes can be
+    // recognized without touching the raw displayed load.
     lastUnitRef.current = unit;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [existing?.id, existing?.actual_load, existing?.actual_reps, existing?.actual_rpe_num, existing?.actual_rpe]);
