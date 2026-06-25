@@ -3034,12 +3034,16 @@ function SetRow({
   // unit-toggle effect above can call markClean() / retry() safely.
   saveRef.current = save;
 
+  const flushSaveAfterEdit = () => {
+    clearEditGuard();
+    setTimeout(() => { void save.flush(); }, 0);
+  };
+
   const onEnter: React.KeyboardEventHandler<HTMLInputElement> = (e) => {
     if (e.key === "Enter") {
       e.preventDefault();
       (e.target as HTMLInputElement).blur();
-      clearEditGuard();
-      setTimeout(() => { void save.flush(); }, 0);
+      flushSaveAfterEdit();
     }
   };
 
@@ -3311,7 +3315,7 @@ function SetRow({
             recentlySavedRef.current = true;
             if (recentlySavedTimerRef.current) clearTimeout(recentlySavedTimerRef.current);
             recentlySavedTimerRef.current = setTimeout(() => { recentlySavedRef.current = false; }, 8000);
-            clearEditGuard();
+            flushSaveAfterEdit();
             setRepsChipOpen(false);
           }}
           readOnly={readonly}
@@ -3359,7 +3363,7 @@ function SetRow({
             recentlySavedRef.current = true;
             if (recentlySavedTimerRef.current) clearTimeout(recentlySavedTimerRef.current);
             recentlySavedTimerRef.current = setTimeout(() => { recentlySavedRef.current = false; }, 8000);
-            clearEditGuard();
+            flushSaveAfterEdit();
             setRpeChipOpen(false);
           }}
           readOnly={readonly} disabled={readonly}
@@ -3399,7 +3403,7 @@ function SetRow({
         }}
         onKeyDown={onEnter}
         onBlur={() => {
-          clearEditGuard();
+          flushSaveAfterEdit();
         }}
         readOnly={readonly}
         disabled={readonly}
