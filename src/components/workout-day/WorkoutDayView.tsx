@@ -1604,7 +1604,7 @@ function WorkoutDay({
              both the completion card and the finish button are visible at once.
              This was the root cause of the Nicolas Galli stuck-state bug. */}
         {!readonly && !completion?.completed_at && (
-          <Card ref={generalNotesRef} className="p-4">
+          <Card className="p-4">
             <ActionButton
               className="w-full"
               loadingLabel="Saving…"
