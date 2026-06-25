@@ -9,6 +9,7 @@ import {
 import { cn } from "@/lib/utils";
 import { NotificationBell } from "@/components/notification-bell";
 import { useClientNavBadges, markNavSeen } from "@/hooks/use-client-nav-badges";
+import { useMediaNavBadges } from "@/hooks/use-media-nav-badges";
 import { useKeyboardOpen } from "@/hooks/use-keyboard-open";
 import { UserAvatar } from "@/components/user-avatar";
 import { SettingsMenu } from "@/components/settings-menu";
@@ -161,7 +162,9 @@ export function AppShell({ items, bottomItems: customBottomItems, title, childre
   const navigate = useNavigate();
   const pathname = useRouterState({ select: (r) => r.location.pathname });
   const search = useRouterState({ select: (r) => r.location.search as Record<string, unknown> });
-  const navBadges = useClientNavBadges();
+  const clientBadges = useClientNavBadges();
+  const mediaBadges = useMediaNavBadges();
+  const navBadges = useMemo(() => ({ ...clientBadges, ...mediaBadges }), [clientBadges, mediaBadges]);
   const [mode, setMode] = useSidebarMode();
   const [collapsedSections, toggleSection, setAllSections] = useCollapsedSections();
   const [paletteOpen, setPaletteOpen] = useState(false);
