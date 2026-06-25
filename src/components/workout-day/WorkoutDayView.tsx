@@ -1063,6 +1063,7 @@ function WorkoutDay({
   const [completeSubmitting, setCompleteSubmitting] = useState(false);
   const [summaryOpen, setSummaryOpen] = useState(false);
   const [lastSummary, setLastSummary] = useState<WorkoutSummary | null>(null);
+  const [lastSessionRating, setLastSessionRating] = useState<number | null>(null);
   // Notifications can deep-link with ?review=1 to nudge the member to finish
   // an in-progress workout. Auto-open the quick popup once it lands.
   const reviewParam = search.review === 1;
