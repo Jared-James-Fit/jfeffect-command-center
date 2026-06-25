@@ -158,50 +158,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     let cancelled = false;
     const fetchRole = async (attempt = 0): Promise<void> => {
       try {
-        // Race the role lookup against a hard timeout so a slow DB
-        // response (RLS contention, transient PgBouncer saturation) can
-        // never strand the splash. On timeout we fall back to a cached
-        // or default role; the next attempt re-runs in the background.
-        const fetchPromise = Promise.all([
-          supabase.from("user_roles").select("role").eq("user_id", uid),
-          supabase.from("app_members").select("id").eq("user_id", uid).maybeSingle(),
-          supabase.from("clients").select("id").eq("user_id", uid).maybeSingle(),
-        ]);
-        const TIMEOUT_MS = 3000;
-        const timeoutPromise = new Promise<"__timeout__">((resolve) =>
-          setTimeout(() => resolve("__timeout__"), TIMEOUT_MS),
+        // Hard 4-second timeout on role fetch — if Supabase is slow on
+        // cold start or flaky network, fall back to cached role rather than
+        // stranding the user on the loading splash. Both bugs (login hang +
+        // missing POV button) are caused by this hanging. Fixed 2026-06-25.
+        const roleTimeout = new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error("role_fetch_timeout")), 4000)
         );
-        const raced = await Promise.race([fetchPromise, timeoutPromise]);
-        if (cancelled) return;
-        if (raced === "__timeout__") {
-          // Don't strand the user. Use a cached role if present, else
-          // default to "client". Do NOT mark roleLoadedForRef so the
-          // in-flight query can still resolve and correct the role.
-          const cached = readCachedRole(uid);
-          const fallback: AppRole = cached ?? "client";
-          if (!roleLoadedForRef.current) {
-            setRole((prev) => prev ?? fallback);
-            setLoading(false);
-          }
-          // Let the original fetch finish in the background and update.
-          fetchPromise.then(([{ data: roleRows }, { data: memberRow }, { data: clientRow }]) => {
-            if (cancelled) return;
-            const roles = (roleRows ?? []).map((r: any) => r.role as AppRole);
-            const resolvedRole: AppRole =
-              roles.includes("admin") ? "admin"
-              : roles.includes("coach") ? "coach"
-              : roles.includes("media_manager") ? "media_manager"
-              : roles.includes("client") ? "client"
-              : memberRow ? "member"
-              : clientRow ? "client"
-              : "client";
-            setRole(resolvedRole);
-            roleLoadedForRef.current = uid;
-            writeCachedRole(uid, resolvedRole);
-          }).catch(() => { /* background failure; user already on a page */ });
-          return;
-        }
-        const [{ data: roleRows, error: roleErr }, { data: memberRow }, { data: clientRow }] = raced;
+        const [{ data: roleRows, error: roleErr }, { data: memberRow }, { data: clientRow }] = await Promise.race([
+          Promise.all([
+            supabase.from("user_roles").select("role").eq("user_id", uid),
+            supabase.from("app_members").select("id").eq("user_id", uid).maybeSingle(),
+            supabase.from("clients").select("id").eq("user_id", uid).maybeSingle(),
+          ]),
+          roleTimeout,
+        ]);
         if (cancelled) return;
         if (roleErr) throw roleErr;
         const roles = (roleRows ?? []).map((r: any) => r.role as AppRole);
