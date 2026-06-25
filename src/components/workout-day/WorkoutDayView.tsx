@@ -2783,7 +2783,7 @@ function SetRow({
     if (focusClearTimerRef.current) clearTimeout(focusClearTimerRef.current);
     if (!focusedField) return;
     focusClearTimerRef.current = setTimeout(() => {
-      setFocusedField(null);
+      clearEditGuard();
     }, 6000);
     return () => {
       if (focusClearTimerRef.current) clearTimeout(focusClearTimerRef.current);
@@ -3032,7 +3032,12 @@ function SetRow({
   saveRef.current = save;
 
   const onEnter: React.KeyboardEventHandler<HTMLInputElement> = (e) => {
-    if (e.key === "Enter") { e.preventDefault(); (e.target as HTMLInputElement).blur(); save.flush(); }
+    if (e.key === "Enter") {
+      e.preventDefault();
+      (e.target as HTMLInputElement).blur();
+      clearEditGuard();
+      queueMicrotask(() => { void save.flush(); });
+    }
   };
 
   // State labels: Suggested (no draft, no confirm), Draft (typed but not all valid yet
@@ -3050,7 +3055,7 @@ function SetRow({
     ? Number.isFinite(existingDurNum) && existingDurNum > 0
     : hideWeight
       ? Number.isFinite(existingRepsNum) && existingRepsNum > 0
-      : Number.isFinite(existingLoadNum) && existingLoadNum > 0;
+      : Number.isFinite(existingRepsNum) && existingRepsNum > 0 && Number.isFinite(existingLoadNum) && existingLoadNum > 0;
   const isConfirmed = Boolean(existing?.completed_at) && hasLoggedValue;
   // hasAnyEntry only counts weight (the field the client must enter) and
   // manually-edited reps/RPE. Pre-filled prescription values do NOT count
@@ -3092,10 +3097,23 @@ function SetRow({
   const saveCompletionStatus = async () => {
     if (readonly || !clientId || statusSaving) return;
     const nextCompletedAt = isConfirmed ? null : new Date().toISOString();
-      let payload: Record<string, any> = {
-      row_id: rowId,
-      client_id: clientId,
-      set_index: setIndex,
+    const loadNum = load ? Number(load) : null;
+    const repsNum = reps ? parseInt(reps, 10) : null;
+    const rpeNum = rpe ? Number(rpe) : null;
+    const loadUnit = persistedUnitForValue(load, unit, existing);
+    const currentHasRequiredValues = isTimeKind
+      ? Number.isFinite(existingDurNum) && existingDurNum > 0
+      : hideWeight
+        ? repsNum != null && Number.isFinite(repsNum) && repsNum > 0
+        : repsNum != null && Number.isFinite(repsNum) && repsNum > 0 && loadNum != null && Number.isFinite(loadNum) && loadNum > 0;
+    if (nextCompletedAt && !currentHasRequiredValues) {
+      toast.error(isTimeKind ? "Complete the timer first" : hideWeight ? "Enter reps before marking complete" : "Enter reps and weight before marking complete");
+      return;
+    }
+    let payload: Record<string, any> = {
+        row_id: rowId,
+        client_id: clientId,
+        set_index: setIndex,
         actual_load: loadNum,
         actual_load_unit: loadUnit,
         entered_value: loadNum,
