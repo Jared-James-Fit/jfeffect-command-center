@@ -103,6 +103,7 @@ export function WorkListView({ filter }: { filter?: string }) {
       toast.success(`Updated ${ids.length} task${ids.length === 1 ? "" : "s"}`);
       clearSelection();
       qc.invalidateQueries({ queryKey: ["media-tasks"] });
+      qc.invalidateQueries({ queryKey: ["media-calendar-content"] });
     } catch (e: any) {
       toast.error(e?.message ?? "Bulk action failed");
     }
@@ -241,6 +242,15 @@ function TaskRow({ task, selected, onSelect }: { task: ExtendedTaskRow; selected
     qc.invalidateQueries({ queryKey: ["media-tasks"] });
   }
 
+  async function setDueDate(d: Date | null) {
+    await (supabase.from("tasks") as any)
+      .update({ due_at: d ? d.toISOString() : null })
+      .eq("id", task.id);
+    qc.invalidateQueries({ queryKey: ["media-tasks"] });
+    qc.invalidateQueries({ queryKey: ["media-calendar-content"] });
+    toast.success(d ? `Due ${format(d, "MMM d")}` : "Due date cleared");
+  }
+
   return (
     <li className="flex items-start gap-3 py-2.5">
       <Checkbox checked={selected} onCheckedChange={(v) => onSelect(!!v)} className="mt-1" />
@@ -258,11 +268,38 @@ function TaskRow({ task, selected, onSelect }: { task: ExtendedTaskRow; selected
         <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[11px]">
           {stat && <Badge variant="outline" style={{ borderColor: `${stat.color}80`, color: stat.color }}>{stat.label}</Badge>}
           {pri && <Badge variant="outline" style={{ borderColor: `${pri.color}80`, color: pri.color }}>{pri.label}</Badge>}
-          {task.due_at && (
-            <span className={cn("text-muted-foreground", overdue && "text-destructive font-medium")}>
-              {format(new Date(task.due_at), "MMM d")}
-            </span>
-          )}
+          <Popover>
+            <PopoverTrigger asChild>
+              <button
+                type="button"
+                className={cn(
+                  "inline-flex h-5 items-center gap-1 rounded-full border border-dashed border-border px-1.5 text-[10px] text-muted-foreground hover:border-primary hover:text-primary transition-colors",
+                  task.due_at && "border-solid border-border",
+                  overdue && "border-destructive/60 text-destructive font-medium",
+                )}
+                aria-label={task.due_at ? "Edit due date" : "Set due date"}
+              >
+                <CalendarIcon className="h-3 w-3" />
+                {task.due_at ? format(new Date(task.due_at), "MMM d") : "Set due"}
+              </button>
+            </PopoverTrigger>
+            <PopoverContent className="w-auto p-0" align="start">
+              <Calendar
+                mode="single"
+                selected={task.due_at ? new Date(task.due_at) : undefined}
+                onSelect={(d) => d && setDueDate(d)}
+                initialFocus
+                className="p-3 pointer-events-auto"
+              />
+              {task.due_at && (
+                <div className="border-t border-border p-2">
+                  <Button variant="ghost" size="sm" className="w-full" onClick={() => setDueDate(null)}>
+                    <X className="mr-1 h-3 w-3" />Clear due date
+                  </Button>
+                </div>
+              )}
+            </PopoverContent>
+          </Popover>
           {task.assignee_name && (
             <span className="inline-flex h-5 items-center gap-1 rounded-full border border-border bg-muted/60 px-2 text-[10px] font-semibold">
               <span className="flex h-4 w-4 items-center justify-center rounded-full bg-primary/20 text-primary text-[9px]">{initials}</span>
@@ -284,6 +321,13 @@ function RowMenu({ task }: { task: ExtendedTaskRow }) {
   async function patch(p: any) {
     await (supabase.from("tasks") as any).update(p).eq("id", task.id);
     qc.invalidateQueries({ queryKey: ["media-tasks"] });
+    qc.invalidateQueries({ queryKey: ["media-calendar-content"] });
+  }
+  function dueIn(days: number) {
+    const d = new Date();
+    d.setHours(9, 0, 0, 0);
+    d.setDate(d.getDate() + days);
+    return patch({ due_at: d.toISOString() });
   }
   return (
     <DropdownMenu>
@@ -291,6 +335,11 @@ function RowMenu({ task }: { task: ExtendedTaskRow }) {
         <Button variant="ghost" size="icon" className="h-7 w-7"><MoreHorizontal className="h-4 w-4" /></Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-52">
+        <div className="px-2 py-1 text-[10px] uppercase tracking-widest text-muted-foreground">Due date</div>
+        <DropdownMenuItem onClick={() => dueIn(0)}><CalendarIcon className="mr-2 h-4 w-4" />Today</DropdownMenuItem>
+        <DropdownMenuItem onClick={() => dueIn(1)}><CalendarIcon className="mr-2 h-4 w-4" />Tomorrow</DropdownMenuItem>
+        <DropdownMenuItem onClick={() => dueIn(7)}><CalendarIcon className="mr-2 h-4 w-4" />Next week</DropdownMenuItem>
+        <DropdownMenuItem onClick={() => patch({ due_at: null })}><X className="mr-2 h-4 w-4" />Clear due date</DropdownMenuItem>
         <div className="px-2 py-1 text-[10px] uppercase tracking-widest text-muted-foreground">Priority</div>
         {PRIORITY_LABELS.map((p) => (
           <DropdownMenuItem key={p.value} onClick={() => patch({ priority_label: p.value })}>{p.label}</DropdownMenuItem>
