@@ -41,6 +41,7 @@ import "@/lib/offline/workout-completion-sync";
 // HTML5 drag-and-drop polyfill for touch devices. Loaded only in the browser
 // because the package touches `document` at module scope and crashes SSR.
 if (typeof document !== "undefined") {
+  // @ts-expect-error - no types shipped
   import("drag-drop-touch");
 }
 
