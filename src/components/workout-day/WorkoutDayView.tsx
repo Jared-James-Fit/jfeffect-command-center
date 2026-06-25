@@ -841,6 +841,7 @@ function WorkoutDay({
   const { data: prefRows = [] } = useQuery({
     queryKey: ["client-exercise-unit-prefs", adapter?.kind ?? "client", client?.id, exerciseIds.join(",")],
     enabled: !!client?.id && exerciseIds.length > 0,
+    staleTime: 60_000,
     queryFn: async () => {
       // Route through the adapter so the member adapter can read its own
       // member_exercise_unit_prefs table (parity with client side).
