@@ -24,7 +24,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { ArrowLeft, Plus, Calendar, Target, Layers, History, BarChart3, BookOpen, CalendarClock, Wand2, Trash2 } from "lucide-react";
 import { toast } from "sonner";
-import { listClientPreps, listClientBlocks, createPrep, createBlock, countdownLabel, updatePrep, updateBlock, deleteBlock, GOAL_TYPES, PREP_STATUSES, BLOCK_STATUSES, type PrepStatus, type BlockStatus } from "@/lib/pl-programs";
+import { listClientPreps, listClientBlocks, createPrep, createBlock, countdownLabel, updatePrep, updateBlock, deleteBlock, deletePrep, GOAL_TYPES, PREP_STATUSES, BLOCK_STATUSES, type PrepStatus, type BlockStatus } from "@/lib/pl-programs";
 import { useAuth } from "@/lib/auth";
 import { BLOCK_PHASE_OPTIONS } from "@/lib/pl-template-blocks";
 import { ClientTrainingIntelCard } from "@/components/client-training-intel-card";
@@ -99,61 +99,12 @@ function ClientProgramsPage() {
 
         <ClientTrainingIntelCard clientId={clientId} />
 
-        <section>
-          <h2 className="mb-3 text-sm font-bold uppercase tracking-widest text-muted-foreground">Preps / Phases</h2>
-          {preps.length === 0 ? (
-            <Card className="p-6 text-sm text-muted-foreground">No preps yet.</Card>
-          ) : (
-            <div className="grid gap-3 md:grid-cols-2">
-              {(preps as any[]).map((p) => {
-                const cd = countdownLabel(p.event_date);
-                const blocksInPrep = (blocks as any[]).filter((b) => b.prep_id === p.id);
-                return (
-                  <Card key={p.id} className="p-4">
-                    <div className="flex items-start justify-between">
-                      <div>
-                        <div className="font-bold text-lg">{p.title}</div>
-                        <div className="text-xs text-muted-foreground">{p.goal_type}</div>
-                        {p.source_template_id && (templateLookup as any)[p.source_template_id] && (
-                          <Link
-                            to="/admin/program-library/$templateId"
-                            params={{ templateId: p.source_template_id }}
-                            className="mt-1 inline-flex items-center gap-1 rounded border border-primary/30 bg-primary/5 px-1.5 py-0.5 text-[10px] text-primary hover:bg-primary/10"
-                          >
-                            <BookOpen className="h-2.5 w-2.5" /> From template: {(templateLookup as any)[p.source_template_id].name}
-                          </Link>
-                        )}
-                      </div>
-                      <Select value={p.status} onValueChange={async (v) => { await updatePrep(p.id, { status: v as PrepStatus }); refresh(); toast.success(`Status: ${v}`); }}>
-                        <SelectTrigger className="h-7 w-28 text-xs"><SelectValue /></SelectTrigger>
-                        <SelectContent>{PREP_STATUSES.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent>
-                      </Select>
-                    </div>
-                    {p.event_name && (
-                      <div className="mt-2 text-sm">
-                        <Calendar className="mr-1 inline h-3 w-3" />{p.event_name}
-                        {p.event_date && <span className="text-muted-foreground"> · {p.event_date}</span>}
-                        {cd && <Badge className="ml-2" variant="secondary">{cd}</Badge>}
-                      </div>
-                    )}
-                    {p.total_weeks && (
-                      <div className="mt-1 text-xs text-muted-foreground">{p.total_weeks} weeks total · {blocksInPrep.length} block(s) programmed</div>
-                    )}
-                    <div className="mt-3 space-y-1">
-                      {blocksInPrep.map((b) => (
-                        <Link key={b.id} to="/admin/blocks/$blockId" params={{ blockId: b.id }} className="block rounded border border-border bg-secondary/30 p-2 text-sm hover:bg-secondary/50">
-                          <span className="font-semibold">{b.name}</span>
-                          <span className="ml-2 text-xs text-muted-foreground">{b.weeks}w · {b.training_focus ?? "—"}</span>
-                        </Link>
-                      ))}
-                      {blocksInPrep.length === 0 && <p className="text-xs italic text-muted-foreground">No blocks programmed yet.</p>}
-                    </div>
-                  </Card>
-                );
-              })}
-            </div>
-          )}
-        </section>
+        <PrepsSection
+          preps={preps as any[]}
+          blocks={blocks as any[]}
+          templateLookup={templateLookup as any}
+          onRefresh={refresh}
+        />
 
         <section>
           <BlocksSection
