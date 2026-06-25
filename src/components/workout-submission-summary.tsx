@@ -1,7 +1,8 @@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Trophy, Dumbbell, Activity, CheckCircle2, XCircle, Flame, Clock } from "lucide-react";
+import { Trophy, Dumbbell, Activity, CheckCircle2, XCircle, Flame, Clock, Star, Calendar } from "lucide-react";
 import type { WorkoutSummary } from "@/lib/workout-summary";
+import { format } from "date-fns";
 
 type Props = {
   open: boolean;
@@ -9,15 +10,27 @@ type Props = {
   summary: WorkoutSummary;
   workoutTitle?: string | null;
   durationMin?: number | null;
+  workoutDate?: string | Date | null;
+  sessionRating?: number | null;
   onClose?: () => void;
 };
 
-export function WorkoutSubmissionSummary({ open, onOpenChange, summary, workoutTitle, durationMin, onClose }: Props) {
+export function WorkoutSubmissionSummary({ open, onOpenChange, summary, workoutTitle, durationMin, workoutDate, sessionRating, onClose }: Props) {
   const headline =
     summary.score >= 90 ? "Crushed it!"
     : summary.score >= 75 ? "Great work!"
     : summary.score >= 50 ? "Solid effort"
     : "Logged — keep going";
+  const motivational =
+    summary.score >= 90 ? "Elite session. Recover hard — momentum is yours."
+    : summary.score >= 75 ? "Strong work today. Consistency stacks results."
+    : summary.score >= 50 ? "Reps in the bank. Show up again tomorrow."
+    : "Logged is better than skipped. Back at it next session.";
+  const ratingStars = sessionRating != null ? Math.max(0, Math.min(5, Math.round(sessionRating))) : 0;
+  const dateLabel = (() => {
+    if (!workoutDate) return null;
+    try { return format(new Date(workoutDate), "EEE, MMM d, yyyy"); } catch { return null; }
+  })();
 
   return (
     <Dialog open={open} onOpenChange={(v) => { onOpenChange(v); if (!v) onClose?.(); }}>
@@ -31,14 +44,31 @@ export function WorkoutSubmissionSummary({ open, onOpenChange, summary, workoutT
               <DialogHeader className="space-y-0">
                 <DialogTitle className="text-2xl font-black leading-tight">{headline}</DialogTitle>
                 <DialogDescription className="text-xs truncate">
-                  {workoutTitle ?? "Workout"} · summary
+                  {workoutTitle ?? "Workout"}
+                  {dateLabel ? ` · ${dateLabel}` : ""}
                 </DialogDescription>
               </DialogHeader>
             </div>
           </div>
+          {sessionRating != null && (
+            <div className="mt-3 flex items-center gap-1.5">
+              {[1, 2, 3, 4, 5].map((i) => (
+                <Star
+                  key={i}
+                  className={`h-5 w-5 ${i <= ratingStars ? "fill-amber-400 text-amber-400" : "text-muted-foreground/40"}`}
+                />
+              ))}
+              <span className="ml-1 text-xs font-bold text-muted-foreground">{ratingStars}/5</span>
+            </div>
+          )}
         </div>
 
         <div className="space-y-3 px-5 pb-4">
+          {/* Motivational message */}
+          <div className="rounded-2xl border border-primary/20 bg-primary/5 px-4 py-3 text-center text-sm font-bold text-foreground">
+            {motivational}
+          </div>
+
           {/* Score */}
           <div className="rounded-2xl border border-border bg-card p-4 text-center">
             <div className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Workout Score</div>
