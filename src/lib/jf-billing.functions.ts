@@ -8,7 +8,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
-import { supabaseAdmin } from "@/integrations/supabase/client.server"; // static — prevents cold-start delay
 import { stripeFetch, formEncode, getStripeKeyForMode, getStripeKeyDiagnostics, detectStripeKeyMode, type StripeMode } from "@/lib/stripe.server";
 import {
   applyJfLifecycle,
@@ -48,7 +47,7 @@ function statusFromSubscription(sub: any, holdPriceId: string | null): string {
 }
 
 async function loadSettings() {
-  // supabaseAdmin imported statically at top of file
+  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
   const { data, error } = await supabaseAdmin.from("jf_membership_settings").select("*").eq("id", true).maybeSingle();
   if (error || !data) throw new Error("JF Membership settings missing. Ask an admin to configure them.");
   return data;
@@ -80,7 +79,7 @@ async function applyStripeStateToMember(memberId: string, sub: any, holdPriceId:
   // Delegate to the canonical lifecycle applier so every writer (webhook,
   // member self-service, admin tools) shares the same status/entitlement
   // logic, grace handling, recovery detection, and audit trail.
-  // supabaseAdmin imported statically at top of file
+  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
   const { data: member } = await supabaseAdmin
     .from("app_members").select("*").eq("id", memberId).maybeSingle();
   if (!member) return;
@@ -88,7 +87,7 @@ async function applyStripeStateToMember(memberId: string, sub: any, holdPriceId:
 }
 
 async function findMemberByUser(userId: string) {
-  // supabaseAdmin imported statically at top of file
+  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
   const { data } = await supabaseAdmin.from("app_members").select("*").eq("user_id", userId).maybeSingle();
   return data;
 }
@@ -146,7 +145,7 @@ async function listActiveSubscriptionsForCustomer(customerId: string, apiKey: st
  */
 async function fireMemberSms(memberId: string, trigger: string, vars: Record<string, string> = {}) {
   try {
-    // supabaseAdmin imported statically at top of file
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { fireAutomationTrigger } = await import("@/lib/sms-trigger.server");
     await fireAutomationTrigger(supabaseAdmin, { trigger, memberId, vars });
   } catch (e) {
@@ -223,7 +222,7 @@ export const createJfSignupCheckout = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     const s = await loadSettings();
     if (!s.monthly_price_id) throw new Error("Membership pricing isn't configured yet. Please contact support.");
-    // supabaseAdmin imported statically at top of file
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
     // Phone is required and must normalize.
     const phoneE164 = normalizePhoneE164(data.phone);
@@ -509,7 +508,7 @@ const CompleteInput = z.object({ session_id: z.string().min(5) });
 export const completeJfSignup = createServerFn({ method: "POST" })
   .inputValidator((d: unknown) => CompleteInput.parse(d))
   .handler(async ({ data }) => {
-    // supabaseAdmin imported statically at top of file
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const s = await loadSettings();
 
     // Resolve the Stripe key for the configured mode (test/live).
@@ -681,7 +680,7 @@ export const getMyJfBilling = createServerFn({ method: "GET" })
     let member: any = await findMemberByUser(userId);
     if (!member) return { member: null, settings: null, lifecycle: null };
     // Server-side lazy enforcement: if grace expired, restrict access now.
-    // supabaseAdmin imported statically at top of file
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     member = await enforceGraceIfExpired(supabaseAdmin, member);
     const s = await loadSettings();
     const graceDays = Number(s.grace_period_days ?? 5);
@@ -774,7 +773,7 @@ export const cancelJfMembership = createServerFn({ method: "POST" })
       apiKey,
     });
     await applyStripeStateToMember(member.id, sub, s.hold_price_id);
-    // supabaseAdmin imported statically at top of file
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     if (data.reason || data.details) {
       await supabaseAdmin.from("jf_cancellation_feedback").insert({
         member_id: member.id, reason: data.reason ?? null, details: data.details ?? null,
@@ -803,7 +802,7 @@ export const keepMembership = createServerFn({ method: "POST" })
 
     // Cross-account / stale ref safety: read the current subscription first.
     const { sub: current, missing } = await safeFetchSubscription(member.stripe_subscription_id!, apiKey);
-    // supabaseAdmin imported statically at top of file
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     if (missing || !current) {
       await recordSyncWarning({ supabaseAdmin, memberId: member.id, reason: "keep_membership_missing_subscription", metadata: { stripe_subscription_id: member.stripe_subscription_id } });
       throw new Error("Your subscription could not be located. Please use Restart Membership instead.");
@@ -839,7 +838,7 @@ export const restartMembership = createServerFn({ method: "POST" })
   .inputValidator((d: unknown) => RestartInput.parse(d))
   .handler(async ({ data, context }) => {
     const { userId } = context as any;
-    // supabaseAdmin imported statically at top of file
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const member = await findMemberByUser(userId);
     if (!member) throw new Error("No member account found.");
     if (member.cross_account_locked) {
@@ -932,7 +931,7 @@ export const adminSetCrossAccountLock = createServerFn({ method: "POST" })
   .inputValidator((d: unknown) => LockInput.parse(d))
   .handler(async ({ data, context }) => {
     await assertAdmin(context);
-    // supabaseAdmin imported statically at top of file
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     await supabaseAdmin.from("app_members").update({
       cross_account_locked: data.locked,
       sync_warning_reason: data.locked ? (data.reason ?? "admin_cross_account_lock") : null,
@@ -1065,7 +1064,7 @@ export const adminGetJfSettings = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
     await assertAdmin(context);
-    // supabaseAdmin imported statically at top of file
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { data } = await supabaseAdmin.from("jf_membership_settings").select("*").eq("id", true).maybeSingle();
     const diagnostics = getStripeKeyDiagnostics();
     const mode: StripeMode = ((data as any)?.stripe_mode === "test" ? "test" : "live");
@@ -1098,7 +1097,7 @@ export const adminUpdateJfSettings = createServerFn({ method: "POST" })
   .inputValidator((d: unknown) => SettingsInput.parse(d))
   .handler(async ({ data, context }) => {
     await assertAdmin(context);
-    // supabaseAdmin imported statically at top of file
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const patch: any = { ...data, updated_at: new Date().toISOString() };
     if (patch.upgrade_coaching_url === "") patch.upgrade_coaching_url = null;
     if (patch.support_email === "") patch.support_email = null;
@@ -1110,7 +1109,7 @@ export const adminUpdateJfSettings = createServerFn({ method: "POST" })
 const MemberIdInput = z.object({ member_id: z.string().uuid() });
 
 async function loadMemberOrThrow(memberId: string) {
-  // supabaseAdmin imported statically at top of file
+  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
   const { data } = await supabaseAdmin.from("app_members").select("*").eq("id", memberId).maybeSingle();
   if (!data) throw new Error("Member not found.");
   return data;
@@ -1224,7 +1223,7 @@ export const adminCompAccess = createServerFn({ method: "POST" })
   .inputValidator((d: unknown) => z.object({ member_id: z.string().uuid(), months: z.number().int().min(1).max(36).default(1) }).parse(d))
   .handler(async ({ data, context }) => {
     await assertAdmin(context);
-    // supabaseAdmin imported statically at top of file
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const expiresAt = new Date(Date.now() + data.months * 30 * 24 * 3600 * 1000).toISOString();
     await supabaseAdmin.from("app_members").update({
       subscription_status: "Active",
@@ -1251,7 +1250,7 @@ export const adminGrantTemporaryAccess = createServerFn({ method: "POST" })
   .inputValidator((d: unknown) => GrantTempAccessInput.parse(d))
   .handler(async ({ data, context }) => {
     await assertAdmin(context);
-    // supabaseAdmin imported statically at top of file
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const expiresAt = new Date(Date.now() + data.days * 86_400_000).toISOString();
     await supabaseAdmin
       .from("app_members")
@@ -1297,7 +1296,7 @@ export const adminExtendTrial = createServerFn({ method: "POST" })
   .inputValidator((d: unknown) => ExtendTrialInput.parse(d))
   .handler(async ({ data, context }) => {
     await assertAdmin(context);
-    // supabaseAdmin imported statically at top of file
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const m = await loadMemberOrThrow(data.member_id);
     const currentTrialEnd = m.trial_end_at ? new Date(m.trial_end_at) : new Date();
     const newTrialEnd = new Date(
@@ -1334,7 +1333,7 @@ export const adminSetAccessEndDate = createServerFn({ method: "POST" })
   .inputValidator((d: unknown) => SetAccessEndDateInput.parse(d))
   .handler(async ({ data, context }) => {
     await assertAdmin(context);
-    // supabaseAdmin imported statically at top of file
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     await supabaseAdmin
       .from("app_members")
       .update({
@@ -1359,7 +1358,7 @@ export const adminRevokeAccess = createServerFn({ method: "POST" })
   .inputValidator((d: unknown) => RevokeAccessInput.parse(d))
   .handler(async ({ data, context }) => {
     await assertAdmin(context);
-    // supabaseAdmin imported statically at top of file
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     await supabaseAdmin
       .from("app_members")
       .update({
