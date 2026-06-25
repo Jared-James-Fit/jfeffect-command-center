@@ -202,9 +202,7 @@ function BlocksSection({ blocks, templateLookup, onRefresh }: { blocks: any[]; t
         {current.length === 0 ? (
           <Card className="p-6 text-sm text-muted-foreground">No active blocks.</Card>
         ) : (
-          <div className="grid gap-2">
-            {current.map((b) => <BlockRow key={b.id} b={b} templateLookup={templateLookup} onRefresh={onRefresh} />)}
-          </div>
+          <BlockGroup blocks={current} templateLookup={templateLookup} onRefresh={onRefresh} groupKey="current" />
         )}
       </div>
       {upcoming.length > 0 && (
@@ -212,22 +210,19 @@ function BlocksSection({ blocks, templateLookup, onRefresh }: { blocks: any[]; t
           <h2 className="mb-3 flex items-center gap-2 text-sm font-bold uppercase tracking-widest text-muted-foreground">
             <CalendarClock className="h-3.5 w-3.5" /> Upcoming Blocks ({upcoming.length})
           </h2>
-          <div className="grid gap-2">
-            {upcoming.map((b) => {
+          <BlockGroup
+            blocks={upcoming}
+            templateLookup={templateLookup}
+            onRefresh={onRefresh}
+            groupKey="upcoming"
+            rowBadge={(b) => {
               const daysUntil = Math.max(
                 0,
                 Math.ceil((new Date(b.start_date + "T00:00:00").getTime() - today.getTime()) / 86400000),
               );
-              return (
-                <div key={b.id} className="relative">
-                  <BlockRow b={b} templateLookup={templateLookup} onRefresh={onRefresh} />
-                  <Badge variant="secondary" className="absolute right-32 top-3 text-[10px]">
-                    Starts in {daysUntil}d
-                  </Badge>
-                </div>
-              );
-            })}
-          </div>
+              return `Starts in ${daysUntil}d`;
+            }}
+          />
         </div>
       )}
       {previous.length > 0 && (
@@ -235,18 +230,212 @@ function BlocksSection({ blocks, templateLookup, onRefresh }: { blocks: any[]; t
           <h2 className="mb-3 flex items-center gap-2 text-sm font-bold uppercase tracking-widest text-muted-foreground">
             <History className="h-3.5 w-3.5" /> Previous Blocks
           </h2>
-          <div className="grid gap-2">
-            {previous.map((b) => <BlockRow key={b.id} b={b} templateLookup={templateLookup} onRefresh={onRefresh} />)}
-          </div>
+          <BlockGroup
+            blocks={previous}
+            templateLookup={templateLookup}
+            onRefresh={onRefresh}
+            groupKey="previous"
+            includeWipeAll
+          />
         </div>
       )}
     </div>
   );
 }
 
-function BlockRow({ b, templateLookup, onRefresh }: { b: any; templateLookup: any; onRefresh: () => void }) {
+function BlockGroup({
+  blocks,
+  templateLookup,
+  onRefresh,
+  groupKey,
+  rowBadge,
+  includeWipeAll,
+}: {
+  blocks: any[];
+  templateLookup: any;
+  onRefresh: () => void;
+  groupKey: string;
+  rowBadge?: (b: any) => string | null;
+  includeWipeAll?: boolean;
+}) {
+  const { role } = useAuth();
+  const canDelete = role === "admin" || role === "coach";
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [busy, setBusy] = useState(false);
+  const [confirmSelected, setConfirmSelected] = useState(false);
+  const [confirmWipe, setConfirmWipe] = useState(false);
+
+  const ids = useMemo(() => blocks.map((b) => b.id), [blocks]);
+  const allChecked = ids.length > 0 && ids.every((id) => selected.has(id));
+  const someChecked = !allChecked && ids.some((id) => selected.has(id));
+
+  const toggleAll = (next: boolean) => {
+    setSelected(next ? new Set(ids) : new Set());
+  };
+  const toggleOne = (id: string, next: boolean) => {
+    setSelected((prev) => {
+      const copy = new Set(prev);
+      if (next) copy.add(id); else copy.delete(id);
+      return copy;
+    });
+  };
+
+  const runDelete = async (targetIds: string[]) => {
+    if (targetIds.length === 0) return;
+    setBusy(true);
+    let ok = 0;
+    let fail = 0;
+    for (const id of targetIds) {
+      try {
+        await deleteBlock(id);
+        ok++;
+      } catch (e: any) {
+        fail++;
+        console.error("deleteBlock failed", id, e);
+      }
+    }
+    setBusy(false);
+    setSelected(new Set());
+    setConfirmSelected(false);
+    setConfirmWipe(false);
+    if (ok > 0) toast.success(`Deleted ${ok} workout${ok === 1 ? "" : "s"}`);
+    if (fail > 0) toast.error(`Failed to delete ${fail} workout${fail === 1 ? "" : "s"}`);
+    onRefresh();
+  };
+
   return (
-    <Card className="p-3 flex items-center justify-between hover:bg-secondary/30">
+    <div>
+      {canDelete && (
+        <div className="mb-2 flex flex-wrap items-center gap-2 rounded-md border border-border bg-muted/30 px-2.5 py-1.5">
+          <Checkbox
+            id={`select-all-${groupKey}`}
+            checked={allChecked ? true : someChecked ? "indeterminate" : false}
+            onCheckedChange={(v) => toggleAll(v === true)}
+            aria-label="Select all workouts in this group"
+          />
+          <label htmlFor={`select-all-${groupKey}`} className="cursor-pointer text-xs font-medium text-muted-foreground">
+            Select all
+          </label>
+          <span className="text-xs text-muted-foreground">
+            {selected.size > 0 ? `${selected.size} selected` : `${ids.length} total`}
+          </span>
+          <div className="ml-auto flex flex-wrap gap-2">
+            {selected.size > 0 && (
+              <Button
+                size="sm"
+                variant="destructive"
+                disabled={busy}
+                onClick={() => setConfirmSelected(true)}
+              >
+                <Trash2 className="mr-1.5 h-3.5 w-3.5" />
+                Delete selected ({selected.size})
+              </Button>
+            )}
+            {includeWipeAll && ids.length > 0 && (
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={busy}
+                onClick={() => setConfirmWipe(true)}
+                className="border-destructive/40 text-destructive hover:bg-destructive/10 hover:text-destructive"
+              >
+                <Trash2 className="mr-1.5 h-3.5 w-3.5" />
+                Delete all previous / archived ({ids.length})
+              </Button>
+            )}
+          </div>
+        </div>
+      )}
+      <div className="grid gap-2">
+        {blocks.map((b) => {
+          const badge = rowBadge?.(b) ?? null;
+          return (
+            <BlockRow
+              key={b.id}
+              b={b}
+              templateLookup={templateLookup}
+              onRefresh={onRefresh}
+              selectable={canDelete}
+              checked={selected.has(b.id)}
+              onCheckedChange={(v) => toggleOne(b.id, v)}
+              cornerBadge={badge}
+            />
+          );
+        })}
+      </div>
+
+      <AlertDialog open={confirmSelected} onOpenChange={(v) => !busy && setConfirmSelected(v)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete {selected.size} workout{selected.size === 1 ? "" : "s"}?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This permanently removes the selected training blocks along with their weeks, days, exercises, and any logged results. This cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={busy}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={busy}
+              onClick={(e) => { e.preventDefault(); runDelete(Array.from(selected)); }}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {busy ? "Deleting…" : "Delete permanently"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={confirmWipe} onOpenChange={(v) => !busy && setConfirmWipe(v)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete ALL previous / archived workouts?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This permanently removes every completed, archived, or past-dated training block for this client — including weeks, days, exercises, and logged results. This cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={busy}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={busy}
+              onClick={(e) => { e.preventDefault(); runDelete(ids); }}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {busy ? "Deleting…" : `Delete ${ids.length} permanently`}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </div>
+  );
+}
+
+function BlockRow({
+  b,
+  templateLookup,
+  onRefresh,
+  selectable,
+  checked,
+  onCheckedChange,
+  cornerBadge,
+}: {
+  b: any;
+  templateLookup: any;
+  onRefresh: () => void;
+  selectable?: boolean;
+  checked?: boolean;
+  onCheckedChange?: (v: boolean) => void;
+  cornerBadge?: string | null;
+}) {
+  return (
+    <Card className="relative p-3 flex items-center gap-3 hover:bg-secondary/30">
+      {selectable && (
+        <Checkbox
+          checked={!!checked}
+          onCheckedChange={(v) => onCheckedChange?.(v === true)}
+          aria-label={`Select ${b.name}`}
+          onClick={(e) => e.stopPropagation()}
+        />
+      )}
       <Link to="/admin/blocks/$blockId" params={{ blockId: b.id }} className="flex-1">
         <div>
           <div className="flex items-center gap-2">
@@ -268,6 +457,9 @@ function BlockRow({ b, templateLookup, onRefresh }: { b: any; templateLookup: an
           )}
         </div>
       </Link>
+      {cornerBadge && (
+        <Badge variant="secondary" className="text-[10px]">{cornerBadge}</Badge>
+      )}
       <Select value={b.status} onValueChange={async (v) => { await updateBlock(b.id, { status: v as BlockStatus }); onRefresh(); toast.success(`Status: ${v}`); }}>
         <SelectTrigger className="h-7 w-28 text-xs"><SelectValue /></SelectTrigger>
         <SelectContent>{BLOCK_STATUSES.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent>
