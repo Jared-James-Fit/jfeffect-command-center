@@ -568,7 +568,7 @@ export function createClientAdapter(ref: WorkoutContextRef): WorkoutContextAdapt
       }
       const { data, error } = await sb
         .from("pl_row_results")
-        .insert(payload)
+        .upsert(payload, { onConflict: "client_id,row_id,set_index" })
         .select("id")
         .maybeSingle();
       if (error) throw new Error(error.message);
