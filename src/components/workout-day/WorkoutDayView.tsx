@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, Clock, CheckCircle2, Circle, Play, StickyNote, NotebookPen, Info, Maximize2, Minimize2, AlertTriangle, RefreshCw, Send, MessageCircle, ChevronDown, ChevronUp, Move, Zap } from "lucide-react";
+import { ArrowLeft, Clock, CheckCircle2, Circle, Play, StickyNote, NotebookPen, Info, Maximize2, Minimize2, AlertTriangle, RefreshCw, Send, MessageCircle, ChevronDown, ChevronUp, Move, Zap, Trophy } from "lucide-react";
 import { MoveWorkoutSheet } from "@/components/schedule/MoveWorkoutSheet";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
@@ -28,6 +28,7 @@ import {
 import { listClientMaxes, buildMaxIndex, computeRowLoad } from "@/lib/pl-maxes";
 import { useAutosave, readLocalDraft, clearLocalDraft } from "@/hooks/use-autosave";
 import { useUnsavedWarning } from "@/hooks/use-unsaved-warning";
+import { useBodyScrollLock } from "@/hooks/use-body-scroll-lock";
 import { SaveStatus } from "@/components/save-status";
 import { ActionButton } from "@/components/action-button";
 import { TrainingHelpButton } from "@/components/training-help-sheet";
@@ -1062,6 +1063,7 @@ function WorkoutDay({
   const [completeSubmitting, setCompleteSubmitting] = useState(false);
   const [summaryOpen, setSummaryOpen] = useState(false);
   const [lastSummary, setLastSummary] = useState<WorkoutSummary | null>(null);
+  const [lastSessionRating, setLastSessionRating] = useState<number | null>(null);
   // Notifications can deep-link with ?review=1 to nudge the member to finish
   // an in-progress workout. Auto-open the quick popup once it lands.
   const reviewParam = search.review === 1;
@@ -1080,6 +1082,26 @@ function WorkoutDay({
   const recapParam = search.recap === 1;
   const autoOpenedRecapRef = useRef(false);
   const recapFromSubmitRef = useRef(false);
+
+  // Build a summary from the current rows/results snapshot. Shared by the
+  // ?recap=1 deep-link, the post-submit celebration, and the "View Score"
+  // button on the completed workout page.
+  const openRecapSummary = () => {
+    const displayUnit: "kg" | "lb" =
+      ((client as any)?.preferred_weight_unit === "kg" ? "kg" : "lb");
+    const computed = computeWorkoutSummary(
+      rows as any[],
+      results as any[],
+      {
+        displayUnit,
+        hasNote: !!completion?.client_notes,
+      },
+    );
+    setLastSummary(computed);
+    recapFromSubmitRef.current = false;
+    setSummaryOpen(true);
+  };
+
   useEffect(() => {
     if (!recapParam) { autoOpenedRecapRef.current = false; return; }
     if (autoOpenedRecapRef.current) return;
@@ -1100,6 +1122,11 @@ function WorkoutDay({
     setLastSummary(computed);
     setSummaryOpen(true);
   }, [recapParam, completion?.completed_at, completion?.client_notes, rows, results, client]);
+
+  // Lock the background page while either overlay is open. Prevents the
+  // jump/glitch where the page scroll position shifts as Radix swaps
+  // scrollbar styles when the sheet/dialog mounts.
+  useBodyScrollLock(completeOpen || summaryOpen);
 
   const refreshNotes = () => {
     qc.invalidateQueries({ queryKey: ["pl-day-exercise-notes", dayId] });
@@ -1396,7 +1423,19 @@ function WorkoutDay({
             }
             return durationRange(day.duration_estimate_min ?? 60);
           })()}</Badge>
-          {completion?.completed_at && <Badge variant="outline" className="text-green-500 border-green-500/30 bg-green-500/10"><CheckCircle2 className="mr-1 h-3 w-3" /> Completed</Badge>}
+          {completion?.completed_at && (
+            <>
+              <Badge variant="outline" className="text-green-500 border-green-500/30 bg-green-500/10"><CheckCircle2 className="mr-1 h-3 w-3" /> Completed</Badge>
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-7 gap-1.5 border-primary/40 bg-primary/10 px-2.5 text-xs font-bold text-primary hover:bg-primary/20"
+                onClick={openRecapSummary}
+              >
+                <Trophy className="h-3.5 w-3.5" /> View Score
+              </Button>
+            </>
+          )}
           {completion && !completion.completed_at && (completion.in_progress_at || completion.started_at) && (
             <Badge variant="outline" className="border-amber-500/30 bg-amber-500/10 text-amber-500">In progress</Badge>
           )}
@@ -1745,8 +1784,13 @@ function WorkoutDay({
                 });
                 setCompleteOpen(false);
                 setLastSummary(computed);
+                setLastSessionRating(payload.session_rating ?? null);
                 recapFromSubmitRef.current = true;
-                setSummaryOpen(true);
+                // Defer opening the summary dialog until the sheet's exit
+                // animation has finished. Stacking two Radix overlays in the
+                // same tick leaves body pointer-events frozen and the dialog
+                // never appears.
+                setTimeout(() => setSummaryOpen(true), 280);
                 toast.message("Workout saved offline", {
                   description: "We'll sync it when you're back online.",
                 });
@@ -1807,8 +1851,9 @@ function WorkoutDay({
 
               setCompleteOpen(false);
               setLastSummary(computed);
+              setLastSessionRating(payload.session_rating ?? null);
               recapFromSubmitRef.current = true;
-              setSummaryOpen(true);
+              setTimeout(() => setSummaryOpen(true), 280);
               toast.success(
                 `Workout submitted — Score: ${computed.score}/100`,
                 {
@@ -1832,6 +1877,13 @@ function WorkoutDay({
           summary={lastSummary}
           workoutTitle={day?.title ?? null}
           durationMin={completion?.actual_duration_min ?? null}
+          workoutDate={completion?.completed_at ?? scheduledDate ?? null}
+          sessionRating={
+            lastSessionRating ??
+            (completion as any)?.session_rating ??
+            existingReview?.overall_rating ??
+            null
+          }
           onClose={() => {
             // Only navigate to the list when the summary was opened as the
             // post-submission celebration. When opened from the "View workout
