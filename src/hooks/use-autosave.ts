@@ -29,10 +29,12 @@ const DRAFT_PREFIX = "lov:draft:";
 const defaultEquals = <T,>(a: T, b: T) => JSON.stringify(a) === JSON.stringify(b);
 
 /**
- * Manual-save helper. Emergency safety lock 2026-06-25:
- * this hook must not persist anything on value changes, mount, hydration,
- * reconnect, failures, or unmount. Only explicit flush()/retry() calls may
- * write to the backend or local draft storage.
+ * Debounced autosave helper with a local draft fallback.
+ *
+ * Contract for workout rows: callers gate `enabled` while an input is focused;
+ * once focus clears, the latest value is saved after `delay`. Failed saves keep
+ * the draft locally and retry with backoff so transient backend/network issues
+ * do not leave the row permanently stuck.
  */
 export function useAutosave<T>({
   key,
@@ -53,8 +55,13 @@ export function useAutosave<T>({
   const retryAttempt = useRef(0);
   const pendingValue = useRef<T>(value);
   const inflight = useRef(false);
+  const enabledRef = useRef(enabled);
+  const delayRef = useRef(delay);
+  const doSaveRef = useRef<(() => Promise<void>) | null>(null);
   const onSaveRef = useRef(onSave);
   onSaveRef.current = onSave;
+  enabledRef.current = enabled;
+  delayRef.current = delay;
   const onPermFailRef = useRef(onPermanentFailure);
   onPermFailRef.current = onPermanentFailure;
   const reportedFailRef = useRef(false);
@@ -95,7 +102,18 @@ export function useAutosave<T>({
     try { window.localStorage.removeItem(DRAFT_PREFIX + key); } catch {}
   }, [key]);
 
+  const scheduleSave = useCallback((ms?: number) => {
+    if (timer.current) { clearTimeout(timer.current); timer.current = null; }
+    if (!enabledRef.current) return;
+    const wait = Math.max(0, ms ?? delayRef.current);
+    timer.current = setTimeout(() => {
+      timer.current = null;
+      void doSaveRef.current?.();
+    }, wait);
+  }, []);
+
   const doSave = useCallback(async () => {
+    if (!enabledRef.current) return;
     if (inflight.current) return;
     const v = pendingValue.current;
     if (lastSavedSet.current && equals(lastSaved.current, v)) {
@@ -136,10 +154,9 @@ export function useAutosave<T>({
       reportedFailRef.current = false;
       setSavedAt(Date.now());
       clearDraft();
-      // If value changed mid-save, leave it pending for the next explicit
-      // Save tap. Never schedule a follow-up write automatically.
       if (!equals(pendingValue.current, v)) {
         setState("idle");
+        scheduleSave(delayRef.current);
       } else {
         setState("saved");
       }
@@ -147,21 +164,25 @@ export function useAutosave<T>({
       console.error("[useAutosave] save failed", err);
       setState("error");
       writeDraft(v);
-      // Manual-save mode: never retry in the background. Retrying requires an
-      // explicit user action via retry()/flush(). This prevents hydration/page
-      // load from repeatedly overwriting workout rows.
       retryAttempt.current = Math.min(retryAttempt.current + 1, 5);
       if (retryAttempt.current >= permanentFailureAfter && !reportedFailRef.current) {
         reportedFailRef.current = true;
         try { onPermFailRef.current?.({ value: v, attempt: retryAttempt.current, error: err }); } catch {}
       }
+      const retryDelay = Math.min(30_000, 1000 * 2 ** retryAttempt.current);
+      scheduleSave(retryDelay);
     } finally {
       inflight.current = false;
     }
-  }, [equals, online, writeDraft, clearDraft, permanentFailureAfter, timeoutMs]);
+  }, [equals, online, writeDraft, clearDraft, permanentFailureAfter, timeoutMs, scheduleSave]);
 
-  // Track value changes for explicit manual saves only. Do not persist anything
-  // from hydration, typing, unit toggles, reconnects, or refetches.
+  useEffect(() => {
+    doSaveRef.current = doSave;
+  }, [doSave]);
+
+  // Track value changes and schedule a save only when the caller says it is
+  // safe (`enabled`). Workout rows set enabled=false while an input has focus,
+  // so the save fires after the user stops typing AND leaves the field.
   useEffect(() => {
     pendingValue.current = value;
     if (!lastSavedSet.current) {
@@ -169,16 +190,22 @@ export function useAutosave<T>({
       lastSavedSet.current = true;
       return;
     }
-    // If the value changed, drop out of a sticky "error" state back to
-    // "idle" so the next flush() (e.g. onBlur) attempts a fresh save with
-    // the new value instead of being silently suppressed.
+    const dirty = !equals(lastSaved.current, value);
+    if (!dirty) {
+      if (timer.current) { clearTimeout(timer.current); timer.current = null; }
+      return;
+    }
     setState((s) => {
       if (s === "saving") return s;
-      if (equals(lastSaved.current, value)) return s;
       return "idle";
     });
+    if (!enabled) {
+      if (timer.current) { clearTimeout(timer.current); timer.current = null; }
+      return;
+    }
+    scheduleSave(delay);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [value, enabled]);
+  }, [value, enabled, delay, scheduleSave]);
 
   // Establish the synced baseline at mount, regardless of `enabled`. This
   // ensures bulk fills (e.g. "Copy Previous", "Quick Inputs") that flip
@@ -193,9 +220,15 @@ export function useAutosave<T>({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Reconnect must not trigger a save. Users retry manually.
+  // Reconnect should retry the latest dirty draft; otherwise a temporary
+  // offline state can leave the row stuck until the user edits it again.
   useEffect(() => {
-    if (online && state === "offline") setState("idle");
+    if (online && state === "offline") {
+      setState("idle");
+      if (lastSavedSet.current && !equals(lastSaved.current, pendingValue.current)) {
+        scheduleSave(0);
+      }
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [online]);
 
