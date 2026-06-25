@@ -1,4 +1,4 @@
-import { createFileRoute, useNavigate, useSearch } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { zodValidator, fallback } from "@tanstack/zod-adapter";
 import { z } from "zod";
 import { TasksPage } from "@/components/tasks/tasks-page";
@@ -45,7 +45,7 @@ function MyWorkPage() {
                 size="sm"
                 variant={view === v.value ? "default" : "ghost"}
                 className={cn("h-8", view === v.value && "shadow-sm")}
-                onClick={() => navigate({ search: (prev) => ({ ...prev, view: v.value }) })}
+                onClick={() => navigate({ search: (prev: any) => ({ ...prev, view: v.value }) })}
               >
                 <v.icon className="mr-1 h-4 w-4" />{v.label}
               </Button>
@@ -58,7 +58,7 @@ function MyWorkPage() {
         <div className="mb-3 flex items-center gap-2 rounded-md border border-primary/40 bg-primary/5 px-3 py-2 text-xs">
           <span className="font-semibold uppercase tracking-widest text-primary">Filter:</span>
           <span>{filter}</span>
-          <Button variant="ghost" size="sm" className="ml-auto h-6 px-2" onClick={() => navigate({ search: (prev) => ({ ...prev, filter: undefined }) })}>Clear</Button>
+          <Button variant="ghost" size="sm" className="ml-auto h-6 px-2" onClick={() => navigate({ search: (prev: any) => ({ ...prev, filter: undefined }) })}>Clear</Button>
         </div>
       )}
 
