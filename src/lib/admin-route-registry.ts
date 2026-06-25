@@ -111,7 +111,7 @@ export const ADMIN_ROUTE_REGISTRY: AdminRouteEntry[] = [
     parent: "Admin → Members", roles: ADMIN, icon: Users,
     keywords: ["membership members", "self guided members"] },
   { id: "client-pov", label: "Client POV", to: "/admin/client-pov", category: "Clients",
-    parent: "Admin → Clients", roles: ADMIN_COACH, icon: Eye, hidden: true,
+    parent: "Admin → Clients", roles: ADMIN_COACH, icon: Eye,
     keywords: ["view as client", "impersonate client", "point of view"] },
   { id: "client-requests", label: "Client Action Requests", to: "/admin/client-action-requests",
     category: "Clients", parent: "Admin → Clients", roles: ADMIN_COACH, icon: ListTodo, hidden: true,
