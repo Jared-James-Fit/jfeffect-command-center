@@ -1,7 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
-import { supabaseAdmin } from "@/integrations/supabase/client.server"; // static — prevents cold-start delay
 import { normalizePhoneToE164 } from "@/lib/phone-e164";
 
 function genToken(len = 32) {
@@ -36,7 +35,7 @@ export const deleteAdminMember = createServerFn({ method: "POST" })
     if (!member) throw new Error("Member not found");
     if (member.user_id === userId) throw new Error("You cannot delete your own account");
 
-    // supabaseAdmin imported statically at top of file
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
     // Delete the app_members row first (RLS bypassed via service role)
     const { error: delErr } = await supabaseAdmin
@@ -62,7 +61,7 @@ export const listMembers = createServerFn({ method: "GET" })
   .inputValidator((i: { accountType?: string; status?: string } | undefined) => i ?? {})
   .handler(async ({ data, context }) => {
     await assertAdmin(context);
-    // supabaseAdmin imported statically at top of file
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     let q = supabaseAdmin.from("app_members").select("*").order("created_at", { ascending: false });
     if (data.accountType) q = q.eq("account_type", data.accountType);
     if (data.status) q = q.eq("status", data.status);
@@ -76,7 +75,7 @@ export const getMember = createServerFn({ method: "GET" })
   .inputValidator((i: { memberId: string }) => z.object({ memberId: z.string().uuid() }).parse(i))
   .handler(async ({ data, context }) => {
     await assertAdmin(context);
-    // supabaseAdmin imported statically at top of file
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { data: member } = await supabaseAdmin.from("app_members").select("*").eq("id", data.memberId).maybeSingle();
     if (!member) throw new Error("Not found");
     const { data: access } = await supabaseAdmin.from("member_access").select("*").eq("member_id", data.memberId);
@@ -98,7 +97,7 @@ export const createAppMember = createServerFn({ method: "POST" })
   .inputValidator((i: unknown) => CreateMemberInput.parse(i))
   .handler(async ({ data, context }) => {
     await assertAdmin(context);
-    // supabaseAdmin imported statically at top of file
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const setup_token = genToken();
     const setup_token_expires_at = new Date(Date.now() + 7 * 24 * 3600 * 1000).toISOString();
     const { data: row, error } = await supabaseAdmin
@@ -178,7 +177,7 @@ export const updateAppMember = createServerFn({ method: "POST" })
   .inputValidator((i: unknown) => UpdateMemberInput.parse(i))
   .handler(async ({ data, context }) => {
     await assertAdmin(context);
-    // supabaseAdmin imported statically at top of file
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { memberId, ...patch } = data;
     if (patch.phone !== undefined && patch.phone !== null && patch.phone !== "") {
       const normalized = normalizePhoneToE164(patch.phone);
@@ -203,7 +202,7 @@ export const applyDefaultMemberAccess = createServerFn({ method: "POST" })
   .inputValidator((i: { memberId: string }) => z.object({ memberId: z.string().uuid() }).parse(i))
   .handler(async ({ data, context }) => {
     await assertAdmin(context);
-    // supabaseAdmin imported statically at top of file
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { data: inserted, error } = await supabaseAdmin.rpc("apply_default_member_access", { _member_id: data.memberId });
     if (error) throw new Error(error.message);
     return { inserted: (inserted as number) ?? 0 };
@@ -214,7 +213,7 @@ export const listMemberDefaults = createServerFn({ method: "GET" })
   .inputValidator((i: { accountType: string }) => z.object({ accountType: z.string() }).parse(i))
   .handler(async ({ data, context }) => {
     await assertAdmin(context);
-    // supabaseAdmin imported statically at top of file
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { data: rows } = await supabaseAdmin
       .from("member_access_defaults")
       .select("access_level_key, enabled")
@@ -233,7 +232,7 @@ export const generateSetupLink = createServerFn({ method: "POST" })
   .inputValidator((i: { memberId: string }) => z.object({ memberId: z.string().uuid() }).parse(i))
   .handler(async ({ data, context }) => {
     await assertAdmin(context);
-    // supabaseAdmin imported statically at top of file
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const setup_token = genToken();
     const setup_token_expires_at = new Date(Date.now() + 7 * 24 * 3600 * 1000).toISOString();
     const { data: row, error } = await supabaseAdmin
@@ -253,7 +252,7 @@ export const generatePasswordResetLink = createServerFn({ method: "POST" })
   .inputValidator((i: { memberId: string }) => z.object({ memberId: z.string().uuid() }).parse(i))
   .handler(async ({ data, context }) => {
     await assertAdmin(context);
-    // supabaseAdmin imported statically at top of file
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { data: row } = await supabaseAdmin.from("app_members").select("email").eq("id", data.memberId).maybeSingle();
     if (!row?.email) throw new Error("Member has no email");
     const origin = getOrigin();
@@ -278,7 +277,7 @@ export const grantAccess = createServerFn({ method: "POST" })
   }).parse(i))
   .handler(async ({ data, context }) => {
     await assertAdmin(context);
-    // supabaseAdmin imported statically at top of file
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { error } = await supabaseAdmin.from("member_access").insert({
       member_id: data.memberId,
       access_level_key: data.accessKey,
@@ -295,7 +294,7 @@ export const revokeAccess = createServerFn({ method: "POST" })
   .inputValidator((i: { accessId: string }) => z.object({ accessId: z.string().uuid() }).parse(i))
   .handler(async ({ data, context }) => {
     await assertAdmin(context);
-    // supabaseAdmin imported statically at top of file
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { error } = await supabaseAdmin.from("member_access").update({ active: false }).eq("id", data.accessId);
     if (error) throw new Error(error.message);
     return { ok: true };
@@ -365,7 +364,7 @@ const RedeemInput = z.object({
 export const redeemSetupToken = createServerFn({ method: "POST" })
   .inputValidator((i: unknown) => RedeemInput.parse(i))
   .handler(async ({ data }) => {
-    // supabaseAdmin imported statically at top of file
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { data: member, error } = await supabaseAdmin
       .from("app_members")
       .select("*")
