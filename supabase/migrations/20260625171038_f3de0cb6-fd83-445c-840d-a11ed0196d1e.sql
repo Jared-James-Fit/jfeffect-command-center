@@ -1,0 +1,1 @@
+REVOKE EXECUTE ON FUNCTION public.tg_coaching_applications_anon_defaults() FROM PUBLIC, anon, authenticated;
