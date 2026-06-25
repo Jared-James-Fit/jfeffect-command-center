@@ -1172,12 +1172,14 @@ function WorkoutDay({
         // count — otherwise blank sets show up as completed in the status bar.
         const kind = required.find((r) => r.rowId === s.rowId)?.metricKind ?? "load_reps";
         const num = (v: any) => v != null && Number.isFinite(Number(v)) && Number(v) > 0;
+        // Load of 0 is a valid log (bodyweight / unloaded). Reps still required.
+        const numOrZero = (v: any) => v != null && Number.isFinite(Number(v)) && Number(v) >= 0;
         const meaningful =
           kind === "timed"
             ? num(s.completedDurationSeconds)
             : kind === "bodyweight"
               ? num(s.reps)
-              : num(s.reps) && (num(s.loadLb) || num(s.loadKg));
+              : num(s.reps) && (numOrZero(s.loadLb) || numOrZero(s.loadKg));
         if (!meaningful) continue;
         loggedByRow.set(s.rowId, (loggedByRow.get(s.rowId) ?? 0) + 1);
       }
