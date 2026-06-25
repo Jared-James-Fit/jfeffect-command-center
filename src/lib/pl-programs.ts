@@ -1382,31 +1382,40 @@ export async function getClientWorkouts(clientId: string) {
   const weekIds = (weeks ?? []).map((w: any) => w.id);
   const { data: days } = weekIds.length ? await sb.from("pl_days").select("*").in("week_id", weekIds).order("day_index") : { data: [] };
   const dayIds = (days ?? []).map((d: any) => d.id);
-  const { data: completions } = dayIds.length ? await sb.from("pl_day_completions").select("*").in("day_id", dayIds) : { data: [] };
-  // Logged-set counts per day. "In progress" is defined as ≥1 logged set
-  // on a day with no completion row; pl_row_results.row_id → pl_exercise_rows.day_id.
-  const { data: exerciseRows } = dayIds.length
-    ? await sb.from("pl_exercise_rows").select("id, day_id").in("day_id", dayIds)
-    : { data: [] };
+  // Fire the two day-dependent reads (completions + exercise rows) in
+  // parallel — they don't depend on each other and previously added a
+  // serial round-trip each, which on mobile turned the workouts list
+  // into a ~2s blank state.
+  const [completionsRes, exerciseRowsRes] = dayIds.length
+    ? await Promise.all([
+        sb.from("pl_day_completions").select("*").in("day_id", dayIds),
+        sb.from("pl_exercise_rows").select("id, day_id").in("day_id", dayIds),
+      ])
+    : [{ data: [] as any[] }, { data: [] as any[] }];
+  const { data: completions } = completionsRes;
+  const { data: exerciseRows } = exerciseRowsRes;
   const rowIdToDay = new Map<string, string>();
   for (const r of (exerciseRows ?? []) as any[]) rowIdToDay.set(r.id, r.day_id);
   const rowIds = Array.from(rowIdToDay.keys());
-  const { data: rowResults } = rowIds.length
-    ? await sb.from("pl_row_results").select("row_id").eq("client_id", clientId).in("row_id", rowIds)
-    : { data: [] };
+  // Run the two completion-derived reads (logged-set counts + feedback
+  // presence) in parallel too — they're independent.
+  const completionIds = (completions ?? []).map((c: any) => c.id).filter(Boolean);
+  const [rowResultsRes, feedbacksRes] = await Promise.all([
+    rowIds.length
+      ? sb.from("pl_row_results").select("row_id").eq("client_id", clientId).in("row_id", rowIds)
+      : Promise.resolve({ data: [] as any[] }),
+    completionIds.length
+      ? sb.from("pl_workout_feedback").select("completion_id").in("completion_id", completionIds)
+      : Promise.resolve({ data: [] as any[] }),
+  ]);
+  const { data: rowResults } = rowResultsRes;
+  const { data: feedbacks } = feedbacksRes;
   const loggedSetsByDay = new Map<string, number>();
   for (const rr of (rowResults ?? []) as any[]) {
     const dayId = rowIdToDay.get(rr.row_id);
     if (!dayId) continue;
     loggedSetsByDay.set(dayId, (loggedSetsByDay.get(dayId) ?? 0) + 1);
   }
-  // Look up which completions already have post-workout feedback submitted, so
-  // the workouts list can show "Leave review" vs "Edit review" without each
-  // card firing its own query.
-  const completionIds = (completions ?? []).map((c: any) => c.id).filter(Boolean);
-  const { data: feedbacks } = completionIds.length
-    ? await sb.from("pl_workout_feedback").select("completion_id").in("completion_id", completionIds)
-    : { data: [] };
   const feedbackSet = new Set<string>((feedbacks ?? []).map((f: any) => f.completion_id));
   const blockOrder = new Map<string, number>();
   (blocks ?? []).forEach((b: any, i: number) => blockOrder.set(b.id, i));

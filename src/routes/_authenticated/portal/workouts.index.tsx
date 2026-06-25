@@ -1,13 +1,12 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { usePortalUserId } from "@/lib/client-impersonation";
 import { Card } from "@/components/ui/card";
 import { WorkoutsExperience } from "@/components/workouts/WorkoutsExperience";
 import { WorkoutArchiveSection } from "@/components/workout-archive-section";
-import { getClientWorkouts } from "@/lib/pl-programs";
-import type { WorkoutItem } from "@/lib/workout-today";
+
 
 export const Route = createFileRoute("/_authenticated/portal/workouts/")({
   component: WorkoutsPage,
@@ -15,29 +14,25 @@ export const Route = createFileRoute("/_authenticated/portal/workouts/")({
 
 function WorkoutsPage() {
   const portalUserId = usePortalUserId();
-  const queryClient = useQueryClient();
-  // Fetch the client record AND their workout schedule together, then prime
-  // the React Query cache for ["my-workouts", clientId] so the child
-  // <WorkoutsExperience /> renders with data already present — no second
-  // "Loading your schedule…" flash after the page paints.
-  const { data, isLoading } = useQuery({
-    queryKey: ["my-workouts-page", portalUserId],
+  // Resolve the client row first (fast single-row lookup) and render the
+  // workouts shell as soon as it's known. The heavier workout-schedule
+  // queries fire in parallel from <WorkoutsExperience />, so the page no
+  // longer blocks on the full ~6-query getClientWorkouts() chain before
+  // showing anything. This is the difference between an instant paint and
+  // a multi-second blank/loading state on mobile.
+  const { data: client, isLoading } = useQuery({
+    queryKey: ["portal-workouts-client", portalUserId],
     enabled: !!portalUserId,
-    queryFn: async () => {
-      const client = (
+    staleTime: 60_000,
+    queryFn: async () =>
+      (
         await supabase
           .from("clients")
           .select("id, full_name")
           .eq("user_id", portalUserId!)
           .maybeSingle()
-      ).data;
-      if (!client) return { client: null as null, items: [] as WorkoutItem[] };
-      const items = (await getClientWorkouts(client.id)) as WorkoutItem[];
-      queryClient.setQueryData(["my-workouts", client.id], items);
-      return { client, items };
-    },
+      ).data,
   });
-  const client = data?.client ?? null;
 
   if (isLoading || !client) {
     return (
