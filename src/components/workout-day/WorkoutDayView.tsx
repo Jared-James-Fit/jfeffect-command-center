@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, Clock, CheckCircle2, Circle, Play, StickyNote, NotebookPen, Info, Maximize2, Minimize2, AlertTriangle, RefreshCw, Send, MessageCircle, ChevronDown, ChevronUp, Move, Zap } from "lucide-react";
+import { ArrowLeft, Clock, CheckCircle2, Circle, Play, StickyNote, NotebookPen, Info, Maximize2, Minimize2, AlertTriangle, RefreshCw, Send, MessageCircle, ChevronDown, ChevronUp, Move, Zap, Save } from "lucide-react";
 import { MoveWorkoutSheet } from "@/components/schedule/MoveWorkoutSheet";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
@@ -895,24 +895,13 @@ function WorkoutDay({
     setCompletionHydrated(true);
   }, [draftHydrated, completionHydrated, completion]);
 
-  // Autosave workout-level notes + actual minutes into pl_day_completions (draft state — does NOT set completed_at).
+  // Manual-save workout-level notes + actual minutes into pl_day_completions (draft state — does NOT set completed_at).
+  // Emergency safety lock 2026-06-25: no autosave on mount/hydration/typing.
   const metaSave = useAutosave({
     key: draftKey,
     value: { notes, actualMin },
     delay: 1000,
-    // Only autosave once both local-draft and server-completion hydration
-    // have run AND the current value actually differs from what's persisted
-    // on the completion row. Without this, opening a completed workout
-    // hydrates the fields from the server and then immediately re-saves
-    // the same values back — producing a constant "Saving…/Saved" flicker.
-    enabled:
-      !!client?.id &&
-      draftHydrated &&
-      completionHydrated &&
-      (
-        notes !== (completion?.client_notes ?? "") ||
-        actualMin !== (completion?.actual_duration_min != null ? String(completion.actual_duration_min) : "")
-      ),
+    enabled: false,
     onPermanentFailure: ({ value }) => {
       if (!client?.id) return;
       enqueueOfflineWrite({
@@ -1550,8 +1539,9 @@ function WorkoutDay({
                   return;
                 }
                 await metaSave.flush();
-                // Ensure a draft row + started_at/in_progress_at exist before the
-                // complete sheet opens. startWorkout is idempotent.
+        await metaSave.flush();
+        // Ensure a draft row + started_at/in_progress_at exist before the
+        // complete sheet opens. startWorkout is idempotent.
                 try {
                   await startWorkoutSrv({ data: { kind: "client", dayId } });
                 } catch (err) {
@@ -2794,12 +2784,10 @@ function SetRow({
       if (a.reps !== b.reps || a.rpe !== b.rpe) return false;
       return a.load === b.load;
     },
-    // NOTE: hydrated is intentionally excluded from this condition.
-    // hydrated only gates the draft-restore optimization; it must not
-    // gate whether saves work. If a user types before the draft-restore
-    // effect fires (common on fast mobile taps), their value would never
-    // save because enabled=false means the baseline is never established.
-    enabled: !readonly && !!clientId && (load.length > 0 || reps.length > 0 || rpe.length > 0 || !!existing),
+    // Emergency safety lock 2026-06-25: set rows are manual-save only.
+    // No hydration, page load, typing, blur, reconnect, retry backoff, or unit
+    // toggle may persist pl_row_results without an explicit Save tap.
+    enabled: false,
     onPermanentFailure: ({ value }) => {
       if (!clientId) return;
       const loadNum = value.load ? Number(value.load) : null;
@@ -2942,7 +2930,7 @@ function SetRow({
   saveRef.current = save;
 
   const onEnter: React.KeyboardEventHandler<HTMLInputElement> = (e) => {
-    if (e.key === "Enter") { e.preventDefault(); (e.target as HTMLInputElement).blur(); save.flush(); }
+    if (e.key === "Enter") { e.preventDefault(); (e.target as HTMLInputElement).blur(); }
   };
 
   // State labels: Suggested (no draft, no confirm), Draft (typed but not all valid yet
@@ -3188,10 +3176,8 @@ function SetRow({
             recentlySavedTimerRef.current = setTimeout(() => { recentlySavedRef.current = false; }, 8000);
             // Clear focus AFTER setting the guard so the server-reset effect
             // (which checks focusedField) cannot fire between null-focus and save.
-            save.flush().finally(() => {
-              setFocusedField(null);
-              setRepsChipOpen(false);
-            });
+            setFocusedField(null);
+            setRepsChipOpen(false);
           }}
           readOnly={readonly}
           disabled={readonly}
@@ -3238,10 +3224,8 @@ function SetRow({
             recentlySavedRef.current = true;
             if (recentlySavedTimerRef.current) clearTimeout(recentlySavedTimerRef.current);
             recentlySavedTimerRef.current = setTimeout(() => { recentlySavedRef.current = false; }, 8000);
-            save.flush().finally(() => {
-              setFocusedField(null);
-              setRpeChipOpen(false);
-            });
+            setFocusedField(null);
+            setRpeChipOpen(false);
           }}
           readOnly={readonly} disabled={readonly}
         />
@@ -3283,7 +3267,7 @@ function SetRow({
           recentlySavedRef.current = true;
           if (recentlySavedTimerRef.current) clearTimeout(recentlySavedTimerRef.current);
           recentlySavedTimerRef.current = setTimeout(() => { recentlySavedRef.current = false; }, 8000);
-          save.flush().finally(() => { setFocusedField(null); });
+          setFocusedField(null);
         }}
         readOnly={readonly}
         disabled={readonly}
@@ -3300,6 +3284,24 @@ function SetRow({
           />
         )}
         {!readonly ? (
+          <>
+          {!isConfirmed && (
+            <button
+              type="button"
+              onClick={() => void save.flush()}
+              title="Save set"
+              aria-label={`Save set ${setIndex}`}
+              className={cn(
+                "inline-flex h-7 w-7 items-center justify-center rounded-full border transition-colors",
+                "border-primary/50 bg-primary/10 text-primary hover:bg-primary/15",
+                save.state === "saving" && "cursor-wait opacity-70",
+                save.state === "error" && "border-destructive bg-destructive/10 text-destructive",
+              )}
+              disabled={save.state === "saving"}
+            >
+              {save.state === "saving" ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+            </button>
+          )}
           <button
             type="button"
             onClick={() => void saveCompletionStatus()}
@@ -3325,6 +3327,7 @@ function SetRow({
               <Circle className="h-4 w-4" />
             )}
           </button>
+          </>
         ) : (
           isConfirmed && <CheckCircle2 className="h-4 w-4 text-green-500" />
         )}
