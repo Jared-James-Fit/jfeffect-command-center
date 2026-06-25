@@ -59,6 +59,18 @@ export function useAutosave<T>({
   onPermFailRef.current = onPermanentFailure;
   const reportedFailRef = useRef(false);
 
+  // Auto-clear the "saved" indicator after a short window so the status
+  // visibly resets to idle (Pencil/"Unsaved changes" hidden, green check
+  // dismissed). Without this the green "Saved" label can linger until the
+  // user types again, which reads as "stuck status".
+  useEffect(() => {
+    if (state !== "saved") return;
+    const t = setTimeout(() => {
+      setState((s) => (s === "saved" ? "idle" : s));
+    }, 2500);
+    return () => clearTimeout(t);
+  }, [state, savedAt]);
+
   // Track online state
   const [online, setOnline] = useState(typeof navigator === "undefined" ? true : navigator.onLine);
   useEffect(() => {
