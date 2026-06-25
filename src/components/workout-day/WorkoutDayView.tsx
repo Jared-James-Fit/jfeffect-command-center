@@ -2669,6 +2669,7 @@ function SetRow({
   const { user } = useAuth();
   const { isImpersonating, client: povClient } = useClientImpersonation();
   const adapter = useOptionalAdapter();
+  const qc = useQueryClient();
   // Display weight is always shown in the active unit.
   // existing stores normalized kg + lb columns (Stage 1 trigger keeps them in sync),
   // plus the original actual_load/actual_load_unit pair. We pick whichever matches `unit`.
@@ -3003,12 +3004,21 @@ function SetRow({
   const saveCompletionStatus = async () => {
     if (readonly || !clientId || statusSaving) return;
     const nextCompletedAt = isConfirmed ? null : new Date().toISOString();
-    const payload = {
+    const payload: Record<string, any> = {
       row_id: rowId,
       client_id: clientId,
       set_index: setIndex,
       completed_at: nextCompletedAt,
     };
+    if (adapter?.kind === "member") {
+      const [weekIndexRaw, dayIndexRaw] = String(workoutId ?? "").split(":");
+      const weekIndex = Number(weekIndexRaw);
+      const dayIndex = Number(dayIndexRaw);
+      if (Number.isFinite(weekIndex) && Number.isFinite(dayIndex)) {
+        payload.week_index = weekIndex;
+        payload.day_index = dayIndex;
+      }
+    }
     setStatusSaving(true);
     setStatusError(null);
     try {
@@ -3297,7 +3307,7 @@ function SetRow({
       )}
       <div className="flex items-center justify-end gap-1">
         {/* When confirmed, show only the green checkmark — not the save spinner too */}
-        {!readonly && !isConfirmed && (
+        {!readonly && !isConfirmed && save.state !== "saved" && (
           <SaveStatus
             state={save.state}
             savedAt={save.savedAt}
