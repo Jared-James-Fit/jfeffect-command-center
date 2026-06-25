@@ -367,15 +367,13 @@ export function createMemberAdapter(ref: WorkoutContextRef): WorkoutContextAdapt
     },
 
     async listExerciseHistory(exerciseId: string, opts): Promise<HistoryEntryDTO[]> {
-      // We don't have a fast cross-day index by exercise_id for members; the
-      // published payload may not store stable exercise ids. Fall back to an
-      // empty list when the lookup isn't possible.
       if (!exerciseId) return [];
       const limit = opts?.limit ?? 50;
       const { data, error } = await supabase
         .from("member_set_logs")
         .select("logged_at, set_index, reps, load_lb, rpe")
         .eq("enrollment_id", enrollmentId)
+        .eq("exercise_id", exerciseId)
         .order("logged_at", { ascending: false })
         .limit(limit);
       if (error) throw new Error(error.message);
