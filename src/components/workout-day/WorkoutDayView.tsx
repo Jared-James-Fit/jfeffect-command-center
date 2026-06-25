@@ -1172,12 +1172,14 @@ function WorkoutDay({
         // count — otherwise blank sets show up as completed in the status bar.
         const kind = required.find((r) => r.rowId === s.rowId)?.metricKind ?? "load_reps";
         const num = (v: any) => v != null && Number.isFinite(Number(v)) && Number(v) > 0;
+        // Load of 0 is a valid log (bodyweight / unloaded). Reps still required.
+        const numOrZero = (v: any) => v != null && Number.isFinite(Number(v)) && Number(v) >= 0;
         const meaningful =
           kind === "timed"
             ? num(s.completedDurationSeconds)
             : kind === "bodyweight"
               ? num(s.reps)
-              : num(s.reps) && (num(s.loadLb) || num(s.loadKg));
+              : num(s.reps) && (numOrZero(s.loadLb) || numOrZero(s.loadKg));
         if (!meaningful) continue;
         loggedByRow.set(s.rowId, (loggedByRow.get(s.rowId) ?? 0) + 1);
       }
@@ -3124,7 +3126,8 @@ function SetRow({
     ? Number.isFinite(existingDurNum) && existingDurNum > 0
     : hideWeight
       ? Number.isFinite(existingRepsNum) && existingRepsNum > 0
-      : Number.isFinite(existingRepsNum) && existingRepsNum > 0 && Number.isFinite(existingLoadNum) && existingLoadNum > 0;
+      // Load of 0 is valid (bodyweight / unloaded). Reps still required.
+      : Number.isFinite(existingRepsNum) && existingRepsNum > 0 && Number.isFinite(existingLoadNum) && existingLoadNum >= 0;
   const isConfirmed = Boolean(existing?.completed_at) && hasLoggedValue;
   // hasAnyEntry only counts weight (the field the client must enter) and
   // manually-edited reps/RPE. Pre-filled prescription values do NOT count
@@ -3174,9 +3177,9 @@ function SetRow({
       ? Number.isFinite(existingDurNum) && existingDurNum > 0
       : hideWeight
         ? repsNum != null && Number.isFinite(repsNum) && repsNum > 0
-        : repsNum != null && Number.isFinite(repsNum) && repsNum > 0 && loadNum != null && Number.isFinite(loadNum) && loadNum > 0;
+        : repsNum != null && Number.isFinite(repsNum) && repsNum > 0 && loadNum != null && Number.isFinite(loadNum) && loadNum >= 0;
     if (nextCompletedAt && !currentHasRequiredValues) {
-      toast.error(isTimeKind ? "Complete the timer first" : hideWeight ? "Enter reps before marking complete" : "Enter reps and weight before marking complete");
+      toast.error(isTimeKind ? "Complete the timer first" : hideWeight ? "Enter reps before marking complete" : "Enter reps and weight before marking complete (use 0 for bodyweight)");
       return;
     }
     let payload: Record<string, any> = {

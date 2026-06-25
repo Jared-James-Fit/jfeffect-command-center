@@ -60,9 +60,14 @@ export interface CompletenessSummary {
 export function isSetMeaningfullyLogged(set: LoggedSetSpec, kind: RowMetricKind): boolean {
   const num = (v: unknown) =>
     v !== null && v !== undefined && v !== "" && Number.isFinite(Number(v)) && Number(v) > 0;
+  // For load values, accept zero as a valid logged value — 0 lb / 0 kg means
+  // bodyweight or unloaded (e.g. assisted machines, paused holds, mobility
+  // work). The set is still meaningfully logged as long as reps are present.
+  const numOrZero = (v: unknown) =>
+    v !== null && v !== undefined && v !== "" && Number.isFinite(Number(v)) && Number(v) >= 0;
   switch (kind) {
     case "load_reps":
-      return num(set.reps) && (num(set.loadLb) || num(set.loadKg));
+      return num(set.reps) && (numOrZero(set.loadLb) || numOrZero(set.loadKg));
     case "bodyweight":
       return num(set.reps);
     case "timed":
