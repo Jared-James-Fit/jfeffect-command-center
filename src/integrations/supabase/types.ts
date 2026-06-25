@@ -7405,6 +7405,105 @@ export type Database = {
           },
         ]
       }
+      media_content_records: {
+        Row: {
+          approval_status: string
+          archived: boolean
+          archived_at: string | null
+          assignee_id: string | null
+          campaign_id: string | null
+          caption: string | null
+          content_type: string | null
+          created_at: string
+          created_by: string | null
+          cta: string | null
+          description: string | null
+          due_date: string | null
+          hook: string | null
+          id: string
+          internal_notes: string | null
+          linked_asset_ids: Json
+          linked_task_ids: Json
+          pillar: string | null
+          platform: string | null
+          priority: number
+          production_status: string
+          publish_date: string | null
+          publish_time: string | null
+          published_at: string | null
+          reference_links: Json
+          reviewer_id: string | null
+          script: string | null
+          thumbnail_url: string | null
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          approval_status?: string
+          archived?: boolean
+          archived_at?: string | null
+          assignee_id?: string | null
+          campaign_id?: string | null
+          caption?: string | null
+          content_type?: string | null
+          created_at?: string
+          created_by?: string | null
+          cta?: string | null
+          description?: string | null
+          due_date?: string | null
+          hook?: string | null
+          id?: string
+          internal_notes?: string | null
+          linked_asset_ids?: Json
+          linked_task_ids?: Json
+          pillar?: string | null
+          platform?: string | null
+          priority?: number
+          production_status?: string
+          publish_date?: string | null
+          publish_time?: string | null
+          published_at?: string | null
+          reference_links?: Json
+          reviewer_id?: string | null
+          script?: string | null
+          thumbnail_url?: string | null
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          approval_status?: string
+          archived?: boolean
+          archived_at?: string | null
+          assignee_id?: string | null
+          campaign_id?: string | null
+          caption?: string | null
+          content_type?: string | null
+          created_at?: string
+          created_by?: string | null
+          cta?: string | null
+          description?: string | null
+          due_date?: string | null
+          hook?: string | null
+          id?: string
+          internal_notes?: string | null
+          linked_asset_ids?: Json
+          linked_task_ids?: Json
+          pillar?: string | null
+          platform?: string | null
+          priority?: number
+          production_status?: string
+          publish_date?: string | null
+          publish_time?: string | null
+          published_at?: string | null
+          reference_links?: Json
+          reviewer_id?: string | null
+          script?: string | null
+          thumbnail_url?: string | null
+          title?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       media_drive_settings: {
         Row: {
           created_at: string

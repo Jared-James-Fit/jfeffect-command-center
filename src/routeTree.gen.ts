@@ -74,19 +74,29 @@ import { Route as AuthenticatedPortalCalendarRouteImport } from './routes/_authe
 import { Route as AuthenticatedPortalAppointmentsRouteImport } from './routes/_authenticated/portal/appointments'
 import { Route as AuthenticatedPortalAnnouncementsRouteImport } from './routes/_authenticated/portal/announcements'
 import { Route as AuthenticatedPortalAccountRouteImport } from './routes/_authenticated/portal/account'
+import { Route as AuthenticatedMediaWorkRouteImport } from './routes/_authenticated/media/work'
 import { Route as AuthenticatedMediaUploadsRouteImport } from './routes/_authenticated/media/uploads'
 import { Route as AuthenticatedMediaTestimonialsRouteImport } from './routes/_authenticated/media/testimonials'
+import { Route as AuthenticatedMediaTemplatesRouteImport } from './routes/_authenticated/media/templates'
+import { Route as AuthenticatedMediaTeamRouteImport } from './routes/_authenticated/media/team'
 import { Route as AuthenticatedMediaSettingsRouteImport } from './routes/_authenticated/media/settings'
 import { Route as AuthenticatedMediaResourcesRouteImport } from './routes/_authenticated/media/resources'
+import { Route as AuthenticatedMediaPublishingRouteImport } from './routes/_authenticated/media/publishing'
 import { Route as AuthenticatedMediaPromoLinksRouteImport } from './routes/_authenticated/media/promo-links'
+import { Route as AuthenticatedMediaPipelineRouteImport } from './routes/_authenticated/media/pipeline'
+import { Route as AuthenticatedMediaPerformanceRouteImport } from './routes/_authenticated/media/performance'
+import { Route as AuthenticatedMediaPagesRouteImport } from './routes/_authenticated/media/pages'
 import { Route as AuthenticatedMediaInboxRouteImport } from './routes/_authenticated/media/inbox'
 import { Route as AuthenticatedMediaEventsRouteImport } from './routes/_authenticated/media/events'
+import { Route as AuthenticatedMediaDraftsRouteImport } from './routes/_authenticated/media/drafts'
 import { Route as AuthenticatedMediaContentRouteImport } from './routes/_authenticated/media/content'
 import { Route as AuthenticatedMediaCommunicationRouteImport } from './routes/_authenticated/media/communication'
 import { Route as AuthenticatedMediaCampaignsRouteImport } from './routes/_authenticated/media/campaigns'
 import { Route as AuthenticatedMediaCalendarRouteImport } from './routes/_authenticated/media/calendar'
 import { Route as AuthenticatedMediaBroadcastsRouteImport } from './routes/_authenticated/media/broadcasts'
+import { Route as AuthenticatedMediaAssetsRouteImport } from './routes/_authenticated/media/assets'
 import { Route as AuthenticatedMediaArchivesRouteImport } from './routes/_authenticated/media/archives'
+import { Route as AuthenticatedMediaArchiveRouteImport } from './routes/_authenticated/media/archive'
 import { Route as AuthenticatedMediaAnnouncementsRouteImport } from './routes/_authenticated/media/announcements'
 import { Route as AuthenticatedMediaActionItemsRouteImport } from './routes/_authenticated/media/action-items'
 import { Route as AuthenticatedMediaAccountRouteImport } from './routes/_authenticated/media/account'
@@ -617,6 +627,11 @@ const AuthenticatedPortalAccountRoute =
     path: '/account',
     getParentRoute: () => AuthenticatedPortalRouteRoute,
   } as any)
+const AuthenticatedMediaWorkRoute = AuthenticatedMediaWorkRouteImport.update({
+  id: '/work',
+  path: '/work',
+  getParentRoute: () => AuthenticatedMediaRouteRoute,
+} as any)
 const AuthenticatedMediaUploadsRoute =
   AuthenticatedMediaUploadsRouteImport.update({
     id: '/uploads',
@@ -629,6 +644,17 @@ const AuthenticatedMediaTestimonialsRoute =
     path: '/testimonials',
     getParentRoute: () => AuthenticatedMediaRouteRoute,
   } as any)
+const AuthenticatedMediaTemplatesRoute =
+  AuthenticatedMediaTemplatesRouteImport.update({
+    id: '/templates',
+    path: '/templates',
+    getParentRoute: () => AuthenticatedMediaRouteRoute,
+  } as any)
+const AuthenticatedMediaTeamRoute = AuthenticatedMediaTeamRouteImport.update({
+  id: '/team',
+  path: '/team',
+  getParentRoute: () => AuthenticatedMediaRouteRoute,
+} as any)
 const AuthenticatedMediaSettingsRoute =
   AuthenticatedMediaSettingsRouteImport.update({
     id: '/settings',
@@ -641,12 +667,35 @@ const AuthenticatedMediaResourcesRoute =
     path: '/resources',
     getParentRoute: () => AuthenticatedMediaRouteRoute,
   } as any)
+const AuthenticatedMediaPublishingRoute =
+  AuthenticatedMediaPublishingRouteImport.update({
+    id: '/publishing',
+    path: '/publishing',
+    getParentRoute: () => AuthenticatedMediaRouteRoute,
+  } as any)
 const AuthenticatedMediaPromoLinksRoute =
   AuthenticatedMediaPromoLinksRouteImport.update({
     id: '/promo-links',
     path: '/promo-links',
     getParentRoute: () => AuthenticatedMediaRouteRoute,
   } as any)
+const AuthenticatedMediaPipelineRoute =
+  AuthenticatedMediaPipelineRouteImport.update({
+    id: '/pipeline',
+    path: '/pipeline',
+    getParentRoute: () => AuthenticatedMediaRouteRoute,
+  } as any)
+const AuthenticatedMediaPerformanceRoute =
+  AuthenticatedMediaPerformanceRouteImport.update({
+    id: '/performance',
+    path: '/performance',
+    getParentRoute: () => AuthenticatedMediaRouteRoute,
+  } as any)
+const AuthenticatedMediaPagesRoute = AuthenticatedMediaPagesRouteImport.update({
+  id: '/pages',
+  path: '/pages',
+  getParentRoute: () => AuthenticatedMediaRouteRoute,
+} as any)
 const AuthenticatedMediaInboxRoute = AuthenticatedMediaInboxRouteImport.update({
   id: '/inbox',
   path: '/inbox',
@@ -656,6 +705,12 @@ const AuthenticatedMediaEventsRoute =
   AuthenticatedMediaEventsRouteImport.update({
     id: '/events',
     path: '/events',
+    getParentRoute: () => AuthenticatedMediaRouteRoute,
+  } as any)
+const AuthenticatedMediaDraftsRoute =
+  AuthenticatedMediaDraftsRouteImport.update({
+    id: '/drafts',
+    path: '/drafts',
     getParentRoute: () => AuthenticatedMediaRouteRoute,
   } as any)
 const AuthenticatedMediaContentRoute =
@@ -688,10 +743,22 @@ const AuthenticatedMediaBroadcastsRoute =
     path: '/broadcasts',
     getParentRoute: () => AuthenticatedMediaRouteRoute,
   } as any)
+const AuthenticatedMediaAssetsRoute =
+  AuthenticatedMediaAssetsRouteImport.update({
+    id: '/assets',
+    path: '/assets',
+    getParentRoute: () => AuthenticatedMediaRouteRoute,
+  } as any)
 const AuthenticatedMediaArchivesRoute =
   AuthenticatedMediaArchivesRouteImport.update({
     id: '/archives',
     path: '/archives',
+    getParentRoute: () => AuthenticatedMediaRouteRoute,
+  } as any)
+const AuthenticatedMediaArchiveRoute =
+  AuthenticatedMediaArchiveRouteImport.update({
+    id: '/archive',
+    path: '/archive',
     getParentRoute: () => AuthenticatedMediaRouteRoute,
   } as any)
 const AuthenticatedMediaAnnouncementsRoute =
@@ -1888,19 +1955,29 @@ export interface FileRoutesByFullPath {
   '/media/account': typeof AuthenticatedMediaAccountRoute
   '/media/action-items': typeof AuthenticatedMediaActionItemsRoute
   '/media/announcements': typeof AuthenticatedMediaAnnouncementsRoute
+  '/media/archive': typeof AuthenticatedMediaArchiveRoute
   '/media/archives': typeof AuthenticatedMediaArchivesRoute
+  '/media/assets': typeof AuthenticatedMediaAssetsRoute
   '/media/broadcasts': typeof AuthenticatedMediaBroadcastsRoute
   '/media/calendar': typeof AuthenticatedMediaCalendarRoute
   '/media/campaigns': typeof AuthenticatedMediaCampaignsRoute
   '/media/communication': typeof AuthenticatedMediaCommunicationRoute
   '/media/content': typeof AuthenticatedMediaContentRoute
+  '/media/drafts': typeof AuthenticatedMediaDraftsRoute
   '/media/events': typeof AuthenticatedMediaEventsRoute
   '/media/inbox': typeof AuthenticatedMediaInboxRoute
+  '/media/pages': typeof AuthenticatedMediaPagesRoute
+  '/media/performance': typeof AuthenticatedMediaPerformanceRoute
+  '/media/pipeline': typeof AuthenticatedMediaPipelineRoute
   '/media/promo-links': typeof AuthenticatedMediaPromoLinksRoute
+  '/media/publishing': typeof AuthenticatedMediaPublishingRoute
   '/media/resources': typeof AuthenticatedMediaResourcesRoute
   '/media/settings': typeof AuthenticatedMediaSettingsRoute
+  '/media/team': typeof AuthenticatedMediaTeamRoute
+  '/media/templates': typeof AuthenticatedMediaTemplatesRoute
   '/media/testimonials': typeof AuthenticatedMediaTestimonialsRoute
   '/media/uploads': typeof AuthenticatedMediaUploadsRoute
+  '/media/work': typeof AuthenticatedMediaWorkRoute
   '/portal/account': typeof AuthenticatedPortalAccountRoute
   '/portal/announcements': typeof AuthenticatedPortalAnnouncementsRoute
   '/portal/appointments': typeof AuthenticatedPortalAppointmentsRoute
@@ -2144,19 +2221,29 @@ export interface FileRoutesByTo {
   '/media/account': typeof AuthenticatedMediaAccountRoute
   '/media/action-items': typeof AuthenticatedMediaActionItemsRoute
   '/media/announcements': typeof AuthenticatedMediaAnnouncementsRoute
+  '/media/archive': typeof AuthenticatedMediaArchiveRoute
   '/media/archives': typeof AuthenticatedMediaArchivesRoute
+  '/media/assets': typeof AuthenticatedMediaAssetsRoute
   '/media/broadcasts': typeof AuthenticatedMediaBroadcastsRoute
   '/media/calendar': typeof AuthenticatedMediaCalendarRoute
   '/media/campaigns': typeof AuthenticatedMediaCampaignsRoute
   '/media/communication': typeof AuthenticatedMediaCommunicationRoute
   '/media/content': typeof AuthenticatedMediaContentRoute
+  '/media/drafts': typeof AuthenticatedMediaDraftsRoute
   '/media/events': typeof AuthenticatedMediaEventsRoute
   '/media/inbox': typeof AuthenticatedMediaInboxRoute
+  '/media/pages': typeof AuthenticatedMediaPagesRoute
+  '/media/performance': typeof AuthenticatedMediaPerformanceRoute
+  '/media/pipeline': typeof AuthenticatedMediaPipelineRoute
   '/media/promo-links': typeof AuthenticatedMediaPromoLinksRoute
+  '/media/publishing': typeof AuthenticatedMediaPublishingRoute
   '/media/resources': typeof AuthenticatedMediaResourcesRoute
   '/media/settings': typeof AuthenticatedMediaSettingsRoute
+  '/media/team': typeof AuthenticatedMediaTeamRoute
+  '/media/templates': typeof AuthenticatedMediaTemplatesRoute
   '/media/testimonials': typeof AuthenticatedMediaTestimonialsRoute
   '/media/uploads': typeof AuthenticatedMediaUploadsRoute
+  '/media/work': typeof AuthenticatedMediaWorkRoute
   '/portal/account': typeof AuthenticatedPortalAccountRoute
   '/portal/announcements': typeof AuthenticatedPortalAnnouncementsRoute
   '/portal/appointments': typeof AuthenticatedPortalAppointmentsRoute
@@ -2407,19 +2494,29 @@ export interface FileRoutesById {
   '/_authenticated/media/account': typeof AuthenticatedMediaAccountRoute
   '/_authenticated/media/action-items': typeof AuthenticatedMediaActionItemsRoute
   '/_authenticated/media/announcements': typeof AuthenticatedMediaAnnouncementsRoute
+  '/_authenticated/media/archive': typeof AuthenticatedMediaArchiveRoute
   '/_authenticated/media/archives': typeof AuthenticatedMediaArchivesRoute
+  '/_authenticated/media/assets': typeof AuthenticatedMediaAssetsRoute
   '/_authenticated/media/broadcasts': typeof AuthenticatedMediaBroadcastsRoute
   '/_authenticated/media/calendar': typeof AuthenticatedMediaCalendarRoute
   '/_authenticated/media/campaigns': typeof AuthenticatedMediaCampaignsRoute
   '/_authenticated/media/communication': typeof AuthenticatedMediaCommunicationRoute
   '/_authenticated/media/content': typeof AuthenticatedMediaContentRoute
+  '/_authenticated/media/drafts': typeof AuthenticatedMediaDraftsRoute
   '/_authenticated/media/events': typeof AuthenticatedMediaEventsRoute
   '/_authenticated/media/inbox': typeof AuthenticatedMediaInboxRoute
+  '/_authenticated/media/pages': typeof AuthenticatedMediaPagesRoute
+  '/_authenticated/media/performance': typeof AuthenticatedMediaPerformanceRoute
+  '/_authenticated/media/pipeline': typeof AuthenticatedMediaPipelineRoute
   '/_authenticated/media/promo-links': typeof AuthenticatedMediaPromoLinksRoute
+  '/_authenticated/media/publishing': typeof AuthenticatedMediaPublishingRoute
   '/_authenticated/media/resources': typeof AuthenticatedMediaResourcesRoute
   '/_authenticated/media/settings': typeof AuthenticatedMediaSettingsRoute
+  '/_authenticated/media/team': typeof AuthenticatedMediaTeamRoute
+  '/_authenticated/media/templates': typeof AuthenticatedMediaTemplatesRoute
   '/_authenticated/media/testimonials': typeof AuthenticatedMediaTestimonialsRoute
   '/_authenticated/media/uploads': typeof AuthenticatedMediaUploadsRoute
+  '/_authenticated/media/work': typeof AuthenticatedMediaWorkRoute
   '/_authenticated/portal/account': typeof AuthenticatedPortalAccountRoute
   '/_authenticated/portal/announcements': typeof AuthenticatedPortalAnnouncementsRoute
   '/_authenticated/portal/appointments': typeof AuthenticatedPortalAppointmentsRoute
@@ -2670,19 +2767,29 @@ export interface FileRouteTypes {
     | '/media/account'
     | '/media/action-items'
     | '/media/announcements'
+    | '/media/archive'
     | '/media/archives'
+    | '/media/assets'
     | '/media/broadcasts'
     | '/media/calendar'
     | '/media/campaigns'
     | '/media/communication'
     | '/media/content'
+    | '/media/drafts'
     | '/media/events'
     | '/media/inbox'
+    | '/media/pages'
+    | '/media/performance'
+    | '/media/pipeline'
     | '/media/promo-links'
+    | '/media/publishing'
     | '/media/resources'
     | '/media/settings'
+    | '/media/team'
+    | '/media/templates'
     | '/media/testimonials'
     | '/media/uploads'
+    | '/media/work'
     | '/portal/account'
     | '/portal/announcements'
     | '/portal/appointments'
@@ -2926,19 +3033,29 @@ export interface FileRouteTypes {
     | '/media/account'
     | '/media/action-items'
     | '/media/announcements'
+    | '/media/archive'
     | '/media/archives'
+    | '/media/assets'
     | '/media/broadcasts'
     | '/media/calendar'
     | '/media/campaigns'
     | '/media/communication'
     | '/media/content'
+    | '/media/drafts'
     | '/media/events'
     | '/media/inbox'
+    | '/media/pages'
+    | '/media/performance'
+    | '/media/pipeline'
     | '/media/promo-links'
+    | '/media/publishing'
     | '/media/resources'
     | '/media/settings'
+    | '/media/team'
+    | '/media/templates'
     | '/media/testimonials'
     | '/media/uploads'
+    | '/media/work'
     | '/portal/account'
     | '/portal/announcements'
     | '/portal/appointments'
@@ -3188,19 +3305,29 @@ export interface FileRouteTypes {
     | '/_authenticated/media/account'
     | '/_authenticated/media/action-items'
     | '/_authenticated/media/announcements'
+    | '/_authenticated/media/archive'
     | '/_authenticated/media/archives'
+    | '/_authenticated/media/assets'
     | '/_authenticated/media/broadcasts'
     | '/_authenticated/media/calendar'
     | '/_authenticated/media/campaigns'
     | '/_authenticated/media/communication'
     | '/_authenticated/media/content'
+    | '/_authenticated/media/drafts'
     | '/_authenticated/media/events'
     | '/_authenticated/media/inbox'
+    | '/_authenticated/media/pages'
+    | '/_authenticated/media/performance'
+    | '/_authenticated/media/pipeline'
     | '/_authenticated/media/promo-links'
+    | '/_authenticated/media/publishing'
     | '/_authenticated/media/resources'
     | '/_authenticated/media/settings'
+    | '/_authenticated/media/team'
+    | '/_authenticated/media/templates'
     | '/_authenticated/media/testimonials'
     | '/_authenticated/media/uploads'
+    | '/_authenticated/media/work'
     | '/_authenticated/portal/account'
     | '/_authenticated/portal/announcements'
     | '/_authenticated/portal/appointments'
@@ -3844,6 +3971,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedPortalAccountRouteImport
       parentRoute: typeof AuthenticatedPortalRouteRoute
     }
+    '/_authenticated/media/work': {
+      id: '/_authenticated/media/work'
+      path: '/work'
+      fullPath: '/media/work'
+      preLoaderRoute: typeof AuthenticatedMediaWorkRouteImport
+      parentRoute: typeof AuthenticatedMediaRouteRoute
+    }
     '/_authenticated/media/uploads': {
       id: '/_authenticated/media/uploads'
       path: '/uploads'
@@ -3856,6 +3990,20 @@ declare module '@tanstack/react-router' {
       path: '/testimonials'
       fullPath: '/media/testimonials'
       preLoaderRoute: typeof AuthenticatedMediaTestimonialsRouteImport
+      parentRoute: typeof AuthenticatedMediaRouteRoute
+    }
+    '/_authenticated/media/templates': {
+      id: '/_authenticated/media/templates'
+      path: '/templates'
+      fullPath: '/media/templates'
+      preLoaderRoute: typeof AuthenticatedMediaTemplatesRouteImport
+      parentRoute: typeof AuthenticatedMediaRouteRoute
+    }
+    '/_authenticated/media/team': {
+      id: '/_authenticated/media/team'
+      path: '/team'
+      fullPath: '/media/team'
+      preLoaderRoute: typeof AuthenticatedMediaTeamRouteImport
       parentRoute: typeof AuthenticatedMediaRouteRoute
     }
     '/_authenticated/media/settings': {
@@ -3872,11 +4020,39 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedMediaResourcesRouteImport
       parentRoute: typeof AuthenticatedMediaRouteRoute
     }
+    '/_authenticated/media/publishing': {
+      id: '/_authenticated/media/publishing'
+      path: '/publishing'
+      fullPath: '/media/publishing'
+      preLoaderRoute: typeof AuthenticatedMediaPublishingRouteImport
+      parentRoute: typeof AuthenticatedMediaRouteRoute
+    }
     '/_authenticated/media/promo-links': {
       id: '/_authenticated/media/promo-links'
       path: '/promo-links'
       fullPath: '/media/promo-links'
       preLoaderRoute: typeof AuthenticatedMediaPromoLinksRouteImport
+      parentRoute: typeof AuthenticatedMediaRouteRoute
+    }
+    '/_authenticated/media/pipeline': {
+      id: '/_authenticated/media/pipeline'
+      path: '/pipeline'
+      fullPath: '/media/pipeline'
+      preLoaderRoute: typeof AuthenticatedMediaPipelineRouteImport
+      parentRoute: typeof AuthenticatedMediaRouteRoute
+    }
+    '/_authenticated/media/performance': {
+      id: '/_authenticated/media/performance'
+      path: '/performance'
+      fullPath: '/media/performance'
+      preLoaderRoute: typeof AuthenticatedMediaPerformanceRouteImport
+      parentRoute: typeof AuthenticatedMediaRouteRoute
+    }
+    '/_authenticated/media/pages': {
+      id: '/_authenticated/media/pages'
+      path: '/pages'
+      fullPath: '/media/pages'
+      preLoaderRoute: typeof AuthenticatedMediaPagesRouteImport
       parentRoute: typeof AuthenticatedMediaRouteRoute
     }
     '/_authenticated/media/inbox': {
@@ -3891,6 +4067,13 @@ declare module '@tanstack/react-router' {
       path: '/events'
       fullPath: '/media/events'
       preLoaderRoute: typeof AuthenticatedMediaEventsRouteImport
+      parentRoute: typeof AuthenticatedMediaRouteRoute
+    }
+    '/_authenticated/media/drafts': {
+      id: '/_authenticated/media/drafts'
+      path: '/drafts'
+      fullPath: '/media/drafts'
+      preLoaderRoute: typeof AuthenticatedMediaDraftsRouteImport
       parentRoute: typeof AuthenticatedMediaRouteRoute
     }
     '/_authenticated/media/content': {
@@ -3928,11 +4111,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedMediaBroadcastsRouteImport
       parentRoute: typeof AuthenticatedMediaRouteRoute
     }
+    '/_authenticated/media/assets': {
+      id: '/_authenticated/media/assets'
+      path: '/assets'
+      fullPath: '/media/assets'
+      preLoaderRoute: typeof AuthenticatedMediaAssetsRouteImport
+      parentRoute: typeof AuthenticatedMediaRouteRoute
+    }
     '/_authenticated/media/archives': {
       id: '/_authenticated/media/archives'
       path: '/archives'
       fullPath: '/media/archives'
       preLoaderRoute: typeof AuthenticatedMediaArchivesRouteImport
+      parentRoute: typeof AuthenticatedMediaRouteRoute
+    }
+    '/_authenticated/media/archive': {
+      id: '/_authenticated/media/archive'
+      path: '/archive'
+      fullPath: '/media/archive'
+      preLoaderRoute: typeof AuthenticatedMediaArchiveRouteImport
       parentRoute: typeof AuthenticatedMediaRouteRoute
     }
     '/_authenticated/media/announcements': {
@@ -5735,19 +5932,29 @@ interface AuthenticatedMediaRouteRouteChildren {
   AuthenticatedMediaAccountRoute: typeof AuthenticatedMediaAccountRoute
   AuthenticatedMediaActionItemsRoute: typeof AuthenticatedMediaActionItemsRoute
   AuthenticatedMediaAnnouncementsRoute: typeof AuthenticatedMediaAnnouncementsRoute
+  AuthenticatedMediaArchiveRoute: typeof AuthenticatedMediaArchiveRoute
   AuthenticatedMediaArchivesRoute: typeof AuthenticatedMediaArchivesRoute
+  AuthenticatedMediaAssetsRoute: typeof AuthenticatedMediaAssetsRoute
   AuthenticatedMediaBroadcastsRoute: typeof AuthenticatedMediaBroadcastsRoute
   AuthenticatedMediaCalendarRoute: typeof AuthenticatedMediaCalendarRoute
   AuthenticatedMediaCampaignsRoute: typeof AuthenticatedMediaCampaignsRoute
   AuthenticatedMediaCommunicationRoute: typeof AuthenticatedMediaCommunicationRoute
   AuthenticatedMediaContentRoute: typeof AuthenticatedMediaContentRoute
+  AuthenticatedMediaDraftsRoute: typeof AuthenticatedMediaDraftsRoute
   AuthenticatedMediaEventsRoute: typeof AuthenticatedMediaEventsRoute
   AuthenticatedMediaInboxRoute: typeof AuthenticatedMediaInboxRoute
+  AuthenticatedMediaPagesRoute: typeof AuthenticatedMediaPagesRoute
+  AuthenticatedMediaPerformanceRoute: typeof AuthenticatedMediaPerformanceRoute
+  AuthenticatedMediaPipelineRoute: typeof AuthenticatedMediaPipelineRoute
   AuthenticatedMediaPromoLinksRoute: typeof AuthenticatedMediaPromoLinksRoute
+  AuthenticatedMediaPublishingRoute: typeof AuthenticatedMediaPublishingRoute
   AuthenticatedMediaResourcesRoute: typeof AuthenticatedMediaResourcesRoute
   AuthenticatedMediaSettingsRoute: typeof AuthenticatedMediaSettingsRoute
+  AuthenticatedMediaTeamRoute: typeof AuthenticatedMediaTeamRoute
+  AuthenticatedMediaTemplatesRoute: typeof AuthenticatedMediaTemplatesRoute
   AuthenticatedMediaTestimonialsRoute: typeof AuthenticatedMediaTestimonialsRoute
   AuthenticatedMediaUploadsRoute: typeof AuthenticatedMediaUploadsRoute
+  AuthenticatedMediaWorkRoute: typeof AuthenticatedMediaWorkRoute
   AuthenticatedMediaIndexRoute: typeof AuthenticatedMediaIndexRoute
   AuthenticatedMediaSalesCoachingRoute: typeof AuthenticatedMediaSalesCoachingRoute
   AuthenticatedMediaSalesMembershipRoute: typeof AuthenticatedMediaSalesMembershipRoute
@@ -5758,19 +5965,29 @@ const AuthenticatedMediaRouteRouteChildren: AuthenticatedMediaRouteRouteChildren
     AuthenticatedMediaAccountRoute: AuthenticatedMediaAccountRoute,
     AuthenticatedMediaActionItemsRoute: AuthenticatedMediaActionItemsRoute,
     AuthenticatedMediaAnnouncementsRoute: AuthenticatedMediaAnnouncementsRoute,
+    AuthenticatedMediaArchiveRoute: AuthenticatedMediaArchiveRoute,
     AuthenticatedMediaArchivesRoute: AuthenticatedMediaArchivesRoute,
+    AuthenticatedMediaAssetsRoute: AuthenticatedMediaAssetsRoute,
     AuthenticatedMediaBroadcastsRoute: AuthenticatedMediaBroadcastsRoute,
     AuthenticatedMediaCalendarRoute: AuthenticatedMediaCalendarRoute,
     AuthenticatedMediaCampaignsRoute: AuthenticatedMediaCampaignsRoute,
     AuthenticatedMediaCommunicationRoute: AuthenticatedMediaCommunicationRoute,
     AuthenticatedMediaContentRoute: AuthenticatedMediaContentRoute,
+    AuthenticatedMediaDraftsRoute: AuthenticatedMediaDraftsRoute,
     AuthenticatedMediaEventsRoute: AuthenticatedMediaEventsRoute,
     AuthenticatedMediaInboxRoute: AuthenticatedMediaInboxRoute,
+    AuthenticatedMediaPagesRoute: AuthenticatedMediaPagesRoute,
+    AuthenticatedMediaPerformanceRoute: AuthenticatedMediaPerformanceRoute,
+    AuthenticatedMediaPipelineRoute: AuthenticatedMediaPipelineRoute,
     AuthenticatedMediaPromoLinksRoute: AuthenticatedMediaPromoLinksRoute,
+    AuthenticatedMediaPublishingRoute: AuthenticatedMediaPublishingRoute,
     AuthenticatedMediaResourcesRoute: AuthenticatedMediaResourcesRoute,
     AuthenticatedMediaSettingsRoute: AuthenticatedMediaSettingsRoute,
+    AuthenticatedMediaTeamRoute: AuthenticatedMediaTeamRoute,
+    AuthenticatedMediaTemplatesRoute: AuthenticatedMediaTemplatesRoute,
     AuthenticatedMediaTestimonialsRoute: AuthenticatedMediaTestimonialsRoute,
     AuthenticatedMediaUploadsRoute: AuthenticatedMediaUploadsRoute,
+    AuthenticatedMediaWorkRoute: AuthenticatedMediaWorkRoute,
     AuthenticatedMediaIndexRoute: AuthenticatedMediaIndexRoute,
     AuthenticatedMediaSalesCoachingRoute: AuthenticatedMediaSalesCoachingRoute,
     AuthenticatedMediaSalesMembershipRoute:
