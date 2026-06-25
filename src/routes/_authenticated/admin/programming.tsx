@@ -11,6 +11,7 @@ import { ProgramFinder, type FinderItem } from "@/components/programs/program-fi
 import { useQuery } from "@tanstack/react-query";
 import { listTemplates } from "@/lib/pl-programs";
 import { supabase } from "@/integrations/supabase/client";
+import { validateTemplatePayload } from "@/lib/pl-template-validation";
 
 type TabKey = "programs" | "browse" | "exercises" | "cardio" | "warmups" | "recipes";
 const TABS: { value: TabKey; label: string }[] = [
@@ -86,24 +87,72 @@ function ProgrammingWorkspace() {
 function AdminProgramBrowser() {
   const { data, isLoading } = useQuery({
     queryKey: ["admin-finder-templates"],
-    queryFn: () => listTemplates({ type: "all", style: "all" }),
+    queryFn: () => listTemplates({ type: "all", style: "all", includeArchived: true } as any),
   });
-  const items: FinderItem[] = useMemo(() => (data ?? []).map((t: any) => ({
-    id: t.id,
-    title: t.name,
-    trainingStyle: t.training_style,
-    level: t.difficulty ?? t.training_focus,
-    weeks: t.weeks,
-    daysPerWeek: t.days_per_week,
-    goal: t.goal ?? t.training_focus,
-    tags: t.tags ?? null,
-    raw: t,
-  })), [data]);
+  // Distinct template IDs that have at least one active client assignment.
+  const { data: assignedClientCounts } = useQuery({
+    queryKey: ["admin-finder-assignments"],
+    queryFn: async () => {
+      const map = new Map<string, number>();
+      const [preps, blocks] = await Promise.all([
+        supabase.from("pl_preps").select("source_template_id, client_id").eq("archived", false),
+        supabase.from("pl_blocks").select("source_template_id, client_id").eq("archived", false),
+      ]);
+      const bump = (rows: any[] | null) => {
+        for (const r of rows ?? []) {
+          const id = r?.source_template_id;
+          if (!id) continue;
+          map.set(id, (map.get(id) ?? 0) + 1);
+        }
+      };
+      bump(preps.data as any);
+      bump(blocks.data as any);
+      return Object.fromEntries(map);
+    },
+    staleTime: 60_000,
+  });
+  // Templates published to the membership library.
+  const { data: membershipSet } = useQuery({
+    queryKey: ["admin-finder-membership"],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("pl_template_shares")
+        .select("template_id, destination, status")
+        .eq("destination", "membership")
+        .not("status", "in", "(removed,rejected)");
+      const set = new Set<string>();
+      for (const r of (data ?? []) as any[]) if (r?.template_id) set.add(r.template_id);
+      return set;
+    },
+    staleTime: 60_000,
+  });
+  const items: FinderItem[] = useMemo(() => (data ?? []).map((t: any) => {
+    const issues = (() => { try { return validateTemplatePayload(t); } catch { return []; } })();
+    return {
+      id: t.id,
+      title: t.name,
+      trainingStyle: t.training_style,
+      level: t.difficulty ?? t.training_focus,
+      weeks: t.weeks,
+      daysPerWeek: t.days_per_week,
+      goal: t.goal ?? t.training_focus,
+      tags: t.tags ?? null,
+      description: t.description ?? null,
+      notes: t.notes ?? null,
+      templateType: t.template_type ?? null,
+      archived: !!t.archived,
+      validationOk: Array.isArray(issues) ? issues.length === 0 : true,
+      assignedClientCount: (assignedClientCounts as any)?.[t.id] ?? 0,
+      membershipPublished: !!(membershipSet as Set<string> | undefined)?.has(t.id),
+      raw: t,
+    } as FinderItem;
+  }), [data, assignedClientCounts, membershipSet]);
   return (
     <div className="p-3 sm:p-4 md:p-6">
       <ProgramFinder
         items={items}
         loading={isLoading}
+        showAdminFilters
         loadPayload={async (it) => {
           const { data } = await supabase.from("pl_templates").select("payload").eq("id", it.id).maybeSingle();
           return (data as any)?.payload ?? null;

@@ -20,6 +20,14 @@ export type FinderItem = {
   goal?: string | null;
   tags?: string[] | null;
   raw?: any;
+  // ---- Optional admin/library metadata (used when showAdminFilters is on) ----
+  templateType?: string | null;        // full_prep | block | week | day | exercise_row
+  archived?: boolean;
+  validationOk?: boolean;              // true => "Ready", false => "Incomplete"
+  assignedClientCount?: number;        // # of active prep/block assignments
+  membershipPublished?: boolean;       // template is currently published to membership
+  description?: string | null;
+  notes?: string | null;
 };
 
 type Props = {
@@ -27,6 +35,8 @@ type Props = {
   loadPayload: (item: FinderItem) => Promise<any>;
   renderActions?: (item: FinderItem) => ReactNode;
   loading?: boolean;
+  /** When true, render the full admin chip toolbar (type / style / status / weight class / assignment). */
+  showAdminFilters?: boolean;
 };
 
 type Folder = {
@@ -184,25 +194,92 @@ function rowReps(r: any) {
   return r?.reps_text || r?.reps || "—";
 }
 
-function highlight(text: string, q: string): ReactNode {
-  if (!q) return text;
-  const idx = text.toLowerCase().indexOf(q);
-  if (idx === -1) return text;
+function highlight(text: string, terms: string[] | string): ReactNode {
+  const list = Array.isArray(terms)
+    ? terms.filter(Boolean)
+    : terms ? [terms] : [];
+  if (!list.length || !text) return text;
+  // Build a single case-insensitive regex covering all terms.
+  const escaped = list
+    .map((t) => t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))
+    .filter(Boolean);
+  if (!escaped.length) return text;
+  const re = new RegExp(`(${escaped.join("|")})`, "ig");
+  const parts = text.split(re);
   return (
     <>
-      {text.slice(0, idx)}
-      <mark className="rounded-sm bg-primary/30 px-0.5 text-foreground">{text.slice(idx, idx + q.length)}</mark>
-      {text.slice(idx + q.length)}
+      {parts.map((p, i) =>
+        i % 2 === 1 ? (
+          <mark key={i} className="rounded-sm bg-primary/30 px-0.5 text-foreground">{p}</mark>
+        ) : (
+          <span key={i}>{p}</span>
+        ),
+      )}
     </>
   );
 }
 
-export function ProgramFinder({ items, loadPayload, renderActions, loading }: Props) {
+// Standard quick-pick weight classes (matches Programs tab).
+const WEIGHT_CLASS_TAGS: string[] = [
+  "47kg", "52kg", "57kg", "59kg", "63kg", "66kg", "69kg", "74kg",
+  "76kg", "83kg", "84kg", "84kg+", "93kg", "105kg", "120kg", "120kg+",
+];
+
+const TYPE_CHIPS: { value: string; label: string }[] = [
+  { value: "all", label: "All" },
+  { value: "full_prep", label: "Full Prep" },
+  { value: "block", label: "Block" },
+  { value: "week", label: "Week" },
+  { value: "day", label: "Day" },
+  { value: "exercise_row", label: "Exercise Row" },
+];
+const STYLE_CHIPS: { value: string; label: string }[] = [
+  { value: "powerlifting", label: "Powerlifting" },
+  { value: "bodybuilding", label: "Bodybuilding" },
+  { value: "strength", label: "Strength" },
+  { value: "lifestyle", label: "Lifestyle" },
+  { value: "hybrid", label: "Hybrid" },
+  { value: "rehab_pivot", label: "Rehab / Pivot" },
+  { value: "conditioning", label: "Conditioning" },
+  { value: "custom", label: "Custom" },
+];
+const STATUS_CHIPS: { value: "ready" | "incomplete" | "archived"; label: string }[] = [
+  { value: "ready", label: "Ready" },
+  { value: "incomplete", label: "Incomplete" },
+  { value: "archived", label: "Archived" },
+];
+
+function Chip({
+  active, onClick, children,
+}: { active: boolean; onClick: () => void; children: ReactNode }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        "rounded-full border px-2.5 py-1 text-[11px] transition-colors",
+        active
+          ? "border-primary bg-primary/10 text-primary"
+          : "border-border text-muted-foreground hover:text-foreground",
+      )}
+    >
+      {children}
+    </button>
+  );
+}
+
+export function ProgramFinder({ items, loadPayload, renderActions, loading, showAdminFilters }: Props) {
   const [folderId, setFolderId] = useState<string>("all");
   const [expanded, setExpanded] = useState<Record<string, boolean>>({ bodybuilding: true });
   const [open, setOpen] = useState<FinderItem | null>(null);
   const [query, setQuery] = useState("");
   const [fullBodyOnly, setFullBodyOnly] = useState(false);
+  // Admin-only filter state
+  const [typeFilter, setTypeFilter] = useState<string>("all");
+  const [styleFilter, setStyleFilter] = useState<string | null>(null);
+  const [statusFilter, setStatusFilter] = useState<"ready" | "incomplete" | "archived" | null>(null);
+  const [weightClass, setWeightClass] = useState<string | null>(null);
+  const [assignedFilter, setAssignedFilter] = useState<"any" | "clients" | "members" | "either" | "unassigned">("any");
 
   const allFolders = useMemo(() => {
     const flat: { folder: Folder; depth: number }[] = [];
@@ -223,6 +300,10 @@ export function ProgramFinder({ items, loadPayload, renderActions, loading }: Pr
 
   const current = findFolder(folderId) ?? FOLDERS[0];
   const q = query.trim().toLowerCase();
+  const qTerms = useMemo(
+    () => q.split(/\s+/).filter((t) => t.length > 0),
+    [q],
+  );
   const hasFullBody = (it: FinderItem) =>
     (it.tags ?? []).some((t) => norm(t) === "full-body" || norm(t) === "full body");
   const haystackFor = (it: FinderItem): string => {
@@ -234,6 +315,8 @@ export function ProgramFinder({ items, loadPayload, renderActions, loading }: Pr
       it.level,
       it.goal,
       it.trainingStyle,
+      it.description,
+      it.notes,
       LEVEL_LABELS[lvl] ?? lvl,
       lvl,
       ty,
@@ -241,23 +324,60 @@ export function ProgramFinder({ items, loadPayload, renderActions, loading }: Pr
       ...((it.tags ?? []) as string[]),
     ].filter(Boolean).join(" ").toLowerCase();
   };
+  const matchesAdmin = (it: FinderItem): boolean => {
+    if (!showAdminFilters) return true;
+    // Type
+    if (typeFilter !== "all" && (it.templateType ?? "") !== typeFilter) return false;
+    // Style (chip overrides folder when set)
+    if (styleFilter && norm(it.trainingStyle) !== styleFilter) return false;
+    // Status
+    if (statusFilter === "ready" && it.validationOk !== true) return false;
+    if (statusFilter === "incomplete" && it.validationOk !== false) return false;
+    if (statusFilter === "archived") {
+      if (!it.archived) return false;
+    } else if (it.archived) {
+      // Hide archived unless explicitly requested.
+      return false;
+    }
+    // Weight class tag
+    if (weightClass) {
+      const wc = weightClass.toLowerCase();
+      const hit = (it.tags ?? []).some((t) => norm(t) === wc);
+      if (!hit) return false;
+    }
+    // Assignment
+    const hasClients = (it.assignedClientCount ?? 0) > 0;
+    const hasMembers = !!it.membershipPublished;
+    if (assignedFilter === "clients" && !hasClients) return false;
+    if (assignedFilter === "members" && !hasMembers) return false;
+    if (assignedFilter === "either" && !hasClients && !hasMembers) return false;
+    if (assignedFilter === "unassigned" && (hasClients || hasMembers)) return false;
+    return true;
+  };
+  const matchesQuery = (it: FinderItem): boolean => {
+    if (!qTerms.length) return true;
+    const h = haystackFor(it);
+    return qTerms.every((t) => h.includes(t));
+  };
   const rows = useMemo(() => {
-    let base = items.filter((it) => current.match(it));
+    let base = items.filter((it) => current.match(it) && matchesAdmin(it));
     if (fullBodyOnly) base = base.filter(hasFullBody);
-    if (!q) return base;
-    return base.filter((it) => haystackFor(it).includes(q));
-  }, [items, current, q, fullBodyOnly]);
+    return base.filter(matchesQuery);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [items, current, qTerms.join("|"), fullBodyOnly, showAdminFilters, typeFilter, styleFilter, statusFilter, weightClass, assignedFilter]);
 
   const counts = useMemo(() => {
     const out: Record<string, number> = {};
-    const matchQuery = (it: FinderItem) => (!q ? true : haystackFor(it).includes(q));
+    const matchQuery = (it: FinderItem) => matchesQuery(it);
     const matchFb = (it: FinderItem) => (fullBodyOnly ? hasFullBody(it) : true);
+    const matchAdmin = (it: FinderItem) => matchesAdmin(it);
     for (const f of FOLDERS) {
-      out[f.id] = items.filter((it) => f.match(it) && matchQuery(it) && matchFb(it)).length;
-      if (f.children) for (const c of f.children) out[c.id] = items.filter((it) => c.match(it) && matchQuery(it) && matchFb(it)).length;
+      out[f.id] = items.filter((it) => f.match(it) && matchQuery(it) && matchFb(it) && matchAdmin(it)).length;
+      if (f.children) for (const c of f.children) out[c.id] = items.filter((it) => c.match(it) && matchQuery(it) && matchFb(it) && matchAdmin(it)).length;
     }
     return out;
-  }, [items, q, fullBodyOnly]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [items, qTerms.join("|"), fullBodyOnly, showAdminFilters, typeFilter, styleFilter, statusFilter, weightClass, assignedFilter]);
 
   const fullBodyAvailable = useMemo(() => items.some(hasFullBody), [items]);
 
@@ -320,6 +440,38 @@ export function ProgramFinder({ items, loadPayload, renderActions, loading }: Pr
           )}
           <span className="shrink-0 text-xs tabular-nums text-muted-foreground">{rows.length} result{rows.length === 1 ? "" : "s"}</span>
         </div>
+        {showAdminFilters && (
+          <div className="space-y-1.5 border-b border-border bg-muted/10 px-3 py-2">
+            <div className="flex flex-wrap items-center gap-1.5">
+              {TYPE_CHIPS.map((c) => (
+                <Chip key={c.value} active={typeFilter === c.value} onClick={() => setTypeFilter(c.value)}>{c.label}</Chip>
+              ))}
+              <span className="px-1 text-muted-foreground/60">·</span>
+              {STYLE_CHIPS.map((c) => (
+                <Chip key={c.value} active={styleFilter === c.value} onClick={() => setStyleFilter(styleFilter === c.value ? null : c.value)}>{c.label}</Chip>
+              ))}
+              <span className="px-1 text-muted-foreground/60">·</span>
+              {STATUS_CHIPS.map((c) => (
+                <Chip key={c.value} active={statusFilter === c.value} onClick={() => setStatusFilter(statusFilter === c.value ? null : c.value)}>{c.label}</Chip>
+              ))}
+            </div>
+            <div className="flex flex-wrap items-center gap-1.5">
+              <span className="text-[11px] uppercase tracking-wider text-muted-foreground">Assigned:</span>
+              <Chip active={assignedFilter === "any"} onClick={() => setAssignedFilter("any")}>Any</Chip>
+              <Chip active={assignedFilter === "clients"} onClick={() => setAssignedFilter("clients")}>Clients</Chip>
+              <Chip active={assignedFilter === "members"} onClick={() => setAssignedFilter("members")}>Members</Chip>
+              <Chip active={assignedFilter === "either"} onClick={() => setAssignedFilter("either")}>Clients or Members</Chip>
+              <Chip active={assignedFilter === "unassigned"} onClick={() => setAssignedFilter("unassigned")}>Unassigned</Chip>
+            </div>
+            <div className="flex flex-wrap items-center gap-1.5">
+              <span className="text-[11px] uppercase tracking-wider text-muted-foreground">Weight class:</span>
+              <Chip active={weightClass === null} onClick={() => setWeightClass(null)}>All</Chip>
+              {WEIGHT_CLASS_TAGS.map((t) => (
+                <Chip key={t} active={weightClass === t} onClick={() => setWeightClass(weightClass === t ? null : t)}>{t}</Chip>
+              ))}
+            </div>
+          </div>
+        )}
         <div className="grid grid-cols-[minmax(0,2fr)_minmax(0,1.4fr)_60px_70px_minmax(0,1fr)] gap-3 border-b border-border bg-muted/30 px-4 py-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
           <div>Program</div><div>Tags</div><div>Weeks</div><div>Days/wk</div><div>Goal</div>
         </div>
@@ -342,7 +494,7 @@ export function ProgramFinder({ items, loadPayload, renderActions, loading }: Pr
                   >
                     <div className="flex min-w-0 items-center gap-2">
                       <FileText className="h-4 w-4 shrink-0 text-muted-foreground" />
-                      <span className="truncate font-medium text-foreground">{highlight(it.title, q)}</span>
+                      <span className="truncate font-medium text-foreground">{highlight(it.title, qTerms)}</span>
                     </div>
                     <div className="flex min-w-0 flex-wrap items-center gap-1">
                       {lvl && (
@@ -363,10 +515,25 @@ export function ProgramFinder({ items, loadPayload, renderActions, loading }: Pr
                           {typeLabel(ty)}
                         </span>
                       )}
+                      {showAdminFilters && (it.assignedClientCount ?? 0) > 0 && (
+                        <span className="rounded-full border border-blue-500/40 bg-blue-500/15 px-1.5 py-px text-[10px] font-medium leading-4 text-blue-300">
+                          {it.assignedClientCount} client{it.assignedClientCount === 1 ? "" : "s"}
+                        </span>
+                      )}
+                      {showAdminFilters && it.membershipPublished && (
+                        <span className="rounded-full border border-rose-500/40 bg-rose-500/15 px-1.5 py-px text-[10px] font-medium leading-4 text-rose-300">
+                          Membership
+                        </span>
+                      )}
+                      {showAdminFilters && it.archived && (
+                        <span className="rounded-full border border-border bg-muted/60 px-1.5 py-px text-[10px] font-medium leading-4 text-muted-foreground">
+                          Archived
+                        </span>
+                      )}
                     </div>
                     <div className="text-xs tabular-nums text-muted-foreground">{it.weeks ?? "—"}</div>
                     <div className="text-xs tabular-nums text-muted-foreground">{it.daysPerWeek ?? "—"}</div>
-                    <div className="truncate text-xs text-muted-foreground">{it.goal ? highlight(it.goal, q) : "—"}</div>
+                    <div className="truncate text-xs text-muted-foreground">{it.goal ? highlight(it.goal, qTerms) : "—"}</div>
                   </li>
                 );
               })}
