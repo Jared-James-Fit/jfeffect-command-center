@@ -3366,11 +3366,22 @@ function SetRow({
       />
       )}
       <div className="flex items-center justify-end gap-1">
-        {/* Compact spinner only — full error label renders below the row to
-            avoid overlapping the weight input. */}
-        {!readonly && !isConfirmed && (save.state === "saving" || save.state === "offline") && (
-          <SaveStatus state={save.state} savedAt={save.savedAt} compact />
-        )}
+        {/* Compact indicator — smooth pencil (pending) → spinner (saving) →
+            check (saved) transition so the row reflects sync status in real
+            time. Full error label renders below the row to avoid overlapping
+            the weight input. */}
+        {(() => {
+          if (readonly || isConfirmed) return null;
+          const dirty = save.hasPending();
+          const displayState: typeof save.state =
+            save.state === "saving" || save.state === "offline" || save.state === "saved"
+              ? save.state
+              : dirty
+                ? "idle"
+                : null as any;
+          if (!displayState) return null;
+          return <SaveStatus state={displayState} savedAt={save.savedAt} compact />;
+        })()}
         {!readonly ? (
           <button
             type="button"
