@@ -1,10 +1,15 @@
-import { Link } from "@tanstack/react-router";
+import { Link, useNavigate } from "@tanstack/react-router";
+import { useState } from "react";
+import { toast } from "sonner";
+import { useAuth } from "@/lib/auth";
+import { useClientImpersonation } from "@/lib/client-impersonation";
+import { supabase } from "@/integrations/supabase/client";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { UserAvatar } from "@/components/user-avatar";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { MoreHorizontal, MessageCircle, Dumbbell, Apple, HeartPulse, Mail, KeyRound, Archive, Trash2, ShoppingCart, Library, Eye } from "lucide-react";
+import { MoreHorizontal, MessageCircle, Dumbbell, Apple, HeartPulse, Mail, KeyRound, Archive, Trash2, ShoppingCart, Library, Eye, Star } from "lucide-react";
 
 type ClientCardProps = {
   c: any;
@@ -44,6 +49,40 @@ export function ClientMobileCard(props: ClientCardProps) {
     hasActiveProduct, setupNeeded,
     onAssign, onSell, onSendSetup, onSendReset, onToggleArchive, onDelete,
   } = props;
+  const { role } = useAuth();
+  const navigate = useNavigate();
+  const impersonation = useClientImpersonation();
+  const canPov = role === "admin" || role === "coach";
+  const [povBusy, setPovBusy] = useState(false);
+
+  const enterPov = async () => {
+    if (povBusy) return;
+    setPovBusy(true);
+    try {
+      const { data, error } = await supabase
+        .from("clients")
+        .select("user_id, full_name")
+        .eq("id", c.id)
+        .single();
+      if (error) throw error;
+      const returnTo = typeof window !== "undefined" ? window.location.pathname + window.location.search : "/admin/clients";
+      impersonation.start(
+        { id: c.id, user_id: data?.user_id ?? null, full_name: data?.full_name ?? c.full_name },
+        returnTo,
+      );
+      if (!data?.user_id) {
+        toast.message("Entering POV preview — client account isn't set up yet, so personal data will be empty.");
+      }
+      if (typeof window !== "undefined") {
+        window.location.href = "/portal";
+      } else {
+        navigate({ to: "/portal" });
+      }
+    } catch (e: any) {
+      toast.error(e?.message ?? "Could not enter POV");
+      setPovBusy(false);
+    }
+  };
 
   const paymentLabel = c.payment_status ?? "—";
   const paymentTone =
@@ -91,6 +130,20 @@ export function ClientMobileCard(props: ClientCardProps) {
             <MessageCircle className="mr-1.5 h-3.5 w-3.5" /> Message
           </Button>
         </Link>
+        {canPov && (
+          <Button
+            type="button"
+            size="sm"
+            onClick={enterPov}
+            disabled={povBusy}
+            aria-label={`Enter ${c.full_name ?? "client"} POV`}
+            title="Enter Client POV"
+            className="shrink-0 border border-warning/50 bg-warning/15 text-warning shadow-sm hover:bg-warning/25"
+          >
+            <Star className="h-4 w-4" />
+            <span className="sr-only">Client POV</span>
+          </Button>
+        )}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="outline" size="sm" className="shrink-0">
