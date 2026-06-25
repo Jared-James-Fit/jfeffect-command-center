@@ -2719,6 +2719,7 @@ function SetRow({
   const [rpeChipOpen, setRpeChipOpen] = useState(false);
   const [statusSaving, setStatusSaving] = useState(false);
   const [statusError, setStatusError] = useState<string | null>(null);
+  useEffect(() => { setStatusError(null); }, [existing?.id, existing?.completed_at]);
   // Hydrate from any unsynced local draft on first mount for this set
   const draftKey = clientId ? `workout-set:${rowId}:${clientId}:${setIndex}` : null;
   const [hydrated, setHydrated] = useState(false);
