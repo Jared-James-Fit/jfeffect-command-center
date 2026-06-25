@@ -17608,7 +17608,6 @@ export type Database = {
       }
     }
     Functions: {
-      _tmp_install_fullbody_sql: { Args: { p_sql: string }; Returns: undefined }
       admin_clients_directory: {
         Args: {
           p_coach_id?: string
