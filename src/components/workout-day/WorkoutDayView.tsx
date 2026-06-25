@@ -1423,7 +1423,19 @@ function WorkoutDay({
             }
             return durationRange(day.duration_estimate_min ?? 60);
           })()}</Badge>
-          {completion?.completed_at && <Badge variant="outline" className="text-green-500 border-green-500/30 bg-green-500/10"><CheckCircle2 className="mr-1 h-3 w-3" /> Completed</Badge>}
+          {completion?.completed_at && (
+            <>
+              <Badge variant="outline" className="text-green-500 border-green-500/30 bg-green-500/10"><CheckCircle2 className="mr-1 h-3 w-3" /> Completed</Badge>
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-7 gap-1.5 border-primary/40 bg-primary/10 px-2.5 text-xs font-bold text-primary hover:bg-primary/20"
+                onClick={openRecapSummary}
+              >
+                <Trophy className="h-3.5 w-3.5" /> View Score
+              </Button>
+            </>
+          )}
           {completion && !completion.completed_at && (completion.in_progress_at || completion.started_at) && (
             <Badge variant="outline" className="border-amber-500/30 bg-amber-500/10 text-amber-500">In progress</Badge>
           )}
