@@ -74,6 +74,7 @@ import { Route as AuthenticatedPortalCalendarRouteImport } from './routes/_authe
 import { Route as AuthenticatedPortalAppointmentsRouteImport } from './routes/_authenticated/portal/appointments'
 import { Route as AuthenticatedPortalAnnouncementsRouteImport } from './routes/_authenticated/portal/announcements'
 import { Route as AuthenticatedPortalAccountRouteImport } from './routes/_authenticated/portal/account'
+import { Route as AuthenticatedMediaWorkRouteImport } from './routes/_authenticated/media/work'
 import { Route as AuthenticatedMediaUploadsRouteImport } from './routes/_authenticated/media/uploads'
 import { Route as AuthenticatedMediaTestimonialsRouteImport } from './routes/_authenticated/media/testimonials'
 import { Route as AuthenticatedMediaSettingsRouteImport } from './routes/_authenticated/media/settings'
@@ -617,6 +618,11 @@ const AuthenticatedPortalAccountRoute =
     path: '/account',
     getParentRoute: () => AuthenticatedPortalRouteRoute,
   } as any)
+const AuthenticatedMediaWorkRoute = AuthenticatedMediaWorkRouteImport.update({
+  id: '/work',
+  path: '/work',
+  getParentRoute: () => AuthenticatedMediaRouteRoute,
+} as any)
 const AuthenticatedMediaUploadsRoute =
   AuthenticatedMediaUploadsRouteImport.update({
     id: '/uploads',
@@ -1901,6 +1907,7 @@ export interface FileRoutesByFullPath {
   '/media/settings': typeof AuthenticatedMediaSettingsRoute
   '/media/testimonials': typeof AuthenticatedMediaTestimonialsRoute
   '/media/uploads': typeof AuthenticatedMediaUploadsRoute
+  '/media/work': typeof AuthenticatedMediaWorkRoute
   '/portal/account': typeof AuthenticatedPortalAccountRoute
   '/portal/announcements': typeof AuthenticatedPortalAnnouncementsRoute
   '/portal/appointments': typeof AuthenticatedPortalAppointmentsRoute
@@ -2157,6 +2164,7 @@ export interface FileRoutesByTo {
   '/media/settings': typeof AuthenticatedMediaSettingsRoute
   '/media/testimonials': typeof AuthenticatedMediaTestimonialsRoute
   '/media/uploads': typeof AuthenticatedMediaUploadsRoute
+  '/media/work': typeof AuthenticatedMediaWorkRoute
   '/portal/account': typeof AuthenticatedPortalAccountRoute
   '/portal/announcements': typeof AuthenticatedPortalAnnouncementsRoute
   '/portal/appointments': typeof AuthenticatedPortalAppointmentsRoute
@@ -2420,6 +2428,7 @@ export interface FileRoutesById {
   '/_authenticated/media/settings': typeof AuthenticatedMediaSettingsRoute
   '/_authenticated/media/testimonials': typeof AuthenticatedMediaTestimonialsRoute
   '/_authenticated/media/uploads': typeof AuthenticatedMediaUploadsRoute
+  '/_authenticated/media/work': typeof AuthenticatedMediaWorkRoute
   '/_authenticated/portal/account': typeof AuthenticatedPortalAccountRoute
   '/_authenticated/portal/announcements': typeof AuthenticatedPortalAnnouncementsRoute
   '/_authenticated/portal/appointments': typeof AuthenticatedPortalAppointmentsRoute
@@ -2683,6 +2692,7 @@ export interface FileRouteTypes {
     | '/media/settings'
     | '/media/testimonials'
     | '/media/uploads'
+    | '/media/work'
     | '/portal/account'
     | '/portal/announcements'
     | '/portal/appointments'
@@ -2939,6 +2949,7 @@ export interface FileRouteTypes {
     | '/media/settings'
     | '/media/testimonials'
     | '/media/uploads'
+    | '/media/work'
     | '/portal/account'
     | '/portal/announcements'
     | '/portal/appointments'
@@ -3201,6 +3212,7 @@ export interface FileRouteTypes {
     | '/_authenticated/media/settings'
     | '/_authenticated/media/testimonials'
     | '/_authenticated/media/uploads'
+    | '/_authenticated/media/work'
     | '/_authenticated/portal/account'
     | '/_authenticated/portal/announcements'
     | '/_authenticated/portal/appointments'
@@ -3843,6 +3855,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/portal/account'
       preLoaderRoute: typeof AuthenticatedPortalAccountRouteImport
       parentRoute: typeof AuthenticatedPortalRouteRoute
+    }
+    '/_authenticated/media/work': {
+      id: '/_authenticated/media/work'
+      path: '/work'
+      fullPath: '/media/work'
+      preLoaderRoute: typeof AuthenticatedMediaWorkRouteImport
+      parentRoute: typeof AuthenticatedMediaRouteRoute
     }
     '/_authenticated/media/uploads': {
       id: '/_authenticated/media/uploads'
@@ -5748,6 +5767,7 @@ interface AuthenticatedMediaRouteRouteChildren {
   AuthenticatedMediaSettingsRoute: typeof AuthenticatedMediaSettingsRoute
   AuthenticatedMediaTestimonialsRoute: typeof AuthenticatedMediaTestimonialsRoute
   AuthenticatedMediaUploadsRoute: typeof AuthenticatedMediaUploadsRoute
+  AuthenticatedMediaWorkRoute: typeof AuthenticatedMediaWorkRoute
   AuthenticatedMediaIndexRoute: typeof AuthenticatedMediaIndexRoute
   AuthenticatedMediaSalesCoachingRoute: typeof AuthenticatedMediaSalesCoachingRoute
   AuthenticatedMediaSalesMembershipRoute: typeof AuthenticatedMediaSalesMembershipRoute
@@ -5771,6 +5791,7 @@ const AuthenticatedMediaRouteRouteChildren: AuthenticatedMediaRouteRouteChildren
     AuthenticatedMediaSettingsRoute: AuthenticatedMediaSettingsRoute,
     AuthenticatedMediaTestimonialsRoute: AuthenticatedMediaTestimonialsRoute,
     AuthenticatedMediaUploadsRoute: AuthenticatedMediaUploadsRoute,
+    AuthenticatedMediaWorkRoute: AuthenticatedMediaWorkRoute,
     AuthenticatedMediaIndexRoute: AuthenticatedMediaIndexRoute,
     AuthenticatedMediaSalesCoachingRoute: AuthenticatedMediaSalesCoachingRoute,
     AuthenticatedMediaSalesMembershipRoute:
