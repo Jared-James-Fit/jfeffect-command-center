@@ -2,13 +2,14 @@ import { useNavigate, useLocation, useRouterState } from "@tanstack/react-router
 import { useCallback, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { useQueryClient } from "@tanstack/react-query";
-import { Briefcase, Sparkles, Film, Shield, User, ArrowRightLeft, Search } from "lucide-react";
+import { Briefcase, Sparkles, Film, Shield, User, ArrowRightLeft, Search, Eye } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { useDashboardMode, type DashboardMode } from "@/lib/dashboard-mode";
 import { setPovPersona } from "@/lib/pov.functions";
 import { getPovFlag, setPovFlag } from "@/components/pov-quick-toggle";
 import { KeyboardShortcutsButton } from "@/components/keyboard-shortcuts";
+import { useAuth } from "@/lib/auth";
 
 /**
  * Consolidated sticky top bar for the admin/coach layout.
@@ -27,6 +28,8 @@ export function AdminTopBar({ showDashboardMode = true }: { showDashboardMode?: 
   const [busy, setBusy] = useState(false);
   const pov = getPovFlag();
   const isMemberView = pov.active || location.pathname.startsWith("/m");
+  const { role } = useAuth();
+  const canClientPov = role === "admin" || role === "coach";
 
   // The messaging surface is an immersive, full-bleed chat view (mobile
   // overlays the whole screen; desktop uses full vertical height). The
@@ -130,6 +133,20 @@ export function AdminTopBar({ showDashboardMode = true }: { showDashboardMode?: 
       <div className="inline-flex items-center gap-0.5 rounded-md border border-border bg-card p-0.5">
         <PovBtn active={!isMemberView} onClick={goAdmin} disabled={busy || !isMemberView} icon={<Shield className="h-3.5 w-3.5" />} label="Admin" />
         <PovBtn active={isMemberView} onClick={goMember} disabled={busy || isMemberView} icon={<User className="h-3.5 w-3.5" />} label="Member" tint="emerald" />
+        {canClientPov && (
+          <button
+            type="button"
+            onClick={() => {
+              try { window.dispatchEvent(new CustomEvent("open-client-pov-picker")); } catch {}
+            }}
+            className="ml-0.5 flex items-center gap-1.5 rounded border-l border-border px-2.5 py-1 text-xs font-semibold text-warning hover:bg-warning/10"
+            aria-label="Enter Client POV"
+            title="Enter Client POV"
+          >
+            <Eye className="h-3.5 w-3.5" />
+            <span className="hidden sm:inline">Client POV</span>
+          </button>
+        )}
       </div>
     </div>
   );
