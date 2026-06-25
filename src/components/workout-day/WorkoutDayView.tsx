@@ -2549,7 +2549,11 @@ function ExerciseNotesSheet({ open, onOpenChange, clientId, dayId, dayTitle, row
   onSaved: () => void;
 }) {
   const [draft, setDraft] = useState(existingNote?.content ?? "");
-  useEffect(() => { setDraft(existingNote?.content ?? ""); }, [existingNote?.id, existingNote?.content, open]);
+  // Only re-hydrate the draft when the sheet (re)opens or the underlying
+  // note row changes identity. Resetting on every `content` change wiped
+  // out user edits whenever a refetch came back with the previous saved
+  // content, making it feel like the note couldn't be edited.
+  useEffect(() => { setDraft(existingNote?.content ?? ""); }, [existingNote?.id, open]);
   const adapter = useOptionalAdapter();
 
   return (
@@ -2561,7 +2565,15 @@ function ExerciseNotesSheet({ open, onOpenChange, clientId, dayId, dayTitle, row
         </SheetHeader>
         <div className="px-5 py-4 space-y-4 pb-32">
           <div>
-            <label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Your note</label>
+            <div className="flex items-center justify-between gap-2">
+              <label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Your note</label>
+              {existingNote && (
+                <span className="text-[10px] text-muted-foreground">
+                  Last saved {new Date(existingNote.updated_at).toLocaleString()}
+                  {existingNote.status === "edited" && " · edited"}
+                </span>
+              )}
+            </div>
             {loading && !existingNote ? (
               <div className="mt-1 h-[140px] w-full animate-pulse rounded-md border border-border bg-muted/40" aria-busy="true" aria-label="Loading note" />
             ) : (
@@ -2569,49 +2581,28 @@ function ExerciseNotesSheet({ open, onOpenChange, clientId, dayId, dayTitle, row
                 value={draft}
                 onChange={(e) => setDraft(e.target.value)}
                 rows={6}
-                placeholder="How did this exercise feel? Form cues, pain, PRs, equipment notes…"
+                placeholder="How did this exercise feel? Form cues, pain, PRs, equipment notes… (tap to edit anytime)"
                 className="mt-1"
               />
             )}
+            {existingNote && (
+              <p className="mt-1 text-[11px] text-muted-foreground">
+                Edit your note anytime — tap above to change it, then tap Save Note.
+              </p>
+            )}
           </div>
-          {loading && !existingNote ? (
-            <section className="rounded-md border border-border bg-secondary/30 p-3">
-              <div className="flex items-center gap-2">
-                <div className="h-3 w-3 animate-pulse rounded-sm bg-muted-foreground/30" />
-                <div className="h-3 w-24 animate-pulse rounded bg-muted-foreground/30" />
-                <div className="h-3 w-32 animate-pulse rounded bg-muted-foreground/20" />
-              </div>
-              <div className="mt-2 space-y-1.5">
-                <div className="h-3 w-full animate-pulse rounded bg-muted-foreground/20" />
-                <div className="h-3 w-5/6 animate-pulse rounded bg-muted-foreground/20" />
-                <div className="h-3 w-2/3 animate-pulse rounded bg-muted-foreground/20" />
-              </div>
-            </section>
-          ) : existingNote && (
-            <section className="rounded-md border border-border bg-secondary/30 p-3">
-              <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
-                <StickyNote className="h-3 w-3" />
-                <span>Last saved</span>
-                <span>·</span>
-                <span>{new Date(existingNote.updated_at).toLocaleString()}</span>
-                {existingNote.status === "edited" && <Badge variant="outline" className="ml-auto text-[10px]">Edited</Badge>}
-              </div>
-              <p className="mt-1 whitespace-pre-wrap text-sm">{existingNote.content}</p>
-            </section>
-          )}
         </div>
         <div className="sticky bottom-0 left-0 right-0 border-t border-border bg-background/95 backdrop-blur px-5 py-3 space-y-2">
           <ActionButton
             className="w-full"
             size="lg"
             loadingLabel="Saving…"
-            successLabel="Saved"
+            successLabel={existingNote ? "Updated" : "Saved"}
             successToast={existingNote ? "Note updated" : "Note saved"}
-            disabled={!clientId || draft.trim().length === 0}
+            disabled={!clientId || (draft.trim() === (existingNote?.content ?? "").trim())}
             onAction={async () => {
               if (!clientId) return;
               const trimmed = draft.trim();
-              if (!trimmed) throw new Error("Note is empty");
               const doSave = async () => {
                 if (existingNote) {
                   const payload = { content: trimmed, status: "edited", coach_seen_at: null };
@@ -2622,6 +2613,7 @@ function ExerciseNotesSheet({ open, onOpenChange, clientId, dayId, dayTitle, row
                     if (error) throw error;
                   }
                 } else {
+                  if (!trimmed) throw new Error("Note is empty");
                   const payload = {
                     client_id: clientId,
                     day_id: dayId,
@@ -2643,7 +2635,7 @@ function ExerciseNotesSheet({ open, onOpenChange, clientId, dayId, dayTitle, row
               onSaved();
             }}
           >
-            <StickyNote className="mr-2 h-4 w-4" /> Save Note
+            <StickyNote className="mr-2 h-4 w-4" /> {existingNote ? "Update Note" : "Save Note"}
           </ActionButton>
           <Button variant="outline" className="w-full" size="lg" onClick={() => onOpenChange(false)}>
             <ArrowLeft className="mr-2 h-4 w-4" /> Back to Workout
