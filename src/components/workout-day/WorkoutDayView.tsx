@@ -1865,6 +1865,13 @@ function WorkoutDay({
           summary={lastSummary}
           workoutTitle={day?.title ?? null}
           durationMin={completion?.actual_duration_min ?? null}
+          workoutDate={completion?.completed_at ?? scheduledDate ?? null}
+          sessionRating={
+            lastSessionRating ??
+            (completion as any)?.session_rating ??
+            existingReview?.overall_rating ??
+            null
+          }
           onClose={() => {
             // Only navigate to the list when the summary was opened as the
             // post-submission celebration. When opened from the "View workout
