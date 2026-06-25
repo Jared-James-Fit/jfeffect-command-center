@@ -765,9 +765,19 @@ function WorkoutDay({
   );
 
   const { data: prefRows = [] } = useQuery({
-    queryKey: ["client-exercise-unit-prefs", client?.id, exerciseIds.join(",")],
+    queryKey: ["client-exercise-unit-prefs", adapter?.kind ?? "client", client?.id, exerciseIds.join(",")],
     enabled: !!client?.id && exerciseIds.length > 0,
-    queryFn: async () => (await sb.from("client_exercise_unit_prefs").select("exercise_id, unit").eq("client_id", client!.id).in("exercise_id", exerciseIds)).data ?? [],
+    queryFn: async () => {
+      // Route through the adapter so the member adapter can read its own
+      // member_exercise_unit_prefs table (parity with client side).
+      if (adapter) {
+        const list = await adapter.listUnitPrefs(exerciseIds);
+        return list.map((p) => ({ exercise_id: p.exerciseId, unit: p.unit }));
+      }
+      return (
+        (await sb.from("client_exercise_unit_prefs").select("exercise_id, unit").eq("client_id", client!.id).in("exercise_id", exerciseIds)).data ?? []
+      );
+    },
   });
 
   const { data: historyRows = [] } = useQuery({
@@ -820,8 +830,14 @@ function WorkoutDay({
     if (exerciseId) setUnitOverrides((m) => ({ ...m, [exerciseId]: next }));
     else setUnitOverrides((m) => ({ ...m, [key]: next } as any));
     if (client?.id && exerciseId) {
-      try { await saveExerciseUnitPref(client.id, exerciseId, next); } catch { /* non-blocking */ }
-      qc.invalidateQueries({ queryKey: ["client-exercise-unit-prefs", client.id] });
+      try {
+        if (adapter) {
+          await adapter.saveExerciseUnitPref({ exerciseId, unit: next });
+        } else {
+          await saveExerciseUnitPref(client.id, exerciseId, next);
+        }
+      } catch { /* non-blocking */ }
+      qc.invalidateQueries({ queryKey: ["client-exercise-unit-prefs"] });
     }
     undo.push({
       label: `Set exercise unit to ${next.toUpperCase()}`,
@@ -830,8 +846,14 @@ function WorkoutDay({
         if (exerciseId) setUnitOverrides((m) => ({ ...m, [exerciseId]: prevUnit as WUnit }));
         else setUnitOverrides((m) => ({ ...m, [key]: prevUnit as WUnit } as any));
         if (client?.id && exerciseId && (prevUnit === "kg" || prevUnit === "lb")) {
-          try { await saveExerciseUnitPref(client.id, exerciseId, prevUnit); } catch {}
-          qc.invalidateQueries({ queryKey: ["client-exercise-unit-prefs", client.id] });
+          try {
+            if (adapter) {
+              await adapter.saveExerciseUnitPref({ exerciseId, unit: prevUnit as WUnit });
+            } else {
+              await saveExerciseUnitPref(client.id, exerciseId, prevUnit);
+            }
+          } catch {}
+          qc.invalidateQueries({ queryKey: ["client-exercise-unit-prefs"] });
         }
       },
     });

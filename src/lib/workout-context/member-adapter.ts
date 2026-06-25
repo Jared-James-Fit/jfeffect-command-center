@@ -367,15 +367,13 @@ export function createMemberAdapter(ref: WorkoutContextRef): WorkoutContextAdapt
     },
 
     async listExerciseHistory(exerciseId: string, opts): Promise<HistoryEntryDTO[]> {
-      // We don't have a fast cross-day index by exercise_id for members; the
-      // published payload may not store stable exercise ids. Fall back to an
-      // empty list when the lookup isn't possible.
       if (!exerciseId) return [];
       const limit = opts?.limit ?? 50;
       const { data, error } = await supabase
         .from("member_set_logs")
         .select("logged_at, set_index, reps, load_lb, rpe")
         .eq("enrollment_id", enrollmentId)
+        .eq("exercise_id", exerciseId)
         .order("logged_at", { ascending: false })
         .limit(limit);
       if (error) throw new Error(error.message);
@@ -509,8 +507,9 @@ export function createMemberAdapter(ref: WorkoutContextRef): WorkoutContextAdapt
     },
 
     async upsertExerciseNote(_input: UpsertExerciseNoteInput): Promise<void> {
-      // Member plans have no per-exercise notes table; notes ride along on
-      // the set log itself via the standard logSet path.
+      // Routed through upsertPlExerciseNoteRaw on the shared UI; this entry
+      // point is retained for adapters that need DTO-shaped writes. The
+      // shared WorkoutDayView calls upsertPlExerciseNoteRaw directly.
     },
 
     async updateDayCompletion(dayId: string, patch: DayCompletionPatch): Promise<void> {
@@ -539,13 +538,34 @@ export function createMemberAdapter(ref: WorkoutContextRef): WorkoutContextAdapt
     },
 
     async saveExerciseUnitPref(_input: { exerciseId: string; unit: "lb" | "kg" }): Promise<void> {
-      // Members default to lb; per-exercise unit prefs aren't persisted.
+      // Persist to member_exercise_unit_prefs so the toggle survives reloads
+      // (parity with client_exercise_unit_prefs).
+      if (!_input.exerciseId) return;
+      const { error } = await (supabase as any)
+        .from("member_exercise_unit_prefs")
+        .upsert(
+          {
+            user_id: ref.userId,
+            exercise_id: _input.exerciseId,
+            unit: _input.unit,
+          },
+          { onConflict: "user_id,exercise_id" },
+        );
+      if (error) throw new Error(error.message);
     },
 
     async listUnitPrefs(_exerciseIds: string[]): Promise<{ exerciseId: string; unit: "lb" | "kg" }[]> {
-      // Memberships don't persist per-exercise unit prefs; callers fall back
-      // to the exercise's default_load_unit.
-      return [];
+      const ids = (_exerciseIds ?? []).filter(Boolean);
+      if (!ids.length) return [];
+      const { data, error } = await (supabase as any)
+        .from("member_exercise_unit_prefs")
+        .select("exercise_id, unit")
+        .eq("user_id", ref.userId)
+        .in("exercise_id", ids);
+      if (error) return [];
+      return (data ?? [])
+        .filter((r: any) => r.unit === "lb" || r.unit === "kg")
+        .map((r: any) => ({ exerciseId: r.exercise_id as string, unit: r.unit as "lb" | "kg" }));
     },
 
     async notifyCoachOfFailure(_input: { dayId: string; reason: string }): Promise<void> {
@@ -613,6 +633,28 @@ export function createMemberAdapter(ref: WorkoutContextRef): WorkoutContextAdapt
         exercise_index: exerciseIndex,
         set_index: setIndex,
       };
+      // Resolve exercise_id from the published payload (or a member-side swap)
+      // so cross-day exercise history can filter correctly. Best-effort: a
+      // missing payload just leaves exercise_id null on this row.
+      try {
+        const { day: dayObj } = await loadPublishedDay(enrollmentId, weekIndex, dayIndex);
+        const baseExId =
+          dayObj?.rows?.[exerciseIndex]?.exercise_id ?? null;
+        let exId: string | null = baseExId;
+        // Honour an active swap for this exercise slot.
+        const { data: swap } = await (supabase as any)
+          .from("member_exercise_swaps")
+          .select("exercise_id")
+          .eq("enrollment_id", enrollmentId)
+          .eq("week_index", weekIndex)
+          .eq("day_index", dayIndex)
+          .eq("exercise_index", exerciseIndex)
+          .maybeSingle();
+        if (swap?.exercise_id) exId = swap.exercise_id as string;
+        if (exId) memberPayload.exercise_id = exId;
+      } catch {
+        // Non-fatal: leave exercise_id unset.
+      }
       if (statusOnly) {
         if (payload.completed_at) {
           memberPayload.logged_at = payload.completed_at;
@@ -668,10 +710,44 @@ export function createMemberAdapter(ref: WorkoutContextRef): WorkoutContextAdapt
       void data;
       return { id: encodeRowResultId(weekIndex, dayIndex, exerciseIndex, setIndex) };
     },
-    async upsertPlExerciseNoteRaw(_payload, _id) {
-      // Member plans don't have a per-exercise notes table — notes ride on
-      // member_set_logs.notes. Silently no-op so the shared UI's save call
-      // doesn't crash; the autosave on the active set captures the note.
+    async upsertPlExerciseNoteRaw(payload, id) {
+      // Reshape pl_exercise_notes payload into member_exercise_notes.
+      // pl_*: client_id, day_id, row_id ("ex:<n>"), exercise_id, exercise_name, content, status, coach_seen_at
+      // member_*: user_id, enrollment_id, week_index, day_index, exercise_index, exercise_id, note
+      if (id) {
+        const dbPatch: Record<string, any> = {};
+        if ("content" in payload) dbPatch.note = payload.content ?? "";
+        if (Object.keys(dbPatch).length === 0) return;
+        const { error } = await (supabase as any)
+          .from("member_exercise_notes")
+          .update(dbPatch)
+          .eq("id", id);
+        if (error) throw new Error(error.message);
+        return;
+      }
+      // Insert path requires day_id + row_id to derive (week, day, exercise_index).
+      const dayId = String(payload.day_id ?? "");
+      const rowId = String(payload.row_id ?? "");
+      if (!dayId || !rowId) {
+        throw new Error("member adapter: upsertPlExerciseNoteRaw needs day_id and row_id");
+      }
+      const { week, day } = decodeDayId(dayId);
+      const exerciseIndex = decodeRowId(rowId);
+      const { error } = await (supabase as any)
+        .from("member_exercise_notes")
+        .upsert(
+          {
+            user_id: ref.userId,
+            enrollment_id: enrollmentId,
+            week_index: week,
+            day_index: day,
+            exercise_index: exerciseIndex,
+            exercise_id: payload.exercise_id ?? null,
+            note: payload.content ?? "",
+          },
+          { onConflict: "enrollment_id,week_index,day_index,exercise_index" },
+        );
+      if (error) throw new Error(error.message);
     },
     async upsertPlDayCompletionRaw(payload, id) {
       // pl_day_completions tracks started_at / in_progress_at / completed_at /
@@ -837,10 +913,29 @@ export function createMemberAdapter(ref: WorkoutContextRef): WorkoutContextAdapt
       };
     },
 
-    async listExerciseNotesRaw(_dayId) {
-      // Member plans don't persist per-day exercise notes; notes ride on
-      // member_set_logs.notes via the standard log path.
-      return [];
+    async listExerciseNotesRaw(dayId) {
+      const { week, day } = decodeDayId(dayId);
+      const { data, error } = await (supabase as any)
+        .from("member_exercise_notes")
+        .select("*")
+        .eq("enrollment_id", enrollmentId)
+        .eq("week_index", week)
+        .eq("day_index", day);
+      if (error) return [];
+      // Reshape into pl_exercise_notes column layout consumed by WorkoutDayView.
+      return (data ?? []).map((n: any) => ({
+        id: n.id,
+        client_id: ref.ownerId,
+        day_id: dayId,
+        row_id: `ex:${n.exercise_index}`,
+        exercise_id: n.exercise_id ?? null,
+        exercise_name: null,
+        content: n.note ?? "",
+        status: "saved",
+        coach_seen_at: null,
+        created_at: n.created_at ?? null,
+        updated_at: n.updated_at ?? null,
+      }));
     },
 
     async getWorkoutFeedbackRaw(dayId) {

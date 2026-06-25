@@ -7976,6 +7976,60 @@ export type Database = {
         }
         Relationships: []
       }
+      member_exercise_notes: {
+        Row: {
+          created_at: string
+          day_index: number
+          enrollment_id: string
+          exercise_id: string | null
+          exercise_index: number
+          id: string
+          note: string
+          updated_at: string
+          user_id: string
+          week_index: number
+        }
+        Insert: {
+          created_at?: string
+          day_index: number
+          enrollment_id: string
+          exercise_id?: string | null
+          exercise_index: number
+          id?: string
+          note?: string
+          updated_at?: string
+          user_id: string
+          week_index: number
+        }
+        Update: {
+          created_at?: string
+          day_index?: number
+          enrollment_id?: string
+          exercise_id?: string | null
+          exercise_index?: number
+          id?: string
+          note?: string
+          updated_at?: string
+          user_id?: string
+          week_index?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "member_exercise_notes_enrollment_id_fkey"
+            columns: ["enrollment_id"]
+            isOneToOne: false
+            referencedRelation: "member_plan_enrollments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "member_exercise_notes_exercise_id_fkey"
+            columns: ["exercise_id"]
+            isOneToOne: false
+            referencedRelation: "exercises"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       member_exercise_swaps: {
         Row: {
           created_at: string
@@ -8023,6 +8077,41 @@ export type Database = {
           },
           {
             foreignKeyName: "member_exercise_swaps_exercise_id_fkey"
+            columns: ["exercise_id"]
+            isOneToOne: false
+            referencedRelation: "exercises"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      member_exercise_unit_prefs: {
+        Row: {
+          created_at: string
+          exercise_id: string
+          id: string
+          unit: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          exercise_id: string
+          id?: string
+          unit: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          exercise_id?: string
+          id?: string
+          unit?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "member_exercise_unit_prefs_exercise_id_fkey"
             columns: ["exercise_id"]
             isOneToOne: false
             referencedRelation: "exercises"
@@ -8745,6 +8834,7 @@ export type Database = {
           enrollment_id: string
           entered_unit: string | null
           entered_value: number | null
+          exercise_id: string | null
           exercise_index: number
           id: string
           is_working_set: boolean | null
@@ -8774,6 +8864,7 @@ export type Database = {
           enrollment_id: string
           entered_unit?: string | null
           entered_value?: number | null
+          exercise_id?: string | null
           exercise_index: number
           id?: string
           is_working_set?: boolean | null
@@ -8803,6 +8894,7 @@ export type Database = {
           enrollment_id?: string
           entered_unit?: string | null
           entered_value?: number | null
+          exercise_id?: string | null
           exercise_index?: number
           id?: string
           is_working_set?: boolean | null
@@ -8842,6 +8934,13 @@ export type Database = {
             columns: ["enrollment_id"]
             isOneToOne: false
             referencedRelation: "member_plan_enrollments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "member_set_logs_exercise_id_fkey"
+            columns: ["exercise_id"]
+            isOneToOne: false
+            referencedRelation: "exercises"
             referencedColumns: ["id"]
           },
           {
