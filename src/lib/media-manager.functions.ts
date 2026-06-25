@@ -26,7 +26,7 @@ async function assertMediaOrAdmin(ctx: any) {
 }
 
 function getOrigin() {
-  return process.env.PUBLIC_APP_URL || process.env.SITE_URL || "";
+  return process.env.PUBLIC_APP_URL || process.env.SITE_URL || "https://jfeffect.com";
 }
 
 const TWILIO_GATEWAY_URL = "https://connector-gateway.lovable.dev/twilio";
@@ -59,8 +59,9 @@ async function sendStaffInviteSms(opts: {
     const twilioKey = process.env.TWILIO_API_KEY;
     if (!lovableKey || !twilioKey) return { sent: false, reason: "twilio_not_configured" };
     const name = (opts.firstName || "").trim();
-    const greeting = name ? `Hi ${name}, ` : "";
-    const body = `${greeting}you've been invited as JF Effect Media Manager. Finish setup here: ${opts.link} (link expires in 7 days).`;
+    const greeting = name ? `Hi ${name} — ` : "";
+    // URL on its own line so iOS/Android render it as a single tap target.
+    const body = `${greeting}you're invited as a JF Effect Media Manager. Tap to set up your account:\n${opts.link}\n(Link expires in 7 days.)`;
     const res = await fetch(`${TWILIO_GATEWAY_URL}/Messages.json`, {
       method: "POST",
       headers: {
