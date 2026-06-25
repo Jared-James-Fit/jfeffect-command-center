@@ -68,6 +68,10 @@ function groupNavItems(items: NavItem[]) {
     "Content",
     "Team",
     "Settings",
+    // ── Media Manager workspace groups (Phase 1 foundation) ──
+    "Daily Work",
+    "Growth",
+    "System",
     // ── Legacy group labels (kept for back-compat — `membershipNav`,
     // `floating-bar.tsx`, `sitemap.tsx` still reference some of these).
     "Core",
