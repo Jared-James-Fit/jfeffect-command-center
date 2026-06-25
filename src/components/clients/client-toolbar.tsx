@@ -33,14 +33,14 @@ export function ClientToolbar({ search, coachingType, coachId, coaches, sort, is
   useEffect(() => {
     if (local === search) return;
     const t = setTimeout(() => {
-      navigate({ search: (prev: any) => ({ ...prev, search: local || undefined, page: 1 }) });
+      navigate({ search: (prev: any) => ({ ...prev, search: local || undefined, page: 1 }), resetScroll: false });
     }, 300);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [local]);
 
   const set = (patch: Record<string, any>) =>
-    navigate({ search: (prev: any) => ({ ...prev, ...patch, page: 1 }) });
+    navigate({ search: (prev: any) => ({ ...prev, ...patch, page: 1 }), resetScroll: false });
 
   const hasFilters =
     !!search || (coachingType && coachingType !== "all") || !!coachId || sort !== "attention";
