@@ -690,10 +690,44 @@ export function createMemberAdapter(ref: WorkoutContextRef): WorkoutContextAdapt
       void data;
       return { id: encodeRowResultId(weekIndex, dayIndex, exerciseIndex, setIndex) };
     },
-    async upsertPlExerciseNoteRaw(_payload, _id) {
-      // Member plans don't have a per-exercise notes table — notes ride on
-      // member_set_logs.notes. Silently no-op so the shared UI's save call
-      // doesn't crash; the autosave on the active set captures the note.
+    async upsertPlExerciseNoteRaw(payload, id) {
+      // Reshape pl_exercise_notes payload into member_exercise_notes.
+      // pl_*: client_id, day_id, row_id ("ex:<n>"), exercise_id, exercise_name, content, status, coach_seen_at
+      // member_*: user_id, enrollment_id, week_index, day_index, exercise_index, exercise_id, note
+      if (id) {
+        const dbPatch: Record<string, any> = {};
+        if ("content" in payload) dbPatch.note = payload.content ?? "";
+        if (Object.keys(dbPatch).length === 0) return;
+        const { error } = await (supabase as any)
+          .from("member_exercise_notes")
+          .update(dbPatch)
+          .eq("id", id);
+        if (error) throw new Error(error.message);
+        return;
+      }
+      // Insert path requires day_id + row_id to derive (week, day, exercise_index).
+      const dayId = String(payload.day_id ?? "");
+      const rowId = String(payload.row_id ?? "");
+      if (!dayId || !rowId) {
+        throw new Error("member adapter: upsertPlExerciseNoteRaw needs day_id and row_id");
+      }
+      const { week, day } = decodeDayId(dayId);
+      const exerciseIndex = decodeRowId(rowId);
+      const { error } = await (supabase as any)
+        .from("member_exercise_notes")
+        .upsert(
+          {
+            user_id: ref.userId,
+            enrollment_id: enrollmentId,
+            week_index: week,
+            day_index: day,
+            exercise_index: exerciseIndex,
+            exercise_id: payload.exercise_id ?? null,
+            note: payload.content ?? "",
+          },
+          { onConflict: "enrollment_id,week_index,day_index,exercise_index" },
+        );
+      if (error) throw new Error(error.message);
     },
     async upsertPlDayCompletionRaw(payload, id) {
       // pl_day_completions tracks started_at / in_progress_at / completed_at /
