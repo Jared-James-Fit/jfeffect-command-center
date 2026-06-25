@@ -1,0 +1,1 @@
+SELECT 1 as test_size_capability;
