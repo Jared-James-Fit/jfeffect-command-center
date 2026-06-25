@@ -40,6 +40,7 @@ type Summary = {
   block_name: string | null;
   sessions: number;
   fallbackSessions: number;
+  bodyweightSets: number;
 };
 
 /**
