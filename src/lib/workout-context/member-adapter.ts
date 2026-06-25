@@ -644,10 +644,12 @@ export function createMemberAdapter(ref: WorkoutContextRef): WorkoutContextAdapt
         completed_duration_seconds: payload.completed_duration_seconds ?? null,
         timer_started_at: payload.timer_started_at ?? null,
         timer_completed_at: payload.timer_completed_at ?? null,
-        logged_at: payload.completed_at ?? new Date().toISOString(),
         });
         if ("completed_at" in payload || payload.completion_method) {
           memberPayload.completion_method = payload.completion_method ?? (payload.completed_at ? "manual_status" : null);
+        }
+        if (payload.completed_at) {
+          memberPayload.logged_at = payload.completed_at;
         }
       }
       // Upsert on the natural key (enrollment + week + day + exercise + set).
