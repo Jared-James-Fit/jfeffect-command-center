@@ -1,7 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
-import { supabaseAdmin } from "@/integrations/supabase/client.server"; // static — prevents cold-start delay
 import type { Database } from "@/integrations/supabase/types";
 
 type ClientUpdate = Database["public"]["Tables"]["clients"]["Update"];
@@ -23,7 +22,7 @@ async function assertAdmin(supabase: any, userId: string) {
 // would let setup / reset / password operations silently overwrite the
 // admin's credentials.
 async function assertNotPrivilegedTarget(opts: { email?: string | null; userId?: string | null }) {
-  // supabaseAdmin imported statically at top of file
+  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
   const targetIds = new Set<string>();
   if (opts.userId) targetIds.add(opts.userId);
   if (opts.email) {
@@ -71,7 +70,7 @@ export const inviteClient = createServerFn({ method: "POST" })
 
     await assertNotPrivilegedTarget({ email: client.email, userId: client.user_id });
 
-    // supabaseAdmin imported statically at top of file
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
     const { data: invited, error: inviteErr } =
       await supabaseAdmin.auth.admin.inviteUserByEmail(client.email, {
@@ -125,7 +124,7 @@ export const getSetupLink = createServerFn({ method: "POST" })
     if (error) throw new Error(error.message);
     if (!client?.email) throw new Error("Client has no email address");
     await assertNotPrivilegedTarget({ email: client.email, userId: client.user_id });
-    // supabaseAdmin imported statically at top of file
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const linkType = client.user_id ? "magiclink" : "invite";
     const { data: link, error: lErr } = await supabaseAdmin.auth.admin.generateLink({
       type: linkType as any,
@@ -160,7 +159,7 @@ export const sendPasswordReset = createServerFn({ method: "POST" })
     if (error) throw new Error(error.message);
     if (!client?.email) throw new Error("Client has no email address");
     await assertNotPrivilegedTarget({ email: client.email });
-    // supabaseAdmin imported statically at top of file
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     // resetPasswordForEmail SENDS the email; admin.generateLink only generates a URL.
     const { error: lErr } = await supabaseAdmin.auth.resetPasswordForEmail(
       client.email,
@@ -188,7 +187,7 @@ export const getPasswordResetLink = createServerFn({ method: "POST" })
     if (error) throw new Error(error.message);
     if (!client?.email) throw new Error("Client has no email address");
     await assertNotPrivilegedTarget({ email: client.email });
-    // supabaseAdmin imported statically at top of file
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { data: link, error: lErr } = await supabaseAdmin.auth.admin.generateLink({
       type: "recovery",
       email: client.email,
@@ -220,7 +219,7 @@ export const setClientPassword = createServerFn({ method: "POST" })
     if (error) throw new Error(error.message);
     if (!client?.email) throw new Error("Client has no email address");
     await assertNotPrivilegedTarget({ email: client.email, userId: client.user_id });
-    // supabaseAdmin imported statically at top of file
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
     let authUserId = client.user_id as string | null;
     if (!authUserId) {
@@ -331,7 +330,7 @@ export const deleteClient = createServerFn({ method: "POST" })
       .single();
     if (cErr) throw new Error(cErr.message);
 
-    // supabaseAdmin imported statically at top of file
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
     const { error: delErr } = await supabaseAdmin
       .from("clients")
