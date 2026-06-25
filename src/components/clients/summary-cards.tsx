@@ -38,6 +38,7 @@ export function SummaryCards({
               onClick={() =>
                 navigate({
                   search: (prev: any) => ({ ...prev, status: k, page: 1 }),
+                  resetScroll: false,
                 })
               }
               className={cn(
