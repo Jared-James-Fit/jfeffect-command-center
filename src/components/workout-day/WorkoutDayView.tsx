@@ -1457,7 +1457,6 @@ function WorkoutDay({
                 <Maximize2 className="h-5 w-5" /> Full Screen
               </Button>
             )}
-            <SaveStatus state={metaSave.state} savedAt={metaSave.savedAt} />
           </div>
         </div>
 
