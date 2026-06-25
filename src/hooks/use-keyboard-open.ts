@@ -38,10 +38,22 @@ export function useKeyboardOpen() {
       // false positives while still firing for every real keyboard.
       const open = inset > 120;
       root.style.setProperty("--keyboard-inset", `${open ? inset : 0}px`);
-      root.style.setProperty("--vv-h", `${Math.round(vv.height)}px`);
-      root.style.setProperty("--vv-top", `${Math.round(vv.offsetTop)}px`);
-      if (open) root.setAttribute("data-keyboard-open", "true");
-      else root.removeAttribute("data-keyboard-open");
+      if (open) {
+        root.style.setProperty("--vv-h", `${Math.round(vv.height)}px`);
+        root.style.setProperty("--vv-top", `${Math.round(vv.offsetTop)}px`);
+        root.setAttribute("data-keyboard-open", "true");
+      } else {
+        // Keyboard closed: pin viewport vars to the full window so the
+        // chat surface doesn't get stuck offset by a stale visualViewport
+        // scroll position (iOS leaves vv.offsetTop > 0 after the input
+        // blurs, which would leave a huge empty band above the tabs).
+        root.style.setProperty("--vv-h", `${Math.round(window.innerHeight)}px`);
+        root.style.setProperty("--vv-top", "0px");
+        root.removeAttribute("data-keyboard-open");
+        if (vv.offsetTop > 0 || window.scrollY > 0) {
+          window.scrollTo({ top: 0, left: 0 });
+        }
+      }
     };
     const schedule = () => {
       if (raf) return;
