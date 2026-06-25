@@ -7887,33 +7887,39 @@ export type Database = {
       }
       media_resource_folders: {
         Row: {
+          archived_at: string | null
           color: string | null
           created_at: string
           created_by: string | null
           icon: string | null
           id: string
+          is_archived: boolean
           name: string
           parent_id: string | null
           sort_order: number
           updated_at: string
         }
         Insert: {
+          archived_at?: string | null
           color?: string | null
           created_at?: string
           created_by?: string | null
           icon?: string | null
           id?: string
+          is_archived?: boolean
           name: string
           parent_id?: string | null
           sort_order?: number
           updated_at?: string
         }
         Update: {
+          archived_at?: string | null
           color?: string | null
           created_at?: string
           created_by?: string | null
           icon?: string | null
           id?: string
+          is_archived?: boolean
           name?: string
           parent_id?: string | null
           sort_order?: number
@@ -7931,6 +7937,9 @@ export type Database = {
       }
       media_resources: {
         Row: {
+          archived_at: string | null
+          campaign_id: string | null
+          content_id: string | null
           created_at: string
           created_by: string | null
           description: string | null
@@ -7938,15 +7947,22 @@ export type Database = {
           file_size: number | null
           folder_id: string | null
           id: string
+          is_archived: boolean
+          is_favourite: boolean
           mime_type: string | null
           name: string
+          provider: string | null
           search_text: unknown
           storage_path: string | null
           tags: string[]
           thumbnail_path: string | null
           updated_at: string
+          visibility: string
         }
         Insert: {
+          archived_at?: string | null
+          campaign_id?: string | null
+          content_id?: string | null
           created_at?: string
           created_by?: string | null
           description?: string | null
@@ -7954,15 +7970,22 @@ export type Database = {
           file_size?: number | null
           folder_id?: string | null
           id?: string
+          is_archived?: boolean
+          is_favourite?: boolean
           mime_type?: string | null
           name: string
+          provider?: string | null
           search_text?: unknown
           storage_path?: string | null
           tags?: string[]
           thumbnail_path?: string | null
           updated_at?: string
+          visibility?: string
         }
         Update: {
+          archived_at?: string | null
+          campaign_id?: string | null
+          content_id?: string | null
           created_at?: string
           created_by?: string | null
           description?: string | null
@@ -7970,15 +7993,26 @@ export type Database = {
           file_size?: number | null
           folder_id?: string | null
           id?: string
+          is_archived?: boolean
+          is_favourite?: boolean
           mime_type?: string | null
           name?: string
+          provider?: string | null
           search_text?: unknown
           storage_path?: string | null
           tags?: string[]
           thumbnail_path?: string | null
           updated_at?: string
+          visibility?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "media_resources_content_fkey"
+            columns: ["content_id"]
+            isOneToOne: false
+            referencedRelation: "media_content_records"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "media_resources_folder_id_fkey"
             columns: ["folder_id"]
