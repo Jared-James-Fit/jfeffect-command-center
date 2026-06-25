@@ -334,6 +334,19 @@ function swapContextForRow(
   return { kind: "member", enrollmentId, weekIndex, dayIndex, exerciseIndex };
 }
 
+function withMemberWorkoutIndexes<T extends Record<string, any>>(
+  payload: T,
+  adapter: WorkoutContextAdapter | null | undefined,
+  dayId: string | null | undefined,
+): T {
+  if (adapter?.kind !== "member" || !dayId) return payload;
+  const [weekIndexRaw, dayIndexRaw] = String(dayId).split(":");
+  const weekIndex = Number(weekIndexRaw);
+  const dayIndex = Number(dayIndexRaw);
+  if (!Number.isFinite(weekIndex) || !Number.isFinite(dayIndex)) return payload;
+  return { ...payload, week_index: weekIndex, day_index: dayIndex };
+}
+
 function WorkoutDay({
   dayId,
   search,
@@ -2094,7 +2107,7 @@ function ExerciseBlock({ row, dayId, dayTitle, clientId, blockId, existingResult
       for (let i = 1; i <= setCount; i++) {
         const ex = existingResults.find((x: any) => x.set_index === i);
         if (ex?.completed_at) continue; // never overwrite confirmed sets
-        const body: Record<string, any> = {
+        const body: Record<string, any> = withMemberWorkoutIndexes({
           row_id: row.id,
           client_id: clientId,
           set_index: i,
@@ -2106,7 +2119,7 @@ function ExerciseBlock({ row, dayId, dayTitle, clientId, blockId, existingResult
           actual_rpe: null,
           actual_rpe_num: null,
           completed_at: nowIso,
-        };
+        }, adapter, dayId);
         if (adapter) {
           tasks.push(adapter.upsertPlRowResultRaw(body, ex?.id ?? null));
         } else {
@@ -2136,7 +2149,7 @@ function ExerciseBlock({ row, dayId, dayTitle, clientId, blockId, existingResult
     for (let i = fromSetIndex + 1; i <= setCount; i++) {
       const ex = existingResults.find((x) => x.set_index === i);
       if (ex?.completed_at) continue; // never touch confirmed sets
-      const body: Record<string, any> = {
+      const body: Record<string, any> = withMemberWorkoutIndexes({
         row_id: row.id,
         client_id: clientId,
         set_index: i,
@@ -2148,7 +2161,7 @@ function ExerciseBlock({ row, dayId, dayTitle, clientId, blockId, existingResult
         actual_rpe: payload.rpe || null,
         actual_rpe_num: rpeNum,
         completed_at: null, // Draft only — must be confirmed per set
-      };
+      }, adapter, dayId);
       if (adapter) {
         tasks.push(adapter.upsertPlRowResultRaw(body, ex?.id ?? null));
       } else {
@@ -2758,11 +2771,14 @@ function SetRow({
   // focus. If focus stays set for too long we'll never autosave because the
   // enabled guard blocks. Clear stale focus after 6s of no activity.
   const focusClearTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const clearEditGuard = () => {
+    setFocusedField(null);
+  };
   useEffect(() => {
     if (focusClearTimerRef.current) clearTimeout(focusClearTimerRef.current);
     if (!focusedField) return;
     focusClearTimerRef.current = setTimeout(() => {
-      setFocusedField(null);
+      clearEditGuard();
     }, 6000);
     return () => {
       if (focusClearTimerRef.current) clearTimeout(focusClearTimerRef.current);
@@ -2848,7 +2864,7 @@ function SetRow({
   const save = useAutosave({
     key: draftKey,
     value,
-    delay: 3000, // 3 s — generous delay so typing is never interrupted by autosave
+    delay: 1000, // fast enough that filled sets sync and turn green without feeling delayed
     // Unit-only changes are display/preference only. The raw typed load is
     // the saved value, so the set row is dirty only when load/reps/RPE change.
     equals: (a, b) => {
@@ -2864,16 +2880,19 @@ function SetRow({
     // Prevents autosave from running on mount before server data arrives.
     // Root cause of weight corruption bug — fixed 2026-06-25. DO NOT remove.
     //
-    // Save only after editing focus is released. The stale-focus timer above
-    // clears focus if mobile/iOS fails to fire blur, so autosave cannot remain
-    // blocked forever.
-    enabled: !readonly && !!clientId && serverHydrated && !focusedField && (load.length > 0 || reps.length > 0 || rpe.length > 0 || !!existing),
+    // Autosave even while a field remains focused so mobile keyboards / sticky
+    // focus cannot leave workout inputs unsaved. The server hydration effect
+    // still refuses to overwrite the focused field, so active typing is safe.
+    enabled: !readonly && !!clientId && serverHydrated && (load.length > 0 || reps.length > 0 || rpe.length > 0 || !!existing),
     onPermanentFailure: ({ value }) => {
       if (!clientId) return;
       const loadNum = value.load ? Number(value.load) : null;
       const repsNum = value.reps ? parseInt(value.reps, 10) : null;
       const rpeNum = value.rpe ? Number(value.rpe) : null;
       const loadUnit = persistedUnitForValue(value.load, value.unit, existing);
+      const completedAt = hideWeight
+        ? (repsNum != null && Number.isFinite(repsNum) && repsNum > 0 ? new Date().toISOString() : null)
+        : (repsNum != null && Number.isFinite(repsNum) && repsNum > 0 && loadNum != null && Number.isFinite(loadNum) && loadNum > 0 ? new Date().toISOString() : null);
       enqueueOfflineWrite({
         id: `portal_set:${rowId}:${clientId}:${setIndex}`,
         label: `Saved set ${setIndex}`,
@@ -2881,7 +2900,7 @@ function SetRow({
         payload: {
           table: "pl_row_results",
           id: existing?.id ?? null,
-          payload: {
+          payload: withMemberWorkoutIndexes({
             row_id: rowId,
             client_id: clientId,
             set_index: setIndex,
@@ -2892,7 +2911,8 @@ function SetRow({
             actual_reps: repsNum,
             actual_rpe: value.rpe || null,
             actual_rpe_num: rpeNum,
-          },
+            completed_at: completedAt,
+          }, adapter, workoutId),
         },
       });
     },
@@ -2908,7 +2928,10 @@ function SetRow({
       if (reps && (repsNum == null || !isFinite(repsNum) || repsNum < 0)) throw new Error("Reps must be a whole number");
       if (rpe && (rpeNum == null || !isFinite(rpeNum) || rpeNum < 0 || rpeNum > 10)) throw new Error("RPE must be 0–10");
       const loadUnit = persistedUnitForValue(load, unit, existing);
-      const payload = {
+      const completedAt = hideWeight
+        ? (repsNum != null && Number.isFinite(repsNum) && repsNum > 0 ? new Date().toISOString() : null)
+        : (repsNum != null && Number.isFinite(repsNum) && repsNum > 0 && loadNum != null && Number.isFinite(loadNum) && loadNum > 0 ? new Date().toISOString() : null);
+      const payload = withMemberWorkoutIndexes({
         row_id: rowId,
         client_id: clientId,
         set_index: setIndex,
@@ -2919,7 +2942,8 @@ function SetRow({
         actual_reps: repsNum,
         actual_rpe: rpe || null,
         actual_rpe_num: rpeNum,
-      };
+        completed_at: completedAt,
+      }, adapter, workoutId);
       let savedId: string | null = existing?.id ?? null;
       // PostgREST keeps a pooled connection in "current transaction is
       // aborted" (SQLSTATE 25P02) state if a prior statement on the same
@@ -2972,6 +2996,7 @@ function SetRow({
           savedId = (inserted as any)?.id ?? null;
         }
       }
+      await qc.refetchQueries({ queryKey: ["pl-day-results", workoutId] });
       onChange();
       // Block the server-reset effect for 3 s after a successful save so the
       // query refetch triggered by onChange() can never overwrite what the
@@ -3009,8 +3034,17 @@ function SetRow({
   // unit-toggle effect above can call markClean() / retry() safely.
   saveRef.current = save;
 
+  const flushSaveAfterEdit = () => {
+    clearEditGuard();
+    setTimeout(() => { void save.flush(); }, 0);
+  };
+
   const onEnter: React.KeyboardEventHandler<HTMLInputElement> = (e) => {
-    if (e.key === "Enter") { e.preventDefault(); (e.target as HTMLInputElement).blur(); save.flush(); }
+    if (e.key === "Enter") {
+      e.preventDefault();
+      (e.target as HTMLInputElement).blur();
+      flushSaveAfterEdit();
+    }
   };
 
   // State labels: Suggested (no draft, no confirm), Draft (typed but not all valid yet
@@ -3028,7 +3062,7 @@ function SetRow({
     ? Number.isFinite(existingDurNum) && existingDurNum > 0
     : hideWeight
       ? Number.isFinite(existingRepsNum) && existingRepsNum > 0
-      : Number.isFinite(existingLoadNum) && existingLoadNum > 0;
+      : Number.isFinite(existingRepsNum) && existingRepsNum > 0 && Number.isFinite(existingLoadNum) && existingLoadNum > 0;
   const isConfirmed = Boolean(existing?.completed_at) && hasLoggedValue;
   // hasAnyEntry only counts weight (the field the client must enter) and
   // manually-edited reps/RPE. Pre-filled prescription values do NOT count
@@ -3070,21 +3104,33 @@ function SetRow({
   const saveCompletionStatus = async () => {
     if (readonly || !clientId || statusSaving) return;
     const nextCompletedAt = isConfirmed ? null : new Date().toISOString();
-    const payload: Record<string, any> = {
-      row_id: rowId,
-      client_id: clientId,
-      set_index: setIndex,
+    const loadNum = load ? Number(load) : null;
+    const repsNum = reps ? parseInt(reps, 10) : null;
+    const rpeNum = rpe ? Number(rpe) : null;
+    const loadUnit = persistedUnitForValue(load, unit, existing);
+    const currentHasRequiredValues = isTimeKind
+      ? Number.isFinite(existingDurNum) && existingDurNum > 0
+      : hideWeight
+        ? repsNum != null && Number.isFinite(repsNum) && repsNum > 0
+        : repsNum != null && Number.isFinite(repsNum) && repsNum > 0 && loadNum != null && Number.isFinite(loadNum) && loadNum > 0;
+    if (nextCompletedAt && !currentHasRequiredValues) {
+      toast.error(isTimeKind ? "Complete the timer first" : hideWeight ? "Enter reps before marking complete" : "Enter reps and weight before marking complete");
+      return;
+    }
+    let payload: Record<string, any> = {
+        row_id: rowId,
+        client_id: clientId,
+        set_index: setIndex,
+        actual_load: loadNum,
+        actual_load_unit: loadUnit,
+        entered_value: loadNum,
+        entered_unit: loadUnit,
+        actual_reps: repsNum,
+        actual_rpe: rpe || null,
+        actual_rpe_num: rpeNum,
       completed_at: nextCompletedAt,
     };
-    if (adapter?.kind === "member") {
-      const [weekIndexRaw, dayIndexRaw] = String(workoutId ?? "").split(":");
-      const weekIndex = Number(weekIndexRaw);
-      const dayIndex = Number(dayIndexRaw);
-      if (Number.isFinite(weekIndex) && Number.isFinite(dayIndex)) {
-        payload.week_index = weekIndex;
-        payload.day_index = dayIndex;
-      }
-    }
+      payload = withMemberWorkoutIndexes(payload, adapter, workoutId);
     setStatusSaving(true);
     setStatusError(null);
     try {
@@ -3093,7 +3139,7 @@ function SetRow({
           await withStatusTimeout(writeStatusWithAbortRetry(() => adapter.upsertPlRowResultRaw(payload, existing.id)));
         } else {
           await withStatusTimeout(writeStatusWithAbortRetry(async () => {
-            const { error } = await sb.from("pl_row_results").update({ completed_at: nextCompletedAt }).eq("id", existing.id);
+            const { error } = await sb.from("pl_row_results").update(payload).eq("id", existing.id);
             if (error) throw error;
           }));
         }
@@ -3107,8 +3153,8 @@ function SetRow({
           if (error) throw error;
         }));
       }
+      await qc.refetchQueries({ queryKey: ["pl-day-results", workoutId] });
       onChange();
-      qc.invalidateQueries({ queryKey: ["pl-day-results"] });
       if (nextCompletedAt) onSetCompleted?.(setIndex);
     } catch (err: any) {
       const message = err?.message ?? "Set status failed to save";
@@ -3168,7 +3214,7 @@ function SetRow({
     // Allow saving even when prescribedSec is null (e.g. reps_text-detected time exercises)
     if (readonly || !clientId) return;
     const nowIso = opts.completedAt ?? new Date().toISOString();
-    const payload: Record<string, any> = {
+      const payload: Record<string, any> = withMemberWorkoutIndexes({
       row_id: rowId,
       client_id: clientId,
       set_index: setIndex,
@@ -3177,7 +3223,7 @@ function SetRow({
       timer_completed_at: nowIso,
       completion_method: opts.method,
       completed_at: nowIso,
-    };
+      }, adapter, workoutId);
     try {
       if (existing?.id) {
         if (adapter) {
@@ -3194,6 +3240,7 @@ function SetRow({
           if (error) throw error;
         }
       }
+      await qc.refetchQueries({ queryKey: ["pl-day-results", workoutId] });
       onChange();
       if (!existing?.completed_at) onSetCompleted?.(setIndex);
       toast.success(
@@ -3268,7 +3315,7 @@ function SetRow({
             recentlySavedRef.current = true;
             if (recentlySavedTimerRef.current) clearTimeout(recentlySavedTimerRef.current);
             recentlySavedTimerRef.current = setTimeout(() => { recentlySavedRef.current = false; }, 8000);
-            setFocusedField(null);
+            flushSaveAfterEdit();
             setRepsChipOpen(false);
           }}
           readOnly={readonly}
@@ -3316,7 +3363,7 @@ function SetRow({
             recentlySavedRef.current = true;
             if (recentlySavedTimerRef.current) clearTimeout(recentlySavedTimerRef.current);
             recentlySavedTimerRef.current = setTimeout(() => { recentlySavedRef.current = false; }, 8000);
-            setFocusedField(null);
+            flushSaveAfterEdit();
             setRpeChipOpen(false);
           }}
           readOnly={readonly} disabled={readonly}
@@ -3356,10 +3403,7 @@ function SetRow({
         }}
         onKeyDown={onEnter}
         onBlur={() => {
-          recentlySavedRef.current = true;
-          if (recentlySavedTimerRef.current) clearTimeout(recentlySavedTimerRef.current);
-          recentlySavedTimerRef.current = setTimeout(() => { recentlySavedRef.current = false; }, 8000);
-          setFocusedField(null);
+          flushSaveAfterEdit();
         }}
         readOnly={readonly}
         disabled={readonly}

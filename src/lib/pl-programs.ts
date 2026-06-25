@@ -1402,7 +1402,11 @@ export async function getClientWorkouts(clientId: string) {
   const completionIds = (completions ?? []).map((c: any) => c.id).filter(Boolean);
   const [rowResultsRes, feedbacksRes] = await Promise.all([
     rowIds.length
-      ? sb.from("pl_row_results").select("row_id").eq("client_id", clientId).in("row_id", rowIds)
+      ? sb
+          .from("pl_row_results")
+          .select("row_id, actual_load, actual_load_unit, actual_reps, completed_duration_seconds")
+          .eq("client_id", clientId)
+          .in("row_id", rowIds)
       : Promise.resolve({ data: [] as any[] }),
     completionIds.length
       ? sb.from("pl_workout_feedback").select("completion_id").in("completion_id", completionIds)
@@ -1412,6 +1416,10 @@ export async function getClientWorkouts(clientId: string) {
   const { data: feedbacks } = feedbacksRes;
   const loggedSetsByDay = new Map<string, number>();
   for (const rr of (rowResults ?? []) as any[]) {
+    const hasLoad = rr.actual_load != null && Number.isFinite(Number(rr.actual_load)) && Number(rr.actual_load) > 0;
+    const hasReps = rr.actual_reps != null && Number.isFinite(Number(rr.actual_reps)) && Number(rr.actual_reps) > 0;
+    const hasDuration = rr.completed_duration_seconds != null && Number.isFinite(Number(rr.completed_duration_seconds)) && Number(rr.completed_duration_seconds) > 0;
+    if (!hasDuration && !(hasReps && hasLoad)) continue;
     const dayId = rowIdToDay.get(rr.row_id);
     if (!dayId) continue;
     loggedSetsByDay.set(dayId, (loggedSetsByDay.get(dayId) ?? 0) + 1);
