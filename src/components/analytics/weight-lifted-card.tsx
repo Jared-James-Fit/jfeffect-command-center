@@ -90,6 +90,10 @@ export function WeightLiftedCard({ clientId, displayUnit }: { clientId: string; 
 
     // Sum sets per calendar day in LB.
     const setsByDay = new Map<string, number>();
+    // Count of logged sets where the recorded load is exactly 0 — these
+    // are bodyweight / unloaded sets (assisted, mobility, paused holds)
+    // and contribute reps but no measurable weight to the tonnage total.
+    let bodyweightSets = 0;
     for (const s of sets) {
       const reps = Number(s.actual_reps ?? 0);
       if (!reps) continue;
@@ -100,7 +104,11 @@ export function WeightLiftedCard({ clientId, displayUnit }: { clientId: string; 
       } else if (s.actual_load != null) {
         lb = toLb(Number(s.actual_load) || 0, (s.actual_load_unit as any) ?? "lb");
       }
-      if (lb <= 0) continue;
+      if (lb <= 0) {
+        // 0 lb / 0 kg is a valid log meaning bodyweight or no external load.
+        if (s.actual_load != null && Number(s.actual_load) === 0) bodyweightSets++;
+        continue;
+      }
       const key = dayKey(new Date(s.completed_at));
       setsByDay.set(key, (setsByDay.get(key) ?? 0) + lb * reps);
     }
@@ -161,6 +169,7 @@ export function WeightLiftedCard({ clientId, displayUnit }: { clientId: string; 
       block_name: blockName,
       sessions: all.length,
       fallbackSessions,
+      bodyweightSets,
     };
   }, [data]);
 
@@ -180,7 +189,7 @@ export function WeightLiftedCard({ clientId, displayUnit }: { clientId: string; 
     );
   }
 
-  if (!summary || summary.lifetime_lb <= 0) {
+  if (!summary || (summary.lifetime_lb <= 0 && summary.bodyweightSets === 0)) {
     return null; // nothing to show yet — keep the page clean for new clients.
   }
 
@@ -229,6 +238,11 @@ export function WeightLiftedCard({ clientId, displayUnit }: { clientId: string; 
           </span>
         )}
       </div>
+      {summary.bodyweightSets > 0 && (
+        <p className="mb-2 text-[11px] text-muted-foreground">
+          {summary.bodyweightSets} set{summary.bodyweightSets === 1 ? "" : "s"} logged at 0 — these represent bodyweight or 0 weight lifted that day and are not added to tonnage totals.
+        </p>
+      )}
       <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
         {tiles.map((t) => {
           const Icon = t.icon;
