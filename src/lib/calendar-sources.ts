@@ -197,6 +197,27 @@ export function useClientCalendarSources(clientId: string | null | undefined) {
     },
   });
 
+  // Realtime: keep the workouts layer in sync when a coach/admin reschedules
+  // a day, edits a week range, or toggles block visibility. Without this the
+  // calendar only updates after a manual refresh or window focus.
+  const qc = useQueryClient();
+  useEffect(() => {
+    if (!clientId) return;
+    const invalidate = () => {
+      void qc.invalidateQueries({ queryKey: ["cal-client-workouts", clientId] });
+    };
+    const channel = supabase
+      .channel(`cal-workouts:${clientId}`)
+      .on("postgres_changes", { event: "*", schema: "public", table: "pl_blocks", filter: `client_id=eq.${clientId}` }, invalidate)
+      .on("postgres_changes", { event: "*", schema: "public", table: "pl_weeks" }, invalidate)
+      .on("postgres_changes", { event: "*", schema: "public", table: "pl_days" }, invalidate)
+      .on("postgres_changes", { event: "*", schema: "public", table: "pl_day_completions", filter: `client_id=eq.${clientId}` }, invalidate)
+      .subscribe();
+    return () => {
+      void supabase.removeChannel(channel);
+    };
+  }, [clientId, qc]);
+
   const items: CalendarItem[] = useMemo(() => {
     const out: CalendarItem[] = [];
 
