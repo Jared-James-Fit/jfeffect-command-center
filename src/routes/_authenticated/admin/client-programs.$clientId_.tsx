@@ -63,6 +63,9 @@ function ClientProgramsPage() {
   const refresh = () => {
     qc.invalidateQueries({ queryKey: ["pl-preps", clientId] });
     qc.invalidateQueries({ queryKey: ["pl-blocks", clientId] });
+    // Programming library panels read from these — keep them in sync after edits/deletions.
+    qc.invalidateQueries({ queryKey: ["pl-template-assignments"] });
+    qc.invalidateQueries({ queryKey: ["admin-finder-assignments"] });
   };
 
   return (

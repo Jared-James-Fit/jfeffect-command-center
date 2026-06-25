@@ -8,12 +8,14 @@ import { CardioDashboard } from "./cardio-targets";
 import { WarmupProtocolsAdmin } from "./warmup-protocols";
 import { AdminRecipes } from "./recipes";
 import { ProgramFinder, type FinderItem } from "@/components/programs/program-finder";
-import { useQuery } from "@tanstack/react-query";
-import { listTemplates, listTemplateAssignments } from "@/lib/pl-programs";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { listTemplates, listTemplateAssignments, deletePrep, deleteBlock } from "@/lib/pl-programs";
 import { supabase } from "@/integrations/supabase/client";
 import { validateTemplatePayload } from "@/lib/pl-template-validation";
 import { Button } from "@/components/ui/button";
-import { UserPlus, Users } from "lucide-react";
+import { UserPlus, Users, Trash2 } from "lucide-react";
+import { toast } from "sonner";
+import { useAuth } from "@/lib/auth";
 
 type TabKey = "programs" | "browse" | "exercises" | "cardio" | "warmups" | "recipes";
 const TABS: { value: TabKey; label: string }[] = [
@@ -182,29 +184,51 @@ function AdminProgramBrowser() {
 }
 
 function AssignedClientsPanel({ templateId }: { templateId: string }) {
+  const qc = useQueryClient();
+  const { role } = useAuth();
+  const canUnassign = role === "admin" || role === "coach";
+  const [busyId, setBusyId] = useState<string | null>(null);
   const { data: assignments = [], isLoading } = useQuery({
     queryKey: ["pl-template-assignments", templateId],
     queryFn: () => listTemplateAssignments(templateId),
     enabled: !!templateId,
+    staleTime: 0,
   });
   const active = (assignments as any[]).filter((a) => !a.archived);
-  const uniqueClients = Array.from(
-    new Map(active.map((a: any) => [a.clientId, a])).values(),
-  ) as any[];
+  const uniqueClientCount = new Set(active.map((a: any) => a.clientId)).size;
+
+  const unassign = async (a: any) => {
+    if (!confirm(`Unassign "${a.label}" from ${a.clientName ?? "this client"}? This deletes the assignment.`)) return;
+    setBusyId(a.id);
+    try {
+      if (a.kind === "prep") await deletePrep(a.id);
+      else await deleteBlock(a.id);
+      toast.success("Unassigned");
+      qc.invalidateQueries({ queryKey: ["pl-template-assignments", templateId] });
+      qc.invalidateQueries({ queryKey: ["admin-finder-assignments"] });
+      qc.invalidateQueries({ queryKey: ["pl-preps", a.clientId] });
+      qc.invalidateQueries({ queryKey: ["pl-blocks", a.clientId] });
+    } catch (e: any) {
+      toast.error(e?.message ?? "Failed to unassign");
+    } finally {
+      setBusyId(null);
+    }
+  };
+
   return (
     <div className="rounded-md border border-border bg-muted/10 p-3">
       <div className="mb-2 flex items-center gap-1.5 text-xs font-semibold text-muted-foreground">
         <Users className="h-3.5 w-3.5" />
-        Assigned to {uniqueClients.length} client{uniqueClients.length === 1 ? "" : "s"}
+        Assigned to {uniqueClientCount} client{uniqueClientCount === 1 ? "" : "s"} · {active.length} active assignment{active.length === 1 ? "" : "s"}
       </div>
       {isLoading ? (
         <div className="text-xs text-muted-foreground">Loading…</div>
-      ) : uniqueClients.length === 0 ? (
+      ) : active.length === 0 ? (
         <div className="text-xs text-muted-foreground">Not yet assigned to any client.</div>
       ) : (
         <ul className="space-y-1">
-          {uniqueClients.map((a) => (
-            <li key={a.clientId} className="flex items-center justify-between gap-2 text-xs">
+          {active.map((a: any) => (
+            <li key={`${a.kind}-${a.id}`} className="flex items-center justify-between gap-2 text-xs">
               <Link
                 to="/admin/client-programs/$clientId"
                 params={{ clientId: a.clientId }}
@@ -212,9 +236,23 @@ function AssignedClientsPanel({ templateId }: { templateId: string }) {
               >
                 {a.clientName ?? "Unknown client"}
               </Link>
-              <span className="shrink-0 truncate text-[10px] text-muted-foreground">
-                {a.kind === "prep" ? "Prep" : "Block"} · {a.label}
-              </span>
+              <div className="flex shrink-0 items-center gap-1.5">
+                <span className="truncate text-[10px] text-muted-foreground">
+                  {a.kind === "prep" ? "Prep" : "Block"} · {a.label}
+                </span>
+                {canUnassign && (
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    className="h-6 w-6 text-muted-foreground hover:text-destructive"
+                    disabled={busyId === a.id}
+                    onClick={() => unassign(a)}
+                    title="Unassign"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </Button>
+                )}
+              </div>
             </li>
           ))}
         </ul>
