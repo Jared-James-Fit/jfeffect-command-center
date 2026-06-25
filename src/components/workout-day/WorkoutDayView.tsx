@@ -1643,15 +1643,6 @@ function WorkoutDay({
           </Card>
         )}
 
-        {readonly && completion?.client_notes && (
-          <Card className="p-4 space-y-2">
-            <div className="text-sm font-bold">Workout Notes</div>
-            <p className="whitespace-pre-wrap text-sm text-muted-foreground">{completion.client_notes}</p>
-            {completion.actual_duration_min && (
-              <div className="text-xs text-muted-foreground">Duration: {completion.actual_duration_min} min</div>
-            )}
-          </Card>
-        )}
 
         {completion?.completed_at && client?.id && (
           <CompletedWorkoutActions
