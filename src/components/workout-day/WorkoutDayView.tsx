@@ -334,6 +334,19 @@ function swapContextForRow(
   return { kind: "member", enrollmentId, weekIndex, dayIndex, exerciseIndex };
 }
 
+function withMemberWorkoutIndexes<T extends Record<string, any>>(
+  payload: T,
+  adapter: WorkoutContextAdapter | null | undefined,
+  dayId: string | null | undefined,
+): T {
+  if (adapter?.kind !== "member" || !dayId) return payload;
+  const [weekIndexRaw, dayIndexRaw] = String(dayId).split(":");
+  const weekIndex = Number(weekIndexRaw);
+  const dayIndex = Number(dayIndexRaw);
+  if (!Number.isFinite(weekIndex) || !Number.isFinite(dayIndex)) return payload;
+  return { ...payload, week_index: weekIndex, day_index: dayIndex };
+}
+
 function WorkoutDay({
   dayId,
   search,
@@ -2094,7 +2107,7 @@ function ExerciseBlock({ row, dayId, dayTitle, clientId, blockId, existingResult
       for (let i = 1; i <= setCount; i++) {
         const ex = existingResults.find((x: any) => x.set_index === i);
         if (ex?.completed_at) continue; // never overwrite confirmed sets
-        const body: Record<string, any> = {
+        const body: Record<string, any> = withMemberWorkoutIndexes({
           row_id: row.id,
           client_id: clientId,
           set_index: i,
@@ -2106,7 +2119,7 @@ function ExerciseBlock({ row, dayId, dayTitle, clientId, blockId, existingResult
           actual_rpe: null,
           actual_rpe_num: null,
           completed_at: nowIso,
-        };
+        }, adapter, dayId);
         if (adapter) {
           tasks.push(adapter.upsertPlRowResultRaw(body, ex?.id ?? null));
         } else {
@@ -2136,7 +2149,7 @@ function ExerciseBlock({ row, dayId, dayTitle, clientId, blockId, existingResult
     for (let i = fromSetIndex + 1; i <= setCount; i++) {
       const ex = existingResults.find((x) => x.set_index === i);
       if (ex?.completed_at) continue; // never touch confirmed sets
-      const body: Record<string, any> = {
+      const body: Record<string, any> = withMemberWorkoutIndexes({
         row_id: row.id,
         client_id: clientId,
         set_index: i,
@@ -2148,7 +2161,7 @@ function ExerciseBlock({ row, dayId, dayTitle, clientId, blockId, existingResult
         actual_rpe: payload.rpe || null,
         actual_rpe_num: rpeNum,
         completed_at: null, // Draft only — must be confirmed per set
-      };
+      }, adapter, dayId);
       if (adapter) {
         tasks.push(adapter.upsertPlRowResultRaw(body, ex?.id ?? null));
       } else {
