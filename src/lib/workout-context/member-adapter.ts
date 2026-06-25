@@ -105,14 +105,29 @@ function addDays(ymd: string, delta: number): string {
 }
 
 /** Locate the day object inside `member_plans.published_payload`. */
+// In-memory cache for published plan payloads.
+// loadPublishedDay is called on every set save — without caching this
+// fetches the entire published_payload JSON on every save, causing timeouts.
+// Cache is keyed by enrollmentId and expires after 5 minutes.
+// Fixed 2026-06-25.
+const _publishedPayloadCache = new Map<string, { payload: any; ts: number }>();
+const PAYLOAD_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
 async function loadPublishedDay(enrollmentId: string, weekIndex: number, dayIndex: number) {
-  const { data, error } = await supabase
-    .from("member_plan_enrollments")
-    .select("member_plans(published_payload)")
-    .eq("id", enrollmentId)
-    .maybeSingle();
-  if (error) throw new Error(error.message);
-  const payload = (data as any)?.member_plans?.published_payload ?? null;
+  const cached = _publishedPayloadCache.get(enrollmentId);
+  let payload: any = null;
+  if (cached && Date.now() - cached.ts < PAYLOAD_CACHE_TTL) {
+    payload = cached.payload;
+  } else {
+    const { data, error } = await supabase
+      .from("member_plan_enrollments")
+      .select("member_plans(published_payload)")
+      .eq("id", enrollmentId)
+      .maybeSingle();
+    if (error) throw new Error(error.message);
+    payload = (data as any)?.member_plans?.published_payload ?? null;
+    _publishedPayloadCache.set(enrollmentId, { payload, ts: Date.now() });
+  }
   const weeks = (payload?.weeks_data ?? []) as any[];
   const week = weeks[weekIndex - 1] ?? null;
   const day = week?.days?.[dayIndex - 1] ?? null;
