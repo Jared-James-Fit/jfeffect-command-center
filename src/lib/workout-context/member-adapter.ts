@@ -593,7 +593,7 @@ export function createMemberAdapter(ref: WorkoutContextRef): WorkoutContextAdapt
       // calling from the member route).
       let weekIndex: number;
       let dayIndex: number;
-      if (id) {
+      if (id && /^mlog:\d+:\d+:\d+:\d+$/.test(id)) {
         const dec = decodeRowResultId(id);
         weekIndex = dec.weekIndex;
         dayIndex = dec.dayIndex;
