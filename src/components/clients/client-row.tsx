@@ -4,7 +4,7 @@ import { UserAvatar } from "@/components/user-avatar";
 import { Button } from "@/components/ui/button";
 import {
   ChevronRight, MoreHorizontal, CalendarDays, Dumbbell,
-  Apple, HeartPulse, CheckCircle2, AlertCircle, Plus, Star, ArrowRight, Clock,
+  Apple, HeartPulse, CheckCircle2, AlertCircle, Plus, Eye, ArrowRight, Clock,
 } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Progress } from "@/components/ui/progress";
@@ -206,7 +206,7 @@ export function ClientRow({ r, onArchive }: { r: DirectoryRow; onArchive?: (r: D
                   aria-label={`Enter ${r.full_name ?? "client"} POV`}
                   className="h-11 w-11 border border-warning/50 bg-warning/15 text-warning shadow-sm hover:bg-warning/25 md:h-10 md:w-10"
                 >
-                  <Star className="h-5 w-5" />
+                  <Eye className="h-5 w-5" />
                 </Button>
               </TooltipTrigger>
               <TooltipContent side="top">Enter Client POV</TooltipContent>

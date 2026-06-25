@@ -9,7 +9,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { UserAvatar } from "@/components/user-avatar";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { MoreHorizontal, MessageCircle, Dumbbell, Apple, HeartPulse, Mail, KeyRound, Archive, Trash2, ShoppingCart, Library, Eye, Star } from "lucide-react";
+import { MoreHorizontal, MessageCircle, Dumbbell, Apple, HeartPulse, Mail, KeyRound, Archive, Trash2, ShoppingCart, Library, Eye } from "lucide-react";
 
 type ClientCardProps = {
   c: any;
@@ -140,7 +140,7 @@ export function ClientMobileCard(props: ClientCardProps) {
             title="Enter Client POV"
             className="shrink-0 border border-warning/50 bg-warning/15 text-warning shadow-sm hover:bg-warning/25"
           >
-            <Star className="h-4 w-4" />
+            <Eye className="h-4 w-4" />
             <span className="sr-only">Client POV</span>
           </Button>
         )}
