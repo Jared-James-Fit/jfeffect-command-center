@@ -241,6 +241,15 @@ function TaskRow({ task, selected, onSelect }: { task: ExtendedTaskRow; selected
     qc.invalidateQueries({ queryKey: ["media-tasks"] });
   }
 
+  async function setDueDate(d: Date | null) {
+    await (supabase.from("tasks") as any)
+      .update({ due_at: d ? d.toISOString() : null })
+      .eq("id", task.id);
+    qc.invalidateQueries({ queryKey: ["media-tasks"] });
+    qc.invalidateQueries({ queryKey: ["media-calendar-content"] });
+    toast.success(d ? `Due ${format(d, "MMM d")}` : "Due date cleared");
+  }
+
   return (
     <li className="flex items-start gap-3 py-2.5">
       <Checkbox checked={selected} onCheckedChange={(v) => onSelect(!!v)} className="mt-1" />
@@ -258,11 +267,38 @@ function TaskRow({ task, selected, onSelect }: { task: ExtendedTaskRow; selected
         <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[11px]">
           {stat && <Badge variant="outline" style={{ borderColor: `${stat.color}80`, color: stat.color }}>{stat.label}</Badge>}
           {pri && <Badge variant="outline" style={{ borderColor: `${pri.color}80`, color: pri.color }}>{pri.label}</Badge>}
-          {task.due_at && (
-            <span className={cn("text-muted-foreground", overdue && "text-destructive font-medium")}>
-              {format(new Date(task.due_at), "MMM d")}
-            </span>
-          )}
+          <Popover>
+            <PopoverTrigger asChild>
+              <button
+                type="button"
+                className={cn(
+                  "inline-flex h-5 items-center gap-1 rounded-full border border-dashed border-border px-1.5 text-[10px] text-muted-foreground hover:border-primary hover:text-primary transition-colors",
+                  task.due_at && "border-solid border-border",
+                  overdue && "border-destructive/60 text-destructive font-medium",
+                )}
+                aria-label={task.due_at ? "Edit due date" : "Set due date"}
+              >
+                <CalendarIcon className="h-3 w-3" />
+                {task.due_at ? format(new Date(task.due_at), "MMM d") : "Set due"}
+              </button>
+            </PopoverTrigger>
+            <PopoverContent className="w-auto p-0" align="start">
+              <Calendar
+                mode="single"
+                selected={task.due_at ? new Date(task.due_at) : undefined}
+                onSelect={(d) => d && setDueDate(d)}
+                initialFocus
+                className="p-3 pointer-events-auto"
+              />
+              {task.due_at && (
+                <div className="border-t border-border p-2">
+                  <Button variant="ghost" size="sm" className="w-full" onClick={() => setDueDate(null)}>
+                    <X className="mr-1 h-3 w-3" />Clear due date
+                  </Button>
+                </div>
+              )}
+            </PopoverContent>
+          </Popover>
           {task.assignee_name && (
             <span className="inline-flex h-5 items-center gap-1 rounded-full border border-border bg-muted/60 px-2 text-[10px] font-semibold">
               <span className="flex h-4 w-4 items-center justify-center rounded-full bg-primary/20 text-primary text-[9px]">{initials}</span>
