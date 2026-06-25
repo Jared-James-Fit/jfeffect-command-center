@@ -2076,7 +2076,7 @@ function ExerciseBlock({ row, dayId, dayTitle, clientId, blockId, existingResult
           tasks.push(adapter.upsertPlRowResultRaw(body, ex?.id ?? null));
         } else {
           if (ex?.id) tasks.push(sb.from("pl_row_results").update(body).eq("id", ex.id));
-          else tasks.push(sb.from("pl_row_results").insert(body));
+          else tasks.push(sb.from("pl_row_results").upsert(body, { onConflict: "client_id,row_id,set_index" }));
         }
       }
       if (!tasks.length) { toast.info("All sets already completed"); return; }
@@ -2118,7 +2118,7 @@ function ExerciseBlock({ row, dayId, dayTitle, clientId, blockId, existingResult
         tasks.push(adapter.upsertPlRowResultRaw(body, ex?.id ?? null));
       } else {
         if (ex?.id) tasks.push(sb.from("pl_row_results").update(body).eq("id", ex.id));
-        else tasks.push(sb.from("pl_row_results").insert(body));
+        else tasks.push(sb.from("pl_row_results").upsert(body, { onConflict: "client_id,row_id,set_index" }));
       }
     }
     if (!tasks.length) return;
@@ -2927,7 +2927,7 @@ function SetRow({
           savedId = (res as any)?.id ?? null;
         } else {
           const inserted = await writeWithAbortRetry(async () => {
-            const { data, error } = await sb.from("pl_row_results").insert(payload).select("id").maybeSingle();
+            const { data, error } = await sb.from("pl_row_results").upsert(payload, { onConflict: "client_id,row_id,set_index" }).select("id").maybeSingle();
             if (error) throw error;
             return data;
           });
@@ -3001,6 +3001,20 @@ function SetRow({
     }
   };
 
+  const withStatusTimeout = async (promise: Promise<any>) => {
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    try {
+      return await Promise.race([
+        promise,
+        new Promise((_, reject) => {
+          timer = setTimeout(() => reject(new Error("Set status save timed out")), 8000);
+        }),
+      ]);
+    } finally {
+      if (timer) clearTimeout(timer);
+    }
+  };
+
   const saveCompletionStatus = async () => {
     if (readonly || !clientId || statusSaving) return;
     const nextCompletedAt = isConfirmed ? null : new Date().toISOString();
@@ -3024,22 +3038,22 @@ function SetRow({
     try {
       if (existing?.id) {
         if (adapter) {
-          await writeStatusWithAbortRetry(() => adapter.upsertPlRowResultRaw(payload, existing.id));
+          await withStatusTimeout(writeStatusWithAbortRetry(() => adapter.upsertPlRowResultRaw(payload, existing.id)));
         } else {
-          await writeStatusWithAbortRetry(async () => {
+          await withStatusTimeout(writeStatusWithAbortRetry(async () => {
             const { error } = await sb.from("pl_row_results").update({ completed_at: nextCompletedAt }).eq("id", existing.id);
             if (error) throw error;
-          });
+          }));
         }
       } else if (adapter) {
-        await writeStatusWithAbortRetry(() => adapter.upsertPlRowResultRaw(payload, null));
+        await withStatusTimeout(writeStatusWithAbortRetry(() => adapter.upsertPlRowResultRaw(payload, null)));
       } else {
-        await writeStatusWithAbortRetry(async () => {
+        await withStatusTimeout(writeStatusWithAbortRetry(async () => {
           const { error } = await sb
             .from("pl_row_results")
             .upsert(payload, { onConflict: "client_id,row_id,set_index" });
           if (error) throw error;
-        });
+        }));
       }
       onChange();
       qc.invalidateQueries({ queryKey: ["pl-day-results"] });
@@ -3124,7 +3138,7 @@ function SetRow({
         if (adapter) {
           await adapter.upsertPlRowResultRaw(payload, null);
         } else {
-          const { error } = await sb.from("pl_row_results").insert(payload);
+          const { error } = await sb.from("pl_row_results").upsert(payload, { onConflict: "client_id,row_id,set_index" });
           if (error) throw error;
         }
       }
