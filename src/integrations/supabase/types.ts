@@ -7438,9 +7438,56 @@ export type Database = {
           },
         ]
       }
+      media_content_comments: {
+        Row: {
+          author_id: string | null
+          body: string
+          content_id: string
+          created_at: string
+          id: string
+          mentions: Json
+          resolved: boolean
+          updated_at: string
+          version: number | null
+        }
+        Insert: {
+          author_id?: string | null
+          body: string
+          content_id: string
+          created_at?: string
+          id?: string
+          mentions?: Json
+          resolved?: boolean
+          updated_at?: string
+          version?: number | null
+        }
+        Update: {
+          author_id?: string | null
+          body?: string
+          content_id?: string
+          created_at?: string
+          id?: string
+          mentions?: Json
+          resolved?: boolean
+          updated_at?: string
+          version?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "media_content_comments_content_id_fkey"
+            columns: ["content_id"]
+            isOneToOne: false
+            referencedRelation: "media_content_records"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       media_content_records: {
         Row: {
           approval_status: string
+          approved_at: string | null
+          approved_by: string | null
+          approved_version: number | null
           archived: boolean
           archived_at: string | null
           assignee_id: string | null
@@ -7450,11 +7497,15 @@ export type Database = {
           created_at: string
           created_by: string | null
           cta: string | null
+          current_version: number
           description: string | null
           due_date: string | null
           hook: string | null
           id: string
           internal_notes: string | null
+          last_change_request: string | null
+          last_change_requested_at: string | null
+          last_change_requested_by: string | null
           linked_asset_ids: Json
           linked_task_ids: Json
           pillar: string | null
@@ -7467,12 +7518,18 @@ export type Database = {
           reference_links: Json
           reviewer_id: string | null
           script: string | null
+          submitted_at: string | null
+          submitted_by: string | null
+          submitted_version: number | null
           thumbnail_url: string | null
           title: string
           updated_at: string
         }
         Insert: {
           approval_status?: string
+          approved_at?: string | null
+          approved_by?: string | null
+          approved_version?: number | null
           archived?: boolean
           archived_at?: string | null
           assignee_id?: string | null
@@ -7482,11 +7539,15 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           cta?: string | null
+          current_version?: number
           description?: string | null
           due_date?: string | null
           hook?: string | null
           id?: string
           internal_notes?: string | null
+          last_change_request?: string | null
+          last_change_requested_at?: string | null
+          last_change_requested_by?: string | null
           linked_asset_ids?: Json
           linked_task_ids?: Json
           pillar?: string | null
@@ -7499,12 +7560,18 @@ export type Database = {
           reference_links?: Json
           reviewer_id?: string | null
           script?: string | null
+          submitted_at?: string | null
+          submitted_by?: string | null
+          submitted_version?: number | null
           thumbnail_url?: string | null
           title: string
           updated_at?: string
         }
         Update: {
           approval_status?: string
+          approved_at?: string | null
+          approved_by?: string | null
+          approved_version?: number | null
           archived?: boolean
           archived_at?: string | null
           assignee_id?: string | null
@@ -7514,11 +7581,15 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           cta?: string | null
+          current_version?: number
           description?: string | null
           due_date?: string | null
           hook?: string | null
           id?: string
           internal_notes?: string | null
+          last_change_request?: string | null
+          last_change_requested_at?: string | null
+          last_change_requested_by?: string | null
           linked_asset_ids?: Json
           linked_task_ids?: Json
           pillar?: string | null
@@ -7531,11 +7602,52 @@ export type Database = {
           reference_links?: Json
           reviewer_id?: string | null
           script?: string | null
+          submitted_at?: string | null
+          submitted_by?: string | null
+          submitted_version?: number | null
           thumbnail_url?: string | null
           title?: string
           updated_at?: string
         }
         Relationships: []
+      }
+      media_content_review_events: {
+        Row: {
+          actor_id: string | null
+          content_id: string
+          created_at: string
+          id: string
+          kind: string
+          notes: string | null
+          version: number | null
+        }
+        Insert: {
+          actor_id?: string | null
+          content_id: string
+          created_at?: string
+          id?: string
+          kind: string
+          notes?: string | null
+          version?: number | null
+        }
+        Update: {
+          actor_id?: string | null
+          content_id?: string
+          created_at?: string
+          id?: string
+          kind?: string
+          notes?: string | null
+          version?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "media_content_review_events_content_id_fkey"
+            columns: ["content_id"]
+            isOneToOne: false
+            referencedRelation: "media_content_records"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       media_drive_settings: {
         Row: {
