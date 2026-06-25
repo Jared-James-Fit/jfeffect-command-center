@@ -2799,8 +2799,20 @@ function SetRow({
     if (recentlySavedRef.current) return;
     const display = existing?.actual_load != null ? fmtLoad(existing.actual_load) : "";
     if (focused !== "load") setLoad(display);
-    if (focused !== "reps") setReps(existing?.actual_reps?.toString() ?? prescribedRepsStr);
-    if (focused !== "rpe") setRpe(existing?.actual_rpe_num != null ? String(existing.actual_rpe_num) : (existing?.actual_rpe ?? prescribedRpeStr));
+    if (focused !== "reps") {
+      // If the server has a stored reps value, hydrate from it. If the
+      // server has null AND the user has explicitly edited (e.g. cleared
+      // the field), keep their current value — don't re-fill with the
+      // prescribed default, that would undo the clear. Only fall back to
+      // the prescription for sets the user hasn't touched yet.
+      if (existing?.actual_reps != null) setReps(existing.actual_reps.toString());
+      else if (!repsEdited) setReps(prescribedRepsStr);
+    }
+    if (focused !== "rpe") {
+      if (existing?.actual_rpe_num != null) setRpe(String(existing.actual_rpe_num));
+      else if (existing?.actual_rpe != null) setRpe(existing.actual_rpe);
+      else if (!rpeEdited) setRpe(prescribedRpeStr);
+    }
     // Track the display unit at hydration so later preference changes can be
     // recognized without touching the raw displayed load.
     lastUnitRef.current = unit;
