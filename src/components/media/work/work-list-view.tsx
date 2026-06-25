@@ -103,6 +103,7 @@ export function WorkListView({ filter }: { filter?: string }) {
       toast.success(`Updated ${ids.length} task${ids.length === 1 ? "" : "s"}`);
       clearSelection();
       qc.invalidateQueries({ queryKey: ["media-tasks"] });
+      qc.invalidateQueries({ queryKey: ["media-calendar-content"] });
     } catch (e: any) {
       toast.error(e?.message ?? "Bulk action failed");
     }
