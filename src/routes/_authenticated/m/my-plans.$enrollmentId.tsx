@@ -39,6 +39,7 @@ function EnrollmentView() {
 
   const { data: enr } = useQuery({
     queryKey: ["m-enrollment", enrollmentId],
+    staleTime: 30_000,
     queryFn: async () => {
       const { data } = await supabase
         .from("member_plan_enrollments")
@@ -50,6 +51,7 @@ function EnrollmentView() {
 
   const { data: completions = [] } = useQuery({
     queryKey: ["m-completions", enrollmentId],
+    staleTime: 30_000,
     queryFn: async () => {
       const { data } = await supabase
         .from("member_workout_completions").select("*")
@@ -60,6 +62,7 @@ function EnrollmentView() {
 
   const { data: scheduleData } = useQuery({
     queryKey: ["m-schedule", enrollmentId],
+    staleTime: 30_000,
     queryFn: async () => {
       const days = await adapter!.listSchedule();
       return {
