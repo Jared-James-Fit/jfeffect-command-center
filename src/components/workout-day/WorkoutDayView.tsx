@@ -2895,6 +2895,9 @@ function SetRow({
       const repsNum = value.reps ? parseInt(value.reps, 10) : null;
       const rpeNum = value.rpe ? Number(value.rpe) : null;
       const loadUnit = persistedUnitForValue(value.load, value.unit, existing);
+      const completedAt = hideWeight
+        ? (repsNum != null && Number.isFinite(repsNum) && repsNum > 0 ? new Date().toISOString() : null)
+        : (repsNum != null && Number.isFinite(repsNum) && repsNum > 0 && loadNum != null && Number.isFinite(loadNum) && loadNum > 0 ? new Date().toISOString() : null);
       enqueueOfflineWrite({
         id: `portal_set:${rowId}:${clientId}:${setIndex}`,
         label: `Saved set ${setIndex}`,
@@ -2902,7 +2905,7 @@ function SetRow({
         payload: {
           table: "pl_row_results",
           id: existing?.id ?? null,
-          payload: {
+          payload: withMemberWorkoutIndexes({
             row_id: rowId,
             client_id: clientId,
             set_index: setIndex,
@@ -2913,7 +2916,8 @@ function SetRow({
             actual_reps: repsNum,
             actual_rpe: value.rpe || null,
             actual_rpe_num: rpeNum,
-          },
+            completed_at: completedAt,
+          }, adapter, workoutId),
         },
       });
     },
@@ -2929,6 +2933,9 @@ function SetRow({
       if (reps && (repsNum == null || !isFinite(repsNum) || repsNum < 0)) throw new Error("Reps must be a whole number");
       if (rpe && (rpeNum == null || !isFinite(rpeNum) || rpeNum < 0 || rpeNum > 10)) throw new Error("RPE must be 0–10");
       const loadUnit = persistedUnitForValue(load, unit, existing);
+      const completedAt = hideWeight
+        ? (repsNum != null && Number.isFinite(repsNum) && repsNum > 0 ? new Date().toISOString() : null)
+        : (repsNum != null && Number.isFinite(repsNum) && repsNum > 0 && loadNum != null && Number.isFinite(loadNum) && loadNum > 0 ? new Date().toISOString() : null);
       const payload = withMemberWorkoutIndexes({
         row_id: rowId,
         client_id: clientId,
@@ -2940,6 +2947,7 @@ function SetRow({
         actual_reps: repsNum,
         actual_rpe: rpe || null,
         actual_rpe_num: rpeNum,
+        completed_at: completedAt,
       }, adapter, workoutId);
       let savedId: string | null = existing?.id ?? null;
       // PostgREST keeps a pooled connection in "current transaction is
