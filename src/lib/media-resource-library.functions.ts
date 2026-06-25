@@ -140,6 +140,11 @@ const ResourceInput = z.object({
   mime_type: z.string().max(200).nullable().optional(),
   file_size: z.number().int().nonnegative().nullable().optional(),
   thumbnail_path: z.string().max(400).nullable().optional(),
+  provider: z.string().max(40).nullable().optional(),
+  visibility: z.string().max(40).nullable().optional(),
+  campaign_id: z.string().uuid().nullable().optional(),
+  content_id: z.string().uuid().nullable().optional(),
+  is_favourite: z.boolean().optional(),
 });
 
 export const createResource = createServerFn({ method: "POST" })
