@@ -61,6 +61,7 @@ function PortalAnalytics() {
   const { data: client } = useQuery({
     queryKey: ["my-client-analytics", portalUserId],
     enabled: !!portalUserId,
+    staleTime: 60_000,
     queryFn: async () =>
       (await supabase.from("clients").select("id, full_name, preferred_weight_unit")
         .eq("user_id", portalUserId!).maybeSingle()).data,
@@ -69,12 +70,14 @@ function PortalAnalytics() {
   const { data: results = [], isLoading } = useQuery({
     queryKey: ["pl-results", client?.id],
     enabled: !!client?.id,
+    staleTime: 30_000,
     queryFn: () => getClientResults(client!.id),
   });
 
   const { data: analyticsSettings } = useQuery({
     queryKey: ["client-analytics-settings", client?.id],
     enabled: !!client?.id,
+    staleTime: 60_000,
     queryFn: () => getClientAnalyticsSettings(client!.id),
   });
 

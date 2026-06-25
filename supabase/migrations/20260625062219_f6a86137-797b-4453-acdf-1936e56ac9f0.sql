@@ -1,0 +1,2 @@
+ALTER PUBLICATION supabase_realtime ADD TABLE public.member_set_logs;
+ALTER PUBLICATION supabase_realtime ADD TABLE public.member_workout_completions;

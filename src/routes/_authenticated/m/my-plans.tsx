@@ -40,6 +40,7 @@ function MyPlans() {
   const { data: enrollments = [], refetch, isLoading } = useQuery({
     queryKey: ["m-enrollments", me?.member?.id],
     enabled: !!me?.member?.id,
+    staleTime: 30_000,
     queryFn: async () => {
       const { data } = await supabase
         .from("member_plan_enrollments")

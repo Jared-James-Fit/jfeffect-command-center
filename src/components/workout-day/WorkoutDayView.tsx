@@ -581,6 +581,67 @@ function WorkoutDay({
   }, [client?.id, dayId, rowIds.join(","), qc]);
   // ────────────────────────────────────────────────────────────────────────
 
+  // ── Member real-time multi-device sync ──────────────────────────────────
+  // Mirror the client realtime channel for member workouts: when a member
+  // saves a set on one device, every other device viewing the same workout
+  // refetches `listRowResults` + completion within ~1s. Filtered by
+  // enrollment_id, scoped to the active (week, day) tuple.
+  const memberRealtimeCtx = (() => {
+    if (adapter?.kind !== "member" || !adapter.ref.enrollmentId) return null;
+    const [w, d] = dayId.split(":");
+    const weekIndex = Number(w);
+    const dayIndex = Number(d);
+    if (!Number.isFinite(weekIndex) || !Number.isFinite(dayIndex)) return null;
+    return { enrollmentId: adapter.ref.enrollmentId, weekIndex, dayIndex };
+  })();
+  useEffect(() => {
+    if (!memberRealtimeCtx) return;
+    const { enrollmentId, weekIndex, dayIndex } = memberRealtimeCtx;
+    const channel = supabase
+      .channel(`member-workout:${enrollmentId}:${weekIndex}:${dayIndex}`)
+      .on(
+        // @ts-ignore — "postgres_changes" is a valid Realtime event type
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "member_set_logs",
+          filter: `enrollment_id=eq.${enrollmentId}`,
+        },
+        (payload: any) => {
+          const w = payload?.new?.week_index ?? payload?.old?.week_index;
+          const d = payload?.new?.day_index ?? payload?.old?.day_index;
+          if (w === weekIndex && d === dayIndex) {
+            qc.invalidateQueries({ queryKey: ["pl-day-results", dayId] });
+          }
+        },
+      )
+      .on(
+        // @ts-ignore
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "member_workout_completions",
+          filter: `enrollment_id=eq.${enrollmentId}`,
+        },
+        (payload: any) => {
+          const w = payload?.new?.week_index ?? payload?.old?.week_index;
+          const d = payload?.new?.day_index ?? payload?.old?.day_index;
+          if (w === weekIndex && d === dayIndex) {
+            qc.invalidateQueries({ queryKey: ["pl-day-completion", dayId] });
+            qc.invalidateQueries({ queryKey: ["m-completions", enrollmentId] });
+          }
+        },
+      )
+      .subscribe();
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [memberRealtimeCtx?.enrollmentId, memberRealtimeCtx?.weekIndex, memberRealtimeCtx?.dayIndex, dayId, qc]);
+  // ────────────────────────────────────────────────────────────────────────
+
   // Slice 3 client fail-safe. A row "is unsupported" when it carries
   // any non-Straight block, or more than one block — i.e. anything the
   // legacy logger would otherwise mis-render or silently flatten. The
