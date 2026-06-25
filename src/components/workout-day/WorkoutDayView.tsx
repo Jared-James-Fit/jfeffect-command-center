@@ -2864,7 +2864,7 @@ function SetRow({
   const save = useAutosave({
     key: draftKey,
     value,
-    delay: 3000, // 3 s — generous delay so typing is never interrupted by autosave
+    delay: 1000, // fast enough that filled sets sync and turn green without feeling delayed
     // Unit-only changes are display/preference only. The raw typed load is
     // the saved value, so the set row is dirty only when load/reps/RPE change.
     equals: (a, b) => {
@@ -2880,10 +2880,10 @@ function SetRow({
     // Prevents autosave from running on mount before server data arrives.
     // Root cause of weight corruption bug — fixed 2026-06-25. DO NOT remove.
     //
-    // Save only after editing focus is released. The stale-focus timer above
-    // clears focus if mobile/iOS fails to fire blur, so autosave cannot remain
-    // blocked forever.
-    enabled: !readonly && !!clientId && serverHydrated && !focusedField && (load.length > 0 || reps.length > 0 || rpe.length > 0 || !!existing),
+    // Autosave even while a field remains focused so mobile keyboards / sticky
+    // focus cannot leave workout inputs unsaved. The server hydration effect
+    // still refuses to overwrite the focused field, so active typing is safe.
+    enabled: !readonly && !!clientId && serverHydrated && (load.length > 0 || reps.length > 0 || rpe.length > 0 || !!existing),
     onPermanentFailure: ({ value }) => {
       if (!clientId) return;
       const loadNum = value.load ? Number(value.load) : null;
