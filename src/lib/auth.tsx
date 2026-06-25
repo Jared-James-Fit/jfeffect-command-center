@@ -174,13 +174,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const raced = await Promise.race([fetchPromise, timeoutPromise]);
         if (cancelled) return;
         if (raced === "__timeout__") {
-          // Don't strand the user. Use a cached role if present, else
-          // default to "client". Do NOT mark roleLoadedForRef so the
-          // in-flight query can still resolve and correct the role.
+          // Don't strand the user. Use a cached role if present.
+          // CRITICAL: Do NOT fall back to "client" — admin/coach users
+          // would get bounced to /portal by the admin route gate before
+          // the background fetch can correct it (which also hides the
+          // Client POV buttons on the way out). Leave role null and let
+          // the background fetch fill it; the splash already cleared.
           const cached = readCachedRole(uid);
-          const fallback: AppRole = cached ?? "client";
           if (!roleLoadedForRef.current) {
-            setRole((prev) => prev ?? fallback);
+            if (cached) setRole((prev) => prev ?? cached);
             setLoading(false);
           }
           // Let the original fetch finish in the background and update.
