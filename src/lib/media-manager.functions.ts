@@ -154,7 +154,8 @@ export const inviteMediaManager = createServerFn({ method: "POST" })
     if (error) throw new Error(error.message);
     const origin = getOrigin();
     const link = `${origin}/staff-setup?token=${setup_token}`;
-    return { invite: row, link };
+    const sms = await sendStaffInviteSms({ toPhone: row.phone, firstName: row.first_name, link });
+    return { invite: row, link, sms };
   });
 
 export const resendStaffInvite = createServerFn({ method: "POST" })
@@ -167,9 +168,11 @@ export const resendStaffInvite = createServerFn({ method: "POST" })
     const setup_token_expires_at = new Date(Date.now() + 7 * 24 * 3600 * 1000).toISOString();
     const { data: row, error } = await supabaseAdmin
       .from("staff_invites").update({ setup_token, setup_token_expires_at, status: "pending" })
-      .eq("id", data.inviteId).select("email").single();
+      .eq("id", data.inviteId).select("email, phone, first_name").single();
     if (error) throw new Error(error.message);
-    return { link: `${getOrigin()}/staff-setup?token=${setup_token}`, email: row.email };
+    const link = `${getOrigin()}/staff-setup?token=${setup_token}`;
+    const sms = await sendStaffInviteSms({ toPhone: (row as any).phone, firstName: (row as any).first_name, link });
+    return { link, email: row.email, sms };
   });
 
 export const revokeStaffInvite = createServerFn({ method: "POST" })
