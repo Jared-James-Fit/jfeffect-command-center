@@ -25,7 +25,8 @@ import {
   bulkArchiveTasks, bulkDeleteTasks, bulkCompleteTasks, dueBucket,
   type ExtendedTaskRow, type PriorityLabel, type StatusLabel,
 } from "@/lib/media-tasks";
-import { createTask, updateTask, toggleTaskDone } from "@/lib/tasks";
+import { createTask, toggleTaskDone } from "@/lib/tasks";
+import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
 const BUCKET_ORDER: ReturnType<typeof dueBucket>[] = ["overdue", "today", "upcoming", "none", "completed"];
@@ -236,7 +237,7 @@ function TaskRow({ task, selected, onSelect }: { task: ExtendedTaskRow; selected
   const initials = (task.assignee_name ?? "").split(" ").map((w) => w[0]).join("").slice(0, 2).toUpperCase();
 
   async function toggleImportant() {
-    await updateTask(task.id, { /* @ts-expect-error - extended column */ important: !task.important });
+    await (supabase.from("tasks") as any).update({ important: !task.important }).eq("id", task.id);
     qc.invalidateQueries({ queryKey: ["media-tasks"] });
   }
 
@@ -281,8 +282,7 @@ function TaskRow({ task, selected, onSelect }: { task: ExtendedTaskRow; selected
 function RowMenu({ task }: { task: ExtendedTaskRow }) {
   const qc = useQueryClient();
   async function patch(p: any) {
-    await (await import("@/integrations/supabase/client")).supabase
-      .from("tasks" as any).update(p).eq("id", task.id);
+    await (supabase.from("tasks") as any).update(p).eq("id", task.id);
     qc.invalidateQueries({ queryKey: ["media-tasks"] });
   }
   return (
@@ -304,7 +304,7 @@ function RowMenu({ task }: { task: ExtendedTaskRow }) {
         </DropdownMenuItem>
         <DropdownMenuItem
           className="text-destructive"
-          onClick={async () => { if (confirm("Delete task?")) { await (await import("@/integrations/supabase/client")).supabase.from("tasks" as any).delete().eq("id", task.id); qc.invalidateQueries({ queryKey: ["media-tasks"] }); } }}
+          onClick={async () => { if (confirm("Delete task?")) { await (supabase.from("tasks") as any).delete().eq("id", task.id); qc.invalidateQueries({ queryKey: ["media-tasks"] }); } }}
         ><Trash2 className="mr-2 h-4 w-4" />Delete</DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
