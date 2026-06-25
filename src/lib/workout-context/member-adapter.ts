@@ -509,8 +509,9 @@ export function createMemberAdapter(ref: WorkoutContextRef): WorkoutContextAdapt
     },
 
     async upsertExerciseNote(_input: UpsertExerciseNoteInput): Promise<void> {
-      // Member plans have no per-exercise notes table; notes ride along on
-      // the set log itself via the standard logSet path.
+      // Routed through upsertPlExerciseNoteRaw on the shared UI; this entry
+      // point is retained for adapters that need DTO-shaped writes. The
+      // shared WorkoutDayView calls upsertPlExerciseNoteRaw directly.
     },
 
     async updateDayCompletion(dayId: string, patch: DayCompletionPatch): Promise<void> {
