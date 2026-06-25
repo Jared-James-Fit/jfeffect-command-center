@@ -539,13 +539,34 @@ export function createMemberAdapter(ref: WorkoutContextRef): WorkoutContextAdapt
     },
 
     async saveExerciseUnitPref(_input: { exerciseId: string; unit: "lb" | "kg" }): Promise<void> {
-      // Members default to lb; per-exercise unit prefs aren't persisted.
+      // Persist to member_exercise_unit_prefs so the toggle survives reloads
+      // (parity with client_exercise_unit_prefs).
+      if (!_input.exerciseId) return;
+      const { error } = await (supabase as any)
+        .from("member_exercise_unit_prefs")
+        .upsert(
+          {
+            user_id: ref.userId,
+            exercise_id: _input.exerciseId,
+            unit: _input.unit,
+          },
+          { onConflict: "user_id,exercise_id" },
+        );
+      if (error) throw new Error(error.message);
     },
 
     async listUnitPrefs(_exerciseIds: string[]): Promise<{ exerciseId: string; unit: "lb" | "kg" }[]> {
-      // Memberships don't persist per-exercise unit prefs; callers fall back
-      // to the exercise's default_load_unit.
-      return [];
+      const ids = (_exerciseIds ?? []).filter(Boolean);
+      if (!ids.length) return [];
+      const { data, error } = await (supabase as any)
+        .from("member_exercise_unit_prefs")
+        .select("exercise_id, unit")
+        .eq("user_id", ref.userId)
+        .in("exercise_id", ids);
+      if (error) return [];
+      return (data ?? [])
+        .filter((r: any) => r.unit === "lb" || r.unit === "kg")
+        .map((r: any) => ({ exerciseId: r.exercise_id as string, unit: r.unit as "lb" | "kg" }));
     },
 
     async notifyCoachOfFailure(_input: { dayId: string; reason: string }): Promise<void> {
