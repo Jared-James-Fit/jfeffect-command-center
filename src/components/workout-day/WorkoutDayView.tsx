@@ -2749,6 +2749,21 @@ function SetRow({
   // Track which field (if any) is currently focused so we never overwrite
   // what the user is actively typing with a stale server refetch.
   const [focusedField, setFocusedField] = useState<"load" | "reps" | "rpe" | null>(null);
+  // iOS / mobile safety: blur events occasionally fail to fire when an input
+  // is removed from the DOM, the keyboard auto-dismisses, or the page loses
+  // focus. If focus stays set for too long we'll never autosave because the
+  // enabled guard blocks. Clear stale focus after 6s of no activity.
+  const focusClearTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    if (focusClearTimerRef.current) clearTimeout(focusClearTimerRef.current);
+    if (!focusedField) return;
+    focusClearTimerRef.current = setTimeout(() => {
+      setFocusedField(null);
+    }, 6000);
+    return () => {
+      if (focusClearTimerRef.current) clearTimeout(focusClearTimerRef.current);
+    };
+  }, [focusedField, load, reps, rpe]);
   useEffect(() => {
     if (!draftKey || hydrated) return;
     const d = readLocalDraft<{ load: string; reps: string; rpe: string }>(draftKey);
