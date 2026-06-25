@@ -108,7 +108,7 @@ export function ClientToolbar({ search, coachingType, coachId, coaches, sort, is
             variant="ghost"
             size="sm"
             className="h-11"
-            onClick={() => navigate({ search: () => ({}) })}
+            onClick={() => navigate({ search: () => ({}), resetScroll: false })}
           >
             Clear filters
           </Button>

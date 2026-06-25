@@ -184,7 +184,7 @@ function ClientsDirectoryPage() {
                 {Array.from({ length: 6 }).map((_, i) => <ClientRowSkeleton key={i} />)}
               </ul>
             ) : rows.length === 0 ? (
-              <EmptyState hasFilters={!!(search.search || search.status !== "all" || search.coachingType !== "all" || search.coachId)} onClear={() => navigate({ search: () => ({}) })} />
+              <EmptyState hasFilters={!!(search.search || search.status !== "all" || search.coachingType !== "all" || search.coachId)} onClear={() => navigate({ search: () => ({}), resetScroll: false })} />
             ) : (
               <ul className="space-y-2">
                 {rows.map((r) => (

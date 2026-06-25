@@ -1,4 +1,15 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
+
+function isImmersiveChatRoute() {
+  if (typeof window === "undefined") return false;
+  const { pathname, search } = window.location;
+  if (pathname.startsWith("/portal/messages") || pathname.startsWith("/admin/messages")) return true;
+  if (pathname.startsWith("/admin/communication")) {
+    const tab = new URLSearchParams(search).get("tab") ?? "messages";
+    return tab === "messages";
+  }
+  return false;
+}
 
 /**
  * Tracks the on-screen keyboard and visible viewport on iOS/Android using
@@ -13,6 +24,8 @@ import { useEffect } from "react";
  * 100dvh, which on iOS Safari does NOT shrink when the keyboard opens.
  */
 export function useKeyboardOpen() {
+  const wasOpenRef = useRef(false);
+
   useEffect(() => {
     if (typeof window === "undefined") return;
     const vv = window.visualViewport;
@@ -50,10 +63,11 @@ export function useKeyboardOpen() {
         root.style.setProperty("--vv-h", `${Math.round(window.innerHeight)}px`);
         root.style.setProperty("--vv-top", "0px");
         root.removeAttribute("data-keyboard-open");
-        if (vv.offsetTop > 0 || window.scrollY > 0) {
+        if (wasOpenRef.current && isImmersiveChatRoute() && (vv.offsetTop > 0 || window.scrollY > 0)) {
           window.scrollTo({ top: 0, left: 0 });
         }
       }
+      wasOpenRef.current = open;
     };
     const schedule = () => {
       if (raf) return;

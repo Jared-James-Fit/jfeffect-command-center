@@ -28,7 +28,7 @@ export function Pager({
         <Select
           value={String(size)}
           onValueChange={(v) =>
-            navigate({ search: (prev: any) => ({ ...prev, size: Number(v), page: 1 }) })
+            navigate({ search: (prev: any) => ({ ...prev, size: Number(v), page: 1 }), resetScroll: false })
           }
         >
           <SelectTrigger className="h-8 w-[72px]" aria-label="Rows per page">
@@ -43,7 +43,7 @@ export function Pager({
           size="icon"
           className="h-8 w-8"
           disabled={page <= 1}
-          onClick={() => navigate({ search: (prev: any) => ({ ...prev, page: page - 1 }) })}
+          onClick={() => navigate({ search: (prev: any) => ({ ...prev, page: page - 1 }), resetScroll: false })}
           aria-label="Previous page"
         >
           <ChevronLeft className="h-4 w-4" />
@@ -56,7 +56,7 @@ export function Pager({
           size="icon"
           className="h-8 w-8"
           disabled={page >= totalPages}
-          onClick={() => navigate({ search: (prev: any) => ({ ...prev, page: page + 1 }) })}
+          onClick={() => navigate({ search: (prev: any) => ({ ...prev, page: page + 1 }), resetScroll: false })}
           aria-label="Next page"
         >
           <ChevronRight className="h-4 w-4" />
