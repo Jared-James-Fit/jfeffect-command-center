@@ -2848,10 +2848,10 @@ function SetRow({
     // Prevents autosave from running on mount before server data arrives.
     // Root cause of weight corruption bug — fixed 2026-06-25. DO NOT remove.
     //
-    // TYPING GUARD: never save while the user is actively typing in a field.
-    // The 3s delay handles most cases, but this ensures saves are blocked
-    // while focus is held regardless of timing.
-    enabled: !readonly && !!clientId && serverHydrated && !focusedField && (load.length > 0 || reps.length > 0 || rpe.length > 0 || !!existing),
+    // NOTE: focusedField guard was removed — on iOS, blur events don't fire
+    // reliably when tapping between inputs, causing saves to be permanently
+    // blocked. The 3s delay is sufficient to avoid saving mid-type.
+    enabled: !readonly && !!clientId && serverHydrated && (load.length > 0 || reps.length > 0 || rpe.length > 0 || !!existing),
     onPermanentFailure: ({ value }) => {
       if (!clientId) return;
       const loadNum = value.load ? Number(value.load) : null;
