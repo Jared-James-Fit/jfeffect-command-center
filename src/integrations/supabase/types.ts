@@ -7147,6 +7147,39 @@ export type Database = {
           },
         ]
       }
+      media_activity_events: {
+        Row: {
+          actor_id: string | null
+          created_at: string
+          id: string
+          kind: string
+          metadata: Json | null
+          subject_id: string | null
+          subject_type: string | null
+          summary: string
+        }
+        Insert: {
+          actor_id?: string | null
+          created_at?: string
+          id?: string
+          kind: string
+          metadata?: Json | null
+          subject_id?: string | null
+          subject_type?: string | null
+          summary: string
+        }
+        Update: {
+          actor_id?: string | null
+          created_at?: string
+          id?: string
+          kind?: string
+          metadata?: Json | null
+          subject_id?: string | null
+          subject_type?: string | null
+          summary?: string
+        }
+        Relationships: []
+      }
       media_archive_settings: {
         Row: {
           auto_archive_enabled: boolean
@@ -7663,6 +7696,45 @@ export type Database = {
           urgent_flag?: boolean
           watched_at?: string | null
           watched_by?: string | null
+        }
+        Relationships: []
+      }
+      media_quick_notes: {
+        Row: {
+          archived: boolean
+          body: string
+          converted_ref_id: string | null
+          converted_to: string | null
+          created_at: string
+          id: string
+          owner_id: string
+          pinned: boolean
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          archived?: boolean
+          body?: string
+          converted_ref_id?: string | null
+          converted_to?: string | null
+          created_at?: string
+          id?: string
+          owner_id: string
+          pinned?: boolean
+          title?: string
+          updated_at?: string
+        }
+        Update: {
+          archived?: boolean
+          body?: string
+          converted_ref_id?: string | null
+          converted_to?: string | null
+          created_at?: string
+          id?: string
+          owner_id?: string
+          pinned?: boolean
+          title?: string
+          updated_at?: string
         }
         Relationships: []
       }
@@ -16322,58 +16394,155 @@ export type Database = {
         }
         Relationships: []
       }
+      task_comments: {
+        Row: {
+          author_id: string | null
+          body: string
+          created_at: string
+          id: string
+          task_id: string
+        }
+        Insert: {
+          author_id?: string | null
+          body: string
+          created_at?: string
+          id?: string
+          task_id: string
+        }
+        Update: {
+          author_id?: string | null
+          body?: string
+          created_at?: string
+          id?: string
+          task_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "task_comments_task_id_fkey"
+            columns: ["task_id"]
+            isOneToOne: false
+            referencedRelation: "tasks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      task_subtasks: {
+        Row: {
+          created_at: string
+          done: boolean
+          id: string
+          position: number
+          task_id: string
+          title: string
+        }
+        Insert: {
+          created_at?: string
+          done?: boolean
+          id?: string
+          position?: number
+          task_id: string
+          title: string
+        }
+        Update: {
+          created_at?: string
+          done?: boolean
+          id?: string
+          position?: number
+          task_id?: string
+          title?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "task_subtasks_task_id_fkey"
+            columns: ["task_id"]
+            isOneToOne: false
+            referencedRelation: "tasks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       tasks: {
         Row: {
+          archived_at: string | null
           assigned_to: string | null
           assignee_name: string | null
+          campaign_id: string | null
           completed_at: string | null
           completed_by: string | null
           created_at: string
           created_by: string | null
+          description: string | null
           due_at: string | null
+          due_time: string | null
           id: string
+          important: boolean
+          linked_asset_id: string | null
+          linked_content_id: string | null
           notes: string | null
           position: number
           priority: number
+          priority_label: string | null
           quadrant: Database["public"]["Enums"]["task_quadrant"]
+          recurring_rule: Json | null
           scope: string
           status: Database["public"]["Enums"]["task_status"]
+          status_label: string | null
           title: string
           updated_at: string
         }
         Insert: {
+          archived_at?: string | null
           assigned_to?: string | null
           assignee_name?: string | null
+          campaign_id?: string | null
           completed_at?: string | null
           completed_by?: string | null
           created_at?: string
           created_by?: string | null
+          description?: string | null
           due_at?: string | null
+          due_time?: string | null
           id?: string
+          important?: boolean
+          linked_asset_id?: string | null
+          linked_content_id?: string | null
           notes?: string | null
           position?: number
           priority?: number
+          priority_label?: string | null
           quadrant?: Database["public"]["Enums"]["task_quadrant"]
+          recurring_rule?: Json | null
           scope?: string
           status?: Database["public"]["Enums"]["task_status"]
+          status_label?: string | null
           title: string
           updated_at?: string
         }
         Update: {
+          archived_at?: string | null
           assigned_to?: string | null
           assignee_name?: string | null
+          campaign_id?: string | null
           completed_at?: string | null
           completed_by?: string | null
           created_at?: string
           created_by?: string | null
+          description?: string | null
           due_at?: string | null
+          due_time?: string | null
           id?: string
+          important?: boolean
+          linked_asset_id?: string | null
+          linked_content_id?: string | null
           notes?: string | null
           position?: number
           priority?: number
+          priority_label?: string | null
           quadrant?: Database["public"]["Enums"]["task_quadrant"]
+          recurring_rule?: Json | null
           scope?: string
           status?: Database["public"]["Enums"]["task_status"]
+          status_label?: string | null
           title?: string
           updated_at?: string
         }
@@ -16397,6 +16566,13 @@ export type Database = {
             columns: ["created_by"]
             isOneToOne: false
             referencedRelation: "coaches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tasks_linked_content_id_fkey"
+            columns: ["linked_content_id"]
+            isOneToOne: false
+            referencedRelation: "media_content_records"
             referencedColumns: ["id"]
           },
         ]
