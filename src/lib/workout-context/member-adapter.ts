@@ -671,8 +671,8 @@ export function createMemberAdapter(ref: WorkoutContextRef): WorkoutContextAdapt
         // Non-fatal: leave exercise_id unset.
       }
       if (statusOnly) {
+        memberPayload.logged_at = payload.completed_at ?? null;
         if (payload.completed_at) {
-          memberPayload.logged_at = payload.completed_at;
           memberPayload.completion_method = "manual_status";
         } else {
           memberPayload.completion_method = null;
@@ -704,9 +704,7 @@ export function createMemberAdapter(ref: WorkoutContextRef): WorkoutContextAdapt
         });
         if ("completed_at" in payload || payload.completion_method) {
           memberPayload.completion_method = payload.completion_method ?? (payload.completed_at ? "manual_status" : null);
-        }
-        if (payload.completed_at) {
-          memberPayload.logged_at = payload.completed_at;
+          memberPayload.logged_at = payload.completed_at ?? null;
         }
       }
       // Upsert on the natural key (enrollment + week + day + exercise + set).
