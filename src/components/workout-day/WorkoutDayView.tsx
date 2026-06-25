@@ -1772,8 +1772,13 @@ function WorkoutDay({
                 });
                 setCompleteOpen(false);
                 setLastSummary(computed);
+                setLastSessionRating(payload.session_rating ?? null);
                 recapFromSubmitRef.current = true;
-                setSummaryOpen(true);
+                // Defer opening the summary dialog until the sheet's exit
+                // animation has finished. Stacking two Radix overlays in the
+                // same tick leaves body pointer-events frozen and the dialog
+                // never appears.
+                setTimeout(() => setSummaryOpen(true), 280);
                 toast.message("Workout saved offline", {
                   description: "We'll sync it when you're back online.",
                 });
