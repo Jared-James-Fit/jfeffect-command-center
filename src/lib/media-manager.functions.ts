@@ -26,7 +26,7 @@ async function assertMediaOrAdmin(ctx: any) {
 }
 
 function getOrigin() {
-  return process.env.PUBLIC_APP_URL || process.env.SITE_URL || "";
+  return process.env.PUBLIC_APP_URL || process.env.SITE_URL || "https://jfeffect.com";
 }
 
 const TWILIO_GATEWAY_URL = "https://connector-gateway.lovable.dev/twilio";
@@ -59,8 +59,9 @@ async function sendStaffInviteSms(opts: {
     const twilioKey = process.env.TWILIO_API_KEY;
     if (!lovableKey || !twilioKey) return { sent: false, reason: "twilio_not_configured" };
     const name = (opts.firstName || "").trim();
-    const greeting = name ? `Hi ${name}, ` : "";
-    const body = `${greeting}you've been invited as JF Effect Media Manager. Finish setup here: ${opts.link} (link expires in 7 days).`;
+    const greeting = name ? `Hi ${name} — ` : "";
+    // URL on its own line so iOS/Android render it as a single tap target.
+    const body = `${greeting}you're invited as a JF Effect Media Manager. Tap to set up your account:\n${opts.link}\n(Link expires in 7 days.)`;
     const res = await fetch(`${TWILIO_GATEWAY_URL}/Messages.json`, {
       method: "POST",
       headers: {
@@ -127,16 +128,17 @@ export const inviteMediaManager = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     await assertAdmin(context);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    // Enforce single Media Manager: reject if one already exists or a pending invite is outstanding.
-    const { data: existingRoles } = await supabaseAdmin
-      .from("user_roles").select("user_id").eq("role", "media_manager").limit(1);
-    if (existingRoles && existingRoles.length > 0) {
-      throw new Error("A Media Manager already exists. Revoke the current one before inviting another.");
-    }
-    const { data: pending } = await supabaseAdmin
-      .from("staff_invites").select("id").eq("role", "media_manager").eq("status", "pending").limit(1);
-    if (pending && pending.length > 0) {
-      throw new Error("A pending Media Manager invite already exists. Revoke it before inviting another.");
+    // Multiple Media Managers are allowed — they all share the same admin workspace.
+    // Guard only against an outstanding pending invite for the SAME email.
+    const { data: pendingSame } = await supabaseAdmin
+      .from("staff_invites")
+      .select("id")
+      .eq("role", "media_manager")
+      .eq("status", "pending")
+      .ilike("email", data.email)
+      .limit(1);
+    if (pendingSame && pendingSame.length > 0) {
+      throw new Error("A pending invite already exists for that email. Resend or revoke it instead.");
     }
     const setup_token = genToken();
     const setup_token_expires_at = new Date(Date.now() + 7 * 24 * 3600 * 1000).toISOString();

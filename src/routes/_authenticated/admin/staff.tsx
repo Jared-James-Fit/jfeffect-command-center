@@ -33,9 +33,12 @@ export function StaffPage({ embedded = false }: { embedded?: boolean } = {}) {
   const { data, isLoading } = useQuery({ queryKey: ["staff"], queryFn: () => list() });
 
   const [form, setForm] = useState({ email: "", first_name: "", last_name: "", phone: "" });
-  const hasActive = (data?.members ?? []).length > 0;
-  const hasPending = (data?.invites ?? []).some((i: any) => i.status === "pending");
-  const inviteDisabled = hasActive || hasPending;
+  const pendingEmails = new Set(
+    (data?.invites ?? [])
+      .filter((i: any) => i.status === "pending")
+      .map((i: any) => (i.email || "").toLowerCase())
+  );
+  const inviteDisabled = pendingEmails.has(form.email.trim().toLowerCase());
 
   function smsMessage(sms: { sent: boolean; reason?: string } | undefined, action: "Invite" | "New link") {
     if (sms?.sent) return `${action} sent by SMS · link also copied`;
@@ -73,13 +76,14 @@ export function StaffPage({ embedded = false }: { embedded?: boolean } = {}) {
       <Card className="p-4 space-y-3">
         <h2 className="text-sm font-bold uppercase tracking-widest text-muted-foreground">Invite Media Manager</h2>
         <p className="text-xs text-muted-foreground">
-          Only one Media Manager account is allowed. {inviteDisabled && "Revoke the current Media Manager or pending invite before adding another."}
+          Add as many Media Managers as you need — they all share the same admin workspace and see edits in real time.
+          {inviteDisabled && " A pending invite already exists for that email — resend or revoke it below."}
         </p>
         <div className="grid gap-2 sm:grid-cols-2">
-          <Input disabled={inviteDisabled} placeholder="First name" value={form.first_name} onChange={(e) => setForm({ ...form, first_name: e.target.value })} />
-          <Input disabled={inviteDisabled} placeholder="Last name" value={form.last_name} onChange={(e) => setForm({ ...form, last_name: e.target.value })} />
-          <Input disabled={inviteDisabled} placeholder="Email" type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
-          <Input disabled={inviteDisabled} placeholder="Phone (optional)" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
+          <Input placeholder="First name" value={form.first_name} onChange={(e) => setForm({ ...form, first_name: e.target.value })} />
+          <Input placeholder="Last name" value={form.last_name} onChange={(e) => setForm({ ...form, last_name: e.target.value })} />
+          <Input placeholder="Email" type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
+          <Input placeholder="Phone (for SMS setup link)" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
         </div>
         <Button onClick={handleInvite} disabled={inviteDisabled}>Send Invite</Button>
       </Card>
