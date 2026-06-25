@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, Clock, CheckCircle2, Circle, Play, StickyNote, NotebookPen, Info, Maximize2, Minimize2, AlertTriangle, RefreshCw, Send, MessageCircle, ChevronDown, ChevronUp, Move, Zap, Save } from "lucide-react";
+import { ArrowLeft, Clock, CheckCircle2, Circle, Play, StickyNote, NotebookPen, Info, Maximize2, Minimize2, AlertTriangle, RefreshCw, Send, MessageCircle, ChevronDown, ChevronUp, Move, Zap } from "lucide-react";
 import { MoveWorkoutSheet } from "@/components/schedule/MoveWorkoutSheet";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
@@ -895,13 +895,24 @@ function WorkoutDay({
     setCompletionHydrated(true);
   }, [draftHydrated, completionHydrated, completion]);
 
-  // Manual-save workout-level notes + actual minutes into pl_day_completions (draft state — does NOT set completed_at).
-  // Emergency safety lock 2026-06-25: no autosave on mount/hydration/typing.
+  // Autosave workout-level notes + actual minutes into pl_day_completions (draft state — does NOT set completed_at).
   const metaSave = useAutosave({
     key: draftKey,
     value: { notes, actualMin },
     delay: 1000,
-    enabled: false,
+    // Only autosave once both local-draft and server-completion hydration
+    // have run AND the current value actually differs from what's persisted
+    // on the completion row. Without this, opening a completed workout
+    // hydrates the fields from the server and then immediately re-saves
+    // the same values back — producing a constant "Saving…/Saved" flicker.
+    enabled:
+      !!client?.id &&
+      draftHydrated &&
+      completionHydrated &&
+      (
+        notes !== (completion?.client_notes ?? "") ||
+        actualMin !== (completion?.actual_duration_min != null ? String(completion.actual_duration_min) : "")
+      ),
     onPermanentFailure: ({ value }) => {
       if (!client?.id) return;
       enqueueOfflineWrite({
@@ -935,7 +946,7 @@ function WorkoutDay({
   });
 
   // Defer PWA updates while the workout has unsaved meta (notes / actual minutes).
-  // No beforeunload prompt — set rows now persist only via explicit Save taps and would
+  // No beforeunload prompt — set rows persist via their own autosaves and would
   // otherwise nag every time the member taps away from the page.
   useUnsavedWarning(
     metaSave.state === "saving" || metaSave.state === "offline" || metaSave.state === "error",
@@ -1177,10 +1188,6 @@ function WorkoutDay({
                       value={actualMin}
                       onChange={(e) => setActualMin(e.target.value)}
                     />
-                    <Button type="button" variant="outline" size="sm" onClick={() => void metaSave.flush()}>
-                      <Save className="h-4 w-4" />
-                      Save
-                    </Button>
                     <ActionButton
                       loadingLabel="Saving…"
                       successLabel="Finish Workout"
@@ -1530,10 +1537,6 @@ function WorkoutDay({
               value={actualMin}
               onChange={(e) => setActualMin(e.target.value)}
             />
-            <Button type="button" variant="outline" size="sm" onClick={() => void metaSave.flush()}>
-              <Save className="h-4 w-4" />
-              Save
-            </Button>
             <ActionButton
               loadingLabel="Saving…"
               successLabel="Finish Workout"
@@ -2715,6 +2718,12 @@ function SetRow({
   // Hydrate from any unsynced local draft on first mount for this set
   const draftKey = clientId ? `workout-set:${rowId}:${clientId}:${setIndex}` : null;
   const [hydrated, setHydrated] = useState(false);
+  // CORRUPTION GUARD (2026-06-25): autosave must not fire until server data has
+  // been received and the display state set from it. Without this, autosave fires
+  // on mount with empty/stale state and overwrites stored values with null/wrong unit.
+  // If !existing there is no server data to wait for, so start as true.
+  // DO NOT remove this guard — it prevents the weight corruption regression.
+  const [serverHydrated, setServerHydrated] = useState(!existing);
   // Track which field (if any) is currently focused so we never overwrite
   // what the user is actively typing with a stale server refetch.
   const [focusedField, setFocusedField] = useState<"load" | "reps" | "rpe" | null>(null);
@@ -2758,6 +2767,8 @@ function SetRow({
     // Track the display unit at hydration so later preference changes can be
     // recognized without touching the raw displayed load.
     lastUnitRef.current = unit;
+    // Signal that server data has arrived — autosave is now safe to fire
+    setServerHydrated(true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [existing?.id, existing?.actual_load, existing?.actual_reps, existing?.actual_rpe_num, existing?.actual_rpe]);
 
@@ -2791,10 +2802,15 @@ function SetRow({
       if (a.reps !== b.reps || a.rpe !== b.rpe) return false;
       return a.load === b.load;
     },
-    // Emergency safety lock 2026-06-25: set rows are manual-save only.
-    // No hydration, page load, typing, blur, reconnect, retry backoff, or unit
-    // toggle may persist pl_row_results without an explicit Save tap.
-    enabled: false,
+    // NOTE: hydrated is intentionally excluded from this condition.
+    // hydrated only gates the draft-restore optimization; it must not
+    // gate whether saves work. If a user types before the draft-restore
+    // effect fires (common on fast mobile taps), their value would never
+    // save because enabled=false means the baseline is never established.
+    // CORRUPTION GUARD: serverHydrated must be true before autosave fires.
+    // Prevents autosave from running on mount before server data arrives.
+    // Root cause of weight corruption bug — fixed 2026-06-25. DO NOT remove.
+    enabled: !readonly && !!clientId && serverHydrated && (load.length > 0 || reps.length > 0 || rpe.length > 0 || !!existing),
     onPermanentFailure: ({ value }) => {
       if (!clientId) return;
       const loadNum = value.load ? Number(value.load) : null;
@@ -2937,7 +2953,7 @@ function SetRow({
   saveRef.current = save;
 
   const onEnter: React.KeyboardEventHandler<HTMLInputElement> = (e) => {
-    if (e.key === "Enter") { e.preventDefault(); (e.target as HTMLInputElement).blur(); }
+    if (e.key === "Enter") { e.preventDefault(); (e.target as HTMLInputElement).blur(); save.flush(); }
   };
 
   // State labels: Suggested (no draft, no confirm), Draft (typed but not all valid yet
@@ -3183,8 +3199,10 @@ function SetRow({
             recentlySavedTimerRef.current = setTimeout(() => { recentlySavedRef.current = false; }, 8000);
             // Clear focus AFTER setting the guard so the server-reset effect
             // (which checks focusedField) cannot fire between null-focus and save.
-            setFocusedField(null);
-            setRepsChipOpen(false);
+            save.flush().finally(() => {
+              setFocusedField(null);
+              setRepsChipOpen(false);
+            });
           }}
           readOnly={readonly}
           disabled={readonly}
@@ -3231,8 +3249,10 @@ function SetRow({
             recentlySavedRef.current = true;
             if (recentlySavedTimerRef.current) clearTimeout(recentlySavedTimerRef.current);
             recentlySavedTimerRef.current = setTimeout(() => { recentlySavedRef.current = false; }, 8000);
-            setFocusedField(null);
-            setRpeChipOpen(false);
+            save.flush().finally(() => {
+              setFocusedField(null);
+              setRpeChipOpen(false);
+            });
           }}
           readOnly={readonly} disabled={readonly}
         />
@@ -3274,7 +3294,7 @@ function SetRow({
           recentlySavedRef.current = true;
           if (recentlySavedTimerRef.current) clearTimeout(recentlySavedTimerRef.current);
           recentlySavedTimerRef.current = setTimeout(() => { recentlySavedRef.current = false; }, 8000);
-          setFocusedField(null);
+          save.flush().finally(() => { setFocusedField(null); });
         }}
         readOnly={readonly}
         disabled={readonly}
@@ -3291,24 +3311,6 @@ function SetRow({
           />
         )}
         {!readonly ? (
-          <>
-          {!isConfirmed && (
-            <button
-              type="button"
-              onClick={() => void save.flush()}
-              title="Save set"
-              aria-label={`Save set ${setIndex}`}
-              className={cn(
-                "inline-flex h-7 w-7 items-center justify-center rounded-full border transition-colors",
-                "border-primary/50 bg-primary/10 text-primary hover:bg-primary/15",
-                save.state === "saving" && "cursor-wait opacity-70",
-                save.state === "error" && "border-destructive bg-destructive/10 text-destructive",
-              )}
-              disabled={save.state === "saving"}
-            >
-              {save.state === "saving" ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-            </button>
-          )}
           <button
             type="button"
             onClick={() => void saveCompletionStatus()}
@@ -3334,7 +3336,6 @@ function SetRow({
               <Circle className="h-4 w-4" />
             )}
           </button>
-          </>
         ) : (
           isConfirmed && <CheckCircle2 className="h-4 w-4 text-green-500" />
         )}
