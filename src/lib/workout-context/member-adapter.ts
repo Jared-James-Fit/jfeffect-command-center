@@ -995,7 +995,7 @@ export function memberLogToPlRowResult(args: {
 }): PlRowResultRaw {
   const { log: l, clientId } = args;
   return {
-    id: l.id,
+    id: encodeRowResultId(l.week_index, l.day_index, l.exercise_index, l.set_index),
     row_id: `ex:${l.exercise_index}`,
     client_id: clientId,
     set_index: l.set_index,
