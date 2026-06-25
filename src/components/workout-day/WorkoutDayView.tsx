@@ -1636,7 +1636,6 @@ function WorkoutDay({
           </Card>
         )}
 
-
         {completion?.completed_at && client?.id && (
           <CompletedWorkoutActions
             ctx={{ kind: "client", dayId }}
