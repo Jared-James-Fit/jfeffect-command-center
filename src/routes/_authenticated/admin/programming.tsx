@@ -1,17 +1,19 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useMemo } from "react";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { useMemo, useState } from "react";
 import { PageHeader } from "@/components/app-shell";
 import { cn } from "@/lib/utils";
-import { ProgramLibrary } from "./program-library";
+import { ProgramLibrary, AssignDialog } from "./program-library";
 import { ExercisesAdmin } from "./exercises";
 import { CardioDashboard } from "./cardio-targets";
 import { WarmupProtocolsAdmin } from "./warmup-protocols";
 import { AdminRecipes } from "./recipes";
 import { ProgramFinder, type FinderItem } from "@/components/programs/program-finder";
 import { useQuery } from "@tanstack/react-query";
-import { listTemplates } from "@/lib/pl-programs";
+import { listTemplates, listTemplateAssignments } from "@/lib/pl-programs";
 import { supabase } from "@/integrations/supabase/client";
 import { validateTemplatePayload } from "@/lib/pl-template-validation";
+import { Button } from "@/components/ui/button";
+import { UserPlus, Users } from "lucide-react";
 
 type TabKey = "programs" | "browse" | "exercises" | "cardio" | "warmups" | "recipes";
 const TABS: { value: TabKey; label: string }[] = [
@@ -85,6 +87,7 @@ function ProgrammingWorkspace() {
 }
 
 function AdminProgramBrowser() {
+  const [assignTpl, setAssignTpl] = useState<any | null>(null);
   const { data, isLoading } = useQuery({
     queryKey: ["admin-finder-templates"],
     queryFn: () => listTemplates({ type: "all", style: "all", includeArchived: true } as any),
@@ -157,7 +160,65 @@ function AdminProgramBrowser() {
           const { data } = await supabase.from("pl_templates").select("payload").eq("id", it.id).maybeSingle();
           return (data as any)?.payload ?? null;
         }}
+        renderActions={(it) => (
+          <div className="space-y-3">
+            <div className="flex flex-wrap items-center gap-2">
+              <Button size="sm" onClick={() => setAssignTpl(it.raw ?? { id: it.id, name: it.title })}>
+                <UserPlus className="mr-1 h-3.5 w-3.5" /> Assign to client
+              </Button>
+              {it.membershipPublished && (
+                <span className="rounded-full border border-rose-500/40 bg-rose-500/15 px-2 py-0.5 text-[10px] font-medium text-rose-300">
+                  In Membership Library
+                </span>
+              )}
+            </div>
+            <AssignedClientsPanel templateId={it.id} />
+          </div>
+        )}
       />
+      <AssignDialog template={assignTpl} onClose={() => setAssignTpl(null)} />
+    </div>
+  );
+}
+
+function AssignedClientsPanel({ templateId }: { templateId: string }) {
+  const { data: assignments = [], isLoading } = useQuery({
+    queryKey: ["pl-template-assignments", templateId],
+    queryFn: () => listTemplateAssignments(templateId),
+    enabled: !!templateId,
+  });
+  const active = (assignments as any[]).filter((a) => !a.archived);
+  const uniqueClients = Array.from(
+    new Map(active.map((a: any) => [a.clientId, a])).values(),
+  ) as any[];
+  return (
+    <div className="rounded-md border border-border bg-muted/10 p-3">
+      <div className="mb-2 flex items-center gap-1.5 text-xs font-semibold text-muted-foreground">
+        <Users className="h-3.5 w-3.5" />
+        Assigned to {uniqueClients.length} client{uniqueClients.length === 1 ? "" : "s"}
+      </div>
+      {isLoading ? (
+        <div className="text-xs text-muted-foreground">Loading…</div>
+      ) : uniqueClients.length === 0 ? (
+        <div className="text-xs text-muted-foreground">Not yet assigned to any client.</div>
+      ) : (
+        <ul className="space-y-1">
+          {uniqueClients.map((a) => (
+            <li key={a.clientId} className="flex items-center justify-between gap-2 text-xs">
+              <Link
+                to="/admin/client-programs/$clientId"
+                params={{ clientId: a.clientId }}
+                className="truncate text-foreground hover:underline"
+              >
+                {a.clientName ?? "Unknown client"}
+              </Link>
+              <span className="shrink-0 truncate text-[10px] text-muted-foreground">
+                {a.kind === "prep" ? "Prep" : "Block"} · {a.label}
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   );
 }
