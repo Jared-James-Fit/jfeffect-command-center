@@ -2,6 +2,7 @@ import type { ProgramFacets } from "./facets";
 
 export type CategoryId =
   | "recommended"
+  | "full_body"
   | "fat_loss"
   | "muscle"
   | "glutes"
@@ -21,6 +22,7 @@ export interface CategoryDef {
 
 export const CATEGORIES: CategoryDef[] = [
   { id: "recommended", label: "Recommended for You", requiresProfile: true },
+  { id: "full_body", label: "Full Body" },
   { id: "fat_loss", label: "Fat Loss" },
   { id: "muscle", label: "Build Muscle" },
   { id: "glutes", label: "Glute Focus" },
@@ -38,6 +40,8 @@ export function matchesCategory(f: ProgramFacets, id: CategoryId): boolean {
     case "all":
     case "recommended":
       return true;
+    case "full_body":
+      return f.isFullBody;
     case "fat_loss":
       return f.goals.includes("fat_loss");
     case "muscle":

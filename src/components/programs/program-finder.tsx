@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import type { ReactNode } from "react";
+import { isFullBodyRow, FULL_BODY_QUERY_ALIASES } from "@/lib/programs/facets";
 
 export type FinderItem = {
   id: string;
@@ -305,11 +306,17 @@ export function ProgramFinder({ items, loadPayload, renderActions, loading, show
     [q],
   );
   const hasFullBody = (it: FinderItem) =>
-    (it.tags ?? []).some((t) => norm(t) === "full-body" || norm(t) === "full body");
+    isFullBodyRow({
+      tags: (it.tags ?? null) as any,
+      training_split: (it.raw?.training_split ?? null) as any,
+      is_full_body: (it.raw?.is_full_body ?? null) as any,
+      training_focus: (it.raw?.training_focus ?? null) as any,
+    });
   const haystackFor = (it: FinderItem): string => {
     const lvl = levelOf(it);
     const fr = freqOf(it);
     const ty = typeOf(it);
+    const fb = hasFullBody(it);
     return [
       it.title,
       it.level,
@@ -322,6 +329,9 @@ export function ProgramFinder({ items, loadPayload, renderActions, loading, show
       ty,
       ...freqAliases(fr),
       ...((it.tags ?? []) as string[]),
+      // Expand structured full-body so search aliases (total body, whole body,
+      // fullbody, full-body, etc.) all surface the same programs.
+      ...(fb ? FULL_BODY_QUERY_ALIASES : []),
     ].filter(Boolean).join(" ").toLowerCase();
   };
   const matchesAdmin = (it: FinderItem): boolean => {
@@ -379,7 +389,9 @@ export function ProgramFinder({ items, loadPayload, renderActions, loading, show
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [items, qTerms.join("|"), fullBodyOnly, showAdminFilters, typeFilter, styleFilter, statusFilter, weightClass, assignedFilter]);
 
-  const fullBodyAvailable = useMemo(() => items.some(hasFullBody), [items]);
+  // Always show the Full Body chip — it must be visible regardless of the
+  // current folder/filter state so members and admins can find it quickly.
+  const fullBodyAvailable = true;
 
   return (
     <div className="grid h-[calc(100vh-220px)] min-h-[480px] max-h-[800px] grid-cols-[220px_minmax(0,1fr)] overflow-hidden rounded-lg border border-border bg-background/40">

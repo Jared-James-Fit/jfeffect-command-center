@@ -14,7 +14,7 @@ import {
 import { Sparkles, ArrowRight, Search as SearchIcon, LayoutGrid, List as ListIcon } from "lucide-react";
 import { listMembershipLibrary, enrollLibraryPlan } from "@/lib/membership-library.functions";
 import { getMyGoalsSetupFn } from "@/lib/client-goals/goals.functions";
-import { deriveFacets } from "@/lib/programs/facets";
+import { deriveFacets, isFullBodyQuery, FULL_BODY_QUERY_ALIASES } from "@/lib/programs/facets";
 import {
   CATEGORIES, type CategoryId, matchesCategory, groupBySections,
 } from "@/lib/programs/categories";
@@ -94,11 +94,22 @@ function PlanLibrary() {
   // Search + filter + category pipeline.
   const matched = useMemo(() => {
     const query = q.trim().toLowerCase();
+    const fbQuery = isFullBodyQuery(query);
     return decorated.filter(({ program, facets }) => {
       if (!matchesCategory(facets, effectiveCategory)) return false;
       if (query) {
-        const hay = `${program.public_title ?? ""} ${program.name ?? ""} ${(program.tags ?? []).join(" ")}`.toLowerCase();
-        if (!hay.includes(query)) return false;
+        const hay = [
+          program.public_title ?? "",
+          program.name ?? "",
+          program.description ?? "",
+          (program.tags ?? []).join(" "),
+          // expose structured full-body so any alias (total body, whole body,
+          // fullbody, full-body…) surfaces the same programs.
+          facets.isFullBody ? FULL_BODY_QUERY_ALIASES.join(" ") : "",
+        ].join(" ").toLowerCase();
+        const matchesText = hay.includes(query);
+        const matchesFullBody = fbQuery && facets.isFullBody;
+        if (!matchesText && !matchesFullBody) return false;
       }
       if (filters.level && facets.level !== filters.level) return false;
       if (filters.daysPerWeek && facets.daysPerWeek !== filters.daysPerWeek) return false;
@@ -257,8 +268,21 @@ function PlanLibrary() {
       </div>
 
       {isLoading ? null : matched.length === 0 ? (
-        <Card className="p-6 text-center text-sm text-muted-foreground">
-          No programs match. Try clearing filters or choosing a different category.
+        <Card className="space-y-3 p-6 text-center text-sm text-muted-foreground">
+          <div>
+            {effectiveCategory === "full_body"
+              ? "No full-body programs match these filters."
+              : "No programs match. Try clearing filters or choosing a different category."}
+          </div>
+          {(Object.keys(filters).length > 0 || q || effectiveCategory !== "all") && (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => { setFilters({}); setQ(""); setCategory("all"); }}
+            >
+              Clear filters
+            </Button>
+          )}
         </Card>
       ) : grouped ? (
         <div className="space-y-6">
