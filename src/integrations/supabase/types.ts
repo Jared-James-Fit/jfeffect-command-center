@@ -7308,6 +7308,81 @@ export type Database = {
           },
         ]
       }
+      media_campaigns: {
+        Row: {
+          archived: boolean
+          archived_at: string | null
+          created_at: string
+          created_by: string | null
+          description: string | null
+          end_date: string | null
+          id: string
+          landing_page_url: string | null
+          lead_magnet_url: string | null
+          name: string
+          notes: string | null
+          objective: string | null
+          offer: string | null
+          owner_id: string | null
+          priority: number
+          promo_link_urls: Json
+          results: string | null
+          start_date: string | null
+          status: string
+          target_audience: string | null
+          team_member_ids: Json
+          updated_at: string
+        }
+        Insert: {
+          archived?: boolean
+          archived_at?: string | null
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          end_date?: string | null
+          id?: string
+          landing_page_url?: string | null
+          lead_magnet_url?: string | null
+          name: string
+          notes?: string | null
+          objective?: string | null
+          offer?: string | null
+          owner_id?: string | null
+          priority?: number
+          promo_link_urls?: Json
+          results?: string | null
+          start_date?: string | null
+          status?: string
+          target_audience?: string | null
+          team_member_ids?: Json
+          updated_at?: string
+        }
+        Update: {
+          archived?: boolean
+          archived_at?: string | null
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          end_date?: string | null
+          id?: string
+          landing_page_url?: string | null
+          lead_magnet_url?: string | null
+          name?: string
+          notes?: string | null
+          objective?: string | null
+          offer?: string | null
+          owner_id?: string | null
+          priority?: number
+          promo_link_urls?: Json
+          results?: string | null
+          start_date?: string | null
+          status?: string
+          target_audience?: string | null
+          team_member_ids?: Json
+          updated_at?: string
+        }
+        Relationships: []
+      }
       media_comments: {
         Row: {
           author_id: string | null
@@ -7928,6 +8003,161 @@ export type Database = {
           watched_by?: string | null
         }
         Relationships: []
+      }
+      media_pages: {
+        Row: {
+          archived: boolean
+          archived_at: string | null
+          booking_link_id: string | null
+          campaign_id: string | null
+          created_at: string
+          created_by: string | null
+          id: string
+          last_reviewed_at: string | null
+          name: string
+          notes: string | null
+          offer: string | null
+          owner_id: string | null
+          page_type: string
+          sales_page_key: string | null
+          status: string
+          updated_at: string
+          url: string
+        }
+        Insert: {
+          archived?: boolean
+          archived_at?: string | null
+          booking_link_id?: string | null
+          campaign_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          last_reviewed_at?: string | null
+          name: string
+          notes?: string | null
+          offer?: string | null
+          owner_id?: string | null
+          page_type?: string
+          sales_page_key?: string | null
+          status?: string
+          updated_at?: string
+          url: string
+        }
+        Update: {
+          archived?: boolean
+          archived_at?: string | null
+          booking_link_id?: string | null
+          campaign_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          last_reviewed_at?: string | null
+          name?: string
+          notes?: string | null
+          offer?: string | null
+          owner_id?: string | null
+          page_type?: string
+          sales_page_key?: string | null
+          status?: string
+          updated_at?: string
+          url?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "media_pages_campaign_id_fkey"
+            columns: ["campaign_id"]
+            isOneToOne: false
+            referencedRelation: "media_campaigns"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      media_performance_entries: {
+        Row: {
+          applications: number | null
+          campaign_id: string | null
+          comments: number | null
+          content_id: string | null
+          created_at: string
+          created_by: string | null
+          id: string
+          leads: number | null
+          likes: number | null
+          notes: string | null
+          platform: string
+          publish_date: string | null
+          reach: number | null
+          revenue_cents: number | null
+          sales: number | null
+          saves: number | null
+          shares: number | null
+          source: string
+          updated_at: string
+          views: number | null
+          watch_time_seconds: number | null
+        }
+        Insert: {
+          applications?: number | null
+          campaign_id?: string | null
+          comments?: number | null
+          content_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          leads?: number | null
+          likes?: number | null
+          notes?: string | null
+          platform: string
+          publish_date?: string | null
+          reach?: number | null
+          revenue_cents?: number | null
+          sales?: number | null
+          saves?: number | null
+          shares?: number | null
+          source?: string
+          updated_at?: string
+          views?: number | null
+          watch_time_seconds?: number | null
+        }
+        Update: {
+          applications?: number | null
+          campaign_id?: string | null
+          comments?: number | null
+          content_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          leads?: number | null
+          likes?: number | null
+          notes?: string | null
+          platform?: string
+          publish_date?: string | null
+          reach?: number | null
+          revenue_cents?: number | null
+          sales?: number | null
+          saves?: number | null
+          shares?: number | null
+          source?: string
+          updated_at?: string
+          views?: number | null
+          watch_time_seconds?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "media_performance_entries_campaign_id_fkey"
+            columns: ["campaign_id"]
+            isOneToOne: false
+            referencedRelation: "media_campaigns"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "media_performance_entries_content_id_fkey"
+            columns: ["content_id"]
+            isOneToOne: false
+            referencedRelation: "media_content_records"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       media_quick_notes: {
         Row: {

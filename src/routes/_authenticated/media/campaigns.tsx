@@ -1,9 +1,5 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useEffect } from "react";
+import { createFileRoute } from "@tanstack/react-router";
+import { CampaignsPage } from "@/components/media/campaigns-page";
 export const Route = createFileRoute("/_authenticated/media/campaigns")({
-  component: () => {
-    const navigate = useNavigate();
-    useEffect(() => { navigate({ to: "/media/content", search: { tab: "campaigns" }, replace: true }); }, [navigate]);
-    return null;
-  },
+  component: CampaignsPage,
 });
