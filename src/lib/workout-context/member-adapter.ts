@@ -633,6 +633,28 @@ export function createMemberAdapter(ref: WorkoutContextRef): WorkoutContextAdapt
         exercise_index: exerciseIndex,
         set_index: setIndex,
       };
+      // Resolve exercise_id from the published payload (or a member-side swap)
+      // so cross-day exercise history can filter correctly. Best-effort: a
+      // missing payload just leaves exercise_id null on this row.
+      try {
+        const { day: dayObj } = await loadPublishedDay(enrollmentId, weekIndex, dayIndex);
+        const baseExId =
+          dayObj?.rows?.[exerciseIndex]?.exercise_id ?? null;
+        let exId: string | null = baseExId;
+        // Honour an active swap for this exercise slot.
+        const { data: swap } = await (supabase as any)
+          .from("member_exercise_swaps")
+          .select("exercise_id")
+          .eq("enrollment_id", enrollmentId)
+          .eq("week_index", weekIndex)
+          .eq("day_index", dayIndex)
+          .eq("exercise_index", exerciseIndex)
+          .maybeSingle();
+        if (swap?.exercise_id) exId = swap.exercise_id as string;
+        if (exId) memberPayload.exercise_id = exId;
+      } catch {
+        // Non-fatal: leave exercise_id unset.
+      }
       if (statusOnly) {
         if (payload.completed_at) {
           memberPayload.logged_at = payload.completed_at;
