@@ -152,6 +152,9 @@ export function useClientCalendarSources(clientId: string | null | undefined) {
     queryKey: ["cal-client-workouts", clientId],
     enabled,
     queryFn: () => getClientWorkouts(clientId!),
+    staleTime: 0,
+    refetchOnWindowFocus: true,
+    refetchOnMount: "always",
   });
 
   const checkinsQ = useQuery({
