@@ -1,7 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
-import { supabaseAdmin } from "@/integrations/supabase/client.server"; // static — prevents cold-start delay
 
 /* ───── helpers ───── */
 
@@ -177,7 +176,7 @@ export const crmDashboardStats = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
     await assertAdmin(context);
-    // supabaseAdmin imported statically at top of file
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const now = new Date();
     const sevenDaysAgo = new Date(now.getTime() - 7 * 86400_000).toISOString();
     const thirtyDaysAgo = new Date(now.getTime() - 30 * 86400_000).toISOString();
@@ -309,7 +308,7 @@ export const listCrmContacts = createServerFn({ method: "POST" })
   .inputValidator((i: unknown) => listSchema.parse(i))
   .handler(async ({ data, context }) => {
     await assertAdmin(context);
-    // supabaseAdmin imported statically at top of file
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
     // last_contacted_at is enriched after the page is fetched, so when the user
     // sorts by it we fall back to created_at for the SQL ORDER BY and re-sort the
@@ -415,7 +414,7 @@ export const getCrmContact = createServerFn({ method: "POST" })
   .inputValidator((i: { id: string }) => z.object({ id: z.string().uuid() }).parse(i))
   .handler(async ({ data, context }) => {
     await assertAdmin(context);
-    // supabaseAdmin imported statically at top of file
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
     const { data: contact, error } = await supabaseAdmin
       .from("clients")
@@ -495,7 +494,7 @@ export const updateCrmContact = createServerFn({ method: "POST" })
   .inputValidator((i: unknown) => updateSchema.parse(i))
   .handler(async ({ data, context }) => {
     await assertAdmin(context);
-    // supabaseAdmin imported statically at top of file
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { id, ...patch } = data;
 
     // Guard: do not let a stage change grant access. We only set lifecycle.
@@ -541,7 +540,7 @@ export const addCrmNote = createServerFn({ method: "POST" })
   )
   .handler(async ({ data, context }) => {
     await assertAdmin(context);
-    // supabaseAdmin imported statically at top of file
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { error } = await supabaseAdmin.from("client_crm_activities").insert({
       client_id: data.id,
       activity_type: "note_added",
@@ -559,7 +558,7 @@ export const convertCrmContact = createServerFn({ method: "POST" })
   .inputValidator((i: unknown) => z.object({ id: z.string().uuid() }).parse(i))
   .handler(async ({ data, context }) => {
     await assertAdmin(context);
-    // supabaseAdmin imported statically at top of file
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
     const { data: c } = await supabaseAdmin
       .from("clients")
@@ -597,7 +596,7 @@ export const listCoachOptions = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
     await assertAdmin(context);
-    // supabaseAdmin imported statically at top of file
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { data } = await supabaseAdmin
       .from("coaches")
       .select("id, full_name, status, archived")
