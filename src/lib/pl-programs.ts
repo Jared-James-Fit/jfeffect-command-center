@@ -1068,6 +1068,12 @@ export async function setBlockEndDate(blockId: string, endDate: string | null) {
   if (error) throw error;
 }
 
+/** Set the prep end date manually. */
+export async function setPrepEndDate(prepId: string, endDate: string | null) {
+  const { error } = await sb.from("pl_preps").update({ end_date: endDate }).eq("id", prepId);
+  if (error) throw error;
+}
+
 /** Update per-week schedule fields (training days, est minutes, notes). */
 export async function updateWeekMeta(weekId: string, patch: Partial<{ training_days: string[]; est_minutes: number | null; notes: string }>) {
   const { error } = await sb.from("pl_weeks").update(patch).eq("id", weekId);
@@ -1171,11 +1177,11 @@ export async function setTemplateArchived(id: string, archived: boolean) {
 export async function listTemplateAssignments(templateId: string) {
   const [preps, blocks] = await Promise.all([
     (sb as any).from("pl_preps")
-      .select("id, title, client_id, created_at, status, archived, clients:clients(id, full_name)")
+      .select("id, title, client_id, created_at, status, archived, start_date, end_date, clients:clients(id, full_name)")
       .eq("source_template_id", templateId)
       .order("created_at", { ascending: false }),
     (sb as any).from("pl_blocks")
-      .select("id, name, client_id, prep_id, created_at, status, archived, clients:clients(id, full_name)")
+      .select("id, name, client_id, prep_id, created_at, status, archived, start_date, end_date, clients:clients(id, full_name)")
       .eq("source_template_id", templateId)
       .order("created_at", { ascending: false }),
   ]);
@@ -1189,13 +1195,15 @@ export async function listTemplateAssignments(templateId: string) {
     createdAt: string;
     status?: string | null;
     archived?: boolean;
+    startDate?: string | null;
+    endDate?: string | null;
   }> = [];
   for (const p of (preps.data ?? []) as any[]) {
-    rows.push({ kind: "prep", id: p.id, label: p.title, clientId: p.client_id, clientName: p.clients?.full_name ?? null, createdAt: p.created_at, status: p.status, archived: !!p.archived });
+    rows.push({ kind: "prep", id: p.id, label: p.title, clientId: p.client_id, clientName: p.clients?.full_name ?? null, createdAt: p.created_at, status: p.status, archived: !!p.archived, startDate: p.start_date ?? null, endDate: p.end_date ?? null });
   }
   for (const b of (blocks.data ?? []) as any[]) {
     // Skip blocks that belong to a prep already listed above to avoid double-counting full-prep assignments.
-    rows.push({ kind: "block", id: b.id, label: b.name, clientId: b.client_id, clientName: b.clients?.full_name ?? null, prepId: b.prep_id, createdAt: b.created_at, status: b.status, archived: !!b.archived });
+    rows.push({ kind: "block", id: b.id, label: b.name, clientId: b.client_id, clientName: b.clients?.full_name ?? null, prepId: b.prep_id, createdAt: b.created_at, status: b.status, archived: !!b.archived, startDate: b.start_date ?? null, endDate: b.end_date ?? null });
   }
   return rows;
 }

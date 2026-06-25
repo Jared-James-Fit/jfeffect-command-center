@@ -9,11 +9,14 @@ import { WarmupProtocolsAdmin } from "./warmup-protocols";
 import { AdminRecipes } from "./recipes";
 import { ProgramFinder, type FinderItem } from "@/components/programs/program-finder";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { listTemplates, listTemplateAssignments, deletePrep, deleteBlock } from "@/lib/pl-programs";
+import { listTemplates, listTemplateAssignments, deletePrep, deleteBlock, setBlockEndDate, setPrepEndDate } from "@/lib/pl-programs";
 import { supabase } from "@/integrations/supabase/client";
 import { validateTemplatePayload } from "@/lib/pl-template-validation";
 import { Button } from "@/components/ui/button";
-import { UserPlus, Users, Trash2, Pencil } from "lucide-react";
+import { UserPlus, Users, Trash2, Pencil, CalendarIcon } from "lucide-react";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { useAuth } from "@/lib/auth";
 
@@ -245,6 +248,15 @@ function AssignedClientsPanel({ templateId }: { templateId: string }) {
                 <span className="truncate text-[10px] text-muted-foreground">
                   {a.kind === "prep" ? "Prep" : "Block"} · {a.label}
                 </span>
+                <EndDateEditor
+                  assignment={a}
+                  canEdit={canUnassign}
+                  onSaved={() => {
+                    qc.invalidateQueries({ queryKey: ["pl-template-assignments", templateId] });
+                    qc.invalidateQueries({ queryKey: ["pl-preps", a.clientId] });
+                    qc.invalidateQueries({ queryKey: ["pl-blocks", a.clientId] });
+                  }}
+                />
                 {canUnassign && (
                   <Button
                     size="icon"
@@ -263,5 +275,88 @@ function AssignedClientsPanel({ templateId }: { templateId: string }) {
         </ul>
       )}
     </div>
+  );
+}
+
+function EndDateEditor({
+  assignment,
+  canEdit,
+  onSaved,
+}: {
+  assignment: any;
+  canEdit: boolean;
+  onSaved: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [value, setValue] = useState<string>(assignment.endDate ?? "");
+  const [saving, setSaving] = useState(false);
+  const label = assignment.endDate
+    ? `Ends ${assignment.endDate}`
+    : "Set end date";
+  const save = async (next: string | null) => {
+    setSaving(true);
+    try {
+      if (assignment.kind === "prep") await setPrepEndDate(assignment.id, next);
+      else await setBlockEndDate(assignment.id, next);
+      toast.success(next ? "End date updated" : "End date cleared");
+      onSaved();
+      setOpen(false);
+    } catch (e: any) {
+      toast.error(e?.message ?? "Could not update end date");
+    } finally {
+      setSaving(false);
+    }
+  };
+  if (!canEdit) {
+    return (
+      <span className="rounded border border-border bg-secondary/40 px-1.5 py-0.5 text-[10px] text-muted-foreground">
+        <CalendarIcon className="mr-1 inline h-3 w-3" />
+        {assignment.endDate ?? "No end date"}
+      </span>
+    );
+  }
+  return (
+    <Popover open={open} onOpenChange={(o) => { setOpen(o); if (o) setValue(assignment.endDate ?? ""); }}>
+      <PopoverTrigger asChild>
+        <Button
+          size="sm"
+          variant="outline"
+          className="h-6 gap-1 px-1.5 text-[10px]"
+          title={assignment.startDate ? `Starts ${assignment.startDate}` : undefined}
+        >
+          <CalendarIcon className="h-3 w-3" />
+          {label}
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-60 pointer-events-auto" align="end">
+        <div className="space-y-2">
+          <div className="text-[11px] text-muted-foreground">
+            {assignment.startDate ? `Starts ${assignment.startDate}` : "No start date"}
+          </div>
+          <div>
+            <Label className="text-xs">End date</Label>
+            <Input
+              type="date"
+              value={value}
+              onChange={(e) => setValue(e.target.value)}
+              min={assignment.startDate ?? undefined}
+            />
+          </div>
+          <div className="flex justify-between gap-2">
+            <Button
+              size="sm"
+              variant="ghost"
+              disabled={saving || !assignment.endDate}
+              onClick={() => save(null)}
+            >
+              Clear
+            </Button>
+            <Button size="sm" disabled={saving || !value} onClick={() => save(value)}>
+              Save
+            </Button>
+          </div>
+        </div>
+      </PopoverContent>
+    </Popover>
   );
 }

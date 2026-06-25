@@ -594,7 +594,9 @@ function AssignedToPanel({ templateId: _templateId, clients }: { templateId: str
               className="flex items-center justify-between rounded px-1 py-0.5 text-[11px] hover:bg-secondary/60"
             >
               <span className="truncate font-medium">{c.clientName ?? "Unknown client"}</span>
-              <span className="ml-2 shrink-0 text-[10px] text-muted-foreground">{c.kind === "prep" ? "Prep" : "Block"}</span>
+              <span className="ml-2 shrink-0 text-[10px] text-muted-foreground">
+                {c.endDate ? `ends ${c.endDate}` : c.kind === "prep" ? "Prep" : "Block"}
+              </span>
             </Link>
           </li>
         ))}
