@@ -1107,12 +1107,6 @@ function WorkoutDay({
     markInProgress();
   };
 
-  // Sticky general-notes shortcut: scroll to the bottom notes card and focus textarea
-  const generalNotesRef = useRef<HTMLDivElement>(null);
-  const focusGeneralNotes = () => {
-    generalNotesRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
-    setTimeout(() => generalNotesRef.current?.querySelector("textarea")?.focus(), 350);
-  };
 
   if (!day) {
     return (
