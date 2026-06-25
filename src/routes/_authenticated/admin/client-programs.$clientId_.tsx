@@ -127,6 +127,224 @@ function ClientProgramsPage() {
 }
 
 function BlocksSection({ blocks, templateLookup, onRefresh }: { blocks: any[]; templateLookup: any; onRefresh: () => void }) {
+  // (component continues below)
+  return _BlocksSectionImpl({ blocks, templateLookup, onRefresh });
+}
+
+function PrepsSection({
+  preps,
+  blocks,
+  templateLookup,
+  onRefresh,
+}: {
+  preps: any[];
+  blocks: any[];
+  templateLookup: any;
+  onRefresh: () => void;
+}) {
+  const { role } = useAuth();
+  const canDelete = role === "admin" || role === "coach";
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [busy, setBusy] = useState(false);
+  const [confirmSelected, setConfirmSelected] = useState(false);
+  const [confirmWipe, setConfirmWipe] = useState(false);
+
+  const ids = useMemo(() => preps.map((p) => p.id), [preps]);
+  const archivedIds = useMemo(
+    () => preps.filter((p) => p.status === "Archived" || p.status === "Completed").map((p) => p.id),
+    [preps],
+  );
+  const allChecked = ids.length > 0 && ids.every((id) => selected.has(id));
+  const someChecked = !allChecked && ids.some((id) => selected.has(id));
+
+  const toggleAll = (next: boolean) => setSelected(next ? new Set(ids) : new Set());
+  const toggleOne = (id: string, next: boolean) => {
+    setSelected((prev) => {
+      const copy = new Set(prev);
+      if (next) copy.add(id); else copy.delete(id);
+      return copy;
+    });
+  };
+
+  const runDelete = async (targetIds: string[]) => {
+    if (targetIds.length === 0) return;
+    setBusy(true);
+    let ok = 0;
+    let fail = 0;
+    for (const id of targetIds) {
+      try {
+        // Cascade: delete every block tied to this prep, then the prep.
+        const linked = blocks.filter((b) => b.prep_id === id).map((b) => b.id);
+        for (const bid of linked) {
+          try { await deleteBlock(bid); } catch (e) { console.error("deleteBlock failed", bid, e); }
+        }
+        await deletePrep(id);
+        ok++;
+      } catch (e: any) {
+        fail++;
+        console.error("deletePrep failed", id, e);
+      }
+    }
+    setBusy(false);
+    setSelected(new Set());
+    setConfirmSelected(false);
+    setConfirmWipe(false);
+    if (ok > 0) toast.success(`Deleted ${ok} prep${ok === 1 ? "" : "s"}`);
+    if (fail > 0) toast.error(`Failed to delete ${fail} prep${fail === 1 ? "" : "s"}`);
+    onRefresh();
+  };
+
+  return (
+    <section>
+      <h2 className="mb-3 text-sm font-bold uppercase tracking-widest text-muted-foreground">Preps / Phases</h2>
+      {preps.length === 0 ? (
+        <Card className="p-6 text-sm text-muted-foreground">No preps yet.</Card>
+      ) : (
+        <>
+          {canDelete && (
+            <div className="mb-2 flex flex-wrap items-center gap-2 rounded-md border border-border bg-muted/30 px-2.5 py-1.5">
+              <Checkbox
+                id="select-all-preps"
+                checked={allChecked ? true : someChecked ? "indeterminate" : false}
+                onCheckedChange={(v) => toggleAll(v === true)}
+                aria-label="Select all preps"
+              />
+              <label htmlFor="select-all-preps" className="cursor-pointer text-xs font-medium text-muted-foreground">
+                Select all
+              </label>
+              <span className="text-xs text-muted-foreground">
+                {selected.size > 0 ? `${selected.size} selected` : `${ids.length} total`}
+              </span>
+              <div className="ml-auto flex flex-wrap gap-2">
+                {selected.size > 0 && (
+                  <Button size="sm" variant="destructive" disabled={busy} onClick={() => setConfirmSelected(true)}>
+                    <Trash2 className="mr-1.5 h-3.5 w-3.5" />
+                    Delete selected ({selected.size})
+                  </Button>
+                )}
+                {archivedIds.length > 0 && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    disabled={busy}
+                    onClick={() => setConfirmWipe(true)}
+                    className="border-destructive/40 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                  >
+                    <Trash2 className="mr-1.5 h-3.5 w-3.5" />
+                    Delete all archived / completed ({archivedIds.length})
+                  </Button>
+                )}
+              </div>
+            </div>
+          )}
+          <div className="grid gap-3 md:grid-cols-2">
+            {preps.map((p) => {
+              const cd = countdownLabel(p.event_date);
+              const blocksInPrep = blocks.filter((b) => b.prep_id === p.id);
+              const isSelected = selected.has(p.id);
+              return (
+                <Card key={p.id} className="p-4">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex items-start gap-2">
+                      {canDelete && (
+                        <Checkbox
+                          checked={isSelected}
+                          onCheckedChange={(v) => toggleOne(p.id, v === true)}
+                          aria-label={`Select ${p.title}`}
+                          className="mt-1"
+                        />
+                      )}
+                      <div>
+                        <div className="font-bold text-lg">{p.title}</div>
+                        <div className="text-xs text-muted-foreground">{p.goal_type}</div>
+                        {p.source_template_id && (templateLookup as any)[p.source_template_id] && (
+                          <Link
+                            to="/admin/program-library/$templateId"
+                            params={{ templateId: p.source_template_id }}
+                            className="mt-1 inline-flex items-center gap-1 rounded border border-primary/30 bg-primary/5 px-1.5 py-0.5 text-[10px] text-primary hover:bg-primary/10"
+                          >
+                            <BookOpen className="h-2.5 w-2.5" /> From template: {(templateLookup as any)[p.source_template_id].name}
+                          </Link>
+                        )}
+                      </div>
+                    </div>
+                    <Select value={p.status} onValueChange={async (v) => { await updatePrep(p.id, { status: v as PrepStatus }); onRefresh(); toast.success(`Status: ${v}`); }}>
+                      <SelectTrigger className="h-7 w-28 text-xs"><SelectValue /></SelectTrigger>
+                      <SelectContent>{PREP_STATUSES.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent>
+                    </Select>
+                  </div>
+                  {p.event_name && (
+                    <div className="mt-2 text-sm">
+                      <Calendar className="mr-1 inline h-3 w-3" />{p.event_name}
+                      {p.event_date && <span className="text-muted-foreground"> · {p.event_date}</span>}
+                      {cd && <Badge className="ml-2" variant="secondary">{cd}</Badge>}
+                    </div>
+                  )}
+                  {p.total_weeks && (
+                    <div className="mt-1 text-xs text-muted-foreground">{p.total_weeks} weeks total · {blocksInPrep.length} block(s) programmed</div>
+                  )}
+                  <div className="mt-3 space-y-1">
+                    {blocksInPrep.map((b) => (
+                      <Link key={b.id} to="/admin/blocks/$blockId" params={{ blockId: b.id }} className="block rounded border border-border bg-secondary/30 p-2 text-sm hover:bg-secondary/50">
+                        <span className="font-semibold">{b.name}</span>
+                        <span className="ml-2 text-xs text-muted-foreground">{b.weeks}w · {b.training_focus ?? "—"}</span>
+                      </Link>
+                    ))}
+                    {blocksInPrep.length === 0 && <p className="text-xs italic text-muted-foreground">No blocks programmed yet.</p>}
+                  </div>
+                </Card>
+              );
+            })}
+          </div>
+        </>
+      )}
+
+      <AlertDialog open={confirmSelected} onOpenChange={(v) => !busy && setConfirmSelected(v)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete {selected.size} prep{selected.size === 1 ? "" : "s"}?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This permanently removes the selected preps/phases AND every block, week, day, exercise, and logged result inside them. This cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={busy}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={busy}
+              onClick={(e) => { e.preventDefault(); runDelete(Array.from(selected)); }}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {busy ? "Deleting…" : "Delete permanently"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={confirmWipe} onOpenChange={(v) => !busy && setConfirmWipe(v)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete ALL archived / completed preps?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This permanently removes every prep marked Archived or Completed for this client — including all blocks, weeks, days, exercises, and logged results. This cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={busy}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={busy}
+              onClick={(e) => { e.preventDefault(); runDelete(archivedIds); }}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {busy ? "Deleting…" : `Delete ${archivedIds.length} permanently`}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </section>
+  );
+}
+
+function _BlocksSectionImpl({ blocks, templateLookup, onRefresh }: { blocks: any[]; templateLookup: any; onRefresh: () => void }) {
   const today = new Date();
   const todayISO = today.toISOString().slice(0, 10);
   const isPrevious = (b: any) => {
