@@ -2670,9 +2670,8 @@ function SetRow({
   const { isImpersonating, client: povClient } = useClientImpersonation();
   const adapter = useOptionalAdapter();
   const qc = useQueryClient();
-  // Display weight is always shown in the active unit.
-  // existing stores normalized kg + lb columns (Stage 1 trigger keeps them in sync),
-  // plus the original actual_load/actual_load_unit pair. We pick whichever matches `unit`.
+  // Display weight is the raw value the client typed. The KG/LB toggle is
+  // display-only: it changes labels/preferences, never the saved number.
   // Helper to format a weight value for display — rounds to 4 sig figs and
   // strips trailing zeros to avoid showing '110.0001' instead of '110'.
   const fmtLoad = (v: number | null | undefined): string => {
@@ -2682,11 +2681,6 @@ function SetRow({
   };
   const initialDisplayLoad = (() => {
     if (!existing) return "";
-    const kg = existing.actual_load_kg;
-    const lb = existing.actual_load_lb;
-    if (unit === "kg" && kg != null) return fmtLoad(kg);
-    if (unit === "lb" && lb != null) return fmtLoad(lb);
-    // Fallback to raw actual_load when normalized columns aren't populated yet.
     return existing.actual_load != null ? fmtLoad(existing.actual_load) : "";
   })();
   const [load, setLoad] = useState(initialDisplayLoad);
@@ -2740,11 +2734,9 @@ function SetRow({
     setHydrated(true);
   }, [draftKey, hydrated, existing]);
 
-  // Reset from server when the persisted result changes (but never while typing)
-  // When the active unit toggles, convert the currently-displayed load value
-  // (typed or hydrated) instead of wiping it. Stored values are read back from
-  // the matching kg/lb column when the row reloads, so old logs are never
-  // corrupted — this only affects the in-progress UI value.
+  // Reset from server when the persisted result changes (but never while typing).
+  // Weight always hydrates from actual_load only. Normalized kg/lb columns are
+  // for analytics/history, not for changing the user's logged raw value.
   const lastUnitRef = useRef<"kg" | "lb">(unit);
   // Ref to the current focused field — used in the effect below without
   // causing the effect to re-run when focus changes.
@@ -2761,44 +2753,22 @@ function SetRow({
     // 8s covers: save latency + Realtime invalidation + window-focus refetch.
     const focused = focusedFieldRef.current;
     if (recentlySavedRef.current) return;
-    const kg = existing?.actual_load_kg;
-    const lb = existing?.actual_load_lb;
-    const display = unit === "kg"
-      ? (kg != null ? fmtLoad(kg) : (existing?.actual_load != null ? fmtLoad(existing.actual_load) : ""))
-      : (lb != null ? fmtLoad(lb) : (existing?.actual_load != null ? fmtLoad(existing.actual_load) : ""));
+    const display = existing?.actual_load != null ? fmtLoad(existing.actual_load) : "";
     if (focused !== "load") setLoad(display);
     if (focused !== "reps") setReps(existing?.actual_reps?.toString() ?? prescribedRepsStr);
     if (focused !== "rpe") setRpe(existing?.actual_rpe_num != null ? String(existing.actual_rpe_num) : (existing?.actual_rpe ?? prescribedRpeStr));
-    // Track the unit at the moment of (re)hydration so unit-conversion
-    // effect doesn't re-convert the freshly-set display value.
+    // Track the display unit at hydration so later preference changes can be
+    // recognized without touching the raw displayed load.
     lastUnitRef.current = unit;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [existing?.id, existing?.actual_load_kg, existing?.actual_load_lb, existing?.actual_load, existing?.actual_reps, existing?.actual_rpe_num, existing?.actual_rpe]);
+  }, [existing?.id, existing?.actual_load, existing?.actual_reps, existing?.actual_rpe_num, existing?.actual_rpe]);
 
   useEffect(() => {
     if (lastUnitRef.current === unit) return;
-    const from = lastUnitRef.current;
     lastUnitRef.current = unit;
-    setLoad((cur) => {
-      if (!cur) return cur;
-      // Prefer the matching column from the saved row — it's the exact value
-      // logged in the new unit, with no lossy rounding.
-      const fromExisting = unit === "kg"
-        ? (existing?.actual_load_kg ?? null)
-        : (existing?.actual_load_lb ?? null);
-      if (fromExisting != null) return fmtLoad(fromExisting);
-      const n = Number(cur);
-      if (!isFinite(n) || n === 0) return cur;
-      const converted = convertWeight(n, from, unit);
-      const step = weightIncrement(unit);
-      return fmtNum(Math.round(converted / step) * step);
-    });
-    // The KG/LB toggle is a *display* concern. The underlying weight has not
-    // changed, so the autosave baseline must adopt the converted display
-    // value without firing a save. Otherwise rounding to display step makes
-    // the value look "dirty" in kg-normalized terms and triggers a phantom
-    // save that can hang on a previously-aborted pooled transaction.
-    // Defer one tick so the setLoad above has flushed into `value`.
+    // Unit changes are preference/label only. Do not convert the displayed
+    // number and do not write pl_row_results; just adopt the current value as
+    // clean so the toggle cannot trigger an autosave.
     queueMicrotask(() => { saveRef.current?.markClean(); });
   }, [unit]);
 
@@ -2806,24 +2776,35 @@ function SetRow({
   // Forward-ref to the autosave handle so effects defined above can call
   // markClean() without a TDZ error.
   const saveRef = useRef<ReturnType<typeof useAutosave<typeof value>> | null>(null);
+  const persistedUnitForValue = (loadValue: string, nextUnit: "kg" | "lb"): "kg" | "lb" => {
+    const existingUnit =
+      existing?.entered_unit === "kg" || existing?.entered_unit === "lb"
+        ? existing.entered_unit
+        : existing?.actual_load_unit === "kg" || existing?.actual_load_unit === "lb"
+          ? existing.actual_load_unit
+          : null;
+    if (!existing) return nextUnit;
+    const nextLoad = loadValue ? Number(loadValue) : null;
+    const currentLoad = existing.actual_load != null ? Number(existing.actual_load) : null;
+    const loadUnchanged =
+      nextLoad == null && currentLoad == null
+        ? true
+        : nextLoad != null && currentLoad != null && Math.abs(nextLoad - currentLoad) < 0.0001;
+    // If the raw number did not change, preserve the original entered unit.
+    // This prevents reps/RPE/status edits after a display-unit toggle from
+    // rewriting actual_load_unit and causing database normalization to convert
+    // historical values under the wrong unit.
+    return loadUnchanged ? (existingUnit ?? nextUnit) : nextUnit;
+  };
   const save = useAutosave({
     key: draftKey,
     value,
     delay: 800, // 0.8 s — fast enough to save before user taps away on mobile
-    // Toggling KG/LB converts the displayed `load` but the underlying
-    // weight is unchanged. Compare in normalized kg so a unit toggle
-    // alone does not mark the set dirty / trigger a save loop.
+    // Unit-only changes are display/preference only. The raw typed load is
+    // the saved value, so the set row is dirty only when load/reps/RPE change.
     equals: (a, b) => {
       if (a.reps !== b.reps || a.rpe !== b.rpe) return false;
-      const toKg = (v: string, u: "kg" | "lb") => {
-        if (!v) return null;
-        const n = Number(v);
-        if (!isFinite(n)) return v; // fall back to string compare on garbage
-        return Math.round(convertWeight(n, u, "kg") * 1000) / 1000;
-      };
-      const ak = toKg(a.load, a.unit);
-      const bk = toKg(b.load, b.unit);
-      return ak === bk;
+      return a.load === b.load;
     },
     // NOTE: hydrated is intentionally excluded from this condition.
     // hydrated only gates the draft-restore optimization; it must not
@@ -2836,6 +2817,7 @@ function SetRow({
       const loadNum = value.load ? Number(value.load) : null;
       const repsNum = value.reps ? parseInt(value.reps, 10) : null;
       const rpeNum = value.rpe ? Number(value.rpe) : null;
+      const loadUnit = persistedUnitForValue(value.load, value.unit);
       enqueueOfflineWrite({
         id: `portal_set:${rowId}:${clientId}:${setIndex}`,
         label: `Saved set ${setIndex}`,
@@ -2848,9 +2830,9 @@ function SetRow({
             client_id: clientId,
             set_index: setIndex,
             actual_load: loadNum,
-            actual_load_unit: value.unit,
+            actual_load_unit: loadUnit,
             entered_value: loadNum,
-            entered_unit: value.unit,
+            entered_unit: loadUnit,
             actual_reps: repsNum,
             actual_rpe: value.rpe || null,
             actual_rpe_num: rpeNum,
@@ -2869,14 +2851,15 @@ function SetRow({
       if (load && (loadNum == null || !isFinite(loadNum) || loadNum < 0)) throw new Error("Weight must be a number");
       if (reps && (repsNum == null || !isFinite(repsNum) || repsNum < 0)) throw new Error("Reps must be a whole number");
       if (rpe && (rpeNum == null || !isFinite(rpeNum) || rpeNum < 0 || rpeNum > 10)) throw new Error("RPE must be 0–10");
+      const loadUnit = persistedUnitForValue(load, unit);
       const payload = {
         row_id: rowId,
         client_id: clientId,
         set_index: setIndex,
         actual_load: loadNum,
-        actual_load_unit: unit,
+        actual_load_unit: loadUnit,
         entered_value: loadNum,
-        entered_unit: unit,
+        entered_unit: loadUnit,
         actual_reps: repsNum,
         actual_rpe: rpe || null,
         actual_rpe_num: rpeNum,
@@ -2904,9 +2887,7 @@ function SetRow({
       // Snapshot "before" in the display unit so the audit diff is meaningful.
       const before = existing
         ? {
-            weight: unit === "kg"
-              ? (existing.actual_load_kg ?? existing.actual_load ?? null)
-              : (existing.actual_load_lb ?? existing.actual_load ?? null),
+            weight: existing.actual_load ?? null,
             reps: existing.actual_reps ?? null,
             rpe: existing.actual_rpe_num ?? existing.actual_rpe ?? null,
             unit: existing.actual_load_unit ?? null,
@@ -2950,7 +2931,7 @@ function SetRow({
           weight: loadNum,
           reps: repsNum,
           rpe: rpeNum,
-          unit,
+          unit: loadUnit,
           status: existing?.completed_at ? "completed" : "saved",
         };
         void writeSetEditAudit(before, after, {
@@ -3087,7 +3068,7 @@ function SetRow({
   };
   const copyPrevious = () => {
     if (!prevExisting) return;
-    const pkg = unit === "kg" ? (prevExisting.actual_load_kg ?? prevExisting.actual_load) : (prevExisting.actual_load_lb ?? prevExisting.actual_load);
+    const pkg = prevExisting.actual_load;
     if (pkg != null) setLoad(String(pkg));
     if (prevExisting.actual_reps != null) setReps(String(prevExisting.actual_reps));
     const prevRpe = prevExisting.actual_rpe_num ?? prevExisting.actual_rpe;
@@ -3370,9 +3351,7 @@ function SetRow({
     {/* Quick-fill chip row — Suggested values are visible but never auto-confirm */}
     {/* Copy Previous — compact secondary action for set 2+ */}
     {!readonly && !isConfirmed && setIndex > 1 && prevExisting?.completed_at && (() => {
-      const prevWeight = unit === "kg"
-        ? (prevExisting.actual_load_kg ?? prevExisting.actual_load)
-        : (prevExisting.actual_load_lb ?? prevExisting.actual_load);
+      const prevWeight = prevExisting.actual_load;
       if (prevWeight == null) return null;
       return (
         <div className="px-3 pb-1.5">
