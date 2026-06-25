@@ -78,7 +78,7 @@ export const listResources = createServerFn({ method: "POST" })
   }).parse(i))
   .handler(async ({ data, context }) => {
     await assertAdminOrMedia(context);
-    const cols = "id,folder_id,name,description,tags,storage_path,external_url,mime_type,file_size,thumbnail_path,created_by,created_at,updated_at";
+    const cols = "id,folder_id,name,description,tags,storage_path,external_url,mime_type,file_size,thumbnail_path,created_by,created_at,updated_at,is_favourite,is_archived,archived_at,provider,campaign_id,content_id,visibility";
     let q = context.supabase.from("media_resources").select(cols).order("created_at", { ascending: false });
     const term = (data.search ?? "").trim();
     if (term) {
