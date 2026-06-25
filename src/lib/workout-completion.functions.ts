@@ -18,6 +18,9 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+// Static import prevents cold-start delay on server function calls (2026-06-25)
+// Previously this was a dynamic import inside the handler which caused 5-15s delay
+import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import {
   summarizeCompleteness,
   type LoggedSetSpec,
@@ -672,7 +675,7 @@ export const submitOrEditReview = createServerFn({ method: "POST" })
       // pl_workout_feedback's INSERT/UPDATE policies are scoped to the client's
       // own auth.uid.
       const writer = usedOverride
-        ? (await import("@/integrations/supabase/client.server")).supabaseAdmin
+        ? supabaseAdmin
         : supabase;
       const { data: completion } = await supabase
         .from("pl_day_completions")
