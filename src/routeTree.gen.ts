@@ -94,6 +94,7 @@ import { Route as AuthenticatedMediaCalendarRouteImport } from './routes/_authen
 import { Route as AuthenticatedMediaBroadcastsRouteImport } from './routes/_authenticated/media/broadcasts'
 import { Route as AuthenticatedMediaAssetsRouteImport } from './routes/_authenticated/media/assets'
 import { Route as AuthenticatedMediaArchivesRouteImport } from './routes/_authenticated/media/archives'
+import { Route as AuthenticatedMediaArchiveRouteImport } from './routes/_authenticated/media/archive'
 import { Route as AuthenticatedMediaAnnouncementsRouteImport } from './routes/_authenticated/media/announcements'
 import { Route as AuthenticatedMediaActionItemsRouteImport } from './routes/_authenticated/media/action-items'
 import { Route as AuthenticatedMediaAccountRouteImport } from './routes/_authenticated/media/account'
@@ -739,6 +740,12 @@ const AuthenticatedMediaArchivesRoute =
   AuthenticatedMediaArchivesRouteImport.update({
     id: '/archives',
     path: '/archives',
+    getParentRoute: () => AuthenticatedMediaRouteRoute,
+  } as any)
+const AuthenticatedMediaArchiveRoute =
+  AuthenticatedMediaArchiveRouteImport.update({
+    id: '/archive',
+    path: '/archive',
     getParentRoute: () => AuthenticatedMediaRouteRoute,
   } as any)
 const AuthenticatedMediaAnnouncementsRoute =
@@ -1935,6 +1942,7 @@ export interface FileRoutesByFullPath {
   '/media/account': typeof AuthenticatedMediaAccountRoute
   '/media/action-items': typeof AuthenticatedMediaActionItemsRoute
   '/media/announcements': typeof AuthenticatedMediaAnnouncementsRoute
+  '/media/archive': typeof AuthenticatedMediaArchiveRoute
   '/media/archives': typeof AuthenticatedMediaArchivesRoute
   '/media/assets': typeof AuthenticatedMediaAssetsRoute
   '/media/broadcasts': typeof AuthenticatedMediaBroadcastsRoute
@@ -2198,6 +2206,7 @@ export interface FileRoutesByTo {
   '/media/account': typeof AuthenticatedMediaAccountRoute
   '/media/action-items': typeof AuthenticatedMediaActionItemsRoute
   '/media/announcements': typeof AuthenticatedMediaAnnouncementsRoute
+  '/media/archive': typeof AuthenticatedMediaArchiveRoute
   '/media/archives': typeof AuthenticatedMediaArchivesRoute
   '/media/assets': typeof AuthenticatedMediaAssetsRoute
   '/media/broadcasts': typeof AuthenticatedMediaBroadcastsRoute
@@ -2468,6 +2477,7 @@ export interface FileRoutesById {
   '/_authenticated/media/account': typeof AuthenticatedMediaAccountRoute
   '/_authenticated/media/action-items': typeof AuthenticatedMediaActionItemsRoute
   '/_authenticated/media/announcements': typeof AuthenticatedMediaAnnouncementsRoute
+  '/_authenticated/media/archive': typeof AuthenticatedMediaArchiveRoute
   '/_authenticated/media/archives': typeof AuthenticatedMediaArchivesRoute
   '/_authenticated/media/assets': typeof AuthenticatedMediaAssetsRoute
   '/_authenticated/media/broadcasts': typeof AuthenticatedMediaBroadcastsRoute
@@ -2738,6 +2748,7 @@ export interface FileRouteTypes {
     | '/media/account'
     | '/media/action-items'
     | '/media/announcements'
+    | '/media/archive'
     | '/media/archives'
     | '/media/assets'
     | '/media/broadcasts'
@@ -3001,6 +3012,7 @@ export interface FileRouteTypes {
     | '/media/account'
     | '/media/action-items'
     | '/media/announcements'
+    | '/media/archive'
     | '/media/archives'
     | '/media/assets'
     | '/media/broadcasts'
@@ -3270,6 +3282,7 @@ export interface FileRouteTypes {
     | '/_authenticated/media/account'
     | '/_authenticated/media/action-items'
     | '/_authenticated/media/announcements'
+    | '/_authenticated/media/archive'
     | '/_authenticated/media/archives'
     | '/_authenticated/media/assets'
     | '/_authenticated/media/broadcasts'
@@ -4071,6 +4084,13 @@ declare module '@tanstack/react-router' {
       path: '/archives'
       fullPath: '/media/archives'
       preLoaderRoute: typeof AuthenticatedMediaArchivesRouteImport
+      parentRoute: typeof AuthenticatedMediaRouteRoute
+    }
+    '/_authenticated/media/archive': {
+      id: '/_authenticated/media/archive'
+      path: '/archive'
+      fullPath: '/media/archive'
+      preLoaderRoute: typeof AuthenticatedMediaArchiveRouteImport
       parentRoute: typeof AuthenticatedMediaRouteRoute
     }
     '/_authenticated/media/announcements': {
@@ -5873,6 +5893,7 @@ interface AuthenticatedMediaRouteRouteChildren {
   AuthenticatedMediaAccountRoute: typeof AuthenticatedMediaAccountRoute
   AuthenticatedMediaActionItemsRoute: typeof AuthenticatedMediaActionItemsRoute
   AuthenticatedMediaAnnouncementsRoute: typeof AuthenticatedMediaAnnouncementsRoute
+  AuthenticatedMediaArchiveRoute: typeof AuthenticatedMediaArchiveRoute
   AuthenticatedMediaArchivesRoute: typeof AuthenticatedMediaArchivesRoute
   AuthenticatedMediaAssetsRoute: typeof AuthenticatedMediaAssetsRoute
   AuthenticatedMediaBroadcastsRoute: typeof AuthenticatedMediaBroadcastsRoute
@@ -5903,6 +5924,7 @@ const AuthenticatedMediaRouteRouteChildren: AuthenticatedMediaRouteRouteChildren
     AuthenticatedMediaAccountRoute: AuthenticatedMediaAccountRoute,
     AuthenticatedMediaActionItemsRoute: AuthenticatedMediaActionItemsRoute,
     AuthenticatedMediaAnnouncementsRoute: AuthenticatedMediaAnnouncementsRoute,
+    AuthenticatedMediaArchiveRoute: AuthenticatedMediaArchiveRoute,
     AuthenticatedMediaArchivesRoute: AuthenticatedMediaArchivesRoute,
     AuthenticatedMediaAssetsRoute: AuthenticatedMediaAssetsRoute,
     AuthenticatedMediaBroadcastsRoute: AuthenticatedMediaBroadcastsRoute,
