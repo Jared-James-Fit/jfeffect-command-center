@@ -3268,12 +3268,8 @@ function SetRow({
             recentlySavedRef.current = true;
             if (recentlySavedTimerRef.current) clearTimeout(recentlySavedTimerRef.current);
             recentlySavedTimerRef.current = setTimeout(() => { recentlySavedRef.current = false; }, 8000);
-            // Clear focus AFTER setting the guard so the server-reset effect
-            // (which checks focusedField) cannot fire between null-focus and save.
-            save.flush().finally(() => {
-              setFocusedField(null);
-              setRepsChipOpen(false);
-            });
+            setFocusedField(null);
+            setRepsChipOpen(false);
           }}
           readOnly={readonly}
           disabled={readonly}
@@ -3320,10 +3316,8 @@ function SetRow({
             recentlySavedRef.current = true;
             if (recentlySavedTimerRef.current) clearTimeout(recentlySavedTimerRef.current);
             recentlySavedTimerRef.current = setTimeout(() => { recentlySavedRef.current = false; }, 8000);
-            save.flush().finally(() => {
-              setFocusedField(null);
-              setRpeChipOpen(false);
-            });
+            setFocusedField(null);
+            setRpeChipOpen(false);
           }}
           readOnly={readonly} disabled={readonly}
         />
@@ -3365,7 +3359,7 @@ function SetRow({
           recentlySavedRef.current = true;
           if (recentlySavedTimerRef.current) clearTimeout(recentlySavedTimerRef.current);
           recentlySavedTimerRef.current = setTimeout(() => { recentlySavedRef.current = false; }, 8000);
-          save.flush().finally(() => { setFocusedField(null); });
+          setFocusedField(null);
         }}
         readOnly={readonly}
         disabled={readonly}
