@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { supabaseAdmin } from "@/integrations/supabase/client.server"; // static — prevents cold-start delay
 
 const GATEWAY_URL = "https://connector-gateway.lovable.dev/twilio";
 
@@ -265,7 +266,7 @@ export const runReminderSweepNow = createServerFn({ method: "POST" })
     const { supabase, userId } = context as any;
     const { data: roles } = await supabase.from("user_roles").select("role").eq("user_id", userId);
     if (!(roles ?? []).some((r: any) => r.role === "admin")) throw new Error("Admin only");
-    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    // supabaseAdmin imported statically at top of file
     return await runReminderSweep(supabaseAdmin);
   });
 
