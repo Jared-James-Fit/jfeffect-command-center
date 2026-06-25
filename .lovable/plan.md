@@ -1,45 +1,101 @@
-## Scope check first
 
-Before I build, two things in your request don't match what's in the repo. I need your call on each before touching code, otherwise I'll ship the wrong thing.
+# Phase 2 — Media Home, My Work, Tasks, Quick Notes, Eisenhower
 
-### 1. "Workout/program builder" — which builder(s)?
+Reuses the existing `tasks` table, `media_content_records`, the current `TasksPage` Eisenhower component, and `MediaHeader`. No duplicate task or note systems.
 
-You named three builders: admin program builder, client program builder, member program builder. The repo only has one:
+## 1. Database (non-destructive migration)
 
-- `src/components/program-builder.tsx` — used by the admin program library template editor and the admin blocks editor. There is no separate client builder or member builder; clients/members only **log** workouts, they don't build them.
-- The one place that actually uses `@dnd-kit` is the schedule calendar, not the program builder.
-- `program-builder.tsx` uses raw HTML5 drag (`onDragStart` / `onDragEnd` attributes), not a DnD library — which is exactly why the snap/drop feels imprecise on desktop and is unresponsive on touch (HTML5 drag has no touch support).
+Add to existing `public.tasks`:
+- `due_time time` (optional — paired with existing `due_at` date)
+- `important boolean default false`
+- `priority_label text` — `urgent | high | normal | low` (mirrors numeric `priority`)
+- `status_label text` — `not_started | in_progress | waiting | blocked | complete` (existing `status` open/done stays as source of truth; label adds intermediate states)
+- `campaign_id uuid null`
+- `linked_content_id uuid null references media_content_records(id) on delete set null`
+- `linked_asset_id uuid null`
+- `recurring_rule jsonb null` (RRULE-lite: `{freq, interval, until}`)
+- `archived_at timestamptz null`
 
-Fix plan for the builder:
-- Replace the HTML5 drag in `program-builder.tsx` with `@dnd-kit` (already installed) using `PointerSensor` + `TouchSensor` + `KeyboardSensor`, `closestCenter`, `verticalListSortingStrategy`, and a `DragOverlay` for the drop indicator.
-- Apply the same pattern to any other sort handles in the same file (exercises within a day, sets within an exercise, days within a week — whichever currently use HTML5 drag).
-- Add a visible drop indicator line between rows and a grab cursor on the handle; long-press activation on touch.
+New tables (small, additive):
+- `task_subtasks` — id, task_id (cascade), title, done, position
+- `task_comments` — id, task_id (cascade), author_id, body, created_at
+- `task_attachments` — id, task_id (cascade), file_url, file_name, mime_type, size_bytes
+- `media_quick_notes` — id, owner_id, title, body, pinned, archived, converted_to (task|draft|content_idea|null), converted_ref_id, updated_at (migrates the localStorage notes; existing local notes auto-import on first load)
+- `media_activity_events` — id, actor_id, kind (task_completed | content_submitted | content_approved | changes_requested | file_uploaded | campaign_updated | publish_date_changed), subject_type, subject_id, summary, created_at
 
-Confirm: **builder = `program-builder.tsx` only**, or do you also want me to find/build admin/client/member-specific builders that don't exist yet?
+All with GRANTs to `authenticated` + `service_role`, RLS scoped to admin/coach/media_manager (matches existing tasks policy). Existing rows untouched.
 
-### 2. "Three workout views" — there are only two
+## 2. Media Home — `/media`
 
-Routes that render `WorkoutDayView`:
-- `/_authenticated/portal/workouts.$dayId.tsx` (client logging) — uses `client-adapter`
-- `/_authenticated/m/workouts.$enrollmentId.$week.$day.tsx` (member logging) — uses `member-adapter`
+Rebuild `src/routes/_authenticated/media/index.tsx` as an action dashboard.
 
-There is **no** admin/coach route that renders `WorkoutDayView` for viewing a client's workout. The closest existing pages are `admin/clients.$id.tsx`, `admin/client-programs.$clientId_.tsx`, and `admin/client-pov.tsx` — none of them mount the shared workout view.
+Compact status card row (each links to a filtered route, real counts only):
+- Due Today → `/media/work?filter=today`
+- Overdue → `/media/work?filter=overdue`
+- Awaiting Review → `/media/inbox?filter=pending`
+- Changes Requested → `/media/inbox?filter=changes`
+- Ready to Publish → `/media/publishing?filter=ready`
+- Scheduled This Week → `/media/publishing?filter=week`
+- Unassigned → `/media/work?filter=unassigned`
+- Blocked → `/media/work?filter=blocked`
 
-Two options — pick one:
+Sections:
+1. **My Priorities** — top 8 of (overdue ∪ today ∪ important) for current user. Title, type, status, priority, due, campaign, assignee, Open, Complete.
+2. **Approval Queue** — `media_content_records` where reviewer = me AND approval_status = pending. Approve / Request Changes / Comment / Open.
+3. **Upcoming Content** — next 10 by `publish_date` ascending. Includes `events.event_date` merged in.
+4. **Needs Attention** — rule-based scan over `media_content_records` + `tasks`: missing final asset / caption / CTA / approval / publish_date / overdue tasks / unassigned / blocked.
+5. **Active Campaigns** — campaigns with `status = active`, with progress counts.
+6. **Recent Activity** — last 20 from `media_activity_events`.
 
-- **A. Parity across the two that exist.** Audit `client-adapter` vs `member-adapter` and make sure the shared `WorkoutDayView` exposes every feature (KG/LB toggle, exercise notes, exercise history, swap exercise, warm-up button, rest timer, quick fill, apply to remaining sets, set status checkmark, cues, How To video) in both. Anything gated only in one adapter gets enabled in the other. No new route.
-- **B. Also add an admin coach view.** Create `admin/clients.$id.workouts.$dayId.tsx` that renders `WorkoutDayView` through a new read/write `coach-adapter`, then do the parity audit across all three.
+Single server function `mediaHomeData()` returns all sections in one call. Empty states everywhere.
 
-Confirm: **A or B?**
+## 3. My Work — `/media/work`
 
-## What I'll do once you confirm
+Wrap existing `TasksPage` with a view switcher:
 
-Assuming **builder = `program-builder.tsx`** and **option A** for parity:
+- **List** (default) — segments: Overdue, Today, Upcoming, No Due Date, Completed. Quick-entry row (title only required; optional inline assignee/due/priority/linked-content). Bulk select (one/multi/all visible) → Assign, Due date, Priority, Status, Complete, Archive, Delete (confirmed). Each row shows status badge, priority pill, due-date warning color, assignee initials, campaign/content link.
+- **Board** — columns by status_label (Not Started · In Progress · Waiting · Blocked · Complete).
+- **Eisenhower** — renders existing `TasksPage` matrix unchanged.
+- **Calendar** — month grid keyed off `due_at`.
 
-1. Pull latest from GitHub (auto-sync) and verify build is green.
-2. Refactor drag-and-drop in `program-builder.tsx` to `@dnd-kit` with touch support, drop indicator, and a regression test that reorders two items and asserts the new order.
-3. Diff `client-adapter` vs `member-adapter` for the 11 features you listed, plus walk `WorkoutDayView` for any feature that's behind an adapter capability flag. Fill the gaps in whichever adapter is missing them — never remove.
-4. Manual verification on the preview for each route (drag a set, toggle KG/LB, open history, swap exercise, start rest timer, mark set complete, open How To, etc.).
-5. Report files changed and any feature that was already present in both.
+URL search params drive the view: `?view=list|board|eisenhower|calendar&filter=…`.
 
-Answer the two confirmations and I'll proceed.
+## 4. Quick Notes
+
+Migrate the existing localStorage Quick Notes panel to the new `media_quick_notes` table with autosave. First load detects local notes and upserts them (one-time, idempotent). Each note row supports: Edit, Pin, Archive, Delete, **Convert to Task / Draft / Content Idea** (creates the target record with note body as description and sets `converted_to` / `converted_ref_id`).
+
+## 5. Header
+
+Reuses the existing `MediaHeader` with the global `+ Create` menu already built in Phase 1.
+
+## Files
+
+New:
+- `src/lib/media-home.functions.ts` — `mediaHomeData()`
+- `src/lib/media-tasks.ts` — extended task helpers (subtasks/comments/attachments/bulk ops)
+- `src/lib/media-quick-notes.ts` + `.functions.ts`
+- `src/lib/media-activity.ts`
+- `src/components/media/home/*` — `StatusCards`, `MyPriorities`, `ApprovalQueue`, `UpcomingContent`, `NeedsAttention`, `ActiveCampaigns`, `RecentActivity`
+- `src/components/media/work/*` — `WorkListView`, `WorkBoardView`, `WorkCalendarView`, `QuickAddRow`, `BulkActionBar`, `TaskRow`
+- `src/components/media/quick-notes-panel.tsx` (DB-backed, replaces localStorage panel inside the Media scope only)
+
+Modified:
+- `src/routes/_authenticated/media/index.tsx` — rewritten as dashboard
+- `src/routes/_authenticated/media/work.tsx` — view switcher + URL search params
+
+Unchanged:
+- `src/lib/tasks.ts` (extended, not replaced)
+- `src/components/tasks/tasks-page.tsx` (used as the Eisenhower view)
+- Admin scope tasks page — keeps localStorage notes
+
+## Verification before stopping
+
+- Read existing tasks → still listed.
+- Read existing localStorage notes → imported on first Media load, then visible from DB.
+- Existing Eisenhower quadrant styles persist.
+- Create / assign / due-date / priority / link-to-content / complete / archive / convert flows manual-tested via Playwright.
+- All 8 home status cards open the correct filtered route.
+
+## Out of scope (Phase 3+)
+
+Pipeline Kanban features, Calendar building beyond the simple month view, Asset Library, Campaigns detail page, Performance analytics, Templates/Brand Kit.
