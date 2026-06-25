@@ -2795,7 +2795,7 @@ function SetRow({
   const save = useAutosave({
     key: draftKey,
     value,
-    delay: 800, // 0.8 s — fast enough to save before user taps away on mobile
+    delay: 3000, // 3 s — generous delay so typing is never interrupted by autosave
     // Unit-only changes are display/preference only. The raw typed load is
     // the saved value, so the set row is dirty only when load/reps/RPE change.
     equals: (a, b) => {
@@ -2810,7 +2810,11 @@ function SetRow({
     // CORRUPTION GUARD: serverHydrated must be true before autosave fires.
     // Prevents autosave from running on mount before server data arrives.
     // Root cause of weight corruption bug — fixed 2026-06-25. DO NOT remove.
-    enabled: !readonly && !!clientId && serverHydrated && (load.length > 0 || reps.length > 0 || rpe.length > 0 || !!existing),
+    //
+    // TYPING GUARD: never save while the user is actively typing in a field.
+    // The 3s delay handles most cases, but this ensures saves are blocked
+    // while focus is held regardless of timing.
+    enabled: !readonly && !!clientId && serverHydrated && !focusedField && (load.length > 0 || reps.length > 0 || rpe.length > 0 || !!existing),
     onPermanentFailure: ({ value }) => {
       if (!clientId) return;
       const loadNum = value.load ? Number(value.load) : null;
