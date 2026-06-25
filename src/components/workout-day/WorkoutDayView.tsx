@@ -2766,6 +2766,11 @@ function SetRow({
   useEffect(() => {
     if (lastUnitRef.current === unit) return;
     lastUnitRef.current = unit;
+    // UNIT TOGGLE IS DISPLAY-ONLY — stored weight must never be converted on
+    // toggle. Regression fix 2026-06-25. If you remove this, the weight
+    // corruption bug returns (stored values get divided/multiplied by 2.2046
+    // on every toggle via the pl_row_results normalization trigger).
+    //
     // Unit changes are preference/label only. Do not convert the displayed
     // number and do not write pl_row_results; just adopt the current value as
     // clean so the toggle cannot trigger an autosave.
