@@ -124,10 +124,10 @@ export function useAutosave<T>({
       reportedFailRef.current = false;
       setSavedAt(Date.now());
       clearDraft();
-      // If value changed mid-save, schedule another
+      // If value changed mid-save, leave it pending for the next explicit
+      // Save tap. Never schedule a follow-up write automatically.
       if (!equals(pendingValue.current, v)) {
         setState("idle");
-        schedule();
       } else {
         setState("saved");
       }
@@ -147,11 +147,6 @@ export function useAutosave<T>({
       inflight.current = false;
     }
   }, [equals, online, writeDraft, clearDraft, permanentFailureAfter, timeoutMs]);
-
-  const schedule = useCallback(() => {
-    if (timer.current) clearTimeout(timer.current);
-    timer.current = null;
-  }, []);
 
   // Track value changes for explicit manual saves only. Do not schedule any
   // backend writes from hydration, typing, unit toggles, reconnects, or refetches.

@@ -6,6 +6,7 @@ describe("emergency autosave lock", () => {
     const source = readFileSync("src/hooks/use-autosave.ts", "utf8");
 
     expect(source).not.toContain("setTimeout(() => { void doSave(); }");
+    expect(source).not.toContain("schedule();");
     expect(source).not.toContain("if (online && state === \"offline\") schedule()");
     expect(source).not.toContain("void doSave();\n    }\n  }, [doSave, equals]);");
   });
