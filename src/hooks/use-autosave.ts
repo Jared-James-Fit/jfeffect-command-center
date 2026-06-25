@@ -29,9 +29,10 @@ const DRAFT_PREFIX = "lov:draft:";
 const defaultEquals = <T,>(a: T, b: T) => JSON.stringify(a) === JSON.stringify(b);
 
 /**
- * Generic debounced autosave with local-draft mirror, offline queueing,
- * and exponential-backoff retry. Never disrupts typing — value is owned
- * by the caller; this hook only schedules background saves when it changes.
+ * Manual-save draft helper. Emergency safety lock 2026-06-25:
+ * this hook must not schedule background writes on value changes, mount,
+ * hydration, reconnect, failures, or unmount. Only explicit flush()/retry()
+ * calls may write to the backend.
  */
 export function useAutosave<T>({
   key,
@@ -134,10 +135,10 @@ export function useAutosave<T>({
       console.error("[useAutosave] save failed", err);
       setState("error");
       writeDraft(v);
-      // exponential backoff retry
+      // Manual-save mode: never retry in the background. Retrying requires an
+      // explicit user action via retry()/flush(). This prevents hydration/page
+      // load from repeatedly overwriting workout rows.
       retryAttempt.current = Math.min(retryAttempt.current + 1, 5);
-      const backoff = Math.min(1000 * 2 ** (retryAttempt.current - 1), 15000);
-      setTimeout(() => { void doSave(); }, backoff);
       if (retryAttempt.current >= permanentFailureAfter && !reportedFailRef.current) {
         reportedFailRef.current = true;
         try { onPermFailRef.current?.({ value: v, attempt: retryAttempt.current, error: err }); } catch {}
@@ -149,24 +150,20 @@ export function useAutosave<T>({
 
   const schedule = useCallback(() => {
     if (timer.current) clearTimeout(timer.current);
-    timer.current = setTimeout(() => { void doSave(); }, delay);
-  }, [doSave, delay]);
+    timer.current = null;
+  }, []);
 
-  // Schedule whenever value changes
+  // Track value changes for explicit manual saves only. Do not schedule any
+  // backend writes from hydration, typing, unit toggles, reconnects, or refetches.
   useEffect(() => {
     pendingValue.current = value;
-    if (!enabled) return;
     if (!lastSavedSet.current) {
-      // Baseline wasn't established at mount (unusual). Treat the current
-      // value as the synced baseline so we don't fire on first enable.
       lastSaved.current = value;
       lastSavedSet.current = true;
       return;
     }
-    if (equals(lastSaved.current, value)) return;
     writeDraft(value);
-    setState((s) => (s === "saving" ? s : "idle"));
-    schedule();
+    setState((s) => (s === "saving" || s === "error" || equals(lastSaved.current, value) ? s : "idle"));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [value, enabled]);
 
@@ -183,19 +180,15 @@ export function useAutosave<T>({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Retry when back online
+  // Reconnect must not trigger a save. Users retry manually.
   useEffect(() => {
-    if (online && state === "offline") schedule();
+    if (online && state === "offline") setState("idle");
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [online]);
 
-  // Flush on unmount if pending
+  // Never flush on unmount; unmount/page-load saves caused workout corruption.
   useEffect(() => () => {
     if (timer.current) clearTimeout(timer.current);
-    if (!equals(lastSaved.current, pendingValue.current)) {
-      // Best-effort fire-and-forget; we can't await in cleanup
-      void doSave();
-    }
   }, [doSave, equals]);
 
   const flush = useCallback(async () => {
