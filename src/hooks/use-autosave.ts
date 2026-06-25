@@ -180,8 +180,9 @@ export function useAutosave<T>({
     doSaveRef.current = doSave;
   }, [doSave]);
 
-  // Track value changes for explicit manual saves only. Do not persist anything
-  // from hydration, typing, unit toggles, reconnects, or refetches.
+  // Track value changes and schedule a save only when the caller says it is
+  // safe (`enabled`). Workout rows set enabled=false while an input has focus,
+  // so the save fires after the user stops typing AND leaves the field.
   useEffect(() => {
     pendingValue.current = value;
     if (!lastSavedSet.current) {
@@ -189,16 +190,22 @@ export function useAutosave<T>({
       lastSavedSet.current = true;
       return;
     }
-    // If the value changed, drop out of a sticky "error" state back to
-    // "idle" so the next flush() (e.g. onBlur) attempts a fresh save with
-    // the new value instead of being silently suppressed.
+    const dirty = !equals(lastSaved.current, value);
+    if (!dirty) {
+      if (timer.current) { clearTimeout(timer.current); timer.current = null; }
+      return;
+    }
     setState((s) => {
       if (s === "saving") return s;
-      if (equals(lastSaved.current, value)) return s;
       return "idle";
     });
+    if (!enabled) {
+      if (timer.current) { clearTimeout(timer.current); timer.current = null; }
+      return;
+    }
+    scheduleSave(delay);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [value, enabled]);
+  }, [value, enabled, delay, scheduleSave]);
 
   // Establish the synced baseline at mount, regardless of `enabled`. This
   // ensures bulk fills (e.g. "Copy Previous", "Quick Inputs") that flip
@@ -213,9 +220,15 @@ export function useAutosave<T>({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Reconnect must not trigger a save. Users retry manually.
+  // Reconnect should retry the latest dirty draft; otherwise a temporary
+  // offline state can leave the row stuck until the user edits it again.
   useEffect(() => {
-    if (online && state === "offline") setState("idle");
+    if (online && state === "offline") {
+      setState("idle");
+      if (lastSavedSet.current && !equals(lastSaved.current, pendingValue.current)) {
+        scheduleSave(0);
+      }
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [online]);
 
