@@ -1,7 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
-import { supabaseAdmin } from "@/integrations/supabase/client.server"; // static — prevents cold-start delay
 
 /**
  * Admin POV ("Preview as Member") system.
@@ -42,7 +41,7 @@ export const ensurePovSandbox = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
     const userId = await assertAdmin(context);
-    // supabaseAdmin imported statically at top of file
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
     // Already linked?
     const { data: existing } = await supabaseAdmin
@@ -83,7 +82,7 @@ export const setPovPersona = createServerFn({ method: "POST" })
   )
   .handler(async ({ data, context }) => {
     const userId = await assertAdmin(context);
-    // supabaseAdmin imported statically at top of file
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
     // Ensure sandbox exists.
     let { data: sandbox } = await supabaseAdmin
@@ -145,7 +144,7 @@ export const copyPovFromMember = createServerFn({ method: "POST" })
   )
   .handler(async ({ data, context }) => {
     const userId = await assertAdmin(context);
-    // supabaseAdmin imported statically at top of file
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
     const { data: src } = await supabaseAdmin
       .from("app_members")
