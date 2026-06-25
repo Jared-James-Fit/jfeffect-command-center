@@ -1081,6 +1081,26 @@ function WorkoutDay({
   const recapParam = search.recap === 1;
   const autoOpenedRecapRef = useRef(false);
   const recapFromSubmitRef = useRef(false);
+
+  // Build a summary from the current rows/results snapshot. Shared by the
+  // ?recap=1 deep-link, the post-submit celebration, and the "View Score"
+  // button on the completed workout page.
+  const openRecapSummary = () => {
+    const displayUnit: "kg" | "lb" =
+      ((client as any)?.preferred_weight_unit === "kg" ? "kg" : "lb");
+    const computed = computeWorkoutSummary(
+      rows as any[],
+      results as any[],
+      {
+        displayUnit,
+        hasNote: !!completion?.client_notes,
+      },
+    );
+    setLastSummary(computed);
+    recapFromSubmitRef.current = false;
+    setSummaryOpen(true);
+  };
+
   useEffect(() => {
     if (!recapParam) { autoOpenedRecapRef.current = false; return; }
     if (autoOpenedRecapRef.current) return;
@@ -1101,6 +1121,11 @@ function WorkoutDay({
     setLastSummary(computed);
     setSummaryOpen(true);
   }, [recapParam, completion?.completed_at, completion?.client_notes, rows, results, client]);
+
+  // Lock the background page while either overlay is open. Prevents the
+  // jump/glitch where the page scroll position shifts as Radix swaps
+  // scrollbar styles when the sheet/dialog mounts.
+  useBodyScrollLock(completeOpen || summaryOpen);
 
   const refreshNotes = () => {
     qc.invalidateQueries({ queryKey: ["pl-day-exercise-notes", dayId] });
