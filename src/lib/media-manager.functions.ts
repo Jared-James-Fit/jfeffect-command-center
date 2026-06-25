@@ -76,13 +76,12 @@ async function sendStaffInviteSms(opts: {
       return { sent: false, reason: `twilio_${res.status}` };
     }
     try {
-      await supabaseAdmin.from("sms_log").insert({
+      await (supabaseAdmin.from("sms_log") as any).insert({
         to_phone: toPhone,
-        from_phone: settings.from_phone,
         body,
-        provider_sid: data?.sid ?? null,
+        kind: "manual",
         status: "sent",
-        kind: "staff_invite",
+        twilio_sid: data?.sid ?? null,
       });
     } catch {}
     return { sent: true, sid: data?.sid };
