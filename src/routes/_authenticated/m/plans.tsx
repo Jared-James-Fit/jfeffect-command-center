@@ -268,8 +268,21 @@ function PlanLibrary() {
       </div>
 
       {isLoading ? null : matched.length === 0 ? (
-        <Card className="p-6 text-center text-sm text-muted-foreground">
-          No programs match. Try clearing filters or choosing a different category.
+        <Card className="space-y-3 p-6 text-center text-sm text-muted-foreground">
+          <div>
+            {effectiveCategory === "full_body"
+              ? "No full-body programs match these filters."
+              : "No programs match. Try clearing filters or choosing a different category."}
+          </div>
+          {(Object.keys(filters).length > 0 || q || effectiveCategory !== "all") && (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => { setFilters({}); setQ(""); setCategory("all"); }}
+            >
+              Clear filters
+            </Button>
+          )}
         </Card>
       ) : grouped ? (
         <div className="space-y-6">
