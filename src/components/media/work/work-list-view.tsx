@@ -321,6 +321,13 @@ function RowMenu({ task }: { task: ExtendedTaskRow }) {
   async function patch(p: any) {
     await (supabase.from("tasks") as any).update(p).eq("id", task.id);
     qc.invalidateQueries({ queryKey: ["media-tasks"] });
+    qc.invalidateQueries({ queryKey: ["media-calendar-content"] });
+  }
+  function dueIn(days: number) {
+    const d = new Date();
+    d.setHours(9, 0, 0, 0);
+    d.setDate(d.getDate() + days);
+    return patch({ due_at: d.toISOString() });
   }
   return (
     <DropdownMenu>
@@ -328,6 +335,11 @@ function RowMenu({ task }: { task: ExtendedTaskRow }) {
         <Button variant="ghost" size="icon" className="h-7 w-7"><MoreHorizontal className="h-4 w-4" /></Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-52">
+        <div className="px-2 py-1 text-[10px] uppercase tracking-widest text-muted-foreground">Due date</div>
+        <DropdownMenuItem onClick={() => dueIn(0)}><CalendarIcon className="mr-2 h-4 w-4" />Today</DropdownMenuItem>
+        <DropdownMenuItem onClick={() => dueIn(1)}><CalendarIcon className="mr-2 h-4 w-4" />Tomorrow</DropdownMenuItem>
+        <DropdownMenuItem onClick={() => dueIn(7)}><CalendarIcon className="mr-2 h-4 w-4" />Next week</DropdownMenuItem>
+        <DropdownMenuItem onClick={() => patch({ due_at: null })}><X className="mr-2 h-4 w-4" />Clear due date</DropdownMenuItem>
         <div className="px-2 py-1 text-[10px] uppercase tracking-widest text-muted-foreground">Priority</div>
         {PRIORITY_LABELS.map((p) => (
           <DropdownMenuItem key={p.value} onClick={() => patch({ priority_label: p.value })}>{p.label}</DropdownMenuItem>
