@@ -1092,6 +1092,18 @@ function WorkoutDay({
           (x: any) => String(x.row_id) === s.rowId && (x.set_index ?? 0) === s.setIndex,
         );
         if (!raw?.completed_at) continue;
+        // A set is only "done" if it actually has the values its kind requires.
+        // A green completed_at flag without a weight / duration / reps does not
+        // count — otherwise blank sets show up as completed in the status bar.
+        const kind = required.find((r) => r.rowId === s.rowId)?.metricKind ?? "load_reps";
+        const num = (v: any) => v != null && Number.isFinite(Number(v)) && Number(v) > 0;
+        const meaningful =
+          kind === "timed"
+            ? num(s.completedDurationSeconds)
+            : kind === "bodyweight"
+              ? num(s.reps)
+              : num(s.reps) && (num(s.loadLb) || num(s.loadKg));
+        if (!meaningful) continue;
         loggedByRow.set(s.rowId, (loggedByRow.get(s.rowId) ?? 0) + 1);
       }
       let exercisesDone = 0;
@@ -3003,7 +3015,21 @@ function SetRow({
 
   // State labels: Suggested (no draft, no confirm), Draft (typed but not all valid yet
   // OR explicitly saved with completed_at=null), Confirmed (existing.completed_at set).
-  const isConfirmed = Boolean(existing?.completed_at);
+  // A set is "confirmed" (green) only when completed_at is set AND the row
+  // actually has the value its kind requires. Without this guard, sets that
+  // were marked complete with no weight (legacy data, fat-finger taps, or
+  // status-only saves) render as fully logged green rows even though the WT
+  // column is blank. Applies app-wide for every client.
+  const isTimeKind = measurementType === "time";
+  const existingLoadNum = existing?.actual_load != null ? Number(existing.actual_load) : NaN;
+  const existingDurNum = (existing as any)?.completed_duration_seconds != null ? Number((existing as any).completed_duration_seconds) : NaN;
+  const existingRepsNum = existing?.actual_reps != null ? Number(existing.actual_reps) : NaN;
+  const hasLoggedValue = isTimeKind
+    ? Number.isFinite(existingDurNum) && existingDurNum > 0
+    : hideWeight
+      ? Number.isFinite(existingRepsNum) && existingRepsNum > 0
+      : Number.isFinite(existingLoadNum) && existingLoadNum > 0;
+  const isConfirmed = Boolean(existing?.completed_at) && hasLoggedValue;
   // hasAnyEntry only counts weight (the field the client must enter) and
   // manually-edited reps/RPE. Pre-filled prescription values do NOT count
   // as draft data — otherwise every unlogged set shows the amber border.
