@@ -49,6 +49,7 @@ import { useAuth } from "@/lib/auth";
 import { useClientImpersonation } from "@/lib/client-impersonation";
 import { writeSetEditAudit } from "@/lib/logged-set-audit";
 import { resolveExerciseUnit, modeUnit, saveExerciseUnitPref, type WUnit } from "@/lib/exercise-unit-prefs";
+import { persistedUnitForValue } from "@/lib/workout-unit-persistence";
 import { WorkoutUndoProvider, useWorkoutUndo, UndoButton } from "@/lib/workout-undo";
 import { WorkoutSyncBanner } from "@/components/workout-sync-banner";
 import { writePlanCache, cachedInitialData } from "@/lib/workout-plan-cache";
@@ -2766,6 +2767,11 @@ function SetRow({
   useEffect(() => {
     if (lastUnitRef.current === unit) return;
     lastUnitRef.current = unit;
+    // UNIT TOGGLE IS DISPLAY-ONLY — stored weight must never be converted on
+    // toggle. Regression fix 2026-06-25. If you remove this, the weight
+    // corruption bug returns (stored values get divided/multiplied by 2.2046
+    // on every toggle via the pl_row_results normalization trigger).
+    //
     // Unit changes are preference/label only. Do not convert the displayed
     // number and do not write pl_row_results; just adopt the current value as
     // clean so the toggle cannot trigger an autosave.
@@ -2776,26 +2782,8 @@ function SetRow({
   // Forward-ref to the autosave handle so effects defined above can call
   // markClean() without a TDZ error.
   const saveRef = useRef<ReturnType<typeof useAutosave<typeof value>> | null>(null);
-  const persistedUnitForValue = (loadValue: string, nextUnit: "kg" | "lb"): "kg" | "lb" => {
-    const existingUnit =
-      existing?.entered_unit === "kg" || existing?.entered_unit === "lb"
-        ? existing.entered_unit
-        : existing?.actual_load_unit === "kg" || existing?.actual_load_unit === "lb"
-          ? existing.actual_load_unit
-          : null;
-    if (!existing) return nextUnit;
-    const nextLoad = loadValue ? Number(loadValue) : null;
-    const currentLoad = existing.actual_load != null ? Number(existing.actual_load) : null;
-    const loadUnchanged =
-      nextLoad == null && currentLoad == null
-        ? true
-        : nextLoad != null && currentLoad != null && Math.abs(nextLoad - currentLoad) < 0.0001;
-    // If the raw number did not change, preserve the original entered unit.
-    // This prevents reps/RPE/status edits after a display-unit toggle from
-    // rewriting actual_load_unit and causing database normalization to convert
-    // historical values under the wrong unit.
-    return loadUnchanged ? (existingUnit ?? nextUnit) : nextUnit;
-  };
+  // persistedUnitForValue is a pure helper — see src/lib/workout-unit-persistence.ts
+  // for the full contract and regression-test coverage.
   const save = useAutosave({
     key: draftKey,
     value,
@@ -2817,7 +2805,7 @@ function SetRow({
       const loadNum = value.load ? Number(value.load) : null;
       const repsNum = value.reps ? parseInt(value.reps, 10) : null;
       const rpeNum = value.rpe ? Number(value.rpe) : null;
-      const loadUnit = persistedUnitForValue(value.load, value.unit);
+      const loadUnit = persistedUnitForValue(value.load, value.unit, existing);
       enqueueOfflineWrite({
         id: `portal_set:${rowId}:${clientId}:${setIndex}`,
         label: `Saved set ${setIndex}`,
@@ -2851,7 +2839,7 @@ function SetRow({
       if (load && (loadNum == null || !isFinite(loadNum) || loadNum < 0)) throw new Error("Weight must be a number");
       if (reps && (repsNum == null || !isFinite(repsNum) || repsNum < 0)) throw new Error("Reps must be a whole number");
       if (rpe && (rpeNum == null || !isFinite(rpeNum) || rpeNum < 0 || rpeNum > 10)) throw new Error("RPE must be 0–10");
-      const loadUnit = persistedUnitForValue(load, unit);
+      const loadUnit = persistedUnitForValue(load, unit, existing);
       const payload = {
         row_id: rowId,
         client_id: clientId,
