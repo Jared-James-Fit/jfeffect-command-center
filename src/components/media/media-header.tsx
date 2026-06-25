@@ -1,4 +1,4 @@
-import { ReactNode, useState } from "react";
+import { ReactNode, useEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "@tanstack/react-router";
 import {
   Bell, Search, Upload, Plus, FileText, ListChecks, Megaphone, Link as LinkIcon,
@@ -10,6 +10,8 @@ import {
   DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem,
   DropdownMenuSeparator, DropdownMenuLabel,
 } from "@/components/ui/dropdown-menu";
+import { Popover, PopoverContent, PopoverAnchor } from "@/components/ui/popover";
+import { searchMediaWorkspace, KIND_LABEL, type SearchHit } from "@/lib/media-global-search";
 
 /**
  * Shared Media Manager page header (Phase 1 foundation).
@@ -31,14 +33,26 @@ export function MediaHeader({
 }) {
   const navigate = useNavigate();
   const [query, setQuery] = useState("");
+  const [open, setOpen] = useState(false);
+  const [hits, setHits] = useState<SearchHit[]>([]);
+  const [busy, setBusy] = useState(false);
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  function onSearchSubmit(e: React.FormEvent) {
-    e.preventDefault();
+  useEffect(() => {
+    if (timer.current) clearTimeout(timer.current);
     const q = query.trim();
-    if (!q) return;
-    // Phase 1: deep-link to the Content Library with the query in URL state.
-    navigate({ to: "/media/content", search: { tab: "library" } as any });
-  }
+    if (q.length < 2) { setHits([]); setBusy(false); return; }
+    setBusy(true);
+    timer.current = setTimeout(async () => {
+      try { setHits(await searchMediaWorkspace(q)); }
+      finally { setBusy(false); }
+    }, 250);
+    return () => { if (timer.current) clearTimeout(timer.current); };
+  }, [query]);
+
+  const grouped = hits.reduce<Record<string, SearchHit[]>>((acc, h) => {
+    (acc[h.kind] ||= []).push(h); return acc;
+  }, {});
 
   return (
     <header className="mb-4 border-b pb-4">
@@ -50,16 +64,55 @@ export function MediaHeader({
           )}
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <form onSubmit={onSearchSubmit} className="relative">
-            <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search Media Manager…"
-              className="h-9 w-56 pl-8"
-              aria-label="Search Media Manager"
-            />
-          </form>
+          <Popover open={open && query.trim().length >= 2} onOpenChange={setOpen}>
+            <PopoverAnchor asChild>
+              <div className="relative">
+                <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  value={query}
+                  onChange={(e) => { setQuery(e.target.value); setOpen(true); }}
+                  onFocus={() => setOpen(true)}
+                  placeholder="Search content, tasks, assets…"
+                  className="h-9 w-56 pl-8 md:w-72"
+                  aria-label="Search Media Manager"
+                />
+              </div>
+            </PopoverAnchor>
+            <PopoverContent
+              align="end"
+              className="w-[min(28rem,calc(100vw-2rem))] p-0"
+              onOpenAutoFocus={(e) => e.preventDefault()}
+            >
+              <div className="max-h-[60vh] overflow-y-auto p-1">
+                {busy && <div className="p-3 text-xs text-muted-foreground">Searching…</div>}
+                {!busy && hits.length === 0 && (
+                  <div className="p-3 text-xs text-muted-foreground">No matches.</div>
+                )}
+                {Object.entries(grouped).map(([kind, list]) => (
+                  <div key={kind} className="py-1">
+                    <div className="px-2 pb-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                      {KIND_LABEL[kind as SearchHit["kind"]]}
+                    </div>
+                    {list.map((h) => (
+                      <button
+                        key={`${h.kind}-${h.id}`}
+                        onClick={() => {
+                          setOpen(false); setQuery("");
+                          navigate({ to: h.to as any });
+                        }}
+                        className="block w-full rounded px-2 py-1.5 text-left text-sm hover:bg-muted"
+                      >
+                        <div className="truncate font-medium">{h.title}</div>
+                        {h.subtitle && (
+                          <div className="truncate text-[11px] text-muted-foreground">{h.subtitle}</div>
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                ))}
+              </div>
+            </PopoverContent>
+          </Popover>
           <Button asChild variant="outline" size="sm" aria-label="Notifications">
             <Link to="/notifications"><Bell className="mr-1.5 h-4 w-4" />Notifications</Link>
           </Button>
