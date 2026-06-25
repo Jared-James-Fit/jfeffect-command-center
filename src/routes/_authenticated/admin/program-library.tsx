@@ -1151,7 +1151,7 @@ function TemplateTreeView({ tpl }: { tpl: any }) {
 }
 
 // ------- Assign dialog with placement -------
-function AssignDialog({ template, onClose }: { template: any; onClose: () => void }) {
+export function AssignDialog({ template, onClose }: { template: any; onClose: () => void }) {
   const qc = useQueryClient();
   const navigate = useNavigate();
   const [clientId, setClientId] = useState<string>("");
