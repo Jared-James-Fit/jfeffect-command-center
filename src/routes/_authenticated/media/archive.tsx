@@ -34,7 +34,8 @@ const TABLES: Record<Kind, { table: string; flag: "archived" | "is_archived" | "
 
 function ArchivePage() {
   const [kind, setKind] = useState<Kind>("content");
-  const { isAdmin } = useAuth();
+  const { role } = useAuth();
+  const canDelete = role === "admin";
   return (
     <div className="mx-auto w-full max-w-6xl p-4 md:p-6">
       <MediaHeader
@@ -49,7 +50,7 @@ function ArchivePage() {
         </TabsList>
         {(Object.keys(TABLES) as Kind[]).map((k) => (
           <TabsContent key={k} value={k} className="mt-4">
-            <ArchiveList kind={k} canDelete={!!isAdmin} />
+            <ArchiveList kind={k} canDelete={canDelete} />
           </TabsContent>
         ))}
       </Tabs>
@@ -63,7 +64,8 @@ function ArchiveList({ kind, canDelete }: { kind: Kind; canDelete: boolean }) {
   const { data, isLoading } = useQuery({
     queryKey: ["media-archive", kind],
     queryFn: async () => {
-      let q = (supabase.from(cfg.table) as any)
+      const db: any = supabase;
+      let q = db.from(cfg.table)
         .select(`id, ${cfg.title}${cfg.subtitle ? `, ${cfg.subtitle}` : ""}, updated_at`)
         .order("updated_at", { ascending: false })
         .limit(200);
@@ -75,14 +77,14 @@ function ArchiveList({ kind, canDelete }: { kind: Kind; canDelete: boolean }) {
 
   async function restore(id: string) {
     const payload = cfg.flag === "archived_at" ? { archived_at: null } : { [cfg.flag]: false };
-    const { error } = await (supabase.from(cfg.table) as any).update(payload).eq("id", id);
+    const { error } = await ((supabase as any).from(cfg.table)).update(payload).eq("id", id);
     if (error) return toast.error(error.message);
     toast.success("Restored");
     qc.invalidateQueries({ queryKey: ["media-archive", kind] });
   }
 
   async function hardDelete(id: string) {
-    const { error } = await (supabase.from(cfg.table) as any).delete().eq("id", id);
+    const { error } = await ((supabase as any).from(cfg.table)).delete().eq("id", id);
     if (error) return toast.error(error.message);
     toast.success("Permanently deleted");
     qc.invalidateQueries({ queryKey: ["media-archive", kind] });
