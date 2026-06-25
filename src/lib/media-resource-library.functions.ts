@@ -242,3 +242,163 @@ export const deleteComment = createServerFn({ method: "POST" })
     if (error) throw new Error(error.message);
     return { ok: true };
   });
+
+/* ------------- bulk + archive + folder ops ------------- */
+
+async function assertAdmin(ctx: any) {
+  const { data } = await ctx.supabase.rpc("has_role", { _user_id: ctx.userId, _role: "admin" });
+  if (!data) throw new Error("Admins only");
+}
+
+export const toggleFavourite = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((i: unknown) => z.object({ ids: z.array(z.string().uuid()).min(1), value: z.boolean() }).parse(i))
+  .handler(async ({ data, context }) => {
+    await assertAdminOrMedia(context);
+    const { error } = await context.supabase.from("media_resources")
+      .update({ is_favourite: data.value } as any).in("id", data.ids);
+    if (error) throw new Error(error.message);
+    return { ok: true };
+  });
+
+export const setArchived = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((i: unknown) => z.object({ ids: z.array(z.string().uuid()).min(1), value: z.boolean() }).parse(i))
+  .handler(async ({ data, context }) => {
+    await assertAdminOrMedia(context);
+    const patch: any = data.value
+      ? { is_archived: true, archived_at: new Date().toISOString() }
+      : { is_archived: false, archived_at: null };
+    const { error } = await context.supabase.from("media_resources").update(patch).in("id", data.ids);
+    if (error) throw new Error(error.message);
+    return { ok: true };
+  });
+
+export const moveResources = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((i: unknown) => z.object({
+    ids: z.array(z.string().uuid()).min(1),
+    folder_id: z.string().uuid().nullable(),
+  }).parse(i))
+  .handler(async ({ data, context }) => {
+    await assertAdminOrMedia(context);
+    const { error } = await context.supabase.from("media_resources")
+      .update({ folder_id: data.folder_id } as any).in("id", data.ids);
+    if (error) throw new Error(error.message);
+    return { ok: true };
+  });
+
+export const addTagsBulk = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((i: unknown) => z.object({
+    ids: z.array(z.string().uuid()).min(1),
+    tags: z.array(z.string().min(1).max(40)).min(1),
+  }).parse(i))
+  .handler(async ({ data, context }) => {
+    await assertAdminOrMedia(context);
+    const norm = data.tags.map((t) => t.trim().toLowerCase()).filter(Boolean);
+    const { data: rows } = await context.supabase.from("media_resources")
+      .select("id, tags").in("id", data.ids);
+    for (const r of rows ?? []) {
+      const merged = Array.from(new Set([...(r.tags ?? []), ...norm]));
+      await context.supabase.from("media_resources").update({ tags: merged } as any).eq("id", r.id);
+    }
+    return { ok: true };
+  });
+
+export const linkResources = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((i: unknown) => z.object({
+    ids: z.array(z.string().uuid()).min(1),
+    content_id: z.string().uuid().nullable().optional(),
+    campaign_id: z.string().uuid().nullable().optional(),
+  }).parse(i))
+  .handler(async ({ data, context }) => {
+    await assertAdminOrMedia(context);
+    const patch: any = {};
+    if (data.content_id !== undefined) patch.content_id = data.content_id;
+    if (data.campaign_id !== undefined) patch.campaign_id = data.campaign_id;
+    if (Object.keys(patch).length === 0) return { ok: true };
+    const { error } = await context.supabase.from("media_resources").update(patch).in("id", data.ids);
+    if (error) throw new Error(error.message);
+    return { ok: true };
+  });
+
+export const deleteResourcesBulk = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((i: unknown) => z.object({ ids: z.array(z.string().uuid()).min(1) }).parse(i))
+  .handler(async ({ data, context }) => {
+    await assertAdmin(context);
+    const { data: rows } = await context.supabase
+      .from("media_resources").select("id, storage_path, thumbnail_path").in("id", data.ids);
+    const paths = (rows ?? []).flatMap((r: any) => [r.storage_path, r.thumbnail_path]).filter(Boolean) as string[];
+    if (paths.length) {
+      const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+      await supabaseAdmin.storage.from(BUCKET).remove(paths);
+    }
+    const { error } = await context.supabase.from("media_resources").delete().in("id", data.ids);
+    if (error) throw new Error(error.message);
+    return { ok: true, count: data.ids.length };
+  });
+
+/* folder ops */
+
+export const archiveFolder = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((i: unknown) => z.object({
+    id: z.string().uuid(),
+    value: z.boolean(),
+    archiveContents: z.boolean().default(false),
+  }).parse(i))
+  .handler(async ({ data, context }) => {
+    await assertAdminOrMedia(context);
+    const patch: any = data.value
+      ? { is_archived: true, archived_at: new Date().toISOString() }
+      : { is_archived: false, archived_at: null };
+    const { error } = await context.supabase.from("media_resource_folders").update(patch).eq("id", data.id);
+    if (error) throw new Error(error.message);
+    if (data.archiveContents) {
+      await context.supabase.from("media_resources")
+        .update({ is_archived: data.value, archived_at: data.value ? new Date().toISOString() : null } as any)
+        .eq("folder_id", data.id);
+    }
+    return { ok: true };
+  });
+
+export const deleteFolderSafe = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((i: unknown) => z.object({
+    id: z.string().uuid(),
+    mode: z.enum(["unfile", "move", "archive", "force"]),
+    target_folder_id: z.string().uuid().nullable().optional(),
+  }).parse(i))
+  .handler(async ({ data, context }) => {
+    await assertAdminOrMedia(context);
+    const { count } = await context.supabase
+      .from("media_resources").select("id", { count: "exact", head: true }).eq("folder_id", data.id);
+    const hasContents = (count ?? 0) > 0;
+
+    if (hasContents) {
+      if (data.mode === "archive") {
+        await context.supabase.from("media_resources")
+          .update({ is_archived: true, archived_at: new Date().toISOString() } as any)
+          .eq("folder_id", data.id);
+        await context.supabase.from("media_resource_folders")
+          .update({ is_archived: true, archived_at: new Date().toISOString() } as any)
+          .eq("id", data.id);
+        return { ok: true, archived: true };
+      }
+      if (data.mode === "move" && data.target_folder_id) {
+        await context.supabase.from("media_resources")
+          .update({ folder_id: data.target_folder_id } as any).eq("folder_id", data.id);
+      } else if (data.mode === "unfile") {
+        await context.supabase.from("media_resources")
+          .update({ folder_id: null } as any).eq("folder_id", data.id);
+      } else if (data.mode !== "force") {
+        throw new Error("Folder is not empty");
+      }
+    }
+    const { error } = await context.supabase.from("media_resource_folders").delete().eq("id", data.id);
+    if (error) throw new Error(error.message);
+    return { ok: true };
+  });
