@@ -970,9 +970,9 @@ function AddSharedLinkDialog({
         mime_type: null,
         file_size: null,
         thumbnail_path: null,
+        provider,
+        visibility,
       } as any });
-      // Stamp provider + visibility (not in base validator, so do via update)
-      // The list refresh will pick them up.
       onOpenChange(false);
       toast.success("Shared link added");
       onSaved();
