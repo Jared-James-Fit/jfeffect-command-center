@@ -584,12 +584,16 @@ export function createMemberAdapter(ref: WorkoutContextRef): WorkoutContextAdapt
           : payload.actual_rpe != null && payload.actual_rpe !== ""
             ? Number(payload.actual_rpe)
             : null;
+      const statusOnly =
+        Object.keys(payload).every((key) =>
+          ["row_id", "client_id", "set_index", "completed_at", "week_index", "day_index"].includes(key),
+        );
       // Decode week/day from the encoded id when updating; fall back to
       // payload.week_index/day_index for inserts (caller sets them when
       // calling from the member route).
       let weekIndex: number;
       let dayIndex: number;
-      if (id) {
+      if (id && /^mlog:\d+:\d+:\d+:\d+$/.test(id)) {
         const dec = decodeRowResultId(id);
         weekIndex = dec.weekIndex;
         dayIndex = dec.dayIndex;
@@ -608,6 +612,16 @@ export function createMemberAdapter(ref: WorkoutContextRef): WorkoutContextAdapt
         day_index: dayIndex,
         exercise_index: exerciseIndex,
         set_index: setIndex,
+      };
+      if (statusOnly) {
+        if (payload.completed_at) {
+          memberPayload.logged_at = payload.completed_at;
+          memberPayload.completion_method = "manual_status";
+        } else {
+          memberPayload.completion_method = null;
+        }
+      } else {
+        Object.assign(memberPayload, {
         reps: payload.actual_reps ?? payload.reps ?? null,
         entered_value: enteredValue,
         entered_unit: enteredUnit,
@@ -630,9 +644,14 @@ export function createMemberAdapter(ref: WorkoutContextRef): WorkoutContextAdapt
         completed_duration_seconds: payload.completed_duration_seconds ?? null,
         timer_started_at: payload.timer_started_at ?? null,
         timer_completed_at: payload.timer_completed_at ?? null,
-        completion_method: payload.completion_method ?? null,
-        logged_at: payload.completed_at ?? new Date().toISOString(),
-      };
+        });
+        if ("completed_at" in payload || payload.completion_method) {
+          memberPayload.completion_method = payload.completion_method ?? (payload.completed_at ? "manual_status" : null);
+        }
+        if (payload.completed_at) {
+          memberPayload.logged_at = payload.completed_at;
+        }
+      }
       // Upsert on the natural key (enrollment + week + day + exercise + set).
       // Avoids the read-then-write race the client adapter uses by relying on
       // a unique constraint we already maintain on member_set_logs.
@@ -980,7 +999,7 @@ export function memberLogToPlRowResult(args: {
 }): PlRowResultRaw {
   const { log: l, clientId } = args;
   return {
-    id: l.id,
+    id: encodeRowResultId(l.week_index, l.day_index, l.exercise_index, l.set_index),
     row_id: `ex:${l.exercise_index}`,
     client_id: clientId,
     set_index: l.set_index,
@@ -996,6 +1015,7 @@ export function memberLogToPlRowResult(args: {
     rir: l.rir ?? null,
     is_working_set: l.is_working_set ?? null,
     notes: l.notes ?? null,
+    completed_at: l.completion_method ? (l.logged_at ?? l.created_at ?? null) : null,
     completed_duration_seconds: l.completed_duration_seconds ?? null,
     logged_at: l.logged_at ?? l.created_at ?? null,
   } as PlRowResultRaw;

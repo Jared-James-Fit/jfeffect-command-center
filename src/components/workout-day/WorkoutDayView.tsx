@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, Clock, CheckCircle2, Play, StickyNote, NotebookPen, Info, Maximize2, Minimize2, AlertTriangle, RefreshCw, Send, MessageCircle, ChevronDown, ChevronUp, Move, Zap } from "lucide-react";
+import { ArrowLeft, Clock, CheckCircle2, Circle, Play, StickyNote, NotebookPen, Info, Maximize2, Minimize2, AlertTriangle, RefreshCw, Send, MessageCircle, ChevronDown, ChevronUp, Move, Zap } from "lucide-react";
 import { MoveWorkoutSheet } from "@/components/schedule/MoveWorkoutSheet";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
@@ -2076,7 +2076,7 @@ function ExerciseBlock({ row, dayId, dayTitle, clientId, blockId, existingResult
           tasks.push(adapter.upsertPlRowResultRaw(body, ex?.id ?? null));
         } else {
           if (ex?.id) tasks.push(sb.from("pl_row_results").update(body).eq("id", ex.id));
-          else tasks.push(sb.from("pl_row_results").insert(body));
+          else tasks.push(sb.from("pl_row_results").upsert(body, { onConflict: "client_id,row_id,set_index" }));
         }
       }
       if (!tasks.length) { toast.info("All sets already completed"); return; }
@@ -2118,7 +2118,7 @@ function ExerciseBlock({ row, dayId, dayTitle, clientId, blockId, existingResult
         tasks.push(adapter.upsertPlRowResultRaw(body, ex?.id ?? null));
       } else {
         if (ex?.id) tasks.push(sb.from("pl_row_results").update(body).eq("id", ex.id));
-        else tasks.push(sb.from("pl_row_results").insert(body));
+        else tasks.push(sb.from("pl_row_results").upsert(body, { onConflict: "client_id,row_id,set_index" }));
       }
     }
     if (!tasks.length) return;
@@ -2669,6 +2669,7 @@ function SetRow({
   const { user } = useAuth();
   const { isImpersonating, client: povClient } = useClientImpersonation();
   const adapter = useOptionalAdapter();
+  const qc = useQueryClient();
   // Display weight is always shown in the active unit.
   // existing stores normalized kg + lb columns (Stage 1 trigger keeps them in sync),
   // plus the original actual_load/actual_load_unit pair. We pick whichever matches `unit`.
@@ -2716,6 +2717,9 @@ function SetRow({
   // Chip open state — when false, show tappable chip; when true, show inline input.
   const [repsChipOpen, setRepsChipOpen] = useState(false);
   const [rpeChipOpen, setRpeChipOpen] = useState(false);
+  const [statusSaving, setStatusSaving] = useState(false);
+  const [statusError, setStatusError] = useState<string | null>(null);
+  useEffect(() => { setStatusError(null); }, [existing?.id, existing?.completed_at]);
   // Hydrate from any unsynced local draft on first mount for this set
   const draftKey = clientId ? `workout-set:${rowId}:${clientId}:${setIndex}` : null;
   const [hydrated, setHydrated] = useState(false);
@@ -2832,10 +2836,6 @@ function SetRow({
       const loadNum = value.load ? Number(value.load) : null;
       const repsNum = value.reps ? parseInt(value.reps, 10) : null;
       const rpeNum = value.rpe ? Number(value.rpe) : null;
-      const allValid =
-        loadNum != null && isFinite(loadNum) && loadNum >= 0 &&
-        repsNum != null && isFinite(repsNum) && repsNum > 0 &&
-        rpeNum != null && isFinite(rpeNum) && rpeNum >= 0 && rpeNum <= 10;
       enqueueOfflineWrite({
         id: `portal_set:${rowId}:${clientId}:${setIndex}`,
         label: `Saved set ${setIndex}`,
@@ -2854,7 +2854,6 @@ function SetRow({
             actual_reps: repsNum,
             actual_rpe: value.rpe || null,
             actual_rpe_num: rpeNum,
-            completed_at: allValid ? new Date().toISOString() : null,
           },
         },
       });
@@ -2870,10 +2869,6 @@ function SetRow({
       if (load && (loadNum == null || !isFinite(loadNum) || loadNum < 0)) throw new Error("Weight must be a number");
       if (reps && (repsNum == null || !isFinite(repsNum) || repsNum < 0)) throw new Error("Reps must be a whole number");
       if (rpe && (rpeNum == null || !isFinite(rpeNum) || rpeNum < 0 || rpeNum > 10)) throw new Error("RPE must be 0–10");
-      const allValid =
-        loadNum != null && loadNum >= 0 &&
-        repsNum != null && repsNum > 0 &&
-        rpeNum != null && rpeNum >= 0 && rpeNum <= 10;
       const payload = {
         row_id: rowId,
         client_id: clientId,
@@ -2885,7 +2880,6 @@ function SetRow({
         actual_reps: repsNum,
         actual_rpe: rpe || null,
         actual_rpe_num: rpeNum,
-        completed_at: allValid ? new Date().toISOString() : null,
       };
       let savedId: string | null = existing?.id ?? null;
       // PostgREST keeps a pooled connection in "current transaction is
@@ -2934,7 +2928,7 @@ function SetRow({
           savedId = (res as any)?.id ?? null;
         } else {
           const inserted = await writeWithAbortRetry(async () => {
-            const { data, error } = await sb.from("pl_row_results").insert(payload).select("id").maybeSingle();
+            const { data, error } = await sb.from("pl_row_results").upsert(payload, { onConflict: "client_id,row_id,set_index" }).select("id").maybeSingle();
             if (error) throw error;
             return data;
           });
@@ -2949,11 +2943,6 @@ function SetRow({
       recentlySavedRef.current = true;
       if (recentlySavedTimerRef.current) clearTimeout(recentlySavedTimerRef.current);
       recentlySavedTimerRef.current = setTimeout(() => { recentlySavedRef.current = false; }, 8000);
-      // Auto-start the per-exercise rest timer when this set transitions
-      // into a fully-valid completed state. Avoid re-triggering on idempotent
-      // updates that were already completed.
-      const wasCompleted = Boolean(existing?.completed_at);
-      if (allValid && !wasCompleted) onSetCompleted?.(setIndex);
       // Coach/admin POV audit trail. Only writes when impersonating, only the
       // fields that actually changed, only after the save succeeds.
       if (isImpersonating && user?.id && povClient?.id === clientId) {
@@ -2962,7 +2951,7 @@ function SetRow({
           reps: repsNum,
           rpe: rpeNum,
           unit,
-          status: allValid ? "completed" : "saved",
+          status: existing?.completed_at ? "completed" : "saved",
         };
         void writeSetEditAudit(before, after, {
           setLogId: savedId,
@@ -2995,6 +2984,89 @@ function SetRow({
   // as draft data — otherwise every unlogged set shows the amber border.
   const hasAnyEntry = load.length > 0 || repsEdited || rpeEdited;
   const isDraft = !isConfirmed && (hasAnyEntry || (existing && !existing.completed_at));
+
+  const isAbortError = (err: unknown) => {
+    const e = err as { code?: string; message?: string } | null | undefined;
+    if (!e) return false;
+    if (e.code === "25P02") return true;
+    return String(e.message ?? "").toLowerCase().includes("current transaction is aborted");
+  };
+
+  const writeStatusWithAbortRetry = async (fn: () => Promise<any>) => {
+    try {
+      return await fn();
+    } catch (err) {
+      if (!isAbortError(err)) throw err;
+      await new Promise((r) => setTimeout(r, 200));
+      return await fn();
+    }
+  };
+
+  const withStatusTimeout = async (promise: Promise<any>) => {
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    try {
+      return await Promise.race([
+        promise,
+        new Promise((_, reject) => {
+          timer = setTimeout(() => reject(new Error("Set status save timed out")), 8000);
+        }),
+      ]);
+    } finally {
+      if (timer) clearTimeout(timer);
+    }
+  };
+
+  const saveCompletionStatus = async () => {
+    if (readonly || !clientId || statusSaving) return;
+    const nextCompletedAt = isConfirmed ? null : new Date().toISOString();
+    const payload: Record<string, any> = {
+      row_id: rowId,
+      client_id: clientId,
+      set_index: setIndex,
+      completed_at: nextCompletedAt,
+    };
+    if (adapter?.kind === "member") {
+      const [weekIndexRaw, dayIndexRaw] = String(workoutId ?? "").split(":");
+      const weekIndex = Number(weekIndexRaw);
+      const dayIndex = Number(dayIndexRaw);
+      if (Number.isFinite(weekIndex) && Number.isFinite(dayIndex)) {
+        payload.week_index = weekIndex;
+        payload.day_index = dayIndex;
+      }
+    }
+    setStatusSaving(true);
+    setStatusError(null);
+    try {
+      if (existing?.id) {
+        if (adapter) {
+          await withStatusTimeout(writeStatusWithAbortRetry(() => adapter.upsertPlRowResultRaw(payload, existing.id)));
+        } else {
+          await withStatusTimeout(writeStatusWithAbortRetry(async () => {
+            const { error } = await sb.from("pl_row_results").update({ completed_at: nextCompletedAt }).eq("id", existing.id);
+            if (error) throw error;
+          }));
+        }
+      } else if (adapter) {
+        await withStatusTimeout(writeStatusWithAbortRetry(() => adapter.upsertPlRowResultRaw(payload, null)));
+      } else {
+        await withStatusTimeout(writeStatusWithAbortRetry(async () => {
+          const { error } = await sb
+            .from("pl_row_results")
+            .upsert(payload, { onConflict: "client_id,row_id,set_index" });
+          if (error) throw error;
+        }));
+      }
+      onChange();
+      qc.invalidateQueries({ queryKey: ["pl-day-results"] });
+      if (nextCompletedAt) onSetCompleted?.(setIndex);
+    } catch (err: any) {
+      const message = err?.message ?? "Set status failed to save";
+      setStatusError(message);
+      toast.error("Set status didn’t save — tap the status icon to retry");
+    } finally {
+      setStatusSaving(false);
+    }
+  };
 
   // Quick-fill helpers — these only update local state, never auto-confirm.
   const applySuggestedWeight = () => { if (suggestedWeight != null) setLoad(fmtNum(suggestedWeight)); };
@@ -3067,7 +3139,7 @@ function SetRow({
         if (adapter) {
           await adapter.upsertPlRowResultRaw(payload, null);
         } else {
-          const { error } = await sb.from("pl_row_results").insert(payload);
+          const { error } = await sb.from("pl_row_results").upsert(payload, { onConflict: "client_id,row_id,set_index" });
           if (error) throw error;
         }
       }
@@ -3104,6 +3176,7 @@ function SetRow({
       "border-t border-builder-card-border/70 transition-colors",
       isConfirmed && "bg-emerald-500/[0.07] border-l-2 border-l-emerald-500/70",
       isDraft && "bg-amber-500/[0.07] border-l-2 border-l-amber-500/60",
+      statusError && "bg-destructive/10 border-l-2 border-l-destructive ring-1 ring-destructive/40",
     )}>
     <div className={cn(
       "grid items-start gap-1.5 px-2.5 py-1.5",
@@ -3249,7 +3322,7 @@ function SetRow({
       )}
       <div className="flex items-center justify-end gap-1">
         {/* When confirmed, show only the green checkmark — not the save spinner too */}
-        {!readonly && !isConfirmed && (
+        {!readonly && !isConfirmed && ["saving", "error", "offline"].includes(save.state) && (
           <SaveStatus
             state={save.state}
             savedAt={save.savedAt}
@@ -3257,9 +3330,42 @@ function SetRow({
             onRetry={save.retry}
           />
         )}
-        {isConfirmed && <CheckCircle2 className="h-4 w-4 text-green-500" />}
+        {!readonly ? (
+          <button
+            type="button"
+            onClick={() => void saveCompletionStatus()}
+            disabled={statusSaving}
+            title={statusError ? "Status failed to save — tap to retry" : isConfirmed ? "Mark set incomplete" : "Mark set complete"}
+            aria-label={statusError ? `Retry saving set ${setIndex} status` : isConfirmed ? `Mark set ${setIndex} incomplete` : `Mark set ${setIndex} complete`}
+            className={cn(
+              "inline-flex h-7 w-7 items-center justify-center rounded-full border transition-colors",
+              isConfirmed
+                ? "border-green-500/40 bg-green-500/10 text-green-500"
+                : "border-border bg-background text-muted-foreground hover:border-green-500/50 hover:text-green-500",
+              statusError && "border-destructive bg-destructive/10 text-destructive hover:text-destructive",
+              statusSaving && "cursor-wait opacity-70",
+            )}
+          >
+            {statusSaving ? (
+              <RefreshCw className="h-4 w-4 animate-spin" />
+            ) : statusError ? (
+              <AlertTriangle className="h-4 w-4" />
+            ) : isConfirmed ? (
+              <CheckCircle2 className="h-4 w-4" />
+            ) : (
+              <Circle className="h-4 w-4" />
+            )}
+          </button>
+        ) : (
+          isConfirmed && <CheckCircle2 className="h-4 w-4 text-green-500" />
+        )}
       </div>
     </div>
+    {statusError && (
+      <div className="px-3 pb-1.5 text-[11px] font-medium text-destructive">
+        Status failed to save. Tap the status icon to retry.
+      </div>
+    )}
 
     {/* Quick-fill chip row — Suggested values are visible but never auto-confirm */}
     {/* Copy Previous — compact secondary action for set 2+ */}
