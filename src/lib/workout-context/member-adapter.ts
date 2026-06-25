@@ -893,10 +893,29 @@ export function createMemberAdapter(ref: WorkoutContextRef): WorkoutContextAdapt
       };
     },
 
-    async listExerciseNotesRaw(_dayId) {
-      // Member plans don't persist per-day exercise notes; notes ride on
-      // member_set_logs.notes via the standard log path.
-      return [];
+    async listExerciseNotesRaw(dayId) {
+      const { week, day } = decodeDayId(dayId);
+      const { data, error } = await (supabase as any)
+        .from("member_exercise_notes")
+        .select("*")
+        .eq("enrollment_id", enrollmentId)
+        .eq("week_index", week)
+        .eq("day_index", day);
+      if (error) return [];
+      // Reshape into pl_exercise_notes column layout consumed by WorkoutDayView.
+      return (data ?? []).map((n: any) => ({
+        id: n.id,
+        client_id: ref.ownerId,
+        day_id: dayId,
+        row_id: `ex:${n.exercise_index}`,
+        exercise_id: n.exercise_id ?? null,
+        exercise_name: null,
+        content: n.note ?? "",
+        status: "saved",
+        coach_seen_at: null,
+        created_at: n.created_at ?? null,
+        updated_at: n.updated_at ?? null,
+      }));
     },
 
     async getWorkoutFeedbackRaw(dayId) {
