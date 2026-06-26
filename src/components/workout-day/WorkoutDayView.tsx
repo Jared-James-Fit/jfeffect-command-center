@@ -2186,6 +2186,13 @@ function ExerciseBlock({ row, dayId, dayTitle, clientId, blockId, existingResult
 
   // ── Quick-fill loading state for the "Fill All Sets" button ──
   const [quickFillLoading, setQuickFillLoading] = useState(false);
+  // Bumped after "Fill All Sets" / "Apply to remaining" persists so child
+  // SetRows force-hydrate from the freshly-written server values even if
+  // their post-save guard would otherwise block the refresh. Without this,
+  // re-running Fill on the same exercise (especially after an autosave on a
+  // later set) leaves the later sets visually empty even though the DB has
+  // the new draft values.
+  const [fillToken, setFillToken] = useState(0);
 
   const applyToRemaining = async (fromSetIndex: number, payload: { load: string; reps: string; rpe: string; unit: "kg" | "lb" }) => {
     if (!clientId) return;
@@ -2219,7 +2226,8 @@ function ExerciseBlock({ row, dayId, dayTitle, clientId, blockId, existingResult
     if (!tasks.length) return;
     await Promise.all(tasks);
     onChange();
-    qc.invalidateQueries({ queryKey: ["pl-day-results"] });
+    await qc.refetchQueries({ queryKey: ["pl-day-results"] });
+    setFillToken((t) => t + 1);
     toast.success(`Applied to ${tasks.length} remaining set${tasks.length === 1 ? "" : "s"} as draft`);
   };
 
@@ -2430,6 +2438,7 @@ function ExerciseBlock({ row, dayId, dayTitle, clientId, blockId, existingResult
               rirTarget={rirTarget}
               hasUncompletedAfter={hasUncompletedAfter}
               onApplyToRemaining={applyToRemaining}
+              forceHydrateToken={fillToken}
               readonly={readonly}
               unit={activeUnit}
               hideWeight={hideWeight}
@@ -2712,7 +2721,7 @@ function SetRow({
   rowId, workoutId, exerciseId, exerciseName, clientId, setIndex, existing, prevExisting,
   targetReps, targetRpe, targetRir, suggestedWeight,
   repTarget, rpeTarget, rirTarget,
-  hasUncompletedAfter, onApplyToRemaining,
+  hasUncompletedAfter, onApplyToRemaining, forceHydrateToken = 0,
   readonly = false, unit = "kg", hideWeight = false, focusMode = false, onChange, onSetCompleted,
   setCount, measurementType = "reps", prescribedDurationSeconds = null,
 }: {
@@ -2736,6 +2745,10 @@ function SetRow({
   rirTarget?: RangeTarget;
   hasUncompletedAfter?: boolean;
   onApplyToRemaining?: (fromSetIndex: number, payload: { load: string; reps: string; rpe: string; unit: "kg" | "lb" }) => Promise<void> | void;
+  /** Bumped by parent after a "Fill All Sets" write to force re-hydration
+   *  from the freshly-saved `existing` even if the recent-save guard would
+   *  otherwise block it. */
+  forceHydrateToken?: number;
   readonly?: boolean;
   unit?: "kg" | "lb";
   hideWeight?: boolean;
@@ -2891,6 +2904,26 @@ function SetRow({
     // clean so the toggle cannot trigger an autosave.
     queueMicrotask(() => { saveRef.current?.markClean(); });
   }, [unit]);
+
+  // Parent-initiated "Fill All Sets" / "Apply to remaining" — force-hydrate
+  // from the freshly-written `existing` regardless of the recent-save guard
+  // and the focused-field guard. This is an explicit user action that must
+  // win over those defensive heuristics; otherwise re-filling after an
+  // autosave on a later set leaves it visually empty.
+  useEffect(() => {
+    if (!forceHydrateToken) return;
+    // Cancel any pending autosave so it can't immediately overwrite the
+    // values we're about to display.
+    recentlySavedRef.current = false;
+    setFocusedField(null);
+    const display = existing?.actual_load != null ? fmtLoad(existing.actual_load) : "";
+    setLoad(display);
+    if (existing?.actual_reps != null) setReps(String(existing.actual_reps));
+    if (existing?.actual_rpe_num != null) setRpe(String(existing.actual_rpe_num));
+    else if (existing?.actual_rpe != null) setRpe(existing.actual_rpe);
+    queueMicrotask(() => { saveRef.current?.markClean(); });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [forceHydrateToken]);
 
   const value = useMemo(() => ({ load, reps, rpe, unit }), [load, reps, rpe, unit]);
   // Forward-ref to the autosave handle so effects defined above can call
