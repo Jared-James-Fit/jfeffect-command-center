@@ -4,6 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { getClientWorkouts } from "@/lib/pl-programs";
 import { dayScheduledDate } from "@/lib/workout-today";
 import { listGoogleEventsRange, getGoogleConnectionStatus } from "@/lib/google-cal.functions";
+import { toLocalISO } from "@/lib/today";
 
 /**
  * Phase 1 calendar item — a single chip rendered on the calendar grid.
@@ -280,7 +281,7 @@ export function useClientCalendarSources(clientId: string | null | undefined) {
       if (!it.day?.id) continue;
       const sd = dayScheduledDate(it as any);
       if (!sd) continue;
-      const date = toLocalDate(sd.toISOString());
+      const date = toLocalISO(sd);
       const completed = !!it.completion?.completed_at;
       out.push({
         id: `workout:${it.day.id}`,
