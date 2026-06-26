@@ -2186,6 +2186,13 @@ function ExerciseBlock({ row, dayId, dayTitle, clientId, blockId, existingResult
 
   // ── Quick-fill loading state for the "Fill All Sets" button ──
   const [quickFillLoading, setQuickFillLoading] = useState(false);
+  // Bumped after "Fill All Sets" / "Apply to remaining" persists so child
+  // SetRows force-hydrate from the freshly-written server values even if
+  // their post-save guard would otherwise block the refresh. Without this,
+  // re-running Fill on the same exercise (especially after an autosave on a
+  // later set) leaves the later sets visually empty even though the DB has
+  // the new draft values.
+  const [fillToken, setFillToken] = useState(0);
 
   const applyToRemaining = async (fromSetIndex: number, payload: { load: string; reps: string; rpe: string; unit: "kg" | "lb" }) => {
     if (!clientId) return;
@@ -2219,7 +2226,8 @@ function ExerciseBlock({ row, dayId, dayTitle, clientId, blockId, existingResult
     if (!tasks.length) return;
     await Promise.all(tasks);
     onChange();
-    qc.invalidateQueries({ queryKey: ["pl-day-results"] });
+    await qc.refetchQueries({ queryKey: ["pl-day-results"] });
+    setFillToken((t) => t + 1);
     toast.success(`Applied to ${tasks.length} remaining set${tasks.length === 1 ? "" : "s"} as draft`);
   };
 
@@ -2430,6 +2438,7 @@ function ExerciseBlock({ row, dayId, dayTitle, clientId, blockId, existingResult
               rirTarget={rirTarget}
               hasUncompletedAfter={hasUncompletedAfter}
               onApplyToRemaining={applyToRemaining}
+              forceHydrateToken={fillToken}
               readonly={readonly}
               unit={activeUnit}
               hideWeight={hideWeight}
