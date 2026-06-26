@@ -157,6 +157,24 @@ export function useClientCalendarSources(clientId: string | null | undefined) {
     refetchOnMount: "always",
   });
 
+  // Fetch client committed training days for calendar date resolution.
+  // ROOT CAUSE FIX 2026-06-26: without this, dayScheduledDate uses linear
+  // distribution instead of the client's actual schedule (e.g. Mon/Wed/Fri).
+  const clientQ = useQuery({
+    queryKey: ["cal-client-data", clientId],
+    enabled,
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("clients")
+        .select("committed_training_days")
+        .eq("id", clientId!)
+        .maybeSingle();
+      return data;
+    },
+    staleTime: 60_000,
+  });
+  const committedDays = (clientQ.data as any)?.committed_training_days ?? null;
+
   const checkinsQ = useQuery({
     queryKey: ["cal-client-checkins", clientId],
     enabled,
@@ -278,7 +296,7 @@ export function useClientCalendarSources(clientId: string | null | undefined) {
     }
     for (const it of (workoutsQ.data ?? []) as any[]) {
       if (!it.day?.id) continue;
-      const sd = dayScheduledDate(it as any);
+      const sd = dayScheduledDate(it as any, committedDays);
       if (!sd) continue;
       const date = toLocalDate(sd.toISOString());
       const completed = !!it.completion?.completed_at;
