@@ -1123,10 +1123,11 @@ function WorkoutDay({
     setSummaryOpen(true);
   }, [recapParam, completion?.completed_at, completion?.client_notes, rows, results, client]);
 
-  // Lock the background page while either overlay is open. Prevents the
-  // jump/glitch where the page scroll position shifts as Radix swaps
-  // scrollbar styles when the sheet/dialog mounts.
-  useBodyScrollLock(completeOpen || summaryOpen);
+  // Lock the background page while the completion sheet is open.
+  // NOTE: Do NOT lock for summaryOpen — the WorkoutSubmissionSummary (Dialog)
+  // manages its own scroll lock via Radix. Double-locking causes the freeze
+  // where pointer-events stay disabled after the completion sheet closes.
+  useBodyScrollLock(completeOpen);
 
   const refreshNotes = () => {
     qc.invalidateQueries({ queryKey: ["pl-day-exercise-notes", dayId] });
@@ -1794,9 +1795,14 @@ function WorkoutDay({
                  // before opening the summary, then defer opening one frame
                  // so the next Radix overlay mounts cleanly.
                  setTimeout(() => {
-                   try { document.body.style.overflow = ""; } catch {}
-                   setTimeout(() => setSummaryOpen(true), 50);
-                 }, 50);
+                   try {
+                     document.body.style.overflow = "";
+                     document.body.style.pointerEvents = "";
+                     document.body.style.position = "";
+                     document.body.style.top = "";
+                   } catch {}
+                   setSummaryOpen(true);
+                 }, 350);
                 toast.message("Workout saved offline", {
                   description: "We'll sync it when you're back online.",
                 });
@@ -1886,10 +1892,18 @@ function WorkoutDay({
               setLastSummary(computed);
               setLastSessionRating(payload.session_rating ?? null);
               recapFromSubmitRef.current = true;
+              // Wait 350ms for Radix's sheet exit animation to fully complete
+              // and release its pointer-events lock before opening the summary.
+              // 50ms was not enough — Radix's cleanup fires at ~300ms.
               setTimeout(() => {
-                try { document.body.style.overflow = ""; } catch {}
-                setTimeout(() => setSummaryOpen(true), 50);
-              }, 50);
+                try {
+                  document.body.style.overflow = "";
+                  document.body.style.pointerEvents = "";
+                  document.body.style.position = "";
+                  document.body.style.top = "";
+                } catch {}
+                setSummaryOpen(true);
+              }, 350);
               toast.success(
                 `Workout submitted — Score: ${computed.score}/100`,
                 {
