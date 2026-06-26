@@ -39,7 +39,9 @@ function blockProgress(start: string | null, end: string | null) {
     const elapsed = Math.max(0, differenceInDays(t, s) + 1);
     const pct = Math.min(100, Math.max(0, Math.round((elapsed / total) * 100)));
     const left = Math.max(0, differenceInDays(e, t));
-    return { pct, left };
+    const totalWeeks = Math.max(1, Math.ceil(total / 7));
+    const week = Math.max(1, Math.min(totalWeeks, Math.floor(Math.max(0, differenceInDays(t, s)) / 7) + 1));
+    return { pct, left, week, totalWeeks };
   } catch { return null; }
 }
 
