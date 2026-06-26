@@ -22,6 +22,22 @@ function weekdayFromDate(dateISO: string): WeekDay | null {
   return (WEEK_DAYS.find((wd) => WEEKDAY_INDEX[wd] === dow) ?? null) as WeekDay | null;
 }
 
+function committedDatesInWindow(
+  weekStart: Date,
+  weekDurationDays: number,
+  committed: WeekDay[],
+): string[] {
+  const dates: string[] = [];
+  for (let i = 0; i < weekDurationDays; i++) {
+    const candidate = addDays(weekStart, i);
+    const weekday = (WEEK_DAYS.find((wd) => WEEKDAY_INDEX[wd] === candidate.getDay()) ?? null) as WeekDay | null;
+    if (weekday && committed.includes(weekday)) {
+      dates.push(format(candidate, "yyyy-MM-dd"));
+    }
+  }
+  return dates;
+}
+
 type Role = "client" | "member" | "coach" | "admin";
 
 async function resolveActorAccess(
@@ -429,9 +445,7 @@ export const rescheduleFromCommittedDays = createServerFn({ method: "POST" })
           .slice()
           .sort((a: any, b: any) => a.day_index - b.day_index);
 
-        const committedDates = committed.map((wd) =>
-          format(addDays(weekStart, (WEEKDAY_INDEX[wd] + 6) % 7), "yyyy-MM-dd"),
-        );
+        const committedDates = committedDatesInWindow(weekStart, dur, committed);
 
         // Classify days as preserved vs movable.
         const consumed = new Set<string>();
