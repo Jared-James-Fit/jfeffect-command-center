@@ -1,13 +1,14 @@
 import { useMemo, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { addDays, format, parseISO, startOfWeek } from "date-fns";
+import { addDays, format, startOfWeek } from "date-fns";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Loader2, CalendarDays } from "lucide-react";
 import { applyBulkScheduleChange } from "@/lib/schedule-bulk.functions";
+import { parseLocalDate } from "@/lib/today";
 import type { ScheduleDay, ScheduleWeek } from "./ScheduleCalendar";
 
 const WEEKDAYS = ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];
@@ -36,7 +37,7 @@ export function WeeklyScheduleEditor({ days, weeks, weekId }: WeeklyScheduleEdit
   // Anchor week start: prefer current scheduled dates of the week's first day,
   // fall back to current week's Monday.
   const anchor = weekDays[0]?.scheduled_date
-    ? startOfWeek(parseISO(weekDays[0]!.scheduled_date!), { weekStartsOn: 1 })
+    ? startOfWeek(parseLocalDate(weekDays[0]!.scheduled_date!)!, { weekStartsOn: 1 })
     : startOfWeek(new Date(), { weekStartsOn: 1 });
 
   // dayIndex → weekday offset 0..6 (Mon..Sun)
@@ -45,7 +46,8 @@ export function WeeklyScheduleEditor({ days, weeks, weekId }: WeeklyScheduleEdit
     for (let i = 0; i < weekDays.length; i++) {
       const d = weekDays[i];
       if (d.scheduled_date) {
-        const dt = parseISO(d.scheduled_date);
+        const dt = parseLocalDate(d.scheduled_date);
+        if (!dt) continue;
         const offset = (dt.getDay() + 6) % 7; // Mon=0..Sun=6
         out[d.id] = offset;
       } else {
