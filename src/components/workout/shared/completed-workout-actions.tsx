@@ -61,7 +61,7 @@ export function CompletedWorkoutActions({
           ) : (
             <>
               <MessageSquare className="h-4 w-4" />
-              Add Review
+              Mark Workout Complete
             </>
           )}
         </Button>
