@@ -2941,18 +2941,20 @@ function SetRow({
   // from the freshly-written `existing` regardless of the recent-save guard
   // and the focused-field guard. This is an explicit user action that must
   // win over those defensive heuristics; otherwise re-filling after an
-  // autosave on a later set leaves it visually empty.
+  // autosave on a later set leaves it visually empty. We read from a ref so
+  // the effect always sees the latest `existing` prop, not a stale closure.
   useEffect(() => {
     if (!forceHydrateToken) return;
+    const latest = latestExistingRef.current;
     // Cancel any pending autosave so it can't immediately overwrite the
     // values we're about to display.
     recentlySavedRef.current = false;
     setFocusedField(null);
-    const display = existing?.actual_load != null ? fmtLoad(existing.actual_load) : "";
+    const display = latest?.actual_load != null ? fmtLoad(latest.actual_load) : "";
     setLoad(display);
-    if (existing?.actual_reps != null) setReps(String(existing.actual_reps));
-    if (existing?.actual_rpe_num != null) setRpe(String(existing.actual_rpe_num));
-    else if (existing?.actual_rpe != null) setRpe(existing.actual_rpe);
+    if (latest?.actual_reps != null) setReps(String(latest.actual_reps));
+    if (latest?.actual_rpe_num != null) setRpe(String(latest.actual_rpe_num));
+    else if (latest?.actual_rpe != null) setRpe(latest.actual_rpe);
     queueMicrotask(() => { saveRef.current?.markClean(); });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [forceHydrateToken]);
