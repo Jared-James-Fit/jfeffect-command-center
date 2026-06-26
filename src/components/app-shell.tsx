@@ -1383,8 +1383,8 @@ export function PageHeader({
   };
   const showBack = !!backTo;
   return (
-    <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border bg-gradient-to-b from-card to-background px-4 py-2.5 md:px-6 md:py-3">
-      <div className="min-w-0 flex-1">
+    <div className="flex flex-col gap-2 border-b border-border bg-gradient-to-b from-card to-background px-4 py-2.5 md:flex-row md:flex-wrap md:items-center md:justify-between md:px-6 md:py-3">
+      <div className="order-2 min-w-0 w-full md:order-1 md:flex-1">
         {showBack && (
           <div className="mb-1 flex items-center gap-2">
             <Button
@@ -1414,10 +1414,10 @@ export function PageHeader({
             )}
           </div>
         )}
-        <h1 className="flex flex-wrap items-center gap-3 text-lg font-black tracking-tight md:text-2xl">{title}</h1>
-        {subtitle ? <p className="mt-0.5 text-xs text-muted-foreground md:text-sm">{subtitle}</p> : null}
+        <h1 className="flex flex-wrap items-center gap-x-3 gap-y-1 text-lg font-black tracking-tight md:text-2xl break-words">{title}</h1>
+        {subtitle ? <p className="mt-0.5 text-xs text-muted-foreground md:text-sm break-words">{subtitle}</p> : null}
       </div>
-      <div className="flex flex-wrap items-center gap-2">
+      <div className="order-1 flex flex-wrap items-center justify-end gap-2 md:order-2 md:w-auto">
         {actions}
         <NotificationBell />
       </div>
