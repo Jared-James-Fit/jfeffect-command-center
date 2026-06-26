@@ -53,8 +53,10 @@ function IndexRedirect() {
         // on another account on this device.
         if (savedView === "client") {
           void supabase.from("clients").select("id").eq("user_id", user.id).maybeSingle().then(({ data }) => {
-            if (data?.id) navigate({ to: "/portal/workouts", replace: true });
-            else navigate({ to: role === "media_manager" ? "/media" : "/admin", replace: true });
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            if (data?.id) navigate({ to: "/portal/workouts" as any, replace: true });
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            else navigate({ to: (role === "media_manager" ? "/media" : "/admin") as any, replace: true });
           });
           return;
         }
