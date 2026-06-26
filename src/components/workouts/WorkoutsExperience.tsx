@@ -80,14 +80,19 @@ export function WorkoutsExperience({
     () => (items ?? []).filter((it) => it.day?.id) as WorkoutItem[],
     [items],
   );
+  // Extract committed training days from client for calendar date resolution.
+  // ROOT CAUSE FIX 2026-06-26: pass to dayScheduledDate so it uses the client's
+  // actual schedule (e.g. Mon/Wed/Fri) when pl_weeks.training_days is not set.
+  const committedDays = (client as any)?.committed_training_days ?? null;
+
   const byDate = useMemo(() => {
     const map = new Map<string, WorkoutItem>();
     for (const it of dayItems) {
-      const d = dayScheduledDate(it);
+      const d = dayScheduledDate(it, committedDays);
       if (d) map.set(toLocalISO(d), it);
     }
     return map;
-  }, [dayItems]);
+  }, [dayItems, committedDays]);
 
   // --- Current block / week label for the header subtitle. -----------------
   const today = localStartOfToday();
@@ -106,14 +111,14 @@ export function WorkoutsExperience({
     pickCurrentBlock(allBlocks, today) ??
     todayItem?.block ??
     dayItems.find((it) => {
-      const d = dayScheduledDate(it);
+      const d = dayScheduledDate(it, committedDays);
       return d && d >= today;
     })?.block ??
     dayItems[dayItems.length - 1]?.block ?? null;
   const headerWeek =
     todayItem?.week ??
     dayItems.find((it) => it.block?.id === headerBlock?.id && (() => {
-      const d = dayScheduledDate(it); return d && d >= today;
+      const d = dayScheduledDate(it, committedDays); return d && d >= today;
     })())?.week ?? null;
   const subtitle = [
     headerBlock?.name ? headerBlock.name : null,
