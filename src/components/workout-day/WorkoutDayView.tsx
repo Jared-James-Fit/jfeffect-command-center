@@ -2148,57 +2148,8 @@ function ExerciseBlock({ row, dayId, dayTitle, clientId, blockId, existingResult
   // a confirmed (completed_at != null) set.
   const qc = useQueryClient();
 
-  // ── Quick-fill: fill ALL sets with the same weight and mark as completed ──
-  const [quickFillOpen, setQuickFillOpen] = useState(false);
-  const [quickFillWeight, setQuickFillWeight] = useState<string>(
-    suggestedWeight != null ? String(suggestedWeight) : ""
-  );
+  // ── Quick-fill loading state for the "Fill All Sets" button ──
   const [quickFillLoading, setQuickFillLoading] = useState(false);
-
-  const fillAllSets = async () => {
-    if (!clientId || !quickFillWeight) return;
-    const loadNum = Number(quickFillWeight);
-    if (!isFinite(loadNum) || loadNum <= 0) { toast.error("Enter a valid weight"); return; }
-    const repsNum = repTarget?.min ?? repTarget?.exact ?? null;
-    const nowIso = new Date().toISOString();
-    setQuickFillLoading(true);
-    try {
-      const tasks: Array<Promise<any>> = [];
-      for (let i = 1; i <= setCount; i++) {
-        const ex = existingResults.find((x: any) => x.set_index === i);
-        if (ex?.completed_at) continue; // never overwrite confirmed sets
-        const body: Record<string, any> = withMemberWorkoutIndexes({
-          row_id: row.id,
-          client_id: clientId,
-          set_index: i,
-          actual_load: loadNum,
-          actual_load_unit: activeUnit,
-          entered_value: loadNum,
-          entered_unit: activeUnit,
-          actual_reps: repsNum,
-          actual_rpe: null,
-          actual_rpe_num: null,
-          completed_at: nowIso,
-        }, adapter, dayId);
-        if (adapter) {
-          tasks.push(adapter.upsertPlRowResultRaw(body, ex?.id ?? null));
-        } else {
-          if (ex?.id) tasks.push(sb.from("pl_row_results").update(body).eq("id", ex.id));
-          else tasks.push(sb.from("pl_row_results").upsert(body, { onConflict: "client_id,row_id,set_index" }));
-        }
-      }
-      if (!tasks.length) { toast.info("All sets already completed"); return; }
-      await Promise.all(tasks);
-      onChange();
-      qc.invalidateQueries({ queryKey: ["pl-day-results"] });
-      toast.success(`✅ ${tasks.length} set${tasks.length === 1 ? "" : "s"} filled with ${loadNum} ${activeUnit} and marked complete`);
-      setQuickFillOpen(false);
-    } catch (e: any) {
-      toast.error(e?.message ?? "Failed to fill sets");
-    } finally {
-      setQuickFillLoading(false);
-    }
-  };
 
   const applyToRemaining = async (fromSetIndex: number, payload: { load: string; reps: string; rpe: string; unit: "kg" | "lb" }) => {
     if (!clientId) return;
