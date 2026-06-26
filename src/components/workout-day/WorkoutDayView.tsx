@@ -2905,6 +2905,26 @@ function SetRow({
     queueMicrotask(() => { saveRef.current?.markClean(); });
   }, [unit]);
 
+  // Parent-initiated "Fill All Sets" / "Apply to remaining" — force-hydrate
+  // from the freshly-written `existing` regardless of the recent-save guard
+  // and the focused-field guard. This is an explicit user action that must
+  // win over those defensive heuristics; otherwise re-filling after an
+  // autosave on a later set leaves it visually empty.
+  useEffect(() => {
+    if (!forceHydrateToken) return;
+    // Cancel any pending autosave so it can't immediately overwrite the
+    // values we're about to display.
+    recentlySavedRef.current = false;
+    setFocusedField(null);
+    const display = existing?.actual_load != null ? fmtLoad(existing.actual_load) : "";
+    setLoad(display);
+    if (existing?.actual_reps != null) setReps(String(existing.actual_reps));
+    if (existing?.actual_rpe_num != null) setRpe(String(existing.actual_rpe_num));
+    else if (existing?.actual_rpe != null) setRpe(existing.actual_rpe);
+    queueMicrotask(() => { saveRef.current?.markClean(); });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [forceHydrateToken]);
+
   const value = useMemo(() => ({ load, reps, rpe, unit }), [load, reps, rpe, unit]);
   // Forward-ref to the autosave handle so effects defined above can call
   // markClean() without a TDZ error.
