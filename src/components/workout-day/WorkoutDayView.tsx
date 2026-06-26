@@ -1790,7 +1790,13 @@ function WorkoutDay({
                 // animation has finished. Stacking two Radix overlays in the
                 // same tick leaves body pointer-events frozen and the dialog
                 // never appears.
-                setTimeout(() => setSummaryOpen(true), 280);
+                 // Release the body scroll lock from the completion sheet
+                 // before opening the summary, then defer opening one frame
+                 // so the next Radix overlay mounts cleanly.
+                 setTimeout(() => {
+                   try { document.body.style.overflow = ""; } catch {}
+                   setTimeout(() => setSummaryOpen(true), 50);
+                 }, 50);
                 toast.message("Workout saved offline", {
                   description: "We'll sync it when you're back online.",
                 });
@@ -1880,7 +1886,10 @@ function WorkoutDay({
               setLastSummary(computed);
               setLastSessionRating(payload.session_rating ?? null);
               recapFromSubmitRef.current = true;
-              setTimeout(() => setSummaryOpen(true), 280);
+              setTimeout(() => {
+                try { document.body.style.overflow = ""; } catch {}
+                setTimeout(() => setSummaryOpen(true), 50);
+              }, 50);
               toast.success(
                 `Workout submitted — Score: ${computed.score}/100`,
                 {
