@@ -2887,6 +2887,10 @@ function SetRow({
   // server response can never overwrite what the user is still typing.
   const recentlySavedRef = useRef(false);
   const recentlySavedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Keep a live reference to the latest server result so the force-hydrate
+  // effect can never read a stale closure when parent bumps fillToken.
+  const latestExistingRef = useRef(existing);
+  useEffect(() => { latestExistingRef.current = existing; }, [existing]);
   useEffect(() => { focusedFieldRef.current = focusedField; }, [focusedField]);
   useEffect(() => {
     // Never overwrite a field the user is actively typing in, and never
