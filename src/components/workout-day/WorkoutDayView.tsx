@@ -2365,16 +2365,30 @@ function ExerciseBlock({ row, dayId, dayTitle, clientId, blockId, existingResult
         const firstUnit = (firstSet?.actual_load_unit as "kg" | "lb" | undefined) ?? activeUnit;
         const displayLoad = Number(Number(firstLoad ?? 0).toFixed(2));
         const onFill = async () => {
-          if (!hasFirstWeight) return;
+          // Refetch fresh results before reading Set 1 so the second fill always
+          // uses the current Set 1 value, not a stale cached snapshot.
+          await qc.refetchQueries({ queryKey: ["pl-day-results", dayId] });
+          const freshResults = (qc.getQueryData([
+            "pl-day-results",
+            dayId,
+            clientId,
+            adapter?.kind ?? null,
+            adapter?.ref.ownerId ?? null,
+          ]) as any[]) ?? existingResults;
+          const freshFirstSet = freshResults.find((x: any) => x.set_index === 1);
+          const freshFirstLoad = freshFirstSet?.actual_load;
+          const freshHasFirstWeight = freshFirstLoad != null && isFinite(Number(freshFirstLoad));
+          if (!freshHasFirstWeight) return;
+          const freshFirstUnit = (freshFirstSet?.actual_load_unit as "kg" | "lb" | undefined) ?? activeUnit;
           setQuickFillLoading(true);
           try {
             await applyToRemaining(1, {
-              load: String(firstLoad),
-              reps: firstSet?.actual_reps != null ? String(firstSet.actual_reps) : "",
-              rpe: firstSet?.actual_rpe_num != null
-                ? String(firstSet.actual_rpe_num)
-                : firstSet?.actual_rpe != null ? String(firstSet.actual_rpe) : "",
-              unit: firstUnit,
+              load: String(freshFirstLoad),
+              reps: freshFirstSet?.actual_reps != null ? String(freshFirstSet.actual_reps) : "",
+              rpe: freshFirstSet?.actual_rpe_num != null
+                ? String(freshFirstSet.actual_rpe_num)
+                : freshFirstSet?.actual_rpe != null ? String(freshFirstSet.actual_rpe) : "",
+              unit: freshFirstUnit,
             });
           } finally {
             setQuickFillLoading(false);
