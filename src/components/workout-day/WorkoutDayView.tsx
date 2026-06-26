@@ -1796,26 +1796,51 @@ function WorkoutDay({
                 });
                 return;
               }
+              // ROOT CAUSE FIX 2026-06-26: completeWorkoutSrv was always
+              // called with kind:"client" even for member workouts. For members,
+              // dayId is "week:day" (not a UUID), so the server function failed
+              // silently — the Finish Workout button appeared to do nothing.
+              const isMember = adapter?.kind === "member";
+              const memberEnrollmentId = isMember ? (adapter?.ref as any)?.enrollmentId : null;
+              const [memberWeekRaw, memberDayRaw] = isMember ? String(dayId).split(":") : [];
+              const memberWeekIndex = isMember ? Number(memberWeekRaw) : null;
+              const memberDayIndex = isMember ? Number(memberDayRaw) : null;
               await completeWorkoutSrv({
-                data: {
-                  kind: "client",
-                  dayId,
-                  requiredRows,
-                  activityTimestamps: heartbeats,
-                  completionMethod: "manual",
-                  completionSource: "workout_view",
-                  sessionRating: payload.session_rating ?? null,
-                  notes: payload.client_notes ?? completion?.client_notes ?? null,
-                  actualDurationMin: resolvedDurationMin,
-                  sessionWeightTotal: computed.totalLifted > 0 ? computed.totalLifted : null,
-                  sessionWeightUnit: computed.totalLifted > 0 ? displayUnit : null,
-                  confirmedMissingLogs: true,
-                  // Post-workout review fields from the new sheet
-                  strengthFeel: payload.strength_feel ?? null,
-                  fatigueFeel: payload.fatigue_feel ?? null,
-                  pain: payload.pain ?? null,
-                  hitTarget: payload.hit_target ?? null,
-                },
+                data: isMember && memberEnrollmentId && Number.isFinite(memberWeekIndex) && Number.isFinite(memberDayIndex)
+                  ? {
+                      kind: "member" as const,
+                      enrollmentId: memberEnrollmentId,
+                      weekIndex: memberWeekIndex!,
+                      dayIndex: memberDayIndex!,
+                      requiredRows,
+                      activityTimestamps: heartbeats,
+                      completionMethod: "manual",
+                      completionSource: "workout_view",
+                      sessionRating: payload.session_rating ?? null,
+                      notes: payload.client_notes ?? null,
+                      actualDurationMin: resolvedDurationMin,
+                      sessionWeightTotal: computed.totalLifted > 0 ? computed.totalLifted : null,
+                      sessionWeightUnit: computed.totalLifted > 0 ? displayUnit : null,
+                      confirmedMissingLogs: true,
+                    }
+                  : {
+                      kind: "client" as const,
+                      dayId,
+                      requiredRows,
+                      activityTimestamps: heartbeats,
+                      completionMethod: "manual",
+                      completionSource: "workout_view",
+                      sessionRating: payload.session_rating ?? null,
+                      notes: payload.client_notes ?? completion?.client_notes ?? null,
+                      actualDurationMin: resolvedDurationMin,
+                      sessionWeightTotal: computed.totalLifted > 0 ? computed.totalLifted : null,
+                      sessionWeightUnit: computed.totalLifted > 0 ? displayUnit : null,
+                      confirmedMissingLogs: true,
+                      strengthFeel: payload.strength_feel ?? null,
+                      fatigueFeel: payload.fatigue_feel ?? null,
+                      pain: payload.pain ?? null,
+                      hitTarget: payload.hit_target ?? null,
+                    },
               });
               if (draftKey) clearLocalDraft(draftKey);
               clearHeartbeatTimestamps(completion?.id ?? null);
@@ -1829,7 +1854,9 @@ function WorkoutDay({
               // Submit the post-workout review if any review fields were filled in
               const hasReviewData = payload.strength_feel || payload.fatigue_feel ||
                 payload.pain != null || payload.hit_target;
-              if (hasReviewData) {
+              // Review save: only for client kind — member reviews are stored
+              // inside completeWorkout for the member path.
+              if (hasReviewData && !isMember) {
                 try {
                   await submitOrEditReview({
                     data: {
