@@ -25,22 +25,6 @@ function weekdayFromDate(dateISO: string): WeekDay | null {
   return (WEEK_DAYS.find((wd) => WEEKDAY_INDEX[wd] === dow) ?? null) as WeekDay | null;
 }
 
-function committedDatesInWindow(
-  weekStart: Date,
-  weekDurationDays: number,
-  committed: WeekDay[],
-): string[] {
-  const dates: string[] = [];
-  for (let i = 0; i < weekDurationDays; i++) {
-    const candidate = addDays(weekStart, i);
-    const weekday = (WEEK_DAYS.find((wd) => WEEKDAY_INDEX[wd] === candidate.getDay()) ?? null) as WeekDay | null;
-    if (weekday && committed.includes(weekday)) {
-      dates.push(format(candidate, "yyyy-MM-dd"));
-    }
-  }
-  return dates;
-}
-
 function committedDatesBetween(
   start: Date,
   end: Date,
