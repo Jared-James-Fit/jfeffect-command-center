@@ -2240,7 +2240,7 @@ function ExerciseBlock({ row, dayId, dayTitle, clientId, blockId, existingResult
     if (!tasks.length) return;
     await Promise.all(tasks);
     onChange();
-    await qc.refetchQueries({ queryKey: ["pl-day-results"] });
+    await qc.refetchQueries({ queryKey: ["pl-day-results", dayId] });
     setFillToken((t) => t + 1);
     toast.success(`Applied to ${tasks.length} remaining set${tasks.length === 1 ? "" : "s"} as draft`);
   };
@@ -2365,16 +2365,30 @@ function ExerciseBlock({ row, dayId, dayTitle, clientId, blockId, existingResult
         const firstUnit = (firstSet?.actual_load_unit as "kg" | "lb" | undefined) ?? activeUnit;
         const displayLoad = Number(Number(firstLoad ?? 0).toFixed(2));
         const onFill = async () => {
-          if (!hasFirstWeight) return;
+          // Refetch fresh results before reading Set 1 so the second fill always
+          // uses the current Set 1 value, not a stale cached snapshot.
+          await qc.refetchQueries({ queryKey: ["pl-day-results", dayId] });
+          const freshResults = (qc.getQueryData([
+            "pl-day-results",
+            dayId,
+            clientId,
+            adapter?.kind ?? null,
+            adapter?.ref.ownerId ?? null,
+          ]) as any[]) ?? existingResults;
+          const freshFirstSet = freshResults.find((x: any) => x.set_index === 1);
+          const freshFirstLoad = freshFirstSet?.actual_load;
+          const freshHasFirstWeight = freshFirstLoad != null && isFinite(Number(freshFirstLoad));
+          if (!freshHasFirstWeight) return;
+          const freshFirstUnit = (freshFirstSet?.actual_load_unit as "kg" | "lb" | undefined) ?? activeUnit;
           setQuickFillLoading(true);
           try {
             await applyToRemaining(1, {
-              load: String(firstLoad),
-              reps: firstSet?.actual_reps != null ? String(firstSet.actual_reps) : "",
-              rpe: firstSet?.actual_rpe_num != null
-                ? String(firstSet.actual_rpe_num)
-                : firstSet?.actual_rpe != null ? String(firstSet.actual_rpe) : "",
-              unit: firstUnit,
+              load: String(freshFirstLoad),
+              reps: freshFirstSet?.actual_reps != null ? String(freshFirstSet.actual_reps) : "",
+              rpe: freshFirstSet?.actual_rpe_num != null
+                ? String(freshFirstSet.actual_rpe_num)
+                : freshFirstSet?.actual_rpe != null ? String(freshFirstSet.actual_rpe) : "",
+              unit: freshFirstUnit,
             });
           } finally {
             setQuickFillLoading(false);
@@ -2873,6 +2887,10 @@ function SetRow({
   // server response can never overwrite what the user is still typing.
   const recentlySavedRef = useRef(false);
   const recentlySavedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Keep a live reference to the latest server result so the force-hydrate
+  // effect can never read a stale closure when parent bumps fillToken.
+  const latestExistingRef = useRef(existing);
+  useEffect(() => { latestExistingRef.current = existing; }, [existing]);
   useEffect(() => { focusedFieldRef.current = focusedField; }, [focusedField]);
   useEffect(() => {
     // Never overwrite a field the user is actively typing in, and never
@@ -2923,18 +2941,20 @@ function SetRow({
   // from the freshly-written `existing` regardless of the recent-save guard
   // and the focused-field guard. This is an explicit user action that must
   // win over those defensive heuristics; otherwise re-filling after an
-  // autosave on a later set leaves it visually empty.
+  // autosave on a later set leaves it visually empty. We read from a ref so
+  // the effect always sees the latest `existing` prop, not a stale closure.
   useEffect(() => {
     if (!forceHydrateToken) return;
+    const latest = latestExistingRef.current;
     // Cancel any pending autosave so it can't immediately overwrite the
     // values we're about to display.
     recentlySavedRef.current = false;
     setFocusedField(null);
-    const display = existing?.actual_load != null ? fmtLoad(existing.actual_load) : "";
+    const display = latest?.actual_load != null ? fmtLoad(latest.actual_load) : "";
     setLoad(display);
-    if (existing?.actual_reps != null) setReps(String(existing.actual_reps));
-    if (existing?.actual_rpe_num != null) setRpe(String(existing.actual_rpe_num));
-    else if (existing?.actual_rpe != null) setRpe(existing.actual_rpe);
+    if (latest?.actual_reps != null) setReps(String(latest.actual_reps));
+    if (latest?.actual_rpe_num != null) setRpe(String(latest.actual_rpe_num));
+    else if (latest?.actual_rpe != null) setRpe(latest.actual_rpe);
     queueMicrotask(() => { saveRef.current?.markClean(); });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [forceHydrateToken]);
