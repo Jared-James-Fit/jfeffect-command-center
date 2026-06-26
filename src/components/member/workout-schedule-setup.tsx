@@ -18,7 +18,7 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Calendar, CheckCircle2, AlertCircle } from "lucide-react";
 import { toast } from "sonner";
-import { format, addDays, nextDay, startOfDay } from "date-fns";
+import { format, addDays } from "date-fns";
 import { rescheduleDay } from "@/lib/member-plans.functions";
 
 const WEEKDAYS = [
@@ -80,46 +80,40 @@ export function WorkoutScheduleSetup({
     });
   };
 
-  // Generate preview schedule
+  // Generate preview schedule by walking the calendar forward from the
+  // chosen start date and assigning each matching weekday to workouts in
+  // (week, day) order. The previous implementation computed each workout's
+  // date independently with `(target - startDow + 7) % 7 + weekOffset*7`,
+  // which scrambled the order whenever the start date was not the earliest
+  // selected weekday (e.g. start Tue with Mon/Wed/Fri placed Day 1 "Mon" a
+  // full week after Day 2 "Wed"). Walking the calendar guarantees Day N+1
+  // always falls after Day N for every Mon/Wed/Fri, Tue/Thu/Sat, and
+  // Mon/Tue/Wed/Thu pattern.
   const previewSchedule = useMemo(() => {
     if (selectedDays.length !== daysPerWeek || !startDate) return [];
 
+    const sortedWorkouts = [...workoutDays].sort(
+      (a, b) => a.week - b.week || a.day - b.day,
+    );
     const start = new Date(startDate + "T00:00:00");
-    const sortedDays = [...selectedDays].sort((a, b) => {
-      const order = [1, 2, 3, 4, 5, 6, 0];
-      return order.indexOf(a) - order.indexOf(b);
-    });
-
-    // Generate dates for each workout day
-    const result: { week: number; day: number; date: string; title?: string | null }[] = [];
-
-    for (const wd of workoutDays) {
-      const daySlot = (wd.day - 1) % daysPerWeek; // 0-indexed slot within the week
-      const weekOffset = wd.week - 1; // 0-indexed week
-
-      // Find the first occurrence of the chosen weekday at or after start
-      const targetWeekday = sortedDays[daySlot];
-      let date = new Date(start);
-
-      // Move to the first occurrence of targetWeekday
-      const startDayOfWeek = start.getDay();
-      let daysToAdd = (targetWeekday - startDayOfWeek + 7) % 7;
-      if (daysToAdd === 0 && weekOffset === 0 && daySlot === 0) daysToAdd = 0;
-      date = addDays(date, daysToAdd);
-
-      // Add weeks offset
-      date = addDays(date, weekOffset * 7);
-
-      result.push({
-        week: wd.week,
-        day: wd.day,
-        date: format(date, "yyyy-MM-dd"),
-        title: wd.title,
-      });
+    const needed = sortedWorkouts.length;
+    const dates: string[] = [];
+    const maxScan = (totalWeeks + 2) * 7 + 14; // generous safety cap
+    let cursor = new Date(start);
+    for (let i = 0; i < maxScan && dates.length < needed; i++) {
+      if (selectedDays.includes(cursor.getDay())) {
+        dates.push(format(cursor, "yyyy-MM-dd"));
+      }
+      cursor = addDays(cursor, 1);
     }
 
-    return result;
-  }, [selectedDays, startDate, daysPerWeek, workoutDays]);
+    return sortedWorkouts.map((wd, i) => ({
+      week: wd.week,
+      day: wd.day,
+      date: dates[i] ?? format(addDays(start, i), "yyyy-MM-dd"),
+      title: wd.title,
+    }));
+  }, [selectedDays, startDate, daysPerWeek, totalWeeks, workoutDays]);
 
   const handleConfirm = async () => {
     if (selectedDays.length !== daysPerWeek) {

@@ -58,13 +58,31 @@ function resolveAvailabilityPool(client: any): WeekDay[] {
   return WEEK_DAYS.filter((d) => result.includes(d));
 }
 
-function dateForWeekday(weekStart: Date, weekday: WeekDay): Date {
-  const startDow = weekStart.getDay(); // 0..6
-  const targetDow = WEEKDAY_INDEX[weekday];
-  // Treat week as Monday-first
-  const startOffset = (startDow + 6) % 7; // distance from Monday
-  const targetOffset = (targetDow + 6) % 7;
-  return addDays(weekStart, targetOffset - startOffset);
+/**
+ * Return every pool weekday that falls inside the block-week window
+ * [weekStart, weekStart + weekDurationDays), in calendar order. The legacy
+ * `dateForWeekday` helper treated each week as Monday-first, so when a block
+ * started mid-week (e.g. Wed) a pool of [Mon, Wed, Fri] placed "Mon" 2 days
+ * BEFORE the block start. Walking the window directly keeps every scheduled
+ * date inside the block and preserves chronological ordering across all
+ * committed-day patterns (Mon/Wed/Fri, Tue/Thu/Sat, Mon/Tue/Wed/Thu, etc.).
+ */
+function poolDatesInWindow(
+  weekStart: Date,
+  weekDurationDays: number,
+  pool: WeekDay[],
+  exclude: Set<WeekDay>,
+): { weekday: WeekDay; date: Date }[] {
+  const out: { weekday: WeekDay; date: Date }[] = [];
+  for (let i = 0; i < weekDurationDays; i++) {
+    const candidate = addDays(weekStart, i);
+    const dow = candidate.getDay();
+    const wd = (WEEK_DAYS.find((x) => WEEKDAY_INDEX[x] === dow) ?? null) as WeekDay | null;
+    if (wd && pool.includes(wd) && !exclude.has(wd)) {
+      out.push({ weekday: wd, date: candidate });
+    }
+  }
+  return out;
 }
 
 function classifyDayType(focus: string | null | undefined): "Training" | "Rest" | "High" {
@@ -163,8 +181,11 @@ export async function buildSchedulePreview(blockId: string): Promise<SchedulePre
       }
     }
 
-    // Walk unlocked days, pull next available weekday from pool
-    const remainingPool = pool.filter((d) => !consumedWeekdays.has(d));
+    // Walk unlocked days, pulling the next available weekday from the pool
+    // in calendar order within this block week (never before weekStart).
+    const weekPoolDates = weekStart
+      ? poolDatesInWindow(weekStart, weekDurationDays, pool, consumedWeekdays)
+      : [];
     let poolCursor = 0;
 
     // Build per-day row first (without cardio)
@@ -181,9 +202,10 @@ export async function buildSchedulePreview(blockId: string): Promise<SchedulePre
           warnings.push(`Locked to ${weekday} but client is no longer available that day.`);
         }
       } else if (weekStart) {
-        if (poolCursor < remainingPool.length) {
-          weekday = remainingPool[poolCursor++];
-          dateISO = format(dateForWeekday(weekStart, weekday), "yyyy-MM-dd");
+        const next = weekPoolDates[poolCursor++];
+        if (next) {
+          weekday = next.weekday;
+          dateISO = format(next.date, "yyyy-MM-dd");
         } else {
           warnings.push("No available weekday left for this workout.");
         }
