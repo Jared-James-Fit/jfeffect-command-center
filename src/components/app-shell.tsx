@@ -32,6 +32,7 @@ import { useSidebarPins, MAX_PINS, type PinScope } from "@/lib/sidebar-pins";
 import { toast } from "sonner";
 import { CommandPalette } from "@/components/command-palette";
 import type { AdminRole } from "@/lib/admin-route-registry";
+import { DualAccountSwitcher } from "@/components/dual-account-switcher";
 
 export interface NavItem {
   to: string;
@@ -717,6 +718,7 @@ export function AppShell({ items, bottomItems: customBottomItems, title, childre
         </header>
 
         <main className="w-full max-w-full box-border min-w-0 flex-1 overflow-x-hidden pb-[calc(140px+env(safe-area-inset-bottom))] md:pb-0">
+          <DualAccountSwitcher />
           {children}
         </main>
 
