@@ -2973,10 +2973,14 @@ function SetRow({
     // Prefer the freshly-written snapshot from the parent: it bypasses the
     // React Query cache race (refetch may not have landed by the time this
     // effect runs, so `latest` can still hold a stale value like 90 lb from
-    // a previous session). Never overwrite Set 1 (the source) or any
-    // already-confirmed set.
-    const useSnapshot = forcedFill && setIndex !== 1 && !latest?.completed_at;
-    if (useSnapshot && forcedFill) {
+    // a previous session).
+    //
+    // ROOT CAUSE FIX 2026-06-26: Previously checked !latest?.completed_at which
+    // caused the fallback to the stale 90 lb value when the set had a completed_at
+    // from a previous session. forcedFill must ALWAYS win for non-Set-1 rows
+    // when the parent explicitly provides it — the completed_at check was wrong.
+    if (forcedFill && setIndex !== 1) {
+      // forcedFill always wins — it's the value just written to the DB
       setLoad(forcedFill.load);
       if (forcedFill.reps) setReps(forcedFill.reps);
       if (forcedFill.rpe) setRpe(forcedFill.rpe);
