@@ -9,7 +9,14 @@ import { defaultRestRange, type ExerciseCategory } from "@/lib/exercise-metadata
  * which replaces whatever timer was running. A floating bar renders at the
  * bottom of the viewport (inside the focus-mode overlay too) and stays
  * usable on mobile, tablet, desktop.
+ *
+ * ROOT CAUSE FIX 2026-06-26: Timer state is now persisted to localStorage
+ * so it survives app backgrounding, page navigation, and PWA restarts.
+ * The timer uses wall-clock time (Date.now() - startedAt) so it continues
+ * correctly even when the app is suspended by iOS.
  */
+
+const LS_KEY = "jfeffect:rest-timer-state";
 
 type RestTimerArgs = {
   exerciseName: string;
@@ -18,6 +25,18 @@ type RestTimerArgs = {
   seconds: number | null;
   category: ExerciseCategory;
   /** Stable key so re-firing the same set does not restart the timer. */
+  signalKey: string;
+};
+
+type TimerState = {
+  exerciseName: string;
+  setIndex: number;
+  seconds: number;
+  category: ExerciseCategory;
+  startedAt: number;
+  paused: boolean;
+  /** Frozen remaining when paused. */
+  remainingAtPause: number | null;
   signalKey: string;
 };
 
@@ -35,20 +54,49 @@ export function useRestTimer() {
   return v;
 }
 
+function loadFromStorage(): TimerState | null {
+  try {
+    const raw = localStorage.getItem(LS_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as TimerState;
+    // Discard stale timers: if the timer would have finished more than 5 minutes
+    // ago, don't restore it (it's irrelevant).
+    const elapsed = Math.floor((Date.now() - parsed.startedAt) / 1000);
+    if (!parsed.paused && elapsed > parsed.seconds + 300) {
+      localStorage.removeItem(LS_KEY);
+      return null;
+    }
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+function saveToStorage(state: TimerState | null) {
+  try {
+    if (state == null) {
+      localStorage.removeItem(LS_KEY);
+    } else {
+      localStorage.setItem(LS_KEY, JSON.stringify(state));
+    }
+  } catch {
+    // localStorage unavailable (private browsing, storage full) — ignore
+  }
+}
+
 export function ActiveRestTimerProvider({ children }: { children: ReactNode }) {
-  const [state, setState] = useState<{
-    exerciseName: string;
-    setIndex: number;
-    seconds: number;
-    category: ExerciseCategory;
-    startedAt: number;
-    paused: boolean;
-    /** Frozen remaining when paused. */
-    remainingAtPause: number | null;
-    signalKey: string;
-  } | null>(null);
+  const [state, setStateRaw] = useState<TimerState | null>(() => loadFromStorage());
   const [tick, setTick] = useState(0);
-  const lastSignal = useRef<string | null>(null);
+  const lastSignal = useRef<string | null>(state?.signalKey ?? null);
+
+  // Wrap setState to also persist to localStorage
+  const setState = useCallback((next: TimerState | null | ((prev: TimerState | null) => TimerState | null)) => {
+    setStateRaw((prev) => {
+      const resolved = typeof next === "function" ? next(prev) : next;
+      saveToStorage(resolved);
+      return resolved;
+    });
+  }, []);
 
   const startRestTimer = useCallback((args: RestTimerArgs) => {
     if (lastSignal.current === args.signalKey) return; // dedupe identical completions
@@ -66,9 +114,9 @@ export function ActiveRestTimerProvider({ children }: { children: ReactNode }) {
       remainingAtPause: null,
       signalKey: args.signalKey,
     });
-  }, []);
+  }, [setState]);
 
-  const dismissRestTimer = useCallback(() => setState(null), []);
+  const dismissRestTimer = useCallback(() => setState(null), [setState]);
 
   // 1Hz ticker — only while running.
   useEffect(() => {
@@ -76,6 +124,17 @@ export function ActiveRestTimerProvider({ children }: { children: ReactNode }) {
     const id = setInterval(() => setTick((t) => t + 1), 1000);
     return () => clearInterval(id);
   }, [state?.paused, state?.startedAt, state == null]);
+
+  // Re-check remaining on visibility change (app returning from background)
+  useEffect(() => {
+    const onVisible = () => {
+      if (document.visibilityState === "visible") {
+        setTick((t) => t + 1); // force re-render to recalculate elapsed
+      }
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => document.removeEventListener("visibilitychange", onVisible);
+  }, []);
 
   const remaining = (() => {
     if (!state) return 0;
