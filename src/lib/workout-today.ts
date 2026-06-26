@@ -51,16 +51,37 @@ function isSameDay(a: Date, b: Date) {
   return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
 }
 
-export function dayScheduledDate(item: WorkoutItem): Date | null {
-  // 1) explicit scheduled_date on the day
+/**
+ * Resolve the calendar date for a workout day.
+ *
+ * Priority:
+ *   1. day.scheduled_date (explicit reschedule — always wins)
+ *   2. week.training_days (coach set specific days during assignment)
+ *   3. committedTrainingDays (client's committed schedule, e.g. Mon/Wed/Fri)
+ *   4. Linear fallback (Day 1 = week start, Day 2 = +1 day, etc.)
+ *
+ * ROOT CAUSE FIX 2026-06-26: pl_weeks.training_days is null for most weeks
+ * (only set when coach explicitly configures it). Without committedTrainingDays
+ * as fallback, the function used linear distribution which ignores the client's
+ * actual schedule, causing dots to appear on wrong calendar days.
+ */
+export function dayScheduledDate(
+  item: WorkoutItem,
+  committedTrainingDays?: string[] | null,
+): Date | null {
+  // 1) explicit scheduled_date on the day — always wins (manual reschedule)
   if (item.day?.scheduled_date) {
     const d = parseLocalDate(item.day.scheduled_date);
     if (d) return d;
   }
-  // 2) derive from week range + day_index, restricted to week.training_days if present
+  // 2) derive from week range + day_index
   const range = item.block && item.week ? weekDisplayRange(item.block, item.week) : null;
   if (!range) return null;
-  const trainingDays: string[] = normalizeWeekdays(item.week?.training_days);
+  // Use week.training_days if set, otherwise fall back to committedTrainingDays
+  const weekTrainingDays = normalizeWeekdays(item.week?.training_days);
+  const trainingDays = weekTrainingDays.length > 0
+    ? weekTrainingDays
+    : normalizeWeekdays(committedTrainingDays);
   if (trainingDays.length > 0) {
     // Find the Nth training-day within the week range that matches day_index ordering.
     const days: Date[] = [];
@@ -72,7 +93,7 @@ export function dayScheduledDate(item: WorkoutItem): Date | null {
     const idx = Math.max(1, item.day?.day_index ?? 1) - 1;
     if (days[idx]) return parseLocalDate(days[idx]);
   }
-  // 3) fallback: linear distribution across the week
+  // 3) fallback: linear distribution across the week (no schedule configured)
   const idx = Math.max(1, item.day?.day_index ?? 1) - 1;
   return parseLocalDate(addDays(range.start, Math.min(6, idx)));
 }
