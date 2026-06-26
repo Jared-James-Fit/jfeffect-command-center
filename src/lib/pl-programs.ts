@@ -1378,7 +1378,7 @@ export async function getClientWorkouts(clientId: string) {
   // block is "current".
   const { data: blocks } = await sb
     .from("pl_blocks")
-    .select("*")
+    .select("*, clients!pl_blocks_client_id_fkey(id, committed_training_days, available_training_days, preferred_training_days, unavailable_training_days)")
     .eq("client_id", clientId)
     .eq("client_visible", true)
     .neq("status", "Archived")

@@ -2,7 +2,8 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { WEEK_DAYS, type WeekDay } from "@/lib/training-schedule";
-import { addDays, format, parseISO } from "date-fns";
+import { addDays, format } from "date-fns";
+import { parseLocalDate, todayLocalISO } from "@/lib/today";
 
 // ───────────────────────────────────────────────────────────────────────────
 // Phase 3-5 server fns: bulk reschedules, coach overrides, schedule lock.
@@ -18,8 +19,23 @@ const WEEKDAY_INDEX: Record<WeekDay, number> = {
 };
 
 function weekdayFromDate(dateISO: string): WeekDay | null {
-  const dow = parseISO(dateISO).getDay();
+  const parsed = parseLocalDate(dateISO);
+  if (!parsed) return null;
+  const dow = parsed.getDay();
   return (WEEK_DAYS.find((wd) => WEEKDAY_INDEX[wd] === dow) ?? null) as WeekDay | null;
+}
+
+function committedDatesBetween(
+  start: Date,
+  end: Date,
+  committed: WeekDay[],
+): string[] {
+  const dates: string[] = [];
+  for (let d = start; d <= end; d = addDays(d, 1)) {
+    const weekday = (WEEK_DAYS.find((wd) => WEEKDAY_INDEX[wd] === d.getDay()) ?? null) as WeekDay | null;
+    if (weekday && committed.includes(weekday)) dates.push(format(d, "yyyy-MM-dd"));
+  }
+  return dates;
 }
 
 type Role = "client" | "member" | "coach" | "admin";
@@ -359,7 +375,7 @@ export const rescheduleFromCommittedDays = createServerFn({ method: "POST" })
 
     const { data: blocks } = await supabase
       .from("pl_blocks")
-      .select("id, start_date, week_duration_days, status")
+      .select("id, start_date, end_date, week_duration_days, weeks, status")
       .eq("client_id", data.clientId)
       .neq("status", "Archived");
     const blockList = (blocks ?? []).filter((b: any) => b.start_date);
@@ -397,13 +413,18 @@ export const rescheduleFromCommittedDays = createServerFn({ method: "POST" })
       if (c.completed_at || c.in_progress_at || c.started_at) touchedDayIds.add(c.day_id);
     }
 
-    const todayISO = format(new Date(), "yyyy-MM-dd");
+    const todayISO = todayLocalISO();
 
-    const daysByWeek = new Map<string, any[]>();
+    const weekById = new Map<string, any>();
+    for (const w of weekList) weekById.set(w.id, w);
+
+    const daysByBlock = new Map<string, any[]>();
     for (const d of dayList) {
-      const list = daysByWeek.get(d.week_id) ?? [];
+      const w = weekById.get(d.week_id);
+      if (!w?.block_id) continue;
+      const list = daysByBlock.get(w.block_id) ?? [];
       list.push(d);
-      daysByWeek.set(d.week_id, list);
+      daysByBlock.set(w.block_id, list);
     }
 
     const moves: Array<{
@@ -415,55 +436,59 @@ export const rescheduleFromCommittedDays = createServerFn({ method: "POST" })
 
     for (const block of blockList) {
       const dur = (block as any).week_duration_days ?? 7;
-      const startDate = parseISO(block.start_date as string);
+      const startDate = parseLocalDate(block.start_date as string);
+      if (!startDate) continue;
       const blockWeeks = weekList
         .filter((w: any) => w.block_id === block.id)
         .sort((a: any, b: any) => a.week_index - b.week_index);
 
-      for (const w of blockWeeks) {
-        const weekStart = addDays(startDate, Math.max(0, (w.week_index ?? 1) - 1) * dur);
-        const weekEndISO = format(addDays(weekStart, 6), "yyyy-MM-dd");
-        if (weekEndISO < todayISO) continue; // past week
+      // Realign chronologically across the whole block, not inside each
+      // block-start week. This is the important fix for clients whose block
+      // starts on (for example) Friday but their committed calendar schedule is
+      // Mon/Wed/Fri: future workouts must land on the actual upcoming
+      // committed dates in order, so the portal's Mon-Sun calendar shows the
+      // correct dots and selected days.
+      const explicitEnd = parseLocalDate((block as any).end_date ?? null);
+      const blockWeekCount = ((block as any).weeks ?? blockWeeks.length) || 1;
+      const blockEnd = explicitEnd ?? addDays(startDate, Math.max(1, blockWeekCount * dur) - 1);
+      if (format(blockEnd, "yyyy-MM-dd") < todayISO) continue;
 
-        const weekDays = (daysByWeek.get(w.id) ?? [])
-          .slice()
-          .sort((a: any, b: any) => a.day_index - b.day_index);
+      const blockDays = (daysByBlock.get(block.id) ?? [])
+        .slice()
+        .sort((a: any, b: any) => {
+          const wa = weekById.get(a.week_id)?.week_index ?? 0;
+          const wb = weekById.get(b.week_id)?.week_index ?? 0;
+          return wa - wb || a.day_index - b.day_index;
+        });
 
-        const committedDates = committed.map((wd) =>
-          format(addDays(weekStart, (WEEKDAY_INDEX[wd] + 6) % 7), "yyyy-MM-dd"),
-        );
-
-        // Classify days as preserved vs movable.
-        const consumed = new Set<string>();
-        const movable: any[] = [];
-        for (const d of weekDays) {
-          const isLocked = !!d.schedule_locked;
-          const isManual = d.schedule_source === "manual";
-          const isTouched = touchedDayIds.has(d.id);
-          const isPast = d.scheduled_date && d.scheduled_date < todayISO;
-          const preserved = isLocked || isManual || isTouched || isPast;
-          if (preserved) {
-            if (d.scheduled_date) consumed.add(d.scheduled_date);
-          } else {
-            movable.push(d);
-          }
+      const consumed = new Set<string>();
+      const movable: any[] = [];
+      for (const d of blockDays) {
+        const isLocked = !!d.schedule_locked;
+        const isManual = d.schedule_source === "manual";
+        const isTouched = touchedDayIds.has(d.id);
+        const isPast = d.scheduled_date && d.scheduled_date < todayISO;
+        const preserved = isLocked || isManual || isTouched || isPast;
+        if (preserved) {
+          if (d.scheduled_date) consumed.add(d.scheduled_date);
+        } else {
+          movable.push(d);
         }
+      }
 
-        const pool = committedDates.filter(
-          (dt) => !consumed.has(dt) && dt >= todayISO,
-        );
-        let cursor = 0;
-        for (const d of movable) {
-          if (cursor >= pool.length) break;
-          const next = pool[cursor++];
-          if (d.scheduled_date === next) continue;
-          moves.push({
-            dayId: d.id,
-            prev: d.scheduled_date ?? null,
-            next,
-            prevSource: d.schedule_source ?? null,
-          });
-        }
+      const pool = committedDatesBetween(startDate, blockEnd, committed)
+        .filter((dt) => dt >= todayISO && !consumed.has(dt));
+      let cursor = 0;
+      for (const d of movable) {
+        if (cursor >= pool.length) break;
+        const next = pool[cursor++];
+        if (d.scheduled_date === next) continue;
+        moves.push({
+          dayId: d.id,
+          prev: d.scheduled_date ?? null,
+          next,
+          prevSource: d.schedule_source ?? null,
+        });
       }
     }
 

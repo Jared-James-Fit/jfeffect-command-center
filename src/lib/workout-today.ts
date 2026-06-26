@@ -47,6 +47,19 @@ function normalizeWeekdays(raw: unknown): string[] {
   return out;
 }
 
+function clientTrainingDays(item: WorkoutItem): string[] {
+  const client = item.block?.clients ?? item.block?.client ?? null;
+  const committed = normalizeWeekdays(client?.committed_training_days);
+  if (committed.length > 0) return committed;
+
+  const available = normalizeWeekdays(client?.available_training_days);
+  const preferred = normalizeWeekdays(client?.preferred_training_days);
+  const unavailable = new Set(normalizeWeekdays(client?.unavailable_training_days));
+  const filteredAvailable = available.filter((d) => !unavailable.has(d));
+  if (filteredAvailable.length > 0) return filteredAvailable;
+  return preferred.filter((d) => !unavailable.has(d));
+}
+
 function isSameDay(a: Date, b: Date) {
   return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
 }
@@ -72,7 +85,23 @@ export function dayScheduledDate(item: WorkoutItem): Date | null {
     const idx = Math.max(1, item.day?.day_index ?? 1) - 1;
     if (days[idx]) return parseLocalDate(days[idx]);
   }
-  // 3) fallback: linear distribution across the week
+  // 3) fallback: if the week row has no training_days snapshot, use the
+  // client's committed/available/preferred days from the joined block client
+  // record and walk the actual calendar window. This keeps unscheduled legacy
+  // rows from being distributed Mon/Tue/Wed when the client trains Mon/Wed/Fri.
+  const clientDays = clientTrainingDays(item);
+  if (clientDays.length > 0) {
+    const days: Date[] = [];
+    for (let i = 0; i < 7; i++) {
+      const d = addDays(range.start, i);
+      if (d > range.end) break;
+      if (clientDays.includes(DAY_NAMES[d.getDay()])) days.push(d);
+    }
+    const idx = Math.max(1, item.day?.day_index ?? 1) - 1;
+    if (days[idx]) return parseLocalDate(days[idx]);
+  }
+
+  // 4) last-resort fallback: linear distribution across the week.
   const idx = Math.max(1, item.day?.day_index ?? 1) - 1;
   return parseLocalDate(addDays(range.start, Math.min(6, idx)));
 }

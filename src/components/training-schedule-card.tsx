@@ -108,6 +108,8 @@ export function TrainingScheduleCard({ client, editable = true, compact = false,
     qc.invalidateQueries({ queryKey: ["my-client"] });
     qc.invalidateQueries({ queryKey: ["my-client-schedule-gate"] });
     qc.invalidateQueries({ queryKey: ["workouts-experience-client", client.id] });
+    qc.invalidateQueries({ queryKey: ["my-workouts", client.id] });
+    qc.invalidateQueries({ queryKey: ["cal-client-workouts", client.id] });
     qc.invalidateQueries({ queryKey: ["client-schedule", client.id] });
     qc.invalidateQueries({ queryKey: ["pl-days"] });
     qc.invalidateQueries({ queryKey: ["workout-today"] });

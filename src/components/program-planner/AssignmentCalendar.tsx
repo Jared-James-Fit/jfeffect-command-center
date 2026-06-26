@@ -6,6 +6,7 @@
 import { useMemo, useState } from "react";
 import { ChevronLeft, ChevronRight, Calendar as CalendarIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { todayLocalISO } from "@/lib/today";
 
 export interface CalendarExistingDay {
   id: string;
@@ -75,7 +76,7 @@ export function AssignmentCalendar({ existing, incoming, initialMonth, onDayClic
   for (let i = 0; i < firstWeekday; i++) cells.push({});
   for (let d = 1; d <= daysInMonth; d++) cells.push({ day: d, iso: isoFor(y, monthIdx, d) });
 
-  const todayISO = today.toISOString().slice(0, 10);
+  const todayISO = todayLocalISO();
 
   return (
     <div className="rounded-md border border-border bg-card">
