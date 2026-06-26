@@ -2207,6 +2207,15 @@ function ExerciseBlock({ row, dayId, dayTitle, clientId, blockId, existingResult
   // later set) leaves the later sets visually empty even though the DB has
   // the new draft values.
   const [fillToken, setFillToken] = useState(0);
+  // Snapshot of the load/reps/rpe/unit just written by Fill All Sets so
+  // child SetRows can display the freshly-filled values without waiting
+  // on the React Query cache refetch (which can race the token bump).
+  const [fillSnapshot, setFillSnapshot] = useState<{
+    load: string;
+    reps: string;
+    rpe: string;
+    unit: "kg" | "lb";
+  } | null>(null);
 
   const applyToRemaining = async (fromSetIndex: number, payload: { load: string; reps: string; rpe: string; unit: "kg" | "lb" }) => {
     if (!clientId) return;
@@ -2241,6 +2250,12 @@ function ExerciseBlock({ row, dayId, dayTitle, clientId, blockId, existingResult
     await Promise.all(tasks);
     onChange();
     await qc.refetchQueries({ queryKey: ["pl-day-results", dayId] });
+    setFillSnapshot({
+      load: loadNum != null ? String(loadNum) : "",
+      reps: repsNum != null ? String(repsNum) : "",
+      rpe: payload.rpe ?? "",
+      unit: payload.unit,
+    });
     setFillToken((t) => t + 1);
     toast.success(`Applied to ${tasks.length} remaining set${tasks.length === 1 ? "" : "s"} as draft`);
   };
@@ -2467,6 +2482,7 @@ function ExerciseBlock({ row, dayId, dayTitle, clientId, blockId, existingResult
               hasUncompletedAfter={hasUncompletedAfter}
               onApplyToRemaining={applyToRemaining}
               forceHydrateToken={fillToken}
+              forcedFill={fillSnapshot}
               readonly={readonly}
               unit={activeUnit}
               hideWeight={hideWeight}
@@ -2750,6 +2766,7 @@ function SetRow({
   targetReps, targetRpe, targetRir, suggestedWeight,
   repTarget, rpeTarget, rirTarget,
   hasUncompletedAfter, onApplyToRemaining, forceHydrateToken = 0,
+  forcedFill = null,
   readonly = false, unit = "kg", hideWeight = false, focusMode = false, onChange, onSetCompleted,
   setCount, measurementType = "reps", prescribedDurationSeconds = null,
 }: {
@@ -2777,6 +2794,9 @@ function SetRow({
    *  from the freshly-saved `existing` even if the recent-save guard would
    *  otherwise block it. */
   forceHydrateToken?: number;
+  /** Snapshot of values just written by Fill All Sets — used to bypass
+   *  the cache race when force-hydrating. */
+  forcedFill?: { load: string; reps: string; rpe: string; unit: "kg" | "lb" } | null;
   readonly?: boolean;
   unit?: "kg" | "lb";
   hideWeight?: boolean;
@@ -2950,11 +2970,23 @@ function SetRow({
     // values we're about to display.
     recentlySavedRef.current = false;
     setFocusedField(null);
-    const display = latest?.actual_load != null ? fmtLoad(latest.actual_load) : "";
-    setLoad(display);
-    if (latest?.actual_reps != null) setReps(String(latest.actual_reps));
-    if (latest?.actual_rpe_num != null) setRpe(String(latest.actual_rpe_num));
-    else if (latest?.actual_rpe != null) setRpe(latest.actual_rpe);
+    // Prefer the freshly-written snapshot from the parent: it bypasses the
+    // React Query cache race (refetch may not have landed by the time this
+    // effect runs, so `latest` can still hold a stale value like 90 lb from
+    // a previous session). Never overwrite Set 1 (the source) or any
+    // already-confirmed set.
+    const useSnapshot = forcedFill && setIndex !== 1 && !latest?.completed_at;
+    if (useSnapshot && forcedFill) {
+      setLoad(forcedFill.load);
+      if (forcedFill.reps) setReps(forcedFill.reps);
+      if (forcedFill.rpe) setRpe(forcedFill.rpe);
+    } else {
+      const display = latest?.actual_load != null ? fmtLoad(latest.actual_load) : "";
+      setLoad(display);
+      if (latest?.actual_reps != null) setReps(String(latest.actual_reps));
+      if (latest?.actual_rpe_num != null) setRpe(String(latest.actual_rpe_num));
+      else if (latest?.actual_rpe != null) setRpe(latest.actual_rpe);
+    }
     queueMicrotask(() => { saveRef.current?.markClean(); });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [forceHydrateToken]);
