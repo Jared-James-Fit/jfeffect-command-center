@@ -4,6 +4,8 @@ import { useAuth } from "@/lib/auth";
 import { DashboardSplash } from "@/components/dashboard-splash";
 import { useClientImpersonation } from "@/lib/client-impersonation";
 import { getLastRoute } from "@/lib/route-persistence";
+import { getViewMode } from "@/lib/view-mode";
+import { supabase } from "@/integrations/supabase/client";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -39,6 +41,25 @@ function IndexRedirect() {
       if (isImpersonating && (role === "admin" || role === "coach")) {
         navigate({ to: "/portal", replace: true });
         return;
+      }
+
+      // Dual-account users (client + staff role): honor their last
+      // selected view (set by <DualAccountSwitcher />). They can flip
+      // back from inside either dashboard at any time.
+      const savedView = getViewMode(user.id);
+      if (savedView && (role === "admin" || role === "coach" || role === "media_manager")) {
+        // Confirm a client record exists before honoring "client" — avoids
+        // sending a staff-only user into /portal if localStorage was seeded
+        // on another account on this device.
+        if (savedView === "client") {
+          void supabase.from("clients").select("id").eq("user_id", user.id).maybeSingle().then(({ data }) => {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            if (data?.id) navigate({ to: "/portal/workouts" as any, replace: true });
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            else navigate({ to: (role === "media_manager" ? "/media" : "/admin") as any, replace: true });
+          });
+          return;
+        }
       }
 
       // Attempt to restore the user's last meaningful route (set by
