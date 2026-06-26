@@ -2240,7 +2240,7 @@ function ExerciseBlock({ row, dayId, dayTitle, clientId, blockId, existingResult
     if (!tasks.length) return;
     await Promise.all(tasks);
     onChange();
-    await qc.refetchQueries({ queryKey: ["pl-day-results"] });
+    await qc.refetchQueries({ queryKey: ["pl-day-results", dayId] });
     setFillToken((t) => t + 1);
     toast.success(`Applied to ${tasks.length} remaining set${tasks.length === 1 ? "" : "s"} as draft`);
   };
