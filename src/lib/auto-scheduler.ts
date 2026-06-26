@@ -1,6 +1,7 @@
 import { supabase } from "@/integrations/supabase/client";
-import { addDays, format, parseISO } from "date-fns";
+import { addDays, format } from "date-fns";
 import { WEEK_DAYS, type WeekDay } from "@/lib/training-schedule";
+import { parseLocalDate } from "@/lib/today";
 
 const sb = supabase as any;
 
@@ -154,7 +155,7 @@ export async function buildSchedulePreview(blockId: string): Promise<SchedulePre
   const rows: PreviewRow[] = [];
   const weekDurationDays = block.week_duration_days ?? 7;
   const startISO: string | null = block.start_date ?? null;
-  const startDate = startISO ? parseISO(startISO) : null;
+  const startDate = startISO ? parseLocalDate(startISO) : null;
 
   for (const w of weekRows) {
     // week_index is 1-based across the codebase (see block-dates.computeWeekRange),
@@ -170,7 +171,8 @@ export async function buildSchedulePreview(blockId: string): Promise<SchedulePre
     if (weekStart) {
       for (const d of weekDays) {
         if (d.schedule_locked && d.scheduled_date) {
-          const dt = parseISO(d.scheduled_date);
+          const dt = parseLocalDate(d.scheduled_date);
+          if (!dt) continue;
           const dow = dt.getDay();
           const weekday = (WEEK_DAYS.find((wd) => WEEKDAY_INDEX[wd] === dow) ?? null) as WeekDay | null;
           if (weekday) {
