@@ -2721,7 +2721,7 @@ function SetRow({
   rowId, workoutId, exerciseId, exerciseName, clientId, setIndex, existing, prevExisting,
   targetReps, targetRpe, targetRir, suggestedWeight,
   repTarget, rpeTarget, rirTarget,
-  hasUncompletedAfter, onApplyToRemaining,
+  hasUncompletedAfter, onApplyToRemaining, forceHydrateToken = 0,
   readonly = false, unit = "kg", hideWeight = false, focusMode = false, onChange, onSetCompleted,
   setCount, measurementType = "reps", prescribedDurationSeconds = null,
 }: {
@@ -2745,6 +2745,10 @@ function SetRow({
   rirTarget?: RangeTarget;
   hasUncompletedAfter?: boolean;
   onApplyToRemaining?: (fromSetIndex: number, payload: { load: string; reps: string; rpe: string; unit: "kg" | "lb" }) => Promise<void> | void;
+  /** Bumped by parent after a "Fill All Sets" write to force re-hydration
+   *  from the freshly-saved `existing` even if the recent-save guard would
+   *  otherwise block it. */
+  forceHydrateToken?: number;
   readonly?: boolean;
   unit?: "kg" | "lb";
   hideWeight?: boolean;
