@@ -301,7 +301,7 @@ function AssignmentStatusStrip({
   range,
 }: {
   r: DirectoryRow;
-  prog: { pct: number; left: number } | null;
+  prog: { pct: number; left: number; week: number; totalWeeks: number } | null;
   range: string | null;
 }) {
   const hasProgram = !!r.block_id;
@@ -321,7 +321,11 @@ function AssignmentStatusStrip({
           ok={hasProgram}
           icon={Dumbbell}
           label="Program"
-          detail={r.block_name}
+          detail={
+            hasProgram && prog
+              ? `${r.block_name ?? "Program"} · Week ${prog.week}/${prog.totalWeeks}`
+              : r.block_name
+          }
           assignLabel="Assign Program"
           onClick={() => (hasProgram ? setSheet("program-view") : setAssignProgramOpen(true))}
         />
