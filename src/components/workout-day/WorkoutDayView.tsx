@@ -2482,6 +2482,7 @@ function ExerciseBlock({ row, dayId, dayTitle, clientId, blockId, existingResult
               hasUncompletedAfter={hasUncompletedAfter}
               onApplyToRemaining={applyToRemaining}
               forceHydrateToken={fillToken}
+              forcedFill={fillSnapshot}
               readonly={readonly}
               unit={activeUnit}
               hideWeight={hideWeight}
