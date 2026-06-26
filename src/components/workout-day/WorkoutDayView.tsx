@@ -2207,6 +2207,15 @@ function ExerciseBlock({ row, dayId, dayTitle, clientId, blockId, existingResult
   // later set) leaves the later sets visually empty even though the DB has
   // the new draft values.
   const [fillToken, setFillToken] = useState(0);
+  // Snapshot of the load/reps/rpe/unit just written by Fill All Sets so
+  // child SetRows can display the freshly-filled values without waiting
+  // on the React Query cache refetch (which can race the token bump).
+  const [fillSnapshot, setFillSnapshot] = useState<{
+    load: string;
+    reps: string;
+    rpe: string;
+    unit: "kg" | "lb";
+  } | null>(null);
 
   const applyToRemaining = async (fromSetIndex: number, payload: { load: string; reps: string; rpe: string; unit: "kg" | "lb" }) => {
     if (!clientId) return;
@@ -2241,6 +2250,12 @@ function ExerciseBlock({ row, dayId, dayTitle, clientId, blockId, existingResult
     await Promise.all(tasks);
     onChange();
     await qc.refetchQueries({ queryKey: ["pl-day-results", dayId] });
+    setFillSnapshot({
+      load: loadNum != null ? String(loadNum) : "",
+      reps: repsNum != null ? String(repsNum) : "",
+      rpe: payload.rpe ?? "",
+      unit: payload.unit,
+    });
     setFillToken((t) => t + 1);
     toast.success(`Applied to ${tasks.length} remaining set${tasks.length === 1 ? "" : "s"} as draft`);
   };
