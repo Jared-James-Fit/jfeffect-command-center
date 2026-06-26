@@ -465,7 +465,8 @@ export const rescheduleFromCommittedDays = createServerFn({ method: "POST" })
       // committed dates in order, so the portal's Mon-Sun calendar shows the
       // correct dots and selected days.
       const explicitEnd = parseLocalDate((block as any).end_date ?? null);
-      const blockEnd = explicitEnd ?? addDays(startDate, Math.max(1, ((block as any).weeks ?? blockWeeks.length || 1) * dur) - 1);
+      const blockWeekCount = ((block as any).weeks ?? blockWeeks.length) || 1;
+      const blockEnd = explicitEnd ?? addDays(startDate, Math.max(1, blockWeekCount * dur) - 1);
       if (format(blockEnd, "yyyy-MM-dd") < todayISO) continue;
 
       const blockDays = (daysByBlock.get(block.id) ?? [])
