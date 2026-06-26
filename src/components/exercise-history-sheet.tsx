@@ -54,7 +54,7 @@ export function ExerciseHistorySheet({
       let q = sb
         .from("pl_row_results")
         .select(`
-          id, set_index, completed_at, updated_at,
+          id, set_index, completed_at, updated_at, created_at,
           actual_reps, actual_rpe, actual_rpe_num,
           entered_value, entered_unit, normalized_kg, normalized_lb,
           actual_load, actual_load_unit,
@@ -76,6 +76,39 @@ export function ExerciseHistorySheet({
       return (data ?? []) as any[];
     },
   });
+
+  // Pull the canonical workout-completion timestamps for every day shown so
+  // we display the actual workout date, not the last-autosave timestamp on
+  // an individual set row.
+  const dayIds = useMemo(() => {
+    const s = new Set<string>();
+    for (const r of rows) {
+      const id = r?.pl_exercise_rows?.pl_days?.id;
+      if (id) s.add(id);
+    }
+    return [...s];
+  }, [rows]);
+
+  const { data: completions = [] } = useQuery({
+    queryKey: ["exercise-history-completions", clientId, dayIds],
+    enabled: !!clientId && dayIds.length > 0 && open,
+    staleTime: 2 * 60_000,
+    gcTime: 10 * 60_000,
+    queryFn: async () => {
+      const { data, error } = await sb
+        .from("pl_day_completions")
+        .select("day_id, completed_at")
+        .eq("client_id", clientId)
+        .in("day_id", dayIds);
+      if (error) throw error;
+      return (data ?? []) as { day_id: string; completed_at: string }[];
+    },
+  });
+  const completionMap = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const c of completions) m.set(c.day_id, c.completed_at);
+    return m;
+  }, [completions]);
 
   const grouped = useMemo(() => {
     const filtered = rows.filter((r: any) => (showPartial ? true : !!r.completed_at));
@@ -102,11 +135,16 @@ export function ExerciseHistorySheet({
   }, [rows, showPartial]);
 
   const fmtLoad = (r: any): string => {
-    const v = displayUnit === "kg" ? r.normalized_kg : r.normalized_lb;
+    // Always show the unit the user actually entered as primary so they
+    // see what they logged — not a converted value. Fall back to the
+    // caller's display unit only when no entered_unit is recorded.
+    const enteredUnit = (r.entered_unit ?? r.actual_load_unit) as "kg" | "lb" | null | undefined;
+    const primaryUnit = (enteredUnit === "kg" || enteredUnit === "lb") ? enteredUnit : displayUnit;
+    const v = primaryUnit === "kg" ? r.normalized_kg : r.normalized_lb;
     if (v == null) return "—";
     const n = Number(v);
     const rounded = Math.abs(n - Math.round(n)) < 0.05 ? Math.round(n) : Number(n.toFixed(1));
-    return `${rounded} ${displayUnit}`;
+    return `${rounded} ${primaryUnit}`;
   };
 
   return (
@@ -169,7 +207,15 @@ export function ExerciseHistorySheet({
                 </div>
                 <div>
                   {(() => {
-                    const ts = g.sets[g.sets.length - 1]?.completed_at ?? g.sets[g.sets.length - 1]?.updated_at;
+                    // Prefer the workout's actual completion timestamp; fall
+                    // back to the earliest set's created_at when the day
+                    // hasn't been formally completed yet.
+                    const completionTs = completionMap.get(g.day?.id);
+                    const earliestCreated = g.sets
+                      .map((s: any) => s.created_at)
+                      .filter(Boolean)
+                      .sort()[0];
+                    const ts = completionTs ?? earliestCreated ?? g.sets[0]?.completed_at ?? g.sets[0]?.updated_at;
                     return ts ? format(new Date(ts), "MMM d, yyyy") : "—";
                   })()}
                 </div>
@@ -193,11 +239,20 @@ export function ExerciseHistorySheet({
                     <span className="font-mono text-muted-foreground">{s.set_index}</span>
                     <span className="font-medium tabular-nums">
                       {fmtLoad(s)}
-                      {s.entered_unit && s.entered_unit !== displayUnit && (
-                        <span className="ml-1 text-[10px] text-muted-foreground">
-                          (entered {Number(s.entered_value)} {s.entered_unit})
-                        </span>
-                      )}
+                      {(() => {
+                        const enteredUnit = s.entered_unit ?? s.actual_load_unit;
+                        const primaryUnit = enteredUnit === "kg" || enteredUnit === "lb" ? enteredUnit : displayUnit;
+                        if (primaryUnit === displayUnit) return null;
+                        const conv = displayUnit === "kg" ? s.normalized_kg : s.normalized_lb;
+                        if (conv == null) return null;
+                        const n = Number(conv);
+                        const rounded = Math.abs(n - Math.round(n)) < 0.05 ? Math.round(n) : Number(n.toFixed(1));
+                        return (
+                          <span className="ml-1 text-[10px] text-muted-foreground">
+                            (≈ {rounded} {displayUnit})
+                          </span>
+                        );
+                      })()}
                     </span>
                     <span className="tabular-nums">{s.actual_reps ?? "—"}</span>
                     <span className="tabular-nums">{s.actual_rpe ?? "—"}</span>
