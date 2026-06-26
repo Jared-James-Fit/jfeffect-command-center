@@ -73,7 +73,29 @@ export function WorkoutsExperience({
   const { data: items = [], isLoading } = useQuery({
     queryKey: ["my-workouts", clientId],
     queryFn: () => getClientWorkouts(clientId) as Promise<WorkoutItem[]>,
+    staleTime: 0,
+    refetchOnMount: "always",
   });
+
+  useEffect(() => {
+    if (!clientId) return;
+    const invalidate = () => {
+      void queryClient.invalidateQueries({ queryKey: ["my-workouts", clientId] });
+      void queryClient.invalidateQueries({ queryKey: ["workouts-experience-client", clientId] });
+      void queryClient.invalidateQueries({ queryKey: ["cal-client-workouts", clientId] });
+    };
+    const channel = supabase
+      .channel(`workouts-experience:${clientId}`)
+      .on("postgres_changes", { event: "*", schema: "public", table: "clients", filter: `id=eq.${clientId}` }, invalidate)
+      .on("postgres_changes", { event: "*", schema: "public", table: "pl_blocks", filter: `client_id=eq.${clientId}` }, invalidate)
+      .on("postgres_changes", { event: "*", schema: "public", table: "pl_weeks" }, invalidate)
+      .on("postgres_changes", { event: "*", schema: "public", table: "pl_days" }, invalidate)
+      .on("postgres_changes", { event: "*", schema: "public", table: "pl_day_completions", filter: `client_id=eq.${clientId}` }, invalidate)
+      .subscribe();
+    return () => {
+      void supabase.removeChannel(channel);
+    };
+  }, [clientId, queryClient]);
 
   // --- Build a date → item map from scheduled_date (canonical helper). -----
   const dayItems = useMemo(
