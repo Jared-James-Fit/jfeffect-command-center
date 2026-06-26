@@ -2,7 +2,8 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { WEEK_DAYS, type WeekDay } from "@/lib/training-schedule";
-import { addDays, format, parseISO } from "date-fns";
+import { addDays, format } from "date-fns";
+import { parseLocalDate, todayLocalISO } from "@/lib/today";
 
 // ───────────────────────────────────────────────────────────────────────────
 // Phase 3-5 server fns: bulk reschedules, coach overrides, schedule lock.
@@ -18,7 +19,9 @@ const WEEKDAY_INDEX: Record<WeekDay, number> = {
 };
 
 function weekdayFromDate(dateISO: string): WeekDay | null {
-  const dow = parseISO(dateISO).getDay();
+  const parsed = parseLocalDate(dateISO);
+  if (!parsed) return null;
+  const dow = parsed.getDay();
   return (WEEK_DAYS.find((wd) => WEEKDAY_INDEX[wd] === dow) ?? null) as WeekDay | null;
 }
 
@@ -413,7 +416,7 @@ export const rescheduleFromCommittedDays = createServerFn({ method: "POST" })
       if (c.completed_at || c.in_progress_at || c.started_at) touchedDayIds.add(c.day_id);
     }
 
-    const todayISO = format(new Date(), "yyyy-MM-dd");
+    const todayISO = todayLocalISO();
 
     const daysByWeek = new Map<string, any[]>();
     for (const d of dayList) {
@@ -431,7 +434,8 @@ export const rescheduleFromCommittedDays = createServerFn({ method: "POST" })
 
     for (const block of blockList) {
       const dur = (block as any).week_duration_days ?? 7;
-      const startDate = parseISO(block.start_date as string);
+      const startDate = parseLocalDate(block.start_date as string);
+      if (!startDate) continue;
       const blockWeeks = weekList
         .filter((w: any) => w.block_id === block.id)
         .sort((a: any, b: any) => a.week_index - b.week_index);
