@@ -3522,7 +3522,12 @@ function SetRow({
       )}
       {!isTime && !hideWeight && (
       <Input
-        className={cn(focusMode ? "h-9 text-base px-2" : "h-8 text-sm px-2")}
+        className={cn(
+          focusMode ? "h-9 text-base px-2" : "h-8 text-sm px-2",
+          load === "" || load == null
+            ? "border-blue-500/40 bg-blue-500/10 text-foreground"
+            : "border-border/60 bg-muted/40 text-muted-foreground",
+        )}
         inputMode="decimal"
         type="text"
         pattern="[0-9]*\.?[0-9]*"
