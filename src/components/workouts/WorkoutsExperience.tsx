@@ -65,6 +65,7 @@ export function WorkoutsExperience({
   mode?: Mode;
   clientName?: string | null;
 }) {
+  const queryClient = useQueryClient();
   const { data: client } = useQuery({
     queryKey: ["workouts-experience-client", clientId],
     queryFn: async () =>
