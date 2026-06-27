@@ -3477,10 +3477,11 @@ function SetRow({
           className={cn(
             "flex items-center justify-center rounded-md border px-2 text-sm font-medium transition-colors whitespace-nowrap",
             focusMode ? "h-9 text-base" : "h-8",
-            repsEdited
+            !reps
               ? "border-blue-500/40 bg-blue-500/10 text-foreground"
               : "border-border/60 bg-muted/40 text-muted-foreground",
-            !readonly && "hover:border-blue-500/60 hover:bg-blue-500/10 cursor-pointer",
+            !readonly && !reps && "hover:border-blue-500/60 hover:bg-blue-500/10 cursor-pointer",
+            !readonly && !!reps && "hover:bg-muted/60 cursor-pointer",
             readonly && "cursor-default",
           )}
         >
