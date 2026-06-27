@@ -10,6 +10,25 @@ import { toast } from "sonner";
 import { BasicInfoForm, type BasicInfoValues } from "@/components/basic-info-form";
 import { isBasicInfoComplete, isIntakeLiftsComplete, REQUIRED_BASIC_INFO_FIELDS } from "@/lib/basic-info";
 
+// Human-readable labels for required fields so the gate can tell the client
+// exactly what's missing instead of a generic "complete all required fields".
+const FIELD_LABELS: Record<string, string> = {
+  first_name: "First name",
+  last_name: "Last name",
+  phone: "Phone number",
+  date_of_birth: "Date of birth",
+  height_cm: "Height",
+  address: "Street address",
+  city: "City",
+  country: "Country",
+  timezone: "Timezone",
+  emergency_contact_name: "Emergency contact name",
+  emergency_contact_phone: "Emergency contact phone",
+  intake_lifts: "Squat / Bench / Deadlift (or pick \"I don't know\")",
+};
+
+const labelFor = (key: string) => FIELD_LABELS[key] ?? key.replace(/_/g, " ");
+
 /**
  * Blocks the client portal until required Basic Information fields are filled.
  * Admin impersonating a client bypasses this gate.
@@ -82,7 +101,8 @@ export function ClientBasicInfoGate({ children }: { children: ReactNode }) {
 
   const save = async () => {
     if (missing.length) {
-      toast.error("Please complete all required fields.");
+      const list = missing.map(labelFor).join(", ");
+      toast.error(`Still missing: ${list}`);
       return;
     }
     setSaving(true);
@@ -151,12 +171,30 @@ export function ClientBasicInfoGate({ children }: { children: ReactNode }) {
           emailReadOnly={client.email ?? user.email ?? ""}
         />
 
-        <div className="flex flex-col-reverse gap-2 border-t border-border pt-4 sm:flex-row sm:items-center sm:justify-between">
-          <p className="text-[11px] text-muted-foreground">
-            {missing.length === 0
-              ? "All required fields complete."
-              : `${missing.length} required field${missing.length === 1 ? "" : "s"} remaining.`}
-          </p>
+        <div className="flex flex-col-reverse gap-3 border-t border-border pt-4 sm:flex-row sm:items-start sm:justify-between">
+          <div className="min-w-0 flex-1">
+            {missing.length === 0 ? (
+              <p className="text-[11px] font-semibold text-emerald-600 dark:text-emerald-400">
+                All required fields complete.
+              </p>
+            ) : (
+              <div className="space-y-1.5">
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-destructive">
+                  {missing.length} field{missing.length === 1 ? "" : "s"} still missing
+                </p>
+                <ul className="flex flex-wrap gap-1.5">
+                  {missing.map((key) => (
+                    <li
+                      key={key}
+                      className="rounded-full border border-destructive/30 bg-destructive/10 px-2 py-0.5 text-[11px] font-medium text-destructive"
+                    >
+                      {labelFor(key)}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </div>
           <Button
             size="lg"
             disabled={saving || missing.length > 0}
