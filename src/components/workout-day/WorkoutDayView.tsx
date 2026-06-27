@@ -1321,7 +1321,15 @@ function WorkoutDay({
                         return;
                       }
                       await metaSave.flush();
-                      try { await startWorkoutSrv({ data: { kind: "client", dayId } }); } catch {}
+                      try {
+                        await startWorkoutSrv({
+                          data: {
+                            kind: "client",
+                            dayId,
+                            actAsClientId: isImpersonating && client?.id ? client.id : null,
+                          } as any,
+                        });
+                      } catch {}
                       if (draftKey) clearLocalDraft(draftKey);
                       refresh();
                       setFocusMode(false);
