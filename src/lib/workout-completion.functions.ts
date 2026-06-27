@@ -837,3 +837,66 @@ export const submitOrEditReview = createServerFn({ method: "POST" })
   });
 
 export type WorkoutCompletionCtx = CtxT;
+
+/* -------------------------------------------------------------------------- */
+/*  setWorkoutStatus — flip status from the calendar/list sheet (client kind) */
+/* -------------------------------------------------------------------------- */
+
+const SetStatusInput = z.object({
+  dayId: z.string().uuid(),
+  status: z.enum(["not_started", "in_progress", "completed"]),
+  actAsClientId: z.string().uuid().nullable().optional(),
+});
+
+export const setWorkoutStatus = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => SetStatusInput.parse(d))
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context;
+    const { clientId, usedOverride } = await resolveScopedClientId(
+      supabase,
+      userId,
+      data.actAsClientId,
+    );
+    const writer = await getWriter(usedOverride, supabase);
+    const now = new Date().toISOString();
+    const { data: existing } = await writer
+      .from("pl_day_completions")
+      .select("id, started_at, in_progress_at, completed_at")
+      .eq("client_id", clientId)
+      .eq("day_id", data.dayId)
+      .maybeSingle();
+
+    if (data.status === "not_started") {
+      if (existing?.id) {
+        const { error } = await writer
+          .from("pl_day_completions")
+          .update({ started_at: null, in_progress_at: null, completed_at: null })
+          .eq("id", existing.id);
+        if (error) throw error;
+      }
+      return { ok: true };
+    }
+
+    const startedAt = existing?.started_at ?? now;
+    const inProgressAt = data.status === "completed"
+      ? existing?.in_progress_at ?? now
+      : now;
+    const completedAt = data.status === "completed" ? now : null;
+
+    const { error } = await writer
+      .from("pl_day_completions")
+      .upsert(
+        {
+          client_id: clientId,
+          day_id: data.dayId,
+          started_at: startedAt,
+          in_progress_at: inProgressAt,
+          completed_at: completedAt,
+          last_activity_at: now,
+        },
+        { onConflict: "client_id,day_id" },
+      );
+    if (error) throw error;
+    return { ok: true };
+  });
