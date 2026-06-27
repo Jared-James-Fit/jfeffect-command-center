@@ -71,6 +71,16 @@ export function WorkoutStatusSheet({
             .update({ started_at: null, in_progress_at: null, completed_at: null })
             .eq("id", completion.id);
           if (error) throw error;
+        } else {
+          // Row may already exist for (day_id, client_id) even though the
+          // caller didn't have its id — clear it in place rather than
+          // inserting (which would hit the unique constraint).
+          const { error } = await supabase
+            .from("pl_day_completions")
+            .update({ started_at: null, in_progress_at: null, completed_at: null })
+            .eq("day_id", dayId)
+            .eq("client_id", clientId);
+          if (error) throw error;
         }
       } else if (next === "in_progress") {
         if (completion?.id) {
@@ -82,7 +92,10 @@ export function WorkoutStatusSheet({
         } else {
           const { error } = await supabase
             .from("pl_day_completions")
-            .insert({ day_id: dayId, client_id: clientId, started_at: now, in_progress_at: now, completed_at: null });
+            .upsert(
+              { day_id: dayId, client_id: clientId, started_at: now, in_progress_at: now, completed_at: null },
+              { onConflict: "day_id,client_id" },
+            );
           if (error) throw error;
         }
       } else {
@@ -99,7 +112,10 @@ export function WorkoutStatusSheet({
         } else {
           const { error } = await supabase
             .from("pl_day_completions")
-            .insert({ day_id: dayId, client_id: clientId, started_at: now, in_progress_at: now, completed_at: now });
+            .upsert(
+              { day_id: dayId, client_id: clientId, started_at: now, in_progress_at: now, completed_at: now },
+              { onConflict: "day_id,client_id" },
+            );
           if (error) throw error;
         }
       }
