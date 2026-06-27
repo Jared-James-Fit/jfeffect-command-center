@@ -24,7 +24,15 @@ const FIELD_LABELS: Record<string, string> = {
   timezone: "Timezone",
   emergency_contact_name: "Emergency contact name",
   emergency_contact_phone: "Emergency contact phone",
-  intake_lifts: "Squat / Bench / Deadlift (or pick \"I don't know\")",
+  intake_lift_unit: "Lift units (lb or kg)",
+  intake_squat_1rm: "Squat 1-rep max",
+  intake_bench_1rm: "Bench 1-rep max",
+  intake_deadlift_1rm: "Deadlift 1-rep max",
+  intake_squat_5rm: "Squat × 5",
+  intake_bench_5rm: "Bench × 5",
+  intake_deadlift_5rm: "Deadlift × 5",
+  intake_training_experience: "Training experience",
+  intake_followed_program: "Followed a program before",
 };
 
 const labelFor = (key: string) => FIELD_LABELS[key] ?? key.replace(/_/g, " ");
@@ -93,11 +101,37 @@ export function ClientBasicInfoGate({ children }: { children: ReactNode }) {
   if (isBasicInfoComplete(client)) return <>{children}</>;
   if (!form) return <>{children}</>;
 
-  const missingBase = REQUIRED_BASIC_INFO_FIELDS.filter(
-    (f) => !((form as any)[f] !== null && (form as any)[f] !== undefined && String((form as any)[f]).trim() !== ""),
-  );
-  const intakeOk = isIntakeLiftsComplete(form);
-  const missing = [...missingBase, ...(intakeOk ? [] : ["intake_lifts"])];
+  const isFilled = (v: any) =>
+    v !== null && v !== undefined && String(v).trim() !== "";
+  const isPositive = (v: any) => Number(v) > 0;
+
+  const missingBase = REQUIRED_BASIC_INFO_FIELDS.filter((f) => !isFilled((form as any)[f]));
+
+  // Break the intake-lifts block into individual chips so the client sees
+  // exactly which max (or unit) is still empty, rather than a generic
+  // "Squat / Bench / Deadlift" catch-all.
+  const intakeMissing: string[] = [];
+  if (form.intake_lifts_known === false) {
+    // "I don't know" path: require the 5RM trio + experience answers.
+    if (!isPositive(form.intake_squat_5rm)) intakeMissing.push("intake_squat_5rm");
+    if (!isPositive(form.intake_bench_5rm)) intakeMissing.push("intake_bench_5rm");
+    if (!isPositive(form.intake_deadlift_5rm)) intakeMissing.push("intake_deadlift_5rm");
+  } else {
+    if (form.intake_lift_unit !== "kg" && form.intake_lift_unit !== "lb") {
+      intakeMissing.push("intake_lift_unit");
+    }
+    if (!isPositive(form.intake_squat_1rm)) intakeMissing.push("intake_squat_1rm");
+    if (!isPositive(form.intake_bench_1rm)) intakeMissing.push("intake_bench_1rm");
+    if (!isPositive(form.intake_deadlift_1rm)) intakeMissing.push("intake_deadlift_1rm");
+  }
+  // Belt-and-suspenders: if the helper still considers the block incomplete
+  // for any other reason, surface a generic chip so the user is never
+  // staring at a disabled button with no explanation.
+  if (intakeMissing.length === 0 && !isIntakeLiftsComplete(form)) {
+    intakeMissing.push("intake_lift_unit");
+  }
+
+  const missing = [...missingBase, ...intakeMissing];
 
   const save = async () => {
     if (missing.length) {
