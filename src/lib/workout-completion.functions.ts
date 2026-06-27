@@ -428,8 +428,9 @@ export const completeWorkout = createServerFn({ method: "POST" })
     // 2) Load logged sets, compute completeness with shared helper.
     // 3) UPSERT completion with computed fields.
     if (data.kind === "client") {
-      const clientId = await resolveClientId(supabase, userId);
-      const { data: existing } = await supabase
+      const { clientId, usedOverride } = await resolveScopedClientId(supabase, userId, (data as any).actAsClientId);
+      const writer = await getWriter(usedOverride, supabase);
+      const { data: existing } = await writer
         .from("pl_day_completions")
         .select("id, started_at, completed_at, last_activity_at")
         .eq("client_id", clientId)
@@ -452,7 +453,7 @@ export const completeWorkout = createServerFn({ method: "POST" })
         }
         const hasEdits = Object.keys(patch).length > 0;
         if (hasEdits) {
-          const { error } = await supabase
+          const { error } = await writer
             .from("pl_day_completions")
             .update(patch)
             .eq("id", existing.id);
@@ -465,7 +466,7 @@ export const completeWorkout = createServerFn({ method: "POST" })
       // Pull saved row results for completeness.
       const rowIds = data.requiredRows.map((r) => r.rowId);
       const { data: setRows } = rowIds.length
-        ? await supabase
+        ? await writer
             .from("pl_row_results")
             .select("row_id, set_index, actual_reps, actual_load_lb, actual_load_kg, actual_rpe, actual_rir, completed_duration_seconds")
             .eq("client_id", clientId)
@@ -522,7 +523,7 @@ export const completeWorkout = createServerFn({ method: "POST" })
       // them here used to fail the upsert with "column does not exist",
       // which surfaced as "Save failed" and blocked the recap popup.
       };
-      const { data: row, error } = await supabase
+      const { data: row, error } = await writer
         .from("pl_day_completions")
         .upsert(update, { onConflict: "client_id,day_id" })
         .select("id")
