@@ -412,6 +412,8 @@ const CompleteInput = z.intersection(
     fatigueFeel: z.string().nullable().optional(),
     pain: z.boolean().nullable().optional(),
     hitTarget: z.string().nullable().optional(),
+    // Coach/admin POV: act on behalf of the impersonated client.
+    actAsClientId: z.string().uuid().nullable().optional(),
   }),
 );
 
