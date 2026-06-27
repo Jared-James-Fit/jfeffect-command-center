@@ -887,9 +887,13 @@ function WorkoutDay({
     const map: Record<string, WUnit> = {};
     for (const r of rows as any[]) {
       const exId = r.exercises?.id;
-      const key = exId ?? `row:${r.id}`;
-      const local = exId ? unitOverrides[exId] : undefined;
-      map[key] = local ?? resolveExerciseUnit({
+      const rowKey = `row:${r.id}`;
+      // Per-row override only — two cards with the same exerciseId (e.g.
+      // a primary + secondary backoff of the same lift) must toggle
+      // independently. The persisted client/member preference (saved by
+      // exerciseId) still seeds future workouts via resolveExerciseUnit.
+      const local = unitOverrides[rowKey];
+      map[rowKey] = local ?? resolveExerciseUnit({
         prefUnit: exId ? prefByEx[exId] ?? null : null,
         historyUnit: exId ? modeUnit(historyByEx[exId] ?? []) : null,
         rowLoadUnit: (r.load_unit === "kg" || r.load_unit === "lb") ? r.load_unit : null,
@@ -901,10 +905,9 @@ function WorkoutDay({
   }, [rows, prefRows, historyRows, unitOverrides, unit]);
 
   const setExerciseUnit = async (exerciseId: string | null, rowId: string, next: WUnit) => {
-    const key = exerciseId ?? `row:${rowId}`;
-    const prevUnit = exerciseId ? unitOverrides[exerciseId] : (unitOverrides as any)[key];
-    if (exerciseId) setUnitOverrides((m) => ({ ...m, [exerciseId]: next }));
-    else setUnitOverrides((m) => ({ ...m, [key]: next } as any));
+    const key = `row:${rowId}`;
+    const prevUnit = unitOverrides[key];
+    setUnitOverrides((m) => ({ ...m, [key]: next }));
     if (client?.id && exerciseId) {
       try {
         if (adapter) {
@@ -919,8 +922,7 @@ function WorkoutDay({
       label: `Set exercise unit to ${next.toUpperCase()}`,
       coalesceKey: `ex-unit:${key}`,
       undo: async () => {
-        if (exerciseId) setUnitOverrides((m) => ({ ...m, [exerciseId]: prevUnit as WUnit }));
-        else setUnitOverrides((m) => ({ ...m, [key]: prevUnit as WUnit } as any));
+        setUnitOverrides((m) => ({ ...m, [key]: prevUnit as WUnit }));
         if (client?.id && exerciseId && (prevUnit === "kg" || prevUnit === "lb")) {
           try {
             if (adapter) {
@@ -936,8 +938,7 @@ function WorkoutDay({
   };
 
   const unitForRow = (r: any): WUnit => {
-    const exId = r.exercises?.id;
-    return resolvedUnitMap[exId ?? `row:${r.id}`] ?? unit;
+    return resolvedUnitMap[`row:${r.id}`] ?? unit;
   };
 
   // Focus / full-screen logging mode.
