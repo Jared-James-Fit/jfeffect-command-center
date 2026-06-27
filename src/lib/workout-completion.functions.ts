@@ -57,6 +57,37 @@ async function resolveClientId(supabase: any, userId: string): Promise<string> {
   return data.id as string;
 }
 
+/**
+ * Resolve the target clients.id, allowing admins/coaches to act on
+ * behalf of a client via POV mode by passing `actAsClientId`. Returns
+ * the id plus a `usedOverride` flag so callers can swap to the
+ * service-role writer (RLS on pl_* tables is scoped to the client's own
+ * auth.uid, so admin-POV writes must bypass it).
+ */
+async function resolveScopedClientId(
+  supabase: any,
+  userId: string,
+  actAsClientId?: string | null,
+): Promise<{ clientId: string; usedOverride: boolean }> {
+  if (actAsClientId) {
+    const [{ data: isAdmin }, { data: isCoach }] = await Promise.all([
+      supabase.rpc("has_role", { _user_id: userId, _role: "admin" }),
+      supabase.rpc("has_role", { _user_id: userId, _role: "coach" }),
+    ]);
+    if (!isAdmin && !isCoach) {
+      throw new Error("Only admins or coaches can act on behalf of a client");
+    }
+    return { clientId: actAsClientId, usedOverride: true };
+  }
+  return { clientId: await resolveClientId(supabase, userId), usedOverride: false };
+}
+
+async function getWriter(usedOverride: boolean, supabase: any) {
+  if (!usedOverride) return supabase;
+  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+  return supabaseAdmin;
+}
+
 /** Ensure the signed-in user owns the enrollment. */
 async function assertOwnsEnrollment(supabase: any, enrollmentId: string) {
   const { data, error } = await supabase
