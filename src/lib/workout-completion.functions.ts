@@ -57,6 +57,37 @@ async function resolveClientId(supabase: any, userId: string): Promise<string> {
   return data.id as string;
 }
 
+/**
+ * Resolve the target clients.id, allowing admins/coaches to act on
+ * behalf of a client via POV mode by passing `actAsClientId`. Returns
+ * the id plus a `usedOverride` flag so callers can swap to the
+ * service-role writer (RLS on pl_* tables is scoped to the client's own
+ * auth.uid, so admin-POV writes must bypass it).
+ */
+async function resolveScopedClientId(
+  supabase: any,
+  userId: string,
+  actAsClientId?: string | null,
+): Promise<{ clientId: string; usedOverride: boolean }> {
+  if (actAsClientId) {
+    const [{ data: isAdmin }, { data: isCoach }] = await Promise.all([
+      supabase.rpc("has_role", { _user_id: userId, _role: "admin" }),
+      supabase.rpc("has_role", { _user_id: userId, _role: "coach" }),
+    ]);
+    if (!isAdmin && !isCoach) {
+      throw new Error("Only admins or coaches can act on behalf of a client");
+    }
+    return { clientId: actAsClientId, usedOverride: true };
+  }
+  return { clientId: await resolveClientId(supabase, userId), usedOverride: false };
+}
+
+async function getWriter(usedOverride: boolean, supabase: any) {
+  if (!usedOverride) return supabase;
+  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+  return supabaseAdmin;
+}
+
 /** Ensure the signed-in user owns the enrollment. */
 async function assertOwnsEnrollment(supabase: any, enrollmentId: string) {
   const { data, error } = await supabase
@@ -74,27 +105,30 @@ async function assertOwnsEnrollment(supabase: any, enrollmentId: string) {
 
 export const startWorkout = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: unknown) => Ctx.parse(d))
+  .inputValidator((d: unknown) =>
+    z.intersection(Ctx, z.object({ actAsClientId: z.string().uuid().nullable().optional() })).parse(d),
+  )
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context;
     const nowIso = new Date().toISOString();
 
     if (data.kind === "client") {
-      const clientId = await resolveClientId(supabase, userId);
-      const { data: existing } = await supabase
+      const { clientId, usedOverride } = await resolveScopedClientId(supabase, userId, (data as any).actAsClientId);
+      const writer = await getWriter(usedOverride, supabase);
+      const { data: existing } = await writer
         .from("pl_day_completions")
         .select("id, started_at, last_activity_at, completed_at")
         .eq("client_id", clientId)
         .eq("day_id", data.dayId)
         .maybeSingle();
       if (existing?.id) {
-        await supabase
+        await writer
           .from("pl_day_completions")
           .update({ last_activity_at: nowIso })
           .eq("id", existing.id);
         return { id: existing.id, started_at: existing.started_at ?? nowIso };
       }
-      const { data: inserted, error } = await supabase
+      const { data: inserted, error } = await writer
         .from("pl_day_completions")
         .upsert(
           {
@@ -296,6 +330,7 @@ const SaveDraftInput = z.intersection(
   z.object({
     clientNotes: z.string().nullable().optional(),
     actualDurationMin: z.number().int().nonnegative().nullable().optional(),
+    actAsClientId: z.string().uuid().nullable().optional(),
   }),
 );
 
@@ -305,19 +340,20 @@ export const saveDraft = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context;
     if (data.kind === "client") {
-      const clientId = await resolveClientId(supabase, userId);
+      const { clientId, usedOverride } = await resolveScopedClientId(supabase, userId, (data as any).actAsClientId);
+      const writer = await getWriter(usedOverride, supabase);
       // Check for an existing row first so we never overwrite completion
       // state (notes-only autosave must not flip a workout to "completed",
       // and editing a finished workout's notes must not clear completed_at
       // via the column default).
-      const { data: existing } = await supabase
+      const { data: existing } = await writer
         .from("pl_day_completions")
         .select("id")
         .eq("client_id", clientId)
         .eq("day_id", data.dayId)
         .maybeSingle();
       if (existing?.id) {
-        const { error } = await supabase
+        const { error } = await writer
           .from("pl_day_completions")
           .update({
             client_notes: data.clientNotes ?? null,
@@ -326,7 +362,7 @@ export const saveDraft = createServerFn({ method: "POST" })
           .eq("id", existing.id);
         if (error) throw error;
       } else {
-        const { error } = await supabase
+        const { error } = await writer
           .from("pl_day_completions")
           .insert({
             client_id: clientId,
@@ -376,6 +412,8 @@ const CompleteInput = z.intersection(
     fatigueFeel: z.string().nullable().optional(),
     pain: z.boolean().nullable().optional(),
     hitTarget: z.string().nullable().optional(),
+    // Coach/admin POV: act on behalf of the impersonated client.
+    actAsClientId: z.string().uuid().nullable().optional(),
   }),
 );
 
@@ -390,8 +428,9 @@ export const completeWorkout = createServerFn({ method: "POST" })
     // 2) Load logged sets, compute completeness with shared helper.
     // 3) UPSERT completion with computed fields.
     if (data.kind === "client") {
-      const clientId = await resolveClientId(supabase, userId);
-      const { data: existing } = await supabase
+      const { clientId, usedOverride } = await resolveScopedClientId(supabase, userId, (data as any).actAsClientId);
+      const writer = await getWriter(usedOverride, supabase);
+      const { data: existing } = await writer
         .from("pl_day_completions")
         .select("id, started_at, completed_at, last_activity_at")
         .eq("client_id", clientId)
@@ -414,7 +453,7 @@ export const completeWorkout = createServerFn({ method: "POST" })
         }
         const hasEdits = Object.keys(patch).length > 0;
         if (hasEdits) {
-          const { error } = await supabase
+          const { error } = await writer
             .from("pl_day_completions")
             .update(patch)
             .eq("id", existing.id);
@@ -427,7 +466,7 @@ export const completeWorkout = createServerFn({ method: "POST" })
       // Pull saved row results for completeness.
       const rowIds = data.requiredRows.map((r) => r.rowId);
       const { data: setRows } = rowIds.length
-        ? await supabase
+        ? await writer
             .from("pl_row_results")
             .select("row_id, set_index, actual_reps, actual_load_lb, actual_load_kg, actual_rpe, actual_rir, completed_duration_seconds")
             .eq("client_id", clientId)
@@ -484,7 +523,7 @@ export const completeWorkout = createServerFn({ method: "POST" })
       // them here used to fail the upsert with "column does not exist",
       // which surfaced as "Save failed" and blocked the recap popup.
       };
-      const { data: row, error } = await supabase
+      const { data: row, error } = await writer
         .from("pl_day_completions")
         .upsert(update, { onConflict: "client_id,day_id" })
         .select("id")
@@ -798,3 +837,66 @@ export const submitOrEditReview = createServerFn({ method: "POST" })
   });
 
 export type WorkoutCompletionCtx = CtxT;
+
+/* -------------------------------------------------------------------------- */
+/*  setWorkoutStatus — flip status from the calendar/list sheet (client kind) */
+/* -------------------------------------------------------------------------- */
+
+const SetStatusInput = z.object({
+  dayId: z.string().uuid(),
+  status: z.enum(["not_started", "in_progress", "completed"]),
+  actAsClientId: z.string().uuid().nullable().optional(),
+});
+
+export const setWorkoutStatus = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => SetStatusInput.parse(d))
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context;
+    const { clientId, usedOverride } = await resolveScopedClientId(
+      supabase,
+      userId,
+      data.actAsClientId,
+    );
+    const writer = await getWriter(usedOverride, supabase);
+    const now = new Date().toISOString();
+    const { data: existing } = await writer
+      .from("pl_day_completions")
+      .select("id, started_at, in_progress_at, completed_at")
+      .eq("client_id", clientId)
+      .eq("day_id", data.dayId)
+      .maybeSingle();
+
+    if (data.status === "not_started") {
+      if (existing?.id) {
+        const { error } = await writer
+          .from("pl_day_completions")
+          .update({ started_at: null, in_progress_at: null, completed_at: null })
+          .eq("id", existing.id);
+        if (error) throw error;
+      }
+      return { ok: true };
+    }
+
+    const startedAt = existing?.started_at ?? now;
+    const inProgressAt = data.status === "completed"
+      ? existing?.in_progress_at ?? now
+      : now;
+    const completedAt = data.status === "completed" ? now : null;
+
+    const { error } = await writer
+      .from("pl_day_completions")
+      .upsert(
+        {
+          client_id: clientId,
+          day_id: data.dayId,
+          started_at: startedAt,
+          in_progress_at: inProgressAt,
+          completed_at: completedAt,
+          last_activity_at: now,
+        },
+        { onConflict: "client_id,day_id" },
+      );
+    if (error) throw error;
+    return { ok: true };
+  });

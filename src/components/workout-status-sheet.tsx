@@ -1,8 +1,10 @@
 import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
+import { useServerFn } from "@tanstack/react-start";
 import { Check, Circle, Loader2, Play, CheckCircle2 } from "lucide-react";
 import { toast } from "sonner";
-import { supabase } from "@/integrations/supabase/client";
+import { setWorkoutStatus as setWorkoutStatusFn } from "@/lib/workout-completion.functions";
+import { useClientImpersonation } from "@/lib/client-impersonation";
 import {
   Sheet, SheetContent, SheetHeader, SheetTitle, SheetFooter,
 } from "@/components/ui/sheet";
@@ -42,6 +44,8 @@ export function WorkoutStatusSheet({
   invalidateKeys?: readonly (readonly unknown[])[];
 }) {
   const qc = useQueryClient();
+  const setStatusSrv = useServerFn(setWorkoutStatusFn);
+  const { isImpersonating, client: povClient } = useClientImpersonation();
   const current: WorkoutStatusKey = completion?.completed_at
     ? "completed"
     : completion?.in_progress_at || completion?.started_at
@@ -62,63 +66,15 @@ export function WorkoutStatusSheet({
 
   async function applyStatus(next: WorkoutStatusKey) {
     setSaving(true);
-    const now = new Date().toISOString();
     try {
-      if (next === "not_started") {
-        if (completion?.id) {
-          const { error } = await supabase
-            .from("pl_day_completions")
-            .update({ started_at: null, in_progress_at: null, completed_at: null })
-            .eq("id", completion.id);
-          if (error) throw error;
-        } else {
-          // Row may already exist for (day_id, client_id) even though the
-          // caller didn't have its id — clear it in place rather than
-          // inserting (which would hit the unique constraint).
-          const { error } = await supabase
-            .from("pl_day_completions")
-            .update({ started_at: null, in_progress_at: null, completed_at: null })
-            .eq("day_id", dayId)
-            .eq("client_id", clientId);
-          if (error) throw error;
-        }
-      } else if (next === "in_progress") {
-        if (completion?.id) {
-          const { error } = await supabase
-            .from("pl_day_completions")
-            .update({ started_at: completion.started_at ?? now, in_progress_at: now, completed_at: null })
-            .eq("id", completion.id);
-          if (error) throw error;
-        } else {
-          const { error } = await supabase
-            .from("pl_day_completions")
-            .upsert(
-              { day_id: dayId, client_id: clientId, started_at: now, in_progress_at: now, completed_at: null },
-              { onConflict: "day_id,client_id" },
-            );
-          if (error) throw error;
-        }
-      } else {
-        if (completion?.id) {
-          const { error } = await supabase
-            .from("pl_day_completions")
-            .update({
-              started_at: completion.started_at ?? now,
-              in_progress_at: completion.in_progress_at ?? now,
-              completed_at: now,
-            })
-            .eq("id", completion.id);
-          if (error) throw error;
-        } else {
-          const { error } = await supabase
-            .from("pl_day_completions")
-            .upsert(
-              { day_id: dayId, client_id: clientId, started_at: now, in_progress_at: now, completed_at: now },
-              { onConflict: "day_id,client_id" },
-            );
-          if (error) throw error;
-        }
-      }
+      // Route every status flip through the shared server fn so coach/admin
+      // POV writes bypass RLS via the service-role writer (pl_day_completions
+      // INSERT/UPDATE policies are scoped to the client's own auth.uid).
+      const actAsClientId =
+        isImpersonating && povClient?.id === clientId ? clientId : null;
+      await setStatusSrv({
+        data: { dayId, status: next, actAsClientId } as any,
+      });
       // Refresh every cache surface that renders workout status.
       await Promise.all([
         qc.invalidateQueries({ queryKey: ["pl-day-completion", dayId] }),

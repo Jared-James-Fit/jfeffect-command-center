@@ -1038,7 +1038,8 @@ function WorkoutDay({
           dayId,
           clientNotes: notes || null,
           actualDurationMin: actualMin ? parseInt(actualMin) : null,
-        },
+          actAsClientId: isImpersonating && client?.id ? client.id : null,
+        } as any,
       });
       if (!completion) qc.invalidateQueries({ queryKey: ["pl-day-completion", dayId] });
     },
@@ -1321,7 +1322,15 @@ function WorkoutDay({
                         return;
                       }
                       await metaSave.flush();
-                      try { await startWorkoutSrv({ data: { kind: "client", dayId } }); } catch {}
+                      try {
+                        await startWorkoutSrv({
+                          data: {
+                            kind: "client",
+                            dayId,
+                            actAsClientId: isImpersonating && client?.id ? client.id : null,
+                          } as any,
+                        });
+                      } catch {}
                       if (draftKey) clearLocalDraft(draftKey);
                       refresh();
                       setFocusMode(false);
@@ -1667,7 +1676,13 @@ function WorkoutDay({
                 // Ensure a draft row + started_at/in_progress_at exist before the
                 // complete sheet opens. startWorkout is idempotent.
                 try {
-                  await startWorkoutSrv({ data: { kind: "client", dayId } });
+                  await startWorkoutSrv({
+                    data: {
+                      kind: "client",
+                      dayId,
+                      actAsClientId: isImpersonating && client?.id ? client.id : null,
+                    } as any,
+                  });
                 } catch (err) {
                   console.warn("pre-complete startWorkout failed", err);
                 }
@@ -1857,6 +1872,7 @@ function WorkoutDay({
                       fatigueFeel: payload.fatigue_feel ?? null,
                       pain: payload.pain ?? null,
                       hitTarget: payload.hit_target ?? null,
+                      actAsClientId: isImpersonating && client?.id ? client.id : null,
                     },
               });
               if (draftKey) clearLocalDraft(draftKey);
@@ -1886,6 +1902,7 @@ function WorkoutDay({
                       fatigueFeel: payload.fatigue_feel ?? null,
                       hitTarget: payload.hit_target ?? null,
                       clientNote: payload.client_notes ?? null,
+                      actAsClientId: isImpersonating && client?.id ? client.id : null,
                     },
                   });
                 } catch {
