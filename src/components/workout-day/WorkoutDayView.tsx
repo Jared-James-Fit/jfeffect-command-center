@@ -1902,6 +1902,7 @@ function WorkoutDay({
                       fatigueFeel: payload.fatigue_feel ?? null,
                       hitTarget: payload.hit_target ?? null,
                       clientNote: payload.client_notes ?? null,
+                      actAsClientId: isImpersonating && client?.id ? client.id : null,
                     },
                   });
                 } catch {
