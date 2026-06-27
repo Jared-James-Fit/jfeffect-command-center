@@ -105,27 +105,30 @@ async function assertOwnsEnrollment(supabase: any, enrollmentId: string) {
 
 export const startWorkout = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: unknown) => Ctx.parse(d))
+  .inputValidator((d: unknown) =>
+    z.intersection(Ctx, z.object({ actAsClientId: z.string().uuid().nullable().optional() })).parse(d),
+  )
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context;
     const nowIso = new Date().toISOString();
 
     if (data.kind === "client") {
-      const clientId = await resolveClientId(supabase, userId);
-      const { data: existing } = await supabase
+      const { clientId, usedOverride } = await resolveScopedClientId(supabase, userId, (data as any).actAsClientId);
+      const writer = await getWriter(usedOverride, supabase);
+      const { data: existing } = await writer
         .from("pl_day_completions")
         .select("id, started_at, last_activity_at, completed_at")
         .eq("client_id", clientId)
         .eq("day_id", data.dayId)
         .maybeSingle();
       if (existing?.id) {
-        await supabase
+        await writer
           .from("pl_day_completions")
           .update({ last_activity_at: nowIso })
           .eq("id", existing.id);
         return { id: existing.id, started_at: existing.started_at ?? nowIso };
       }
-      const { data: inserted, error } = await supabase
+      const { data: inserted, error } = await writer
         .from("pl_day_completions")
         .upsert(
           {
