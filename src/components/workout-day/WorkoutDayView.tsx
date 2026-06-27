@@ -2980,12 +2980,14 @@ function SetRow({
     // effect runs, so `latest` can still hold a stale value like 90 lb from
     // a previous session).
     //
-    // ROOT CAUSE FIX 2026-06-26: Previously checked !latest?.completed_at which
-    // caused the fallback to the stale 90 lb value when the set had a completed_at
-    // from a previous session. forcedFill must ALWAYS win for non-Set-1 rows
-    // when the parent explicitly provides it — the completed_at check was wrong.
-    if (forcedFill && setIndex !== 1) {
-      // forcedFill always wins — it's the value just written to the DB
+    // FIX 2026-06-27: applyToRemaining explicitly SKIPS sets that already
+    // have completed_at (it never overwrites confirmed sets in the DB).
+    // So forcedFill must also skip them visually — otherwise the display
+    // shows the fill value (e.g. "330 lb") while the DB still holds the
+    // original entry (e.g. "110 kg"), producing the history-vs-input
+    // mismatch reported on Jared McIntyre's Block 1 / Wk 2 / Day 1.
+    if (forcedFill && setIndex !== 1 && !latest?.completed_at) {
+      // forcedFill wins for uncompleted sets — it's the value just written to the DB
       setLoad(forcedFill.load);
       if (forcedFill.reps) setReps(forcedFill.reps);
       if (forcedFill.rpe) setRpe(forcedFill.rpe);
