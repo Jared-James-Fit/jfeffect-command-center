@@ -1675,7 +1675,13 @@ function WorkoutDay({
                 // Ensure a draft row + started_at/in_progress_at exist before the
                 // complete sheet opens. startWorkout is idempotent.
                 try {
-                  await startWorkoutSrv({ data: { kind: "client", dayId } });
+                  await startWorkoutSrv({
+                    data: {
+                      kind: "client",
+                      dayId,
+                      actAsClientId: isImpersonating && client?.id ? client.id : null,
+                    } as any,
+                  });
                 } catch (err) {
                   console.warn("pre-complete startWorkout failed", err);
                 }
