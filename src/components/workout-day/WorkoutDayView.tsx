@@ -1038,7 +1038,8 @@ function WorkoutDay({
           dayId,
           clientNotes: notes || null,
           actualDurationMin: actualMin ? parseInt(actualMin) : null,
-        },
+          actAsClientId: isImpersonating && client?.id ? client.id : null,
+        } as any,
       });
       if (!completion) qc.invalidateQueries({ queryKey: ["pl-day-completion", dayId] });
     },
