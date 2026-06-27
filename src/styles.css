@@ -477,13 +477,16 @@ mark.gh-mark.gh-flash { animation: ghFlashPulse 1.4s ease-out 2; }
       overflow-x: hidden !important;
     }
 
-    /* Each exercise card snaps to start so the card header is always visible.
+    /* Each exercise card snaps to center so the card settles in the middle
+       of the viewport instead of sticking to the top edge under the header.
        workout-snap-list is the direct parent of exercise cards inside fullscreen. */
     .workout-scroll-container > * {
-      scroll-snap-align: start;
+      scroll-snap-align: center;
+      scroll-snap-stop: always;
     }
     .workout-snap-list > * {
-      scroll-snap-align: start;
+      scroll-snap-align: center;
+      scroll-snap-stop: always;
     }
   }
 }
