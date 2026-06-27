@@ -1872,6 +1872,7 @@ function WorkoutDay({
                       fatigueFeel: payload.fatigue_feel ?? null,
                       pain: payload.pain ?? null,
                       hitTarget: payload.hit_target ?? null,
+                      actAsClientId: isImpersonating && client?.id ? client.id : null,
                     },
               });
               if (draftKey) clearLocalDraft(draftKey);
