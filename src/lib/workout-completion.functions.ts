@@ -330,6 +330,7 @@ const SaveDraftInput = z.intersection(
   z.object({
     clientNotes: z.string().nullable().optional(),
     actualDurationMin: z.number().int().nonnegative().nullable().optional(),
+    actAsClientId: z.string().uuid().nullable().optional(),
   }),
 );
 
@@ -339,19 +340,20 @@ export const saveDraft = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context;
     if (data.kind === "client") {
-      const clientId = await resolveClientId(supabase, userId);
+      const { clientId, usedOverride } = await resolveScopedClientId(supabase, userId, (data as any).actAsClientId);
+      const writer = await getWriter(usedOverride, supabase);
       // Check for an existing row first so we never overwrite completion
       // state (notes-only autosave must not flip a workout to "completed",
       // and editing a finished workout's notes must not clear completed_at
       // via the column default).
-      const { data: existing } = await supabase
+      const { data: existing } = await writer
         .from("pl_day_completions")
         .select("id")
         .eq("client_id", clientId)
         .eq("day_id", data.dayId)
         .maybeSingle();
       if (existing?.id) {
-        const { error } = await supabase
+        const { error } = await writer
           .from("pl_day_completions")
           .update({
             client_notes: data.clientNotes ?? null,
@@ -360,7 +362,7 @@ export const saveDraft = createServerFn({ method: "POST" })
           .eq("id", existing.id);
         if (error) throw error;
       } else {
-        const { error } = await supabase
+        const { error } = await writer
           .from("pl_day_completions")
           .insert({
             client_id: clientId,
