@@ -1123,11 +1123,15 @@ function WorkoutDay({
     setSummaryOpen(true);
   }, [recapParam, completion?.completed_at, completion?.client_notes, rows, results, client]);
 
-  // Lock the background page while the completion sheet is open.
-  // NOTE: Do NOT lock for summaryOpen — the WorkoutSubmissionSummary (Dialog)
-  // manages its own scroll lock via Radix. Double-locking causes the freeze
-  // where pointer-events stay disabled after the completion sheet closes.
-  useBodyScrollLock(completeOpen);
+  // NOTE: useBodyScrollLock was removed here.
+  // ROOT CAUSE FIX 2026-06-26: useBodyScrollLock applies position:fixed to the
+  // body which conflicts with Radix's own scroll management on Sheet/Dialog
+  // components. When a second Radix overlay (e.g. ExerciseHistorySheet) opens
+  // while the body is already position:fixed, Radix's cleanup on close leaves
+  // the body in an inconsistent state — pointer-events frozen, page unresponsive.
+  // Radix Sheet and Dialog components already manage their own scroll locking
+  // internally. The manual lock is redundant and causes the freeze bug.
+  // void completeOpen; // keep reference to avoid lint warning
 
   const refreshNotes = () => {
     qc.invalidateQueries({ queryKey: ["pl-day-exercise-notes", dayId] });
