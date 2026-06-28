@@ -191,14 +191,16 @@ FORMAT RULES (strict — do not change headings, do not add extra commentary):
 
 Output plain text only — no markdown, no bullets, no tables. Match the formatting exactly so the app's parser can read it.`;
 
-function parseMacroLine(line: string): { protein?: number; carbs?: number; fats?: number } {
+function parseMacroLine(line: string): { protein?: number; carbs?: number; fats?: number; fibre?: number } {
   const out: any = {};
   const p = line.match(/(\d+(?:\.\d+)?)\s*g?\s*protein/i);
   const c = line.match(/(\d+(?:\.\d+)?)\s*g?\s*(?:carb|carbohydrate)/i);
   const f = line.match(/(\d+(?:\.\d+)?)\s*g?\s*fat/i);
+  const fb = line.match(/(\d+(?:\.\d+)?)\s*g?\s*fibre|fiber/i);
   if (p) out.protein = Number(p[1]);
   if (c) out.carbs = Number(c[1]);
   if (f) out.fats = Number(f[1]);
+  if (fb) out.fibre = Number(fb[1]);
   return out;
 }
 
