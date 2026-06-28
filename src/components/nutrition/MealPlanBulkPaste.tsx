@@ -29,6 +29,8 @@ Approximate macros:
 67 g protein
 68 g carbohydrates
 13 g fat
+10 g fibre
+
 
 Meal 2
 160 g cooked chicken breast
