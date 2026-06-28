@@ -244,14 +244,15 @@ export function parseMealPlan(text: string): ParsedDay[] {
     } else {
       // Sum each "Approximate macros" block
       const matches = [...body.matchAll(/Approximate macros?:?\s*\n([\s\S]*?)(?=\n\s*\n|$)/gi)];
-      let p = 0, c = 0, f = 0, any = false;
+      let p = 0, c = 0, f = 0, fb = 0, any = false;
       for (const m of matches) {
         const got = parseMacroLine(m[1].replace(/\n/g, " "));
         if (got.protein) { p += got.protein; any = true; }
         if (got.carbs) { c += got.carbs; any = true; }
         if (got.fats) { f += got.fats; any = true; }
+        if (got.fibre) { fb += got.fibre; any = true; }
       }
-      if (any) macros = { protein: p, carbs: c, fats: f };
+      if (any) macros = { protein: p, carbs: c, fats: f, fibre: fb };
     }
     const calories = macros.protein != null && macros.carbs != null && macros.fats != null
       ? Math.round(macros.protein * 4 + macros.carbs * 4 + macros.fats * 9)
