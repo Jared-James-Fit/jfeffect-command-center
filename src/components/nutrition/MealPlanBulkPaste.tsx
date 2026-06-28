@@ -150,6 +150,8 @@ Approximate macros:
 50 g protein
 78 g carbohydrates
 23 g fat
+8 g fibre
+
 
 Daily Total
 Approximately 181 g protein, 295 g carbohydrates and 60 g fat
