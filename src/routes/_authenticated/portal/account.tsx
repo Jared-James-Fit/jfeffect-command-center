@@ -366,46 +366,127 @@ function ProfileStatusCard({
     status = "complete";
   }
 
-  const missingItems: string[] = [];
-  if (!client.first_name || !client.last_name) missingItems.push("Full name");
-  if (!client.phone) missingItems.push("Phone number");
-  if (!client.date_of_birth) missingItems.push("Date of birth");
-  if (!client.timezone) missingItems.push("Timezone");
-  if (!goalsOk) missingItems.push("Goals & Training setup");
+  // Build a granular, plain-English list of every missing field so the
+  // client sees exactly what to fix instead of a vague "Information Missing".
+  const isFilled = (v: any) => v !== null && v !== undefined && String(v).trim() !== "";
+  const isPositive = (v: any) => Number(v) > 0;
+
+  type MissingItem = { key: string; label: string; section: "basic" | "lifts" | "goals" };
+  const missing: MissingItem[] = [];
+
+  if (!isFilled(client.first_name)) missing.push({ key: "first_name", label: "First name", section: "basic" });
+  if (!isFilled(client.last_name)) missing.push({ key: "last_name", label: "Last name", section: "basic" });
+  if (!isFilled(client.phone)) missing.push({ key: "phone", label: "Phone number", section: "basic" });
+  if (!isFilled(client.date_of_birth)) missing.push({ key: "date_of_birth", label: "Date of birth", section: "basic" });
+  if (!isFilled(client.height_cm)) missing.push({ key: "height_cm", label: "Height", section: "basic" });
+  if (!isFilled(client.address)) missing.push({ key: "address", label: "Street address", section: "basic" });
+  if (!isFilled(client.city)) missing.push({ key: "city", label: "City", section: "basic" });
+  if (!isFilled(client.country)) missing.push({ key: "country", label: "Country", section: "basic" });
+  if (!isFilled(client.timezone)) missing.push({ key: "timezone", label: "Timezone", section: "basic" });
+  if (!isFilled(client.emergency_contact_name)) missing.push({ key: "ec_name", label: "Emergency contact name", section: "basic" });
+  if (!isFilled(client.emergency_contact_phone)) missing.push({ key: "ec_phone", label: "Emergency contact phone", section: "basic" });
+
+  if (!isIntakeLiftsComplete(client)) {
+    if (client.intake_lifts_known === false) {
+      if (!isPositive(client.intake_squat_5rm)) missing.push({ key: "sq5", label: "Squat × 5 max", section: "lifts" });
+      if (!isPositive(client.intake_bench_5rm)) missing.push({ key: "bn5", label: "Bench × 5 max", section: "lifts" });
+      if (!isPositive(client.intake_deadlift_5rm)) missing.push({ key: "dl5", label: "Deadlift × 5 max", section: "lifts" });
+    } else {
+      if (client.intake_lift_unit !== "kg" && client.intake_lift_unit !== "lb") {
+        missing.push({ key: "unit", label: "Lift units (lb or kg)", section: "lifts" });
+      }
+      if (!isPositive(client.intake_squat_1rm)) missing.push({ key: "sq1", label: "Squat 1-rep max", section: "lifts" });
+      if (!isPositive(client.intake_bench_1rm)) missing.push({ key: "bn1", label: "Bench 1-rep max", section: "lifts" });
+      if (!isPositive(client.intake_deadlift_1rm)) missing.push({ key: "dl1", label: "Deadlift 1-rep max", section: "lifts" });
+    }
+  }
+
+  if (!goalsOk) missing.push({ key: "goals", label: "Goals & Training setup", section: "goals" });
+
+  const hasBasic = missing.some((m) => m.section === "basic" || m.section === "lifts");
+  const hasGoals = missing.some((m) => m.section === "goals");
+
+  const jumpTo = (id: string) => {
+    const el = document.getElementById(id);
+    if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
 
   return (
     <Card className={[
-      "p-4 flex flex-col sm:flex-row sm:items-center gap-3",
+      "p-5 space-y-4",
       status === "complete" ? "border-emerald-500/30 bg-emerald-500/5" :
-      status === "review" ? "border-amber-500/30 bg-amber-500/5" :
-      "border-amber-500/30 bg-amber-500/5",
+      status === "review" ? "border-amber-500/40 bg-amber-500/10" :
+      "border-amber-500/40 bg-amber-500/10",
     ].join(" ")}>
-      <div className="flex items-center gap-2 flex-1">
-        {status === "complete" && <CheckCircle2 className="h-5 w-5 shrink-0 text-emerald-500" />}
-        {status === "review" && <Clock className="h-5 w-5 shrink-0 text-amber-500" />}
-        {status === "missing" && <AlertTriangle className="h-5 w-5 shrink-0 text-amber-500" />}
-        <div>
-          <div className="font-semibold text-sm">
-            {status === "complete" && "Profile Complete"}
-            {status === "review" && "Needs Review"}
-            {status === "missing" && "Information Missing"}
+      <div className="flex items-start gap-3">
+        {status === "complete" && <CheckCircle2 className="h-6 w-6 shrink-0 text-emerald-500 mt-0.5" />}
+        {status === "review" && <Clock className="h-6 w-6 shrink-0 text-amber-500 mt-0.5" />}
+        {status === "missing" && <AlertTriangle className="h-6 w-6 shrink-0 text-amber-500 mt-0.5" />}
+        <div className="flex-1 min-w-0">
+          <div className="font-bold text-base">
+            {status === "complete" && "Profile complete — you're all set."}
+            {status === "review" && "Coach asked you to review your info"}
+            {status === "missing" && (
+              missing.length === 1
+                ? "1 thing to finish on your profile"
+                : `${missing.length} things to finish on your profile`
+            )}
           </div>
-          {missingItems.length > 0 && (
-            <div className="text-xs text-muted-foreground mt-0.5">
-              Missing: {missingItems.join(", ")}
-            </div>
+          {status === "missing" && (
+            <p className="text-xs text-muted-foreground mt-1">
+              Tap any item below to jump straight to the field that needs to be filled in.
+            </p>
+          )}
+          {status === "review" && (
+            <p className="text-xs text-muted-foreground mt-1">
+              Double-check your details below — autosave will confirm them for your coach.
+            </p>
           )}
         </div>
+        {status !== "complete" && (
+          <Badge
+            variant="outline"
+            className="border-amber-500/40 text-amber-600 dark:text-amber-400 shrink-0"
+          >
+            Action needed
+          </Badge>
+        )}
       </div>
-      {status !== "complete" && (
-        <Badge
-          variant="outline"
-          className={status === "review"
-            ? "border-amber-500/40 text-amber-600 dark:text-amber-400 shrink-0"
-            : "border-amber-500/40 text-amber-600 dark:text-amber-400 shrink-0"}
-        >
-          {status === "review" ? "Needs Review" : "Information Missing"}
-        </Badge>
+
+      {status === "missing" && missing.length > 0 && (
+        <>
+          <ul className="flex flex-wrap gap-1.5">
+            {missing.map((m) => (
+              <li key={m.key}>
+                <button
+                  type="button"
+                  onClick={() => jumpTo(m.section === "goals" ? "" : "basic-information")}
+                  className="rounded-full border border-amber-500/40 bg-background/60 px-2.5 py-1 text-[11px] font-semibold text-amber-700 dark:text-amber-300 hover:bg-amber-500/15 transition"
+                >
+                  {m.label}
+                </button>
+              </li>
+            ))}
+          </ul>
+          <div className="flex flex-wrap gap-2 pt-1">
+            {hasBasic && (
+              <Button
+                size="sm"
+                onClick={() => jumpTo("basic-information")}
+                className="bg-amber-500 hover:bg-amber-600 text-white"
+              >
+                Fix basic info
+              </Button>
+            )}
+            {hasGoals && (
+              <Link to="/portal/goals-setup">
+                <Button size="sm" variant="outline" className="border-amber-500/40 text-amber-700 dark:text-amber-300">
+                  Complete Goals & Training
+                </Button>
+              </Link>
+            )}
+          </div>
+        </>
       )}
     </Card>
   );
