@@ -137,6 +137,8 @@ Approximate macros:
 59 g protein
 109 g carbohydrates
 22 g fat
+7 g fibre
+
 
 Meal 3
 150 g cooked lean ground turkey
