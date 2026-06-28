@@ -154,7 +154,8 @@ Approximate macros:
 
 
 Daily Total
-Approximately 181 g protein, 295 g carbohydrates and 60 g fat
+Approximately 181 g protein, 295 g carbohydrates, 60 g fat and 27 g fibre
+
 
 FOOD-WEIGHING RULES
 Chicken, turkey, rice, potatoes and vegetables are listed using their cooked weight.
