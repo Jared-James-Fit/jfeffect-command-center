@@ -170,7 +170,7 @@ CLIENT DETAILS (fill in):
 - Bodyweight:
 - Training days per week:
 - Daily calorie target:
-- Daily protein / carbs / fat targets:
+- Daily protein / carbs / fat / fibre targets:
 - Allergies / dislikes:
 - Preferred foods:
 
