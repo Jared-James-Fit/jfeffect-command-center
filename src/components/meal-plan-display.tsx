@@ -10,11 +10,13 @@ const TOTAL_HEADING = /^\s*(daily\s*total|totals?)\b/i;
 const HIGHDAY_HEADING = /^\s*high\s*day\s*(changes?|adjustments?)?\s*$/i;
 const APPROX_LABEL = /^\s*approx[:.]?\s*$/i;
 const APPROX_INLINE = /^\s*approx[:.]\s*(.+)$/i;
+const APPROX_NATURAL_LABEL = /^\s*approximate\s*macros[:.]?\s*$/i;
+const NATURAL_MACRO = /^\s*~?\s*\d+(?:\.\d+)?\s*g?\s*(protein|carbohydrates?|carbs?|fat|fibre|fiber)s?\s*$/i;
 const MACRO_TOKEN = /^~?\s*\d+(?:\.\d+)?\s*[pcfPCF]\s*$/;
 const MACRO_COMBINED = /^\s*~?\s*\d+\s*[pP]\s*[\/,]\s*~?\s*\d+\s*[cC]\s*[\/,]\s*~?\s*\d+\s*[fF]\b/;
 
 type Section =
-  | { kind: "meal"; title: string; subtitle?: string; items: string[]; approx?: string }
+  | { kind: "meal"; title: string; subtitle?: string; items: string[]; approx?: string; approxMacros?: { title: string; items: string[] } }
   | { kind: "total"; title: string; macros?: string }
   | { kind: "highday"; title: string; items: string[] }
   | { kind: "other"; items: string[] };
@@ -32,6 +34,7 @@ function parse(text: string): Section[] {
   let cur: Section | null = null;
   let approxBuf: string[] = [];
   let collectingApprox = false;
+  let collectingApproxBlock = false;
 
   const flushApprox = () => {
     if (cur && approxBuf.length && (cur.kind === "meal" || cur.kind === "total")) {
@@ -46,9 +49,14 @@ function parse(text: string): Section[] {
     collectingApprox = false;
   };
 
+  const flushApproxBlock = () => {
+    collectingApproxBlock = false;
+  };
+
   for (const line of lines) {
     if (MEAL_HEADING.test(line)) {
       flushApprox();
+      flushApproxBlock();
       // Split parenthesized subtitle: "Meal 3 (Pre/Post Workout Meal)" → title="Meal 3", subtitle="Pre/Post Workout Meal"
       const m = line.match(/^(.*?)\s*\(([^)]+)\)\s*$/);
       cur = m
@@ -59,32 +67,49 @@ function parse(text: string): Section[] {
     }
     if (HIGHDAY_HEADING.test(line)) {
       flushApprox();
+      flushApproxBlock();
       cur = { kind: "highday", title: line, items: [] };
       sections.push(cur);
       continue;
     }
     if (TOTAL_HEADING.test(line)) {
       flushApprox();
+      flushApproxBlock();
       cur = { kind: "total", title: line };
       sections.push(cur);
       continue;
     }
     if (APPROX_LABEL.test(line)) {
       flushApprox();
+      flushApproxBlock();
       // Only start collecting if we have a meal/total to attach to — prevents stray Approx cards
       if (cur?.kind === "meal" || cur?.kind === "total") collectingApprox = true;
+      continue;
+    }
+    if (APPROX_NATURAL_LABEL.test(line)) {
+      flushApprox();
+      if (cur?.kind === "meal") {
+        cur.approxMacros = { title: line.trim(), items: [] };
+        collectingApproxBlock = true;
+      }
       continue;
     }
     const inline = line.match(APPROX_INLINE);
     if (inline) {
       flushApprox();
+      flushApproxBlock();
       const cleaned = normalizeMacroLine(inline[1]);
       if (cur?.kind === "meal") cur.approx = cleaned;
       else if (cur?.kind === "total") cur.macros = cleaned;
       continue;
     }
+    if (collectingApproxBlock && cur?.kind === "meal" && NATURAL_MACRO.test(line)) {
+      cur.approxMacros!.items.push(line);
+      continue;
+    }
     if (MACRO_COMBINED.test(line)) {
       flushApprox();
+      flushApproxBlock();
       const cleaned = normalizeMacroLine(line);
       if (cur?.kind === "meal") cur.approx = cur.approx ? `${cur.approx} / ${cleaned}` : cleaned;
       else if (cur?.kind === "total") cur.macros = cur.macros ? `${cur.macros} / ${cleaned}` : cleaned;
@@ -100,7 +125,8 @@ function parse(text: string): Section[] {
         continue;
       }
     }
-    // Regular item line
+    // Regular item line — exit any approx block first
+    if (collectingApproxBlock) flushApproxBlock();
     flushApprox();
     if (!cur) { cur = { kind: "other", items: [] }; sections.push(cur); }
     if (cur.kind === "total") {
@@ -118,6 +144,11 @@ function parse(text: string): Section[] {
 
 function titleCase(s: string) {
   return s.replace(/\s+/g, " ").trim();
+}
+
+function formatMacroValue(line: string) {
+  // Normalize spacing around grams and units for a cleaner read.
+  return line.replace(/\s+/g, " ").trim();
 }
 
 export function MealPlanDisplay({ text, className }: Props) {
@@ -147,6 +178,18 @@ export function MealPlanDisplay({ text, className }: Props) {
               {s.approx && (
                 <div className="mt-2 inline-flex items-center rounded bg-primary/10 px-2 py-0.5 text-[11px] font-bold tracking-wider text-primary">
                   APPROX · {s.approx.replace(/\s*\/\s*/g, " · ")}
+                </div>
+              )}
+              {s.approxMacros && s.approxMacros.items.length > 0 && (
+                <div className="mt-4 rounded-md border border-border/60 bg-secondary/30 px-3 py-2.5">
+                  <div className="text-[11px] font-black uppercase tracking-widest text-primary">{titleCase(s.approxMacros.title)}</div>
+                  <ul className="mt-2 space-y-1">
+                    {s.approxMacros.items.map((it, j) => (
+                      <li key={j} className="flex items-center justify-between text-[13px] text-foreground/90">
+                        <span className="capitalize">{formatMacroValue(it)}</span>
+                      </li>
+                    ))}
+                  </ul>
                 </div>
               )}
             </div>
