@@ -183,9 +183,10 @@ FORMAT RULES (strict — do not change headings, do not add extra commentary):
    <P> g protein
    <C> g carbohydrates
    <F> g fat
+   <Fb> g fibre
 5. End every menu with:
    Daily Total
-   Approximately <P> g protein, <C> g carbohydrates and <F> g fat
+   Approximately <P> g protein, <C> g carbohydrates, <F> g fat and <Fb> g fibre
 6. After all menus, include a FOOD-WEIGHING RULES section with the standard rules (cooked vs packaged, weigh consistently, track all calorie beverages, seasonings/zero-cal drinks allowed).
 
 Output plain text only — no markdown, no bullets, no tables. Match the formatting exactly so the app's parser can read it.`;
