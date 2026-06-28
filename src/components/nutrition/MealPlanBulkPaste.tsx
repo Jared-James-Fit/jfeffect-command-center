@@ -339,7 +339,7 @@ export function MealPlanBulkPaste({ onApply }: Props) {
           rows={10}
           value={text}
           onChange={(e) => setText(e.target.value)}
-          placeholder={`TRAINING-DAY MENU\n\nMeal 1\n300 g greek yogurt\n50 g oats\n...\n\nApproximate macros:\n67 g protein\n68 g carbohydrates\n13 g fat\n\n...\n\nDaily Total\nApproximately 185 g protein, 230 g carbohydrates and 60 g fat`}
+          placeholder={`TRAINING-DAY MENU\n\nMeal 1\n300 g greek yogurt\n50 g oats\n...\n\nApproximate macros:\n67 g protein\n68 g carbohydrates\n13 g fat\n10 g fibre\n\n...\n\nDaily Total\nApproximately 185 g protein, 230 g carbohydrates, 60 g fat and 25 g fibre`}
           className="font-mono text-xs leading-relaxed"
           spellCheck={false}
         />
