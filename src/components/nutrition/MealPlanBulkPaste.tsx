@@ -262,6 +262,7 @@ export function parseMealPlan(text: string): ParsedDay[] {
       protein: macros.protein ?? null,
       carbs: macros.carbs ?? null,
       fats: macros.fats ?? null,
+      fibre: macros.fibre ?? null,
       calories,
       notes: body,
       sort_order: idx,
