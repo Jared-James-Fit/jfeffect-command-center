@@ -29,6 +29,8 @@ Approximate macros:
 67 g protein
 68 g carbohydrates
 13 g fat
+10 g fibre
+
 
 Meal 2
 160 g cooked chicken breast
@@ -40,6 +42,8 @@ Approximate macros:
 60 g protein
 83 g carbohydrates
 22 g fat
+7 g fibre
+
 
 Meal 3
 180 g cooked lean ground turkey
@@ -51,9 +55,12 @@ Approximate macros:
 58 g protein
 79 g carbohydrates
 25 g fat
+8 g fibre
+
 
 Daily Total
-Approximately 185 g protein, 230 g carbohydrates and 60 g fat
+Approximately 185 g protein, 230 g carbohydrates, 60 g fat and 25 g fibre
+
 
 Being slightly over the protein target is acceptable.
 
@@ -70,6 +77,8 @@ Approximate macros:
 66 g protein
 56 g carbohydrates
 15 g fat
+9 g fibre
+
 
 Meal 2
 180 g cooked chicken breast
@@ -81,6 +90,8 @@ Approximate macros:
 64 g protein
 61 g carbohydrates
 28 g fat
+6 g fibre
+
 
 Meal 3
 180 g cooked lean ground turkey
@@ -92,9 +103,12 @@ Approximate macros:
 55 g protein
 48 g carbohydrates
 23 g fat
+6 g fibre
+
 
 Daily Total
-Approximately 185 g protein, 165 g carbohydrates and 65 g fat
+Approximately 185 g protein, 165 g carbohydrates, 65 g fat and 21 g fibre
+
 
 HIGH-DAY MENU
 
@@ -110,6 +124,8 @@ Approximate macros:
 72 g protein
 109 g carbohydrates
 15 g fat
+12 g fibre
+
 
 Meal 2
 150 g cooked chicken breast
@@ -121,6 +137,8 @@ Approximate macros:
 59 g protein
 109 g carbohydrates
 22 g fat
+7 g fibre
+
 
 Meal 3
 150 g cooked lean ground turkey
@@ -132,9 +150,12 @@ Approximate macros:
 50 g protein
 78 g carbohydrates
 23 g fat
+8 g fibre
+
 
 Daily Total
-Approximately 181 g protein, 295 g carbohydrates and 60 g fat
+Approximately 181 g protein, 295 g carbohydrates, 60 g fat and 27 g fibre
+
 
 FOOD-WEIGHING RULES
 Chicken, turkey, rice, potatoes and vegetables are listed using their cooked weight.
@@ -149,7 +170,7 @@ CLIENT DETAILS (fill in):
 - Bodyweight:
 - Training days per week:
 - Daily calorie target:
-- Daily protein / carbs / fat targets:
+- Daily protein / carbs / fat / fibre targets:
 - Allergies / dislikes:
 - Preferred foods:
 
@@ -162,21 +183,24 @@ FORMAT RULES (strict — do not change headings, do not add extra commentary):
    <P> g protein
    <C> g carbohydrates
    <F> g fat
+   <Fb> g fibre
 5. End every menu with:
    Daily Total
-   Approximately <P> g protein, <C> g carbohydrates and <F> g fat
+   Approximately <P> g protein, <C> g carbohydrates, <F> g fat and <Fb> g fibre
 6. After all menus, include a FOOD-WEIGHING RULES section with the standard rules (cooked vs packaged, weigh consistently, track all calorie beverages, seasonings/zero-cal drinks allowed).
 
 Output plain text only — no markdown, no bullets, no tables. Match the formatting exactly so the app's parser can read it.`;
 
-function parseMacroLine(line: string): { protein?: number; carbs?: number; fats?: number } {
+function parseMacroLine(line: string): { protein?: number; carbs?: number; fats?: number; fibre?: number } {
   const out: any = {};
   const p = line.match(/(\d+(?:\.\d+)?)\s*g?\s*protein/i);
   const c = line.match(/(\d+(?:\.\d+)?)\s*g?\s*(?:carb|carbohydrate)/i);
   const f = line.match(/(\d+(?:\.\d+)?)\s*g?\s*fat/i);
+  const fb = line.match(/(\d+(?:\.\d+)?)\s*g?\s*fibre|fiber/i);
   if (p) out.protein = Number(p[1]);
   if (c) out.carbs = Number(c[1]);
   if (f) out.fats = Number(f[1]);
+  if (fb) out.fibre = Number(fb[1]);
   return out;
 }
 
@@ -220,14 +244,15 @@ export function parseMealPlan(text: string): ParsedDay[] {
     } else {
       // Sum each "Approximate macros" block
       const matches = [...body.matchAll(/Approximate macros?:?\s*\n([\s\S]*?)(?=\n\s*\n|$)/gi)];
-      let p = 0, c = 0, f = 0, any = false;
+      let p = 0, c = 0, f = 0, fb = 0, any = false;
       for (const m of matches) {
         const got = parseMacroLine(m[1].replace(/\n/g, " "));
         if (got.protein) { p += got.protein; any = true; }
         if (got.carbs) { c += got.carbs; any = true; }
         if (got.fats) { f += got.fats; any = true; }
+        if (got.fibre) { fb += got.fibre; any = true; }
       }
-      if (any) macros = { protein: p, carbs: c, fats: f };
+      if (any) macros = { protein: p, carbs: c, fats: f, fibre: fb };
     }
     const calories = macros.protein != null && macros.carbs != null && macros.fats != null
       ? Math.round(macros.protein * 4 + macros.carbs * 4 + macros.fats * 9)
@@ -237,6 +262,7 @@ export function parseMealPlan(text: string): ParsedDay[] {
       protein: macros.protein ?? null,
       carbs: macros.carbs ?? null,
       fats: macros.fats ?? null,
+      fibre: macros.fibre ?? null,
       calories,
       notes: body,
       sort_order: idx,
@@ -313,7 +339,7 @@ export function MealPlanBulkPaste({ onApply }: Props) {
           rows={10}
           value={text}
           onChange={(e) => setText(e.target.value)}
-          placeholder={`TRAINING-DAY MENU\n\nMeal 1\n300 g greek yogurt\n50 g oats\n...\n\nApproximate macros:\n67 g protein\n68 g carbohydrates\n13 g fat\n\n...\n\nDaily Total\nApproximately 185 g protein, 230 g carbohydrates and 60 g fat`}
+          placeholder={`TRAINING-DAY MENU\n\nMeal 1\n300 g greek yogurt\n50 g oats\n...\n\nApproximate macros:\n67 g protein\n68 g carbohydrates\n13 g fat\n10 g fibre\n\n...\n\nDaily Total\nApproximately 185 g protein, 230 g carbohydrates, 60 g fat and 25 g fibre`}
           className="font-mono text-xs leading-relaxed"
           spellCheck={false}
         />
@@ -327,7 +353,7 @@ export function MealPlanBulkPaste({ onApply }: Props) {
               <li key={i} className="flex flex-wrap items-center justify-between gap-2 rounded border border-border/60 bg-secondary/30 px-2 py-1">
                 <span className="font-semibold">{d.day_label}</span>
                 <span className="text-muted-foreground">
-                  {d.calories ?? "—"} kcal · P {d.protein ?? "—"} / C {d.carbs ?? "—"} / F {d.fats ?? "—"}
+                  {d.calories ?? "—"} kcal · P {d.protein ?? "—"} / C {d.carbs ?? "—"} / F {d.fats ?? "—"} / Fb {d.fibre ?? "—"}
                 </span>
               </li>
             ))}
