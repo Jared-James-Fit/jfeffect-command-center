@@ -10,7 +10,7 @@ import { PageHeader } from "@/components/app-shell";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { ShieldAlert, CreditCard, Settings, Trash2, CheckCircle2, AlertTriangle, Clock, Briefcase, Calendar } from "lucide-react";
-import { isBasicInfoComplete } from "@/lib/basic-info";
+import { isBasicInfoComplete, isIntakeLiftsComplete } from "@/lib/basic-info";
 import { isNative } from "@/platform";
 import { toast } from "sonner";
 import { createCustomerPortalSession } from "@/lib/stripe-checkout.functions";
@@ -216,7 +216,7 @@ function AccountPage() {
         )}
 
         <SectionErrorBoundary label="Basic Information" className="md:col-span-2">
-          <Card className="border-border bg-card p-6 md:col-span-2 space-y-4">
+          <Card id="basic-information" className="border-border bg-card p-6 md:col-span-2 space-y-4 scroll-mt-24">
             <div className="flex items-center justify-between">
               <h3 className="text-xs uppercase tracking-widest text-muted-foreground">Basic Information</h3>
               <SavedIndicator state={saveState} />
