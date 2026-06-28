@@ -353,7 +353,7 @@ export function MealPlanBulkPaste({ onApply }: Props) {
               <li key={i} className="flex flex-wrap items-center justify-between gap-2 rounded border border-border/60 bg-secondary/30 px-2 py-1">
                 <span className="font-semibold">{d.day_label}</span>
                 <span className="text-muted-foreground">
-                  {d.calories ?? "—"} kcal · P {d.protein ?? "—"} / C {d.carbs ?? "—"} / F {d.fats ?? "—"}
+                  {d.calories ?? "—"} kcal · P {d.protein ?? "—"} / C {d.carbs ?? "—"} / F {d.fats ?? "—"} / Fb {d.fibre ?? "—"}
                 </span>
               </li>
             ))}
