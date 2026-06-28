@@ -15,6 +15,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { NUTRITION_PHASES, NUTRITION_GOALS, NUTRITION_STRUCTURES, dayLabelsForStructure, TARGET_STATUSES } from "@/lib/nutrition-cardio";
 import { FileText, Upload, X, Plus, ChevronDown } from "lucide-react";
 import { todayLocalISO } from "@/lib/today";
+import { MealPlanBulkPaste, type ParsedDay } from "@/components/nutrition/MealPlanBulkPaste";
 
 const QUICK_DAY_TYPES = [
   "Training Day",
@@ -232,6 +233,11 @@ export function NutritionTargetDialog({ open, onOpenChange, clientId, clients = 
         </div>
 
         <div className="space-y-3">
+          <MealPlanBulkPaste
+            onApply={(parsed: ParsedDay[]) => {
+              setDays(parsed.map((d, i) => ({ ...d, sort_order: i })));
+            }}
+          />
           <div className="flex items-center justify-between">
             <h4 className="text-xs uppercase tracking-widest text-muted-foreground">Day Targets</h4>
             <DropdownMenu>
