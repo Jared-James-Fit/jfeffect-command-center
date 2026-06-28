@@ -13,6 +13,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { MediaHeader } from "@/components/media/media-header";
 import { toast } from "sonner";
+import { AccountProfileSettings } from "@/components/account-profile-settings";
+import { ChangePasswordCard } from "@/components/change-password-card";
 
 const TABS = ["workspace", "notifications", "account"] as const;
 type Tab = (typeof TABS)[number];
@@ -76,10 +78,12 @@ function SettingsPage() {
           <NotificationSettings canEdit={canEdit} />
         </TabsContent>
         <TabsContent value="account" className="mt-4 space-y-3">
+          <AccountProfileSettings roleLabel={role ?? undefined} />
           <Card className="space-y-2 p-4">
             <div className="text-sm"><span className="font-medium">Email:</span> {user?.email}</div>
             <div className="text-sm capitalize"><span className="font-medium">Role:</span> {role ?? "Not assigned"}</div>
           </Card>
+          <ChangePasswordCard />
           <Button variant="outline" onClick={() => signOut()}>Sign out</Button>
         </TabsContent>
       </Tabs>

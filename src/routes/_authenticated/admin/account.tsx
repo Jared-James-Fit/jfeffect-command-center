@@ -5,6 +5,7 @@ import { Card } from "@/components/ui/card";
 import { ChangePasswordCard } from "@/components/change-password-card";
 import { UserCog } from "lucide-react";
 import { SettingsTabs } from "@/components/settings/settings-tabs";
+import { AccountProfileSettings } from "@/components/account-profile-settings";
 
 export const Route = createFileRoute("/_authenticated/admin/account")({
   component: AdminAccountPage,
@@ -17,7 +18,7 @@ function AdminAccountPage() {
   return (
     <>
       <SettingsTabs />
-      <PageHeader title="My Account" subtitle="Manage your sign-in credentials." />
+      <PageHeader title="My Account" subtitle="Manage your contact info, profile picture, and password." />
       <div className="grid gap-6 p-6 md:p-8">
         <Card className="border-border bg-card p-6 space-y-2">
           <div className="flex items-center gap-2">
@@ -27,6 +28,8 @@ function AdminAccountPage() {
           <div className="text-sm font-semibold">{user.email}</div>
           <div className="text-[11px] uppercase tracking-wider text-muted-foreground">Role: {role ?? "—"}</div>
         </Card>
+
+        <AccountProfileSettings roleLabel={role ?? undefined} />
 
         <ChangePasswordCard />
       </div>
