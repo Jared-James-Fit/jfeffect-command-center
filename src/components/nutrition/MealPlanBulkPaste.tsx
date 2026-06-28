@@ -90,6 +90,8 @@ Approximate macros:
 64 g protein
 61 g carbohydrates
 28 g fat
+6 g fibre
+
 
 Meal 3
 180 g cooked lean ground turkey
@@ -101,9 +103,12 @@ Approximate macros:
 55 g protein
 48 g carbohydrates
 23 g fat
+6 g fibre
+
 
 Daily Total
-Approximately 185 g protein, 165 g carbohydrates and 65 g fat
+Approximately 185 g protein, 165 g carbohydrates, 65 g fat and 21 g fibre
+
 
 HIGH-DAY MENU
 
@@ -119,6 +124,8 @@ Approximate macros:
 72 g protein
 109 g carbohydrates
 15 g fat
+12 g fibre
+
 
 Meal 2
 150 g cooked chicken breast
