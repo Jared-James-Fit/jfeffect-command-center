@@ -34,6 +34,7 @@ import {
 import { format, parseISO } from "date-fns";
 import { WaterTrackerCard } from "./water-tracker-card";
 import { convertWeight, type ProgressMetric } from "@/lib/progress-metrics";
+import { compressImage } from "@/lib/image-compress";
 
 /**
  * Mobile-safe date picker: defaults to today and shows a plain text
@@ -759,6 +760,10 @@ function AngleUploadCard({
   const fileRef = useRef<HTMLInputElement>(null);
   const [progress, setProgress] = useState<number | null>(null);
   const [err, setErr] = useState<string | null>(null);
+  const [localPreview, setLocalPreview] = useState<string | null>(null);
+  useEffect(() => {
+    return () => { if (localPreview) URL.revokeObjectURL(localPreview); };
+  }, [localPreview]);
   const { data: media = [] } = useQuery({
     queryKey: ["progress-media", subId],
     enabled: !!subId,
@@ -769,17 +774,32 @@ function AngleUploadCard({
   async function onFile(f: File) {
     setErr(null);
     try {
+      // Instant local preview — don't make the user wait for upload to "see" the file.
+      const previewUrl = URL.createObjectURL(f);
+      setLocalPreview((prev) => { if (prev) URL.revokeObjectURL(prev); return previewUrl; });
+      setProgress(1);
+
+      // Compress images aggressively before upload (massive speed-up on phone photos / HEIC).
+      let fileToUpload: File = f;
+      if (mediaType === "photo" && f.type.startsWith("image/") && f.type !== "image/gif") {
+        try {
+          const compressed = await compressImage(f, { maxDimension: 2000, quality: 0.82 });
+          fileToUpload = compressed instanceof File
+            ? compressed
+            : new File([compressed], f.name.replace(/\.[^.]+$/, "") + ".jpg", { type: "image/jpeg" });
+        } catch { /* fall back to original */ }
+      }
+
       const sid = await getSubId();
       // Pre-create media row in "uploading" state
       const m = await createMedia({
         submission_id: sid, user_id: ctx.userId, media_type: mediaType, angle,
-        original_filename: f.name, file_size_bytes: f.size, mime_type: f.type,
+        original_filename: f.name, file_size_bytes: fileToUpload.size, mime_type: fileToUpload.type || f.type,
         upload_status: "uploading",
       });
       qc.invalidateQueries({ queryKey: ["progress-media", sid] });
-      setProgress(0);
       const res = await uploadProgressFile({
-        file: f, userId: ctx.userId, onProgress: (p) => setProgress(p),
+        file: fileToUpload, userId: ctx.userId, onProgress: (p) => setProgress(p),
       });
       await updateMedia(m.id, {
         storage_path: res.path, thumbnail_path: res.path,
@@ -788,10 +808,14 @@ function AngleUploadCard({
       } as any);
       setProgress(100);
       qc.invalidateQueries({ queryKey: ["progress-media", sid] });
-      setTimeout(() => setProgress(null), 1500);
+      setTimeout(() => {
+        setProgress(null);
+        setLocalPreview((prev) => { if (prev) URL.revokeObjectURL(prev); return null; });
+      }, 800);
     } catch (e: any) {
       setErr(e?.message ?? "Upload failed");
       setProgress(null);
+      setLocalPreview((prev) => { if (prev) URL.revokeObjectURL(prev); return null; });
     }
   }
 
@@ -808,7 +832,13 @@ function AngleUploadCard({
         {existing && existing.upload_status === "ready" && <CheckCircle2 className="h-4 w-4 text-emerald-500" />}
       </div>
       <div className="min-h-32 sm:min-h-40 aspect-square rounded bg-muted relative overflow-hidden">
-        {existing ? (
+        {localPreview ? (
+          mediaType === "video" ? (
+            <video src={localPreview} className="h-full w-full object-cover" muted playsInline />
+          ) : (
+            <img src={localPreview} alt={angle} className="h-full w-full object-cover" />
+          )
+        ) : existing ? (
           <MediaThumb m={existing} />
         ) : (
           <button
