@@ -1290,6 +1290,7 @@ function MeasurementsTab({ ctx, onAdd }: { ctx: ProgressContext; onAdd: () => vo
   const { data: rows = [] } = useQuery({
     queryKey: ["progress-meas", ctx.userId],
     queryFn: () => listMeasurements(ctx.userId),
+    staleTime: 60_000,
   });
   async function remove(id: string) {
     if (!confirm("Delete this measurement?")) return;
@@ -1391,6 +1392,7 @@ function ComparisonDialog({ ctx, open, onOpenChange }: { ctx: ProgressContext; o
   const { data: subs = [] } = useQuery({
     queryKey: ["progress-subs-photo", ctx.userId],
     queryFn: () => listSubmissions({ userId: ctx.userId, type: "photo" }),
+    staleTime: 60_000,
   });
   const [aId, setA] = useState<string | null>(null);
   const [bId, setB] = useState<string | null>(null);
@@ -1444,13 +1446,14 @@ function SubmissionPicker({ label, value, onChange, subs }: {
 }
 
 function ComparePane({ subId, angle }: { subId: string; angle: ProgressAngle }) {
-  const { data: sub } = useQuery({ queryKey: ["progress-sub", subId], queryFn: () => getSubmission(subId) });
-  const { data: media = [] } = useQuery({ queryKey: ["progress-media", subId], queryFn: () => listMediaForSubmission(subId) });
+  const { data: sub } = useQuery({ queryKey: ["progress-sub", subId], queryFn: () => getSubmission(subId), staleTime: 60_000 });
+  const { data: media = [] } = useQuery({ queryKey: ["progress-media", subId], queryFn: () => listMediaForSubmission(subId), staleTime: 60 * 60 * 1000 });
   const m = media.find((mm) => mm.angle === angle);
   const { data: url } = useQuery({
     queryKey: ["sig", m?.storage_path],
     enabled: !!m?.storage_path,
     queryFn: () => getSignedMediaUrl(m!.storage_path!),
+    staleTime: 60 * 60 * 1000,
   });
   return (
     <div>
