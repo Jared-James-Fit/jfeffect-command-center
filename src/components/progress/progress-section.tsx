@@ -1471,9 +1471,9 @@ function ComparePane({ subId, angle }: { subId: string; angle: ProgressAngle }) 
 
 function SubmissionDetailDialog({ ctx, submissionId, onClose }: { ctx: ProgressContext; submissionId: string; onClose: () => void }) {
   const qc = useQueryClient();
-  const { data: sub } = useQuery({ queryKey: ["progress-sub", submissionId], queryFn: () => getSubmission(submissionId) });
-  const { data: media = [] } = useQuery({ queryKey: ["progress-media", submissionId], queryFn: () => listMediaForSubmission(submissionId) });
-  const { data: reviews = [] } = useQuery({ queryKey: ["progress-reviews", submissionId], queryFn: () => listReviewResponses(submissionId) });
+  const { data: sub } = useQuery({ queryKey: ["progress-sub", submissionId], queryFn: () => getSubmission(submissionId), staleTime: 60_000 });
+  const { data: media = [] } = useQuery({ queryKey: ["progress-media", submissionId], queryFn: () => listMediaForSubmission(submissionId), staleTime: 60 * 60 * 1000 });
+  const { data: reviews = [] } = useQuery({ queryKey: ["progress-reviews", submissionId], queryFn: () => listReviewResponses(submissionId), staleTime: 60_000 });
   const [body, setBody] = useState("");
   const [internal, setInternal] = useState(false);
 
