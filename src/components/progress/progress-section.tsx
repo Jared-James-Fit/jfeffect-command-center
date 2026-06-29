@@ -1072,7 +1072,27 @@ function BodyweightTab({
     cutoff.setDate(cutoff.getDate() - days);
     return chartAll.filter((p) => new Date(p.d) >= cutoff);
   }, [chartAll, range]);
-  const yDomain = chart.length === 1 ? [chart[0].v - 1, chart[0].v + 1] : ["auto", "auto"];
+  const yDomain = useMemo<[number | string, number | string]>(
+    () => (chart.length === 1 ? [chart[0].v - 1, chart[0].v + 1] : ["auto", "auto"]),
+    [chart],
+  );
+
+  // Stable custom dot renderer so recharts doesn't rebuild every render.
+  const renderDot = useMemo(
+    () => (props: any) => (
+      <circle
+        cx={props.cx}
+        cy={props.cy}
+        r={4}
+        fill="var(--primary)"
+        stroke="var(--card)"
+        strokeWidth={2}
+        className="cursor-pointer"
+        onClick={(e) => { e.stopPropagation(); handlePointClick(props.payload); }}
+      />
+    ),
+    [],
+  );
 
   function handlePointClick(point?: { d: string; v: number; unit: "kg" | "lb"; note?: string | null }) {
     if (!point) return;
