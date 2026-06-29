@@ -1000,6 +1000,7 @@ function BodyweightTab({
   const { data: rows = [] } = useQuery({
     queryKey: ["progress-bw", ctx.userId],
     queryFn: () => listBodyweight(ctx.userId),
+    staleTime: 60_000,
   });
   const { data: metricRows = [] } = useQuery({
     queryKey: ["progress-metrics", ctx.clientId],
@@ -1015,6 +1016,7 @@ function BodyweightTab({
       if (error) throw error;
       return (data ?? []) as ProgressMetric[];
     },
+    staleTime: 60_000,
   });
   const combinedRows = useMemo(() => {
     const byDate = new Map<string, { id: string; date: string; value: number; unit: "kg" | "lb"; note?: string | null; source: "progress_bodyweight" | "progress_metrics" }>();
