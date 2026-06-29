@@ -1056,15 +1056,21 @@ function BodyweightTab({
     return Array.from(byDate.values()).sort((a, b) => b.date.localeCompare(a.date));
   }, [ctx.preferredWeightUnit, metricRows, rows]);
 
-  const stats = bodyweightStats(combinedRows.map((r) => ({
-    id: r.id,
-    user_id: ctx.userId,
-    logged_date: r.date,
-    weight_value: r.value,
-    weight_unit: r.unit,
-    note: r.note ?? null,
-    created_at: "",
-  })));
+  const stats = useMemo(
+    () =>
+      bodyweightStats(
+        combinedRows.map((r) => ({
+          id: r.id,
+          user_id: ctx.userId,
+          logged_date: r.date,
+          weight_value: r.value,
+          weight_unit: r.unit,
+          note: r.note ?? null,
+          created_at: "",
+        })),
+      ),
+    [combinedRows, ctx.userId],
+  );
 
   const unit = combinedRows[0]?.unit ?? ctx.preferredWeightUnit ?? "lb";
   const chartAll = useMemo(() => {
