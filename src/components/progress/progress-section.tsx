@@ -245,7 +245,7 @@ function OverviewTab({
     staleTime: 60_000,
   });
 
-  const stats = bodyweightStats(bwRows);
+  const stats = useMemo(() => bodyweightStats(bwRows), [bwRows]);
 
   const weightChart = useMemo(() => {
     if (!bwRows.length) return [];
@@ -531,6 +531,7 @@ function PhotosTab({
   const { data: subs = [], isLoading } = useQuery({
     queryKey: ["progress-subs-photo", ctx.userId],
     queryFn: () => listSubmissions({ userId: ctx.userId, type: "photo" }),
+    staleTime: 60_000,
   });
 
   return (
@@ -565,6 +566,7 @@ function VideosTab({
   const { data: subs = [], isLoading } = useQuery({
     queryKey: ["progress-subs-video", ctx.userId],
     queryFn: () => listSubmissions({ userId: ctx.userId, type: "video" }),
+    staleTime: 60_000,
   });
   return (
     <div className="space-y-3">
@@ -593,6 +595,7 @@ function SubmissionCard({ sub, onOpen }: { sub: ProgressSubmission; onOpen: () =
   const { data: media = [] } = useQuery({
     queryKey: ["progress-media", sub.id],
     queryFn: () => listMediaForSubmission(sub.id),
+    staleTime: 60 * 60 * 1000,
   });
   const complete = sub.submission_type === "photo"
     ? PHOTO_ANGLES.every((a) => media.find((m) => m.angle === a && m.upload_status !== "draft"))
@@ -997,6 +1000,7 @@ function BodyweightTab({
   const { data: rows = [] } = useQuery({
     queryKey: ["progress-bw", ctx.userId],
     queryFn: () => listBodyweight(ctx.userId),
+    staleTime: 60_000,
   });
   const { data: metricRows = [] } = useQuery({
     queryKey: ["progress-metrics", ctx.clientId],
@@ -1012,6 +1016,7 @@ function BodyweightTab({
       if (error) throw error;
       return (data ?? []) as ProgressMetric[];
     },
+    staleTime: 60_000,
   });
   const combinedRows = useMemo(() => {
     const byDate = new Map<string, { id: string; date: string; value: number; unit: "kg" | "lb"; note?: string | null; source: "progress_bodyweight" | "progress_metrics" }>();
@@ -1067,7 +1072,27 @@ function BodyweightTab({
     cutoff.setDate(cutoff.getDate() - days);
     return chartAll.filter((p) => new Date(p.d) >= cutoff);
   }, [chartAll, range]);
-  const yDomain = chart.length === 1 ? [chart[0].v - 1, chart[0].v + 1] : ["auto", "auto"];
+  const yDomain = useMemo<[number | string, number | string]>(
+    () => (chart.length === 1 ? [chart[0].v - 1, chart[0].v + 1] : ["auto", "auto"]),
+    [chart],
+  );
+
+  // Stable custom dot renderer so recharts doesn't rebuild every render.
+  const renderDot = useMemo(
+    () => (props: any) => (
+      <circle
+        cx={props.cx}
+        cy={props.cy}
+        r={4}
+        fill="var(--primary)"
+        stroke="var(--card)"
+        strokeWidth={2}
+        className="cursor-pointer"
+        onClick={(e) => { e.stopPropagation(); handlePointClick(props.payload); }}
+      />
+    ),
+    [],
+  );
 
   function handlePointClick(point?: { d: string; v: number; unit: "kg" | "lb"; note?: string | null }) {
     if (!point) return;
@@ -1135,18 +1160,7 @@ function BodyweightTab({
                   type="monotone" dataKey="v"
                   stroke="var(--primary)" strokeWidth={2}
                   fill="url(#bwChartArea)" isAnimationActive={false}
-                  dot={(props: any) => (
-                    <circle
-                      cx={props.cx}
-                      cy={props.cy}
-                      r={4}
-                      fill="var(--primary)"
-                      stroke="var(--card)"
-                      strokeWidth={2}
-                      className="cursor-pointer"
-                      onClick={(e) => { e.stopPropagation(); handlePointClick(props.payload); }}
-                    />
-                  )}
+                  dot={renderDot}
                   activeDot={{ r: 6, onClick: (_event: unknown, payload: any) => handlePointClick(payload?.payload), style: { cursor: "pointer" } }}
                 />
               </AreaChart>
