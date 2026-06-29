@@ -61,10 +61,7 @@ export function rowBadges(r: DirectoryRow): BadgeDef[] {
                                out.push({ label: `${r.missed_workouts_count} Missed`, tone: "warn", icon: XCircle });
   if (r.f_inactive)            out.push({ label: "Inactive",      tone: "warn",   icon: Clock });
   if (r.f_program_ending)      out.push({ label: "Ending Soon",   tone: "warn",   icon: CalendarClock });
-  if (r.f_missing_program)     out.push({ label: "No Program",    tone: "warn",   icon: Dumbbell });
   if (r.f_new_client && out.length < 2) out.push({ label: "New",  tone: "ok",     icon: UserPlus });
-  if (r.f_missing_nutrition && out.length < 3) out.push({ label: "Nutrition Missing", tone: "muted", icon: Apple });
-  if (r.f_missing_cardio && out.length < 3)    out.push({ label: "Cardio Missing",    tone: "muted", icon: HeartPulse });
   if (out.length === 0)        out.push({ label: "Active", tone: "ok", icon: CheckCircle2 });
   return out.slice(0, 3);
 }
