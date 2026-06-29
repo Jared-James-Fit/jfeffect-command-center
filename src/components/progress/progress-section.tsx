@@ -593,6 +593,7 @@ function SubmissionCard({ sub, onOpen }: { sub: ProgressSubmission; onOpen: () =
   const { data: media = [] } = useQuery({
     queryKey: ["progress-media", sub.id],
     queryFn: () => listMediaForSubmission(sub.id),
+    staleTime: 60 * 60 * 1000,
   });
   const complete = sub.submission_type === "photo"
     ? PHOTO_ANGLES.every((a) => media.find((m) => m.angle === a && m.upload_status !== "draft"))
