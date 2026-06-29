@@ -772,13 +772,17 @@ function AngleUploadCard({
   const [progress, setProgress] = useState<number | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [localPreview, setLocalPreview] = useState<string | null>(null);
-  useEffect(() => {
-    return () => { if (localPreview) URL.revokeObjectURL(localPreview); };
-  }, [localPreview]);
+  const localPreviewRef = useRef<string | null>(null);
+  useEffect(() => { localPreviewRef.current = localPreview; }, [localPreview]);
+  // Revoke only on unmount; the setter already revokes the previous URL.
+  useEffect(() => () => {
+    if (localPreviewRef.current) URL.revokeObjectURL(localPreviewRef.current);
+  }, []);
   const { data: media = [] } = useQuery({
     queryKey: ["progress-media", subId],
     enabled: !!subId,
     queryFn: () => listMediaForSubmission(subId!),
+    staleTime: 60_000,
   });
   const existing = media.find((m) => m.angle === angle);
 
