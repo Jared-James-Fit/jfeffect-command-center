@@ -531,6 +531,7 @@ function PhotosTab({
   const { data: subs = [], isLoading } = useQuery({
     queryKey: ["progress-subs-photo", ctx.userId],
     queryFn: () => listSubmissions({ userId: ctx.userId, type: "photo" }),
+    staleTime: 60_000,
   });
 
   return (
@@ -565,6 +566,7 @@ function VideosTab({
   const { data: subs = [], isLoading } = useQuery({
     queryKey: ["progress-subs-video", ctx.userId],
     queryFn: () => listSubmissions({ userId: ctx.userId, type: "video" }),
+    staleTime: 60_000,
   });
   return (
     <div className="space-y-3">
