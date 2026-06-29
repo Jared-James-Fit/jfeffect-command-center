@@ -553,7 +553,11 @@ function PhotosTab({
         />
       ) : (
         <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-          {subs.map((s) => <SubmissionCard key={s.id} sub={s} onOpen={() => onOpen(s.id)} />)}
+          {subs.map((s) => (
+            <LazyMount key={s.id} className="min-h-[180px]">
+              <SubmissionCard sub={s} onOpen={() => onOpen(s.id)} />
+            </LazyMount>
+          ))}
         </div>
       )}
     </div>
@@ -584,7 +588,11 @@ function VideosTab({
         />
       ) : (
         <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-          {subs.map((s) => <SubmissionCard key={s.id} sub={s} onOpen={() => onOpen(s.id)} />)}
+          {subs.map((s) => (
+            <LazyMount key={s.id} className="min-h-[180px]">
+              <SubmissionCard sub={s} onOpen={() => onOpen(s.id)} />
+            </LazyMount>
+          ))}
         </div>
       )}
     </div>
@@ -764,13 +772,17 @@ function AngleUploadCard({
   const [progress, setProgress] = useState<number | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [localPreview, setLocalPreview] = useState<string | null>(null);
-  useEffect(() => {
-    return () => { if (localPreview) URL.revokeObjectURL(localPreview); };
-  }, [localPreview]);
+  const localPreviewRef = useRef<string | null>(null);
+  useEffect(() => { localPreviewRef.current = localPreview; }, [localPreview]);
+  // Revoke only on unmount; the setter already revokes the previous URL.
+  useEffect(() => () => {
+    if (localPreviewRef.current) URL.revokeObjectURL(localPreviewRef.current);
+  }, []);
   const { data: media = [] } = useQuery({
     queryKey: ["progress-media", subId],
     enabled: !!subId,
     queryFn: () => listMediaForSubmission(subId!),
+    staleTime: 60_000,
   });
   const existing = media.find((m) => m.angle === angle);
 
@@ -1044,15 +1056,21 @@ function BodyweightTab({
     return Array.from(byDate.values()).sort((a, b) => b.date.localeCompare(a.date));
   }, [ctx.preferredWeightUnit, metricRows, rows]);
 
-  const stats = bodyweightStats(combinedRows.map((r) => ({
-    id: r.id,
-    user_id: ctx.userId,
-    logged_date: r.date,
-    weight_value: r.value,
-    weight_unit: r.unit,
-    note: r.note ?? null,
-    created_at: "",
-  })));
+  const stats = useMemo(
+    () =>
+      bodyweightStats(
+        combinedRows.map((r) => ({
+          id: r.id,
+          user_id: ctx.userId,
+          logged_date: r.date,
+          weight_value: r.value,
+          weight_unit: r.unit,
+          note: r.note ?? null,
+          created_at: "",
+        })),
+      ),
+    [combinedRows, ctx.userId],
+  );
 
   const unit = combinedRows[0]?.unit ?? ctx.preferredWeightUnit ?? "lb";
   const chartAll = useMemo(() => {
@@ -1278,6 +1296,7 @@ function MeasurementsTab({ ctx, onAdd }: { ctx: ProgressContext; onAdd: () => vo
   const { data: rows = [] } = useQuery({
     queryKey: ["progress-meas", ctx.userId],
     queryFn: () => listMeasurements(ctx.userId),
+    staleTime: 60_000,
   });
   async function remove(id: string) {
     if (!confirm("Delete this measurement?")) return;
@@ -1379,6 +1398,7 @@ function ComparisonDialog({ ctx, open, onOpenChange }: { ctx: ProgressContext; o
   const { data: subs = [] } = useQuery({
     queryKey: ["progress-subs-photo", ctx.userId],
     queryFn: () => listSubmissions({ userId: ctx.userId, type: "photo" }),
+    staleTime: 60_000,
   });
   const [aId, setA] = useState<string | null>(null);
   const [bId, setB] = useState<string | null>(null);
@@ -1432,13 +1452,14 @@ function SubmissionPicker({ label, value, onChange, subs }: {
 }
 
 function ComparePane({ subId, angle }: { subId: string; angle: ProgressAngle }) {
-  const { data: sub } = useQuery({ queryKey: ["progress-sub", subId], queryFn: () => getSubmission(subId) });
-  const { data: media = [] } = useQuery({ queryKey: ["progress-media", subId], queryFn: () => listMediaForSubmission(subId) });
+  const { data: sub } = useQuery({ queryKey: ["progress-sub", subId], queryFn: () => getSubmission(subId), staleTime: 60_000 });
+  const { data: media = [] } = useQuery({ queryKey: ["progress-media", subId], queryFn: () => listMediaForSubmission(subId), staleTime: 60 * 60 * 1000 });
   const m = media.find((mm) => mm.angle === angle);
   const { data: url } = useQuery({
     queryKey: ["sig", m?.storage_path],
     enabled: !!m?.storage_path,
     queryFn: () => getSignedMediaUrl(m!.storage_path!),
+    staleTime: 60 * 60 * 1000,
   });
   return (
     <div>
@@ -1456,9 +1477,9 @@ function ComparePane({ subId, angle }: { subId: string; angle: ProgressAngle }) 
 
 function SubmissionDetailDialog({ ctx, submissionId, onClose }: { ctx: ProgressContext; submissionId: string; onClose: () => void }) {
   const qc = useQueryClient();
-  const { data: sub } = useQuery({ queryKey: ["progress-sub", submissionId], queryFn: () => getSubmission(submissionId) });
-  const { data: media = [] } = useQuery({ queryKey: ["progress-media", submissionId], queryFn: () => listMediaForSubmission(submissionId) });
-  const { data: reviews = [] } = useQuery({ queryKey: ["progress-reviews", submissionId], queryFn: () => listReviewResponses(submissionId) });
+  const { data: sub } = useQuery({ queryKey: ["progress-sub", submissionId], queryFn: () => getSubmission(submissionId), staleTime: 60_000 });
+  const { data: media = [] } = useQuery({ queryKey: ["progress-media", submissionId], queryFn: () => listMediaForSubmission(submissionId), staleTime: 60 * 60 * 1000 });
+  const { data: reviews = [] } = useQuery({ queryKey: ["progress-reviews", submissionId], queryFn: () => listReviewResponses(submissionId), staleTime: 60_000 });
   const [body, setBody] = useState("");
   const [internal, setInternal] = useState(false);
 
@@ -1555,6 +1576,7 @@ function DetailMediaPane({ angle, media }: { angle: ProgressAngle; media?: Progr
     queryKey: ["sig", media?.storage_path],
     enabled: !!media?.storage_path,
     queryFn: () => getSignedMediaUrl(media!.storage_path!),
+    staleTime: 60 * 60 * 1000,
   });
   return (
     <div>
@@ -1582,9 +1604,9 @@ function DetailMediaPane({ angle, media }: { angle: ProgressAngle; media?: Progr
 // ============== Timeline ==============
 
 function TimelineTab({ ctx, onOpen }: { ctx: ProgressContext; onOpen: (id: string) => void }) {
-  const { data: subs = [] } = useQuery({ queryKey: ["progress-subs", ctx.userId], queryFn: () => listSubmissions({ userId: ctx.userId }) });
-  const { data: bw = [] } = useQuery({ queryKey: ["progress-bw", ctx.userId], queryFn: () => listBodyweight(ctx.userId) });
-  const { data: meas = [] } = useQuery({ queryKey: ["progress-meas", ctx.userId], queryFn: () => listMeasurements(ctx.userId) });
+  const { data: subs = [] } = useQuery({ queryKey: ["progress-subs", ctx.userId], queryFn: () => listSubmissions({ userId: ctx.userId }), staleTime: 60_000 });
+  const { data: bw = [] } = useQuery({ queryKey: ["progress-bw", ctx.userId], queryFn: () => listBodyweight(ctx.userId), staleTime: 60_000 });
+  const { data: meas = [] } = useQuery({ queryKey: ["progress-meas", ctx.userId], queryFn: () => listMeasurements(ctx.userId), staleTime: 60_000 });
   const [filter, setFilter] = useState<"all" | "photos" | "videos" | "weight" | "measure">("all");
 
   type Item = { at: string; kind: string; title: string; subtitle?: string; id?: string; onClick?: () => void };
