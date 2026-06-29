@@ -1570,6 +1570,7 @@ function DetailMediaPane({ angle, media }: { angle: ProgressAngle; media?: Progr
     queryKey: ["sig", media?.storage_path],
     enabled: !!media?.storage_path,
     queryFn: () => getSignedMediaUrl(media!.storage_path!),
+    staleTime: 60 * 60 * 1000,
   });
   return (
     <div>
@@ -1597,9 +1598,9 @@ function DetailMediaPane({ angle, media }: { angle: ProgressAngle; media?: Progr
 // ============== Timeline ==============
 
 function TimelineTab({ ctx, onOpen }: { ctx: ProgressContext; onOpen: (id: string) => void }) {
-  const { data: subs = [] } = useQuery({ queryKey: ["progress-subs", ctx.userId], queryFn: () => listSubmissions({ userId: ctx.userId }) });
-  const { data: bw = [] } = useQuery({ queryKey: ["progress-bw", ctx.userId], queryFn: () => listBodyweight(ctx.userId) });
-  const { data: meas = [] } = useQuery({ queryKey: ["progress-meas", ctx.userId], queryFn: () => listMeasurements(ctx.userId) });
+  const { data: subs = [] } = useQuery({ queryKey: ["progress-subs", ctx.userId], queryFn: () => listSubmissions({ userId: ctx.userId }), staleTime: 60_000 });
+  const { data: bw = [] } = useQuery({ queryKey: ["progress-bw", ctx.userId], queryFn: () => listBodyweight(ctx.userId), staleTime: 60_000 });
+  const { data: meas = [] } = useQuery({ queryKey: ["progress-meas", ctx.userId], queryFn: () => listMeasurements(ctx.userId), staleTime: 60_000 });
   const [filter, setFilter] = useState<"all" | "photos" | "videos" | "weight" | "measure">("all");
 
   type Item = { at: string; kind: string; title: string; subtitle?: string; id?: string; onClick?: () => void };
