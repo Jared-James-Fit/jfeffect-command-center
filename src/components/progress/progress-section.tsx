@@ -245,7 +245,7 @@ function OverviewTab({
     staleTime: 60_000,
   });
 
-  const stats = bodyweightStats(bwRows);
+  const stats = useMemo(() => bodyweightStats(bwRows), [bwRows]);
 
   const weightChart = useMemo(() => {
     if (!bwRows.length) return [];
