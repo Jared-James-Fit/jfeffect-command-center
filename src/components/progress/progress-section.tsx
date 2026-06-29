@@ -34,6 +34,7 @@ import {
 import { format, parseISO } from "date-fns";
 import { WaterTrackerCard } from "./water-tracker-card";
 import { convertWeight, type ProgressMetric } from "@/lib/progress-metrics";
+import { compressImage } from "@/lib/image-compress";
 
 /**
  * Mobile-safe date picker: defaults to today and shows a plain text
