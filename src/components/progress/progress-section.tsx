@@ -1160,18 +1160,7 @@ function BodyweightTab({
                   type="monotone" dataKey="v"
                   stroke="var(--primary)" strokeWidth={2}
                   fill="url(#bwChartArea)" isAnimationActive={false}
-                  dot={(props: any) => (
-                    <circle
-                      cx={props.cx}
-                      cy={props.cy}
-                      r={4}
-                      fill="var(--primary)"
-                      stroke="var(--card)"
-                      strokeWidth={2}
-                      className="cursor-pointer"
-                      onClick={(e) => { e.stopPropagation(); handlePointClick(props.payload); }}
-                    />
-                  )}
+                  dot={renderDot}
                   activeDot={{ r: 6, onClick: (_event: unknown, payload: any) => handlePointClick(payload?.payload), style: { cursor: "pointer" } }}
                 />
               </AreaChart>
