@@ -553,7 +553,11 @@ function PhotosTab({
         />
       ) : (
         <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-          {subs.map((s) => <SubmissionCard key={s.id} sub={s} onOpen={() => onOpen(s.id)} />)}
+          {subs.map((s) => (
+            <LazyMount key={s.id} className="min-h-[180px]">
+              <SubmissionCard sub={s} onOpen={() => onOpen(s.id)} />
+            </LazyMount>
+          ))}
         </div>
       )}
     </div>
@@ -584,7 +588,11 @@ function VideosTab({
         />
       ) : (
         <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-          {subs.map((s) => <SubmissionCard key={s.id} sub={s} onOpen={() => onOpen(s.id)} />)}
+          {subs.map((s) => (
+            <LazyMount key={s.id} className="min-h-[180px]">
+              <SubmissionCard sub={s} onOpen={() => onOpen(s.id)} />
+            </LazyMount>
+          ))}
         </div>
       )}
     </div>
