@@ -521,7 +521,7 @@ function EditExerciseDialog({
 
 function NewExerciseDialog({ onClose, onCreated }: { onClose: () => void; onCreated: () => void }) {
   const [form, setForm] = useState({
-    name: "", category: CATEGORIES[0], muscle_group: "", equipment: "",
+    name: "", category: CATEGORIES[0], primary_muscle_group: "", muscle_group: "", equipment: "",
     youtube_url: "", cues: "", common_mistakes: "", difficulty: "Intermediate",
     default_load_unit: "lb" as "kg" | "lb",
   });
@@ -529,6 +529,7 @@ function NewExerciseDialog({ onClose, onCreated }: { onClose: () => void; onCrea
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!form.primary_muscle_group) return toast.error("Primary muscle group is required");
     setBusy(true);
     const { error } = await supabase.from("exercises").insert(form);
     setBusy(false);
@@ -552,6 +553,15 @@ function NewExerciseDialog({ onClose, onCreated }: { onClose: () => void; onCrea
             </Select>
           </div>
           <div><Label>Muscle group</Label><Input value={form.muscle_group} onChange={(e) => setForm({ ...form, muscle_group: e.target.value })} /></div>
+          <div className="col-span-2">
+            <Label>Primary muscle group *</Label>
+            <Select value={form.primary_muscle_group} onValueChange={(v) => setForm({ ...form, primary_muscle_group: v })}>
+              <SelectTrigger><SelectValue placeholder="Select primary muscle…" /></SelectTrigger>
+              <SelectContent>
+                {PRIMARY_MUSCLE_GROUPS.map((m) => <SelectItem key={m} value={m}>{m}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
           <div><Label>Equipment</Label><Input value={form.equipment} onChange={(e) => setForm({ ...form, equipment: e.target.value })} /></div>
           <div><Label>Difficulty</Label><Input value={form.difficulty} onChange={(e) => setForm({ ...form, difficulty: e.target.value })} /></div>
           <div>
