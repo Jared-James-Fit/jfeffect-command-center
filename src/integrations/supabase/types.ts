@@ -15447,6 +15447,114 @@ export type Database = {
         }
         Relationships: []
       }
+      push_notification_dedupe: {
+        Row: {
+          created_at: string
+          event_key: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          event_key: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          event_key?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      push_notification_preferences: {
+        Row: {
+          billing: boolean
+          check_ins: boolean
+          coaching_apps: boolean
+          created_at: string
+          lift_reviews: boolean
+          master_enabled: boolean
+          messages: boolean
+          updated_at: string
+          user_id: string
+          workouts: boolean
+        }
+        Insert: {
+          billing?: boolean
+          check_ins?: boolean
+          coaching_apps?: boolean
+          created_at?: string
+          lift_reviews?: boolean
+          master_enabled?: boolean
+          messages?: boolean
+          updated_at?: string
+          user_id: string
+          workouts?: boolean
+        }
+        Update: {
+          billing?: boolean
+          check_ins?: boolean
+          coaching_apps?: boolean
+          created_at?: string
+          lift_reviews?: boolean
+          master_enabled?: boolean
+          messages?: boolean
+          updated_at?: string
+          user_id?: string
+          workouts?: boolean
+        }
+        Relationships: []
+      }
+      push_subscriptions: {
+        Row: {
+          auth_key: string
+          created_at: string
+          device_name: string | null
+          enabled: boolean
+          endpoint: string
+          failure_count: number
+          id: string
+          last_error: string | null
+          last_used_at: string | null
+          p256dh_key: string
+          platform: string | null
+          updated_at: string
+          user_agent: string | null
+          user_id: string
+        }
+        Insert: {
+          auth_key: string
+          created_at?: string
+          device_name?: string | null
+          enabled?: boolean
+          endpoint: string
+          failure_count?: number
+          id?: string
+          last_error?: string | null
+          last_used_at?: string | null
+          p256dh_key: string
+          platform?: string | null
+          updated_at?: string
+          user_agent?: string | null
+          user_id: string
+        }
+        Update: {
+          auth_key?: string
+          created_at?: string
+          device_name?: string | null
+          enabled?: boolean
+          endpoint?: string
+          failure_count?: number
+          id?: string
+          last_error?: string | null
+          last_used_at?: string | null
+          p256dh_key?: string
+          platform?: string | null
+          updated_at?: string
+          user_agent?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       recipe_client_access: {
         Row: {
           client_id: string
