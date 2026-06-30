@@ -35,7 +35,7 @@ export function WorkoutSubmissionSummary({ open, onOpenChange, summary, workoutT
   return (
     <Dialog open={open} onOpenChange={(v) => { onOpenChange(v); if (!v) onClose?.(); }}>
       <DialogContent className="w-[calc(100vw-1rem)] max-w-md gap-0 overflow-x-hidden overflow-y-auto p-0 pb-[env(safe-area-inset-bottom)] [&>button]:hidden">
-        <div className="bg-gradient-to-br from-primary/15 via-primary/5 to-transparent px-4 pt-5 pb-4 sm:px-6 sm:pt-6">
+        <div className="min-w-0 bg-gradient-to-br from-primary/15 via-primary/5 to-transparent px-4 pt-5 pb-4 sm:px-6 sm:pt-6">
           <div className="grid grid-cols-[auto_minmax(0,1fr)] items-center gap-3">
             <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-primary/20 text-primary">
               <Trophy className="h-6 w-6" />
@@ -63,7 +63,7 @@ export function WorkoutSubmissionSummary({ open, onOpenChange, summary, workoutT
           )}
         </div>
 
-        <div className="space-y-3 px-4 pb-4 sm:px-5">
+        <div className="min-w-0 space-y-3 px-4 pb-4 sm:px-5">
           {/* Motivational message */}
           <div className="rounded-2xl border border-primary/20 bg-primary/5 px-3 py-3 text-center text-sm font-bold leading-snug text-foreground sm:px-4">
             {motivational}
@@ -128,7 +128,7 @@ export function WorkoutSubmissionSummary({ open, onOpenChange, summary, workoutT
           )}
         </div>
 
-        <DialogFooter className="border-t bg-background/95 px-4 py-3 sm:px-5">
+        <DialogFooter className="min-w-0 border-t bg-background/95 px-4 py-3 sm:px-5">
           <Button className="h-12 w-full text-base font-bold" onClick={() => { onOpenChange(false); onClose?.(); }}>
             <ChevronLeft className="mr-2 h-5 w-5" />
             Back
