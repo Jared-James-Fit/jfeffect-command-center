@@ -72,9 +72,9 @@ export function WorkoutSubmissionSummary({ open, onOpenChange, summary, workoutT
           {/* Score */}
           <div className="rounded-2xl border border-border bg-card p-4 text-center">
             <div className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Workout Score</div>
-            <div className="mt-1 flex items-baseline justify-center gap-1">
-              <span className="text-5xl font-black text-primary">{summary.score}</span>
-              <span className="text-xl font-bold text-muted-foreground">/100</span>
+            <div className="mt-1 flex items-center justify-center gap-1">
+              <span className="text-5xl font-black leading-none text-primary">{summary.score}</span>
+              <span className="text-xl font-bold leading-none text-muted-foreground">/100</span>
             </div>
             <div className="mt-1 text-xs text-muted-foreground">
               {summary.completionPct}% completed
