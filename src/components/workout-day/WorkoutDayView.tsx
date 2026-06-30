@@ -83,7 +83,7 @@ import { computeActiveSeconds } from "@/lib/workout-duration";
 import { LoggingQualityBadge } from "@/components/workout/shared/logging-quality-badge";
 import { CompletedWorkoutActions } from "@/components/workout/shared/completed-workout-actions";
 import { WorkoutStatusBar } from "@/components/workout-day/WorkoutStatusBar";
-import { WorkoutTimer } from "@/components/workout-day/WorkoutTimer";
+import { WorkoutTimer, computeActiveDurationMin } from "@/components/workout-day/WorkoutTimer";
 
 /* -------------------------------------------------------------------------- */
 /* Target-parsing helpers (Suggested → Draft → Confirmed fast-logging)         */
@@ -1785,9 +1785,16 @@ function WorkoutDay({
               // over the (possibly stale) completion query snapshot, so edits
               // to a past workout's actual minutes actually persist.
               const typedMin = Number.parseInt(actualMin, 10);
+              // Prefer active app-open time (pauses when the workout view is
+              // backgrounded/hidden — same math as the live WorkoutTimer
+              // badge) over wall-clock so the recap matches what the client
+              // actually experienced.
+              const activeMin = computeActiveDurationMin(
+                completion?.started_at ?? completion?.in_progress_at ?? null,
+              );
               const resolvedDurationMin = Number.isFinite(typedMin) && typedMin > 0
                 ? typedMin
-                : completion?.actual_duration_min ?? null;
+                : activeMin ?? completion?.actual_duration_min ?? null;
               // Phase 2: offline-safe completion. If the client is offline,
               // persist the completion payload locally so it survives reload.
               // Phase 3 will register a sync handler that drains this store.
@@ -1956,7 +1963,17 @@ function WorkoutDay({
           onOpenChange={setSummaryOpen}
           summary={lastSummary}
           workoutTitle={day?.title ?? null}
-          durationMin={completion?.actual_duration_min ?? null}
+          durationMin={
+            // For completed workouts use the stored value; for the in-app
+            // recap (and offline saves) prefer the active app-open time so
+            // the duration tile reflects time the workout view was actually
+            // open — matching the live timer badge and the value persisted
+            // on Finish.
+            computeActiveDurationMin(
+              completion?.started_at ?? completion?.in_progress_at ?? null,
+              completion?.completed_at ?? undefined,
+            ) ?? completion?.actual_duration_min ?? null
+          }
           workoutDate={completion?.completed_at ?? scheduledDate ?? null}
           sessionRating={
             lastSessionRating ??
