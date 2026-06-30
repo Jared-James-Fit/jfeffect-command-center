@@ -1095,6 +1095,7 @@ function VideoSubmissionDialog({ ctx, open, onOpenChange }: { ctx: ProgressConte
   const [bw, setBw] = useState("");
   const [unit, setUnit] = useState<"kg" | "lb">(ctx.preferredWeightUnit ?? "lb");
   const [notes, setNotes] = useState("");
+  const [busy, setBusy] = useState(false);
 
   async function ensureSub() {
     if (subId) return subId;
@@ -1109,6 +1110,8 @@ function VideoSubmissionDialog({ ctx, open, onOpenChange }: { ctx: ProgressConte
   }
 
   async function save(asDraft: boolean) {
+    setBusy(true);
+    try {
     const id = await ensureSub();
     await updateSubmission(id, {
       video_format: format, submission_date: date, check_in_label: label,
@@ -1122,6 +1125,7 @@ function VideoSubmissionDialog({ ctx, open, onOpenChange }: { ctx: ProgressConte
     qc.invalidateQueries({ queryKey: ["progress-subs-video", ctx.userId] });
     toast.success(asDraft ? "Saved as draft" : "Submitted");
     onOpenChange(false);
+    } finally { setBusy(false); }
   }
 
   const angles: ProgressAngle[] = format === "continuous" ? ["all"] : PHOTO_ANGLES;
@@ -1131,29 +1135,28 @@ function VideoSubmissionDialog({ ctx, open, onOpenChange }: { ctx: ProgressConte
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Add Progress Video</DialogTitle>
-          <p className="text-sm text-muted-foreground">Record or upload one video. Optional: switch to 4-angle format for a full physique breakdown.</p>
+          <p className="text-sm text-muted-foreground">Tap the tile to record or pick a video from your library.</p>
         </DialogHeader>
         <div className="space-y-4">
+          {/* Format toggle — quick, big, single row */}
+          <div className="grid grid-cols-2 gap-2">
+            <Button size="lg" variant={format === "continuous" ? "default" : "outline"} onClick={() => setFormat("continuous")} className="h-12 font-bold">
+              Single Video
+            </Button>
+            <Button size="lg" variant={format === "four_angle" ? "default" : "outline"} onClick={() => setFormat("four_angle")} className="h-12 font-bold">
+              4-Angle
+            </Button>
+          </div>
+
           <div className={`grid gap-3 ${angles.length === 1 ? "grid-cols-1" : "grid-cols-2"}`}>
             {angles.map((a) => (
               <AngleUploadCard key={a} angle={a} mediaType="video" ctx={ctx} getSubId={ensureSub} subId={subId} />
             ))}
           </div>
 
-          <details className="rounded-md border border-border p-3 text-sm" open>
-            <summary className="cursor-pointer font-medium">Details (optional)</summary>
+          <details className="rounded-md border border-border p-3 text-sm">
+            <summary className="cursor-pointer font-medium">Details &amp; bodyweight (optional)</summary>
             <div className="mt-3 space-y-3">
-              <div>
-                <Label className="text-xs">Format</Label>
-                <div className="grid grid-cols-2 gap-2 mt-1">
-                  <Button size="sm" variant={format === "continuous" ? "default" : "outline"} onClick={() => setFormat("continuous")}>
-                    Single Video
-                  </Button>
-                  <Button size="sm" variant={format === "four_angle" ? "default" : "outline"} onClick={() => setFormat("four_angle")}>
-                    4-Angle Physique
-                  </Button>
-                </div>
-              </div>
               <div className="grid grid-cols-2 gap-3">
                 <DateField value={date} onChange={setDate} />
                 <div>
@@ -1185,9 +1188,15 @@ function VideoSubmissionDialog({ ctx, open, onOpenChange }: { ctx: ProgressConte
             </div>
           </details>
         </div>
-        <DialogFooter className="flex-col gap-2 sm:flex-row">
-          <Button variant="outline" onClick={() => save(true)}>Save Draft</Button>
-          <Button onClick={() => save(false)}>{ctx.canRequestReview ? "Submit for Coach Review" : "Save to My Progress"}</Button>
+        <DialogFooter>
+          <Button
+            onClick={() => save(false)}
+            disabled={busy}
+            className="h-14 w-full text-base font-bold"
+          >
+            {busy ? <><Loader2 className="h-5 w-5 animate-spin" /> Saving…</> :
+              ctx.canRequestReview ? "Done · Send to Coach" : "Done · Save Progress"}
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
