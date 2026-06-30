@@ -3,6 +3,54 @@ import { Clock, RotateCcw } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 /**
+ * Read the cumulative paused-while-hidden duration (in ms) the WorkoutTimer
+ * has persisted for a given workout session. Includes any currently-open
+ * hidden interval up to `endsAt` (defaults to now), so callers compute the
+ * same "active app time" the live timer badge displays.
+ *
+ * Used by the post-workout summary so the "Duration" stat reflects time the
+ * client actually had the workout open — not wall-clock — and pauses
+ * whenever the tab is hidden or the app is backgrounded.
+ */
+export function readWorkoutPausedMs(
+  startedAt: string | Date | null | undefined,
+  endsAt: number = Date.now(),
+): number {
+  if (!startedAt || typeof window === "undefined") return 0;
+  const startKey = typeof startedAt === "string" ? startedAt : new Date(startedAt).toISOString();
+  try {
+    const raw = window.localStorage.getItem(`wsb-pause:${startKey}`);
+    if (!raw) return 0;
+    const parsed = JSON.parse(raw);
+    const pausedMs = Number(parsed?.pausedMs) || 0;
+    const hiddenAt = parsed?.hiddenAt != null ? Number(parsed.hiddenAt) : null;
+    const live = hiddenAt != null ? Math.max(0, endsAt - hiddenAt) : 0;
+    return Math.max(0, pausedMs + live);
+  } catch {
+    return 0;
+  }
+}
+
+/**
+ * Active duration in minutes between `startedAt` and `endsAt` (defaults to
+ * now), excluding any paused-while-hidden time tracked by WorkoutTimer.
+ * Returns null when no valid start timestamp is available.
+ */
+export function computeActiveDurationMin(
+  startedAt: string | Date | null | undefined,
+  endsAt?: string | Date | null,
+): number | null {
+  if (!startedAt) return null;
+  const start = new Date(startedAt).getTime();
+  if (!Number.isFinite(start)) return null;
+  const end = endsAt ? new Date(endsAt).getTime() : Date.now();
+  if (!Number.isFinite(end) || end < start) return null;
+  const paused = readWorkoutPausedMs(startedAt, end);
+  const activeMs = Math.max(0, end - start - paused);
+  return Math.max(1, Math.round(activeMs / 60000));
+}
+
+/**
  * Standalone workout elapsed-time badge with pause-on-hidden and reset.
  */
 export function WorkoutTimer({
