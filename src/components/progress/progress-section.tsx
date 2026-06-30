@@ -232,13 +232,13 @@ function OverviewTab({
     staleTime: 60_000,
   });
   const { data: photoSubs = [] } = useQuery({
-    queryKey: ["progress-subs-photo", ctx.userId],
-    queryFn: () => listSubmissions({ userId: ctx.userId, type: "photo" }),
+    queryKey: ["progress-subs-photo-recent", ctx.userId],
+    queryFn: () => listSubmissionsPaged({ userId: ctx.userId, type: "photo", limit: 6 }),
     staleTime: 60_000,
   });
   const { data: videoSubs = [] } = useQuery({
-    queryKey: ["progress-subs-video", ctx.userId],
-    queryFn: () => listSubmissions({ userId: ctx.userId, type: "video" }),
+    queryKey: ["progress-subs-video-recent", ctx.userId],
+    queryFn: () => listSubmissionsPaged({ userId: ctx.userId, type: "video", limit: 6 }),
     staleTime: 60_000,
   });
   const { data: measRows = [] } = useQuery({
