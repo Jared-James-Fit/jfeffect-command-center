@@ -530,110 +530,247 @@ function LazyMount({ children, className, rootMargin = "200px" }: { children: Re
 function PhotosTab({
   ctx, onNew, onOpen, onCompare,
 }: { ctx: ProgressContext; onNew: () => void; onOpen: (id: string) => void; onCompare: () => void }) {
-  const { data: subs = [], isLoading } = useQuery({
-    queryKey: ["progress-subs-photo", ctx.userId],
-    queryFn: () => listSubmissions({ userId: ctx.userId, type: "photo" }),
-    staleTime: 60_000,
-  });
-
   return (
-    <div className="space-y-3">
-      <div className="flex items-center justify-between gap-2">
-        <h2 className="text-lg font-semibold">Progress Photos</h2>
-        <div className="flex gap-2">
-          {subs.length >= 2 && <Button variant="outline" size="sm" onClick={onCompare}><Eye className="h-4 w-4 mr-1" />Compare</Button>}
-          <Button size="sm" onClick={onNew}><Plus className="h-4 w-4 mr-1" />New</Button>
-        </div>
-      </div>
-      {isLoading ? (
-        <p className="text-sm text-muted-foreground">Loading…</p>
-      ) : !subs.length ? (
-        <EmptyState
-          icon={Camera} title="No photos"
-          body="Upload progress photos."
-          actionLabel="Add Photos" onAction={onNew}
-        />
-      ) : (
-        <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-          {subs.map((s) => (
-            <LazyMount key={s.id} className="min-h-[180px]">
-              <SubmissionCard sub={s} onOpen={() => onOpen(s.id)} />
-            </LazyMount>
-          ))}
-        </div>
-      )}
-    </div>
+    <PaginatedSubmissionList
+      ctx={ctx}
+      kind="photo"
+      title="Progress Photos"
+      emptyIcon={Camera}
+      emptyTitle="No photos"
+      emptyBody="Upload progress photos."
+      onNew={onNew}
+      onOpen={onOpen}
+      headerExtras={
+        <Button variant="outline" size="sm" onClick={onCompare}>
+          <Eye className="h-4 w-4 mr-1" />Compare
+        </Button>
+      }
+    />
   );
 }
 
 function VideosTab({
   ctx, onNew, onOpen,
 }: { ctx: ProgressContext; onNew: () => void; onOpen: (id: string) => void }) {
-  const { data: subs = [], isLoading } = useQuery({
-    queryKey: ["progress-subs-video", ctx.userId],
-    queryFn: () => listSubmissions({ userId: ctx.userId, type: "video" }),
+  return (
+    <PaginatedSubmissionList
+      ctx={ctx}
+      kind="video"
+      title="Progress Videos"
+      emptyIcon={VideoIcon}
+      emptyTitle="No videos"
+      emptyBody="Record or upload a video."
+      onNew={onNew}
+      onOpen={onOpen}
+    />
+  );
+}
+
+type StatusFilter = "all" | "awaiting" | "reviewed";
+const PAGE_SIZE = 6;
+
+/**
+ * Lightweight, paginated, filterable submission list.
+ *
+ * - One narrow paginated query for submission cards (no notes / no review meta).
+ * - One batched query for primary media per visible page.
+ * - One batched signed-URL fetch.
+ * - NO Google Drive iframes / players in the list (open detail to view).
+ */
+function PaginatedSubmissionList({
+  ctx, kind, title, emptyIcon, emptyTitle, emptyBody, onNew, onOpen, headerExtras,
+}: {
+  ctx: ProgressContext;
+  kind: "photo" | "video";
+  title: string;
+  emptyIcon: any;
+  emptyTitle: string;
+  emptyBody: string;
+  onNew: () => void;
+  onOpen: (id: string) => void;
+  headerExtras?: React.ReactNode;
+}) {
+  const [status, setStatus] = useState<StatusFilter>("all");
+  const [pages, setPages] = useState(1);
+  // Reset pagination on filter change so we always re-request from offset 0.
+  useEffect(() => { setPages(1); }, [status, kind, ctx.userId]);
+
+  const limit = pages * PAGE_SIZE;
+  const { data: subs = [], isLoading, isError, refetch, isFetching } = useQuery({
+    queryKey: ["progress-subs-paged", ctx.userId, kind, status, limit],
+    queryFn: () => listSubmissionsPaged({
+      userId: ctx.userId,
+      type: kind,
+      reviewStatus: status === "all" ? undefined : status,
+      limit,
+      offset: 0,
+    }),
     staleTime: 60_000,
+    placeholderData: (prev) => prev,
   });
+
+  const ids = useMemo(() => subs.map((s) => s.id), [subs]);
+  const { data: thumbs } = useQuery({
+    queryKey: ["progress-primary-thumbs", ctx.userId, ids.join(",")],
+    enabled: ids.length > 0,
+    staleTime: 5 * 60_000,
+    queryFn: async () => {
+      const map = await listPrimaryThumbsForSubmissions(ids);
+      const paths = Array.from(map.values()).map((m) => m.thumbPath).filter((p): p is string => !!p);
+      const signed = await getSignedMediaUrlsBatch(paths);
+      const out = new Map<string, { url: string | null; mediaType: "photo" | "video" }>();
+      for (const id of ids) {
+        const m = map.get(id);
+        out.set(id, {
+          url: m?.thumbPath ? signed.get(m.thumbPath) ?? null : null,
+          mediaType: (m?.mediaType ?? kind) as "photo" | "video",
+        });
+      }
+      return out;
+    },
+  });
+
+  const hasMore = subs.length === limit; // approximate — last page may be exactly full
+
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between gap-2">
-        <h2 className="text-lg font-semibold">Progress Videos</h2>
-        <Button size="sm" onClick={onNew}><Plus className="h-4 w-4 mr-1" />New</Button>
-      </div>
-      {isLoading ? (
-        <p className="text-sm text-muted-foreground">Loading…</p>
-      ) : !subs.length ? (
-        <EmptyState
-          icon={VideoIcon} title="No videos"
-          body="Record or upload a video."
-          actionLabel="Add Video" onAction={onNew}
-        />
-      ) : (
-        <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-          {subs.map((s) => (
-            <LazyMount key={s.id} className="min-h-[180px]">
-              <SubmissionCard sub={s} onOpen={() => onOpen(s.id)} />
-            </LazyMount>
-          ))}
+        <h2 className="text-lg font-semibold">{title}</h2>
+        <div className="flex gap-2">
+          {headerExtras}
+          <Button size="sm" onClick={onNew}><Plus className="h-4 w-4 mr-1" />New</Button>
         </div>
+      </div>
+
+      <div className="flex flex-wrap gap-1">
+        {([
+          ["all", "All"], ["awaiting", "Awaiting Review"], ["reviewed", "Reviewed"],
+        ] as const).map(([k, label]) => (
+          <Button
+            key={k}
+            size="sm"
+            variant={status === k ? "default" : "outline"}
+            onClick={() => setStatus(k)}
+            className="h-7 px-3 text-xs"
+          >
+            {label}
+          </Button>
+        ))}
+      </div>
+
+      {isError ? (
+        <Card className="p-4 text-center space-y-2">
+          <p className="text-sm text-muted-foreground">Progress submissions could not be loaded.</p>
+          <Button size="sm" variant="outline" onClick={() => void refetch()}>Try Again</Button>
+        </Card>
+      ) : isLoading && !subs.length ? (
+        <SubmissionGridSkeleton />
+      ) : !subs.length ? (
+        <EmptyState icon={emptyIcon} title={emptyTitle} body={emptyBody} actionLabel="Add" onAction={onNew} />
+      ) : (
+        <>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+            {subs.map((s) => {
+              const t = thumbs?.get(s.id);
+              return (
+                <LightSubmissionCard
+                  key={s.id}
+                  sub={s}
+                  thumbUrl={t?.url ?? null}
+                  mediaType={t?.mediaType ?? kind}
+                  onOpen={() => onOpen(s.id)}
+                />
+              );
+            })}
+          </div>
+          {hasMore && (
+            <div className="flex justify-center pt-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setPages((p) => p + 1)}
+                disabled={isFetching}
+              >
+                {isFetching ? <><Loader2 className="h-3 w-3 mr-1 animate-spin" />Loading…</> : "Load more"}
+              </Button>
+            </div>
+          )}
+        </>
       )}
     </div>
   );
 }
 
-function SubmissionCard({ sub, onOpen }: { sub: ProgressSubmission; onOpen: () => void }) {
-  const { data: media = [] } = useQuery({
-    queryKey: ["progress-media", sub.id],
-    queryFn: () => listMediaForSubmission(sub.id),
-    staleTime: 60 * 60 * 1000,
-  });
-  const complete = sub.submission_type === "photo"
-    ? PHOTO_ANGLES.every((a) => media.find((m) => m.angle === a && m.upload_status !== "draft"))
-    : sub.video_format === "continuous"
-      ? media.some((m) => m.angle === "all" && m.upload_status !== "draft")
-      : PHOTO_ANGLES.every((a) => media.find((m) => m.angle === a && m.upload_status !== "draft"));
+function SubmissionGridSkeleton() {
   return (
-    <Card className="p-3 cursor-pointer hover:bg-accent/50" onClick={onOpen}>
-      <div className="flex items-start justify-between gap-2">
-        <div className="min-w-0 flex-1">
-          <p className="font-medium truncate">{sub.check_in_label || (sub.submission_type === "photo" ? "Progress Photos" : "Progress Video")}</p>
-          <p className="text-xs text-muted-foreground">{fmtDate(sub.submission_date)} {sub.bodyweight ? `· ${sub.bodyweight} ${sub.weight_unit}` : ""}</p>
+    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+      {Array.from({ length: 6 }).map((_, i) => (
+        <Card key={i} className="overflow-hidden">
+          <div className="aspect-square w-full animate-pulse bg-muted" />
+          <div className="p-3 space-y-2">
+            <div className="h-3 w-3/4 animate-pulse rounded bg-muted" />
+            <div className="h-2 w-1/2 animate-pulse rounded bg-muted" />
+          </div>
+        </Card>
+      ))}
+    </div>
+  );
+}
+
+function LightSubmissionCard({
+  sub, thumbUrl, mediaType, onOpen,
+}: {
+  sub: ProgressSubmissionCard;
+  thumbUrl: string | null;
+  mediaType: "photo" | "video";
+  onOpen: () => void;
+}) {
+  const [imgFailed, setImgFailed] = useState(false);
+  const isVideo = mediaType === "video" || sub.submission_type === "video";
+  return (
+    <Card className="overflow-hidden flex flex-col">
+      <button
+        type="button"
+        onClick={onOpen}
+        className="relative block aspect-square w-full bg-muted text-left"
+      >
+        {thumbUrl && !imgFailed && !isVideo ? (
+          <img
+            src={thumbUrl}
+            alt={sub.check_in_label || "Progress submission"}
+            loading="lazy"
+            width={400}
+            height={400}
+            onError={() => setImgFailed(true)}
+            className="h-full w-full object-cover"
+          />
+        ) : isVideo ? (
+          <div className="flex h-full w-full flex-col items-center justify-center bg-black/70 text-white">
+            <VideoIcon className="h-8 w-8" />
+            <span className="mt-1 text-[10px] uppercase tracking-widest opacity-80">Video</span>
+          </div>
+        ) : (
+          <div className="flex h-full w-full items-center justify-center text-xs text-muted-foreground">
+            No preview
+          </div>
+        )}
+        <span className="absolute left-2 top-2 rounded-full bg-background/85 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider">
+          {prettyStatus(sub.review_status)}
+        </span>
+      </button>
+      <div className="p-3 flex flex-col gap-2">
+        <div className="min-w-0">
+          <p className="font-medium truncate">
+            {sub.check_in_label || (sub.submission_type === "photo" ? "Progress Photos" : "Progress Video")}
+          </p>
+          <p className="text-xs text-muted-foreground">
+            {fmtDate(sub.submission_date)}{sub.bodyweight ? ` · ${sub.bodyweight} ${sub.weight_unit}` : ""}
+          </p>
         </div>
-        <Badge variant={complete ? "default" : "outline"}>{complete ? "Complete" : "Draft"}</Badge>
-      </div>
-      <div className="mt-2 grid grid-cols-4 gap-1">
-        {(sub.submission_type === "video" && sub.video_format === "continuous" ? (["all"] as ProgressAngle[]) : PHOTO_ANGLES).map((a) => {
-          const m = media.find((mm) => mm.angle === a);
-          return (
-            <div key={a} className="relative aspect-square rounded bg-muted overflow-hidden">
-              {m ? <MediaThumb m={m} /> : <div className="flex h-full w-full items-center justify-center text-[10px] text-muted-foreground">{ANGLE_LABEL[a]}</div>}
-            </div>
-          );
-        })}
-      </div>
-      <div className="mt-2 flex items-center justify-between">
-        <Badge variant="outline" className="text-xs">{prettyStatus(sub.review_status)}</Badge>
-        <ChevronRight className="h-4 w-4 text-muted-foreground" />
+        <Button size="sm" className="w-full" onClick={onOpen}>
+          View Submission
+          <ChevronRight className="h-4 w-4 ml-1" />
+        </Button>
       </div>
     </Card>
   );
