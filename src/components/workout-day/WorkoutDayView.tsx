@@ -1963,7 +1963,17 @@ function WorkoutDay({
           onOpenChange={setSummaryOpen}
           summary={lastSummary}
           workoutTitle={day?.title ?? null}
-          durationMin={completion?.actual_duration_min ?? null}
+          durationMin={
+            // For completed workouts use the stored value; for the in-app
+            // recap (and offline saves) prefer the active app-open time so
+            // the duration tile reflects time the workout view was actually
+            // open — matching the live timer badge and the value persisted
+            // on Finish.
+            computeActiveDurationMin(
+              completion?.started_at ?? completion?.in_progress_at ?? null,
+              completion?.completed_at ?? undefined,
+            ) ?? completion?.actual_duration_min ?? null
+          }
           workoutDate={completion?.completed_at ?? scheduledDate ?? null}
           sessionRating={
             lastSessionRating ??
