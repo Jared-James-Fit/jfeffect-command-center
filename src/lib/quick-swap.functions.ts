@@ -118,10 +118,19 @@ export const applySwap = createServerFn({ method: "POST" })
       const siblings = await findFutureSiblings(context.supabase, ctx);
       for (const id of siblings) if (!ids.includes(id)) ids.push(id);
     }
-    const { error } = await context.supabase
+    // RLS on pl_exercise_rows only lets coaches/admins UPDATE — clients
+    // (the trainee themself) can only SELECT. That meant client-portal
+    // swaps came back "successful" with zero rows actually changed
+    // ("doesn't actually swap"). We've already loaded + authorized the
+    // row via loadRowContext (which itself runs as the caller, so RLS
+    // still gates whether the user can see the row at all), so it's safe
+    // to escalate the write to the service-role client.
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { data: updated, error } = await supabaseAdmin
       .from("pl_exercise_rows")
       .update({ exercise_id: data.newExerciseId, exercise_name_override: null })
-      .in("id", ids);
+      .in("id", ids)
+      .select("id");
     if (error) throw error;
-    return { updatedRowIds: ids, count: ids.length };
+    return { updatedRowIds: (updated ?? []).map((r: any) => r.id), count: (updated ?? []).length };
   });
