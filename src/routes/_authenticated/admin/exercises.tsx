@@ -117,6 +117,16 @@ export function ExercisesAdmin({ embedded = false }: { embedded?: boolean } = {}
   const [warmupTarget, setWarmupTarget] = useState<any | null>(null);
   const [volumeTarget, setVolumeTarget] = useState<any | null>(null);
 
+  const setPrimaryMuscle = async (id: string, value: string) => {
+    const { error } = await supabase
+      .from("exercises")
+      .update({ primary_muscle_group: value, needs_muscle_review: false })
+      .eq("id", id);
+    if (error) return toast.error(error.message);
+    toast.success("Muscle group updated");
+    qc.invalidateQueries({ queryKey: ["exercises"] });
+  };
+
   const needsTagsCount = exercises.filter(
     (e: any) => !e.primary_movement_pattern || !e.variation_type,
   ).length;
@@ -229,6 +239,19 @@ export function ExercisesAdmin({ embedded = false }: { embedded?: boolean } = {}
                   <Button variant="ghost" size="sm" title="Warm-up settings" onClick={() => setWarmupTarget(e)}><Flame className="h-3 w-3 text-orange-500" /></Button>
                   <Button variant="ghost" size="sm" onClick={() => del(e.id)}><Trash2 className="h-3 w-3" /></Button>
                 </div>
+              </div>
+              <div>
+                <Select
+                  value={(e as any).primary_muscle_group ?? ""}
+                  onValueChange={(v) => setPrimaryMuscle(e.id, v)}
+                >
+                  <SelectTrigger className="h-7 text-[11px]"><SelectValue placeholder="Set primary muscle…" /></SelectTrigger>
+                  <SelectContent>
+                    {PRIMARY_MUSCLE_GROUPS.map((m) => (
+                      <SelectItem key={m} value={m}>{m}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
               <div className="flex flex-wrap gap-1">
                 {e.primary_movement_pattern ? (
