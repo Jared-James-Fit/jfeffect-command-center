@@ -989,9 +989,14 @@ function AngleUploadCard({
   }
 
   // Consume a file from the dialog-level multi-upload queue, if one targets this angle.
-  const multiTarget = qc.getQueryData<{ files: File[]; targets: ProgressAngle[]; ts: number } | undefined>(
-    ["progress-media-multi-target", subId]
-  );
+  // useQuery (with no fetcher) lets us subscribe to the cache entry written by
+  // PhotoSubmissionDialog.multiUpload() so each tile reacts to the queue.
+  const { data: multiTarget } = useQuery<{ files: File[]; targets: ProgressAngle[]; ts: number } | undefined>({
+    queryKey: ["progress-media-multi-target", subId],
+    enabled: !!subId,
+    queryFn: () => undefined,
+    staleTime: Infinity,
+  });
   const lastTsRef = useRef<number>(0);
   useEffect(() => {
     if (!multiTarget || !subId) return;
