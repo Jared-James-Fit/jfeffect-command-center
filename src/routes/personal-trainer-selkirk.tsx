@@ -18,7 +18,7 @@ const DESCRIPTION =
 const URL = "https://jfeffect.com/personal-trainer-selkirk";
 const OG_IMAGE = "https://jfeffect.com/icon-1024.png";
 
-const BOOK_HREF = "/coaching/apply?from=selkirk";
+const BOOK_HREF = "/personal-trainer-selkirk/apply";
 const EXTERNAL_HREF = "https://jaredjamesfit.com";
 
 const faq = [
