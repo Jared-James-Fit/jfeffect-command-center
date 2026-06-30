@@ -47,10 +47,13 @@ export const getMemberSwapImpact = createServerFn({ method: "POST" })
   .inputValidator((d: unknown) => ImpactInput.parse(d))
   .handler(async ({ data, context }) => {
     await ensureEnrollmentOwned(context.supabase, data.enrollmentId, context.userId);
-    // Pull plan payload to count how many future days reference the same
-    // slot. Members' plans typically repeat the same week template, so a
-    // "future" scope swap should match by exercise_id on every matching
-    // (day_index, exerciseIndex) across week_index >= current.
+    // Pull plan payload to count how many FUTURE workout days reference
+    // the same source exercise anywhere in the day. We previously locked
+    // the match to the same (day_index, exercise_index) slot — that
+    // missed repeats and reported "0 affected" when the exercise sat at
+    // a different index in a later week. Now we count any later day
+    // (later week, OR same week + later day_index) that contains the
+    // same exercise_id at any position.
     const { data: enr, error } = await context.supabase
       .from("member_plan_enrollments")
       .select("member_plans(published_payload)")
@@ -63,18 +66,16 @@ export const getMemberSwapImpact = createServerFn({ method: "POST" })
     const srcExerciseId = srcDay?.rows?.[data.exerciseIndex]?.exercise_id ?? null;
     if (srcExerciseId) {
       for (const w of weeks) {
-        if ((w.week_index ?? 0) < data.weekIndex) continue;
+        const wi = w.week_index ?? 0;
+        if (wi < data.weekIndex) continue;
         for (const d of w.days ?? []) {
-          if ((d.day_index ?? 0) !== data.dayIndex) continue;
-          const r = d.rows?.[data.exerciseIndex];
-          if (!r) continue;
-          if (
-            w.week_index === data.weekIndex &&
-            d.day_index === data.dayIndex
-          ) {
-            continue;
-          }
-          if (r.exercise_id === srcExerciseId) futureCount++;
+          const di = d.day_index ?? 0;
+          // Skip today's workout and anything earlier in the current week.
+          if (wi === data.weekIndex && di <= data.dayIndex) continue;
+          const hit = (d.rows ?? []).some(
+            (r: any) => r?.exercise_id === srcExerciseId,
+          );
+          if (hit) futureCount++;
         }
       }
     }
@@ -119,20 +120,26 @@ export const applyMemberSwap = createServerFn({ method: "POST" })
       const srcExerciseId = srcDay?.rows?.[data.exerciseIndex]?.exercise_id ?? null;
       if (srcExerciseId) {
         for (const w of weeks) {
-          if ((w.week_index ?? 0) <= data.weekIndex) continue;
+          const wi = w.week_index ?? 0;
+          if (wi < data.weekIndex) continue;
           for (const d of w.days ?? []) {
-            if ((d.day_index ?? 0) !== data.dayIndex) continue;
-            const r = d.rows?.[data.exerciseIndex];
-            if (!r || r.exercise_id !== srcExerciseId) continue;
-            baseRows.push({
-              enrollment_id: data.enrollmentId,
-              week_index: w.week_index,
-              day_index: d.day_index,
-              exercise_index: data.exerciseIndex,
-              exercise_id: data.newExerciseId,
-              scope: "future",
-              created_by: context.userId,
-            });
+            const di = d.day_index ?? 0;
+            // Skip today's workout and anything earlier in the current week.
+            if (wi === data.weekIndex && di <= data.dayIndex) continue;
+            const rows = (d.rows ?? []) as any[];
+            for (let idx = 0; idx < rows.length; idx++) {
+              const r = rows[idx];
+              if (!r || r.exercise_id !== srcExerciseId) continue;
+              baseRows.push({
+                enrollment_id: data.enrollmentId,
+                week_index: wi,
+                day_index: di,
+                exercise_index: idx,
+                exercise_id: data.newExerciseId,
+                scope: "future",
+                created_by: context.userId,
+              });
+            }
           }
         }
       }
