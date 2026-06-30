@@ -130,7 +130,8 @@ export function WorkoutSubmissionSummary({ open, onOpenChange, summary, workoutT
 
         <DialogFooter className="border-t bg-background/95 px-5 py-3">
           <Button className="h-12 w-full text-base font-bold" onClick={() => { onOpenChange(false); onClose?.(); }}>
-            Done
+            <ChevronLeft className="mr-2 h-5 w-5" />
+            Back
           </Button>
         </DialogFooter>
       </DialogContent>
