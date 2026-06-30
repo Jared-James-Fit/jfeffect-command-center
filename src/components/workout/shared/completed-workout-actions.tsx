@@ -75,6 +75,7 @@ export function CompletedWorkoutActions({
         hasCoach={hasCoach}
         initial={initialReview ?? null}
         onSaved={onReviewSaved}
+        onViewScore={onViewScore}
         actAsClientId={actAsClientId ?? null}
       />
     </>
