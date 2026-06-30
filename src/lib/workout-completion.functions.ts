@@ -122,9 +122,12 @@ export const startWorkout = createServerFn({ method: "POST" })
         .eq("day_id", data.dayId)
         .maybeSingle();
       if (existing?.id) {
+        const patch: any = { last_activity_at: nowIso };
+        if (!existing.started_at) patch.started_at = nowIso;
+        if (!(existing as any).in_progress_at) patch.in_progress_at = nowIso;
         await writer
           .from("pl_day_completions")
-          .update({ last_activity_at: nowIso })
+          .update(patch)
           .eq("id", existing.id);
         return { id: existing.id, started_at: existing.started_at ?? nowIso };
       }
@@ -156,9 +159,12 @@ export const startWorkout = createServerFn({ method: "POST" })
       .eq("day_index", data.dayIndex)
       .maybeSingle();
     if (existing?.id) {
+      const patch: any = { last_activity_at: nowIso };
+      if (!existing.started_at) patch.started_at = nowIso;
+      if (!(existing as any).in_progress_at) patch.in_progress_at = nowIso;
       await supabase
         .from("member_workout_completions")
-        .update({ last_activity_at: nowIso })
+        .update(patch)
         .eq("id", existing.id);
       return { id: existing.id, started_at: existing.started_at ?? nowIso };
     }
