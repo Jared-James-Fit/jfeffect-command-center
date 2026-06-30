@@ -600,8 +600,12 @@ export function QuickSwapButton({
           ? `Swapped across ${res.count} workout${res.count === 1 ? "" : "s"}`
           : `Swapped for today`,
       );
-      // Refresh any cached workout-day data so the new exercise appears.
-      qc.invalidateQueries({
+      // Refresh any cached workout-day data so the new exercise appears
+      // immediately. We refetch (not just invalidate) so the row card
+      // re-renders before the sheet closes — otherwise users saw the old
+      // exercise name lingering and assumed the swap didn't apply.
+      qc.refetchQueries({
+        type: "active",
         predicate: (q) => {
           const k = q.queryKey?.[0];
           return typeof k === "string" && k.startsWith("pl-");
