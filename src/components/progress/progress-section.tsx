@@ -988,6 +988,23 @@ function AngleUploadCard({
     }
   }
 
+  // Consume a file from the dialog-level multi-upload queue, if one targets this angle.
+  const multiTarget = qc.getQueryData<{ files: File[]; targets: ProgressAngle[]; ts: number } | undefined>(
+    ["progress-media-multi-target", subId]
+  );
+  const lastTsRef = useRef<number>(0);
+  useEffect(() => {
+    if (!multiTarget || !subId) return;
+    if (multiTarget.ts === lastTsRef.current) return;
+    const idx = multiTarget.targets.indexOf(angle);
+    if (idx === -1) return;
+    const f = multiTarget.files[idx];
+    if (!f) return;
+    lastTsRef.current = multiTarget.ts;
+    void onFile(f);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [multiTarget?.ts, subId]);
+
   async function remove() {
     if (!existing) return;
     await deleteMedia(existing.id);
@@ -995,53 +1012,74 @@ function AngleUploadCard({
   }
 
   return (
-    <Card className="p-3">
-      <div className="flex items-center justify-between mb-2">
-        <p className="text-sm font-medium">{ANGLE_LABEL[angle]}</p>
-        {existing && existing.upload_status === "ready" && <CheckCircle2 className="h-4 w-4 text-emerald-500" />}
-      </div>
-      <div className="min-h-32 sm:min-h-40 aspect-square rounded bg-muted relative overflow-hidden">
+    <div className="space-y-1">
+      <button
+        type="button"
+        onClick={() => fileRef.current?.click()}
+        className="group relative block aspect-square w-full overflow-hidden rounded-xl border-2 border-dashed border-border bg-muted/60 transition active:scale-[0.98] hover:border-primary/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+        aria-label={existing ? `Replace ${ANGLE_LABEL[angle]} photo` : `Upload ${ANGLE_LABEL[angle]} photo`}
+      >
+        {/* Preview layer */}
         {localPreview ? (
           mediaType === "video" ? (
-            <video src={localPreview} className="h-full w-full object-cover" muted playsInline />
+            <video src={localPreview} className="progress-thumb-in h-full w-full object-cover" muted playsInline />
           ) : (
-            <img src={localPreview} alt={angle} className="h-full w-full object-cover" />
+            <img src={localPreview} alt={angle} className="progress-thumb-in h-full w-full object-cover" />
           )
         ) : existing ? (
-          <MediaThumb m={existing} />
+          <div className="progress-thumb-in h-full w-full"><MediaThumb m={existing} /></div>
         ) : (
-          <button
-            onClick={() => fileRef.current?.click()}
-            className="absolute inset-0 flex flex-col items-center justify-center gap-2 text-xs text-muted-foreground hover:bg-accent active:bg-accent"
-          >
-            {mediaType === "video" ? <VideoIcon className="h-8 w-8" /> : <Camera className="h-8 w-8" />}
-            <span className="font-medium">{mediaType === "video" ? "Tap to record or upload" : "Tap to take or upload photo"}</span>
-          </button>
-        )}
-        {progress != null && (
-          <div className="absolute inset-x-0 bottom-0 bg-black/70 p-2">
-            <ProgressBar value={progress} className="h-1" />
-            <p className="text-[10px] text-white mt-1">{progress < 100 ? `Uploading ${progress}%` : "Saved"}</p>
+          <div className="flex h-full w-full flex-col items-center justify-center gap-2 text-muted-foreground">
+            {mediaType === "video" ? <VideoIcon className="h-10 w-10" /> : <Camera className="h-10 w-10" />}
+            <span className="text-[13px] font-bold">{ANGLE_LABEL[angle]}</span>
+            <span className="text-[11px]">Tap to {mediaType === "video" ? "record" : "add photo"}</span>
           </div>
         )}
-      </div>
+
+        {/* Loading shimmer overlay */}
+        {progress != null && progress < 100 && (
+          <>
+            <div className="absolute inset-0 bg-background/40 backdrop-blur-[1px]" />
+            <div className="progress-shimmer" />
+            <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 to-transparent p-2">
+              <ProgressBar value={progress} className="h-1.5" />
+              <p className="mt-1 text-[11px] font-semibold text-white">Uploading… {progress}%</p>
+            </div>
+          </>
+        )}
+
+        {/* Angle label chip on filled tiles */}
+        {(existing || localPreview) && progress == null && (
+          <div className="absolute left-2 top-2 rounded-full bg-black/70 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-white">
+            {ANGLE_LABEL[angle]}
+          </div>
+        )}
+        {existing && existing.upload_status === "ready" && progress == null && (
+          <div className="absolute right-2 top-2 grid h-6 w-6 place-items-center rounded-full bg-emerald-500 text-white shadow">
+            <CheckCircle2 className="h-4 w-4" />
+          </div>
+        )}
+      </button>
+
+      {/* Inline remove control — only when there is media and not uploading */}
+      {existing && progress == null && (
+        <button
+          type="button"
+          onClick={remove}
+          className="flex w-full items-center justify-center gap-1 rounded-md py-1 text-[11px] font-semibold text-muted-foreground hover:text-destructive"
+        >
+          <Trash2 className="h-3 w-3" /> Remove
+        </button>
+      )}
+
       <input
         ref={fileRef} type="file"
         accept={mediaType === "photo" ? "image/*" : "video/*"}
-        // No `capture` attribute — lets the user pick from their photo library or take a new photo.
         className="hidden"
         onChange={(e) => { const f = e.target.files?.[0]; if (f) onFile(f); e.target.value = ""; }}
       />
-      <div className="mt-2 flex gap-2">
-        <Button size="sm" variant="outline" className="flex-1" onClick={() => fileRef.current?.click()}>
-          {existing ? "Replace" : "Upload"}
-        </Button>
-        {existing && (
-          <Button size="sm" variant="ghost" onClick={remove}><Trash2 className="h-4 w-4" /></Button>
-        )}
-      </div>
-      {err && <p className="text-xs text-destructive mt-1">{err}</p>}
-    </Card>
+      {err && <p className="text-xs text-destructive">{err}</p>}
+    </div>
   );
 }
 
