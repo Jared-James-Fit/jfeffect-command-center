@@ -107,6 +107,86 @@ export async function listSubmissions(opts: { userId?: string; type?: ProgressSu
   return (data ?? []) as ProgressSubmission[];
 }
 
+/**
+ * Lightweight, paginated submissions list for the Progress Snapshot / list views.
+ * Selects ONLY the fields needed to render a card — no notes, no review metadata,
+ * no media. Use {@link listPrimaryThumbsForSubmissions} to fetch one thumbnail
+ * per submission in a single batched query.
+ */
+export type ProgressSubmissionCard = Pick<
+  ProgressSubmission,
+  | "id"
+  | "user_id"
+  | "submission_type"
+  | "video_format"
+  | "submission_date"
+  | "check_in_label"
+  | "bodyweight"
+  | "weight_unit"
+  | "review_status"
+>;
+
+export async function listSubmissionsPaged(opts: {
+  userId?: string;
+  type?: ProgressSubmissionType;
+  /** "awaiting" matches both submitted+awaiting_review. */
+  reviewStatus?: "awaiting" | "reviewed";
+  limit?: number;
+  offset?: number;
+}) {
+  const limit = Math.max(1, Math.min(50, opts.limit ?? 6));
+  const offset = Math.max(0, opts.offset ?? 0);
+  let q = db
+    .from("progress_submissions")
+    .select(
+      "id, user_id, submission_type, video_format, submission_date, check_in_label, bodyweight, weight_unit, review_status",
+    )
+    .order("submission_date", { ascending: false })
+    .order("created_at", { ascending: false })
+    .range(offset, offset + limit - 1);
+  if (opts.userId) q = q.eq("user_id", opts.userId);
+  if (opts.type) q = q.eq("submission_type", opts.type);
+  if (opts.reviewStatus === "awaiting") q = q.in("review_status", ["submitted", "awaiting_review"]);
+  else if (opts.reviewStatus === "reviewed") q = q.eq("review_status", "reviewed");
+  const { data, error } = await q;
+  if (error) throw error;
+  return (data ?? []) as ProgressSubmissionCard[];
+}
+
+/**
+ * One batched query that returns the primary (first ready) media row for each
+ * submission id, keyed by submission_id. Replaces N+1 per-card fetches.
+ * Never returns Drive URLs — list cards must not embed Drive players.
+ */
+export async function listPrimaryThumbsForSubmissions(submissionIds: string[]) {
+  const out = new Map<string, { thumbPath: string | null; mediaType: ProgressSubmissionType }>();
+  if (!submissionIds.length) return out;
+  const { data, error } = await db
+    .from("progress_media")
+    .select("submission_id, media_type, thumbnail_path, storage_path, upload_status, created_at")
+    .in("submission_id", submissionIds)
+    .neq("upload_status", "draft")
+    .order("created_at", { ascending: true });
+  if (error) throw error;
+  for (const m of (data ?? []) as any[]) {
+    if (out.has(m.submission_id)) continue;
+    out.set(m.submission_id, {
+      thumbPath: (m.thumbnail_path as string | null) || (m.storage_path as string | null) || null,
+      mediaType: m.media_type as ProgressSubmissionType,
+    });
+  }
+  return out;
+}
+
+/** Batch sign a set of storage paths in parallel. Failed paths resolve to null. */
+export async function getSignedMediaUrlsBatch(paths: string[], expiresIn = 60 * 60 * 6) {
+  const unique = Array.from(new Set(paths.filter(Boolean)));
+  const entries = await Promise.all(
+    unique.map(async (p) => [p, await getSignedMediaUrl(p, expiresIn)] as const),
+  );
+  return new Map(entries);
+}
+
 export async function getSubmission(id: string) {
   const { data, error } = await db.from("progress_submissions").select("*").eq("id", id).single();
   if (error) throw error;
