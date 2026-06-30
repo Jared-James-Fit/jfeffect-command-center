@@ -33,6 +33,7 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as CoachingIndexRouteImport } from './routes/coaching.index'
 import { Route as SignupJfRouteImport } from './routes/signup.jf'
 import { Route as SignTokenRouteImport } from './routes/sign.$token'
+import { Route as PersonalTrainerSelkirkApplyRouteImport } from './routes/personal-trainer-selkirk.apply'
 import { Route as MWelcomeRouteImport } from './routes/m.welcome'
 import { Route as LegalSlugRouteImport } from './routes/legal.$slug'
 import { Route as EmailUnsubscribeRouteImport } from './routes/email/unsubscribe'
@@ -399,6 +400,12 @@ const SignTokenRoute = SignTokenRouteImport.update({
   path: '/sign/$token',
   getParentRoute: () => rootRouteImport,
 } as any)
+const PersonalTrainerSelkirkApplyRoute =
+  PersonalTrainerSelkirkApplyRouteImport.update({
+    id: '/apply',
+    path: '/apply',
+    getParentRoute: () => PersonalTrainerSelkirkRoute,
+  } as any)
 const MWelcomeRoute = MWelcomeRouteImport.update({
   id: '/m/welcome',
   path: '/m/welcome',
@@ -1847,7 +1854,7 @@ export interface FileRoutesByFullPath {
   '/join': typeof JoinRoute
   '/member-setup': typeof MemberSetupRoute
   '/membership': typeof MembershipRoute
-  '/personal-trainer-selkirk': typeof PersonalTrainerSelkirkRoute
+  '/personal-trainer-selkirk': typeof PersonalTrainerSelkirkRouteWithChildren
   '/privacy': typeof PrivacyRoute
   '/recover': typeof RecoverRoute
   '/reset-password': typeof ResetPasswordRoute
@@ -1871,6 +1878,7 @@ export interface FileRoutesByFullPath {
   '/email/unsubscribe': typeof EmailUnsubscribeRoute
   '/legal/$slug': typeof LegalSlugRoute
   '/m/welcome': typeof MWelcomeRoute
+  '/personal-trainer-selkirk/apply': typeof PersonalTrainerSelkirkApplyRoute
   '/sign/$token': typeof SignTokenRoute
   '/signup/jf': typeof SignupJfRoute
   '/coaching/': typeof CoachingIndexRoute
@@ -2118,7 +2126,7 @@ export interface FileRoutesByTo {
   '/join': typeof JoinRoute
   '/member-setup': typeof MemberSetupRoute
   '/membership': typeof MembershipRoute
-  '/personal-trainer-selkirk': typeof PersonalTrainerSelkirkRoute
+  '/personal-trainer-selkirk': typeof PersonalTrainerSelkirkRouteWithChildren
   '/privacy': typeof PrivacyRoute
   '/recover': typeof RecoverRoute
   '/reset-password': typeof ResetPasswordRoute
@@ -2138,6 +2146,7 @@ export interface FileRoutesByTo {
   '/email/unsubscribe': typeof EmailUnsubscribeRoute
   '/legal/$slug': typeof LegalSlugRoute
   '/m/welcome': typeof MWelcomeRoute
+  '/personal-trainer-selkirk/apply': typeof PersonalTrainerSelkirkApplyRoute
   '/sign/$token': typeof SignTokenRoute
   '/signup/jf': typeof SignupJfRoute
   '/coaching': typeof CoachingIndexRoute
@@ -2386,7 +2395,7 @@ export interface FileRoutesById {
   '/join': typeof JoinRoute
   '/member-setup': typeof MemberSetupRoute
   '/membership': typeof MembershipRoute
-  '/personal-trainer-selkirk': typeof PersonalTrainerSelkirkRoute
+  '/personal-trainer-selkirk': typeof PersonalTrainerSelkirkRouteWithChildren
   '/privacy': typeof PrivacyRoute
   '/recover': typeof RecoverRoute
   '/reset-password': typeof ResetPasswordRoute
@@ -2410,6 +2419,7 @@ export interface FileRoutesById {
   '/email/unsubscribe': typeof EmailUnsubscribeRoute
   '/legal/$slug': typeof LegalSlugRoute
   '/m/welcome': typeof MWelcomeRoute
+  '/personal-trainer-selkirk/apply': typeof PersonalTrainerSelkirkApplyRoute
   '/sign/$token': typeof SignTokenRoute
   '/signup/jf': typeof SignupJfRoute
   '/coaching/': typeof CoachingIndexRoute
@@ -2683,6 +2693,7 @@ export interface FileRouteTypes {
     | '/email/unsubscribe'
     | '/legal/$slug'
     | '/m/welcome'
+    | '/personal-trainer-selkirk/apply'
     | '/sign/$token'
     | '/signup/jf'
     | '/coaching/'
@@ -2950,6 +2961,7 @@ export interface FileRouteTypes {
     | '/email/unsubscribe'
     | '/legal/$slug'
     | '/m/welcome'
+    | '/personal-trainer-selkirk/apply'
     | '/sign/$token'
     | '/signup/jf'
     | '/coaching'
@@ -3221,6 +3233,7 @@ export interface FileRouteTypes {
     | '/email/unsubscribe'
     | '/legal/$slug'
     | '/m/welcome'
+    | '/personal-trainer-selkirk/apply'
     | '/sign/$token'
     | '/signup/jf'
     | '/coaching/'
@@ -3470,7 +3483,7 @@ export interface RootRouteChildren {
   JoinRoute: typeof JoinRoute
   MemberSetupRoute: typeof MemberSetupRoute
   MembershipRoute: typeof MembershipRoute
-  PersonalTrainerSelkirkRoute: typeof PersonalTrainerSelkirkRoute
+  PersonalTrainerSelkirkRoute: typeof PersonalTrainerSelkirkRouteWithChildren
   PrivacyRoute: typeof PrivacyRoute
   RecoverRoute: typeof RecoverRoute
   ResetPasswordRoute: typeof ResetPasswordRoute
@@ -3683,6 +3696,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/sign/$token'
       preLoaderRoute: typeof SignTokenRouteImport
       parentRoute: typeof rootRouteImport
+    }
+    '/personal-trainer-selkirk/apply': {
+      id: '/personal-trainer-selkirk/apply'
+      path: '/apply'
+      fullPath: '/personal-trainer-selkirk/apply'
+      preLoaderRoute: typeof PersonalTrainerSelkirkApplyRouteImport
+      parentRoute: typeof PersonalTrainerSelkirkRoute
     }
     '/m/welcome': {
       id: '/m/welcome'
@@ -6135,6 +6155,20 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
 const AuthenticatedRouteRouteWithChildren =
   AuthenticatedRouteRoute._addFileChildren(AuthenticatedRouteRouteChildren)
 
+interface PersonalTrainerSelkirkRouteChildren {
+  PersonalTrainerSelkirkApplyRoute: typeof PersonalTrainerSelkirkApplyRoute
+}
+
+const PersonalTrainerSelkirkRouteChildren: PersonalTrainerSelkirkRouteChildren =
+  {
+    PersonalTrainerSelkirkApplyRoute: PersonalTrainerSelkirkApplyRoute,
+  }
+
+const PersonalTrainerSelkirkRouteWithChildren =
+  PersonalTrainerSelkirkRoute._addFileChildren(
+    PersonalTrainerSelkirkRouteChildren,
+  )
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AuthenticatedRouteRoute: AuthenticatedRouteRouteWithChildren,
@@ -6147,7 +6181,7 @@ const rootRouteChildren: RootRouteChildren = {
   JoinRoute: JoinRoute,
   MemberSetupRoute: MemberSetupRoute,
   MembershipRoute: MembershipRoute,
-  PersonalTrainerSelkirkRoute: PersonalTrainerSelkirkRoute,
+  PersonalTrainerSelkirkRoute: PersonalTrainerSelkirkRouteWithChildren,
   PrivacyRoute: PrivacyRoute,
   RecoverRoute: RecoverRoute,
   ResetPasswordRoute: ResetPasswordRoute,
