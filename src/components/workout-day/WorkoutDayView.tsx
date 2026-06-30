@@ -1729,6 +1729,10 @@ function WorkoutDay({
             onReviewSaved={() =>
               qc.invalidateQueries({ queryKey: ["pl-workout-feedback", dayId, client.id] })
             }
+            onViewScore={(rating) => {
+              setLastSessionRating(rating);
+              setTimeout(() => openRecapSummary(), 350);
+            }}
           />
         )}
         {children}
