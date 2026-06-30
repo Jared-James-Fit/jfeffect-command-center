@@ -36,6 +36,7 @@ export function CompletedWorkoutActions({
   hasCoach,
   initialReview,
   onReviewSaved,
+  onViewScore,
   logAnchorId,
   actAsClientId,
 }: Props) {
