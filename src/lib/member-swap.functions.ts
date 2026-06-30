@@ -37,8 +37,14 @@ async function ensureEnrollmentOwned(supabase: any, enrollmentId: string, userId
     .maybeSingle();
   if (error) throw new Error(error.message);
   const ownerUserId = (data as any)?.app_members?.user_id ?? null;
-  if (!data || ownerUserId !== userId) {
-    throw new Error("Enrollment not found or not owned by caller");
+  if (!data) throw new Error("Enrollment not found");
+  if (ownerUserId !== userId) {
+    // Allow admins to swap on behalf of a member (POV mode).
+    const { data: isAdmin } = await supabase.rpc("has_role", {
+      _user_id: userId,
+      _role: "admin",
+    });
+    if (!isAdmin) throw new Error("Enrollment not owned by caller");
   }
 }
 
@@ -145,7 +151,12 @@ export const applyMemberSwap = createServerFn({ method: "POST" })
       }
     }
 
-    const { error } = await context.supabase
+    // RLS only lets the member themself write to `member_exercise_swaps`
+    // (admins get SELECT only). To keep admin/POV swaps working AND avoid
+    // silent zero-row upserts when policies don't match the writer, escalate
+    // to the service-role client after we've already authorized the caller.
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { error } = await supabaseAdmin
       .from("member_exercise_swaps")
       .upsert(baseRows, {
         onConflict: "enrollment_id,week_index,day_index,exercise_index",
@@ -169,7 +180,8 @@ export const clearMemberSwap = createServerFn({ method: "POST" })
   )
   .handler(async ({ data, context }) => {
     await ensureEnrollmentOwned(context.supabase, data.enrollmentId, context.userId);
-    const { error } = await context.supabase
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { error } = await supabaseAdmin
       .from("member_exercise_swaps")
       .delete()
       .eq("enrollment_id", data.enrollmentId)
