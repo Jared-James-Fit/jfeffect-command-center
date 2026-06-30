@@ -198,6 +198,17 @@ export async function sendMessage(input: {
   }
   const { data, error } = await db.from("messages").insert(row).select().single();
   if (error) throw error;
+  // Fire-and-forget push notification. Never block the send on push failures.
+  if (data?.id) {
+    void (async () => {
+      try {
+        const { notifyNewMessage } = await import("@/lib/push/events.functions");
+        await notifyNewMessage({ data: { messageId: data.id } });
+      } catch (e) {
+        console.warn("[push] notifyNewMessage failed", e);
+      }
+    })();
+  }
   return data as Message;
 }
 
