@@ -130,6 +130,7 @@ type Props = {
   hasCoach?: boolean;
   initial?: ReviewInitial | null;
   onSaved?: () => void;
+  onViewScore?: (rating: number | null) => void;
   actAsClientId?: string | null;
 };
 
