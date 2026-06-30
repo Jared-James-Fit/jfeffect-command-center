@@ -757,7 +757,7 @@ function WorkoutDay({
     (async () => {
       try {
         await startWorkoutSrv({ data: { kind: "client", dayId } });
-        if (!completion) qc.invalidateQueries({ queryKey: ["pl-day-completion", dayId] });
+        qc.invalidateQueries({ queryKey: ["pl-day-completion", dayId] });
       } catch (err) {
         // Soft-fail: starting is best-effort; later writes will create the row.
         console.warn("startWorkout failed", err);
