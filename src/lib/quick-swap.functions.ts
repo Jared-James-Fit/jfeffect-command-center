@@ -51,13 +51,25 @@ async function loadRowContext(supabase: any, rowId: string): Promise<RowCtx> {
  */
 async function findFutureSiblings(supabase: any, ctx: RowCtx): Promise<string[]> {
   if (!ctx.exerciseId || !ctx.clientId) return [];
-  // 1) all day_ids in this block
+  // 1) all week_ids in this block, then day_ids in those weeks. We
+  // resolve in two steps because filtering on an embedded resource
+  // (pl_weeks.block_id) silently returns no rows on some PostgREST
+  // setups — which surfaced as "0 uncompleted workouts affected".
+  const { data: weeks, error: weeksErr } = await supabase
+    .from("pl_weeks")
+    .select("id")
+    .eq("block_id", ctx.blockId);
+  if (weeksErr) throw weeksErr;
+  const weekIds = (weeks ?? []).map((w: any) => w.id);
+  if (weekIds.length === 0) return [];
   const { data: days, error: daysErr } = await supabase
     .from("pl_days")
-    .select("id, pl_weeks!inner(block_id)")
-    .eq("pl_weeks.block_id", ctx.blockId);
+    .select("id")
+    .in("week_id", weekIds);
   if (daysErr) throw daysErr;
-  const dayIds = (days ?? []).map((d: any) => d.id).filter((id: string) => id !== ctx.dayId);
+  const dayIds = (days ?? [])
+    .map((d: any) => d.id)
+    .filter((id: string) => id !== ctx.dayId);
   if (dayIds.length === 0) return [];
 
   // 2) drop any day that has a completion record
