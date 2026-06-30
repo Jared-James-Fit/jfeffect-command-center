@@ -123,6 +123,8 @@ function AccountPage() {
         </div>
       </Card>
 
+      <PushNotificationCard />
+
       {/* Delete account — required by Google Play and Apple App Store policies */}
       <Card className="p-6 border-destructive/30">
         <div className="flex items-center gap-2 mb-3">
