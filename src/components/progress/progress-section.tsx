@@ -865,6 +865,7 @@ function PhotoSubmissionDialog({ ctx, open, onOpenChange }: { ctx: ProgressConte
               <AngleUploadCard
                 key={a} angle={a} mediaType="photo" ctx={ctx}
                 getSubId={ensureSub} subId={subId}
+                pendingFile={pendingByAngle[a]}
               />
             ))}
           </div>
