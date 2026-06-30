@@ -239,7 +239,7 @@ export function ExerciseHistorySheet({
                   <span>RPE</span>
                   <span></span>
                 </div>
-                {g.sets.map((s: any) => (
+                {g.sets.map((s: any, i: number) => (
                   <div
                     key={s.id}
                     className={cn(
@@ -247,7 +247,7 @@ export function ExerciseHistorySheet({
                       s.completed_at && "bg-green-500/5",
                     )}
                   >
-                    <span className="font-mono text-muted-foreground">{s.set_index}</span>
+                    <span className="font-mono text-muted-foreground">{i + 1}</span>
                     <span className="font-medium tabular-nums">
                       {fmtLoad(s)}
                       {(() => {
