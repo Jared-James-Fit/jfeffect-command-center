@@ -1785,9 +1785,16 @@ function WorkoutDay({
               // over the (possibly stale) completion query snapshot, so edits
               // to a past workout's actual minutes actually persist.
               const typedMin = Number.parseInt(actualMin, 10);
+              // Prefer active app-open time (pauses when the workout view is
+              // backgrounded/hidden — same math as the live WorkoutTimer
+              // badge) over wall-clock so the recap matches what the client
+              // actually experienced.
+              const activeMin = computeActiveDurationMin(
+                completion?.started_at ?? completion?.in_progress_at ?? null,
+              );
               const resolvedDurationMin = Number.isFinite(typedMin) && typedMin > 0
                 ? typedMin
-                : completion?.actual_duration_min ?? null;
+                : activeMin ?? completion?.actual_duration_min ?? null;
               // Phase 2: offline-safe completion. If the client is offline,
               // persist the completion payload locally so it survives reload.
               // Phase 3 will register a sync handler that drains this store.
