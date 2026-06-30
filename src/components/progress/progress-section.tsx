@@ -828,6 +828,7 @@ function PhotoSubmissionDialog({ ctx, open, onOpenChange }: { ctx: ProgressConte
       submitted_at: asDraft ? null : new Date().toISOString(),
     });
     qc.invalidateQueries({ queryKey: ["progress-subs", ctx.userId] });
+    qc.invalidateQueries({ queryKey: ["progress-subs-paged", ctx.userId] });
     qc.invalidateQueries({ queryKey: ["progress-subs-photo", ctx.userId] });
     toast.success(asDraft ? "Saved as draft" : ctx.canRequestReview ? "Submitted to your coach" : "Saved to your progress");
     onOpenChange(false);
@@ -1065,6 +1066,7 @@ function VideoSubmissionDialog({ ctx, open, onOpenChange }: { ctx: ProgressConte
       submitted_at: asDraft ? null : new Date().toISOString(),
     });
     qc.invalidateQueries({ queryKey: ["progress-subs", ctx.userId] });
+    qc.invalidateQueries({ queryKey: ["progress-subs-paged", ctx.userId] });
     qc.invalidateQueries({ queryKey: ["progress-subs-video", ctx.userId] });
     toast.success(asDraft ? "Saved as draft" : "Submitted");
     onOpenChange(false);
@@ -1634,6 +1636,7 @@ function SubmissionDetailDialog({ ctx, submissionId, onClose }: { ctx: ProgressC
     qc.invalidateQueries({ queryKey: ["progress-reviews", submissionId] });
     qc.invalidateQueries({ queryKey: ["progress-sub", submissionId] });
     qc.invalidateQueries({ queryKey: ["progress-subs", ctx.userId] });
+    qc.invalidateQueries({ queryKey: ["progress-subs-paged", ctx.userId] });
     toast.success("Sent");
   }
 
@@ -1641,6 +1644,7 @@ function SubmissionDetailDialog({ ctx, submissionId, onClose }: { ctx: ProgressC
     if (!confirm("Delete this whole check-in (photos/videos and feedback)?")) return;
     await deleteSubmission(submissionId);
     qc.invalidateQueries({ queryKey: ["progress-subs", ctx.userId] });
+    qc.invalidateQueries({ queryKey: ["progress-subs-paged", ctx.userId] });
     qc.invalidateQueries({ queryKey: ["progress-subs-photo", ctx.userId] });
     qc.invalidateQueries({ queryKey: ["progress-subs-video", ctx.userId] });
     onClose();
