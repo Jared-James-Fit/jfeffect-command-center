@@ -97,9 +97,19 @@ export function muscleColor(muscle: string): string {
 export function shortMuscleLabel(name: string): string {
   const raw = (name || "").trim();
   if (!raw) return "Other";
-  // Collapse multi-word groupings, keep first chunk.
+  const CANONICAL = new Set([
+    "Chest","Lats","Upper Back","Traps","Front Delts","Side Delts","Rear Delts",
+    "Biceps","Triceps","Forearms","Quads","Hamstrings","Glutes","Adductors",
+    "Calves","Abs/Core","Lower Back","Other",
+  ]);
+  // If already a canonical standardized value, preserve it.
+  const titled = raw
+    .split(/\s+/)
+    .map((w) => (w ? w[0]!.toUpperCase() + w.slice(1).toLowerCase() : w))
+    .join(" ");
+  if (CANONICAL.has(titled)) return titled;
+  // Legacy fallback: collapse comma lists, keep first chunk.
   const first = raw.split(/[,/]| and /i)[0]!.trim();
-  // Capitalize.
   return first
     .split(" ")
     .map((w) => (w ? w[0]!.toUpperCase() + w.slice(1).toLowerCase() : w))
