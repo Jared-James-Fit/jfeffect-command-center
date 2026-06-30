@@ -4,7 +4,7 @@ import { UserAvatar } from "@/components/user-avatar";
 import { Button } from "@/components/ui/button";
 import {
   ChevronRight, MoreHorizontal, CalendarDays, Dumbbell,
-  Apple, HeartPulse, CheckCircle2, AlertCircle, Plus, Eye, ArrowRight, Clock,
+  Apple, HeartPulse, CheckCircle2, AlertCircle, Plus, Eye, ArrowRight, Clock, AlertTriangle, Upload,
 } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Progress } from "@/components/ui/progress";
@@ -377,23 +377,55 @@ function AssignmentStatusStrip({
         </>
       )}
       {r.next_block_id && (
-        <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+        <div className="inline-flex max-w-full items-center gap-1.5 rounded-full border border-sky-500/30 bg-sky-500/10 px-2 py-1 text-[11px] font-medium text-sky-400">
           <ArrowRight className="h-3 w-3 shrink-0" aria-hidden />
           <span className="truncate">
-            Up next: <span className="text-foreground font-medium">{r.next_block_name ?? "Next block"}</span>
-            {r.next_block_start && (
-              <span className="ml-1 text-muted-foreground">
-                · {(() => {
-                  try {
-                    const days = differenceInDays(parseISO(r.next_block_start), new Date());
-                    return days <= 0 ? "starts today" : `in ${days}d`;
-                  } catch { return ""; }
-                })()}
-              </span>
-            )}
+            Up next: <span className="font-semibold">{r.next_block_name ?? "Next block"}</span>
+            {r.next_block_start && (() => {
+              try {
+                const d = parseISO(r.next_block_start);
+                const days = differenceInDays(d, new Date());
+                const when = days <= 0 ? "starts today" : `in ${days}d · ${format(d, "MMM d")}`;
+                return <span className="ml-1 opacity-80">· {when}</span>;
+              } catch { return null; }
+            })()}
           </span>
         </div>
       )}
+      {hasProgram && !r.next_block_id && (() => {
+        // No next block queued — surface program-end so the coach knows when to upload more.
+        const endIso = r.block_end;
+        if (!endIso) return null;
+        let daysLeft = 0;
+        try { daysLeft = differenceInDays(parseISO(endIso), new Date()); } catch { return null; }
+        const ended = daysLeft < 0;
+        const ending = daysLeft <= 14;
+        const tone = ended
+          ? "border-destructive/40 bg-destructive/10 text-destructive"
+          : ending
+          ? "border-amber-500/40 bg-amber-500/10 text-amber-500"
+          : "border-border bg-muted/40 text-muted-foreground";
+        const label = ended
+          ? `Program ended ${format(parseISO(endIso), "MMM d")} · upload next block`
+          : ending
+          ? `Program ends in ${daysLeft}d (${format(parseISO(endIso), "MMM d")}) · no next block`
+          : `Program ends ${format(parseISO(endIso), "MMM d")} · no next block queued`;
+        return (
+          <Link
+            to="/admin/program-assign/$clientId"
+            params={{ clientId: r.id }}
+            className={cn(
+              "inline-flex max-w-full items-center gap-1.5 rounded-full border px-2 py-1 text-[11px] font-medium transition hover:brightness-110",
+              tone,
+            )}
+            title="Upload / assign the next block"
+          >
+            {ended || ending ? <AlertTriangle className="h-3 w-3 shrink-0" /> : <Upload className="h-3 w-3 shrink-0" />}
+            <span className="truncate">{label}</span>
+            <Plus className="h-3 w-3 shrink-0" />
+          </Link>
+        );
+      })()}
       <ClientQuickSheet
         kind={sheet}
         clientId={r.id}
