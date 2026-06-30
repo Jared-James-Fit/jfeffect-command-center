@@ -24,6 +24,7 @@ type Props = {
   hasCoach?: boolean;
   initialReview?: ReviewInitial | null;
   onReviewSaved?: () => void;
+  onViewScore?: (rating: number | null) => void;
   /** Optional: id of an element to scroll to when "View Log" is clicked. */
   logAnchorId?: string;
   /** Admin/coach POV: submit on behalf of this client id. */
