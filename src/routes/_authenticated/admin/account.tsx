@@ -6,6 +6,7 @@ import { ChangePasswordCard } from "@/components/change-password-card";
 import { UserCog } from "lucide-react";
 import { SettingsTabs } from "@/components/settings/settings-tabs";
 import { AccountProfileSettings } from "@/components/account-profile-settings";
+import { PushNotificationCard } from "@/components/push/push-notification-card";
 
 export const Route = createFileRoute("/_authenticated/admin/account")({
   component: AdminAccountPage,
@@ -30,6 +31,8 @@ function AdminAccountPage() {
         </Card>
 
         <AccountProfileSettings roleLabel={role ?? undefined} />
+
+        <PushNotificationCard showCoachingApps />
 
         <ChangePasswordCard />
       </div>

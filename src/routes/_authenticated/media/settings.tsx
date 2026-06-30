@@ -14,6 +14,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { MediaHeader } from "@/components/media/media-header";
 import { toast } from "sonner";
 import { AccountProfileSettings } from "@/components/account-profile-settings";
+import { PushNotificationCard } from "@/components/push/push-notification-card";
 import { ChangePasswordCard } from "@/components/change-password-card";
 
 const TABS = ["workspace", "notifications", "account"] as const;
@@ -79,6 +80,7 @@ function SettingsPage() {
         </TabsContent>
         <TabsContent value="account" className="mt-4 space-y-3">
           <AccountProfileSettings roleLabel={role ?? undefined} />
+          <PushNotificationCard />
           <Card className="space-y-2 p-4">
             <div className="text-sm"><span className="font-medium">Email:</span> {user?.email}</div>
             <div className="text-sm capitalize"><span className="font-medium">Role:</span> {role ?? "Not assigned"}</div>

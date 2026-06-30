@@ -25,6 +25,7 @@ import { SavedIndicator } from "@/components/saved-indicator";
 import { ClientLegalSafety } from "@/components/legal/client-legal-safety";
 import { InstallAppCard } from "@/components/portal/install-app-card";
 import { SectionErrorBoundary } from "@/components/section-error-boundary";
+import { PushNotificationCard } from "@/components/push/push-notification-card";
 
 export const Route = createFileRoute("/_authenticated/portal/account")({
   component: AccountPage,
@@ -312,6 +313,12 @@ function AccountPage() {
         <div className="md:col-span-3">
           <SectionErrorBoundary label="Install App">
             <InstallAppCard />
+          </SectionErrorBoundary>
+        </div>
+
+        <div className="md:col-span-3">
+          <SectionErrorBoundary label="Push Notifications">
+            <PushNotificationCard />
           </SectionErrorBoundary>
         </div>
 
