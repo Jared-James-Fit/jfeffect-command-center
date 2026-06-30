@@ -198,9 +198,10 @@ export function WorkoutReviewEditor({
     onSuccess: (res: any) => {
       toast.success(res?.edited ? "Review updated." : "Review saved.");
       onSaved?.();
+      onViewScore?.(selectedCard?.overallRating ?? null);
       onOpenChange(false);
     },
-        onError: (e: any) => toast.error(e?.message || "Couldn't save review"),
+    onError: (e: any) => toast.error(e?.message || "Couldn't save review"),
   });
 
   const canSubmit = status !== null && !mutation.isPending;
