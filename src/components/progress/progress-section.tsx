@@ -132,33 +132,6 @@ export function ProgressSection({
 
   return (
     <div className="space-y-4 p-3 pb-[max(5rem,env(safe-area-inset-bottom))] md:p-6 md:pb-12">
-      {/* Always-visible quick actions so logging is one tap from any tab */}
-      <div className="grid grid-cols-3 gap-2">
-        <Button
-          variant="outline"
-          className="h-12 flex-col gap-0.5 text-xs font-bold"
-          onClick={() => setWeightDialog(true)}
-        >
-          <Scale className="h-4 w-4" />
-          Log Weight
-        </Button>
-        <Button
-          variant="outline"
-          className="h-12 flex-col gap-0.5 text-xs font-bold"
-          onClick={() => setPhotoDialog(true)}
-        >
-          <Camera className="h-4 w-4" />
-          Add Photos
-        </Button>
-        <Button
-          variant="outline"
-          className="h-12 flex-col gap-0.5 text-xs font-bold"
-          onClick={() => setMeasureDialog(true)}
-        >
-          <Ruler className="h-4 w-4" />
-          Add Measurements
-        </Button>
-      </div>
       <Tabs value={tab} onValueChange={setTab} className="space-y-4">
         <TabsList className="grid w-full grid-cols-4 md:grid-cols-7 h-auto">
           <TabsTrigger value="overview">Overview</TabsTrigger>
@@ -806,6 +779,10 @@ function PhotoSubmissionDialog({ ctx, open, onOpenChange }: { ctx: ProgressConte
   const [bw, setBw] = useState("");
   const [notes, setNotes] = useState("");
   const [unit, setUnit] = useState<"kg" | "lb">(ctx.preferredWeightUnit ?? "lb");
+  const [busy, setBusy] = useState(false);
+  const multiRef = useRef<HTMLInputElement>(null);
+  // Map of angle → File to inject into the matching AngleUploadCard.
+  const [pendingByAngle, setPendingByAngle] = useState<Partial<Record<ProgressAngle, { file: File; ts: number }>>>({});
 
   async function ensureSub() {
     if (subId) return subId;
@@ -819,6 +796,8 @@ function PhotoSubmissionDialog({ ctx, open, onOpenChange }: { ctx: ProgressConte
   }
 
   async function save(asDraft: boolean) {
+    setBusy(true);
+    try {
     const id = await ensureSub();
     await updateSubmission(id, {
       submission_date: date, check_in_label: label,
@@ -832,6 +811,22 @@ function PhotoSubmissionDialog({ ctx, open, onOpenChange }: { ctx: ProgressConte
     qc.invalidateQueries({ queryKey: ["progress-subs-photo", ctx.userId] });
     toast.success(asDraft ? "Saved as draft" : ctx.canRequestReview ? "Submitted to your coach" : "Saved to your progress");
     onOpenChange(false);
+    } finally { setBusy(false); }
+  }
+
+  // One-tap multi-upload: assigns picked files to angles that are still empty,
+  // in PHOTO_ANGLES order. Called from the big "Upload all" button.
+  async function multiUpload(files: File[]) {
+    const sid = await ensureSub();
+    const { data: existing = [] } = await supabase
+      .from("progress_media").select("angle").eq("submission_id", sid);
+    const taken = new Set((existing ?? []).map((r: any) => r.angle));
+    const targets = PHOTO_ANGLES.filter((a) => !taken.has(a)).slice(0, files.length);
+    if (!targets.length) { toast.message("All four angles already have a photo. Tap a tile to replace one."); return; }
+    const ts = Date.now();
+    const next: Partial<Record<ProgressAngle, { file: File; ts: number }>> = {};
+    targets.forEach((a, i) => { next[a] = { file: files[i], ts: ts + i }; });
+    setPendingByAngle((prev) => ({ ...prev, ...next }));
   }
 
   return (
@@ -839,21 +834,44 @@ function PhotoSubmissionDialog({ ctx, open, onOpenChange }: { ctx: ProgressConte
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Add Progress Photos</DialogTitle>
-          <p className="text-sm text-muted-foreground">Upload one photo per angle. Use consistent lighting and distance for accurate comparisons.</p>
+          <p className="text-sm text-muted-foreground">Tap a tile to add a photo — or upload all four at once.</p>
         </DialogHeader>
 
         <div className="space-y-4">
+          {/* Big one-tap multi-upload — fastest path */}
+          <Button
+            type="button"
+            className="h-14 w-full text-base font-bold gap-2"
+            onClick={() => multiRef.current?.click()}
+          >
+            <ImagePlus className="h-5 w-5" />
+            Upload Photos
+          </Button>
+          <input
+            ref={multiRef}
+            type="file"
+            accept="image/*"
+            multiple
+            className="hidden"
+            onChange={(e) => {
+              const fs = Array.from(e.target.files ?? []);
+              e.target.value = "";
+              if (fs.length) void multiUpload(fs);
+            }}
+          />
+
           <div className="grid grid-cols-2 gap-3">
             {PHOTO_ANGLES.map((a) => (
               <AngleUploadCard
                 key={a} angle={a} mediaType="photo" ctx={ctx}
                 getSubId={ensureSub} subId={subId}
+                pendingFile={pendingByAngle[a]}
               />
             ))}
           </div>
 
           <details className="rounded-md border border-border p-3 text-sm">
-            <summary className="cursor-pointer font-medium">Details (optional)</summary>
+            <summary className="cursor-pointer font-medium">Details &amp; bodyweight (optional)</summary>
             <div className="mt-3 space-y-3">
               <div className="grid grid-cols-2 gap-3">
                 <DateField value={date} onChange={setDate} />
@@ -883,18 +901,19 @@ function PhotoSubmissionDialog({ ctx, open, onOpenChange }: { ctx: ProgressConte
                   <Textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} />
                 </div>
               </div>
-              <ul className="list-disc space-y-1 pl-5 text-xs text-muted-foreground">
-                <li>Use similar lighting and camera distance</li>
-                <li>Same four angles, stand in a consistent position</li>
-                <li>Take photos at a similar time of day</li>
-              </ul>
             </div>
           </details>
         </div>
 
-        <DialogFooter className="flex-col gap-2 sm:flex-row">
-          <Button variant="outline" onClick={() => save(true)}>Save Draft</Button>
-          <Button onClick={() => save(false)}>{ctx.canRequestReview ? "Submit for Coach Review" : "Save to My Progress"}</Button>
+        <DialogFooter>
+          <Button
+            onClick={() => save(false)}
+            disabled={busy}
+            className="h-14 w-full text-base font-bold"
+          >
+            {busy ? <><Loader2 className="h-5 w-5 animate-spin" /> Saving…</> :
+              ctx.canRequestReview ? "Done · Send to Coach" : "Done · Save Progress"}
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
@@ -902,10 +921,12 @@ function PhotoSubmissionDialog({ ctx, open, onOpenChange }: { ctx: ProgressConte
 }
 
 function AngleUploadCard({
-  angle, mediaType, ctx, getSubId, subId,
+  angle, mediaType, ctx, getSubId, subId, pendingFile,
 }: {
   angle: ProgressAngle; mediaType: "photo" | "video"; ctx: ProgressContext;
   getSubId: () => Promise<string>; subId: string | null;
+  /** File pushed from the dialog-level multi-upload queue. */
+  pendingFile?: { file: File; ts: number };
 }) {
   const qc = useQueryClient();
   const fileRef = useRef<HTMLInputElement>(null);
@@ -974,6 +995,16 @@ function AngleUploadCard({
     }
   }
 
+  // Consume a file pushed by the dialog-level multi-upload queue.
+  const lastTsRef = useRef<number>(0);
+  useEffect(() => {
+    if (!pendingFile) return;
+    if (pendingFile.ts === lastTsRef.current) return;
+    lastTsRef.current = pendingFile.ts;
+    void onFile(pendingFile.file);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingFile?.ts]);
+
   async function remove() {
     if (!existing) return;
     await deleteMedia(existing.id);
@@ -981,53 +1012,74 @@ function AngleUploadCard({
   }
 
   return (
-    <Card className="p-3">
-      <div className="flex items-center justify-between mb-2">
-        <p className="text-sm font-medium">{ANGLE_LABEL[angle]}</p>
-        {existing && existing.upload_status === "ready" && <CheckCircle2 className="h-4 w-4 text-emerald-500" />}
-      </div>
-      <div className="min-h-32 sm:min-h-40 aspect-square rounded bg-muted relative overflow-hidden">
+    <div className="space-y-1">
+      <button
+        type="button"
+        onClick={() => fileRef.current?.click()}
+        className="group relative block aspect-square w-full overflow-hidden rounded-xl border-2 border-dashed border-border bg-muted/60 transition active:scale-[0.98] hover:border-primary/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+        aria-label={existing ? `Replace ${ANGLE_LABEL[angle]} photo` : `Upload ${ANGLE_LABEL[angle]} photo`}
+      >
+        {/* Preview layer */}
         {localPreview ? (
           mediaType === "video" ? (
-            <video src={localPreview} className="h-full w-full object-cover" muted playsInline />
+            <video src={localPreview} className="progress-thumb-in h-full w-full object-cover" muted playsInline />
           ) : (
-            <img src={localPreview} alt={angle} className="h-full w-full object-cover" />
+            <img src={localPreview} alt={angle} className="progress-thumb-in h-full w-full object-cover" />
           )
         ) : existing ? (
-          <MediaThumb m={existing} />
+          <div className="progress-thumb-in h-full w-full"><MediaThumb m={existing} /></div>
         ) : (
-          <button
-            onClick={() => fileRef.current?.click()}
-            className="absolute inset-0 flex flex-col items-center justify-center gap-2 text-xs text-muted-foreground hover:bg-accent active:bg-accent"
-          >
-            {mediaType === "video" ? <VideoIcon className="h-8 w-8" /> : <Camera className="h-8 w-8" />}
-            <span className="font-medium">{mediaType === "video" ? "Tap to record or upload" : "Tap to take or upload photo"}</span>
-          </button>
-        )}
-        {progress != null && (
-          <div className="absolute inset-x-0 bottom-0 bg-black/70 p-2">
-            <ProgressBar value={progress} className="h-1" />
-            <p className="text-[10px] text-white mt-1">{progress < 100 ? `Uploading ${progress}%` : "Saved"}</p>
+          <div className="flex h-full w-full flex-col items-center justify-center gap-2 text-muted-foreground">
+            {mediaType === "video" ? <VideoIcon className="h-10 w-10" /> : <Camera className="h-10 w-10" />}
+            <span className="text-[13px] font-bold">{ANGLE_LABEL[angle]}</span>
+            <span className="text-[11px]">Tap to {mediaType === "video" ? "record" : "add photo"}</span>
           </div>
         )}
-      </div>
+
+        {/* Loading shimmer overlay */}
+        {progress != null && progress < 100 && (
+          <>
+            <div className="absolute inset-0 bg-background/40 backdrop-blur-[1px]" />
+            <div className="progress-shimmer" />
+            <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 to-transparent p-2">
+              <ProgressBar value={progress} className="h-1.5" />
+              <p className="mt-1 text-[11px] font-semibold text-white">Uploading… {progress}%</p>
+            </div>
+          </>
+        )}
+
+        {/* Angle label chip on filled tiles */}
+        {(existing || localPreview) && progress == null && (
+          <div className="absolute left-2 top-2 rounded-full bg-black/70 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-white">
+            {ANGLE_LABEL[angle]}
+          </div>
+        )}
+        {existing && existing.upload_status === "ready" && progress == null && (
+          <div className="absolute right-2 top-2 grid h-6 w-6 place-items-center rounded-full bg-emerald-500 text-white shadow">
+            <CheckCircle2 className="h-4 w-4" />
+          </div>
+        )}
+      </button>
+
+      {/* Inline remove control — only when there is media and not uploading */}
+      {existing && progress == null && (
+        <button
+          type="button"
+          onClick={remove}
+          className="flex w-full items-center justify-center gap-1 rounded-md py-1 text-[11px] font-semibold text-muted-foreground hover:text-destructive"
+        >
+          <Trash2 className="h-3 w-3" /> Remove
+        </button>
+      )}
+
       <input
         ref={fileRef} type="file"
         accept={mediaType === "photo" ? "image/*" : "video/*"}
-        // No `capture` attribute — lets the user pick from their photo library or take a new photo.
         className="hidden"
         onChange={(e) => { const f = e.target.files?.[0]; if (f) onFile(f); e.target.value = ""; }}
       />
-      <div className="mt-2 flex gap-2">
-        <Button size="sm" variant="outline" className="flex-1" onClick={() => fileRef.current?.click()}>
-          {existing ? "Replace" : "Upload"}
-        </Button>
-        {existing && (
-          <Button size="sm" variant="ghost" onClick={remove}><Trash2 className="h-4 w-4" /></Button>
-        )}
-      </div>
-      {err && <p className="text-xs text-destructive mt-1">{err}</p>}
-    </Card>
+      {err && <p className="text-xs text-destructive">{err}</p>}
+    </div>
   );
 }
 
@@ -1043,6 +1095,7 @@ function VideoSubmissionDialog({ ctx, open, onOpenChange }: { ctx: ProgressConte
   const [bw, setBw] = useState("");
   const [unit, setUnit] = useState<"kg" | "lb">(ctx.preferredWeightUnit ?? "lb");
   const [notes, setNotes] = useState("");
+  const [busy, setBusy] = useState(false);
 
   async function ensureSub() {
     if (subId) return subId;
@@ -1057,6 +1110,8 @@ function VideoSubmissionDialog({ ctx, open, onOpenChange }: { ctx: ProgressConte
   }
 
   async function save(asDraft: boolean) {
+    setBusy(true);
+    try {
     const id = await ensureSub();
     await updateSubmission(id, {
       video_format: format, submission_date: date, check_in_label: label,
@@ -1070,6 +1125,7 @@ function VideoSubmissionDialog({ ctx, open, onOpenChange }: { ctx: ProgressConte
     qc.invalidateQueries({ queryKey: ["progress-subs-video", ctx.userId] });
     toast.success(asDraft ? "Saved as draft" : "Submitted");
     onOpenChange(false);
+    } finally { setBusy(false); }
   }
 
   const angles: ProgressAngle[] = format === "continuous" ? ["all"] : PHOTO_ANGLES;
@@ -1079,29 +1135,28 @@ function VideoSubmissionDialog({ ctx, open, onOpenChange }: { ctx: ProgressConte
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Add Progress Video</DialogTitle>
-          <p className="text-sm text-muted-foreground">Record or upload one video. Optional: switch to 4-angle format for a full physique breakdown.</p>
+          <p className="text-sm text-muted-foreground">Tap the tile to record or pick a video from your library.</p>
         </DialogHeader>
         <div className="space-y-4">
+          {/* Format toggle — quick, big, single row */}
+          <div className="grid grid-cols-2 gap-2">
+            <Button size="lg" variant={format === "continuous" ? "default" : "outline"} onClick={() => setFormat("continuous")} className="h-12 font-bold">
+              Single Video
+            </Button>
+            <Button size="lg" variant={format === "four_angle" ? "default" : "outline"} onClick={() => setFormat("four_angle")} className="h-12 font-bold">
+              4-Angle
+            </Button>
+          </div>
+
           <div className={`grid gap-3 ${angles.length === 1 ? "grid-cols-1" : "grid-cols-2"}`}>
             {angles.map((a) => (
               <AngleUploadCard key={a} angle={a} mediaType="video" ctx={ctx} getSubId={ensureSub} subId={subId} />
             ))}
           </div>
 
-          <details className="rounded-md border border-border p-3 text-sm" open>
-            <summary className="cursor-pointer font-medium">Details (optional)</summary>
+          <details className="rounded-md border border-border p-3 text-sm">
+            <summary className="cursor-pointer font-medium">Details &amp; bodyweight (optional)</summary>
             <div className="mt-3 space-y-3">
-              <div>
-                <Label className="text-xs">Format</Label>
-                <div className="grid grid-cols-2 gap-2 mt-1">
-                  <Button size="sm" variant={format === "continuous" ? "default" : "outline"} onClick={() => setFormat("continuous")}>
-                    Single Video
-                  </Button>
-                  <Button size="sm" variant={format === "four_angle" ? "default" : "outline"} onClick={() => setFormat("four_angle")}>
-                    4-Angle Physique
-                  </Button>
-                </div>
-              </div>
               <div className="grid grid-cols-2 gap-3">
                 <DateField value={date} onChange={setDate} />
                 <div>
@@ -1133,9 +1188,15 @@ function VideoSubmissionDialog({ ctx, open, onOpenChange }: { ctx: ProgressConte
             </div>
           </details>
         </div>
-        <DialogFooter className="flex-col gap-2 sm:flex-row">
-          <Button variant="outline" onClick={() => save(true)}>Save Draft</Button>
-          <Button onClick={() => save(false)}>{ctx.canRequestReview ? "Submit for Coach Review" : "Save to My Progress"}</Button>
+        <DialogFooter>
+          <Button
+            onClick={() => save(false)}
+            disabled={busy}
+            className="h-14 w-full text-base font-bold"
+          >
+            {busy ? <><Loader2 className="h-5 w-5 animate-spin" /> Saving…</> :
+              ctx.canRequestReview ? "Done · Send to Coach" : "Done · Save Progress"}
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
