@@ -484,7 +484,7 @@ function OverviewTab({
   );
 }
 
-function SubmissionThumb({ sub }: { sub: ProgressSubmission }) {
+function SubmissionThumb({ sub }: { sub: Pick<ProgressSubmission, "id" | "submission_type"> }) {
   const { data: media = [] } = useQuery({
     queryKey: ["progress-media", sub.id],
     queryFn: () => listMediaForSubmission(sub.id),
