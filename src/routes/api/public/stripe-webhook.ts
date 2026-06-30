@@ -6,6 +6,7 @@ import {
   fetchExpandedCheckoutSession,
   upsertPromoRedemption,
 } from "@/lib/promo-capture";
+import { sendBillingAdminEmail, buildBillingEmailBody } from "@/lib/billing-notify.server";
 
 // Verify Stripe signature using Web Crypto (HMAC-SHA256).
 // Header format: t=timestamp,v1=sig,v1=sig...
@@ -702,6 +703,28 @@ export const Route = createFileRoute("/api/public/stripe-webhook")({
                 }).eq("id", purchase.id);
                 await revokeMemberFromPurchase(supabase, purchase);
               }
+              // Admin notification for subscription cancellation — best-effort
+              try {
+                const { data: clientRow } = purchase?.client_id
+                  ? await supabase.from("clients").select("first_name,last_name,email").eq("id", purchase.client_id).maybeSingle()
+                  : { data: null };
+                const clientName = clientRow ? `${clientRow.first_name ?? ""} ${clientRow.last_name ?? ""}`.trim() : null;
+                const clientEmail = clientRow?.email ?? null;
+                await sendBillingAdminEmail(supabase, {
+                  stripeEventId: event.id,
+                  subject: `Subscription cancelled — ${clientName ?? clientEmail ?? "Client"} — ${purchase?.product_name ?? "Coaching"}`,
+                  body: buildBillingEmailBody({
+                    eventType: event.type,
+                    clientName,
+                    clientEmail,
+                    productName: purchase?.product_name ?? null,
+                    subscriptionStatus: "Cancelled",
+                    stripeCustomerId: obj.customer ?? null,
+                    eventId: event.id,
+                    eventTime: event.created,
+                  }),
+                });
+              } catch { /* best-effort */ }
               break;
             }
 
@@ -774,6 +797,36 @@ export const Route = createFileRoute("/api/public/stripe-webhook")({
                 }).eq("id", purchase.id);
                 await provisionMemberFromPurchase(supabase, { ...purchase, stripe_customer_id: obj.customer ?? purchase.stripe_customer_id });
               }
+              // Admin billing notification — best-effort, never fails the webhook
+              if ((obj.amount_paid ?? 0) > 0) {
+                try {
+                  const { data: clientRow } = purchase?.client_id
+                    ? await supabase.from("clients").select("first_name,last_name,email").eq("id", purchase.client_id).maybeSingle()
+                    : { data: null };
+                  const clientName = clientRow ? `${clientRow.first_name ?? ""} ${clientRow.last_name ?? ""}`.trim() : (obj.customer_name ?? null);
+                  const clientEmail = clientRow?.email ?? obj.customer_email ?? null;
+                  await sendBillingAdminEmail(supabase, {
+                    stripeEventId: event.id,
+                    subject: `Payment received — ${clientName ?? clientEmail ?? "Client"} — ${purchase?.product_name ?? "Coaching"}`,
+                    body: buildBillingEmailBody({
+                      eventType: event.type,
+                      clientName,
+                      clientEmail,
+                      productName: purchase?.product_name ?? null,
+                      amountPaid: obj.amount_paid,
+                      taxAmount: obj.tax ?? null,
+                      currency: obj.currency,
+                      subscriptionStatus: "Active",
+                      invoiceStatus: obj.status,
+                      nextRenewalAt: obj.lines?.data?.[0]?.period?.end ?? null,
+                      stripeInvoiceUrl: obj.hosted_invoice_url ?? null,
+                      stripeCustomerId: obj.customer ?? null,
+                      eventId: event.id,
+                      eventTime: event.created,
+                    }),
+                  });
+                } catch { /* best-effort */ }
+              }
               break;
             }
             // ── Invoice failed (payment issue) ──────────────────────────────
@@ -816,6 +869,35 @@ export const Route = createFileRoute("/api/public/stripe-webhook")({
                   last_payment_update_at: now,
                 }).eq("id", purchase.id);
               }
+              // Admin billing notification for payment failure — best-effort
+              try {
+                const { data: clientRow } = purchase?.client_id
+                  ? await supabase.from("clients").select("first_name,last_name,email").eq("id", purchase.client_id).maybeSingle()
+                  : { data: null };
+                const clientName = clientRow ? `${clientRow.first_name ?? ""} ${clientRow.last_name ?? ""}`.trim() : (obj.customer_name ?? null);
+                const clientEmail = clientRow?.email ?? obj.customer_email ?? null;
+                await sendBillingAdminEmail(supabase, {
+                  stripeEventId: event.id,
+                  subject: `PAYMENT FAILED — ${clientName ?? clientEmail ?? "Client"} — Action required`,
+                  body: buildBillingEmailBody({
+                    eventType: event.type,
+                    clientName,
+                    clientEmail,
+                    productName: purchase?.product_name ?? null,
+                    amountDue: obj.amount_due,
+                    taxAmount: obj.tax ?? null,
+                    currency: obj.currency,
+                    subscriptionStatus: "Past Due",
+                    invoiceStatus: obj.status,
+                    failureReason: obj.last_payment_error?.message ?? null,
+                    nextRetryAt: obj.next_payment_attempt ?? null,
+                    stripeInvoiceUrl: obj.hosted_invoice_url ?? null,
+                    stripeCustomerId: obj.customer ?? null,
+                    eventId: event.id,
+                    eventTime: event.created,
+                  }),
+                });
+              } catch { /* best-effort */ }
               break;
             }
 
