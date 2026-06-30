@@ -34,15 +34,15 @@ export function WorkoutSubmissionSummary({ open, onOpenChange, summary, workoutT
 
   return (
     <Dialog open={open} onOpenChange={(v) => { onOpenChange(v); if (!v) onClose?.(); }}>
-      <DialogContent className="max-w-md p-0 overflow-hidden pb-[env(safe-area-inset-bottom)]">
-        <div className="bg-gradient-to-br from-primary/15 via-primary/5 to-transparent px-6 pt-6 pb-4">
-          <div className="flex items-center gap-3">
-            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/20 text-primary">
+      <DialogContent className="w-[calc(100vw-1rem)] max-w-md gap-0 overflow-hidden p-0 pb-[env(safe-area-inset-bottom)] [&>button[aria-label='Back']]:hidden">
+        <div className="bg-gradient-to-br from-primary/15 via-primary/5 to-transparent px-4 pt-5 pb-4 sm:px-6 sm:pt-6">
+          <div className="grid grid-cols-[auto_minmax(0,1fr)] items-center gap-3">
+            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-primary/20 text-primary">
               <Trophy className="h-6 w-6" />
             </div>
-            <div className="flex-1 min-w-0">
-              <DialogHeader className="space-y-0">
-                <DialogTitle className="text-2xl font-black leading-tight">{headline}</DialogTitle>
+            <div className="min-w-0">
+              <DialogHeader className="space-y-0 pr-0 text-left">
+                <DialogTitle className="truncate text-2xl font-black leading-tight">{headline}</DialogTitle>
                 <DialogDescription className="text-xs truncate">
                   {workoutTitle ?? "Workout"}
                   {dateLabel ? ` · ${dateLabel}` : ""}
@@ -63,9 +63,9 @@ export function WorkoutSubmissionSummary({ open, onOpenChange, summary, workoutT
           )}
         </div>
 
-        <div className="space-y-3 px-5 pb-4">
+        <div className="space-y-3 px-4 pb-4 sm:px-5">
           {/* Motivational message */}
-          <div className="rounded-2xl border border-primary/20 bg-primary/5 px-4 py-3 text-center text-sm font-bold text-foreground">
+          <div className="rounded-2xl border border-primary/20 bg-primary/5 px-3 py-3 text-center text-sm font-bold leading-snug text-foreground sm:px-4">
             {motivational}
           </div>
 
@@ -91,7 +91,7 @@ export function WorkoutSubmissionSummary({ open, onOpenChange, summary, workoutT
           </div>
 
           {/* Stat grid */}
-          <div className="grid grid-cols-3 gap-2">
+          <div className="grid grid-cols-2 gap-2 min-[420px]:grid-cols-3">
             <StatTile label="Exercises" value={`${summary.exercisesCompleted}/${summary.exercisesTotal}`} icon={<CheckCircle2 className="h-3.5 w-3.5" />} />
             <StatTile label="Sets" value={`${summary.completedSets}/${summary.prescribedSets}`} icon={<Activity className="h-3.5 w-3.5" />} />
             <StatTile label="Total Reps" value={`${summary.totalReps}`} icon={<Activity className="h-3.5 w-3.5" />} />
@@ -128,7 +128,7 @@ export function WorkoutSubmissionSummary({ open, onOpenChange, summary, workoutT
           )}
         </div>
 
-        <DialogFooter className="border-t bg-background/95 px-5 py-3">
+        <DialogFooter className="border-t bg-background/95 px-4 py-3 sm:px-5">
           <Button className="h-12 w-full text-base font-bold" onClick={() => { onOpenChange(false); onClose?.(); }}>
             <ChevronLeft className="mr-2 h-5 w-5" />
             Back
@@ -141,10 +141,10 @@ export function WorkoutSubmissionSummary({ open, onOpenChange, summary, workoutT
 
 function StatTile({ icon, label, value, muted, className }: { icon: React.ReactNode; label: string; value: string; muted?: boolean; className?: string }) {
   return (
-    <div className={`rounded-xl border border-border bg-card px-3 py-2 ${className ?? ""}`}>
-      <div className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
-        {icon}
-        {label}
+    <div className={`min-w-0 rounded-xl border border-border bg-card px-3 py-2 ${className ?? ""}`}>
+      <div className="flex min-w-0 items-center gap-1 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+        <span className="shrink-0">{icon}</span>
+        <span className="truncate">{label}</span>
       </div>
       <div className={`mt-0.5 text-lg font-black leading-tight ${muted ? "text-muted-foreground" : "text-foreground"}`}>
         {value}
