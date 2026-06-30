@@ -155,6 +155,7 @@ export function WorkoutReviewEditor({
   hasCoach,
   initial,
   onSaved,
+  onViewScore,
   actAsClientId,
 }: Props) {
   const submit = useServerFn(submitOrEditReview);
