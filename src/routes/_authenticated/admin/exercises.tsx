@@ -34,9 +34,16 @@ function ExercisesRedirect() {
 
 const CATEGORIES = ["Squat", "Bench", "Deadlift", "Upper Body", "Lower Body", "Back", "Chest", "Shoulders", "Arms", "Glutes", "Core", "Mobility", "Warm-Ups", "Powerlifting", "Bodybuilding", "Cardio"];
 
+const PRIMARY_MUSCLE_GROUPS = [
+  "Chest","Lats","Upper Back","Traps","Front Delts","Side Delts","Rear Delts",
+  "Biceps","Triceps","Forearms","Quads","Hamstrings","Glutes","Adductors",
+  "Calves","Abs/Core","Lower Back","Other",
+] as const;
+
 const MIGRATION_FILTERS: { value: string; label: string }[] = [
   { value: "all", label: "All exercises" },
   { value: "needs_volume_tags", label: "Needs volume tags" },
+  { value: "needs_muscle_review", label: "Needs muscle review" },
   { value: "youtube_pending", label: "YouTube pending" },
   { value: "vimeo_uploaded", label: "Vimeo uploaded" },
   { value: "ready_for_review", label: "Ready for review" },
@@ -53,6 +60,7 @@ export function ExercisesAdmin({ embedded = false }: { embedded?: boolean } = {}
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState("all");
   const [migration, setMigration] = useState("all");
+  const [muscleFilter, setMuscleFilter] = useState("all");
   const [editing, setEditing] = useState<any | null>(null);
 
   const { data: exercises = [] } = useQuery({
@@ -67,9 +75,16 @@ export function ExercisesAdmin({ embedded = false }: { embedded?: boolean } = {}
   const filtered = exercises.filter((e) => {
     if (category !== "all" && e.category !== category) return false;
     if (search && !e.name.toLowerCase().includes(search.toLowerCase())) return false;
+    if (muscleFilter !== "all") {
+      const mg = (e as any).primary_muscle_group ?? "Other";
+      if (mg !== muscleFilter) return false;
+    }
     if (migration === "all") return true;
     if (migration === "needs_volume_tags") {
       return !e.primary_movement_pattern || !e.variation_type;
+    }
+    if (migration === "needs_muscle_review") {
+      return (e as any).needs_muscle_review === true;
     }
     if (migration === "missing_vimeo") return !e.vimeo_video_id;
     if (migration === "quality_warning") return !!e.quality_warning;
@@ -105,6 +120,9 @@ export function ExercisesAdmin({ embedded = false }: { embedded?: boolean } = {}
   const needsTagsCount = exercises.filter(
     (e: any) => !e.primary_movement_pattern || !e.variation_type,
   ).length;
+  const needsMuscleCount = exercises.filter(
+    (e: any) => e.needs_muscle_review === true,
+  ).length;
 
   const { data: globalSet } = useExerciseVideoSetGlobal();
   const onChangeGlobal = async (v: string) => {
@@ -121,7 +139,7 @@ export function ExercisesAdmin({ embedded = false }: { embedded?: boolean } = {}
     <>
       {!embedded && <PageHeader
         title="Exercise Library"
-        subtitle={`${exercises.length} exercises · ${stillYouTubeCount} still on YouTube · ${needsTagsCount} need volume tags`}
+        subtitle={`${exercises.length} exercises · ${needsMuscleCount} need muscle review · ${stillYouTubeCount} still on YouTube · ${needsTagsCount} need volume tags`}
         actions={
           <Dialog open={open} onOpenChange={setOpen}>
             <DialogTrigger asChild>
@@ -183,6 +201,15 @@ export function ExercisesAdmin({ embedded = false }: { embedded?: boolean } = {}
                 ))}
               </SelectContent>
             </Select>
+            <Select value={muscleFilter} onValueChange={setMuscleFilter}>
+              <SelectTrigger className="w-56"><SelectValue placeholder="Primary muscle" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All muscle groups</SelectItem>
+                {PRIMARY_MUSCLE_GROUPS.map((m) => (
+                  <SelectItem key={m} value={m}>{m}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
         </div>
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -191,7 +218,10 @@ export function ExercisesAdmin({ embedded = false }: { embedded?: boolean } = {}
               <div className="flex items-start justify-between">
                 <div>
                   <div className="font-bold">{e.name}</div>
-                  <div className="text-xs text-muted-foreground">{e.category} · {e.muscle_group ?? "—"}</div>
+                  <div className="text-xs text-muted-foreground">
+                    {e.category} · <span className={(e as any).needs_muscle_review ? "text-amber-500 font-semibold" : "text-primary font-semibold"}>{(e as any).primary_muscle_group ?? "—"}</span>
+                    {(e as any).needs_muscle_review && <span className="ml-1 text-amber-500">⚠ review</span>}
+                  </div>
                 </div>
                 <div className="flex gap-1">
                   <Button variant="ghost" size="sm" onClick={() => setEditing(e)}><Pencil className="h-3 w-3" /></Button>
