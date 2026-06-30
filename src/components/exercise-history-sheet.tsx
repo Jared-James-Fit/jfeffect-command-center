@@ -130,7 +130,18 @@ export function ExerciseHistorySheet({
       const bd = b.sets[0]?.completed_at ?? b.sets[0]?.updated_at ?? "";
       return ad < bd ? 1 : -1;
     });
-    for (const g of list) g.sets.sort((x, y) => (x.set_index ?? 0) - (y.set_index ?? 0));
+    for (const g of list) {
+      g.sets.sort((x, y) => {
+        // Sort by created_at first (chronological order they were logged),
+        // falling back to set_index. This fixes ordering when the same
+        // exercise appears on multiple rows in one day (each row restarts
+        // set_index at 1), so we display them in the order performed.
+        const ax = x.created_at ?? x.completed_at ?? x.updated_at ?? "";
+        const bx = y.created_at ?? y.completed_at ?? y.updated_at ?? "";
+        if (ax && bx && ax !== bx) return ax < bx ? -1 : 1;
+        return (x.set_index ?? 0) - (y.set_index ?? 0);
+      });
+    }
     return list;
   }, [rows, showPartial]);
 
@@ -228,7 +239,7 @@ export function ExerciseHistorySheet({
                   <span>RPE</span>
                   <span></span>
                 </div>
-                {g.sets.map((s: any) => (
+                {g.sets.map((s: any, i: number) => (
                   <div
                     key={s.id}
                     className={cn(
@@ -236,7 +247,7 @@ export function ExerciseHistorySheet({
                       s.completed_at && "bg-green-500/5",
                     )}
                   >
-                    <span className="font-mono text-muted-foreground">{s.set_index}</span>
+                    <span className="font-mono text-muted-foreground">{i + 1}</span>
                     <span className="font-medium tabular-nums">
                       {fmtLoad(s)}
                       {(() => {
