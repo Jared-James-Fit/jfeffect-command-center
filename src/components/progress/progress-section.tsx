@@ -132,33 +132,6 @@ export function ProgressSection({
 
   return (
     <div className="space-y-4 p-3 pb-[max(5rem,env(safe-area-inset-bottom))] md:p-6 md:pb-12">
-      {/* Always-visible quick actions so logging is one tap from any tab */}
-      <div className="grid grid-cols-3 gap-2">
-        <Button
-          variant="outline"
-          className="h-12 flex-col gap-0.5 text-xs font-bold"
-          onClick={() => setWeightDialog(true)}
-        >
-          <Scale className="h-4 w-4" />
-          Log Weight
-        </Button>
-        <Button
-          variant="outline"
-          className="h-12 flex-col gap-0.5 text-xs font-bold"
-          onClick={() => setPhotoDialog(true)}
-        >
-          <Camera className="h-4 w-4" />
-          Add Photos
-        </Button>
-        <Button
-          variant="outline"
-          className="h-12 flex-col gap-0.5 text-xs font-bold"
-          onClick={() => setMeasureDialog(true)}
-        >
-          <Ruler className="h-4 w-4" />
-          Add Measurements
-        </Button>
-      </div>
       <Tabs value={tab} onValueChange={setTab} className="space-y-4">
         <TabsList className="grid w-full grid-cols-4 md:grid-cols-7 h-auto">
           <TabsTrigger value="overview">Overview</TabsTrigger>
