@@ -921,10 +921,12 @@ function PhotoSubmissionDialog({ ctx, open, onOpenChange }: { ctx: ProgressConte
 }
 
 function AngleUploadCard({
-  angle, mediaType, ctx, getSubId, subId,
+  angle, mediaType, ctx, getSubId, subId, pendingFile,
 }: {
   angle: ProgressAngle; mediaType: "photo" | "video"; ctx: ProgressContext;
   getSubId: () => Promise<string>; subId: string | null;
+  /** File pushed from the dialog-level multi-upload queue. */
+  pendingFile?: { file: File; ts: number };
 }) {
   const qc = useQueryClient();
   const fileRef = useRef<HTMLInputElement>(null);
@@ -993,27 +995,15 @@ function AngleUploadCard({
     }
   }
 
-  // Consume a file from the dialog-level multi-upload queue, if one targets this angle.
-  // useQuery (with no fetcher) lets us subscribe to the cache entry written by
-  // PhotoSubmissionDialog.multiUpload() so each tile reacts to the queue.
-  const { data: multiTarget } = useQuery<{ files: File[]; targets: ProgressAngle[]; ts: number } | undefined>({
-    queryKey: ["progress-media-multi-target", subId],
-    enabled: !!subId,
-    queryFn: () => undefined,
-    staleTime: Infinity,
-  });
+  // Consume a file pushed by the dialog-level multi-upload queue.
   const lastTsRef = useRef<number>(0);
   useEffect(() => {
-    if (!multiTarget || !subId) return;
-    if (multiTarget.ts === lastTsRef.current) return;
-    const idx = multiTarget.targets.indexOf(angle);
-    if (idx === -1) return;
-    const f = multiTarget.files[idx];
-    if (!f) return;
-    lastTsRef.current = multiTarget.ts;
-    void onFile(f);
+    if (!pendingFile) return;
+    if (pendingFile.ts === lastTsRef.current) return;
+    lastTsRef.current = pendingFile.ts;
+    void onFile(pendingFile.file);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [multiTarget?.ts, subId]);
+  }, [pendingFile?.ts]);
 
   async function remove() {
     if (!existing) return;
