@@ -1,6 +1,6 @@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Trophy, Dumbbell, Activity, CheckCircle2, XCircle, Flame, Clock, Star, Calendar } from "lucide-react";
+import { Trophy, Dumbbell, Activity, CheckCircle2, XCircle, Flame, Clock, Star, Calendar, ChevronLeft } from "lucide-react";
 import type { WorkoutSummary } from "@/lib/workout-summary";
 import { format } from "date-fns";
 
