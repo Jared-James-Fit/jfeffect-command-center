@@ -781,6 +781,8 @@ function PhotoSubmissionDialog({ ctx, open, onOpenChange }: { ctx: ProgressConte
   const [unit, setUnit] = useState<"kg" | "lb">(ctx.preferredWeightUnit ?? "lb");
   const [busy, setBusy] = useState(false);
   const multiRef = useRef<HTMLInputElement>(null);
+  // Map of angle → File to inject into the matching AngleUploadCard.
+  const [pendingByAngle, setPendingByAngle] = useState<Partial<Record<ProgressAngle, { file: File; ts: number }>>>({});
 
   async function ensureSub() {
     if (subId) return subId;
@@ -821,8 +823,10 @@ function PhotoSubmissionDialog({ ctx, open, onOpenChange }: { ctx: ProgressConte
     const taken = new Set((existing ?? []).map((r: any) => r.angle));
     const targets = PHOTO_ANGLES.filter((a) => !taken.has(a)).slice(0, files.length);
     if (!targets.length) { toast.message("All four angles already have a photo. Tap a tile to replace one."); return; }
-    qc.setQueryData(["progress-media-multi-target", sid], { files, targets, ts: Date.now() });
-    qc.invalidateQueries({ queryKey: ["progress-media", sid] });
+    const ts = Date.now();
+    const next: Partial<Record<ProgressAngle, { file: File; ts: number }>> = {};
+    targets.forEach((a, i) => { next[a] = { file: files[i], ts: ts + i }; });
+    setPendingByAngle((prev) => ({ ...prev, ...next }));
   }
 
   return (
