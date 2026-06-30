@@ -779,6 +779,8 @@ function PhotoSubmissionDialog({ ctx, open, onOpenChange }: { ctx: ProgressConte
   const [bw, setBw] = useState("");
   const [notes, setNotes] = useState("");
   const [unit, setUnit] = useState<"kg" | "lb">(ctx.preferredWeightUnit ?? "lb");
+  const [busy, setBusy] = useState(false);
+  const multiRef = useRef<HTMLInputElement>(null);
 
   async function ensureSub() {
     if (subId) return subId;
@@ -792,6 +794,8 @@ function PhotoSubmissionDialog({ ctx, open, onOpenChange }: { ctx: ProgressConte
   }
 
   async function save(asDraft: boolean) {
+    setBusy(true);
+    try {
     const id = await ensureSub();
     await updateSubmission(id, {
       submission_date: date, check_in_label: label,
@@ -805,6 +809,20 @@ function PhotoSubmissionDialog({ ctx, open, onOpenChange }: { ctx: ProgressConte
     qc.invalidateQueries({ queryKey: ["progress-subs-photo", ctx.userId] });
     toast.success(asDraft ? "Saved as draft" : ctx.canRequestReview ? "Submitted to your coach" : "Saved to your progress");
     onOpenChange(false);
+    } finally { setBusy(false); }
+  }
+
+  // One-tap multi-upload: assigns picked files to angles that are still empty,
+  // in PHOTO_ANGLES order. Called from the big "Upload all" button.
+  async function multiUpload(files: File[]) {
+    const sid = await ensureSub();
+    const { data: existing = [] } = await supabase
+      .from("progress_media").select("angle").eq("submission_id", sid);
+    const taken = new Set((existing ?? []).map((r: any) => r.angle));
+    const targets = PHOTO_ANGLES.filter((a) => !taken.has(a)).slice(0, files.length);
+    if (!targets.length) { toast.message("All four angles already have a photo. Tap a tile to replace one."); return; }
+    qc.setQueryData(["progress-media-multi-target", sid], { files, targets, ts: Date.now() });
+    qc.invalidateQueries({ queryKey: ["progress-media", sid] });
   }
 
   return (
@@ -812,10 +830,32 @@ function PhotoSubmissionDialog({ ctx, open, onOpenChange }: { ctx: ProgressConte
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Add Progress Photos</DialogTitle>
-          <p className="text-sm text-muted-foreground">Upload one photo per angle. Use consistent lighting and distance for accurate comparisons.</p>
+          <p className="text-sm text-muted-foreground">Tap a tile to add a photo — or upload all four at once.</p>
         </DialogHeader>
 
         <div className="space-y-4">
+          {/* Big one-tap multi-upload — fastest path */}
+          <Button
+            type="button"
+            className="h-14 w-full text-base font-bold gap-2"
+            onClick={() => multiRef.current?.click()}
+          >
+            <ImagePlus className="h-5 w-5" />
+            Upload Photos
+          </Button>
+          <input
+            ref={multiRef}
+            type="file"
+            accept="image/*"
+            multiple
+            className="hidden"
+            onChange={(e) => {
+              const fs = Array.from(e.target.files ?? []);
+              e.target.value = "";
+              if (fs.length) void multiUpload(fs);
+            }}
+          />
+
           <div className="grid grid-cols-2 gap-3">
             {PHOTO_ANGLES.map((a) => (
               <AngleUploadCard
@@ -826,7 +866,7 @@ function PhotoSubmissionDialog({ ctx, open, onOpenChange }: { ctx: ProgressConte
           </div>
 
           <details className="rounded-md border border-border p-3 text-sm">
-            <summary className="cursor-pointer font-medium">Details (optional)</summary>
+            <summary className="cursor-pointer font-medium">Details &amp; bodyweight (optional)</summary>
             <div className="mt-3 space-y-3">
               <div className="grid grid-cols-2 gap-3">
                 <DateField value={date} onChange={setDate} />
@@ -856,18 +896,19 @@ function PhotoSubmissionDialog({ ctx, open, onOpenChange }: { ctx: ProgressConte
                   <Textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} />
                 </div>
               </div>
-              <ul className="list-disc space-y-1 pl-5 text-xs text-muted-foreground">
-                <li>Use similar lighting and camera distance</li>
-                <li>Same four angles, stand in a consistent position</li>
-                <li>Take photos at a similar time of day</li>
-              </ul>
             </div>
           </details>
         </div>
 
-        <DialogFooter className="flex-col gap-2 sm:flex-row">
-          <Button variant="outline" onClick={() => save(true)}>Save Draft</Button>
-          <Button onClick={() => save(false)}>{ctx.canRequestReview ? "Submit for Coach Review" : "Save to My Progress"}</Button>
+        <DialogFooter>
+          <Button
+            onClick={() => save(false)}
+            disabled={busy}
+            className="h-14 w-full text-base font-bold"
+          >
+            {busy ? <><Loader2 className="h-5 w-5 animate-spin" /> Saving…</> :
+              ctx.canRequestReview ? "Done · Send to Coach" : "Done · Save Progress"}
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
