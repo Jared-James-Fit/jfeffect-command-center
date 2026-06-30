@@ -24,6 +24,7 @@ type Props = {
   hasCoach?: boolean;
   initialReview?: ReviewInitial | null;
   onReviewSaved?: () => void;
+  onViewScore?: (rating: number | null) => void;
   /** Optional: id of an element to scroll to when "View Log" is clicked. */
   logAnchorId?: string;
   /** Admin/coach POV: submit on behalf of this client id. */
@@ -35,6 +36,7 @@ export function CompletedWorkoutActions({
   hasCoach,
   initialReview,
   onReviewSaved,
+  onViewScore,
   logAnchorId,
   actAsClientId,
 }: Props) {
@@ -73,6 +75,7 @@ export function CompletedWorkoutActions({
         hasCoach={hasCoach}
         initial={initialReview ?? null}
         onSaved={onReviewSaved}
+        onViewScore={onViewScore}
         actAsClientId={actAsClientId ?? null}
       />
     </>
