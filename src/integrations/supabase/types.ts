@@ -4769,8 +4769,10 @@ export type Database = {
           muscle_group: string | null
           muscle_groups: string[]
           name: string
+          needs_muscle_review: boolean
           pl_lift_group: string | null
           primary_movement_pattern: string | null
+          primary_muscle_group: string | null
           quality_warning: string | null
           safe_to_publish: boolean
           secondary_vimeo_embed_url: string | null
@@ -4820,8 +4822,10 @@ export type Database = {
           muscle_group?: string | null
           muscle_groups?: string[]
           name: string
+          needs_muscle_review?: boolean
           pl_lift_group?: string | null
           primary_movement_pattern?: string | null
+          primary_muscle_group?: string | null
           quality_warning?: string | null
           safe_to_publish?: boolean
           secondary_vimeo_embed_url?: string | null
@@ -4871,8 +4875,10 @@ export type Database = {
           muscle_group?: string | null
           muscle_groups?: string[]
           name?: string
+          needs_muscle_review?: boolean
           pl_lift_group?: string | null
           primary_movement_pattern?: string | null
+          primary_muscle_group?: string | null
           quality_warning?: string | null
           safe_to_publish?: boolean
           secondary_vimeo_embed_url?: string | null
@@ -17792,6 +17798,10 @@ export type Database = {
           isOneToOne: false
           isSetofReturn: true
         }
+      }
+      classify_exercise_muscle: {
+        Args: { p_existing: string; p_name: string }
+        Returns: string
       }
       coach_has_template_share: {
         Args: { _template_id: string; _user_id: string }
