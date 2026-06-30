@@ -61,6 +61,10 @@ export default defineConfig({
         workbox: {
           navigateFallback: "/",
           maximumFileSizeToCacheInBytes: 5 * 1024 * 1024,
+          // Pull in our Web Push handlers (push, notificationclick,
+          // pushsubscriptionchange) inside the same SW Workbox generates.
+          // This keeps us at ONE service worker for offline + push.
+          importScripts: ["/push-sw.js"],
           navigateFallbackDenylist: [
             /^\/~oauth/,         // Supabase OAuth callback — must hit network
             /^\/api\//,
