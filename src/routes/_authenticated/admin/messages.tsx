@@ -87,48 +87,57 @@ export function MessagesInbox({
   });
 
   const { data: lastMessages = [] } = useQuery({
-    queryKey: ["last-messages", states.map((s) => s.client_id).sort().join(",")],
+    queryKey: ["last-messages"],
     enabled: states.length > 0,
     staleTime: 30_000,
     queryFn: async () => {
       const clientIds = Array.from(new Set(states.map((s) => s.client_id))).filter(Boolean);
-      const results: Message[] = [];
-      const batchSize = 10;
-      for (let i = 0; i < clientIds.length; i += batchSize) {
-        const batch = clientIds.slice(i, i + batchSize);
-        const batchResults = await Promise.all(
-          batch.map(async (clientId) => {
-            const { data, error } = await (supabase.from("messages") as any)
-              .select("id, client_id, body, sender_role, created_at, read_by_admin_at, is_internal_note")
-              .eq("client_id", clientId)
-              .eq("is_internal_note", false)
-              .in("delivery_status", ["sent", "sending"])
-              .order("created_at", { ascending: false })
-              .limit(1)
-              .maybeSingle();
-            if (error) throw error;
-            return data as Message | null;
-          }),
-        );
-        for (const m of batchResults) if (m) results.push(m);
+      if (clientIds.length === 0) return [] as Message[];
+      // Single bulk fetch instead of N+1 per-client queries. We pull the
+      // most-recent slice of messages across all relevant clients and
+      // take the first row per client_id client-side.
+      const { data, error } = await (supabase.from("messages") as any)
+        .select("id, client_id, body, sender_role, created_at, read_by_admin_at, is_internal_note")
+        .in("client_id", clientIds)
+        .eq("is_internal_note", false)
+        .in("delivery_status", ["sent", "sending"])
+        .order("created_at", { ascending: false })
+        .limit(Math.max(500, clientIds.length * 2));
+      if (error) throw error;
+      const seen = new Set<string>();
+      const latest: Message[] = [];
+      for (const m of (data ?? []) as Message[]) {
+        if (seen.has(m.client_id)) continue;
+        seen.add(m.client_id);
+        latest.push(m);
       }
-      return results;
+      return latest;
     },
   });
 
   // Realtime
   useEffect(() => {
+    let pending: ReturnType<typeof setTimeout> | null = null;
+    const scheduleInvalidate = (keys: string[]) => {
+      if (pending) return;
+      pending = setTimeout(() => {
+        pending = null;
+        for (const k of keys) qc.invalidateQueries({ queryKey: [k] });
+      }, 750);
+    };
     const ch = supabase
       .channel("admin-inbox")
       .on("postgres_changes", { event: "*", schema: "public", table: "messages" }, () => {
-        qc.invalidateQueries({ queryKey: ["last-messages"] });
-        qc.invalidateQueries({ queryKey: ["conversation-states"] });
+        scheduleInvalidate(["last-messages", "conversation-states"]);
       })
       .on("postgres_changes", { event: "*", schema: "public", table: "conversation_state" }, () => {
-        qc.invalidateQueries({ queryKey: ["conversation-states"] });
+        scheduleInvalidate(["conversation-states"]);
       })
       .subscribe();
-    return () => { supabase.removeChannel(ch); };
+    return () => {
+      if (pending) clearTimeout(pending);
+      supabase.removeChannel(ch);
+    };
   }, [qc]);
 
   const lastByClient = useMemo(() => {
