@@ -15,8 +15,9 @@ import { MessageThread, UnreadBadge, PriorityChip } from "@/components/message-t
 import {
   type ConversationState, type Message,
   setConversationStatus, setConversationPriority, PRIORITIES,
+  markUnread, markRead,
 } from "@/lib/messages";
-import { Search, ChevronLeft, MoreHorizontal, ExternalLink, Phone, MessageSquare } from "lucide-react";
+import { Search, ChevronLeft, MoreHorizontal, ExternalLink, Phone, MessageSquare, MailOpen, Mail } from "lucide-react";
 import { SendSmsDialog } from "@/components/send-sms-dialog";
 import { formatDistanceToNow, parseISO } from "date-fns";
 import { cn } from "@/lib/utils";
@@ -223,6 +224,21 @@ export function MessagesInbox({
     if (!selectedId) return;
     await setConversationPriority(selectedId, priority);
     qc.invalidateQueries({ queryKey: ["conversation-states"] });
+  };
+
+  const handleMarkUnread = async () => {
+    if (!selectedId) return;
+    await markUnread(selectedId, "admin");
+    qc.invalidateQueries({ queryKey: ["conversation-states"] });
+    qc.invalidateQueries({ queryKey: ["last-messages"] });
+    qc.invalidateQueries({ queryKey: ["admin-nav-badges"] });
+  };
+  const handleMarkRead = async () => {
+    if (!selectedId) return;
+    await markRead(selectedId, "admin");
+    qc.invalidateQueries({ queryKey: ["conversation-states"] });
+    qc.invalidateQueries({ queryKey: ["last-messages"] });
+    qc.invalidateQueries({ queryKey: ["admin-nav-badges"] });
   };
 
   // Full-bleed two-pane layout. On <md: stacked — inbox OR conversation.
@@ -475,6 +491,13 @@ export function MessagesInbox({
                     <Link to="/admin/clients/$id" params={{ id: selected.id }}>
                       <ExternalLink className="mr-2 h-4 w-4" /> Open client profile
                     </Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onClick={handleMarkUnread}>
+                    <Mail className="mr-2 h-4 w-4" /> Mark as unread
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={handleMarkRead}>
+                    <MailOpen className="mr-2 h-4 w-4" /> Mark as read
                   </DropdownMenuItem>
                   <DropdownMenuSeparator />
                   <DropdownMenuLabel className="text-[10px] uppercase tracking-widest text-muted-foreground">Status</DropdownMenuLabel>
