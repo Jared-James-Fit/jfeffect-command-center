@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card } from "@/components/ui/card";
@@ -13,6 +13,24 @@ export function PtSessionsPanel({ clientId, client }: { clientId: string; client
   const qc = useQueryClient();
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<any>(null);
+
+  useEffect(() => {
+    const ch = supabase
+      .channel(`pt-sessions-${clientId}`)
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "pt_sessions", filter: `client_id=eq.${clientId}` },
+        () => {
+          qc.invalidateQueries({ queryKey: ["pt-sessions", clientId] });
+          qc.invalidateQueries({ queryKey: ["client-session-credits", clientId] });
+          qc.invalidateQueries({ queryKey: ["client", clientId] });
+        },
+      )
+      .subscribe();
+    return () => {
+      supabase.removeChannel(ch);
+    };
+  }, [clientId, qc]);
 
   const { data: sessions = [] } = useQuery({
     queryKey: ["pt-sessions", clientId],
