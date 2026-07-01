@@ -4,6 +4,35 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 
 const Category = z.enum(["question", "bug", "suggestion", "reply"]);
 
+/** Live-support agent: read count of currently-available agents (any signed-in user). */
+export const getLiveSupportStatus = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const { supabase, userId } = context;
+    const { data: agents } = await supabase
+      .from("live_support_agents")
+      .select("user_id,is_available,updated_at");
+    const available = (agents ?? []).filter((a: any) => a.is_available);
+    const mine = (agents ?? []).find((a: any) => a.user_id === userId) ?? null;
+    return {
+      availableCount: available.length,
+      isAvailable: !!mine?.is_available,
+    };
+  });
+
+/** Live-support agent: toggle own availability. */
+export const setLiveSupportAvailability = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((i: unknown) => z.object({ available: z.boolean() }).parse(i))
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context;
+    const { error } = await supabase
+      .from("live_support_agents")
+      .upsert({ user_id: userId, is_available: data.available, updated_at: new Date().toISOString() });
+    if (error) throw new Error(error.message);
+    return { ok: true };
+  });
+
 /** Member: get-or-create own thread + list messages. */
 export const getMySupportThread = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
