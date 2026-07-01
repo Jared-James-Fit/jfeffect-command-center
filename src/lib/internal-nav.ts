@@ -222,8 +222,6 @@ const MEMBERSHIP_OVERLAY: Entry[] = [
     visibleTo: ["admin"] },
   { to: "/admin/membership/challenges", label: "Challenges", icon: Trophy, group: "Programming",
     visibleTo: ["admin"] },
-  { to: "/admin/settings", label: "Workspace Settings", icon: Settings, group: "Settings",
-    visibleTo: ["admin"] },
 ];
 
 /**
@@ -296,9 +294,13 @@ export function buildInternalNav(
   const base = REGISTRY.filter((e) => e.visibleTo.includes(roleTag));
   const overlay =
     opts.mode === "membership" && roleTag === "admin" ? MEMBERSHIP_OVERLAY : [];
-  // Strip `visibleTo` before handing to the shell (extra fields are harmless
-  // but the type is `NavItem`, not `Entry`).
-  return [...base, ...overlay].map(({ visibleTo: _v, ...item }) => item as NavItem);
+  // Merge base + overlay, dedupe by `to` (last wins so overlay can rename
+  // shared destinations), and strip `visibleTo` before handing to the shell.
+  const merged = new Map<string, NavItem>();
+  for (const { visibleTo: _v, ...item } of [...base, ...overlay]) {
+    merged.set(item.to, item as NavItem);
+  }
+  return Array.from(merged.values());
 }
 
 /**
