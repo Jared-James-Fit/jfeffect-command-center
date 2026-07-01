@@ -298,7 +298,7 @@ export function SessionCreditsPanel({ clientId }: { clientId: string }) {
       </div>
 
       {/* Event history */}
-      <LedgerHistory events={events} appointments={appointments} />
+      <LedgerHistory events={events} appointments={appointments} onChanged={invalidate} />
     </Card>
   );
 }
@@ -306,11 +306,23 @@ export function SessionCreditsPanel({ clientId }: { clientId: string }) {
 function LedgerHistory({
   events,
   appointments,
+  onChanged,
 }: {
   events: any[];
   appointments: Record<string, any>;
+  onChanged: () => void;
 }) {
   const [open, setOpen] = useState(false);
+  const [editing, setEditing] = useState<any | null>(null);
+  const delFn = useServerFn(deleteSessionLedgerEvent);
+  const delM = useMutation({
+    mutationFn: async (id: string) => delFn({ data: { id } }),
+    onSuccess: () => {
+      toast.success("Ledger entry deleted");
+      onChanged();
+    },
+    onError: (e: any) => toast.error(e.message),
+  });
   return (
     <Collapsible open={open} onOpenChange={setOpen}>
       <CollapsibleTrigger asChild>
@@ -342,6 +354,7 @@ function LedgerHistory({
                   <th className="p-2 text-right">Value Δ</th>
                   <th className="p-2 text-left">Appointment</th>
                   <th className="p-2 text-left">Note</th>
+                  <th className="p-2 text-right" />
                 </tr>
               </thead>
               <tbody>
@@ -395,6 +408,24 @@ function LedgerHistory({
                       <td className="p-2 text-xs text-muted-foreground max-w-[20rem]">
                         {e.note ?? ""}
                       </td>
+                      <td className="p-2 text-right whitespace-nowrap">
+                        <Button size="icon" variant="ghost" onClick={() => setEditing(e)} title="Edit">
+                          <Pencil className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          className="text-destructive"
+                          onClick={() => {
+                            if (confirm("Delete this ledger entry? This will change the client's balance.")) {
+                              delM.mutate(e.id);
+                            }
+                          }}
+                          title="Delete"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </td>
                     </tr>
                   );
                 })}
@@ -403,7 +434,98 @@ function LedgerHistory({
           </div>
         )}
       </CollapsibleContent>
+      <EditLedgerEventDialog
+        event={editing}
+        onClose={() => setEditing(null)}
+        onSaved={() => {
+          setEditing(null);
+          onChanged();
+        }}
+      />
     </Collapsible>
+  );
+}
+
+function EditLedgerEventDialog({
+  event,
+  onClose,
+  onSaved,
+}: {
+  event: any | null;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const fn = useServerFn(updateSessionLedgerEvent);
+  const [sessions, setSessions] = useState("");
+  const [unit, setUnit] = useState("");
+  const [eff, setEff] = useState("");
+  const [exp, setExp] = useState("");
+  const [note, setNote] = useState("");
+  useEffect(() => {
+    if (!event) return;
+    setSessions(String(event.session_count ?? ""));
+    setUnit(
+      event.unit_value_minor != null ? String(Number(event.unit_value_minor) / 100) : "",
+    );
+    setEff(event.effective_date ?? "");
+    setExp(event.expires_at ?? "");
+    setNote(event.note ?? "");
+  }, [event]);
+  const m = useMutation({
+    mutationFn: async () => {
+      const patch: any = { id: event.id };
+      const sc = parseInt(sessions, 10);
+      if (Number.isFinite(sc)) patch.session_count = sc;
+      if (unit === "") patch.unit_value_minor = null;
+      else if (Number.isFinite(parseFloat(unit)))
+        patch.unit_value_minor = Math.round(parseFloat(unit) * 100);
+      if (eff) patch.effective_date = eff;
+      patch.expires_at = exp || null;
+      patch.note = note || null;
+      return fn({ data: patch });
+    },
+    onSuccess: () => {
+      toast.success("Ledger entry updated");
+      onSaved();
+    },
+    onError: (e: any) => toast.error(e.message),
+  });
+  return (
+    <Dialog open={!!event} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>Edit ledger entry</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-3">
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <Label>Sessions Δ</Label>
+              <Input type="number" value={sessions} onChange={(e) => setSessions(e.target.value)} />
+            </div>
+            <div>
+              <Label>Unit value</Label>
+              <Input value={unit} onChange={(e) => setUnit(e.target.value)} placeholder="0.00" />
+            </div>
+            <div>
+              <Label>Effective date</Label>
+              <Input type="date" value={eff} onChange={(e) => setEff(e.target.value)} />
+            </div>
+            <div>
+              <Label>Expires</Label>
+              <Input type="date" value={exp} onChange={(e) => setExp(e.target.value)} />
+            </div>
+          </div>
+          <div>
+            <Label>Note</Label>
+            <Textarea rows={2} value={note} onChange={(e) => setNote(e.target.value)} />
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose} disabled={m.isPending}>Cancel</Button>
+          <Button onClick={() => m.mutate()} disabled={m.isPending}>Save</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 
