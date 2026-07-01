@@ -20,7 +20,7 @@ export function PtCalendarPanel() {
   const { data: clients = [] } = useQuery({
     queryKey: ["clients-min"],
     queryFn: async () => {
-      const { data } = await supabase.from("clients").select("id, full_name, timezone, default_session_location").eq("archived", false).order("full_name");
+      const { data } = await supabase.from("clients").select("id, full_name, timezone, default_session_location, package_tracking_enabled, sessions_purchased, sessions_used").eq("archived", false).order("full_name");
       return data ?? [];
     },
   });
