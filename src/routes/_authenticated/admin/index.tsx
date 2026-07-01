@@ -33,6 +33,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { Inbox, Flame, CalendarCheck, TrendingUp } from "lucide-react";
 import { DashboardRefreshIndicator } from "@/components/portal/dashboard-refresh-indicator";
 import { DashboardOfflineEmpty, useIsOfflineWithoutCache } from "@/components/portal/dashboard-offline-empty";
+import { NotificationSetupPrompt } from "@/components/notification-setup-prompt";
 
 function CoachingApplicationsTiles() {
   const fetchMetrics = useServerFn(getCoachingApplicationsMetrics);
@@ -483,6 +484,7 @@ function AdminDashboard() {
           <DashboardRefreshIndicator />
         </div>
         <DriveSetupBanner />
+        <NotificationSetupPrompt />
 
         {/* TODAY PRIORITY */}
         <Card className="border-border bg-card p-4">
