@@ -26,7 +26,17 @@ export function WorkoutSubmissionSummary({ open, onOpenChange, summary, workoutT
     : summary.score >= 75 ? "Strong work today. Consistency stacks results."
     : summary.score >= 50 ? "Reps in the bank. Show up again tomorrow."
     : "Logged is better than skipped. Back at it next session.";
-  const ratingStars = sessionRating != null ? Math.max(0, Math.min(5, Math.round(sessionRating))) : 0;
+  // The star rating on the celebration screen represents session quality.
+  // Historically it only showed the client's self-reported `overall_rating`,
+  // which caused confusing screens like "100/100" alongside "3/5 stars" when
+  // the client left the rating at its default. Derive stars from the
+  // computed workout score and, when a self-rating exists, take whichever
+  // is higher so an intentionally high self-rating still wins.
+  const scoreStars = Math.max(0, Math.min(5, Math.round(summary.score / 20)));
+  const selfStars = sessionRating != null
+    ? Math.max(0, Math.min(5, Math.round(sessionRating)))
+    : 0;
+  const ratingStars = Math.max(scoreStars, selfStars);
   const dateLabel = (() => {
     if (!workoutDate) return null;
     try { return format(new Date(workoutDate), "EEE, MMM d, yyyy"); } catch { return null; }
@@ -50,7 +60,7 @@ export function WorkoutSubmissionSummary({ open, onOpenChange, summary, workoutT
               </DialogHeader>
             </div>
           </div>
-          {sessionRating != null && (
+          {ratingStars > 0 && (
             <div className="mt-3 flex items-center gap-1.5">
               {[1, 2, 3, 4, 5].map((i) => (
                 <Star
