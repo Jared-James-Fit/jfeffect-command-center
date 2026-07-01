@@ -45,8 +45,18 @@ export function computeActiveDurationMin(
   if (!Number.isFinite(start)) return null;
   const end = endsAt ? new Date(endsAt).getTime() : Date.now();
   if (!Number.isFinite(end) || end < start) return null;
+  const wallMs = Math.max(0, end - start);
   const paused = readWorkoutPausedMs(startedAt, end);
-  const activeMs = Math.max(0, end - start - paused);
+  // Only trust the paused-while-hidden tracker when it stayed under the full
+  // wall-clock window. The Page Visibility API is unreliable in PWAs (iOS
+  // Safari, backgrounded standalone apps, page reloads mid-session), so a
+  // paused value that swallows most/all of the session almost always means
+  // the tracker missed a "visible" event and we should fall back to wall
+  // clock — otherwise the summary reports "1 min" for a real hour-long
+  // workout. We keep the subtraction only when the paused window is a
+  // sensible fraction (<75%) of wall time.
+  const trustedPause = paused > 0 && paused < wallMs * 0.75 ? paused : 0;
+  const activeMs = Math.max(0, wallMs - trustedPause);
   return Math.max(1, Math.round(activeMs / 60000));
 }
 
