@@ -575,12 +575,12 @@ export function AppShell({ items, bottomItems: customBottomItems, title, childre
                   {pinnedItems.map((item) => {
                     const active = item.to === activeTo;
                     const Icon = item.icon;
-                    // Pin <button> must be a sibling of <Link>, not a descendant.
-                    // See note in the grouped-items renderer below.
                     const link = (
                       <div
+                        data-sidebar-row
+                        data-pinned="true"
                         className={cn(
-                          "group/pin flex items-center rounded-md transition-colors",
+                          "sidebar-nav-row group/pin relative flex items-center rounded-md transition-colors",
                           active
                             ? "bg-primary/15 text-primary font-semibold border-l-2 border-primary"
                             : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground border-l-2 border-amber-400/40",
@@ -588,22 +588,30 @@ export function AppShell({ items, bottomItems: customBottomItems, title, childre
                       >
                         <Link
                           to={item.to}
+                          aria-label={`Open ${item.label}`}
                           className={cn(
-                            "flex flex-1 items-center min-w-0",
+                            "absolute inset-0 z-0 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-sidebar",
+                          )}
+                        />
+                        <div
+                          className={cn(
+                            "pointer-events-none relative z-[1] flex flex-1 items-center min-w-0",
                             rowPadding,
                             rowText,
+                            !isCollapsed && "!pr-8",
                             active ? "text-primary" : "text-sidebar-foreground",
                           )}
                         >
                           <div className="relative"><Icon className="h-4 w-4 shrink-0" /><SidebarBadge badge={navBadges[item.to]} isCollapsed={isCollapsed} /></div>
                           {!isCollapsed && <span className="truncate flex-1">{item.label}</span>}
                           {!isCollapsed && <SidebarBadge badge={navBadges[item.to]} isCollapsed={false} />}
-                        </Link>
+                        </div>
                         {!isCollapsed && (
                           <button
                             type="button"
                             onClick={(e) => { e.preventDefault(); e.stopPropagation(); onTogglePin(item); }}
-                            className="mr-2 grid h-5 w-5 shrink-0 place-items-center rounded text-amber-300 opacity-0 pointer-events-none transition group-hover/pin:opacity-100 group-hover/pin:pointer-events-auto hover:bg-amber-400/10"
+                            data-pinned="true"
+                            className="sidebar-pin-button absolute right-2 top-1/2 z-10 grid h-5 w-5 -translate-y-1/2 place-items-center rounded text-amber-300 opacity-0 transition hover:bg-amber-400/10"
                             aria-label={`Unpin ${item.label}`}
                             title="Unpin"
                           >
@@ -656,14 +664,12 @@ export function AppShell({ items, bottomItems: customBottomItems, title, childre
                         const active = item.to === activeTo;
                         const Icon = item.icon;
                         const pinned = isPinned(item.to);
-                        // NOTE: keep the pin <button> as a SIBLING of the <Link>, not
-                        // a descendant. <a><button/></a> is invalid HTML and browsers
-                        // reflow the DOM, which can swallow clicks on the link so it
-                        // never navigates (regression seen on Membership Admin sidebar).
                         const link = (
                           <div
+                            data-sidebar-row
+                            data-pinned={pinned ? "true" : "false"}
                             className={cn(
-                              "group/row flex items-center rounded-md transition-colors",
+                              "sidebar-nav-row group/row relative flex items-center rounded-md transition-colors",
                               active
                                 ? "bg-primary/15 text-primary font-semibold border-l-2 border-primary"
                                 : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground border-l-2 border-transparent",
@@ -671,26 +677,34 @@ export function AppShell({ items, bottomItems: customBottomItems, title, childre
                           >
                             <Link
                               to={item.to}
+                              aria-label={`Open ${item.label}`}
                               className={cn(
-                                "flex flex-1 items-center min-w-0",
+                                "absolute inset-0 z-0 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-sidebar",
+                              )}
+                            />
+                            <div
+                              className={cn(
+                                "pointer-events-none relative z-[1] flex flex-1 items-center min-w-0",
                                 rowPadding,
                                 rowText,
+                                !isCollapsed && "!pr-8",
                                 active ? "text-primary" : "text-sidebar-foreground",
                               )}
                             >
                               <div className="relative"><Icon className="h-4 w-4 shrink-0" /><SidebarBadge badge={navBadges[item.to]} isCollapsed={isCollapsed} /></div>
                               {!isCollapsed && <span className="truncate flex-1">{item.label}</span>}
                               {!isCollapsed && <SidebarBadge badge={navBadges[item.to]} isCollapsed={false} />}
-                            </Link>
+                            </div>
                             {!isCollapsed && (
                               <button
                                 type="button"
                                 onClick={(e) => { e.preventDefault(); e.stopPropagation(); onTogglePin(item); }}
+                                data-pinned={pinned ? "true" : undefined}
                                 className={cn(
-                                  "mr-2 grid h-5 w-5 shrink-0 place-items-center rounded transition",
+                                  "sidebar-pin-button absolute right-2 top-1/2 z-10 grid h-5 w-5 -translate-y-1/2 place-items-center rounded transition",
                                   pinned
-                                    ? "text-amber-300 opacity-100 pointer-events-auto"
-                                    : "text-muted-foreground opacity-0 pointer-events-none group-hover/row:opacity-100 group-hover/row:pointer-events-auto hover:text-amber-300",
+                                    ? "text-amber-300 opacity-100"
+                                    : "text-muted-foreground opacity-0 hover:text-amber-300",
                                   "hover:bg-amber-400/10",
                                 )}
                                 aria-label={pinned ? `Unpin ${item.label}` : `Pin ${item.label}`}
