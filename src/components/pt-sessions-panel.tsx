@@ -58,10 +58,6 @@ export function PtSessionsPanel({ clientId, client }: { clientId: string; client
   const markComplete = async (s: any) => {
     const { error } = await supabase.from("pt_sessions").update({ status: "Completed" }).eq("id", s.id);
     if (error) return toast.error(error.message);
-    if (client?.package_tracking_enabled) {
-      await supabase.from("clients").update({ sessions_used: (client.sessions_used ?? 0) + 1 }).eq("id", clientId);
-      qc.invalidateQueries({ queryKey: ["client", clientId] });
-    }
     qc.invalidateQueries({ queryKey: ["pt-sessions", clientId] });
     toast.success("Marked completed");
   };
@@ -70,6 +66,12 @@ export function PtSessionsPanel({ clientId, client }: { clientId: string; client
     if (!confirm("Delete this session?")) return;
     const { error } = await supabase.from("pt_sessions").delete().eq("id", s.id);
     if (error) return toast.error(error.message);
+    // Refund credit if it was a Scheduled session and tracking is on
+    if (client?.package_tracking_enabled && s.status === "Scheduled") {
+      const nextUsed = Math.max(0, Number(client.sessions_used ?? 0) - 1);
+      await supabase.from("clients").update({ sessions_used: nextUsed }).eq("id", clientId);
+      qc.invalidateQueries({ queryKey: ["client", clientId] });
+    }
     qc.invalidateQueries({ queryKey: ["pt-sessions", clientId] });
     toast.success("Deleted");
   };
