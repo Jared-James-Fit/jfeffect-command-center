@@ -1,0 +1,3 @@
+ALTER TABLE public.session_ledger_events DROP CONSTRAINT IF EXISTS session_ledger_events_source_check;
+ALTER TABLE public.session_ledger_events ADD CONSTRAINT session_ledger_events_source_check
+  CHECK (source = ANY (ARRAY['manual','auto_grant_on_payment','auto_use_on_complete','auto_expire','conversion','admin_adjust','auto_use_on_appointment','auto_unuse_on_appointment_cancel','package_grant']));
