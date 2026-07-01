@@ -21,6 +21,27 @@ self.addEventListener('push', (event) => {
   };
 
   event.waitUntil((async () => {
+    // Suppress if the user is already actively viewing the same
+    // conversation (matching pathname + optional #group=<id> hash for
+    // group chats). Prevents duplicate pings while chatting in-app.
+    try {
+      const targetUrl = new URL(payload.url || '/', self.location.origin);
+      const targetGroup = (targetUrl.hash.match(/group=([0-9a-f-]{36})/i) || [])[1];
+      const wins = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+      for (const w of wins) {
+        if (!w.visibilityState || w.visibilityState !== 'visible') continue;
+        try {
+          const u = new URL(w.url);
+          if (u.origin !== self.location.origin) continue;
+          if (u.pathname !== targetUrl.pathname) continue;
+          if (targetGroup) {
+            const activeGroup = (u.hash.match(/group=([0-9a-f-]{36})/i) || [])[1];
+            if (activeGroup !== targetGroup) continue;
+          }
+          return; // matching visible tab → skip
+        } catch {}
+      }
+    } catch {}
     await self.registration.showNotification(title, opts);
     // Best-effort app icon badge update (supported on installed PWAs)
     try {
