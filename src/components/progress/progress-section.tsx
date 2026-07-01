@@ -1790,7 +1790,54 @@ function SubmissionDetailDialog({ ctx, submissionId, onClose }: { ctx: ProgressC
           {fmtDate(sub.submission_date)} · {prettyStatus(sub.review_status)}
           {sub.bodyweight ? ` · ${sub.bodyweight} ${sub.weight_unit}` : ""}
         </div>
-        {sub.notes && <p className="text-sm mb-3">{sub.notes}</p>}
+        {sub.notes && !editing && <p className="text-sm mb-3">{sub.notes}</p>}
+
+        {canEdit && (
+          editing ? (
+            <div className="mb-4 rounded-md border border-primary/40 bg-primary/5 p-3 space-y-3">
+              <div className="grid grid-cols-2 gap-3">
+                <DateField value={editDate} onChange={setEditDate} />
+                <div>
+                  <Label className="text-xs">Label</Label>
+                  <Select value={editLabel} onValueChange={setEditLabel}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {CHECK_IN_LABELS.map((l) => <SelectItem key={l} value={l}>{l}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label className="text-xs">Bodyweight</Label>
+                  <div className="flex gap-2">
+                    <Input type="number" inputMode="decimal" value={editBw} onChange={(e) => setEditBw(e.target.value)} placeholder="—" />
+                    <Select value={editUnit} onValueChange={(v: any) => setEditUnit(v)}>
+                      <SelectTrigger className="w-20"><SelectValue /></SelectTrigger>
+                      <SelectContent><SelectItem value="kg">kg</SelectItem><SelectItem value="lb">lb</SelectItem></SelectContent>
+                    </Select>
+                  </div>
+                </div>
+                <div>
+                  <Label className="text-xs">Notes</Label>
+                  <Textarea value={editNotes} onChange={(e) => setEditNotes(e.target.value)} rows={2} />
+                </div>
+              </div>
+              <div className="flex gap-2">
+                <Button size="sm" onClick={saveEdit} disabled={savingEdit} className="flex-1">
+                  {savingEdit ? <><Loader2 className="h-4 w-4 mr-1 animate-spin" />Saving…</> : "Save changes"}
+                </Button>
+                <Button size="sm" variant="outline" onClick={() => setEditing(false)} disabled={savingEdit}>Cancel</Button>
+              </div>
+            </div>
+          ) : (
+            <div className="mb-3">
+              <Button size="sm" variant="outline" onClick={() => setEditing(true)}>
+                Edit date &amp; details
+              </Button>
+            </div>
+          )
+        )}
 
         <div className={`grid gap-2 ${angles.length === 1 ? "grid-cols-1" : "grid-cols-2"}`}>
           {angles.map((a) => {
