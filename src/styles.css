@@ -362,7 +362,6 @@ html[data-keyboard-open="true"] {
   pointer-events: none;
 }
 .sidebar-nav-row:hover .sidebar-pin-button,
-.sidebar-nav-row:focus-within .sidebar-pin-button,
 .sidebar-nav-row .sidebar-pin-button[data-pinned="true"] {
   pointer-events: auto;
 }
