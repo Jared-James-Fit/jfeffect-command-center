@@ -21,8 +21,11 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Phone, MessageSquare, AlertTriangle } from "lucide-react";
+import { Phone, MessageSquare, AlertTriangle, Mail } from "lucide-react";
 import { UserAvatar } from "@/components/user-avatar";
+import { markUnread } from "@/lib/messages";
+import { useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
 
 export const Route = createFileRoute("/_authenticated/portal/messages")({
   component: ClientMessages,
@@ -33,6 +36,7 @@ function ClientMessages() {
   const [tab, setTab] = useState<"coach" | "groups">("coach");
   const groupSummary = useMyGroupSummary();
   const [confirm, setConfirm] = useState<null | "call" | "sms">(null);
+  const qc = useQueryClient();
 
   const { data: client } = useQuery({
     queryKey: ["my-client-id", portalUserId],
@@ -133,6 +137,22 @@ function ClientMessages() {
             onClick={() => setConfirm("sms")}
           >
             <MessageSquare className="h-4 w-4" />
+          </Button>
+        )}
+        {client?.id && (
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="h-9 w-9 shrink-0"
+            title="Mark conversation as unread"
+            onClick={async () => {
+              await markUnread(client.id, "client");
+              qc.invalidateQueries({ queryKey: ["client-nav-badges"] });
+              toast.success("Marked as unread");
+            }}
+          >
+            <Mail className="h-4 w-4" />
           </Button>
         )}
       </header>

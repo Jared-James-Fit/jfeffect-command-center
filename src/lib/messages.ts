@@ -227,6 +227,69 @@ export async function markRead(clientId: string, role: SenderRole) {
     .eq("client_id", clientId)
     .eq("sender_role", oppRole)
     .is(col, null);
+  // Best-effort: dismiss OS-level notifications + PWA app badge for this thread
+  // so the reminder disappears the moment the conversation is opened.
+  try { await dismissMessageBadges(clientId); } catch {}
+}
+
+/**
+ * Mark a conversation as UNREAD from the current side.
+ * Sets the conversation's last-read timestamp to just before the most recent
+ * incoming message so the unread count / badge reappears, and clears the
+ * per-message read receipt on that latest incoming message.
+ */
+export async function markUnread(clientId: string, role: SenderRole) {
+  const oppRole = role === "admin" ? "client" : "admin";
+  const col = role === "admin" ? "read_by_admin_at" : "read_by_client_at";
+  const readCol = role === "admin" ? "admin_last_read_at" : "client_last_read_at";
+
+  // Find the most recent incoming message from the peer
+  const { data: latest } = await (db.from("messages") as any)
+    .select("id, created_at")
+    .eq("client_id", clientId)
+    .eq("sender_role", oppRole)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  const rewind = latest?.created_at
+    ? new Date(new Date(latest.created_at).getTime() - 1).toISOString()
+    : null;
+
+  await db
+    .from("conversation_state")
+    .upsert({ client_id: clientId, [readCol]: rewind } as any, { onConflict: "client_id" });
+
+  if (latest?.id) {
+    await (db.from("messages") as any).update({ [col]: null }).eq("id", latest.id);
+  }
+}
+
+/**
+ * Close any queued OS notifications for a message thread and clear the PWA
+ * app-icon badge. Safe to call from anywhere in the browser; no-ops on
+ * unsupported platforms (iOS Safari without PWA install, etc.).
+ */
+export async function dismissMessageBadges(clientId: string) {
+  if (typeof window === "undefined") return;
+  try {
+    const nav: any = window.navigator;
+    if (nav && typeof nav.clearAppBadge === "function") {
+      await nav.clearAppBadge();
+    } else if (nav && typeof nav.setAppBadge === "function") {
+      await nav.setAppBadge(0);
+    }
+  } catch {}
+  try {
+    if ("serviceWorker" in navigator) {
+      const reg = await navigator.serviceWorker.getRegistration();
+      if (reg) {
+        const tag = `msg:${clientId}`;
+        const list = await reg.getNotifications({ tag });
+        list.forEach((n) => { try { n.close(); } catch {} });
+      }
+    }
+  } catch {}
 }
 
 export async function listConversationStates() {
