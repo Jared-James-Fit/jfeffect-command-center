@@ -7,7 +7,7 @@ import { buildInternalNav, resolveStaffRoleTag } from "@/lib/internal-nav";
 import { useDashboardMode, setDashboardMode } from "@/lib/dashboard-mode";
 import { AdminTopBar } from "@/components/admin-top-bar";
 import { TaskPopupGate } from "@/components/tasks/task-popup-gate";
-import { ClipboardList } from "lucide-react";
+import { ClipboardList, LayoutDashboard, Users, MessagesSquare, BookOpen, Library } from "lucide-react";
 import { useBarLayout, resolveLayout, withBarActionItems } from "@/lib/floating-bar";
 
 export const Route = createFileRoute("/_authenticated/admin")({
@@ -51,7 +51,10 @@ function AdminLayout() {
     ? buildInternalNav(roleTag, { mode: isMembership ? "membership" : "coaching" })
     : (isCoach ? coachNav : coachingAdminNav);
   const title = isCoach ? "Coach" : isMembership ? "Membership Admin" : "Admin";
-  const customLayout = useBarLayout(isCoach ? "coach" : "admin");
+  // Use a dedicated "membership" bar scope when in membership mode so the
+  // admin can customize a different floating bar for member-facing ops.
+  const barScope = isCoach ? "coach" : (isMembership ? "admin" : "admin");
+  const customLayout = useBarLayout(barScope);
 
   const defaultBottom = useMemo(() => {
     // Derive the mobile bottom bar from the SAME role-aware registry that
@@ -70,6 +73,18 @@ function AdminLayout() {
         { ...pick("/admin/tasks"), label: "Tasks" },
       ].filter(Boolean);
     }
+    if (isMembership) {
+      // Membership-optimized quick bar: Home, Members, Support Inbox,
+      // Programs library, Plan library — the routes admins actually need
+      // when running the JF Membership day-to-day.
+      return [
+        { to: "/admin/membership", label: "Home", icon: LayoutDashboard },
+        { to: "/admin/members", label: "Members", icon: Users },
+        { to: "/admin/communication?tab=support-inbox", label: "Support", icon: MessagesSquare },
+        { to: "/admin/programming", label: "Programs", icon: BookOpen },
+        { to: "/admin/member-plans", label: "Plans", icon: Library },
+      ];
+    }
     return [
       pick("/admin"),
       { ...pick("/admin/clients"), label: "Clients" },
@@ -84,7 +99,7 @@ function AdminLayout() {
         ],
       },
     ];
-  }, [isCoach, nav]);
+  }, [isCoach, isMembership, nav]);
 
   const bottomItems = useMemo(() => {
     if (customLayout && customLayout.slots.length > 0) {
