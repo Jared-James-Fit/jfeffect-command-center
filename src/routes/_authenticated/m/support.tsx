@@ -3,14 +3,15 @@ import { useEffect, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { supabase } from "@/integrations/supabase/client";
-import { getMySupportThread, sendSupportMessage, markMyThreadRead } from "@/lib/member-support.functions";
+import { getMySupportThread, sendSupportMessage, markMyThreadRead, getLiveSupportStatus } from "@/lib/member-support.functions";
+import { formatTicket } from "@/lib/support-ticket";
 import { PageHeader } from "@/components/app-shell";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Send, Info, Clock, Bug, Lightbulb, HelpCircle, MessageCircle } from "lucide-react";
+import { Send, Info, Clock, Bug, Lightbulb, HelpCircle, MessageCircle, Radio, Ticket } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
@@ -29,10 +30,17 @@ function SupportPage() {
   const fetchThread = useServerFn(getMySupportThread);
   const send = useServerFn(sendSupportMessage);
   const markRead = useServerFn(markMyThreadRead);
+  const liveStatusFn = useServerFn(getLiveSupportStatus);
 
   const { data } = useQuery({ queryKey: ["m-support"], queryFn: () => fetchThread() });
   const messages = (data?.messages ?? []) as any[];
   const thread = data?.thread as any;
+  const { data: liveStatus } = useQuery({
+    queryKey: ["live-support-status"],
+    queryFn: () => liveStatusFn(),
+    refetchInterval: 30_000,
+  });
+  const liveCount = liveStatus?.availableCount ?? 0;
 
   const [body, setBody] = useState("");
   const [category, setCategory] = useState<Category>("question");
@@ -76,6 +84,26 @@ function SupportPage() {
         title="Support"
         subtitle="Jared's team is here to help with the app, billing, and reports."
       />
+
+      {thread?.ticket_number != null && (
+        <div className="flex flex-wrap items-center gap-2 text-xs">
+          <Badge variant="outline" className="gap-1 font-mono">
+            <Ticket className="h-3 w-3" /> {formatTicket(thread.ticket_number)}
+          </Badge>
+          <Badge
+            variant="outline"
+            className={cn(
+              "gap-1",
+              liveCount > 0
+                ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-300"
+                : "text-muted-foreground",
+            )}
+          >
+            <Radio className={cn("h-3 w-3", liveCount > 0 && "animate-pulse")} />
+            {liveCount > 0 ? `${liveCount} agent${liveCount === 1 ? "" : "s"} live now` : "No live agents right now"}
+          </Badge>
+        </div>
+      )}
 
       <Card className="border-primary/30 bg-primary/5 p-3 text-xs">
         <div className="flex items-start gap-2">
