@@ -54,7 +54,12 @@ export type BadgeDef = { label: string; tone: "danger" | "warn" | "info" | "ok" 
 export function rowBadges(r: DirectoryRow): BadgeDef[] {
   const out: BadgeDef[] = [];
   if (r.f_payment_issue)       out.push({ label: "Payment Issue", tone: "danger", icon: CreditCard });
-  if (r.f_needs_setup)         out.push({ label: "Needs Setup",   tone: "info",   icon: UserRoundCog });
+  // Only surface "Needs Setup" when the account itself isn't activated yet
+  // (invite pending, agreement pending, reset sent). Otherwise a missing
+  // optional field like `preferred_training_days` would flag every client.
+  const accountActivated = r.account_status === "Account Created" || r.account_status === "Active";
+  if (r.f_needs_setup && !accountActivated)
+                               out.push({ label: "Needs Setup",   tone: "info",   icon: UserRoundCog });
   if (r.f_needs_review)        out.push({ label: "Review Due",    tone: "warn",   icon: ClipboardCheck });
   // NEW: missed workouts and inactive flags
   if (r.f_missed_workouts && r.missed_workouts_count > 0)
