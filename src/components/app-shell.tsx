@@ -610,7 +610,6 @@ export function AppShell({ items, bottomItems: customBottomItems, title, childre
                           <button
                             type="button"
                             onClick={(e) => { e.preventDefault(); e.stopPropagation(); onTogglePin(item); }}
-                            data-pinned="true"
                             className="sidebar-pin-button absolute right-2 top-1/2 z-10 grid h-5 w-5 -translate-y-1/2 place-items-center rounded text-amber-300 opacity-0 transition hover:bg-amber-400/10"
                             aria-label={`Unpin ${item.label}`}
                             title="Unpin"
