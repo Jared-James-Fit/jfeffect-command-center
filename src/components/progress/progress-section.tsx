@@ -1167,6 +1167,20 @@ function VideoSubmissionDialog({ ctx, open, onOpenChange }: { ctx: ProgressConte
             </Button>
           </div>
 
+          {/* Date + label surfaced at top so backdating is one tap. */}
+          <div className="grid grid-cols-2 gap-3">
+            <DateField value={date} onChange={setDate} />
+            <div>
+              <Label className="text-xs">Label</Label>
+              <Select value={label} onValueChange={setLabel}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {CHECK_IN_LABELS.map((l) => <SelectItem key={l} value={l}>{l}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
           <div className={`grid gap-3 ${angles.length === 1 ? "grid-cols-1" : "grid-cols-2"}`}>
             {angles.map((a) => (
               <AngleUploadCard key={a} angle={a} mediaType="video" ctx={ctx} getSubId={ensureSub} subId={subId} />
@@ -1174,20 +1188,8 @@ function VideoSubmissionDialog({ ctx, open, onOpenChange }: { ctx: ProgressConte
           </div>
 
           <details className="rounded-md border border-border p-3 text-sm">
-            <summary className="cursor-pointer font-medium">Details &amp; bodyweight (optional)</summary>
+            <summary className="cursor-pointer font-medium">Bodyweight &amp; notes (optional)</summary>
             <div className="mt-3 space-y-3">
-              <div className="grid grid-cols-2 gap-3">
-                <DateField value={date} onChange={setDate} />
-                <div>
-                  <Label className="text-xs">Label</Label>
-                  <Select value={label} onValueChange={setLabel}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      {CHECK_IN_LABELS.map((l) => <SelectItem key={l} value={l}>{l}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <Label className="text-xs">Bodyweight</Label>
