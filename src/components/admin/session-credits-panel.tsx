@@ -337,7 +337,7 @@ function GrantRow({ g, onChanged }: { g: any; onChanged: () => void }) {
         </td>
       </tr>
       <EditLedgerEventDialog
-        event={editing ? g : null}
+        event={editing ? { ...g, session_count: g.total_sessions } : null}
         onClose={() => setEditing(false)}
         onSaved={() => {
           setEditing(false);
