@@ -1100,6 +1100,7 @@ function VideoSubmissionDialog({ ctx, open, onOpenChange }: { ctx: ProgressConte
   // Default to single video upload. Four-angle is an advanced option.
   const [format, setFormat] = useState<ProgressVideoFormat>("continuous");
   const [subId, setSubId] = useState<string | null>(null);
+  const subPromiseRef = useRef<Promise<string> | null>(null);
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
   const [label, setLabel] = useState("Weekly Check-In");
   const [bw, setBw] = useState("");
@@ -1109,14 +1110,19 @@ function VideoSubmissionDialog({ ctx, open, onOpenChange }: { ctx: ProgressConte
 
   async function ensureSub() {
     if (subId) return subId;
-    const s = await createSubmission({
-      user_id: ctx.userId, owner_type: ctx.ownerType,
-      client_id: ctx.clientId, member_id: ctx.memberId, assigned_coach_id: ctx.assignedCoachId ?? null,
-      submission_type: "video", video_format: format,
-      submission_date: date, check_in_label: label,
-    });
-    setSubId(s.id);
-    return s.id;
+    if (subPromiseRef.current) return subPromiseRef.current;
+    subPromiseRef.current = (async () => {
+      const s = await createSubmission({
+        user_id: ctx.userId, owner_type: ctx.ownerType,
+        client_id: ctx.clientId, member_id: ctx.memberId, assigned_coach_id: ctx.assignedCoachId ?? null,
+        submission_type: "video", video_format: format,
+        submission_date: date, check_in_label: label,
+      });
+      setSubId(s.id);
+      return s.id;
+    })();
+    try { return await subPromiseRef.current; }
+    catch (e) { subPromiseRef.current = null; throw e; }
   }
 
   async function save(asDraft: boolean) {
