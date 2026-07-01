@@ -18085,6 +18085,7 @@ export type Database = {
         Args: { _template_id: string; _user_id: string }
         Returns: boolean
       }
+      is_privileged_writer: { Args: never; Returns: boolean }
       jf_member_has_full_access: {
         Args: { _user_id: string }
         Returns: boolean
