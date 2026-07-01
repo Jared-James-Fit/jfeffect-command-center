@@ -159,6 +159,17 @@ export async function sendGroupMessage(input: {
   if (error) throw error;
   // bump group updated_at for sort order
   await db.from("chat_groups").update({ updated_at: new Date().toISOString() }).eq("id", input.groupId);
+  // Fire-and-forget push. Never block the send on push failures.
+  if (data?.id) {
+    void (async () => {
+      try {
+        const { notifyNewGroupMessage } = await import("@/lib/push/events.functions");
+        await notifyNewGroupMessage({ data: { messageId: data.id } });
+      } catch (e) {
+        console.warn("[push] notifyNewGroupMessage failed", e);
+      }
+    })();
+  }
   return data as GroupMessage;
 }
 

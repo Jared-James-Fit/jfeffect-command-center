@@ -35,6 +35,20 @@ export function GroupChatsPane({ asAdmin }: { asAdmin: boolean }) {
   const renameGroupFn = useServerFn(updateGroupChat);
   const isAdmin = role === "admin";
 
+  // Deep-link support: /portal/messages#group=<uuid> or
+  // /admin/communication?tab=groups#group=<uuid> auto-selects the group so
+  // tapping a push notification lands the user right in the conversation.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const readHash = () => {
+      const m = window.location.hash.match(/group=([0-9a-f-]{36})/i);
+      if (m) setSelectedId(m[1]);
+    };
+    readHash();
+    window.addEventListener("hashchange", readHash);
+    return () => window.removeEventListener("hashchange", readHash);
+  }, []);
+
   const { data: groups = [] } = useQuery({
     queryKey: ["chat-groups", asAdmin],
     queryFn: () => (asAdmin ? listAllGroupsForAdmin() : listMyGroups()),
