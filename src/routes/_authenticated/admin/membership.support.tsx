@@ -5,14 +5,17 @@ import { useServerFn } from "@tanstack/react-start";
 import { supabase } from "@/integrations/supabase/client";
 import {
   listSupportThreads, getSupportThread, replySupportMessage, setSupportThreadStatus,
+  getLiveSupportStatus, setLiveSupportAvailability,
 } from "@/lib/member-support.functions";
+import { formatTicket } from "@/lib/support-ticket";
 import { PageHeader } from "@/components/app-shell";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Send, Bug, Lightbulb, HelpCircle, Check } from "lucide-react";
+import { Send, Bug, Lightbulb, HelpCircle, Check, Radio, Ticket } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
@@ -39,6 +42,8 @@ export function SupportInbox({ embedded = false }: { embedded?: boolean } = {}) 
   const get = useServerFn(getSupportThread);
   const reply = useServerFn(replySupportMessage);
   const setStatus = useServerFn(setSupportThreadStatus);
+  const liveStatusFn = useServerFn(getLiveSupportStatus);
+  const setLive = useServerFn(setLiveSupportAvailability);
 
   const [statusFilter, setStatusFilter] = useState<string>("");
   const [selected, setSelected] = useState<string | null>(null);
@@ -56,6 +61,18 @@ export function SupportInbox({ embedded = false }: { embedded?: boolean } = {}) 
     queryFn: () => get({ data: { threadId: selected! } }),
     enabled: !!selected,
   });
+  const { data: liveStatus } = useQuery({
+    queryKey: ["live-support-status"],
+    queryFn: () => liveStatusFn(),
+    refetchInterval: 30_000,
+  });
+  const toggleLive = async (next: boolean) => {
+    try {
+      await setLive({ data: { available: next } });
+      await qc.invalidateQueries({ queryKey: ["live-support-status"] });
+      toast.success(next ? "You're live for member support" : "Off live support");
+    } catch (e: any) { toast.error(e?.message ?? "Failed"); }
+  };
 
   useEffect(() => {
     const ch = supabase
@@ -98,6 +115,21 @@ export function SupportInbox({ embedded = false }: { embedded?: boolean } = {}) 
       {!embedded && (
         <PageHeader title="Member Support Inbox" subtitle="Questions, bug reports, and suggestions from JF members." />
       )}
+      <Card className="flex flex-wrap items-center justify-between gap-3 p-3">
+        <div className="flex items-center gap-2 text-sm">
+          <Radio className={cn("h-4 w-4", liveStatus?.isAvailable ? "text-emerald-400 animate-pulse" : "text-muted-foreground")} />
+          <div>
+            <div className="font-semibold">Live Support</div>
+            <div className="text-xs text-muted-foreground">
+              {liveStatus?.availableCount ?? 0} agent{(liveStatus?.availableCount ?? 0) === 1 ? "" : "s"} online · members see this in real time
+            </div>
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-muted-foreground">{liveStatus?.isAvailable ? "You are live" : "You are offline"}</span>
+          <Switch checked={!!liveStatus?.isAvailable} onCheckedChange={toggleLive} />
+        </div>
+      </Card>
       <div className="grid gap-3 md:grid-cols-[320px,1fr]">
         <Card className="flex h-[calc(100dvh-12rem)] flex-col overflow-hidden">
           <div className="flex items-center gap-2 border-b p-2">
@@ -131,6 +163,7 @@ export function SupportInbox({ embedded = false }: { embedded?: boolean } = {}) 
                   )}
                 </div>
                 <div className="mt-0.5 flex items-center gap-2 text-[10px] text-muted-foreground">
+                  <span className="font-mono text-primary">{formatTicket(t.ticket_number)}</span>
                   <Badge variant="outline" className="h-4 px-1 text-[10px] capitalize">{t.status}</Badge>
                   <span className="truncate">{t.last_member_message_at ? new Date(t.last_member_message_at).toLocaleString() : "—"}</span>
                 </div>
@@ -146,7 +179,14 @@ export function SupportInbox({ embedded = false }: { embedded?: boolean } = {}) 
             <>
               <div className="flex flex-wrap items-center justify-between gap-2 border-b p-3">
                 <div>
-                  <div className="font-semibold">{detail?.thread?.member?.full_name ?? detail?.thread?.member?.email}</div>
+                  <div className="flex items-center gap-2">
+                    <span className="font-semibold">{detail?.thread?.member?.full_name ?? detail?.thread?.member?.email}</span>
+                    {detail?.thread?.ticket_number != null && (
+                      <Badge variant="outline" className="gap-1 font-mono text-[10px]">
+                        <Ticket className="h-3 w-3" /> {formatTicket(detail.thread.ticket_number)}
+                      </Badge>
+                    )}
+                  </div>
                   <div className="text-xs text-muted-foreground">{detail?.thread?.member?.email} · {detail?.thread?.member?.phone ?? "no phone"}</div>
                 </div>
                 <div className="flex items-center gap-1">
