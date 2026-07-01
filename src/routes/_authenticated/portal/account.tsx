@@ -357,9 +357,11 @@ function AccountPage() {
 
         {/* ── Billing & Subscription — hidden on native (purchases not available in Android app) ── */}
         {!isNative() && (
-          <SectionErrorBoundary label="Billing & Subscription" className="md:col-span-3 scroll-mt-32">
-            <BillingSection clientId={client?.id} />
-          </SectionErrorBoundary>
+          <div id="billing" className="md:col-span-3 scroll-mt-32">
+            <SectionErrorBoundary label="Billing & Subscription">
+              <BillingSection clientId={client?.id} />
+            </SectionErrorBoundary>
+          </div>
         )}
 
         {/* ── Delete Account — required by Google Play and Apple App Store policies ── */}
