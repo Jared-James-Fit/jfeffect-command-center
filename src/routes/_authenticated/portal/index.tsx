@@ -33,6 +33,7 @@ import { DashboardRefreshIndicator } from "@/components/portal/dashboard-refresh
 import { DashboardOfflineEmpty, useIsOfflineWithoutCache } from "@/components/portal/dashboard-offline-empty";
 import { DeferRender } from "@/components/defer-render";
 import { logPerf } from "@/lib/perf-timing";
+import { NotificationSetupPrompt } from "@/components/notification-setup-prompt";
 
 export const Route = createFileRoute("/_authenticated/portal/")({ component: PortalHome });
 
@@ -418,11 +419,12 @@ function PortalHome() {
           avatarUrl={(client as any)?.profile_picture_url ?? null}
           unreadCount={unreadMsgs.length}
         />
-        <div className="-mt-2 flex justify-end">
-          <DashboardRefreshIndicator />
-        </div>
+      <div className="-mt-2 flex justify-end">
+        <DashboardRefreshIndicator />
+      </div>
+      <NotificationSetupPrompt />
 
-        {/* 2 — Profile-missing fallback (workouts moved off the dashboard
+      {/* 2 — Profile-missing fallback (workouts moved off the dashboard
             for perf — clients reach training via Quick Actions / nav). */}
         {clientSettled && !client ? <NoProfileCard /> : null}
 
