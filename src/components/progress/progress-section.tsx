@@ -1705,8 +1705,51 @@ function SubmissionDetailDialog({ ctx, submissionId, onClose }: { ctx: ProgressC
   const { data: reviews = [] } = useQuery({ queryKey: ["progress-reviews", submissionId], queryFn: () => listReviewResponses(submissionId), staleTime: 60_000 });
   const [body, setBody] = useState("");
   const [internal, setInternal] = useState(false);
+  // Edit-in-place mode for the check-in header (date/label/bw/notes).
+  const [editing, setEditing] = useState(false);
+  const [savingEdit, setSavingEdit] = useState(false);
+  const [editDate, setEditDate] = useState<string>("");
+  const [editLabel, setEditLabel] = useState<string>("");
+  const [editBw, setEditBw] = useState<string>("");
+  const [editUnit, setEditUnit] = useState<"kg" | "lb">("lb");
+  const [editNotes, setEditNotes] = useState<string>("");
+
+  // Seed editor state whenever we open editing or the submission loads.
+  useEffect(() => {
+    if (!sub) return;
+    setEditDate(sub.submission_date);
+    setEditLabel(sub.check_in_label || "Weekly Check-In");
+    setEditBw(sub.bodyweight != null ? String(sub.bodyweight) : "");
+    setEditUnit((sub.weight_unit as "kg" | "lb" | null) ?? ctx.preferredWeightUnit ?? "lb");
+    setEditNotes(sub.notes || "");
+  }, [sub?.id, editing, ctx.preferredWeightUnit]);
 
   const canReply = ctx.viewerRole === "admin" || ctx.viewerRole === "coach";
+  // Owners always edit their own; admins can edit for support. Coach view is read-only.
+  const canEdit = ctx.viewerRole === "owner" || ctx.viewerRole === "admin";
+
+  async function saveEdit() {
+    if (!sub) return;
+    setSavingEdit(true);
+    try {
+      await updateSubmission(sub.id, {
+        submission_date: editDate,
+        check_in_label: editLabel,
+        bodyweight: editBw ? Number(editBw) : null,
+        weight_unit: editBw ? editUnit : null,
+        notes: editNotes || null,
+      });
+      qc.invalidateQueries({ queryKey: ["progress-sub", sub.id] });
+      qc.invalidateQueries({ queryKey: ["progress-subs", ctx.userId] });
+      qc.invalidateQueries({ queryKey: ["progress-subs-paged", ctx.userId] });
+      qc.invalidateQueries({ queryKey: ["progress-subs-photo", ctx.userId] });
+      qc.invalidateQueries({ queryKey: ["progress-subs-video", ctx.userId] });
+      toast.success("Saved");
+      setEditing(false);
+    } catch (e: any) {
+      toast.error(e?.message ?? "Could not save");
+    } finally { setSavingEdit(false); }
+  }
 
   async function submitReply() {
     if (!body.trim()) return;
