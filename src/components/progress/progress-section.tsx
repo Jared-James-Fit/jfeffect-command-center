@@ -848,6 +848,21 @@ function PhotoSubmissionDialog({ ctx, open, onOpenChange }: { ctx: ProgressConte
         </DialogHeader>
 
         <div className="space-y-4">
+          {/* Date + label are now front-and-centre so the check-in can be
+              backdated in one tap — no need to expand the details drawer. */}
+          <div className="grid grid-cols-2 gap-3">
+            <DateField value={date} onChange={setDate} />
+            <div>
+              <Label className="text-xs">Label</Label>
+              <Select value={label} onValueChange={setLabel}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {CHECK_IN_LABELS.map((l) => <SelectItem key={l} value={l}>{l}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
           {/* Big one-tap multi-upload — fastest path */}
           <Button
             type="button"
