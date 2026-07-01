@@ -198,6 +198,16 @@ export async function sendMessage(input: {
   }
   const { data, error } = await db.from("messages").insert(row).select().single();
   if (error) throw error;
+  // If the admin replies, the conversation no longer "needs response".
+  if (input.senderRole === "admin") {
+    try {
+      await db
+        .from("conversation_state")
+        .update({ status: "open" })
+        .eq("client_id", input.clientId)
+        .eq("status", "needs_response");
+    } catch {}
+  }
   // Fire-and-forget push notification. Never block the send on push failures.
   if (data?.id) {
     void (async () => {
@@ -227,6 +237,16 @@ export async function markRead(clientId: string, role: SenderRole) {
     .eq("client_id", clientId)
     .eq("sender_role", oppRole)
     .is(col, null);
+  // Admin opening a "Needs Response" thread clears that status automatically.
+  if (role === "admin") {
+    try {
+      await db
+        .from("conversation_state")
+        .update({ status: "open" })
+        .eq("client_id", clientId)
+        .eq("status", "needs_response");
+    } catch {}
+  }
   // Best-effort: dismiss OS-level notifications + PWA app badge for this thread
   // so the reminder disappears the moment the conversation is opened.
   try { await dismissMessageBadges(clientId); } catch {}
