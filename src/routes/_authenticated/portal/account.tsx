@@ -195,6 +195,39 @@ function AccountPage() {
         actions={<SavedIndicator state={saveState} />}
       />
       <div className="grid gap-6 p-6 md:p-8 md:grid-cols-3">
+        {/* Sticky quick-jump navigation so clients can find any section
+            fast on mobile without scrolling through the whole page. */}
+        <div className="md:col-span-3 sticky top-16 z-20 -mx-6 md:-mx-8 md:top-20">
+          <div className="border-y border-border bg-background/95 px-6 py-2 backdrop-blur md:px-8">
+            <div className="flex gap-2 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+              {[
+                { id: "basic-information", label: "Basic Info" },
+                { id: "profile-picture", label: "Photo" },
+                { id: "training-schedule", label: "Schedule" },
+                { id: "goals-setup", label: "Goals" },
+                { id: "password", label: "Password" },
+                { id: "notifications", label: "Notifications" },
+                { id: "install-app", label: "Install App" },
+                { id: "legal-safety", label: "Legal" },
+                { id: "billing", label: "Billing" },
+                { id: "delete-account", label: "Delete" },
+              ].map((s) => (
+                <button
+                  key={s.id}
+                  type="button"
+                  onClick={() => {
+                    const el = document.getElementById(s.id);
+                    if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+                  }}
+                  className="shrink-0 rounded-full border border-border bg-card px-3 py-1.5 text-xs font-semibold text-foreground hover:bg-secondary"
+                >
+                  {s.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+
         {/* ── Profile Status ── */}
         <div className="md:col-span-3">
           <ProfileStatusCard
@@ -236,7 +269,7 @@ function AccountPage() {
         </SectionErrorBoundary>
 
         <SectionErrorBoundary label="Profile Picture">
-          <Card className="border-border bg-card p-6 space-y-3">
+          <Card id="profile-picture" className="border-border bg-card p-6 space-y-3 scroll-mt-32">
             <h3 className="text-xs uppercase tracking-widest text-muted-foreground">Profile Picture</h3>
             <ProfilePictureCapture
               mode="client"
@@ -263,20 +296,20 @@ function AccountPage() {
           </Card>
         </SectionErrorBoundary>
 
-        <div className="md:col-span-3">
+        <div id="password" className="md:col-span-3 scroll-mt-32">
           <SectionErrorBoundary label="Change Password">
             <ChangePasswordCard />
           </SectionErrorBoundary>
         </div>
 
-        <div className="md:col-span-3">
+        <div id="training-schedule" className="md:col-span-3 scroll-mt-32">
           <SectionErrorBoundary label="Training Schedule">
             <TrainingScheduleCard client={client as any} editable />
           </SectionErrorBoundary>
         </div>
 
         {/* Goals & Training Setup — links to the dedicated goals-setup page */}
-        <div className="md:col-span-3">
+        <div id="goals-setup" className="md:col-span-3 scroll-mt-32">
           <Card className="border-border bg-card p-6 space-y-4">
             <div className="flex items-center justify-between">
               <div>
@@ -304,19 +337,19 @@ function AccountPage() {
           </div>
         )}
 
-        <div className="md:col-span-3">
+        <div id="legal-safety" className="md:col-span-3 scroll-mt-32">
           <SectionErrorBoundary label="Legal & Safety">
             <ClientLegalSafety />
           </SectionErrorBoundary>
         </div>
 
-        <div className="md:col-span-3">
+        <div id="install-app" className="md:col-span-3 scroll-mt-32">
           <SectionErrorBoundary label="Install App">
             <InstallAppCard />
           </SectionErrorBoundary>
         </div>
 
-        <div className="md:col-span-3">
+        <div id="notifications" className="md:col-span-3 scroll-mt-32">
           <SectionErrorBoundary label="Push Notifications">
             <PushNotificationCard />
           </SectionErrorBoundary>
@@ -324,13 +357,15 @@ function AccountPage() {
 
         {/* ── Billing & Subscription — hidden on native (purchases not available in Android app) ── */}
         {!isNative() && (
-          <SectionErrorBoundary label="Billing & Subscription" className="md:col-span-3">
-            <BillingSection clientId={client?.id} />
-          </SectionErrorBoundary>
+          <div id="billing" className="md:col-span-3 scroll-mt-32">
+            <SectionErrorBoundary label="Billing & Subscription">
+              <BillingSection clientId={client?.id} />
+            </SectionErrorBoundary>
+          </div>
         )}
 
         {/* ── Delete Account — required by Google Play and Apple App Store policies ── */}
-        <div className="md:col-span-3">
+        <div id="delete-account" className="md:col-span-3 scroll-mt-32">
           <Card className="border-destructive/30 bg-card p-6 space-y-3">
             <div className="flex items-center gap-2">
               <Trash2 className="h-4 w-4 text-destructive" />
