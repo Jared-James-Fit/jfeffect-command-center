@@ -208,6 +208,79 @@ export const adjustSessionCredits = createServerFn({ method: "POST" })
     return { ok: true, event: ev };
   });
 
+// -------- Edit / delete individual ledger events --------
+const UpdateLedgerEvent = z.object({
+  id: z.string().uuid(),
+  session_count: z.number().int().optional(),
+  unit_value_minor: z.number().int().nonnegative().nullable().optional(),
+  effective_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  expires_at: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
+  note: z.string().max(2000).nullable().optional(),
+  currency: z.string().min(3).max(3).optional(),
+});
+
+export const updateSessionLedgerEvent = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => UpdateLedgerEvent.parse(d))
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context as any;
+    await assertAdmin(supabase, userId);
+    const { id, ...patch } = data;
+    const { data: before } = await supabase
+      .from("session_ledger_events")
+      .select("*")
+      .eq("id", id)
+      .single();
+    const { data: row, error } = await supabase
+      .from("session_ledger_events")
+      .update(patch)
+      .eq("id", id)
+      .select("*")
+      .single();
+    if (error) throw new Error(error.message);
+    await supabase.from("financial_audit_events").insert({
+      client_id: row.client_id,
+      actor_user_id: userId,
+      actor_role: "admin",
+      action: "session_credit_event_updated",
+      record_type: "session_ledger_events",
+      record_id: id,
+      before_state: before ?? null,
+      after_state: row,
+    });
+    return { ok: true, event: row };
+  });
+
+export const deleteSessionLedgerEvent = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => z.object({ id: z.string().uuid() }).parse(d))
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context as any;
+    await assertAdmin(supabase, userId);
+    const { data: before } = await supabase
+      .from("session_ledger_events")
+      .select("*")
+      .eq("id", data.id)
+      .single();
+    const { error } = await supabase
+      .from("session_ledger_events")
+      .delete()
+      .eq("id", data.id);
+    if (error) throw new Error(error.message);
+    if (before) {
+      await supabase.from("financial_audit_events").insert({
+        client_id: before.client_id,
+        actor_user_id: userId,
+        actor_role: "admin",
+        action: "session_credit_event_deleted",
+        record_type: "session_ledger_events",
+        record_id: data.id,
+        before_state: before,
+      });
+    }
+    return { ok: true };
+  });
+
 // -------- Add credits (create package + grant to client in one step) --------
 const AddCredits = z.object({
   client_id: z.string().uuid(),
