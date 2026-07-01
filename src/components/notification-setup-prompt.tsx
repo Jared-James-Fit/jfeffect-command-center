@@ -40,9 +40,14 @@ export function NotificationSetupPrompt({ className }: { className?: string }) {
     setBusy(true);
     try {
       const result = await enablePushOnThisDevice();
-      setStatus(result.ok ? "active" : "inactive");
+      if (result.ok) {
+        setStatus("active");
+      } else {
+        const p = currentPermission();
+        setStatus(p === "denied" ? "blocked" : "inactive");
+      }
     } catch {
-      setStatus("inactive");
+      setStatus(currentPermission() === "denied" ? "blocked" : "inactive");
     } finally {
       setBusy(false);
     }
