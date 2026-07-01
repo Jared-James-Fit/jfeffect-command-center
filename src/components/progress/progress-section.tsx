@@ -144,7 +144,7 @@ export function ProgressSection({
         </TabsList>
 
         <TabsContent value="overview">
-          <OverviewTab ctx={ctx} onLogWeight={() => setWeightDialog(true)} onAddPhotos={() => setPhotoDialog(true)} onAddVideo={() => setVideoDialog(true)} onAddMeasurements={() => setMeasureDialog(true)} onViewTab={setTab} />
+          <OverviewTab ctx={ctx} onLogWeight={() => setWeightDialog(true)} onAddPhotos={() => setPhotoDialog(true)} onAddVideo={() => setVideoDialog(true)} onAddMeasurements={() => setMeasureDialog(true)} onViewTab={setTab} onOpenSubmission={setDetailId} />
         </TabsContent>
         <TabsContent value="photos">
           <PhotosTab ctx={ctx} onNew={() => setPhotoDialog(true)} onOpen={setDetailId} onCompare={() => setCompareDialog(true)} />
@@ -190,7 +190,7 @@ export function ProgressSection({
 // ============== Overview tab ==============
 
 function OverviewTab({
-  ctx, onLogWeight, onAddPhotos, onAddVideo, onAddMeasurements, onViewTab,
+  ctx, onLogWeight, onAddPhotos, onAddVideo, onAddMeasurements, onViewTab, onOpenSubmission,
 }: {
   ctx: ProgressContext;
   onLogWeight: () => void;
@@ -198,6 +198,7 @@ function OverviewTab({
   onAddVideo: () => void;
   onAddMeasurements: () => void;
   onViewTab: (tab: string) => void;
+  onOpenSubmission: (id: string) => void;
 }) {
   const { data: bwRows = [] } = useQuery({
     queryKey: ["progress-bw", ctx.userId],
@@ -363,7 +364,7 @@ function OverviewTab({
               {photoSubs.slice(0, 2).map((sub) => (
                 <button
                   key={sub.id}
-                  onClick={() => onViewTab("photos")}
+                  onClick={() => onOpenSubmission(sub.id)}
                   className="relative aspect-square overflow-hidden rounded bg-muted text-left"
                 >
                   <LazyMount className="h-full w-full">
