@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { Card } from "@/components/ui/card";
@@ -9,6 +9,7 @@ import { CheckCircle2, Circle, ChevronRight, Camera, IdCard, CalendarClock, Targ
 import { supabase } from "@/integrations/supabase/client";
 import { isBasicInfoComplete } from "@/lib/basic-info";
 import { isGoalsSetupComplete, type ClientGoalsSetupRow } from "@/lib/client-goals/schema";
+import { SetupStepSheet, type SetupStepKey } from "@/components/portal/setup-step-sheet";
 
 type Props = {
   clientId: string;
@@ -21,7 +22,10 @@ type Item = {
   key: ItemKey;
   label: string;
   description: string;
-  to: string;
+  /** External navigation target when the step doesn't fit in a bottom sheet. */
+  to?: string;
+  /** In-place sheet key. When set, the row opens the sheet instead of navigating. */
+  sheet?: SetupStepKey;
   icon: typeof Camera;
   done: boolean;
 };
@@ -35,6 +39,7 @@ type Item = {
  *  - Hidden only once every item is complete. Cannot be dismissed.
  */
 export function SetupChecklistBanner({ clientId, userId }: Props) {
+  const [openStep, setOpenStep] = useState<SetupStepKey | null>(null);
   const { data: client, isPending: clientPending, isFetched: clientFetched } = useQuery({
     queryKey: ["setup-banner-client", userId],
     enabled: !!userId,
@@ -74,7 +79,7 @@ export function SetupChecklistBanner({ clientId, userId }: Props) {
         key: "profile_picture",
         label: "Add a profile photo",
         description: "A clear headshot helps your coach personalise feedback.",
-        to: "/portal/account",
+        sheet: "profile_picture",
         icon: Camera,
         done: profileDone,
       },
@@ -82,7 +87,7 @@ export function SetupChecklistBanner({ clientId, userId }: Props) {
         key: "basic_info",
         label: "Confirm your basic info",
         description: "Contact, height, emergency contact and a few intake details.",
-        to: "/portal/account",
+        sheet: "basic_info",
         icon: IdCard,
         done: basicDone,
       },
@@ -90,7 +95,7 @@ export function SetupChecklistBanner({ clientId, userId }: Props) {
         key: "training_schedule",
         label: "Set your training schedule",
         description: "How many days a week you'll train, and which days.",
-        to: "/portal/account",
+        sheet: "training_schedule",
         icon: CalendarClock,
         done: scheduleDone,
       },
@@ -121,6 +126,7 @@ export function SetupChecklistBanner({ clientId, userId }: Props) {
   const nextItem = items.find((i) => !i.done) ?? items[0];
 
   return (
+    <>
     <Card className="relative overflow-hidden border-primary/30 bg-primary/5 p-4 sm:p-5">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0 space-y-1">
@@ -141,41 +147,68 @@ export function SetupChecklistBanner({ clientId, userId }: Props) {
       <ul className="mt-4 space-y-2">
         {items.map((it) => {
           const Icon = it.icon;
+          const rowClass =
+            "flex w-full items-center gap-3 rounded-lg border border-border/60 bg-background/60 px-3 py-2.5 text-left text-sm transition hover:bg-background " +
+            (it.done ? "opacity-60" : "");
+          const inner = (
+            <>
+              <div className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-primary/10 text-primary">
+                <Icon className="h-4 w-4" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-2">
+                  <span className={"font-semibold " + (it.done ? "line-through" : "")}>{it.label}</span>
+                  {it.done ? (
+                    <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+                  ) : (
+                    <Circle className="h-3.5 w-3.5 text-muted-foreground" />
+                  )}
+                </div>
+                <div className="text-[11px] text-muted-foreground sm:text-xs">{it.description}</div>
+              </div>
+              {!it.done && <ChevronRight className="h-4 w-4 text-muted-foreground" />}
+            </>
+          );
           return (
             <li key={it.key}>
-              <Link
-                to={it.to}
-                className={
-                  "flex items-center gap-3 rounded-lg border border-border/60 bg-background/60 px-3 py-2.5 text-sm transition hover:bg-background " +
-                  (it.done ? "opacity-60" : "")
-                }
-              >
-                <div className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-primary/10 text-primary">
-                  <Icon className="h-4 w-4" />
-                </div>
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2">
-                    <span className={"font-semibold " + (it.done ? "line-through" : "")}>{it.label}</span>
-                    {it.done ? (
-                      <CheckCircle2 className="h-4 w-4 text-emerald-500" />
-                    ) : (
-                      <Circle className="h-3.5 w-3.5 text-muted-foreground" />
-                    )}
-                  </div>
-                  <div className="text-[11px] text-muted-foreground sm:text-xs">{it.description}</div>
-                </div>
-                {!it.done && <ChevronRight className="h-4 w-4 text-muted-foreground" />}
-              </Link>
+              {it.sheet ? (
+                <button
+                  type="button"
+                  className={rowClass}
+                  onClick={() => setOpenStep(it.sheet!)}
+                  disabled={it.done}
+                >
+                  {inner}
+                </button>
+              ) : (
+                <Link to={it.to!} className={rowClass}>
+                  {inner}
+                </Link>
+              )}
             </li>
           );
         })}
       </ul>
 
       <div className="mt-4 flex flex-wrap gap-2">
-        <Button asChild size="sm">
-          <Link to={nextItem.to}>Continue setup</Link>
-        </Button>
+        {nextItem.sheet ? (
+          <Button size="sm" onClick={() => setOpenStep(nextItem.sheet!)}>
+            Continue setup
+          </Button>
+        ) : (
+          <Button asChild size="sm">
+            <Link to={nextItem.to!}>Continue setup</Link>
+          </Button>
+        )}
       </div>
     </Card>
+    <SetupStepSheet
+      step={openStep}
+      clientId={clientId}
+      userId={userId}
+      client={client}
+      onOpenChange={(o) => { if (!o) setOpenStep(null); }}
+    />
+    </>
   );
 }
