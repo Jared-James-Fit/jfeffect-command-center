@@ -603,7 +603,7 @@ export function AppShell({ items, bottomItems: customBottomItems, title, childre
                           <button
                             type="button"
                             onClick={(e) => { e.preventDefault(); e.stopPropagation(); onTogglePin(item); }}
-                            className="mr-2 grid h-5 w-5 shrink-0 place-items-center rounded text-amber-300 opacity-0 transition group-hover/pin:opacity-100 hover:bg-amber-400/10"
+                            className="mr-2 grid h-5 w-5 shrink-0 place-items-center rounded text-amber-300 opacity-0 pointer-events-none transition group-hover/pin:opacity-100 group-hover/pin:pointer-events-auto hover:bg-amber-400/10"
                             aria-label={`Unpin ${item.label}`}
                             title="Unpin"
                           >
@@ -689,8 +689,8 @@ export function AppShell({ items, bottomItems: customBottomItems, title, childre
                                 className={cn(
                                   "mr-2 grid h-5 w-5 shrink-0 place-items-center rounded transition",
                                   pinned
-                                    ? "text-amber-300 opacity-100"
-                                    : "text-muted-foreground opacity-0 group-hover/row:opacity-100 hover:text-amber-300",
+                                    ? "text-amber-300 opacity-100 pointer-events-auto"
+                                    : "text-muted-foreground opacity-0 pointer-events-none group-hover/row:opacity-100 group-hover/row:pointer-events-auto hover:text-amber-300",
                                   "hover:bg-amber-400/10",
                                 )}
                                 aria-label={pinned ? `Unpin ${item.label}` : `Pin ${item.label}`}
