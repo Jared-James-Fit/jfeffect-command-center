@@ -342,11 +342,44 @@ export function MessagesInbox({
           {conversations.length === 0 ? (
             <div className="p-6 text-center text-sm text-muted-foreground">No conversations.</div>
           ) : conversations.map(({ client, state, last, unread }) => (
-            <button
+            <SwipeableRow
               key={client.id}
+              className="border-b border-border/60"
+              actions={[
+                {
+                  key: "unread",
+                  label: unread > 0 ? "Read" : "Unread",
+                  color: "primary",
+                  icon: unread > 0 ? <MailOpen className="h-4 w-4" /> : <Mail className="h-4 w-4" />,
+                  onSelect: async () => {
+                    if (unread > 0) {
+                      await markRead(client.id, "admin");
+                    } else {
+                      await markUnread(client.id, "admin");
+                    }
+                    qc.invalidateQueries({ queryKey: ["conversation-states"] });
+                    qc.invalidateQueries({ queryKey: ["last-messages"] });
+                    qc.invalidateQueries({ queryKey: ["admin-nav-badges"] });
+                  },
+                },
+                {
+                  key: "archive",
+                  label: state?.status === "archived" ? "Unarchive" : "Archive",
+                  color: "destructive",
+                  icon: state?.status === "archived" ? <Archive className="h-4 w-4" /> : <Trash2 className="h-4 w-4" />,
+                  onSelect: async () => {
+                    const next = state?.status === "archived" ? "open" : "archived";
+                    await setConversationStatus(client.id, next);
+                    qc.invalidateQueries({ queryKey: ["conversation-states"] });
+                    toast.success(next === "archived" ? "Conversation archived" : "Conversation restored");
+                  },
+                },
+              ]}
+            >
+            <button
               onClick={() => selectClient(client.id)}
               className={cn(
-                "flex w-full items-start gap-3 border-b border-border/60 px-4 py-3 text-left transition hover:bg-secondary/40",
+                "flex w-full items-start gap-3 px-4 py-3 text-left transition hover:bg-secondary/40",
                 selectedId === client.id && "bg-secondary/60",
               )}
             >
@@ -390,6 +423,7 @@ export function MessagesInbox({
                 </div>
               </div>
             </button>
+            </SwipeableRow>
           ))}
         </div>
       </aside>
