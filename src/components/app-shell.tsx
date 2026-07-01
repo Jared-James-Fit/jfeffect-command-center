@@ -216,18 +216,46 @@ export function AppShell({ items, bottomItems: customBottomItems, title, childre
     if (typeof window === "undefined") return;
     const vv = window.visualViewport;
     if (!vv) return;
+    let rafId = 0;
     const sync = () => {
-      const nav = document.querySelector<HTMLElement>("[data-mobile-bottom-nav]");
-      if (!nav) return;
-      const offset = window.innerHeight - (vv.height + vv.offsetTop);
-      nav.style.transform = offset > 0 ? `translateY(${-offset}px)` : "";
+      const els = document.querySelectorAll<HTMLElement>(
+        "[data-mobile-bottom-nav], [data-viewport-pinned]",
+      );
+      if (!els.length) return;
+      // Amount the visible viewport is offset from the layout viewport.
+      const dy = window.innerHeight - (vv.height + vv.offsetTop);
+      const dx = -vv.offsetLeft;
+      const scale = vv.scale || 1;
+      // Counter-translate so fixed bars stay glued to the visible viewport
+      // corner even while the user pinch-zooms and pans.
+      const t =
+        dy > 0 || dx !== 0 || scale !== 1
+          ? `translate(${dx}px, ${-Math.max(dy, 0)}px)`
+          : "";
+      els.forEach((el) => {
+        el.style.transform = t;
+        el.style.transformOrigin = "bottom right";
+        el.style.willChange = t ? "transform" : "";
+      });
+    };
+    const schedule = () => {
+      if (rafId) return;
+      rafId = window.requestAnimationFrame(() => {
+        rafId = 0;
+        sync();
+      });
     };
     sync();
-    vv.addEventListener("resize", sync);
-    vv.addEventListener("scroll", sync);
+    vv.addEventListener("resize", schedule);
+    vv.addEventListener("scroll", schedule);
+    window.addEventListener("scroll", schedule, { passive: true });
+    window.addEventListener("orientationchange", schedule);
     return () => {
-      vv.removeEventListener("resize", sync);
-      vv.removeEventListener("scroll", sync);
+      vv.removeEventListener("resize", schedule);
+      vv.removeEventListener("scroll", schedule);
+      window.removeEventListener("scroll", schedule);
+      window.removeEventListener("orientationchange", schedule);
+      if (rafId) window.cancelAnimationFrame(rafId);
     };
   }, []);
 
