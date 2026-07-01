@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -10,28 +10,61 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
 import { SESSION_TYPES, SESSION_STATUSES, COMMON_TIMEZONES } from "@/lib/pt-sessions";
+import { AlertTriangle, Repeat, CalendarDays } from "lucide-react";
 
 type Props = {
   open: boolean;
   onOpenChange: (o: boolean) => void;
   clientId?: string;
-  clients?: Array<{ id: string; full_name: string; timezone?: string | null; default_session_location?: string | null }>;
+  clients?: Array<{ id: string; full_name: string; timezone?: string | null; default_session_location?: string | null; package_tracking_enabled?: boolean | null; sessions_purchased?: number | null; sessions_used?: number | null }>;
   initial?: any;
 };
+
+const DOW = [
+  { key: 0, short: "Sun" },
+  { key: 1, short: "Mon" },
+  { key: 2, short: "Tue" },
+  { key: 3, short: "Wed" },
+  { key: 4, short: "Thu" },
+  { key: 5, short: "Fri" },
+  { key: 6, short: "Sat" },
+];
+
+function computeRecurringDates(startISO: string, weekdays: number[], weeks: number, includeStart: boolean): string[] {
+  if (!weekdays.length || weeks <= 0) return [];
+  const start = new Date(startISO + "T00:00:00");
+  const startDow = start.getDay();
+  const end = new Date(start);
+  end.setDate(end.getDate() + weeks * 7 - 1);
+  const out: string[] = [];
+  const cur = new Date(start);
+  while (cur <= end) {
+    const dow = cur.getDay();
+    const isStart = cur.getTime() === start.getTime();
+    if (weekdays.includes(dow) && (includeStart || !isStart || dow !== startDow)) {
+      out.push(cur.toISOString().slice(0, 10));
+    }
+    cur.setDate(cur.getDate() + 1);
+  }
+  return out;
+}
 
 export function PtSessionDialog({ open, onOpenChange, clientId, clients = [], initial }: Props) {
   const qc = useQueryClient();
   const [form, setForm] = useState<any>(null);
   const [saving, setSaving] = useState(false);
+  const [confirmOverbook, setConfirmOverbook] = useState(false);
 
   useEffect(() => {
     if (!open) return;
+    setConfirmOverbook(false);
     if (initial) {
-      setForm({ ...initial });
+      setForm({ ...initial, _isRecurring: false, _weekdays: [], _weeks: 4, _includeStartDate: true });
       return;
     }
     const c = clients.find((x) => x.id === clientId);
     const tomorrow = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+    const dow = new Date(tomorrow + "T00:00:00").getDay();
     setForm({
       client_id: clientId ?? "",
       title: "Personal Training Session",
@@ -48,22 +81,53 @@ export function PtSessionDialog({ open, onOpenChange, clientId, clients = [], in
       visible_to_client: true,
       reminders_enabled: true,
       send_confirmation_email: true,
+      _isRecurring: false,
+      _weekdays: [dow],
+      _weeks: 4,
+      _includeStartDate: true,
     });
   }, [open, initial, clientId, clients]);
 
+  const selectedClient = form ? clients.find((c) => c.id === form.client_id) : undefined;
+  const tracking = !!selectedClient?.package_tracking_enabled;
+  const purchased = Number(selectedClient?.sessions_purchased ?? 0);
+  const used = Number(selectedClient?.sessions_used ?? 0);
+  const remaining = Math.max(purchased - used, 0);
+
+  const previewDates = useMemo(() => {
+    if (!form || !form._isRecurring) return [form?.session_date].filter(Boolean) as string[];
+    return computeRecurringDates(form.session_date, form._weekdays, form._weeks, form._includeStartDate);
+  }, [form]);
+
   if (!form) return null;
   const set = (k: string, v: any) => setForm({ ...form, [k]: v });
+  const toggleWeekday = (d: number) => {
+    const next = form._weekdays.includes(d)
+      ? form._weekdays.filter((x: number) => x !== d)
+      : [...form._weekdays, d].sort();
+    set("_weekdays", next);
+  };
+
+  const isNewBooking = !form.id;
+  const bookingCount = isNewBooking ? previewDates.length : 0;
+  const willReserve = tracking && isNewBooking && form.status === "Scheduled" ? bookingCount : 0;
+  const overbook = willReserve > remaining;
 
   const save = async () => {
     if (!form.client_id) return toast.error("Pick a client first");
     if (!form.title) return toast.error("Title is required");
+    if (form._isRecurring && previewDates.length === 0) return toast.error("Pick at least one weekday");
+    if (overbook && !confirmOverbook) {
+      toast.error(`Only ${remaining} credit${remaining === 1 ? "" : "s"} left — top up or confirm overbooking`);
+      return;
+    }
     setSaving(true);
-    const payload: any = {
+
+    const basePayload: any = {
       client_id: form.client_id,
       title: form.title,
       session_type: form.session_type,
       custom_type: form.session_type === "Custom Session" ? form.custom_type : null,
-      session_date: form.session_date,
       start_time: form.start_time,
       end_time: form.end_time,
       timezone: form.timezone,
@@ -75,23 +139,74 @@ export function PtSessionDialog({ open, onOpenChange, clientId, clients = [], in
       reminders_enabled: form.reminders_enabled,
       send_confirmation_email: form.send_confirmation_email,
     };
-    const { error } = form.id
-      ? await supabase.from("pt_sessions").update(payload).eq("id", form.id)
-      : await supabase.from("pt_sessions").insert(payload);
+
+    let error: any = null;
+    if (form.id) {
+      const { error: e } = await supabase
+        .from("pt_sessions")
+        .update({ ...basePayload, session_date: form.session_date })
+        .eq("id", form.id);
+      error = e;
+    } else {
+      const rows = previewDates.map((d) => ({ ...basePayload, session_date: d }));
+      const { error: e } = await supabase.from("pt_sessions").insert(rows);
+      error = e;
+      // Reserve credits at booking time (only for Scheduled + tracking-enabled)
+      if (!e && tracking && form.status === "Scheduled" && rows.length > 0) {
+        await supabase
+          .from("clients")
+          .update({ sessions_used: used + rows.length })
+          .eq("id", form.client_id);
+      }
+    }
+
     setSaving(false);
     if (error) return toast.error(error.message);
-    toast.success(form.id ? "Session updated" : "Session booked");
+    toast.success(
+      form.id
+        ? "Session updated"
+        : previewDates.length > 1
+          ? `Booked ${previewDates.length} sessions`
+          : "Session booked",
+    );
     qc.invalidateQueries({ queryKey: ["pt-sessions"] });
     qc.invalidateQueries({ queryKey: ["pt-sessions", form.client_id] });
+    qc.invalidateQueries({ queryKey: ["client", form.client_id] });
     onOpenChange(false);
   };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl">
+      <DialogContent className="max-w-2xl max-h-[92vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>{form.id ? "Edit Session" : "Book Personal Training Session"}</DialogTitle>
+          <DialogTitle>{form.id ? "Edit / Reschedule Session" : "Book Personal Training Session"}</DialogTitle>
         </DialogHeader>
+
+        {tracking && isNewBooking && (
+          <div className={`rounded-md border px-3 py-2 text-sm ${overbook ? "border-destructive/60 bg-destructive/10" : remaining <= 2 ? "border-amber-500/60 bg-amber-500/10" : "border-primary/40 bg-primary/10"}`}>
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2">
+                {overbook ? <AlertTriangle className="h-4 w-4 text-destructive" /> : <CalendarDays className="h-4 w-4" />}
+                <span>
+                  <strong>{remaining}</strong> credit{remaining === 1 ? "" : "s"} left
+                  {willReserve > 0 && <> · booking will use <strong>{willReserve}</strong></>}
+                </span>
+              </div>
+              {overbook && (
+                <div className="flex items-center gap-2">
+                  <Switch checked={confirmOverbook} onCheckedChange={setConfirmOverbook} />
+                  <Label className="text-xs">Overbook</Label>
+                </div>
+              )}
+            </div>
+            {overbook && (
+              <p className="mt-1 text-xs text-muted-foreground">
+                No session credits left. Top up credits from the Session Credits panel, or toggle Overbook to book anyway.
+              </p>
+            )}
+          </div>
+        )}
+
         <div className="grid gap-3 md:grid-cols-2">
           {!clientId && (
             <div className="md:col-span-2">
@@ -129,7 +244,7 @@ export function PtSessionDialog({ open, onOpenChange, clientId, clients = [], in
             </div>
           )}
           <div>
-            <Label>Date</Label>
+            <Label>{form._isRecurring ? "Start date" : "Date"}</Label>
             <Input type="date" value={form.session_date} onChange={(e) => set("session_date", e.target.value)} />
           </div>
           <div>
@@ -151,6 +266,69 @@ export function PtSessionDialog({ open, onOpenChange, clientId, clients = [], in
             <Label>Location</Label>
             <Input value={form.location} onChange={(e) => set("location", e.target.value)} />
           </div>
+
+          {isNewBooking && (
+            <div className="md:col-span-2 rounded-md border border-border bg-secondary/30 p-3 space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Repeat className="h-4 w-4 text-primary" />
+                  <Label className="text-sm font-semibold">Repeat weekly</Label>
+                </div>
+                <Switch checked={form._isRecurring} onCheckedChange={(v) => set("_isRecurring", v)} />
+              </div>
+              {form._isRecurring && (
+                <>
+                  <div>
+                    <Label className="mb-1 block text-xs uppercase tracking-widest text-muted-foreground">Days of week</Label>
+                    <div className="flex flex-wrap gap-1.5">
+                      {DOW.map((d) => (
+                        <Button
+                          key={d.key}
+                          type="button"
+                          size="sm"
+                          variant={form._weekdays.includes(d.key) ? "default" : "outline"}
+                          onClick={() => toggleWeekday(d.key)}
+                          className="min-w-[3.5rem]"
+                        >
+                          {d.short}
+                        </Button>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <div>
+                      <Label>Number of weeks</Label>
+                      <Input
+                        type="number"
+                        min={1}
+                        max={26}
+                        value={form._weeks}
+                        onChange={(e) => set("_weeks", Math.max(1, Math.min(26, parseInt(e.target.value || "1", 10))))}
+                      />
+                    </div>
+                    <div className="flex items-end justify-between rounded-md border border-border bg-background/60 px-3 py-2">
+                      <Label className="text-xs">Include start date if it matches</Label>
+                      <Switch checked={form._includeStartDate} onCheckedChange={(v) => set("_includeStartDate", v)} />
+                    </div>
+                  </div>
+                  <div className="rounded-md border border-dashed border-border p-2 text-xs">
+                    <div className="mb-1 font-semibold text-muted-foreground">
+                      Will book {previewDates.length} session{previewDates.length === 1 ? "" : "s"}:
+                    </div>
+                    <div className="flex flex-wrap gap-1">
+                      {previewDates.slice(0, 24).map((d) => (
+                        <span key={d} className="rounded bg-secondary px-1.5 py-0.5">
+                          {new Date(d + "T00:00:00").toLocaleDateString(undefined, { month: "short", day: "numeric" })}
+                        </span>
+                      ))}
+                      {previewDates.length > 24 && <span className="text-muted-foreground">+{previewDates.length - 24} more</span>}
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+
           <div className="md:col-span-2">
             <Label>Notes</Label>
             <Textarea rows={3} value={form.notes ?? ""} onChange={(e) => set("notes", e.target.value)} />
@@ -162,8 +340,18 @@ export function PtSessionDialog({ open, onOpenChange, clientId, clients = [], in
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
-          <Button onClick={save} disabled={saving} className="bg-gradient-primary font-bold uppercase">
-            {saving ? "Saving…" : form.id ? "Save Session" : "Book Session"}
+          <Button
+            onClick={save}
+            disabled={saving || (overbook && !confirmOverbook)}
+            className="bg-gradient-primary font-bold uppercase"
+          >
+            {saving
+              ? "Saving…"
+              : form.id
+                ? "Save Session"
+                : previewDates.length > 1
+                  ? `Book ${previewDates.length} Sessions`
+                  : "Book Session"}
           </Button>
         </DialogFooter>
       </DialogContent>
