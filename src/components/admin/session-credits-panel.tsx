@@ -256,11 +256,39 @@ export function SessionCreditsPanel({ clientId }: { clientId: string }) {
                   <th className="p-2 text-right">Value remaining</th>
                   <th className="p-2 text-left">Payment note</th>
                   <th className="p-2 text-left">Status</th>
+                  <th className="p-2 text-right" />
                 </tr>
               </thead>
               <tbody>
                 {grantRows.map((g) => (
-                  <tr key={g.id} className="border-t border-border align-top">
+                  <GrantRow key={g.id} g={g} onChanged={invalidate} />
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      {/* Event history */}
+      <LedgerHistory events={events} appointments={appointments} onChanged={invalidate} />
+    </Card>
+  );
+}
+
+function GrantRow({ g, onChanged }: { g: any; onChanged: () => void }) {
+  const [editing, setEditing] = useState(false);
+  const delFn = useServerFn(deleteSessionLedgerEvent);
+  const delM = useMutation({
+    mutationFn: async () => delFn({ data: { id: g.id } }),
+    onSuccess: () => {
+      toast.success("Package removed");
+      onChanged();
+    },
+    onError: (e: any) => toast.error(e.message),
+  });
+  return (
+    <>
+      <tr className="border-t border-border align-top">
                     <td className="p-2 font-medium">{g.service_type}</td>
                     <td className="p-2 text-xs">{g.effective_date ?? "—"}</td>
                     <td className="p-2 text-xs">{g.expires_at ?? "—"}</td>
@@ -289,17 +317,34 @@ export function SessionCreditsPanel({ clientId }: { clientId: string }) {
                         {g.status}
                       </Badge>
                     </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
-
-      {/* Event history */}
-      <LedgerHistory events={events} appointments={appointments} onChanged={invalidate} />
-    </Card>
+        <td className="p-2 text-right whitespace-nowrap">
+          <Button size="icon" variant="ghost" onClick={() => setEditing(true)} title="Edit">
+            <Pencil className="h-4 w-4" />
+          </Button>
+          <Button
+            size="icon"
+            variant="ghost"
+            className="text-destructive"
+            onClick={() => {
+              if (confirm(`Remove this granted package (${g.total_sessions} sessions)?`)) {
+                delM.mutate();
+              }
+            }}
+            title="Delete grant"
+          >
+            <Trash2 className="h-4 w-4" />
+          </Button>
+        </td>
+      </tr>
+      <EditLedgerEventDialog
+        event={editing ? g : null}
+        onClose={() => setEditing(false)}
+        onSaved={() => {
+          setEditing(false);
+          onChanged();
+        }}
+      />
+    </>
   );
 }
 
