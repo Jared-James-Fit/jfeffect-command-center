@@ -1,6 +1,7 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
+import { supabase } from "@/integrations/supabase/client";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -40,6 +41,8 @@ import {
   getClientSessionCredits,
   adjustSessionCredits,
   addClientSessionCredits,
+  updateSessionLedgerEvent,
+  deleteSessionLedgerEvent,
 } from "@/lib/session-credit-packages.functions";
 
 function fmt(amountMinor: number | null | undefined, currency = "CAD") {
@@ -69,6 +72,27 @@ export function SessionCreditsPanel({ clientId }: { clientId: string }) {
   };
   const invalidatePackages = () =>
     qc.invalidateQueries({ queryKey: ["session-credit-packages"] });
+
+  // Realtime sync across admin/coach devices
+  useEffect(() => {
+    const ch = supabase
+      .channel(`session-credits-${clientId}`)
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "session_ledger_events", filter: `client_id=eq.${clientId}` },
+        () => invalidate(),
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "session_credit_packages" },
+        () => invalidatePackages(),
+      )
+      .subscribe();
+    return () => {
+      supabase.removeChannel(ch);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [clientId]);
 
   const balance = (summaryQ.data?.balance ?? []) as any[];
   const totalRemaining = balance.reduce(
