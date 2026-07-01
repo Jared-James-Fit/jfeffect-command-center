@@ -355,6 +355,17 @@ html[data-keyboard-open="true"] {
   --shell-topbar-h: 0px;
 }
 
+/* Sidebar rows use a full-row link with a tiny optional pin button layered on
+   top. Keep hidden pin buttons out of hit-testing so they can never swallow
+   navigation taps/clicks on admin menu rows. */
+.sidebar-nav-row .sidebar-pin-button {
+  pointer-events: none;
+}
+.sidebar-nav-row:hover .sidebar-pin-button,
+.sidebar-nav-row .sidebar-pin-button[data-pinned="true"] {
+  pointer-events: auto;
+}
+
 /* Prevent iOS auto-zoom on focus: ensure inputs are at least 16px */
 @media (max-width: 768px) {
   input, textarea, select {
