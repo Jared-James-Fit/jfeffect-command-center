@@ -17,7 +17,9 @@ import {
   setConversationStatus, setConversationPriority, PRIORITIES,
   markUnread, markRead,
 } from "@/lib/messages";
-import { Search, ChevronLeft, MoreHorizontal, ExternalLink, Phone, MessageSquare, MailOpen, Mail } from "lucide-react";
+import { Search, ChevronLeft, MoreHorizontal, ExternalLink, Phone, MessageSquare, MailOpen, Mail, Trash2, Archive } from "lucide-react";
+import { SwipeableRow } from "@/components/ui/swipeable-row";
+import { toast } from "sonner";
 import { SendSmsDialog } from "@/components/send-sms-dialog";
 import { formatDistanceToNow, parseISO } from "date-fns";
 import { cn } from "@/lib/utils";
