@@ -18,14 +18,21 @@ function AdminLayout() {
   const { role, loading } = useAuth();
   const navigate = useNavigate();
   const pathname = useRouterState({ select: (r) => r.location.pathname });
+  const search = useRouterState({ select: (r) => r.location.search as { tab?: string } | undefined });
   const [mode] = useDashboardMode();
-  // If user lands on /admin/membership, force membership mode; conversely auto-switch back when leaving.
+  const isMembershipWorkspacePath =
+    pathname.startsWith("/admin/membership") ||
+    pathname.startsWith("/admin/members") ||
+    pathname.startsWith("/admin/member-plans") ||
+    pathname === "/admin/sales/membership" ||
+    pathname === "/admin/legal" ||
+    (pathname === "/admin/communication" && search?.tab === "support-inbox");
+  // Keep Membership mode active across every route in the Membership sidebar.
   useEffect(() => {
-    const inMembership = pathname.startsWith("/admin/membership");
-    if (inMembership && mode !== "membership") setDashboardMode("membership");
-    if (!inMembership && mode === "membership") setDashboardMode("coaching");
-    if (mode === "media") setDashboardMode(inMembership ? "membership" : "coaching");
-  }, [pathname, mode]);
+    if (isMembershipWorkspacePath && mode !== "membership") setDashboardMode("membership");
+    if (!isMembershipWorkspacePath && mode === "membership") setDashboardMode("coaching");
+    if (mode === "media") setDashboardMode(isMembershipWorkspacePath ? "membership" : "coaching");
+  }, [isMembershipWorkspacePath, mode]);
   useEffect(() => {
     if (loading || !role) return;
     if (role === "admin" || role === "coach") return;
