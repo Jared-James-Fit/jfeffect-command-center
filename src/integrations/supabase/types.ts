@@ -6940,6 +6940,24 @@ export type Database = {
         }
         Relationships: []
       }
+      live_support_agents: {
+        Row: {
+          is_available: boolean
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          is_available?: boolean
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          is_available?: boolean
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       logged_set_edit_audit: {
         Row: {
           client_id: string | null
@@ -9888,6 +9906,7 @@ export type Database = {
           last_team_message_at: string | null
           member_id: string
           status: string
+          ticket_number: number
           unread_for_member: number
           unread_for_team: number
           updated_at: string
@@ -9899,6 +9918,7 @@ export type Database = {
           last_team_message_at?: string | null
           member_id: string
           status?: string
+          ticket_number?: number
           unread_for_member?: number
           unread_for_team?: number
           updated_at?: string
@@ -9910,6 +9930,7 @@ export type Database = {
           last_team_message_at?: string | null
           member_id?: string
           status?: string
+          ticket_number?: number
           unread_for_member?: number
           unread_for_team?: number
           updated_at?: string
