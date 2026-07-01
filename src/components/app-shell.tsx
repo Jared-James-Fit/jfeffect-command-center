@@ -208,6 +208,29 @@ export function AppShell({ items, bottomItems: customBottomItems, title, childre
     return () => window.removeEventListener("open-command-palette", onOpen as EventListener);
   }, []);
 
+  // Keep the mobile bottom nav pinned to the visual viewport during pinch-zoom.
+  // Without this, iOS Safari (and Chrome on Android) leaves `position: fixed`
+  // bars anchored to the layout viewport, so they scroll away / disappear as
+  // the user zooms in and out.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const vv = window.visualViewport;
+    if (!vv) return;
+    const sync = () => {
+      const nav = document.querySelector<HTMLElement>("[data-mobile-bottom-nav]");
+      if (!nav) return;
+      const offset = window.innerHeight - (vv.height + vv.offsetTop);
+      nav.style.transform = offset > 0 ? `translateY(${-offset}px)` : "";
+    };
+    sync();
+    vv.addEventListener("resize", sync);
+    vv.addEventListener("scroll", sync);
+    return () => {
+      vv.removeEventListener("resize", sync);
+      vv.removeEventListener("scroll", sync);
+    };
+  }, []);
+
   const { data: me } = useQuery({
     queryKey: ["app-shell-me", user?.id],
     enabled: !!user?.id,
@@ -674,23 +697,23 @@ export function AppShell({ items, bottomItems: customBottomItems, title, childre
       {/* Mobile top bar */}
       <div className="flex min-w-0 flex-1 flex-col">
         <header
-          className="flex items-center justify-between border-b border-border px-4 pb-3 md:hidden"
+          className="flex items-center justify-between gap-2 border-b border-border px-3 pb-3 md:hidden"
           style={{ paddingTop: "calc(env(safe-area-inset-top) + 0.75rem)" }}
         >
-          <div className="flex items-center gap-2">
-            <img src="/logo.png" alt="JF Effect" className="h-8 w-8 rounded-md object-cover" />
-            <span className="text-sm font-black tracking-tight">{title}</span>
+          <div className="flex min-w-0 items-center gap-2">
+            <img src="/logo.png" alt="JF Effect" className="h-8 w-8 shrink-0 rounded-md object-cover" />
+            <span className="truncate text-sm font-black tracking-tight">{title}</span>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex shrink-0 items-center gap-1.5">
             <Button
               variant="outline"
               size="sm"
               onClick={() => setPaletteOpen(true)}
               aria-label="Search workout library"
-              className="h-8 gap-1.5 border-primary/40 bg-primary/5 px-2 text-xs font-semibold text-foreground hover:bg-primary/10"
+              className="h-8 shrink-0 gap-1.5 border-primary/40 bg-primary/5 px-2 text-xs font-semibold text-foreground hover:bg-primary/10"
             >
               <Search className="h-3.5 w-3.5 text-primary" />
-              Workouts
+              <span className="hidden min-[380px]:inline">Workouts</span>
             </Button>
             <SettingsMenu
               items={items}
@@ -698,7 +721,7 @@ export function AppShell({ items, bottomItems: customBottomItems, title, childre
               mePic={me?.pic ?? null}
               onSignOut={handleSignOut}
               trigger={
-                <Button variant="ghost" size="sm" aria-label="Settings">
+                <Button variant="ghost" size="sm" aria-label="Settings" className="h-8 w-8 shrink-0 px-0">
                   <SettingsIcon className="h-4 w-4" />
                 </Button>
               }
@@ -709,7 +732,7 @@ export function AppShell({ items, bottomItems: customBottomItems, title, childre
               mePic={me?.pic ?? null}
               onSignOut={handleSignOut}
               trigger={
-                <button type="button" aria-label="Account menu" className="rounded-full">
+                <button type="button" aria-label="Account menu" className="shrink-0 rounded-full">
                   <UserAvatar src={me?.pic ?? null} name={me?.name ?? user?.email ?? ""} size={28} ring expandable={false} />
                 </button>
               }
