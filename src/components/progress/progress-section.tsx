@@ -774,6 +774,11 @@ function MediaThumb({ m }: { m: ProgressMedia }) {
 function PhotoSubmissionDialog({ ctx, open, onOpenChange }: { ctx: ProgressContext; open: boolean; onOpenChange: (b: boolean) => void }) {
   const qc = useQueryClient();
   const [subId, setSubId] = useState<string | null>(null);
+  // Shared in-flight promise so parallel tile uploads never race to create
+  // duplicate submissions. Without this, tapping a second tile while the
+  // first upload is still starting spawned a NEW submission row (and made
+  // the second upload feel slow because it re-created the sub server-side).
+  const subPromiseRef = useRef<Promise<string> | null>(null);
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
   const [label, setLabel] = useState("Weekly Check-In");
   const [bw, setBw] = useState("");
@@ -786,13 +791,18 @@ function PhotoSubmissionDialog({ ctx, open, onOpenChange }: { ctx: ProgressConte
 
   async function ensureSub() {
     if (subId) return subId;
-    const s = await createSubmission({
-      user_id: ctx.userId, owner_type: ctx.ownerType,
-      client_id: ctx.clientId, member_id: ctx.memberId, assigned_coach_id: ctx.assignedCoachId ?? null,
-      submission_type: "photo", submission_date: date, check_in_label: label,
-    });
-    setSubId(s.id);
-    return s.id;
+    if (subPromiseRef.current) return subPromiseRef.current;
+    subPromiseRef.current = (async () => {
+      const s = await createSubmission({
+        user_id: ctx.userId, owner_type: ctx.ownerType,
+        client_id: ctx.clientId, member_id: ctx.memberId, assigned_coach_id: ctx.assignedCoachId ?? null,
+        submission_type: "photo", submission_date: date, check_in_label: label,
+      });
+      setSubId(s.id);
+      return s.id;
+    })();
+    try { return await subPromiseRef.current; }
+    catch (e) { subPromiseRef.current = null; throw e; }
   }
 
   async function save(asDraft: boolean) {
@@ -838,6 +848,21 @@ function PhotoSubmissionDialog({ ctx, open, onOpenChange }: { ctx: ProgressConte
         </DialogHeader>
 
         <div className="space-y-4">
+          {/* Date + label are now front-and-centre so the check-in can be
+              backdated in one tap — no need to expand the details drawer. */}
+          <div className="grid grid-cols-2 gap-3">
+            <DateField value={date} onChange={setDate} />
+            <div>
+              <Label className="text-xs">Label</Label>
+              <Select value={label} onValueChange={setLabel}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {CHECK_IN_LABELS.map((l) => <SelectItem key={l} value={l}>{l}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
           {/* Big one-tap multi-upload — fastest path */}
           <Button
             type="button"
@@ -871,20 +896,8 @@ function PhotoSubmissionDialog({ ctx, open, onOpenChange }: { ctx: ProgressConte
           </div>
 
           <details className="rounded-md border border-border p-3 text-sm">
-            <summary className="cursor-pointer font-medium">Details &amp; bodyweight (optional)</summary>
+            <summary className="cursor-pointer font-medium">Bodyweight &amp; notes (optional)</summary>
             <div className="mt-3 space-y-3">
-              <div className="grid grid-cols-2 gap-3">
-                <DateField value={date} onChange={setDate} />
-                <div>
-                  <Label className="text-xs">Label</Label>
-                  <Select value={label} onValueChange={setLabel}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      {CHECK_IN_LABELS.map((l) => <SelectItem key={l} value={l}>{l}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <Label className="text-xs">Bodyweight</Label>
@@ -1090,6 +1103,7 @@ function VideoSubmissionDialog({ ctx, open, onOpenChange }: { ctx: ProgressConte
   // Default to single video upload. Four-angle is an advanced option.
   const [format, setFormat] = useState<ProgressVideoFormat>("continuous");
   const [subId, setSubId] = useState<string | null>(null);
+  const subPromiseRef = useRef<Promise<string> | null>(null);
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
   const [label, setLabel] = useState("Weekly Check-In");
   const [bw, setBw] = useState("");
@@ -1099,14 +1113,19 @@ function VideoSubmissionDialog({ ctx, open, onOpenChange }: { ctx: ProgressConte
 
   async function ensureSub() {
     if (subId) return subId;
-    const s = await createSubmission({
-      user_id: ctx.userId, owner_type: ctx.ownerType,
-      client_id: ctx.clientId, member_id: ctx.memberId, assigned_coach_id: ctx.assignedCoachId ?? null,
-      submission_type: "video", video_format: format,
-      submission_date: date, check_in_label: label,
-    });
-    setSubId(s.id);
-    return s.id;
+    if (subPromiseRef.current) return subPromiseRef.current;
+    subPromiseRef.current = (async () => {
+      const s = await createSubmission({
+        user_id: ctx.userId, owner_type: ctx.ownerType,
+        client_id: ctx.clientId, member_id: ctx.memberId, assigned_coach_id: ctx.assignedCoachId ?? null,
+        submission_type: "video", video_format: format,
+        submission_date: date, check_in_label: label,
+      });
+      setSubId(s.id);
+      return s.id;
+    })();
+    try { return await subPromiseRef.current; }
+    catch (e) { subPromiseRef.current = null; throw e; }
   }
 
   async function save(asDraft: boolean) {
@@ -1148,6 +1167,20 @@ function VideoSubmissionDialog({ ctx, open, onOpenChange }: { ctx: ProgressConte
             </Button>
           </div>
 
+          {/* Date + label surfaced at top so backdating is one tap. */}
+          <div className="grid grid-cols-2 gap-3">
+            <DateField value={date} onChange={setDate} />
+            <div>
+              <Label className="text-xs">Label</Label>
+              <Select value={label} onValueChange={setLabel}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {CHECK_IN_LABELS.map((l) => <SelectItem key={l} value={l}>{l}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
           <div className={`grid gap-3 ${angles.length === 1 ? "grid-cols-1" : "grid-cols-2"}`}>
             {angles.map((a) => (
               <AngleUploadCard key={a} angle={a} mediaType="video" ctx={ctx} getSubId={ensureSub} subId={subId} />
@@ -1155,20 +1188,8 @@ function VideoSubmissionDialog({ ctx, open, onOpenChange }: { ctx: ProgressConte
           </div>
 
           <details className="rounded-md border border-border p-3 text-sm">
-            <summary className="cursor-pointer font-medium">Details &amp; bodyweight (optional)</summary>
+            <summary className="cursor-pointer font-medium">Bodyweight &amp; notes (optional)</summary>
             <div className="mt-3 space-y-3">
-              <div className="grid grid-cols-2 gap-3">
-                <DateField value={date} onChange={setDate} />
-                <div>
-                  <Label className="text-xs">Label</Label>
-                  <Select value={label} onValueChange={setLabel}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      {CHECK_IN_LABELS.map((l) => <SelectItem key={l} value={l}>{l}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <Label className="text-xs">Bodyweight</Label>
@@ -1684,8 +1705,51 @@ function SubmissionDetailDialog({ ctx, submissionId, onClose }: { ctx: ProgressC
   const { data: reviews = [] } = useQuery({ queryKey: ["progress-reviews", submissionId], queryFn: () => listReviewResponses(submissionId), staleTime: 60_000 });
   const [body, setBody] = useState("");
   const [internal, setInternal] = useState(false);
+  // Edit-in-place mode for the check-in header (date/label/bw/notes).
+  const [editing, setEditing] = useState(false);
+  const [savingEdit, setSavingEdit] = useState(false);
+  const [editDate, setEditDate] = useState<string>("");
+  const [editLabel, setEditLabel] = useState<string>("");
+  const [editBw, setEditBw] = useState<string>("");
+  const [editUnit, setEditUnit] = useState<"kg" | "lb">("lb");
+  const [editNotes, setEditNotes] = useState<string>("");
+
+  // Seed editor state whenever we open editing or the submission loads.
+  useEffect(() => {
+    if (!sub) return;
+    setEditDate(sub.submission_date);
+    setEditLabel(sub.check_in_label || "Weekly Check-In");
+    setEditBw(sub.bodyweight != null ? String(sub.bodyweight) : "");
+    setEditUnit((sub.weight_unit as "kg" | "lb" | null) ?? ctx.preferredWeightUnit ?? "lb");
+    setEditNotes(sub.notes || "");
+  }, [sub?.id, editing, ctx.preferredWeightUnit]);
 
   const canReply = ctx.viewerRole === "admin" || ctx.viewerRole === "coach";
+  // Owners always edit their own; admins can edit for support. Coach view is read-only.
+  const canEdit = ctx.viewerRole === "owner" || ctx.viewerRole === "admin";
+
+  async function saveEdit() {
+    if (!sub) return;
+    setSavingEdit(true);
+    try {
+      await updateSubmission(sub.id, {
+        submission_date: editDate,
+        check_in_label: editLabel,
+        bodyweight: editBw ? Number(editBw) : null,
+        weight_unit: editBw ? editUnit : null,
+        notes: editNotes || null,
+      });
+      qc.invalidateQueries({ queryKey: ["progress-sub", sub.id] });
+      qc.invalidateQueries({ queryKey: ["progress-subs", ctx.userId] });
+      qc.invalidateQueries({ queryKey: ["progress-subs-paged", ctx.userId] });
+      qc.invalidateQueries({ queryKey: ["progress-subs-photo", ctx.userId] });
+      qc.invalidateQueries({ queryKey: ["progress-subs-video", ctx.userId] });
+      toast.success("Saved");
+      setEditing(false);
+    } catch (e: any) {
+      toast.error(e?.message ?? "Could not save");
+    } finally { setSavingEdit(false); }
+  }
 
   async function submitReply() {
     if (!body.trim()) return;
@@ -1726,7 +1790,54 @@ function SubmissionDetailDialog({ ctx, submissionId, onClose }: { ctx: ProgressC
           {fmtDate(sub.submission_date)} · {prettyStatus(sub.review_status)}
           {sub.bodyweight ? ` · ${sub.bodyweight} ${sub.weight_unit}` : ""}
         </div>
-        {sub.notes && <p className="text-sm mb-3">{sub.notes}</p>}
+        {sub.notes && !editing && <p className="text-sm mb-3">{sub.notes}</p>}
+
+        {canEdit && (
+          editing ? (
+            <div className="mb-4 rounded-md border border-primary/40 bg-primary/5 p-3 space-y-3">
+              <div className="grid grid-cols-2 gap-3">
+                <DateField value={editDate} onChange={setEditDate} />
+                <div>
+                  <Label className="text-xs">Label</Label>
+                  <Select value={editLabel} onValueChange={setEditLabel}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {CHECK_IN_LABELS.map((l) => <SelectItem key={l} value={l}>{l}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label className="text-xs">Bodyweight</Label>
+                  <div className="flex gap-2">
+                    <Input type="number" inputMode="decimal" value={editBw} onChange={(e) => setEditBw(e.target.value)} placeholder="—" />
+                    <Select value={editUnit} onValueChange={(v: any) => setEditUnit(v)}>
+                      <SelectTrigger className="w-20"><SelectValue /></SelectTrigger>
+                      <SelectContent><SelectItem value="kg">kg</SelectItem><SelectItem value="lb">lb</SelectItem></SelectContent>
+                    </Select>
+                  </div>
+                </div>
+                <div>
+                  <Label className="text-xs">Notes</Label>
+                  <Textarea value={editNotes} onChange={(e) => setEditNotes(e.target.value)} rows={2} />
+                </div>
+              </div>
+              <div className="flex gap-2">
+                <Button size="sm" onClick={saveEdit} disabled={savingEdit} className="flex-1">
+                  {savingEdit ? <><Loader2 className="h-4 w-4 mr-1 animate-spin" />Saving…</> : "Save changes"}
+                </Button>
+                <Button size="sm" variant="outline" onClick={() => setEditing(false)} disabled={savingEdit}>Cancel</Button>
+              </div>
+            </div>
+          ) : (
+            <div className="mb-3">
+              <Button size="sm" variant="outline" onClick={() => setEditing(true)}>
+                Edit date &amp; details
+              </Button>
+            </div>
+          )
+        )}
 
         <div className={`grid gap-2 ${angles.length === 1 ? "grid-cols-1" : "grid-cols-2"}`}>
           {angles.map((a) => {
