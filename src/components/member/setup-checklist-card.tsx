@@ -7,7 +7,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import {
-  Check, ChevronRight, Smartphone, Bell, ClipboardList, Dumbbell, UserCircle, X,
+  CheckCircle2, Circle, ChevronRight, Smartphone, Bell, ClipboardList, Dumbbell, UserCircle,
 } from "lucide-react";
 import { getMySetupStatus } from "@/lib/member-setup.functions";
 import {
@@ -16,6 +16,7 @@ import {
 import { supabase } from "@/integrations/supabase/client";
 import { usePwaInstall } from "@/hooks/use-pwa-install";
 import { useNotificationPermission } from "@/hooks/use-notification-permission";
+import { Badge } from "@/components/ui/badge";
 
 type Item = {
   key: string;
@@ -28,22 +29,6 @@ type Item = {
   cta: string;
   disabled?: boolean;
 };
-
-const SNOOZE_KEY = "jf:m-setup-snooze:session";
-
-/**
- * Session-scoped dismissal: the checklist hides for the rest of this
- * browser session, but reappears the next time the member opens the app.
- * Matches the client-portal banner's "pop back every login" behavior.
- */
-function isSessionSnoozed(): boolean {
-  if (typeof window === "undefined") return false;
-  try { return window.sessionStorage.getItem(SNOOZE_KEY) === "1"; } catch { return false; }
-}
-function setSessionSnoozed() {
-  if (typeof window === "undefined") return;
-  try { window.sessionStorage.setItem(SNOOZE_KEY, "1"); } catch { /* ignore */ }
-}
 
 function useSetupChecklistData() {
   const fetchStatus = useServerFn(getMySetupStatus);
@@ -73,10 +58,6 @@ function useSetupChecklistData() {
     })();
     return () => { cancel = true; };
   }, [status]);
-
-  const [sessionDismissed, setSessionDismissed] = useState<boolean>(() => isSessionSnoozed());
-  useEffect(() => { setSessionDismissed(isSessionSnoozed()); }, []);
-  const isDismissed = sessionDismissed;
 
   // Sync detected permission to the server when it diverges from stored status.
   useEffect(() => {
@@ -172,19 +153,13 @@ function useSetupChecklistData() {
 
   return {
     items,
-    isDismissed,
     setupComplete,
     isInstalled,
-    dismissChecklist: () => {
-      setSessionSnoozed();
-      setSessionDismissed(true);
-    },
   };
 }
 
 export function SetupChecklist({ activeEnrollment }: { activeEnrollment?: any }) {
   const data = useSetupChecklistData();
-  if (data.isDismissed) return null;
 
   // Patch dynamic completion based on caller-supplied data.
   const items = data.items.map((it) => {
@@ -196,66 +171,74 @@ export function SetupChecklist({ activeEnrollment }: { activeEnrollment?: any })
   const total = items.length;
   if (done === total) return null;
   const pct = Math.round((done / total) * 100);
+  const nextItem = items.find((i) => !i.done) ?? items[0];
 
   return (
-    <Card className="p-6">
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <div className="text-xs uppercase tracking-wider text-muted-foreground">Get set up</div>
-          <div className="mt-1 text-lg font-bold">Finish setting up JF Effect</div>
-          <div className="text-sm text-muted-foreground">{done} of {total} done · {pct}%</div>
+    <Card className="relative overflow-hidden border-primary/30 bg-primary/5 p-4 sm:p-5">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0 space-y-1">
+          <div className="flex items-center gap-2">
+            <h2 className="text-base font-black tracking-tight sm:text-lg">Complete your setup</h2>
+            <Badge variant="secondary" className="text-[10px]">{done}/{total}</Badge>
+          </div>
+          <p className="text-xs text-muted-foreground sm:text-sm">
+            Finish a few quick steps so your training, plans, and reminders are ready. You can keep using the app while you do this.
+          </p>
         </div>
-        <button
-          aria-label="Hide setup checklist"
-          onClick={() => data.dismissChecklist()}
-          className="rounded-md p-1 text-muted-foreground transition hover:bg-muted hover:text-foreground"
-        >
-          <X className="h-4 w-4" />
-        </button>
       </div>
-      <Progress value={pct} className="mt-3" />
-      <ul className="mt-4 divide-y divide-border">
+
+      <div className="mt-3">
+        <Progress value={pct} />
+      </div>
+
+      <ul className="mt-4 space-y-2">
         {items.map((it) => {
           const Icon = it.icon;
+          const rowClass =
+            "flex items-center gap-3 rounded-lg border border-border/60 bg-background/60 px-3 py-2.5 text-sm transition hover:bg-background " +
+            (it.done ? "opacity-60" : "");
           const inner = (
-            <div className="flex items-center justify-between gap-3 py-3">
-              <div className="flex min-w-0 items-center gap-3">
-                <div className={`grid h-9 w-9 shrink-0 place-items-center rounded-full ${
-                  it.done ? "bg-emerald-500/15 text-emerald-500" : "bg-muted text-muted-foreground"
-                }`}>
-                  {it.done ? <Check className="h-4 w-4" /> : <Icon className="h-4 w-4" />}
-                </div>
-                <div className="min-w-0">
-                  <div className={`truncate text-sm font-medium ${it.done ? "text-muted-foreground line-through" : ""}`}>
-                    {it.label}
-                  </div>
-                  {it.description && !it.done ? (
-                    <div className="truncate text-xs text-muted-foreground">{it.description}</div>
-                  ) : null}
-                </div>
+            <>
+              <div className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-primary/10 text-primary">
+                <Icon className="h-4 w-4" />
               </div>
-              <div className="flex shrink-0 items-center gap-1 text-sm font-medium text-primary">
-                {it.cta} <ChevronRight className="h-4 w-4" />
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-2">
+                  <span className={"font-semibold " + (it.done ? "line-through" : "")}>{it.label}</span>
+                  {it.done ? (
+                    <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+                  ) : (
+                    <Circle className="h-3.5 w-3.5 text-muted-foreground" />
+                  )}
+                </div>
+                {it.description && !it.done ? (
+                  <div className="text-[11px] text-muted-foreground sm:text-xs">{it.description}</div>
+                ) : null}
               </div>
-            </div>
+              {!it.done && <ChevronRight className="h-4 w-4 text-muted-foreground" />}
+            </>
           );
-          if (it.done) {
-            return <li key={it.key} className="opacity-70">{inner}</li>;
-          }
-          if (it.disabled) {
-            return <li key={it.key} className="opacity-60">{inner}</li>;
+          if (it.done || it.disabled) {
+            return <li key={it.key}><div className={rowClass}>{inner}</div></li>;
           }
           return (
             <li key={it.key}>
               {it.onClick
-                ? <button className="w-full text-left" onClick={it.onClick}>{inner}</button>
-                : <Link to={it.to!}>{inner}</Link>}
+                ? <button type="button" className={rowClass + " w-full text-left"} onClick={it.onClick}>{inner}</button>
+                : <Link to={it.to!} className={rowClass}>{inner}</Link>}
             </li>
           );
         })}
       </ul>
-      <div className="mt-3 flex justify-end gap-2">
-        <Button variant="ghost" size="sm" onClick={() => data.dismissChecklist()}>Hide for now</Button>
+
+      <div className="mt-4 flex flex-wrap gap-2">
+        {nextItem.onClick ? (
+          <Button size="sm" onClick={nextItem.onClick}>Continue setup</Button>
+        ) : (
+          <Button asChild size="sm">
+            <Link to={nextItem.to!}>Continue setup</Link>
+          </Button>
+        )}
       </div>
     </Card>
   );
