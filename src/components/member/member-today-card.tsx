@@ -5,6 +5,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Play, ArrowRight, Coffee, AlertCircle, CheckCircle2, Crosshair } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { getEnrollmentSchedule } from "@/lib/member-plans.functions";
 
@@ -96,48 +97,41 @@ export function MemberTodayCard({ enrollment }: { enrollment: Enrollment }) {
   const view = renderView(kind, entry, planName, todayStr);
 
   return (
-    <Card
-      className={cn(
-        "relative overflow-hidden border p-0 text-foreground",
-        "bg-gradient-to-br from-zinc-950 via-zinc-900 to-zinc-950",
-        view.borderClass,
-      )}
-    >
-      <div className="pointer-events-none absolute -top-24 -right-16 h-64 w-64 rounded-full bg-primary/25 blur-3xl" />
-      <div className="pointer-events-none absolute -bottom-24 -left-16 h-56 w-56 rounded-full bg-primary/10 blur-3xl" />
-      <div className="pointer-events-none absolute inset-0 opacity-[0.04] [background-image:radial-gradient(circle_at_1px_1px,white_1px,transparent_0)] [background-size:18px_18px]" />
-
-      <div className="relative space-y-4 p-5 md:p-7">
-        <div className="flex flex-wrap items-center gap-2">
-          <span
-            className={cn(
-              "inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.18em]",
-              view.pillClass,
-            )}
-          >
-            <span className="inline-flex h-3.5 w-3.5 items-center justify-center">{view.icon}</span>
-            {view.eyebrow}
-          </span>
-          {entry && (
-            <span className="rounded-full border border-white/15 px-2.5 py-1 text-[10px] font-bold uppercase tracking-widest text-white/70">
-              Week {entry.week} · Day {entry.day}
-            </span>
+    <Card className="rounded-xl border border-border bg-card p-4">
+      <div className="flex items-start gap-3">
+        <div
+          className={cn(
+            "grid h-10 w-10 shrink-0 place-items-center rounded-xl text-white shadow-sm",
+            view.iconBg,
           )}
+        >
+          {view.compactIcon}
         </div>
-
-        <div className="text-[11px] font-black uppercase tracking-[0.22em] text-primary/90">
-          {planName}
-        </div>
-
-        <h2 className="text-3xl font-black leading-[1.05] tracking-tight text-white md:text-4xl">
-          {view.title}
-        </h2>
-        {view.subtitle && (
-          <p className="text-sm text-white/70">{view.subtitle}</p>
-        )}
-
-        <div className="flex flex-wrap items-center gap-2 pt-1 [&_a]:w-full [&_a]:sm:w-auto [&_button]:w-full [&_button]:sm:w-auto">
-          {view.primary}
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-1.5">
+            <Badge
+              variant="outline"
+              className={cn(
+                "text-[10px] font-black uppercase tracking-wider",
+                view.badgeClass,
+              )}
+            >
+              {view.eyebrow}
+            </Badge>
+            {entry && (
+              <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                W{entry.week} · D{entry.day}
+              </span>
+            )}
+          </div>
+          <h3 className="mt-1 text-sm font-bold leading-tight">{view.title}</h3>
+          <p className="mt-0.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+            {planName}
+          </p>
+          {view.subtitle && (
+            <p className="mt-0.5 text-xs text-muted-foreground">{view.subtitle}</p>
+          )}
+          {view.primary && <div className="mt-2">{view.primary}</div>}
         </div>
       </div>
     </Card>
@@ -153,8 +147,9 @@ export function MemberTodayCard({ enrollment }: { enrollment: Enrollment }) {
     title: string;
     subtitle?: string;
     icon: React.ReactNode;
-    pillClass: string;
-    borderClass: string;
+    compactIcon: React.ReactNode;
+    iconBg: string;
+    badgeClass: string;
     primary: React.ReactNode;
   } {
     const openDay = (week: number, day: number, label: string, icon: React.ReactNode, variant?: "outline") => (
@@ -162,7 +157,7 @@ export function MemberTodayCard({ enrollment }: { enrollment: Enrollment }) {
         to="/m/workouts/$enrollmentId/$week/$day"
         params={{ enrollmentId: enrollment.id, week: String(week), day: String(day) }}
       >
-        <Button size="lg" variant={variant} className="font-bold uppercase">
+        <Button size="sm" variant={variant}>
           {icon} {label}
         </Button>
       </Link>
@@ -174,10 +169,11 @@ export function MemberTodayCard({ enrollment }: { enrollment: Enrollment }) {
           title: "Let's get to work.",
           subtitle: "Your scheduled session is ready.",
           icon: <Play className="h-5 w-5 text-primary-foreground" />,
-          pillClass: "bg-primary text-primary-foreground",
-          borderClass: "border-primary",
+          compactIcon: <Play className="h-5 w-5" />,
+          iconBg: "bg-primary",
+          badgeClass: "border-primary/30 bg-primary/10 text-primary",
           primary: entry
-            ? openDay(entry.week, entry.day, "Start Today's Workout", <Play className="mr-2 h-4 w-4" />)
+            ? openDay(entry.week, entry.day, "Start Workout", <Play className="mr-1.5 h-3.5 w-3.5" />)
             : null,
         };
       case "missed":
@@ -186,10 +182,11 @@ export function MemberTodayCard({ enrollment }: { enrollment: Enrollment }) {
           title: "Let's catch up.",
           subtitle: entry ? `Scheduled ${relLabel(entry.date, today)}.` : undefined,
           icon: <AlertCircle className="h-5 w-5 text-primary-foreground" />,
-          pillClass: "bg-destructive text-destructive-foreground",
-          borderClass: "border-destructive/60",
+          compactIcon: <AlertCircle className="h-5 w-5" />,
+          iconBg: "bg-destructive",
+          badgeClass: "border-destructive/30 bg-destructive/10 text-destructive",
           primary: entry
-            ? openDay(entry.week, entry.day, "Complete Missed Workout", <Play className="mr-2 h-4 w-4" />)
+            ? openDay(entry.week, entry.day, "Complete", <ArrowRight className="ml-1.5 h-3.5 w-3.5" />, "outline")
             : null,
         };
       case "rest":
@@ -200,10 +197,11 @@ export function MemberTodayCard({ enrollment }: { enrollment: Enrollment }) {
             ? `Next session ${relLabel(entry.date, today)}.`
             : "Recover, eat well, sleep well.",
           icon: <Coffee className="h-5 w-5 text-primary-foreground" />,
-          pillClass: "bg-sky-500 text-white",
-          borderClass: "border-sky-500/60",
+          compactIcon: <Coffee className="h-5 w-5" />,
+          iconBg: "bg-sky-500",
+          badgeClass: "border-sky-500/30 bg-sky-500/10 text-sky-500",
           primary: entry
-            ? openDay(entry.week, entry.day, "View Upcoming Workout", <ArrowRight className="mr-2 h-4 w-4" />, "outline")
+            ? openDay(entry.week, entry.day, "Upcoming", <ArrowRight className="ml-1.5 h-3.5 w-3.5" />, "outline")
             : null,
         };
       case "upcoming":
@@ -212,10 +210,11 @@ export function MemberTodayCard({ enrollment }: { enrollment: Enrollment }) {
           title: "Up next.",
           subtitle: entry ? relLabel(entry.date, today) : undefined,
           icon: <Crosshair className="h-5 w-5 text-primary-foreground" />,
-          pillClass: "bg-primary text-primary-foreground",
-          borderClass: "border-primary/60",
+          compactIcon: <Crosshair className="h-5 w-5" />,
+          iconBg: "bg-primary",
+          badgeClass: "border-primary/30 bg-primary/10 text-primary",
           primary: entry
-            ? openDay(entry.week, entry.day, "View Upcoming Workout", <ArrowRight className="mr-2 h-4 w-4" />, "outline")
+            ? openDay(entry.week, entry.day, "View", <ArrowRight className="ml-1.5 h-3.5 w-3.5" />, "outline")
             : null,
         };
       case "complete":
@@ -225,12 +224,13 @@ export function MemberTodayCard({ enrollment }: { enrollment: Enrollment }) {
           title: `${planName} — All workouts complete.`,
           subtitle: "Pick a new plan or restart this one.",
           icon: <CheckCircle2 className="h-5 w-5 text-primary-foreground" />,
-          pillClass: "bg-emerald-500 text-white",
-          borderClass: "border-emerald-500/60",
+          compactIcon: <CheckCircle2 className="h-5 w-5" />,
+          iconBg: "bg-emerald-500",
+          badgeClass: "border-emerald-500/30 bg-emerald-500/10 text-emerald-500",
           primary: (
             <Link to="/m/plans">
-              <Button size="lg" variant="outline" className="font-bold uppercase">
-                Browse Plans <ArrowRight className="ml-2 h-4 w-4" />
+              <Button size="sm" variant="outline">
+                Browse Plans <ArrowRight className="ml-1.5 h-3.5 w-3.5" />
               </Button>
             </Link>
           ),
