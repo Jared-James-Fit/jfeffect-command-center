@@ -436,13 +436,6 @@ function PortalHome() {
           </SectionErrorBoundary>
         )}
 
-        {/* Today's training status — compact, blends with the dashboard cards */}
-        {client?.id && (
-          <SectionErrorBoundary label="Today's training">
-            <DashboardTodayCard clientId={client.id} />
-          </SectionErrorBoundary>
-        )}
-
         {/* Action Centre — pinned to the top so urgent items are seen first */}
         <SectionErrorBoundary label="Action centre">
           <ActionCentre items={actions.slice(0, 5)} />
