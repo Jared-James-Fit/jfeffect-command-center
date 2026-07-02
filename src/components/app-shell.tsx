@@ -673,22 +673,17 @@ export function AppShell({ items, bottomItems: customBottomItems, title, childre
                               to={item.to}
                               aria-label={`Open ${item.label}`}
                               className={cn(
-                                "absolute inset-0 z-0 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-sidebar",
-                              )}
-                            />
-                            <div
-                              className={cn(
-                                "pointer-events-none relative z-[1] flex flex-1 items-center min-w-0",
+                                "flex flex-1 items-center min-w-0 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-sidebar",
                                 rowPadding,
                                 rowText,
-                                !isCollapsed && "!pr-8",
+                                !isCollapsed && "pr-8",
                                 active ? "text-primary" : "text-sidebar-foreground",
                               )}
                             >
                               <div className="relative"><Icon className="h-4 w-4 shrink-0" /><SidebarBadge badge={navBadges[item.to]} isCollapsed={isCollapsed} /></div>
                               {!isCollapsed && <span className="truncate flex-1">{item.label}</span>}
                               {!isCollapsed && <SidebarBadge badge={navBadges[item.to]} isCollapsed={false} />}
-                            </div>
+                            </Link>
                             {!isCollapsed && (
                               <button
                                 type="button"
