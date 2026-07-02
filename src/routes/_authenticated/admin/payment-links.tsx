@@ -162,7 +162,7 @@ function emptyForm(): FormState {
     agreementBeforeService: false, status: "Active", notes: "",
     imageFile: null, imagePreview: null,
     stripePriceId: "", checkoutMode: "",
-    generateStripeProduct: false, billingInterval: "", accessLevel: "",
+    generateStripeProduct: true, billingInterval: "", accessLevel: "",
   };
 }
 
