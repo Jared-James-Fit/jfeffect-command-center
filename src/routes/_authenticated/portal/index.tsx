@@ -30,7 +30,6 @@ import { useServerFn } from "@tanstack/react-start";
 import { format, parseISO, isToday, isTomorrow } from "date-fns";
 import { SectionErrorBoundary } from "@/components/section-error-boundary";
 import { DashboardRefreshIndicator } from "@/components/portal/dashboard-refresh-indicator";
-import { DashboardTodayCard } from "@/components/portal/dashboard-today-card";
 import { DashboardOfflineEmpty, useIsOfflineWithoutCache } from "@/components/portal/dashboard-offline-empty";
 import { DeferRender } from "@/components/defer-render";
 import { logPerf } from "@/lib/perf-timing";
