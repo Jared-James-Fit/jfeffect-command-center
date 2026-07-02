@@ -305,14 +305,15 @@ export function AppShell({ items, bottomItems: customBottomItems, title, childre
     return "admin";
   }, [title]);
   const { pins, isPinned, count: pinCount } = useSidebarPins(pinScope);
+  const isMembershipAdminShell = pinScope === "admin" && title.toLowerCase().includes("membership");
   const navByTo = useMemo(() => {
     const m = new Map<string, NavItem>();
     for (const it of items) m.set(it.to, it);
     return m;
   }, [items]);
   const pinnedItems = useMemo(
-    () => pins.map((to) => navByTo.get(to)).filter(Boolean) as NavItem[],
-    [pins, navByTo],
+    () => isMembershipAdminShell ? [] : pins.map((to) => navByTo.get(to)).filter(Boolean) as NavItem[],
+    [isMembershipAdminShell, pins, navByTo],
   );
   // Sections that contain the currently active route should auto-open.
   const activeGroupLabel = useMemo(() => {
@@ -604,7 +605,7 @@ export function AppShell({ items, bottomItems: customBottomItems, title, childre
             )}
             {grouped.map((group) => {
               const containsActive = group.label === activeGroupLabel;
-              const sectionCollapsed = group.label
+              const sectionCollapsed = group.label && !isMembershipAdminShell
                 ? collapsedSections.has(group.label) && !containsActive
                 : false;
               return (
