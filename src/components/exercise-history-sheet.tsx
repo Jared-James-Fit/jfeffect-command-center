@@ -160,7 +160,14 @@ export function ExerciseHistorySheet({
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="right" className="w-full sm:max-w-lg overflow-y-auto">
+      <SheetContent
+        side="right"
+        className="w-full sm:max-w-lg overflow-y-auto"
+        style={{
+          paddingTop: "calc(env(safe-area-inset-top) + 1.5rem)",
+          paddingBottom: "calc(env(safe-area-inset-bottom) + 1rem)",
+        }}
+      >
         <SheetHeader>
           <SheetTitle className="flex items-center gap-2">
             <History className="h-4 w-4" /> {exerciseName} history
