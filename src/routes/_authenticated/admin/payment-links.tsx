@@ -580,11 +580,10 @@ export function PaymentLinksPage({ embedded = false }: { embedded?: boolean } = 
                       <div className="text-xs text-muted-foreground">
                         {normalizeProductType(p.product_type)}{inferDelivery(p.product_type) !== "Online" ? ` · ${inferDelivery(p.product_type)}` : ""}{p.payment_structure ? ` · ${normalizePaymentStructure(p.payment_structure)}` : ""}{termLabel(p) ? ` · ${termLabel(p)}` : ""}
                       </div>
-                      {/* Subtitle: use description if it contains frequency/payment info, otherwise show price */}
-                      {p.description && /every|payment|week|month|year/i.test(p.description) ? (
-                        <div className="text-sm font-semibold mt-1">{p.description}</div>
-                      ) : (
-                        <div className="text-lg font-black mt-1">{p.currency.toUpperCase()} {formatPrice(p.price_cents, p.currency)}</div>
+                      {/* Always show price; if description contains payment/frequency info, show it below */}
+                      <div className="text-lg font-black mt-1">{p.currency.toUpperCase()} {formatPrice(p.price_cents, p.currency)}</div>
+                      {p.description && /every|payment|week|month|year/i.test(p.description) && (
+                        <div className="text-sm font-semibold mt-1 text-muted-foreground">{p.description}</div>
                       )}
                     </div>
                   </div>
