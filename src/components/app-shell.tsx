@@ -576,43 +576,24 @@ export function AppShell({ items, bottomItems: customBottomItems, title, childre
                     const active = item.to === activeTo;
                     const Icon = item.icon;
                     const link = (
-                      <div
+                      <Link
+                        to={item.to}
                         data-sidebar-row
                         data-pinned="true"
+                        aria-label={`Open ${item.label}`}
                         className={cn(
-                          "sidebar-nav-row group/pin relative flex items-center rounded-md transition-colors",
+                          "sidebar-nav-row group/pin flex w-full items-center min-w-0 rounded-md transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-sidebar",
+                          rowPadding,
+                          rowText,
                           active
                             ? "bg-primary/15 text-primary font-semibold border-l-2 border-primary"
                             : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground border-l-2 border-amber-400/40",
                         )}
                       >
-                        <Link
-                          to={item.to}
-                          aria-label={`Open ${item.label}`}
-                          className={cn(
-                            "flex flex-1 items-center min-w-0 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-sidebar",
-                            rowPadding,
-                            rowText,
-                            !isCollapsed && "pr-8",
-                            active ? "text-primary" : "text-sidebar-foreground",
-                          )}
-                        >
-                          <div className="relative"><Icon className="h-4 w-4 shrink-0" /><SidebarBadge badge={navBadges[item.to]} isCollapsed={isCollapsed} /></div>
-                          {!isCollapsed && <span className="truncate flex-1">{item.label}</span>}
-                          {!isCollapsed && <SidebarBadge badge={navBadges[item.to]} isCollapsed={false} />}
-                        </Link>
-                        {!isCollapsed && (
-                          <button
-                            type="button"
-                            onClick={(e) => { e.preventDefault(); e.stopPropagation(); onTogglePin(item); }}
-                            className="sidebar-pin-button absolute right-2 top-1/2 z-10 grid h-5 w-5 -translate-y-1/2 place-items-center rounded text-amber-300 opacity-0 transition hover:bg-amber-400/10"
-                            aria-label={`Unpin ${item.label}`}
-                            title="Unpin"
-                          >
-                            <Pin className="h-3 w-3 fill-current" />
-                          </button>
-                        )}
-                      </div>
+                        <div className="relative"><Icon className="h-4 w-4 shrink-0" /><SidebarBadge badge={navBadges[item.to]} isCollapsed={isCollapsed} /></div>
+                        {!isCollapsed && <span className="truncate flex-1">{item.label}</span>}
+                        {!isCollapsed && <SidebarBadge badge={navBadges[item.to]} isCollapsed={false} />}
+                      </Link>
                     );
                     return (
                       <li key={`pin-${item.to}`}>
@@ -659,50 +640,24 @@ export function AppShell({ items, bottomItems: customBottomItems, title, childre
                         const Icon = item.icon;
                         const pinned = isPinned(item.to);
                         const link = (
-                          <div
+                          <Link
+                            to={item.to}
                             data-sidebar-row
                             data-pinned={pinned ? "true" : "false"}
+                            aria-label={`Open ${item.label}`}
                             className={cn(
-                              "sidebar-nav-row group/row relative flex items-center rounded-md transition-colors",
+                              "sidebar-nav-row group/row flex w-full items-center min-w-0 rounded-md transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-sidebar",
+                              rowPadding,
+                              rowText,
                               active
                                 ? "bg-primary/15 text-primary font-semibold border-l-2 border-primary"
                                 : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground border-l-2 border-transparent",
                             )}
                           >
-                            <Link
-                              to={item.to}
-                              aria-label={`Open ${item.label}`}
-                              className={cn(
-                                "flex flex-1 items-center min-w-0 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-sidebar",
-                                rowPadding,
-                                rowText,
-                                !isCollapsed && "pr-8",
-                                active ? "text-primary" : "text-sidebar-foreground",
-                              )}
-                            >
-                              <div className="relative"><Icon className="h-4 w-4 shrink-0" /><SidebarBadge badge={navBadges[item.to]} isCollapsed={isCollapsed} /></div>
-                              {!isCollapsed && <span className="truncate flex-1">{item.label}</span>}
-                              {!isCollapsed && <SidebarBadge badge={navBadges[item.to]} isCollapsed={false} />}
-                            </Link>
-                            {!isCollapsed && (
-                              <button
-                                type="button"
-                                onClick={(e) => { e.preventDefault(); e.stopPropagation(); onTogglePin(item); }}
-                                data-pinned={pinned ? "true" : undefined}
-                                className={cn(
-                                  "sidebar-pin-button absolute right-2 top-1/2 z-10 grid h-5 w-5 -translate-y-1/2 place-items-center rounded transition",
-                                  pinned
-                                    ? "text-amber-300 opacity-100"
-                                    : "text-muted-foreground opacity-0 hover:text-amber-300",
-                                  "hover:bg-amber-400/10",
-                                )}
-                                aria-label={pinned ? `Unpin ${item.label}` : `Pin ${item.label}`}
-                                title={pinned ? "Unpin" : "Pin shortcut"}
-                              >
-                                <Star className={cn("h-3 w-3", pinned && "fill-current")} />
-                              </button>
-                            )}
-                          </div>
+                            <div className="relative"><Icon className="h-4 w-4 shrink-0" /><SidebarBadge badge={navBadges[item.to]} isCollapsed={isCollapsed} /></div>
+                            {!isCollapsed && <span className="truncate flex-1">{item.label}</span>}
+                            {!isCollapsed && <SidebarBadge badge={navBadges[item.to]} isCollapsed={false} />}
+                          </Link>
                         );
                         return (
                           <li key={item.to}>
