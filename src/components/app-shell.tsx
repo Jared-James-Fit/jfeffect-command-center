@@ -4,7 +4,7 @@ import { useAuth } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
 import {
   LogOut, ChevronLeft, ChevronRight, ChevronDown, Search, Settings as SettingsIcon, ArrowLeft, MoreHorizontal,
-  Star, Pin, ChevronsDownUp, ChevronsUpDown, BookOpen, Users, UserCog, IdCard,
+  ChevronsDownUp, ChevronsUpDown, BookOpen, Users, UserCog, IdCard,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { NotificationBell } from "@/components/notification-bell";
@@ -304,7 +304,7 @@ export function AppShell({ items, bottomItems: customBottomItems, title, childre
     if (t.includes("client") || t.includes("portal")) return "client";
     return "admin";
   }, [title]);
-  const { pins, isPinned, toggle: togglePin, count: pinCount } = useSidebarPins(pinScope);
+  const { pins, isPinned, count: pinCount } = useSidebarPins(pinScope);
   const navByTo = useMemo(() => {
     const m = new Map<string, NavItem>();
     for (const it of items) m.set(it.to, it);
@@ -314,13 +314,6 @@ export function AppShell({ items, bottomItems: customBottomItems, title, childre
     () => pins.map((to) => navByTo.get(to)).filter(Boolean) as NavItem[],
     [pins, navByTo],
   );
-  const onTogglePin = (it: NavItem) => {
-    const r = togglePin(it.to);
-    if (r.full) toast.error(`Pinned shortcuts are full (${MAX_PINS} max)`);
-    else if (r.pinned) toast.success(`Pinned ${it.label}`);
-    else toast.message(`Unpinned ${it.label}`);
-  };
-
   // Sections that contain the currently active route should auto-open.
   const activeGroupLabel = useMemo(() => {
     for (const g of grouped) {
