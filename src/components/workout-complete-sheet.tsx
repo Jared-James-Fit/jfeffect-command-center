@@ -33,42 +33,6 @@ type Props = {
   onSubmit: (payload: WorkoutCompletePayload) => Promise<void> | void;
 };
 
-function QuickTapGroup<T extends string>({
-  label,
-  options,
-  value,
-  onChange,
-}: {
-  label: string;
-  options: { value: T; label: string }[];
-  value: T | null;
-  onChange: (v: T) => void;
-}) {
-  return (
-    <fieldset className="space-y-2">
-      <legend className="text-sm font-bold">{label}</legend>
-      <div className={`grid gap-2`} style={{ gridTemplateColumns: `repeat(${options.length}, 1fr)` }}>
-        {options.map((o) => (
-          <button
-            key={o.value}
-            type="button"
-            onClick={() => onChange(o.value)}
-            aria-pressed={value === o.value}
-            className={cn(
-              "rounded-xl border px-2 py-2.5 text-xs font-bold transition-colors",
-              value === o.value
-                ? "border-primary bg-primary/15 text-primary"
-                : "border-border bg-card text-muted-foreground hover:bg-secondary/40",
-            )}
-          >
-            {o.label}
-          </button>
-        ))}
-      </div>
-    </fieldset>
-  );
-}
-
 export function WorkoutCompleteSheet({
   open,
   onOpenChange,
@@ -77,19 +41,11 @@ export function WorkoutCompleteSheet({
   onSubmit,
 }: Props) {
   const [rating, setRating] = useState<number | null>(null);
-  const [strengthFeel, setStrengthFeel] = useState<string | null>(null);
-  const [fatigueFeel, setFatigueFeel] = useState<string | null>(null);
-  const [pain, setPain] = useState<string | null>(null);
-  const [hitTarget, setHitTarget] = useState<string | null>(null);
   const [note, setNote] = useState<string>("");
 
   useEffect(() => {
     if (!open) return;
     setRating(initial?.session_rating ?? null);
-    setStrengthFeel(initial?.strength_feel ?? null);
-    setFatigueFeel(initial?.fatigue_feel ?? null);
-    setPain(initial?.pain != null ? (initial.pain ? "Yes" : "No") : null);
-    setHitTarget(initial?.hit_target ?? null);
     setNote(initial?.client_notes ?? "");
   }, [open, initial?.session_rating, initial?.client_notes]);
 
@@ -99,10 +55,10 @@ export function WorkoutCompleteSheet({
     if (!canSubmit || rating == null) return;
     await onSubmit({
       session_rating: rating,
-      strength_feel: strengthFeel ?? null,
-      fatigue_feel: fatigueFeel ?? null,
-      pain: pain === "Yes" ? true : pain === "No" ? false : null,
-      hit_target: hitTarget ?? null,
+      strength_feel: null,
+      fatigue_feel: null,
+      pain: null,
+      hit_target: null,
       client_notes: note.trim() ? note.trim() : null,
     });
   };
@@ -116,11 +72,11 @@ export function WorkoutCompleteSheet({
         <div className="px-5 pt-5">
           <SheetHeader className="space-y-1 text-left">
             <SheetTitle className="text-xl font-black">Workout Complete</SheetTitle>
-            <SheetDescription>Quick tap review — takes under 20 seconds.</SheetDescription>
+            <SheetDescription>Quick rating — takes 5 seconds.</SheetDescription>
           </SheetHeader>
         </div>
 
-        <div className="space-y-5 px-5 pb-4 pt-5">
+        <div className="space-y-6 px-5 pb-4 pt-5">
           {/* 1. Rating */}
           <fieldset className="space-y-2">
             <legend className="text-sm font-bold">How was this workout? <span className="text-destructive">*</span></legend>
@@ -147,55 +103,7 @@ export function WorkoutCompleteSheet({
             </div>
           </fieldset>
 
-          {/* 2. Strength feel */}
-          <QuickTapGroup
-            label="How did your strength feel?"
-            options={[
-              { value: "Weak", label: "Weak" },
-              { value: "Normal", label: "Normal" },
-              { value: "Strong", label: "Strong" },
-            ]}
-            value={strengthFeel as any}
-            onChange={setStrengthFeel}
-          />
-
-          {/* 3. Fatigue */}
-          <QuickTapGroup
-            label="How tired did you feel?"
-            options={[
-              { value: "Fresh", label: "Fresh" },
-              { value: "Normal", label: "Normal" },
-              { value: "Drained", label: "Drained" },
-            ]}
-            value={fatigueFeel as any}
-            onChange={setFatigueFeel}
-          />
-
-          {/* 4. Pain */}
-          <QuickTapGroup
-            label="Any pain or discomfort?"
-            options={[
-              { value: "No", label: "No" },
-              { value: "Mild", label: "Mild" },
-              { value: "Yes", label: "Yes" },
-            ]}
-            value={pain as any}
-            onChange={setPain}
-          />
-
-          {/* 5. Hit target */}
-          <QuickTapGroup
-            label="Did you hit the target reps/RIR?"
-            options={[
-              { value: "Yes", label: "Yes" },
-              { value: "Mostly", label: "Mostly" },
-              { value: "No", label: "No" },
-            ]}
-            value={hitTarget as any}
-            onChange={setHitTarget}
-          />
-
-          {/* 6. Optional coach note */}
+          {/* Optional coach note */}
           <div className="space-y-2">
             <Label htmlFor="wc-note" className="text-sm font-bold">
               Anything your coach should know? <span className="font-normal text-muted-foreground">(optional)</span>
