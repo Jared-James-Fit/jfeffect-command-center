@@ -306,12 +306,14 @@ export function ExerciseHistoryButton({
   exerciseName,
   displayUnit,
   className,
+  currentDayIndex,
 }: {
   clientId: string | null | undefined;
   exerciseId: string | null | undefined;
   exerciseName: string;
   displayUnit?: "kg" | "lb";
   className?: string;
+  currentDayIndex?: number | null;
 }) {
   const [open, setOpen] = useState(false);
   if (!clientId || !exerciseId) return null;
