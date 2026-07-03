@@ -50,7 +50,8 @@ async function loadRowContext(supabase: any, rowId: string): Promise<RowCtx> {
  * Template blocks (client_id IS NULL) are excluded — never mutate templates.
  */
 async function findFutureSiblings(supabase: any, ctx: RowCtx): Promise<string[]> {
-  if (!ctx.exerciseId || !ctx.clientId) return [];
+  if (!ctx.clientId) return [];
+  if (!ctx.exerciseId && !ctx.exerciseNameOverride) return [];
   // 1) all week_ids in this block, then day_ids in those weeks. We
   // resolve in two steps because filtering on an embedded resource
   // (pl_weeks.block_id) silently returns no rows on some PostgREST
@@ -82,14 +83,41 @@ async function findFutureSiblings(supabase: any, ctx: RowCtx): Promise<string[]>
   const openDayIds = dayIds.filter((id: string) => !completedSet.has(id));
   if (openDayIds.length === 0) return [];
 
-  // 3) matching rows on those days
+  // 3) matching rows on those days — match by exercise_id when we have
+  // one, but ALSO fall back to name matching (linked exercise name or
+  // free-text override). Coaches often duplicate an exercise across
+  // weeks with the same name but different exercise records, which
+  // previously reported "0 uncompleted workouts affected" and blocked
+  // the "Future workouts in this block" option entirely.
+  let srcName: string | null = ctx.exerciseNameOverride;
+  if (!srcName && ctx.exerciseId) {
+    const { data: srcEx } = await supabase
+      .from("exercises")
+      .select("name")
+      .eq("id", ctx.exerciseId)
+      .maybeSingle();
+    srcName = (srcEx as any)?.name ?? null;
+  }
   const { data: rows, error: rErr } = await supabase
     .from("pl_exercise_rows")
-    .select("id")
-    .in("day_id", openDayIds)
-    .eq("exercise_id", ctx.exerciseId);
+    .select("id, exercise_id, exercise_name_override, exercises(name)")
+    .in("day_id", openDayIds);
   if (rErr) throw rErr;
-  return (rows ?? []).map((r: any) => r.id);
+  const normalizedSrc = (srcName ?? "").trim().toLowerCase();
+  const matches: string[] = [];
+  for (const r of (rows ?? []) as any[]) {
+    if (ctx.exerciseId && r.exercise_id === ctx.exerciseId) {
+      matches.push(r.id);
+      continue;
+    }
+    if (normalizedSrc) {
+      const rowName = ((r.exercise_name_override ?? r.exercises?.name) ?? "")
+        .trim()
+        .toLowerCase();
+      if (rowName && rowName === normalizedSrc) matches.push(r.id);
+    }
+  }
+  return matches;
 }
 
 export const getSwapImpact = createServerFn({ method: "POST" })
