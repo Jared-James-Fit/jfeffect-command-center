@@ -832,7 +832,7 @@ export function QuickSwapButton({
                       value="future"
                       id="swap-scope-future"
                       className="mt-0.5"
-                      disabled={!!impact?.isTemplate || (impact?.futureCount ?? 0) === 0}
+                      disabled={!!impact?.isTemplate}
                     />
                     <Label htmlFor="swap-scope-future" className="flex-1 cursor-pointer">
                       <div className="text-sm font-medium">Future workouts in this block</div>
