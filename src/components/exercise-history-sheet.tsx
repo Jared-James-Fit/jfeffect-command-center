@@ -220,7 +220,9 @@ export function ExerciseHistorySheet({
               </div>
             </Card>
           )}
-          {grouped.map((g) => (
+          {grouped.map((g) => {
+            const isSameTrainingDay = currentDayIndex != null && g.day?.day_index != null && g.day.day_index === currentDayIndex;
+            return (
             <Card key={`${g.block?.id}-${g.week?.id}-${g.day?.id}`} className="p-3">
               <div className="mb-2 flex flex-wrap items-baseline justify-between gap-1 text-[11px] uppercase tracking-wider text-muted-foreground">
                 <div className="truncate font-bold">
