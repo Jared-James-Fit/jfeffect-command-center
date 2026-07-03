@@ -127,20 +127,36 @@ function useSidebarMode() {
   return [mode, update] as const;
 }
 
+// Sections that must never be collapsed — they contain primary navigation items
+// that users need to access at all times.
+const NEVER_COLLAPSE_SECTIONS = new Set([
+  "Home", "Clients", "Coaching", "Programming", "Forms",
+  "Communication", "Sales", "Calendar", "Content",
+]);
+
 function useCollapsedSections() {
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set(DEFAULT_COLLAPSED_SECTIONS));
   useEffect(() => {
     try {
       const raw = localStorage.getItem(SIDEBAR_COLLAPSED_SECTIONS_KEY);
-      if (raw) setCollapsed(new Set(JSON.parse(raw)));
+      if (raw) {
+        // Filter out any sections that should never be collapsed.
+        // This is a one-time migration that fixes corrupted localStorage state
+        // from previous Lovable builds that accidentally collapsed primary sections.
+        const stored = new Set<string>(JSON.parse(raw));
+        for (const section of NEVER_COLLAPSE_SECTIONS) stored.delete(section);
+        setCollapsed(stored);
+      }
     } catch {}
   }, []);
   const toggle = (label: string, allLabels?: string[]) => {
+    // Never collapse primary navigation sections
+    if (NEVER_COLLAPSE_SECTIONS.has(label)) return;
     setCollapsed((prev) => {
       const isCollapsed = prev.has(label);
       if (allLabels && isCollapsed) {
-        // Accordion: open this section, collapse all others
-        const next = new Set(allLabels.filter((l) => l !== label));
+        // Accordion: open this section, collapse all others (but never collapse primary sections)
+        const next = new Set(allLabels.filter((l) => l !== label && !NEVER_COLLAPSE_SECTIONS.has(l)));
         try { localStorage.setItem(SIDEBAR_COLLAPSED_SECTIONS_KEY, JSON.stringify(Array.from(next))); } catch {}
         return next;
       }
