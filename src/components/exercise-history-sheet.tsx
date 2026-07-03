@@ -242,7 +242,7 @@ export function ExerciseHistorySheet({
                     return ts ? format(new Date(ts), "MMM d, yyyy") : "—";
                   })()}
                   {isSameTrainingDay && (
-                    <Badge variant="outline" className="ml-2 text-[10px] font-medium">Same training day</Badge>
+                    <Badge variant="outline" className="text-[10px] font-medium">Same training day</Badge>
                   )}
                 </div>
               </div>
