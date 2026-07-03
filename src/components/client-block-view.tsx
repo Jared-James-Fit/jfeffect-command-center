@@ -339,8 +339,11 @@ export function ClientBlockView({
 
   return (
     <section className="space-y-3">
-      {/* Block selector — current + next + previously assigned blocks. */}
-      {orderedBlocks.length > 1 && (
+      {/* Block selector — current + next + previously assigned blocks.
+          Always rendered when we have any blocks so clients can discover
+          the picker and jump to previous or upcoming blocks as soon as
+          the coach publishes them. */}
+      {orderedBlocks.length > 0 && (
         <div
           className="-mx-3 flex snap-x snap-mandatory items-stretch gap-2 overflow-x-auto px-3 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
           aria-label="Training blocks"
