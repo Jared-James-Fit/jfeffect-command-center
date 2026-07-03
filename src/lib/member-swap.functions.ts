@@ -69,8 +69,23 @@ export const getMemberSwapImpact = createServerFn({ method: "POST" })
     const weeks = ((enr as any)?.member_plans?.published_payload?.weeks_data ?? []) as any[];
     let futureCount = 0;
     const srcDay = weeks[data.weekIndex - 1]?.days?.[data.dayIndex - 1] ?? null;
-    const srcExerciseId = srcDay?.rows?.[data.exerciseIndex]?.exercise_id ?? null;
-    if (srcExerciseId) {
+    const srcRow = srcDay?.rows?.[data.exerciseIndex] ?? null;
+    const srcExerciseId = srcRow?.exercise_id ?? null;
+    const srcName = ((srcRow?.exercise_name_override ?? srcRow?.exercise_name ?? srcRow?.name ?? "") as string)
+      .trim()
+      .toLowerCase();
+    const rowMatches = (r: any): boolean => {
+      if (!r) return false;
+      if (srcExerciseId && r.exercise_id === srcExerciseId) return true;
+      if (srcName) {
+        const n = ((r.exercise_name_override ?? r.exercise_name ?? r.name ?? "") as string)
+          .trim()
+          .toLowerCase();
+        if (n && n === srcName) return true;
+      }
+      return false;
+    };
+    if (srcExerciseId || srcName) {
       for (const w of weeks) {
         const wi = w.week_index ?? 0;
         if (wi < data.weekIndex) continue;
@@ -78,9 +93,7 @@ export const getMemberSwapImpact = createServerFn({ method: "POST" })
           const di = d.day_index ?? 0;
           // Skip today's workout and anything earlier in the current week.
           if (wi === data.weekIndex && di <= data.dayIndex) continue;
-          const hit = (d.rows ?? []).some(
-            (r: any) => r?.exercise_id === srcExerciseId,
-          );
+          const hit = (d.rows ?? []).some(rowMatches);
           if (hit) futureCount++;
         }
       }
@@ -123,8 +136,23 @@ export const applyMemberSwap = createServerFn({ method: "POST" })
         .maybeSingle();
       const weeks = ((enr as any)?.member_plans?.published_payload?.weeks_data ?? []) as any[];
       const srcDay = weeks[data.weekIndex - 1]?.days?.[data.dayIndex - 1] ?? null;
-      const srcExerciseId = srcDay?.rows?.[data.exerciseIndex]?.exercise_id ?? null;
-      if (srcExerciseId) {
+      const srcRow = srcDay?.rows?.[data.exerciseIndex] ?? null;
+      const srcExerciseId = srcRow?.exercise_id ?? null;
+      const srcName = ((srcRow?.exercise_name_override ?? srcRow?.exercise_name ?? srcRow?.name ?? "") as string)
+        .trim()
+        .toLowerCase();
+      const rowMatches = (r: any): boolean => {
+        if (!r) return false;
+        if (srcExerciseId && r.exercise_id === srcExerciseId) return true;
+        if (srcName) {
+          const n = ((r.exercise_name_override ?? r.exercise_name ?? r.name ?? "") as string)
+            .trim()
+            .toLowerCase();
+          if (n && n === srcName) return true;
+        }
+        return false;
+      };
+      if (srcExerciseId || srcName) {
         for (const w of weeks) {
           const wi = w.week_index ?? 0;
           if (wi < data.weekIndex) continue;
@@ -135,7 +163,7 @@ export const applyMemberSwap = createServerFn({ method: "POST" })
             const rows = (d.rows ?? []) as any[];
             for (let idx = 0; idx < rows.length; idx++) {
               const r = rows[idx];
-              if (!r || r.exercise_id !== srcExerciseId) continue;
+              if (!rowMatches(r)) continue;
               baseRows.push({
                 enrollment_id: data.enrollmentId,
                 week_index: wi,
