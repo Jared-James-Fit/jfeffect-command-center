@@ -1639,6 +1639,7 @@ function WorkoutDay({
                 row={r}
                 dayId={dayId}
                 dayTitle={cleanDayTitle(day.title, day.day_index)}
+                dayIndex={day?.day_index ?? null}
                 clientId={client?.id}
                 blockId={blockId}
                 existingResults={(results as any[]).filter((x) => x.row_id === r.id)}
