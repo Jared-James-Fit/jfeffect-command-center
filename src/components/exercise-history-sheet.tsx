@@ -31,6 +31,7 @@ export function ExerciseHistorySheet({
   exerciseName,
   displayUnit = "kg",
   excludePartial = false,
+  currentDayIndex,
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
@@ -40,6 +41,8 @@ export function ExerciseHistorySheet({
   displayUnit?: "kg" | "lb";
   /** When true, hide sets without a completed_at timestamp. */
   excludePartial?: boolean;
+  /** Program day index of the workout the history was opened from. When present, matching days are highlighted. */
+  currentDayIndex?: number | null;
 }) {
   const [showPartial, setShowPartial] = useState(!excludePartial);
   const [days, setDays] = useState<number | null>(null);
@@ -217,8 +220,10 @@ export function ExerciseHistorySheet({
               </div>
             </Card>
           )}
-          {grouped.map((g) => (
-            <Card key={`${g.block?.id}-${g.week?.id}-${g.day?.id}`} className="p-3">
+          {grouped.map((g) => {
+            const isSameTrainingDay = currentDayIndex != null && g.day?.day_index != null && g.day.day_index === currentDayIndex;
+            return (
+            <Card key={`${g.block?.id}-${g.week?.id}-${g.day?.id}`} className={cn("p-3", isSameTrainingDay && "border-l-4 border-l-primary/40")}>
               <div className="mb-2 flex flex-wrap items-baseline justify-between gap-1 text-[11px] uppercase tracking-wider text-muted-foreground">
                 <div className="truncate font-bold">
                   {g.block?.name ?? "Block"} · Wk {g.week?.week_index ?? "?"} · {g.day?.title || `Day ${g.day?.day_index ?? ""}`}
@@ -236,6 +241,9 @@ export function ExerciseHistorySheet({
                     const ts = completionTs ?? earliestCreated ?? g.sets[0]?.completed_at ?? g.sets[0]?.updated_at;
                     return ts ? format(new Date(ts), "MMM d, yyyy") : "—";
                   })()}
+                  {isSameTrainingDay && (
+                    <Badge variant="outline" className="ml-2 text-[10px] font-medium">Same training day</Badge>
+                  )}
                 </div>
               </div>
               <div className="overflow-hidden rounded-md border border-border">
@@ -283,7 +291,8 @@ export function ExerciseHistorySheet({
                 ))}
               </div>
             </Card>
-          ))}
+          );
+        })}
         </div>
       </SheetContent>
     </Sheet>
