@@ -329,6 +329,7 @@ export function ExerciseHistoryButton({
         exerciseId={exerciseId}
         exerciseName={exerciseName}
         displayUnit={displayUnit}
+        currentDayIndex={currentDayIndex}
       />
     </>
   );
