@@ -7,6 +7,11 @@ export type SummaryRow = {
   sets?: number | null;
   exercises?: { id?: string | null; name?: string | null } | null;
   exercise_name_override?: string | null;
+  /** Row was explicitly marked as skipped. Doesn't count against completion. */
+  skipped?: boolean | null;
+  /** Present for timed exercises (planks, holds, cardio). */
+  measurement_type?: string | null;
+  tracking_type?: string | null;
 };
 
 export type SummaryResult = {
@@ -16,6 +21,8 @@ export type SummaryResult = {
   actual_load_unit: "kg" | "lb" | null;
   actual_rpe: number | null;
   completed_at: string | null;
+  /** Set duration for timed exercises. A set counts as completed when >0. */
+  completed_duration_seconds?: number | null;
 };
 
 const KG_PER_LB = 0.45359237;
@@ -70,10 +77,16 @@ export function computeWorkoutSummary(
   const missedExercises: string[] = [];
 
   for (const row of rows) {
+    // Explicitly skipped rows don't count for or against the score.
+    if (row.skipped) continue;
     const sets = Math.max(0, Number(row.sets ?? 0));
     prescribedSets += sets;
+    // A set counts as completed if it has reps logged OR duration logged
+    // (timed exercises like planks/holds/cardio don't populate actual_reps).
     const rs = (byRow.get(row.id) ?? []).filter(
-      (r) => (r.actual_reps ?? 0) > 0,
+      (r) =>
+        (Number(r.actual_reps ?? 0) > 0) ||
+        (Number(r.completed_duration_seconds ?? 0) > 0),
     );
     if (rs.length > 0) {
       exercisesCompleted += 1;
@@ -106,6 +119,7 @@ export function computeWorkoutSummary(
   score = Math.max(0, Math.min(100, Math.round(score)));
 
   const totalLiftedRounded = Math.round(totalLifted);
+  const consideredRows = rows.filter((r) => !r.skipped).length;
 
   return {
     displayUnit,
@@ -115,7 +129,7 @@ export function computeWorkoutSummary(
     totalReps,
     totalLifted: totalLiftedRounded,
     totalLiftedFmt: `${totalLiftedRounded.toLocaleString()} ${displayUnit}`,
-    exercisesTotal: rows.length,
+    exercisesTotal: consideredRows,
     exercisesCompleted,
     missedExercises,
     avgRpe: rpeCount > 0 ? Math.round((rpeSum / rpeCount) * 10) / 10 : null,
