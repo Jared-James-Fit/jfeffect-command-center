@@ -288,7 +288,8 @@ export function ExerciseHistorySheet({
                 ))}
               </div>
             </Card>
-          ))}
+          );
+        })}
         </div>
       </SheetContent>
     </Sheet>
