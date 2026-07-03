@@ -98,6 +98,99 @@ export function dayScheduledDate(
   return parseLocalDate(addDays(range.start, Math.min(6, idx)));
 }
 
+/**
+ * Resolve calendar dates for every day in a single week, avoiding collisions.
+ *
+ * Manually pinned `scheduled_date` values always win. Remaining days (no
+ * explicit date) are laid onto training-day slots inside the week range in
+ * `day_index` order, skipping any slot already claimed by a pinned day so we
+ * never lose a workout to a duplicate. When training-day slots are
+ * exhausted, we fall through to any remaining day in the week range, and
+ * finally to the last day of the range so nothing is dropped.
+ *
+ * ROOT CAUSE FIX 2026-07-03: previous per-day resolver could stack multiple
+ * derived days onto the same weekday when a sibling day was pinned to a
+ * training-day slot, causing calendar dots to disappear (e.g. Fionna's Sat
+ * workout collapsed onto Fri because Day 4 was pinned to Fri and Day 3
+ * derived to the same Fri slot).
+ */
+export function resolveWeekDayDates(
+  days: any[],
+  week: any,
+  block: any,
+  committedTrainingDays?: string[] | null,
+): Map<string, Date> {
+  const out = new Map<string, Date>();
+  if (!Array.isArray(days) || days.length === 0) return out;
+  const range = week && block ? weekDisplayRange(block, week) : null;
+
+  // Sort by day_index so lower-indexed days claim earlier slots.
+  const sorted = [...days].sort(
+    (a, b) => (a?.day_index ?? 0) - (b?.day_index ?? 0),
+  );
+
+  const used = new Set<string>(); // ISO yyyy-mm-dd of taken dates in this week
+  const dateKey = (d: Date) =>
+    `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+
+  // Pass 1: explicit scheduled_date wins.
+  for (const d of sorted) {
+    if (!d?.id || !d?.scheduled_date) continue;
+    const parsed = parseLocalDate(d.scheduled_date);
+    if (!parsed) continue;
+    out.set(d.id, parsed);
+    used.add(dateKey(parsed));
+  }
+
+  if (!range) return out;
+
+  // Build the week's ordered day list once.
+  const weekDays: Date[] = [];
+  for (let i = 0; i < 7; i++) {
+    const d = addDays(range.start, i);
+    if (d > range.end) break;
+    weekDays.push(d);
+  }
+
+  const weekTrainingDays = normalizeWeekdays(week?.training_days);
+  const trainingDays = weekTrainingDays.length > 0
+    ? weekTrainingDays
+    : normalizeWeekdays(committedTrainingDays);
+
+  const trainingSlots = trainingDays.length > 0
+    ? weekDays.filter((d) => trainingDays.includes(DAY_NAMES[d.getDay()]))
+    : weekDays;
+
+  // Pass 2: derived days claim the next unused training-day slot.
+  for (const d of sorted) {
+    if (!d?.id || out.has(d.id)) continue;
+    let picked: Date | null = null;
+    for (const slot of trainingSlots) {
+      const k = dateKey(slot);
+      if (used.has(k)) continue;
+      picked = slot;
+      used.add(k);
+      break;
+    }
+    if (!picked) {
+      // Fall back to any remaining day in the range.
+      for (const slot of weekDays) {
+        const k = dateKey(slot);
+        if (used.has(k)) continue;
+        picked = slot;
+        used.add(k);
+        break;
+      }
+    }
+    // Last-resort: pin to the range end so the day still shows up.
+    if (!picked) picked = weekDays[weekDays.length - 1] ?? range.end;
+    const normalized = parseLocalDate(picked);
+    if (normalized) out.set(d.id, normalized);
+  }
+
+  return out;
+}
+
 function isRestDayToday(restDays: string[] | null | undefined): boolean {
   const normalized = normalizeWeekdays(restDays);
   if (normalized.length === 0) return false;
