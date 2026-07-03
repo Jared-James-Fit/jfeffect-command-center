@@ -2387,6 +2387,7 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
             exerciseId={exerciseId}
             exerciseName={name}
             displayUnit={activeUnit}
+            currentDayIndex={dayIndex}
           />
         )}
         {hasGuide && (
