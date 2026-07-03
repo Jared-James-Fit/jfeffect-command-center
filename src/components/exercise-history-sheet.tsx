@@ -241,6 +241,9 @@ export function ExerciseHistorySheet({
                     const ts = completionTs ?? earliestCreated ?? g.sets[0]?.completed_at ?? g.sets[0]?.updated_at;
                     return ts ? format(new Date(ts), "MMM d, yyyy") : "—";
                   })()}
+                  {isSameTrainingDay && (
+                    <Badge variant="outline" className="ml-2 text-[10px] font-medium">Same training day</Badge>
+                  )}
                 </div>
               </div>
               <div className="overflow-hidden rounded-md border border-border">
