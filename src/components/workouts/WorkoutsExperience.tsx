@@ -1081,14 +1081,44 @@ function BlockViewTab({
 }: {
   items: WorkoutItem[]; clientId: string; mode: Mode;
 }) {
-  void clientId;
+  // Pull EVERY client-visible block for this client directly, so previous
+  // and upcoming blocks appear in the selector even when the current
+  // workouts query hasn't materialized items for them (e.g. brand-new
+  // upcoming blocks with no completions yet, or completed blocks the
+  // client should still be able to review). Falls back to blocks derived
+  // from items until the direct query resolves.
+  const { data: allBlocks } = useQuery({
+    queryKey: ["client-visible-blocks", clientId],
+    enabled: !!clientId,
+    staleTime: 30_000,
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("pl_blocks")
+        .select("*")
+        .eq("client_id", clientId)
+        .eq("client_visible", true)
+        .neq("status", "Archived")
+        .order("start_date", { ascending: true, nullsFirst: false })
+        .order("sort_order", { ascending: true, nullsFirst: false })
+        .order("created_at", { ascending: true });
+      return (data ?? []) as any[];
+    },
+  });
+
   const blocks = useMemo(() => {
     const seen = new Map<string, any>();
+    // Seed with the direct query so previous/upcoming blocks are guaranteed
+    // to appear even before their day items load.
+    for (const b of (allBlocks ?? [])) {
+      if (b?.id) seen.set(b.id, b);
+    }
+    // Merge in anything from items in case a block is visible via items but
+    // hasn't come back from the direct fetch yet.
     for (const it of items) {
       if (it.block?.id && !seen.has(it.block.id)) seen.set(it.block.id, it.block);
     }
     return [...seen.values()];
-  }, [items]);
+  }, [allBlocks, items]);
 
   const today = localStartOfToday();
   // Date-range driven (with sort_order / earliest-start tiebreakers) so
