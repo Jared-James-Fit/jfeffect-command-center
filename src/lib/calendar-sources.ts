@@ -2,7 +2,7 @@ import { useEffect, useMemo } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { getClientWorkouts } from "@/lib/pl-programs";
-import { dayScheduledDate } from "@/lib/workout-today";
+import { resolveWeekDayDates } from "@/lib/workout-today";
 import { listGoogleEventsRange, getGoogleConnectionStatus } from "@/lib/google-cal.functions";
 
 /**
@@ -294,22 +294,42 @@ export function useClientCalendarSources(clientId: string | null | undefined) {
         raw: s,
       });
     }
-    for (const it of (workoutsQ.data ?? []) as any[]) {
-      if (!it.day?.id) continue;
-      const sd = dayScheduledDate(it as any, committedDays);
-      if (!sd) continue;
-      const date = toLocalDate(sd.toISOString());
-      const completed = !!it.completion?.completed_at;
-      out.push({
-        id: `workout:${it.day.id}`,
-        kind: "workout",
-        date,
-        title: it.day?.title || `Day ${it.day?.day_index ?? ""}`.trim(),
-        subtitle: [it.block?.name, it.day?.focus].filter(Boolean).join(" · "),
-        status: completed ? "Completed" : "Scheduled",
-        href: { to: "/portal/workouts/$dayId", params: { dayId: it.day.id } },
-        raw: it,
-      });
+    // Group workout items by week so we can resolve every day's date in a
+    // single collision-aware pass. This guarantees every day in the client's
+    // program shows up on the calendar exactly once, even when a coach has
+    // pinned some days to explicit dates that would otherwise clash with
+    // derived dates for their siblings.
+    {
+      const workoutItems = (workoutsQ.data ?? []) as any[];
+      const byWeek = new Map<string, any[]>();
+      for (const it of workoutItems) {
+        if (!it.day?.id || !it.week?.id) continue;
+        const arr = byWeek.get(it.week.id) ?? [];
+        arr.push(it);
+        byWeek.set(it.week.id, arr);
+      }
+      for (const [, weekItems] of byWeek) {
+        const week = weekItems[0]?.week;
+        const block = weekItems[0]?.block;
+        const dayRows = weekItems.map((it) => it.day);
+        const dateMap = resolveWeekDayDates(dayRows, week, block, committedDays);
+        for (const it of weekItems) {
+          const resolved = dateMap.get(it.day.id);
+          if (!resolved) continue;
+          const date = toLocalDate(resolved.toISOString());
+          const completed = !!it.completion?.completed_at;
+          out.push({
+            id: `workout:${it.day.id}`,
+            kind: "workout",
+            date,
+            title: it.day?.title || `Day ${it.day?.day_index ?? ""}`.trim(),
+            subtitle: [it.block?.name, it.day?.focus].filter(Boolean).join(" · "),
+            status: completed ? "Completed" : "Scheduled",
+            href: { to: "/portal/workouts/$dayId", params: { dayId: it.day.id } },
+            raw: it,
+          });
+        }
+      }
     }
     for (const c of (checkinsQ.data ?? [])) {
       if (!c.next_due_at) continue;
