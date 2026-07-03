@@ -31,6 +31,7 @@ export function ExerciseHistorySheet({
   exerciseName,
   displayUnit = "kg",
   excludePartial = false,
+  currentDayIndex,
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
@@ -40,6 +41,8 @@ export function ExerciseHistorySheet({
   displayUnit?: "kg" | "lb";
   /** When true, hide sets without a completed_at timestamp. */
   excludePartial?: boolean;
+  /** Program day index of the workout the history was opened from. When present, matching days are highlighted. */
+  currentDayIndex?: number | null;
 }) {
   const [showPartial, setShowPartial] = useState(!excludePartial);
   const [days, setDays] = useState<number | null>(null);
