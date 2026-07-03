@@ -225,10 +225,10 @@ export function ExerciseHistorySheet({
             return (
             <Card key={`${g.block?.id}-${g.week?.id}-${g.day?.id}`} className={cn("p-3", isSameTrainingDay && "border-l-4 border-l-primary/40")}>
               <div className="mb-2 flex flex-wrap items-baseline justify-between gap-1 text-[11px] uppercase tracking-wider text-muted-foreground">
-                <div className="truncate font-bold">
+                <div className={cn("truncate font-bold", isSameTrainingDay && "min-w-0 flex-1")}>
                   {g.block?.name ?? "Block"} · Wk {g.week?.week_index ?? "?"} · {g.day?.title || `Day ${g.day?.day_index ?? ""}`}
                 </div>
-                <div>
+                <div className={cn("flex items-baseline gap-2", isSameTrainingDay && "flex-shrink-0")}>
                   {(() => {
                     // Prefer the workout's actual completion timestamp; fall
                     // back to the earliest set's created_at when the day
@@ -242,7 +242,7 @@ export function ExerciseHistorySheet({
                     return ts ? format(new Date(ts), "MMM d, yyyy") : "—";
                   })()}
                   {isSameTrainingDay && (
-                    <Badge variant="outline" className="ml-2 text-[10px] font-medium">Same training day</Badge>
+                    <Badge variant="outline" className="text-[10px] font-medium">Same training day</Badge>
                   )}
                 </div>
               </div>
@@ -306,12 +306,14 @@ export function ExerciseHistoryButton({
   exerciseName,
   displayUnit,
   className,
+  currentDayIndex,
 }: {
   clientId: string | null | undefined;
   exerciseId: string | null | undefined;
   exerciseName: string;
   displayUnit?: "kg" | "lb";
   className?: string;
+  currentDayIndex?: number | null;
 }) {
   const [open, setOpen] = useState(false);
   if (!clientId || !exerciseId) return null;
@@ -327,6 +329,7 @@ export function ExerciseHistoryButton({
         exerciseId={exerciseId}
         exerciseName={exerciseName}
         displayUnit={displayUnit}
+        currentDayIndex={currentDayIndex}
       />
     </>
   );
