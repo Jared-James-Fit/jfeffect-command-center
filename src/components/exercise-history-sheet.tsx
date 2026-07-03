@@ -223,7 +223,7 @@ export function ExerciseHistorySheet({
           {grouped.map((g) => {
             const isSameTrainingDay = currentDayIndex != null && g.day?.day_index != null && g.day.day_index === currentDayIndex;
             return (
-            <Card key={`${g.block?.id}-${g.week?.id}-${g.day?.id}`} className="p-3">
+            <Card key={`${g.block?.id}-${g.week?.id}-${g.day?.id}`} className={cn("p-3", isSameTrainingDay && "border-l-4 border-l-primary/40")}>
               <div className="mb-2 flex flex-wrap items-baseline justify-between gap-1 text-[11px] uppercase tracking-wider text-muted-foreground">
                 <div className="truncate font-bold">
                   {g.block?.name ?? "Block"} · Wk {g.week?.week_index ?? "?"} · {g.day?.title || `Day ${g.day?.day_index ?? ""}`}
