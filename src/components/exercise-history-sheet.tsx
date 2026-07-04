@@ -149,15 +149,30 @@ export function ExerciseHistorySheet({
   }, [rows, showPartial]);
 
   const fmtLoad = (r: any): string => {
-    // Show loads in the caller's display unit (the client's chosen unit
-    // for this workout / exercise) so history matches the rest of the UI.
-    // The originally entered value is still shown as a secondary
-    // "(≈ N unit)" annotation below.
-    const v = displayUnit === "kg" ? r.normalized_kg : r.normalized_lb;
-    if (v == null) return "—";
-    const n = Number(v);
+    // Always show the load in the unit the client actually entered on
+    // that set. Converting historical entries into the caller's current
+    // `displayUnit` produced misleading rows like "54.4 kg (orig 120 lb)"
+    // — the client trained in pounds, they should see pounds.
+    const enteredUnit: "kg" | "lb" | null =
+      r.entered_unit === "kg" || r.entered_unit === "lb"
+        ? r.entered_unit
+        : r.actual_load_unit === "kg" || r.actual_load_unit === "lb"
+          ? r.actual_load_unit
+          : null;
+    const unit: "kg" | "lb" = enteredUnit ?? displayUnit;
+    // Prefer the raw entered value; fall back to the matching normalized
+    // column so pre-migration rows without entered_value still render.
+    let n: number | null = null;
+    if (r.entered_value != null && enteredUnit) n = Number(r.entered_value);
+    else if (r.actual_load != null && enteredUnit) n = Number(r.actual_load);
+    else {
+      const v = unit === "kg" ? r.normalized_kg : r.normalized_lb;
+      if (v == null) return "—";
+      n = Number(v);
+    }
+    if (n == null || Number.isNaN(n)) return "—";
     const rounded = Math.abs(n - Math.round(n)) < 0.05 ? Math.round(n) : Number(n.toFixed(1));
-    return `${rounded} ${displayUnit}`;
+    return `${rounded} ${unit}`;
   };
 
   return (
@@ -175,7 +190,7 @@ export function ExerciseHistorySheet({
             <History className="h-4 w-4" /> {exerciseName} history
           </SheetTitle>
           <SheetDescription>
-            Past logged sets across all blocks. Loads shown in {displayUnit.toUpperCase()}; original entries are preserved.
+            Past logged sets across all blocks. Each set is shown in the unit it was originally logged.
           </SheetDescription>
         </SheetHeader>
 
@@ -265,16 +280,24 @@ export function ExerciseHistorySheet({
                     <span className="font-medium tabular-nums">
                       {fmtLoad(s)}
                       {(() => {
-                        const enteredUnit = s.entered_unit ?? s.actual_load_unit;
-                        if (enteredUnit !== "kg" && enteredUnit !== "lb") return null;
-                        if (enteredUnit === displayUnit) return null;
-                        const conv = enteredUnit === "kg" ? s.normalized_kg : s.normalized_lb;
+                        // Secondary annotation: show the converted value in
+                        // the caller's `displayUnit` when it differs from
+                        // the entered unit, so a coach viewing in lb still
+                        // sees a kg equivalent alongside a kg entry.
+                        const enteredUnit =
+                          s.entered_unit === "kg" || s.entered_unit === "lb"
+                            ? s.entered_unit
+                            : s.actual_load_unit === "kg" || s.actual_load_unit === "lb"
+                              ? s.actual_load_unit
+                              : null;
+                        if (!enteredUnit || enteredUnit === displayUnit) return null;
+                        const conv = displayUnit === "kg" ? s.normalized_kg : s.normalized_lb;
                         if (conv == null) return null;
                         const n = Number(conv);
                         const rounded = Math.abs(n - Math.round(n)) < 0.05 ? Math.round(n) : Number(n.toFixed(1));
                         return (
                           <span className="ml-1 text-[10px] text-muted-foreground">
-                            (orig {rounded} {enteredUnit})
+                            (≈ {rounded} {displayUnit})
                           </span>
                         );
                       })()}
