@@ -63,7 +63,7 @@ export function ExerciseHistorySheet({
           actual_load, actual_load_unit,
           pl_exercise_rows!inner(
             id, exercise_id,
-            pl_days!inner(id, day_index, title, pl_weeks!inner(id, week_index, pl_blocks!inner(id, name)))
+            pl_days!inner(id, day_index, title, scheduled_date, pl_weeks!inner(id, week_index, pl_blocks!inner(id, name)))
           )
         `)
         .eq("client_id", clientId)
