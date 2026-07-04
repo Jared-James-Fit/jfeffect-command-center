@@ -893,12 +893,24 @@ function WorkoutDay({
       // independently. The persisted client/member preference (saved by
       // exerciseId) still seeds future workouts via resolveExerciseUnit.
       const local = unitOverrides[rowKey];
+      // Sensible defaults when there's no explicit preference/history:
+      //   Competition squat, bench, deadlift → kg
+      //   Everything else → lb
+      const isCompLift =
+        r.exercises?.is_competition_lift === true ||
+        r.exercises?.competition_lift_type === "squat" ||
+        r.exercises?.competition_lift_type === "bench" ||
+        r.exercises?.competition_lift_type === "deadlift";
+      const libraryDefault: WUnit | null =
+        r.exercises?.default_load_unit === "kg" || r.exercises?.default_load_unit === "lb"
+          ? r.exercises.default_load_unit
+          : (isCompLift ? "kg" : "lb");
       map[rowKey] = local ?? resolveExerciseUnit({
         prefUnit: exId ? prefByEx[exId] ?? null : null,
         historyUnit: exId ? modeUnit(historyByEx[exId] ?? []) : null,
         rowLoadUnit: (r.load_unit === "kg" || r.load_unit === "lb") ? r.load_unit : null,
-        exerciseDefault: (r.exercises?.default_load_unit === "kg" || r.exercises?.default_load_unit === "lb") ? r.exercises.default_load_unit : null,
-        workoutUnit: unit,
+        exerciseDefault: libraryDefault,
+        workoutUnit: isCompLift ? "kg" : "lb",
       });
     }
     return map;
