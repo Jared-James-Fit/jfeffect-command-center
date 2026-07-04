@@ -149,16 +149,15 @@ export function ExerciseHistorySheet({
   }, [rows, showPartial]);
 
   const fmtLoad = (r: any): string => {
-    // Always show the unit the user actually entered as primary so they
-    // see what they logged — not a converted value. Fall back to the
-    // caller's display unit only when no entered_unit is recorded.
-    const enteredUnit = (r.entered_unit ?? r.actual_load_unit) as "kg" | "lb" | null | undefined;
-    const primaryUnit = (enteredUnit === "kg" || enteredUnit === "lb") ? enteredUnit : displayUnit;
-    const v = primaryUnit === "kg" ? r.normalized_kg : r.normalized_lb;
+    // Show loads in the caller's display unit (the client's chosen unit
+    // for this workout / exercise) so history matches the rest of the UI.
+    // The originally entered value is still shown as a secondary
+    // "(≈ N unit)" annotation below.
+    const v = displayUnit === "kg" ? r.normalized_kg : r.normalized_lb;
     if (v == null) return "—";
     const n = Number(v);
     const rounded = Math.abs(n - Math.round(n)) < 0.05 ? Math.round(n) : Number(n.toFixed(1));
-    return `${rounded} ${primaryUnit}`;
+    return `${rounded} ${displayUnit}`;
   };
 
   return (
@@ -267,15 +266,15 @@ export function ExerciseHistorySheet({
                       {fmtLoad(s)}
                       {(() => {
                         const enteredUnit = s.entered_unit ?? s.actual_load_unit;
-                        const primaryUnit = enteredUnit === "kg" || enteredUnit === "lb" ? enteredUnit : displayUnit;
-                        if (primaryUnit === displayUnit) return null;
-                        const conv = displayUnit === "kg" ? s.normalized_kg : s.normalized_lb;
+                        if (enteredUnit !== "kg" && enteredUnit !== "lb") return null;
+                        if (enteredUnit === displayUnit) return null;
+                        const conv = enteredUnit === "kg" ? s.normalized_kg : s.normalized_lb;
                         if (conv == null) return null;
                         const n = Number(conv);
                         const rounded = Math.abs(n - Math.round(n)) < 0.05 ? Math.round(n) : Number(n.toFixed(1));
                         return (
                           <span className="ml-1 text-[10px] text-muted-foreground">
-                            (≈ {rounded} {displayUnit})
+                            (orig {rounded} {enteredUnit})
                           </span>
                         );
                       })()}
