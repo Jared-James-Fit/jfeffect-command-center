@@ -244,9 +244,20 @@ export function ExerciseHistorySheet({
                 </div>
                 <div className={cn("flex items-baseline gap-2", isSameTrainingDay && "flex-shrink-0")}>
                   {(() => {
-                    // Prefer the workout's actual completion timestamp; fall
-                    // back to the earliest set's created_at when the day
-                    // hasn't been formally completed yet.
+                    // Prefer the day's scheduled training date (what the
+                    // client is meant to see on the calendar), then the
+                    // workout completion timestamp, then the earliest set's
+                    // created_at as a last resort. Parse YYYY-MM-DD dates
+                    // as local calendar dates so JUN 30 doesn't slide to
+                    // JUN 29 in negative UTC offsets.
+                    const scheduled: string | null = g.day?.scheduled_date ?? null;
+                    if (scheduled) {
+                      const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(scheduled);
+                      if (m) {
+                        const d = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+                        return format(d, "MMM d, yyyy");
+                      }
+                    }
                     const completionTs = completionMap.get(g.day?.id);
                     const earliestCreated = g.sets
                       .map((s: any) => s.created_at)
