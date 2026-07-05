@@ -1,5 +1,5 @@
-import { useMemo, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useEffect, useMemo, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { Badge } from "@/components/ui/badge";
@@ -46,6 +46,34 @@ export function ExerciseHistorySheet({
 }) {
   const [showPartial, setShowPartial] = useState(!excludePartial);
   const [days, setDays] = useState<number | null>(null);
+  const queryClient = useQueryClient();
+
+  // Realtime: refetch when this client's logged sets or day completions
+  // change so the history stays in sync across devices/coach view without
+  // the user needing to reopen the sheet.
+  useEffect(() => {
+    if (!open || !clientId) return;
+    const channel = sb
+      .channel(`exercise-history-${clientId}-${exerciseId ?? "all"}`)
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "pl_row_results", filter: `client_id=eq.${clientId}` },
+        () => {
+          queryClient.invalidateQueries({ queryKey: ["exercise-history", clientId, exerciseId] });
+        },
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "pl_day_completions", filter: `client_id=eq.${clientId}` },
+        () => {
+          queryClient.invalidateQueries({ queryKey: ["exercise-history-completions", clientId] });
+        },
+      )
+      .subscribe();
+    return () => {
+      sb.removeChannel(channel);
+    };
+  }, [open, clientId, exerciseId, queryClient]);
 
   const { data: rows = [], isLoading, isFetching } = useQuery({
     queryKey: ["exercise-history", clientId, exerciseId, days],
@@ -113,6 +141,31 @@ export function ExerciseHistorySheet({
     return m;
   }, [completions]);
 
+  // Resolve the canonical "training date" for a group. Prefer the day's
+  // scheduled_date (parsed as a local calendar date), then the workout
+  // completion timestamp, then the earliest set's created_at, then any
+  // set-level timestamp as a last resort.
+  const resolveGroupDate = (g: { day: any; sets: any[] }): number => {
+    const scheduled: string | null = g.day?.scheduled_date ?? null;
+    if (scheduled) {
+      const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(scheduled);
+      if (m) return new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])).getTime();
+      const t = Date.parse(scheduled);
+      if (!Number.isNaN(t)) return t;
+    }
+    const completionTs = completionMap.get(g.day?.id);
+    if (completionTs) {
+      const t = Date.parse(completionTs);
+      if (!Number.isNaN(t)) return t;
+    }
+    const earliestCreated = g.sets
+      .map((s: any) => s.created_at)
+      .filter(Boolean)
+      .sort()[0];
+    const fallback = earliestCreated ?? g.sets[0]?.completed_at ?? g.sets[0]?.updated_at;
+    return fallback ? Date.parse(fallback) : 0;
+  };
+
   const grouped = useMemo(() => {
     const filtered = rows.filter((r: any) => (showPartial ? true : !!r.completed_at));
     const byDay = new Map<string, { day: any; week: any; block: any; sets: any[] }>();
@@ -126,13 +179,10 @@ export function ExerciseHistorySheet({
       if (!byDay.has(k)) byDay.set(k, { day: d, week: w, block: b, sets: [] });
       byDay.get(k)!.sets.push(r);
     }
-    // Most recent day first; sets ascending within day.
+    // Most recent training date first, using the same resolver the header
+    // renders so ordering matches the visible date on each card.
     const list = [...byDay.values()];
-    list.sort((a, b) => {
-      const ad = a.sets[0]?.completed_at ?? a.sets[0]?.updated_at ?? "";
-      const bd = b.sets[0]?.completed_at ?? b.sets[0]?.updated_at ?? "";
-      return ad < bd ? 1 : -1;
-    });
+    list.sort((a, b) => resolveGroupDate(b) - resolveGroupDate(a));
     for (const g of list) {
       g.sets.sort((x, y) => {
         // Sort by created_at first (chronological order they were logged),
@@ -146,7 +196,7 @@ export function ExerciseHistorySheet({
       });
     }
     return list;
-  }, [rows, showPartial]);
+  }, [rows, showPartial, completionMap]);
 
   const fmtLoad = (r: any): string => {
     // Always show the load in the unit the client actually entered on
