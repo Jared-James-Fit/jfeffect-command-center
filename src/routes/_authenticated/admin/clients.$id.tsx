@@ -834,6 +834,7 @@ function ClientDetail() {
               </Button>
             </Link>
           </div>
+          <StartingMaxesCard form={form} />
           <Suspense fallback={<TabFallback />}>
             <GoalsSetupPanel clientId={id} />
           </Suspense>
@@ -2050,8 +2051,6 @@ function ClientOverviewSnapshot({
             </dl>
           </Card>
 
-          {/* Starting Maxes from intake */}
-          <StartingMaxesCard form={form} onEdit={() => onGoToTab("goals-setup")} />
         </div>
       </div>
     </div>
@@ -2079,7 +2078,7 @@ function SnapshotField({ label, value, fallbackAction }: { label: string; value?
   );
 }
 
-function StartingMaxesCard({ form, onEdit }: { form: any; onEdit: () => void }) {
+function StartingMaxesCard({ form, onEdit }: { form: any; onEdit?: () => void }) {
   const unit = form.intake_lift_unit === "kg" ? "kg" : "lb";
   const known = form.intake_lifts_known !== false;
   const oneRms = {
@@ -2113,9 +2112,11 @@ function StartingMaxesCard({ form, onEdit }: { form: any; onEdit: () => void }) 
         <h3 className="text-sm font-semibold uppercase tracking-widest text-muted-foreground">
           Starting Maxes {known ? "(1RM)" : "(5RM)"}
         </h3>
-        <Button variant="ghost" size="sm" className="min-h-[40px] text-primary" onClick={onEdit}>
-          Edit →
-        </Button>
+        {onEdit && (
+          <Button variant="ghost" size="sm" className="min-h-[40px] text-primary" onClick={onEdit}>
+            Edit →
+          </Button>
+        )}
       </div>
       {hasAny ? (
         <dl className="grid grid-cols-2 gap-y-1.5 text-xs">
