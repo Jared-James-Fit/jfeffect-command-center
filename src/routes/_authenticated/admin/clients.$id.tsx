@@ -832,10 +832,10 @@ function ClientDetail() {
               <Button variant="outline" className="min-h-[64px] w-full justify-start text-base">
                 <MessageSquare className="mr-3 h-5 w-5" /> Edit Coaching Notes
               </Button>
-          </Link>
-        </div>
-        <StartingMaxesCard form={form} />
-        <Suspense fallback={<TabFallback />}>
+            </Link>
+          </div>
+          <StartingMaxesCard form={form} />
+          <Suspense fallback={<TabFallback />}>
             <GoalsSetupPanel clientId={id} />
           </Suspense>
           <PowerlifterSection form={form} set={set} />
