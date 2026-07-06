@@ -475,7 +475,7 @@ function primaryActionTarget(action: DirectoryNextAction, clientId: string) {
       );
     case "setup":
       return (
-        <Link to="/admin/clients/$id" params={{ id: clientId }} search={{ tab: "account" } as any}>{label}</Link>
+        <Link to="/admin/clients/$id" params={{ id: clientId }}>{label}</Link>
       );
     case "open":
     default:
