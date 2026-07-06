@@ -232,7 +232,13 @@ const TAB_TO_SECTION: Record<TabValue, SectionId> = SECTIONS.reduce((acc, s) => 
 }, {} as Record<TabValue, SectionId>);
 
 export const Route = createFileRoute("/_authenticated/admin/clients/$id")({
-  validateSearch: (s) => z.object({ tab: z.enum(TAB_VALUES).optional() }).parse(s),
+  validateSearch: (s) => {
+    const parsed = z.object({ tab: z.string().optional() }).parse(s);
+    // Redirect deprecated tabs after the Client Profile / Nutrition consolidation.
+    const remap: Record<string, TabValue> = { profile: "info", cardio: "nutrition" };
+    const t = parsed.tab ? (remap[parsed.tab] ?? parsed.tab) : undefined;
+    return { tab: t && (TAB_VALUES as readonly string[]).includes(t) ? (t as TabValue) : undefined };
+  },
   component: ClientDetail,
 });
 
