@@ -134,65 +134,140 @@ export function WorkoutsExperience({
   const navigate = useNavigate();
 
   const handleDownloadPdf = async () => {
-    if (!headerBlock?.id) {
-      toast.error("No active block to download yet.");
-      return;
-    }
     setDownloadingPdf(true);
     try {
-      const tree = await getBlockTree(headerBlock.id);
-      if (!tree) throw new Error("Block not found");
-      const { downloadWorkoutPdf } = await import("@/lib/workouts/workout-pdf");
-      const weeksSorted = (tree.weeks ?? [])
-        .slice()
-        .sort((a: any, b: any) => (a.week_index ?? 0) - (b.week_index ?? 0));
-      const daysByWeek = new Map<string, any[]>();
-      for (const d of tree.days ?? []) {
-        const list = daysByWeek.get(d.week_id) ?? [];
-        list.push(d);
-        daysByWeek.set(d.week_id, list);
+      // Pull every client-visible block, then their weeks/days/exercises,
+      // completions, and every logged set — so the report includes both
+      // the prescribed program and everything the athlete actually did.
+      const { data: blocks } = await supabase
+        .from("pl_blocks")
+        .select("*")
+        .eq("client_id", clientId)
+        .eq("client_visible", true)
+        .neq("status", "Archived")
+        .order("start_date", { ascending: true, nullsFirst: false })
+        .order("created_at", { ascending: true });
+
+      const blockRows = (blocks ?? []) as any[];
+      if (!blockRows.length) {
+        toast.error("No blocks to download yet.");
+        return;
       }
-      const rowsByDay = new Map<string, any[]>();
-      for (const r of tree.rows ?? []) {
-        const list = rowsByDay.get(r.day_id) ?? [];
+
+      const trees = await Promise.all(
+        blockRows.map(async (b) => ({ block: b, tree: await getBlockTree(b.id) })),
+      );
+
+      const allDayIds: string[] = [];
+      const allRowIds: string[] = [];
+      for (const { tree } of trees) {
+        for (const d of tree?.days ?? []) allDayIds.push(d.id);
+        for (const r of tree?.rows ?? []) allRowIds.push(r.id);
+      }
+
+      const [completionsRes, resultsRes] = await Promise.all([
+        allDayIds.length
+          ? supabase
+              .from("pl_day_completions")
+              .select("day_id, completed_at, note")
+              .in("day_id", allDayIds)
+              .eq("client_id", clientId)
+          : Promise.resolve({ data: [] as any[] }),
+        allRowIds.length
+          ? supabase
+              .from("pl_row_results")
+              .select(
+                "row_id, set_index, actual_reps, actual_load, actual_load_unit, actual_rpe, actual_rir, completed_duration_seconds, notes",
+              )
+              .in("row_id", allRowIds)
+              .eq("client_id", clientId)
+          : Promise.resolve({ data: [] as any[] }),
+      ]);
+      const completionByDay = new Map<string, any>();
+      for (const c of (completionsRes.data ?? []) as any[]) {
+        // If there are somehow multiple, prefer the completed one.
+        const prev = completionByDay.get(c.day_id);
+        if (!prev || (c.completed_at && !prev.completed_at)) {
+          completionByDay.set(c.day_id, c);
+        }
+      }
+      const resultsByRow = new Map<string, any[]>();
+      for (const r of (resultsRes.data ?? []) as any[]) {
+        const list = resultsByRow.get(r.row_id) ?? [];
         list.push(r);
-        rowsByDay.set(r.day_id, list);
+        resultsByRow.set(r.row_id, list);
       }
-      downloadWorkoutPdf({
-        client_name:
-          clientName ||
-          [(client as any)?.first_name, (client as any)?.last_name]
-            .filter(Boolean)
-            .join(" ") ||
-          null,
-        program_name: tree.block?.name ?? null,
-        block_name: tree.block?.name ?? null,
-        block_status: tree.block?.status ?? null,
-        block_start: tree.block?.start_date ?? null,
-        block_end: tree.block?.end_date ?? null,
-        weeks: weeksSorted.map((w: any) => ({
-          id: w.id,
-          week_index: w.week_index,
-          notes: w.notes ?? null,
-          days: (daysByWeek.get(w.id) ?? [])
+
+      const { downloadFullTrainingReportPdf } = await import(
+        "@/lib/workouts/workout-pdf"
+      );
+      const clientDisplayName =
+        clientName ||
+        [(client as any)?.first_name, (client as any)?.last_name]
+          .filter(Boolean)
+          .join(" ") ||
+        (client as any)?.full_name ||
+        null;
+
+      downloadFullTrainingReportPdf({
+        client_name: clientDisplayName,
+        generated_at: new Date(),
+        blocks: trees.map(({ block, tree }) => {
+          const weeksSorted = (tree?.weeks ?? [])
             .slice()
-            .sort((a: any, b: any) => (a.day_index ?? 0) - (b.day_index ?? 0))
-            .map((d: any) => ({
-              id: d.id,
-              day_index: d.day_index,
-              title: cleanDayTitle(d.title) ?? d.title ?? null,
-              notes: d.notes ?? null,
-              notes_client_visible: d.notes_client_visible ?? null,
-              scheduled_date: d.scheduled_date ?? null,
-              rows: rowsByDay.get(d.id) ?? [],
+            .sort((a: any, b: any) => (a.week_index ?? 0) - (b.week_index ?? 0));
+          const daysByWeek = new Map<string, any[]>();
+          for (const d of tree?.days ?? []) {
+            const list = daysByWeek.get(d.week_id) ?? [];
+            list.push(d);
+            daysByWeek.set(d.week_id, list);
+          }
+          const rowsByDay = new Map<string, any[]>();
+          for (const r of tree?.rows ?? []) {
+            const list = rowsByDay.get(r.day_id) ?? [];
+            list.push(r);
+            rowsByDay.set(r.day_id, list);
+          }
+          return {
+            block_name: block?.name ?? null,
+            block_status: block?.status ?? null,
+            block_start: block?.start_date ?? null,
+            block_end: block?.end_date ?? null,
+            weeks: weeksSorted.map((w: any) => ({
+              id: w.id,
+              week_index: w.week_index,
+              notes: w.notes ?? null,
+              days: (daysByWeek.get(w.id) ?? [])
+                .slice()
+                .sort((a: any, b: any) => (a.day_index ?? 0) - (b.day_index ?? 0))
+                .map((d: any) => {
+                  const c = completionByDay.get(d.id);
+                  return {
+                    id: d.id,
+                    day_index: d.day_index,
+                    title: cleanDayTitle(d.title) ?? d.title ?? null,
+                    notes: d.notes ?? null,
+                    notes_client_visible: d.notes_client_visible ?? null,
+                    scheduled_date: d.scheduled_date ?? null,
+                    completed_at: c?.completed_at ?? null,
+                    completion_note: c?.note ?? null,
+                    rows: (rowsByDay.get(d.id) ?? []).map((r: any) => ({
+                      ...r,
+                      logged_sets: resultsByRow.get(r.id) ?? [],
+                    })),
+                  };
+                }),
             })),
-        })),
+          };
+        }),
       });
     } catch (err) {
       console.error("Workout PDF download failed", err);
       toast.error("Could not generate workout PDF. Please try again.");
     } finally {
       setDownloadingPdf(false);
+      return;
+    }
     }
   };
 
@@ -208,8 +283,9 @@ export function WorkoutsExperience({
               variant="outline"
               className="h-8 gap-1"
               onClick={handleDownloadPdf}
-              disabled={downloadingPdf || !headerBlock?.id}
-              aria-label="Download workout plan as PDF"
+              disabled={downloadingPdf}
+              aria-label="Download complete training report as PDF (all blocks + logged data)"
+              title="Download complete training report (all blocks + logged workouts)"
             >
               {downloadingPdf ? (
                 <Loader2 className="h-3.5 w-3.5 animate-spin" />
