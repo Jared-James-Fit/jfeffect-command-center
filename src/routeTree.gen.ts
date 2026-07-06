@@ -113,6 +113,7 @@ import { Route as AuthenticatedMAnnouncementsRouteImport } from './routes/_authe
 import { Route as AuthenticatedMAccountRouteImport } from './routes/_authenticated/m/account'
 import { Route as AuthenticatedCoachProgramsRouteImport } from './routes/_authenticated/coach/programs'
 import { Route as AuthenticatedAdminWarmupProtocolsRouteImport } from './routes/_authenticated/admin/warmup-protocols'
+import { Route as AuthenticatedAdminTransactionsRouteImport } from './routes/_authenticated/admin/transactions'
 import { Route as AuthenticatedAdminTrainingPhasesRouteImport } from './routes/_authenticated/admin/training-phases'
 import { Route as AuthenticatedAdminTrainingIntelligenceRouteImport } from './routes/_authenticated/admin/training-intelligence'
 import { Route as AuthenticatedAdminTestimonialsRouteImport } from './routes/_authenticated/admin/testimonials'
@@ -848,6 +849,12 @@ const AuthenticatedAdminWarmupProtocolsRoute =
   AuthenticatedAdminWarmupProtocolsRouteImport.update({
     id: '/warmup-protocols',
     path: '/warmup-protocols',
+    getParentRoute: () => AuthenticatedAdminRouteRoute,
+  } as any)
+const AuthenticatedAdminTransactionsRoute =
+  AuthenticatedAdminTransactionsRouteImport.update({
+    id: '/transactions',
+    path: '/transactions',
     getParentRoute: () => AuthenticatedAdminRouteRoute,
   } as any)
 const AuthenticatedAdminTrainingPhasesRoute =
@@ -1955,6 +1962,7 @@ export interface FileRoutesByFullPath {
   '/admin/testimonials': typeof AuthenticatedAdminTestimonialsRoute
   '/admin/training-intelligence': typeof AuthenticatedAdminTrainingIntelligenceRoute
   '/admin/training-phases': typeof AuthenticatedAdminTrainingPhasesRoute
+  '/admin/transactions': typeof AuthenticatedAdminTransactionsRoute
   '/admin/warmup-protocols': typeof AuthenticatedAdminWarmupProtocolsRoute
   '/coach/programs': typeof AuthenticatedCoachProgramsRoute
   '/m/account': typeof AuthenticatedMAccountRoute
@@ -2223,6 +2231,7 @@ export interface FileRoutesByTo {
   '/admin/testimonials': typeof AuthenticatedAdminTestimonialsRoute
   '/admin/training-intelligence': typeof AuthenticatedAdminTrainingIntelligenceRoute
   '/admin/training-phases': typeof AuthenticatedAdminTrainingPhasesRoute
+  '/admin/transactions': typeof AuthenticatedAdminTransactionsRoute
   '/admin/warmup-protocols': typeof AuthenticatedAdminWarmupProtocolsRoute
   '/coach/programs': typeof AuthenticatedCoachProgramsRoute
   '/m/account': typeof AuthenticatedMAccountRoute
@@ -2498,6 +2507,7 @@ export interface FileRoutesById {
   '/_authenticated/admin/testimonials': typeof AuthenticatedAdminTestimonialsRoute
   '/_authenticated/admin/training-intelligence': typeof AuthenticatedAdminTrainingIntelligenceRoute
   '/_authenticated/admin/training-phases': typeof AuthenticatedAdminTrainingPhasesRoute
+  '/_authenticated/admin/transactions': typeof AuthenticatedAdminTransactionsRoute
   '/_authenticated/admin/warmup-protocols': typeof AuthenticatedAdminWarmupProtocolsRoute
   '/_authenticated/coach/programs': typeof AuthenticatedCoachProgramsRoute
   '/_authenticated/m/account': typeof AuthenticatedMAccountRoute
@@ -2773,6 +2783,7 @@ export interface FileRouteTypes {
     | '/admin/testimonials'
     | '/admin/training-intelligence'
     | '/admin/training-phases'
+    | '/admin/transactions'
     | '/admin/warmup-protocols'
     | '/coach/programs'
     | '/m/account'
@@ -3041,6 +3052,7 @@ export interface FileRouteTypes {
     | '/admin/testimonials'
     | '/admin/training-intelligence'
     | '/admin/training-phases'
+    | '/admin/transactions'
     | '/admin/warmup-protocols'
     | '/coach/programs'
     | '/m/account'
@@ -3315,6 +3327,7 @@ export interface FileRouteTypes {
     | '/_authenticated/admin/testimonials'
     | '/_authenticated/admin/training-intelligence'
     | '/_authenticated/admin/training-phases'
+    | '/_authenticated/admin/transactions'
     | '/_authenticated/admin/warmup-protocols'
     | '/_authenticated/coach/programs'
     | '/_authenticated/m/account'
@@ -4269,6 +4282,13 @@ declare module '@tanstack/react-router' {
       path: '/warmup-protocols'
       fullPath: '/admin/warmup-protocols'
       preLoaderRoute: typeof AuthenticatedAdminWarmupProtocolsRouteImport
+      parentRoute: typeof AuthenticatedAdminRouteRoute
+    }
+    '/_authenticated/admin/transactions': {
+      id: '/_authenticated/admin/transactions'
+      path: '/transactions'
+      fullPath: '/admin/transactions'
+      preLoaderRoute: typeof AuthenticatedAdminTransactionsRouteImport
       parentRoute: typeof AuthenticatedAdminRouteRoute
     }
     '/_authenticated/admin/training-phases': {
@@ -5672,6 +5692,7 @@ interface AuthenticatedAdminRouteRouteChildren {
   AuthenticatedAdminTestimonialsRoute: typeof AuthenticatedAdminTestimonialsRoute
   AuthenticatedAdminTrainingIntelligenceRoute: typeof AuthenticatedAdminTrainingIntelligenceRoute
   AuthenticatedAdminTrainingPhasesRoute: typeof AuthenticatedAdminTrainingPhasesRoute
+  AuthenticatedAdminTransactionsRoute: typeof AuthenticatedAdminTransactionsRoute
   AuthenticatedAdminWarmupProtocolsRoute: typeof AuthenticatedAdminWarmupProtocolsRoute
   AuthenticatedAdminIndexRoute: typeof AuthenticatedAdminIndexRoute
   AuthenticatedAdminAgreementsNativePackageIdRoute: typeof AuthenticatedAdminAgreementsNativePackageIdRoute
@@ -5799,6 +5820,7 @@ const AuthenticatedAdminRouteRouteChildren: AuthenticatedAdminRouteRouteChildren
       AuthenticatedAdminTrainingIntelligenceRoute,
     AuthenticatedAdminTrainingPhasesRoute:
       AuthenticatedAdminTrainingPhasesRoute,
+    AuthenticatedAdminTransactionsRoute: AuthenticatedAdminTransactionsRoute,
     AuthenticatedAdminWarmupProtocolsRoute:
       AuthenticatedAdminWarmupProtocolsRoute,
     AuthenticatedAdminIndexRoute: AuthenticatedAdminIndexRoute,
