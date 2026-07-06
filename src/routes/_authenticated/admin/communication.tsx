@@ -49,7 +49,7 @@ export const Route = createFileRoute("/_authenticated/admin/communication")({
 function CommunicationWorkspace() {
   const { tab, client, sub } = Route.useSearch();
   const navigate = useNavigate();
-  const viewportLockedTab = tab === "messages" || tab === "support-inbox" || tab === "support-alerts";
+  const viewportLockedTab = tab === "messages" || tab === "support-inbox";
 
   useMemo(() => {
     try { window.localStorage.setItem(LAST_TAB_KEY, tab); } catch {}
@@ -159,10 +159,10 @@ function CommunicationWorkspace() {
         <div className="min-h-0 flex-1 overflow-hidden">
           {tab === "messages" && <MessagesInbox initialClient={client} embedded />}
           {tab === "support-inbox" && <SupportInbox embedded />}
-          {tab === "support-alerts" && <SupportAlertsPage embedded />}
         </div>
       ) : (
         <div className="min-h-0 flex-1 overflow-auto">
+          {tab === "support-alerts" && <SupportAlertsPage embedded />}
           {tab === "broadcasts" && <AdminBroadcasts embedded />}
           {tab === "media-libraries" && <MediaLibrariesPanel sub={sub} />}
           {tab === "popups" && <PopupsManager embedded />}
