@@ -2111,9 +2111,11 @@ function StartingMaxesCard({ form, onEdit }: { form: any; onEdit: () => void }) 
         <h3 className="text-sm font-semibold uppercase tracking-widest text-muted-foreground">
           Starting Maxes {known ? "(1RM)" : "(5RM)"}
         </h3>
-        <Button variant="ghost" size="sm" className="min-h-[40px] text-primary" onClick={onEdit}>
-          Edit →
-        </Button>
+        {onEdit && (
+          <Button variant="ghost" size="sm" className="min-h-[40px] text-primary" onClick={onEdit}>
+            Edit →
+          </Button>
+        )}
       </div>
       {hasAny ? (
         <dl className="grid grid-cols-2 gap-y-1.5 text-xs">
