@@ -56,21 +56,28 @@ function groupNavItems(items: NavItem[]) {
     map.set(key, list);
   }
   const order = [
-    // ── New consolidated IA (11 workspaces). Listed first so they always
+    // ── Trainerize-style IA (MAIN then OTHER). Listed first so they always
     // render in the intended order when the sidebar is driven by
     // `buildInternalNav()` from `@/lib/internal-nav`. Legacy groups remain
     // below for back-compat with any nav source still using the old labels.
-    "Home",
+    "Overview",
+    "Messages",
     "Clients",
-    "Coaching",
+    "Payments",
     "Programming",
+    "Scheduling",
+    "Business",
+    "Team",
+    "Add-ons",
+    "Settings",
+    // ── Legacy IA workspace labels (kept for back-compat) ──
+    "Home",
+    "Coaching",
     "Forms",
     "Communication",
     "Sales",
     "Calendar",
     "Content",
-    "Team",
-    "Settings",
     // ── Media Manager workspace groups (Phase 1 foundation) ──
     "Daily Work",
     "Growth",
@@ -78,7 +85,6 @@ function groupNavItems(items: NavItem[]) {
     // ── Legacy group labels (kept for back-compat — `membershipNav`,
     // `floating-bar.tsx`, `sitemap.tsx` still reference some of these).
     "Core",
-    "Overview",
     "Members",
     "Billing",
     "Setup Tools",
@@ -88,6 +94,7 @@ function groupNavItems(items: NavItem[]) {
     "Documents",
     "Team / Ops",
     "Account",
+    "Launch",
   ];
   const result: { label: string | undefined; items: NavItem[] }[] = [];
   for (const key of order) {
@@ -108,7 +115,12 @@ const SIDEBAR_COLLAPSED_SECTIONS_KEY = "jf-sidebar-collapsed-sections";
 // Default-collapsed sidebar sections. Includes both the new IA workspace
 // names (Team, Settings) and the legacy group names so users on either
 // nav source see a reasonably compact sidebar on first load.
-const DEFAULT_COLLAPSED_SECTIONS = ["Settings", "Team", "Documents", "Team / Ops"];
+const DEFAULT_COLLAPSED_SECTIONS = [
+  // Trainerize IA — default-closed secondary sections
+  "Add-ons", "Settings", "Team", "Business",
+  // Legacy
+  "Documents", "Team / Ops",
+];
 
 function useSidebarMode() {
   const [mode, setMode] = useState<SidebarMode>("expanded");
@@ -129,9 +141,9 @@ function useSidebarMode() {
 
 // Sections that must never be collapsed — they contain primary navigation items
 // that users need to access at all times.
-const NEVER_COLLAPSE_SECTIONS = new Set([
-  "Home", "Clients", "Coaching", "Programming", "Forms",
-  "Communication", "Sales", "Calendar", "Content",
+const NEVER_COLLAPSE_SECTIONS = new Set<string>([
+  // Overview is the always-visible primary section (Dashboard + Tasks).
+  "Overview",
 ]);
 
 function useCollapsedSections() {
