@@ -12,6 +12,7 @@ import {
   CheckCircle2,
   XCircle,
   Clock,
+  ArrowRight,
   type LucideIcon,
 } from "lucide-react";
 import type { DirectoryNextAction, DirectoryRow } from "@/lib/clients-directory.functions";
@@ -102,6 +103,7 @@ export function ACTION_ICON(kind: DirectoryNextAction["kind"]): LucideIcon {
     case "next_phase": return CalendarClock;
     case "nutrition": return Apple;
     case "cardio": return HeartPulse;
+    case "open": return ArrowRight;
     default: return AlertCircle;
   }
 }
