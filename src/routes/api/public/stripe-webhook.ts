@@ -485,6 +485,28 @@ export const Route = createFileRoute("/api/public/stripe-webhook")({
 
                 if (obj.payment_status === "paid") {
                   await provisionMemberFromPurchase(supabase, { ...purchase, stripe_customer_id: obj.customer ?? purchase.stripe_customer_id });
+                  // Create payment_ledger row for this payment (idempotent via stripe_checkout_session_id)
+                  if (obj.amount_total && obj.amount_total > 0) {
+                    await supabase.from("payment_ledger").upsert({
+                      client_id: purchase.client_id,
+                      purchase_id: purchase.id,
+                      txn_type: "payment",
+                      method: "stripe",
+                      amount_minor: obj.amount_total,
+                      tax_minor: obj.total_details?.amount_tax ?? 0,
+                      currency: (obj.currency ?? "cad").toUpperCase(),
+                      transaction_date: new Date(event.created * 1000).toISOString().slice(0, 10),
+                      received_at: new Date(event.created * 1000).toISOString(),
+                      external_reference: obj.id,
+                      stripe_event_id: event.id,
+                      stripe_payment_intent_id: obj.payment_intent ?? null,
+                      stripe_invoice_id: obj.invoice ?? null,
+                      source: "stripe_checkout",
+                      internal_note: `Stripe checkout.session.completed — session ${obj.id}`,
+                    }, { onConflict: "external_reference", ignoreDuplicates: true }).then(() => {}, (e: any) => {
+                      console.error("[stripe-webhook] payment_ledger upsert failed", e?.message);
+                    });
+                  }
                 }
               }
 
@@ -796,6 +818,59 @@ export const Route = createFileRoute("/api/public/stripe-webhook")({
                   last_payment_update_at: now,
                 }).eq("id", purchase.id);
                 await provisionMemberFromPurchase(supabase, { ...purchase, stripe_customer_id: obj.customer ?? purchase.stripe_customer_id });
+                // Create payment_ledger row for subscription renewal (idempotent via stripe_invoice_id)
+                if ((obj.amount_paid ?? 0) > 0) {
+                  await supabase.from("payment_ledger").upsert({
+                    client_id: purchase.client_id,
+                    purchase_id: purchase.id,
+                    txn_type: "payment",
+                    method: "stripe",
+                    amount_minor: obj.amount_paid,
+                    tax_minor: obj.tax ?? 0,
+                    currency: (obj.currency ?? "cad").toUpperCase(),
+                    transaction_date: new Date(event.created * 1000).toISOString().slice(0, 10),
+                    received_at: new Date(event.created * 1000).toISOString(),
+                    external_reference: obj.id,
+                    stripe_event_id: event.id,
+                    stripe_payment_intent_id: obj.payment_intent ?? null,
+                    stripe_invoice_id: obj.id,
+                    stripe_subscription_id: obj.subscription ?? null,
+                    source: "stripe_subscription",
+                    internal_note: `Stripe invoice.payment_succeeded — invoice ${obj.id}`,
+                  }, { onConflict: "external_reference", ignoreDuplicates: true }).then(() => {}, (e: any) => {
+                    console.error("[stripe-webhook] payment_ledger upsert failed (invoice)", e?.message);
+                  });
+                }
+              }
+              // Admin billing notification — best-effort, never fails the webhook
+              if ((obj.amount_paid ?? 0) > 0) {
+                try {
+                  const { data: clientRow } = purchase?.client_id
+                    ? await supabase.from("clients").select("first_name,last_name,email").eq("id", purchase.client_id).maybeSingle()
+                    : { data: null };
+                  const clientName = clientRow ? `${clientRow.first_name ?? ""} ${clientRow.last_name ?? ""}`.trim() : (obj.customer_name ?? null);
+                  const clientEmail = clientRow?.email ?? obj.customer_email ?? null;
+                  await sendBillingAdminEmail(supabase, {
+                    stripeEventId: event.id,
+                    subject: `Payment received — ${clientName ?? clientEmail ?? "Client"} — ${purchase?.product_name ?? "Coaching"}`,
+                    body: buildBillingEmailBody({
+                      eventType: event.type,
+                      clientName,
+                      clientEmail,
+                      productName: purchase?.product_name ?? null,
+                      amountPaid: obj.amount_paid,
+                      taxAmount: obj.tax ?? null,
+                      currency: obj.currency,
+                      subscriptionStatus: "Active",
+                      invoiceStatus: obj.status,
+                      nextRenewalAt: obj.lines?.data?.[0]?.period?.end ?? null,
+                      stripeInvoiceUrl: obj.hosted_invoice_url ?? null,
+                      stripeCustomerId: obj.customer ?? null,
+                      eventId: event.id,
+                      eventTime: event.created,
+                    }),
+                  });
+                } catch { /* best-effort */ }
               }
               // Admin billing notification — best-effort, never fails the webhook
               if ((obj.amount_paid ?? 0) > 0) {

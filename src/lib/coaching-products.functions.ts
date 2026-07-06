@@ -143,7 +143,7 @@ export const createCoachingProduct = createServerFn({ method: "POST" })
           // Require billing address so Stripe Tax can determine the correct rate
           billing_address_collection: "required",
           allow_promotion_codes: "true",
-          "metadata[product_id]": data.name,
+          "metadata[product_id]": product.id, // Stripe product ID (Supabase UUID not yet available at this point)
         }),
       });
       stripe_product_id = product.id;
