@@ -80,7 +80,6 @@ const AssignedProgramsCard = lazyDefault(() => import("@/components/assigned-pro
 const ClientWarmupCard = lazyDefault(() => import("@/components/client-warmup-card"), "ClientWarmupCard");
 const ClientBillingPanel = lazyDefault(() => import("@/components/admin/client-billing-panel"), "ClientBillingPanel");
 const GoalsSetupPanel = lazyDefault(() => import("@/components/clients/goals-setup-panel"), "GoalsSetupPanel");
-const ProfileGoalsAdminPanel = lazyDefault(() => import("@/components/clients/profile-goals-admin-panel"), "ProfileGoalsAdminPanel");
 const SessionCreditsPanel = lazyDefault(() => import("@/components/admin/session-credits-panel"), "SessionCreditsPanel");
 
 function TabFallback() {
