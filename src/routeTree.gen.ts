@@ -113,6 +113,7 @@ import { Route as AuthenticatedMAnnouncementsRouteImport } from './routes/_authe
 import { Route as AuthenticatedMAccountRouteImport } from './routes/_authenticated/m/account'
 import { Route as AuthenticatedCoachProgramsRouteImport } from './routes/_authenticated/coach/programs'
 import { Route as AuthenticatedAdminWarmupProtocolsRouteImport } from './routes/_authenticated/admin/warmup-protocols'
+import { Route as AuthenticatedAdminTransactionsRouteImport } from './routes/_authenticated/admin/transactions'
 import { Route as AuthenticatedAdminTrainingPhasesRouteImport } from './routes/_authenticated/admin/training-phases'
 import { Route as AuthenticatedAdminTrainingIntelligenceRouteImport } from './routes/_authenticated/admin/training-intelligence'
 import { Route as AuthenticatedAdminTestimonialsRouteImport } from './routes/_authenticated/admin/testimonials'
@@ -184,6 +185,7 @@ import { Route as AuthenticatedPortalRecipesIndexRouteImport } from './routes/_a
 import { Route as AuthenticatedPortalAgreementsIndexRouteImport } from './routes/_authenticated/portal/agreements.index'
 import { Route as AuthenticatedMNutritionIndexRouteImport } from './routes/_authenticated/m/nutrition.index'
 import { Route as AuthenticatedAdminSalesIndexRouteImport } from './routes/_authenticated/admin/sales.index'
+import { Route as AuthenticatedAdminProductsHistoryIndexRouteImport } from './routes/_authenticated/admin/products-history.index'
 import { Route as AuthenticatedAdminMembershipIndexRouteImport } from './routes/_authenticated/admin/membership.index'
 import { Route as AuthenticatedAdminMembersIndexRouteImport } from './routes/_authenticated/admin/members.index'
 import { Route as AuthenticatedAdminMemberResourcesIndexRouteImport } from './routes/_authenticated/admin/member-resources.index'
@@ -233,6 +235,7 @@ import { Route as AuthenticatedAdminSalesCoachingRouteImport } from './routes/_a
 import { Route as AuthenticatedAdminPurchasesIdRouteImport } from './routes/_authenticated/admin/purchases.$id'
 import { Route as AuthenticatedAdminProgramLibraryTemplateIdRouteImport } from './routes/_authenticated/admin/program-library_.$templateId'
 import { Route as AuthenticatedAdminProgramAssignClientIdRouteImport } from './routes/_authenticated/admin/program-assign.$clientId'
+import { Route as AuthenticatedAdminProductsHistoryOfferIdRouteImport } from './routes/_authenticated/admin/products-history.$offerId'
 import { Route as AuthenticatedAdminMembershipWelcomeMessagesRouteImport } from './routes/_authenticated/admin/membership.welcome-messages'
 import { Route as AuthenticatedAdminMembershipSupportRouteImport } from './routes/_authenticated/admin/membership.support'
 import { Route as AuthenticatedAdminMembershipStripeSyncRouteImport } from './routes/_authenticated/admin/membership.stripe-sync'
@@ -850,6 +853,12 @@ const AuthenticatedAdminWarmupProtocolsRoute =
     path: '/warmup-protocols',
     getParentRoute: () => AuthenticatedAdminRouteRoute,
   } as any)
+const AuthenticatedAdminTransactionsRoute =
+  AuthenticatedAdminTransactionsRouteImport.update({
+    id: '/transactions',
+    path: '/transactions',
+    getParentRoute: () => AuthenticatedAdminRouteRoute,
+  } as any)
 const AuthenticatedAdminTrainingPhasesRoute =
   AuthenticatedAdminTrainingPhasesRouteImport.update({
     id: '/training-phases',
@@ -1268,6 +1277,12 @@ const AuthenticatedAdminSalesIndexRoute =
     path: '/sales/',
     getParentRoute: () => AuthenticatedAdminRouteRoute,
   } as any)
+const AuthenticatedAdminProductsHistoryIndexRoute =
+  AuthenticatedAdminProductsHistoryIndexRouteImport.update({
+    id: '/products-history/',
+    path: '/products-history/',
+    getParentRoute: () => AuthenticatedAdminRouteRoute,
+  } as any)
 const AuthenticatedAdminMembershipIndexRoute =
   AuthenticatedAdminMembershipIndexRouteImport.update({
     id: '/',
@@ -1558,6 +1573,12 @@ const AuthenticatedAdminProgramAssignClientIdRoute =
     id: '/$clientId',
     path: '/$clientId',
     getParentRoute: () => AuthenticatedAdminProgramAssignRoute,
+  } as any)
+const AuthenticatedAdminProductsHistoryOfferIdRoute =
+  AuthenticatedAdminProductsHistoryOfferIdRouteImport.update({
+    id: '/products-history/$offerId',
+    path: '/products-history/$offerId',
+    getParentRoute: () => AuthenticatedAdminRouteRoute,
   } as any)
 const AuthenticatedAdminMembershipWelcomeMessagesRoute =
   AuthenticatedAdminMembershipWelcomeMessagesRouteImport.update({
@@ -1955,6 +1976,7 @@ export interface FileRoutesByFullPath {
   '/admin/testimonials': typeof AuthenticatedAdminTestimonialsRoute
   '/admin/training-intelligence': typeof AuthenticatedAdminTrainingIntelligenceRoute
   '/admin/training-phases': typeof AuthenticatedAdminTrainingPhasesRoute
+  '/admin/transactions': typeof AuthenticatedAdminTransactionsRoute
   '/admin/warmup-protocols': typeof AuthenticatedAdminWarmupProtocolsRoute
   '/coach/programs': typeof AuthenticatedCoachProgramsRoute
   '/m/account': typeof AuthenticatedMAccountRoute
@@ -2057,6 +2079,7 @@ export interface FileRoutesByFullPath {
   '/admin/membership/stripe-sync': typeof AuthenticatedAdminMembershipStripeSyncRoute
   '/admin/membership/support': typeof AuthenticatedAdminMembershipSupportRoute
   '/admin/membership/welcome-messages': typeof AuthenticatedAdminMembershipWelcomeMessagesRoute
+  '/admin/products-history/$offerId': typeof AuthenticatedAdminProductsHistoryOfferIdRoute
   '/admin/program-assign/$clientId': typeof AuthenticatedAdminProgramAssignClientIdRoute
   '/admin/program-library/$templateId': typeof AuthenticatedAdminProgramLibraryTemplateIdRoute
   '/admin/purchases/$id': typeof AuthenticatedAdminPurchasesIdRoute
@@ -2106,6 +2129,7 @@ export interface FileRoutesByFullPath {
   '/admin/member-resources/': typeof AuthenticatedAdminMemberResourcesIndexRoute
   '/admin/members/': typeof AuthenticatedAdminMembersIndexRoute
   '/admin/membership/': typeof AuthenticatedAdminMembershipIndexRoute
+  '/admin/products-history/': typeof AuthenticatedAdminProductsHistoryIndexRoute
   '/admin/sales/': typeof AuthenticatedAdminSalesIndexRoute
   '/m/nutrition/': typeof AuthenticatedMNutritionIndexRoute
   '/portal/agreements/': typeof AuthenticatedPortalAgreementsIndexRoute
@@ -2223,6 +2247,7 @@ export interface FileRoutesByTo {
   '/admin/testimonials': typeof AuthenticatedAdminTestimonialsRoute
   '/admin/training-intelligence': typeof AuthenticatedAdminTrainingIntelligenceRoute
   '/admin/training-phases': typeof AuthenticatedAdminTrainingPhasesRoute
+  '/admin/transactions': typeof AuthenticatedAdminTransactionsRoute
   '/admin/warmup-protocols': typeof AuthenticatedAdminWarmupProtocolsRoute
   '/coach/programs': typeof AuthenticatedCoachProgramsRoute
   '/m/account': typeof AuthenticatedMAccountRoute
@@ -2325,6 +2350,7 @@ export interface FileRoutesByTo {
   '/admin/membership/stripe-sync': typeof AuthenticatedAdminMembershipStripeSyncRoute
   '/admin/membership/support': typeof AuthenticatedAdminMembershipSupportRoute
   '/admin/membership/welcome-messages': typeof AuthenticatedAdminMembershipWelcomeMessagesRoute
+  '/admin/products-history/$offerId': typeof AuthenticatedAdminProductsHistoryOfferIdRoute
   '/admin/program-assign/$clientId': typeof AuthenticatedAdminProgramAssignClientIdRoute
   '/admin/program-library/$templateId': typeof AuthenticatedAdminProgramLibraryTemplateIdRoute
   '/admin/purchases/$id': typeof AuthenticatedAdminPurchasesIdRoute
@@ -2374,6 +2400,7 @@ export interface FileRoutesByTo {
   '/admin/member-resources': typeof AuthenticatedAdminMemberResourcesIndexRoute
   '/admin/members': typeof AuthenticatedAdminMembersIndexRoute
   '/admin/membership': typeof AuthenticatedAdminMembershipIndexRoute
+  '/admin/products-history': typeof AuthenticatedAdminProductsHistoryIndexRoute
   '/admin/sales': typeof AuthenticatedAdminSalesIndexRoute
   '/m/nutrition': typeof AuthenticatedMNutritionIndexRoute
   '/portal/agreements': typeof AuthenticatedPortalAgreementsIndexRoute
@@ -2498,6 +2525,7 @@ export interface FileRoutesById {
   '/_authenticated/admin/testimonials': typeof AuthenticatedAdminTestimonialsRoute
   '/_authenticated/admin/training-intelligence': typeof AuthenticatedAdminTrainingIntelligenceRoute
   '/_authenticated/admin/training-phases': typeof AuthenticatedAdminTrainingPhasesRoute
+  '/_authenticated/admin/transactions': typeof AuthenticatedAdminTransactionsRoute
   '/_authenticated/admin/warmup-protocols': typeof AuthenticatedAdminWarmupProtocolsRoute
   '/_authenticated/coach/programs': typeof AuthenticatedCoachProgramsRoute
   '/_authenticated/m/account': typeof AuthenticatedMAccountRoute
@@ -2600,6 +2628,7 @@ export interface FileRoutesById {
   '/_authenticated/admin/membership/stripe-sync': typeof AuthenticatedAdminMembershipStripeSyncRoute
   '/_authenticated/admin/membership/support': typeof AuthenticatedAdminMembershipSupportRoute
   '/_authenticated/admin/membership/welcome-messages': typeof AuthenticatedAdminMembershipWelcomeMessagesRoute
+  '/_authenticated/admin/products-history/$offerId': typeof AuthenticatedAdminProductsHistoryOfferIdRoute
   '/_authenticated/admin/program-assign/$clientId': typeof AuthenticatedAdminProgramAssignClientIdRoute
   '/_authenticated/admin/program-library_/$templateId': typeof AuthenticatedAdminProgramLibraryTemplateIdRoute
   '/_authenticated/admin/purchases/$id': typeof AuthenticatedAdminPurchasesIdRoute
@@ -2649,6 +2678,7 @@ export interface FileRoutesById {
   '/_authenticated/admin/member-resources/': typeof AuthenticatedAdminMemberResourcesIndexRoute
   '/_authenticated/admin/members/': typeof AuthenticatedAdminMembersIndexRoute
   '/_authenticated/admin/membership/': typeof AuthenticatedAdminMembershipIndexRoute
+  '/_authenticated/admin/products-history/': typeof AuthenticatedAdminProductsHistoryIndexRoute
   '/_authenticated/admin/sales/': typeof AuthenticatedAdminSalesIndexRoute
   '/_authenticated/m/nutrition/': typeof AuthenticatedMNutritionIndexRoute
   '/_authenticated/portal/agreements/': typeof AuthenticatedPortalAgreementsIndexRoute
@@ -2773,6 +2803,7 @@ export interface FileRouteTypes {
     | '/admin/testimonials'
     | '/admin/training-intelligence'
     | '/admin/training-phases'
+    | '/admin/transactions'
     | '/admin/warmup-protocols'
     | '/coach/programs'
     | '/m/account'
@@ -2875,6 +2906,7 @@ export interface FileRouteTypes {
     | '/admin/membership/stripe-sync'
     | '/admin/membership/support'
     | '/admin/membership/welcome-messages'
+    | '/admin/products-history/$offerId'
     | '/admin/program-assign/$clientId'
     | '/admin/program-library/$templateId'
     | '/admin/purchases/$id'
@@ -2924,6 +2956,7 @@ export interface FileRouteTypes {
     | '/admin/member-resources/'
     | '/admin/members/'
     | '/admin/membership/'
+    | '/admin/products-history/'
     | '/admin/sales/'
     | '/m/nutrition/'
     | '/portal/agreements/'
@@ -3041,6 +3074,7 @@ export interface FileRouteTypes {
     | '/admin/testimonials'
     | '/admin/training-intelligence'
     | '/admin/training-phases'
+    | '/admin/transactions'
     | '/admin/warmup-protocols'
     | '/coach/programs'
     | '/m/account'
@@ -3143,6 +3177,7 @@ export interface FileRouteTypes {
     | '/admin/membership/stripe-sync'
     | '/admin/membership/support'
     | '/admin/membership/welcome-messages'
+    | '/admin/products-history/$offerId'
     | '/admin/program-assign/$clientId'
     | '/admin/program-library/$templateId'
     | '/admin/purchases/$id'
@@ -3192,6 +3227,7 @@ export interface FileRouteTypes {
     | '/admin/member-resources'
     | '/admin/members'
     | '/admin/membership'
+    | '/admin/products-history'
     | '/admin/sales'
     | '/m/nutrition'
     | '/portal/agreements'
@@ -3315,6 +3351,7 @@ export interface FileRouteTypes {
     | '/_authenticated/admin/testimonials'
     | '/_authenticated/admin/training-intelligence'
     | '/_authenticated/admin/training-phases'
+    | '/_authenticated/admin/transactions'
     | '/_authenticated/admin/warmup-protocols'
     | '/_authenticated/coach/programs'
     | '/_authenticated/m/account'
@@ -3417,6 +3454,7 @@ export interface FileRouteTypes {
     | '/_authenticated/admin/membership/stripe-sync'
     | '/_authenticated/admin/membership/support'
     | '/_authenticated/admin/membership/welcome-messages'
+    | '/_authenticated/admin/products-history/$offerId'
     | '/_authenticated/admin/program-assign/$clientId'
     | '/_authenticated/admin/program-library_/$templateId'
     | '/_authenticated/admin/purchases/$id'
@@ -3466,6 +3504,7 @@ export interface FileRouteTypes {
     | '/_authenticated/admin/member-resources/'
     | '/_authenticated/admin/members/'
     | '/_authenticated/admin/membership/'
+    | '/_authenticated/admin/products-history/'
     | '/_authenticated/admin/sales/'
     | '/_authenticated/m/nutrition/'
     | '/_authenticated/portal/agreements/'
@@ -4271,6 +4310,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAdminWarmupProtocolsRouteImport
       parentRoute: typeof AuthenticatedAdminRouteRoute
     }
+    '/_authenticated/admin/transactions': {
+      id: '/_authenticated/admin/transactions'
+      path: '/transactions'
+      fullPath: '/admin/transactions'
+      preLoaderRoute: typeof AuthenticatedAdminTransactionsRouteImport
+      parentRoute: typeof AuthenticatedAdminRouteRoute
+    }
     '/_authenticated/admin/training-phases': {
       id: '/_authenticated/admin/training-phases'
       path: '/training-phases'
@@ -4768,6 +4814,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAdminSalesIndexRouteImport
       parentRoute: typeof AuthenticatedAdminRouteRoute
     }
+    '/_authenticated/admin/products-history/': {
+      id: '/_authenticated/admin/products-history/'
+      path: '/products-history'
+      fullPath: '/admin/products-history/'
+      preLoaderRoute: typeof AuthenticatedAdminProductsHistoryIndexRouteImport
+      parentRoute: typeof AuthenticatedAdminRouteRoute
+    }
     '/_authenticated/admin/membership/': {
       id: '/_authenticated/admin/membership/'
       path: '/'
@@ -5110,6 +5163,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/admin/program-assign/$clientId'
       preLoaderRoute: typeof AuthenticatedAdminProgramAssignClientIdRouteImport
       parentRoute: typeof AuthenticatedAdminProgramAssignRoute
+    }
+    '/_authenticated/admin/products-history/$offerId': {
+      id: '/_authenticated/admin/products-history/$offerId'
+      path: '/products-history/$offerId'
+      fullPath: '/admin/products-history/$offerId'
+      preLoaderRoute: typeof AuthenticatedAdminProductsHistoryOfferIdRouteImport
+      parentRoute: typeof AuthenticatedAdminRouteRoute
     }
     '/_authenticated/admin/membership/welcome-messages': {
       id: '/_authenticated/admin/membership/welcome-messages'
@@ -5672,6 +5732,7 @@ interface AuthenticatedAdminRouteRouteChildren {
   AuthenticatedAdminTestimonialsRoute: typeof AuthenticatedAdminTestimonialsRoute
   AuthenticatedAdminTrainingIntelligenceRoute: typeof AuthenticatedAdminTrainingIntelligenceRoute
   AuthenticatedAdminTrainingPhasesRoute: typeof AuthenticatedAdminTrainingPhasesRoute
+  AuthenticatedAdminTransactionsRoute: typeof AuthenticatedAdminTransactionsRoute
   AuthenticatedAdminWarmupProtocolsRoute: typeof AuthenticatedAdminWarmupProtocolsRoute
   AuthenticatedAdminIndexRoute: typeof AuthenticatedAdminIndexRoute
   AuthenticatedAdminAgreementsNativePackageIdRoute: typeof AuthenticatedAdminAgreementsNativePackageIdRoute
@@ -5689,6 +5750,7 @@ interface AuthenticatedAdminRouteRouteChildren {
   AuthenticatedAdminMemberResourcesNewRoute: typeof AuthenticatedAdminMemberResourcesNewRoute
   AuthenticatedAdminMembersMemberIdRoute: typeof AuthenticatedAdminMembersMemberIdRoute
   AuthenticatedAdminMembersNewRoute: typeof AuthenticatedAdminMembersNewRoute
+  AuthenticatedAdminProductsHistoryOfferIdRoute: typeof AuthenticatedAdminProductsHistoryOfferIdRoute
   AuthenticatedAdminProgramLibraryTemplateIdRoute: typeof AuthenticatedAdminProgramLibraryTemplateIdRoute
   AuthenticatedAdminSalesCoachingRoute: typeof AuthenticatedAdminSalesCoachingRoute
   AuthenticatedAdminSalesCoachingApplicationsRoute: typeof AuthenticatedAdminSalesCoachingApplicationsRoute
@@ -5705,6 +5767,7 @@ interface AuthenticatedAdminRouteRouteChildren {
   AuthenticatedAdminMemberPlansIndexRoute: typeof AuthenticatedAdminMemberPlansIndexRoute
   AuthenticatedAdminMemberResourcesIndexRoute: typeof AuthenticatedAdminMemberResourcesIndexRoute
   AuthenticatedAdminMembersIndexRoute: typeof AuthenticatedAdminMembersIndexRoute
+  AuthenticatedAdminProductsHistoryIndexRoute: typeof AuthenticatedAdminProductsHistoryIndexRoute
   AuthenticatedAdminSalesIndexRoute: typeof AuthenticatedAdminSalesIndexRoute
   AuthenticatedAdminClientProgramsClientIdAnalyticsRoute: typeof AuthenticatedAdminClientProgramsClientIdAnalyticsRoute
   AuthenticatedAdminClientProgramsClientIdHistoryRoute: typeof AuthenticatedAdminClientProgramsClientIdHistoryRoute
@@ -5799,6 +5862,7 @@ const AuthenticatedAdminRouteRouteChildren: AuthenticatedAdminRouteRouteChildren
       AuthenticatedAdminTrainingIntelligenceRoute,
     AuthenticatedAdminTrainingPhasesRoute:
       AuthenticatedAdminTrainingPhasesRoute,
+    AuthenticatedAdminTransactionsRoute: AuthenticatedAdminTransactionsRoute,
     AuthenticatedAdminWarmupProtocolsRoute:
       AuthenticatedAdminWarmupProtocolsRoute,
     AuthenticatedAdminIndexRoute: AuthenticatedAdminIndexRoute,
@@ -5828,6 +5892,8 @@ const AuthenticatedAdminRouteRouteChildren: AuthenticatedAdminRouteRouteChildren
     AuthenticatedAdminMembersMemberIdRoute:
       AuthenticatedAdminMembersMemberIdRoute,
     AuthenticatedAdminMembersNewRoute: AuthenticatedAdminMembersNewRoute,
+    AuthenticatedAdminProductsHistoryOfferIdRoute:
+      AuthenticatedAdminProductsHistoryOfferIdRoute,
     AuthenticatedAdminProgramLibraryTemplateIdRoute:
       AuthenticatedAdminProgramLibraryTemplateIdRoute,
     AuthenticatedAdminSalesCoachingRoute: AuthenticatedAdminSalesCoachingRoute,
@@ -5852,6 +5918,8 @@ const AuthenticatedAdminRouteRouteChildren: AuthenticatedAdminRouteRouteChildren
     AuthenticatedAdminMemberResourcesIndexRoute:
       AuthenticatedAdminMemberResourcesIndexRoute,
     AuthenticatedAdminMembersIndexRoute: AuthenticatedAdminMembersIndexRoute,
+    AuthenticatedAdminProductsHistoryIndexRoute:
+      AuthenticatedAdminProductsHistoryIndexRoute,
     AuthenticatedAdminSalesIndexRoute: AuthenticatedAdminSalesIndexRoute,
     AuthenticatedAdminClientProgramsClientIdAnalyticsRoute:
       AuthenticatedAdminClientProgramsClientIdAnalyticsRoute,

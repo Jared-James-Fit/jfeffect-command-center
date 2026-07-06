@@ -9123,10 +9123,16 @@ export type Database = {
           member_id: string
           payment_date: string
           payment_method: string | null
+          receipt_url: string | null
           service_product: string | null
           status: string
+          stripe_checkout_session_id: string | null
+          stripe_customer_id: string | null
           stripe_invoice_id: string | null
+          stripe_mode: string | null
           stripe_payment_id: string | null
+          stripe_payment_intent_id: string | null
+          stripe_subscription_id: string | null
           updated_at: string
         }
         Insert: {
@@ -9142,10 +9148,16 @@ export type Database = {
           member_id: string
           payment_date?: string
           payment_method?: string | null
+          receipt_url?: string | null
           service_product?: string | null
           status?: string
+          stripe_checkout_session_id?: string | null
+          stripe_customer_id?: string | null
           stripe_invoice_id?: string | null
+          stripe_mode?: string | null
           stripe_payment_id?: string | null
+          stripe_payment_intent_id?: string | null
+          stripe_subscription_id?: string | null
           updated_at?: string
         }
         Update: {
@@ -9161,10 +9173,16 @@ export type Database = {
           member_id?: string
           payment_date?: string
           payment_method?: string | null
+          receipt_url?: string | null
           service_product?: string | null
           status?: string
+          stripe_checkout_session_id?: string | null
+          stripe_customer_id?: string | null
           stripe_invoice_id?: string | null
+          stripe_mode?: string | null
           stripe_payment_id?: string | null
+          stripe_payment_intent_id?: string | null
+          stripe_subscription_id?: string | null
           updated_at?: string
         }
         Relationships: [
@@ -12574,13 +12592,18 @@ export type Database = {
           method: string
           purchase_id: string | null
           receipt_number: string | null
+          receipt_url: string | null
           received_at: string
           reversal_of: string | null
           source: string
           stripe_charge_id: string | null
+          stripe_checkout_session_id: string | null
+          stripe_customer_id: string | null
           stripe_event_id: string | null
           stripe_invoice_id: string | null
+          stripe_mode: string | null
           stripe_payment_intent_id: string | null
+          stripe_subscription_id: string | null
           tax_minor: number
           transaction_date: string
           txn_type: string
@@ -12600,13 +12623,18 @@ export type Database = {
           method: string
           purchase_id?: string | null
           receipt_number?: string | null
+          receipt_url?: string | null
           received_at?: string
           reversal_of?: string | null
           source?: string
           stripe_charge_id?: string | null
+          stripe_checkout_session_id?: string | null
+          stripe_customer_id?: string | null
           stripe_event_id?: string | null
           stripe_invoice_id?: string | null
+          stripe_mode?: string | null
           stripe_payment_intent_id?: string | null
+          stripe_subscription_id?: string | null
           tax_minor?: number
           transaction_date?: string
           txn_type: string
@@ -12626,13 +12654,18 @@ export type Database = {
           method?: string
           purchase_id?: string | null
           receipt_number?: string | null
+          receipt_url?: string | null
           received_at?: string
           reversal_of?: string | null
           source?: string
           stripe_charge_id?: string | null
+          stripe_checkout_session_id?: string | null
+          stripe_customer_id?: string | null
           stripe_event_id?: string | null
           stripe_invoice_id?: string | null
+          stripe_mode?: string | null
           stripe_payment_intent_id?: string | null
+          stripe_subscription_id?: string | null
           tax_minor?: number
           transaction_date?: string
           txn_type?: string
@@ -15272,6 +15305,7 @@ export type Database = {
           purchase_disclaimer: string | null
           purchase_status_v2: string | null
           purchased_at: string
+          receipt_url: string | null
           refund_policy: string | null
           service_status: string
           session_length_minutes: number | null
@@ -15286,6 +15320,7 @@ export type Database = {
           status: string
           stripe_checkout_session_id: string | null
           stripe_customer_id: string | null
+          stripe_mode: string | null
           stripe_payment_intent_id: string | null
           stripe_payment_link: string | null
           stripe_price_id: string | null
@@ -15354,6 +15389,7 @@ export type Database = {
           purchase_disclaimer?: string | null
           purchase_status_v2?: string | null
           purchased_at?: string
+          receipt_url?: string | null
           refund_policy?: string | null
           service_status?: string
           session_length_minutes?: number | null
@@ -15368,6 +15404,7 @@ export type Database = {
           status?: string
           stripe_checkout_session_id?: string | null
           stripe_customer_id?: string | null
+          stripe_mode?: string | null
           stripe_payment_intent_id?: string | null
           stripe_payment_link?: string | null
           stripe_price_id?: string | null
@@ -15436,6 +15473,7 @@ export type Database = {
           purchase_disclaimer?: string | null
           purchase_status_v2?: string | null
           purchased_at?: string
+          receipt_url?: string | null
           refund_policy?: string | null
           service_status?: string
           session_length_minutes?: number | null
@@ -15450,6 +15488,7 @@ export type Database = {
           status?: string
           stripe_checkout_session_id?: string | null
           stripe_customer_id?: string | null
+          stripe_mode?: string | null
           stripe_payment_intent_id?: string | null
           stripe_payment_link?: string | null
           stripe_price_id?: string | null
@@ -17722,6 +17761,40 @@ export type Database = {
       }
     }
     Views: {
+      admin_transactions_v1: {
+        Row: {
+          admin_notes: string | null
+          amount: number | null
+          currency: string | null
+          id: string | null
+          method: string | null
+          occurred_at: string | null
+          occurred_on: string | null
+          offer_id: string | null
+          product_name: string | null
+          purchase_id: string | null
+          purchase_type: string | null
+          receipt_url: string | null
+          source: string | null
+          status: string | null
+          stripe_charge_id: string | null
+          stripe_checkout_session_id: string | null
+          stripe_customer_id: string | null
+          stripe_invoice_id: string | null
+          stripe_mode: string | null
+          stripe_payment_intent_id: string | null
+          stripe_price_id: string | null
+          stripe_product_id: string | null
+          stripe_subscription_id: string | null
+          subject_email: string | null
+          subject_id: string | null
+          subject_kind: string | null
+          subject_name: string | null
+          txn_type: string | null
+          voided: boolean | null
+        }
+        Relationships: []
+      }
       v_membership_checkout_legal: {
         Row: {
           current_version_id: string | null
