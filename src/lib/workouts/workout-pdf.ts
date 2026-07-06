@@ -509,14 +509,15 @@ export function generateFullTrainingReportPdf(data: FullTrainingReportData): jsP
         // Per-exercise: prescribed line + logged sets table
         for (let i = 0; i < rowsSorted.length; i++) {
           const r = rowsSorted[i];
-          ensureSpace(60);
+          ensureSpace(72);
           const name =
             r.exercise_name_override?.trim() || r.exercises?.name || "Exercise";
           doc.setFont("helvetica", "bold");
           doc.setFontSize(10);
           doc.setTextColor(20, 20, 20);
-          doc.text(`${i + 1}. ${name}`, marginX, y + 12);
-          y += 16;
+          y += 14;
+          doc.text(`${i + 1}. ${name}`, marginX, y);
+          y += 6;
 
           doc.setFont("helvetica", "normal");
           doc.setFontSize(9);
@@ -536,8 +537,9 @@ export function generateFullTrainingReportPdf(data: FullTrainingReportData): jsP
               `Prescribed: ${prescribed}`,
               pageWidth - marginX * 2,
             );
+            y += 10;
             doc.text(plines, marginX, y);
-            y += plines.length * 11;
+            y += (plines.length - 1) * 11 + 4;
           }
 
           const logged = (r.logged_sets ?? [])
