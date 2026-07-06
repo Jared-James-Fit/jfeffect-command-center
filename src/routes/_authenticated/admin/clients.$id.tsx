@@ -193,15 +193,14 @@ function AssignedCoachSelect({ value, onChange }: { value: string | null; onChan
   );
 }
 
-const TAB_VALUES = ["summary", "profile", "info", "goals-setup", "coaching", "account", "training", "nutrition", "cardio", "metrics", "messages", "lift-videos", "documents", "sessions", "purchases", "billing", "agreements", "notes"] as const;
+const TAB_VALUES = ["summary", "info", "goals-setup", "coaching", "account", "training", "nutrition", "metrics", "messages", "lift-videos", "documents", "sessions", "purchases", "billing", "agreements", "notes"] as const;
 type TabValue = typeof TAB_VALUES[number];
 
 type SectionId = "client-profile" | "training" | "nutrition" | "communication" | "business";
 type TabDef = { value: TabValue; label: string; description?: string; icon?: ComponentType<any> };
 const SECTIONS: { id: SectionId; label: string; description: string; icon: ComponentType<any>; tabs: TabDef[] }[] = [
-  { id: "client-profile", label: "Client Profile", description: "Overview, personal info, goals, coaching setup & login", icon: UserIcon, tabs: [
+  { id: "client-profile", label: "Client Profile", description: "Overview, personal info, goals, coaching & login", icon: UserIcon, tabs: [
     { value: "summary", label: "Overview", description: "Snapshot & quick actions", icon: LayoutDashboard },
-    { value: "profile", label: "Profile & Goals", description: "Unified profile status, info & goals", icon: UserIcon },
     { value: "info", label: "Personal Info", description: "Identity, contact, address & emergency", icon: IdCard },
     { value: "goals-setup", label: "Goals & Intake", description: "Goals, intake answers & lifting", icon: Target },
     { value: "coaching", label: "Coaching Setup", description: "Coach, package, schedule & links", icon: Settings2 },
@@ -213,9 +212,8 @@ const SECTIONS: { id: SectionId; label: string; description: string; icon: Compo
     { value: "lift-videos", label: "Lift Videos", icon: Dumbbell },
     { value: "sessions", label: "Sessions", icon: Calendar },
   ]},
-  { id: "nutrition", label: "Nutrition", description: "Targets & cardio", icon: Apple, tabs: [
-    { value: "nutrition", label: "Nutrition Targets", icon: Apple },
-    { value: "cardio", label: "Cardio Targets", icon: Apple },
+  { id: "nutrition", label: "Nutrition & Cardio", description: "Macros, targets & cardio", icon: Apple, tabs: [
+    { value: "nutrition", label: "Nutrition & Cardio", icon: Apple },
   ]},
   { id: "communication", label: "Communication", description: "Messages, notes, documents", icon: MessageSquare, tabs: [
     { value: "messages", label: "Messages", icon: MessageSquare },
