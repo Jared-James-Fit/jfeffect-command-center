@@ -2077,7 +2077,7 @@ function SnapshotField({ label, value, fallbackAction }: { label: string; value?
   );
 }
 
-function StartingMaxesCard({ form, onEdit }: { form: any; onEdit: () => void }) {
+function StartingMaxesCard({ form, onEdit }: { form: any; onEdit?: () => void }) {
   const unit = form.intake_lift_unit === "kg" ? "kg" : "lb";
   const known = form.intake_lifts_known !== false;
   const oneRms = {
