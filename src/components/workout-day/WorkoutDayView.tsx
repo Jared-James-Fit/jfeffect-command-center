@@ -2124,7 +2124,11 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
     onUnitChange?.(u);
   };
   const video = exercise?.video_url ?? exercise?.vimeo_embed_url ?? null;
-  const hasGuide = Boolean(exerciseId || video);
+  // Always show the How To button for every exercise.
+  // Previously this was Boolean(exerciseId || video) which hid the button for
+  // exercises added via exercise_name_override without an exercise_id (e.g. Dead Bug,
+  // Leg Press). HowToSheet already handles the no-video case with "Video coming soon."
+  const hasGuide = true;
   const cues = exercise?.cues ?? null;
   const setCount = Math.max(1, row.sets ?? 1);
   // Tracking type resolution priority:
