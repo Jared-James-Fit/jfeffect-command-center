@@ -48,6 +48,8 @@ type Day = {
   notes?: string | null;
   notes_client_visible?: boolean | null;
   scheduled_date?: string | null;
+  started_at?: string | null;
+  in_progress_at?: string | null;
   completed_at?: string | null;
   completion_note?: string | null;
   rows: Row[];
@@ -159,6 +161,10 @@ function formatLoggedEffort(s: LoggedSet): string {
 
 function isWorkoutCompleted(day: Day): boolean {
   return !!day.completed_at;
+}
+
+function isWorkoutInProgress(day: Day): boolean {
+  return !isWorkoutCompleted(day) && (!!day.started_at || !!day.in_progress_at || countLoggedSets(day) > 0);
 }
 
 function loggedSetHasInput(s: LoggedSet): boolean {
