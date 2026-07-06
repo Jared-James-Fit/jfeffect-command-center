@@ -2050,8 +2050,6 @@ function ClientOverviewSnapshot({
             </dl>
           </Card>
 
-          {/* Starting Maxes from intake */}
-          <StartingMaxesCard form={form} onEdit={() => onGoToTab("goals-setup")} />
         </div>
       </div>
     </div>
