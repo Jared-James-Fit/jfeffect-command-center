@@ -342,6 +342,59 @@ export function ClientBlockView({
 
   return (
     <section className="space-y-3">
+      {/* "Now viewing" bar — the single source of truth for what the
+          user is currently looking at. Fixes the confusion where the
+          page-level subtitle keeps saying "current" block/week while
+          the user has clicked into a previous block. Also gives a
+          one-tap way to jump back to today's block. */}
+      {block && (
+        <div className="flex flex-wrap items-center gap-2 rounded-lg border border-border bg-secondary/40 px-3 py-2">
+          <span className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">
+            Now viewing
+          </span>
+          <span className="truncate text-sm font-bold">
+            {block.name ?? "Block"}
+          </span>
+          {resolvedWeek && (
+            <span className="text-sm text-muted-foreground">
+              · Week {resolvedWeek.week_index}
+            </span>
+          )}
+          {blockStatus === "completed" && (
+            <Badge variant="outline" className="h-5 border-emerald-500/40 px-1.5 text-[9px] font-bold text-emerald-500">Done</Badge>
+          )}
+          {blockStatus === "current" && (
+            <Badge className="h-5 border-primary/40 bg-primary/15 px-1.5 text-[9px] font-bold text-primary hover:bg-primary/20">Current</Badge>
+          )}
+          {blockStatus === "upcoming" && (
+            <Badge variant="outline" className="h-5 border-amber-500/40 px-1.5 text-[9px] font-bold text-amber-500">Upcoming</Badge>
+          )}
+          {orderedBlocks.length > 1 && onBlockChange && (() => {
+            const cur = orderedBlocks.find((b: any) => blockStatusFor(b) === "current");
+            if (!cur || cur.id === blockId) return null;
+            return (
+              <Button
+                size="sm"
+                variant="outline"
+                className="ml-auto h-7 px-2 text-[11px]"
+                onClick={() => onBlockChange(cur.id)}
+              >
+                <Crosshair className="mr-1 h-3 w-3" /> Jump to current block
+              </Button>
+            );
+          })()}
+        </div>
+      )}
+
+      {/* Helper hint above the block picker — makes it obvious that
+          the cards are tappable and horizontally scrollable. */}
+      {orderedBlocks.length > 1 && (
+        <div className="flex items-center justify-between px-0.5 text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+          <span>Tap a block to switch</span>
+          <span className="hidden sm:inline">{orderedBlocks.length} blocks · swipe →</span>
+        </div>
+      )}
+
       {/* Block selector — current + next + previously assigned blocks.
           Always rendered when we have any blocks so clients can discover
           the picker and jump to previous or upcoming blocks as soon as
@@ -372,10 +425,10 @@ export function ClientBlockView({
                 onClick={() => onBlockChange?.(b.id)}
                 disabled={!onBlockChange}
                 className={cn(
-                  "snap-start shrink-0 min-w-[10rem] max-w-[18rem] rounded-lg border px-3 py-2 text-left transition-colors",
+                  "snap-start shrink-0 min-w-[11rem] max-w-[18rem] cursor-pointer rounded-lg border-2 px-3 py-2 text-left shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md active:translate-y-0",
                   isSel
                     ? "border-primary bg-primary text-primary-foreground"
-                    : "border-border bg-card text-foreground/85 hover:bg-secondary/60",
+                    : "border-border bg-card text-foreground/85 hover:border-primary/50 hover:bg-secondary/60",
                 )}
                 aria-pressed={isSel}
                 aria-label={`${b.name ?? "Block"} — ${statusLabel}`}

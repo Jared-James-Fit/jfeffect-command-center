@@ -1206,6 +1206,18 @@ function BlockViewTab({
     if (!selectedBlockId && defaultBlock?.id) setSelectedBlockId(defaultBlock.id);
   }, [defaultBlock?.id, selectedBlockId]);
 
+  // Week + day selection also needs local state so clicks in
+  // ClientBlockView actually change what's rendered. When the block
+  // changes, reset the week/day selection so the child falls back to
+  // "current week" for the newly-viewed block instead of a stale index
+  // that may not exist in that block.
+  const [selectedWeekIndex, setSelectedWeekIndex] = useState<number | null>(null);
+  const [selectedDayId, setSelectedDayId] = useState<string | null>(null);
+  useEffect(() => {
+    setSelectedWeekIndex(null);
+    setSelectedDayId(null);
+  }, [selectedBlockId]);
+
   const block = blocks.find((b: any) => b.id === selectedBlockId) ?? defaultBlock;
   if (!block) {
     return <EmptyState />;
@@ -1217,10 +1229,15 @@ function BlockViewTab({
       blocks={blocks}
       selectedBlockId={selectedBlockId}
       onBlockChange={(bid) => setSelectedBlockId(bid)}
-      selectedWeekIndex={null}
-      selectedDayId={null}
-      onWeekChange={() => {}}
-      onDayChange={() => {}}
+      selectedWeekIndex={selectedWeekIndex}
+      selectedDayId={selectedDayId}
+      onWeekChange={(idx) => {
+        setSelectedWeekIndex(idx);
+        // Changing the week should also clear the pinned day so the
+        // child re-derives the best default (today → first-open → first).
+        setSelectedDayId(null);
+      }}
+      onDayChange={(id) => setSelectedDayId(id)}
       mode={mode === "coach" ? "admin" : "client"}
     />
   );
