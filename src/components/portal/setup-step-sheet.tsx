@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
@@ -67,7 +67,7 @@ export function SetupStepSheet({ step, clientId, userId, client, onOpenChange }:
             />
           )}
           {step === "basic_info" && (
-            <BasicInfoStep client={client} onDone={() => onOpenChange(false)} />
+            <BasicInfoStep client={client} clientId={clientId} onDone={() => onOpenChange(false)} />
           )}
           {step === "training_schedule" && (
             <TrainingScheduleStep client={client} onDone={() => onOpenChange(false)} />
@@ -144,26 +144,61 @@ const BASIC_FIELDS = [
   ...SOCIAL_FIELDS,
 ] as const;
 
-function BasicInfoStep({ client, onDone }: { client: any; onDone: () => void }) {
+function BasicInfoStep({ client, clientId, onDone }: { client: any; clientId: string; onDone: () => void }) {
   const qc = useQueryClient();
-  const [form, setForm] = useState<any>(client);
+  const [form, setForm] = useState<any>(client ?? null);
   const [saving, setSaving] = useState(false);
-  useEffect(() => { setForm(client); }, [client]);
+  // Only hydrate from server data once, so a background refetch or an
+  // activity-heartbeat update to the parent's `client` query doesn't wipe
+  // what the user is currently typing.
+  const hydratedRef = useRef(false);
+  useEffect(() => {
+    if (hydratedRef.current) return;
+    if (!client) return;
+    setForm(client);
+    hydratedRef.current = true;
+  }, [client]);
 
   const remaining = useMemo(() => (form ? missingBasicFields(form) : []), [form]);
 
   const save = async (closeAfter: boolean) => {
-    if (!form?.id) return;
+    // Defence in depth: fall back to the clientId prop so a save never
+    // silently no-ops just because the parent's `client` query hadn't
+    // loaded when the user opened the sheet.
+    const targetId = form?.id ?? clientId;
+    if (!targetId) {
+      toast.error("Couldn't identify your account — please close and reopen this step.");
+      return;
+    }
     setSaving(true);
     const patch: any = {};
-    for (const f of BASIC_FIELDS) patch[f] = form[f] ?? null;
-    patch.full_name = [form.first_name, form.last_name].filter(Boolean).join(" ").trim() || form.full_name;
+    for (const f of BASIC_FIELDS) patch[f] = form?.[f] ?? null;
+    patch.full_name =
+      [form?.first_name, form?.last_name].filter(Boolean).join(" ").trim() ||
+      form?.full_name ||
+      null;
     patch.info_last_updated_at = new Date().toISOString();
     patch.info_last_updated_by = "client";
     patch.info_update_requested = false;
-    const { error } = await supabase.from("clients").update(patch).eq("id", form.id);
+    const { data: updated, error } = await supabase
+      .from("clients")
+      .update(patch)
+      .eq("id", targetId)
+      .select("id");
     setSaving(false);
-    if (error) { toast.error(error.message); return; }
+    if (error) {
+      console.error("[BasicInfoStep] save failed", error);
+      toast.error(error.message ?? "Couldn't save your info. Please try again.");
+      return;
+    }
+    if (!updated || updated.length === 0) {
+      // Row wasn't updated — almost always an RLS mismatch (session belongs
+      // to a different user than the client row). Surface this instead of
+      // silently pretending it saved.
+      console.error("[BasicInfoStep] save updated 0 rows for id", targetId);
+      toast.error("We couldn't save to your account. Please sign out and back in, then try again.");
+      return;
+    }
     qc.invalidateQueries({ queryKey: ["setup-banner-client"] });
     qc.invalidateQueries({ queryKey: ["my-client-account"] });
     qc.invalidateQueries({ queryKey: ["my-client"] });

@@ -74,7 +74,16 @@ export function TrainingScheduleCard({ client, editable = true, compact = false,
       training_schedule_last_updated: new Date().toISOString(),
       training_schedule_updated_by: auth.user?.id ?? null,
     };
-    const { error } = await supabase.from("clients").update(patch).eq("id", client.id);
+    const { data: updated, error } = await supabase
+      .from("clients")
+      .update(patch)
+      .eq("id", client.id)
+      .select("id");
+    if (!error && (!updated || updated.length === 0)) {
+      setSaving(false);
+      toast.error("We couldn't save to your account. Please sign out and back in, then try again.");
+      return;
+    }
     if (!error) {
       // Log activity for admin notification surface
       await (supabase as any).from("client_activity_log").insert({
