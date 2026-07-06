@@ -50,7 +50,15 @@ export function ClientRow({ r, onArchive }: { r: DirectoryRow; onArchive?: (r: D
   const urgent = r.priority <= 3;
   const prog = blockProgress(r.block_start, r.block_end);
   const range = fmtRange(r.block_start, r.block_end);
-  const actionTarget = primaryActionTarget(r.next_action, r.id);
+  // For non-urgent next-actions (missing program, next phase, nutrition,
+  // cardio, setup), the "Program"/"Nutrition"/"Cardio" status pills already
+  // handle the specific assign flow. The big primary button should always
+  // just open the client so admins have one consistent CTA per row.
+  const effectiveAction: DirectoryNextAction =
+    r.next_action.kind === "payment" || r.next_action.kind === "review"
+      ? r.next_action
+      : { kind: "open", label: "Open Client" };
+  const actionTarget = primaryActionTarget(effectiveAction, r.id);
   const { role } = useAuth();
   const navigate = useNavigate();
   const impersonation = useClientImpersonation();
@@ -216,11 +224,11 @@ export function ClientRow({ r, onArchive }: { r: DirectoryRow; onArchive?: (r: D
           )}
           <Tooltip>
             <TooltipTrigger asChild>
-              <Button asChild size="sm" className={cn("h-9 min-w-[8rem]", actionStyle(r.next_action, urgent))}>
+              <Button asChild size="sm" className={cn("h-9 min-w-[8rem]", actionStyle(effectiveAction, urgent))}>
                 {actionTarget}
               </Button>
             </TooltipTrigger>
-            <TooltipContent side="top">{r.next_action.label}</TooltipContent>
+            <TooltipContent side="top">{effectiveAction.label}</TooltipContent>
           </Tooltip>
 
           <QuickActionsMenu r={r} />
