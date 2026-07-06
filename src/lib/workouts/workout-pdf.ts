@@ -544,7 +544,7 @@ export function generateFullTrainingReportPdf(data: FullTrainingReportData): jsP
       doc.setFont("helvetica", "bold");
       doc.setFontSize(11);
       doc.text(`Week ${week.week_index}`, marginX + 10, y + 14);
-      y += 26;
+      y += 34;
       doc.setTextColor(20, 20, 20);
 
       for (const day of week.days) {
