@@ -169,7 +169,7 @@ export function WorkoutsExperience({
         allDayIds.length
           ? supabase
               .from("pl_day_completions")
-              .select("day_id, completed_at, client_notes, actual_duration_min, logging_percentage, logged_sets_count")
+              .select("day_id, started_at, in_progress_at, completed_at, client_notes, actual_duration_min, logging_percentage, logged_sets_count")
               .in("day_id", allDayIds)
               .eq("client_id", clientId)
           : Promise.resolve({ data: [] as any[] }),
@@ -251,6 +251,8 @@ export function WorkoutsExperience({
                     notes: d.notes ?? null,
                     notes_client_visible: d.notes_client_visible ?? null,
                     scheduled_date: d.scheduled_date ?? null,
+                    started_at: c?.started_at ?? null,
+                    in_progress_at: c?.in_progress_at ?? null,
                     completed_at: c?.completed_at ?? null,
                     completion_note: c?.client_notes ?? null,
                     rows: (rowsByDay.get(d.id) ?? []).map((r: any) => ({
