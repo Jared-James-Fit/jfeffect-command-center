@@ -27,8 +27,15 @@ export type LoggedSet = {
   set_index?: number | null;
   actual_reps?: number | null;
   actual_load?: number | null;
+  actual_load_lb?: number | null;
+  actual_load_kg?: number | null;
   actual_load_unit?: string | null;
+  entered_value?: number | null;
+  entered_unit?: string | null;
+  normalized_lb?: number | null;
+  normalized_kg?: number | null;
   actual_rpe?: string | number | null;
+  actual_rpe_num?: string | number | null;
   actual_rir?: string | number | null;
   completed_duration_seconds?: number | null;
   notes?: string | null;
@@ -124,9 +131,16 @@ function formatRest(r: Row): string {
 }
 
 function formatLoggedLoad(s: LoggedSet): string {
-  if (s.actual_load == null) return "—";
-  const unit = (s.actual_load_unit ?? "lb").toLowerCase();
-  return `${s.actual_load} ${unit}`;
+  const enteredValue = s.entered_value ?? s.actual_load;
+  if (enteredValue != null) {
+    const unit = (s.entered_unit ?? s.actual_load_unit ?? "lb").toLowerCase();
+    return `${enteredValue} ${unit}`;
+  }
+  if (s.actual_load_lb != null) return `${s.actual_load_lb} lb`;
+  if (s.normalized_lb != null) return `${s.normalized_lb} lb`;
+  if (s.actual_load_kg != null) return `${s.actual_load_kg} kg`;
+  if (s.normalized_kg != null) return `${s.normalized_kg} kg`;
+  return "—";
 }
 
 function formatLoggedRepsOrTime(s: LoggedSet): string {
@@ -137,9 +151,53 @@ function formatLoggedRepsOrTime(s: LoggedSet): string {
 }
 
 function formatLoggedEffort(s: LoggedSet): string {
-  if (s.actual_rpe != null && s.actual_rpe !== "") return `RPE ${s.actual_rpe}`;
+  const rpe = s.actual_rpe_num ?? s.actual_rpe;
+  if (rpe != null && rpe !== "") return `RPE ${rpe}`;
   if (s.actual_rir != null && s.actual_rir !== "") return `RIR ${s.actual_rir}`;
   return "—";
+}
+
+function isWorkoutCompleted(day: Day): boolean {
+  return !!day.completed_at;
+}
+
+function loggedSetHasInput(s: LoggedSet): boolean {
+  const reps = s.actual_reps != null && Number.isFinite(Number(s.actual_reps)) && Number(s.actual_reps) > 0;
+  const duration = s.completed_duration_seconds != null && Number.isFinite(Number(s.completed_duration_seconds)) && Number(s.completed_duration_seconds) > 0;
+  const load =
+    s.entered_value != null ||
+    s.actual_load != null ||
+    s.actual_load_lb != null ||
+    s.actual_load_kg != null ||
+    s.normalized_lb != null ||
+    s.normalized_kg != null;
+  const effort =
+    (s.actual_rpe_num != null && s.actual_rpe_num !== "") ||
+    (s.actual_rpe != null && s.actual_rpe !== "") ||
+    (s.actual_rir != null && s.actual_rir !== "");
+  const note = !!s.notes?.trim();
+  return reps || duration || load || effort || note;
+}
+
+function countLoggedSets(day: Day): number {
+  return day.rows.reduce((sum, row) => sum + (row.logged_sets ?? []).filter(loggedSetHasInput).length, 0);
+}
+
+function drawStatusPill(
+  doc: jsPDF,
+  label: string,
+  x: number,
+  y: number,
+  fill: [number, number, number],
+  text: [number, number, number] = [255, 255, 255],
+) {
+  const pillW = doc.getTextWidth(label) + 14;
+  doc.setFillColor(...fill);
+  doc.roundedRect(x - pillW, y - 11, pillW, 16, 4, 4, "F");
+  doc.setTextColor(...text);
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(8);
+  doc.text(label, x - pillW + 7, y);
 }
 
 export function generateWorkoutPdf(data: WorkoutPdfData): jsPDF {
@@ -397,7 +455,7 @@ export function generateFullTrainingReportPdf(data: FullTrainingReportData): jsP
     for (const w of b.weeks) {
       for (const d of w.days) {
         totalWorkouts += 1;
-        if (d.completed_at) completedWorkouts += 1;
+        if (isWorkoutCompleted(d)) completedWorkouts += 1;
       }
     }
   }
@@ -410,6 +468,39 @@ export function generateFullTrainingReportPdf(data: FullTrainingReportData): jsP
     y,
   );
   y += 24;
+
+  if (data.blocks.length) {
+    autoTable(doc, {
+      startY: y,
+      head: [["Block", "Dates", "Status", "Completed"]],
+      body: data.blocks.map((b) => {
+        const blockTotal = b.weeks.reduce((sum, w) => sum + w.days.length, 0);
+        const blockDone = b.weeks.reduce(
+          (sum, w) => sum + w.days.filter(isWorkoutCompleted).length,
+          0,
+        );
+        return [
+          b.block_name || "Training Block",
+          [fmtDate(b.block_start), fmtDate(b.block_end)].filter(Boolean).join(" – ") || "—",
+          b.block_status || "—",
+          `${blockDone}/${blockTotal}`,
+        ];
+      }),
+      styles: { fontSize: 9, cellPadding: 5, overflow: "linebreak" },
+      headStyles: { fillColor: [30, 30, 30], textColor: 255 },
+      columnStyles: {
+        0: { cellWidth: "auto", fontStyle: "bold" },
+        1: { cellWidth: 120 },
+        2: { cellWidth: 70 },
+        3: { cellWidth: 70, halign: "center" },
+      },
+      margin: { left: marginX, right: marginX },
+      didDrawPage: (hook) => {
+        y = hook.cursor?.y ?? y;
+      },
+    });
+    y = (doc as any).lastAutoTable?.finalY ?? y;
+  }
 
   const ensureSpace = (needed: number) => {
     if (y + needed > pageHeight - 60) {
@@ -440,7 +531,7 @@ export function generateFullTrainingReportPdf(data: FullTrainingReportData): jsP
     if (b.block_status) bLines.push(`Status: ${b.block_status}`);
     let bDone = 0;
     let bTotal = 0;
-    for (const w of b.weeks) for (const d of w.days) { bTotal++; if (d.completed_at) bDone++; }
+    for (const w of b.weeks) for (const d of w.days) { bTotal++; if (isWorkoutCompleted(d)) bDone++; }
     bLines.push(`${bDone} of ${bTotal} workouts completed`);
     for (const line of bLines) { doc.text(line, marginX, y); y += 13; }
     y += 6;
@@ -457,40 +548,44 @@ export function generateFullTrainingReportPdf(data: FullTrainingReportData): jsP
       doc.setTextColor(20, 20, 20);
 
       for (const day of week.days) {
-        ensureSpace(60);
+        ensureSpace(82);
         doc.setFont("helvetica", "bold");
         doc.setFontSize(11);
         doc.setTextColor(20, 20, 20);
-        const dayLabel =
+        const completed = isWorkoutCompleted(day);
+        const loggedCount = countLoggedSets(day);
+        const status = completed ? "COMPLETED" : loggedCount > 0 ? "IN PROGRESS" : "NOT COMPLETED";
+        const statusFill: [number, number, number] = completed
+          ? [16, 145, 91]
+          : loggedCount > 0
+            ? [217, 119, 6]
+            : [128, 128, 128];
+        const dayLabelText =
           `Day ${day.day_index}` +
           (day.title ? ` — ${day.title}` : "") +
           (day.scheduled_date ? `  (${fmtDate(day.scheduled_date)})` : "");
-        doc.text(dayLabel, marginX, y);
-
-        // Status pill on the right
-        const status = day.completed_at ? "COMPLETED" : "NOT COMPLETED";
-        const pillW = doc.getTextWidth(status) + 12;
-        const pillX = pageWidth - marginX - pillW;
-        if (day.completed_at) {
-          doc.setFillColor(16, 185, 129);
-        } else {
-          doc.setFillColor(200, 200, 200);
-        }
-        doc.roundedRect(pillX, y - 10, pillW, 14, 3, 3, "F");
-        doc.setTextColor(255, 255, 255);
-        doc.setFont("helvetica", "bold");
-        doc.setFontSize(8);
-        doc.text(status, pillX + 6, y);
+        const pillRight = pageWidth - marginX;
+        const pillReservedWidth = Math.max(92, doc.getTextWidth(status) + 20);
+        const dayLines = doc.splitTextToSize(dayLabelText, pageWidth - marginX * 2 - pillReservedWidth);
+        doc.text(dayLines, marginX, y);
+        drawStatusPill(doc, status, pillRight, y, statusFill);
         doc.setTextColor(20, 20, 20);
 
-        if (day.completed_at) {
-          y += 12;
-          doc.setFont("helvetica", "normal");
-          doc.setFontSize(9);
-          doc.setTextColor(90, 90, 90);
-          doc.text(`Logged ${fmtDate(day.completed_at)}`, marginX, y);
+        y += Math.max(14, dayLines.length * 12);
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(9);
+        doc.setTextColor(90, 90, 90);
+        const detailParts = [
+          completed && day.completed_at ? `Completed ${fmtDate(day.completed_at)}` : null,
+          loggedCount > 0 ? `${loggedCount} logged set${loggedCount === 1 ? "" : "s"}` : null,
+          day.completion_note?.trim() ? `Note: ${day.completion_note.trim()}` : null,
+        ].filter(Boolean);
+        if (detailParts.length) {
+          const detailLines = doc.splitTextToSize(detailParts.join("  ·  "), pageWidth - marginX * 2);
+          doc.text(detailLines, marginX, y);
+          y += detailLines.length * 11;
         }
-        y += 8;
+        y += 4;
 
         if (!day.rows || day.rows.length === 0) {
           y += 10;
@@ -515,9 +610,9 @@ export function generateFullTrainingReportPdf(data: FullTrainingReportData): jsP
           doc.setFont("helvetica", "bold");
           doc.setFontSize(10);
           doc.setTextColor(20, 20, 20);
-          y += 14;
+          y += 10;
           doc.text(`${i + 1}. ${name}`, marginX, y);
-          y += 6;
+          y += 12;
 
           doc.setFont("helvetica", "normal");
           doc.setFontSize(9);
@@ -537,12 +632,12 @@ export function generateFullTrainingReportPdf(data: FullTrainingReportData): jsP
               `Prescribed: ${prescribed}`,
               pageWidth - marginX * 2,
             );
-            y += 10;
             doc.text(plines, marginX, y);
-            y += (plines.length - 1) * 11 + 4;
+            y += plines.length * 11 + 2;
           }
 
           const logged = (r.logged_sets ?? [])
+            .filter(loggedSetHasInput)
             .slice()
             .sort((a, b) => (a.set_index ?? 0) - (b.set_index ?? 0));
           if (logged.length) {
@@ -572,14 +667,18 @@ export function generateFullTrainingReportPdf(data: FullTrainingReportData): jsP
             });
             y = (doc as any).lastAutoTable?.finalY ?? y;
             y += 6;
-          } else if (day.completed_at) {
+          } else if (completed) {
             doc.setFont("helvetica", "italic");
             doc.setFontSize(8);
             doc.setTextColor(140, 140, 140);
-            doc.text("No sets logged for this exercise.", marginX, y + 10);
-            y += 16;
+            doc.text("Completed workout — no sets logged for this exercise.", marginX, y);
+            y += 12;
           } else {
-            y += 4;
+            doc.setFont("helvetica", "italic");
+            doc.setFontSize(8);
+            doc.setTextColor(140, 140, 140);
+            doc.text("Not completed yet.", marginX, y);
+            y += 12;
           }
 
           if (r.notes?.trim()) {
