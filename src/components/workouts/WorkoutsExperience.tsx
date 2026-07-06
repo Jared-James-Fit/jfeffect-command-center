@@ -266,8 +266,6 @@ export function WorkoutsExperience({
       toast.error("Could not generate workout PDF. Please try again.");
     } finally {
       setDownloadingPdf(false);
-      return;
-    }
     }
   };
 
