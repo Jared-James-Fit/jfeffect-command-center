@@ -855,12 +855,6 @@ function ClientDetail() {
         <TabsContent value="nutrition" className="grid gap-6 md:grid-cols-3">
           <Suspense fallback={<TabFallback />}>
             <NutritionTargetsPanel clientId={id} />
-          </Suspense>
-        </TabsContent>
-
-        <TabsContent value="cardio" className="grid gap-6 md:grid-cols-3">
-          <Suspense fallback={<TabFallback />}>
-            <div className="md:col-span-3"><TrainingScheduleCard client={form} /></div>
             <CardioTargetsPanel clientId={id} />
           </Suspense>
         </TabsContent>
