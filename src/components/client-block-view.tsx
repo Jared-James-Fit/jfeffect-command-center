@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "@tanstack/react-router";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, keepPreviousData } from "@tanstack/react-query";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -128,6 +128,9 @@ export function ClientBlockView({
     enabled: !!blockId,
     queryFn: () => getBlockTree(blockId!),
     staleTime: 60_000,
+    // Keep showing the previously loaded block's tree while a new one
+    // fetches so clicking a previous/next block never blanks the view.
+    placeholderData: keepPreviousData,
   });
 
   // Pull completions for state-aware actions (Start / Continue / Review).
