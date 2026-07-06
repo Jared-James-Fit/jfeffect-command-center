@@ -1,7 +1,7 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { z } from "zod";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useMemo, useState, lazy, Suspense, type ComponentType } from "react";
+import { useEffect, useMemo, useState, lazy, Suspense, Fragment, type ComponentType } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/app-shell";
 import { Card } from "@/components/ui/card";
@@ -2058,6 +2058,9 @@ function ClientOverviewSnapshot({
               )}
             </dl>
           </Card>
+
+          {/* Starting Maxes from intake */}
+          <StartingMaxesCard form={form} onEdit={() => onGoToTab("goals-setup")} />
         </div>
       </div>
     </div>
@@ -2082,5 +2085,73 @@ function SnapshotField({ label, value, fallbackAction }: { label: string; value?
         <div className="mt-0.5 font-semibold text-muted-foreground">—</div>
       )}
     </div>
+  );
+}
+
+function StartingMaxesCard({ form, onEdit }: { form: any; onEdit: () => void }) {
+  const unit = form.intake_lift_unit === "kg" ? "kg" : "lb";
+  const known = form.intake_lifts_known !== false;
+  const oneRms = {
+    squat: form.intake_squat_1rm,
+    bench: form.intake_bench_1rm,
+    deadlift: form.intake_deadlift_1rm,
+  };
+  const fiveRms = {
+    squat: form.intake_squat_5rm,
+    bench: form.intake_bench_5rm,
+    deadlift: form.intake_deadlift_5rm,
+  };
+  const hasAny =
+    Number(oneRms.squat) > 0 || Number(oneRms.bench) > 0 || Number(oneRms.deadlift) > 0 ||
+    Number(fiveRms.squat) > 0 || Number(fiveRms.bench) > 0 || Number(fiveRms.deadlift) > 0;
+  const fmt = (v: any) => (Number(v) > 0 ? `${Number(v)} ${unit}` : "—");
+  const rows = known
+    ? [
+        { label: "Squat 1RM", value: fmt(oneRms.squat) },
+        { label: "Bench 1RM", value: fmt(oneRms.bench) },
+        { label: "Deadlift 1RM", value: fmt(oneRms.deadlift) },
+      ]
+    : [
+        { label: "Squat × 5", value: fmt(fiveRms.squat) },
+        { label: "Bench × 5", value: fmt(fiveRms.bench) },
+        { label: "Deadlift × 5", value: fmt(fiveRms.deadlift) },
+      ];
+  return (
+    <Card className="border-border bg-card p-6 space-y-3">
+      <div className="flex items-center justify-between">
+        <h3 className="text-sm font-semibold uppercase tracking-widest text-muted-foreground">
+          Starting Maxes {known ? "(1RM)" : "(5RM)"}
+        </h3>
+        <Button variant="ghost" size="sm" className="min-h-[40px] text-primary" onClick={onEdit}>
+          Edit →
+        </Button>
+      </div>
+      {hasAny ? (
+        <dl className="grid grid-cols-2 gap-y-1.5 text-xs">
+          {rows.map((r) => (
+            <Fragment key={r.label}>
+              <dt className="text-muted-foreground">{r.label}</dt>
+              <dd className="font-medium">{r.value}</dd>
+            </Fragment>
+          ))}
+          {form.intake_training_experience && (
+            <>
+              <dt className="text-muted-foreground">Experience</dt>
+              <dd className="font-medium">{form.intake_training_experience}</dd>
+            </>
+          )}
+          {form.intake_followed_program != null && (
+            <>
+              <dt className="text-muted-foreground">Followed program</dt>
+              <dd className="font-medium">{form.intake_followed_program ? "Yes" : "No"}</dd>
+            </>
+          )}
+        </dl>
+      ) : (
+        <p className="text-xs text-muted-foreground">
+          Client hasn't entered their starting squat, bench, or deadlift yet.
+        </p>
+      )}
+    </Card>
   );
 }
