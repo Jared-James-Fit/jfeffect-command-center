@@ -689,12 +689,6 @@ function ClientDetail() {
           />
         </TabsContent>
 
-        <TabsContent value="profile" className="grid gap-6">
-          <Suspense fallback={<TabFallback />}>
-            <ProfileGoalsAdminPanel clientId={id} />
-          </Suspense>
-        </TabsContent>
-
         <TabsContent value="coaching" className="grid gap-6 md:grid-cols-3">
           <Card className="border-border bg-card p-6 md:col-span-2 space-y-4">
             <div className="flex items-center justify-between">
