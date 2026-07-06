@@ -173,6 +173,8 @@ function BasicInfoStep({ client, clientId, onDone }: { client: any; clientId: st
     setSaving(true);
     const patch: any = {};
     for (const f of BASIC_FIELDS) patch[f] = form?.[f] ?? null;
+    // preferred_height_unit has a NOT NULL constraint — default to "imperial" if not set
+    if (patch.preferred_height_unit == null) patch.preferred_height_unit = "imperial";
     patch.full_name =
       [form?.first_name, form?.last_name].filter(Boolean).join(" ").trim() ||
       form?.full_name ||
