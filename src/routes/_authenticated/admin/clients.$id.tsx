@@ -80,7 +80,6 @@ const AssignedProgramsCard = lazyDefault(() => import("@/components/assigned-pro
 const ClientWarmupCard = lazyDefault(() => import("@/components/client-warmup-card"), "ClientWarmupCard");
 const ClientBillingPanel = lazyDefault(() => import("@/components/admin/client-billing-panel"), "ClientBillingPanel");
 const GoalsSetupPanel = lazyDefault(() => import("@/components/clients/goals-setup-panel"), "GoalsSetupPanel");
-const ProfileGoalsAdminPanel = lazyDefault(() => import("@/components/clients/profile-goals-admin-panel"), "ProfileGoalsAdminPanel");
 const SessionCreditsPanel = lazyDefault(() => import("@/components/admin/session-credits-panel"), "SessionCreditsPanel");
 
 function TabFallback() {
@@ -193,15 +192,14 @@ function AssignedCoachSelect({ value, onChange }: { value: string | null; onChan
   );
 }
 
-const TAB_VALUES = ["summary", "profile", "info", "goals-setup", "coaching", "account", "training", "nutrition", "cardio", "metrics", "messages", "lift-videos", "documents", "sessions", "purchases", "billing", "agreements", "notes"] as const;
+const TAB_VALUES = ["summary", "info", "goals-setup", "coaching", "account", "training", "nutrition", "metrics", "messages", "lift-videos", "documents", "sessions", "purchases", "billing", "agreements", "notes"] as const;
 type TabValue = typeof TAB_VALUES[number];
 
 type SectionId = "client-profile" | "training" | "nutrition" | "communication" | "business";
 type TabDef = { value: TabValue; label: string; description?: string; icon?: ComponentType<any> };
 const SECTIONS: { id: SectionId; label: string; description: string; icon: ComponentType<any>; tabs: TabDef[] }[] = [
-  { id: "client-profile", label: "Client Profile", description: "Overview, personal info, goals, coaching setup & login", icon: UserIcon, tabs: [
+  { id: "client-profile", label: "Client Profile", description: "Overview, personal info, goals, coaching & login", icon: UserIcon, tabs: [
     { value: "summary", label: "Overview", description: "Snapshot & quick actions", icon: LayoutDashboard },
-    { value: "profile", label: "Profile & Goals", description: "Unified profile status, info & goals", icon: UserIcon },
     { value: "info", label: "Personal Info", description: "Identity, contact, address & emergency", icon: IdCard },
     { value: "goals-setup", label: "Goals & Intake", description: "Goals, intake answers & lifting", icon: Target },
     { value: "coaching", label: "Coaching Setup", description: "Coach, package, schedule & links", icon: Settings2 },
@@ -213,9 +211,8 @@ const SECTIONS: { id: SectionId; label: string; description: string; icon: Compo
     { value: "lift-videos", label: "Lift Videos", icon: Dumbbell },
     { value: "sessions", label: "Sessions", icon: Calendar },
   ]},
-  { id: "nutrition", label: "Nutrition", description: "Targets & cardio", icon: Apple, tabs: [
-    { value: "nutrition", label: "Nutrition Targets", icon: Apple },
-    { value: "cardio", label: "Cardio Targets", icon: Apple },
+  { id: "nutrition", label: "Nutrition & Cardio", description: "Macros, targets & cardio", icon: Apple, tabs: [
+    { value: "nutrition", label: "Nutrition & Cardio", icon: Apple },
   ]},
   { id: "communication", label: "Communication", description: "Messages, notes, documents", icon: MessageSquare, tabs: [
     { value: "messages", label: "Messages", icon: MessageSquare },
@@ -234,7 +231,13 @@ const TAB_TO_SECTION: Record<TabValue, SectionId> = SECTIONS.reduce((acc, s) => 
 }, {} as Record<TabValue, SectionId>);
 
 export const Route = createFileRoute("/_authenticated/admin/clients/$id")({
-  validateSearch: (s) => z.object({ tab: z.enum(TAB_VALUES).optional() }).parse(s),
+  validateSearch: (s) => {
+    const parsed = z.object({ tab: z.string().optional() }).parse(s);
+    // Redirect deprecated tabs after the Client Profile / Nutrition consolidation.
+    const remap: Record<string, TabValue> = { profile: "info", cardio: "nutrition" };
+    const t = parsed.tab ? (remap[parsed.tab] ?? parsed.tab) : undefined;
+    return { tab: t && (TAB_VALUES as readonly string[]).includes(t) ? (t as TabValue) : undefined };
+  },
   component: ClientDetail,
 });
 
@@ -691,12 +694,6 @@ function ClientDetail() {
           />
         </TabsContent>
 
-        <TabsContent value="profile" className="grid gap-6">
-          <Suspense fallback={<TabFallback />}>
-            <ProfileGoalsAdminPanel clientId={id} />
-          </Suspense>
-        </TabsContent>
-
         <TabsContent value="coaching" className="grid gap-6 md:grid-cols-3">
           <Card className="border-border bg-card p-6 md:col-span-2 space-y-4">
             <div className="flex items-center justify-between">
@@ -863,12 +860,6 @@ function ClientDetail() {
         <TabsContent value="nutrition" className="grid gap-6 md:grid-cols-3">
           <Suspense fallback={<TabFallback />}>
             <NutritionTargetsPanel clientId={id} />
-          </Suspense>
-        </TabsContent>
-
-        <TabsContent value="cardio" className="grid gap-6 md:grid-cols-3">
-          <Suspense fallback={<TabFallback />}>
-            <div className="md:col-span-3"><TrainingScheduleCard client={form} /></div>
             <CardioTargetsPanel clientId={id} />
           </Suspense>
         </TabsContent>
