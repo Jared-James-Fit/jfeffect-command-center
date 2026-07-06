@@ -185,6 +185,7 @@ import { Route as AuthenticatedPortalRecipesIndexRouteImport } from './routes/_a
 import { Route as AuthenticatedPortalAgreementsIndexRouteImport } from './routes/_authenticated/portal/agreements.index'
 import { Route as AuthenticatedMNutritionIndexRouteImport } from './routes/_authenticated/m/nutrition.index'
 import { Route as AuthenticatedAdminSalesIndexRouteImport } from './routes/_authenticated/admin/sales.index'
+import { Route as AuthenticatedAdminProductsHistoryIndexRouteImport } from './routes/_authenticated/admin/products-history.index'
 import { Route as AuthenticatedAdminMembershipIndexRouteImport } from './routes/_authenticated/admin/membership.index'
 import { Route as AuthenticatedAdminMembersIndexRouteImport } from './routes/_authenticated/admin/members.index'
 import { Route as AuthenticatedAdminMemberResourcesIndexRouteImport } from './routes/_authenticated/admin/member-resources.index'
@@ -1275,6 +1276,12 @@ const AuthenticatedAdminSalesIndexRoute =
     path: '/sales/',
     getParentRoute: () => AuthenticatedAdminRouteRoute,
   } as any)
+const AuthenticatedAdminProductsHistoryIndexRoute =
+  AuthenticatedAdminProductsHistoryIndexRouteImport.update({
+    id: '/products-history/',
+    path: '/products-history/',
+    getParentRoute: () => AuthenticatedAdminRouteRoute,
+  } as any)
 const AuthenticatedAdminMembershipIndexRoute =
   AuthenticatedAdminMembershipIndexRouteImport.update({
     id: '/',
@@ -2114,6 +2121,7 @@ export interface FileRoutesByFullPath {
   '/admin/member-resources/': typeof AuthenticatedAdminMemberResourcesIndexRoute
   '/admin/members/': typeof AuthenticatedAdminMembersIndexRoute
   '/admin/membership/': typeof AuthenticatedAdminMembershipIndexRoute
+  '/admin/products-history/': typeof AuthenticatedAdminProductsHistoryIndexRoute
   '/admin/sales/': typeof AuthenticatedAdminSalesIndexRoute
   '/m/nutrition/': typeof AuthenticatedMNutritionIndexRoute
   '/portal/agreements/': typeof AuthenticatedPortalAgreementsIndexRoute
@@ -2383,6 +2391,7 @@ export interface FileRoutesByTo {
   '/admin/member-resources': typeof AuthenticatedAdminMemberResourcesIndexRoute
   '/admin/members': typeof AuthenticatedAdminMembersIndexRoute
   '/admin/membership': typeof AuthenticatedAdminMembershipIndexRoute
+  '/admin/products-history': typeof AuthenticatedAdminProductsHistoryIndexRoute
   '/admin/sales': typeof AuthenticatedAdminSalesIndexRoute
   '/m/nutrition': typeof AuthenticatedMNutritionIndexRoute
   '/portal/agreements': typeof AuthenticatedPortalAgreementsIndexRoute
@@ -2659,6 +2668,7 @@ export interface FileRoutesById {
   '/_authenticated/admin/member-resources/': typeof AuthenticatedAdminMemberResourcesIndexRoute
   '/_authenticated/admin/members/': typeof AuthenticatedAdminMembersIndexRoute
   '/_authenticated/admin/membership/': typeof AuthenticatedAdminMembershipIndexRoute
+  '/_authenticated/admin/products-history/': typeof AuthenticatedAdminProductsHistoryIndexRoute
   '/_authenticated/admin/sales/': typeof AuthenticatedAdminSalesIndexRoute
   '/_authenticated/m/nutrition/': typeof AuthenticatedMNutritionIndexRoute
   '/_authenticated/portal/agreements/': typeof AuthenticatedPortalAgreementsIndexRoute
@@ -2935,6 +2945,7 @@ export interface FileRouteTypes {
     | '/admin/member-resources/'
     | '/admin/members/'
     | '/admin/membership/'
+    | '/admin/products-history/'
     | '/admin/sales/'
     | '/m/nutrition/'
     | '/portal/agreements/'
@@ -3204,6 +3215,7 @@ export interface FileRouteTypes {
     | '/admin/member-resources'
     | '/admin/members'
     | '/admin/membership'
+    | '/admin/products-history'
     | '/admin/sales'
     | '/m/nutrition'
     | '/portal/agreements'
@@ -3479,6 +3491,7 @@ export interface FileRouteTypes {
     | '/_authenticated/admin/member-resources/'
     | '/_authenticated/admin/members/'
     | '/_authenticated/admin/membership/'
+    | '/_authenticated/admin/products-history/'
     | '/_authenticated/admin/sales/'
     | '/_authenticated/m/nutrition/'
     | '/_authenticated/portal/agreements/'
@@ -4788,6 +4801,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAdminSalesIndexRouteImport
       parentRoute: typeof AuthenticatedAdminRouteRoute
     }
+    '/_authenticated/admin/products-history/': {
+      id: '/_authenticated/admin/products-history/'
+      path: '/products-history'
+      fullPath: '/admin/products-history/'
+      preLoaderRoute: typeof AuthenticatedAdminProductsHistoryIndexRouteImport
+      parentRoute: typeof AuthenticatedAdminRouteRoute
+    }
     '/_authenticated/admin/membership/': {
       id: '/_authenticated/admin/membership/'
       path: '/'
@@ -5726,6 +5746,7 @@ interface AuthenticatedAdminRouteRouteChildren {
   AuthenticatedAdminMemberPlansIndexRoute: typeof AuthenticatedAdminMemberPlansIndexRoute
   AuthenticatedAdminMemberResourcesIndexRoute: typeof AuthenticatedAdminMemberResourcesIndexRoute
   AuthenticatedAdminMembersIndexRoute: typeof AuthenticatedAdminMembersIndexRoute
+  AuthenticatedAdminProductsHistoryIndexRoute: typeof AuthenticatedAdminProductsHistoryIndexRoute
   AuthenticatedAdminSalesIndexRoute: typeof AuthenticatedAdminSalesIndexRoute
   AuthenticatedAdminClientProgramsClientIdAnalyticsRoute: typeof AuthenticatedAdminClientProgramsClientIdAnalyticsRoute
   AuthenticatedAdminClientProgramsClientIdHistoryRoute: typeof AuthenticatedAdminClientProgramsClientIdHistoryRoute
@@ -5874,6 +5895,8 @@ const AuthenticatedAdminRouteRouteChildren: AuthenticatedAdminRouteRouteChildren
     AuthenticatedAdminMemberResourcesIndexRoute:
       AuthenticatedAdminMemberResourcesIndexRoute,
     AuthenticatedAdminMembersIndexRoute: AuthenticatedAdminMembersIndexRoute,
+    AuthenticatedAdminProductsHistoryIndexRoute:
+      AuthenticatedAdminProductsHistoryIndexRoute,
     AuthenticatedAdminSalesIndexRoute: AuthenticatedAdminSalesIndexRoute,
     AuthenticatedAdminClientProgramsClientIdAnalyticsRoute:
       AuthenticatedAdminClientProgramsClientIdAnalyticsRoute,
