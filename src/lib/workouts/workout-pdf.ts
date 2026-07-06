@@ -560,10 +560,11 @@ export function generateFullTrainingReportPdf(data: FullTrainingReportData): jsP
         doc.setTextColor(20, 20, 20);
         const completed = isWorkoutCompleted(day);
         const loggedCount = countLoggedSets(day);
-        const status = completed ? "COMPLETED" : loggedCount > 0 ? "IN PROGRESS" : "NOT COMPLETED";
+        const inProgress = isWorkoutInProgress(day);
+        const status = completed ? "COMPLETED" : inProgress ? "IN PROGRESS" : "NOT COMPLETED";
         const statusFill: [number, number, number] = completed
           ? [16, 145, 91]
-          : loggedCount > 0
+          : inProgress
             ? [217, 119, 6]
             : [128, 128, 128];
         const dayLabelText =
