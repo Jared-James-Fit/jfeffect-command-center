@@ -175,6 +175,12 @@ function BasicInfoStep({ client, clientId, onDone }: { client: any; clientId: st
     for (const f of BASIC_FIELDS) patch[f] = form?.[f] ?? null;
     // preferred_height_unit has a NOT NULL constraint — default to "imperial" if not set
     if (patch.preferred_height_unit == null) patch.preferred_height_unit = "imperial";
+    // intake_lift_unit defaults to "lb" in the UI but is only persisted when the
+    // user actively toggles it. If lifts are known and the unit is still null,
+    // default to "lb" so completion checks (which require kg|lb) pass.
+    if (patch.intake_lifts_known !== false && patch.intake_lift_unit !== "kg" && patch.intake_lift_unit !== "lb") {
+      patch.intake_lift_unit = "lb";
+    }
     patch.full_name =
       [form?.first_name, form?.last_name].filter(Boolean).join(" ").trim() ||
       form?.full_name ||
