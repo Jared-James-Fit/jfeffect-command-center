@@ -771,14 +771,20 @@ function WorkoutDay({
     startedRef.current = true;
     (async () => {
       try {
-        await startWorkoutSrv({ data: { kind: "client", dayId } });
+        const isMember = adapter?.kind === "member";
+        const memberRef = isMember ? (adapter?.ref as any) : null;
+        const startData = isMember && memberRef?.enrollmentId
+          ? { kind: "member" as const, enrollmentId: memberRef.enrollmentId, weekIndex: Number(dayId.split(":")[0]), dayIndex: Number(dayId.split(":")[1]) }
+          : { kind: "client" as const, dayId };
+        await startWorkoutSrv({ data: startData });
         qc.invalidateQueries({ queryKey: ["pl-day-completion", dayId] });
+        if (isMember) qc.invalidateQueries({ queryKey: ["member-workout-completion"] });
       } catch (err) {
         // Soft-fail: starting is best-effort; later writes will create the row.
         console.warn("startWorkout failed", err);
       }
     })();
-  }, [client?.id, completion?.id, completion?.started_at, dayId, qc, startWorkoutSrv, isImpersonating]);
+  }, [client?.id, completion?.id, completion?.started_at, dayId, qc, startWorkoutSrv, isImpersonating, adapter]);
 
   // Mark in_progress when any meaningful entry occurs
   const markInProgress = async () => {
@@ -788,8 +794,14 @@ function WorkoutDay({
     if (isImpersonating) return;
     if (completion?.in_progress_at) return;
     try {
-      await startWorkoutSrv({ data: { kind: "client", dayId } });
+      const isMember = adapter?.kind === "member";
+      const memberRef = isMember ? (adapter?.ref as any) : null;
+      const startData = isMember && memberRef?.enrollmentId
+        ? { kind: "member" as const, enrollmentId: memberRef.enrollmentId, weekIndex: Number(dayId.split(":")[0]), dayIndex: Number(dayId.split(":")[1]) }
+        : { kind: "client" as const, dayId };
+      await startWorkoutSrv({ data: startData });
       qc.invalidateQueries({ queryKey: ["pl-day-completion", dayId] });
+      if (isMember) qc.invalidateQueries({ queryKey: ["member-workout-completion"] });
     } catch (err) {
       console.warn("markInProgress failed", err);
     }
