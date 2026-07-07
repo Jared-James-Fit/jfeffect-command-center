@@ -53,6 +53,18 @@ type Day = {
   completed_at?: string | null;
   completion_note?: string | null;
   rows: Row[];
+  /**
+   * Client-authored exercise-level notes (pl_exercise_notes). Rendered as a
+   * dedicated "Client exercise notes" section so coaches see them in every
+   * downloaded PDF, not just inline per-set notes.
+   */
+  client_exercise_notes?: Array<{
+    exercise_name?: string | null;
+    content: string;
+    status?: string | null;
+    created_at?: string | null;
+    updated_at?: string | null;
+  }>;
 };
 
 type Week = {
