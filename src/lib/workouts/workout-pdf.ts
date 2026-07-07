@@ -549,7 +549,7 @@ export function generateFullTrainingReportPdf(data: FullTrainingReportData): jsP
   if (data.client_name) {
     doc.setFont("helvetica", "bold");
     doc.setFontSize(14);
-    doc.text(`Athlete: ${data.client_name}`, marginX, y);
+    doc.text(sanitizeText(`Athlete: ${data.client_name}`), marginX, y);
     y += 22;
   }
 
@@ -585,9 +585,9 @@ export function generateFullTrainingReportPdf(data: FullTrainingReportData): jsP
           0,
         );
         return [
-          b.block_name || "Training Block",
+          sanitizeText(b.block_name) || "Training Block",
           [fmtDate(b.block_start), fmtDate(b.block_end)].filter(Boolean).join(" – ") || "—",
-          b.block_status || "—",
+          sanitizeText(b.block_status) || "—",
           `${blockDone}/${blockTotal}`,
         ];
       }),
@@ -614,18 +614,20 @@ export function generateFullTrainingReportPdf(data: FullTrainingReportData): jsP
     }
   };
 
-  for (const b of data.blocks) {
+  for (let bi = 0; bi < data.blocks.length; bi++) {
+    const b = data.blocks[bi];
     // Block header
     doc.addPage();
     y = 56;
-    doc.setFillColor(15, 15, 15);
-    doc.rect(0, 0, pageWidth, 40, "F");
+    const bc = blockColor(bi);
+    doc.setFillColor(...bc);
+    doc.rect(0, 0, pageWidth, 46, "F");
     doc.setTextColor(255, 255, 255);
     doc.setFont("helvetica", "bold");
     doc.setFontSize(14);
-    doc.text(b.block_name || "Training Block", marginX, 26);
+    doc.text(sanitizeText(b.block_name) || "Training Block", marginX, 28);
     doc.setTextColor(20, 20, 20);
-    y = 64;
+    y = 68;
 
     doc.setFont("helvetica", "normal");
     doc.setFontSize(10);
@@ -643,7 +645,8 @@ export function generateFullTrainingReportPdf(data: FullTrainingReportData): jsP
 
     for (const week of b.weeks) {
       ensureSpace(50);
-      doc.setFillColor(30, 30, 30);
+      const wc = weekColor(week.week_index);
+      doc.setFillColor(...wc);
       doc.rect(marginX, y, pageWidth - marginX * 2, 20, "F");
       doc.setTextColor(255, 255, 255);
       doc.setFont("helvetica", "bold");
@@ -656,7 +659,7 @@ export function generateFullTrainingReportPdf(data: FullTrainingReportData): jsP
         ensureSpace(82);
         doc.setFont("helvetica", "bold");
         doc.setFontSize(11);
-        doc.setTextColor(20, 20, 20);
+        doc.setTextColor(...wc);
         const completed = isWorkoutCompleted(day);
         const loggedCount = countLoggedSets(day);
         const inProgress = isWorkoutInProgress(day);
@@ -666,13 +669,16 @@ export function generateFullTrainingReportPdf(data: FullTrainingReportData): jsP
           : inProgress
             ? [217, 119, 6]
             : [128, 128, 128];
-        const dayLabelText =
+        const cleanTitle = normalizeDayTitle(day.title, day.day_index);
+        const dayLabelText = sanitizeText(
           `Day ${day.day_index}` +
-          (day.title ? ` — ${day.title}` : "") +
-          (day.scheduled_date ? `  (${fmtDate(day.scheduled_date)})` : "");
+            (cleanTitle ? ` — ${cleanTitle}` : "") +
+            (day.scheduled_date ? `  (${fmtDate(day.scheduled_date)})` : ""),
+        );
         const pillRight = pageWidth - marginX;
-        const pillReservedWidth = Math.max(92, doc.getTextWidth(status) + 20);
-        const dayLines = doc.splitTextToSize(dayLabelText, pageWidth - marginX * 2 - pillReservedWidth);
+        const pillReservedWidth = Math.max(100, doc.getTextWidth(status) + 24);
+        const availableWidth = pageWidth - marginX * 2 - pillReservedWidth - 8;
+        const dayLines = doc.splitTextToSize(dayLabelText, availableWidth);
         doc.text(dayLines, marginX, y);
         drawStatusPill(doc, status, pillRight, y, statusFill);
         doc.setTextColor(20, 20, 20);
@@ -684,7 +690,6 @@ export function generateFullTrainingReportPdf(data: FullTrainingReportData): jsP
         const detailParts = [
           completed && day.completed_at ? `Completed ${fmtDate(day.completed_at)}` : null,
           loggedCount > 0 ? `${loggedCount} logged set${loggedCount === 1 ? "" : "s"}` : null,
-          day.completion_note?.trim() ? `Note: ${day.completion_note.trim()}` : null,
         ].filter(Boolean);
         if (detailParts.length) {
           const detailLines = doc.splitTextToSize(detailParts.join("  ·  "), pageWidth - marginX * 2);
@@ -712,7 +717,7 @@ export function generateFullTrainingReportPdf(data: FullTrainingReportData): jsP
           const r = rowsSorted[i];
           ensureSpace(72);
           const name =
-            r.exercise_name_override?.trim() || r.exercises?.name || "Exercise";
+            sanitizeText(r.exercise_name_override) || sanitizeText(r.exercises?.name) || "Exercise";
           doc.setFont("helvetica", "bold");
           doc.setFontSize(10);
           doc.setTextColor(20, 20, 20);
@@ -735,7 +740,7 @@ export function generateFullTrainingReportPdf(data: FullTrainingReportData): jsP
             .join("  ");
           if (prescribed) {
             const plines = doc.splitTextToSize(
-              `Prescribed: ${prescribed}`,
+              sanitizeText(`Prescribed: ${prescribed}`),
               pageWidth - marginX * 2,
             );
             doc.text(plines, marginX, y);
@@ -755,10 +760,10 @@ export function generateFullTrainingReportPdf(data: FullTrainingReportData): jsP
                 formatLoggedRepsOrTime(s),
                 formatLoggedLoad(s),
                 formatLoggedEffort(s),
-                (s.notes ?? "").trim() || "—",
+                sanitizeText(s.notes) || "—",
               ]),
               styles: { fontSize: 8, cellPadding: 3 },
-              headStyles: { fillColor: [40, 40, 40], textColor: 255 },
+              headStyles: { fillColor: wc, textColor: 255 },
               columnStyles: {
                 0: { cellWidth: 30, halign: "center" },
                 1: { cellWidth: 70, halign: "center" },
@@ -792,7 +797,7 @@ export function generateFullTrainingReportPdf(data: FullTrainingReportData): jsP
             doc.setFontSize(8);
             doc.setTextColor(90, 90, 90);
             const nl = doc.splitTextToSize(
-              `Coach note: ${r.notes.trim()}`,
+              sanitizeText(`Coach note: ${r.notes.trim()}`),
               pageWidth - marginX * 2,
             );
             ensureSpace(nl.length * 10 + 4);
@@ -801,12 +806,25 @@ export function generateFullTrainingReportPdf(data: FullTrainingReportData): jsP
           }
         }
 
+        if (day.completion_note?.trim()) {
+          doc.setFont("helvetica", "italic");
+          doc.setFontSize(9);
+          doc.setTextColor(60, 60, 60);
+          const lines = doc.splitTextToSize(
+            sanitizeText(`Client note: ${day.completion_note.trim()}`),
+            pageWidth - marginX * 2,
+          );
+          ensureSpace(lines.length * 11 + 4);
+          doc.text(lines, marginX, y);
+          y += lines.length * 11 + 4;
+        }
+
         if (day.notes?.trim() && day.notes_client_visible !== false) {
           doc.setFont("helvetica", "italic");
           doc.setFontSize(9);
           doc.setTextColor(90, 90, 90);
           const lines = doc.splitTextToSize(
-            `Day note: ${day.notes.trim()}`,
+            sanitizeText(`Coach day note: ${day.notes.trim()}`),
             pageWidth - marginX * 2,
           );
           ensureSpace(lines.length * 11 + 4);
