@@ -14,6 +14,7 @@ import {
 } from "@/lib/messages";
 import { transcribeVoiceMessage } from "@/lib/voice-transcribe.functions";
 import { Button } from "@/components/ui/button";
+import { ChatImageLightbox } from "@/components/chat-image-lightbox";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
