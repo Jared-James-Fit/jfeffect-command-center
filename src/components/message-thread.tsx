@@ -1598,6 +1598,24 @@ export function MessageThread({
             </Fragment>
           );
         })}
+        {peerTyping && (
+          <div className="flex items-end gap-2" aria-live="polite" aria-label="typing">
+            <UserAvatar
+              src={peerAvatarPath ?? null}
+              name={peerName ?? (role === "admin" ? "Client" : "Coach Jared")}
+              size={28}
+              tone="neutral"
+              className="mb-1"
+            />
+            <div className="rounded-2xl rounded-bl-md bg-secondary px-3 py-2 shadow-sm">
+              <div className="flex items-center gap-1">
+                <span className="h-1.5 w-1.5 animate-typing-bounce rounded-full bg-muted-foreground/70 [animation-delay:-0.32s]" />
+                <span className="h-1.5 w-1.5 animate-typing-bounce rounded-full bg-muted-foreground/70 [animation-delay:-0.16s]" />
+                <span className="h-1.5 w-1.5 animate-typing-bounce rounded-full bg-muted-foreground/70" />
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Phase 4A — admin strip showing scheduled & failed messages with
