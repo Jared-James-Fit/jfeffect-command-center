@@ -494,6 +494,7 @@ export function WorkoutsExperience({
                     selectedDate={selectedDate}
                     onSelectDate={setSelectedDate}
                     byDate={byDate}
+                    chipsByDate={priorityChipsByDate}
                   />
                 )}
                 <SelectedDayCard
