@@ -105,7 +105,10 @@ const ORDERED: PurposeLabel[] = ["Primary", "Secondary", "Tertiary", "Quaternary
 export function liftColorGroup(
   meta?: ExerciseMeta | null,
   cardColorOverride?: string | null,
+  movementFamilyOverride?: string | null,
 ): "squat" | "bench" | "deadlift" | null {
+  const mf = (movementFamilyOverride ?? "").toLowerCase();
+  if (mf === "squat" || mf === "bench" || mf === "deadlift") return mf;
   const o = (cardColorOverride ?? "").toLowerCase();
   if (o === "yellow") return "squat";
   if (o === "sky") return "bench";
@@ -130,7 +133,7 @@ export function liftColorGroup(
  * Manual `purpose_label` on a row always wins.
  */
 export function derivePurposeLabels<
-  R extends { purpose_label?: string | null; card_color?: string | null },
+  R extends { purpose_label?: string | null; card_color?: string | null; movement_family?: string | null },
 >(
   rows: R[],
   resolveMeta: (row: R) => ExerciseMeta | null | undefined,
@@ -143,7 +146,7 @@ export function derivePurposeLabels<
   return rows.map((row) => {
     if (row.purpose_label && row.purpose_label.trim()) return row.purpose_label.trim();
     const meta = resolveMeta(row);
-    const group = liftColorGroup(meta, row.card_color ?? null);
+    const group = liftColorGroup(meta, row.card_color ?? null, row.movement_family ?? null);
     if (group) {
       const idx = counters[group]++;
       return idx < ORDERED.length ? ORDERED[idx] : "";
