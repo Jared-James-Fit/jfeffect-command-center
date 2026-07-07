@@ -136,6 +136,7 @@ function ImageAttachment({ att }: { att: MessageAttachment }) {
   const signed = useSignedUrl(att.storage_path);
   const src = att.storage_path ? signed : att.url;
   const [errored, setErrored] = useState(false);
+  const [lightboxOpen, setLightboxOpen] = useState(false);
   const looksLikeGif = !!att.url && /tenor\.com|\.gif(\?|$)/i.test(att.url);
   if (!src || errored) {
     return (
@@ -146,18 +147,31 @@ function ImageAttachment({ att }: { att: MessageAttachment }) {
     );
   }
   return (
-    <a href={src} target="_blank" rel="noreferrer" className="block max-w-[280px]">
-      <img
+    <>
+      <button
+        type="button"
+        onClick={() => setLightboxOpen(true)}
+        className="block max-w-[280px] cursor-zoom-in"
+        aria-label={att.name ? `Open image ${att.name}` : "Open image"}
+      >
+        <img
+          src={src}
+          alt={att.name ?? ""}
+          className={cn(
+            looksLikeGif ? "h-[180px] w-[180px] object-cover" : "max-h-80 w-auto object-cover",
+            "rounded-md",
+          )}
+          loading="lazy"
+          onError={() => setErrored(true)}
+        />
+      </button>
+      <ChatImageLightbox
         src={src}
-        alt={att.name ?? ""}
-        className={cn(
-          looksLikeGif ? "h-[180px] w-[180px] object-cover" : "max-h-80 w-auto object-cover",
-          "rounded-md",
-        )}
-        loading="lazy"
-        onError={() => setErrored(true)}
+        alt={att.name}
+        open={lightboxOpen}
+        onClose={() => setLightboxOpen(false)}
       />
-    </a>
+    </>
   );
 }
 
