@@ -198,6 +198,39 @@ export function ClientBlockView({
     return m;
   }, [tree?.rows]);
 
+  // Weekly priority summary — collects non-Assistance labelled rows across
+  // every day in the current week and groups by (movement family, label).
+  const weeklyPriorities = useMemo(() => {
+    const RANK: Record<string, number> = { Primary: 0, Secondary: 1, Tertiary: 2, Quaternary: 3 };
+    const FAMILY_LABEL: Record<string, string> = {
+      squat: "Squat", bench: "Bench", deadlift: "Deadlift",
+      upper: "Upper", lower: "Lower", other: "Other",
+    };
+    const items: Array<{ key: string; label: string; family: string; dayId: string; dayName: string; rank: number }> = [];
+    for (const d of days) {
+      const rows = (rowsByDay.get(d.id) ?? []).slice().sort((a: any, b: any) => (a.sort_order ?? 0) - (b.sort_order ?? 0));
+      if (!rows.length) continue;
+      const labels = derivePurposeLabels(rows, (r: any) => r.exercises ?? null);
+      const dd = dayDate(d);
+      const dayName = dd ? format(dd, "EEEE") : `Day ${d.day_index}`;
+      rows.forEach((r: any, i: number) => {
+        const label = labels[i];
+        if (!label || label === "Assistance") return;
+        const family = (r.movement_family as string | null) ?? r.exercises?.competition_lift_type ?? "other";
+        items.push({
+          key: `${family}|${label}|${d.id}`,
+          label,
+          family: FAMILY_LABEL[family] ?? "Other",
+          dayId: d.id,
+          dayName,
+          rank: RANK[label] ?? 99,
+        });
+      });
+    }
+    items.sort((a, b) => a.rank - b.rank || a.family.localeCompare(b.family));
+    return items;
+  }, [days, rowsByDay, block, resolvedWeek]);
+
   // Canonical per-day scheduled date — same pipeline used by the Overview
   // tab, SmartTodayCard, and workout-logger header. Honors explicit
   // day.scheduled_date, then week.training_days, then a linear fallback.
@@ -618,6 +651,47 @@ export function ClientBlockView({
           </div>
         )}
       </div>
+
+      {weeklyPriorities.length > 0 && (
+        <Card className="p-3">
+          <div className="mb-1.5 text-[11px] font-black uppercase tracking-wide text-foreground/70">
+            Week {resolvedWeek?.week_index} Priorities
+          </div>
+          <ul className="grid gap-0.5">
+            {weeklyPriorities.map((p) => {
+              const line = `${p.label} ${p.family} — ${p.dayName}`;
+              const inner = (
+                <span className="flex items-center justify-between gap-2 rounded px-1.5 py-1 text-[12px] hover:bg-muted">
+                  <span className="truncate font-semibold">{line}</span>
+                </span>
+              );
+              if (mode === "client") {
+                return (
+                  <li key={p.key}>
+                    <Link to="/portal/workouts/$dayId" params={{ dayId: p.dayId }}>
+                      {inner}
+                    </Link>
+                  </li>
+                );
+              }
+              return (
+                <li key={p.key}>
+                  <button
+                    type="button"
+                    className="w-full text-left"
+                    onClick={() => {
+                      const idx = days.findIndex((d: any) => d.id === p.dayId);
+                      if (idx >= 0) selectDay(p.dayId, idx);
+                    }}
+                  >
+                    {inner}
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        </Card>
+      )}
 
       {/* Day columns / carousel */}
       {days.length === 0 ? (
