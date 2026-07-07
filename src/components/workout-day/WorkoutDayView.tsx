@@ -367,6 +367,15 @@ function WorkoutDay({
   const qc = useQueryClient();
   const undo = useWorkoutUndo();
   const cacheScope = `portal:${dayId}`;
+  // Gate the workout-detail queries on a fully hydrated auth session.
+  // Root cause of the Ashley Santos "No exercises assigned" bug: on cold
+  // launches (mobile PWA especially) `pl_exercise_rows` was queried
+  // before `auth.uid()` resolved on the network, so the RLS policy
+  // silently returned 0 rows and the previous `?? []` swallowed the
+  // error into a false-empty state. `useAuth()` exposes `loading` +
+  // `user` so we can wait for the session before hitting Supabase.
+  const { user: authUser, loading: authLoading } = useAuth();
+  const authReady = !authLoading && !!authUser;
 
   // Register a passthrough handler so any autosave that hits its
   // permanent-failure threshold can hand the write to the durable queue.
@@ -456,10 +465,17 @@ function WorkoutDay({
     // Days don't mutate while a workout is open. Treat as fresh for the
     // whole session so remounts (tab toggles, back nav) are instant.
     staleTime: 5 * 60_000,
+    enabled: authReady,
+    retry: 2,
     queryFn: async () => {
-      const d = adapter
-        ? await adapter.getDayRaw(dayId)
-        : (await sb.from("pl_days").select("*").eq("id", dayId).maybeSingle()).data;
+      let d: any;
+      if (adapter) {
+        d = await adapter.getDayRaw(dayId);
+      } else {
+        const { data, error } = await sb.from("pl_days").select("*").eq("id", dayId).maybeSingle();
+        if (error) throw error;
+        d = data;
+      }
       if (d) writePlanCache(cacheScope, "day", d);
       return d;
     },
@@ -506,15 +522,41 @@ function WorkoutDay({
   // they can fix client logs in place.
   const readonly = false;
 
-  const { data: rows = [], isSuccess: rowsLoaded } = useQuery({
+  const {
+    data: rows = [],
+    isSuccess: rowsLoaded,
+    isFetching: rowsFetching,
+    isError: rowsIsError,
+    error: rowsError,
+    refetch: refetchRows,
+  } = useQuery({
     queryKey: ["pl-day-rows", dayId, adapter?.kind ?? null, adapter?.ref.ownerId ?? null],
     initialData: cachedInitialData<any[]>(cacheScope, "rows"),
     staleTime: 5 * 60_000,
     gcTime: 10 * 60_000,
+    // Never run the exercise-rows read before Supabase has a session —
+    // otherwise the RLS policy on pl_exercise_rows filters everything
+    // out and we render the false-empty state.
+    enabled: authReady,
+    retry: 2,
+    retryDelay: (attempt) => Math.min(1500 * 2 ** attempt, 6_000),
     queryFn: async () => {
-      const r = adapter
-        ? await adapter.listRowsRaw(dayId)
-        : (await sb.from("pl_exercise_rows").select("*, exercises(id,name,video_url,vimeo_embed_url,secondary_vimeo_embed_url,active_video_set,thumbnail_url,cues,common_mistakes,muscle_group,category,pl_lift_group,warmup_protocol_id,is_powerlifting,warmup_notes,default_load_unit,exercise_category,is_competition_lift,competition_lift_type,default_measurement_type,duration_seconds)").eq("day_id", dayId).order("sort_order")).data ?? [];
+      let r: any[];
+      if (adapter) {
+        r = await adapter.listRowsRaw(dayId);
+      } else {
+        const { data, error } = await sb
+          .from("pl_exercise_rows")
+          .select("*, exercises(id,name,video_url,vimeo_embed_url,secondary_vimeo_embed_url,active_video_set,thumbnail_url,cues,common_mistakes,muscle_group,category,pl_lift_group,warmup_protocol_id,is_powerlifting,warmup_notes,default_load_unit,exercise_category,is_competition_lift,competition_lift_type,default_measurement_type,duration_seconds)")
+          .eq("day_id", dayId)
+          .order("sort_order");
+        // Surface RLS / network errors to react-query so the failure
+        // card renders and retries kick in, instead of silently
+        // collapsing to an empty array (root cause of Ashley Santos'
+        // "No exercises are assigned" report).
+        if (error) throw error;
+        r = data ?? [];
+      }
       // Secondary lookup: for rows that have exercise_name_override but no exercise_id,
       // look up the exercise by name so the How To sheet can show the Vimeo video.
       const nameOnlyRows = (r as any[]).filter((row) => !row.exercise_id && row.exercise_name_override);
