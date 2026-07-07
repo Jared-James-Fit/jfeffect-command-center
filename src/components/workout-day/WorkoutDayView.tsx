@@ -1396,8 +1396,12 @@ function WorkoutDay({
               </div>
             </WorkoutLoadBoundary>
 
-            {/* Finish Workout + Completed Actions inside fullscreen mode */}
-            {!readonly && !completion?.completed_at && (
+            {/* Finish Workout + Completed Actions inside fullscreen mode.
+                 Mirror the primary Finish gate: only render once rows have
+                 successfully loaded and there is at least one exercise, so a
+                 transient load-failure or empty-rows state cannot complete a
+                 workout. */}
+            {!readonly && !completion?.completed_at && !rowsIsError && authReady && rowsLoaded && (rows as any[]).length > 0 && (
               <div className="mx-auto max-w-3xl px-4 pb-4">
                 <Card className="p-4">
                   <ActionButton
