@@ -1,0 +1,3 @@
+CREATE UNIQUE INDEX IF NOT EXISTS payment_ledger_external_reference_unique ON public.payment_ledger(external_reference) WHERE external_reference IS NOT NULL;
+ALTER TABLE public.payment_ledger ADD COLUMN IF NOT EXISTS stripe_subscription_id text;
+CREATE INDEX IF NOT EXISTS payment_ledger_stripe_subscription_idx ON public.payment_ledger(stripe_subscription_id) WHERE stripe_subscription_id IS NOT NULL;
