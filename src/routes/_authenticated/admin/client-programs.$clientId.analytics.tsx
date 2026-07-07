@@ -12,6 +12,9 @@ import { format } from "date-fns";
 import { SearchableSelect, type SearchableOption } from "@/components/analytics/searchable-select";
 import { ANALYTICS_COLORS, exerciseColor, exerciseGroup, fmtNum, fmtDelta, muscleColor, shortMuscleLabel } from "@/lib/analytics-format";
 import { GraphDotDetail, type GraphDotPoint } from "@/components/analytics/graph-dot-detail";
+import { AnalyticsFilterBar, defaultAnalyticsFilter, type AnalyticsFilter } from "@/components/analytics/analytics-filter-bar";
+import { PowerliftingExposureSection } from "@/components/analytics/powerlifting-exposure-section";
+import { useEffect } from "react";
 
 export const Route = createFileRoute("/_authenticated/admin/client-programs/$clientId/analytics")({ component: AnalyticsPage });
 
@@ -25,6 +28,22 @@ function AnalyticsPage() {
     queryKey: ["pl-results", clientId],
     queryFn: () => getClientResults(clientId),
   });
+  const { data: clientBlocks = [] } = useQuery({
+    queryKey: ["pl-blocks-for-analytics", clientId],
+    staleTime: 60_000,
+    queryFn: async () =>
+      (await supabase
+        .from("pl_blocks")
+        .select("id, name, status, start_date, end_date")
+        .eq("client_id", clientId)).data ?? [],
+  });
+  const [analyticsFilter, setAnalyticsFilter] = useState<AnalyticsFilter | null>(null);
+  useEffect(() => {
+    if (!analyticsFilter && clientBlocks.length >= 0) {
+      setAnalyticsFilter(defaultAnalyticsFilter(clientBlocks));
+    }
+  }, [analyticsFilter, clientBlocks]);
+  const filter = analyticsFilter ?? defaultAnalyticsFilter(clientBlocks);
 
   const history = useMemo(() => buildExerciseHistory(results as any), [results]);
   const volume = useMemo(() => weeklyMuscleVolume(results as any[], 7), [results]);
@@ -101,6 +120,8 @@ function AnalyticsPage() {
         <Link to="/admin/client-programs/$clientId" params={{ clientId }} className="inline-flex items-center text-sm text-muted-foreground hover:text-foreground">
           <ArrowLeft className="mr-1 h-4 w-4" /> Back to programs
         </Link>
+
+        <AnalyticsFilterBar blocks={clientBlocks} value={filter} onChange={setAnalyticsFilter} />
 
         {isLoading ? <p className="text-sm text-muted-foreground">Loading…</p> : (
           <>
@@ -232,6 +253,14 @@ function AnalyticsPage() {
                 </Card>
               )}
             </section>
+
+            <PowerliftingExposureSection
+              clientId={clientId}
+              filter={filter}
+              results={results as any[]}
+              admin
+              navigateToBuilderHref={`/admin/client-programs/${clientId}`}
+            />
           </>
         )}
       </div>
