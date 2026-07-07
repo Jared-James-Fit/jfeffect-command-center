@@ -861,6 +861,47 @@ export function MessageThread({
     return () => { supabase.removeChannel(ch); };
   }, [clientId, role, qc]);
 
+  // ---------- Realtime typing indicator (iMessage-style) ----------
+  // Uses Supabase Realtime broadcast (ephemeral, no DB writes). Peer typing
+  // auto-clears after 3s of silence, or immediately on send.
+  useEffect(() => {
+    if (!clientId || !user?.id) return;
+    const ch = supabase.channel(`typing-${clientId}`, {
+      config: { broadcast: { self: false } },
+    });
+    ch.on("broadcast", { event: "typing" }, (payload: any) => {
+      const from = payload?.payload?.senderId as string | undefined;
+      const fromRole = payload?.payload?.role as SenderRole | undefined;
+      const stopped = !!payload?.payload?.stopped;
+      if (!from || from === user.id) return;
+      if (fromRole === role) return; // ignore same-role echoes
+      if (peerTypingTimerRef.current) clearTimeout(peerTypingTimerRef.current);
+      if (stopped) { setPeerTyping(false); return; }
+      setPeerTyping(true);
+      peerTypingTimerRef.current = setTimeout(() => setPeerTyping(false), 3200);
+    }).subscribe();
+    typingChannelRef.current = ch;
+    return () => {
+      if (peerTypingTimerRef.current) clearTimeout(peerTypingTimerRef.current);
+      supabase.removeChannel(ch);
+      typingChannelRef.current = null;
+    };
+  }, [clientId, user?.id, role]);
+
+  const broadcastTyping = (stopped = false) => {
+    const ch = typingChannelRef.current;
+    if (!ch || !user?.id) return;
+    const now = Date.now();
+    // Throttle to at most one event per ~1.5s while actively typing.
+    if (!stopped && now - lastTypingSentRef.current < 1500) return;
+    lastTypingSentRef.current = now;
+    void ch.send({
+      type: "broadcast",
+      event: "typing",
+      payload: { senderId: user.id, role, stopped },
+    });
+  };
+
   // Mark read when conversation is first opened or switches
   useEffect(() => {
     if (!clientId || !messages.length) return;
