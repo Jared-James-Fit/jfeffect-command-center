@@ -147,11 +147,14 @@ async function syncClientStripeCustomerId(supabase: any, stripeCustomerId: strin
     });
     return;
   }
+  // Update if null OR if the customer ID has changed (handles repeat purchases
+  // where Stripe creates a new customer for the same client email).
+  // We always prefer the most recent Stripe customer ID.
   await supabase
     .from("clients")
     .update({ stripe_customer_id: stripeCustomerId })
     .eq("id", clientId)
-    .is("stripe_customer_id", null); // only update if not already set
+    .neq("stripe_customer_id", stripeCustomerId); // update if different or null
 }
 
 /**
@@ -461,9 +464,36 @@ export const Route = createFileRoute("/api/public/stripe-webhook")({
                 }).then(() => {}, () => {});
                 break;
               }
-              const purchase = await resolvePurchase(supabase, obj, {
+              // For guest checkouts (no Stripe customer ID), also try to match
+              // by customer email from customer_details.
+              const guestEmail = obj.customer_details?.email ?? obj.customer_email ?? null;
+              let purchase = await resolvePurchase(supabase, obj, {
                 stripe_checkout_session_id: obj.id,
+                stripe_customer_id: obj.customer ?? undefined,
               });
+              // Email fallback: if no match yet and we have an email, find the
+              // most recent unpaid purchase_record for a client with that email.
+              if (!purchase && guestEmail) {
+                const { data: clientByEmail } = await supabase
+                  .from("clients")
+                  .select("id")
+                  .ilike("email", guestEmail)
+                  .maybeSingle();
+                if (clientByEmail) {
+                  const { data: prByEmail } = await supabase
+                    .from("purchase_records")
+                    .select("*")
+                    .eq("client_id", clientByEmail.id)
+                    .in("payment_status", ["Unpaid", "Pending Payment"])
+                    .order("purchased_at", { ascending: false })
+                    .limit(1)
+                    .maybeSingle();
+                  if (prByEmail) {
+                    purchase = prByEmail;
+                    console.log(`[stripe-webhook] guest checkout matched by email ${guestEmail} → purchase ${prByEmail.id}`);
+                  }
+                }
+              }
               if (purchase) {
                 await supabase.from("purchase_records").update({
                   payment_status: obj.payment_status === "paid"
