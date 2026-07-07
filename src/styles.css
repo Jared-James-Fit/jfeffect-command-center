@@ -392,6 +392,15 @@ html[data-keyboard-open="true"] {
   animation: reaction-pop 240ms cubic-bezier(.2,.8,.2,1);
 }
 
+/* iMessage-style typing indicator */
+@keyframes typing-bounce {
+  0%, 80%, 100% { transform: translateY(0); opacity: 0.4; }
+  40%           { transform: translateY(-3px); opacity: 1; }
+}
+.animate-typing-bounce {
+  animation: typing-bounce 1.2s ease-in-out infinite;
+}
+
 /* GIF fallback emoji subtle bounce */
 @keyframes gif-bounce {
   0%, 100% { transform: translateY(0) scale(1); }
