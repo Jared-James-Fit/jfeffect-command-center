@@ -99,6 +99,61 @@ function fmtDate(iso?: string | null) {
   }
 }
 
+/**
+ * jsPDF's default helvetica font is Latin-1 (Windows-1252) only. Emoji,
+ * CJK, and other multi-byte characters render as tofu / random glyphs and
+ * also break `getTextWidth`, which is why the status pill overlaps titles
+ * containing emoji. Strip anything outside the printable Latin-1 range.
+ */
+function sanitizeText(s: string | null | undefined): string {
+  if (!s) return "";
+  return s
+    // eslint-disable-next-line no-control-regex
+    .replace(/[^\x09\x0A\x0D\x20-\x7E\xA0-\xFF]/g, "")
+    .replace(/[ \t]{2,}/g, " ")
+    .trim();
+}
+
+/**
+ * Coaches often name days "Day 5 — Primer". Combined with our own
+ * `Day ${index}` prefix that yields "Day 5 — Day 5 — Primer". Strip any
+ * leading "Day N", "D5", "Day 5:" style prefix that matches the current
+ * day index.
+ */
+function normalizeDayTitle(title: string | null | undefined, index: number): string {
+  const cleaned = sanitizeText(title);
+  if (!cleaned) return "";
+  const re = new RegExp(`^(?:day|d)\\s*0*${index}\\b[\\s\\-–—:.]*`, "i");
+  return cleaned.replace(re, "").trim();
+}
+
+/** Distinct colors per week so long blocks are easy to skim. */
+const WEEK_COLORS: [number, number, number][] = [
+  [30, 64, 175],    // indigo
+  [124, 58, 237],   // violet
+  [16, 145, 91],    // emerald
+  [217, 119, 6],    // amber
+  [190, 24, 93],    // pink
+  [8, 145, 178],    // cyan
+  [220, 38, 38],    // red
+  [5, 122, 85],     // teal
+];
+function weekColor(weekIndex: number): [number, number, number] {
+  const idx = ((weekIndex - 1) % WEEK_COLORS.length + WEEK_COLORS.length) % WEEK_COLORS.length;
+  return WEEK_COLORS[idx];
+}
+
+/** Block accent colors, cycled per block. */
+const BLOCK_COLORS: [number, number, number][] = [
+  [15, 23, 42],     // slate-900
+  [67, 20, 7],      // deep brown
+  [23, 37, 84],     // navy
+  [59, 7, 100],     // deep purple
+];
+function blockColor(i: number): [number, number, number] {
+  return BLOCK_COLORS[((i % BLOCK_COLORS.length) + BLOCK_COLORS.length) % BLOCK_COLORS.length];
+}
+
 function formatLoad(r: Row): string {
   if (r.percentage != null) {
     const basis = r.percentage_basis ? ` ${r.percentage_basis}` : "";
@@ -270,7 +325,8 @@ export function generateWorkoutPdf(data: WorkoutPdfData): jsPDF {
 
   for (const week of data.weeks) {
     ensureSpace(60);
-    doc.setFillColor(15, 15, 15);
+    const wc = weekColor(week.week_index);
+    doc.setFillColor(...wc);
     doc.rect(marginX, y, pageWidth - marginX * 2, 22, "F");
     doc.setTextColor(255, 255, 255);
     doc.setFont("helvetica", "bold");
@@ -283,7 +339,7 @@ export function generateWorkoutPdf(data: WorkoutPdfData): jsPDF {
       doc.setFont("helvetica", "italic");
       doc.setFontSize(9);
       doc.setTextColor(90, 90, 90);
-      const lines = doc.splitTextToSize(week.notes.trim(), pageWidth - marginX * 2);
+      const lines = doc.splitTextToSize(sanitizeText(week.notes), pageWidth - marginX * 2);
       ensureSpace(lines.length * 11 + 6);
       doc.text(lines, marginX, y);
       y += lines.length * 11 + 6;
@@ -293,12 +349,14 @@ export function generateWorkoutPdf(data: WorkoutPdfData): jsPDF {
       ensureSpace(50);
       doc.setFont("helvetica", "bold");
       doc.setFontSize(11);
-      doc.setTextColor(20, 20, 20);
+      doc.setTextColor(...wc);
+      const cleanTitle = normalizeDayTitle(day.title, day.day_index);
       const dayLabel =
         `Day ${day.day_index}` +
-        (day.title ? ` — ${day.title}` : "") +
+        (cleanTitle ? ` — ${cleanTitle}` : "") +
         (day.scheduled_date ? `  (${fmtDate(day.scheduled_date)})` : "");
-      doc.text(dayLabel, marginX, y);
+      doc.text(sanitizeText(dayLabel), marginX, y);
+      doc.setTextColor(20, 20, 20);
       y += 6;
 
       if (!day.rows || day.rows.length === 0) {
@@ -319,18 +377,18 @@ export function generateWorkoutPdf(data: WorkoutPdfData): jsPDF {
           .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
           .map((r, i) => [
             String(i + 1),
-            r.exercise_name_override?.trim() ||
-              r.exercises?.name ||
+            sanitizeText(r.exercise_name_override) ||
+              sanitizeText(r.exercises?.name) ||
               "Exercise",
             r.sets != null ? String(r.sets) : "—",
             formatReps(r),
             formatLoad(r),
             formatRpe(r),
             formatRest(r),
-            r.tempo?.trim() || "—",
+            sanitizeText(r.tempo) || "—",
           ]),
         styles: { fontSize: 8, cellPadding: 4 },
-        headStyles: { fillColor: [40, 40, 40], textColor: 255 },
+        headStyles: { fillColor: wc, textColor: 255 },
         columnStyles: {
           0: { cellWidth: 18 },
           1: { cellWidth: "auto" },
@@ -356,9 +414,8 @@ export function generateWorkoutPdf(data: WorkoutPdfData): jsPDF {
         doc.setFontSize(8);
         doc.setTextColor(80, 80, 80);
         for (const r of noteRows) {
-          const name =
-            r.exercise_name_override?.trim() || r.exercises?.name || "Exercise";
-          const text = `• ${name}: ${r.notes!.trim()}`;
+          const name = sanitizeText(r.exercise_name_override) || sanitizeText(r.exercises?.name) || "Exercise";
+          const text = sanitizeText(`• ${name}: ${r.notes!.trim()}`);
           const lines = doc.splitTextToSize(text, pageWidth - marginX * 2);
           ensureSpace(lines.length * 10 + 2);
           doc.text(lines, marginX, y);
@@ -367,13 +424,55 @@ export function generateWorkoutPdf(data: WorkoutPdfData): jsPDF {
         y += 4;
       }
 
+      // Client-authored notes captured on the logged sets
+      const setNotes: string[] = [];
+      for (const r of day.rows) {
+        for (const s of r.logged_sets ?? []) {
+          const note = sanitizeText(s.notes);
+          if (!note) continue;
+          const name = sanitizeText(r.exercise_name_override) || sanitizeText(r.exercises?.name) || "Exercise";
+          setNotes.push(`• ${name} — set ${s.set_index ?? "?"}: ${note}`);
+        }
+      }
+      if (setNotes.length) {
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(8);
+        doc.setTextColor(...wc);
+        ensureSpace(14);
+        doc.text("Client notes", marginX, y);
+        y += 10;
+        doc.setFont("helvetica", "normal");
+        doc.setTextColor(70, 70, 70);
+        for (const line of setNotes) {
+          const wrapped = doc.splitTextToSize(line, pageWidth - marginX * 2);
+          ensureSpace(wrapped.length * 10 + 2);
+          doc.text(wrapped, marginX, y);
+          y += wrapped.length * 10;
+        }
+        y += 4;
+      }
+
+      // Client completion note
+      if (day.completion_note?.trim()) {
+        doc.setFont("helvetica", "italic");
+        doc.setFontSize(9);
+        doc.setTextColor(60, 60, 60);
+        const lines = doc.splitTextToSize(
+          sanitizeText(`Client note: ${day.completion_note.trim()}`),
+          pageWidth - marginX * 2,
+        );
+        ensureSpace(lines.length * 11 + 4);
+        doc.text(lines, marginX, y);
+        y += lines.length * 11 + 4;
+      }
+
       // Day note — only when explicitly client-visible
       if (day.notes?.trim() && day.notes_client_visible !== false) {
         doc.setFont("helvetica", "italic");
         doc.setFontSize(9);
         doc.setTextColor(90, 90, 90);
         const lines = doc.splitTextToSize(
-          `Note: ${day.notes.trim()}`,
+          sanitizeText(`Coach note: ${day.notes.trim()}`),
           pageWidth - marginX * 2,
         );
         ensureSpace(lines.length * 11 + 4);
@@ -450,7 +549,7 @@ export function generateFullTrainingReportPdf(data: FullTrainingReportData): jsP
   if (data.client_name) {
     doc.setFont("helvetica", "bold");
     doc.setFontSize(14);
-    doc.text(`Athlete: ${data.client_name}`, marginX, y);
+    doc.text(sanitizeText(`Athlete: ${data.client_name}`), marginX, y);
     y += 22;
   }
 
@@ -486,9 +585,9 @@ export function generateFullTrainingReportPdf(data: FullTrainingReportData): jsP
           0,
         );
         return [
-          b.block_name || "Training Block",
+          sanitizeText(b.block_name) || "Training Block",
           [fmtDate(b.block_start), fmtDate(b.block_end)].filter(Boolean).join(" – ") || "—",
-          b.block_status || "—",
+          sanitizeText(b.block_status) || "—",
           `${blockDone}/${blockTotal}`,
         ];
       }),
@@ -515,18 +614,20 @@ export function generateFullTrainingReportPdf(data: FullTrainingReportData): jsP
     }
   };
 
-  for (const b of data.blocks) {
+  for (let bi = 0; bi < data.blocks.length; bi++) {
+    const b = data.blocks[bi];
     // Block header
     doc.addPage();
     y = 56;
-    doc.setFillColor(15, 15, 15);
-    doc.rect(0, 0, pageWidth, 40, "F");
+    const bc = blockColor(bi);
+    doc.setFillColor(...bc);
+    doc.rect(0, 0, pageWidth, 46, "F");
     doc.setTextColor(255, 255, 255);
     doc.setFont("helvetica", "bold");
     doc.setFontSize(14);
-    doc.text(b.block_name || "Training Block", marginX, 26);
+    doc.text(sanitizeText(b.block_name) || "Training Block", marginX, 28);
     doc.setTextColor(20, 20, 20);
-    y = 64;
+    y = 68;
 
     doc.setFont("helvetica", "normal");
     doc.setFontSize(10);
@@ -544,7 +645,8 @@ export function generateFullTrainingReportPdf(data: FullTrainingReportData): jsP
 
     for (const week of b.weeks) {
       ensureSpace(50);
-      doc.setFillColor(30, 30, 30);
+      const wc = weekColor(week.week_index);
+      doc.setFillColor(...wc);
       doc.rect(marginX, y, pageWidth - marginX * 2, 20, "F");
       doc.setTextColor(255, 255, 255);
       doc.setFont("helvetica", "bold");
@@ -557,7 +659,7 @@ export function generateFullTrainingReportPdf(data: FullTrainingReportData): jsP
         ensureSpace(82);
         doc.setFont("helvetica", "bold");
         doc.setFontSize(11);
-        doc.setTextColor(20, 20, 20);
+        doc.setTextColor(...wc);
         const completed = isWorkoutCompleted(day);
         const loggedCount = countLoggedSets(day);
         const inProgress = isWorkoutInProgress(day);
@@ -567,13 +669,16 @@ export function generateFullTrainingReportPdf(data: FullTrainingReportData): jsP
           : inProgress
             ? [217, 119, 6]
             : [128, 128, 128];
-        const dayLabelText =
+        const cleanTitle = normalizeDayTitle(day.title, day.day_index);
+        const dayLabelText = sanitizeText(
           `Day ${day.day_index}` +
-          (day.title ? ` — ${day.title}` : "") +
-          (day.scheduled_date ? `  (${fmtDate(day.scheduled_date)})` : "");
+            (cleanTitle ? ` — ${cleanTitle}` : "") +
+            (day.scheduled_date ? `  (${fmtDate(day.scheduled_date)})` : ""),
+        );
         const pillRight = pageWidth - marginX;
-        const pillReservedWidth = Math.max(92, doc.getTextWidth(status) + 20);
-        const dayLines = doc.splitTextToSize(dayLabelText, pageWidth - marginX * 2 - pillReservedWidth);
+        const pillReservedWidth = Math.max(100, doc.getTextWidth(status) + 24);
+        const availableWidth = pageWidth - marginX * 2 - pillReservedWidth - 8;
+        const dayLines = doc.splitTextToSize(dayLabelText, availableWidth);
         doc.text(dayLines, marginX, y);
         drawStatusPill(doc, status, pillRight, y, statusFill);
         doc.setTextColor(20, 20, 20);
@@ -585,7 +690,6 @@ export function generateFullTrainingReportPdf(data: FullTrainingReportData): jsP
         const detailParts = [
           completed && day.completed_at ? `Completed ${fmtDate(day.completed_at)}` : null,
           loggedCount > 0 ? `${loggedCount} logged set${loggedCount === 1 ? "" : "s"}` : null,
-          day.completion_note?.trim() ? `Note: ${day.completion_note.trim()}` : null,
         ].filter(Boolean);
         if (detailParts.length) {
           const detailLines = doc.splitTextToSize(detailParts.join("  ·  "), pageWidth - marginX * 2);
@@ -613,7 +717,7 @@ export function generateFullTrainingReportPdf(data: FullTrainingReportData): jsP
           const r = rowsSorted[i];
           ensureSpace(72);
           const name =
-            r.exercise_name_override?.trim() || r.exercises?.name || "Exercise";
+            sanitizeText(r.exercise_name_override) || sanitizeText(r.exercises?.name) || "Exercise";
           doc.setFont("helvetica", "bold");
           doc.setFontSize(10);
           doc.setTextColor(20, 20, 20);
@@ -636,7 +740,7 @@ export function generateFullTrainingReportPdf(data: FullTrainingReportData): jsP
             .join("  ");
           if (prescribed) {
             const plines = doc.splitTextToSize(
-              `Prescribed: ${prescribed}`,
+              sanitizeText(`Prescribed: ${prescribed}`),
               pageWidth - marginX * 2,
             );
             doc.text(plines, marginX, y);
@@ -656,10 +760,10 @@ export function generateFullTrainingReportPdf(data: FullTrainingReportData): jsP
                 formatLoggedRepsOrTime(s),
                 formatLoggedLoad(s),
                 formatLoggedEffort(s),
-                (s.notes ?? "").trim() || "—",
+                sanitizeText(s.notes) || "—",
               ]),
               styles: { fontSize: 8, cellPadding: 3 },
-              headStyles: { fillColor: [40, 40, 40], textColor: 255 },
+              headStyles: { fillColor: wc, textColor: 255 },
               columnStyles: {
                 0: { cellWidth: 30, halign: "center" },
                 1: { cellWidth: 70, halign: "center" },
@@ -693,7 +797,7 @@ export function generateFullTrainingReportPdf(data: FullTrainingReportData): jsP
             doc.setFontSize(8);
             doc.setTextColor(90, 90, 90);
             const nl = doc.splitTextToSize(
-              `Coach note: ${r.notes.trim()}`,
+              sanitizeText(`Coach note: ${r.notes.trim()}`),
               pageWidth - marginX * 2,
             );
             ensureSpace(nl.length * 10 + 4);
@@ -702,12 +806,25 @@ export function generateFullTrainingReportPdf(data: FullTrainingReportData): jsP
           }
         }
 
+        if (day.completion_note?.trim()) {
+          doc.setFont("helvetica", "italic");
+          doc.setFontSize(9);
+          doc.setTextColor(60, 60, 60);
+          const lines = doc.splitTextToSize(
+            sanitizeText(`Client note: ${day.completion_note.trim()}`),
+            pageWidth - marginX * 2,
+          );
+          ensureSpace(lines.length * 11 + 4);
+          doc.text(lines, marginX, y);
+          y += lines.length * 11 + 4;
+        }
+
         if (day.notes?.trim() && day.notes_client_visible !== false) {
           doc.setFont("helvetica", "italic");
           doc.setFontSize(9);
           doc.setTextColor(90, 90, 90);
           const lines = doc.splitTextToSize(
-            `Day note: ${day.notes.trim()}`,
+            sanitizeText(`Coach day note: ${day.notes.trim()}`),
             pageWidth - marginX * 2,
           );
           ensureSpace(lines.length * 11 + 4);
