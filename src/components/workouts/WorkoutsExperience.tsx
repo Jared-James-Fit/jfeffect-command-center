@@ -185,6 +185,22 @@ export function WorkoutsExperience({
       ]);
       if ((completionsRes as any).error) throw (completionsRes as any).error;
       if ((resultsRes as any).error) throw (resultsRes as any).error;
+      // Client-authored exercise notes for every day in the report.
+      const notesRes: any = allDayIds.length
+        ? await supabase
+            .from("pl_exercise_notes")
+            .select("day_id, row_id, exercise_name, content, status, created_at, updated_at")
+            .in("day_id", allDayIds)
+            .eq("client_id", clientId)
+            .order("updated_at", { ascending: true })
+        : { data: [] as any[] };
+      if (notesRes?.error) throw notesRes.error;
+      const notesByDay = new Map<string, any[]>();
+      for (const n of (notesRes.data ?? []) as any[]) {
+        const list = notesByDay.get(n.day_id) ?? [];
+        list.push(n);
+        notesByDay.set(n.day_id, list);
+      }
       const completionByDay = new Map<string, any>();
       for (const c of (completionsRes.data ?? []) as any[]) {
         // If there are somehow multiple, prefer the completed one.
@@ -259,6 +275,7 @@ export function WorkoutsExperience({
                       ...r,
                       logged_sets: resultsByRow.get(r.id) ?? [],
                     })),
+                    client_exercise_notes: notesByDay.get(d.id) ?? [],
                   };
                 }),
             })),
