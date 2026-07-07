@@ -95,6 +95,60 @@ export function WorkoutsExperience({
     return map;
   }, [dayItems, committedDays]);
 
+  // Fetch priority-labelled rows for every visible scheduled day so the
+  // month/week grids can render compact priority chips. Only pulls the
+  // metadata columns needed to derive labels.
+  const dayIds = useMemo(
+    () => dayItems.map((it) => it.day?.id).filter(Boolean) as string[],
+    [dayItems],
+  );
+  const { data: priorityRows = [] } = useQuery({
+    queryKey: ["workouts-priority-rows", clientId, dayIds.length],
+    enabled: dayIds.length > 0,
+    staleTime: 60_000,
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("pl_exercise_rows")
+        .select("day_id, sort_order, purpose_label, movement_family, card_color, exercise_id, exercises(competition_lift_type, is_competition_lift, exercise_category)")
+        .in("day_id", dayIds)
+        .order("sort_order");
+      return (data ?? []) as any[];
+    },
+  });
+
+  const priorityChipsByDate = useMemo(() => {
+    const rowsByDay = new Map<string, any[]>();
+    for (const r of priorityRows) {
+      const list = rowsByDay.get(r.day_id) ?? [];
+      list.push(r);
+      rowsByDay.set(r.day_id, list);
+    }
+    const FAMILY: Record<string, string> = {
+      squat: "Squat", bench: "Bench", deadlift: "Deadlift",
+      upper: "Upper", lower: "Lower", other: "Other",
+    };
+    const out = new Map<string, Array<{ label: string; family: string }>>();
+    for (const it of dayItems) {
+      const id = it.day?.id;
+      if (!id) continue;
+      const rows = rowsByDay.get(id) ?? [];
+      if (!rows.length) continue;
+      const labels = derivePurposeLabels(rows, (r: any) => r.exercises ?? null);
+      const chips: Array<{ label: string; family: string }> = [];
+      rows.forEach((r: any, i: number) => {
+        const label = labels[i];
+        if (!label || label === "Assistance") return;
+        const famRaw = (r.movement_family as string | null) ?? r.exercises?.competition_lift_type ?? "";
+        chips.push({ label, family: FAMILY[String(famRaw).toLowerCase()] ?? "" });
+      });
+      if (!chips.length) continue;
+      const d = dayScheduledDate(it, committedDays);
+      if (!d) continue;
+      out.set(toLocalISO(d), chips);
+    }
+    return out;
+  }, [priorityRows, dayItems, committedDays]);
+
   // --- Current block / week label for the header subtitle. -----------------
   const today = localStartOfToday();
   const todayItem = byDate.get(toLocalISO(today)) ?? null;
