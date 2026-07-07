@@ -245,10 +245,20 @@ function BlockEditor() {
   const { blockId } = Route.useParams();
   const qc = useQueryClient();
 
-  const { data: tree, isLoading } = useQuery({
+  const { data: tree, isLoading, error: treeError, refetch: refetchTree } = useQuery({
     queryKey: ["pl-block-tree", blockId],
     queryFn: () => getBlockTree(blockId),
+    retry: 2,
   });
+  // Surface the underlying error in the console so a coach who reports
+  // "block won't open" can share the exact failure. Previously the block
+  // page silently stuck on "Loading block…" whenever the tree fetch failed.
+  useEffect(() => {
+    if (treeError) {
+      // eslint-disable-next-line no-console
+      console.error("[block-editor] getBlockTree failed", { blockId, error: treeError });
+    }
+  }, [blockId, treeError]);
   const clientIdFromTree = tree?.block?.client_id ?? null;
   // Load the client identity + (optional) parent Program (prep) so the
   // header can show whose plan is being edited without any guessing.
@@ -396,6 +406,49 @@ function BlockEditor() {
     ready: !!tree && !!payload,
   });
 
+  if (treeError) {
+    return (
+      <div className="mx-auto max-w-lg space-y-3 p-8 text-center">
+        <h2 className="text-lg font-semibold">Couldn't load this block</h2>
+        <p className="text-sm text-muted-foreground">
+          {(treeError as any)?.message ?? "The block data didn't load. This is usually a temporary connection issue."}
+        </p>
+        <div className="flex justify-center gap-2">
+          <button
+            type="button"
+            onClick={() => refetchTree()}
+            className="inline-flex items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
+          >
+            Try again
+          </button>
+          <Link
+            to="/admin/clients"
+            className="inline-flex items-center justify-center rounded-md border border-border px-4 py-2 text-sm font-medium hover:bg-muted"
+          >
+            Back to clients
+          </Link>
+        </div>
+      </div>
+    );
+  }
+  if (!isLoading && tree === null) {
+    return (
+      <div className="mx-auto max-w-lg space-y-3 p-8 text-center">
+        <h2 className="text-lg font-semibold">Block not found</h2>
+        <p className="text-sm text-muted-foreground">
+          This block has been deleted, or you don't have access to it.
+        </p>
+        <div className="flex justify-center">
+          <Link
+            to="/admin/clients"
+            className="inline-flex items-center justify-center rounded-md border border-border px-4 py-2 text-sm font-medium hover:bg-muted"
+          >
+            Back to clients
+          </Link>
+        </div>
+      </div>
+    );
+  }
   if (isLoading || !tree || !payload) {
     return <div className="p-8 text-sm text-muted-foreground">Loading block…</div>;
   }
