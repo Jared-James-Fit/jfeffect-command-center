@@ -855,6 +855,30 @@ export function generateFullTrainingReportPdf(data: FullTrainingReportData): jsP
           y += lines.length * 11 + 4;
         }
 
+        // Client-authored exercise-level notes for the full report.
+        const exNotesFull = (day.client_exercise_notes ?? []).filter((n) => sanitizeText(n.content));
+        if (exNotesFull.length) {
+          doc.setFont("helvetica", "bold");
+          doc.setFontSize(9);
+          doc.setTextColor(...wc);
+          ensureSpace(14);
+          doc.text("Client exercise notes", marginX, y);
+          y += 11;
+          doc.setFont("helvetica", "normal");
+          doc.setFontSize(9);
+          doc.setTextColor(70, 70, 70);
+          for (const n of exNotesFull) {
+            const exName = sanitizeText(n.exercise_name) || "Exercise";
+            const body = sanitizeText(n.content);
+            const line = `• ${exName}: ${body}`;
+            const wrapped = doc.splitTextToSize(line, pageWidth - marginX * 2);
+            ensureSpace(wrapped.length * 11 + 2);
+            doc.text(wrapped, marginX, y);
+            y += wrapped.length * 11;
+          }
+          y += 4;
+        }
+
         if (day.notes?.trim() && day.notes_client_visible !== false) {
           doc.setFont("helvetica", "italic");
           doc.setFontSize(9);
