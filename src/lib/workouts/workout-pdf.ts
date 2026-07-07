@@ -275,6 +275,70 @@ function drawStatusPill(
   doc.text(label, x - pillW + 7, y);
 }
 
+/* ---------------------------------------------------------------------- */
+/* Powerlifting priority overview                                          */
+/* Derive per-day (label, family) chips from the same row metadata the     */
+/* app uses (purpose_label wins; else movement_family maps to Squat/Bench/ */
+/* Deadlift; Assistance/blank rows are excluded).                          */
+/* ---------------------------------------------------------------------- */
+
+const FAMILY_TITLE: Record<string, string> = {
+  squat: "Squat",
+  bench: "Bench",
+  deadlift: "Deadlift",
+  upper: "Upper",
+  lower: "Lower",
+  other: "Other",
+};
+
+function pdfDerivePriority(row: Row): { label: string; family: string } | null {
+  const label = (row.purpose_label ?? "").trim();
+  const allowed = ["Primary", "Secondary", "Tertiary", "Quaternary"];
+  const familyRaw = (row.movement_family ?? "").toLowerCase();
+  const family = FAMILY_TITLE[familyRaw] ?? "";
+  if (label && allowed.includes(label)) {
+    return { label, family: family || "" };
+  }
+  return null;
+}
+
+function buildBlockPriorityRows(weeks: Week[]): Array<[string, string]> {
+  const out: Array<[string, string]> = [];
+  for (const w of weeks) {
+    for (const d of w.days) {
+      const priorities: string[] = [];
+      for (const r of (d.rows ?? [])
+        .slice()
+        .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0))) {
+        const p = pdfDerivePriority(r);
+        if (!p) continue;
+        priorities.push(p.family ? `${p.label} ${p.family}` : p.label);
+      }
+      if (!priorities.length) continue;
+      const cleanTitle = normalizeDayTitle(d.title, d.day_index);
+      const label = sanitizeText(
+        `W${w.week_index} · Day ${d.day_index}` +
+          (cleanTitle ? ` — ${cleanTitle}` : ""),
+      );
+      out.push([label, priorities.join(" · ")]);
+    }
+  }
+  return out;
+}
+
+function blockHasAnyPriorityData(weeks: Week[]): boolean {
+  for (const w of weeks) {
+    for (const d of w.days) {
+      for (const r of d.rows ?? []) {
+        if (pdfDerivePriority(r)) return true;
+        const fam = (r.movement_family ?? "").toLowerCase();
+        if (fam === "squat" || fam === "bench" || fam === "deadlift") return true;
+      }
+    }
+  }
+  return false;
+}
+
 export function generateWorkoutPdf(data: WorkoutPdfData): jsPDF {
   const doc = new jsPDF({ unit: "pt", format: "a4" });
   const pageWidth = doc.internal.pageSize.getWidth();
@@ -336,6 +400,42 @@ export function generateWorkoutPdf(data: WorkoutPdfData): jsPDF {
       y = 56;
     }
   };
+
+  // Powerlifting priority overview — one row per day that has at least
+  // one Primary/Secondary/Tertiary/Quaternary priority. Only shown when
+  // the block has any priority-carrying rows at all.
+  if (blockHasAnyPriorityData(data.weeks)) {
+    const priorityRows = buildBlockPriorityRows(data.weeks);
+    if (priorityRows.length) {
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(11);
+      doc.setTextColor(20, 20, 20);
+      ensureSpace(20);
+      doc.text(
+        sanitizeText(`Training Priorities — ${data.block_name || data.program_name || "Training Block"}`),
+        marginX,
+        y,
+      );
+      y += 8;
+      autoTable(doc, {
+        startY: y,
+        head: [["Day", "Powerlifting Priorities"]],
+        body: priorityRows,
+        styles: { fontSize: 9, cellPadding: 5, overflow: "linebreak" },
+        headStyles: { fillColor: [30, 30, 30], textColor: 255 },
+        columnStyles: {
+          0: { cellWidth: 150, fontStyle: "bold" },
+          1: { cellWidth: "auto" },
+        },
+        margin: { left: marginX, right: marginX },
+        didDrawPage: (hook) => {
+          y = hook.cursor?.y ?? y;
+        },
+      });
+      y = (doc as any).lastAutoTable?.finalY ?? y;
+      y += 12;
+    }
+  }
 
   for (const week of data.weeks) {
     ensureSpace(60);
@@ -680,6 +780,40 @@ export function generateFullTrainingReportPdf(data: FullTrainingReportData): jsP
     bLines.push(`${bDone} of ${bTotal} workouts completed`);
     for (const line of bLines) { doc.text(line, marginX, y); y += 13; }
     y += 6;
+
+    // Powerlifting priority overview for this block
+    if (blockHasAnyPriorityData(b.weeks)) {
+      const priorityRows = buildBlockPriorityRows(b.weeks);
+      if (priorityRows.length) {
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(11);
+        doc.setTextColor(20, 20, 20);
+        ensureSpace(20);
+        doc.text(
+          sanitizeText(`Training Priorities — ${b.block_name || "Training Block"}`),
+          marginX,
+          y,
+        );
+        y += 8;
+        autoTable(doc, {
+          startY: y,
+          head: [["Day", "Powerlifting Priorities"]],
+          body: priorityRows,
+          styles: { fontSize: 9, cellPadding: 5, overflow: "linebreak" },
+          headStyles: { fillColor: [30, 30, 30], textColor: 255 },
+          columnStyles: {
+            0: { cellWidth: 150, fontStyle: "bold" },
+            1: { cellWidth: "auto" },
+          },
+          margin: { left: marginX, right: marginX },
+          didDrawPage: (hook) => {
+            y = hook.cursor?.y ?? y;
+          },
+        });
+        y = (doc as any).lastAutoTable?.finalY ?? y;
+        y += 12;
+      }
+    }
 
     for (const week of b.weeks) {
       ensureSpace(50);

@@ -1659,6 +1659,7 @@ function WeekEditor({ week, setWeek, exercises, onCopyDayToFuture, hideHeader, c
         <Button size="sm" variant="outline" onClick={addDay}><Plus className="mr-1 h-3 w-3" /> Day</Button>
       )}
       <WeeklyVolumeSummary week={week} exercises={exercises as any} weekIndex={week?.week_index} />
+      <WeekPriorityWarnings week={week} exercises={exercises as any} />
       {days.map((d: any, i: number) => {
         const dayMinutes = estimateDayMinutes(d.rows || []);
         const dKey = `${dayKeyPrefix ?? `wk${week.week_index ?? 0}`}:d${d.day_index ?? i}`;
@@ -3115,6 +3116,76 @@ function RowEditor({ row, setRow, onDelete, exercises, compact, onMoveUp, onMove
       )}
       </>
       )}
+    </div>
+  );
+}
+
+/**
+ * Non-blocking warning banner shown inside WeekEditor. Surfaces conflicts
+ * derived from the current week's rows via derivePurposeLabels — never
+ * modifies any row or blocks saving.
+ */
+function WeekPriorityWarnings({ week, exercises }: { week: any; exercises: any[] }) {
+  const FAMILY_LABEL: Record<string, string> = {
+    squat: "Squat", bench: "Bench", deadlift: "Deadlift",
+    upper: "Upper", lower: "Lower", other: "Other",
+  };
+  const warnings = useMemo(() => {
+    const exById = new Map<string, any>((exercises ?? []).map((e: any) => [e.id, e]));
+    const primaryByFamily = new Map<string, number>();
+    const labelsByFamily = new Map<string, Set<string>>();
+    const missingLabelOnCompRows: number[] = [];
+    for (const d of (week?.days ?? []) as any[]) {
+      const rows = (d?.rows ?? []) as any[];
+      if (!rows.length) continue;
+      const labels = derivePurposeLabels(rows, (r: any) => (r.exercise_id ? exById.get(r.exercise_id) : null));
+      rows.forEach((r: any, i: number) => {
+        const label = labels[i];
+        const famRaw = String(r.movement_family ?? "").toLowerCase();
+        const isCompFamily = famRaw === "squat" || famRaw === "bench" || famRaw === "deadlift";
+        if (label && label !== "Assistance" && famRaw) {
+          const set = labelsByFamily.get(famRaw) ?? new Set<string>();
+          set.add(label);
+          labelsByFamily.set(famRaw, set);
+          if (label === "Primary") {
+            primaryByFamily.set(famRaw, (primaryByFamily.get(famRaw) ?? 0) + 1);
+          }
+        }
+        // Comp lift row with no auto or manual priority label at all
+        if (isCompFamily && (!label || label === "Assistance") && !(r.purpose_label ?? "").trim()) {
+          missingLabelOnCompRows.push(1);
+        }
+      });
+    }
+    const out: string[] = [];
+    for (const [fam, count] of primaryByFamily) {
+      if (count >= 2) {
+        out.push(`Two Primary ${FAMILY_LABEL[fam] ?? fam} exposures this week. Keep both if intentional.`);
+      }
+    }
+    for (const [fam, labels] of labelsByFamily) {
+      const hasTertiaryOrQuat = labels.has("Tertiary") || labels.has("Quaternary");
+      const hasPrimaryOrSecondary = labels.has("Primary") || labels.has("Secondary");
+      if (hasTertiaryOrQuat && !hasPrimaryOrSecondary) {
+        const which = labels.has("Tertiary") ? "Tertiary" : "Quaternary";
+        out.push(`${which} ${FAMILY_LABEL[fam] ?? fam} exists without a Primary or Secondary ${FAMILY_LABEL[fam] ?? fam} this week.`);
+      }
+    }
+    if (missingLabelOnCompRows.length) {
+      out.push(`${missingLabelOnCompRows.length === 1 ? "1 competition lift row" : `${missingLabelOnCompRows.length} competition lift rows`} without a priority label.`);
+    }
+    return out;
+  }, [week, exercises]);
+  if (!warnings.length) return null;
+  return (
+    <div className="rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-[12px] text-amber-700 dark:text-amber-300">
+      <div className="mb-1 flex items-center gap-1.5 font-semibold">
+        <AlertTriangle className="h-3.5 w-3.5" />
+        Priority checks
+      </div>
+      <ul className="ml-4 list-disc space-y-0.5">
+        {warnings.map((w, i) => (<li key={i}>{w}</li>))}
+      </ul>
     </div>
   );
 }

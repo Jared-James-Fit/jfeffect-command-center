@@ -690,6 +690,17 @@ export function ClientBlockView({
               );
             })}
           </ul>
+          <details className="mt-2 rounded border border-border/60 bg-background/60 px-2 py-1 text-[11px] text-muted-foreground">
+            <summary className="cursor-pointer select-none font-semibold text-foreground/70">
+              Priority legend
+            </summary>
+            <ul className="mt-1 grid gap-0.5 pl-2">
+              <li><span className="font-semibold text-foreground">Primary</span> — highest-priority exposure</li>
+              <li><span className="font-semibold text-foreground">Secondary</span> — second-priority exposure</li>
+              <li><span className="font-semibold text-foreground">Tertiary</span> — third-priority exposure</li>
+              <li><span className="font-semibold text-foreground">Quaternary</span> — fourth-priority exposure</li>
+            </ul>
+          </details>
         </Card>
       )}
 
