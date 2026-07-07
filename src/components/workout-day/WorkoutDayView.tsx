@@ -2485,6 +2485,15 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
           </span>
         )}
       </div>
+      {/* Compact "Last time" chip — subtle so it never outshines today's prescription. */}
+      {clientId && exerciseId && (
+        <PreviousLiftChip
+          clientId={clientId}
+          exerciseId={exerciseId}
+          currentDayId={dayId}
+          displayUnit={activeUnit}
+        />
+      )}
       {/* Big, dummy-proof rest timer — tap to start, auto-resets at 0 */}
       <div className="mt-2">
         <RestTimerButton seconds={effectiveRest ?? null} label={restDisplay} />
