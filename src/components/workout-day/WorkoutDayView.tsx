@@ -2538,7 +2538,7 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
           </div>
         )}
       </div>
-      {/* Row 2 — badges + sets×reps + rest (compact, single line on mobile when possible) */}
+      {/* Row 2 — badges */}
       <div className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
         <Badge variant="outline" className={cn("h-4 px-1 text-[10px] font-bold uppercase tracking-wider", purposeLabelBadgeClass(purposeLabel))}>
           {purposeLabel || category}
@@ -2548,19 +2548,6 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
             <StickyNote className="h-2.5 w-2.5" /> Note
           </span>
         )}
-      </div>
-      {/* Compact "Last time" chip — subtle so it never outshines today's prescription. */}
-      {clientId && exerciseId && (
-        <PreviousLiftChip
-          clientId={clientId}
-          exerciseId={exerciseId}
-          currentDayId={dayId}
-          displayUnit={activeUnit}
-        />
-      )}
-      {/* Big, dummy-proof rest timer — tap to start, auto-resets at 0 */}
-      <div className="mt-2">
-        <RestTimerButton seconds={effectiveRest ?? null} label={restDisplay} />
       </div>
       {/* Standardized prescription line: Sets × Reps @ Weight | RPE */}
       <div className="mt-1 text-sm font-semibold text-foreground leading-snug break-words">
@@ -2578,6 +2565,19 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
           durationSeconds: effectivePrescribedDurationSec,
         })}
         {row.tempo && <span className="ml-2 text-xs font-normal text-muted-foreground">tempo {row.tempo}</span>}
+      </div>
+      {/* Compact "Last time" chip — subtle so it never outshines today's prescription. */}
+      {clientId && exerciseId && (
+        <PreviousLiftChip
+          clientId={clientId}
+          exerciseId={exerciseId}
+          currentDayId={dayId}
+          displayUnit={activeUnit}
+        />
+      )}
+      {/* Big, dummy-proof rest timer — tap to start, auto-resets at 0 */}
+      <div className="mt-2">
+        <RestTimerButton seconds={effectiveRest ?? null} label={restDisplay} />
       </div>
       {/* Suggested load badges */}
       {row.manual_override && (row.load_kg || row.load_lb) && (
