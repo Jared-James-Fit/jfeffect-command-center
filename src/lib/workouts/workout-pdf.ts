@@ -99,6 +99,61 @@ function fmtDate(iso?: string | null) {
   }
 }
 
+/**
+ * jsPDF's default helvetica font is Latin-1 (Windows-1252) only. Emoji,
+ * CJK, and other multi-byte characters render as tofu / random glyphs and
+ * also break `getTextWidth`, which is why the status pill overlaps titles
+ * containing emoji. Strip anything outside the printable Latin-1 range.
+ */
+function sanitizeText(s: string | null | undefined): string {
+  if (!s) return "";
+  return s
+    // eslint-disable-next-line no-control-regex
+    .replace(/[^\x09\x0A\x0D\x20-\x7E\xA0-\xFF]/g, "")
+    .replace(/[ \t]{2,}/g, " ")
+    .trim();
+}
+
+/**
+ * Coaches often name days "Day 5 — Primer". Combined with our own
+ * `Day ${index}` prefix that yields "Day 5 — Day 5 — Primer". Strip any
+ * leading "Day N", "D5", "Day 5:" style prefix that matches the current
+ * day index.
+ */
+function normalizeDayTitle(title: string | null | undefined, index: number): string {
+  const cleaned = sanitizeText(title);
+  if (!cleaned) return "";
+  const re = new RegExp(`^(?:day|d)\\s*0*${index}\\b[\\s\\-–—:.]*`, "i");
+  return cleaned.replace(re, "").trim();
+}
+
+/** Distinct colors per week so long blocks are easy to skim. */
+const WEEK_COLORS: [number, number, number][] = [
+  [30, 64, 175],    // indigo
+  [124, 58, 237],   // violet
+  [16, 145, 91],    // emerald
+  [217, 119, 6],    // amber
+  [190, 24, 93],    // pink
+  [8, 145, 178],    // cyan
+  [220, 38, 38],    // red
+  [5, 122, 85],     // teal
+];
+function weekColor(weekIndex: number): [number, number, number] {
+  const idx = ((weekIndex - 1) % WEEK_COLORS.length + WEEK_COLORS.length) % WEEK_COLORS.length;
+  return WEEK_COLORS[idx];
+}
+
+/** Block accent colors, cycled per block. */
+const BLOCK_COLORS: [number, number, number][] = [
+  [15, 23, 42],     // slate-900
+  [67, 20, 7],      // deep brown
+  [23, 37, 84],     // navy
+  [59, 7, 100],     // deep purple
+];
+function blockColor(i: number): [number, number, number] {
+  return BLOCK_COLORS[((i % BLOCK_COLORS.length) + BLOCK_COLORS.length) % BLOCK_COLORS.length];
+}
+
 function formatLoad(r: Row): string {
   if (r.percentage != null) {
     const basis = r.percentage_basis ? ` ${r.percentage_basis}` : "";
