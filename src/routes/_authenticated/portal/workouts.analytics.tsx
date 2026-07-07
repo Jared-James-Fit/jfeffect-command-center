@@ -751,6 +751,15 @@ function PortalAnalytics() {
                 </Card>
               )}
             </section>
+
+            {client?.id && (
+              <PowerliftingExposureSection
+                clientId={client.id}
+                filter={filter}
+                results={results as any[]}
+                displayUnit={displayUnit}
+              />
+            )}
           </>
         )}
       </div>
