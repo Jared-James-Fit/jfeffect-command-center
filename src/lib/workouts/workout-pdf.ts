@@ -325,7 +325,8 @@ export function generateWorkoutPdf(data: WorkoutPdfData): jsPDF {
 
   for (const week of data.weeks) {
     ensureSpace(60);
-    doc.setFillColor(15, 15, 15);
+    const wc = weekColor(week.week_index);
+    doc.setFillColor(...wc);
     doc.rect(marginX, y, pageWidth - marginX * 2, 22, "F");
     doc.setTextColor(255, 255, 255);
     doc.setFont("helvetica", "bold");
@@ -338,7 +339,7 @@ export function generateWorkoutPdf(data: WorkoutPdfData): jsPDF {
       doc.setFont("helvetica", "italic");
       doc.setFontSize(9);
       doc.setTextColor(90, 90, 90);
-      const lines = doc.splitTextToSize(week.notes.trim(), pageWidth - marginX * 2);
+      const lines = doc.splitTextToSize(sanitizeText(week.notes), pageWidth - marginX * 2);
       ensureSpace(lines.length * 11 + 6);
       doc.text(lines, marginX, y);
       y += lines.length * 11 + 6;
@@ -348,12 +349,14 @@ export function generateWorkoutPdf(data: WorkoutPdfData): jsPDF {
       ensureSpace(50);
       doc.setFont("helvetica", "bold");
       doc.setFontSize(11);
-      doc.setTextColor(20, 20, 20);
+      doc.setTextColor(...wc);
+      const cleanTitle = normalizeDayTitle(day.title, day.day_index);
       const dayLabel =
         `Day ${day.day_index}` +
-        (day.title ? ` — ${day.title}` : "") +
+        (cleanTitle ? ` — ${cleanTitle}` : "") +
         (day.scheduled_date ? `  (${fmtDate(day.scheduled_date)})` : "");
-      doc.text(dayLabel, marginX, y);
+      doc.text(sanitizeText(dayLabel), marginX, y);
+      doc.setTextColor(20, 20, 20);
       y += 6;
 
       if (!day.rows || day.rows.length === 0) {
@@ -374,18 +377,18 @@ export function generateWorkoutPdf(data: WorkoutPdfData): jsPDF {
           .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
           .map((r, i) => [
             String(i + 1),
-            r.exercise_name_override?.trim() ||
-              r.exercises?.name ||
+            sanitizeText(r.exercise_name_override) ||
+              sanitizeText(r.exercises?.name) ||
               "Exercise",
             r.sets != null ? String(r.sets) : "—",
             formatReps(r),
             formatLoad(r),
             formatRpe(r),
             formatRest(r),
-            r.tempo?.trim() || "—",
+            sanitizeText(r.tempo) || "—",
           ]),
         styles: { fontSize: 8, cellPadding: 4 },
-        headStyles: { fillColor: [40, 40, 40], textColor: 255 },
+        headStyles: { fillColor: wc, textColor: 255 },
         columnStyles: {
           0: { cellWidth: 18 },
           1: { cellWidth: "auto" },
@@ -411,9 +414,8 @@ export function generateWorkoutPdf(data: WorkoutPdfData): jsPDF {
         doc.setFontSize(8);
         doc.setTextColor(80, 80, 80);
         for (const r of noteRows) {
-          const name =
-            r.exercise_name_override?.trim() || r.exercises?.name || "Exercise";
-          const text = `• ${name}: ${r.notes!.trim()}`;
+          const name = sanitizeText(r.exercise_name_override) || sanitizeText(r.exercises?.name) || "Exercise";
+          const text = sanitizeText(`• ${name}: ${r.notes!.trim()}`);
           const lines = doc.splitTextToSize(text, pageWidth - marginX * 2);
           ensureSpace(lines.length * 10 + 2);
           doc.text(lines, marginX, y);
@@ -422,13 +424,55 @@ export function generateWorkoutPdf(data: WorkoutPdfData): jsPDF {
         y += 4;
       }
 
+      // Client-authored notes captured on the logged sets
+      const setNotes: string[] = [];
+      for (const r of day.rows) {
+        for (const s of r.logged_sets ?? []) {
+          const note = sanitizeText(s.notes);
+          if (!note) continue;
+          const name = sanitizeText(r.exercise_name_override) || sanitizeText(r.exercises?.name) || "Exercise";
+          setNotes.push(`• ${name} — set ${s.set_index ?? "?"}: ${note}`);
+        }
+      }
+      if (setNotes.length) {
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(8);
+        doc.setTextColor(...wc);
+        ensureSpace(14);
+        doc.text("Client notes", marginX, y);
+        y += 10;
+        doc.setFont("helvetica", "normal");
+        doc.setTextColor(70, 70, 70);
+        for (const line of setNotes) {
+          const wrapped = doc.splitTextToSize(line, pageWidth - marginX * 2);
+          ensureSpace(wrapped.length * 10 + 2);
+          doc.text(wrapped, marginX, y);
+          y += wrapped.length * 10;
+        }
+        y += 4;
+      }
+
+      // Client completion note
+      if (day.completion_note?.trim()) {
+        doc.setFont("helvetica", "italic");
+        doc.setFontSize(9);
+        doc.setTextColor(60, 60, 60);
+        const lines = doc.splitTextToSize(
+          sanitizeText(`Client note: ${day.completion_note.trim()}`),
+          pageWidth - marginX * 2,
+        );
+        ensureSpace(lines.length * 11 + 4);
+        doc.text(lines, marginX, y);
+        y += lines.length * 11 + 4;
+      }
+
       // Day note — only when explicitly client-visible
       if (day.notes?.trim() && day.notes_client_visible !== false) {
         doc.setFont("helvetica", "italic");
         doc.setFontSize(9);
         doc.setTextColor(90, 90, 90);
         const lines = doc.splitTextToSize(
-          `Note: ${day.notes.trim()}`,
+          sanitizeText(`Coach note: ${day.notes.trim()}`),
           pageWidth - marginX * 2,
         );
         ensureSpace(lines.length * 11 + 4);
