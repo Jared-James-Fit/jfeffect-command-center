@@ -22,6 +22,7 @@ import { AutoSchedulePanel } from "@/components/auto-schedule-panel";
 import { usePersistentUndoStack } from "@/lib/persistent-undo";
 import { useScrollRestoration } from "@/lib/scroll-restore";
 import { ClientBuilderIdentityHeader, ClientBuilderStickyChip } from "@/components/builder-identity-header";
+import { BlockSwitcher } from "@/components/block-switcher";
 
 export const Route = createFileRoute("/_authenticated/admin/blocks/$blockId")({ component: BlockEditor });
 
@@ -464,6 +465,7 @@ function BlockEditor() {
           </ActionButton>
         </div>
       </div>
+      <BlockSwitcher clientId={clientId} currentBlockId={blockId} />
 
       <StructureCanvas
         type="block"
