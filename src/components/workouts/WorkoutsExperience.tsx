@@ -671,11 +671,12 @@ function WeekStrip({
 /* ---------------------------------------------------------------------- */
 
 function MonthGrid({
-  selectedDate, onSelectDate, byDate,
+  selectedDate, onSelectDate, byDate, chipsByDate,
 }: {
   selectedDate: Date;
   onSelectDate: (d: Date) => void;
   byDate: Map<string, WorkoutItem>;
+  chipsByDate?: Map<string, Array<{ label: string; family: string }>>;
 }) {
   const monthStart = startOfMonth(selectedDate);
   const monthEnd = endOfMonth(selectedDate);
@@ -753,6 +754,33 @@ function MonthGrid({
                   {title}
                 </span>
               )}
+              {(() => {
+                const chips = chipsByDate?.get(iso) ?? [];
+                if (!chips.length) return null;
+                const shown = chips.slice(0, 2);
+                const extra = chips.length - shown.length;
+                return (
+                  <div className="mt-1 flex flex-wrap gap-0.5">
+                    {shown.map((c, i) => (
+                      <span
+                        key={i}
+                        className={cn(
+                          "truncate rounded border px-1 text-[9px] font-semibold leading-tight",
+                          purposeLabelBadgeClass(c.label),
+                        )}
+                        title={c.family ? `${c.label} ${c.family}` : c.label}
+                      >
+                        {c.label[0]}{c.family ? ` ${c.family}` : ""}
+                      </span>
+                    ))}
+                    {extra > 0 && (
+                      <span className="truncate rounded border border-muted-foreground/30 bg-muted px-1 text-[9px] font-semibold leading-tight text-muted-foreground">
+                        +{extra}
+                      </span>
+                    )}
+                  </div>
+                );
+              })()}
             </button>
           );
         })}
