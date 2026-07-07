@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { ClipboardList, FileSignature, UtensilsCrossed, ChevronRight } from "lucide-react";
 import { format, parseISO, isToday, isYesterday } from "date-fns";
+import { ChatImageLightbox } from "@/components/chat-image-lightbox";
 
 /* ------------------------------- Attachment Types (shared shape) ------------------------------- */
 
