@@ -1758,7 +1758,12 @@ export function MessageThread({
             {/* Textarea */}
             <Textarea
               value={body}
-              onChange={(e) => setBody(e.target.value)}
+              onChange={(e) => {
+                setBody(e.target.value);
+                if (e.target.value.trim().length > 0) broadcastTyping(false);
+                else broadcastTyping(true);
+              }}
+              onBlur={() => broadcastTyping(true)}
               placeholder={role === "client" ? "Message Coach Jared…" : "Reply to client…"}
               rows={1}
               enterKeyHint="send"
