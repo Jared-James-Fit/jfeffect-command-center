@@ -184,6 +184,26 @@ export function TransactionDetailDrawer({
                 <Receipt className="h-3.5 w-3.5" /> Open receipt
               </Button>
             )}
+            {txn.invoice_pdf_url && (
+              <Button
+                variant="secondary"
+                size="sm"
+                className="mt-2 w-full justify-start gap-2"
+                onClick={() => window.open(txn.invoice_pdf_url!, "_blank", "noopener,noreferrer")}
+              >
+                <ExternalLink className="h-3.5 w-3.5" /> Invoice PDF
+              </Button>
+            )}
+            {txn.hosted_invoice_url && (
+              <Button
+                variant="secondary"
+                size="sm"
+                className="mt-2 w-full justify-start gap-2"
+                onClick={() => window.open(txn.hosted_invoice_url!, "_blank", "noopener,noreferrer")}
+              >
+                <ExternalLink className="h-3.5 w-3.5" /> Hosted invoice
+              </Button>
+            )}
           </section>
 
           {txn.admin_notes && (

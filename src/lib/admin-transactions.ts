@@ -38,6 +38,8 @@ export type AdminTransactionRow = {
   stripe_product_id: string | null;
   stripe_price_id: string | null;
   receipt_url: string | null;
+  hosted_invoice_url: string | null;
+  invoice_pdf_url: string | null;
   stripe_mode: string | null;
   admin_notes: string | null;
   voided: boolean;

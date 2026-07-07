@@ -14,15 +14,21 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { ExternalLink, Search, Receipt } from "lucide-react";
+import { ExternalLink, Search, Receipt, FileText, MoreHorizontal } from "lucide-react";
 import { TransactionDetailDrawer } from "@/components/payments/transaction-detail-drawer";
 import type { AdminTransactionRow } from "@/lib/admin-transactions";
 import {
-  stripeCustomerUrl,
   stripePaymentIntentUrl,
   stripeSubscriptionUrl,
   stripeCheckoutSessionUrl,
+  stripeChargeUrl,
+  stripeInvoiceUrl,
 } from "@/lib/stripe-links";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 
 export const Route = createFileRoute("/_authenticated/admin/transactions")({
   component: AdminTransactionsPage,
@@ -37,22 +43,100 @@ function statusTone(status?: string | null) {
   return "bg-muted text-muted-foreground border-border";
 }
 
-function StripeIcon({ href, title }: { href: string | null; title: string }) {
-  if (!href) return null;
+function bestStripeUrl(r: AdminTransactionRow): string | null {
   return (
-    <button
-      type="button"
-      title={`Open ${title} in Stripe`}
-      onClick={(e) => {
-        e.stopPropagation();
-        window.open(href, "_blank", "noopener,noreferrer");
-      }}
-      className="text-muted-foreground hover:text-foreground"
-    >
-      <ExternalLink className="h-3.5 w-3.5" />
-    </button>
+    stripePaymentIntentUrl(r.stripe_payment_intent_id, r.stripe_mode) ??
+    stripeChargeUrl(r.stripe_charge_id, r.stripe_mode) ??
+    stripeInvoiceUrl(r.stripe_invoice_id, r.stripe_mode) ??
+    stripeCheckoutSessionUrl(r.stripe_checkout_session_id, r.stripe_mode) ??
+    stripeSubscriptionUrl(r.stripe_subscription_id, r.stripe_mode)
   );
 }
+
+type ActionLink = { label: string; href: string; icon: React.ComponentType<{ className?: string }> };
+
+function actionsFor(r: AdminTransactionRow): ActionLink[] {
+  const out: ActionLink[] = [];
+  const stripe = bestStripeUrl(r);
+  if (stripe) out.push({ label: "Stripe", href: stripe, icon: ExternalLink });
+  if (r.invoice_pdf_url) out.push({ label: "Invoice PDF", href: r.invoice_pdf_url, icon: FileText });
+  if (r.receipt_url) out.push({ label: "Receipt", href: r.receipt_url, icon: Receipt });
+  return out;
+}
+
+function ActionsCell({ r }: { r: AdminTransactionRow }) {
+  const actions = actionsFor(r);
+  if (actions.length === 0) return <span className="text-xs text-muted-foreground">—</span>;
+  return (
+    <>
+      {/* Desktop */}
+      <div className="hidden md:flex flex-wrap items-center gap-1">
+        {actions.slice(0, 3).map((a) => {
+          const Icon = a.icon;
+          return (
+            <Button
+              key={a.label}
+              size="sm"
+              variant="outline"
+              className="h-7 gap-1 px-2 text-xs"
+              onClick={(e) => {
+                e.stopPropagation();
+                window.open(a.href, "_blank", "noopener,noreferrer");
+              }}
+            >
+              <Icon className="h-3 w-3" />
+              {a.label}
+            </Button>
+          );
+        })}
+      </div>
+      {/* Mobile */}
+      <div className="md:hidden">
+        <Popover>
+          <PopoverTrigger asChild>
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-7 gap-1 px-2 text-xs"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <MoreHorizontal className="h-3 w-3" /> Actions
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent align="end" className="w-48 p-1" onClick={(e) => e.stopPropagation()}>
+            <div className="flex flex-col">
+              {actions.map((a) => {
+                const Icon = a.icon;
+                return (
+                  <button
+                    key={a.label}
+                    type="button"
+                    className="flex items-center gap-2 rounded px-2 py-1.5 text-left text-sm hover:bg-accent"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      window.open(a.href, "_blank", "noopener,noreferrer");
+                    }}
+                  >
+                    <Icon className="h-3.5 w-3.5" />
+                    {a.label}
+                  </button>
+                );
+              })}
+            </div>
+          </PopoverContent>
+        </Popover>
+      </div>
+    </>
+  );
+}
+
+const RANGE_LABEL: Record<string, string> = {
+  "7": "Last 7 days",
+  "30": "Last 30 days",
+  "90": "Last 90 days",
+  "365": "Last year",
+  "all": "All time",
+};
 
 function AdminTransactionsPage() {
   const [search, setSearch] = useState("");
@@ -108,14 +192,17 @@ function AdminTransactionsPage() {
   const totals = useMemo(() => {
     let paid = 0;
     let refunded = 0;
+    let voidedCount = 0;
     let count = 0;
     for (const r of filtered) {
+      if (r.voided) { voidedCount++; continue; }
       count++;
       const s = (r.status ?? "").toLowerCase();
+      const t = (r.txn_type ?? "").toLowerCase();
       if (s === "paid") paid += Number(r.amount ?? 0);
-      if (s === "refunded" || s === "voided") refunded += Number(r.amount ?? 0);
+      if (t === "refund" || t === "partial_refund") refunded += Number(r.amount ?? 0);
     }
-    return { paid, refunded, count };
+    return { paid, refunded, count, voidedCount };
   }, [filtered]);
 
   return (
@@ -126,21 +213,27 @@ function AdminTransactionsPage() {
       />
       <div className="p-6 md:p-8 space-y-6">
         {/* Totals */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           <Card className="p-4">
             <div className="text-xs uppercase tracking-widest text-muted-foreground">Rows</div>
             <div className="mt-1 text-2xl font-semibold">{totals.count.toLocaleString()}</div>
           </Card>
           <Card className="p-4">
-            <div className="text-xs uppercase tracking-widest text-muted-foreground">Paid</div>
+            <div className="text-xs uppercase tracking-widest text-muted-foreground">Paid · {RANGE_LABEL[days] ?? ""}</div>
             <div className="mt-1 text-2xl font-semibold text-emerald-500">
               {new Intl.NumberFormat(undefined, { style: "currency", currency: "USD" }).format(totals.paid)}
             </div>
           </Card>
           <Card className="p-4">
-            <div className="text-xs uppercase tracking-widest text-muted-foreground">Refunded / Voided</div>
+            <div className="text-xs uppercase tracking-widest text-muted-foreground">Refunded</div>
             <div className="mt-1 text-2xl font-semibold text-amber-500">
               {new Intl.NumberFormat(undefined, { style: "currency", currency: "USD" }).format(totals.refunded)}
+            </div>
+          </Card>
+          <Card className="p-4">
+            <div className="text-xs uppercase tracking-widest text-muted-foreground">Voided</div>
+            <div className="mt-1 text-2xl font-semibold text-muted-foreground">
+              {totals.voidedCount.toLocaleString()} voided
             </div>
           </Card>
         </div>
@@ -209,7 +302,7 @@ function AdminTransactionsPage() {
                   <th className="px-4 py-2 text-left">Type</th>
                   <th className="px-4 py-2 text-right">Amount</th>
                   <th className="px-4 py-2 text-left">Status</th>
-                  <th className="px-4 py-2 text-left">Stripe</th>
+                  <th className="px-4 py-2 text-left">Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -269,25 +362,7 @@ function AdminTransactionsPage() {
                           <Badge variant="outline" className={statusTone(r.status)}>{r.status}</Badge>
                         </td>
                         <td className="px-4 py-2">
-                          <div className="flex items-center gap-2">
-                            <StripeIcon href={stripeCustomerUrl(r.stripe_customer_id, r.stripe_mode)} title="customer" />
-                            <StripeIcon href={stripePaymentIntentUrl(r.stripe_payment_intent_id, r.stripe_mode)} title="payment" />
-                            <StripeIcon href={stripeCheckoutSessionUrl(r.stripe_checkout_session_id, r.stripe_mode)} title="checkout session" />
-                            <StripeIcon href={stripeSubscriptionUrl(r.stripe_subscription_id, r.stripe_mode)} title="subscription" />
-                            {r.receipt_url && (
-                              <button
-                                type="button"
-                                title="Open receipt"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  window.open(r.receipt_url!, "_blank", "noopener,noreferrer");
-                                }}
-                                className="text-muted-foreground hover:text-foreground"
-                              >
-                                <Receipt className="h-3.5 w-3.5" />
-                              </button>
-                            )}
-                          </div>
+                          <ActionsCell r={r} />
                         </td>
                       </tr>
                     );

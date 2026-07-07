@@ -12587,8 +12587,10 @@ export type Database = {
           created_by: string | null
           currency: string
           external_reference: string | null
+          hosted_invoice_url: string | null
           id: string
           internal_note: string | null
+          invoice_pdf_url: string | null
           method: string
           purchase_id: string | null
           receipt_number: string | null
@@ -12618,8 +12620,10 @@ export type Database = {
           created_by?: string | null
           currency?: string
           external_reference?: string | null
+          hosted_invoice_url?: string | null
           id?: string
           internal_note?: string | null
+          invoice_pdf_url?: string | null
           method: string
           purchase_id?: string | null
           receipt_number?: string | null
@@ -12649,8 +12653,10 @@ export type Database = {
           created_by?: string | null
           currency?: string
           external_reference?: string | null
+          hosted_invoice_url?: string | null
           id?: string
           internal_note?: string | null
+          invoice_pdf_url?: string | null
           method?: string
           purchase_id?: string | null
           receipt_number?: string | null
@@ -17769,7 +17775,9 @@ export type Database = {
           admin_notes: string | null
           amount: number | null
           currency: string | null
+          hosted_invoice_url: string | null
           id: string | null
+          invoice_pdf_url: string | null
           method: string | null
           occurred_at: string | null
           occurred_on: string | null

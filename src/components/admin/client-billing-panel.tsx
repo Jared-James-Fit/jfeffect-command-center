@@ -49,8 +49,19 @@ export function ClientBillingPanel({ clientId }: { clientId: string }) {
   const totalRefunded = (data.ledger as any[])
     .filter((l) => !l.voided && ["refund","partial_refund"].includes(l.txn_type))
     .reduce((s, l) => s + Number(l.amount_minor), 0);
+  const PAID_STATUSES = new Set(["paid", "paid in full", "active subscription", "completed"]);
+  const isPurchasePaid = (p: any) =>
+    PAID_STATUSES.has(String(p.payment_status ?? "").toLowerCase());
   const totalOutstanding = (data.purchases as any[])
-    .reduce((s, p) => s + Number(p.amount_outstanding_cents ?? 0), 0);
+    .filter((p) => !isPurchasePaid(p))
+    .reduce((s, p) => {
+      const contract = Number(p.contract_value_cents ?? Math.round(Number(p.full_payable_amount ?? 0) * 100));
+      const paid = Number(p.amount_paid_cents ?? 0);
+      const out = p.amount_outstanding_cents != null
+        ? Number(p.amount_outstanding_cents)
+        : Math.max(0, contract - paid);
+      return s + out;
+    }, 0);
 
   return (
     <div className="md:col-span-3 space-y-6">
@@ -65,10 +76,7 @@ export function ClientBillingPanel({ clientId }: { clientId: string }) {
       <Tabs defaultValue="purchases">
         <TabsList>
           <TabsTrigger value="purchases">Purchases</TabsTrigger>
-          <TabsTrigger value="ledger">Payment ledger</TabsTrigger>
           <TabsTrigger value="sessions">PT sessions</TabsTrigger>
-          <TabsTrigger value="credits">Credits</TabsTrigger>
-          <TabsTrigger value="conversions">Conversions</TabsTrigger>
         </TabsList>
 
         <TabsContent value="purchases" className="space-y-3">
@@ -76,88 +84,20 @@ export function ClientBillingPanel({ clientId }: { clientId: string }) {
             <p className="text-sm text-muted-foreground py-4">No purchases yet.</p>
           )}
           {(data.purchases as any[]).map((p) => (
-            <PurchaseRow key={p.id} purchase={p} clientId={clientId} onChanged={invalidate} />
+            <PurchaseRow
+              key={p.id}
+              purchase={p}
+              clientId={clientId}
+              onChanged={invalidate}
+              ledger={(data.ledger as any[]).filter((l) => l.purchase_id === p.id)}
+              isPaid={isPurchasePaid(p)}
+            />
           ))}
-        </TabsContent>
-
-        <TabsContent value="ledger" className="space-y-2">
-          {(data.ledger as any[]).length === 0 && (
-            <p className="text-sm text-muted-foreground py-4">No ledger entries.</p>
-          )}
-          <div className="overflow-x-auto rounded border border-border">
-            <table className="w-full text-sm">
-              <thead className="bg-muted/40 text-xs uppercase">
-                <tr><th className="p-2 text-left">Date</th><th className="p-2 text-left">Type</th><th className="p-2 text-left">Method</th><th className="p-2 text-right">Amount</th><th className="p-2 text-left">Note</th><th /></tr>
-              </thead>
-              <tbody>
-                {(data.ledger as any[]).map((l) => (
-                  <tr key={l.id} className={l.voided ? "opacity-50 line-through" : ""}>
-                    <td className="p-2">{l.transaction_date}</td>
-                    <td className="p-2">{l.txn_type}</td>
-                    <td className="p-2">{l.method}</td>
-                    <td className="p-2 text-right font-mono">{fmt(l.amount_minor, l.currency)}</td>
-                    <td className="p-2 text-xs text-muted-foreground">{l.internal_note ?? l.external_reference ?? ""}</td>
-                    <td className="p-2 text-right">
-                      {!l.voided && (
-                        <VoidButton
-                          ledgerId={l.id}
-                          amount={fmt(l.amount_minor, l.currency)}
-                          date={l.transaction_date}
-                          onDone={invalidate}
-                        />
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
         </TabsContent>
 
         <TabsContent value="sessions" className="space-y-3">
           <ExpireButton onDone={invalidate} />
           <SessionBalanceTable balance={data.session_balance as any[]} events={data.session_events as any[]} />
-        </TabsContent>
-
-        <TabsContent value="credits" className="space-y-2">
-          {(data.credits as any[]).length === 0 && (
-            <p className="text-sm text-muted-foreground py-4">No credits issued.</p>
-          )}
-          <div className="overflow-x-auto rounded border border-border">
-            <table className="w-full text-sm">
-              <thead className="bg-muted/40 text-xs uppercase">
-                <tr><th className="p-2 text-left">Date</th><th className="p-2 text-left">Kind</th><th className="p-2 text-right">Amount</th><th className="p-2 text-left">Reason</th></tr>
-              </thead>
-              <tbody>
-                {(data.credits as any[]).map((c) => (
-                  <tr key={c.id}>
-                    <td className="p-2">{new Date(c.created_at).toLocaleDateString()}</td>
-                    <td className="p-2">{c.kind}</td>
-                    <td className="p-2 text-right font-mono">{fmt(c.amount_minor, c.currency)}</td>
-                    <td className="p-2 text-xs text-muted-foreground">{c.reason}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </TabsContent>
-
-        <TabsContent value="conversions" className="space-y-2">
-          {(data.conversions as any[]).length === 0 && (
-            <p className="text-sm text-muted-foreground py-4">No service conversions.</p>
-          )}
-          {(data.conversions as any[]).map((c) => (
-            <Card key={c.id} className="p-4 text-sm space-y-1">
-              <div className="font-medium">Conversion · {c.effective_date} · {c.original_disposition}</div>
-              <div className="text-xs text-muted-foreground">
-                Original value {fmt(c.original_contract_value_cents)} · Delivered {fmt(c.value_delivered_cents)} ·
-                Credit applied {fmt(c.credit_applied_cents)} · New price {fmt(c.new_price_cents)} ·
-                {c.amount_due_cents > 0 ? ` Due ${fmt(c.amount_due_cents)}` : ""}
-                {c.refund_owed_cents > 0 ? ` Refund owed ${fmt(c.refund_owed_cents)}` : ""}
-              </div>
-              {c.notes && <div className="text-xs">{c.notes}</div>}
-            </Card>
-          ))}
         </TabsContent>
       </Tabs>
     </div>
@@ -173,11 +113,12 @@ function SummaryTile({ label, value, highlight }: { label: string; value: string
   );
 }
 
-function PurchaseRow({ purchase, clientId, onChanged }: { purchase: any; clientId: string; onChanged: () => void }) {
+function PurchaseRow({ purchase, clientId, onChanged, ledger, isPaid }: { purchase: any; clientId: string; onChanged: () => void; ledger: any[]; isPaid: boolean }) {
   const currency = purchase.currency ?? "CAD";
   const contract = Number(purchase.contract_value_cents ?? Math.round(Number(purchase.full_payable_amount ?? 0) * 100));
   const paid = Number(purchase.amount_paid_cents ?? 0);
-  const outstanding = Number(purchase.amount_outstanding_cents ?? Math.max(0, contract - paid));
+  const outstandingRaw = Number(purchase.amount_outstanding_cents ?? Math.max(0, contract - paid));
+  const outstanding = isPaid ? 0 : outstandingRaw;
 
   return (
     <Card className="p-4 space-y-3">
@@ -192,8 +133,8 @@ function PurchaseRow({ purchase, clientId, onChanged }: { purchase: any; clientI
         <div className="text-right text-sm">
           <div>Contract <span className="font-mono">{fmt(contract, currency)}</span></div>
           <div>Paid <span className="font-mono">{fmt(paid, currency)}</span></div>
-          <div className={outstanding > 0 ? "text-destructive" : "text-green-600"}>
-            {outstanding > 0 ? `Owes ${fmt(outstanding, currency)}` : "Paid in full"}
+          <div className={isPaid || outstanding <= 0 ? "text-green-600" : "text-destructive"}>
+            {isPaid || outstanding <= 0 ? "Paid in full" : `Owes ${fmt(outstanding, currency)}`}
           </div>
         </div>
       </div>
@@ -207,6 +148,48 @@ function PurchaseRow({ purchase, clientId, onChanged }: { purchase: any; clientI
           <GrantSessionsDialog purchase={purchase} onDone={onChanged} />
         )}
       </div>
+      {ledger.length > 0 && (
+        <details className="text-xs">
+          <summary className="cursor-pointer text-muted-foreground hover:text-foreground">
+            Payment history ({ledger.length})
+          </summary>
+          <div className="mt-2 overflow-x-auto rounded border border-border">
+            <table className="w-full text-sm">
+              <thead className="bg-muted/40 text-xs uppercase">
+                <tr>
+                  <th className="p-2 text-left">Date</th>
+                  <th className="p-2 text-left">Type</th>
+                  <th className="p-2 text-left">Method</th>
+                  <th className="p-2 text-right">Amount</th>
+                  <th className="p-2 text-left">Note</th>
+                  <th />
+                </tr>
+              </thead>
+              <tbody>
+                {ledger.map((l) => (
+                  <tr key={l.id} className={l.voided ? "opacity-50 line-through" : ""}>
+                    <td className="p-2">{l.transaction_date}</td>
+                    <td className="p-2">{l.txn_type}</td>
+                    <td className="p-2">{l.method}</td>
+                    <td className="p-2 text-right font-mono">{fmt(l.amount_minor, l.currency)}</td>
+                    <td className="p-2 text-xs text-muted-foreground">{l.internal_note ?? l.external_reference ?? ""}</td>
+                    <td className="p-2 text-right">
+                      {!l.voided && (
+                        <VoidButton
+                          ledgerId={l.id}
+                          amount={fmt(l.amount_minor, l.currency)}
+                          date={l.transaction_date}
+                          onDone={onChanged}
+                        />
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </details>
+      )}
     </Card>
   );
 }
