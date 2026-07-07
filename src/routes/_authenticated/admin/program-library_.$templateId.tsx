@@ -2499,11 +2499,11 @@ function RowEditor({ row, setRow, onDelete, exercises, compact, onMoveUp, onMove
           {RowIndexBadge}
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-1.5 min-w-0">
-              {(purposeLabel || purposeLabel === "") && (
+              {purposeLabel && (
                 <span className={cn(
                   "inline-flex shrink-0 items-center rounded-full border px-1.5 py-0 text-[9px] font-bold uppercase tracking-wide",
                   purposeLabelBadgeClass(purposeLabel),
-                )}>{purposeLabel || "Auto"}</span>
+                )}>{purposeLabel}</span>
               )}
               {(row.exercise_id || row.exercise_name_override) && VideoBadge}
               <span className="truncate text-sm font-semibold">{exName || <span className="italic text-muted-foreground">Unnamed exercise</span>}</span>
