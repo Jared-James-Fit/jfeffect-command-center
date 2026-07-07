@@ -464,6 +464,30 @@ export function generateWorkoutPdf(data: WorkoutPdfData): jsPDF {
         y += 4;
       }
 
+      // Client-authored exercise-level notes (pl_exercise_notes) — shown even
+      // when the client hasn't logged any sets on the day.
+      const exNotes = (day.client_exercise_notes ?? []).filter((n) => sanitizeText(n.content));
+      if (exNotes.length) {
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(8);
+        doc.setTextColor(...wc);
+        ensureSpace(14);
+        doc.text("Client exercise notes", marginX, y);
+        y += 10;
+        doc.setFont("helvetica", "normal");
+        doc.setTextColor(70, 70, 70);
+        for (const n of exNotes) {
+          const exName = sanitizeText(n.exercise_name) || "Exercise";
+          const body = sanitizeText(n.content);
+          const line = `• ${exName}: ${body}`;
+          const wrapped = doc.splitTextToSize(line, pageWidth - marginX * 2);
+          ensureSpace(wrapped.length * 10 + 2);
+          doc.text(wrapped, marginX, y);
+          y += wrapped.length * 10;
+        }
+        y += 4;
+      }
+
       // Client completion note
       if (day.completion_note?.trim()) {
         doc.setFont("helvetica", "italic");
