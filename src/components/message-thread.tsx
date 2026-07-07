@@ -1176,6 +1176,7 @@ export function MessageThread({
       setBody("");
       setAttachments([]);
       setInternalNote(false);
+      broadcastTyping(true);
       qc.invalidateQueries({ queryKey: ["messages", clientId, role] });
       return sent;
     } catch (e: any) {
