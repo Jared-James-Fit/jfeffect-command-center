@@ -766,6 +766,13 @@ export function MessageThread({
   // per message: same emoji removes; different emoji replaces; none adds.
   const onToggleReaction = (messageId: string, emoji: string) => {
     if (!user) return;
+    // Ignore rapid duplicate toggles (touchend double-tap + synthesized
+    // dblclick, accidental repeat taps). The UI still feels instant because
+    // the first tap already applied the optimistic update.
+    const nowTs = Date.now();
+    const lastTs = lastReactionAtRef.current.get(messageId) ?? 0;
+    if (nowTs - lastTs < 600) return;
+    lastReactionAtRef.current.set(messageId, nowTs);
     const key = ["message-reactions", clientId] as const;
     const prev = qc.getQueryData<MessageReaction[]>(key) ?? reactions;
 
