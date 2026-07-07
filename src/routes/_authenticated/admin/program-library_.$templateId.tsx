@@ -1626,7 +1626,6 @@ export function BlockPayloadEditor({ weeksData, setWeeksData, exercises, compact
 
 function WeekEditor({ week, setWeek, exercises, onCopyDayToFuture, hideHeader, compact, dayKeyPrefix, blockId, blockStartDate, blockEndDate, onExtraDayAdded }: { week: any; setWeek: (w: any) => void; exercises: any[]; onCopyDayToFuture?: (dayIdx: number) => void; hideHeader?: boolean; compact?: boolean; dayKeyPrefix?: string; blockId?: string | null; blockStartDate?: string | null; blockEndDate?: string | null; onExtraDayAdded?: () => void }) {
   const days = week.days || [];
-  // WeekPriorityWarnings is defined below in this file.
   const addDay = () => {
     const nextIdx = (days[days.length - 1]?.day_index ?? 0) + 1;
     setWeek({ ...week, days: [...days, { day_index: nextIdx, title: `Day ${nextIdx}`, rows: [] }] });
