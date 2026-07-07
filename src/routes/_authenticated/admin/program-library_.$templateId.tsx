@@ -1659,6 +1659,7 @@ function WeekEditor({ week, setWeek, exercises, onCopyDayToFuture, hideHeader, c
         <Button size="sm" variant="outline" onClick={addDay}><Plus className="mr-1 h-3 w-3" /> Day</Button>
       )}
       <WeeklyVolumeSummary week={week} exercises={exercises as any} weekIndex={week?.week_index} />
+      <WeekPriorityWarnings week={week} exercises={exercises as any} />
       {days.map((d: any, i: number) => {
         const dayMinutes = estimateDayMinutes(d.rows || []);
         const dKey = `${dayKeyPrefix ?? `wk${week.week_index ?? 0}`}:d${d.day_index ?? i}`;
