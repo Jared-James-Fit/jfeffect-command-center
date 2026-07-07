@@ -1762,7 +1762,7 @@ function WorkoutDay({
              Guard: !completion?.completed_at prevents the glitchy state where
              both the completion card and the finish button are visible at once.
              This was the root cause of the Nicolas Galli stuck-state bug. */}
-        {!readonly && !completion?.completed_at && (
+        {!readonly && !completion?.completed_at && !rowsIsError && authReady && rowsLoaded && (rows as any[]).length > 0 && (
           <Card className="p-4">
             <ActionButton
               className="w-full"
