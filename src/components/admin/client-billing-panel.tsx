@@ -99,7 +99,12 @@ export function ClientBillingPanel({ clientId }: { clientId: string }) {
                     <td className="p-2 text-xs text-muted-foreground">{l.internal_note ?? l.external_reference ?? ""}</td>
                     <td className="p-2 text-right">
                       {!l.voided && (
-                        <VoidButton ledgerId={l.id} onDone={invalidate} />
+                        <VoidButton
+                          ledgerId={l.id}
+                          amount={fmt(l.amount_minor, l.currency)}
+                          date={l.transaction_date}
+                          onDone={invalidate}
+                        />
                       )}
                     </td>
                   </tr>
@@ -413,18 +418,68 @@ function GrantSessionsDialog({ purchase, onDone }: { purchase: any; onDone: () =
   );
 }
 
-function VoidButton({ ledgerId, onDone }: { ledgerId: string; onDone: () => void }) {
+function VoidButton({ ledgerId, amount, date, onDone }: { ledgerId: string; amount?: string; date?: string; onDone: () => void }) {
   const fn = useServerFn(voidLedgerRow);
+  const [open, setOpen] = useState(false);
+  const [reason, setReason] = useState("");
+  const VOID_REASONS = [
+    "Duplicate entry",
+    "Entered in error",
+    "Test transaction",
+    "Refunded outside system",
+    "Other",
+  ];
   const m = useMutation({
     mutationFn: async () => {
-      const reason = window.prompt("Void reason?");
-      if (!reason) throw new Error("Cancelled");
-      return fn({ data: { ledger_id: ledgerId, reason } });
+      if (!reason.trim()) throw new Error("Please select or enter a reason");
+      return fn({ data: { ledger_id: ledgerId, reason: reason.trim() } });
     },
-    onSuccess: () => { toast.success("Voided"); onDone(); },
-    onError: (e: any) => { if (e.message !== "Cancelled") toast.error(e.message); },
+    onSuccess: () => { toast.success("Transaction voided"); setOpen(false); setReason(""); onDone(); },
+    onError: (e: any) => toast.error(e.message),
   });
-  return <Button size="sm" variant="ghost" onClick={() => m.mutate()}>Void</Button>;
+  return (
+    <>
+      <Button size="sm" variant="ghost" className="text-destructive hover:text-destructive" onClick={() => setOpen(true)}>Void</Button>
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Void Transaction</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 py-2">
+            {(amount || date) && (
+              <div className="rounded-md bg-muted/50 border border-border px-3 py-2 text-sm">
+                {date && <div className="text-muted-foreground text-xs">{date}</div>}
+                {amount && <div className="font-semibold">{amount}</div>}
+              </div>
+            )}
+            <div className="space-y-1.5">
+              <Label className="text-sm font-semibold">Reason <span className="text-destructive">*</span></Label>
+              <Select value={reason} onValueChange={setReason}>
+                <SelectTrigger><SelectValue placeholder="Select a reason…" /></SelectTrigger>
+                <SelectContent>
+                  {VOID_REASONS.map(r => <SelectItem key={r} value={r}>{r}</SelectItem>)}
+                </SelectContent>
+              </Select>
+              {reason === "Other" && (
+                <Input
+                  placeholder="Describe the reason\u2026"
+                  autoFocus
+                  onChange={e => setReason(e.target.value || "Other")}
+                />
+              )}
+            </div>
+            <p className="text-xs text-muted-foreground">This marks the transaction as voided and inserts an offsetting reversal. The original record is preserved for audit purposes.</p>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { setOpen(false); setReason(""); }}>Cancel</Button>
+            <Button variant="destructive" onClick={() => m.mutate()} disabled={!reason.trim() || m.isPending}>
+              {m.isPending ? "Voiding…" : "Void Transaction"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
+  );
 }
 
 function ExpireButton({ onDone }: { onDone: () => void }) {

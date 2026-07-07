@@ -1,10 +1,18 @@
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
+import { useState } from "react";
+import { useMutation } from "@tanstack/react-query";
+import { useServerFn } from "@tanstack/react-start";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Link } from "@tanstack/react-router";
-import { ExternalLink, Copy, Receipt } from "lucide-react";
+import { ExternalLink, Copy, Receipt, Trash2 } from "lucide-react";
 import { toast } from "sonner";
+import { voidLedgerRow } from "@/lib/billing.functions";
 import {
   stripeCustomerUrl,
   stripePaymentIntentUrl,
@@ -189,8 +197,79 @@ export function TransactionDetailDrawer({
               </section>
             </>
           )}
+
+          {/* Void action — only for client-source ledger rows that aren't already voided */}
+          {txn.source === "client" && txn.status?.toLowerCase() !== "voided" && txn.status?.toLowerCase() !== "refunded" && (
+            <>
+              <Separator />
+              <VoidTransactionSection
+                ledgerId={txn.id}
+                amount={new Intl.NumberFormat(undefined, { style: "currency", currency: txn.currency || "USD" }).format(txn.amount ?? 0)}
+                date={new Date(txn.occurred_at).toLocaleDateString()}
+                onVoided={() => onOpenChange(false)}
+              />
+            </>
+          )}
         </div>
       </SheetContent>
     </Sheet>
+  );
+}
+
+function VoidTransactionSection({ ledgerId, amount, date, onVoided }: { ledgerId: string; amount: string; date: string; onVoided: () => void }) {
+  const fn = useServerFn(voidLedgerRow);
+  const [open, setOpen] = useState(false);
+  const [reason, setReason] = useState("");
+  const [customReason, setCustomReason] = useState("");
+  const VOID_REASONS = ["Duplicate entry", "Entered in error", "Test transaction", "Refunded outside system", "Other"];
+  const m = useMutation({
+    mutationFn: async () => {
+      const finalReason = reason === "Other" ? customReason.trim() : reason;
+      if (!finalReason) throw new Error("Please select or enter a reason");
+      return fn({ data: { ledger_id: ledgerId, reason: finalReason } });
+    },
+    onSuccess: () => { toast.success("Transaction voided"); setOpen(false); onVoided(); },
+    onError: (e: any) => toast.error(e.message),
+  });
+  return (
+    <section>
+      <h3 className="text-xs uppercase tracking-widest text-muted-foreground mb-2">Admin actions</h3>
+      <Button
+        variant="outline"
+        size="sm"
+        className="gap-2 border-destructive/30 text-destructive hover:bg-destructive/5"
+        onClick={() => setOpen(true)}
+      >
+        <Trash2 className="h-3.5 w-3.5" /> Void transaction
+      </Button>
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader><DialogTitle>Void Transaction</DialogTitle></DialogHeader>
+          <div className="space-y-3 py-2">
+            <div className="rounded-md bg-muted/50 border border-border px-3 py-2 text-sm">
+              <div className="text-muted-foreground text-xs">{date}</div>
+              <div className="font-semibold">{amount}</div>
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-sm font-semibold">Reason <span className="text-destructive">*</span></Label>
+              <Select value={reason} onValueChange={setReason}>
+                <SelectTrigger><SelectValue placeholder="Select a reason\u2026" /></SelectTrigger>
+                <SelectContent>{VOID_REASONS.map(r => <SelectItem key={r} value={r}>{r}</SelectItem>)}</SelectContent>
+              </Select>
+              {reason === "Other" && (
+                <Input placeholder="Describe the reason\u2026" autoFocus value={customReason} onChange={e => setCustomReason(e.target.value)} />
+              )}
+            </div>
+            <p className="text-xs text-muted-foreground">Marks the transaction as voided and inserts an offsetting reversal. The original record is preserved for audit.</p>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
+            <Button variant="destructive" onClick={() => m.mutate()} disabled={!reason || (reason === "Other" && !customReason.trim()) || m.isPending}>
+              {m.isPending ? "Voiding\u2026" : "Void Transaction"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </section>
   );
 }
