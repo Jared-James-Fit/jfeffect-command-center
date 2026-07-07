@@ -16,6 +16,8 @@ import {
   getClientResults, buildExerciseHistory, weeklyMuscleVolume, recentPRs,
 } from "@/lib/pl-programs";
 import { format, isSameDay } from "date-fns";
+import { AnalyticsFilterBar, defaultAnalyticsFilter, type AnalyticsFilter } from "@/components/analytics/analytics-filter-bar";
+import { PowerliftingExposureSection } from "@/components/analytics/powerlifting-exposure-section";
 import {
   SearchableSelect,
   type SearchableOption,
@@ -73,6 +75,27 @@ function PortalAnalytics() {
     staleTime: 30_000,
     queryFn: () => getClientResults(client!.id),
   });
+
+  const { data: clientBlocks = [] } = useQuery({
+    queryKey: ["pl-blocks-for-analytics", client?.id],
+    enabled: !!client?.id,
+    staleTime: 60_000,
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("pl_blocks")
+        .select("id, name, status, start_date, end_date")
+        .eq("client_id", client!.id);
+      return data ?? [];
+    },
+  });
+
+  const [analyticsFilter, setAnalyticsFilter] = useState<AnalyticsFilter | null>(null);
+  useEffect(() => {
+    if (!analyticsFilter && clientBlocks.length >= 0) {
+      setAnalyticsFilter(defaultAnalyticsFilter(clientBlocks));
+    }
+  }, [analyticsFilter, clientBlocks]);
+  const filter = analyticsFilter ?? defaultAnalyticsFilter(clientBlocks);
 
   const { data: analyticsSettings } = useQuery({
     queryKey: ["client-analytics-settings", client?.id],
