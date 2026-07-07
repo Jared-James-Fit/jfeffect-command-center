@@ -2564,8 +2564,7 @@ function RowEditor({ row, setRow, onDelete, exercises, compact, onMoveUp, onMove
         {!row.exercise_id && (
           <RowCell className="mt-1 h-7 text-sm font-semibold" placeholder="Custom name" value={row.exercise_name_override} onCommit={(v) => setRow({ ...row, exercise_name_override: v })} />
         )}
-        {purposeLabel && (
-          <div className="mt-1 flex items-center gap-1">
+        <div className="mt-1 flex flex-wrap items-center gap-1">
             <Popover>
               <PopoverTrigger asChild>
                 <button
@@ -2576,7 +2575,7 @@ function RowEditor({ row, setRow, onDelete, exercises, compact, onMoveUp, onMove
                   )}
                   title={row.purpose_label ? "Manual purpose label — click to change" : "Auto purpose label — click to override"}
                 >
-                  {purposeLabel}
+                  {purposeLabel || "Auto"}
                 </button>
               </PopoverTrigger>
               <PopoverContent className="w-44 p-2" align="start">
@@ -2604,8 +2603,55 @@ function RowEditor({ row, setRow, onDelete, exercises, compact, onMoveUp, onMove
                 </div>
               </PopoverContent>
             </Popover>
+            <Popover>
+              <PopoverTrigger asChild>
+                <button
+                  type="button"
+                  className={cn(
+                    "inline-flex items-center gap-1 rounded-full border px-1.5 py-0 text-[9px] font-bold uppercase tracking-wide transition hover:bg-secondary",
+                    "border-muted-foreground/30 bg-muted text-muted-foreground",
+                  )}
+                  title={row.movement_family ? "Manual movement family — click to change" : "Auto movement family — click to override"}
+                >
+                  {(() => {
+                    const map: Record<string, string> = { squat: "Squat", bench: "Bench", deadlift: "Deadlift", upper: "Upper", lower: "Lower", other: "Other" };
+                    return row.movement_family ? map[row.movement_family as string] ?? row.movement_family : "Auto Family";
+                  })()}
+                </button>
+              </PopoverTrigger>
+              <PopoverContent className="w-44 p-2" align="start">
+                <div className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Movement family</div>
+                <div className="grid gap-1">
+                  <button
+                    type="button"
+                    onClick={() => setRow({ ...row, movement_family: null })}
+                    className={cn("rounded px-2 py-1 text-left text-xs hover:bg-muted",
+                      !row.movement_family && "bg-muted/60 font-semibold")}
+                  >
+                    Auto (from exercise)
+                  </button>
+                  {([
+                    ["squat", "Squat"],
+                    ["bench", "Bench"],
+                    ["deadlift", "Deadlift"],
+                    ["upper", "Upper Body"],
+                    ["lower", "Lower Body"],
+                    ["other", "Other"],
+                  ] as const).map(([val, label]) => (
+                    <button
+                      key={val}
+                      type="button"
+                      onClick={() => setRow({ ...row, movement_family: val })}
+                      className={cn("rounded px-2 py-1 text-left text-xs hover:bg-muted",
+                        row.movement_family === val && "bg-primary/10 font-semibold text-primary")}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              </PopoverContent>
+            </Popover>
           </div>
-        )}
           </div>
         </div>
         </Field>
