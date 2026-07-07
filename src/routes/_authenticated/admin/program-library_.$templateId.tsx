@@ -1465,8 +1465,8 @@ export function BlockPayloadEditor({ weeksData, setWeeksData, exercises, compact
               compact={compact}
               dayKeyPrefix={`wk${weeksData[activeIdx].week_index ?? activeIdx}`}
               blockId={ctxBlockId}
-              blockStartDate={(payload as any)?.start_date ?? null}
-              blockEndDate={(payload as any)?.end_date ?? null}
+              blockStartDate={null}
+              blockEndDate={null}
               onExtraDayAdded={() => { /* block-tree query invalidated inside AddExtraDayDialog */ }}
             />
           )}
@@ -1594,8 +1594,8 @@ export function BlockPayloadEditor({ weeksData, setWeeksData, exercises, compact
                         hideHeader
                         dayKeyPrefix={`wk${w.week_index ?? wi}`}
                         blockId={ctxBlockId}
-                        blockStartDate={(payload as any)?.start_date ?? null}
-                        blockEndDate={(payload as any)?.end_date ?? null}
+                        blockStartDate={null}
+                        blockEndDate={null}
                         onExtraDayAdded={() => {}}
                       />
                     </div>

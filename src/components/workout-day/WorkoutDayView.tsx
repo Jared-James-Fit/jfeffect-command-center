@@ -2135,6 +2135,115 @@ function UnsupportedExerciseCard({ row }: { row: any }) {
   );
 }
 
+/**
+ * Compact "Last time" chip — shows the top set (heaviest × reps) the client
+ * logged the last time they trained this exercise on a *different* day.
+ * Intentionally small so it doesn't outshine the coach's prescribed load,
+ * but explicit ("Last time" label + date) so the client can't mistake it
+ * for today's target.
+ */
+function PreviousLiftChip({
+  clientId,
+  exerciseId,
+  currentDayId,
+  displayUnit,
+}: {
+  clientId: string | undefined | null;
+  exerciseId: string | null;
+  currentDayId: string;
+  displayUnit: "kg" | "lb";
+}) {
+  const { data } = useQuery({
+    queryKey: ["previous-lift", clientId, exerciseId, currentDayId],
+    enabled: !!clientId && !!exerciseId,
+    staleTime: 60_000,
+    queryFn: async () => {
+      const { data: rows } = await (supabase as any)
+        .from("pl_row_results")
+        .select(
+          `id, set_index, completed_at, created_at, actual_reps,
+           entered_value, entered_unit, normalized_kg, normalized_lb,
+           actual_load, actual_load_unit, completed_duration_seconds,
+           pl_exercise_rows!inner(
+             exercise_id,
+             pl_days!inner(id, day_index, scheduled_date, pl_weeks!inner(week_index))
+           )`,
+        )
+        .eq("client_id", clientId)
+        .eq("pl_exercise_rows.exercise_id", exerciseId)
+        .not("completed_at", "is", null)
+        .order("completed_at", { ascending: false })
+        .limit(60);
+      const list = (rows ?? []) as any[];
+      // Skip the current day (any set logged today shouldn't count as
+      // "last time"). Pick the most recent day, then the heaviest set on it.
+      const otherDay = list.find((r) => r?.pl_exercise_rows?.pl_days?.id !== currentDayId);
+      if (!otherDay) return null;
+      const dayId = otherDay.pl_exercise_rows.pl_days.id;
+      const daySets = list.filter((r) => r?.pl_exercise_rows?.pl_days?.id === dayId);
+      const scoreOf = (s: any) => {
+        const kg = s.normalized_kg != null ? Number(s.normalized_kg) : null;
+        const reps = s.actual_reps != null ? Number(s.actual_reps) : 0;
+        return kg != null ? kg * Math.max(1, reps) : reps;
+      };
+      const top = daySets.slice().sort((a, b) => scoreOf(b) - scoreOf(a))[0];
+      return { top, day: otherDay.pl_exercise_rows.pl_days };
+    },
+  });
+  if (!data?.top) return null;
+  const s = data.top;
+  const enteredUnit: "kg" | "lb" | null =
+    s.entered_unit === "kg" || s.entered_unit === "lb"
+      ? s.entered_unit
+      : s.actual_load_unit === "kg" || s.actual_load_unit === "lb"
+        ? s.actual_load_unit
+        : null;
+  let loadStr = "";
+  if (s.completed_duration_seconds != null && s.actual_reps == null) {
+    loadStr = `${s.completed_duration_seconds}s`;
+  } else {
+    let n: number | null = null;
+    let unit: "kg" | "lb" = enteredUnit ?? displayUnit;
+    if (enteredUnit && s.entered_value != null) n = Number(s.entered_value);
+    else if (enteredUnit && s.actual_load != null) n = Number(s.actual_load);
+    else {
+      const v = displayUnit === "kg" ? s.normalized_kg : s.normalized_lb;
+      if (v != null) { n = Number(v); unit = displayUnit; }
+    }
+    if (n != null && !Number.isNaN(n)) {
+      const rounded = Math.abs(n - Math.round(n)) < 0.05 ? Math.round(n) : Number(n.toFixed(1));
+      loadStr = `${rounded} ${unit}`;
+    }
+  }
+  const repsStr = s.actual_reps != null ? ` × ${s.actual_reps}` : "";
+  if (!loadStr && !repsStr) return null;
+  const scheduled: string | null = data.day?.scheduled_date ?? null;
+  let when = "";
+  if (scheduled) {
+    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(scheduled);
+    if (m) {
+      const d = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+      const now = new Date();
+      const days = Math.round((now.getTime() - d.getTime()) / 86400000);
+      when = days <= 0 ? "today" : days === 1 ? "yesterday" : days < 14 ? `${days}d ago` : d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+    }
+  } else if (s.completed_at) {
+    const d = new Date(s.completed_at);
+    const days = Math.round((Date.now() - d.getTime()) / 86400000);
+    when = days <= 0 ? "today" : days === 1 ? "yesterday" : days < 14 ? `${days}d ago` : d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+  }
+  return (
+    <div
+      className="mt-1 inline-flex max-w-full items-center gap-1 rounded-md border border-dashed border-muted-foreground/30 bg-muted/30 px-2 py-0.5 text-[11px] font-medium text-muted-foreground"
+      title="Your top set the last time you trained this exercise"
+    >
+      <span className="text-[9px] font-bold uppercase tracking-wider text-muted-foreground/70">Last time</span>
+      <span className="font-semibold tabular-nums text-foreground/80">{loadStr}{repsStr}</span>
+      {when && <span className="text-[10px] text-muted-foreground/70">· {when}</span>}
+    </div>
+  );
+}
+
 function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, existingResults, existingNote, notesLoading = false, readonly = false, unit = "kg", onUnitChange, focusMode = false, onChange, onNoteChange, purposeLabel = null, swapContext = undefined }: { row: any; dayId: string; dayTitle: string; dayIndex?: number | null; clientId: string | undefined; blockId?: string | null; existingResults: any[]; existingNote?: any; notesLoading?: boolean; readonly?: boolean; unit?: "kg" | "lb"; onUnitChange?: (u: "kg" | "lb") => void; focusMode?: boolean; onChange: () => void; onNoteChange: () => void; purposeLabel?: string | null; swapContext?: { kind: "client" } | { kind: "member"; enrollmentId: string; weekIndex: number; dayIndex: number; exerciseIndex: number } | undefined }) {
   const adapter = useOptionalAdapter();
   const name = row.exercises?.name ?? row.exercise_name_override ?? "Exercise";
@@ -2376,6 +2485,15 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
           </span>
         )}
       </div>
+      {/* Compact "Last time" chip — subtle so it never outshines today's prescription. */}
+      {clientId && exerciseId && (
+        <PreviousLiftChip
+          clientId={clientId}
+          exerciseId={exerciseId}
+          currentDayId={dayId}
+          displayUnit={activeUnit}
+        />
+      )}
       {/* Big, dummy-proof rest timer — tap to start, auto-resets at 0 */}
       <div className="mt-2">
         <RestTimerButton seconds={effectiveRest ?? null} label={restDisplay} />

@@ -53,6 +53,18 @@ type Day = {
   completed_at?: string | null;
   completion_note?: string | null;
   rows: Row[];
+  /**
+   * Client-authored exercise-level notes (pl_exercise_notes). Rendered as a
+   * dedicated "Client exercise notes" section so coaches see them in every
+   * downloaded PDF, not just inline per-set notes.
+   */
+  client_exercise_notes?: Array<{
+    exercise_name?: string | null;
+    content: string;
+    status?: string | null;
+    created_at?: string | null;
+    updated_at?: string | null;
+  }>;
 };
 
 type Week = {
@@ -452,6 +464,30 @@ export function generateWorkoutPdf(data: WorkoutPdfData): jsPDF {
         y += 4;
       }
 
+      // Client-authored exercise-level notes (pl_exercise_notes) — shown even
+      // when the client hasn't logged any sets on the day.
+      const exNotes = (day.client_exercise_notes ?? []).filter((n) => sanitizeText(n.content));
+      if (exNotes.length) {
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(8);
+        doc.setTextColor(...wc);
+        ensureSpace(14);
+        doc.text("Client exercise notes", marginX, y);
+        y += 10;
+        doc.setFont("helvetica", "normal");
+        doc.setTextColor(70, 70, 70);
+        for (const n of exNotes) {
+          const exName = sanitizeText(n.exercise_name) || "Exercise";
+          const body = sanitizeText(n.content);
+          const line = `• ${exName}: ${body}`;
+          const wrapped = doc.splitTextToSize(line, pageWidth - marginX * 2);
+          ensureSpace(wrapped.length * 10 + 2);
+          doc.text(wrapped, marginX, y);
+          y += wrapped.length * 10;
+        }
+        y += 4;
+      }
+
       // Client completion note
       if (day.completion_note?.trim()) {
         doc.setFont("helvetica", "italic");
@@ -817,6 +853,30 @@ export function generateFullTrainingReportPdf(data: FullTrainingReportData): jsP
           ensureSpace(lines.length * 11 + 4);
           doc.text(lines, marginX, y);
           y += lines.length * 11 + 4;
+        }
+
+        // Client-authored exercise-level notes for the full report.
+        const exNotesFull = (day.client_exercise_notes ?? []).filter((n) => sanitizeText(n.content));
+        if (exNotesFull.length) {
+          doc.setFont("helvetica", "bold");
+          doc.setFontSize(9);
+          doc.setTextColor(...wc);
+          ensureSpace(14);
+          doc.text("Client exercise notes", marginX, y);
+          y += 11;
+          doc.setFont("helvetica", "normal");
+          doc.setFontSize(9);
+          doc.setTextColor(70, 70, 70);
+          for (const n of exNotesFull) {
+            const exName = sanitizeText(n.exercise_name) || "Exercise";
+            const body = sanitizeText(n.content);
+            const line = `• ${exName}: ${body}`;
+            const wrapped = doc.splitTextToSize(line, pageWidth - marginX * 2);
+            ensureSpace(wrapped.length * 11 + 2);
+            doc.text(wrapped, marginX, y);
+            y += wrapped.length * 11;
+          }
+          y += 4;
         }
 
         if (day.notes?.trim() && day.notes_client_visible !== false) {

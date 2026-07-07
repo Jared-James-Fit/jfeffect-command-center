@@ -1,4 +1,5 @@
-import { useQuery } from "@tanstack/react-query";
+import { useEffect } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -8,6 +9,7 @@ import { StickyNote } from "lucide-react";
 const sb = supabase as any;
 
 export function ClientExerciseNotesCard({ clientId }: { clientId: string }) {
+  const qc = useQueryClient();
   const { data: notes = [] } = useQuery({
     queryKey: ["client-exercise-notes", clientId],
     enabled: !!clientId,
@@ -21,6 +23,25 @@ export function ClientExerciseNotesCard({ clientId }: { clientId: string }) {
       return data ?? [];
     },
   });
+
+  // Realtime: reflect note create/update/delete instantly across coach view,
+  // client portal, and member app without a manual refresh.
+  useEffect(() => {
+    if (!clientId) return;
+    const channel = sb
+      .channel(`client-exercise-notes-${clientId}`)
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "pl_exercise_notes", filter: `client_id=eq.${clientId}` },
+        () => {
+          qc.invalidateQueries({ queryKey: ["client-exercise-notes", clientId] });
+        },
+      )
+      .subscribe();
+    return () => {
+      sb.removeChannel(channel);
+    };
+  }, [clientId, qc]);
 
   return (
     <Card className="p-4 md:col-span-3">

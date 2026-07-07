@@ -19,6 +19,7 @@ import { toast } from "sonner";
 import { getBlockTree } from "@/lib/pl-programs";
 import { getClientMealPlanForCoach } from "@/lib/nutrition-targets/admin-meal-plan.functions";
 import { useServerFn } from "@tanstack/react-start";
+import { supabase } from "@/integrations/supabase/client";
 
 function useClientPdfDownloads(r: DirectoryRow) {
   const [workoutPending, setWorkoutPending] = useState(false);
@@ -53,6 +54,23 @@ function useClientPdfDownloads(r: DirectoryRow) {
         list.push(rw);
         rowsByDay.set(rw.day_id, list);
       }
+      // Fetch client-authored exercise notes for every day in the block so
+      // the downloaded PDF surfaces what the client actually wrote.
+      const allDayIds = (tree.days ?? []).map((d: any) => d.id);
+      const notesByDay = new Map<string, any[]>();
+      if (allDayIds.length) {
+        const { data: noteRows } = await (supabase as any)
+          .from("pl_exercise_notes")
+          .select("day_id, row_id, exercise_name, content, status, created_at, updated_at")
+          .in("day_id", allDayIds)
+          .eq("client_id", r.id)
+          .order("updated_at", { ascending: true });
+        for (const n of (noteRows ?? []) as any[]) {
+          const list = notesByDay.get(n.day_id) ?? [];
+          list.push(n);
+          notesByDay.set(n.day_id, list);
+        }
+      }
       downloadWorkoutPdf({
         client_name: r.full_name ?? null,
         program_name: (tree as any).block?.name ?? null,
@@ -75,6 +93,7 @@ function useClientPdfDownloads(r: DirectoryRow) {
               notes_client_visible: d.notes_client_visible ?? null,
               scheduled_date: d.scheduled_date ?? null,
               rows: rowsByDay.get(d.id) ?? [],
+              client_exercise_notes: notesByDay.get(d.id) ?? [],
             })),
         })),
       });
