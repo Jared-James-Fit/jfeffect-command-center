@@ -19,6 +19,8 @@ type Row = {
   notes?: string | null;
   measurement_type?: string | null;
   duration_seconds?: number | null;
+  purpose_label?: string | null;
+  movement_family?: string | null;
   /** Actual logged sets for this row, in set_index order. */
   logged_sets?: LoggedSet[];
 };
@@ -754,11 +756,14 @@ export function generateFullTrainingReportPdf(data: FullTrainingReportData): jsP
           ensureSpace(72);
           const name =
             sanitizeText(r.exercise_name_override) || sanitizeText(r.exercises?.name) || "Exercise";
+          const purpose = sanitizeText(r.purpose_label) || "";
+          const showPurpose = purpose && purpose.toLowerCase() !== "assistance";
+          const displayName = showPurpose ? `${purpose} — ${name}` : name;
           doc.setFont("helvetica", "bold");
           doc.setFontSize(10);
           doc.setTextColor(20, 20, 20);
           y += 10;
-          doc.text(`${i + 1}. ${name}`, marginX, y);
+          doc.text(`${i + 1}. ${displayName}`, marginX, y);
           y += 12;
 
           doc.setFont("helvetica", "normal");
