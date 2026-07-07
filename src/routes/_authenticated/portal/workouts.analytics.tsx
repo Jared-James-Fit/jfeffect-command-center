@@ -334,6 +334,12 @@ function PortalAnalytics() {
           </div>
         </div>
 
+        <AnalyticsFilterBar
+          blocks={clientBlocks}
+          value={filter}
+          onChange={setAnalyticsFilter}
+        />
+
         {isLoading ? (
           <Card className="p-8 text-center text-sm text-muted-foreground">
             Loading your training data…
