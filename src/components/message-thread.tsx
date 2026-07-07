@@ -614,6 +614,15 @@ export function MessageThread({
   const [messageType, setMessageType] = useState("General");
   const [internalNote, setInternalNote] = useState(false);
   const [priority, setPriority] = useState<string>("Normal");
+  // Peer typing indicator (iMessage-style). Set via Realtime broadcast.
+  const [peerTyping, setPeerTyping] = useState(false);
+  const peerTypingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const typingChannelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
+  const lastTypingSentRef = useRef(0);
+  // Dedupe reaction toggles: touch double-tap + synthesized dblclick can both
+  // fire, flipping the reaction off immediately after adding it. This ref
+  // ignores repeat toggles on the same message within ~600ms.
+  const lastReactionAtRef = useRef<Map<string, number>>(new Map());
   const scrollerRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
@@ -757,6 +766,13 @@ export function MessageThread({
   // per message: same emoji removes; different emoji replaces; none adds.
   const onToggleReaction = (messageId: string, emoji: string) => {
     if (!user) return;
+    // Ignore rapid duplicate toggles (touchend double-tap + synthesized
+    // dblclick, accidental repeat taps). The UI still feels instant because
+    // the first tap already applied the optimistic update.
+    const nowTs = Date.now();
+    const lastTs = lastReactionAtRef.current.get(messageId) ?? 0;
+    if (nowTs - lastTs < 600) return;
+    lastReactionAtRef.current.set(messageId, nowTs);
     const key = ["message-reactions", clientId] as const;
     const prev = qc.getQueryData<MessageReaction[]>(key) ?? reactions;
 
@@ -844,6 +860,47 @@ export function MessageThread({
       .subscribe();
     return () => { supabase.removeChannel(ch); };
   }, [clientId, role, qc]);
+
+  // ---------- Realtime typing indicator (iMessage-style) ----------
+  // Uses Supabase Realtime broadcast (ephemeral, no DB writes). Peer typing
+  // auto-clears after 3s of silence, or immediately on send.
+  useEffect(() => {
+    if (!clientId || !user?.id) return;
+    const ch = supabase.channel(`typing-${clientId}`, {
+      config: { broadcast: { self: false } },
+    });
+    ch.on("broadcast", { event: "typing" }, (payload: any) => {
+      const from = payload?.payload?.senderId as string | undefined;
+      const fromRole = payload?.payload?.role as SenderRole | undefined;
+      const stopped = !!payload?.payload?.stopped;
+      if (!from || from === user.id) return;
+      if (fromRole === role) return; // ignore same-role echoes
+      if (peerTypingTimerRef.current) clearTimeout(peerTypingTimerRef.current);
+      if (stopped) { setPeerTyping(false); return; }
+      setPeerTyping(true);
+      peerTypingTimerRef.current = setTimeout(() => setPeerTyping(false), 3200);
+    }).subscribe();
+    typingChannelRef.current = ch;
+    return () => {
+      if (peerTypingTimerRef.current) clearTimeout(peerTypingTimerRef.current);
+      supabase.removeChannel(ch);
+      typingChannelRef.current = null;
+    };
+  }, [clientId, user?.id, role]);
+
+  const broadcastTyping = (stopped = false) => {
+    const ch = typingChannelRef.current;
+    if (!ch || !user?.id) return;
+    const now = Date.now();
+    // Throttle to at most one event per ~1.5s while actively typing.
+    if (!stopped && now - lastTypingSentRef.current < 1500) return;
+    lastTypingSentRef.current = now;
+    void ch.send({
+      type: "broadcast",
+      event: "typing",
+      payload: { senderId: user.id, role, stopped },
+    });
+  };
 
   // Mark read when conversation is first opened or switches
   useEffect(() => {
@@ -1119,6 +1176,7 @@ export function MessageThread({
       setBody("");
       setAttachments([]);
       setInternalNote(false);
+      broadcastTyping(true);
       qc.invalidateQueries({ queryKey: ["messages", clientId, role] });
       return sent;
     } catch (e: any) {
@@ -1443,7 +1501,9 @@ export function MessageThread({
                       "absolute right-1 text-[10px] text-muted-foreground",
                       hasReactions ? "-bottom-8" : "-bottom-4",
                     )}>
-                      {readAt ? `Read ${format(parseISO(readAt), "h:mm a")}` : "Sent"}
+                      {readAt
+                        ? `Seen ${format(parseISO(readAt), "h:mm a")}`
+                        : "Delivered"}
                     </div>
                   );
                 })()}
@@ -1538,6 +1598,24 @@ export function MessageThread({
             </Fragment>
           );
         })}
+        {peerTyping && (
+          <div className="flex items-end gap-2" aria-live="polite" aria-label="typing">
+            <UserAvatar
+              src={peerAvatarPath ?? null}
+              name={peerName ?? (role === "admin" ? "Client" : "Coach Jared")}
+              size={28}
+              tone="neutral"
+              className="mb-1"
+            />
+            <div className="rounded-2xl rounded-bl-md bg-secondary px-3 py-2 shadow-sm">
+              <div className="flex items-center gap-1">
+                <span className="h-1.5 w-1.5 animate-typing-bounce rounded-full bg-muted-foreground/70 [animation-delay:-0.32s]" />
+                <span className="h-1.5 w-1.5 animate-typing-bounce rounded-full bg-muted-foreground/70 [animation-delay:-0.16s]" />
+                <span className="h-1.5 w-1.5 animate-typing-bounce rounded-full bg-muted-foreground/70" />
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Phase 4A — admin strip showing scheduled & failed messages with
@@ -1701,7 +1779,12 @@ export function MessageThread({
             {/* Textarea */}
             <Textarea
               value={body}
-              onChange={(e) => setBody(e.target.value)}
+              onChange={(e) => {
+                setBody(e.target.value);
+                if (e.target.value.trim().length > 0) broadcastTyping(false);
+                else broadcastTyping(true);
+              }}
+              onBlur={() => broadcastTyping(true)}
               placeholder={role === "client" ? "Message Coach Jared…" : "Reply to client…"}
               rows={1}
               enterKeyHint="send"
