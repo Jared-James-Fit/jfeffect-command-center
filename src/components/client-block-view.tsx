@@ -652,6 +652,47 @@ export function ClientBlockView({
         )}
       </div>
 
+      {weeklyPriorities.length > 0 && (
+        <Card className="p-3">
+          <div className="mb-1.5 text-[11px] font-black uppercase tracking-wide text-foreground/70">
+            Week {resolvedWeek?.week_index} Priorities
+          </div>
+          <ul className="grid gap-0.5">
+            {weeklyPriorities.map((p) => {
+              const line = `${p.label} ${p.family} — ${p.dayName}`;
+              const inner = (
+                <span className="flex items-center justify-between gap-2 rounded px-1.5 py-1 text-[12px] hover:bg-muted">
+                  <span className="truncate font-semibold">{line}</span>
+                </span>
+              );
+              if (mode === "client") {
+                return (
+                  <li key={p.key}>
+                    <Link to="/portal/workouts/$dayId" params={{ dayId: p.dayId }}>
+                      {inner}
+                    </Link>
+                  </li>
+                );
+              }
+              return (
+                <li key={p.key}>
+                  <button
+                    type="button"
+                    className="w-full text-left"
+                    onClick={() => {
+                      const idx = days.findIndex((d: any) => d.id === p.dayId);
+                      if (idx >= 0) selectDay(p.dayId, idx);
+                    }}
+                  >
+                    {inner}
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        </Card>
+      )}
+
       {/* Day columns / carousel */}
       {days.length === 0 ? (
         <Card className="p-6 text-sm text-muted-foreground">
