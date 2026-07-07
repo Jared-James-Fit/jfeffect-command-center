@@ -401,6 +401,42 @@ export function generateWorkoutPdf(data: WorkoutPdfData): jsPDF {
     }
   };
 
+  // Powerlifting priority overview — one row per day that has at least
+  // one Primary/Secondary/Tertiary/Quaternary priority. Only shown when
+  // the block has any priority-carrying rows at all.
+  if (blockHasAnyPriorityData(data.weeks)) {
+    const priorityRows = buildBlockPriorityRows(data.weeks);
+    if (priorityRows.length) {
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(11);
+      doc.setTextColor(20, 20, 20);
+      ensureSpace(20);
+      doc.text(
+        sanitizeText(`Training Priorities — ${data.block_name || data.program_name || "Training Block"}`),
+        marginX,
+        y,
+      );
+      y += 8;
+      autoTable(doc, {
+        startY: y,
+        head: [["Day", "Powerlifting Priorities"]],
+        body: priorityRows,
+        styles: { fontSize: 9, cellPadding: 5, overflow: "linebreak" },
+        headStyles: { fillColor: [30, 30, 30], textColor: 255 },
+        columnStyles: {
+          0: { cellWidth: 150, fontStyle: "bold" },
+          1: { cellWidth: "auto" },
+        },
+        margin: { left: marginX, right: marginX },
+        didDrawPage: (hook) => {
+          y = hook.cursor?.y ?? y;
+        },
+      });
+      y = (doc as any).lastAutoTable?.finalY ?? y;
+      y += 12;
+    }
+  }
+
   for (const week of data.weeks) {
     ensureSpace(60);
     const wc = weekColor(week.week_index);
