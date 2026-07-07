@@ -13590,6 +13590,7 @@ export type Database = {
           load_unit: string | null
           manual_override: boolean
           measurement_type: string
+          movement_family: string | null
           notes: string | null
           override_of_pct: number | null
           percentage: number | null
@@ -13627,6 +13628,7 @@ export type Database = {
           load_unit?: string | null
           manual_override?: boolean
           measurement_type?: string
+          movement_family?: string | null
           notes?: string | null
           override_of_pct?: number | null
           percentage?: number | null
@@ -13664,6 +13666,7 @@ export type Database = {
           load_unit?: string | null
           manual_override?: boolean
           measurement_type?: string
+          movement_family?: string | null
           notes?: string | null
           override_of_pct?: number | null
           percentage?: number | null
