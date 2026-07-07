@@ -1501,7 +1501,9 @@ export function MessageThread({
                       "absolute right-1 text-[10px] text-muted-foreground",
                       hasReactions ? "-bottom-8" : "-bottom-4",
                     )}>
-                      {readAt ? `Read ${format(parseISO(readAt), "h:mm a")}` : "Sent"}
+                      {readAt
+                        ? `Seen ${format(parseISO(readAt), "h:mm a")}`
+                        : "Delivered"}
                     </div>
                   );
                 })()}
