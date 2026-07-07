@@ -275,6 +275,70 @@ function drawStatusPill(
   doc.text(label, x - pillW + 7, y);
 }
 
+/* ---------------------------------------------------------------------- */
+/* Powerlifting priority overview                                          */
+/* Derive per-day (label, family) chips from the same row metadata the     */
+/* app uses (purpose_label wins; else movement_family maps to Squat/Bench/ */
+/* Deadlift; Assistance/blank rows are excluded).                          */
+/* ---------------------------------------------------------------------- */
+
+const FAMILY_TITLE: Record<string, string> = {
+  squat: "Squat",
+  bench: "Bench",
+  deadlift: "Deadlift",
+  upper: "Upper",
+  lower: "Lower",
+  other: "Other",
+};
+
+function pdfDerivePriority(row: Row): { label: string; family: string } | null {
+  const label = (row.purpose_label ?? "").trim();
+  const allowed = ["Primary", "Secondary", "Tertiary", "Quaternary"];
+  const familyRaw = (row.movement_family ?? "").toLowerCase();
+  const family = FAMILY_TITLE[familyRaw] ?? "";
+  if (label && allowed.includes(label)) {
+    return { label, family: family || "" };
+  }
+  return null;
+}
+
+function buildBlockPriorityRows(weeks: Week[]): Array<[string, string]> {
+  const out: Array<[string, string]> = [];
+  for (const w of weeks) {
+    for (const d of w.days) {
+      const priorities: string[] = [];
+      for (const r of (d.rows ?? [])
+        .slice()
+        .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0))) {
+        const p = pdfDerivePriority(r);
+        if (!p) continue;
+        priorities.push(p.family ? `${p.label} ${p.family}` : p.label);
+      }
+      if (!priorities.length) continue;
+      const cleanTitle = normalizeDayTitle(d.title, d.day_index);
+      const label = sanitizeText(
+        `W${w.week_index} · Day ${d.day_index}` +
+          (cleanTitle ? ` — ${cleanTitle}` : ""),
+      );
+      out.push([label, priorities.join(" · ")]);
+    }
+  }
+  return out;
+}
+
+function blockHasAnyPriorityData(weeks: Week[]): boolean {
+  for (const w of weeks) {
+    for (const d of w.days) {
+      for (const r of d.rows ?? []) {
+        if (pdfDerivePriority(r)) return true;
+        const fam = (r.movement_family ?? "").toLowerCase();
+        if (fam === "squat" || fam === "bench" || fam === "deadlift") return true;
+      }
+    }
+  }
+  return false;
+}
+
 export function generateWorkoutPdf(data: WorkoutPdfData): jsPDF {
   const doc = new jsPDF({ unit: "pt", format: "a4" });
   const pageWidth = doc.internal.pageSize.getWidth();
