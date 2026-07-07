@@ -64,6 +64,7 @@ function treeToPayload(tree: any) {
             title: d.title ?? "",
             focus: d.focus ?? "",
             notes: d.notes ?? "",
+            scheduled_date: d.scheduled_date ?? null,
             rows: rows.map((r: any) => {
               const out: any = { _dbId: r.id, sort_order: r.sort_order };
               for (const k of ROW_FIELDS) out[k] = r[k];
@@ -158,14 +159,15 @@ async function applyPayloadDiff(blockId: string, originalTree: any, current: any
         const created = await addDayFn(cw._dbId, wantDayIdx, cd.title || `Day ${wantDayIdx}`);
         cd._dbId = created.id;
         od = { _dbId: created.id, day_index: created.day_index, title: created.title, focus: "", notes: "", rows: [] };
-        if (cd.focus || cd.notes) {
-          await updateDay(created.id, { focus: cd.focus || null, notes: cd.notes || null });
+        if (cd.focus || cd.notes || cd.scheduled_date) {
+          await updateDay(created.id, { focus: cd.focus || null, notes: cd.notes || null, scheduled_date: cd.scheduled_date || null });
         }
       } else {
         const dPatch: any = {};
         if ((cd.title ?? "") !== (od?.title ?? "")) dPatch.title = cd.title || null;
         if ((cd.focus ?? "") !== (od?.focus ?? "")) dPatch.focus = cd.focus || null;
         if ((cd.notes ?? "") !== (od?.notes ?? "")) dPatch.notes = cd.notes || null;
+        if ((cd.scheduled_date ?? null) !== (od?.scheduled_date ?? null)) dPatch.scheduled_date = cd.scheduled_date || null;
         if (wantDayIdx !== od?.day_index) dPatch.day_index = wantDayIdx;
         if (Object.keys(dPatch).length) await updateDay(cd._dbId, dPatch);
       }

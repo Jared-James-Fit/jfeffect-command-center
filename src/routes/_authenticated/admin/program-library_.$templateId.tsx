@@ -64,6 +64,7 @@ import {
 import { useNavigate, useSearch } from "@tanstack/react-router";
 import { ArchiveRestore, Archive as ArchiveIcon, Pencil } from "lucide-react";
 import { ProgramStatusBadge } from "@/components/programs/program-status-badge";
+import { AddExtraDayDialog } from "@/components/add-extra-day-dialog";
 
 // ---------------- Day focus + expand/collapse bus ----------------
 // Module-level event bus that lets the program builder know which day
@@ -1463,6 +1464,10 @@ export function BlockPayloadEditor({ weeksData, setWeeksData, exercises, compact
               onCopyDayToFuture={(di) => copyDayToFuture(activeIdx, di)}
               compact={compact}
               dayKeyPrefix={`wk${weeksData[activeIdx].week_index ?? activeIdx}`}
+              blockId={ctxBlockId}
+              blockStartDate={(payload as any)?.start_date ?? null}
+              blockEndDate={(payload as any)?.end_date ?? null}
+              onExtraDayAdded={() => { /* block-tree query invalidated inside AddExtraDayDialog */ }}
             />
           )}
         </>
@@ -1588,6 +1593,10 @@ export function BlockPayloadEditor({ weeksData, setWeeksData, exercises, compact
                         compact={compact}
                         hideHeader
                         dayKeyPrefix={`wk${w.week_index ?? wi}`}
+                        blockId={ctxBlockId}
+                        blockStartDate={(payload as any)?.start_date ?? null}
+                        blockEndDate={(payload as any)?.end_date ?? null}
+                        onExtraDayAdded={() => {}}
                       />
                     </div>
                   </Card>
@@ -1615,7 +1624,7 @@ export function BlockPayloadEditor({ weeksData, setWeeksData, exercises, compact
   );
 }
 
-function WeekEditor({ week, setWeek, exercises, onCopyDayToFuture, hideHeader, compact, dayKeyPrefix }: { week: any; setWeek: (w: any) => void; exercises: any[]; onCopyDayToFuture?: (dayIdx: number) => void; hideHeader?: boolean; compact?: boolean; dayKeyPrefix?: string }) {
+function WeekEditor({ week, setWeek, exercises, onCopyDayToFuture, hideHeader, compact, dayKeyPrefix, blockId, blockStartDate, blockEndDate, onExtraDayAdded }: { week: any; setWeek: (w: any) => void; exercises: any[]; onCopyDayToFuture?: (dayIdx: number) => void; hideHeader?: boolean; compact?: boolean; dayKeyPrefix?: string; blockId?: string | null; blockStartDate?: string | null; blockEndDate?: string | null; onExtraDayAdded?: () => void }) {
   const days = week.days || [];
   const addDay = () => {
     const nextIdx = (days[days.length - 1]?.day_index ?? 0) + 1;
@@ -1631,9 +1640,19 @@ function WeekEditor({ week, setWeek, exercises, onCopyDayToFuture, hideHeader, c
   return (
     <div className="space-y-3">
       {!hideHeader && (
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <Input className="max-w-xs" placeholder="Week notes" value={week.notes ?? ""} onChange={(e) => setWeek({ ...week, notes: e.target.value })} />
           <Button size="sm" variant="outline" onClick={addDay}><Plus className="mr-1 h-3 w-3" /> Day</Button>
+          {blockId && week._dbId && (
+            <AddExtraDayDialog
+              weekId={week._dbId}
+              blockId={blockId}
+              existingDayCount={days.length}
+              blockStartDate={blockStartDate}
+              blockEndDate={blockEndDate}
+              onAdded={onExtraDayAdded}
+            />
+          )}
         </div>
       )}
       {hideHeader && days.length === 0 && (
@@ -1645,9 +1664,20 @@ function WeekEditor({ week, setWeek, exercises, onCopyDayToFuture, hideHeader, c
         const dKey = `${dayKeyPrefix ?? `wk${week.week_index ?? 0}`}:d${d.day_index ?? i}`;
         return (
         <Card key={i} className={cn("border-l-[3px] border-l-primary/40", compact ? "p-2" : "p-3")}>
-          <div className={cn("flex items-center gap-2", compact ? "mb-1" : "mb-2")}>
+          <div className={cn("flex items-center gap-2 flex-wrap", compact ? "mb-1" : "mb-2")}>
             <Input className={cn("max-w-xs font-bold", compact && "h-7 text-xs")} value={d.title ?? ""} onChange={(e) => { const copy = [...days]; copy[i] = { ...d, title: e.target.value }; setWeek({ ...week, days: copy }); }} />
             <Input className={cn("max-w-xs", compact && "h-7 text-xs")} placeholder="Focus" value={d.focus ?? ""} onChange={(e) => { const copy = [...days]; copy[i] = { ...d, focus: e.target.value }; setWeek({ ...week, days: copy }); }} />
+            {/* Scheduled date — required for extra/peak days to show on the correct calendar date */}
+            <div className="flex items-center gap-1">
+              <span className="text-xs text-muted-foreground whitespace-nowrap">Date:</span>
+              <input
+                type="date"
+                className={cn("border border-input rounded-md bg-background px-2 text-xs h-7 focus:outline-none focus:ring-1 focus:ring-ring", !d.scheduled_date && "text-muted-foreground")}
+                value={d.scheduled_date ?? ""}
+                onChange={(e) => { const copy = [...days]; copy[i] = { ...d, scheduled_date: e.target.value || null }; setWeek({ ...week, days: copy }); }}
+                title="Set the actual calendar date for this workout. Required for extra/peak days."
+              />
+            </div>
             <span className="inline-flex items-center gap-1 rounded-full bg-secondary px-2 py-0.5 text-xs text-secondary-foreground">
               <Clock className="h-3 w-3" /> {durationRange(dayMinutes)}
             </span>
