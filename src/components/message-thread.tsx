@@ -614,6 +614,15 @@ export function MessageThread({
   const [messageType, setMessageType] = useState("General");
   const [internalNote, setInternalNote] = useState(false);
   const [priority, setPriority] = useState<string>("Normal");
+  // Peer typing indicator (iMessage-style). Set via Realtime broadcast.
+  const [peerTyping, setPeerTyping] = useState(false);
+  const peerTypingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const typingChannelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
+  const lastTypingSentRef = useRef(0);
+  // Dedupe reaction toggles: touch double-tap + synthesized dblclick can both
+  // fire, flipping the reaction off immediately after adding it. This ref
+  // ignores repeat toggles on the same message within ~600ms.
+  const lastReactionAtRef = useRef<Map<string, number>>(new Map());
   const scrollerRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
