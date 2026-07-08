@@ -1114,6 +1114,7 @@ function WorkoutDay({
           payload: {
             day_id: dayId,
             client_id: client.id,
+            scheduled_workout_id: scheduledWorkoutId,
             client_notes: value.notes || null,
             actual_duration_min: value.actualMin ? parseInt(value.actualMin) : null,
           },
@@ -1126,6 +1127,7 @@ function WorkoutDay({
         data: {
           kind: "client",
           dayId,
+          scheduledWorkoutId,
           clientNotes: notes || null,
           actualDurationMin: actualMin ? parseInt(actualMin) : null,
           actAsClientId: isImpersonating && client?.id ? client.id : null,
@@ -1431,6 +1433,7 @@ function WorkoutDay({
                           data: {
                             kind: "client",
                             dayId,
+                          scheduledWorkoutId,
                             actAsClientId: isImpersonating && client?.id ? client.id : null,
                           } as any,
                         });
@@ -1449,7 +1452,7 @@ function WorkoutDay({
             {completion?.completed_at && client?.id && (
               <div className="mx-auto max-w-3xl px-4 pb-4">
                 <CompletedWorkoutActions
-                  ctx={{ kind: "client", dayId }}
+                  ctx={{ kind: "client", dayId, scheduledWorkoutId }}
                   hasCoach
                   actAsClientId={isImpersonating ? client.id : null}
                   initialReview={
@@ -1808,6 +1811,7 @@ function WorkoutDay({
                     data: {
                       kind: "client",
                       dayId,
+                      scheduledWorkoutId,
                       actAsClientId: isImpersonating && client?.id ? client.id : null,
                     } as any,
                   });
@@ -1826,7 +1830,7 @@ function WorkoutDay({
 
         {completion?.completed_at && client?.id && (
           <CompletedWorkoutActions
-            ctx={{ kind: "client", dayId }}
+            ctx={{ kind: "client", dayId, scheduledWorkoutId }}
             hasCoach
             actAsClientId={isImpersonating ? client.id : null}
             initialReview={
@@ -1930,6 +1934,7 @@ function WorkoutDay({
                   payload: {
                     kind: "client",
                     dayId,
+                    scheduledWorkoutId,
                     requiredRows,
                     activityTimestamps: heartbeats,
                     completionMethod: "manual",
@@ -1997,6 +2002,7 @@ function WorkoutDay({
                   : {
                       kind: "client" as const,
                       dayId,
+                      scheduledWorkoutId,
                       requiredRows,
                       activityTimestamps: heartbeats,
                       completionMethod: "manual",
@@ -2047,6 +2053,7 @@ function WorkoutDay({
                     data: {
                       kind: "client",
                       dayId,
+                      scheduledWorkoutId,
                       overallRating: payload.session_rating,
                       sessionRpe: payload.session_rating * 2, // map 1-5 → 2-10
                       pain: payload.pain ?? false,
