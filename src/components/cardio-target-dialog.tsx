@@ -166,6 +166,9 @@ export function CardioTargetDialog({ open, onOpenChange, clientId, clients = [],
     toast.success(form.id ? "Updated" : "Created");
     qc.invalidateQueries({ queryKey: ["cardio-targets"] });
     qc.invalidateQueries({ queryKey: ["cardio-targets", form.client_id] });
+    qc.invalidateQueries({ queryKey: ["cal-client-cardio", form.client_id] });
+    qc.invalidateQueries({ queryKey: ["client-cardio-resolved", form.client_id] });
+    qc.invalidateQueries({ queryKey: ["week-sched-data"] });
     onOpenChange(false);
   };
 

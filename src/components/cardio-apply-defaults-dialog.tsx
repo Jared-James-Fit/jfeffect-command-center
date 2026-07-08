@@ -381,6 +381,7 @@ export function CardioApplyDefaultsDialog({
       qc.invalidateQueries({ queryKey: ["cardio-targets"] });
       qc.invalidateQueries({ queryKey: ["client-prefs-cardio-dialog", clientId] });
       qc.invalidateQueries({ queryKey: ["cal-client-cardio", clientId] });
+      qc.invalidateQueries({ queryKey: ["client-cardio-resolved", clientId] });
       qc.invalidateQueries({ queryKey: ["week-sched-data"] });
       onOpenChange(false);
     } catch (e: any) {

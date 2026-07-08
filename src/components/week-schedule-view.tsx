@@ -442,6 +442,7 @@ function HighDayRescheduleMenu({
   const invalidate = () => {
     qc.invalidateQueries({ queryKey: ["week-sched-data"] });
     qc.invalidateQueries({ queryKey: ["cal-client-cardio", clientId] });
+    qc.invalidateQueries({ queryKey: ["client-cardio-resolved", clientId] });
   };
   const changeRecurring = async (d: WeekDay) => {
     try {

@@ -74,6 +74,9 @@ export function CardioTargetsPanel({ clientId }: { clientId: string }) {
     const { error } = await supabase.from("cardio_targets").delete().eq("id", t.id);
     if (error) return toast.error(error.message);
     qc.invalidateQueries({ queryKey: ["cardio-targets", clientId] });
+    qc.invalidateQueries({ queryKey: ["cal-client-cardio", clientId] });
+    qc.invalidateQueries({ queryKey: ["client-cardio-resolved", clientId] });
+    qc.invalidateQueries({ queryKey: ["week-sched-data"] });
     toast.success("Deleted");
   };
 
@@ -82,6 +85,9 @@ export function CardioTargetsPanel({ clientId }: { clientId: string }) {
     const { error } = await supabase.from("cardio_targets").insert({ ...rest, status: "Active" });
     if (error) return toast.error(error.message);
     qc.invalidateQueries({ queryKey: ["cardio-targets", clientId] });
+    qc.invalidateQueries({ queryKey: ["cal-client-cardio", clientId] });
+    qc.invalidateQueries({ queryKey: ["client-cardio-resolved", clientId] });
+    qc.invalidateQueries({ queryKey: ["week-sched-data"] });
     toast.success("Duplicated");
   };
 
@@ -106,6 +112,9 @@ export function CardioTargetsPanel({ clientId }: { clientId: string }) {
       setRenameOpen(true);
     }
     qc.invalidateQueries({ queryKey: ["cardio-targets", clientId] });
+    qc.invalidateQueries({ queryKey: ["cal-client-cardio", clientId] });
+    qc.invalidateQueries({ queryKey: ["client-cardio-resolved", clientId] });
+    qc.invalidateQueries({ queryKey: ["week-sched-data"] });
     toast.success(`Synced with nutrition day types${inserts.length ? ` · created ${inserts.length}` : ""}`);
   };
 

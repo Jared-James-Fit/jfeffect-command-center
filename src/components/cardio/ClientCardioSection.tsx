@@ -17,7 +17,6 @@ import { Card } from "@/components/ui/card";
 import { Loader2, Heart } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { CardioCompletionCard } from "./CardioCompletionCard";
-import { dayTypeLabel } from "@/lib/training-schedule";
 import { getClientWorkouts } from "@/lib/pl-programs";
 import { mondayWeekDates, resolveClientWeekDays, resolveWorkoutDatesFromItems } from "@/lib/resolved-client-days";
 import { parseLocalDate, todayLocalISO, toLocalISO } from "@/lib/today";
