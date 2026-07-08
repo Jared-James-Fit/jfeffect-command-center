@@ -517,7 +517,7 @@ export const rescheduleFromCommittedDays = createServerFn({ method: "POST" })
         if (a.target === "instance" && a.instanceId) {
           await supabaseAdmin
             .from("pl_scheduled_workouts")
-            .update({ scheduled_date: a.prev, schedule_source: "auto" })
+            .update({ scheduled_date: a.prev ?? undefined, schedule_source: "auto" })
             .eq("id", a.instanceId);
         } else {
           await supabaseAdmin
