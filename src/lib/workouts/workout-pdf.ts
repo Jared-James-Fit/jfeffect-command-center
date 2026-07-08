@@ -103,7 +103,15 @@ export type FullTrainingReportData = {
 function fmtDate(iso?: string | null) {
   if (!iso) return null;
   try {
-    return new Date(iso).toLocaleDateString(undefined, {
+    // DATE columns arrive as "YYYY-MM-DD" and must be treated as a local
+    // calendar day. `new Date("YYYY-MM-DD")` parses as UTC midnight, which
+    // renders as the previous day for any user west of UTC (Ashley/Jared).
+    // Full timestamps still parse normally.
+    const dateOnly = /^\d{4}-\d{2}-\d{2}$/.exec(String(iso));
+    const d = dateOnly
+      ? new Date(Number(dateOnly[0].slice(0, 4)), Number(dateOnly[0].slice(5, 7)) - 1, Number(dateOnly[0].slice(8, 10)))
+      : new Date(iso);
+    return d.toLocaleDateString(undefined, {
       year: "numeric",
       month: "short",
       day: "numeric",
