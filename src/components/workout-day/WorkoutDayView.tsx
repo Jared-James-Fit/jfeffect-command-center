@@ -2009,6 +2009,19 @@ function WorkoutDay({
               // immediately — prevents the stuck state where Finish Workout
               // button remains visible after completion.
               await qc.refetchQueries({ queryKey: ["pl-day-completion", dayId] });
+              // Broaden invalidation so the outer workout list, dashboard
+              // today card, and schedule surfaces flip to "Completed"
+              // immediately after submit — not on next reload.
+              if (client?.id) {
+                await Promise.all([
+                  qc.invalidateQueries({ queryKey: ["my-workouts", client.id] }),
+                  qc.invalidateQueries({ queryKey: ["workouts-experience-client", client.id] }),
+                  qc.invalidateQueries({ queryKey: ["workouts-priority-rows", client.id] }),
+                  qc.invalidateQueries({ queryKey: ["portal-workouts-client"] }),
+                  qc.invalidateQueries({ queryKey: ["schedule"] }),
+                  qc.invalidateQueries({ queryKey: ["resolved-client-days"] }),
+                ]);
+              }
 
               // Submit the post-workout review if any review fields were filled in
               const hasReviewData = payload.strength_feel || payload.fatigue_feel ||
