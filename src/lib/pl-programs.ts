@@ -1,4 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
+import { mergeScheduledInstances } from "@/lib/scheduled-instances-merge";
 
 // ---------- Types ----------
 export type PrepStatus = "Planned" | "Active" | "Completed" | "Archived";
