@@ -13245,6 +13245,44 @@ export type Database = {
           },
         ]
       }
+      pl_completion_link_review: {
+        Row: {
+          candidate_count: number
+          client_id: string
+          completion_id: string
+          created_at: string
+          day_id: string
+          id: string
+          reason: string
+        }
+        Insert: {
+          candidate_count: number
+          client_id: string
+          completion_id: string
+          created_at?: string
+          day_id: string
+          id?: string
+          reason: string
+        }
+        Update: {
+          candidate_count?: number
+          client_id?: string
+          completion_id?: string
+          created_at?: string
+          day_id?: string
+          id?: string
+          reason?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pl_completion_link_review_completion_id_fkey"
+            columns: ["completion_id"]
+            isOneToOne: false
+            referencedRelation: "pl_day_completions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       pl_day_completions: {
         Row: {
           active_duration_seconds: number | null
@@ -13267,6 +13305,7 @@ export type Database = {
             | Database["public"]["Enums"]["workout_logging_quality"]
             | null
           required_sets_count: number | null
+          scheduled_workout_id: string | null
           session_rating: number | null
           session_weight_total: number | null
           session_weight_unit: string | null
@@ -13295,6 +13334,7 @@ export type Database = {
             | Database["public"]["Enums"]["workout_logging_quality"]
             | null
           required_sets_count?: number | null
+          scheduled_workout_id?: string | null
           session_rating?: number | null
           session_weight_total?: number | null
           session_weight_unit?: string | null
@@ -13323,6 +13363,7 @@ export type Database = {
             | Database["public"]["Enums"]["workout_logging_quality"]
             | null
           required_sets_count?: number | null
+          scheduled_workout_id?: string | null
           session_rating?: number | null
           session_weight_total?: number | null
           session_weight_unit?: string | null
@@ -13336,6 +13377,13 @@ export type Database = {
             columns: ["day_id"]
             isOneToOne: false
             referencedRelation: "pl_days"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pl_day_completions_scheduled_workout_id_fkey"
+            columns: ["scheduled_workout_id"]
+            isOneToOne: false
+            referencedRelation: "pl_scheduled_workouts"
             referencedColumns: ["id"]
           },
         ]
