@@ -92,6 +92,7 @@ export function QuickActionsMenu({ r }: { r: DirectoryRow }) {
   const [assignOpen, setAssignOpen] = useState(false);
   const [archiveOpen, setArchiveOpen] = useState(false);
   const [sellOpen, setSellOpen] = useState(false);
+  const [scheduleOpen, setScheduleOpen] = useState(false);
   const pdfs = useClientPdfDownloads(r);
   return (
     <>
@@ -143,6 +144,11 @@ export function QuickActionsMenu({ r }: { r: DirectoryRow }) {
             <CalendarDays className="h-4 w-4" /> View Schedule
           </Link>
         </DropdownMenuItem>
+        {hasProgram && (
+          <DropdownMenuItem onSelect={(e) => { e.preventDefault(); setScheduleOpen(true); }}>
+            <Plus className="mr-2 h-4 w-4" /> Schedule Workout
+          </DropdownMenuItem>
+        )}
         <DropdownMenuItem onSelect={(e) => { e.preventDefault(); setArchiveOpen(true); }}>
           <Archive className="mr-2 h-4 w-4" /> Workout Archive
         </DropdownMenuItem>
@@ -231,6 +237,12 @@ export function QuickActionsMenu({ r }: { r: DirectoryRow }) {
     <QuickSellSheet
       open={sellOpen}
       onOpenChange={setSellOpen}
+      clientId={r.id}
+      clientName={r.full_name}
+    />
+    <ScheduleWorkoutSheet
+      open={scheduleOpen}
+      onOpenChange={setScheduleOpen}
       clientId={r.id}
       clientName={r.full_name}
     />
