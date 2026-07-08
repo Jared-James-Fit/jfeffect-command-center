@@ -8,8 +8,9 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
-import { ArrowLeft, ExternalLink, CheckCircle2, AlertTriangle, FileSignature } from "lucide-react";
+import { ArrowLeft, ExternalLink, CheckCircle2, AlertTriangle, FileSignature, Receipt, FileText, Download } from "lucide-react";
 import { toast } from "sonner";
+import { resolvePaymentDisplay, formatMoney } from "@/lib/payment-display";
 
 export const Route = createFileRoute("/_authenticated/portal/purchases/$id")({ component: ClientPurchase });
 
@@ -25,9 +26,25 @@ function ClientPurchase() {
     queryFn: async () => (await supabase.from("purchase_records").select("*, clients(full_name, email, agreement_signed, agreement_signed_date, agreement_version, agreement_link)").eq("id", id).single()).data,
   });
 
+  const { data: latestLedger } = useQuery({
+    queryKey: ["my-purchase-ledger", id],
+    queryFn: async () =>
+      (
+        await supabase
+          .from("payment_ledger")
+          .select("method, receipt_url, hosted_invoice_url, invoice_pdf_url, transaction_date, voided")
+          .eq("purchase_id", id)
+          .eq("voided", false)
+          .order("transaction_date", { ascending: false })
+          .limit(1)
+          .maybeSingle()
+      ).data,
+  });
+
   if (!r) return <div className="p-10 text-muted-foreground">Loading…</div>;
 
   const c = r.clients as any;
+  const d = resolvePaymentDisplay({ ...r, latest_ledger: latestLedger ?? null });
   const accept = async () => {
     setBusy(true);
     const { error } = await supabase.from("purchase_records").update({
@@ -48,7 +65,7 @@ function ClientPurchase() {
   };
 
   const accepted = r.terms_accepted;
-  const paid = r.payment_status === "Paid";
+  const paid = d.isPaidInFull || d.status === "paid" || d.status === "active_subscription";
 
   return (
     <>
@@ -66,22 +83,66 @@ function ClientPurchase() {
               <CheckCircle2 className="h-6 w-6 text-primary" />
               <div>
                 <div className="font-bold">Purchase confirmed</div>
-                <div className="text-xs text-muted-foreground">Paid on {r.paid_at ? new Date(r.paid_at).toLocaleString() : "—"}</div>
+                <div className="text-xs text-muted-foreground">
+                  Paid on {d.paymentDate ? new Date(d.paymentDate).toLocaleString() : "—"}
+                  {d.paymentMethodLabel ? ` · ${d.paymentMethodLabel}` : ""}
+                </div>
               </div>
             </Card>
           )}
 
-          <Card className="border-border bg-card p-6 space-y-2">
-            <div className="text-xs uppercase tracking-widest text-muted-foreground">Amount</div>
-            <div className="text-4xl font-black">{r.currency ?? "USD"} {Number(r.full_payable_amount ?? 0).toLocaleString()}</div>
-            <div className="text-sm text-muted-foreground">{r.payment_structure} {r.payment_frequency ? `· ${r.payment_frequency}` : ""}</div>
-            {r.amount_due_today != null && r.amount_due_today !== r.full_payable_amount && (
-              <div className="text-sm">Due today: <span className="font-bold">{r.currency} {Number(r.amount_due_today).toLocaleString()}</span></div>
+          <Card className="border-border bg-card p-6 space-y-3">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <div className="text-xs uppercase tracking-widest text-muted-foreground">Payment</div>
+                <div className="text-4xl font-black mt-1">{formatMoney(d.amountPaid, d.currency)}</div>
+                <div className="text-xs text-muted-foreground mt-1">paid of {formatMoney(d.contractTotal, d.currency)}</div>
+              </div>
+              <Badge variant="outline" className={d.statusTone}>{d.statusLabel}</Badge>
+            </div>
+
+            {d.amountOutstanding > 0 && (
+              <div className="rounded border border-destructive/30 bg-destructive/5 p-3 text-sm">
+                <span className="text-muted-foreground">Outstanding balance:</span>{" "}
+                <span className="font-semibold text-destructive">{formatMoney(d.amountOutstanding, d.currency)}</span>
+              </div>
+            )}
+
+            {d.nextBillingDate && (
+              <div className="text-sm">
+                <span className="text-muted-foreground">Next payment:</span>{" "}
+                <span className="font-semibold">{new Date(d.nextBillingDate).toLocaleDateString()}</span>
+              </div>
+            )}
+
+            {d.paymentMethodLabel && (
+              <div className="text-xs text-muted-foreground">Method: {d.paymentMethodLabel}</div>
+            )}
+
+            {(d.receiptUrl || d.hostedInvoiceUrl || d.invoicePdfUrl) && (
+              <div className="flex flex-wrap gap-2 pt-2 border-t border-border">
+                {d.receiptUrl && (
+                  <a href={d.receiptUrl} target="_blank" rel="noreferrer">
+                    <Button size="sm" variant="outline"><Receipt className="mr-1 h-3.5 w-3.5" /> Receipt</Button>
+                  </a>
+                )}
+                {d.hostedInvoiceUrl && (
+                  <a href={d.hostedInvoiceUrl} target="_blank" rel="noreferrer">
+                    <Button size="sm" variant="outline"><FileText className="mr-1 h-3.5 w-3.5" /> Invoice</Button>
+                  </a>
+                )}
+                {d.invoicePdfUrl && (
+                  <a href={d.invoicePdfUrl} target="_blank" rel="noreferrer">
+                    <Button size="sm" variant="outline"><Download className="mr-1 h-3.5 w-3.5" /> PDF</Button>
+                  </a>
+                )}
+              </div>
             )}
           </Card>
 
-          {r.short_description && <Card className="border-border bg-card p-6"><p>{r.short_description}</p></Card>}
-          {r.full_description && <Card className="border-border bg-card p-6 whitespace-pre-wrap text-sm">{r.full_description}</Card>}
+          {d.productDescription ? (
+            <Card className="border-border bg-card p-6 whitespace-pre-wrap text-sm">{d.productDescription}</Card>
+          ) : null}
 
           <Card className="border-border bg-card p-6 grid gap-4 sm:grid-cols-2">
             <Field label="Service start" v={r.term_start_date} />
