@@ -402,10 +402,13 @@ export function ScheduleCalendar(props: ScheduleCalendarProps) {
               const list = byDate.get(ymd) ?? [];
               return (
                 <DroppableCell key={ymd} date={date} dim={!isSameMonth(date, cursor)}>
-                  {list.map((chip) => {
+                  {list.map((chip, idx) => {
                     const day = chip.day;
                     const wk = weekMap.get(day.week_id);
                     const blk = wk ? blockMap.get(wk.block_id) : null;
+                    const instChips = list.filter((c) => c.instanceId);
+                    const instIdx = chip.instanceId ? instChips.findIndex((c) => c.chipId === chip.chipId) : -1;
+                    const canReorder = canEdit && !!chip.instanceId && !!onReorder && instChips.length > 1;
                     return (
                       <div key={chip.chipId} onClick={() => onSelectDay?.({ dayId: day.id, instanceId: chip.instanceId })}>
                         <DayChip
@@ -415,6 +418,9 @@ export function ScheduleCalendar(props: ScheduleCalendarProps) {
                           blockName={blk?.name ?? null}
                           comp={chip.comp}
                           draggable={canEdit}
+                          canReorderUp={canReorder && instIdx > 0}
+                          canReorderDown={canReorder && instIdx >= 0 && instIdx < instChips.length - 1}
+                          onNudge={canReorder ? (dir) => handleReorderNudge(chip.chipId, dir) : undefined}
                         />
                       </div>
                     );
