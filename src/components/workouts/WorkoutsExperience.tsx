@@ -816,6 +816,42 @@ function MonthGrid({
 /* Selected day card                                                      */
 /* ---------------------------------------------------------------------- */
 
+function SelectedDayList({
+  items, date, readonly, clientId,
+}: {
+  items: WorkoutItem[];
+  date: Date;
+  readonly: boolean;
+  clientId: string;
+}) {
+  // Render one card per scheduled workout on this date so nothing is
+  // dropped when a client stacks two workouts onto the same day (e.g.
+  // moves a mid-week session onto Friday where a workout already exists).
+  if (items.length === 0) {
+    return (
+      <SelectedDayCard
+        item={null}
+        date={date}
+        readonly={readonly}
+        clientId={clientId}
+      />
+    );
+  }
+  return (
+    <div className="space-y-3">
+      {items.map((it) => (
+        <SelectedDayCard
+          key={it.day?.id ?? Math.random()}
+          item={it}
+          date={date}
+          readonly={readonly}
+          clientId={clientId}
+        />
+      ))}
+    </div>
+  );
+}
+
 function SelectedDayCard({
   item, date, readonly, clientId,
 }: {
