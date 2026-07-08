@@ -26,38 +26,12 @@ import { updatePurchaseTermDates, getPurchaseStripeFailures } from "@/lib/purcha
 import { toast } from "sonner";
 import { SendPaymentRequestDialog } from "@/components/send-payment-request-dialog";
 import { differenceInDays, format, parseISO } from "date-fns";
+import { resolvePaymentDisplay, formatMoney } from "@/lib/payment-display";
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
-function statusTone(s?: string | null) {
-  switch (s) {
-    case "Paid":
-    case "Active Subscription":
-      return "border-green-500/40 text-green-500 bg-green-500/10";
-    case "Overdue":
-    case "Failed":
-    case "Manual Payment Needed":
-      return "border-destructive/40 text-destructive bg-destructive/5";
-    case "Refunded":
-    case "Cancelled":
-    case "Expired":
-      return "border-border text-muted-foreground";
-    default:
-      return "border-warning/40 text-warning bg-warning/5";
-  }
-}
-
 function isPending(s?: string | null) {
   return s !== "Paid" && s !== "Active Subscription" && s !== "Cancelled" && s !== "Refunded";
-}
-
-function requestLabel(s?: string | null) {
-  if (s === "Paid") return "Paid";
-  if (s === "Active Subscription") return "Active subscription";
-  if (s === "Cancelled") return "Cancelled request";
-  if (s === "Refunded") return "Refunded";
-  if (s === "Overdue" || s === "Failed" || s === "Manual Payment Needed") return `Payment ${s.toLowerCase()}`;
-  return "Pending payment setup request";
 }
 
 function expiryStatus(endDate?: string | null): { label: string; tone: string; daysLeft: number } | null {
@@ -353,6 +327,7 @@ export function PurchaseRecordsPanel({ clientId }: { clientId: string }) {
           {records.map((r: any) => {
             const expiry = expiryStatus(r.term_end_date ?? r.package_expiry_date);
             const hasTermDates = !!(r.term_start_date || r.term_end_date);
+            const display = resolvePaymentDisplay(r);
             return (
               <li key={r.id} className="rounded-lg border border-border bg-secondary/20 p-4 space-y-3">
                 {/* Header */}
@@ -362,8 +337,18 @@ export function PurchaseRecordsPanel({ clientId }: { clientId: string }) {
                     <div className="text-xs text-muted-foreground">{r.offer_type} · {new Date(r.purchased_at).toLocaleDateString()}</div>
                   </Link>
                   <div className="flex flex-wrap items-center gap-1.5">
-                    <span className="text-sm font-mono">{r.currency} {Number(r.full_payable_amount ?? 0).toLocaleString()}</span>
-                    <Badge variant="outline" className={statusTone(r.payment_status)}>{requestLabel(r.payment_status)}</Badge>
+                    <span className="text-sm font-mono">{formatMoney(display.contractTotal, display.currency)}</span>
+                    <Badge variant="outline" className={display.statusTone}>{display.statusLabel}</Badge>
+                    {display.amountOutstanding > 0 && (
+                      <Badge variant="outline" className="border-amber-500/40 text-amber-500 bg-amber-500/5">
+                        {formatMoney(display.amountOutstanding, display.currency)} outstanding
+                      </Badge>
+                    )}
+                    {display.nextBillingDate && (
+                      <Badge variant="outline" className="border-border text-muted-foreground">
+                        Next: {format(parseISO(display.nextBillingDate), "MMM d, yyyy")}
+                      </Badge>
+                    )}
                     {r.service_status && r.service_status !== "Not Started" && <Badge variant="outline">{r.service_status}</Badge>}
                     {expiry && (
                       <Badge variant="outline" className={expiry.tone}>

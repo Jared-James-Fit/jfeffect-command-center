@@ -228,3 +228,17 @@ export function formatMoney(amount: number, currency: string): string {
     return `${currency} ${amount.toFixed(2)}`;
   }
 }
+
+/**
+ * Shared tone resolver for ledger-style status strings used by
+ * admin Transactions table + Transaction detail drawer. Keeps colours
+ * consistent with resolvePaymentDisplay statusTone.
+ */
+export function ledgerStatusTone(status: string | null | undefined): string {
+  const s = (status ?? "").toLowerCase();
+  if (s === "paid") return "border-emerald-500/40 text-emerald-500 bg-emerald-500/10";
+  if (s === "refunded" || s === "voided") return "border-amber-500/40 text-amber-500 bg-amber-500/10";
+  if (s === "failed" || s === "past_due" || s === "overdue") return "border-destructive/40 text-destructive bg-destructive/5";
+  if (s === "pending") return "border-blue-500/40 text-blue-500 bg-blue-500/10";
+  return "border-border text-muted-foreground";
+}

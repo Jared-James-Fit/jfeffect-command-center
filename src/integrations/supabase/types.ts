@@ -15324,6 +15324,7 @@ export type Database = {
           amount_refunded_cents: number
           assigned_at: string
           assigned_by: string | null
+          cancel_at_period_end: boolean
           cancellation_policy: string | null
           client_id: string
           confirmation_email_sent_at: string | null
@@ -15343,6 +15344,7 @@ export type Database = {
           last_payment_update_at: string | null
           last_payment_update_source: string | null
           location: string | null
+          next_billing_date: string | null
           number_of_payments: number | null
           offer_id: string | null
           offer_name: string
@@ -15380,6 +15382,7 @@ export type Database = {
           stripe_product_id: string | null
           stripe_receipt_url: string | null
           stripe_subscription_id: string | null
+          stripe_subscription_status: string | null
           term_duration_text: string | null
           term_end_date: string | null
           term_start_date: string | null
@@ -15408,6 +15411,7 @@ export type Database = {
           amount_refunded_cents?: number
           assigned_at?: string
           assigned_by?: string | null
+          cancel_at_period_end?: boolean
           cancellation_policy?: string | null
           client_id: string
           confirmation_email_sent_at?: string | null
@@ -15427,6 +15431,7 @@ export type Database = {
           last_payment_update_at?: string | null
           last_payment_update_source?: string | null
           location?: string | null
+          next_billing_date?: string | null
           number_of_payments?: number | null
           offer_id?: string | null
           offer_name: string
@@ -15464,6 +15469,7 @@ export type Database = {
           stripe_product_id?: string | null
           stripe_receipt_url?: string | null
           stripe_subscription_id?: string | null
+          stripe_subscription_status?: string | null
           term_duration_text?: string | null
           term_end_date?: string | null
           term_start_date?: string | null
@@ -15492,6 +15498,7 @@ export type Database = {
           amount_refunded_cents?: number
           assigned_at?: string
           assigned_by?: string | null
+          cancel_at_period_end?: boolean
           cancellation_policy?: string | null
           client_id?: string
           confirmation_email_sent_at?: string | null
@@ -15511,6 +15518,7 @@ export type Database = {
           last_payment_update_at?: string | null
           last_payment_update_source?: string | null
           location?: string | null
+          next_billing_date?: string | null
           number_of_payments?: number | null
           offer_id?: string | null
           offer_name?: string
@@ -15548,6 +15556,7 @@ export type Database = {
           stripe_product_id?: string | null
           stripe_receipt_url?: string | null
           stripe_subscription_id?: string | null
+          stripe_subscription_status?: string | null
           term_duration_text?: string | null
           term_end_date?: string | null
           term_start_date?: string | null

@@ -653,6 +653,14 @@ export const Route = createFileRoute("/api/public/stripe-webhook")({
                   ...(obj.current_period_end
                     ? { term_end_date: new Date(obj.current_period_end * 1000).toISOString().split("T")[0] }
                     : {}),
+                  // Persist Stripe-derived billing state so downstream
+                  // client/admin surfaces don't re-query Stripe.
+                  stripe_subscription_status: obj.status ?? null,
+                  cancel_at_period_end: !!obj.cancel_at_period_end,
+                  next_billing_date:
+                    obj.current_period_end && (obj.status === "active" || obj.status === "trialing") && !obj.cancel_at_period_end
+                      ? new Date(obj.current_period_end * 1000).toISOString().split("T")[0]
+                      : null,
                   last_payment_update_source: "stripe_webhook",
                   last_payment_update_at: now,
                 }).eq("id", purchase.id);
@@ -718,6 +726,12 @@ export const Route = createFileRoute("/api/public/stripe-webhook")({
                   ...(obj.current_period_end
                     ? { term_end_date: new Date(obj.current_period_end * 1000).toISOString().split("T")[0] }
                     : {}),
+                  stripe_subscription_status: obj.status ?? null,
+                  cancel_at_period_end: !!obj.cancel_at_period_end,
+                  next_billing_date:
+                    obj.current_period_end && (obj.status === "active" || obj.status === "trialing") && !obj.cancel_at_period_end
+                      ? new Date(obj.current_period_end * 1000).toISOString().split("T")[0]
+                      : null,
                   last_payment_update_source: "stripe_webhook",
                   last_payment_update_at: now,
                 }).eq("id", purchase.id);
@@ -750,6 +764,9 @@ export const Route = createFileRoute("/api/public/stripe-webhook")({
                 await supabase.from("purchase_records").update({
                   payment_status: "Cancelled",
                   service_status: "Cancelled",
+                  stripe_subscription_status: "canceled",
+                  cancel_at_period_end: false,
+                  next_billing_date: null,
                   last_payment_update_source: "stripe_webhook",
                   last_payment_update_at: now,
                 }).eq("id", purchase.id);
@@ -844,6 +861,10 @@ export const Route = createFileRoute("/api/public/stripe-webhook")({
                   service_status: "Active",
                   paid_at: now,
                   stripe_receipt_url: obj.hosted_invoice_url ?? purchase.stripe_receipt_url,
+                  // Roll next_billing_date forward from the invoice line period end.
+                  ...(obj.lines?.data?.[0]?.period?.end
+                    ? { next_billing_date: new Date(obj.lines.data[0].period.end * 1000).toISOString().split("T")[0] }
+                    : {}),
                   last_payment_update_source: "stripe_webhook",
                   last_payment_update_at: now,
                 }).eq("id", purchase.id);
