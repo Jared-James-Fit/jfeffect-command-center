@@ -1,6 +1,11 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import {
+  assertInstanceNotCompleted,
+  completedInstanceIds,
+  validateReorderPayload,
+} from "@/lib/schedule-mutation-guards";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Manual Workout Scheduling — server functions for pl_scheduled_workouts.
@@ -296,11 +301,7 @@ export const moveScheduledWorkout = createServerFn({ method: "POST" })
       .select("completed_at")
       .eq("scheduled_workout_id", data.instanceId)
       .maybeSingle();
-    if (comp?.completed_at) {
-      throw new Error(
-        "This workout is already completed and its history is locked. Schedule a new copy on the new date instead of moving the completed one.",
-      );
-    }
+    assertInstanceNotCompleted(comp ?? null);
 
     // Compute next order_index if not provided → append.
     let orderIndex = data.orderIndex;
@@ -415,51 +416,29 @@ export const reorderScheduledWorkouts = createServerFn({ method: "POST" })
       .eq("client_id", data.clientId)
       .eq("scheduled_date", data.date);
     if (exErr) throw new Error(exErr.message);
-    const existingIds = new Set((existing ?? []).map((r: any) => r.id));
-    const requested = new Set(data.orderedInstanceIds);
-    if (requested.size !== data.orderedInstanceIds.length) {
-      throw new Error("Reorder payload contains duplicate instance ids.");
-    }
-    if (
-      existingIds.size !== requested.size ||
-      [...requested].some((id) => !existingIds.has(id))
-    ) {
-      throw new Error(
-        "Reorder payload does not match the current instances for this date. Refresh the schedule and try again.",
-      );
-    }
-
-    // Reject if any of the instances is completed — reordering a completed
-    // instance would change its historical position on the day.
     const { data: comps } = await context.supabase
       .from("pl_day_completions")
       .select("scheduled_workout_id, completed_at")
       .in("scheduled_workout_id", data.orderedInstanceIds);
-    const completedIds = new Set(
-      (comps ?? [])
-        .filter((c: any) => c.completed_at)
-        .map((c: any) => c.scheduled_workout_id as string),
-    );
-    if (completedIds.size > 0) {
-      throw new Error(
-        "One of these workouts is already completed and cannot be reordered.",
-      );
-    }
+    const plan = validateReorderPayload({
+      existingIds: (existing ?? []).map((r: any) => r.id),
+      requestedIds: data.orderedInstanceIds,
+      completed: completedInstanceIds(comps ?? []),
+    });
 
     // Normalize order_index to 0..N-1 in a single pass — no duplicates,
     // no gaps. We write every row (even if its target index is unchanged)
     // to keep the outcome deterministic and easy to test.
-    for (let i = 0; i < data.orderedInstanceIds.length; i++) {
-      const id = data.orderedInstanceIds[i];
+    for (const { id, orderIndex } of plan) {
       const { error } = await context.supabase
         .from("pl_scheduled_workouts")
-        .update({ order_index: i })
+        .update({ order_index: orderIndex })
         .eq("id", id)
         .eq("client_id", data.clientId)
         .eq("scheduled_date", data.date);
       if (error) throw new Error(error.message);
     }
-    return { ok: true as const, normalizedCount: data.orderedInstanceIds.length };
+    return { ok: true as const, normalizedCount: plan.length };
   });
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -494,16 +473,12 @@ export const updateScheduledWorkoutTime = createServerFn({ method: "POST" })
 
     // Slice 2d: completed instances are immutable — time is part of the
     // historical record once logged sets are attached.
-    const { data: comp } = await context.supabase
+    const { data: timeComp } = await context.supabase
       .from("pl_day_completions")
       .select("completed_at")
       .eq("scheduled_workout_id", data.instanceId)
       .maybeSingle();
-    if (comp?.completed_at) {
-      throw new Error(
-        "This workout is already completed. Its scheduled time is locked to preserve history.",
-      );
-    }
+    assertInstanceNotCompleted(timeComp ?? null);
 
     const { error } = await context.supabase
       .from("pl_scheduled_workouts")
