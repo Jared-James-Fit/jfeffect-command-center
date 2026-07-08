@@ -45,9 +45,19 @@ function AnalyticsPage() {
   }, [analyticsFilter, clientBlocks]);
   const filter = analyticsFilter ?? defaultAnalyticsFilter(clientBlocks);
 
-  const history = useMemo(() => buildExerciseHistory(results as any), [results]);
-  const volume = useMemo(() => weeklyMuscleVolume(results as any[], 7), [results]);
-  const prs = useMemo(() => recentPRs(results as any[], 30), [results]);
+  const filteredResults = useMemo(() => {
+    const startMs = filter.start.getTime();
+    const endMs = filter.end.getTime();
+    return (results as any[]).filter((r: any) => {
+      if (!r.date) return false;
+      const t = new Date(r.date).getTime();
+      return t >= startMs && t <= endMs;
+    });
+  }, [results, filter.start, filter.end]);
+  const BIG_DAYS = 365000;
+  const history = useMemo(() => buildExerciseHistory(filteredResults as any), [filteredResults]);
+  const volume = useMemo(() => weeklyMuscleVolume(filteredResults as any[], BIG_DAYS), [filteredResults]);
+  const prs = useMemo(() => recentPRs(filteredResults as any[], BIG_DAYS), [filteredResults]);
   const [selectedEx, setSelectedEx] = useState<string>("");
   const [selectedDot, setSelectedDot] = useState<GraphDotPoint | null>(null);
   const activeEx = selectedEx || history[0]?.name || "";
