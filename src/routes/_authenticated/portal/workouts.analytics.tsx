@@ -399,6 +399,9 @@ function PortalAnalytics() {
             {/* RECENT PRS */}
             {client?.id && (
               <section aria-label="Planned vs Actual">
+                <div className="mb-1 text-[11px] font-semibold text-muted-foreground">
+                  Note: showing the 5 most recent completed workouts (not filtered by {filter.label}).
+                </div>
                 <PlannedVsActualCard
                   clientId={client.id}
                   formula={analyticsSettings?.e1rm_formula}
