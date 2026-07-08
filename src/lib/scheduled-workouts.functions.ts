@@ -191,6 +191,31 @@ export const scheduleWorkouts = createServerFn({ method: "POST" })
       }
     }
 
+    // SAFETY GUARD (Phase 2 pre-instance-completion):
+    // Completion tracking is still keyed by source day_id, so scheduling the
+    // same source workout twice would let one completion satisfy both cards.
+    // Reject any attempt to schedule a source_day_id that already has an
+    // existing scheduled instance for this client. Remove this guard once
+    // pl_day_completions gains a scheduled_workout_id column.
+    {
+      const { data: dupes } = await context.supabase
+        .from("pl_scheduled_workouts")
+        .select("source_day_id")
+        .eq("client_id", data.clientId)
+        .in("source_day_id", data.sourceDayIds);
+      const taken = new Set((dupes ?? []).map((r: any) => r.source_day_id));
+      const collide = data.sourceDayIds.filter((id) => taken.has(id));
+      if (collide.length) {
+        throw new Error(
+          "One or more of these workouts is already on this client's schedule. Move the existing one instead of scheduling a duplicate.",
+        );
+      }
+      const uniq = new Set(data.sourceDayIds);
+      if (uniq.size !== data.sourceDayIds.length) {
+        throw new Error("Cannot schedule the same workout twice in one action.");
+      }
+    }
+
     // Find current max order_index on the target date so new rows stack.
     const { data: existing } = await context.supabase
       .from("pl_scheduled_workouts")
@@ -401,52 +426,15 @@ export const copyScheduledWorkout = createServerFn({ method: "POST" })
       .object({ instanceId: z.string().uuid(), newDate: isoDate })
       .parse(d),
   )
-  .handler(async ({ data, context }) => {
-    const { data: instance } = await context.supabase
-      .from("pl_scheduled_workouts")
-      .select(
-        "id, client_id, source_day_id, scheduled_time, note",
-      )
-      .eq("id", data.instanceId)
-      .maybeSingle();
-    if (!instance) throw new Error("Scheduled workout not found.");
-    const { actor, client } = await resolveActor(context, instance.client_id);
-    if (actor === "client") {
-      const perm = client.workout_scheduling_permission ?? "move";
-      if (perm !== "full_program") {
-        throw new Error("Only your coach can copy a scheduled workout.");
-      }
-    }
-
-    const { data: existing } = await context.supabase
-      .from("pl_scheduled_workouts")
-      .select("order_index")
-      .eq("client_id", instance.client_id)
-      .eq("scheduled_date", data.newDate)
-      .order("order_index", { ascending: false })
-      .limit(1);
-    const nextIdx =
-      (existing?.[0]?.order_index as number | undefined) !== undefined
-        ? (existing![0].order_index as number) + 1
-        : 0;
-
-    const { data: inserted, error } = await context.supabase
-      .from("pl_scheduled_workouts")
-      .insert({
-        client_id: instance.client_id,
-        source_day_id: instance.source_day_id,
-        scheduled_date: data.newDate,
-        scheduled_time: instance.scheduled_time,
-        order_index: nextIdx,
-        schedule_source: "copied",
-        created_by: context.userId,
-        original_date: data.newDate,
-        note: instance.note,
-      })
-      .select("id")
-      .single();
-    if (error) throw new Error(error.message);
-    return { ok: true, id: inserted.id };
+  .handler(async () => {
+    // Disabled until pl_day_completions is instance-scoped. A copy creates a
+    // second scheduled instance of the same source_day_id, which today would
+    // share completion state with the original — completing one would mark
+    // both done. See Phase 2 spec: "either make completions instance-specific
+    // now, or disable duplicate scheduling/copying until that part is safe".
+    throw new Error(
+      "Copy Workout is temporarily disabled while we finish per-instance completion tracking. Use Move, or schedule a different workout on that date.",
+    );
   });
 
 // ─────────────────────────────────────────────────────────────────────────────
