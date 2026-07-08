@@ -280,17 +280,8 @@ function PortalAnalytics() {
     [volume],
   );
 
-  const rangeOptions: SearchableOption[] = [
-    { value: "7", label: "Last 7 days" },
-    { value: "30", label: "Last 30 days" },
-    { value: "90", label: "Last 90 days" },
-    { value: "365", label: "Last year" },
-  ];
-  const volumeRangeOptions: SearchableOption[] = [
-    { value: "7", label: "Last 7 days" },
-    { value: "14", label: "Last 14 days" },
-    { value: "30", label: "Last 30 days" },
-  ];
+  // Range chips removed — the global AnalyticsFilterBar controls date range for
+  // all in-range analytics (PRs, volume, 1RM chart).
 
   // Summary stats (display only; computed from already-loaded data).
   const summary = useMemo(() => {
