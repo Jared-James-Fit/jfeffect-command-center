@@ -133,13 +133,11 @@ export function MoveWorkoutSheet({
   const ctx = ctxQuery.data;
 
   const [target, setTarget] = useState<Date | null>(null);
-  const [confirmCompleted, setConfirmCompleted] = useState(false);
   const [timeInput, setTimeInput] = useState<string>("");
 
   useEffect(() => {
     if (!open) return;
     setTarget(initialTargetDate ?? null);
-    setConfirmCompleted(false);
     setTimeInput((ctx?.instance?.scheduled_time as string | null) ?? "");
   }, [dayId, scheduledWorkoutId, initialTargetDate, open, ctx?.instance?.scheduled_time]);
 
@@ -219,13 +217,12 @@ export function MoveWorkoutSheet({
   }, [ctx, today]);
 
   const moveMutation = useMutation({
-    mutationFn: async (args: { newDate: Date; confirmCompletedMove: boolean }) => {
+    mutationFn: async (args: { newDate: Date }) => {
       if (isInstanceMode) {
         const res = await moveInstanceFn({
           data: {
             instanceId: scheduledWorkoutId!,
             newDate: toYMD(args.newDate),
-            confirmCompletedMove: args.confirmCompletedMove,
           },
         });
         return { ...res, __instance: true as const };
@@ -234,18 +231,12 @@ export function MoveWorkoutSheet({
         data: {
           dayId: dayId!,
           newDate: toYMD(args.newDate),
-          confirmCompletedMove: args.confirmCompletedMove,
         },
       });
       return { ...res, __instance: false as const };
     },
     onSuccess: (res) => {
       if (!res.ok) {
-        if ((res as any).requiresCompletedConfirmation) {
-          setConfirmCompleted(true);
-          toast.warning((res as any).message);
-          return;
-        }
         return;
       }
       if ((res as any).noop) {
@@ -278,7 +269,6 @@ export function MoveWorkoutSheet({
                     newDate: prev.scheduledDate,
                     time: prev.scheduledTime,
                     orderIndex: prev.orderIndex,
-                    confirmCompletedMove: true,
                   },
                 });
                 toast.success("Move undone.");
@@ -383,10 +373,7 @@ export function MoveWorkoutSheet({
 
   const handleConfirm = () => {
     if (!effectiveTarget) return;
-    moveMutation.mutate({
-      newDate: effectiveTarget,
-      confirmCompletedMove: confirmCompleted || !isCompleted,
-    });
+    moveMutation.mutate({ newDate: effectiveTarget });
   };
 
   const title = ctx?.day?.title?.trim() || (ctx ? `Day ${ctx.day.day_index}` : "Workout");
