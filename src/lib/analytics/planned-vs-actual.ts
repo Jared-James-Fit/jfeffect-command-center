@@ -84,6 +84,8 @@ export async function getRecentPlannedVsActual(
     workingRpeMin?: number;
     startDate?: Date | string | null;
     endDate?: Date | string | null;
+    /** When set, only include completions from days inside the block. */
+    blockId?: string | null;
   } = {},
 ): Promise<PlannedVsActualDay[]> {
   const limit = opts.limit ?? 5;
@@ -94,6 +96,17 @@ export async function getRecentPlannedVsActual(
   const startIso = toIso(opts.startDate);
   const endIso = toIso(opts.endDate);
 
+  // Resolve block scope once — pl_day_completions.day_id must be in this set.
+  let blockDayIds: string[] | null = null;
+  if (opts.blockId) {
+    const { data: weeks } = await supabase.from("pl_weeks").select("id").eq("block_id", opts.blockId);
+    const weekIds = (weeks ?? []).map((w: any) => w.id);
+    if (weekIds.length === 0) return [];
+    const { data: days } = await supabase.from("pl_days").select("id").in("week_id", weekIds);
+    blockDayIds = (days ?? []).map((d: any) => d.id);
+    if (blockDayIds.length === 0) return [];
+  }
+
   let completionsQuery = supabase
     .from("pl_day_completions")
     .select("id, day_id, completed_at, pl_days(name, sort_order)")
@@ -101,6 +114,7 @@ export async function getRecentPlannedVsActual(
     .not("completed_at", "is", null);
   if (startIso) completionsQuery = completionsQuery.gte("completed_at", startIso);
   if (endIso) completionsQuery = completionsQuery.lte("completed_at", endIso);
+  if (blockDayIds) completionsQuery = completionsQuery.in("day_id", blockDayIds);
   const { data: completions, error: cErr } = await completionsQuery
     .order("completed_at", { ascending: false })
     .limit(limit);
