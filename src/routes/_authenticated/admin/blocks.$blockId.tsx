@@ -518,7 +518,11 @@ function BlockEditor() {
           </ActionButton>
         </div>
       </div>
-      <BlockSwitcher clientId={clientId} currentBlockId={blockId} />
+      <BlockSwitcher
+        clientId={clientId}
+        currentBlockId={blockId}
+        onBeforeNavigate={dirty ? save : undefined}
+      />
 
       <StructureCanvas
         type="block"

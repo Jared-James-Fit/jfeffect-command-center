@@ -1,7 +1,8 @@
-import { useQuery } from "@tanstack/react-query";
-import { Link } from "@tanstack/react-router";
+import { useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useNavigate } from "@tanstack/react-router";
 import { Layers } from "lucide-react";
-import { listClientBlocks } from "@/lib/pl-programs";
+import { listClientBlocks, getBlockTree } from "@/lib/pl-programs";
 import { cn } from "@/lib/utils";
 
 /**
@@ -17,10 +18,17 @@ import { cn } from "@/lib/utils";
 export function BlockSwitcher({
   clientId,
   currentBlockId,
+  onBeforeNavigate,
 }: {
   clientId: string;
   currentBlockId: string;
+  /** Called before navigating away — use to save unsaved changes. */
+  onBeforeNavigate?: () => Promise<void>;
 }) {
+  const navigate = useNavigate();
+  const qc = useQueryClient();
+  const [switching, setSwitching] = useState<string | null>(null);
+
   const { data: blocks = [] } = useQuery({
     queryKey: ["pl-blocks", clientId],
     queryFn: () => listClientBlocks(clientId),
@@ -29,6 +37,29 @@ export function BlockSwitcher({
 
   if (!blocks.length || blocks.length < 2) return null;
 
+  const handleClick = async (e: React.MouseEvent, blockId: string) => {
+    if (blockId === currentBlockId || switching) return;
+    e.preventDefault();
+    setSwitching(blockId);
+    try {
+      if (onBeforeNavigate) {
+        await onBeforeNavigate();
+      }
+      await navigate({ to: "/admin/blocks/$blockId", params: { blockId } });
+    } finally {
+      setSwitching(null);
+    }
+  };
+
+  const handleMouseEnter = (blockId: string) => {
+    if (blockId === currentBlockId) return;
+    qc.prefetchQuery({
+      queryKey: ["pl-block-tree", blockId],
+      queryFn: () => getBlockTree(blockId),
+      staleTime: 30_000,
+    });
+  };
+
   return (
     <div className="flex w-full items-center gap-1.5 overflow-x-auto py-1 -mx-1 px-1">
       <span className="inline-flex shrink-0 items-center gap-1 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
@@ -36,24 +67,41 @@ export function BlockSwitcher({
       </span>
       {(blocks as any[]).map((b) => {
         const active = b.id === currentBlockId;
+        const isSwitching = switching === b.id;
         return (
-          <Link
+          <button
             key={b.id}
-            to="/admin/blocks/$blockId"
-            params={{ blockId: b.id }}
+            type="button"
+            disabled={!!switching}
             title={`${b.name}${b.start_date ? ` · ${b.start_date}` : ""}`}
+            onClick={(e) => handleClick(e, b.id)}
+            onMouseEnter={() => handleMouseEnter(b.id)}
             className={cn(
               "inline-flex shrink-0 items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-semibold whitespace-nowrap transition-colors",
               active
                 ? "border-primary bg-primary text-primary-foreground shadow-sm"
-                : "border-border bg-secondary/50 text-foreground hover:border-primary/50 hover:bg-secondary",
+                : isSwitching
+                  ? "border-primary/50 bg-secondary opacity-70 cursor-wait"
+                  : "border-border bg-secondary/50 text-foreground hover:border-primary/50 hover:bg-secondary cursor-pointer",
             )}
           >
-            <span className="max-w-[180px] truncate">{b.name}</span>
-            {b.status && !active && (
-              <span className="text-[9px] text-muted-foreground">· {b.status}</span>
+            {isSwitching ? (
+              <>
+                <svg className="h-3 w-3 animate-spin shrink-0" viewBox="0 0 24 24" fill="none">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                </svg>
+                <span className="max-w-[180px] truncate">{b.name}</span>
+              </>
+            ) : (
+              <>
+                <span className="max-w-[180px] truncate">{b.name}</span>
+                {b.status && !active && (
+                  <span className="text-[9px] text-muted-foreground">· {b.status}</span>
+                )}
+              </>
             )}
-          </Link>
+          </button>
         );
       })}
     </div>
