@@ -2772,6 +2772,7 @@ export type Database = {
           facebook: string | null
           first_name: string | null
           food_dislikes: string[] | null
+          full_cardio_rest_days: string[]
           full_name: string
           goals: string | null
           height_cm: number | null
@@ -2952,6 +2953,7 @@ export type Database = {
           facebook?: string | null
           first_name?: string | null
           food_dislikes?: string[] | null
+          full_cardio_rest_days?: string[]
           full_name: string
           goals?: string | null
           height_cm?: number | null
@@ -3132,6 +3134,7 @@ export type Database = {
           facebook?: string | null
           first_name?: string | null
           food_dislikes?: string[] | null
+          full_cardio_rest_days?: string[]
           full_name?: string
           goals?: string | null
           height_cm?: number | null
@@ -11779,6 +11782,47 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
+      }
+      nutrition_day_overrides: {
+        Row: {
+          client_id: string
+          created_at: string
+          created_by: string | null
+          day_label: string
+          id: string
+          notes: string | null
+          override_date: string
+          updated_at: string
+        }
+        Insert: {
+          client_id: string
+          created_at?: string
+          created_by?: string | null
+          day_label: string
+          id?: string
+          notes?: string | null
+          override_date: string
+          updated_at?: string
+        }
+        Update: {
+          client_id?: string
+          created_at?: string
+          created_by?: string | null
+          day_label?: string
+          id?: string
+          notes?: string | null
+          override_date?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "nutrition_day_overrides_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       nutrition_notification_log: {
         Row: {

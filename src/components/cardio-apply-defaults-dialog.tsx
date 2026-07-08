@@ -10,6 +10,8 @@ import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { findDefaultFor, CARDIO_INTENSITIES } from "@/lib/nutrition-cardio";
 import { Lock } from "lucide-react";
+import { WEEK_DAYS, SHORT_DAY, type WeekDay } from "@/lib/training-schedule";
+import { setRecurringHighDays, setFullCardioRestDays, SUNDAY } from "@/lib/high-day-schedule";
 
 type Props = {
   open: boolean;
@@ -136,7 +138,7 @@ export function CardioApplyDefaultsDialog({
     queryFn: async () => {
       const { data } = await supabase
         .from("clients")
-        .select("committed_training_frequency, preferred_training_days, preferred_high_days")
+        .select("committed_training_frequency, preferred_training_days, preferred_high_days, preferred_rest_days, full_cardio_rest_days")
         .eq("id", clientId)
         .maybeSingle();
       return data;
@@ -168,6 +170,40 @@ export function CardioApplyDefaultsDialog({
   const highDaysCount = useMemo(() => {
     return labelCounts["High Day"] ?? (clientPrefs?.preferred_high_days ?? []).length ?? 0;
   }, [labelCounts, clientPrefs]);
+
+  // ── Weekday assignment for High Day ─────────────────────────────────
+  // Source of truth: clients.preferred_high_days. Falls back to Sunday
+  // when the client has one High Day per week but no assigned weekday.
+  const [highDayWeekday, setHighDayWeekday] = useState<WeekDay>(SUNDAY);
+  useEffect(() => {
+    if (!open) return;
+    const existing = (clientPrefs?.preferred_high_days ?? []).find(
+      (d: string) => (WEEK_DAYS as readonly string[]).includes(d),
+    ) as WeekDay | undefined;
+    setHighDayWeekday(existing ?? SUNDAY);
+  }, [open, clientPrefs?.preferred_high_days]);
+
+  // ── Full Cardio Rest weekday (defaults to a non-training, non-high day) ─
+  const [fullRestEnabled, setFullRestEnabled] = useState(false);
+  const [fullRestWeekday, setFullRestWeekday] = useState<WeekDay>("Saturday");
+  useEffect(() => {
+    if (!open) return;
+    const existing = (clientPrefs?.full_cardio_rest_days ?? []).find(
+      (d: string) => (WEEK_DAYS as readonly string[]).includes(d),
+    ) as WeekDay | undefined;
+    if (existing) {
+      setFullRestEnabled(true);
+      setFullRestWeekday(existing);
+    } else {
+      // Default: pick a non-training, non-high weekday
+      const training = new Set<string>(clientPrefs?.preferred_training_days ?? []);
+      const pick = (WEEK_DAYS as readonly WeekDay[]).find(
+        (d) => !training.has(d) && d !== highDayWeekday,
+      );
+      setFullRestEnabled(false);
+      setFullRestWeekday(pick ?? "Saturday");
+    }
+  }, [open, clientPrefs?.full_cardio_rest_days, clientPrefs?.preferred_training_days, highDayWeekday]);
 
   const anyExisting = existing.some(
     (e) => effectiveLabels.includes(e.day_type) && !e.program_name,
@@ -264,9 +300,22 @@ export function CardioApplyDefaultsDialog({
       return;
     }
     setSaving(true);
+    // Adjust Non-Training Day frequency down by 1 when Full Cardio Rest is on,
+    // so the remaining Non-Training days actually get cardio and the rest day
+    // is preserved but excluded from cardio.
+    let effectiveRows = rows;
+    if (fullRestEnabled) {
+      effectiveRows = rows.map((r) => {
+        if (r.day_type === "Rest Day" || r.day_type === "Non-Training Day") {
+          const f = Math.max(0, parseFreq(r.frequency_str) - 1);
+          return { ...r, frequency_str: String(f) };
+        }
+        return r;
+      });
+    }
     const inserts: any[] = [];
     const updates: Array<{ id: string; patch: any }> = [];
-    for (const row of rows) {
+    for (const row of effectiveRows) {
       if (!row.enabled) continue;
       const freq = parseFreq(row.frequency_str);
       if (freq <= 0) continue;
@@ -302,6 +351,19 @@ export function CardioApplyDefaultsDialog({
       }
     }
     try {
+      // Persist weekday assignments FIRST so downstream calendar views resolve
+      // the correct dates even if the target inserts fail later.
+      try {
+        await setRecurringHighDays(clientId, [highDayWeekday]);
+      } catch (err) {
+        // Non-fatal: log but continue with cardio target writes.
+        console.warn("Failed to save High Day weekday", err);
+      }
+      try {
+        await setFullCardioRestDays(clientId, fullRestEnabled ? [fullRestWeekday] : []);
+      } catch (err) {
+        console.warn("Failed to save Full Cardio Rest weekday", err);
+      }
       if (inserts.length) {
         const { error } = await supabase.from("cardio_targets").insert(inserts);
         if (error) throw error;
@@ -317,6 +379,9 @@ export function CardioApplyDefaultsDialog({
       toast.success(msg);
       qc.invalidateQueries({ queryKey: ["cardio-targets", clientId] });
       qc.invalidateQueries({ queryKey: ["cardio-targets"] });
+      qc.invalidateQueries({ queryKey: ["client-prefs-cardio-dialog", clientId] });
+      qc.invalidateQueries({ queryKey: ["cal-client-cardio", clientId] });
+      qc.invalidateQueries({ queryKey: ["week-sched-data"] });
       onOpenChange(false);
     } catch (e: any) {
       toast.error(e.message ?? "Failed to apply defaults");
@@ -362,6 +427,15 @@ export function CardioApplyDefaultsDialog({
           </span>
         </div>
 
+        {/* Compact weekly preview */}
+        <WeeklyPreview
+          trainingDays={clientPrefs?.preferred_training_days ?? []}
+          highDayWeekday={highDayWeekday}
+          fullRestEnabled={fullRestEnabled}
+          fullRestWeekday={fullRestWeekday}
+          rows={rows}
+        />
+
         <ul className="space-y-2">
           {rows.map((row, idx) => {
             const existingRow = findDefaultFor(existing, row.day_type);
@@ -404,6 +478,61 @@ export function CardioApplyDefaultsDialog({
                         </Badge>
                       )}
                     </div>
+
+                    {row.enabled && row.day_type === "High Day" && (
+                      <div className="rounded-md border border-amber-500/30 bg-amber-500/5 px-2 py-1.5 text-[11px]">
+                        <div className="mb-1 font-semibold text-amber-700 dark:text-amber-500">
+                          Scheduled weekday
+                        </div>
+                        <div className="flex flex-wrap gap-1">
+                          {(WEEK_DAYS as readonly WeekDay[]).map((d) => (
+                            <button
+                              key={d}
+                              type="button"
+                              onClick={() => setHighDayWeekday(d)}
+                              className={`h-6 rounded px-2 text-[10px] font-bold uppercase tracking-wider transition-colors ${
+                                highDayWeekday === d
+                                  ? "bg-amber-500 text-white"
+                                  : "border border-border bg-background text-muted-foreground hover:bg-secondary"
+                              }`}
+                            >
+                              {SHORT_DAY[d]}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {row.enabled && (row.day_type === "Rest Day" || row.day_type === "Non-Training Day") && parseFreq(row.frequency_str) >= 2 && (
+                      <div className="rounded-md border border-border bg-background px-2 py-1.5 text-[11px]">
+                        <label className="flex items-center gap-2">
+                          <Checkbox
+                            checked={fullRestEnabled}
+                            onCheckedChange={(v) => setFullRestEnabled(!!v)}
+                          />
+                          <span className="font-semibold">Full Cardio Rest day</span>
+                          <span className="text-muted-foreground">(no cardio prescribed)</span>
+                        </label>
+                        {fullRestEnabled && (
+                          <div className="mt-1.5 flex flex-wrap gap-1">
+                            {(WEEK_DAYS as readonly WeekDay[]).map((d) => (
+                              <button
+                                key={d}
+                                type="button"
+                                onClick={() => setFullRestWeekday(d)}
+                                className={`h-6 rounded px-2 text-[10px] font-bold uppercase tracking-wider transition-colors ${
+                                  fullRestWeekday === d
+                                    ? "bg-muted-foreground text-background"
+                                    : "border border-border bg-background text-muted-foreground hover:bg-secondary"
+                                }`}
+                              >
+                                {SHORT_DAY[d]}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
 
                     {row.enabled && (
                       <div className="grid grid-cols-3 gap-2">
@@ -489,5 +618,71 @@ export function CardioApplyDefaultsDialog({
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  );
+}
+
+function WeeklyPreview({
+  trainingDays,
+  highDayWeekday,
+  fullRestEnabled,
+  fullRestWeekday,
+  rows,
+}: {
+  trainingDays: string[];
+  highDayWeekday: WeekDay;
+  fullRestEnabled: boolean;
+  fullRestWeekday: WeekDay;
+  rows: RowDraft[];
+}) {
+  const trainingSet = new Set(trainingDays);
+  const trainingRow = rows.find((r) => r.day_type === "Training Day" && r.enabled);
+  const highRow = rows.find((r) => r.day_type === "High Day" && r.enabled);
+  const restRow = rows.find(
+    (r) => (r.day_type === "Rest Day" || r.day_type === "Non-Training Day") && r.enabled,
+  );
+  return (
+    <div className="rounded-md border border-border bg-secondary/20 p-2">
+      <div className="mb-1 text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+        Weekly preview
+      </div>
+      <ul className="grid grid-cols-7 gap-1">
+        {(WEEK_DAYS as readonly WeekDay[]).map((d) => {
+          const isTraining = trainingSet.has(d);
+          const isHigh = d === highDayWeekday;
+          const isFullRest = fullRestEnabled && d === fullRestWeekday && !isTraining && !isHigh;
+          let tone = "border-border bg-background text-muted-foreground";
+          let label = "";
+          let sub = "";
+          if (isHigh) {
+            tone = "border-amber-500/50 bg-amber-500/10 text-amber-700 dark:text-amber-500";
+            label = "High";
+            sub = highRow?.cardio_type ?? "";
+          } else if (isTraining) {
+            tone = "border-primary/40 bg-primary/10 text-primary";
+            label = "Training";
+            sub = trainingRow?.cardio_type ?? "";
+          } else if (isFullRest) {
+            tone = "border-muted-foreground/40 bg-muted/40 text-muted-foreground";
+            label = "Rest";
+            sub = "Cardio Rest";
+          } else {
+            tone = "border-border bg-background text-foreground";
+            label = "Non-Training";
+            sub = restRow?.cardio_type ?? "";
+          }
+          return (
+            <li
+              key={d}
+              className={`rounded border p-1 text-center transition-colors ${tone}`}
+              title={`${d} · ${label}${sub ? " · " + sub : ""}`}
+            >
+              <div className="text-[9px] font-black uppercase tracking-widest">{SHORT_DAY[d]}</div>
+              <div className="text-[9px] font-bold leading-tight">{label}</div>
+              {sub && <div className="truncate text-[8px] opacity-80">{sub}</div>}
+            </li>
+          );
+        })}
+      </ul>
+    </div>
   );
 }

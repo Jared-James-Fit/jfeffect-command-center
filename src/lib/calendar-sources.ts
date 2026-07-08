@@ -193,7 +193,7 @@ export function useClientCalendarSources(clientId: string | null | undefined) {
     enabled,
     staleTime: 5 * 60_000,
     queryFn: async () => {
-      const [targetsRes, clientRes] = await Promise.all([
+      const [targetsRes, clientRes, overridesRes] = await Promise.all([
         supabase
           .from("cardio_targets")
           .select("id,day_type,custom_day_type,cardio_type,custom_type,duration_minutes,intensity,frequency_per_week,status,enabled,visible_to_client,client_notes")
@@ -204,13 +204,17 @@ export function useClientCalendarSources(clientId: string | null | undefined) {
           .is("program_name", null),
         supabase
           .from("clients")
-          .select("preferred_training_days,preferred_rest_days,preferred_high_days")
+          .select("preferred_training_days,preferred_rest_days,preferred_high_days,full_cardio_rest_days")
           .eq("id", clientId!)
           .maybeSingle(),
+        (supabase.from("nutrition_day_overrides") as any)
+          .select("override_date,day_label")
+          .eq("client_id", clientId!),
       ]);
       return {
         targets: (targetsRes.data ?? []) as any[],
         schedule: clientRes.data as any,
+        overrides: (overridesRes.data ?? []) as Array<{ override_date: string; day_label: string }>,
       };
     },
   });
@@ -348,12 +352,16 @@ export function useClientCalendarSources(clientId: string | null | undefined) {
     // Generate cardio calendar events for the current week ± 4 weeks
     const cardioTargets = cardioQ.data?.targets ?? [];
     const schedule = cardioQ.data?.schedule;
+    const overridesList = cardioQ.data?.overrides ?? [];
+    const overrideByDate = new Map<string, string>();
+    for (const o of overridesList) overrideByDate.set(o.override_date, o.day_label);
     if (cardioTargets.length > 0) {
       // Day-of-week arrays from client schedule (e.g. ["Monday","Wednesday"])
       const WEEKDAY_NAMES = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
       const trainingDays: string[] = (schedule?.preferred_training_days ?? []).map((d: string) => d.trim());
       const restDays: string[] = (schedule?.preferred_rest_days ?? []).map((d: string) => d.trim());
       const highDays: string[] = (schedule?.preferred_high_days ?? []).map((d: string) => d.trim());
+      const fullRestDays: string[] = (schedule?.full_cardio_rest_days ?? []).map((d: string) => d.trim());
 
       // Map day_type to the relevant day-of-week array
       function daysForType(dayType: string): string[] {
@@ -372,8 +380,11 @@ export function useClientCalendarSources(clientId: string | null | undefined) {
       endOfRange.setDate(startOfRange.getDate() + 35); // 5 weeks
 
       for (const target of cardioTargets) {
+        const isHighTarget = (target.day_type ?? "").toLowerCase().includes("high");
         const targetDays = daysForType(target.day_type ?? "");
-        if (targetDays.length === 0) continue;
+        // High Day targets may still fire via overrides even when the
+        // recurring weekday array is empty — don't early-exit.
+        if (targetDays.length === 0 && !isHighTarget) continue;
         const cardioName = target.cardio_type === "Custom" ? (target.custom_type || "Cardio") : (target.cardio_type || "Cardio");
         const subtitle = [target.duration_minutes ? `${target.duration_minutes} min` : null, target.intensity].filter(Boolean).join(" · ");
 
@@ -381,11 +392,35 @@ export function useClientCalendarSources(clientId: string | null | undefined) {
         const cursor = new Date(startOfRange);
         while (cursor <= endOfRange) {
           const dayName = WEEKDAY_NAMES[cursor.getDay()];
-          if (targetDays.includes(dayName)) {
-            const y = cursor.getFullYear();
-            const m = String(cursor.getMonth() + 1).padStart(2, "0");
-            const d = String(cursor.getDate()).padStart(2, "0");
-            const dateStr = `${y}-${m}-${d}`;
+          const y = cursor.getFullYear();
+          const m = String(cursor.getMonth() + 1).padStart(2, "0");
+          const d = String(cursor.getDate()).padStart(2, "0");
+          const dateStr = `${y}-${m}-${d}`;
+          const overrideLabel = overrideByDate.get(dateStr);
+          const isHighByOverride = overrideLabel === "High Day";
+          // Suppress cardio on a Full Cardio Rest weekday for non-training,
+          // non-high targets. Overrides that mark the day as High still fire.
+          const suppressForRest =
+            !isHighTarget &&
+            (target.day_type ?? "").toLowerCase() !== "training day" &&
+            fullRestDays.includes(dayName) &&
+            !isHighByOverride;
+          // If a date has an override, only the target matching that override
+          // fires. Prevents duplicate cardio when High Day is moved to a day
+          // that would otherwise host a Non-Training Day target.
+          let matches: boolean;
+          if (overrideLabel) {
+            matches =
+              (isHighByOverride && isHighTarget) ||
+              (!isHighByOverride && (target.day_type ?? "") === overrideLabel);
+          } else {
+            // No override on this date: use recurring weekday match, but
+            // never emit a High target on a weekday that is overridden away
+            // (handled above), and never emit non-High on a recurring High
+            // weekday when this date has no override.
+            matches = targetDays.includes(dayName) && !(isHighTarget ? false : highDays.includes(dayName));
+          }
+          if (matches && !suppressForRest) {
             out.push({
               id: `cardio:${target.id}:${dateStr}`,
               kind: "cardio",
