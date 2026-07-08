@@ -6,6 +6,7 @@ import {
   Download, Loader2, ShoppingCart,
 } from "lucide-react";
 import { QuickSellSheet } from "./quick-sell-sheet";
+import { ScheduleWorkoutSheet } from "@/components/schedule/ScheduleWorkoutSheet";
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem,
   DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger,
@@ -250,6 +251,7 @@ export function ClientMoreMenu({
   const [assignOpen, setAssignOpen] = useState(false);
   const [archiveOpen, setArchiveOpen] = useState(false);
   const [sellOpen, setSellOpen] = useState(false);
+  const [scheduleOpen, setScheduleOpen] = useState(false);
   const pdfs = useClientPdfDownloads(r);
   return (
     <>
