@@ -58,21 +58,66 @@ export function createClientAdapter(ref: WorkoutContextRef): WorkoutContextAdapt
       const res = await getClientSchedule({ data: { clientId: ref.ownerId } });
       const weekById = new Map((res.weeks ?? []).map((w: any) => [w.id, w]));
       const blockById = new Map((res.blocks ?? []).map((b: any) => [b.id, b]));
-      const completedByDay = new Map<string, any>();
-      for (const c of res.completions ?? []) {
-        if ((c as any).completed_at) completedByDay.set((c as any).day_id, c);
+      const dayById = new Map((res.days ?? []).map((d: any) => [d.id, d]));
+      const instances = ((res as any).scheduledInstances ?? []) as any[];
+      const completions = ((res.completions ?? []) as any[]);
+
+      // Instance-first completion lookup with legacy fallback.
+      const completionByInstance = new Map<string, any>();
+      const legacyCompletionByDay = new Map<string, any>();
+      for (const c of completions) {
+        if (!c.completed_at) continue;
+        if (c.scheduled_workout_id) completionByInstance.set(c.scheduled_workout_id, c);
+        else legacyCompletionByDay.set(c.day_id, c);
       }
+
+      // Build the set of days that already have an instance so we skip
+      // their legacy scheduled_date row (double-render prevention).
+      const daysWithInstance = new Set<string>();
+      for (const inst of instances) daysWithInstance.add(inst.source_day_id);
+
       const from = opts?.fromDate ?? null;
       const to = opts?.toDate ?? null;
       const out: WorkoutScheduleDay[] = [];
+
+      // Phase 2a: canonical schedule = pl_scheduled_workouts, with legacy
+      // pl_days.scheduled_date only as a fallback for days that lack any
+      // instance (should be empty post-backfill except brand-new writes
+      // that skip the scheduled-workouts table).
+      for (const inst of instances) {
+        const date = inst.scheduled_date as string;
+        if (!date) continue;
+        if (from && date < from) continue;
+        if (to && date > to) continue;
+        const d = dayById.get(inst.source_day_id) as any;
+        if (!d) continue;
+        const week = weekById.get(d.week_id) as any;
+        const block = week ? (blockById.get(week.block_id) as any) : null;
+        const comp = completionByInstance.get(inst.id);
+        out.push({
+          id: `${inst.id}`,
+          date,
+          week: week?.week_index ?? 0,
+          day: d.day_index ?? 0,
+          title: d.title ?? d.focus ?? null,
+          blockId: block?.id ?? null,
+          blockName: block?.name ?? null,
+          completed: !!comp,
+          completedAt: comp?.completed_at ?? null,
+        } as WorkoutScheduleDay);
+      }
+
       for (const d of res.days ?? []) {
         const date: string | null = (d as any).scheduled_date ?? null;
         if (!date) continue;
+        // Skip legacy scheduled_date rows that are already represented by
+        // an instance — the merge rule prevents double-render.
+        if (daysWithInstance.has((d as any).id)) continue;
         if (from && date < from) continue;
         if (to && date > to) continue;
         const week = weekById.get((d as any).week_id) as any;
         const block = week ? (blockById.get(week.block_id) as any) : null;
-        const comp = completedByDay.get((d as any).id);
+        const comp = legacyCompletionByDay.get((d as any).id);
         out.push({
           id: (d as any).id,
           date,
