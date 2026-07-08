@@ -505,8 +505,8 @@ export function WorkoutsExperience({
                     chipsByDate={priorityChipsByDate}
                   />
                 )}
-                <SelectedDayCard
-                  item={byDate.get(toLocalISO(selectedDate)) ?? null}
+                <SelectedDayList
+                  items={byDate.get(toLocalISO(selectedDate)) ?? []}
                   date={selectedDate}
                   readonly={mode === "coach"}
                   clientId={clientId}
@@ -536,7 +536,7 @@ export function WorkoutsExperience({
               // different day updates the cardio target/label. dayContext is
               // only a fallback hint for empty-state copy.
               dayContext={
-                (byDate.get(toLocalISO(selectedDate)) ?? null) ? "training" : "rest"
+                (byDate.get(toLocalISO(selectedDate))?.length ?? 0) > 0 ? "training" : "rest"
               }
               date={selectedDate}
             />
