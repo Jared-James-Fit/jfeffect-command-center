@@ -126,14 +126,30 @@ function PortalAnalytics() {
   const [prFilter, setPrFilter] = useState<string>("all");
   const [selectedDot, setSelectedDot] = useState<GraphDotPoint | null>(null);
 
-  const history = useMemo(() => buildExerciseHistory(results as any), [results]);
+  // Global filter applied to all in-range analytics (kept separate from the
+  // exposure section which does its own range-aware queries).
+  const filteredResults = useMemo(() => {
+    const startMs = filter.start.getTime();
+    const endMs = filter.end.getTime();
+    return (results as any[]).filter((r: any) => {
+      if (!r.date) return false;
+      const t = new Date(r.date).getTime();
+      return t >= startMs && t <= endMs;
+    });
+  }, [results, filter.start, filter.end]);
+
+  const BIG_DAYS = 365000; // effectively lifetime — filtering already happened
+  const history = useMemo(
+    () => buildExerciseHistory(filteredResults as any),
+    [filteredResults],
+  );
   const volume = useMemo(
-    () => weeklyMuscleVolume(results as any[], volumeDays),
-    [results, volumeDays],
+    () => weeklyMuscleVolume(filteredResults as any[], BIG_DAYS),
+    [filteredResults],
   );
   const prs = useMemo(
-    () => recentPRs(results as any[], rangeDays),
-    [results, rangeDays],
+    () => recentPRs(filteredResults as any[], BIG_DAYS),
+    [filteredResults],
   );
 
   const activeEx = selectedEx || history[0]?.name || "";
