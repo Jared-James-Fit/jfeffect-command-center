@@ -9,6 +9,20 @@ export type WorkoutItem = {
   completion: any;
   /** Count of logged sets for this day; >0 with no completion = in-progress. */
   logged_sets_count?: number;
+  /**
+   * Instance-level scheduling fields (Phase 2a canonical merge).
+   *
+   * When this item was emitted by the pl_scheduled_workouts merge, these
+   * fields carry the instance identity. When the item is a legacy fallback
+   * (a pl_days.scheduled_date row with no matching instance) or an
+   * unscheduled placeholder, `scheduledWorkoutId` is null.
+   */
+  scheduledWorkoutId?: string | null;
+  /** yyyy-mm-dd — canonical date from the instance, or legacy pl_days.scheduled_date. */
+  scheduledDate?: string | null;
+  scheduledTime?: string | null;
+  scheduleOrderIndex?: number;
+  scheduleSource?: "program" | "manual" | "moved" | "copied" | "legacy" | null;
 };
 
 export type TodayState =
