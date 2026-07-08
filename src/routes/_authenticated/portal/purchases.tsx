@@ -6,23 +6,10 @@ import { usePortalUserId } from "@/lib/client-impersonation";
 import { PageHeader } from "@/components/app-shell";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { ChevronRight } from "lucide-react";
+import { ChevronRight, Receipt } from "lucide-react";
 import { toast } from "sonner";
 import { isNative } from "@/platform";
-
-function statusBadgeClass(s?: string | null) {
-  if (s === "Paid" || s === "Active Subscription") return "border-green-500/40 text-green-500 bg-green-500/10";
-  if (s === "Overdue" || s === "Failed" || s === "Manual Payment Needed") return "border-destructive/40 text-destructive bg-destructive/5";
-  if (s === "Cancelled" || s === "Refunded" || s === "Expired") return "border-border text-muted-foreground";
-  return "border-warning/40 text-warning bg-warning/5";
-}
-function statusLabel(s?: string | null) {
-  if (s === "Paid") return "Paid · Active";
-  if (s === "Active Subscription") return "Active subscription";
-  if (s === "Cancelled") return "Cancelled";
-  if (!s || s === "Not Sent" || s === "Sent" || s === "Pending") return "Payment setup needed";
-  return s;
-}
+import { resolvePaymentDisplay, formatMoney } from "@/lib/payment-display";
 
 export const Route = createFileRoute("/_authenticated/portal/purchases")({
   component: MyPurchases,
@@ -63,6 +50,25 @@ function MyPurchases() {
       ).data ?? [],
   });
 
+  // Pull latest non-voided ledger row per purchase — used for receipt/method.
+  const { data: ledgerByPurchase = {} } = useQuery({
+    queryKey: ["my-purchases-ledger", client?.id],
+    enabled: !!client?.id,
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("payment_ledger")
+        .select("purchase_id, method, receipt_url, hosted_invoice_url, invoice_pdf_url, transaction_date, voided")
+        .eq("client_id", client!.id)
+        .eq("voided", false)
+        .order("transaction_date", { ascending: false });
+      const map: Record<string, any> = {};
+      for (const row of data ?? []) {
+        if (row.purchase_id && !map[row.purchase_id]) map[row.purchase_id] = row;
+      }
+      return map;
+    },
+  });
+
   return (
     <>
       <PageHeader
@@ -80,23 +86,58 @@ function MyPurchases() {
             </Card>
           ) : (
             <div className="space-y-3">
-              {records.map((r: any) => (
-                <Link key={r.id} to="/portal/purchases/$id" params={{ id: r.id }}>
-                  <Card className="border-border bg-card p-4 hover:bg-secondary/30 transition flex items-center justify-between">
-                    <div>
-                      <div className="font-bold">{r.offer_name}</div>
-                      <div className="text-xs text-muted-foreground">
-                        {r.offer_type} · {new Date(r.purchased_at).toLocaleDateString()}
+              {records.map((r: any) => {
+                const d = resolvePaymentDisplay({ ...r, latest_ledger: ledgerByPurchase[r.id] ?? null });
+                return (
+                  <Link key={r.id} to="/portal/purchases/$id" params={{ id: r.id }}>
+                    <Card className="border-border bg-card p-4 hover:bg-secondary/30 transition">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0 flex-1">
+                          <div className="font-bold truncate">{d.productName}</div>
+                          <div className="text-xs text-muted-foreground">
+                            {r.offer_type ? `${r.offer_type} · ` : ""}
+                            {new Date(r.purchased_at).toLocaleDateString()}
+                          </div>
+                          <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs">
+                            <span>
+                              <span className="text-muted-foreground">Paid:</span>{" "}
+                              <span className="font-semibold">{formatMoney(d.amountPaid, d.currency)}</span>
+                            </span>
+                            {d.amountOutstanding > 0 && (
+                              <span>
+                                <span className="text-muted-foreground">Outstanding:</span>{" "}
+                                <span className="font-semibold text-destructive">{formatMoney(d.amountOutstanding, d.currency)}</span>
+                              </span>
+                            )}
+                            {d.nextBillingDate && (
+                              <span>
+                                <span className="text-muted-foreground">Next payment:</span>{" "}
+                                <span className="font-semibold">{new Date(d.nextBillingDate).toLocaleDateString()}</span>
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                        <div className="flex flex-col items-end gap-1 shrink-0">
+                          {!r.terms_accepted && <Badge className="bg-gradient-primary">Action needed</Badge>}
+                          <Badge variant="outline" className={d.statusTone}>{d.statusLabel}</Badge>
+                          {d.receiptUrl && (
+                            <a
+                              href={d.receiptUrl}
+                              target="_blank"
+                              rel="noreferrer"
+                              onClick={(e) => e.stopPropagation()}
+                              className="text-[11px] text-primary hover:underline inline-flex items-center gap-1"
+                            >
+                              <Receipt className="h-3 w-3" /> Receipt
+                            </a>
+                          )}
+                          <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                        </div>
                       </div>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      {!r.terms_accepted && <Badge className="bg-gradient-primary">Action needed</Badge>}
-                      <Badge variant="outline" className={statusBadgeClass(r.payment_status)}>{statusLabel(r.payment_status)}</Badge>
-                      <ChevronRight className="h-4 w-4 text-muted-foreground" />
-                    </div>
-                  </Card>
-                </Link>
-              ))}
+                    </Card>
+                  </Link>
+                );
+              })}
             </div>
           )}
         </section>
