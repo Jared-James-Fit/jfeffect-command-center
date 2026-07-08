@@ -24,7 +24,42 @@ import { useScrollRestoration } from "@/lib/scroll-restore";
 import { ClientBuilderIdentityHeader, ClientBuilderStickyChip } from "@/components/builder-identity-header";
 import { BlockSwitcher } from "@/components/block-switcher";
 
-export const Route = createFileRoute("/_authenticated/admin/blocks/$blockId")({ component: BlockEditor });
+export const Route = createFileRoute("/_authenticated/admin/blocks/$blockId")({
+  component: BlockEditor,
+  // Surface the actual error inline instead of the router's generic
+  // "Something went wrong loading this page" fallback. Coaches reporting
+  // "the block won't open" need the underlying message + a working
+  // back-to-clients link — not a bare Try again button.
+  errorComponent: BlockEditorErrorFallback,
+});
+
+function BlockEditorErrorFallback({ error, reset }: { error: Error; reset: () => void }) {
+  // eslint-disable-next-line no-console
+  console.error("[block-editor] route error", error);
+  return (
+    <div className="mx-auto max-w-lg space-y-3 p-8 text-center">
+      <h2 className="text-lg font-semibold">Couldn't open this block</h2>
+      <p className="text-sm text-muted-foreground">
+        {error?.message ?? "The block editor failed to load."}
+      </p>
+      <div className="flex justify-center gap-2">
+        <button
+          type="button"
+          onClick={() => reset()}
+          className="inline-flex items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
+        >
+          Try again
+        </button>
+        <Link
+          to="/admin/clients"
+          className="inline-flex items-center justify-center rounded-md border border-border px-4 py-2 text-sm font-medium hover:bg-muted"
+        >
+          Back to clients
+        </Link>
+      </div>
+    </div>
+  );
+}
 
 // ---------- Tree ↔ payload adapters ----------
 
