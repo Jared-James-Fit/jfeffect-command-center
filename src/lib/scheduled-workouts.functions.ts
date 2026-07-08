@@ -191,6 +191,31 @@ export const scheduleWorkouts = createServerFn({ method: "POST" })
       }
     }
 
+    // SAFETY GUARD (Phase 2 pre-instance-completion):
+    // Completion tracking is still keyed by source day_id, so scheduling the
+    // same source workout twice would let one completion satisfy both cards.
+    // Reject any attempt to schedule a source_day_id that already has an
+    // existing scheduled instance for this client. Remove this guard once
+    // pl_day_completions gains a scheduled_workout_id column.
+    {
+      const { data: dupes } = await context.supabase
+        .from("pl_scheduled_workouts")
+        .select("source_day_id")
+        .eq("client_id", data.clientId)
+        .in("source_day_id", data.sourceDayIds);
+      const taken = new Set((dupes ?? []).map((r: any) => r.source_day_id));
+      const collide = data.sourceDayIds.filter((id) => taken.has(id));
+      if (collide.length) {
+        throw new Error(
+          "One or more of these workouts is already on this client's schedule. Move the existing one instead of scheduling a duplicate.",
+        );
+      }
+      const uniq = new Set(data.sourceDayIds);
+      if (uniq.size !== data.sourceDayIds.length) {
+        throw new Error("Cannot schedule the same workout twice in one action.");
+      }
+    }
+
     // Find current max order_index on the target date so new rows stack.
     const { data: existing } = await context.supabase
       .from("pl_scheduled_workouts")
