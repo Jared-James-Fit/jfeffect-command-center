@@ -17,6 +17,8 @@ import { PurchaseAgreementBadge, computePurchaseAgreementStatus } from "@/compon
 import { useServerFn } from "@tanstack/react-start";
 import { getSignedAgreementUrl } from "@/lib/agreements.functions";
 import { Checkbox } from "@/components/ui/checkbox";
+import { resolvePaymentDisplay, formatMoney } from "@/lib/payment-display";
+import { format, parseISO } from "date-fns";
 
 export const Route = createFileRoute("/_authenticated/admin/purchases/$id")({ component: PurchaseDetail });
 
@@ -43,6 +45,8 @@ function PurchaseDetail() {
       .order("created_at", { ascending: false })).data ?? [],
   });
   if (!form) return <div className="p-10 text-muted-foreground">Loading…</div>;
+
+  const display = resolvePaymentDisplay(form);
 
   const save = async () => {
     const { id: _i, created_at, updated_at, clients, ...patch } = form;
@@ -126,6 +130,32 @@ function PurchaseDetail() {
         <div className="space-y-6">
           <Card className="border-border bg-card p-5 space-y-3">
             <h3 className="text-xs uppercase tracking-widest text-muted-foreground">Payment</h3>
+            <div className="rounded-md border border-border bg-secondary/20 p-3 space-y-1 text-sm">
+              <div className="flex items-center gap-2">
+                <Badge variant="outline" className={display.statusTone}>{display.statusLabel}</Badge>
+                {display.isRecurring && display.nextBillingDate && (
+                  <span className="text-xs text-muted-foreground">
+                    Next: {format(parseISO(display.nextBillingDate), "MMM d, yyyy")}
+                  </span>
+                )}
+              </div>
+              <div className="text-xs">
+                <span className="text-muted-foreground">Paid: </span>
+                <span className="font-semibold">{formatMoney(display.amountPaid, display.currency)}</span>
+                {display.amountOutstanding > 0 && (
+                  <>
+                    <span className="text-muted-foreground"> · Outstanding: </span>
+                    <span className="font-semibold text-amber-600">{formatMoney(display.amountOutstanding, display.currency)}</span>
+                  </>
+                )}
+                {display.amountRefunded > 0 && (
+                  <>
+                    <span className="text-muted-foreground"> · Refunded: </span>
+                    <span className="font-semibold">{formatMoney(display.amountRefunded, display.currency)}</span>
+                  </>
+                )}
+              </div>
+            </div>
             <div>
               <Label>Payment status</Label>
               <Select value={form.payment_status} onValueChange={(v) => set("payment_status", v)}>
