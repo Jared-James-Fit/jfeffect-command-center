@@ -56,33 +56,64 @@ function statusBadge(s: Status) {
   }
 }
 
-function DayChip({ chipId, day, comp, week, blockName, draggable }: {
+function DayChip({ chipId, day, comp, week, blockName, draggable, canReorderUp, canReorderDown, onNudge }: {
   chipId: string;
   day: ScheduleDay; comp: ScheduleCompletion | null;
   week?: ScheduleWeek; blockName?: string | null; draggable: boolean;
+  canReorderUp?: boolean; canReorderDown?: boolean;
+  onNudge?: (direction: -1 | 1) => void;
 }) {
   const id = chipId;
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
     id, disabled: !draggable,
   });
+  // Each chip is ALSO a droppable so a drag can land "onto this chip" — the
+  // parent uses that to distinguish same-cell reorder from cross-date move.
+  const { setNodeRef: setDropRef, isOver } = useDroppable({ id: `chip:${chipId}`, disabled: !draggable });
   const status = statusOf(day, comp);
+  const isCompleted = status === "completed";
   return (
     <div
-      ref={setNodeRef}
-      {...listeners}
-      {...attributes}
+      ref={(el) => { setNodeRef(el); setDropRef(el); }}
       className={cn(
         "group rounded-md border border-border bg-card p-1.5 text-[11px] leading-tight space-y-0.5 select-none",
-        draggable && "cursor-grab active:cursor-grabbing touch-none",
+        draggable && !isCompleted && "cursor-grab active:cursor-grabbing touch-none",
         isDragging && "opacity-50",
-        status === "completed" && "opacity-70",
+        isCompleted && "opacity-70",
+        isOver && "ring-2 ring-primary",
       )}
+      {...(draggable && !isCompleted ? listeners : {})}
+      {...attributes}
     >
       <div className="flex items-center gap-1">
-        {draggable && <GripVertical className="h-3 w-3 text-muted-foreground" />}
+        {draggable && !isCompleted && <GripVertical className="h-3 w-3 text-muted-foreground" />}
         <span className="font-medium truncate flex-1">
           {day.title?.trim() || `Day ${day.day_index}`}
         </span>
+        {onNudge && !isCompleted && (canReorderUp || canReorderDown) && (
+          <span className="flex items-center gap-0.5 opacity-70 group-hover:opacity-100">
+            <button
+              type="button"
+              aria-label="Move up"
+              disabled={!canReorderUp}
+              onClick={(e) => { e.stopPropagation(); onNudge(-1); }}
+              onPointerDown={(e) => e.stopPropagation()}
+              className="rounded p-0.5 hover:bg-secondary disabled:opacity-30"
+            >
+              <ChevronUp className="h-3 w-3" />
+            </button>
+            <button
+              type="button"
+              aria-label="Move down"
+              disabled={!canReorderDown}
+              onClick={(e) => { e.stopPropagation(); onNudge(1); }}
+              onPointerDown={(e) => e.stopPropagation()}
+              className="rounded p-0.5 hover:bg-secondary disabled:opacity-30"
+            >
+              <ChevronDown className="h-3 w-3" />
+            </button>
+          </span>
+        )}
       </div>
       <div className="text-[10px] text-muted-foreground truncate">
         {blockName ? `${blockName} · ` : ""}W{week?.week_index ?? "?"} · D{day.day_index}
