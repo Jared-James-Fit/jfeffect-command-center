@@ -4,7 +4,7 @@ import { useAuth } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
 import {
   LogOut, ChevronLeft, ChevronRight, ChevronDown, Search, Settings as SettingsIcon, ArrowLeft, MoreHorizontal,
-  ChevronsDownUp, ChevronsUpDown, BookOpen, Users, UserCog, IdCard,
+  ChevronsDownUp, ChevronsUpDown, BookOpen, Users, UserCog, IdCard, Pin, PinOff,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { NotificationBell } from "@/components/notification-bell";
@@ -332,7 +332,19 @@ export function AppShell({ items, bottomItems: customBottomItems, title, childre
     if (t.includes("client") || t.includes("portal")) return "client";
     return "admin";
   }, [title]);
-  const { pins, isPinned, count: pinCount } = useSidebarPins(pinScope);
+  const { pins, isPinned, toggle: togglePin, count: pinCount } = useSidebarPins(pinScope);
+  const handleTogglePin = (e: React.MouseEvent, to: string, label: string) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const res = togglePin(to);
+    if (res.full) {
+      toast.error(`Max ${MAX_PINS} pinned shortcuts. Unpin one first.`);
+    } else if (res.pinned) {
+      toast.success(`Pinned "${label}"`);
+    } else {
+      toast.success(`Unpinned "${label}"`);
+    }
+  };
   const isMembershipAdminShell = pinScope === "admin" && title.toLowerCase().includes("membership");
   const navByTo = useMemo(() => {
     const m = new Map<string, NavItem>();
@@ -624,7 +636,20 @@ export function AppShell({ items, bottomItems: customBottomItems, title, childre
                             <TooltipTrigger asChild>{link}</TooltipTrigger>
                             <TooltipContent side="right">📌 {item.label}</TooltipContent>
                           </Tooltip>
-                        ) : link}
+                        ) : (
+                          <div className="relative group/pinrow">
+                            {link}
+                            <button
+                              type="button"
+                              onClick={(e) => handleTogglePin(e, item.to, item.label)}
+                              aria-label={`Unpin ${item.label}`}
+                              title="Unpin"
+                              className="absolute right-1.5 top-1/2 -translate-y-1/2 rounded p-1 text-amber-400 opacity-70 hover:bg-amber-400/10 hover:opacity-100"
+                            >
+                              <PinOff className="h-3.5 w-3.5" />
+                            </button>
+                          </div>
+                        )}
                       </li>
                     );
                   })}
@@ -688,7 +713,25 @@ export function AppShell({ items, bottomItems: customBottomItems, title, childre
                                 <TooltipTrigger asChild>{link}</TooltipTrigger>
                                 <TooltipContent side="right">{item.label}</TooltipContent>
                               </Tooltip>
-                            ) : link}
+                            ) : (
+                              <div className="relative group/navrow">
+                                {link}
+                                <button
+                                  type="button"
+                                  onClick={(e) => handleTogglePin(e, item.to, item.label)}
+                                  aria-label={pinned ? `Unpin ${item.label}` : `Pin ${item.label}`}
+                                  title={pinned ? "Unpin from favorites" : "Pin to favorites"}
+                                  className={cn(
+                                    "absolute right-1.5 top-1/2 -translate-y-1/2 rounded p-1 transition-opacity",
+                                    pinned
+                                      ? "text-amber-400 opacity-70 hover:opacity-100 hover:bg-amber-400/10"
+                                      : "text-muted-foreground opacity-0 hover:bg-sidebar-accent hover:text-foreground group-hover/navrow:opacity-70 focus:opacity-100",
+                                  )}
+                                >
+                                  {pinned ? <PinOff className="h-3.5 w-3.5" /> : <Pin className="h-3.5 w-3.5" />}
+                                </button>
+                              </div>
+                            )}
                           </li>
                         );
                       })}
