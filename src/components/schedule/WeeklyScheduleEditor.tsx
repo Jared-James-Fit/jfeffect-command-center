@@ -8,7 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Loader2, CalendarDays } from "lucide-react";
 import { applyBulkScheduleChange } from "@/lib/schedule-bulk.functions";
-import type { ScheduleDay, ScheduleWeek } from "./ScheduleCalendar";
+import type { ScheduleDay, ScheduleWeek, ScheduledInstance } from "./ScheduleCalendar";
 
 const WEEKDAYS = ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];
 
@@ -20,10 +20,14 @@ export interface WeeklyScheduleEditorProps {
   days: ScheduleDay[];
   weeks: ScheduleWeek[];
   weekId: string;
+  /** Slice 2d: the instance list for this client. Days that already have
+   *  a scheduled instance are blocked here — mutating pl_days would silently
+   *  desync from the canonical schedule the calendar renders. */
+  scheduledInstances?: ScheduledInstance[];
   /** "this" → only this week. "future" → also shift later weeks the same way. */
 }
 
-export function WeeklyScheduleEditor({ days, weeks, weekId }: WeeklyScheduleEditorProps) {
+export function WeeklyScheduleEditor({ days, weeks, weekId, scheduledInstances }: WeeklyScheduleEditorProps) {
   const qc = useQueryClient();
   const apply = useServerFn(applyBulkScheduleChange);
 
@@ -81,12 +85,21 @@ export function WeeklyScheduleEditor({ days, weeks, weekId }: WeeklyScheduleEdit
     return out;
   }, [futureWeekIds, weeks, week, anchor, days, weekDays, assignment]);
 
+  const instanceBackedDayIds = useMemo(() => {
+    const set = new Set<string>();
+    for (const inst of scheduledInstances ?? []) set.add(inst.source_day_id);
+    return set;
+  }, [scheduledInstances]);
+  const instanceBlockedMoves = useMemo(
+    () => moves.filter((m) => instanceBackedDayIds.has(m.dayId)),
+    [moves, instanceBackedDayIds],
+  );
+
   const mutation = useMutation({
     mutationFn: async () => apply({
       data: {
         moves,
         scope: scope === "this" ? "week" : "block",
-        confirmCompletedMove: true,
       },
     }),
     onSuccess: (res: any) => {
@@ -142,11 +155,18 @@ export function WeeklyScheduleEditor({ days, weeks, weekId }: WeeklyScheduleEdit
               <SelectItem value="future">This + future weeks in block</SelectItem>
             </SelectContent>
           </Select>
-          <Button onClick={() => mutation.mutate()} disabled={moves.length === 0 || mutation.isPending}>
+          <Button onClick={() => mutation.mutate()} disabled={moves.length === 0 || mutation.isPending || instanceBlockedMoves.length > 0}>
             {mutation.isPending && <Loader2 className="mr-1 h-4 w-4 animate-spin" />}
             Apply {moves.length} change{moves.length === 1 ? "" : "s"}
           </Button>
         </div>
+        {instanceBlockedMoves.length > 0 && (
+          <div className="rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-xs">
+            {instanceBlockedMoves.length} of these workouts use the new
+            scheduling system. Move them from the workout calendar instead —
+            this weekly editor would silently desync the schedule.
+          </div>
+        )}
       </CardContent>
     </Card>
   );
