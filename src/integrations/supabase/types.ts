@@ -2879,6 +2879,7 @@ export type Database = {
           warmup_protocol_id: string | null
           water_target_locked_by_coach: boolean
           website: string | null
+          workout_scheduling_permission: string
           youtube: string | null
         }
         Insert: {
@@ -3060,6 +3061,7 @@ export type Database = {
           warmup_protocol_id?: string | null
           water_target_locked_by_coach?: boolean
           website?: string | null
+          workout_scheduling_permission?: string
           youtube?: string | null
         }
         Update: {
@@ -3241,6 +3243,7 @@ export type Database = {
           warmup_protocol_id?: string | null
           water_target_locked_by_coach?: boolean
           website?: string | null
+          workout_scheduling_permission?: string
           youtube?: string | null
         }
         Relationships: [
@@ -14001,6 +14004,66 @@ export type Database = {
           {
             foreignKeyName: "pl_schedule_audit_day_id_fkey"
             columns: ["day_id"]
+            isOneToOne: false
+            referencedRelation: "pl_days"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      pl_scheduled_workouts: {
+        Row: {
+          client_id: string
+          created_at: string
+          created_by: string | null
+          id: string
+          note: string | null
+          order_index: number
+          original_date: string | null
+          schedule_source: string
+          scheduled_date: string
+          scheduled_time: string | null
+          source_day_id: string
+          updated_at: string
+        }
+        Insert: {
+          client_id: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          note?: string | null
+          order_index?: number
+          original_date?: string | null
+          schedule_source?: string
+          scheduled_date: string
+          scheduled_time?: string | null
+          source_day_id: string
+          updated_at?: string
+        }
+        Update: {
+          client_id?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          note?: string | null
+          order_index?: number
+          original_date?: string | null
+          schedule_source?: string
+          scheduled_date?: string
+          scheduled_time?: string | null
+          source_day_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pl_scheduled_workouts_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pl_scheduled_workouts_source_day_id_fkey"
+            columns: ["source_day_id"]
             isOneToOne: false
             referencedRelation: "pl_days"
             referencedColumns: ["id"]

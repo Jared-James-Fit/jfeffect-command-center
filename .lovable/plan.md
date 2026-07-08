@@ -1,101 +1,142 @@
 
-# Phase 2 — Media Home, My Work, Tasks, Quick Notes, Eisenhower
+## Goal
 
-Reuses the existing `tasks` table, `media_content_records`, the current `TasksPage` Eisenhower component, and `MediaHeader`. No duplicate task or note systems.
+Add a thin scheduling layer over the existing workout system so coaches can manually place any assigned workout onto any date, multiple workouts can live on the same date, and clients can move their scheduled workouts (with permission controls). Reuse `pl_blocks / pl_weeks / pl_days / pl_exercise_rows / pl_day_completions` — do not duplicate programs, exercises, or completions.
 
-## 1. Database (non-destructive migration)
+## What's already in place (reuse as-is)
 
-Add to existing `public.tasks`:
-- `due_time time` (optional — paired with existing `due_at` date)
-- `important boolean default false`
-- `priority_label text` — `urgent | high | normal | low` (mirrors numeric `priority`)
-- `status_label text` — `not_started | in_progress | waiting | blocked | complete` (existing `status` open/done stays as source of truth; label adds intermediate states)
-- `campaign_id uuid null`
-- `linked_content_id uuid null references media_content_records(id) on delete set null`
-- `linked_asset_id uuid null`
-- `recurring_rule jsonb null` (RRULE-lite: `{freq, interval, until}`)
-- `archived_at timestamptz null`
+- `pl_days.scheduled_date`, `schedule_source` (`auto`|`manual`), `schedule_locked` — move flow already writes these.
+- `MoveWorkoutSheet` — single-workout move with same-day conflict + swap.
+- `moveWorkout`, `swapWorkouts`, `undoScheduleChange`, `getMoveContext` server fns in `schedule-manager.functions.ts`.
+- Calendar + selected-day list already renders multiple workouts per date (just fixed).
+- Client impersonation for "Admin Client POV".
 
-New tables (small, additive):
-- `task_subtasks` — id, task_id (cascade), title, done, position
-- `task_comments` — id, task_id (cascade), author_id, body, created_at
-- `task_attachments` — id, task_id (cascade), file_url, file_name, mime_type, size_bytes
-- `media_quick_notes` — id, owner_id, title, body, pinned, archived, converted_to (task|draft|content_idea|null), converted_ref_id, updated_at (migrates the localStorage notes; existing local notes auto-import on first load)
-- `media_activity_events` — id, actor_id, kind (task_completed | content_submitted | content_approved | changes_requested | file_uploaded | campaign_updated | publish_date_changed), subject_type, subject_id, summary, created_at
+## Backend changes (one migration)
 
-All with GRANTs to `authenticated` + `service_role`, RLS scoped to admin/coach/media_manager (matches existing tasks policy). Existing rows untouched.
+### 1. New table `pl_scheduled_workouts` (the scheduling layer)
 
-## 2. Media Home — `/media`
+Non-destructive additive record. Each row is one instance of a workout on a date.
 
-Rebuild `src/routes/_authenticated/media/index.tsx` as an action dashboard.
+```
+id                  uuid pk
+client_id           uuid → clients.id
+source_day_id       uuid → pl_days.id       -- the prescription (block/week/day + rows)
+scheduled_date      date
+scheduled_time      time null               -- optional
+order_index         int  default 0          -- ordering when 2+ share a date
+schedule_source     text default 'manual'   -- 'program' | 'manual' | 'moved' | 'copied'
+created_by          uuid → auth.users null
+original_date       date null               -- first scheduled_date, kept when moved
+note                text null
+created_at / updated_at
+UNIQUE(client_id, source_day_id, scheduled_date, order_index)  -- prevents dup submits
+```
 
-Compact status card row (each links to a filtered route, real counts only):
-- Due Today → `/media/work?filter=today`
-- Overdue → `/media/work?filter=overdue`
-- Awaiting Review → `/media/inbox?filter=pending`
-- Changes Requested → `/media/inbox?filter=changes`
-- Ready to Publish → `/media/publishing?filter=ready`
-- Scheduled This Week → `/media/publishing?filter=week`
-- Unassigned → `/media/work?filter=unassigned`
-- Blocked → `/media/work?filter=blocked`
+RLS: authenticated read/write scoped to `client_id = auth.uid()`'s own client OR admin/coach via existing `has_role`.
 
-Sections:
-1. **My Priorities** — top 8 of (overdue ∪ today ∪ important) for current user. Title, type, status, priority, due, campaign, assignee, Open, Complete.
-2. **Approval Queue** — `media_content_records` where reviewer = me AND approval_status = pending. Approve / Request Changes / Comment / Open.
-3. **Upcoming Content** — next 10 by `publish_date` ascending. Includes `events.event_date` merged in.
-4. **Needs Attention** — rule-based scan over `media_content_records` + `tasks`: missing final asset / caption / CTA / approval / publish_date / overdue tasks / unassigned / blocked.
-5. **Active Campaigns** — campaigns with `status = active`, with progress counts.
-6. **Recent Activity** — last 20 from `media_activity_events`.
+### 2. Backfill
 
-Single server function `mediaHomeData()` returns all sections in one call. Empty states everywhere.
+One-time INSERT selecting every `pl_days` row that already has `scheduled_date` (the current program-derived schedule) as `schedule_source='program'`. Then existing calendar/workout queries can keep working during rollout because we also keep reading `pl_days.scheduled_date` — see rollout.
 
-## 3. My Work — `/media/work`
+### 3. New table `client_schedule_permissions` (or column)
 
-Wrap existing `TasksPage` with a view switcher:
+Simplest: add column `clients.workout_scheduling_permission text default 'move'` with allowed values `off | move | add_current_block | full_program`.
 
-- **List** (default) — segments: Overdue, Today, Upcoming, No Due Date, Completed. Quick-entry row (title only required; optional inline assignee/due/priority/linked-content). Bulk select (one/multi/all visible) → Assign, Due date, Priority, Status, Complete, Archive, Delete (confirmed). Each row shows status badge, priority pill, due-date warning color, assignee initials, campaign/content link.
-- **Board** — columns by status_label (Not Started · In Progress · Waiting · Blocked · Complete).
-- **Eisenhower** — renders existing `TasksPage` matrix unchanged.
-- **Calendar** — month grid keyed off `due_at`.
+### 4. Extend `moveWorkout` server fn (minimum change)
 
-URL search params drive the view: `?view=list|board|eisenhower|calendar&filter=…`.
+- Continue to update `pl_days.scheduled_date` for program instances (single-instance case) so nothing breaks.
+- When the target row is a manual instance, update `pl_scheduled_workouts` instead.
+- Enforce `workout_scheduling_permission` when caller is the client.
 
-## 4. Quick Notes
+### 5. New server fns in `schedule-manager.functions.ts`
 
-Migrate the existing localStorage Quick Notes panel to the new `media_quick_notes` table with autosave. First load detects local notes and upserts them (one-time, idempotent). Each note row supports: Edit, Pin, Archive, Delete, **Convert to Task / Draft / Content Idea** (creates the target record with note body as description and sets `converted_to` / `converted_ref_id`).
+- `scheduleWorkouts({ clientId, sourceDayIds[], date, time?, orderIndex? })` — coach/admin only; inserts N `pl_scheduled_workouts` rows in a single transaction. Rejects duplicates.
+- `removeScheduledWorkout({ instanceId })` — coach/admin; only removes the manual instance, never the source day.
+- `reorderScheduledWorkouts({ date, clientId, orderedInstanceIds[] })` — updates `order_index`.
+- `updateScheduledTime({ instanceId, time })`.
+- `copyScheduledWorkout({ instanceId, newDate })` — coach/admin.
 
-## 5. Header
+All: middleware `requireSupabaseAuth`, permission-gated for client callers.
 
-Reuses the existing `MediaHeader` with the global `+ Create` menu already built in Phase 1.
+## Frontend changes
 
-## Files
+### 6. Calendar data source (`src/lib/calendar-sources.ts`, `WorkoutsExperience.tsx`)
 
-New:
-- `src/lib/media-home.functions.ts` — `mediaHomeData()`
-- `src/lib/media-tasks.ts` — extended task helpers (subtasks/comments/attachments/bulk ops)
-- `src/lib/media-quick-notes.ts` + `.functions.ts`
-- `src/lib/media-activity.ts`
-- `src/components/media/home/*` — `StatusCards`, `MyPriorities`, `ApprovalQueue`, `UpcomingContent`, `NeedsAttention`, `ActiveCampaigns`, `RecentActivity`
-- `src/components/media/work/*` — `WorkListView`, `WorkBoardView`, `WorkCalendarView`, `QuickAddRow`, `BulkActionBar`, `TaskRow`
-- `src/components/media/quick-notes-panel.tsx` (DB-backed, replaces localStorage panel inside the Media scope only)
+- Fetch **both** program-derived days (existing query) **and** `pl_scheduled_workouts` for the client.
+- Merge into the same `WorkoutItem` shape keyed by date. Each manual instance carries `instanceId` and resolves `day/week/block` via `source_day_id`.
+- Sort within a date by `order_index` then created_at.
+- Cardio/nutrition day resolver already handles multi-workout dates — no change.
 
-Modified:
-- `src/routes/_authenticated/media/index.tsx` — rewritten as dashboard
-- `src/routes/_authenticated/media/work.tsx` — view switcher + URL search params
+### 7. `+ Schedule Workout` action (single new UI, reused everywhere)
 
-Unchanged:
-- `src/lib/tasks.ts` (extended, not replaced)
-- `src/components/tasks/tasks-page.tsx` (used as the Eisenhower view)
-- Admin scope tasks page — keeps localStorage notes
+New component `ScheduleWorkoutSheet.tsx` (bottom sheet, mobile-first):
 
-## Verification before stopping
+Step 1 — Date (default: currently selected calendar date)
+Step 2 — Program (assigned to client only)
+Step 3 — Block (Active first, then other blocks in active program, then other assigned programs, then archived for admin only)
+Step 4 — Workouts (multi-select, searchable, shows day title + est duration)
+Step 5 — Optional time + order
+Step 6 — Confirm with preview: "Friday · adds 2 workouts. Currently scheduled: Upper Body Day. Will be added as Workout 2, 3."
 
-- Read existing tasks → still listed.
-- Read existing localStorage notes → imported on first Media load, then visible from DB.
-- Existing Eisenhower quadrant styles persist.
-- Create / assign / due-date / priority / link-to-content / complete / archive / convert flows manual-tested via Playwright.
-- All 8 home status cards open the correct filtered route.
+Entry points (reuse, no new pages):
+- `WorkoutsExperience` header action row.
+- Coach schedule manager toolbar.
+- Admin messages thread quick-actions dropdown (open sheet pre-scoped to that client).
 
-## Out of scope (Phase 3+)
+### 8. Client "Move Workout" action
 
-Pipeline Kanban features, Calendar building beyond the simple month view, Asset Library, Campaigns detail page, Performance analytics, Templates/Brand Kit.
+- On any incomplete scheduled workout in `SelectedDayCard`, show only: **Start / Resume**, **Move Workout**, **Change Time or Order**. Hide Add/Copy/Replace/Remove.
+- `MoveWorkoutSheet` gets a permission check: if `workout_scheduling_permission='off'`, show read-only message.
+- Same-day landing dialog:
+  ```
+  Friday already has 1 workout.
+  ○ Add this as Workout 2
+  ○ Move Friday's workout to Saturday
+  ○ Choose another date
+  ```
+
+### 9. Coach/admin "More" menu on a workout card
+
+Extend the existing `DropdownMenu` on `SelectedDayCard` (coach mode) with: Add workout on this date, Copy to another date, Replace with…, Remove scheduled workout (only for manual instances), Change time, Change order.
+
+### 10. Messages quick action
+
+In the admin thread header/quick actions menu, add "Schedule Workout" — opens the same `ScheduleWorkoutSheet` with `clientId` prefilled. No new mutations.
+
+## Permissions matrix (enforced in server fns)
+
+| Permission | Move own | Add from current block | Add from any assigned program | Copy | Remove | Replace |
+|---|---|---|---|---|---|---|
+| off | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ |
+| move (default) | ✓ | ✗ | ✗ | ✗ | ✗ | ✗ |
+| add_current_block | ✓ | ✓ | ✗ | ✗ | ✗ | ✗ |
+| full_program | ✓ | ✓ | ✓ | ✓ | ✗ | ✗ |
+| coach/admin | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+
+Remove/Replace are coach/admin only in every tier per spec.
+
+## Safety invariants
+
+- Manual scheduling never mutates `pl_days` rows other than `scheduled_date`/`order_index` on the specific instance.
+- `pl_day_completions` and `pl_row_results` are never touched by scheduling operations.
+- A completed instance's `source_day_id` stays locked; copies create a new instance with the same `source_day_id`, no completion copied.
+- Move/add operations never advance `pl_blocks.status` or `pl_weeks`.
+
+## Rollout order
+
+1. Migration (table + column + backfill of existing `pl_days.scheduled_date` into `pl_scheduled_workouts` as `schedule_source='program'`).
+2. Server fns (schedule/remove/reorder/copy) + extend `moveWorkout` permission check.
+3. Update calendar merge in `calendar-sources.ts` / `WorkoutsExperience.tsx`.
+4. Build `ScheduleWorkoutSheet` + wire into Workouts header, schedule manager, messages menu.
+5. Restrict client `SelectedDayCard` menu based on permission.
+6. Tests: multi-instance render, conflict handling, permission gating, completion preservation.
+
+## Out of scope
+
+- No redesign of calendar/week strip/month grid.
+- No changes to `pl_row_results`, `pl_day_completions`, workout player, program assignment logic, or block progression.
+- No new cardio/nutrition wiring — existing resolver already reads scheduled dates.
+
+## Open question
+
+Should the "add from current block" tier be enabled per-client from the client detail page, or globally off with per-client override? Spec implies per-client with `move` as the default; I'll add a select on the client profile.

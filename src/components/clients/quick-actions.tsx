@@ -6,6 +6,7 @@ import {
   Download, Loader2, ShoppingCart,
 } from "lucide-react";
 import { QuickSellSheet } from "./quick-sell-sheet";
+import { ScheduleWorkoutSheet } from "@/components/schedule/ScheduleWorkoutSheet";
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem,
   DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger,
@@ -91,6 +92,7 @@ export function QuickActionsMenu({ r }: { r: DirectoryRow }) {
   const [assignOpen, setAssignOpen] = useState(false);
   const [archiveOpen, setArchiveOpen] = useState(false);
   const [sellOpen, setSellOpen] = useState(false);
+  const [scheduleOpen, setScheduleOpen] = useState(false);
   const pdfs = useClientPdfDownloads(r);
   return (
     <>
@@ -142,6 +144,11 @@ export function QuickActionsMenu({ r }: { r: DirectoryRow }) {
             <CalendarDays className="h-4 w-4" /> View Schedule
           </Link>
         </DropdownMenuItem>
+        {hasProgram && (
+          <DropdownMenuItem onSelect={(e) => { e.preventDefault(); setScheduleOpen(true); }}>
+            <Plus className="mr-2 h-4 w-4" /> Schedule Workout
+          </DropdownMenuItem>
+        )}
         <DropdownMenuItem onSelect={(e) => { e.preventDefault(); setArchiveOpen(true); }}>
           <Archive className="mr-2 h-4 w-4" /> Workout Archive
         </DropdownMenuItem>
@@ -233,6 +240,12 @@ export function QuickActionsMenu({ r }: { r: DirectoryRow }) {
       clientId={r.id}
       clientName={r.full_name}
     />
+    <ScheduleWorkoutSheet
+      open={scheduleOpen}
+      onOpenChange={setScheduleOpen}
+      clientId={r.id}
+      clientName={r.full_name}
+    />
     </>
   );
 }
@@ -250,6 +263,7 @@ export function ClientMoreMenu({
   const [assignOpen, setAssignOpen] = useState(false);
   const [archiveOpen, setArchiveOpen] = useState(false);
   const [sellOpen, setSellOpen] = useState(false);
+  const [scheduleOpen, setScheduleOpen] = useState(false);
   const pdfs = useClientPdfDownloads(r);
   return (
     <>
@@ -270,6 +284,11 @@ export function ClientMoreMenu({
 
         <DropdownMenuSeparator />
         <DropdownMenuLabel className="text-xs">Training</DropdownMenuLabel>
+        {r.block_id && (
+          <DropdownMenuItem onSelect={(e) => { e.preventDefault(); setScheduleOpen(true); }}>
+            <Plus className="mr-2 h-4 w-4" /> Schedule Workout
+          </DropdownMenuItem>
+        )}
         {r.block_id ? (
           <DropdownMenuItem asChild>
             <Link to="/admin/client-programs/$clientId" params={{ clientId: r.id }} className="flex items-center gap-2">
@@ -404,6 +423,12 @@ export function ClientMoreMenu({
     <QuickSellSheet
       open={sellOpen}
       onOpenChange={setSellOpen}
+      clientId={r.id}
+      clientName={r.full_name}
+    />
+    <ScheduleWorkoutSheet
+      open={scheduleOpen}
+      onOpenChange={setScheduleOpen}
       clientId={r.id}
       clientName={r.full_name}
     />
