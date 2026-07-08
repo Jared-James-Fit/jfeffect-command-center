@@ -826,7 +826,7 @@ function WorkoutDay({
         const memberRef = isMember ? (adapter?.ref as any) : null;
         const startData = isMember && memberRef?.enrollmentId
           ? { kind: "member" as const, enrollmentId: memberRef.enrollmentId, weekIndex: Number(dayId.split(":")[0]), dayIndex: Number(dayId.split(":")[1]) }
-          : { kind: "client" as const, dayId };
+          : { kind: "client" as const, dayId, scheduledWorkoutId };
         await startWorkoutSrv({ data: startData });
         qc.invalidateQueries({ queryKey: ["pl-day-completion", dayId] });
         if (isMember) qc.invalidateQueries({ queryKey: ["member-workout-completion"] });
@@ -849,7 +849,7 @@ function WorkoutDay({
       const memberRef = isMember ? (adapter?.ref as any) : null;
       const startData = isMember && memberRef?.enrollmentId
         ? { kind: "member" as const, enrollmentId: memberRef.enrollmentId, weekIndex: Number(dayId.split(":")[0]), dayIndex: Number(dayId.split(":")[1]) }
-        : { kind: "client" as const, dayId };
+        : { kind: "client" as const, dayId, scheduledWorkoutId };
       await startWorkoutSrv({ data: startData });
       qc.invalidateQueries({ queryKey: ["pl-day-completion", dayId] });
       if (isMember) qc.invalidateQueries({ queryKey: ["member-workout-completion"] });
@@ -882,7 +882,7 @@ function WorkoutDay({
         };
       }
     }
-    return { kind: "client" as const, dayId };
+    return { kind: "client" as const, dayId, scheduledWorkoutId };
   })();
   useWorkoutHeartbeat(
     heartbeatEnabled
