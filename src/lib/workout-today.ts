@@ -83,7 +83,14 @@ export function dayScheduledDate(
   item: WorkoutItem,
   committedTrainingDays?: string[] | null,
 ): Date | null {
-  // 1) explicit scheduled_date on the day — always wins (manual reschedule)
+  // 0) Canonical instance-level scheduled date (pl_scheduled_workouts).
+  //    Set by mergeScheduledInstances(); overrides the legacy path.
+  if (item.scheduledDate) {
+    const d = parseLocalDate(item.scheduledDate);
+    if (d) return d;
+  }
+  // 1) explicit scheduled_date on the pl_days row — legacy fallback for
+  //    rows that predate the instance backfill.
   if (item.day?.scheduled_date) {
     const d = parseLocalDate(item.day.scheduled_date);
     if (d) return d;
