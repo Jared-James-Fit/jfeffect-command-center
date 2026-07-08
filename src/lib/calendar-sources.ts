@@ -356,84 +356,108 @@ export function useClientCalendarSources(clientId: string | null | undefined) {
     const overrideByDate = new Map<string, string>();
     for (const o of overridesList) overrideByDate.set(o.override_date, o.day_label);
     if (cardioTargets.length > 0) {
-      // Day-of-week arrays from client schedule (e.g. ["Monday","Wednesday"])
+      // ROOT CAUSE FIX 2026-07-08: Training Day cardio must land on the
+      // client's actual committed workout dates, not on generic weekdays
+      // from clients.preferred_training_days. Rebuild the actual workout
+      // date set from the same resolved schedule the workout chips use,
+      // then classify every date in the visible range as Training / High /
+      // Non-Training / Rest and emit exactly one matching cardio target
+      // per date. This mirrors week-schedule-view.tsx buildCells().
       const WEEKDAY_NAMES = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
-      const trainingDays: string[] = (schedule?.preferred_training_days ?? []).map((d: string) => d.trim());
-      const restDays: string[] = (schedule?.preferred_rest_days ?? []).map((d: string) => d.trim());
-      const highDays: string[] = (schedule?.preferred_high_days ?? []).map((d: string) => d.trim());
-      const fullRestDays: string[] = (schedule?.full_cardio_rest_days ?? []).map((d: string) => d.trim());
+      const highDayNames: string[] = (schedule?.preferred_high_days ?? []).map((d: string) => (d ?? "").trim());
+      const fullRestDays: string[] = (schedule?.full_cardio_rest_days ?? []).map((d: string) => (d ?? "").trim());
 
-      // Map day_type to the relevant day-of-week array
-      function daysForType(dayType: string): string[] {
-        const t = dayType.toLowerCase();
-        if (t.includes("training")) return trainingDays;
-        if (t.includes("high")) return highDays;
-        if (t.includes("rest") || t.includes("non-training") || t.includes("non training")) return restDays;
-        return []; // General / unknown — skip (shown in today panel instead)
+      // Rebuild actual committed workout dates using resolveWeekDayDates,
+      // matching how the workout chips above are placed.
+      const workoutDatesInRange = new Set<string>();
+      {
+        const workoutItems = (workoutsQ.data ?? []) as any[];
+        const byWeek = new Map<string, any[]>();
+        for (const it of workoutItems) {
+          if (!it.day?.id || !it.week?.id) continue;
+          const arr = byWeek.get(it.week.id) ?? [];
+          arr.push(it);
+          byWeek.set(it.week.id, arr);
+        }
+        for (const [, weekItems] of byWeek) {
+          const week = weekItems[0]?.week;
+          const block = weekItems[0]?.block;
+          const dayRows = weekItems.map((it) => it.day);
+          const dateMap = resolveWeekDayDates(dayRows, week, block, committedDays);
+          for (const [, d] of dateMap) {
+            if (d) workoutDatesInRange.add(toLocalDate(d.toISOString()));
+          }
+        }
       }
 
-      // Generate events for 5 weeks: 2 past + current + 2 future
-      const today = new Date();
-      const startOfRange = new Date(today);
-      startOfRange.setDate(today.getDate() - today.getDay() - 14); // 2 weeks back from Sunday
-      const endOfRange = new Date(startOfRange);
-      endOfRange.setDate(startOfRange.getDate() + 35); // 5 weeks
+      // Pick one active target per day-type. If the coach created more than
+      // one, the first Active/enabled/visible one wins (same order as the
+      // existing week view).
+      function pickTarget(kind: "training" | "high" | "non_training"): any | null {
+        for (const t of cardioTargets) {
+          const dt = (t.day_type ?? "").toLowerCase();
+          if (kind === "training" && dt === "training day") return t;
+          if (kind === "high" && dt.includes("high")) return t;
+          if (kind === "non_training" && (dt === "rest day" || dt === "non-training day" || dt.includes("non training"))) return t;
+        }
+        return null;
+      }
 
-      for (const target of cardioTargets) {
-        const isHighTarget = (target.day_type ?? "").toLowerCase().includes("high");
-        const targetDays = daysForType(target.day_type ?? "");
-        // High Day targets may still fire via overrides even when the
-        // recurring weekday array is empty — don't early-exit.
-        if (targetDays.length === 0 && !isHighTarget) continue;
+      function emit(target: any, dateStr: string) {
         const cardioName = target.cardio_type === "Custom" ? (target.custom_type || "Cardio") : (target.cardio_type || "Cardio");
         const subtitle = [target.duration_minutes ? `${target.duration_minutes} min` : null, target.intensity].filter(Boolean).join(" · ");
+        out.push({
+          id: `cardio:${target.id}:${dateStr}`,
+          kind: "cardio",
+          date: dateStr,
+          title: cardioName,
+          subtitle,
+          status: null,
+          href: { to: "/portal/workouts" },
+          raw: { ...target, _date: dateStr },
+        });
+      }
 
-        // Walk each day in the range and emit an event for matching weekdays
-        const cursor = new Date(startOfRange);
-        while (cursor <= endOfRange) {
-          const dayName = WEEKDAY_NAMES[cursor.getDay()];
-          const y = cursor.getFullYear();
-          const m = String(cursor.getMonth() + 1).padStart(2, "0");
-          const d = String(cursor.getDate()).padStart(2, "0");
-          const dateStr = `${y}-${m}-${d}`;
-          const overrideLabel = overrideByDate.get(dateStr);
-          const isHighByOverride = overrideLabel === "High Day";
-          // Suppress cardio on a Full Cardio Rest weekday for non-training,
-          // non-high targets. Overrides that mark the day as High still fire.
-          const suppressForRest =
-            !isHighTarget &&
-            (target.day_type ?? "").toLowerCase() !== "training day" &&
-            fullRestDays.includes(dayName) &&
-            !isHighByOverride;
-          // If a date has an override, only the target matching that override
-          // fires. Prevents duplicate cardio when High Day is moved to a day
-          // that would otherwise host a Non-Training Day target.
-          let matches: boolean;
-          if (overrideLabel) {
-            matches =
-              (isHighByOverride && isHighTarget) ||
-              (!isHighByOverride && (target.day_type ?? "") === overrideLabel);
-          } else {
-            // No override on this date: use recurring weekday match, but
-            // never emit a High target on a weekday that is overridden away
-            // (handled above), and never emit non-High on a recurring High
-            // weekday when this date has no override.
-            matches = targetDays.includes(dayName) && !(isHighTarget ? false : highDays.includes(dayName));
-          }
-          if (matches && !suppressForRest) {
-            out.push({
-              id: `cardio:${target.id}:${dateStr}`,
-              kind: "cardio",
-              date: dateStr,
-              title: cardioName,
-              subtitle,
-              status: null,
-              href: { to: "/portal/workouts" },
-              raw: { ...target, _date: dateStr },
-            });
-          }
-          cursor.setDate(cursor.getDate() + 1);
+      // Range: 2 weeks past → 3 weeks future (5 weeks total)
+      const today = new Date();
+      const startOfRange = new Date(today);
+      startOfRange.setDate(today.getDate() - today.getDay() - 14);
+      const endOfRange = new Date(startOfRange);
+      endOfRange.setDate(startOfRange.getDate() + 35);
+
+      // Walk each date and emit one resolved cardio prescription
+      const cursor = new Date(startOfRange);
+      while (cursor <= endOfRange) {
+        const dayName = WEEKDAY_NAMES[cursor.getDay()];
+        const y = cursor.getFullYear();
+        const m = String(cursor.getMonth() + 1).padStart(2, "0");
+        const d = String(cursor.getDate()).padStart(2, "0");
+        const dateStr = `${y}-${m}-${d}`;
+        const overrideLabel = overrideByDate.get(dateStr);
+
+        // Resolve the day type for this date
+        let dayType: "training" | "high" | "non_training" | "rest";
+        if (overrideLabel === "High Day") {
+          dayType = "high";
+        } else if (overrideLabel && overrideLabel !== "High Day") {
+          // Explicit non-High override wins over recurring high weekday
+          dayType = workoutDatesInRange.has(dateStr) ? "training" : "non_training";
+        } else if (highDayNames.includes(dayName)) {
+          dayType = "high";
+        } else if (workoutDatesInRange.has(dateStr)) {
+          dayType = "training";
+        } else if (fullRestDays.includes(dayName)) {
+          dayType = "rest";
+        } else {
+          dayType = "non_training";
         }
+
+        if (dayType !== "rest") {
+          const target = pickTarget(dayType);
+          if (target) emit(target, dateStr);
+        }
+
+        cursor.setDate(cursor.getDate() + 1);
       }
     }
 
