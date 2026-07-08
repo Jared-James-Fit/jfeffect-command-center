@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMemo, useEffect } from "react";
-import { Link, useRouter } from "@tanstack/react-router";
+import { Link, useRouter, useNavigate } from "@tanstack/react-router";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { AlertTriangle } from "lucide-react";
@@ -20,6 +20,11 @@ export const Route = createFileRoute("/_authenticated/portal/workouts/$dayId")({
     edit: s.edit === 1 || s.edit === "1" || s.edit === true ? 1 : undefined,
     review: s.review === 1 || s.review === "1" || s.review === true ? 1 : undefined,
     recap: s.recap === 1 || s.recap === "1" || s.recap === true ? 1 : undefined,
+    // Slice 2b: pl_scheduled_workouts.id of the specific calendar
+    // instance this URL is opening. When present, the client adapter
+    // scopes completion reads/writes by scheduled_workout_id so two
+    // instances of the same source day keep independent state.
+    instance: typeof s.instance === "string" && s.instance.length > 0 ? s.instance : undefined,
   }),
   component: RouteComponent,
   // Capture render/load errors on this route so the page degrades gracefully
@@ -66,6 +71,7 @@ function WorkoutDayErrorFallback({ error, reset }: { error: Error; reset: () => 
 function RouteComponent() {
   const { dayId } = Route.useParams();
   const search = Route.useSearch();
+  const navigate = useNavigate();
   // Resolve the trainee identity for the client adapter. Mirrors the
   // lookup that WorkoutDayView still performs internally (via
   // usePortalUserId + the my-client query) — both will converge onto the
@@ -80,6 +86,56 @@ function RouteComponent() {
   });
   const clientId = povClient?.id ?? ownClient?.id ?? null;
   const clientUserId = povClient?.user_id ?? portalUserId ?? null;
+
+  // Slice 2b legacy URL disambiguation: when the URL has no ?instance= but
+  // the client has one or more scheduled instances for this day_id, try to
+  // resolve automatically.
+  //   0 matches  → open through the legacy path (scheduled_workout_id IS NULL)
+  //   1 incomplete match → auto-redirect to include ?instance=<id>
+  //   >1 candidates → show the picker (component-level below)
+  const shouldResolveLegacy = !!clientId && !search.instance;
+  const { data: legacyCandidates } = useQuery({
+    queryKey: ["portal-workout-instance-candidates", clientId, dayId],
+    enabled: shouldResolveLegacy,
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("pl_scheduled_workouts")
+        .select("id, scheduled_date, scheduled_time, order_index")
+        .eq("client_id", clientId!)
+        .eq("source_day_id", dayId)
+        .order("scheduled_date", { ascending: true })
+        .order("order_index", { ascending: true });
+      const rows = (data ?? []) as any[];
+      if (!rows.length) return { rows, completedById: {} as Record<string, boolean> };
+      const ids = rows.map((r) => r.id);
+      const { data: comps } = await supabase
+        .from("pl_day_completions")
+        .select("scheduled_workout_id, completed_at")
+        .in("scheduled_workout_id", ids as any);
+      const completedById: Record<string, boolean> = {};
+      for (const c of (comps ?? []) as any[]) {
+        if (c.scheduled_workout_id && c.completed_at) completedById[c.scheduled_workout_id] = true;
+      }
+      return { rows, completedById };
+    },
+  });
+
+  // Auto-redirect when exactly one incomplete candidate matches.
+  useEffect(() => {
+    if (!shouldResolveLegacy || !legacyCandidates) return;
+    const rows = legacyCandidates.rows;
+    if (!rows.length) return; // legacy path
+    const incomplete = rows.filter((r: any) => !legacyCandidates.completedById[r.id]);
+    if (incomplete.length === 1) {
+      navigate({
+        to: "/portal/workouts/$dayId",
+        params: { dayId },
+        search: { ...search, instance: incomplete[0].id } as any,
+        replace: true,
+      });
+    }
+  }, [shouldResolveLegacy, legacyCandidates, dayId, navigate, search]);
+
   const { data: dayRow } = useQuery({
     queryKey: ["portal-workout-day-cardio-date", dayId],
     enabled: !!dayId,
@@ -93,8 +149,62 @@ function RouteComponent() {
       kind: "client",
       userId: clientUserId,
       ownerId: clientId,
+      scheduledWorkoutId: search.instance ?? null,
     });
-  }, [clientId, clientUserId]);
+  }, [clientId, clientUserId, search.instance]);
+
+  // Show picker when the URL is legacy AND there are 2+ candidates OR
+  // when the only match is completed (avoid auto-opening a completed one).
+  if (shouldResolveLegacy && legacyCandidates && legacyCandidates.rows.length) {
+    const rows = legacyCandidates.rows;
+    const incomplete = rows.filter((r: any) => !legacyCandidates.completedById[r.id]);
+    const showPicker =
+      rows.length > 1 && incomplete.length !== 1
+        ? true
+        : rows.length === 1 && legacyCandidates.completedById[rows[0].id]
+          ? true
+          : false;
+    if (showPicker) {
+      return (
+        <div className="p-6">
+          <Card className="space-y-3 p-6">
+            <div className="text-base font-bold">Choose which scheduled workout to open</div>
+            <div className="text-sm text-muted-foreground">
+              This workout is scheduled on more than one date. Pick the instance you want to open.
+            </div>
+            <div className="space-y-2">
+              {rows.map((r: any) => {
+                const done = !!legacyCandidates.completedById[r.id];
+                return (
+                  <Button
+                    key={r.id}
+                    variant="outline"
+                    className="w-full justify-between"
+                    onClick={() =>
+                      navigate({
+                        to: "/portal/workouts/$dayId",
+                        params: { dayId },
+                        search: { ...search, instance: r.id } as any,
+                        replace: true,
+                      })
+                    }
+                  >
+                    <span>
+                      {r.scheduled_date}
+                      {r.scheduled_time ? ` · ${String(r.scheduled_time).slice(0, 5)}` : ""}
+                    </span>
+                    <span className="text-xs text-muted-foreground">
+                      {done ? "Completed" : "Incomplete"}
+                    </span>
+                  </Button>
+                );
+              })}
+            </div>
+          </Card>
+        </div>
+      );
+    }
+  }
 
   return (
     <WorkoutDayView

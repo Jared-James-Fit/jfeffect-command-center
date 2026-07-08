@@ -150,7 +150,7 @@ type View = {
 
 function startBtn(item: WorkoutItem, label: string, icon: React.ReactNode) {
   return (
-    <Link to="/portal/workouts/$dayId" params={{ dayId: item.day.id }}>
+    <Link to="/portal/workouts/$dayId" params={{ dayId: item.day.id }} search={(item.scheduledWorkoutId ? { instance: item.scheduledWorkoutId } : undefined) as any}>
       <Button size="lg" className="font-bold uppercase">
         {icon} {label}
       </Button>
@@ -208,7 +208,7 @@ function render(state: TodayState): View {
         bgClass: "bg-sky-500",
         statusPillClass: "bg-sky-500 text-white",
         primary: next ? (
-          <Link to="/portal/workouts/$dayId" params={{ dayId: next.day.id }}>
+          <Link to="/portal/workouts/$dayId" params={{ dayId: next.day.id }} search={(next.scheduledWorkoutId ? { instance: next.scheduledWorkoutId } : undefined) as any}>
             <Button size="lg" variant="outline" className="font-bold uppercase">
               View Upcoming Workout <ArrowRight className="ml-2 h-4 w-4" />
             </Button>
@@ -231,7 +231,7 @@ function render(state: TodayState): View {
         borderClass: "border-primary/60",
         bgClass: "bg-primary",
         primary: (
-          <Link to="/portal/workouts/$dayId" params={{ dayId: it.day.id }}>
+          <Link to="/portal/workouts/$dayId" params={{ dayId: it.day.id }} search={(it.scheduledWorkoutId ? { instance: it.scheduledWorkoutId } : undefined) as any}>
             <Button size="lg" className="font-bold uppercase">
               View Upcoming Workout <ArrowRight className="ml-2 h-4 w-4" />
             </Button>

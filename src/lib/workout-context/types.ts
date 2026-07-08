@@ -22,6 +22,16 @@ export interface WorkoutContextRef {
   ownerId: string;
   /** For `member` kind: the enrollment id. Undefined for clients. */
   enrollmentId?: string;
+  /**
+   * Slice 2b: pl_scheduled_workouts.id when this adapter instance is bound
+   * to a specific scheduled instance. When present, the client adapter
+   * scopes every pl_day_completions read/write by scheduled_workout_id
+   * instead of client_id+day_id, so two instances of the same source day
+   * keep independent completion state. Undefined for the legacy path
+   * (single-instance program day) — the adapter then reads/writes rows
+   * where scheduled_workout_id IS NULL.
+   */
+  scheduledWorkoutId?: string | null;
 }
 
 /** A single calendar-placed workout day, in display order. */

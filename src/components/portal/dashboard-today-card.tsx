@@ -108,7 +108,7 @@ function buildView(state: TodayState) {
         badgeClass: "border-primary/30 bg-primary/10 text-primary",
         primary: (
           <Button asChild size="sm">
-            <Link to="/portal/workouts/$dayId" params={{ dayId: it.day.id }}>
+            <Link to="/portal/workouts/$dayId" params={{ dayId: it.day.id }} search={(it.scheduledWorkoutId ? { instance: it.scheduledWorkoutId } : undefined) as any}>
               <Play className="mr-1.5 h-3.5 w-3.5" />
               Start Workout
             </Link>
@@ -127,7 +127,7 @@ function buildView(state: TodayState) {
         badgeClass: "border-amber-500/30 bg-amber-500/10 text-amber-500",
         primary: (
           <Button asChild size="sm">
-            <Link to="/portal/workouts/$dayId" params={{ dayId: it.day.id }}>
+            <Link to="/portal/workouts/$dayId" params={{ dayId: it.day.id }} search={(it.scheduledWorkoutId ? { instance: it.scheduledWorkoutId } : undefined) as any}>
               <RotateCcw className="mr-1.5 h-3.5 w-3.5" />
               Continue
             </Link>
@@ -146,7 +146,7 @@ function buildView(state: TodayState) {
         badgeClass: "border-sky-500/30 bg-sky-500/10 text-sky-500",
         primary: next ? (
           <Button asChild size="sm" variant="outline">
-            <Link to="/portal/workouts/$dayId" params={{ dayId: next.day.id }}>
+            <Link to="/portal/workouts/$dayId" params={{ dayId: next.day.id }} search={(next.scheduledWorkoutId ? { instance: next.scheduledWorkoutId } : undefined) as any}>
               Upcoming <ArrowRight className="ml-1.5 h-3.5 w-3.5" />
             </Link>
           </Button>
@@ -164,7 +164,7 @@ function buildView(state: TodayState) {
         badgeClass: "border-primary/30 bg-primary/10 text-primary",
         primary: (
           <Button asChild size="sm" variant="outline">
-            <Link to="/portal/workouts/$dayId" params={{ dayId: it.day.id }}>
+            <Link to="/portal/workouts/$dayId" params={{ dayId: it.day.id }} search={(it.scheduledWorkoutId ? { instance: it.scheduledWorkoutId } : undefined) as any}>
               View <ArrowRight className="ml-1.5 h-3.5 w-3.5" />
             </Link>
           </Button>
@@ -182,7 +182,7 @@ function buildView(state: TodayState) {
         badgeClass: "border-destructive/30 bg-destructive/10 text-destructive",
         primary: (
           <Button asChild size="sm" variant="outline">
-            <Link to="/portal/workouts/$dayId" params={{ dayId: it.day.id }}>
+            <Link to="/portal/workouts/$dayId" params={{ dayId: it.day.id }} search={(it.scheduledWorkoutId ? { instance: it.scheduledWorkoutId } : undefined) as any}>
               Complete <ArrowRight className="ml-1.5 h-3.5 w-3.5" />
             </Link>
           </Button>

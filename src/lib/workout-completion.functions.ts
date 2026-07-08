@@ -35,6 +35,12 @@ import {
 const ClientCtx = z.object({
   kind: z.literal("client"),
   dayId: z.string().uuid(),
+  /**
+   * Slice 2b: when present, completions are scoped to this
+   * pl_scheduled_workouts.id so two calendar instances of the same
+   * source day (day_id) keep independent completion state.
+   */
+  scheduledWorkoutId: z.string().uuid().nullable().optional(),
 });
 const MemberCtx = z.object({
   kind: z.literal("member"),
@@ -44,6 +50,26 @@ const MemberCtx = z.object({
 });
 const Ctx = z.discriminatedUnion("kind", [ClientCtx, MemberCtx]);
 type CtxT = z.infer<typeof Ctx>;
+
+/**
+ * Slice 2b helper — apply the (client_id, day_id, [scheduled_workout_id])
+ * scoping to a pl_day_completions query builder. When `scheduledWorkoutId`
+ * is provided, the row is uniquely identified by that column alone
+ * (partial-unique from Phase 2 migration). Otherwise the legacy path is
+ * used: rows where scheduled_workout_id IS NULL.
+ */
+function scopeCompletion(
+  q: any,
+  clientId: string,
+  dayId: string,
+  scheduledWorkoutId: string | null | undefined,
+): any {
+  if (scheduledWorkoutId) return q.eq("scheduled_workout_id", scheduledWorkoutId);
+  return q
+    .eq("client_id", clientId)
+    .eq("day_id", dayId)
+    .is("scheduled_workout_id", null);
+}
 
 /** Resolve clients.id for the signed-in user, throwing if not a client. */
 async function resolveClientId(supabase: any, userId: string): Promise<string> {
@@ -115,12 +141,19 @@ export const startWorkout = createServerFn({ method: "POST" })
     if (data.kind === "client") {
       const { clientId, usedOverride } = await resolveScopedClientId(supabase, userId, (data as any).actAsClientId);
       const writer = await getWriter(usedOverride, supabase);
-      const { data: existing } = await writer
+      const scheduledWorkoutId = (data as any).scheduledWorkoutId ?? null;
+      let existingQ = writer
         .from("pl_day_completions")
-        .select("id, started_at, last_activity_at, completed_at")
-        .eq("client_id", clientId)
-        .eq("day_id", data.dayId)
-        .maybeSingle();
+        .select("id, started_at, last_activity_at, completed_at");
+      if (scheduledWorkoutId) {
+        existingQ = existingQ.eq("scheduled_workout_id", scheduledWorkoutId);
+      } else {
+        existingQ = existingQ
+          .eq("client_id", clientId)
+          .eq("day_id", data.dayId)
+          .is("scheduled_workout_id", null);
+      }
+      const { data: existing } = await existingQ.maybeSingle();
       if (existing?.id) {
         const patch: any = { last_activity_at: nowIso };
         if (!existing.started_at) patch.started_at = nowIso;
@@ -131,19 +164,22 @@ export const startWorkout = createServerFn({ method: "POST" })
           .eq("id", existing.id);
         return { id: existing.id, started_at: existing.started_at ?? nowIso };
       }
+      const insertRow: any = {
+        client_id: clientId,
+        day_id: data.dayId,
+        started_at: nowIso,
+        in_progress_at: nowIso,
+        last_activity_at: nowIso,
+        completion_source: "workout_view",
+      };
+      if (scheduledWorkoutId) insertRow.scheduled_workout_id = scheduledWorkoutId;
+      // Slice 2b: partial-unique replacement of the old (client_id, day_id)
+      // blanket unique means we can't use a plain onConflict any more; do
+      // an insert and let the partial unique surface a duplicate error
+      // instead. Existence was already checked above.
       const { data: inserted, error } = await writer
         .from("pl_day_completions")
-        .upsert(
-          {
-            client_id: clientId,
-            day_id: data.dayId,
-            started_at: nowIso,
-            in_progress_at: nowIso,
-            last_activity_at: nowIso,
-            completion_source: "workout_view",
-          },
-          { onConflict: "client_id,day_id", ignoreDuplicates: false },
-        )
+        .insert(insertRow)
         .select("id, started_at")
         .single();
       if (error) throw error;
@@ -352,12 +388,13 @@ export const saveDraft = createServerFn({ method: "POST" })
       // state (notes-only autosave must not flip a workout to "completed",
       // and editing a finished workout's notes must not clear completed_at
       // via the column default).
-      const { data: existing } = await writer
-        .from("pl_day_completions")
-        .select("id")
-        .eq("client_id", clientId)
-        .eq("day_id", data.dayId)
-        .maybeSingle();
+      const scheduledWorkoutId = (data as any).scheduledWorkoutId ?? null;
+      const { data: existing } = await scopeCompletion(
+        writer.from("pl_day_completions").select("id"),
+        clientId,
+        data.dayId,
+        scheduledWorkoutId,
+      ).maybeSingle();
       if (existing?.id) {
         const { error } = await writer
           .from("pl_day_completions")
@@ -368,17 +405,19 @@ export const saveDraft = createServerFn({ method: "POST" })
           .eq("id", existing.id);
         if (error) throw error;
       } else {
+        const insertRow: any = {
+          client_id: clientId,
+          day_id: data.dayId,
+          client_notes: data.clientNotes ?? null,
+          actual_duration_min: data.actualDurationMin ?? null,
+          // Explicit null — the column has DEFAULT now() so omitting this
+          // would mark the workout as completed on first note keystroke.
+          completed_at: null,
+        };
+        if (scheduledWorkoutId) insertRow.scheduled_workout_id = scheduledWorkoutId;
         const { error } = await writer
           .from("pl_day_completions")
-          .insert({
-            client_id: clientId,
-            day_id: data.dayId,
-            client_notes: data.clientNotes ?? null,
-            actual_duration_min: data.actualDurationMin ?? null,
-            // Explicit null — the column has DEFAULT now() so omitting this
-            // would mark the workout as completed on first note keystroke.
-            completed_at: null,
-          });
+          .insert(insertRow);
         if (error) throw error;
       }
       return { ok: true };
@@ -436,12 +475,13 @@ export const completeWorkout = createServerFn({ method: "POST" })
     if (data.kind === "client") {
       const { clientId, usedOverride } = await resolveScopedClientId(supabase, userId, (data as any).actAsClientId);
       const writer = await getWriter(usedOverride, supabase);
-      const { data: existing } = await writer
-        .from("pl_day_completions")
-        .select("id, started_at, completed_at, last_activity_at")
-        .eq("client_id", clientId)
-        .eq("day_id", data.dayId)
-        .maybeSingle();
+      const scheduledWorkoutId = (data as any).scheduledWorkoutId ?? null;
+      const { data: existing } = await scopeCompletion(
+        writer.from("pl_day_completions").select("id, started_at, completed_at, last_activity_at"),
+        clientId,
+        data.dayId,
+        scheduledWorkoutId,
+      ).maybeSingle();
 
       // Already completed → apply edits (notes / rating / duration) in place
       // rather than silently no-op. Stats (elapsed, logged_sets_count, etc.)
@@ -529,9 +569,23 @@ export const completeWorkout = createServerFn({ method: "POST" })
       // them here used to fail the upsert with "column does not exist",
       // which surfaced as "Save failed" and blocked the recap popup.
       };
+      // Slice 2b: cannot use onConflict here — the old (client_id, day_id)
+      // unique was replaced by two partial uniques. Do a check-then-update
+      // or insert instead.
+      if (existing?.id) {
+        const { data: row, error } = await writer
+          .from("pl_day_completions")
+          .update(update)
+          .eq("id", existing.id)
+          .select("id")
+          .single();
+        if (error) throw error;
+        return { id: row.id, summary };
+      }
+      if (scheduledWorkoutId) update.scheduled_workout_id = scheduledWorkoutId;
       const { data: row, error } = await writer
         .from("pl_day_completions")
-        .upsert(update, { onConflict: "client_id,day_id" })
+        .insert(update)
         .select("id")
         .single();
       if (error) throw error;
@@ -646,11 +700,15 @@ export const reopenWorkout = createServerFn({ method: "POST" })
     const nowIso = new Date().toISOString();
     if (data.kind === "client") {
       const clientId = await resolveClientId(supabase, userId);
-      const { error } = await supabase
-        .from("pl_day_completions")
-        .update({ completed_at: null, last_activity_at: nowIso })
-        .eq("client_id", clientId)
-        .eq("day_id", data.dayId);
+      const scheduledWorkoutId = (data as any).scheduledWorkoutId ?? null;
+      const { error } = await scopeCompletion(
+        supabase
+          .from("pl_day_completions")
+          .update({ completed_at: null, last_activity_at: nowIso }),
+        clientId,
+        data.dayId,
+        scheduledWorkoutId,
+      );
       if (error) throw error;
     } else {
       await assertOwnsEnrollment(supabase, data.enrollmentId);
@@ -719,12 +777,13 @@ export const submitOrEditReview = createServerFn({ method: "POST" })
       const writer = usedOverride
         ? (await import("@/integrations/supabase/client.server")).supabaseAdmin
         : supabase;
-      const { data: completion } = await supabase
-        .from("pl_day_completions")
-        .select("id")
-        .eq("client_id", clientId)
-        .eq("day_id", data.dayId)
-        .maybeSingle();
+      const scheduledWorkoutId = (data as any).scheduledWorkoutId ?? null;
+      const { data: completion } = await scopeCompletion(
+        supabase.from("pl_day_completions").select("id"),
+        clientId,
+        data.dayId,
+        scheduledWorkoutId,
+      ).maybeSingle();
       if (!completion?.id) throw new Error("Cannot submit review before completion exists");
 
       const { data: existing } = await writer
@@ -866,12 +925,15 @@ export const setWorkoutStatus = createServerFn({ method: "POST" })
     );
     const writer = await getWriter(usedOverride, supabase);
     const now = new Date().toISOString();
-    const { data: existing } = await writer
-      .from("pl_day_completions")
-      .select("id, started_at, in_progress_at, completed_at")
-      .eq("client_id", clientId)
-      .eq("day_id", data.dayId)
-      .maybeSingle();
+    const scheduledWorkoutId = (data as any).scheduledWorkoutId ?? null;
+    const { data: existing } = await scopeCompletion(
+      writer
+        .from("pl_day_completions")
+        .select("id, started_at, in_progress_at, completed_at"),
+      clientId,
+      data.dayId,
+      scheduledWorkoutId,
+    ).maybeSingle();
 
     if (data.status === "not_started") {
       if (existing?.id) {
@@ -890,19 +952,29 @@ export const setWorkoutStatus = createServerFn({ method: "POST" })
       : now;
     const completedAt = data.status === "completed" ? now : null;
 
-    const { error } = await writer
-      .from("pl_day_completions")
-      .upsert(
-        {
-          client_id: clientId,
-          day_id: data.dayId,
+    if (existing?.id) {
+      const { error } = await writer
+        .from("pl_day_completions")
+        .update({
           started_at: startedAt,
           in_progress_at: inProgressAt,
           completed_at: completedAt,
           last_activity_at: now,
-        },
-        { onConflict: "client_id,day_id" },
-      );
-    if (error) throw error;
+        })
+        .eq("id", existing.id);
+      if (error) throw error;
+    } else {
+      const insertRow: any = {
+        client_id: clientId,
+        day_id: data.dayId,
+        started_at: startedAt,
+        in_progress_at: inProgressAt,
+        completed_at: completedAt,
+        last_activity_at: now,
+      };
+      if (scheduledWorkoutId) insertRow.scheduled_workout_id = scheduledWorkoutId;
+      const { error } = await writer.from("pl_day_completions").insert(insertRow);
+      if (error) throw error;
+    }
     return { ok: true };
   });
