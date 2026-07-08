@@ -785,7 +785,22 @@ export interface LiftResultPoint {
 }
 
 /** Pull all completed sets for a client, joined with exercise + muscle group. */
-export async function getClientResults(clientId: string) {
+export async function getClientResults(
+  clientId: string,
+  opts: { blockId?: string } = {},
+) {
+  // When blockId is provided, restrict results to rows whose day belongs to
+  // the block. This is the authoritative boundary for exact-block analytics.
+  let allowedDayIds: Set<string> | null = null;
+  if (opts.blockId) {
+    const { data: weeks } = await sb.from("pl_weeks").select("id").eq("block_id", opts.blockId);
+    const weekIds = (weeks ?? []).map((w: any) => w.id);
+    if (weekIds.length === 0) return [];
+    const { data: days } = await sb.from("pl_days").select("id").in("week_id", weekIds);
+    const dayIds = (days ?? []).map((d: any) => d.id);
+    if (dayIds.length === 0) return [];
+    allowedDayIds = new Set(dayIds);
+  }
   const { data, error } = await sb
     .from("pl_row_results")
     .select("id, set_index, actual_load, actual_load_unit, entered_value, entered_unit, normalized_lb, normalized_kg, actual_reps, actual_rpe, actual_rir, notes, completed_at, completed_duration_seconds, row_id, pl_exercise_rows(exercise_id, exercise_name_override, day_id, purpose_label, movement_family, exercises(name, muscle_group, primary_muscle_group, category))")
@@ -795,6 +810,11 @@ export async function getClientResults(clientId: string) {
   if (error) throw error;
   const LB_PER_KG = 2.2046226;
   return (data ?? [])
+    .filter((r: any) => {
+      if (!allowedDayIds) return true;
+      const did = r.pl_exercise_rows?.day_id ?? null;
+      return did && allowedDayIds.has(did);
+    })
     .map((r: any) => {
       // Always work in LB internally. Prefer the pre-computed normalized
       // column; fall back to converting whichever raw value + unit was
