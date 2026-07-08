@@ -602,7 +602,7 @@ function WeekStrip({
 }: {
   selectedDate: Date;
   onSelectDate: (d: Date) => void;
-  byDate: Map<string, WorkoutItem>;
+  byDate: Map<string, WorkoutItem[]>;
 }) {
   // Week the selected date belongs to. Mon-first to match existing schedule UI.
   const weekStart = startOfWeek(selectedDate, { weekStartsOn: 1 });
@@ -635,7 +635,9 @@ function WeekStrip({
       <div className="grid grid-cols-7 gap-1">
         {days.map((d) => {
           const iso = toLocalISO(d);
-          const item = byDate.get(iso);
+          const list = byDate.get(iso) ?? [];
+          const item = list[0];
+          const extra = Math.max(0, list.length - 1);
           const status: WorkoutStatus | "none" = item
             ? getWorkoutStatus(item).status
             : "none";
@@ -656,7 +658,7 @@ function WeekStrip({
                     : "hover:bg-secondary",
               )}
               aria-pressed={isSelected}
-              aria-label={`${format(d, "EEEE MMMM d")}${item ? `, ${getWorkoutStatus(item).label}` : ", rest day"}`}
+              aria-label={`${format(d, "EEEE MMMM d")}${item ? `, ${getWorkoutStatus(item).label}${extra ? ` (+${extra} more)` : ""}` : ", rest day"}`}
             >
               <span className={cn(
                 "text-[10px] font-bold uppercase tracking-wider",
@@ -671,6 +673,12 @@ function WeekStrip({
                 {format(d, "d")}
               </span>
               <span className={cn("mt-0.5 h-1.5 w-1.5 rounded-full", statusDotClass(status))} />
+              {extra > 0 && (
+                <span className={cn(
+                  "text-[9px] font-bold leading-none",
+                  isSelected ? "text-primary-foreground/80" : "text-muted-foreground",
+                )}>+{extra}</span>
+              )}
             </button>
           );
         })}
@@ -688,7 +696,7 @@ function MonthGrid({
 }: {
   selectedDate: Date;
   onSelectDate: (d: Date) => void;
-  byDate: Map<string, WorkoutItem>;
+  byDate: Map<string, WorkoutItem[]>;
   chipsByDate?: Map<string, Array<{ label: string; family: string }>>;
 }) {
   const monthStart = startOfMonth(selectedDate);
@@ -727,7 +735,9 @@ function MonthGrid({
       <div className="grid grid-cols-7 gap-1">
         {days.map((d) => {
           const iso = toLocalISO(d);
-          const item = byDate.get(iso);
+          const list = byDate.get(iso) ?? [];
+          const item = list[0];
+          const extraCount = Math.max(0, list.length - 1);
           const status: WorkoutStatus | "none" = item
             ? getWorkoutStatus(item).status
             : "none";
@@ -764,7 +774,7 @@ function MonthGrid({
               </div>
               {title && (
                 <span className="mt-1 line-clamp-2 text-[10px] leading-tight text-muted-foreground">
-                  {title}
+                  {title}{extraCount > 0 ? ` +${extraCount}` : ""}
                 </span>
               )}
               {(() => {
