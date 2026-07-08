@@ -12,6 +12,7 @@ import { Badge } from "@/components/ui/badge";
 import { ChevronLeft, ChevronRight, CheckCircle2, Clock, AlertCircle, GripVertical, Calendar as CalIcon, CalendarPlus } from "lucide-react";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
+import { buildScheduleChips } from "@/lib/schedule-calendar-chips";
 
 export type ScheduleDay = {
   id: string; day_index: number; title: string | null; focus: string | null;
@@ -154,67 +155,40 @@ export function ScheduleCalendar(props: ScheduleCalendarProps) {
   const weekMap = useMemo(() => new Map(weeks.map((w) => [w.id, w])), [weeks]);
   const blockMap = useMemo(() => new Map(blocks.map((b) => [b.id, b])), [blocks]);
   const dayById = useMemo(() => new Map(days.map((d) => [d.id, d])), [days]);
-  const instanceCompletionByInstance = useMemo(() => {
-    const m = new Map<string, ScheduleCompletion>();
-    for (const c of completions) {
-      if (c.scheduled_workout_id) m.set(c.scheduled_workout_id, c);
-    }
-    return m;
-  }, [completions]);
-  const legacyCompletionByDay = useMemo(() => {
-    const m = new Map<string, ScheduleCompletion>();
-    for (const c of completions) {
-      if (!c.scheduled_workout_id) m.set(c.day_id, c);
-    }
-    return m;
-  }, [completions]);
+  const daysWithInstance = useMemo(
+    () => new Set((scheduledInstances ?? []).map((i) => i.source_day_id)),
+    [scheduledInstances],
+  );
 
-  /**
-   * A rendered card on the calendar. When `instanceId` is set, drag/drop
-   * operates on that scheduled instance; otherwise it's a legacy chip
-   * that falls back to pl_days.scheduled_date.
-   */
+  // Shared pure builder — tested in src/test/schedule-calendar-chips.test.ts
+  // for the "one chip per instance / drag ids = instance ids" invariants.
   type Chip = {
-    chipId: string;               // dnd id
+    chipId: string;
     instanceId: string | null;
     day: ScheduleDay;
     scheduled_date: string;
     comp: ScheduleCompletion | null;
   };
-
-  const daysWithInstance = useMemo(() => {
-    if (!scheduledInstances) return new Set<string>();
-    return new Set(scheduledInstances.map((i) => i.source_day_id));
-  }, [scheduledInstances]);
-
   const chips: Chip[] = useMemo(() => {
+    const raw = buildScheduleChips({
+      days,
+      instances: scheduledInstances ?? [],
+      completions,
+    });
     const out: Chip[] = [];
-    // Instance-based chips (one per instance)
-    for (const inst of scheduledInstances ?? []) {
-      const day = dayById.get(inst.source_day_id);
-      if (!day) continue;
+    for (const r of raw) {
+      const d = dayById.get(r.dayId);
+      if (!d) continue;
       out.push({
-        chipId: `inst:${inst.id}`,
-        instanceId: inst.id,
-        day: { ...day, scheduled_date: inst.scheduled_date },
-        scheduled_date: inst.scheduled_date,
-        comp: instanceCompletionByInstance.get(inst.id) ?? null,
-      });
-    }
-    // Legacy fallback chips — only for days with no matching instance.
-    for (const d of days) {
-      if (!d.scheduled_date) continue;
-      if (daysWithInstance.has(d.id)) continue;
-      out.push({
-        chipId: `day:${d.id}`,
-        instanceId: null,
-        day: d,
-        scheduled_date: d.scheduled_date,
-        comp: legacyCompletionByDay.get(d.id) ?? null,
+        chipId: r.chipId,
+        instanceId: r.instanceId,
+        day: { ...d, scheduled_date: r.scheduledDate },
+        scheduled_date: r.scheduledDate,
+        comp: (r.completion as ScheduleCompletion | null) ?? null,
       });
     }
     return out;
-  }, [days, dayById, scheduledInstances, daysWithInstance, instanceCompletionByInstance, legacyCompletionByDay]);
+  }, [days, dayById, scheduledInstances, completions]);
 
   const chipById = useMemo(() => new Map(chips.map((c) => [c.chipId, c])), [chips]);
 
