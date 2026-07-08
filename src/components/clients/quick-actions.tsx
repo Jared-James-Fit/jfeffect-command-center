@@ -154,7 +154,7 @@ export function QuickActionsMenu({ r }: { r: DirectoryRow }) {
           ) : (
             <Download className="mr-2 h-4 w-4" />
           )}
-          Download Workout PDF
+          Download Training Report
         </DropdownMenuItem>
 
         <DropdownMenuSeparator />
@@ -305,7 +305,7 @@ export function ClientMoreMenu({
           ) : (
             <Download className="mr-2 h-4 w-4" />
           )}
-          Download Workout PDF
+          Download Training Report
         </DropdownMenuItem>
 
         <DropdownMenuSeparator />
