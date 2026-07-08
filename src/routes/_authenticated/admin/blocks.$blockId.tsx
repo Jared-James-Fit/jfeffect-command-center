@@ -581,7 +581,19 @@ function BlockEditor() {
       <BlockSwitcher
         clientId={clientId}
         currentBlockId={blockId}
-        onBeforeNavigate={dirty ? save : undefined}
+        hasUnsavedChanges={dirty}
+        currentBlockName={name || tree.block.name || "this block"}
+        onBeforeNavigate={save}
+        onDiscardUnsaved={() => {
+          // Rehydrate from the last-loaded server snapshot so unsaved
+          // local edits are dropped without touching the database. The
+          // hydration effect will re-run for the new blockId on navigate.
+          if (originalTreeRef.current) {
+            setPayload(treeToPayload(originalTreeRef.current));
+            setName(originalTreeRef.current.block?.name ?? "");
+          }
+          setDirty(false);
+        }}
       />
 
       <StructureCanvas
