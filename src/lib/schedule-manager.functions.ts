@@ -101,9 +101,6 @@ export const moveWorkout = createServerFn({ method: "POST" })
       .object({
         dayId: z.string().uuid(),
         newDate: isoDate,
-        // When true, the server inserts the row even if the day already has
-        // a completion record — completed_at itself is NEVER touched here.
-        confirmCompletedMove: z.boolean().optional(),
       })
       .parse(i),
   )
@@ -119,19 +116,36 @@ export const moveWorkout = createServerFn({ method: "POST" })
       throw new Error("This workout's date is locked by your coach.");
     }
 
-    // Completed-workout guardrail: clients must explicitly confirm.
+    // Slice 2d: this legacy path may only mutate pl_days.scheduled_date
+    // for genuinely legacy program days that have NO pl_scheduled_workouts
+    // instance for this client. Once any instance exists, the calendar
+    // reads it as canonical (Slice 2a) and mutating pl_days would silently
+    // desync from the visible schedule. Callers must go through
+    // moveScheduledWorkout with the exact instance id.
+    const { data: existingInstance } = await supabase
+      .from("pl_scheduled_workouts")
+      .select("id")
+      .eq("client_id", block.client_id)
+      .eq("source_day_id", data.dayId)
+      .limit(1);
+    if ((existingInstance ?? []).length > 0) {
+      throw new Error(
+        "This workout uses the new scheduling system. Move it from the workout calendar instead.",
+      );
+    }
+
+    // Slice 2d: completed workouts are immutable for every actor. A move
+    // on a completed day would rewrite the historical scheduled date and
+    // desync reporting from logged completions.
     const { data: completion } = await supabase
       .from("pl_day_completions")
-      .select("id, completed_at, in_progress_at")
+      .select("id, completed_at")
       .eq("day_id", data.dayId)
       .maybeSingle();
-    if (completion?.completed_at && role === "client" && !data.confirmCompletedMove) {
-      return {
-        ok: false as const,
-        requiresCompletedConfirmation: true,
-        message:
-          "This workout is already completed. Confirm to move its scheduled date — your logged sets are untouched.",
-      };
+    if (completion?.completed_at) {
+      throw new Error(
+        "This workout is already completed and its scheduled date is locked.",
+      );
     }
 
     if (day.scheduled_date === data.newDate) {
@@ -217,6 +231,31 @@ export const swapWorkouts = createServerFn({ method: "POST" })
       role !== "coach"
     ) {
       throw new Error("One of these workouts is date-locked by your coach.");
+    }
+
+    // Slice 2d: reject if EITHER day is instance-backed. Swapping via
+    // pl_days.scheduled_date would desync from the canonical instance list.
+    const { data: siblingInstances } = await supabase
+      .from("pl_scheduled_workouts")
+      .select("source_day_id")
+      .eq("client_id", a.block.client_id)
+      .in("source_day_id", [data.dayIdA, data.dayIdB]);
+    if ((siblingInstances ?? []).length > 0) {
+      throw new Error(
+        "One of these workouts uses the new scheduling system. Move it from the workout calendar instead.",
+      );
+    }
+
+    // Reject completed workouts on either side — completed history is
+    // locked. See moveWorkout above for the same rule.
+    const { data: completions } = await supabase
+      .from("pl_day_completions")
+      .select("day_id, completed_at")
+      .in("day_id", [data.dayIdA, data.dayIdB]);
+    if ((completions ?? []).some((c: any) => c.completed_at)) {
+      throw new Error(
+        "One of these workouts is already completed and cannot be swapped.",
+      );
     }
 
     const batchId = crypto.randomUUID();

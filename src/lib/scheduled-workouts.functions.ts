@@ -260,7 +260,6 @@ export const moveScheduledWorkout = createServerFn({ method: "POST" })
       newDate: string;
       time?: string | null;
       orderIndex?: number | null;
-      confirmCompletedMove?: boolean;
     }) =>
       z
         .object({
@@ -268,7 +267,6 @@ export const moveScheduledWorkout = createServerFn({ method: "POST" })
           newDate: isoDate,
           time: isoTime,
           orderIndex: z.number().int().nullable().optional(),
-          confirmCompletedMove: z.boolean().optional(),
         })
         .parse(d),
   )
@@ -288,20 +286,20 @@ export const moveScheduledWorkout = createServerFn({ method: "POST" })
         throw new Error("Schedule editing is disabled for your account.");
     }
 
-    // Completion guard — a completed instance may not be silently moved.
-    // Clients must confirm; coaches/admins may move without confirming.
+    // Slice 2d: completed scheduled instances are immutable across every
+    // actor tier. Moving a completed instance would rewrite the historical
+    // date attached to logged sets and corrupt reporting. Coaches who
+    // genuinely want the workout to happen on a new date should schedule a
+    // new future copy of the source day instead.
     const { data: comp } = await context.supabase
       .from("pl_day_completions")
       .select("completed_at")
       .eq("scheduled_workout_id", data.instanceId)
       .maybeSingle();
-    if (comp?.completed_at && actor === "client" && !data.confirmCompletedMove) {
-      return {
-        ok: false as const,
-        requiresCompletedConfirmation: true,
-        message:
-          "This workout is already completed. Confirm to move its scheduled date — your logged sets stay attached.",
-      };
+    if (comp?.completed_at) {
+      throw new Error(
+        "This workout is already completed and its history is locked. Schedule a new copy on the new date instead of moving the completed one.",
+      );
     }
 
     // Compute next order_index if not provided → append.
@@ -406,6 +404,51 @@ export const reorderScheduledWorkouts = createServerFn({ method: "POST" })
       if (perm === "off")
         throw new Error("Schedule editing is disabled for your account.");
     }
+
+    // Load every instance for this (client, date). The caller MUST send
+    // the exact full set of ids in the intended order — no missing ids
+    // and no foreign ids. This prevents partial re-orders that would
+    // leave stale/duplicate order_index values behind.
+    const { data: existing, error: exErr } = await context.supabase
+      .from("pl_scheduled_workouts")
+      .select("id")
+      .eq("client_id", data.clientId)
+      .eq("scheduled_date", data.date);
+    if (exErr) throw new Error(exErr.message);
+    const existingIds = new Set((existing ?? []).map((r: any) => r.id));
+    const requested = new Set(data.orderedInstanceIds);
+    if (requested.size !== data.orderedInstanceIds.length) {
+      throw new Error("Reorder payload contains duplicate instance ids.");
+    }
+    if (
+      existingIds.size !== requested.size ||
+      [...requested].some((id) => !existingIds.has(id))
+    ) {
+      throw new Error(
+        "Reorder payload does not match the current instances for this date. Refresh the schedule and try again.",
+      );
+    }
+
+    // Reject if any of the instances is completed — reordering a completed
+    // instance would change its historical position on the day.
+    const { data: comps } = await context.supabase
+      .from("pl_day_completions")
+      .select("scheduled_workout_id, completed_at")
+      .in("scheduled_workout_id", data.orderedInstanceIds);
+    const completedIds = new Set(
+      (comps ?? [])
+        .filter((c: any) => c.completed_at)
+        .map((c: any) => c.scheduled_workout_id as string),
+    );
+    if (completedIds.size > 0) {
+      throw new Error(
+        "One of these workouts is already completed and cannot be reordered.",
+      );
+    }
+
+    // Normalize order_index to 0..N-1 in a single pass — no duplicates,
+    // no gaps. We write every row (even if its target index is unchanged)
+    // to keep the outcome deterministic and easy to test.
     for (let i = 0; i < data.orderedInstanceIds.length; i++) {
       const id = data.orderedInstanceIds[i];
       const { error } = await context.supabase
@@ -416,7 +459,7 @@ export const reorderScheduledWorkouts = createServerFn({ method: "POST" })
         .eq("scheduled_date", data.date);
       if (error) throw new Error(error.message);
     }
-    return { ok: true };
+    return { ok: true as const, normalizedCount: data.orderedInstanceIds.length };
   });
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -448,6 +491,20 @@ export const updateScheduledWorkoutTime = createServerFn({ method: "POST" })
       if (perm === "off")
         throw new Error("Schedule editing is disabled for your account.");
     }
+
+    // Slice 2d: completed instances are immutable — time is part of the
+    // historical record once logged sets are attached.
+    const { data: comp } = await context.supabase
+      .from("pl_day_completions")
+      .select("completed_at")
+      .eq("scheduled_workout_id", data.instanceId)
+      .maybeSingle();
+    if (comp?.completed_at) {
+      throw new Error(
+        "This workout is already completed. Its scheduled time is locked to preserve history.",
+      );
+    }
+
     const { error } = await context.supabase
       .from("pl_scheduled_workouts")
       .update({ scheduled_time: data.time })
