@@ -402,7 +402,7 @@ export function ScheduleCalendar(props: ScheduleCalendarProps) {
               const list = byDate.get(ymd) ?? [];
               return (
                 <DroppableCell key={ymd} date={date} dim={!isSameMonth(date, cursor)}>
-                  {list.map((chip, idx) => {
+                  {list.map((chip) => {
                     const day = chip.day;
                     const wk = weekMap.get(day.week_id);
                     const blk = wk ? blockMap.get(wk.block_id) : null;
