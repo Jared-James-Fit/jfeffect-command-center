@@ -294,29 +294,24 @@ function PortalAnalytics() {
 
   // Summary stats (display only; computed from already-loaded data).
   const summary = useMemo(() => {
-    const now = Date.now();
-    const prs30 = (results as any[]).length
-      ? recentPRs(results as any[], 30).length
-      : 0;
-    const last7Sets = (results as any[]).filter(
-      (r: any) => r.date && now - new Date(r.date).getTime() <= 7 * 86400000,
-    ).length;
+    const prsInRange = prs.length;
+    const setsInRange = filteredResults.length;
     const workouts = new Set(
-      (results as any[])
+      filteredResults
         .filter((r: any) => r.date)
         .map((r: any) => format(new Date(r.date), "yyyy-MM-dd")),
     ).size;
     // Top improved lift in selected range.
     const top = [...prs].sort((a: any, b: any) => b.delta - a.delta)[0];
     return {
-      prs30,
-      last7Sets,
+      prsInRange,
+      setsInRange,
       workouts,
       topLift: top
         ? { name: top.exercise_name, delta: conv(top.delta) }
         : null,
     };
-  }, [results, prs, conv]);
+  }, [filteredResults, prs, conv]);
 
   return (
     <>
