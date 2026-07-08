@@ -477,26 +477,30 @@ export function MoveWorkoutSheet({
             </div>
           )}
 
-          {/* Completion / in-progress warning */}
-          {(isCompleted || inProgress) && (
+          {/* Slice 2d: completed workouts are permanently locked from moves,
+             time changes, and removal. Coaches who want the workout on a
+             new date must schedule a fresh copy — the completion stays as
+             the historical record. */}
+          {isCompleted && (
+            <div className="rounded-md border border-emerald-500/40 bg-emerald-500/10 p-3 text-xs text-emerald-900 dark:text-emerald-200">
+              <div className="flex items-start gap-2">
+                <AlertTriangle className="mt-0.5 h-4 w-4" />
+                <div>
+                  This workout is already completed. Its scheduled date, time,
+                  and order are locked to keep historical reporting accurate.
+                  To have it happen on a new date, schedule a fresh copy from
+                  the calendar instead.
+                </div>
+              </div>
+            </div>
+          )}
+          {!isCompleted && inProgress && (
             <div className="rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-xs text-amber-900 dark:text-amber-200">
               <div className="flex items-start gap-2">
                 <AlertTriangle className="mt-0.5 h-4 w-4" />
                 <div>
-                  {isCompleted
-                    ? "This workout is already completed. Moving it changes only the scheduled date — your logged sets stay attached and editable."
-                    : "This workout is in progress. Moving its scheduled date won't lose your current set logs."}
-                  {isCompleted && (
-                    <label className="mt-2 flex items-center gap-2">
-                      <input
-                        type="checkbox"
-                        checked={confirmCompleted}
-                        onChange={(e) => setConfirmCompleted(e.target.checked)}
-                        className="h-4 w-4"
-                      />
-                      I understand. Allow this move.
-                    </label>
-                  )}
+                  This workout is in progress. Moving its scheduled date
+                  won't lose your current set logs.
                 </div>
               </div>
             </div>
@@ -547,7 +551,7 @@ export function MoveWorkoutSheet({
             </div>
           )}
 
-          {effectiveTarget && ctx && (
+          {effectiveTarget && ctx && !isCompleted && (
             <div className="rounded-md bg-secondary/40 p-3 text-xs">
               <span className="text-muted-foreground">{currentDateLabel}</span>
               <ArrowRight className="mx-2 inline h-3.5 w-3.5" />
@@ -608,21 +612,28 @@ export function MoveWorkoutSheet({
 
         <DrawerFooter className="flex flex-row gap-2 pt-2">
           <Button variant="outline" className="flex-1" onClick={() => onOpenChange(false)}>
-            <RotateCcw className="mr-1 h-4 w-4" /> Cancel
+            <RotateCcw className="mr-1 h-4 w-4" /> {isCompleted ? "Close" : "Cancel"}
           </Button>
-          <Button
-            className="flex-1"
-            disabled={
-              !effectiveTarget ||
-              !!ctxQuery.isError ||
-              moveMutation.isPending ||
-              swapMutation.isPending ||
-              (isCompleted && !confirmCompleted)
-            }
-            onClick={handleConfirm}
-          >
-            {moveMutation.isPending ? (
-              <Loader2 className="mr-1 h-4 w-4 animate-spin" />
+          {!isCompleted && (
+            <Button
+              className="flex-1"
+              disabled={
+                !effectiveTarget ||
+                !!ctxQuery.isError ||
+                moveMutation.isPending ||
+                swapMutation.isPending
+              }
+              onClick={handleConfirm}
+            >
+              {moveMutation.isPending ? (
+                <Loader2 className="mr-1 h-4 w-4 animate-spin" />
+              ) : (
+                <CalendarIcon className="mr-1 h-4 w-4" />
+              )}
+              Move workout
+            </Button>
+          )}
+        </DrawerFooter>
             ) : (
               <CalendarIcon className="mr-1 h-4 w-4" />
             )}
