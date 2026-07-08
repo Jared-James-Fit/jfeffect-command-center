@@ -713,7 +713,25 @@ export function AppShell({ items, bottomItems: customBottomItems, title, childre
                                 <TooltipTrigger asChild>{link}</TooltipTrigger>
                                 <TooltipContent side="right">{item.label}</TooltipContent>
                               </Tooltip>
-                            ) : link}
+                            ) : (
+                              <div className="relative group/navrow">
+                                {link}
+                                <button
+                                  type="button"
+                                  onClick={(e) => handleTogglePin(e, item.to, item.label)}
+                                  aria-label={pinned ? `Unpin ${item.label}` : `Pin ${item.label}`}
+                                  title={pinned ? "Unpin from favorites" : "Pin to favorites"}
+                                  className={cn(
+                                    "absolute right-1.5 top-1/2 -translate-y-1/2 rounded p-1 transition-opacity",
+                                    pinned
+                                      ? "text-amber-400 opacity-70 hover:opacity-100 hover:bg-amber-400/10"
+                                      : "text-muted-foreground opacity-0 hover:bg-sidebar-accent hover:text-foreground group-hover/navrow:opacity-70 focus:opacity-100",
+                                  )}
+                                >
+                                  {pinned ? <PinOff className="h-3.5 w-3.5" /> : <Pin className="h-3.5 w-3.5" />}
+                                </button>
+                              </div>
+                            )}
                           </li>
                         );
                       })}
