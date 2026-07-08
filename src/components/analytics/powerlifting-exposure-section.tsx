@@ -451,7 +451,7 @@ export function PowerliftingExposureSection({
               <div className="mb-3 text-xs font-bold uppercase tracking-widest text-muted-foreground">
                 Planned vs Completed Sets by Role
               </div>
-              <PlannedVsCompletedTable clientId={clientId} filter={filter} />
+              <PlannedVsCompletedTable clientId={clientId} filter={filter} blockId={blockId} />
             </Card>
           )}
         </>
@@ -464,17 +464,30 @@ export function PowerliftingExposureSection({
 function PlannedVsCompletedTable({
   clientId,
   filter,
+  blockId,
 }: {
   clientId: string;
   filter: AnalyticsFilter;
+  blockId?: string | null;
 }) {
   const { data } = useQuery({
-    queryKey: ["pl-role-set-counts", clientId, filter.start.toISOString(), filter.end.toISOString()],
+    queryKey: [
+      "pl-role-set-counts",
+      clientId,
+      filter.start.toISOString(),
+      filter.end.toISOString(),
+      blockId ?? null,
+    ],
     enabled: !!clientId,
     staleTime: 30_000,
     queryFn: async () => {
-      const { data: blocks } = await supabase.from("pl_blocks").select("id").eq("client_id", clientId);
-      const blockIds = (blocks ?? []).map((b) => b.id);
+      let blockIds: string[];
+      if (blockId) {
+        blockIds = [blockId];
+      } else {
+        const { data: blocks } = await supabase.from("pl_blocks").select("id").eq("client_id", clientId);
+        blockIds = (blocks ?? []).map((b) => b.id);
+      }
       if (blockIds.length === 0) return { planned: {}, completed: {} } as any;
       const { data: weeks } = await supabase.from("pl_weeks").select("id").in("block_id", blockIds);
       const weekIds = (weeks ?? []).map((w) => w.id);
