@@ -28,6 +28,7 @@ export function ScheduleManagerShell({ clientId, mode }: ScheduleManagerShellPro
   });
 
   const [moveDayId, setMoveDayId] = useState<string | null>(null);
+  const [moveInstanceId, setMoveInstanceId] = useState<string | null>(null);
   const [moveInitialDate, setMoveInitialDate] = useState<Date | null>(null);
   const [bulkOpen, setBulkOpen] = useState(false);
   const [bulkAnchor, setBulkAnchor] = useState<string | null>(null);
@@ -37,15 +38,20 @@ export function ScheduleManagerShell({ clientId, mode }: ScheduleManagerShellPro
   if (isLoading || !data) {
     return <div className="flex items-center gap-2 text-sm text-muted-foreground p-8"><Loader2 className="h-4 w-4 animate-spin" /> Loading schedule…</div>;
   }
-  const { client, blocks, weeks, days, completions } = data as any;
+  const { client, blocks, weeks, days, completions, scheduledInstances } = data as any;
   const locked = !!client?.schedule_locked && mode === "client";
 
-  const handleMove = (dayId: string, targetDate: Date) => {
-    setMoveDayId(dayId);
+  const handleMove = (
+    target: { dayId: string; instanceId: string | null },
+    targetDate: Date,
+  ) => {
+    setMoveDayId(target.dayId);
+    setMoveInstanceId(target.instanceId);
     setMoveInitialDate(targetDate);
   };
-  const handleSelectDay = (dayId: string) => {
-    setMoveDayId(dayId);
+  const handleSelectDay = (target: { dayId: string; instanceId: string | null }) => {
+    setMoveDayId(target.dayId);
+    setMoveInstanceId(target.instanceId);
     setMoveInitialDate(null);
   };
 
@@ -80,6 +86,7 @@ export function ScheduleManagerShell({ clientId, mode }: ScheduleManagerShellPro
             weeks={weeks}
             blocks={blocks}
             completions={completions}
+            scheduledInstances={scheduledInstances ?? []}
             canEdit={!locked}
             onMoveDay={handleMove}
             onSelectDay={handleSelectDay}
@@ -124,8 +131,10 @@ export function ScheduleManagerShell({ clientId, mode }: ScheduleManagerShellPro
 
       <MoveWorkoutSheet
         dayId={moveDayId}
+        scheduledWorkoutId={moveInstanceId}
+        coachControls={mode === "coach"}
         open={!!moveDayId}
-        onOpenChange={(o) => { if (!o) { setMoveDayId(null); setMoveInitialDate(null); } }}
+        onOpenChange={(o) => { if (!o) { setMoveDayId(null); setMoveInstanceId(null); setMoveInitialDate(null); } }}
         initialTargetDate={moveInitialDate}
         viewWorkoutAs={
           mode === "coach"

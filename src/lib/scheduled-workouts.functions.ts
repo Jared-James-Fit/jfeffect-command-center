@@ -260,6 +260,7 @@ export const moveScheduledWorkout = createServerFn({ method: "POST" })
       newDate: string;
       time?: string | null;
       orderIndex?: number | null;
+      confirmCompletedMove?: boolean;
     }) =>
       z
         .object({
@@ -267,13 +268,16 @@ export const moveScheduledWorkout = createServerFn({ method: "POST" })
           newDate: isoDate,
           time: isoTime,
           orderIndex: z.number().int().nullable().optional(),
+          confirmCompletedMove: z.boolean().optional(),
         })
         .parse(d),
   )
   .handler(async ({ data, context }) => {
     const { data: instance } = await context.supabase
       .from("pl_scheduled_workouts")
-      .select("id, client_id, scheduled_date, order_index, schedule_source")
+      .select(
+        "id, client_id, scheduled_date, scheduled_time, order_index, schedule_source",
+      )
       .eq("id", data.instanceId)
       .maybeSingle();
     if (!instance) throw new Error("Scheduled workout not found.");
@@ -282,6 +286,22 @@ export const moveScheduledWorkout = createServerFn({ method: "POST" })
       const perm = client.workout_scheduling_permission ?? "move";
       if (perm === "off")
         throw new Error("Schedule editing is disabled for your account.");
+    }
+
+    // Completion guard — a completed instance may not be silently moved.
+    // Clients must confirm; coaches/admins may move without confirming.
+    const { data: comp } = await context.supabase
+      .from("pl_day_completions")
+      .select("completed_at")
+      .eq("scheduled_workout_id", data.instanceId)
+      .maybeSingle();
+    if (comp?.completed_at && actor === "client" && !data.confirmCompletedMove) {
+      return {
+        ok: false as const,
+        requiresCompletedConfirmation: true,
+        message:
+          "This workout is already completed. Confirm to move its scheduled date — your logged sets stay attached.",
+      };
     }
 
     // Compute next order_index if not provided → append.
@@ -314,7 +334,14 @@ export const moveScheduledWorkout = createServerFn({ method: "POST" })
       })
       .eq("id", data.instanceId);
     if (error) throw new Error(error.message);
-    return { ok: true };
+    return {
+      ok: true as const,
+      previous: {
+        scheduledDate: instance.scheduled_date as string,
+        scheduledTime: (instance.scheduled_time as string | null) ?? null,
+        orderIndex: (instance.order_index as number) ?? 0,
+      },
+    };
   });
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -335,6 +362,19 @@ export const removeScheduledWorkout = createServerFn({ method: "POST" })
     const { actor } = await resolveActor(context, instance.client_id);
     if (actor === "client") {
       throw new Error("Only your coach can remove a scheduled workout.");
+    }
+    // Block removal of a completed instance — logged sets stay attached to
+    // the instance and would be orphaned by delete. Coach must undo the
+    // completion first if they really need to remove it.
+    const { data: comp } = await context.supabase
+      .from("pl_day_completions")
+      .select("completed_at")
+      .eq("scheduled_workout_id", data.instanceId)
+      .maybeSingle();
+    if (comp?.completed_at) {
+      throw new Error(
+        "This workout instance is already completed. Reset the completion before removing it.",
+      );
     }
     const { error } = await context.supabase
       .from("pl_scheduled_workouts")

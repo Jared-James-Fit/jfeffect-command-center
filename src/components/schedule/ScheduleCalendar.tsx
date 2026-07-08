@@ -20,7 +20,20 @@ export type ScheduleDay = {
 };
 export type ScheduleWeek = { id: string; week_index: number; block_id: string };
 export type ScheduleBlock = { id: string; name: string | null; start_date: string | null; end_date: string | null };
-export type ScheduleCompletion = { day_id: string; completed_at: string | null; in_progress_at: string | null };
+export type ScheduleCompletion = {
+  day_id: string;
+  completed_at: string | null;
+  in_progress_at: string | null;
+  scheduled_workout_id?: string | null;
+};
+export type ScheduledInstance = {
+  id: string;
+  source_day_id: string;
+  scheduled_date: string;
+  scheduled_time: string | null;
+  order_index: number;
+  schedule_source?: string | null;
+};
 
 type Status = "completed" | "in-progress" | "overdue" | "rescheduled" | "scheduled" | "unscheduled";
 function statusOf(day: ScheduleDay, comp: ScheduleCompletion | null): Status {
@@ -42,11 +55,12 @@ function statusBadge(s: Status) {
   }
 }
 
-function DayChip({ day, comp, week, blockName, draggable }: {
+function DayChip({ chipId, day, comp, week, blockName, draggable }: {
+  chipId: string;
   day: ScheduleDay; comp: ScheduleCompletion | null;
   week?: ScheduleWeek; blockName?: string | null; draggable: boolean;
 }) {
-  const id = day.id;
+  const id = chipId;
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
     id, disabled: !draggable,
   });
@@ -106,14 +120,28 @@ export interface ScheduleCalendarProps {
   weeks: ScheduleWeek[];
   blocks: ScheduleBlock[];
   completions: ScheduleCompletion[];
+  /**
+   * Slice 2c — when provided, the calendar renders one chip per
+   * scheduled instance and drag/select callbacks report the exact
+   * `instanceId`. `pl_days.scheduled_date` is used only as the legacy
+   * fallback for days with no matching instance.
+   */
+  scheduledInstances?: ScheduledInstance[];
   canEdit: boolean;
-  onMoveDay: (dayId: string, targetDate: Date) => void;
+  /**
+   * `instanceId` is set whenever the dragged chip corresponds to a
+   * scheduled instance. Legacy chips (no instance) leave it null.
+   */
+  onMoveDay: (
+    target: { dayId: string; instanceId: string | null },
+    targetDate: Date,
+  ) => void;
   /** Open the move sheet pre-filled with the workout but no target date. */
-  onSelectDay?: (dayId: string) => void;
+  onSelectDay?: (target: { dayId: string; instanceId: string | null }) => void;
 }
 
 export function ScheduleCalendar(props: ScheduleCalendarProps) {
-  const { days, weeks, blocks, completions, canEdit, onMoveDay, onSelectDay } = props;
+  const { days, weeks, blocks, completions, scheduledInstances, canEdit, onMoveDay, onSelectDay } = props;
   const [view, setView] = useState<"month" | "list">("month");
   const [cursor, setCursor] = useState<Date>(startOfMonth(new Date()));
   const [dragId, setDragId] = useState<string | null>(null);
@@ -125,22 +153,80 @@ export function ScheduleCalendar(props: ScheduleCalendarProps) {
 
   const weekMap = useMemo(() => new Map(weeks.map((w) => [w.id, w])), [weeks]);
   const blockMap = useMemo(() => new Map(blocks.map((b) => [b.id, b])), [blocks]);
-  const compMap = useMemo(() => {
+  const dayById = useMemo(() => new Map(days.map((d) => [d.id, d])), [days]);
+  const instanceCompletionByInstance = useMemo(() => {
     const m = new Map<string, ScheduleCompletion>();
-    for (const c of completions) m.set(c.day_id, c);
+    for (const c of completions) {
+      if (c.scheduled_workout_id) m.set(c.scheduled_workout_id, c);
+    }
+    return m;
+  }, [completions]);
+  const legacyCompletionByDay = useMemo(() => {
+    const m = new Map<string, ScheduleCompletion>();
+    for (const c of completions) {
+      if (!c.scheduled_workout_id) m.set(c.day_id, c);
+    }
     return m;
   }, [completions]);
 
-  const byDate = useMemo(() => {
-    const m = new Map<string, ScheduleDay[]>();
+  /**
+   * A rendered card on the calendar. When `instanceId` is set, drag/drop
+   * operates on that scheduled instance; otherwise it's a legacy chip
+   * that falls back to pl_days.scheduled_date.
+   */
+  type Chip = {
+    chipId: string;               // dnd id
+    instanceId: string | null;
+    day: ScheduleDay;
+    scheduled_date: string;
+    comp: ScheduleCompletion | null;
+  };
+
+  const daysWithInstance = useMemo(() => {
+    if (!scheduledInstances) return new Set<string>();
+    return new Set(scheduledInstances.map((i) => i.source_day_id));
+  }, [scheduledInstances]);
+
+  const chips: Chip[] = useMemo(() => {
+    const out: Chip[] = [];
+    // Instance-based chips (one per instance)
+    for (const inst of scheduledInstances ?? []) {
+      const day = dayById.get(inst.source_day_id);
+      if (!day) continue;
+      out.push({
+        chipId: `inst:${inst.id}`,
+        instanceId: inst.id,
+        day: { ...day, scheduled_date: inst.scheduled_date },
+        scheduled_date: inst.scheduled_date,
+        comp: instanceCompletionByInstance.get(inst.id) ?? null,
+      });
+    }
+    // Legacy fallback chips — only for days with no matching instance.
     for (const d of days) {
       if (!d.scheduled_date) continue;
-      const list = m.get(d.scheduled_date) ?? [];
-      list.push(d);
-      m.set(d.scheduled_date, list);
+      if (daysWithInstance.has(d.id)) continue;
+      out.push({
+        chipId: `day:${d.id}`,
+        instanceId: null,
+        day: d,
+        scheduled_date: d.scheduled_date,
+        comp: legacyCompletionByDay.get(d.id) ?? null,
+      });
+    }
+    return out;
+  }, [days, dayById, scheduledInstances, daysWithInstance, instanceCompletionByInstance, legacyCompletionByDay]);
+
+  const chipById = useMemo(() => new Map(chips.map((c) => [c.chipId, c])), [chips]);
+
+  const byDate = useMemo(() => {
+    const m = new Map<string, Chip[]>();
+    for (const c of chips) {
+      const list = m.get(c.scheduled_date) ?? [];
+      list.push(c);
+      m.set(c.scheduled_date, list);
     }
     return m;
-  }, [days]);
+  }, [chips]);
 
   const monthStart = startOfMonth(cursor);
   const gridStart = startOfWeek(monthStart, { weekStartsOn: 1 });
@@ -151,28 +237,32 @@ export function ScheduleCalendar(props: ScheduleCalendarProps) {
 
   const upcoming = useMemo(() => {
     const today = startOfToday();
-    return days
-      .filter((d) => d.scheduled_date)
-      .map((d) => ({ d, date: parseISO(d.scheduled_date!) }))
+    return chips
+      .map((c) => ({ c, date: parseISO(c.scheduled_date) }))
       .filter((x) => x.date >= today)
       .sort((a, b) => a.date.getTime() - b.date.getTime())
       .slice(0, 30);
-  }, [days]);
+  }, [chips]);
 
   const unscheduled = useMemo(
-    () => days.filter((d) => !d.scheduled_date).sort((a, b) => a.day_index - b.day_index),
-    [days],
+    () =>
+      days
+        .filter((d) => !d.scheduled_date && !daysWithInstance.has(d.id))
+        .sort((a, b) => a.day_index - b.day_index),
+    [days, daysWithInstance],
   );
 
   const handleDragEnd = (e: DragEndEvent) => {
     setDragId(null);
     if (!e.over || !e.active) return;
-    const dayId = String(e.active.id);
+    const chipId = String(e.active.id);
+    const chip = chipById.get(chipId);
+    if (!chip) return;
     const targetDate = parseISO(String(e.over.id));
-    onMoveDay(dayId, targetDate);
+    onMoveDay({ dayId: chip.day.id, instanceId: chip.instanceId }, targetDate);
   };
 
-  const draggedDay = dragId ? days.find((d) => d.id === dragId) : null;
+  const draggedChip = dragId ? chipById.get(dragId) ?? null : null;
 
   return (
     <DndContext
@@ -195,7 +285,7 @@ export function ScheduleCalendar(props: ScheduleCalendarProps) {
                   key={d.id}
                   type="button"
                   disabled={!canEdit}
-                  onClick={() => onSelectDay?.(d.id)}
+                  onClick={() => onSelectDay?.({ dayId: d.id, instanceId: null })}
                   className="flex items-center justify-between gap-3 rounded-md border border-border bg-card p-3 text-left text-sm transition hover:bg-accent/40 disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   <span className="min-w-0">
@@ -248,16 +338,18 @@ export function ScheduleCalendar(props: ScheduleCalendarProps) {
               const list = byDate.get(ymd) ?? [];
               return (
                 <DroppableCell key={ymd} date={date} dim={!isSameMonth(date, cursor)}>
-                  {list.map((day) => {
+                  {list.map((chip) => {
+                    const day = chip.day;
                     const wk = weekMap.get(day.week_id);
                     const blk = wk ? blockMap.get(wk.block_id) : null;
                     return (
-                      <div key={day.id} onClick={() => onSelectDay?.(day.id)}>
+                      <div key={chip.chipId} onClick={() => onSelectDay?.({ dayId: day.id, instanceId: chip.instanceId })}>
                         <DayChip
+                          chipId={chip.chipId}
                           day={day}
                           week={wk}
                           blockName={blk?.name ?? null}
-                          comp={compMap.get(day.id) ?? null}
+                          comp={chip.comp}
                           draggable={canEdit}
                         />
                       </div>
@@ -274,14 +366,15 @@ export function ScheduleCalendar(props: ScheduleCalendarProps) {
             {upcoming.length === 0 && (
               <div className="text-sm text-muted-foreground text-center py-8">No upcoming workouts scheduled.</div>
             )}
-            {upcoming.map(({ d, date }) => {
+            {upcoming.map(({ c: chip, date }) => {
+              const d = chip.day;
               const wk = weekMap.get(d.week_id);
               const blk = wk ? blockMap.get(wk.block_id) : null;
               return (
                 <div
-                  key={d.id}
+                  key={chip.chipId}
                   className="flex items-center justify-between gap-3 rounded-md border border-border bg-card p-3 cursor-pointer hover:bg-accent/40"
-                  onClick={() => onSelectDay?.(d.id)}
+                  onClick={() => onSelectDay?.({ dayId: d.id, instanceId: chip.instanceId })}
                 >
                   <div className="flex-1 min-w-0">
                     <div className="text-xs text-muted-foreground">{format(date, "EEE, MMM d")}</div>
@@ -290,7 +383,7 @@ export function ScheduleCalendar(props: ScheduleCalendarProps) {
                       {blk?.name ?? "Block"} · Week {wk?.week_index ?? "?"} · Day {d.day_index}
                     </div>
                   </div>
-                  {statusBadge(statusOf(d, compMap.get(d.id) ?? null))}
+                  {statusBadge(statusOf(d, chip.comp))}
                 </div>
               );
             })}
@@ -299,9 +392,9 @@ export function ScheduleCalendar(props: ScheduleCalendarProps) {
       </Tabs>
 
       <DragOverlay>
-        {draggedDay ? (
+        {draggedChip ? (
           <div className="rounded-md border border-primary bg-card p-2 shadow-lg text-xs font-medium">
-            {draggedDay.title?.trim() || `Day ${draggedDay.day_index}`}
+            {draggedChip.day.title?.trim() || `Day ${draggedChip.day.day_index}`}
           </div>
         ) : null}
       </DragOverlay>

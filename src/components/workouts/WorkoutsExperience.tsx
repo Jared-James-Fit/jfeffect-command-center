@@ -1125,6 +1125,7 @@ function SelectedDayCard({
           open={moveOpen}
           onOpenChange={setMoveOpen}
           currentScheduledDate={date}
+          scheduledWorkoutId={item.scheduledWorkoutId ?? null}
         />
       )}
 

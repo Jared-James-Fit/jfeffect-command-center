@@ -397,7 +397,16 @@ export const getScheduleHistory = createServerFn({ method: "GET" })
 export const getMoveContext = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .inputValidator((i: unknown) =>
-    z.object({ dayId: z.string().uuid() }).parse(i),
+    z
+      .object({
+        dayId: z.string().uuid(),
+        // Slice 2c: when present, the sheet is operating on a specific
+        // scheduled instance (pl_scheduled_workouts.id). Completion is
+        // scoped by scheduled_workout_id, and destination-date collision
+        // detection uses the instance list — never pl_days.scheduled_date.
+        scheduledWorkoutId: z.string().uuid().optional(),
+      })
+      .parse(i),
   )
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context;
@@ -436,11 +445,46 @@ export const getMoveContext = createServerFn({ method: "GET" })
       block_id: weekMap.get(d.week_id)?.block_id ?? block.id,
     }));
 
-    const { data: completion } = await supabase
-      .from("pl_day_completions")
-      .select("completed_at, in_progress_at")
-      .eq("day_id", data.dayId)
-      .maybeSingle();
+    let completion: any = null;
+    if (data.scheduledWorkoutId) {
+      const { data: c } = await supabase
+        .from("pl_day_completions")
+        .select("id, completed_at, in_progress_at, scheduled_workout_id")
+        .eq("scheduled_workout_id", data.scheduledWorkoutId)
+        .maybeSingle();
+      completion = c ?? null;
+    } else {
+      const { data: c } = await supabase
+        .from("pl_day_completions")
+        .select("id, completed_at, in_progress_at")
+        .eq("day_id", data.dayId)
+        .is("scheduled_workout_id", null)
+        .maybeSingle();
+      completion = c ?? null;
+    }
+
+    // Load the instance itself (if provided) and any other instances on
+    // this client that share the source_day_id — used by callers to
+    // detect "same-day conflict" without touching pl_days.scheduled_date.
+    let instance: any = null;
+    let siblingInstances: any[] = [];
+    if (data.scheduledWorkoutId) {
+      const { data: inst } = await supabase
+        .from("pl_scheduled_workouts")
+        .select(
+          "id, client_id, source_day_id, scheduled_date, scheduled_time, order_index, schedule_source",
+        )
+        .eq("id", data.scheduledWorkoutId)
+        .maybeSingle();
+      instance = inst ?? null;
+      if (inst?.client_id) {
+        const { data: sibs } = await supabase
+          .from("pl_scheduled_workouts")
+          .select("id, source_day_id, scheduled_date, scheduled_time, order_index")
+          .eq("client_id", inst.client_id);
+        siblingInstances = sibs ?? [];
+      }
+    }
 
     return {
       day: {
@@ -448,7 +492,10 @@ export const getMoveContext = createServerFn({ method: "GET" })
         day_index: day.day_index,
         title: day.title,
         focus: day.focus,
-        scheduled_date: day.scheduled_date,
+        // In instance mode the instance date is authoritative for
+        // the "Currently scheduled for …" display. Fall back to the
+        // legacy pl_days.scheduled_date otherwise.
+        scheduled_date: instance?.scheduled_date ?? day.scheduled_date,
         schedule_locked: day.schedule_locked,
       },
       week: { id: week.id, week_index: week.week_index, training_days: week.training_days },
@@ -460,5 +507,7 @@ export const getMoveContext = createServerFn({ method: "GET" })
       },
       allBlockDays: decorated,
       completion,
+      instance,
+      siblingInstances,
     };
   });
