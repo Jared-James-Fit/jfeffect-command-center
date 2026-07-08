@@ -350,6 +350,11 @@ function PortalAnalytics() {
           <AnalyticsEmptyPreview />
         ) : (
           <>
+            {filteredResults.length === 0 && (
+              <Card className="border-dashed border-border/70 bg-card/60 p-6 text-center text-sm text-muted-foreground">
+                No training data logged in this period ({filter.label}).
+              </Card>
+            )}
             {/* SUMMARY STATS */}
             <section
               aria-label="Summary"
