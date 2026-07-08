@@ -19,8 +19,11 @@ export type AnalyticsFilter =
   | {
       preset: "exact_block";
       blockId: string;
-      start: Date | null;
-      end: Date | null;
+      /** For undated blocks these fall back to lifetime bounds — blockId is the authoritative boundary. */
+      start: Date;
+      end: Date;
+      /** True when the underlying block has real start/end dates. */
+      hasBlockDates: boolean;
       label: string;
     }
   | { preset: "last_4w" | "last_8w" | "last_12w" | "lifetime"; start: Date; end: Date; label: string }
@@ -34,6 +37,17 @@ function blockRange(b: AnalyticsBlock): { start: Date; end: Date } {
 
 function blockRangeMaybe(b: AnalyticsBlock): { start: Date | null; end: Date | null } {
   return { start: parseLocalDate(b.start_date), end: parseLocalDate(b.end_date) };
+}
+
+function lifetimeBounds(blocks: AnalyticsBlock[]): { start: Date; end: Date } {
+  const earliest = blocks
+    .map((b) => b.start_date)
+    .filter((s): s is string => !!s)
+    .sort()[0];
+  return {
+    start: earliest ? parseISO(earliest) : subDays(new Date(), 365),
+    end: new Date(),
+  };
 }
 
 function currentBlockFilter(b: AnalyticsBlock): AnalyticsFilter {
@@ -58,19 +72,28 @@ function previousBlockFilter(b: AnalyticsBlock): AnalyticsFilter {
   };
 }
 
-export function exactBlockFilter(b: AnalyticsBlock): AnalyticsFilter {
+export function exactBlockFilter(
+  b: AnalyticsBlock,
+  allBlocks: AnalyticsBlock[],
+): AnalyticsFilter {
   const { start, end } = blockRangeMaybe(b);
+  const hasBlockDates = !!start;
   const dateLabel =
     start && end
       ? `${format(start, "MMM d")}–${format(end, "MMM d, yyyy")}`
       : start
         ? `from ${format(start, "MMM d, yyyy")}`
         : "Not scheduled";
+  // Fallback: undated blocks use lifetime bounds for chart display only.
+  // blockId remains the authoritative data boundary — downstream analytics
+  // that need real dates should key off `hasBlockDates`.
+  const fallback = lifetimeBounds(allBlocks);
   return {
     preset: "exact_block",
     blockId: b.id,
-    start,
-    end,
+    start: start ?? fallback.start,
+    end: end ?? fallback.end,
+    hasBlockDates,
     label: `${b.name} · ${dateLabel}`,
   };
 }
