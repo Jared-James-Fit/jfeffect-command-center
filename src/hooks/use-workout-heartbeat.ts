@@ -56,7 +56,7 @@ type Opts =
       completionId: string;
       // Server-ping context — mirrors workout-completion.functions Ctx shape.
       ping:
-        | { kind: "client"; dayId: string }
+        | { kind: "client"; dayId: string; scheduledWorkoutId?: string | null }
         | { kind: "member"; enrollmentId: string; weekIndex: number; dayIndex: number };
     };
 

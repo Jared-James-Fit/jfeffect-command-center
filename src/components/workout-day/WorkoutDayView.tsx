@@ -521,6 +521,9 @@ function WorkoutDay({
   const isOutsideScheduledDay = !!scheduledDate && scheduledDate.getTime() !== today.getTime();
 
   const { isImpersonating } = useClientImpersonation();
+  const scheduledWorkoutId = adapter?.kind === "client"
+    ? adapter.ref.scheduledWorkoutId ?? (search as any)?.instance ?? null
+    : null;
   // Workouts are ALWAYS editable — past, today, future, completed. There is no
   // automatic lock based on date, block status, program status, or completion.
   // The only way a workout becomes read-only is an explicit manual lock
@@ -590,7 +593,7 @@ function WorkoutDay({
   }, [rowsLoaded, rows.length]);
 
   const { data: results = [] } = useQuery({
-    queryKey: ["pl-day-results", dayId, client?.id, adapter?.kind ?? null, adapter?.ref.ownerId ?? null],
+    queryKey: ["pl-day-results", dayId, client?.id, adapter?.kind ?? null, adapter?.ref.ownerId ?? null, scheduledWorkoutId],
     enabled: !!client?.id && (rows as any[]).length > 0,
     initialData: client?.id ? cachedInitialData<any[]>(cacheScope, `results:${client.id}`) : undefined,
     staleTime: 2 * 60_000,
@@ -742,7 +745,7 @@ function WorkoutDay({
   });
 
   const { data: completion } = useQuery({
-    queryKey: ["pl-day-completion", dayId, client?.id, adapter?.kind ?? null],
+    queryKey: ["pl-day-completion", dayId, client?.id, adapter?.kind ?? null, scheduledWorkoutId],
     enabled: !!client?.id,
     // Completion state is critical — always fetch fresh to prevent stuck UI states
     // where the workout appears both completed and incomplete simultaneously.
@@ -823,7 +826,7 @@ function WorkoutDay({
         const memberRef = isMember ? (adapter?.ref as any) : null;
         const startData = isMember && memberRef?.enrollmentId
           ? { kind: "member" as const, enrollmentId: memberRef.enrollmentId, weekIndex: Number(dayId.split(":")[0]), dayIndex: Number(dayId.split(":")[1]) }
-          : { kind: "client" as const, dayId };
+          : { kind: "client" as const, dayId, scheduledWorkoutId };
         await startWorkoutSrv({ data: startData });
         qc.invalidateQueries({ queryKey: ["pl-day-completion", dayId] });
         if (isMember) qc.invalidateQueries({ queryKey: ["member-workout-completion"] });
@@ -846,7 +849,7 @@ function WorkoutDay({
       const memberRef = isMember ? (adapter?.ref as any) : null;
       const startData = isMember && memberRef?.enrollmentId
         ? { kind: "member" as const, enrollmentId: memberRef.enrollmentId, weekIndex: Number(dayId.split(":")[0]), dayIndex: Number(dayId.split(":")[1]) }
-        : { kind: "client" as const, dayId };
+        : { kind: "client" as const, dayId, scheduledWorkoutId };
       await startWorkoutSrv({ data: startData });
       qc.invalidateQueries({ queryKey: ["pl-day-completion", dayId] });
       if (isMember) qc.invalidateQueries({ queryKey: ["member-workout-completion"] });
@@ -879,7 +882,7 @@ function WorkoutDay({
         };
       }
     }
-    return { kind: "client" as const, dayId };
+    return { kind: "client" as const, dayId, scheduledWorkoutId };
   })();
   useWorkoutHeartbeat(
     heartbeatEnabled
@@ -1111,6 +1114,7 @@ function WorkoutDay({
           payload: {
             day_id: dayId,
             client_id: client.id,
+            scheduled_workout_id: scheduledWorkoutId,
             client_notes: value.notes || null,
             actual_duration_min: value.actualMin ? parseInt(value.actualMin) : null,
           },
@@ -1123,6 +1127,7 @@ function WorkoutDay({
         data: {
           kind: "client",
           dayId,
+          scheduledWorkoutId,
           clientNotes: notes || null,
           actualDurationMin: actualMin ? parseInt(actualMin) : null,
           actAsClientId: isImpersonating && client?.id ? client.id : null,
@@ -1428,6 +1433,7 @@ function WorkoutDay({
                           data: {
                             kind: "client",
                             dayId,
+                          scheduledWorkoutId,
                             actAsClientId: isImpersonating && client?.id ? client.id : null,
                           } as any,
                         });
@@ -1446,7 +1452,7 @@ function WorkoutDay({
             {completion?.completed_at && client?.id && (
               <div className="mx-auto max-w-3xl px-4 pb-4">
                 <CompletedWorkoutActions
-                  ctx={{ kind: "client", dayId }}
+                  ctx={{ kind: "client", dayId, scheduledWorkoutId }}
                   hasCoach
                   actAsClientId={isImpersonating ? client.id : null}
                   initialReview={
@@ -1805,6 +1811,7 @@ function WorkoutDay({
                     data: {
                       kind: "client",
                       dayId,
+                      scheduledWorkoutId,
                       actAsClientId: isImpersonating && client?.id ? client.id : null,
                     } as any,
                   });
@@ -1823,7 +1830,7 @@ function WorkoutDay({
 
         {completion?.completed_at && client?.id && (
           <CompletedWorkoutActions
-            ctx={{ kind: "client", dayId }}
+            ctx={{ kind: "client", dayId, scheduledWorkoutId }}
             hasCoach
             actAsClientId={isImpersonating ? client.id : null}
             initialReview={
@@ -1927,6 +1934,7 @@ function WorkoutDay({
                   payload: {
                     kind: "client",
                     dayId,
+                    scheduledWorkoutId,
                     requiredRows,
                     activityTimestamps: heartbeats,
                     completionMethod: "manual",
@@ -1994,6 +2002,7 @@ function WorkoutDay({
                   : {
                       kind: "client" as const,
                       dayId,
+                      scheduledWorkoutId,
                       requiredRows,
                       activityTimestamps: heartbeats,
                       completionMethod: "manual",
@@ -2044,6 +2053,7 @@ function WorkoutDay({
                     data: {
                       kind: "client",
                       dayId,
+                      scheduledWorkoutId,
                       overallRating: payload.session_rating,
                       sessionRpe: payload.session_rating * 2, // map 1-5 → 2-10
                       pain: payload.pain ?? false,
