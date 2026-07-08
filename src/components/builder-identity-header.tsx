@@ -26,7 +26,7 @@ function statusTone(status: string | null | undefined) {
  * the admin nav with the same identity in shorthand.
  */
 export function ClientBuilderIdentityHeader(props: {
-  clientId: string;
+  clientId: string | null | undefined;
   clientName: string;
   clientAvatarUrl?: string | null;
   programName?: string | null;
@@ -41,6 +41,11 @@ export function ClientBuilderIdentityHeader(props: {
     clientId, clientName, clientAvatarUrl, programName, blockName,
     blockStatus, currentWeek, totalWeeks, unsaved,
   } = props;
+  // Defensive: never pass null/undefined into a TanStack Link `params` value —
+  // it throws a synchronous invariant that the router boundary catches, which
+  // shows the coach a generic "Something went wrong" fallback with no signal.
+  // Fall back to a plain span when the block is missing a client id.
+  const hasClient = typeof clientId === "string" && clientId.length > 0;
 
   return (
     <div className={cn("rounded-lg border border-primary/30 bg-[color-mix(in_oklab,var(--primary)_5%,var(--card))] p-3 shadow-sm", props.className)}>
@@ -48,14 +53,18 @@ export function ClientBuilderIdentityHeader(props: {
       <nav aria-label="Breadcrumb" className="mb-1.5 flex flex-wrap items-center gap-1 text-[11px] text-muted-foreground">
         <Link to="/admin/clients" className="hover:text-foreground">Clients</Link>
         <ChevronRight className="h-3 w-3 opacity-50" />
-        <Link
-          to="/admin/clients/$id"
-          params={{ id: clientId }}
-          className="max-w-[28ch] truncate hover:text-foreground"
-          title={clientName}
-        >
-          {clientName}
-        </Link>
+        {hasClient ? (
+          <Link
+            to="/admin/clients/$id"
+            params={{ id: clientId as string }}
+            className="max-w-[28ch] truncate hover:text-foreground"
+            title={clientName}
+          >
+            {clientName}
+          </Link>
+        ) : (
+          <span className="max-w-[28ch] truncate text-foreground" title={clientName}>{clientName}</span>
+        )}
         <ChevronRight className="h-3 w-3 opacity-50" />
         <span className="text-muted-foreground/70">Programs</span>
         <ChevronRight className="h-3 w-3 opacity-50" />
@@ -97,21 +106,25 @@ export function ClientBuilderIdentityHeader(props: {
         </div>
 
         <div className="ml-auto flex shrink-0 flex-wrap items-center gap-1">
-          <Link
-            to="/admin/clients/$id"
-            params={{ id: clientId }}
-            className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 text-[11px] text-muted-foreground hover:bg-muted hover:text-foreground"
-          >
-            <ExternalLink className="h-3 w-3" /> View profile
-          </Link>
-          <Link
-            to="/admin/clients/$id"
-            params={{ id: clientId }}
-            search={{ tab: "messages" } as any}
-            className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 text-[11px] text-muted-foreground hover:bg-muted hover:text-foreground"
-          >
-            <MessageSquare className="h-3 w-3" /> Messages
-          </Link>
+          {hasClient ? (
+            <>
+              <Link
+                to="/admin/clients/$id"
+                params={{ id: clientId as string }}
+                className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 text-[11px] text-muted-foreground hover:bg-muted hover:text-foreground"
+              >
+                <ExternalLink className="h-3 w-3" /> View profile
+              </Link>
+              <Link
+                to="/admin/clients/$id"
+                params={{ id: clientId as string }}
+                search={{ tab: "messages" } as any}
+                className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 text-[11px] text-muted-foreground hover:bg-muted hover:text-foreground"
+              >
+                <MessageSquare className="h-3 w-3" /> Messages
+              </Link>
+            </>
+          ) : null}
         </div>
       </div>
     </div>
@@ -124,16 +137,36 @@ export function ClientBuilderIdentityHeader(props: {
  * scrolled off. Truncates long names cleanly on mobile.
  */
 export function ClientBuilderStickyChip(props: {
-  clientId: string;
+  clientId: string | null | undefined;
   clientName: string;
   blockName: string;
   currentWeek?: number | null;
 }) {
   const { clientId, clientName, blockName, currentWeek } = props;
+  const hasClient = typeof clientId === "string" && clientId.length > 0;
+  if (!hasClient) {
+    return (
+      <span
+        className="inline-flex min-w-0 max-w-full items-center gap-1.5 rounded-md border border-primary/30 bg-primary/10 px-2 py-1 text-[11px] font-medium text-primary"
+        title={`${clientName} · ${blockName}${currentWeek ? ` · Week ${currentWeek}` : ""}`}
+      >
+        <UserIcon className="h-3 w-3 shrink-0" />
+        <span className="max-w-[18ch] truncate font-semibold sm:max-w-[28ch]">{clientName}</span>
+        <span className="hidden text-primary/60 sm:inline">·</span>
+        <span className="hidden max-w-[18ch] truncate text-primary/80 sm:inline">{blockName}</span>
+        {currentWeek ? (
+          <>
+            <span className="text-primary/60">·</span>
+            <span className="shrink-0 text-primary/80">W{currentWeek}</span>
+          </>
+        ) : null}
+      </span>
+    );
+  }
   return (
     <Link
       to="/admin/clients/$id"
-      params={{ id: clientId }}
+      params={{ id: clientId as string }}
       className="inline-flex min-w-0 max-w-full items-center gap-1.5 rounded-md border border-primary/30 bg-primary/10 px-2 py-1 text-[11px] font-medium text-primary hover:bg-primary/15"
       title={`${clientName} · ${blockName}${currentWeek ? ` · Week ${currentWeek}` : ""}`}
     >
