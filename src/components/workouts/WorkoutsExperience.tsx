@@ -523,9 +523,14 @@ export function WorkoutsExperience({
             <ClientCardioSection
               clientId={clientId}
               hideWhenEmpty
-              // Determine day context: training day if today has a scheduled workout
-              dayContext={todayItem ? "training" : "rest"}
-              date={today}
+              // Cardio is resolved by the selected calendar date via
+              // resolveClientWeekDays — pass selectedDate so tapping a
+              // different day updates the cardio target/label. dayContext is
+              // only a fallback hint for empty-state copy.
+              dayContext={
+                (byDate.get(toLocalISO(selectedDate)) ?? null) ? "training" : "rest"
+              }
+              date={selectedDate}
             />
             <DeferredAnalytics clientId={clientId} />
           </>
