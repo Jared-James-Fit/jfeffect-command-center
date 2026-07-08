@@ -9,7 +9,7 @@ import {
 } from "date-fns";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { ChevronLeft, ChevronRight, CheckCircle2, Clock, AlertCircle, GripVertical, Calendar as CalIcon, CalendarPlus } from "lucide-react";
+import { ChevronLeft, ChevronRight, CheckCircle2, Clock, AlertCircle, GripVertical, Calendar as CalIcon, CalendarPlus, ChevronUp, ChevronDown } from "lucide-react";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
 import { buildScheduleChips } from "@/lib/schedule-calendar-chips";
@@ -139,10 +139,18 @@ export interface ScheduleCalendarProps {
   ) => void;
   /** Open the move sheet pre-filled with the workout but no target date. */
   onSelectDay?: (target: { dayId: string; instanceId: string | null }) => void;
+  /**
+   * Slice 2d — persist same-day ordering. Fires when the user reorders
+   * within a date cell (drag-and-drop within-cell, or Move Up / Move
+   * Down on a chip). `orderedInstanceIds` is the FULL ordered list of
+   * scheduled-instance ids for that date. Legacy chips (no instance)
+   * cannot participate in reorder — they carry no instance id.
+   */
+  onReorder?: (date: string, orderedInstanceIds: string[]) => void;
 }
 
 export function ScheduleCalendar(props: ScheduleCalendarProps) {
-  const { days, weeks, blocks, completions, scheduledInstances, canEdit, onMoveDay, onSelectDay } = props;
+  const { days, weeks, blocks, completions, scheduledInstances, canEdit, onMoveDay, onSelectDay, onReorder } = props;
   const [view, setView] = useState<"month" | "list">("month");
   const [cursor, setCursor] = useState<Date>(startOfMonth(new Date()));
   const [dragId, setDragId] = useState<string | null>(null);
@@ -232,8 +240,59 @@ export function ScheduleCalendar(props: ScheduleCalendarProps) {
     const chipId = String(e.active.id);
     const chip = chipById.get(chipId);
     if (!chip) return;
-    const targetDate = parseISO(String(e.over.id));
-    onMoveDay({ dayId: chip.day.id, instanceId: chip.instanceId }, targetDate);
+    const overId = String(e.over.id);
+    // Two drop-target kinds:
+    //   `<yyyy-MM-dd>`            → the whole date cell (cross-date move)
+    //   `chip:<chipId>`           → a specific chip within a cell
+    //                               (same-cell reorder or cross-date append)
+    let targetDateStr: string;
+    let anchorChipId: string | null = null;
+    if (overId.startsWith("chip:")) {
+      const target = chipById.get(overId.slice(5));
+      if (!target) return;
+      targetDateStr = target.scheduled_date;
+      anchorChipId = target.chipId;
+    } else {
+      targetDateStr = overId;
+    }
+    const sameDate = targetDateStr === chip.scheduled_date;
+    if (sameDate && anchorChipId && chip.instanceId && onReorder) {
+      // Same-date reorder: build the new order by moving `chip` before
+      // the chip we dropped onto. Only chips that carry an instance id
+      // can be reordered — legacy chips are filtered out.
+      const dayChips = (byDate.get(targetDateStr) ?? []).filter(
+        (c) => c.instanceId,
+      );
+      const without = dayChips.filter((c) => c.chipId !== chip.chipId);
+      const anchorIdx = without.findIndex((c) => c.chipId === anchorChipId);
+      const insertAt = anchorIdx < 0 ? without.length : anchorIdx;
+      const reordered = [
+        ...without.slice(0, insertAt),
+        chip,
+        ...without.slice(insertAt),
+      ];
+      onReorder(
+        targetDateStr,
+        reordered.map((c) => c.instanceId!).filter(Boolean),
+      );
+      return;
+    }
+    if (sameDate) return; // legacy-chip same-date drop is a no-op
+    onMoveDay({ dayId: chip.day.id, instanceId: chip.instanceId }, parseISO(targetDateStr));
+  };
+
+  const handleReorderNudge = (chipId: string, direction: -1 | 1) => {
+    const chip = chipById.get(chipId);
+    if (!chip || !chip.instanceId || !onReorder) return;
+    const dayChips = (byDate.get(chip.scheduled_date) ?? []).filter(
+      (c) => c.instanceId,
+    );
+    const idx = dayChips.findIndex((c) => c.chipId === chip.chipId);
+    const next = idx + direction;
+    if (idx < 0 || next < 0 || next >= dayChips.length) return;
+    const swapped = dayChips.slice();
+    [swapped[idx], swapped[next]] = [swapped[next], swapped[idx]];
+    onReorder(chip.scheduled_date, swapped.map((c) => c.instanceId!));
   };
 
   const draggedChip = dragId ? chipById.get(dragId) ?? null : null;
