@@ -1136,6 +1136,7 @@ function SelectedDayCard({
           dayId={item.day.id}
           clientId={clientId}
           completion={item.completion as any}
+          scheduledWorkoutId={item.scheduledWorkoutId ?? null}
           invalidateKeys={[["workouts-experience-client", clientId]]}
         />
       )}
@@ -1151,7 +1152,7 @@ function SelectedDayCard({
         <WorkoutReviewEditor
           open={reviewOpen}
           onOpenChange={setReviewOpen}
-          ctx={{ kind: "client", dayId: item.day.id }}
+          ctx={{ kind: "client", dayId: item.day.id, scheduledWorkoutId: item.scheduledWorkoutId ?? null }}
           hasCoach
           initial={reviewInitial}
           onSaved={() =>

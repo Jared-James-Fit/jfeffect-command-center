@@ -29,6 +29,7 @@ export function WorkoutStatusSheet({
   dayId,
   clientId,
   completion,
+  scheduledWorkoutId = null,
   invalidateKeys = [],
 }: {
   open: boolean;
@@ -41,6 +42,7 @@ export function WorkoutStatusSheet({
     in_progress_at?: string | null;
     completed_at?: string | null;
   } | null | undefined;
+  scheduledWorkoutId?: string | null;
   invalidateKeys?: readonly (readonly unknown[])[];
 }) {
   const qc = useQueryClient();
@@ -73,7 +75,7 @@ export function WorkoutStatusSheet({
       const actAsClientId =
         isImpersonating && povClient?.id === clientId ? clientId : null;
       await setStatusSrv({
-        data: { dayId, status: next, actAsClientId } as any,
+        data: { dayId, status: next, scheduledWorkoutId, actAsClientId } as any,
       });
       // Refresh every cache surface that renders workout status.
       await Promise.all([

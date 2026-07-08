@@ -962,6 +962,7 @@ export type WorkoutCompletionCtx = CtxT;
 const SetStatusInput = z.object({
   dayId: z.string().uuid(),
   status: z.enum(["not_started", "in_progress", "completed"]),
+  scheduledWorkoutId: z.string().uuid().nullable().optional(),
   actAsClientId: z.string().uuid().nullable().optional(),
 });
 
