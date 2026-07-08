@@ -408,15 +408,7 @@ function PortalAnalytics() {
                   <Trophy className="h-5 w-5 shrink-0 text-primary" />
                   <span className="truncate">Recent PRs</span>
                 </h2>
-                <div className="flex shrink-0 items-center gap-2">
-                  <SearchableSelect
-                    options={rangeOptions}
-                    value={String(rangeDays)}
-                    onChange={(v) => setRangeDays(Number(v))}
-                    triggerClassName="h-9 w-36"
-                    ariaLabel="PR range"
-                  />
-                </div>
+                <span className="shrink-0 text-xs font-semibold text-muted-foreground">{filter.label}</span>
               </div>
               <div className="mb-3 grid gap-2 sm:grid-cols-[1fr_auto] sm:items-center">
                 <SearchableSelect
