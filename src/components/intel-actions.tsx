@@ -97,7 +97,7 @@ export function PainFlagActions({ flag, clientId }: { flag: PainFlag; clientId: 
 export function OpenWorkoutLink({ dayId, label = "Open workout" }: { dayId: string | null | undefined; label?: string }) {
   if (!dayId) return null;
   return (
-    <Link to="/portal/workouts/$dayId" params={{ dayId }}>
+    <Link to="/portal/workouts/$dayId" params={{ dayId }} search={{}}>
       <Button size="sm" variant="outline"><PlayCircle className="mr-1 h-3.5 w-3.5" />{label}</Button>
     </Link>
   );

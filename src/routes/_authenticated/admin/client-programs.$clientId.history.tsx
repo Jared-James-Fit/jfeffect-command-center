@@ -200,7 +200,7 @@ function WorkoutFeedbackSection({
         ? window.location.pathname + window.location.search
         : null,
     );
-    navigate({ to: "/portal/workouts/$dayId", params: { dayId } });
+    navigate({ to: "/portal/workouts/$dayId", params: { dayId }, search: {} });
   };
   const { data: rows = [], refetch } = useQuery({
     queryKey: ["pl-workout-feedback-history", clientId],

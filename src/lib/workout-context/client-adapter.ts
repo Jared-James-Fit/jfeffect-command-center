@@ -38,8 +38,39 @@ import { notifyCoachOfWorkoutFailure } from "@/lib/support-alerts.functions";
 
 const sb = supabase as any;
 
+/**
+ * Slice 2b: completion scoping.
+ *
+ * When `ref.scheduledWorkoutId` is present, every pl_day_completions read/write
+ * scopes by `scheduled_workout_id = <id>` — no fallback to a legacy row with
+ * the same day_id (that would let a null-instance historical completion attach
+ * to a scheduled instance card). When it is absent, the adapter uses the
+ * legacy path (`client_id + day_id + scheduled_workout_id IS NULL`) so
+ * pre-slice-2 program days keep working exactly as before.
+ *
+ * The `client_id + day_id` blanket unique was replaced in the Phase 2
+ * migration by two partial uniques:
+ *   - `scheduled_workout_id` WHERE NOT NULL   (one completion per instance)
+ *   - `(client_id, day_id)`  WHERE scheduled_workout_id IS NULL   (legacy)
+ */
+function applyCompletionScope(
+  query: any,
+  clientId: string,
+  dayId: string,
+  scheduledWorkoutId: string | null | undefined,
+): any {
+  if (scheduledWorkoutId) {
+    return query.eq("scheduled_workout_id", scheduledWorkoutId);
+  }
+  return query
+    .eq("client_id", clientId)
+    .eq("day_id", dayId)
+    .is("scheduled_workout_id", null);
+}
+
 export function createClientAdapter(ref: WorkoutContextRef): WorkoutContextAdapter {
   if (ref.kind !== "client") throw new Error("createClientAdapter requires kind=client");
+  const scheduledWorkoutId = ref.scheduledWorkoutId ?? null;
   return {
     kind: "client",
     ref,
@@ -254,12 +285,13 @@ export function createClientAdapter(ref: WorkoutContextRef): WorkoutContextAdapt
     },
 
     async getDayCompletionRaw(dayId) {
-      const { data, error } = await sb
-        .from("pl_day_completions")
-        .select("*")
-        .eq("day_id", dayId)
-        .eq("client_id", ref.ownerId)
-        .maybeSingle();
+      const q = applyCompletionScope(
+        sb.from("pl_day_completions").select("*"),
+        ref.ownerId,
+        dayId,
+        scheduledWorkoutId,
+      );
+      const { data, error } = await q.maybeSingle();
       if (error) throw new Error(error.message);
       return (data ?? null) as Record<string, any> | null;
     },
@@ -434,12 +466,13 @@ export function createClientAdapter(ref: WorkoutContextRef): WorkoutContextAdapt
     },
 
     async getDayCompletion(dayId: string): Promise<DayCompletionDTO | null> {
-      const { data, error } = await sb
-        .from("pl_day_completions")
-        .select("*")
-        .eq("day_id", dayId)
-        .eq("client_id", ref.ownerId)
-        .maybeSingle();
+      const q = applyCompletionScope(
+        sb.from("pl_day_completions").select("*"),
+        ref.ownerId,
+        dayId,
+        scheduledWorkoutId,
+      );
+      const { data, error } = await q.maybeSingle();
       if (error) throw new Error(error.message);
       if (!data) return null;
       return {
@@ -557,12 +590,13 @@ export function createClientAdapter(ref: WorkoutContextRef): WorkoutContextAdapt
     },
 
     async updateDayCompletion(dayId: string, patch: DayCompletionPatch): Promise<void> {
-      const { data: existing } = await sb
-        .from("pl_day_completions")
-        .select("id")
-        .eq("day_id", dayId)
-        .eq("client_id", ref.ownerId)
-        .maybeSingle();
+      const q = applyCompletionScope(
+        sb.from("pl_day_completions").select("id"),
+        ref.ownerId,
+        dayId,
+        scheduledWorkoutId,
+      );
+      const { data: existing } = await q.maybeSingle();
       const dbPatch: Record<string, unknown> = {};
       if (patch.startedAt !== undefined) dbPatch.started_at = patch.startedAt;
       if (patch.inProgressAt !== undefined) dbPatch.in_progress_at = patch.inProgressAt;
@@ -576,9 +610,15 @@ export function createClientAdapter(ref: WorkoutContextRef): WorkoutContextAdapt
           .eq("id", existing.id);
         if (error) throw new Error(error.message);
       } else {
+        const insertRow: Record<string, unknown> = {
+          day_id: dayId,
+          client_id: ref.ownerId,
+          ...dbPatch,
+        };
+        if (scheduledWorkoutId) insertRow.scheduled_workout_id = scheduledWorkoutId;
         const { error } = await sb
           .from("pl_day_completions")
-          .insert({ day_id: dayId, client_id: ref.ownerId, ...dbPatch });
+          .insert(insertRow);
         if (error) throw new Error(error.message);
       }
     },
@@ -634,7 +674,11 @@ export function createClientAdapter(ref: WorkoutContextRef): WorkoutContextAdapt
         if (error) throw new Error(error.message);
         return;
       }
-      const { error } = await sb.from("pl_day_completions").insert(payload);
+      const insertRow: Record<string, any> = { ...payload };
+      if (scheduledWorkoutId && !insertRow.scheduled_workout_id) {
+        insertRow.scheduled_workout_id = scheduledWorkoutId;
+      }
+      const { error } = await sb.from("pl_day_completions").insert(insertRow);
       if (error) throw new Error(error.message);
     },
 

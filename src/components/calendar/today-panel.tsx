@@ -161,7 +161,7 @@ type TileSpec = {
   title: string;
   meta?: string;
   item?: CalendarItem;
-  href?: { to: string; params?: Record<string, string> };
+  href?: { to: string; params?: Record<string, string>; search?: Record<string, string> };
 };
 
 const TONE_CLASSES: Record<Tone, { border: string; eyebrow: string; iconBg: string }> = {
@@ -193,7 +193,16 @@ function Tile({ spec }: { spec: TileSpec }) {
     </Card>
   );
   if (href) {
-    return <Link to={href.to as any} params={href.params as any} className="block">{inner}</Link>;
+    return (
+      <Link
+        to={href.to as any}
+        params={href.params as any}
+        search={(href as any).search as any}
+        className="block"
+      >
+        {inner}
+      </Link>
+    );
   }
   return inner;
 }

@@ -420,7 +420,12 @@ function EventDetailSheet({
                 </a>
               )}
               {item.href && (
-                <Link to={item.href.to as any} params={item.href.params as any} onClick={onClose}>
+                <Link
+                  to={item.href.to as any}
+                  params={item.href.params as any}
+                  search={(item.href as any).search as any}
+                  onClick={onClose}
+                >
                   <Button size="sm" className="w-full bg-gradient-primary font-bold uppercase">{ctaLabel(item)}</Button>
                 </Link>
               )}

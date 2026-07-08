@@ -229,6 +229,12 @@ export type WorkoutDayViewSearch = {
   edit?: 1;
   review?: 1;
   recap?: 1;
+  /**
+   * Slice 2b: pl_scheduled_workouts.id of the calendar instance the
+   * player opened. When present, the client adapter scopes completion
+   * reads/writes by scheduled_workout_id.
+   */
+  instance?: string;
 };
 
 /**

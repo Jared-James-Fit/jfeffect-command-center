@@ -1061,7 +1061,7 @@ function SelectedDayCard({
                     <Link
                       to="/portal/workouts/$dayId"
                       params={{ dayId: item.day.id }}
-                      search={{ recap: 1 } as any}
+                      search={{ recap: 1, ...(item.scheduledWorkoutId ? { instance: item.scheduledWorkoutId } : {}) } as any}
                     >
                       <Trophy className="mr-2 h-4 w-4" /> View workout recap
                     </Link>
@@ -1086,7 +1086,7 @@ function SelectedDayCard({
             <Link
               to="/portal/workouts/$dayId"
               params={{ dayId: item.day.id }}
-              search={cta.search as any}
+              search={{ ...(cta.search as any), ...(item.scheduledWorkoutId ? { instance: item.scheduledWorkoutId } : {}) } as any}
             >
               {cta.icon} {cta.label}
             </Link>
@@ -1101,7 +1101,7 @@ function SelectedDayCard({
                 <Link
                   to="/portal/workouts/$dayId"
                   params={{ dayId: item.day.id }}
-                  search={cta.secondary.search as any}
+                  search={{ ...(cta.secondary.search as any), ...(item.scheduledWorkoutId ? { instance: item.scheduledWorkoutId } : {}) } as any}
                 >
                   {cta.secondary.label}
                 </Link>
@@ -1300,7 +1300,11 @@ function DayPreviewSheet({
         )}
         <SheetFooter className="mt-4 sm:justify-start">
           <Button asChild size="lg" className={cn("font-bold", cta.tone)} onClick={() => onOpenChange(false)}>
-            <Link to="/portal/workouts/$dayId" params={{ dayId: item.day.id }} search={cta.search as any}>
+            <Link
+              to="/portal/workouts/$dayId"
+              params={{ dayId: item.day.id }}
+              search={{ ...(cta.search as any), ...(item.scheduledWorkoutId ? { instance: item.scheduledWorkoutId } : {}) } as any}
+            >
               {cta.label}
             </Link>
           </Button>

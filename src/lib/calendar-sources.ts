@@ -35,7 +35,12 @@ export type CalendarItem = {
   clientId?: string | null;
   clientName?: string | null;
   // CTA: where to send the user when they tap "Open"
-  href?: { to: string; params?: Record<string, string> } | null;
+  href?: {
+    to: string;
+    params?: Record<string, string>;
+    /** Slice 2b: threaded through for scheduled workout instances (?instance=…). */
+    search?: Record<string, string>;
+  } | null;
   raw?: any;
 };
 
@@ -335,7 +340,16 @@ export function useClientCalendarSources(clientId: string | null | undefined) {
             title: it.day?.title || `Day ${it.day?.day_index ?? ""}`.trim(),
             subtitle: [it.block?.name, it.day?.focus].filter(Boolean).join(" · "),
             status: completed ? "Completed" : "Scheduled",
-            href: { to: "/portal/workouts/$dayId", params: { dayId: it.day.id } },
+            href: {
+              to: "/portal/workouts/$dayId",
+              params: { dayId: it.day.id },
+              // Slice 2b: threading the instance ID so the workout player
+              // opens the specific calendar instance and scopes its
+              // completion by scheduled_workout_id.
+              ...(it.scheduledWorkoutId
+                ? { search: { instance: it.scheduledWorkoutId } }
+                : {}),
+            },
             raw: it,
           });
         }
