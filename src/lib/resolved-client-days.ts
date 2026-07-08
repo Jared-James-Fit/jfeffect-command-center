@@ -142,6 +142,38 @@ export function resolveWorkoutDatesFromSchedule(
   return out;
 }
 
+export function resolveWorkoutDatesFromItems(
+  items: any[],
+  committedTrainingDays?: string[] | null,
+): ResolvedWorkoutDate[] {
+  const byWeek = new Map<string, any[]>();
+  for (const item of items ?? []) {
+    if (!item?.day?.id || !item?.week?.id) continue;
+    const list = byWeek.get(item.week.id) ?? [];
+    list.push(item);
+    byWeek.set(item.week.id, list);
+  }
+
+  const out: ResolvedWorkoutDate[] = [];
+  for (const [, weekItems] of byWeek) {
+    const week = weekItems[0]?.week;
+    const block = weekItems[0]?.block;
+    const dayRows = weekItems.map((item) => item.day);
+    const dateMap = resolveWeekDayDates(dayRows, week, block, committedTrainingDays);
+    for (const item of weekItems) {
+      const resolved = dateMap.get(item.day.id);
+      if (!resolved) continue;
+      out.push({
+        date: toLocalISO(resolved),
+        workoutId: item.day.id,
+        workout: item.day,
+        isWorkoutOverride: !!item.day.schedule_locked,
+      });
+    }
+  }
+  return out;
+}
+
 function chooseRestDate(
   weekDates: string[],
   workoutsByDate: Map<string, ResolvedWorkoutDate>,
