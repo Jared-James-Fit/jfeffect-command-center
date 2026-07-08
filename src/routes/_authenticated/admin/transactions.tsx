@@ -44,8 +44,12 @@ function statusTone(status?: string | null) {
 }
 
 function bestStripeUrl(r: AdminTransactionRow): string | null {
+  // Stripe uses py_* prefix for direct charges (not PaymentIntents).
+  // If stripe_payment_intent_id starts with py_ or ch_, treat it as a charge URL.
+  const piId = r.stripe_payment_intent_id;
+  const isCharge = piId && (piId.startsWith("py_") || piId.startsWith("ch_"));
   return (
-    stripePaymentIntentUrl(r.stripe_payment_intent_id, r.stripe_mode) ??
+    (isCharge ? stripeChargeUrl(piId, r.stripe_mode) : stripePaymentIntentUrl(piId, r.stripe_mode)) ??
     stripeChargeUrl(r.stripe_charge_id, r.stripe_mode) ??
     stripeInvoiceUrl(r.stripe_invoice_id, r.stripe_mode) ??
     stripeCheckoutSessionUrl(r.stripe_checkout_session_id, r.stripe_mode) ??
