@@ -95,18 +95,28 @@ export const getClientSchedule = createServerFn({ method: "GET" })
           .order("day_index")
       : { data: [] };
     const dayIds = (days ?? []).map((d: any) => d.id);
-    const { data: completions } = dayIds.length
-      ? await supabase
-          .from("pl_day_completions")
-          .select("id, day_id, completed_at, in_progress_at, started_at")
-          .in("day_id", dayIds)
-      : { data: [] };
+    const [completionsRes, scheduledInstancesRes] = dayIds.length
+      ? await Promise.all([
+          supabase
+            .from("pl_day_completions")
+            .select("id, day_id, completed_at, in_progress_at, started_at, scheduled_workout_id")
+            .in("day_id", dayIds),
+          // Phase 2a: canonical instance list scoped to the target client.
+          (supabase.from("pl_scheduled_workouts") as any)
+            .select("id, client_id, source_day_id, scheduled_date, scheduled_time, order_index, schedule_source, note, created_at")
+            .eq("client_id", data.clientId)
+            .in("source_day_id", dayIds),
+        ])
+      : [{ data: [] }, { data: [] }];
+    const { data: completions } = completionsRes;
+    const { data: scheduledInstances } = scheduledInstancesRes;
     return {
       client,
       blocks: blocks ?? [],
       weeks: weeks ?? [],
       days: days ?? [],
       completions: completions ?? [],
+      scheduledInstances: scheduledInstances ?? [],
     };
   });
 

@@ -1,4 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
+import { mergeScheduledInstances } from "@/lib/scheduled-instances-merge";
 
 // ---------- Types ----------
 export type PrepStatus = "Planned" | "Active" | "Completed" | "Archived";
@@ -1419,14 +1420,21 @@ export async function getClientWorkouts(clientId: string) {
   // parallel — they don't depend on each other and previously added a
   // serial round-trip each, which on mobile turned the workouts list
   // into a ~2s blank state.
-  const [completionsRes, exerciseRowsRes] = dayIds.length
+  const [completionsRes, exerciseRowsRes, scheduledInstancesRes] = dayIds.length
     ? await Promise.all([
-        sb.from("pl_day_completions").select("*").in("day_id", dayIds),
+        sb.from("pl_day_completions").select("*").in("day_id", dayIds).eq("client_id", clientId),
         sb.from("pl_exercise_rows").select("id, day_id").in("day_id", dayIds),
+        // Phase 2a: fetch instance-level schedule alongside prescriptions.
+        // Filtered to this client so we never merge another client's cards.
+        sb.from("pl_scheduled_workouts")
+          .select("id, client_id, source_day_id, scheduled_date, scheduled_time, order_index, schedule_source, note, created_at")
+          .eq("client_id", clientId)
+          .in("source_day_id", dayIds),
       ])
-    : [{ data: [] as any[] }, { data: [] as any[] }];
+    : [{ data: [] as any[] }, { data: [] as any[] }, { data: [] as any[] }];
   const { data: completions } = completionsRes;
   const { data: exerciseRows } = exerciseRowsRes;
+  const { data: scheduledInstances } = scheduledInstancesRes;
   const rowIdToDay = new Map<string, string>();
   for (const r of (exerciseRows ?? []) as any[]) rowIdToDay.set(r.id, r.day_id);
   const rowIds = Array.from(rowIdToDay.keys());
@@ -1466,21 +1474,33 @@ export async function getClientWorkouts(clientId: string) {
     list.push(d);
     daysByWeek.set(d.week_id, list);
   }
-  const items = (weeks ?? []).flatMap((w: any) => {
+  // Build one prescription-shaped item per pl_days row (or a placeholder
+  // for weeks with no days). We then run these through
+  // mergeScheduledInstances to emit one card per scheduled instance and
+  // link completions instance-first with a safe legacy fallback.
+  const baseItems = (weeks ?? []).flatMap((w: any) => {
     const b = (blocks ?? []).find((x: any) => x.id === w?.block_id);
     const weekDays = daysByWeek.get(w.id) ?? [];
     if (weekDays.length === 0) return [{ day: null, week: w, block: b, completion: null, logged_sets_count: 0 }];
     return weekDays.map((d: any) => {
-      const c = (completions ?? []).find((x: any) => x.day_id === d.id);
-      const completion = c ? { ...c, has_feedback: feedbackSet.has(c.id) } : c;
+      // Base completion resolution is done by mergeScheduledInstances
+      // (instance-first, legacy fallback). Leave null here so the merge
+      // owns linkage — otherwise it would double-attach.
       return {
         day: d,
         week: w,
         block: b,
-        completion,
-        logged_sets_count: loggedSetsByDay.get(d.id) ?? 0,
+        completion: null,
+        logged_sets_count: 0,
       };
     });
+  });
+  const items = mergeScheduledInstances({
+    items: baseItems,
+    instances: (scheduledInstances ?? []) as any[],
+    completions: (completions ?? []) as any[],
+    feedbackCompletionIds: feedbackSet,
+    loggedSetsByDay,
   });
   // Sort: block (created order) → week_index → day_index
   items.sort((a: any, b: any) => {
@@ -1490,7 +1510,14 @@ export async function getClientWorkouts(clientId: string) {
     const aw = a.week?.week_index ?? 0;
     const bw = b.week?.week_index ?? 0;
     if (aw !== bw) return aw - bw;
-    return (a.day?.day_index ?? 0) - (b.day?.day_index ?? 0);
+    const di = (a.day?.day_index ?? 0) - (b.day?.day_index ?? 0);
+    if (di !== 0) return di;
+    // Two instances of the same source_day_id sort by scheduled_date +
+    // order_index so stacked cards render deterministically.
+    const ad = a.scheduledDate ?? "";
+    const bd = b.scheduledDate ?? "";
+    if (ad !== bd) return ad.localeCompare(bd);
+    return (a.scheduleOrderIndex ?? 0) - (b.scheduleOrderIndex ?? 0);
   });
   return items;
 }

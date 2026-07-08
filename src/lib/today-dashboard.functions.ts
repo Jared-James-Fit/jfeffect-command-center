@@ -1,5 +1,6 @@
 import { supabase } from "@/integrations/supabase/client";
 import type { WorkoutItem } from "@/lib/workout-today";
+import { mergeScheduledInstances } from "@/lib/scheduled-instances-merge";
 
 /**
  * Lightweight dashboard variant of getClientWorkouts.
@@ -37,13 +38,20 @@ export async function getClientTodayItems(clientId: string): Promise<WorkoutItem
   const dayIds = (days ?? []).map((d: any) => d.id);
   if (!dayIds.length) return [];
 
-  const { data: completions } = await supabase
-    .from("pl_day_completions")
-    .select("*")
-    .in("day_id", dayIds)
-    .eq("client_id", clientId);
-
-  const completionsByDay = new Map((completions ?? []).map((c: any) => [c.day_id, c]));
+  const [completionsRes, scheduledInstancesRes] = await Promise.all([
+    supabase
+      .from("pl_day_completions")
+      .select("*")
+      .in("day_id", dayIds)
+      .eq("client_id", clientId),
+    // Phase 2a: instance-level schedule for the dashboard.
+    (supabase.from("pl_scheduled_workouts") as any)
+      .select("id, client_id, source_day_id, scheduled_date, scheduled_time, order_index, schedule_source, note, created_at")
+      .eq("client_id", clientId)
+      .in("source_day_id", dayIds),
+  ]);
+  const { data: completions } = completionsRes;
+  const { data: scheduledInstances } = scheduledInstancesRes;
 
   const daysByWeek = new Map<string, any[]>();
   for (const d of days ?? []) {
@@ -52,19 +60,23 @@ export async function getClientTodayItems(clientId: string): Promise<WorkoutItem
     daysByWeek.set(d.week_id, list);
   }
 
-  const items: WorkoutItem[] = [];
+  const baseItems: WorkoutItem[] = [];
   for (const w of weeks ?? []) {
     const b = (blocks ?? []).find((x: any) => x.id === w.block_id);
     const weekDays = daysByWeek.get(w.id) ?? [];
     for (const d of weekDays) {
-      items.push({
+      baseItems.push({
         day: d,
         week: w,
         block: b,
-        completion: completionsByDay.get(d.id) ?? null,
+        completion: null, // merge attaches per-instance / legacy completion
         logged_sets_count: 0,
       });
     }
   }
-  return items;
+  return mergeScheduledInstances({
+    items: baseItems,
+    instances: (scheduledInstances ?? []) as any[],
+    completions: (completions ?? []) as any[],
+  });
 }

@@ -236,6 +236,8 @@ export function useClientCalendarSources(clientId: string | null | undefined) {
       .on("postgres_changes", { event: "*", schema: "public", table: "pl_weeks" }, invalidate)
       .on("postgres_changes", { event: "*", schema: "public", table: "pl_days" }, invalidate)
       .on("postgres_changes", { event: "*", schema: "public", table: "pl_day_completions", filter: `client_id=eq.${clientId}` }, invalidate)
+      // Phase 2a: reflect newly scheduled / moved / copied instances live.
+      .on("postgres_changes", { event: "*", schema: "public", table: "pl_scheduled_workouts", filter: `client_id=eq.${clientId}` }, invalidate)
       .subscribe();
     return () => {
       void supabase.removeChannel(channel);
@@ -325,9 +327,11 @@ export function useClientCalendarSources(clientId: string | null | undefined) {
           const date = toLocalISO(resolved);
           const completed = !!it.completion?.completed_at;
           out.push({
-            id: `workout:${it.day.id}`,
+            // Phase 2a: stacked instances (two cards on the same date) need
+            // distinct calendar IDs so React keys don't collide.
+            id: `workout:${it.scheduledWorkoutId ?? it.day.id}`,
             kind: "workout",
-            date,
+            date: it.scheduledDate ?? date,
             title: it.day?.title || `Day ${it.day?.day_index ?? ""}`.trim(),
             subtitle: [it.block?.name, it.day?.focus].filter(Boolean).join(" · "),
             status: completed ? "Completed" : "Scheduled",
