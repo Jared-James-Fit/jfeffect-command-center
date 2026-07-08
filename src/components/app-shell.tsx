@@ -627,17 +627,6 @@ export function AppShell({ items, bottomItems: customBottomItems, title, childre
                         <div className="relative"><Icon className="h-4 w-4 shrink-0" /><SidebarBadge badge={navBadges[item.to]} isCollapsed={isCollapsed} /></div>
                         {!isCollapsed && <span className="truncate flex-1">{item.label}</span>}
                         {!isCollapsed && <SidebarBadge badge={navBadges[item.to]} isCollapsed={false} />}
-                        {!isCollapsed && (
-                          <button
-                            type="button"
-                            onClick={(e) => handleTogglePin(e, item.to, item.label)}
-                            aria-label={`Unpin ${item.label}`}
-                            title="Unpin"
-                            className="ml-1 rounded p-1 text-amber-400 hover:bg-amber-400/10"
-                          >
-                            <PinOff className="h-3.5 w-3.5" />
-                          </button>
-                        )}
                       </Link>
                     );
                     return (
@@ -647,7 +636,20 @@ export function AppShell({ items, bottomItems: customBottomItems, title, childre
                             <TooltipTrigger asChild>{link}</TooltipTrigger>
                             <TooltipContent side="right">📌 {item.label}</TooltipContent>
                           </Tooltip>
-                        ) : link}
+                        ) : (
+                          <div className="relative group/pinrow">
+                            {link}
+                            <button
+                              type="button"
+                              onClick={(e) => handleTogglePin(e, item.to, item.label)}
+                              aria-label={`Unpin ${item.label}`}
+                              title="Unpin"
+                              className="absolute right-1.5 top-1/2 -translate-y-1/2 rounded p-1 text-amber-400 opacity-70 hover:bg-amber-400/10 hover:opacity-100"
+                            >
+                              <PinOff className="h-3.5 w-3.5" />
+                            </button>
+                          </div>
+                        )}
                       </li>
                     );
                   })}
