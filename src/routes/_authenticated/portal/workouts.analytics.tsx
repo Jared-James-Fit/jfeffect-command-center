@@ -366,14 +366,14 @@ function PortalAnalytics() {
             >
               <StatCard
                 icon={<Trophy className="h-4 w-4" />}
-                label="PRs · 30d"
-                value={String(summary.prs30)}
+                label="PRs in range"
+                value={String(summary.prsInRange)}
                 color={ANALYTICS_COLORS.green}
               />
               <StatCard
                 icon={<Flame className="h-4 w-4" />}
-                label="Sets · 7d"
-                value={String(summary.last7Sets)}
+                label="Sets in range"
+                value={String(summary.setsInRange)}
                 color={ANALYTICS_COLORS.red}
               />
               <StatCard
