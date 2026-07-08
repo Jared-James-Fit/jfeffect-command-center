@@ -57,6 +57,7 @@ export function WeightLiftedCard({
   rangeStart,
   rangeEnd,
   rangeLabel,
+  blockId,
 }: {
   clientId: string;
   displayUnit: Unit;
@@ -64,6 +65,8 @@ export function WeightLiftedCard({
   rangeStart?: Date;
   rangeEnd?: Date;
   rangeLabel?: string;
+  /** When set, restrict logged sets to days belonging to this block. */
+  blockId?: string | null;
 }) {
   const { data, isLoading } = useQuery({
     queryKey: [
@@ -71,30 +74,47 @@ export function WeightLiftedCard({
       clientId,
       rangeStart?.toISOString() ?? null,
       rangeEnd?.toISOString() ?? null,
+      blockId ?? null,
     ],
     enabled: !!clientId,
     staleTime: 60_000,
     queryFn: async () => {
       const startIso = rangeStart?.toISOString() ?? null;
       const endIso = rangeEnd?.toISOString() ?? null;
-      const setsQ = supabase
+
+      // Resolve block scope so both sets + completions honor the block.
+      let blockDayIds: string[] | null = null;
+      if (blockId) {
+        const { data: weeks } = await supabase.from("pl_weeks").select("id").eq("block_id", blockId);
+        const weekIds = (weeks ?? []).map((w: any) => w.id);
+        if (weekIds.length === 0) return { sets: [], days: [], prep: null } as any;
+        const { data: days } = await supabase.from("pl_days").select("id").in("week_id", weekIds);
+        blockDayIds = (days ?? []).map((d: any) => d.id);
+        if (blockDayIds.length === 0) return { sets: [], days: [], prep: null } as any;
+      }
+
+      let setsQ = supabase
         .from("pl_row_results")
-        .select("normalized_lb, actual_load, actual_load_unit, actual_reps, completed_at")
+        .select("normalized_lb, actual_load, actual_load_unit, actual_reps, completed_at, pl_exercise_rows!inner(day_id)")
         .eq("client_id", clientId)
         .not("actual_reps", "is", null)
         .not("completed_at", "is", null);
-      const daysQ = (supabase.from("pl_day_completions") as any)
+      let daysQ = (supabase.from("pl_day_completions") as any)
         .select("completed_at, session_weight_total, session_weight_unit")
         .eq("client_id", clientId)
         .not("completed_at", "is", null)
         .not("session_weight_total", "is", null);
       if (startIso) {
-        setsQ.gte("completed_at", startIso);
-        daysQ.gte("completed_at", startIso);
+        setsQ = setsQ.gte("completed_at", startIso);
+        daysQ = daysQ.gte("completed_at", startIso);
       }
       if (endIso) {
-        setsQ.lte("completed_at", endIso);
-        daysQ.lte("completed_at", endIso);
+        setsQ = setsQ.lte("completed_at", endIso);
+        daysQ = daysQ.lte("completed_at", endIso);
+      }
+      if (blockDayIds) {
+        setsQ = setsQ.in("pl_exercise_rows.day_id", blockDayIds);
+        daysQ = daysQ.in("day_id", blockDayIds);
       }
       const [setsRes, daysRes, prepRes] = await Promise.all([
         setsQ,
