@@ -473,10 +473,37 @@ export function appendRowToFirstDay(payload: any, type: string, row: any) {
 
 export const Route = createFileRoute("/_authenticated/admin/program-library_/$templateId")({
   component: TemplateEditor,
+  errorComponent: TemplateEditorErrorFallback,
   validateSearch: (s: Record<string, unknown>) => ({
     block: typeof s.block === "string" ? (s.block as string) : undefined,
   }),
 });
+
+function TemplateEditorErrorFallback({ error, reset }: { error: Error; reset: () => void }) {
+  // eslint-disable-next-line no-console
+  console.error("[program-library-template] route error", error);
+  return (
+    <div className="mx-auto max-w-lg space-y-3 p-8 text-center">
+      <h2 className="text-lg font-semibold">Couldn't open this template</h2>
+      <p className="text-sm text-muted-foreground">{error?.message ?? "The template editor failed to load."}</p>
+      <div className="flex justify-center gap-2">
+        <button
+          type="button"
+          onClick={() => reset()}
+          className="inline-flex items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
+        >
+          Try again
+        </button>
+        <Link
+          to="/admin/program-library"
+          className="inline-flex items-center justify-center rounded-md border border-border px-4 py-2 text-sm font-medium hover:bg-muted"
+        >
+          Back to library
+        </Link>
+      </div>
+    </div>
+  );
+}
 
 const STYLES: TrainingStyle[] = ["powerlifting", "bodybuilding", "strength", "lifestyle", "hybrid", "rehab", "conditioning", "custom"];
 
