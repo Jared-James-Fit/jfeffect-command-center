@@ -9,6 +9,8 @@ import { createClientAdapter } from "@/lib/workout-context/client-adapter";
 import { usePortalUserId, useClientImpersonation } from "@/lib/client-impersonation";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { ClientCardioSection } from "@/components/cardio/ClientCardioSection";
+import { parseLocalDate } from "@/lib/today";
 
 export const Route = createFileRoute("/_authenticated/portal/workouts/$dayId")({
   validateSearch: (s: Record<string, unknown>) => ({
@@ -78,6 +80,12 @@ function RouteComponent() {
   });
   const clientId = povClient?.id ?? ownClient?.id ?? null;
   const clientUserId = povClient?.user_id ?? portalUserId ?? null;
+  const { data: dayRow } = useQuery({
+    queryKey: ["portal-workout-day-cardio-date", dayId],
+    enabled: !!dayId,
+    queryFn: async () =>
+      (await supabase.from("pl_days").select("scheduled_date").eq("id", dayId).maybeSingle()).data,
+  });
 
   const adapter = useMemo(() => {
     if (!clientId || !clientUserId) return undefined;
@@ -98,6 +106,16 @@ function RouteComponent() {
         listPath: "/portal/workouts",
         messagesPath: "/portal/messages",
       }}
-    />
+    >
+      {clientId && (
+        <ClientCardioSection
+          clientId={clientId}
+          dayContext="unknown"
+          date={parseLocalDate((dayRow as any)?.scheduled_date) ?? new Date()}
+          hideWhenEmpty
+          readonly={search.readonly === 1}
+        />
+      )}
+    </WorkoutDayView>
   );
 }

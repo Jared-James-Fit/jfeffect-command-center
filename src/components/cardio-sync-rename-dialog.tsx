@@ -47,6 +47,9 @@ export function CardioSyncRenameDialog({ open, onOpenChange, clientId, orphaned,
     setSaving(false);
     if (error) return toast.error(error.message);
     qc.invalidateQueries({ queryKey: ["cardio-targets", clientId] });
+    qc.invalidateQueries({ queryKey: ["cal-client-cardio", clientId] });
+    qc.invalidateQueries({ queryKey: ["client-cardio-resolved", clientId] });
+    qc.invalidateQueries({ queryKey: ["week-sched-data"] });
     toast.success("Cardio name updated");
   };
 

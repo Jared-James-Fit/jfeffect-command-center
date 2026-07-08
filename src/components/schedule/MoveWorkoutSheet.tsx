@@ -201,6 +201,9 @@ export function MoveWorkoutSheet({
         return;
       }
       void queryClient.invalidateQueries();
+      void queryClient.invalidateQueries({ queryKey: ["client-cardio-resolved"] });
+      void queryClient.invalidateQueries({ queryKey: ["cal-client-cardio"] });
+      void queryClient.invalidateQueries({ queryKey: ["week-sched-data"] });
       toast.success("Workout moved.", {
         action: res.batchId
           ? {
@@ -210,6 +213,9 @@ export function MoveWorkoutSheet({
                   await undo({ data: { batchId: res.batchId! } });
                   toast.success("Move undone.");
                   void queryClient.invalidateQueries();
+                  void queryClient.invalidateQueries({ queryKey: ["client-cardio-resolved"] });
+                  void queryClient.invalidateQueries({ queryKey: ["cal-client-cardio"] });
+                  void queryClient.invalidateQueries({ queryKey: ["week-sched-data"] });
                 } catch (e: any) {
                   toast.error(e?.message ?? "Could not undo.");
                 }
@@ -231,6 +237,9 @@ export function MoveWorkoutSheet({
     },
     onSuccess: (res) => {
       void queryClient.invalidateQueries();
+      void queryClient.invalidateQueries({ queryKey: ["client-cardio-resolved"] });
+      void queryClient.invalidateQueries({ queryKey: ["cal-client-cardio"] });
+      void queryClient.invalidateQueries({ queryKey: ["week-sched-data"] });
       toast.success("Workouts swapped.", {
         action: res.batchId
           ? {
@@ -240,6 +249,9 @@ export function MoveWorkoutSheet({
                   await undo({ data: { batchId: res.batchId! } });
                   toast.success("Swap undone.");
                   void queryClient.invalidateQueries();
+                  void queryClient.invalidateQueries({ queryKey: ["client-cardio-resolved"] });
+                  void queryClient.invalidateQueries({ queryKey: ["cal-client-cardio"] });
+                  void queryClient.invalidateQueries({ queryKey: ["week-sched-data"] });
                 } catch (e: any) {
                   toast.error(e?.message ?? "Could not undo.");
                 }
