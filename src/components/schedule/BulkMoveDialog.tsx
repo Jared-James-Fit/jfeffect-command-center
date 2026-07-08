@@ -16,7 +16,7 @@ import { ArrowRight, Loader2, ListChecks } from "lucide-react";
 import { applyBulkScheduleChange } from "@/lib/schedule-bulk.functions";
 import { undoScheduleChange } from "@/lib/schedule-manager.functions";
 import type {
-  ScheduleDay, ScheduleWeek, ScheduleBlock, ScheduleCompletion,
+  ScheduleDay, ScheduleWeek, ScheduleBlock, ScheduleCompletion, ScheduledInstance,
 } from "./ScheduleCalendar";
 
 type Scope = "single" | "week" | "pattern" | "block" | "program" | "custom";
@@ -36,6 +36,7 @@ function ymd(d: Date) {
 
 interface Ctx {
   days: ScheduleDay[]; weeks: ScheduleWeek[]; blocks: ScheduleBlock[]; completions: ScheduleCompletion[];
+  scheduledInstances?: ScheduledInstance[];
 }
 
 function computeMoves(args: {
@@ -128,28 +129,45 @@ export function BulkMoveDialog({ open, onOpenChange, anchorDayId, initialTargetD
   const [newDate, setNewDate] = useState<Date | null>(initialTargetDate ?? null);
   const [step, setStep] = useState<"scope" | "preview">("scope");
   const [customIds, setCustomIds] = useState<string[]>([]);
-  const [confirmCompleted, setConfirmCompleted] = useState(false);
 
   const moves = useMemo(() => {
     if (!anchorDayId || !newDate) return [];
     return computeMoves({ ctx, anchorDayId, newDate, scope, customDayIds: customIds });
   }, [ctx, anchorDayId, newDate, scope, customIds]);
 
+  // Slice 2d: bulk moves write pl_days.scheduled_date. Any day that has a
+  // pl_scheduled_workouts instance is instance-canonical — mutating pl_days
+  // silently desyncs from the visible calendar. Block those days here and
+  // route the user to the calendar's per-instance move flow instead.
+  const instanceBackedDayIds = useMemo(() => {
+    const set = new Set<string>();
+    for (const inst of ctx.scheduledInstances ?? []) set.add(inst.source_day_id);
+    return set;
+  }, [ctx.scheduledInstances]);
+  const instanceBlockedMoves = useMemo(
+    () => moves.filter((m) => instanceBackedDayIds.has(m.dayId)),
+    [moves, instanceBackedDayIds],
+  );
+  const completedDayIds = useMemo(() => {
+    const set = new Set<string>();
+    for (const c of ctx.completions ?? []) if ((c as any).completed_at) set.add((c as any).day_id);
+    return set;
+  }, [ctx.completions]);
+  const completedBlockedMoves = useMemo(
+    () => moves.filter((m) => completedDayIds.has(m.dayId)),
+    [moves, completedDayIds],
+  );
+  const isBlocked = instanceBlockedMoves.length > 0 || completedBlockedMoves.length > 0;
+
   const mutation = useMutation({
     mutationFn: async () => apply({
       data: {
         moves: moves.map((m) => ({ dayId: m.dayId, newDate: m.newDate })),
         scope: scope === "single" ? "single" : (scope as any),
-        confirmCompletedMove: confirmCompleted,
       },
     }),
     onSuccess: (res: any) => {
       if (!res?.ok) {
-        if (res?.requiresCompletedConfirmation) {
-          setConfirmCompleted(true);
-          toast.warning(res.message);
-          return;
-        }
         return;
       }
       if (res.noop) { toast.info("Nothing to change — already on those dates."); onOpenChange(false); return; }
@@ -257,9 +275,28 @@ export function BulkMoveDialog({ open, onOpenChange, anchorDayId, initialTargetD
               ))}
             </div>
             <label className="flex items-center gap-2 text-xs text-muted-foreground">
-              <Checkbox checked={confirmCompleted} onCheckedChange={(v) => setConfirmCompleted(!!v)} />
-              I understand any completed workouts in this batch will be rescheduled (logs preserved).
+              Completed workouts are permanently locked — none will be
+              rescheduled by this batch.
             </label>
+            {isBlocked && (
+              <div className="rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-xs">
+                {instanceBlockedMoves.length > 0 && (
+                  <div>
+                    <strong>{instanceBlockedMoves.length}</strong> of these
+                    workouts use the new scheduling system. Move them from
+                    the workout calendar instead — this bulk tool would
+                    silently desync the schedule.
+                  </div>
+                )}
+                {completedBlockedMoves.length > 0 && (
+                  <div className={instanceBlockedMoves.length ? "mt-1" : undefined}>
+                    <strong>{completedBlockedMoves.length}</strong> of these
+                    workouts are already completed and cannot be moved.
+                    Schedule a new copy on the new date instead.
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         )}
 
@@ -273,7 +310,7 @@ export function BulkMoveDialog({ open, onOpenChange, anchorDayId, initialTargetD
               Preview <Badge variant="secondary" className="ml-2">{moves.length}</Badge>
             </Button>
           ) : (
-            <Button onClick={() => mutation.mutate()} disabled={mutation.isPending || moves.length === 0}>
+            <Button onClick={() => mutation.mutate()} disabled={mutation.isPending || moves.length === 0 || isBlocked}>
               {mutation.isPending && <Loader2 className="mr-1 h-4 w-4 animate-spin" />}
               Apply {moves.length} change{moves.length === 1 ? "" : "s"}
             </Button>
