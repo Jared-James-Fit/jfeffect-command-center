@@ -47,12 +47,7 @@ function ClientPurchase() {
   const d = resolvePaymentDisplay({ ...r, latest_ledger: latestLedger ?? null });
   const accept = async () => {
     setBusy(true);
-    const { error } = await supabase.from("purchase_records").update({
-      terms_accepted: true,
-      terms_accepted_at: new Date().toISOString(),
-      terms_accepted_client_name: c?.full_name ?? null,
-      terms_accepted_client_email: c?.email ?? user?.email ?? null,
-    }).eq("id", id);
+    const { error } = await supabase.rpc("accept_my_purchase", { p_purchase_id: id });
     setBusy(false);
     if (error) return toast.error(error.message);
     toast.success("Acceptance recorded");
