@@ -339,23 +339,43 @@ function BlockEditor() {
   const [payload, setPayload] = useState<any>(null);
   const [dirty, setDirty] = useState(false);
   const originalTreeRef = useRef<any>(null);
-  const hydratedRef = useRef(false);
+  // Track WHICH block the editor is currently hydrated for. A boolean
+  // "hydrated once" ref caused the block-tab switcher bug: switching to
+  // a different block updated the URL param and refetched the new tree,
+  // but this effect saw hydratedRef.current === true and refused to
+  // rehydrate, so the editor kept rendering the previously-opened block.
+  const hydratedBlockIdRef = useRef<string | null>(null);
 
   // Durable per-block undo/redo. Baseline = the block's server `updated_at`;
   // mismatches drop stale history without applying it. See persistent-undo.
   const undoStack = usePersistentUndoStack({
     scope: `block:${blockId}`,
     baseline: (tree?.block as any)?.updated_at ?? null,
-    enabled: hydratedRef.current,
+    enabled: hydratedBlockIdRef.current === blockId,
   });
   const lastPushTs = useRef(0);
 
+  // When the route param changes (block tab click, back/forward, deep link),
+  // synchronously reset per-block editor state so we never briefly show the
+  // previous block's rows as though they belonged to the new one. The
+  // hydration effect below then rehydrates from the freshly-fetched tree.
   useEffect(() => {
-    if (tree && !hydratedRef.current) {
+    if (hydratedBlockIdRef.current && hydratedBlockIdRef.current !== blockId) {
+      hydratedBlockIdRef.current = null;
+      originalTreeRef.current = null;
+      setPayload(null);
+      setName("");
+      setDirty(false);
+    }
+  }, [blockId]);
+
+  useEffect(() => {
+    if (tree && hydratedBlockIdRef.current !== tree.block.id) {
       originalTreeRef.current = tree;
       setName(tree.block.name ?? "");
       setPayload(treeToPayload(tree));
-      hydratedRef.current = true;
+      setDirty(false);
+      hydratedBlockIdRef.current = tree.block.id;
     }
   }, [tree]);
 
@@ -416,11 +436,16 @@ function BlockEditor() {
     key: `pl-block:${blockId}:editor`,
     value: autosaveValue,
     delay: 8000,
-    enabled: hydratedRef.current && dirty,
+    enabled: hydratedBlockIdRef.current === blockId && dirty,
     onSave: async () => { await persist(); },
   });
 
   const save = async () => {
+    // Safety guard: never let a stale save land on a different block than
+    // the one currently loaded in the editor. If the hydrated block id
+    // doesn't match the route param, skip — the next render will hydrate
+    // the correct block and the coach can save there.
+    if (hydratedBlockIdRef.current !== blockId) return;
     // Manual save: if there are pending autosave changes, flush() will run
     // the autosave's onSave (which already calls persist()) exactly once.
     // Otherwise nothing is pending and we still want to persist current
@@ -556,7 +581,19 @@ function BlockEditor() {
       <BlockSwitcher
         clientId={clientId}
         currentBlockId={blockId}
-        onBeforeNavigate={dirty ? save : undefined}
+        hasUnsavedChanges={dirty}
+        currentBlockName={name || tree.block.name || "this block"}
+        onBeforeNavigate={save}
+        onDiscardUnsaved={() => {
+          // Rehydrate from the last-loaded server snapshot so unsaved
+          // local edits are dropped without touching the database. The
+          // hydration effect will re-run for the new blockId on navigate.
+          if (originalTreeRef.current) {
+            setPayload(treeToPayload(originalTreeRef.current));
+            setName(originalTreeRef.current.block?.name ?? "");
+          }
+          setDirty(false);
+        }}
       />
 
       <StructureCanvas
