@@ -24,6 +24,8 @@ interface Props {
   admin?: boolean;
   displayUnit?: "lb" | "kg";
   navigateToBuilderHref?: string;
+  /** When set (block-based presets), restrict data to a single block. */
+  blockId?: string | null;
 }
 
 const FAMILY_LABEL: Record<LiftFamily, string> = {
@@ -45,20 +47,32 @@ export function PowerliftingExposureSection({
   admin = false,
   displayUnit = "lb",
   navigateToBuilderHref,
+  blockId = null,
 }: Props) {
   const navigate = useNavigate();
 
   // Fetch pl_exercise_rows with role fields + days + completions for the client, filtered by date range.
   const { data: exposureData } = useQuery({
-    queryKey: ["pl-exposure", clientId, filter.start.toISOString(), filter.end.toISOString()],
+    queryKey: [
+      "pl-exposure",
+      clientId,
+      filter.start.toISOString(),
+      filter.end.toISOString(),
+      blockId ?? null,
+    ],
     enabled: !!clientId,
     staleTime: 30_000,
     queryFn: async () => {
-      const { data: blocks } = await supabase
-        .from("pl_blocks")
-        .select("id")
-        .eq("client_id", clientId);
-      const blockIds = (blocks ?? []).map((b) => b.id);
+      let blockIds: string[];
+      if (blockId) {
+        blockIds = [blockId];
+      } else {
+        const { data: blocks } = await supabase
+          .from("pl_blocks")
+          .select("id")
+          .eq("client_id", clientId);
+        blockIds = (blocks ?? []).map((b) => b.id);
+      }
       if (blockIds.length === 0) return { rows: [], days: [], completions: [], hasSbdRows: false };
 
       const { data: weeks } = await supabase
