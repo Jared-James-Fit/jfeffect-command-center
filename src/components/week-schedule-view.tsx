@@ -16,7 +16,12 @@ import {
 } from "@/lib/high-day-schedule";
 import { toast } from "sonner";
 import { detectAvailabilityChange } from "@/lib/auto-scheduler";
-import { dayScheduledDate } from "@/lib/workout-today";
+import {
+  mondayWeekDates,
+  resolveClientWeekDays,
+  resolveWorkoutDatesFromSchedule,
+  type CardioDayType,
+} from "@/lib/resolved-client-days";
 import { cn } from "@/lib/utils";
 
 const sb = supabase as any;
@@ -45,12 +50,6 @@ type DayCell = {
   completion: { completed_at: string | null; completed_date: string | null } | null;
 };
 
-function classifyDayType(focus: string | null | undefined): "Training" | "Rest" | "High" {
-  const f = (focus ?? "").toLowerCase();
-  if (f.includes("high")) return "High";
-  return "Training";
-}
-
 function todayISO(): string {
   return format(new Date(), "yyyy-MM-dd");
 }
@@ -62,7 +61,7 @@ async function loadBlockData(blockId: string, clientId: string) {
     sb.from("cardio_targets")
       .select("id, day_type, frequency_per_week, cardio_type, custom_type, duration_minutes, intensity, heart_rate_zone, client_notes, status, visible_to_client, enabled, start_date, end_date")
       .eq("client_id", clientId),
-    sb.from("clients").select("preferred_high_days, full_cardio_rest_days").eq("id", clientId).maybeSingle(),
+    sb.from("clients").select("committed_training_days, preferred_high_days, full_cardio_rest_days").eq("id", clientId).maybeSingle(),
     sb.from("nutrition_day_overrides").select("override_date, day_label").eq("client_id", clientId),
   ]);
   const weekIds = (weeks ?? []).map((w: any) => w.id);
@@ -85,119 +84,56 @@ async function loadBlockData(blockId: string, clientId: string) {
 }
 
 function buildCells(
+  clientId: string,
   weekStart: Date,
   allDays: any[],
   cardioTargets: any[],
   completions: any[],
   weeks: any[],
   block: any,
-  clientPrefs: { preferred_high_days?: string[] | null; full_cardio_rest_days?: string[] | null } | null,
+  clientPrefs: { committed_training_days?: string[] | null; preferred_high_days?: string[] | null; full_cardio_rest_days?: string[] | null } | null,
   overrides: Array<{ override_date: string; day_label: string }>,
 ): DayCell[] {
-  const weekDates: string[] = WEEK_DAYS.map((_, i) => format(addDays(weekStart, i), "yyyy-MM-dd"));
+  const weekDates: string[] = mondayWeekDates(weekStart);
   const today = todayISO();
 
-  // Workouts on this week — fall back to derived date when scheduled_date is missing
-  const weekById = new Map<string, any>();
-  for (const w of weeks) weekById.set(w.id, w);
-  const workoutsByDate = new Map<string, any>();
-  for (const d of allDays) {
-    let iso = d.scheduled_date ?? null;
-    if (!iso) {
-      const wk = weekById.get(d.week_id);
-      const sd = dayScheduledDate({ day: d, week: wk, block, completion: null } as any);
-      iso = sd ? format(sd, "yyyy-MM-dd") : null;
-    }
-    if (iso && weekDates.includes(iso)) {
-      workoutsByDate.set(iso, d);
-    }
-  }
-  const workoutDates = new Set(workoutsByDate.keys());
-  const nonWorkoutDates = weekDates.filter((d) => !workoutDates.has(d));
-
-  // Resolve High Day date for this week from override → recurring schedule
-  // → workout-focus fallback. Overrides take precedence.
-  const overrideByDate = new Map<string, string>();
-  for (const o of overrides ?? []) overrideByDate.set(o.override_date, o.day_label);
-  const highDayNames = new Set((clientPrefs?.preferred_high_days ?? []).map((d) => d?.trim()));
-  const fullRestNames = new Set((clientPrefs?.full_cardio_rest_days ?? []).map((d) => d?.trim()));
-  const WEEKDAY_NAMES: WeekDay[] = ["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"];
-  let highDate: string | null = null;
-  const overrideHigh = weekDates.find((d) => overrideByDate.get(d) === "High Day");
-  if (overrideHigh) {
-    highDate = overrideHigh;
-  } else if (highDayNames.size > 0) {
-    // Pick the weekday from the recurring schedule that is NOT overridden
-    // away and is not already claimed by an override to another label.
-    for (let i = 0; i < 7; i++) {
-      const iso = weekDates[i];
-      const wd = WEEKDAY_NAMES[i];
-      if (overrideByDate.has(iso)) continue;
-      if (highDayNames.has(wd)) { highDate = iso; break; }
-    }
-  }
-  if (!highDate) {
-    // Fall back to workout-focus classifier
-    highDate = [...workoutsByDate.entries()].find(([, d]) => classifyDayType(d.focus) === "High")?.[0] ?? null;
-  }
-
-  // Cardio placement per day for the visible week
-  const cardioByDate = new Map<string, DayCell["cardio"]>();
   const activeCardio = cardioTargets.filter((c) =>
     c.enabled !== false && c.visible_to_client !== false && (c.status ?? "Active") === "Active",
   );
-  for (const c of activeCardio) {
-    // Skip empty/incomplete targets
-    if (!c.duration_minutes && !c.intensity && !c.frequency_per_week) continue;
-    // Date-window guard
-    if (c.start_date && c.start_date > weekDates[6]) continue;
-    if (c.end_date && c.end_date < weekDates[0]) continue;
-    const freq = Math.max(1, c.frequency_per_week ?? 1);
-    const dayType = c.day_type ?? "General";
-    let eligible: string[] = (() => {
-      if (dayType === "Training Day") return [...workoutDates];
-      if (dayType === "Rest Day" || dayType === "Non-Training Day") return nonWorkoutDates;
-      if (dayType === "High Day") return highDate ? [highDate] : [];
-      return weekDates;
-    })();
-    // Suppress non-training/non-high cardio on the Full Cardio Rest weekday.
-    if (dayType !== "Training Day" && dayType !== "High Day" && fullRestNames.size > 0) {
-      eligible = eligible.filter((iso) => {
-        const i = weekDates.indexOf(iso);
-        return i < 0 ? true : !fullRestNames.has(WEEKDAY_NAMES[i]);
-      });
-    }
-    // Prevent a non-High target from landing on the High Day date.
-    if (dayType !== "High Day" && highDate) {
-      eligible = eligible.filter((iso) => iso !== highDate);
-    }
-    const picks = eligible.slice(0, freq);
-    const label = c.cardio_type === "Custom" ? c.custom_type ?? "Cardio" : c.cardio_type ?? "Cardio";
-    for (const dateISO of picks) {
-      const list = cardioByDate.get(dateISO) ?? [];
-      list.push({
-        id: c.id,
-        label,
-        dayType,
-        duration: c.duration_minutes ?? null,
-        intensity: c.intensity ?? null,
-        zone: c.heart_rate_zone ?? null,
-        notes: c.client_notes ?? null,
-      });
-      cardioByDate.set(dateISO, list);
-    }
-  }
+  const cardioById = new Map(activeCardio.map((c) => [c.id, c]));
+  const workoutDates = resolveWorkoutDatesFromSchedule(allDays, weeks, block, clientPrefs?.committed_training_days ?? null);
+  const workoutsByDate = new Map(workoutDates.map((w) => [w.date, w]));
+  const resolvedDays = resolveClientWeekDays({
+    clientId,
+    weekDates,
+    workouts: workoutDates,
+    recurringHighDays: clientPrefs?.preferred_high_days ?? null,
+    highDayOverrides: overrides,
+    fullCardioRestDays: clientPrefs?.full_cardio_rest_days ?? null,
+    cardioTargets: activeCardio,
+  });
+
+  const dayTypeLabel = (type: CardioDayType) => {
+    if (type === "training") return "Training Day";
+    if (type === "high") return "High Day";
+    if (type === "rest") return "Full Cardio Rest";
+    return "Non-Training Day";
+  };
 
   const completionByDay = new Map<string, any>();
   for (const c of completions) completionByDay.set(c.day_id, c);
 
   return WEEK_DAYS.map((wd, i) => {
     const dateISO = weekDates[i];
-    const workout = workoutsByDate.get(dateISO) ?? null;
-    const dayType: DayCell["dayType"] = dateISO === highDate
+    const resolved = resolvedDays[i];
+    const workoutDate = workoutsByDate.get(dateISO) ?? null;
+    const workout = workoutDate?.workout ?? null;
+    const target = resolved?.cardioTargetId ? cardioById.get(resolved.cardioTargetId) : null;
+    const label = target ? (target.cardio_type === "Custom" ? target.custom_type ?? "Cardio" : target.cardio_type ?? "Cardio") : null;
+    const dayType: DayCell["dayType"] = resolved?.nutritionDayType === "high"
       ? "High"
       : workout
-        ? classifyDayType(workout.focus)
+        ? "Training"
         : "Rest";
     const completion = workout ? (completionByDay.get(workout.id) ?? null) : null;
     return {
@@ -210,10 +146,18 @@ function buildCells(
             dayId: workout.id,
             title: workout.title ?? `Day ${workout.day_index}`,
             focus: workout.focus ?? null,
-            manualOverride: !!workout.schedule_locked,
+            manualOverride: !!resolved?.isWorkoutOverride,
           }
         : null,
-      cardio: cardioByDate.get(dateISO) ?? [],
+      cardio: target && resolved?.cardioDayType !== "rest" ? [{
+        id: `${target.id}:${dateISO}`,
+        label: label ?? "Cardio",
+        dayType: dayTypeLabel(resolved.cardioDayType),
+        duration: target.duration_minutes ?? null,
+        intensity: target.intensity ?? null,
+        zone: target.heart_rate_zone ?? null,
+        notes: target.client_notes ?? null,
+      }] : [],
       dayType,
       completion,
     } as DayCell;
@@ -260,8 +204,8 @@ export function WeekScheduleView({
 
   const cells = useMemo(() => {
     if (!data) return [] as DayCell[];
-    return buildCells(weekStart, data.days, data.cardio, data.completions, data.weeks, data.block, data.clientPrefs, data.overrides);
-  }, [data, weekStart]);
+    return buildCells(clientId, weekStart, data.days, data.cardio, data.completions, data.weeks, data.block, data.clientPrefs, data.overrides);
+  }, [clientId, data, weekStart]);
 
   const goPrev = () => setWeekStart((d) => addDays(d, -7));
   const goNext = () => setWeekStart((d) => addDays(d, 7));
