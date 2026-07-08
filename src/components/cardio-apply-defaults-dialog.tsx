@@ -427,6 +427,15 @@ export function CardioApplyDefaultsDialog({
           </span>
         </div>
 
+        {/* Compact weekly preview */}
+        <WeeklyPreview
+          trainingDays={clientPrefs?.preferred_training_days ?? []}
+          highDayWeekday={highDayWeekday}
+          fullRestEnabled={fullRestEnabled}
+          fullRestWeekday={fullRestWeekday}
+          rows={rows}
+        />
+
         <ul className="space-y-2">
           {rows.map((row, idx) => {
             const existingRow = findDefaultFor(existing, row.day_type);
