@@ -1660,6 +1660,16 @@ function WorkoutDay({
                           }
                         }
                         await qc.invalidateQueries({ queryKey: ["pl-day-completion", dayId] });
+                        if (client?.id) {
+                          await Promise.all([
+                            qc.invalidateQueries({ queryKey: ["my-workouts", client.id] }),
+                            qc.invalidateQueries({ queryKey: ["workouts-experience-client", client.id] }),
+                            qc.invalidateQueries({ queryKey: ["workouts-priority-rows", client.id] }),
+                            qc.invalidateQueries({ queryKey: ["portal-workouts-client"] }),
+                            qc.invalidateQueries({ queryKey: ["schedule"] }),
+                            qc.invalidateQueries({ queryKey: ["resolved-client-days"] }),
+                          ]);
+                        }
                         toast.success(`Status set: ${opt.label}`);
                       } catch (err: any) {
                         toast.error("Could not update status", { description: err?.message });
