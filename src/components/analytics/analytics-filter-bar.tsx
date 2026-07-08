@@ -1,63 +1,115 @@
 import { useMemo, useState } from "react";
-import { format, subDays, parseISO } from "date-fns";
+import { format, parseISO, subDays } from "date-fns";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { CalendarSearch, Layers, RotateCcw } from "lucide-react";
+import {
+  type AnalyticsBlock as SharedAnalyticsBlock,
+  parseLocalDate,
+  resolveCurrentBlock,
+  resolvePreviousBlock,
+} from "@/lib/analytics/blocks";
 
-export type AnalyticsBlock = {
-  id: string;
-  name: string;
-  status: string | null;
-  start_date: string | null;
-  end_date: string | null;
-};
+/** Re-export so existing consumers keep importing from this module. */
+export type AnalyticsBlock = SharedAnalyticsBlock;
 
 export type AnalyticsFilter =
   | { preset: "current_block"; blockId: string; start: Date; end: Date; label: string }
   | { preset: "previous_block"; blockId: string; start: Date; end: Date; label: string }
+  | {
+      preset: "exact_block";
+      blockId: string;
+      /** For undated blocks these fall back to lifetime bounds — blockId is the authoritative boundary. */
+      start: Date;
+      end: Date;
+      /** True when the underlying block has real start/end dates. */
+      hasBlockDates: boolean;
+      label: string;
+    }
   | { preset: "last_4w" | "last_8w" | "last_12w" | "lifetime"; start: Date; end: Date; label: string }
   | { preset: "custom"; start: Date; end: Date; label: string };
 
-function orderedBlocks(blocks: AnalyticsBlock[]): AnalyticsBlock[] {
-  return [...blocks]
-    .filter((b) => b.start_date)
-    .sort((a, b) => (b.start_date ?? "").localeCompare(a.start_date ?? ""));
-}
-
-function activeBlock(blocks: AnalyticsBlock[]): AnalyticsBlock | null {
-  return blocks.find((b) => (b.status ?? "").toLowerCase() === "active") ?? null;
-}
-
-function previousBlock(blocks: AnalyticsBlock[]): AnalyticsBlock | null {
-  const sorted = orderedBlocks(blocks);
-  const activeIdx = sorted.findIndex((b) => (b.status ?? "").toLowerCase() === "active");
-  if (activeIdx >= 0 && sorted[activeIdx + 1]) return sorted[activeIdx + 1];
-  // fallback: most recent block whose end_date is in the past
-  const today = new Date().toISOString().slice(0, 10);
-  return sorted.find((b) => (b.end_date ?? "") < today) ?? null;
-}
-
 function blockRange(b: AnalyticsBlock): { start: Date; end: Date } {
-  const start = b.start_date ? parseISO(b.start_date) : subDays(new Date(), 28);
-  const end = b.end_date ? parseISO(b.end_date) : new Date();
+  const start = parseLocalDate(b.start_date) ?? subDays(new Date(), 28);
+  const end = parseLocalDate(b.end_date) ?? new Date();
   return { start, end };
 }
 
-/** Compute default filter given blocks. */
+function blockRangeMaybe(b: AnalyticsBlock): { start: Date | null; end: Date | null } {
+  return { start: parseLocalDate(b.start_date), end: parseLocalDate(b.end_date) };
+}
+
+function lifetimeBounds(blocks: AnalyticsBlock[]): { start: Date; end: Date } {
+  const earliest = blocks
+    .map((b) => b.start_date)
+    .filter((s): s is string => !!s)
+    .sort()[0];
+  return {
+    start: earliest ? parseISO(earliest) : subDays(new Date(), 365),
+    end: new Date(),
+  };
+}
+
+function currentBlockFilter(b: AnalyticsBlock): AnalyticsFilter {
+  const { start, end } = blockRange(b);
+  return {
+    preset: "current_block",
+    blockId: b.id,
+    start,
+    end,
+    label: `Current Block · ${format(start, "MMM d")}–${format(end, "MMM d")}`,
+  };
+}
+
+function previousBlockFilter(b: AnalyticsBlock): AnalyticsFilter {
+  const { start, end } = blockRange(b);
+  return {
+    preset: "previous_block",
+    blockId: b.id,
+    start,
+    end,
+    label: `Previous Block · ${format(start, "MMM d")}–${format(end, "MMM d")}`,
+  };
+}
+
+export function exactBlockFilter(
+  b: AnalyticsBlock,
+  allBlocks: AnalyticsBlock[],
+): AnalyticsFilter {
+  const { start, end } = blockRangeMaybe(b);
+  const hasBlockDates = !!start;
+  const dateLabel =
+    start && end
+      ? `${format(start, "MMM d")}–${format(end, "MMM d, yyyy")}`
+      : start
+        ? `from ${format(start, "MMM d, yyyy")}`
+        : "Not scheduled";
+  // Fallback: undated blocks use lifetime bounds for chart display only.
+  // blockId remains the authoritative data boundary — downstream analytics
+  // that need real dates should key off `hasBlockDates`.
+  const fallback = lifetimeBounds(allBlocks);
+  return {
+    preset: "exact_block",
+    blockId: b.id,
+    start: start ?? fallback.start,
+    end: end ?? fallback.end,
+    hasBlockDates,
+    label: `${b.name} · ${dateLabel}`,
+  };
+}
+
+/** Default filter given the block set. */
 export function defaultAnalyticsFilter(blocks: AnalyticsBlock[]): AnalyticsFilter {
-  const active = activeBlock(blocks);
-  if (active) {
-    const { start, end } = blockRange(active);
-    return {
-      preset: "current_block",
-      blockId: active.id,
-      start,
-      end,
-      label: `Current Block · ${format(start, "MMM d")}–${format(end, "MMM d")}`,
-    };
-  }
+  const current = resolveCurrentBlock(blocks);
+  if (current) return currentBlockFilter(current);
   const end = new Date();
   const start = subDays(end, 56);
-  return { preset: "last_8w", start, end, label: `Last 8W · ${format(start, "MMM d")}–${format(end, "MMM d")}` };
+  return {
+    preset: "last_8w",
+    start,
+    end,
+    label: `Last 8W · ${format(start, "MMM d")}–${format(end, "MMM d")}`,
+  };
 }
 
 function lastNWeeks(n: number): AnalyticsFilter {
@@ -79,37 +131,67 @@ function lifetimeFilter(blocks: AnalyticsBlock[]): AnalyticsFilter {
     .sort()[0];
   const start = earliest ? parseISO(earliest) : subDays(new Date(), 365);
   const end = new Date();
-  return { preset: "lifetime", start, end, label: `Lifetime · ${format(start, "MMM d, yyyy")}–${format(end, "MMM d, yyyy")}` };
+  return {
+    preset: "lifetime",
+    start,
+    end,
+    label: `Lifetime · ${format(start, "MMM d, yyyy")}–${format(end, "MMM d, yyyy")}`,
+  };
 }
 
 interface Props {
   blocks: AnalyticsBlock[];
   value: AnalyticsFilter;
   onChange: (f: AnalyticsFilter) => void;
+  /** ID of the block currently being viewed (may be historical). */
+  selectedBlockId?: string | null;
+  /** ID of the resolved *actual* current block, independent of what's selected. */
+  resolvedCurrentBlockId?: string | null;
+  /** Called when the user taps "Browse Blocks". */
+  onOpenPicker?: () => void;
 }
 
-export function AnalyticsFilterBar({ blocks, value, onChange }: Props) {
-  const active = useMemo(() => activeBlock(blocks), [blocks]);
-  const prev = useMemo(() => previousBlock(blocks), [blocks]);
+export function AnalyticsFilterBar({
+  blocks,
+  value,
+  onChange,
+  selectedBlockId,
+  resolvedCurrentBlockId,
+  onOpenPicker,
+}: Props) {
+  const current = useMemo(() => resolveCurrentBlock(blocks), [blocks]);
+  const prev = useMemo(() => resolvePreviousBlock(blocks, current), [blocks, current]);
   const [customOpen, setCustomOpen] = useState(value.preset === "custom");
-  const [customStart, setCustomStart] = useState<string>(format(value.start, "yyyy-MM-dd"));
-  const [customEnd, setCustomEnd] = useState<string>(format(value.end, "yyyy-MM-dd"));
+  const [customStart, setCustomStart] = useState<string>(
+    format(value.start ?? new Date(), "yyyy-MM-dd"),
+  );
+  const [customEnd, setCustomEnd] = useState<string>(
+    format(value.end ?? new Date(), "yyyy-MM-dd"),
+  );
 
-  const chips: { key: AnalyticsFilter["preset"]; label: string; disabled?: boolean; onSelect: () => void }[] = [
+  const selectedBlock = useMemo(
+    () => blocks.find((b) => b.id === (selectedBlockId ?? "")) ?? null,
+    [blocks, selectedBlockId],
+  );
+  const isViewingHistorical =
+    value.preset === "exact_block" &&
+    !!resolvedCurrentBlockId &&
+    selectedBlockId !== resolvedCurrentBlockId;
+
+  const chips: {
+    key: AnalyticsFilter["preset"];
+    label: string;
+    disabled?: boolean;
+    disabledHint?: string;
+    onSelect: () => void;
+  }[] = [
     {
       key: "current_block",
       label: "Current Block",
-      disabled: !active,
+      disabled: !current,
       onSelect: () => {
-        if (!active) return;
-        const { start, end } = blockRange(active);
-        onChange({
-          preset: "current_block",
-          blockId: active.id,
-          start,
-          end,
-          label: `Current Block · ${format(start, "MMM d")}–${format(end, "MMM d")}`,
-        });
+        if (!current) return;
+        onChange(currentBlockFilter(current));
         setCustomOpen(false);
       },
     },
@@ -117,25 +199,53 @@ export function AnalyticsFilterBar({ blocks, value, onChange }: Props) {
       key: "previous_block",
       label: "Previous Block",
       disabled: !prev,
+      disabledHint: prev ? undefined : "No previous block is available.",
       onSelect: () => {
         if (!prev) return;
-        const { start, end } = blockRange(prev);
-        onChange({
-          preset: "previous_block",
-          blockId: prev.id,
-          start,
-          end,
-          label: `Previous Block · ${format(start, "MMM d")}–${format(end, "MMM d")}`,
-        });
+        onChange(previousBlockFilter(prev));
         setCustomOpen(false);
       },
     },
-    { key: "last_4w", label: "Last 4W", onSelect: () => { onChange(lastNWeeks(4)); setCustomOpen(false); } },
-    { key: "last_8w", label: "Last 8W", onSelect: () => { onChange(lastNWeeks(8)); setCustomOpen(false); } },
-    { key: "last_12w", label: "Last 12W", onSelect: () => { onChange(lastNWeeks(12)); setCustomOpen(false); } },
+    {
+      key: "last_4w",
+      label: "Last 4W",
+      onSelect: () => {
+        onChange(lastNWeeks(4));
+        setCustomOpen(false);
+      },
+    },
+    {
+      key: "last_8w",
+      label: "Last 8W",
+      onSelect: () => {
+        onChange(lastNWeeks(8));
+        setCustomOpen(false);
+      },
+    },
+    {
+      key: "last_12w",
+      label: "Last 12W",
+      onSelect: () => {
+        onChange(lastNWeeks(12));
+        setCustomOpen(false);
+      },
+    },
     { key: "custom", label: "Custom", onSelect: () => setCustomOpen(true) },
-    { key: "lifetime", label: "Lifetime", onSelect: () => { onChange(lifetimeFilter(blocks)); setCustomOpen(false); } },
+    {
+      key: "lifetime",
+      label: "Lifetime",
+      onSelect: () => {
+        onChange(lifetimeFilter(blocks));
+        setCustomOpen(false);
+      },
+    },
   ];
+
+  const returnToCurrent = () => {
+    if (!current) return;
+    onChange(currentBlockFilter(current));
+    setCustomOpen(false);
+  };
 
   return (
     <div className="space-y-2">
@@ -148,6 +258,7 @@ export function AnalyticsFilterBar({ blocks, value, onChange }: Props) {
               type="button"
               onClick={c.onSelect}
               disabled={c.disabled}
+              title={c.disabledHint}
               className={[
                 "h-8 rounded-full border px-3 text-xs font-semibold transition-colors",
                 activeChip
@@ -161,15 +272,54 @@ export function AnalyticsFilterBar({ blocks, value, onChange }: Props) {
           );
         })}
       </div>
+
+      {/* Browse Blocks — mandatory obvious action */}
+      {onOpenPicker && (
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={onOpenPicker}
+            className="h-9 gap-1.5 w-full sm:w-auto"
+          >
+            <Layers className="h-4 w-4" />
+            {value.preset === "lifetime" ? "Browse history by block" : "Browse Blocks"}
+          </Button>
+          {isViewingHistorical && current && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={returnToCurrent}
+              className="h-9 gap-1.5 text-primary"
+            >
+              <RotateCcw className="h-4 w-4" />
+              Return to Current Block
+            </Button>
+          )}
+        </div>
+      )}
+
       {customOpen && (
         <div className="flex flex-wrap items-end gap-2 rounded-md border border-border bg-card p-3">
           <label className="text-xs font-semibold text-muted-foreground">
             Start
-            <Input type="date" value={customStart} onChange={(e) => setCustomStart(e.target.value)} className="mt-1 h-8 w-40" />
+            <Input
+              type="date"
+              value={customStart}
+              onChange={(e) => setCustomStart(e.target.value)}
+              className="mt-1 h-8 w-40"
+            />
           </label>
           <label className="text-xs font-semibold text-muted-foreground">
             End
-            <Input type="date" value={customEnd} onChange={(e) => setCustomEnd(e.target.value)} className="mt-1 h-8 w-40" />
+            <Input
+              type="date"
+              value={customEnd}
+              onChange={(e) => setCustomEnd(e.target.value)}
+              className="mt-1 h-8 w-40"
+            />
           </label>
           <Button
             size="sm"
@@ -189,7 +339,43 @@ export function AnalyticsFilterBar({ blocks, value, onChange }: Props) {
           </Button>
         </div>
       )}
-      <div className="text-xs font-semibold text-muted-foreground">{value.label}</div>
+
+      {/* Selected-block summary line (Change button opens picker). */}
+      {value.preset === "exact_block" && selectedBlock ? (
+        <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-border bg-card px-3 py-2">
+          <div className="min-w-0 text-xs">
+            <div className="truncate text-sm font-bold text-foreground">
+              {selectedBlock.name}
+            </div>
+            <div className="truncate text-muted-foreground">
+              {selectedBlock.start_date
+                ? `${format(parseLocalDate(selectedBlock.start_date)!, "MMM d, yyyy")}${
+                    selectedBlock.end_date
+                      ? ` – ${format(parseLocalDate(selectedBlock.end_date)!, "MMM d, yyyy")}`
+                      : ""
+                  }`
+                : "Not scheduled"}
+              {" · "}
+              {selectedBlock.id === resolvedCurrentBlockId
+                ? "Current"
+                : selectedBlock.status ?? "Block"}
+            </div>
+          </div>
+          {onOpenPicker && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={onOpenPicker}
+              className="h-8 gap-1.5"
+            >
+              <CalendarSearch className="h-3.5 w-3.5" /> Change
+            </Button>
+          )}
+        </div>
+      ) : (
+        <div className="text-xs font-semibold text-muted-foreground">{value.label}</div>
+      )}
     </div>
   );
 }

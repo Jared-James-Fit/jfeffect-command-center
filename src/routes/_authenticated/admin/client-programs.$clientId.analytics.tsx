@@ -1,6 +1,8 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useMemo, useState, useCallback } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { z } from "zod";
+import { zodValidator, fallback } from "@tanstack/zod-adapter";
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/app-shell";
 import { Card } from "@/components/ui/card";
@@ -12,38 +14,102 @@ import { format } from "date-fns";
 import { SearchableSelect, type SearchableOption } from "@/components/analytics/searchable-select";
 import { ANALYTICS_COLORS, exerciseColor, exerciseGroup, fmtNum, fmtDelta, muscleColor, shortMuscleLabel } from "@/lib/analytics-format";
 import { GraphDotDetail, type GraphDotPoint } from "@/components/analytics/graph-dot-detail";
-import { AnalyticsFilterBar, defaultAnalyticsFilter, type AnalyticsFilter } from "@/components/analytics/analytics-filter-bar";
+import {
+  AnalyticsFilterBar,
+  defaultAnalyticsFilter,
+  exactBlockFilter,
+  type AnalyticsFilter,
+} from "@/components/analytics/analytics-filter-bar";
+import { BlockPickerSheet } from "@/components/analytics/block-picker-sheet";
+import {
+  type AnalyticsBlock,
+  hasOverlappingBlocks,
+  normalizeAnalyticsBlock,
+  resolveCurrentBlock,
+} from "@/lib/analytics/blocks";
 import { PowerliftingExposureSection } from "@/components/analytics/powerlifting-exposure-section";
 import { useEffect } from "react";
 
-export const Route = createFileRoute("/_authenticated/admin/client-programs/$clientId/analytics")({ component: AnalyticsPage });
+const analyticsSearchSchema = z.object({
+  filter: fallback(z.string(), "").default(""),
+  blockId: fallback(z.string(), "").default(""),
+});
+
+export const Route = createFileRoute("/_authenticated/admin/client-programs/$clientId/analytics")({
+  validateSearch: zodValidator(analyticsSearchSchema),
+  component: AnalyticsPage,
+});
 
 function AnalyticsPage() {
   const { clientId } = Route.useParams();
+  const search = Route.useSearch();
+  const navigate = useNavigate({ from: Route.fullPath });
   const { data: client } = useQuery({
     queryKey: ["client", clientId],
     queryFn: async () => (await supabase.from("clients").select("id, full_name").eq("id", clientId).maybeSingle()).data,
   });
-  const { data: results = [], isLoading } = useQuery({
-    queryKey: ["pl-results", clientId],
-    queryFn: () => getClientResults(clientId),
-  });
-  const { data: clientBlocks = [] } = useQuery({
+  const {
+    data: clientBlocks = [],
+    isLoading: blocksLoading,
+    isError: blocksError,
+    refetch: refetchBlocks,
+  } = useQuery<AnalyticsBlock[]>({
     queryKey: ["pl-blocks-for-analytics", clientId],
     staleTime: 60_000,
-    queryFn: async () =>
-      (await supabase
+    queryFn: async () => {
+      const { data } = await supabase
         .from("pl_blocks")
-        .select("id, name, status, start_date, end_date")
-        .eq("client_id", clientId)).data ?? [],
+        .select(
+          "id, name, status, start_date, end_date, weeks, sort_order, training_focus, prep_id, pl_preps(id, title, event_name, event_date)",
+        )
+        .eq("client_id", clientId)
+        .order("sort_order", { ascending: true });
+      return (data ?? []).map(normalizeAnalyticsBlock);
+    },
   });
+  const resolvedCurrentBlockId = useMemo(
+    () => resolveCurrentBlock(clientBlocks)?.id ?? null,
+    [clientBlocks],
+  );
+  const overlapping = useMemo(() => hasOverlappingBlocks(clientBlocks), [clientBlocks]);
+  const isExactBlockUrl = search.filter === "exact_block" && !!search.blockId;
+  const requestedBlock = useMemo(
+    () => (isExactBlockUrl ? clientBlocks.find((b) => b.id === search.blockId) ?? null : null),
+    [clientBlocks, isExactBlockUrl, search.blockId],
+  );
   const [analyticsFilter, setAnalyticsFilter] = useState<AnalyticsFilter | null>(null);
   useEffect(() => {
-    if (!analyticsFilter && clientBlocks.length >= 0) {
+    if (analyticsFilter) return;
+    if (isExactBlockUrl && requestedBlock) {
+      setAnalyticsFilter(exactBlockFilter(requestedBlock, clientBlocks));
+    } else {
       setAnalyticsFilter(defaultAnalyticsFilter(clientBlocks));
     }
-  }, [analyticsFilter, clientBlocks]);
+  }, [analyticsFilter, clientBlocks, isExactBlockUrl, requestedBlock]);
   const filter = analyticsFilter ?? defaultAnalyticsFilter(clientBlocks);
+  const handleFilterChange = (next: AnalyticsFilter) => {
+    setAnalyticsFilter(next);
+    navigate({
+      search: (prev: any) => ({
+        ...prev,
+        filter: next.preset === "exact_block" ? "exact_block" : "",
+        blockId: next.preset === "exact_block" ? (next as any).blockId : "",
+      }),
+      replace: true,
+    });
+  };
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const activeBlockId =
+    filter.preset === "current_block" ||
+    filter.preset === "previous_block" ||
+    filter.preset === "exact_block"
+      ? ((filter as any).blockId as string)
+      : null;
+  const { data: results = [], isLoading } = useQuery({
+    queryKey: ["pl-results", clientId, activeBlockId],
+    queryFn: () => getClientResults(clientId, { blockId: activeBlockId ?? undefined }),
+  });
+  const selectedBlockId = activeBlockId;
 
   const filteredResults = useMemo(() => {
     const startMs = filter.start.getTime();
@@ -131,7 +197,37 @@ function AnalyticsPage() {
           <ArrowLeft className="mr-1 h-4 w-4" /> Back to programs
         </Link>
 
-        <AnalyticsFilterBar blocks={clientBlocks} value={filter} onChange={setAnalyticsFilter} />
+        <AnalyticsFilterBar
+          blocks={clientBlocks}
+          value={filter}
+          onChange={handleFilterChange}
+          selectedBlockId={selectedBlockId}
+          resolvedCurrentBlockId={resolvedCurrentBlockId}
+          onOpenPicker={() => setPickerOpen(true)}
+        />
+
+        <BlockPickerSheet
+          open={pickerOpen}
+          onOpenChange={setPickerOpen}
+          blocks={clientBlocks}
+          selectedBlockId={selectedBlockId}
+          resolvedCurrentBlockId={resolvedCurrentBlockId}
+          isLoading={blocksLoading}
+          isError={blocksError}
+          onRetry={() => { void refetchBlocks(); }}
+          onSelect={(b) => handleFilterChange(exactBlockFilter(b, clientBlocks))}
+        />
+
+        {overlapping && (
+          <div className="rounded-md border border-border bg-muted/40 p-3 text-xs text-muted-foreground">
+            This client has overlapping blocks. Exact block filtering prevents their analytics from being combined.
+          </div>
+        )}
+        {filter.preset === "exact_block" && !(filter as any).hasBlockDates && (
+          <div className="rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-xs text-amber-700 dark:text-amber-300">
+            This block has not been scheduled yet.
+          </div>
+        )}
 
         {isLoading ? <p className="text-sm text-muted-foreground">Loading…</p> : (
           <>
@@ -280,6 +376,7 @@ function AnalyticsPage() {
               results={results as any[]}
               admin
               navigateToBuilderHref={`/admin/client-programs/${clientId}`}
+              blockId={activeBlockId}
             />
           </>
         )}

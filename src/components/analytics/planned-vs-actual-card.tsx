@@ -28,12 +28,14 @@ export function PlannedVsActualCard({
   workingRpeMin,
   startDate,
   endDate,
+  blockId,
 }: {
   clientId: string;
   formula?: "epley" | "brzycki";
   workingRpeMin?: number;
   startDate?: Date;
   endDate?: Date;
+  blockId?: string | null;
 }) {
   const [expandedDay, setExpandedDay] = useState<string | null>(null);
 
@@ -45,6 +47,7 @@ export function PlannedVsActualCard({
       workingRpeMin,
       startDate?.toISOString() ?? null,
       endDate?.toISOString() ?? null,
+      blockId ?? null,
     ],
     enabled: !!clientId,
     queryFn: () =>
@@ -54,6 +57,7 @@ export function PlannedVsActualCard({
         workingRpeMin,
         startDate: startDate ?? null,
         endDate: endDate ?? null,
+        blockId: blockId ?? null,
       }),
   });
 
