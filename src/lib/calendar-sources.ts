@@ -236,6 +236,8 @@ export function useClientCalendarSources(clientId: string | null | undefined) {
       .on("postgres_changes", { event: "*", schema: "public", table: "pl_weeks" }, invalidate)
       .on("postgres_changes", { event: "*", schema: "public", table: "pl_days" }, invalidate)
       .on("postgres_changes", { event: "*", schema: "public", table: "pl_day_completions", filter: `client_id=eq.${clientId}` }, invalidate)
+      // Phase 2a: reflect newly scheduled / moved / copied instances live.
+      .on("postgres_changes", { event: "*", schema: "public", table: "pl_scheduled_workouts", filter: `client_id=eq.${clientId}` }, invalidate)
       .subscribe();
     return () => {
       void supabase.removeChannel(channel);
