@@ -42,30 +42,74 @@ export const Route = createFileRoute("/_authenticated/admin/client-programs/$cli
 
 function AnalyticsPage() {
   const { clientId } = Route.useParams();
+  const search = Route.useSearch();
+  const navigate = useNavigate({ from: Route.fullPath });
   const { data: client } = useQuery({
     queryKey: ["client", clientId],
     queryFn: async () => (await supabase.from("clients").select("id, full_name").eq("id", clientId).maybeSingle()).data,
   });
-  const { data: results = [], isLoading } = useQuery({
-    queryKey: ["pl-results", clientId],
-    queryFn: () => getClientResults(clientId),
-  });
-  const { data: clientBlocks = [] } = useQuery({
+  const {
+    data: clientBlocks = [],
+    isLoading: blocksLoading,
+    isError: blocksError,
+    refetch: refetchBlocks,
+  } = useQuery<AnalyticsBlock[]>({
     queryKey: ["pl-blocks-for-analytics", clientId],
     staleTime: 60_000,
-    queryFn: async () =>
-      (await supabase
+    queryFn: async () => {
+      const { data } = await supabase
         .from("pl_blocks")
-        .select("id, name, status, start_date, end_date")
-        .eq("client_id", clientId)).data ?? [],
+        .select(
+          "id, name, status, start_date, end_date, weeks, sort_order, training_focus, prep_id, pl_preps(id, title, event_name, event_date)",
+        )
+        .eq("client_id", clientId)
+        .order("sort_order", { ascending: true });
+      return (data ?? []).map(normalizeAnalyticsBlock);
+    },
   });
+  const resolvedCurrentBlockId = useMemo(
+    () => resolveCurrentBlock(clientBlocks)?.id ?? null,
+    [clientBlocks],
+  );
+  const overlapping = useMemo(() => hasOverlappingBlocks(clientBlocks), [clientBlocks]);
+  const isExactBlockUrl = search.filter === "exact_block" && !!search.blockId;
+  const requestedBlock = useMemo(
+    () => (isExactBlockUrl ? clientBlocks.find((b) => b.id === search.blockId) ?? null : null),
+    [clientBlocks, isExactBlockUrl, search.blockId],
+  );
   const [analyticsFilter, setAnalyticsFilter] = useState<AnalyticsFilter | null>(null);
   useEffect(() => {
-    if (!analyticsFilter && clientBlocks.length >= 0) {
+    if (analyticsFilter) return;
+    if (isExactBlockUrl && requestedBlock) {
+      setAnalyticsFilter(exactBlockFilter(requestedBlock, clientBlocks));
+    } else {
       setAnalyticsFilter(defaultAnalyticsFilter(clientBlocks));
     }
-  }, [analyticsFilter, clientBlocks]);
+  }, [analyticsFilter, clientBlocks, isExactBlockUrl, requestedBlock]);
   const filter = analyticsFilter ?? defaultAnalyticsFilter(clientBlocks);
+  const handleFilterChange = (next: AnalyticsFilter) => {
+    setAnalyticsFilter(next);
+    navigate({
+      search: (prev: any) => ({
+        ...prev,
+        filter: next.preset === "exact_block" ? "exact_block" : "",
+        blockId: next.preset === "exact_block" ? (next as any).blockId : "",
+      }),
+      replace: true,
+    });
+  };
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const activeBlockId =
+    filter.preset === "current_block" ||
+    filter.preset === "previous_block" ||
+    filter.preset === "exact_block"
+      ? ((filter as any).blockId as string)
+      : null;
+  const { data: results = [], isLoading } = useQuery({
+    queryKey: ["pl-results", clientId, activeBlockId],
+    queryFn: () => getClientResults(clientId, { blockId: activeBlockId ?? undefined }),
+  });
+  const selectedBlockId = activeBlockId;
 
   const filteredResults = useMemo(() => {
     const startMs = filter.start.getTime();
