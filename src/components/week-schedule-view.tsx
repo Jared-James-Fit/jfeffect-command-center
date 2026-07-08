@@ -478,3 +478,128 @@ function DayCard({
     </Card>
   );
 }
+
+function HighDayRescheduleMenu({
+  clientId,
+  dateISO,
+  weekday,
+  recurringHighDays,
+  hasOverride,
+}: {
+  clientId: string;
+  dateISO: string;
+  weekday: WeekDay;
+  recurringHighDays: string[];
+  hasOverride: boolean;
+}) {
+  const qc = useQueryClient();
+  const [busy, setBusy] = useState(false);
+  const [open, setOpen] = useState(false);
+  const invalidate = () => {
+    qc.invalidateQueries({ queryKey: ["week-sched-data"] });
+    qc.invalidateQueries({ queryKey: ["cal-client-cardio", clientId] });
+  };
+  const changeRecurring = async (d: WeekDay) => {
+    try {
+      setBusy(true);
+      await setRecurringHighDays(clientId, [d]);
+      toast.success(`Recurring High Day moved to ${d}`);
+      invalidate();
+      setOpen(false);
+    } catch (e: any) {
+      toast.error(e.message ?? "Failed to update recurring High Day");
+    } finally { setBusy(false); }
+  };
+  const moveThisWeekTo = async (targetISO: string) => {
+    try {
+      setBusy(true);
+      // Move: mark this date as its normal weekday label and target date as High Day.
+      // Simplest: just add an override at target date = High Day.
+      await upsertNutritionDayOverride(clientId, targetISO, "High Day", "Rescheduled from " + dateISO);
+      // And blank this date to Non-Training so we don't emit two High Days.
+      await upsertNutritionDayOverride(clientId, dateISO, "Non-Training Day", "Moved High Day away");
+      toast.success("Moved High Day for this week only");
+      invalidate();
+      setOpen(false);
+    } catch (e: any) {
+      toast.error(e.message ?? "Failed to move High Day");
+    } finally { setBusy(false); }
+  };
+  const clearOverride = async () => {
+    try {
+      setBusy(true);
+      await deleteNutritionDayOverride(clientId, dateISO);
+      toast.success("Cleared exception");
+      invalidate();
+      setOpen(false);
+    } catch (e: any) {
+      toast.error(e.message ?? "Failed to clear override");
+    } finally { setBusy(false); }
+  };
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button variant="outline" size="sm" className="h-7 w-full gap-1 text-[11px]">
+          <CalendarClock className="h-3 w-3" />
+          Reschedule High Day
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent align="start" className="w-64 space-y-3 p-3 pointer-events-auto">
+        <div>
+          <div className="mb-1 text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+            Change recurring weekday
+          </div>
+          <div className="grid grid-cols-4 gap-1">
+            {(WEEK_DAYS as readonly WeekDay[]).map((d) => (
+              <button
+                key={d}
+                type="button"
+                disabled={busy}
+                onClick={() => changeRecurring(d)}
+                className={cn(
+                  "h-7 rounded px-1 text-[10px] font-bold uppercase tracking-wider transition-colors",
+                  recurringHighDays.includes(d)
+                    ? "bg-amber-500 text-white"
+                    : "border border-border bg-background hover:bg-secondary",
+                )}
+              >
+                {SHORT_DAY[d]}
+              </button>
+            ))}
+          </div>
+        </div>
+        <div>
+          <div className="mb-1 text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+            Move this week only (from {SHORT_DAY[weekday]})
+          </div>
+          <div className="grid grid-cols-4 gap-1">
+            {(WEEK_DAYS as readonly WeekDay[]).map((d, i) => {
+              // Compute the ISO date within the same Monday-start week as dateISO
+              const base = parseISO(dateISO);
+              const monday = addDays(base, -(((base.getDay() + 6) % 7)));
+              const targetDate = addDays(monday, i);
+              const targetISO = format(targetDate, "yyyy-MM-dd");
+              const disabled = busy || targetISO === dateISO;
+              return (
+                <button
+                  key={d}
+                  type="button"
+                  disabled={disabled}
+                  onClick={() => moveThisWeekTo(targetISO)}
+                  className="h-7 rounded border border-border bg-background px-1 text-[10px] font-bold uppercase tracking-wider transition-colors hover:bg-secondary disabled:opacity-40"
+                >
+                  {SHORT_DAY[d]}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+        {hasOverride && (
+          <Button size="sm" variant="outline" className="h-7 w-full text-[11px]" disabled={busy} onClick={clearOverride}>
+            Clear this-week exception
+          </Button>
+        )}
+      </PopoverContent>
+    </Popover>
+  );
+}
