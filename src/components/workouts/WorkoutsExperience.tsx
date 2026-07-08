@@ -87,10 +87,17 @@ export function WorkoutsExperience({
   const committedDays = (client as any)?.committed_training_days ?? null;
 
   const byDate = useMemo(() => {
-    const map = new Map<string, WorkoutItem>();
+    // Multiple workouts can land on the same calendar date (e.g. a
+    // reschedule stacks Day 2 onto Day 4's Friday). Group them so no
+    // workout is silently dropped from the calendar / selected-day view.
+    const map = new Map<string, WorkoutItem[]>();
     for (const it of dayItems) {
       const d = dayScheduledDate(it, committedDays);
-      if (d) map.set(toLocalISO(d), it);
+      if (!d) continue;
+      const key = toLocalISO(d);
+      const list = map.get(key) ?? [];
+      list.push(it);
+      map.set(key, list);
     }
     return map;
   }, [dayItems, committedDays]);
@@ -151,7 +158,8 @@ export function WorkoutsExperience({
 
   // --- Current block / week label for the header subtitle. -----------------
   const today = localStartOfToday();
-  const todayItem = byDate.get(toLocalISO(today)) ?? null;
+  const todayItems = byDate.get(toLocalISO(today)) ?? [];
+  const todayItem = todayItems[0] ?? null;
   // Collect unique blocks across scheduled days and pick the current one
   // by date range (with sort_order / earliest-start tiebreakers). Falls back
   // to today's item or the most recent scheduled item if no block covers today.
@@ -497,8 +505,8 @@ export function WorkoutsExperience({
                     chipsByDate={priorityChipsByDate}
                   />
                 )}
-                <SelectedDayCard
-                  item={byDate.get(toLocalISO(selectedDate)) ?? null}
+                <SelectedDayList
+                  items={byDate.get(toLocalISO(selectedDate)) ?? []}
                   date={selectedDate}
                   readonly={mode === "coach"}
                   clientId={clientId}
@@ -528,7 +536,7 @@ export function WorkoutsExperience({
               // different day updates the cardio target/label. dayContext is
               // only a fallback hint for empty-state copy.
               dayContext={
-                (byDate.get(toLocalISO(selectedDate)) ?? null) ? "training" : "rest"
+                (byDate.get(toLocalISO(selectedDate))?.length ?? 0) > 0 ? "training" : "rest"
               }
               date={selectedDate}
             />
@@ -594,7 +602,7 @@ function WeekStrip({
 }: {
   selectedDate: Date;
   onSelectDate: (d: Date) => void;
-  byDate: Map<string, WorkoutItem>;
+  byDate: Map<string, WorkoutItem[]>;
 }) {
   // Week the selected date belongs to. Mon-first to match existing schedule UI.
   const weekStart = startOfWeek(selectedDate, { weekStartsOn: 1 });
@@ -627,7 +635,9 @@ function WeekStrip({
       <div className="grid grid-cols-7 gap-1">
         {days.map((d) => {
           const iso = toLocalISO(d);
-          const item = byDate.get(iso);
+          const list = byDate.get(iso) ?? [];
+          const item = list[0];
+          const extra = Math.max(0, list.length - 1);
           const status: WorkoutStatus | "none" = item
             ? getWorkoutStatus(item).status
             : "none";
@@ -648,7 +658,7 @@ function WeekStrip({
                     : "hover:bg-secondary",
               )}
               aria-pressed={isSelected}
-              aria-label={`${format(d, "EEEE MMMM d")}${item ? `, ${getWorkoutStatus(item).label}` : ", rest day"}`}
+              aria-label={`${format(d, "EEEE MMMM d")}${item ? `, ${getWorkoutStatus(item).label}${extra ? ` (+${extra} more)` : ""}` : ", rest day"}`}
             >
               <span className={cn(
                 "text-[10px] font-bold uppercase tracking-wider",
@@ -663,6 +673,12 @@ function WeekStrip({
                 {format(d, "d")}
               </span>
               <span className={cn("mt-0.5 h-1.5 w-1.5 rounded-full", statusDotClass(status))} />
+              {extra > 0 && (
+                <span className={cn(
+                  "text-[9px] font-bold leading-none",
+                  isSelected ? "text-primary-foreground/80" : "text-muted-foreground",
+                )}>+{extra}</span>
+              )}
             </button>
           );
         })}
@@ -680,7 +696,7 @@ function MonthGrid({
 }: {
   selectedDate: Date;
   onSelectDate: (d: Date) => void;
-  byDate: Map<string, WorkoutItem>;
+  byDate: Map<string, WorkoutItem[]>;
   chipsByDate?: Map<string, Array<{ label: string; family: string }>>;
 }) {
   const monthStart = startOfMonth(selectedDate);
@@ -719,7 +735,9 @@ function MonthGrid({
       <div className="grid grid-cols-7 gap-1">
         {days.map((d) => {
           const iso = toLocalISO(d);
-          const item = byDate.get(iso);
+          const list = byDate.get(iso) ?? [];
+          const item = list[0];
+          const extraCount = Math.max(0, list.length - 1);
           const status: WorkoutStatus | "none" = item
             ? getWorkoutStatus(item).status
             : "none";
@@ -756,7 +774,7 @@ function MonthGrid({
               </div>
               {title && (
                 <span className="mt-1 line-clamp-2 text-[10px] leading-tight text-muted-foreground">
-                  {title}
+                  {title}{extraCount > 0 ? ` +${extraCount}` : ""}
                 </span>
               )}
               {(() => {
@@ -797,6 +815,42 @@ function MonthGrid({
 /* ---------------------------------------------------------------------- */
 /* Selected day card                                                      */
 /* ---------------------------------------------------------------------- */
+
+function SelectedDayList({
+  items, date, readonly, clientId,
+}: {
+  items: WorkoutItem[];
+  date: Date;
+  readonly: boolean;
+  clientId: string;
+}) {
+  // Render one card per scheduled workout on this date so nothing is
+  // dropped when a client stacks two workouts onto the same day (e.g.
+  // moves a mid-week session onto Friday where a workout already exists).
+  if (items.length === 0) {
+    return (
+      <SelectedDayCard
+        item={null}
+        date={date}
+        readonly={readonly}
+        clientId={clientId}
+      />
+    );
+  }
+  return (
+    <div className="space-y-3">
+      {items.map((it) => (
+        <SelectedDayCard
+          key={it.day?.id ?? Math.random()}
+          item={it}
+          date={date}
+          readonly={readonly}
+          clientId={clientId}
+        />
+      ))}
+    </div>
+  );
+}
 
 function SelectedDayCard({
   item, date, readonly, clientId,
