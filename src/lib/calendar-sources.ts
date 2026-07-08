@@ -404,6 +404,19 @@ export function useClientCalendarSources(clientId: string | null | undefined) {
         });
       }
 
+      function emitRest(dateStr: string) {
+        out.push({
+          id: `cardio-rest:${clientId}:${dateStr}`,
+          kind: "cardio",
+          date: dateStr,
+          title: "Full Cardio Rest",
+          subtitle: "No cardio scheduled",
+          status: null,
+          href: { to: "/portal/workouts" },
+          raw: { _date: dateStr, day_type: "Full Cardio Rest", rest: true },
+        });
+      }
+
       // Range: 2 weeks past → 3 weeks future (5 weeks total)
       const today = new Date();
       const startOfRange = new Date(today);
@@ -436,6 +449,7 @@ export function useClientCalendarSources(clientId: string | null | undefined) {
         }).find((d) => d.date === dateStr);
         const target = resolved?.cardioTargetId ? cardioTargets.find((t: any) => t.id === resolved.cardioTargetId) : null;
         if (target) emit(target, dateStr);
+        else if (resolved?.cardioDayType === "rest") emitRest(dateStr);
 
         cursor.setDate(cursor.getDate() + 1);
       }

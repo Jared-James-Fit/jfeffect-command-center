@@ -47,6 +47,7 @@ type DayCell = {
     notes: string | null;
   }>;
   dayType: "Training" | "Rest" | "High";
+  cardioDayType: CardioDayType;
   completion: { completed_at: string | null; completed_date: string | null } | null;
 };
 
@@ -159,6 +160,7 @@ function buildCells(
         notes: target.client_notes ?? null,
       }] : [],
       dayType,
+      cardioDayType: resolved?.cardioDayType ?? "non_training",
       completion,
     } as DayCell;
   });
@@ -176,6 +178,7 @@ function statusFor(cell: DayCell): { label: string; tone: string } | null {
   if (cell.workout && cell.isPast) return { label: "Missed", tone: "border-destructive/40 bg-destructive/10 text-destructive" };
   if (cell.workout) return { label: "Upcoming", tone: "border-border bg-secondary/40 text-muted-foreground" };
   if (cell.cardio.length > 0) return { label: "Cardio Day", tone: "border-border bg-secondary/40 text-muted-foreground" };
+  if (cell.cardioDayType === "rest") return { label: "Full Rest", tone: "border-border bg-secondary/30 text-muted-foreground" };
   return { label: "Rest Day", tone: "border-border bg-secondary/30 text-muted-foreground" };
 }
 
@@ -394,7 +397,7 @@ function DayCard({
         </div>
       ) : cell.cardio.length === 0 ? (
         <div className="flex items-center gap-2 rounded-md border border-dashed border-border p-2 text-[11px] text-muted-foreground">
-          <Moon className="h-3 w-3" /> Rest Day
+          <Moon className="h-3 w-3" /> {cell.cardioDayType === "rest" ? "Full Cardio Rest — no cardio scheduled" : "Rest Day"}
         </div>
       ) : null}
 
