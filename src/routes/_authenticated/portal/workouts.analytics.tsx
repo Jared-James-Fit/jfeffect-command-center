@@ -1,6 +1,9 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useMemo, useState, useCallback } from "react";
+import { useNavigate } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
+import { z } from "zod";
+import { zodValidator, fallback } from "@tanstack/zod-adapter";
 import { supabase } from "@/integrations/supabase/client";
 import { usePortalUserId } from "@/lib/client-impersonation";
 import { PageHeader } from "@/components/app-shell";
@@ -17,6 +20,13 @@ import {
 } from "@/lib/pl-programs";
 import { format, isSameDay } from "date-fns";
 import { AnalyticsFilterBar, defaultAnalyticsFilter, type AnalyticsFilter } from "@/components/analytics/analytics-filter-bar";
+import { exactBlockFilter } from "@/components/analytics/analytics-filter-bar";
+import { BlockPickerSheet } from "@/components/analytics/block-picker-sheet";
+import {
+  type AnalyticsBlock,
+  normalizeAnalyticsBlock,
+  resolveCurrentBlock,
+} from "@/lib/analytics/blocks";
 import { PowerliftingExposureSection } from "@/components/analytics/powerlifting-exposure-section";
 import {
   SearchableSelect,
@@ -46,7 +56,13 @@ import {
  * normalized columns (via getClientResults) — partial sets are excluded
  * because the query requires actual_load AND actual_reps.
  */
+const analyticsSearchSchema = z.object({
+  filter: fallback(z.string(), "").default(""),
+  blockId: fallback(z.string(), "").default(""),
+});
+
 export const Route = createFileRoute("/_authenticated/portal/workouts/analytics")({
+  validateSearch: zodValidator(analyticsSearchSchema),
   component: PortalAnalytics,
 });
 
@@ -60,6 +76,8 @@ function convertWeight(value: number, from: Unit, to: Unit) {
 
 function PortalAnalytics() {
   const portalUserId = usePortalUserId();
+  const search = Route.useSearch();
+  const navigate = useNavigate({ from: Route.fullPath });
   const { data: client } = useQuery({
     queryKey: ["my-client-analytics", portalUserId],
     enabled: !!portalUserId,
@@ -69,33 +87,79 @@ function PortalAnalytics() {
         .eq("user_id", portalUserId!).maybeSingle()).data,
   });
 
-  const { data: results = [], isLoading } = useQuery({
-    queryKey: ["pl-results", client?.id],
-    enabled: !!client?.id,
-    staleTime: 30_000,
-    queryFn: () => getClientResults(client!.id),
-  });
-
-  const { data: clientBlocks = [] } = useQuery({
+  const { data: clientBlocks = [], isLoading: blocksLoading, isError: blocksError, refetch: refetchBlocks } = useQuery<AnalyticsBlock[]>({
     queryKey: ["pl-blocks-for-analytics", client?.id],
     enabled: !!client?.id,
     staleTime: 60_000,
     queryFn: async () => {
       const { data } = await supabase
         .from("pl_blocks")
-        .select("id, name, status, start_date, end_date")
-        .eq("client_id", client!.id);
-      return data ?? [];
+        .select(
+          "id, name, status, start_date, end_date, weeks, sort_order, training_focus, prep_id, pl_preps(id, title, event_name, event_date)",
+        )
+        .eq("client_id", client!.id)
+        .order("sort_order", { ascending: true });
+      // Normalize pl_preps once at the route/query boundary.
+      return (data ?? []).map(normalizeAnalyticsBlock);
     },
   });
 
+  const resolvedCurrentBlockId = useMemo(
+    () => resolveCurrentBlock(clientBlocks)?.id ?? null,
+    [clientBlocks],
+  );
+
+  // Decide whether the requested block scope is active.
+  const isExactBlockUrl = search.filter === "exact_block" && !!search.blockId;
+  const requestedBlock = useMemo(
+    () => (isExactBlockUrl ? clientBlocks.find((b) => b.id === search.blockId) ?? null : null),
+    [clientBlocks, isExactBlockUrl, search.blockId],
+  );
+
   const [analyticsFilter, setAnalyticsFilter] = useState<AnalyticsFilter | null>(null);
   useEffect(() => {
-    if (!analyticsFilter && clientBlocks.length >= 0) {
+    if (!clientBlocks.length && !analyticsFilter) return;
+    if (analyticsFilter) return;
+    if (isExactBlockUrl && requestedBlock) {
+      setAnalyticsFilter(exactBlockFilter(requestedBlock, clientBlocks));
+    } else {
       setAnalyticsFilter(defaultAnalyticsFilter(clientBlocks));
     }
-  }, [analyticsFilter, clientBlocks]);
+  }, [analyticsFilter, clientBlocks, isExactBlockUrl, requestedBlock]);
   const filter = analyticsFilter ?? defaultAnalyticsFilter(clientBlocks);
+
+  // URL persistence — always preserve other search params.
+  const handleFilterChange = (next: AnalyticsFilter) => {
+    setAnalyticsFilter(next);
+    navigate({
+      search: (prev) => ({
+        ...prev,
+        filter: next.preset === "exact_block" ? "exact_block" : "",
+        blockId: next.preset === "exact_block" ? (next as any).blockId : "",
+      }),
+      replace: true,
+    });
+  };
+
+  const [pickerOpen, setPickerOpen] = useState(false);
+
+  // Only fetch logged results when we know the block scope. When an exact
+  // block is selected the query key includes blockId so cache is scoped.
+  const activeBlockId =
+    filter.preset === "current_block" ||
+    filter.preset === "previous_block" ||
+    filter.preset === "exact_block"
+      ? (filter as any).blockId as string
+      : null;
+
+  const { data: results = [], isLoading } = useQuery({
+    queryKey: ["pl-results", client?.id, activeBlockId],
+    enabled: !!client?.id,
+    staleTime: 30_000,
+    queryFn: () => getClientResults(client!.id, { blockId: activeBlockId ?? undefined }),
+  });
+
+  const selectedBlockId = activeBlockId;
 
   const { data: analyticsSettings } = useQuery({
     queryKey: ["client-analytics-settings", client?.id],
@@ -339,8 +403,37 @@ function PortalAnalytics() {
         <AnalyticsFilterBar
           blocks={clientBlocks}
           value={filter}
-          onChange={setAnalyticsFilter}
+          onChange={handleFilterChange}
+          selectedBlockId={selectedBlockId}
+          resolvedCurrentBlockId={resolvedCurrentBlockId}
+          onOpenPicker={() => setPickerOpen(true)}
         />
+
+        <BlockPickerSheet
+          open={pickerOpen}
+          onOpenChange={setPickerOpen}
+          blocks={clientBlocks}
+          selectedBlockId={selectedBlockId}
+          resolvedCurrentBlockId={resolvedCurrentBlockId}
+          isLoading={blocksLoading}
+          isError={blocksError}
+          onRetry={() => { void refetchBlocks(); }}
+          onSelect={(b) => handleFilterChange(exactBlockFilter(b, clientBlocks))}
+        />
+
+        {filter.preset === "exact_block" && !filter.hasBlockDates && (
+          <div className="rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-xs text-amber-700 dark:text-amber-300">
+            This block has not been scheduled yet. Planned structure is shown; date-based charts will fill in once workouts are scheduled.
+          </div>
+        )}
+        {filter.preset === "exact_block" &&
+          selectedBlockId &&
+          selectedBlockId !== resolvedCurrentBlockId &&
+          resolvedCurrentBlockId && (
+            <div className="rounded-md border border-sky-500/40 bg-sky-500/10 p-3 text-xs text-sky-700 dark:text-sky-300">
+              Upcoming Block · No workouts completed yet.
+            </div>
+          )}
 
         {isLoading ? (
           <Card className="p-8 text-center text-sm text-muted-foreground">
@@ -399,6 +492,7 @@ function PortalAnalytics() {
                 rangeStart={filter.start}
                 rangeEnd={filter.end}
                 rangeLabel={filter.label}
+                blockId={activeBlockId}
               />
             )}
 
@@ -414,6 +508,7 @@ function PortalAnalytics() {
                   workingRpeMin={analyticsSettings?.working_set_rpe_min}
                   startDate={filter.start}
                   endDate={filter.end}
+                  blockId={activeBlockId}
                 />
               </section>
             )}
@@ -762,6 +857,7 @@ function PortalAnalytics() {
                 filter={filter}
                 results={results as any[]}
                 displayUnit={displayUnit}
+                blockId={activeBlockId}
               />
             )}
           </>
