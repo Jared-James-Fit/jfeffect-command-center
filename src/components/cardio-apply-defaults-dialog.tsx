@@ -12,6 +12,7 @@ import { findDefaultFor, CARDIO_INTENSITIES } from "@/lib/nutrition-cardio";
 import { Lock } from "lucide-react";
 import { WEEK_DAYS, SHORT_DAY, type WeekDay } from "@/lib/training-schedule";
 import { setRecurringHighDays, setFullCardioRestDays, SUNDAY } from "@/lib/high-day-schedule";
+import { todayLocalISO } from "@/lib/today";
 
 type Props = {
   open: boolean;
@@ -136,12 +137,21 @@ export function CardioApplyDefaultsDialog({
     enabled: open && !!clientId,
     staleTime: 5 * 60_000,
     queryFn: async () => {
-      const { data } = await supabase
-        .from("clients")
-        .select("committed_training_frequency, preferred_training_days, preferred_high_days, preferred_rest_days, full_cardio_rest_days")
-        .eq("id", clientId)
-        .maybeSingle();
-      return data;
+      const [{ data }, activeBlock] = await Promise.all([
+        supabase
+          .from("clients")
+          .select("committed_training_frequency, committed_training_days, preferred_training_days, preferred_high_days, preferred_rest_days, full_cardio_rest_days")
+          .eq("id", clientId)
+          .maybeSingle(),
+        (supabase.from("pl_blocks") as any)
+          .select("start_date")
+          .eq("client_id", clientId)
+          .eq("status", "Active")
+          .order("start_date", { ascending: false })
+          .limit(1)
+          .maybeSingle(),
+      ]);
+      return { ...(data ?? {}), active_block_start_date: activeBlock.data?.start_date ?? null };
     },
   });
 
@@ -321,6 +331,7 @@ export function CardioApplyDefaultsDialog({
       if (freq <= 0) continue;
       const existingRow = findDefaultFor(existing, row.day_type);
       const cfg = defaultConfigFor(row.day_type);
+      const targetStartDate = (clientPrefs as any)?.active_block_start_date ?? todayLocalISO();
       const payload = {
         client_id: clientId,
         day_type: row.day_type,
@@ -334,7 +345,7 @@ export function CardioApplyDefaultsDialog({
         calorie_target_max: cfg.calorie_target_max,
         show_calories_to_client: cfg.calorie_target_min != null,
         client_notes: existingRow?.client_notes || cfg.client_notes,
-        start_date: new Date().toISOString().slice(0, 10),
+        start_date: targetStartDate,
         status: "Active",
         enabled: true,
         visible_to_client: true,
