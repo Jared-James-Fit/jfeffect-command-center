@@ -284,7 +284,7 @@ export function WeekScheduleView({
             </div>
             {todaysCell.workout && mode === "client" && (
               <Button asChild size="sm" className="shrink-0">
-                <Link to="/portal/workouts/$dayId" params={{ dayId: todaysCell.workout.dayId }}>Open</Link>
+                <Link to="/portal/workouts/$dayId" params={{ dayId: todaysCell.workout.dayId }} search={{}}>Open</Link>
               </Button>
             )}
           </div>
@@ -390,7 +390,7 @@ function DayCard({
               {mode === "admin" ? (
                 <span>Open Workout</span>
               ) : (
-                <Link to="/portal/workouts/$dayId" params={{ dayId: cell.workout.dayId }}>Open Workout</Link>
+                <Link to="/portal/workouts/$dayId" params={{ dayId: cell.workout.dayId }} search={{}}>Open Workout</Link>
               )}
             </Button>
           )}

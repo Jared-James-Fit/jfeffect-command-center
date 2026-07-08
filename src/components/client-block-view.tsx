@@ -668,7 +668,7 @@ export function ClientBlockView({
               if (mode === "client") {
                 return (
                   <li key={p.key}>
-                    <Link to="/portal/workouts/$dayId" params={{ dayId: p.dayId }}>
+                    <Link to="/portal/workouts/$dayId" params={{ dayId: p.dayId }} search={{}}>
                       {inner}
                     </Link>
                   </li>
@@ -763,8 +763,7 @@ export function ClientBlockView({
                   to="/portal/workouts/$dayId"
                   params={{ dayId: d.id }}
                   className={cn("block", disabled && "pointer-events-none opacity-60")}
-                  aria-disabled={disabled || undefined}
-                >
+                  aria-disabled={disabled || undefined} search={{}}>
                   <Button size="sm" variant={variant as any} className="w-full font-bold uppercase tracking-wide">
                     <Icon className="mr-1.5 h-3.5 w-3.5" /> {label}
                   </Button>
