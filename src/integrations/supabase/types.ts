@@ -17880,6 +17880,102 @@ export type Database = {
       }
     }
     Functions: {
+      accept_my_purchase: {
+        Args: { p_purchase_id: string }
+        Returns: {
+          admin_notes: string | null
+          agreement_block_override: boolean
+          agreement_block_override_at: string | null
+          agreement_block_override_by: string | null
+          agreement_block_override_reason: string | null
+          agreement_link: string | null
+          agreement_signed_at_purchase: boolean | null
+          agreement_signed_date: string | null
+          agreement_version: string | null
+          amount_credited_cents: number
+          amount_due_today: number | null
+          amount_outstanding_cents: number | null
+          amount_paid: number | null
+          amount_paid_cents: number
+          amount_refunded_cents: number
+          assigned_at: string
+          assigned_by: string | null
+          cancel_at_period_end: boolean
+          cancellation_policy: string | null
+          client_id: string
+          confirmation_email_sent_at: string | null
+          contract_value_cents: number | null
+          created_at: string
+          currency: string | null
+          deposit_amount: number | null
+          excluded_features: string[] | null
+          full_description: string | null
+          full_payable_amount: number | null
+          id: string
+          in_person_policy: string | null
+          included_features: string[] | null
+          installment_amount: number | null
+          is_fixed_term_commitment: boolean | null
+          is_recurring: boolean | null
+          last_payment_update_at: string | null
+          last_payment_update_source: string | null
+          location: string | null
+          next_billing_date: string | null
+          number_of_payments: number | null
+          offer_id: string | null
+          offer_name: string
+          offer_snapshot: Json | null
+          offer_type: string | null
+          offer_version: number | null
+          package_expiry_date: string | null
+          package_tracking_enabled: boolean | null
+          paid_at: string | null
+          payment_frequency: string | null
+          payment_status: string
+          payment_structure: string | null
+          purchase_disclaimer: string | null
+          purchase_status_v2: string | null
+          purchased_at: string
+          receipt_url: string | null
+          refund_policy: string | null
+          service_status: string
+          session_length_minutes: number | null
+          sessions_booked: number | null
+          sessions_cancelled: number | null
+          sessions_completed: number | null
+          sessions_missed: number | null
+          sessions_purchased: number | null
+          sessions_used: number | null
+          short_description: string | null
+          show_value_to_client: boolean
+          status: string
+          stripe_checkout_session_id: string | null
+          stripe_customer_id: string | null
+          stripe_mode: string | null
+          stripe_payment_intent_id: string | null
+          stripe_payment_link: string | null
+          stripe_price_id: string | null
+          stripe_product_id: string | null
+          stripe_receipt_url: string | null
+          stripe_subscription_id: string | null
+          stripe_subscription_status: string | null
+          term_duration_text: string | null
+          term_end_date: string | null
+          term_start_date: string | null
+          terms_accepted: boolean | null
+          terms_accepted_at: string | null
+          terms_accepted_client_email: string | null
+          terms_accepted_client_name: string | null
+          timezone: string | null
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "purchase_records"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       admin_clients_directory: {
         Args: {
           p_coach_id?: string
