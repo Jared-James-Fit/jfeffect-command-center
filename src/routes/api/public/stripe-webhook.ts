@@ -861,6 +861,10 @@ export const Route = createFileRoute("/api/public/stripe-webhook")({
                   service_status: "Active",
                   paid_at: now,
                   stripe_receipt_url: obj.hosted_invoice_url ?? purchase.stripe_receipt_url,
+                  // Roll next_billing_date forward from the invoice line period end.
+                  ...(obj.lines?.data?.[0]?.period?.end
+                    ? { next_billing_date: new Date(obj.lines.data[0].period.end * 1000).toISOString().split("T")[0] }
+                    : {}),
                   last_payment_update_source: "stripe_webhook",
                   last_payment_update_at: now,
                 }).eq("id", purchase.id);
