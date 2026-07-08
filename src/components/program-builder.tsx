@@ -534,7 +534,7 @@ function useFavoriteExercises() {
     return () => { cancelled = true; sub.subscription.unsubscribe(); };
   }, []);
 
-  const { data: favs = new Set<string>() } = useQuery({
+  const { data: rawFavs } = useQuery({
     queryKey: ["pl-exercise-favorites", userId],
     enabled: !!userId,
     initialData: () => readFavCache(userId),
@@ -549,6 +549,15 @@ function useFavoriteExercises() {
       return set;
     },
   });
+  // Persisted React Query caches from earlier builds JSON.stringify'd this
+  // Set into `{}`; rehydrated non-Set values would throw
+  // "h.has is not a function" during render. Normalize defensively so the
+  // block/template editor keeps opening even for users on an older cache.
+  const favs = useMemo<Set<string>>(() => {
+    if (rawFavs instanceof Set) return rawFavs;
+    if (Array.isArray(rawFavs)) return new Set(rawFavs as string[]);
+    return new Set<string>();
+  }, [rawFavs]);
 
   const toggle = async (exerciseId: string) => {
     if (!userId) return;
