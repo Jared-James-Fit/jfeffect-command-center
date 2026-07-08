@@ -193,7 +193,7 @@ export function useClientCalendarSources(clientId: string | null | undefined) {
     enabled,
     staleTime: 5 * 60_000,
     queryFn: async () => {
-      const [targetsRes, clientRes] = await Promise.all([
+      const [targetsRes, clientRes, overridesRes] = await Promise.all([
         supabase
           .from("cardio_targets")
           .select("id,day_type,custom_day_type,cardio_type,custom_type,duration_minutes,intensity,frequency_per_week,status,enabled,visible_to_client,client_notes")
@@ -204,13 +204,17 @@ export function useClientCalendarSources(clientId: string | null | undefined) {
           .is("program_name", null),
         supabase
           .from("clients")
-          .select("preferred_training_days,preferred_rest_days,preferred_high_days")
+          .select("preferred_training_days,preferred_rest_days,preferred_high_days,full_cardio_rest_days")
           .eq("id", clientId!)
           .maybeSingle(),
+        (supabase.from("nutrition_day_overrides") as any)
+          .select("override_date,day_label")
+          .eq("client_id", clientId!),
       ]);
       return {
         targets: (targetsRes.data ?? []) as any[],
         schedule: clientRes.data as any,
+        overrides: (overridesRes.data ?? []) as Array<{ override_date: string; day_label: string }>,
       };
     },
   });
