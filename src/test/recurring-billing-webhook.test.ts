@@ -94,11 +94,13 @@ vi.mock("@supabase/supabase-js", () => {
         update(patch: any) {
           updates.push({ table, patch });
           if (table === "purchase_records") Object.assign(purchaseRow, patch);
-          return {
-            eq: async () => ({ data: null, error: null }),
-            in: async () => ({ data: null, error: null }),
-            neq: async () => ({ data: null, error: null }),
+          const chain: any = {
+            eq() { return chain; },
+            in() { return chain; },
+            neq() { return chain; },
+            then(res: any) { res({ data: null, error: null }); },
           };
+          return chain;
         },
         upsert(row: any) {
           upserts.push({ table, row });
