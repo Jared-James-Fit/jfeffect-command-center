@@ -38,15 +38,21 @@ export const Route = createFileRoute("/_authenticated/admin/transactions")({
 const statusTone = ledgerStatusTone;
 
 function bestStripeUrl(r: AdminTransactionRow): string | null {
-  // Stripe uses py_* prefix for direct charges (not PaymentIntents).
-  // If stripe_payment_intent_id starts with py_ or ch_, treat it as a charge URL.
+  // Prefer the charge_id: it is written by webhook handlers with a unique
+  // active index (`payment_ledger_stripe_charge_unique_active`) and always
+  // resolves at Stripe's `/payments/{id}` route. PaymentIntent IDs occasionally
+  // drift from the real intent (e.g. checkout swap-outs, manual backfills)
+  // and can 404 or open the wrong payment in the dashboard. The checkout
+  // session and invoice are the next most authoritative fallbacks; PI is
+  // last because it is the field most prone to stale/incorrect values.
   const piId = r.stripe_payment_intent_id;
-  const isCharge = piId && (piId.startsWith("py_") || piId.startsWith("ch_"));
+  const isChargeLike = piId && (piId.startsWith("py_") || piId.startsWith("ch_"));
   return (
-    (isCharge ? stripeChargeUrl(piId, r.stripe_mode) : stripePaymentIntentUrl(piId, r.stripe_mode)) ??
     stripeChargeUrl(r.stripe_charge_id, r.stripe_mode) ??
+    (isChargeLike ? stripeChargeUrl(piId, r.stripe_mode) : null) ??
     stripeInvoiceUrl(r.stripe_invoice_id, r.stripe_mode) ??
     stripeCheckoutSessionUrl(r.stripe_checkout_session_id, r.stripe_mode) ??
+    stripePaymentIntentUrl(piId, r.stripe_mode) ??
     stripeSubscriptionUrl(r.stripe_subscription_id, r.stripe_mode)
   );
 }
