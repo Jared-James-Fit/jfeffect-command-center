@@ -87,10 +87,17 @@ export function WorkoutsExperience({
   const committedDays = (client as any)?.committed_training_days ?? null;
 
   const byDate = useMemo(() => {
-    const map = new Map<string, WorkoutItem>();
+    // Multiple workouts can land on the same calendar date (e.g. a
+    // reschedule stacks Day 2 onto Day 4's Friday). Group them so no
+    // workout is silently dropped from the calendar / selected-day view.
+    const map = new Map<string, WorkoutItem[]>();
     for (const it of dayItems) {
       const d = dayScheduledDate(it, committedDays);
-      if (d) map.set(toLocalISO(d), it);
+      if (!d) continue;
+      const key = toLocalISO(d);
+      const list = map.get(key) ?? [];
+      list.push(it);
+      map.set(key, list);
     }
     return map;
   }, [dayItems, committedDays]);
@@ -151,7 +158,8 @@ export function WorkoutsExperience({
 
   // --- Current block / week label for the header subtitle. -----------------
   const today = localStartOfToday();
-  const todayItem = byDate.get(toLocalISO(today)) ?? null;
+  const todayItems = byDate.get(toLocalISO(today)) ?? [];
+  const todayItem = todayItems[0] ?? null;
   // Collect unique blocks across scheduled days and pick the current one
   // by date range (with sort_order / earliest-start tiebreakers). Falls back
   // to today's item or the most recent scheduled item if no block covers today.
