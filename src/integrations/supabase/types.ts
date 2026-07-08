@@ -13930,6 +13930,7 @@ export type Database = {
           normalized_lb: number | null
           notes: string | null
           row_id: string
+          scheduled_workout_id: string | null
           set_index: number
           timer_completed_at: string | null
           timer_started_at: string | null
@@ -13958,6 +13959,7 @@ export type Database = {
           normalized_lb?: number | null
           notes?: string | null
           row_id: string
+          scheduled_workout_id?: string | null
           set_index: number
           timer_completed_at?: string | null
           timer_started_at?: string | null
@@ -13986,6 +13988,7 @@ export type Database = {
           normalized_lb?: number | null
           notes?: string | null
           row_id?: string
+          scheduled_workout_id?: string | null
           set_index?: number
           timer_completed_at?: string | null
           timer_started_at?: string | null
@@ -13998,6 +14001,13 @@ export type Database = {
             columns: ["row_id"]
             isOneToOne: false
             referencedRelation: "pl_exercise_rows"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pl_row_results_scheduled_workout_id_fkey"
+            columns: ["scheduled_workout_id"]
+            isOneToOne: false
+            referencedRelation: "pl_scheduled_workouts"
             referencedColumns: ["id"]
           },
         ]
