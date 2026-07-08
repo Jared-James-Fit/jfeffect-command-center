@@ -275,11 +275,15 @@ export function createClientAdapter(ref: WorkoutContextRef): WorkoutContextAdapt
       if (rowErr) throw new Error(rowErr.message);
       const rowIds = (rowIdsRes ?? []).map((r: any) => r.id);
       if (!rowIds.length) return [];
-      const { data, error } = await sb
-        .from("pl_row_results")
-        .select("*")
-        .in("row_id", rowIds)
-        .eq("client_id", ref.ownerId);
+      // Slice 2c: scope by instance so Instance A never reads Instance B's
+      // set logs. Legacy path (no instance) keeps the client scope.
+      let q = sb.from("pl_row_results").select("*").in("row_id", rowIds);
+      if (scheduledWorkoutId) {
+        q = q.eq("scheduled_workout_id", scheduledWorkoutId);
+      } else {
+        q = q.eq("client_id", ref.ownerId).is("scheduled_workout_id", null);
+      }
+      const { data, error } = await q;
       if (error) throw new Error(error.message);
       return (data ?? []) as PlRowResultRaw[];
     },
@@ -392,11 +396,15 @@ export function createClientAdapter(ref: WorkoutContextRef): WorkoutContextAdapt
       if (rowErr) throw new Error(rowErr.message);
       const rowIds = (rowIdsRes ?? []).map((r: any) => r.id);
       if (!rowIds.length) return [];
-      const { data, error } = await sb
-        .from("pl_row_results")
-        .select("*")
-        .in("row_id", rowIds)
-        .eq("client_id", ref.ownerId);
+      // Slice 2c: instance-scoped when a scheduled workout is set, else
+      // legacy null-instance rows for this client.
+      let q = sb.from("pl_row_results").select("*").in("row_id", rowIds);
+      if (scheduledWorkoutId) {
+        q = q.eq("scheduled_workout_id", scheduledWorkoutId);
+      } else {
+        q = q.eq("client_id", ref.ownerId).is("scheduled_workout_id", null);
+      }
+      const { data, error } = await q;
       if (error) throw new Error(error.message);
       return (data ?? []).map((r: any) => ({
         id: r.id,
@@ -544,6 +552,7 @@ export function createClientAdapter(ref: WorkoutContextRef): WorkoutContextAdapt
         completed_duration_seconds: input.completedDurationSeconds ?? null,
         completed_at: new Date().toISOString(),
       };
+      if (scheduledWorkoutId) payload.scheduled_workout_id = scheduledWorkoutId;
       if (input.id) {
         const { error } = await sb
           .from("pl_row_results")
@@ -552,13 +561,28 @@ export function createClientAdapter(ref: WorkoutContextRef): WorkoutContextAdapt
         if (error) throw new Error(error.message);
         return input.id;
       }
-      // Use upsert with onConflict to prevent duplicate key errors on retry.
-      // The unique constraint is (client_id, row_id, set_index).
-      // If the set was already saved (e.g. partial sync), this updates it
-      // instead of inserting a duplicate.
+      // Slice 2c: the old blanket unique was split into two partial
+      // uniques (legacy null-instance vs instance-scoped). A single
+      // onConflict target no longer matches both, so check-then-write.
+      let existingQ = sb
+        .from("pl_row_results")
+        .select("id")
+        .eq("row_id", input.rowId)
+        .eq("set_index", input.setIndex);
+      if (scheduledWorkoutId) {
+        existingQ = existingQ.eq("scheduled_workout_id", scheduledWorkoutId);
+      } else {
+        existingQ = existingQ.eq("client_id", ref.ownerId).is("scheduled_workout_id", null);
+      }
+      const { data: existing } = await existingQ.maybeSingle();
+      if (existing?.id) {
+        const { error } = await sb.from("pl_row_results").update(payload).eq("id", existing.id);
+        if (error) throw new Error(error.message);
+        return existing.id as string;
+      }
       const { data, error } = await sb
         .from("pl_row_results")
-        .upsert(payload, { onConflict: "client_id,row_id,set_index" })
+        .insert(payload)
         .select("id")
         .maybeSingle();
       if (error) throw new Error(error.message);
@@ -651,9 +675,32 @@ export function createClientAdapter(ref: WorkoutContextRef): WorkoutContextAdapt
         if (error) throw new Error(error.message);
         return { id };
       }
+      // Slice 2c: same partial-unique split as upsertRowResult. Also
+      // ensure the instance id gets stamped on inserts when the adapter
+      // is bound to a scheduled workout.
+      const insertPayload: Record<string, any> = { ...(payload as any) };
+      if (scheduledWorkoutId && !insertPayload.scheduled_workout_id) {
+        insertPayload.scheduled_workout_id = scheduledWorkoutId;
+      }
+      let existingQ = sb
+        .from("pl_row_results")
+        .select("id")
+        .eq("row_id", insertPayload.row_id)
+        .eq("set_index", insertPayload.set_index);
+      if (insertPayload.scheduled_workout_id) {
+        existingQ = existingQ.eq("scheduled_workout_id", insertPayload.scheduled_workout_id);
+      } else {
+        existingQ = existingQ.eq("client_id", insertPayload.client_id).is("scheduled_workout_id", null);
+      }
+      const { data: existing } = await existingQ.maybeSingle();
+      if (existing?.id) {
+        const { error } = await sb.from("pl_row_results").update(insertPayload).eq("id", existing.id);
+        if (error) throw new Error(error.message);
+        return { id: existing.id as string };
+      }
       const { data, error } = await sb
         .from("pl_row_results")
-        .upsert(payload, { onConflict: "client_id,row_id,set_index" })
+        .insert(insertPayload)
         .select("id")
         .maybeSingle();
       if (error) throw new Error(error.message);

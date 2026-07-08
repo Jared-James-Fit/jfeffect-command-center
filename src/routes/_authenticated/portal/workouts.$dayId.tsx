@@ -90,9 +90,13 @@ function RouteComponent() {
   // Slice 2b legacy URL disambiguation: when the URL has no ?instance= but
   // the client has one or more scheduled instances for this day_id, try to
   // resolve automatically.
-  //   0 matches  → open through the legacy path (scheduled_workout_id IS NULL)
-  //   1 incomplete match → auto-redirect to include ?instance=<id>
-  //   >1 candidates → show the picker (component-level below)
+  // Slice 2c — clarified rules:
+  //   0 matches                → legacy path (scheduled_workout_id IS NULL)
+  //   exactly 1 match          → auto-redirect to include ?instance=<id>
+  //                              (completed or not — opening the only real
+  //                              instance is never ambiguous)
+  //   2+ matches               → show picker; never guess between valid
+  //                              instances even when only one is incomplete
   const shouldResolveLegacy = !!clientId && !search.instance;
   const { data: legacyCandidates } = useQuery({
     queryKey: ["portal-workout-instance-candidates", clientId, dayId],
@@ -120,17 +124,17 @@ function RouteComponent() {
     },
   });
 
-  // Auto-redirect when exactly one incomplete candidate matches.
+  // Auto-redirect only when there is exactly one candidate — never guess
+  // between multiple valid instances.
   useEffect(() => {
     if (!shouldResolveLegacy || !legacyCandidates) return;
     const rows = legacyCandidates.rows;
     if (!rows.length) return; // legacy path
-    const incomplete = rows.filter((r: any) => !legacyCandidates.completedById[r.id]);
-    if (incomplete.length === 1) {
+    if (rows.length === 1) {
       navigate({
         to: "/portal/workouts/$dayId",
         params: { dayId },
-        search: { ...search, instance: incomplete[0].id } as any,
+        search: { ...search, instance: rows[0].id } as any,
         replace: true,
       });
     }
@@ -153,18 +157,10 @@ function RouteComponent() {
     });
   }, [clientId, clientUserId, search.instance]);
 
-  // Show picker when the URL is legacy AND there are 2+ candidates OR
-  // when the only match is completed (avoid auto-opening a completed one).
-  if (shouldResolveLegacy && legacyCandidates && legacyCandidates.rows.length) {
+  // Show picker only when 2+ candidates exist.
+  if (shouldResolveLegacy && legacyCandidates && legacyCandidates.rows.length > 1) {
     const rows = legacyCandidates.rows;
-    const incomplete = rows.filter((r: any) => !legacyCandidates.completedById[r.id]);
-    const showPicker =
-      rows.length > 1 && incomplete.length !== 1
-        ? true
-        : rows.length === 1 && legacyCandidates.completedById[rows[0].id]
-          ? true
-          : false;
-    if (showPicker) {
+    {
       return (
         <div className="p-6">
           <Card className="space-y-3 p-6">

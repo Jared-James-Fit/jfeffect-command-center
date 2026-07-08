@@ -237,12 +237,15 @@ export const updateWorkoutActivity = createServerFn({ method: "POST" })
     const nowIso = new Date().toISOString();
     if (data.kind === "client") {
       const clientId = await resolveClientId(supabase, userId);
-      await supabase
+      // Slice 2c: scope the heartbeat to the specific scheduled instance
+      // when the caller provides one so two concurrent instances of the
+      // same source day don't cross-update each other's last_activity_at.
+      const scheduledWorkoutId = (data as any).scheduledWorkoutId ?? null;
+      const base = supabase
         .from("pl_day_completions")
         .update({ last_activity_at: nowIso })
-        .eq("client_id", clientId)
-        .eq("day_id", data.dayId)
         .is("completed_at", null);
+      await scopeCompletion(base, clientId, data.dayId, scheduledWorkoutId);
     } else {
       await assertOwnsEnrollment(supabase, data.enrollmentId);
       await supabase
@@ -287,6 +290,11 @@ export const saveSetResult = createServerFn({ method: "POST" })
     if (data.kind === "client") {
       if (!data.rowId) throw new Error("rowId required for client kind");
       const clientId = await resolveClientId(supabase, userId);
+      // Slice 2c: scope pl_row_results by scheduled_workout_id when present
+      // so two calendar instances of the same source day keep independent
+      // set logs. When absent, the legacy (client_id, row_id, set_index)
+      // unique still applies.
+      const scheduledWorkoutId = (data as any).scheduledWorkoutId ?? null;
       const payload: Record<string, any> = {
         client_id: clientId,
         row_id: data.rowId,
@@ -301,19 +309,51 @@ export const saveSetResult = createServerFn({ method: "POST" })
         completed_duration_seconds: data.completedDurationSeconds ?? null,
         completed_at: nowIso,
       };
-      const { data: row, error } = await supabase
+      if (scheduledWorkoutId) payload.scheduled_workout_id = scheduledWorkoutId;
+      // Old blanket unique was replaced by partial uniques, so an upsert
+      // with a single onConflict target no longer covers both paths.
+      // Check-then-update/insert instead, scoped by the correct key.
+      let existingQ = supabase
         .from("pl_row_results")
-        .upsert(payload, { onConflict: "client_id,row_id,set_index" })
         .select("id")
-        .single();
-      if (error) throw error;
-      // heartbeat
-      await supabase
-        .from("pl_day_completions")
-        .update({ last_activity_at: nowIso })
-        .eq("client_id", clientId)
-        .is("completed_at", null);
-      return { id: row.id };
+        .eq("row_id", data.rowId)
+        .eq("set_index", data.setIndex);
+      if (scheduledWorkoutId) {
+        existingQ = existingQ.eq("scheduled_workout_id", scheduledWorkoutId);
+      } else {
+        existingQ = existingQ.eq("client_id", clientId).is("scheduled_workout_id", null);
+      }
+      const { data: existingRow } = await existingQ.maybeSingle();
+      let rowId: string;
+      if (existingRow?.id) {
+        const { data: updated, error } = await supabase
+          .from("pl_row_results")
+          .update(payload as any)
+          .eq("id", existingRow.id)
+          .select("id")
+          .single();
+        if (error) throw error;
+        rowId = updated.id;
+      } else {
+        const { data: inserted, error } = await supabase
+          .from("pl_row_results")
+          .insert(payload as any)
+          .select("id")
+          .single();
+        if (error) throw error;
+        rowId = inserted.id;
+      }
+      // Heartbeat — scope to this instance's completion row (or legacy).
+      await scopeCompletion(
+        supabase
+          .from("pl_day_completions")
+          .update({ last_activity_at: nowIso })
+          .is("completed_at", null),
+        clientId,
+        data.dayId,
+        scheduledWorkoutId,
+      );
+      return { id: rowId };
     }
 
     if (data.exerciseIndex == null) throw new Error("exerciseIndex required for member kind");
@@ -511,13 +551,25 @@ export const completeWorkout = createServerFn({ method: "POST" })
       const startedAt = existing?.started_at ?? nowIso;
       // Pull saved row results for completeness.
       const rowIds = data.requiredRows.map((r) => r.rowId);
-      const { data: setRows } = rowIds.length
-        ? await writer
-            .from("pl_row_results")
-            .select("row_id, set_index, actual_reps, actual_load_lb, actual_load_kg, actual_rpe, actual_rir, completed_duration_seconds")
-            .eq("client_id", clientId)
-            .in("row_id", rowIds)
-        : { data: [] as any[] };
+      // Slice 2c: scope by scheduled_workout_id when present so completing
+      // Instance A does not read Instance B's logged sets.
+      const setsQ = rowIds.length
+        ? (() => {
+            let q = writer
+              .from("pl_row_results")
+              .select(
+                "row_id, set_index, actual_reps, actual_load_lb, actual_load_kg, actual_rpe, actual_rir, completed_duration_seconds",
+              )
+              .in("row_id", rowIds);
+            if (scheduledWorkoutId) {
+              q = q.eq("scheduled_workout_id", scheduledWorkoutId);
+            } else {
+              q = q.eq("client_id", clientId).is("scheduled_workout_id", null);
+            }
+            return q;
+          })()
+        : null;
+      const { data: setRows } = setsQ ? await setsQ : { data: [] as any[] };
 
       const sets: LoggedSetSpec[] = (setRows ?? []).map((s: any) => ({
         rowId: s.row_id,
