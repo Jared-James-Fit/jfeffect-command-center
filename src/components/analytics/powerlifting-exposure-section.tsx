@@ -492,29 +492,44 @@ function PlannedVsCompletedTable({
       );
       const relevantRowIds = relevantRows.map((r) => r.id);
 
-      // Planned: sum row.sets (fallback 1) per (family, role) across ALL qualifying
-      // rows, regardless of whether anything was logged.
-      // Completed: count pl_row_results per (family, role) where actual_reps IS NOT NULL.
+      // Planned: sum row.sets per (family, role). Canonical workout renderer
+      // treats `sets = null` as 0 (see estimateRowSeconds in pl-programs.ts),
+      // so we DO NOT fabricate one set. Rows missing a set count are excluded
+      // from the numeric total and surfaced via `missingSetsRows` warning.
+      // Completed: unique (row_id, set_index) with actual_reps IS NOT NULL —
+      // never counts duplicate or updated result rows twice.
       const planned: Record<string, Record<string, number>> = {};
       const completed: Record<string, Record<string, number>> = {};
       const bucket = (obj: any, fam: string, role: string) => {
         obj[fam] = obj[fam] ?? {};
         obj[fam][role] = obj[fam][role] ?? 0;
       };
+      let missingSetsRows = 0;
       for (const r of relevantRows) {
         const fam = r.movement_family!.toLowerCase();
         const role = r.purpose_label!;
         bucket(planned, fam, role);
-        planned[fam][role] += Number(r.sets ?? 1);
+        const setCount = r.sets == null ? null : Number(r.sets);
+        if (setCount == null || !Number.isFinite(setCount) || setCount <= 0) {
+          missingSetsRows += 1;
+          continue;
+        }
+        planned[fam][role] += setCount;
       }
       const rowMeta = new Map(relevantRows.map((r) => [r.id, r]));
       if (relevantRowIds.length) {
         const { data: resultRows } = await supabase
           .from("pl_row_results")
-          .select("row_id, actual_reps")
+          .select("row_id, set_index, actual_reps")
           .in("row_id", relevantRowIds)
           .not("actual_reps", "is", null);
+        // Deduplicate by (row_id, set_index) — a set that was re-saved or
+        // corrected still counts as one completed set.
+        const seen = new Set<string>();
         for (const rr of resultRows ?? []) {
+          const key = `${rr.row_id}|${rr.set_index}`;
+          if (seen.has(key)) continue;
+          seen.add(key);
           const meta = rowMeta.get(rr.row_id);
           if (!meta) continue;
           const fam = meta.movement_family!.toLowerCase();
@@ -523,22 +538,28 @@ function PlannedVsCompletedTable({
           completed[fam][role] += 1;
         }
       }
-      return { planned, completed };
+      return { planned, completed, missingSetsRows };
     },
   });
 
   if (!data) return <div className="text-sm text-muted-foreground">Loading…</div>;
-  const { planned, completed } = data as {
+  const { planned, completed, missingSetsRows } = data as {
     planned: Record<string, Record<string, number>>;
     completed: Record<string, Record<string, number>>;
+    missingSetsRows: number;
   };
   const families: LiftFamily[] = ["squat", "bench", "deadlift"];
   const roles: Role[] = ["Primary", "Secondary", "Tertiary", "Quaternary"];
   const anyData = families.some((f) => planned[f] && Object.keys(planned[f]).length > 0);
-  if (!anyData) return <div className="text-sm text-muted-foreground">No prescribed sets in this range.</div>;
+  if (!anyData) return <div className="text-sm text-muted-foreground">No workouts were scheduled in this period.</div>;
 
   return (
     <div className="space-y-4">
+      {missingSetsRows > 0 && (
+        <div className="rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-300">
+          Data quality: {missingSetsRows} SBD row{missingSetsRows === 1 ? "" : "s"} in this range have no prescribed set count and were excluded from the planned total.
+        </div>
+      )}
       {families.map((fam) => {
         const p = planned[fam];
         if (!p || Object.keys(p).length === 0) return null;

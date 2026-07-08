@@ -26,18 +26,35 @@ export function PlannedVsActualCard({
   clientId,
   formula,
   workingRpeMin,
+  startDate,
+  endDate,
 }: {
   clientId: string;
   formula?: "epley" | "brzycki";
   workingRpeMin?: number;
+  startDate?: Date;
+  endDate?: Date;
 }) {
   const [expandedDay, setExpandedDay] = useState<string | null>(null);
 
   const { data: days = [], isLoading } = useQuery({
-    queryKey: ["planned-vs-actual", clientId, formula, workingRpeMin],
+    queryKey: [
+      "planned-vs-actual",
+      clientId,
+      formula,
+      workingRpeMin,
+      startDate?.toISOString() ?? null,
+      endDate?.toISOString() ?? null,
+    ],
     enabled: !!clientId,
     queryFn: () =>
-      getRecentPlannedVsActual(clientId, { limit: 5, formula, workingRpeMin }),
+      getRecentPlannedVsActual(clientId, {
+        limit: 5,
+        formula,
+        workingRpeMin,
+        startDate: startDate ?? null,
+        endDate: endDate ?? null,
+      }),
   });
 
   if (isLoading) {

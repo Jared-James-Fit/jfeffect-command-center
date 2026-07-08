@@ -51,24 +51,54 @@ type Summary = {
  * sets, we fall back to the quick-popup `session_weight_total` for that
  * session. Always reads via supabase client so RLS scopes to the caller.
  */
-export function WeightLiftedCard({ clientId, displayUnit }: { clientId: string; displayUnit: Unit }) {
+export function WeightLiftedCard({
+  clientId,
+  displayUnit,
+  rangeStart,
+  rangeEnd,
+  rangeLabel,
+}: {
+  clientId: string;
+  displayUnit: Unit;
+  /** Optional global analytics range. When set, all tiles are clipped to this window. */
+  rangeStart?: Date;
+  rangeEnd?: Date;
+  rangeLabel?: string;
+}) {
   const { data, isLoading } = useQuery({
-    queryKey: ["weight-lifted", clientId],
+    queryKey: [
+      "weight-lifted",
+      clientId,
+      rangeStart?.toISOString() ?? null,
+      rangeEnd?.toISOString() ?? null,
+    ],
     enabled: !!clientId,
     staleTime: 60_000,
     queryFn: async () => {
+      const startIso = rangeStart?.toISOString() ?? null;
+      const endIso = rangeEnd?.toISOString() ?? null;
+      const setsQ = supabase
+        .from("pl_row_results")
+        .select("normalized_lb, actual_load, actual_load_unit, actual_reps, completed_at")
+        .eq("client_id", clientId)
+        .not("actual_reps", "is", null)
+        .not("completed_at", "is", null);
+      const daysQ = (supabase.from("pl_day_completions") as any)
+        .select("completed_at, session_weight_total, session_weight_unit")
+        .eq("client_id", clientId)
+        .not("completed_at", "is", null)
+        .not("session_weight_total", "is", null);
+      if (startIso) {
+        setsQ.gte("completed_at", startIso);
+        daysQ.gte("completed_at", startIso);
+      }
+      if (endIso) {
+        setsQ.lte("completed_at", endIso);
+        daysQ.lte("completed_at", endIso);
+      }
       const [setsRes, daysRes, prepRes] = await Promise.all([
-        supabase
-          .from("pl_row_results")
-          .select("normalized_lb, actual_load, actual_load_unit, actual_reps, completed_at")
-          .eq("client_id", clientId)
-          .not("actual_reps", "is", null)
-          .not("completed_at", "is", null),
-        (supabase.from("pl_day_completions") as any)
-          .select("completed_at, session_weight_total, session_weight_unit")
-          .eq("client_id", clientId)
-          .not("completed_at", "is", null)
-          .not("session_weight_total", "is", null),
+        setsQ,
+        daysQ,
         (supabase.from("pl_preps") as any)
           .select("start_date, end_date, name, title, status")
           .eq("client_id", clientId)
@@ -142,16 +172,27 @@ export function WeightLiftedCard({ clientId, displayUnit }: { clientId: string; 
     const lastDate = all[0]?.date ?? null;
 
     const now = Date.now();
-    const weekCut = now - 7 * 86400000;
-    const monthCut = now - 30 * 86400000;
-    const week = all.filter((d) => d.date.getTime() >= weekCut).reduce((s, x) => s + x.weight_lb, 0);
-    const month = all.filter((d) => d.date.getTime() >= monthCut).reduce((s, x) => s + x.weight_lb, 0);
+    // Anchor "last 7/30 days" at rangeEnd (falls back to now) and clamp
+    // the lower bound to rangeStart so the tile stays inside the global range.
+    const rangeEndMs = rangeEnd ? rangeEnd.getTime() : now;
+    const rangeStartMs = rangeStart ? rangeStart.getTime() : -Infinity;
+    const weekCut = Math.max(rangeStartMs, rangeEndMs - 7 * 86400000);
+    const monthCut = Math.max(rangeStartMs, rangeEndMs - 30 * 86400000);
+    const week = all
+      .filter((d) => d.date.getTime() >= weekCut && d.date.getTime() <= rangeEndMs)
+      .reduce((s, x) => s + x.weight_lb, 0);
+    const month = all
+      .filter((d) => d.date.getTime() >= monthCut && d.date.getTime() <= rangeEndMs)
+      .reduce((s, x) => s + x.weight_lb, 0);
 
     let block = 0;
     let blockName: string | null = null;
     if (prep?.start_date) {
-      const start = new Date(prep.start_date).getTime();
-      const end = prep.end_date ? new Date(prep.end_date + "T23:59:59").getTime() : now;
+      // Intersect the current block with the global range.
+      const blockStart = new Date(prep.start_date).getTime();
+      const blockEnd = prep.end_date ? new Date(prep.end_date + "T23:59:59").getTime() : now;
+      const start = Math.max(blockStart, rangeStartMs);
+      const end = Math.min(blockEnd, rangeEndMs);
       block = all
         .filter((d) => d.date.getTime() >= start && d.date.getTime() <= end)
         .reduce((s, x) => s + x.weight_lb, 0);
@@ -195,10 +236,11 @@ export function WeightLiftedCard({ clientId, displayUnit }: { clientId: string; 
   }
 
   const conv = (lb: number) => convFromLb(lb, displayUnit);
+  const scopeSublabel = rangeLabel ?? "selected range";
   const tiles: { icon: typeof Dumbbell; label: string; value: string; sublabel?: string | null }[] = [
     {
       icon: Dumbbell,
-      label: "Lifetime",
+      label: rangeStart || rangeEnd ? "Selected range" : "Lifetime",
       value: formatBig(conv(summary.lifetime_lb), displayUnit),
       sublabel: summary.sessions > 0 ? `${summary.sessions} session${summary.sessions === 1 ? "" : "s"}` : null,
     },
@@ -212,13 +254,13 @@ export function WeightLiftedCard({ clientId, displayUnit }: { clientId: string; 
       icon: CalendarDays,
       label: "This week",
       value: formatBig(conv(summary.week_lb), displayUnit),
-      sublabel: "last 7 days",
+      sublabel: rangeStart || rangeEnd ? `last 7 days in ${scopeSublabel}` : "last 7 days",
     },
     {
       icon: CalendarRange,
       label: "This month",
       value: formatBig(conv(summary.month_lb), displayUnit),
-      sublabel: "last 30 days",
+      sublabel: rangeStart || rangeEnd ? `last 30 days in ${scopeSublabel}` : "last 30 days",
     },
     {
       icon: Layers,

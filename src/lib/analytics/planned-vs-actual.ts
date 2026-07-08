@@ -78,17 +78,30 @@ function rowHitRepTarget(reps: number, min: number | null, max: number | null): 
  */
 export async function getRecentPlannedVsActual(
   clientId: string,
-  opts: { limit?: number; formula?: E1RMFormula; workingRpeMin?: number } = {},
+  opts: {
+    limit?: number;
+    formula?: E1RMFormula;
+    workingRpeMin?: number;
+    startDate?: Date | string | null;
+    endDate?: Date | string | null;
+  } = {},
 ): Promise<PlannedVsActualDay[]> {
   const limit = opts.limit ?? 5;
   const formula = opts.formula ?? "epley";
   const rpeMin = opts.workingRpeMin ?? 6;
+  const toIso = (d: Date | string | null | undefined) =>
+    d == null ? null : (d instanceof Date ? d.toISOString() : new Date(d).toISOString());
+  const startIso = toIso(opts.startDate);
+  const endIso = toIso(opts.endDate);
 
-  const { data: completions, error: cErr } = await supabase
+  let completionsQuery = supabase
     .from("pl_day_completions")
     .select("id, day_id, completed_at, pl_days(name, sort_order)")
     .eq("client_id", clientId)
-    .not("completed_at", "is", null)
+    .not("completed_at", "is", null);
+  if (startIso) completionsQuery = completionsQuery.gte("completed_at", startIso);
+  if (endIso) completionsQuery = completionsQuery.lte("completed_at", endIso);
+  const { data: completions, error: cErr } = await completionsQuery
     .order("completed_at", { ascending: false })
     .limit(limit);
   if (cErr) throw cErr;
