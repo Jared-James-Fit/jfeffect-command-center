@@ -376,6 +376,7 @@ function AnalyticsPage() {
               results={results as any[]}
               admin
               navigateToBuilderHref={`/admin/client-programs/${clientId}`}
+              blockId={activeBlockId}
             />
           </>
         )}
