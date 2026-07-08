@@ -17,7 +17,10 @@ import { Card } from "@/components/ui/card";
 import { Loader2, Heart } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { CardioCompletionCard } from "./CardioCompletionCard";
-import { CARDIO_DAY_TYPES, dayTypeLabel } from "@/lib/training-schedule";
+import { dayTypeLabel } from "@/lib/training-schedule";
+import { getClientWorkouts } from "@/lib/pl-programs";
+import { mondayWeekDates, resolveClientWeekDays, resolveWorkoutDatesFromItems } from "@/lib/resolved-client-days";
+import { parseLocalDate, todayLocalISO, toLocalISO } from "@/lib/today";
 
 type DayContext = "training" | "rest" | "unknown";
 
@@ -35,41 +38,66 @@ export function ClientCardioSection({
   date?: Date;
   readonly?: boolean;
 }) {
-  const { data: targets = [], isLoading } = useQuery({
-    queryKey: ["client-cardio-visible", clientId],
+  const dateStr = date ? toLocalISO(date) : todayLocalISO();
+  const { data: resolved, isLoading } = useQuery({
+    queryKey: ["client-cardio-resolved", clientId, dateStr],
     enabled: !!clientId,
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("cardio_targets")
-        .select(
-          "id,cardio_type,custom_type,day_type,custom_day_type,frequency_per_week,duration_minutes,intensity,heart_rate_zone,machine_preference,goal,step_target,calorie_target_min,calorie_target_max,show_calories_to_client,client_notes,program_name,start_date,end_date",
-        )
-        .eq("client_id", clientId)
-        .eq("visible_to_client", true)
-        .eq("enabled", true)
-        .eq("status", "Active")
-        .order("start_date", { ascending: false });
-      if (error) throw error;
-      return (data ?? []) as any[];
+      const [targetsRes, clientRes, overridesRes, workouts] = await Promise.all([
+        supabase
+          .from("cardio_targets")
+          .select(
+            "id,cardio_type,custom_type,day_type,custom_day_type,frequency_per_week,duration_minutes,intensity,heart_rate_zone,machine_preference,goal,step_target,calorie_target_min,calorie_target_max,show_calories_to_client,client_notes,program_name,start_date,end_date,status,enabled,visible_to_client",
+          )
+          .eq("client_id", clientId)
+          .eq("visible_to_client", true)
+          .eq("enabled", true)
+          .eq("status", "Active")
+          .is("program_name", null)
+          .order("start_date", { ascending: false }),
+        supabase
+          .from("clients")
+          .select("committed_training_days,preferred_high_days,full_cardio_rest_days")
+          .eq("id", clientId)
+          .maybeSingle(),
+        (supabase.from("nutrition_day_overrides") as any)
+          .select("override_date,day_label")
+          .eq("client_id", clientId),
+        getClientWorkouts(clientId),
+      ]);
+      if (targetsRes.error) throw targetsRes.error;
+      const targetDate = parseLocalDate(dateStr) ?? new Date();
+      const monday = new Date(targetDate);
+      monday.setDate(targetDate.getDate() - ((targetDate.getDay() + 6) % 7));
+      const weekDates = mondayWeekDates(monday);
+      const client = clientRes.data as any;
+      const workoutDates = resolveWorkoutDatesFromItems(workouts as any[], client?.committed_training_days ?? null);
+      const day = resolveClientWeekDays({
+        clientId,
+        weekDates,
+        workouts: workoutDates,
+        recurringHighDays: client?.preferred_high_days ?? null,
+        highDayOverrides: (overridesRes.data ?? []) as any[],
+        fullCardioRestDays: client?.full_cardio_rest_days ?? null,
+        cardioTargets: (targetsRes.data ?? []) as any[],
+      }).find((d) => d.date === dateStr) ?? null;
+      const target = day?.cardioTargetId
+        ? ((targetsRes.data ?? []) as any[]).find((t) => t.id === day.cardioTargetId) ?? null
+        : null;
+      return { day, target };
     },
+    staleTime: 0,
+    refetchOnMount: "always",
   });
 
-  // Filter targets by day context (case-insensitive, aligned with CARDIO_DAY_TYPES)
-  function dayTypeMatches(value: string | null | undefined, candidates: string[]): boolean {
-    const normalized = (value ?? "General").toLowerCase();
-    return candidates.some((c) => c.toLowerCase() === normalized);
-  }
-
-  const filteredTargets = targets.filter((t: any) => {
-    if (dayContext === "unknown") return true;
-    if (dayContext === "training") {
-      return dayTypeMatches(t.day_type, ["Training Day", "High Day", "General"]);
-    }
-    if (dayContext === "rest") {
-      return dayTypeMatches(t.day_type, ["Rest Day", "General"]);
-    }
-    return true;
-  });
+  const filteredTargets = resolved?.target ? [resolved.target] : [];
+  const resolvedLabel = resolved?.day?.cardioDayType === "high"
+    ? "High Day"
+    : resolved?.day?.cardioDayType === "training"
+      ? "Training Day"
+      : resolved?.day?.cardioDayType === "rest"
+        ? "Full Cardio Rest"
+        : "Non-Training Day";
 
   if (isLoading) {
     return (
@@ -86,8 +114,10 @@ export function ClientCardioSection({
         <h2 className="flex items-center gap-2 text-xs uppercase tracking-widest text-muted-foreground">
           <Heart className="h-4 w-4 shrink-0" /> Cardio
         </h2>
-        {dayContext === "rest" ? (
-          <p className="mt-3 text-sm text-muted-foreground">Rest day — no cardio assigned.</p>
+        {resolved?.day?.cardioDayType === "rest" ? (
+          <p className="mt-3 text-sm text-muted-foreground">Full Cardio Rest — no cardio scheduled.</p>
+        ) : dayContext === "rest" ? (
+          <p className="mt-3 text-sm text-muted-foreground">No cardio scheduled for this date.</p>
         ) : (
           <p className="mt-3 text-sm text-muted-foreground">No cardio assigned.</p>
         )}
@@ -99,12 +129,7 @@ export function ClientCardioSection({
     <div className="space-y-3">
       <h2 className="flex items-center gap-2 text-xs uppercase tracking-widest text-muted-foreground px-0.5">
         <Heart className="h-4 w-4 shrink-0" /> Cardio
-        {dayContext === "training" && (
-          <span className="text-primary font-bold">· {dayTypeLabel({ day_type: "Training Day" })}</span>
-        )}
-        {dayContext === "rest" && (
-          <span className="text-muted-foreground font-bold">· {dayTypeLabel({ day_type: "Rest Day" })}</span>
-        )}
+        <span className="text-primary font-bold">· {resolvedLabel}</span>
       </h2>
       {filteredTargets.map((t: any) => (
         <CardioCompletionCard
