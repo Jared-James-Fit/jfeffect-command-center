@@ -393,19 +393,27 @@ function PortalAnalytics() {
 
             {/* WEIGHT LIFTED — lifetime / last / week / month / current block */}
             {client?.id && (
-              <WeightLiftedCard clientId={client.id} displayUnit={displayUnit} />
+              <WeightLiftedCard
+                clientId={client.id}
+                displayUnit={displayUnit}
+                rangeStart={filter.start}
+                rangeEnd={filter.end}
+                rangeLabel={filter.label}
+              />
             )}
 
             {/* RECENT PRS */}
             {client?.id && (
               <section aria-label="Planned vs Actual">
                 <div className="mb-1 text-[11px] font-semibold text-muted-foreground">
-                  Note: showing the 5 most recent completed workouts (not filtered by {filter.label}).
+                  {filter.label} · 5 most recent completed workouts in this range
                 </div>
                 <PlannedVsActualCard
                   clientId={client.id}
                   formula={analyticsSettings?.e1rm_formula}
                   workingRpeMin={analyticsSettings?.working_set_rpe_min}
+                  startDate={filter.start}
+                  endDate={filter.end}
                 />
               </section>
             )}
