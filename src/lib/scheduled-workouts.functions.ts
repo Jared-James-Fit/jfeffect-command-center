@@ -1,6 +1,11 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import {
+  assertInstanceNotCompleted,
+  completedInstanceIds,
+  validateReorderPayload,
+} from "@/lib/schedule-mutation-guards";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Manual Workout Scheduling — server functions for pl_scheduled_workouts.
@@ -260,7 +265,6 @@ export const moveScheduledWorkout = createServerFn({ method: "POST" })
       newDate: string;
       time?: string | null;
       orderIndex?: number | null;
-      confirmCompletedMove?: boolean;
     }) =>
       z
         .object({
@@ -268,7 +272,6 @@ export const moveScheduledWorkout = createServerFn({ method: "POST" })
           newDate: isoDate,
           time: isoTime,
           orderIndex: z.number().int().nullable().optional(),
-          confirmCompletedMove: z.boolean().optional(),
         })
         .parse(d),
   )
@@ -288,21 +291,17 @@ export const moveScheduledWorkout = createServerFn({ method: "POST" })
         throw new Error("Schedule editing is disabled for your account.");
     }
 
-    // Completion guard — a completed instance may not be silently moved.
-    // Clients must confirm; coaches/admins may move without confirming.
+    // Slice 2d: completed scheduled instances are immutable across every
+    // actor tier. Moving a completed instance would rewrite the historical
+    // date attached to logged sets and corrupt reporting. Coaches who
+    // genuinely want the workout to happen on a new date should schedule a
+    // new future copy of the source day instead.
     const { data: comp } = await context.supabase
       .from("pl_day_completions")
       .select("completed_at")
       .eq("scheduled_workout_id", data.instanceId)
       .maybeSingle();
-    if (comp?.completed_at && actor === "client" && !data.confirmCompletedMove) {
-      return {
-        ok: false as const,
-        requiresCompletedConfirmation: true,
-        message:
-          "This workout is already completed. Confirm to move its scheduled date — your logged sets stay attached.",
-      };
-    }
+    assertInstanceNotCompleted(comp ?? null);
 
     // Compute next order_index if not provided → append.
     let orderIndex = data.orderIndex;
@@ -406,17 +405,40 @@ export const reorderScheduledWorkouts = createServerFn({ method: "POST" })
       if (perm === "off")
         throw new Error("Schedule editing is disabled for your account.");
     }
-    for (let i = 0; i < data.orderedInstanceIds.length; i++) {
-      const id = data.orderedInstanceIds[i];
+
+    // Load every instance for this (client, date). The caller MUST send
+    // the exact full set of ids in the intended order — no missing ids
+    // and no foreign ids. This prevents partial re-orders that would
+    // leave stale/duplicate order_index values behind.
+    const { data: existing, error: exErr } = await context.supabase
+      .from("pl_scheduled_workouts")
+      .select("id")
+      .eq("client_id", data.clientId)
+      .eq("scheduled_date", data.date);
+    if (exErr) throw new Error(exErr.message);
+    const { data: comps } = await context.supabase
+      .from("pl_day_completions")
+      .select("scheduled_workout_id, completed_at")
+      .in("scheduled_workout_id", data.orderedInstanceIds);
+    const plan = validateReorderPayload({
+      existingIds: (existing ?? []).map((r: any) => r.id),
+      requestedIds: data.orderedInstanceIds,
+      completed: completedInstanceIds(comps ?? []),
+    });
+
+    // Normalize order_index to 0..N-1 in a single pass — no duplicates,
+    // no gaps. We write every row (even if its target index is unchanged)
+    // to keep the outcome deterministic and easy to test.
+    for (const { id, orderIndex } of plan) {
       const { error } = await context.supabase
         .from("pl_scheduled_workouts")
-        .update({ order_index: i })
+        .update({ order_index: orderIndex })
         .eq("id", id)
         .eq("client_id", data.clientId)
         .eq("scheduled_date", data.date);
       if (error) throw new Error(error.message);
     }
-    return { ok: true };
+    return { ok: true as const, normalizedCount: plan.length };
   });
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -448,6 +470,16 @@ export const updateScheduledWorkoutTime = createServerFn({ method: "POST" })
       if (perm === "off")
         throw new Error("Schedule editing is disabled for your account.");
     }
+
+    // Slice 2d: completed instances are immutable — time is part of the
+    // historical record once logged sets are attached.
+    const { data: timeComp } = await context.supabase
+      .from("pl_day_completions")
+      .select("completed_at")
+      .eq("scheduled_workout_id", data.instanceId)
+      .maybeSingle();
+    assertInstanceNotCompleted(timeComp ?? null);
+
     const { error } = await context.supabase
       .from("pl_scheduled_workouts")
       .update({ scheduled_time: data.time })

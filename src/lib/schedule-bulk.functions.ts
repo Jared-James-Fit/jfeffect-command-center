@@ -137,7 +137,6 @@ export const applyBulkScheduleChange = createServerFn({ method: "POST" })
       scope: z.enum([
         "single","week","pattern","block","program","custom","shift-following",
       ]),
-      confirmCompletedMove: z.boolean().optional(),
     }).parse(i),
   )
   .handler(async ({ data, context }) => {
@@ -165,18 +164,36 @@ export const applyBulkScheduleChange = createServerFn({ method: "POST" })
     if (role !== "coach" && role !== "admin") {
       const locked = dayRows.find((d: any) => d.schedule_locked);
       if (locked) throw new Error("One of these workouts is date-locked by your coach.");
+    }
 
-      const { data: completedRows } = await supabase
-        .from("pl_day_completions")
-        .select("day_id, completed_at").in("day_id", dayIds);
-      const anyCompleted = (completedRows ?? []).some((c: any) => c.completed_at);
-      if (anyCompleted && !data.confirmCompletedMove) {
-        return {
-          ok: false as const,
-          requiresCompletedConfirmation: true,
-          message: "Some workouts are already completed. Confirm to reschedule them — logged sets stay intact.",
-        };
-      }
+    // Slice 2d: reject the entire batch if any day is instance-backed.
+    // Bulk moves write pl_days.scheduled_date; when an instance exists the
+    // calendar reads from pl_scheduled_workouts (Slice 2a) and the write
+    // would silently desync. Callers must migrate to instance-scoped
+    // moves or route through the calendar.
+    const { data: batchInstances } = await supabase
+      .from("pl_scheduled_workouts")
+      .select("source_day_id")
+      .eq("client_id", clientId)
+      .in("source_day_id", dayIds);
+    if ((batchInstances ?? []).length > 0) {
+      throw new Error(
+        "One or more of these workouts uses the new scheduling system. Move them from the workout calendar instead.",
+      );
+    }
+
+    // Slice 2d: completed workouts are immutable for every actor. No
+    // confirmation flag bypasses this — a completed row rewritten via
+    // this legacy path would desync from pl_day_completions.
+    const { data: completedRows } = await supabase
+      .from("pl_day_completions")
+      .select("day_id, completed_at")
+      .in("day_id", dayIds);
+    const anyCompleted = (completedRows ?? []).some((c: any) => c.completed_at);
+    if (anyCompleted) {
+      throw new Error(
+        "One or more of these workouts is already completed. Their scheduled dates are locked.",
+      );
     }
 
     const dayById = new Map<string, any>(dayRows.map((d: any) => [d.id, d]));
@@ -260,54 +277,15 @@ export const coachOverrideCompletedMove = createServerFn({ method: "POST" })
       acknowledge: z.literal(true),
     }).parse(i),
   )
-  .handler(async ({ data, context }) => {
-    const { supabase, userId } = context;
-    const { data: day } = await supabase
-      .from("pl_days")
-      .select("id, scheduled_date, schedule_source, week_id")
-      .eq("id", data.dayId).maybeSingle();
-    if (!day) throw new Error("Workout not found.");
-    const { data: week } = await supabase
-      .from("pl_weeks").select("block_id").eq("id", day.week_id).maybeSingle();
-    const { data: block } = await supabase
-      .from("pl_blocks").select("client_id").eq("id", week!.block_id).maybeSingle();
-    const clientId = block!.client_id;
-    const { role } = await resolveActorAccess({ supabase, userId }, clientId);
-    if (role !== "coach" && role !== "admin") {
-      throw new Error("Only a coach or admin can override a completed workout.");
-    }
-
-    const batchId = crypto.randomUUID();
-    const { error: upErr } = await supabase
-      .from("pl_days")
-      .update({ scheduled_date: data.newDate, schedule_source: "coach" })
-      .eq("id", data.dayId);
-    if (upErr) throw new Error(upErr.message);
-
-    if (data.updateCompletedAt) {
-      await supabase
-        .from("pl_day_completions")
-        .update({ completed_at: `${data.newDate}T12:00:00Z` })
-        .eq("day_id", data.dayId);
-    }
-
-    await supabase.from("pl_schedule_audit").insert({
-      batch_id: batchId,
-      day_id: data.dayId,
-      client_id: clientId,
-      previous_date: day.scheduled_date,
-      new_date: data.newDate,
-      previous_source: day.schedule_source ?? null,
-      new_source: "coach",
-      scope: "completed-override",
-      changed_by: userId,
-      changed_by_role: role,
-      note: data.updateCompletedAt
-        ? "Override: scheduled_date + completed_at rewritten."
-        : "Override: scheduled_date rewritten; completed_at preserved.",
-    });
-
-    return { ok: true as const, batchId };
+  .handler(async () => {
+    // Slice 2d: completed workouts are permanently immutable. Rewriting
+    // scheduled_date or completed_at on a completed row corrupts historical
+    // reporting and desyncs from logged sets. The only supported flow is
+    // to schedule a new future copy of the source day instead of moving
+    // the completed original.
+    throw new Error(
+      "Overriding a completed workout is disabled. Schedule a new copy on the new date instead — the original completion stays as historical record.",
+    );
   });
 
 // ───────────────────────────────────────────────────────────────────────────
@@ -483,22 +461,70 @@ export const rescheduleFromCommittedDays = createServerFn({ method: "POST" })
 
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const batchId = crypto.randomUUID();
-    const applied: typeof moves = [];
+
+    // Slice 2d: any day that has a pl_scheduled_workouts instance for this
+    // client is instance-canonical. We update the instance's scheduled_date
+    // (schedule_source: "auto") and MUST NOT touch pl_days.scheduled_date —
+    // that would desync the visible calendar from the underlying data.
+    // Days without an instance stay on the legacy pl_days fallback so
+    // brand-new blocks that predate any instance backfill still realign.
+    const { data: instRows } = await supabaseAdmin
+      .from("pl_scheduled_workouts")
+      .select("id, source_day_id, scheduled_date")
+      .eq("client_id", data.clientId)
+      .in("source_day_id", moves.map((m) => m.dayId));
+    const instanceByDayId = new Map<string, { id: string; scheduled_date: string }>();
+    for (const r of instRows ?? []) {
+      // Duplicate scheduling is guarded elsewhere, so at most one instance
+      // per source_day at Slice 2d. If multiple ever exist we take the
+      // earliest — the realign write still ends up correct after the guard
+      // is removed because the caller supplies one target date per day.
+      const prev = instanceByDayId.get((r as any).source_day_id);
+      if (!prev || (r as any).scheduled_date < prev.scheduled_date) {
+        instanceByDayId.set((r as any).source_day_id, {
+          id: (r as any).id,
+          scheduled_date: (r as any).scheduled_date,
+        });
+      }
+    }
+
+    type AppliedRow = (typeof moves)[number] & {
+      target: "instance" | "day";
+      instanceId?: string;
+    };
+    const applied: AppliedRow[] = [];
     try {
       for (const m of moves) {
-        const { error } = await supabaseAdmin
-          .from("pl_days")
-          .update({ scheduled_date: m.next, schedule_source: "auto" })
-          .eq("id", m.dayId);
-        if (error) throw new Error(error.message);
-        applied.push(m);
+        const inst = instanceByDayId.get(m.dayId);
+        if (inst) {
+          const { error } = await supabaseAdmin
+            .from("pl_scheduled_workouts")
+            .update({ scheduled_date: m.next, schedule_source: "auto" })
+            .eq("id", inst.id);
+          if (error) throw new Error(error.message);
+          applied.push({ ...m, target: "instance", instanceId: inst.id, prev: inst.scheduled_date });
+        } else {
+          const { error } = await supabaseAdmin
+            .from("pl_days")
+            .update({ scheduled_date: m.next, schedule_source: "auto" })
+            .eq("id", m.dayId);
+          if (error) throw new Error(error.message);
+          applied.push({ ...m, target: "day" });
+        }
       }
     } catch (err) {
       for (const a of applied) {
-        await supabaseAdmin
-          .from("pl_days")
-          .update({ scheduled_date: a.prev, schedule_source: a.prevSource ?? "auto" })
-          .eq("id", a.dayId);
+        if (a.target === "instance" && a.instanceId) {
+          await supabaseAdmin
+            .from("pl_scheduled_workouts")
+            .update({ scheduled_date: a.prev ?? undefined, schedule_source: "auto" })
+            .eq("id", a.instanceId);
+        } else {
+          await supabaseAdmin
+            .from("pl_days")
+            .update({ scheduled_date: a.prev, schedule_source: a.prevSource ?? "auto" })
+            .eq("id", a.dayId);
+        }
       }
       throw err;
     }

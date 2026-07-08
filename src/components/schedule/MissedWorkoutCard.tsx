@@ -95,14 +95,13 @@ export function MissedWorkoutCard({ clientId }: MissedWorkoutCardProps) {
       const newDate = ymd(new Date());
       if (row.instanceId) {
         return moveInstanceFn({
-          data: { instanceId: row.instanceId, newDate, confirmCompletedMove: true },
+          data: { instanceId: row.instanceId, newDate },
         });
       }
       return apply({
         data: {
           moves: [{ dayId: row.dayId, newDate }],
           scope: "single",
-          confirmCompletedMove: true,
         },
       });
     },

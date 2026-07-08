@@ -9,7 +9,7 @@ import {
 } from "date-fns";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { ChevronLeft, ChevronRight, CheckCircle2, Clock, AlertCircle, GripVertical, Calendar as CalIcon, CalendarPlus } from "lucide-react";
+import { ChevronLeft, ChevronRight, CheckCircle2, Clock, AlertCircle, GripVertical, Calendar as CalIcon, CalendarPlus, ChevronUp, ChevronDown } from "lucide-react";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
 import { buildScheduleChips } from "@/lib/schedule-calendar-chips";
@@ -56,33 +56,64 @@ function statusBadge(s: Status) {
   }
 }
 
-function DayChip({ chipId, day, comp, week, blockName, draggable }: {
+function DayChip({ chipId, day, comp, week, blockName, draggable, canReorderUp, canReorderDown, onNudge }: {
   chipId: string;
   day: ScheduleDay; comp: ScheduleCompletion | null;
   week?: ScheduleWeek; blockName?: string | null; draggable: boolean;
+  canReorderUp?: boolean; canReorderDown?: boolean;
+  onNudge?: (direction: -1 | 1) => void;
 }) {
   const id = chipId;
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
     id, disabled: !draggable,
   });
+  // Each chip is ALSO a droppable so a drag can land "onto this chip" — the
+  // parent uses that to distinguish same-cell reorder from cross-date move.
+  const { setNodeRef: setDropRef, isOver } = useDroppable({ id: `chip:${chipId}`, disabled: !draggable });
   const status = statusOf(day, comp);
+  const isCompleted = status === "completed";
   return (
     <div
-      ref={setNodeRef}
-      {...listeners}
-      {...attributes}
+      ref={(el) => { setNodeRef(el); setDropRef(el); }}
       className={cn(
         "group rounded-md border border-border bg-card p-1.5 text-[11px] leading-tight space-y-0.5 select-none",
-        draggable && "cursor-grab active:cursor-grabbing touch-none",
+        draggable && !isCompleted && "cursor-grab active:cursor-grabbing touch-none",
         isDragging && "opacity-50",
-        status === "completed" && "opacity-70",
+        isCompleted && "opacity-70",
+        isOver && "ring-2 ring-primary",
       )}
+      {...(draggable && !isCompleted ? listeners : {})}
+      {...attributes}
     >
       <div className="flex items-center gap-1">
-        {draggable && <GripVertical className="h-3 w-3 text-muted-foreground" />}
+        {draggable && !isCompleted && <GripVertical className="h-3 w-3 text-muted-foreground" />}
         <span className="font-medium truncate flex-1">
           {day.title?.trim() || `Day ${day.day_index}`}
         </span>
+        {onNudge && !isCompleted && (canReorderUp || canReorderDown) && (
+          <span className="flex items-center gap-0.5 opacity-70 group-hover:opacity-100">
+            <button
+              type="button"
+              aria-label="Move up"
+              disabled={!canReorderUp}
+              onClick={(e) => { e.stopPropagation(); onNudge(-1); }}
+              onPointerDown={(e) => e.stopPropagation()}
+              className="rounded p-0.5 hover:bg-secondary disabled:opacity-30"
+            >
+              <ChevronUp className="h-3 w-3" />
+            </button>
+            <button
+              type="button"
+              aria-label="Move down"
+              disabled={!canReorderDown}
+              onClick={(e) => { e.stopPropagation(); onNudge(1); }}
+              onPointerDown={(e) => e.stopPropagation()}
+              className="rounded p-0.5 hover:bg-secondary disabled:opacity-30"
+            >
+              <ChevronDown className="h-3 w-3" />
+            </button>
+          </span>
+        )}
       </div>
       <div className="text-[10px] text-muted-foreground truncate">
         {blockName ? `${blockName} · ` : ""}W{week?.week_index ?? "?"} · D{day.day_index}
@@ -139,10 +170,18 @@ export interface ScheduleCalendarProps {
   ) => void;
   /** Open the move sheet pre-filled with the workout but no target date. */
   onSelectDay?: (target: { dayId: string; instanceId: string | null }) => void;
+  /**
+   * Slice 2d — persist same-day ordering. Fires when the user reorders
+   * within a date cell (drag-and-drop within-cell, or Move Up / Move
+   * Down on a chip). `orderedInstanceIds` is the FULL ordered list of
+   * scheduled-instance ids for that date. Legacy chips (no instance)
+   * cannot participate in reorder — they carry no instance id.
+   */
+  onReorder?: (date: string, orderedInstanceIds: string[]) => void;
 }
 
 export function ScheduleCalendar(props: ScheduleCalendarProps) {
-  const { days, weeks, blocks, completions, scheduledInstances, canEdit, onMoveDay, onSelectDay } = props;
+  const { days, weeks, blocks, completions, scheduledInstances, canEdit, onMoveDay, onSelectDay, onReorder } = props;
   const [view, setView] = useState<"month" | "list">("month");
   const [cursor, setCursor] = useState<Date>(startOfMonth(new Date()));
   const [dragId, setDragId] = useState<string | null>(null);
@@ -232,8 +271,59 @@ export function ScheduleCalendar(props: ScheduleCalendarProps) {
     const chipId = String(e.active.id);
     const chip = chipById.get(chipId);
     if (!chip) return;
-    const targetDate = parseISO(String(e.over.id));
-    onMoveDay({ dayId: chip.day.id, instanceId: chip.instanceId }, targetDate);
+    const overId = String(e.over.id);
+    // Two drop-target kinds:
+    //   `<yyyy-MM-dd>`            → the whole date cell (cross-date move)
+    //   `chip:<chipId>`           → a specific chip within a cell
+    //                               (same-cell reorder or cross-date append)
+    let targetDateStr: string;
+    let anchorChipId: string | null = null;
+    if (overId.startsWith("chip:")) {
+      const target = chipById.get(overId.slice(5));
+      if (!target) return;
+      targetDateStr = target.scheduled_date;
+      anchorChipId = target.chipId;
+    } else {
+      targetDateStr = overId;
+    }
+    const sameDate = targetDateStr === chip.scheduled_date;
+    if (sameDate && anchorChipId && chip.instanceId && onReorder) {
+      // Same-date reorder: build the new order by moving `chip` before
+      // the chip we dropped onto. Only chips that carry an instance id
+      // can be reordered — legacy chips are filtered out.
+      const dayChips = (byDate.get(targetDateStr) ?? []).filter(
+        (c) => c.instanceId,
+      );
+      const without = dayChips.filter((c) => c.chipId !== chip.chipId);
+      const anchorIdx = without.findIndex((c) => c.chipId === anchorChipId);
+      const insertAt = anchorIdx < 0 ? without.length : anchorIdx;
+      const reordered = [
+        ...without.slice(0, insertAt),
+        chip,
+        ...without.slice(insertAt),
+      ];
+      onReorder(
+        targetDateStr,
+        reordered.map((c) => c.instanceId!).filter(Boolean),
+      );
+      return;
+    }
+    if (sameDate) return; // legacy-chip same-date drop is a no-op
+    onMoveDay({ dayId: chip.day.id, instanceId: chip.instanceId }, parseISO(targetDateStr));
+  };
+
+  const handleReorderNudge = (chipId: string, direction: -1 | 1) => {
+    const chip = chipById.get(chipId);
+    if (!chip || !chip.instanceId || !onReorder) return;
+    const dayChips = (byDate.get(chip.scheduled_date) ?? []).filter(
+      (c) => c.instanceId,
+    );
+    const idx = dayChips.findIndex((c) => c.chipId === chip.chipId);
+    const next = idx + direction;
+    if (idx < 0 || next < 0 || next >= dayChips.length) return;
+    const swapped = dayChips.slice();
+    [swapped[idx], swapped[next]] = [swapped[next], swapped[idx]];
+    onReorder(chip.scheduled_date, swapped.map((c) => c.instanceId!));
   };
 
   const draggedChip = dragId ? chipById.get(dragId) ?? null : null;
@@ -316,6 +406,9 @@ export function ScheduleCalendar(props: ScheduleCalendarProps) {
                     const day = chip.day;
                     const wk = weekMap.get(day.week_id);
                     const blk = wk ? blockMap.get(wk.block_id) : null;
+                    const instChips = list.filter((c) => c.instanceId);
+                    const instIdx = chip.instanceId ? instChips.findIndex((c) => c.chipId === chip.chipId) : -1;
+                    const canReorder = canEdit && !!chip.instanceId && !!onReorder && instChips.length > 1;
                     return (
                       <div key={chip.chipId} onClick={() => onSelectDay?.({ dayId: day.id, instanceId: chip.instanceId })}>
                         <DayChip
@@ -325,6 +418,9 @@ export function ScheduleCalendar(props: ScheduleCalendarProps) {
                           blockName={blk?.name ?? null}
                           comp={chip.comp}
                           draggable={canEdit}
+                          canReorderUp={canReorder && instIdx > 0}
+                          canReorderDown={canReorder && instIdx >= 0 && instIdx < instChips.length - 1}
+                          onNudge={canReorder ? (dir) => handleReorderNudge(chip.chipId, dir) : undefined}
                         />
                       </div>
                     );
