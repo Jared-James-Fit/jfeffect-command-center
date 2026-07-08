@@ -1,11 +1,13 @@
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { Loader2, History as HistoryIcon, ListChecks, CalendarRange } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Card, CardContent } from "@/components/ui/card";
 import { getClientSchedule } from "@/lib/schedule-bulk.functions";
+import { reorderScheduledWorkouts } from "@/lib/scheduled-workouts.functions";
+import { toast } from "sonner";
 import { ScheduleCalendar } from "./ScheduleCalendar";
 import { BulkMoveDialog } from "./BulkMoveDialog";
 import { MoveWorkoutSheet } from "./MoveWorkoutSheet";
@@ -21,6 +23,8 @@ export interface ScheduleManagerShellProps {
 
 export function ScheduleManagerShell({ clientId, mode }: ScheduleManagerShellProps) {
   const fetchFn = useServerFn(getClientSchedule);
+  const reorderFn = useServerFn(reorderScheduledWorkouts);
+  const queryClient = useQueryClient();
   const { data, isLoading } = useQuery({
     queryKey: ["client-schedule", clientId],
     enabled: !!clientId,
@@ -53,6 +57,18 @@ export function ScheduleManagerShell({ clientId, mode }: ScheduleManagerShellPro
     setMoveDayId(target.dayId);
     setMoveInstanceId(target.instanceId);
     setMoveInitialDate(null);
+  };
+
+  const reorderMutation = useMutation({
+    mutationFn: async (args: { date: string; orderedInstanceIds: string[] }) =>
+      reorderFn({ data: { clientId, date: args.date, orderedInstanceIds: args.orderedInstanceIds } }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries();
+    },
+    onError: (e: any) => toast.error(e?.message ?? "Could not reorder."),
+  });
+  const handleReorder = (date: string, orderedInstanceIds: string[]) => {
+    reorderMutation.mutate({ date, orderedInstanceIds });
   };
 
   const sortedWeeks = [...(weeks as any[])].sort((a, b) => a.week_index - b.week_index);
@@ -90,6 +106,7 @@ export function ScheduleManagerShell({ clientId, mode }: ScheduleManagerShellPro
             canEdit={!locked}
             onMoveDay={handleMove}
             onSelectDay={handleSelectDay}
+            onReorder={handleReorder}
           />
         </CardContent>
       </Card>
@@ -114,7 +131,7 @@ export function ScheduleManagerShell({ clientId, mode }: ScheduleManagerShellPro
             </Select>
           </div>
           {weeklyWeekId && !locked && (
-            <WeeklyScheduleEditor days={days} weeks={weeks} weekId={weeklyWeekId} />
+            <WeeklyScheduleEditor days={days} weeks={weeks} weekId={weeklyWeekId} scheduledInstances={scheduledInstances ?? []} />
           )}
         </CardContent>
       </Card>
@@ -150,7 +167,7 @@ export function ScheduleManagerShell({ clientId, mode }: ScheduleManagerShellPro
         open={bulkOpen}
         onOpenChange={setBulkOpen}
         anchorDayId={bulkAnchor}
-        ctx={{ days, weeks, blocks, completions }}
+        ctx={{ days, weeks, blocks, completions, scheduledInstances: scheduledInstances ?? [] }}
       />
       <ScheduleHistoryDrawer clientId={clientId} open={historyOpen} onOpenChange={setHistoryOpen} />
     </div>
