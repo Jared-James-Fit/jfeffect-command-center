@@ -426,6 +426,12 @@ export function ClientMoreMenu({
       clientId={r.id}
       clientName={r.full_name}
     />
+    <ScheduleWorkoutSheet
+      open={scheduleOpen}
+      onOpenChange={setScheduleOpen}
+      clientId={r.id}
+      clientName={r.full_name}
+    />
     </>
   );
 }
