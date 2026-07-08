@@ -4,6 +4,16 @@ import { useNavigate } from "@tanstack/react-router";
 import { Layers } from "lucide-react";
 import { listClientBlocks, getBlockTree } from "@/lib/pl-programs";
 import { cn } from "@/lib/utils";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 /**
  * Compact one-click switcher for jumping between every training block
@@ -19,15 +29,26 @@ export function BlockSwitcher({
   clientId,
   currentBlockId,
   onBeforeNavigate,
+  hasUnsavedChanges = false,
+  currentBlockName,
+  onDiscardUnsaved,
 }: {
   clientId: string;
   currentBlockId: string;
   /** Called before navigating away — use to save unsaved changes. */
   onBeforeNavigate?: () => Promise<void>;
+  /** True when the current block editor has unsaved edits. */
+  hasUnsavedChanges?: boolean;
+  /** Display name of the current block, used in the confirm prompt. */
+  currentBlockName?: string;
+  /** Called when the coach chooses "Discard and switch" — must drop the
+   *  local unsaved edits without touching the database. */
+  onDiscardUnsaved?: () => void;
 }) {
   const navigate = useNavigate();
   const qc = useQueryClient();
   const [switching, setSwitching] = useState<string | null>(null);
+  const [pendingBlockId, setPendingBlockId] = useState<string | null>(null);
 
   const { data: blocks = [] } = useQuery({
     queryKey: ["pl-blocks", clientId],
@@ -37,18 +58,26 @@ export function BlockSwitcher({
 
   if (!blocks.length || blocks.length < 2) return null;
 
-  const handleClick = async (e: React.MouseEvent, blockId: string) => {
-    if (blockId === currentBlockId || switching) return;
-    e.preventDefault();
+  const doNavigate = async (blockId: string) => {
     setSwitching(blockId);
     try {
-      if (onBeforeNavigate) {
-        await onBeforeNavigate();
-      }
       await navigate({ to: "/admin/blocks/$blockId", params: { blockId } });
     } finally {
       setSwitching(null);
     }
+  };
+
+  const handleClick = async (e: React.MouseEvent, blockId: string) => {
+    if (blockId === currentBlockId || switching) return;
+    e.preventDefault();
+    // Unsaved-change protection: prompt before navigating so the coach
+    // can save, discard, or cancel. Silent auto-save was hiding the
+    // decision — coaches asked to see the choice explicitly.
+    if (hasUnsavedChanges) {
+      setPendingBlockId(blockId);
+      return;
+    }
+    await doNavigate(blockId);
   };
 
   const handleMouseEnter = (blockId: string) => {
@@ -61,6 +90,7 @@ export function BlockSwitcher({
   };
 
   return (
+    <>
     <div className="flex w-full items-center gap-1.5 overflow-x-auto py-1 -mx-1 px-1">
       <span className="inline-flex shrink-0 items-center gap-1 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
         <Layers className="h-3 w-3" /> Blocks
@@ -105,5 +135,55 @@ export function BlockSwitcher({
         );
       })}
     </div>
+    <AlertDialog
+      open={!!pendingBlockId}
+      onOpenChange={(v) => { if (!v) setPendingBlockId(null); }}
+    >
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>
+            Unsaved changes in {currentBlockName ?? "this block"}
+          </AlertDialogTitle>
+          <AlertDialogDescription>
+            Save your edits before switching, discard them, or stay on this block.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter className="flex-col gap-2 sm:flex-row">
+          <AlertDialogCancel>Cancel</AlertDialogCancel>
+          <button
+            type="button"
+            className="inline-flex h-10 items-center justify-center rounded-md border border-border px-4 py-2 text-sm font-medium hover:bg-muted"
+            onClick={async () => {
+              const target = pendingBlockId;
+              setPendingBlockId(null);
+              if (onDiscardUnsaved) onDiscardUnsaved();
+              if (target) await doNavigate(target);
+            }}
+          >
+            Discard and switch
+          </button>
+          <AlertDialogAction
+            onClick={async (e) => {
+              e.preventDefault();
+              const target = pendingBlockId;
+              setPendingBlockId(null);
+              try {
+                if (onBeforeNavigate) await onBeforeNavigate();
+              } catch (err) {
+                // If saving failed, don't navigate — leave the coach on
+                // the current block so they can fix and retry.
+                // eslint-disable-next-line no-console
+                console.error("[block-switcher] save-before-switch failed", err);
+                return;
+              }
+              if (target) await doNavigate(target);
+            }}
+          >
+            Save and switch
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+    </>
   );
 }
