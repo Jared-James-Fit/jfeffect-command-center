@@ -16,10 +16,9 @@ import type { DirectoryRow } from "@/lib/clients-directory.functions";
 import { AssignProgramDialog } from "./assign-program-dialog";
 import { WorkoutArchiveDialog } from "./workout-archive-dialog";
 import { toast } from "sonner";
-import { getBlockTree } from "@/lib/pl-programs";
 import { getClientMealPlanForCoach } from "@/lib/nutrition-targets/admin-meal-plan.functions";
 import { useServerFn } from "@tanstack/react-start";
-import { supabase } from "@/integrations/supabase/client";
+import { downloadFullTrainingReportForClient } from "@/lib/workouts/download-full-training-report";
 
 function useClientPdfDownloads(r: DirectoryRow) {
   const [workoutPending, setWorkoutPending] = useState(false);
@@ -27,80 +26,21 @@ function useClientPdfDownloads(r: DirectoryRow) {
   const fetchMealPlan = useServerFn(getClientMealPlanForCoach);
 
   const downloadWorkout = async () => {
-    if (!r.block_id) {
-      toast.error(`${r.full_name ?? "Client"} has no active program.`);
-      return;
-    }
     setWorkoutPending(true);
-    const toastId = toast.loading("Generating workout PDF…");
+    const toastId = toast.loading("Generating training report…");
     try {
-      const tree = await getBlockTree(r.block_id);
-      if (!tree) throw new Error("Block not found");
-      const { downloadWorkoutPdf } = await import(
-        "@/lib/workouts/workout-pdf"
-      );
-      const weeksSorted = (tree.weeks ?? [])
-        .slice()
-        .sort((a: any, b: any) => (a.week_index ?? 0) - (b.week_index ?? 0));
-      const daysByWeek = new Map<string, any[]>();
-      for (const d of tree.days ?? []) {
-        const list = daysByWeek.get(d.week_id) ?? [];
-        list.push(d);
-        daysByWeek.set(d.week_id, list);
-      }
-      const rowsByDay = new Map<string, any[]>();
-      for (const rw of tree.rows ?? []) {
-        const list = rowsByDay.get(rw.day_id) ?? [];
-        list.push(rw);
-        rowsByDay.set(rw.day_id, list);
-      }
-      // Fetch client-authored exercise notes for every day in the block so
-      // the downloaded PDF surfaces what the client actually wrote.
-      const allDayIds = (tree.days ?? []).map((d: any) => d.id);
-      const notesByDay = new Map<string, any[]>();
-      if (allDayIds.length) {
-        const { data: noteRows } = await (supabase as any)
-          .from("pl_exercise_notes")
-          .select("day_id, row_id, exercise_name, content, status, created_at, updated_at")
-          .in("day_id", allDayIds)
-          .eq("client_id", r.id)
-          .order("updated_at", { ascending: true });
-        for (const n of (noteRows ?? []) as any[]) {
-          const list = notesByDay.get(n.day_id) ?? [];
-          list.push(n);
-          notesByDay.set(n.day_id, list);
-        }
-      }
-      downloadWorkoutPdf({
-        client_name: r.full_name ?? null,
-        program_name: (tree as any).block?.name ?? null,
-        block_name: (tree as any).block?.name ?? null,
-        block_status: (tree as any).block?.status ?? null,
-        block_start: (tree as any).block?.start_date ?? null,
-        block_end: (tree as any).block?.end_date ?? null,
-        weeks: weeksSorted.map((w: any) => ({
-          id: w.id,
-          week_index: w.week_index,
-          notes: w.notes ?? null,
-          days: (daysByWeek.get(w.id) ?? [])
-            .slice()
-            .sort((a: any, b: any) => (a.day_index ?? 0) - (b.day_index ?? 0))
-            .map((d: any) => ({
-              id: d.id,
-              day_index: d.day_index,
-              title: d.title ?? null,
-              notes: d.notes ?? null,
-              notes_client_visible: d.notes_client_visible ?? null,
-              scheduled_date: d.scheduled_date ?? null,
-              rows: rowsByDay.get(d.id) ?? [],
-              client_exercise_notes: notesByDay.get(d.id) ?? [],
-            })),
-        })),
+      const res = await downloadFullTrainingReportForClient({
+        clientId: r.id,
+        clientDisplayName: r.full_name ?? null,
       });
-      toast.success("Workout PDF downloaded", { id: toastId });
+      if (!res.ok) {
+        toast.error(res.reason, { id: toastId });
+        return;
+      }
+      toast.success("Training report downloaded", { id: toastId });
     } catch (err) {
-      console.error("Workout PDF download failed", err);
-      toast.error("Could not generate workout PDF.", { id: toastId });
+      console.error("Training report download failed", err);
+      toast.error("Could not generate training report.", { id: toastId });
     } finally {
       setWorkoutPending(false);
     }
@@ -214,7 +154,7 @@ export function QuickActionsMenu({ r }: { r: DirectoryRow }) {
           ) : (
             <Download className="mr-2 h-4 w-4" />
           )}
-          Download Workout PDF
+          Download Training Report
         </DropdownMenuItem>
 
         <DropdownMenuSeparator />
@@ -365,7 +305,7 @@ export function ClientMoreMenu({
           ) : (
             <Download className="mr-2 h-4 w-4" />
           )}
-          Download Workout PDF
+          Download Training Report
         </DropdownMenuItem>
 
         <DropdownMenuSeparator />
