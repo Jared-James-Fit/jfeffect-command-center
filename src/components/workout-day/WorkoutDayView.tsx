@@ -521,6 +521,9 @@ function WorkoutDay({
   const isOutsideScheduledDay = !!scheduledDate && scheduledDate.getTime() !== today.getTime();
 
   const { isImpersonating } = useClientImpersonation();
+  const scheduledWorkoutId = adapter?.kind === "client"
+    ? adapter.ref.scheduledWorkoutId ?? (search as any)?.instance ?? null
+    : null;
   // Workouts are ALWAYS editable — past, today, future, completed. There is no
   // automatic lock based on date, block status, program status, or completion.
   // The only way a workout becomes read-only is an explicit manual lock
@@ -590,7 +593,7 @@ function WorkoutDay({
   }, [rowsLoaded, rows.length]);
 
   const { data: results = [] } = useQuery({
-    queryKey: ["pl-day-results", dayId, client?.id, adapter?.kind ?? null, adapter?.ref.ownerId ?? null],
+    queryKey: ["pl-day-results", dayId, client?.id, adapter?.kind ?? null, adapter?.ref.ownerId ?? null, scheduledWorkoutId],
     enabled: !!client?.id && (rows as any[]).length > 0,
     initialData: client?.id ? cachedInitialData<any[]>(cacheScope, `results:${client.id}`) : undefined,
     staleTime: 2 * 60_000,
@@ -742,7 +745,7 @@ function WorkoutDay({
   });
 
   const { data: completion } = useQuery({
-    queryKey: ["pl-day-completion", dayId, client?.id, adapter?.kind ?? null],
+    queryKey: ["pl-day-completion", dayId, client?.id, adapter?.kind ?? null, scheduledWorkoutId],
     enabled: !!client?.id,
     // Completion state is critical — always fetch fresh to prevent stuck UI states
     // where the workout appears both completed and incomplete simultaneously.
