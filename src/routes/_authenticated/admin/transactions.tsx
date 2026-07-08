@@ -29,19 +29,13 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
+import { ledgerStatusTone } from "@/lib/payment-display";
 
 export const Route = createFileRoute("/_authenticated/admin/transactions")({
   component: AdminTransactionsPage,
 });
 
-function statusTone(status?: string | null) {
-  const s = (status ?? "").toLowerCase();
-  if (s === "paid") return "bg-emerald-500/15 text-emerald-500 border-emerald-500/30";
-  if (s === "refunded" || s === "voided") return "bg-amber-500/15 text-amber-600 border-amber-500/30";
-  if (s === "failed") return "bg-red-500/15 text-red-500 border-red-500/30";
-  if (s === "pending") return "bg-blue-500/15 text-blue-500 border-blue-500/30";
-  return "bg-muted text-muted-foreground border-border";
-}
+const statusTone = ledgerStatusTone;
 
 function bestStripeUrl(r: AdminTransactionRow): string | null {
   // Stripe uses py_* prefix for direct charges (not PaymentIntents).
