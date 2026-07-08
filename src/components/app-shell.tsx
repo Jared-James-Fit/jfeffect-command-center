@@ -4,7 +4,7 @@ import { useAuth } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
 import {
   LogOut, ChevronLeft, ChevronRight, ChevronDown, Search, Settings as SettingsIcon, ArrowLeft, MoreHorizontal,
-  ChevronsDownUp, ChevronsUpDown, BookOpen, Users, UserCog, IdCard,
+  ChevronsDownUp, ChevronsUpDown, BookOpen, Users, UserCog, IdCard, Pin, PinOff,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { NotificationBell } from "@/components/notification-bell";
@@ -332,7 +332,19 @@ export function AppShell({ items, bottomItems: customBottomItems, title, childre
     if (t.includes("client") || t.includes("portal")) return "client";
     return "admin";
   }, [title]);
-  const { pins, isPinned, count: pinCount } = useSidebarPins(pinScope);
+  const { pins, isPinned, toggle: togglePin, count: pinCount } = useSidebarPins(pinScope);
+  const handleTogglePin = (e: React.MouseEvent, to: string, label: string) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const res = togglePin(to);
+    if (res.full) {
+      toast.error(`Max ${MAX_PINS} pinned shortcuts. Unpin one first.`);
+    } else if (res.pinned) {
+      toast.success(`Pinned "${label}"`);
+    } else {
+      toast.success(`Unpinned "${label}"`);
+    }
+  };
   const isMembershipAdminShell = pinScope === "admin" && title.toLowerCase().includes("membership");
   const navByTo = useMemo(() => {
     const m = new Map<string, NavItem>();
