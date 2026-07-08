@@ -93,6 +93,7 @@ export function WorkoutListCard({ item, readonly = false }: { item: any; readonl
         open={moveOpen}
         onOpenChange={setMoveOpen}
         currentScheduledDate={status.scheduled ?? dayScheduledDate(item)}
+        scheduledWorkoutId={item.scheduledWorkoutId ?? null}
       />
     )}
     </div>

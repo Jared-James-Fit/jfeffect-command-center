@@ -14,14 +14,21 @@ import {
 } from "@/components/ui/drawer";
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { CalendarIcon, AlertTriangle, ArrowRight, Loader2, RotateCcw, Replace, Eye } from "lucide-react";
+import { CalendarIcon, AlertTriangle, ArrowRight, Loader2, RotateCcw, Replace, Eye, Trash2, Clock } from "lucide-react";
 import {
   moveWorkout,
   swapWorkouts,
   undoScheduleChange,
   getMoveContext,
 } from "@/lib/schedule-manager.functions";
+import {
+  moveScheduledWorkout,
+  updateScheduledWorkoutTime,
+  removeScheduledWorkout,
+} from "@/lib/scheduled-workouts.functions";
 import { detectScheduleConflicts } from "@/lib/schedule-conflicts";
 import { useClientImpersonation } from "@/lib/client-impersonation";
 
@@ -55,6 +62,21 @@ export interface MoveWorkoutSheetProps {
    */
   currentScheduledDate?: Date | null;
   /**
+   * Slice 2c: pl_scheduled_workouts.id of the exact instance the caller
+   * wants to move. When present, every write targets this instance —
+   * pl_days.scheduled_date is NEVER updated, completion is scoped by
+   * scheduled_workout_id, and destination-date collisions become
+   * append-as-next-order-index rather than swap. Callers that don't yet
+   * thread an instance (genuine legacy program-day cards) omit this and
+   * fall through to the legacy dayId path.
+   */
+  scheduledWorkoutId?: string | null;
+  /**
+   * When true, surface coach-only instance controls (change time, remove
+   * future workout). Ignored on legacy dayId path.
+   */
+  coachControls?: boolean;
+  /**
    * When provided (coach/admin viewing a client schedule), reveals a
    * "View what they logged" action on completed / in-progress workouts.
    * Clicking it enters Client POV as that client and opens the workout
@@ -78,6 +100,8 @@ export function MoveWorkoutSheet({
   onOpenChange,
   initialTargetDate,
   currentScheduledDate,
+  scheduledWorkoutId,
+  coachControls,
   viewWorkoutAs,
 }: MoveWorkoutSheetProps) {
   const queryClient = useQueryClient();
@@ -87,11 +111,22 @@ export function MoveWorkoutSheet({
   const move = useServerFn(moveWorkout);
   const swap = useServerFn(swapWorkouts);
   const undo = useServerFn(undoScheduleChange);
+  const moveInstanceFn = useServerFn(moveScheduledWorkout);
+  const updateInstanceTimeFn = useServerFn(updateScheduledWorkoutTime);
+  const removeInstanceFn = useServerFn(removeScheduledWorkout);
+
+  const isInstanceMode = !!scheduledWorkoutId;
 
   const ctxQuery = useQuery({
-    queryKey: ["schedule-move-context", dayId],
+    queryKey: ["schedule-move-context", dayId, scheduledWorkoutId ?? null],
     enabled: !!dayId && open,
-    queryFn: () => fetchCtx({ data: { dayId: dayId! } }),
+    queryFn: () =>
+      fetchCtx({
+        data: {
+          dayId: dayId!,
+          ...(scheduledWorkoutId ? { scheduledWorkoutId } : {}),
+        },
+      }),
   });
 
   const today = startOfToday();
@@ -99,12 +134,14 @@ export function MoveWorkoutSheet({
 
   const [target, setTarget] = useState<Date | null>(null);
   const [confirmCompleted, setConfirmCompleted] = useState(false);
+  const [timeInput, setTimeInput] = useState<string>("");
 
   useEffect(() => {
     if (!open) return;
     setTarget(initialTargetDate ?? null);
     setConfirmCompleted(false);
-  }, [dayId, initialTargetDate, open]);
+    setTimeInput((ctx?.instance?.scheduled_time as string | null) ?? "");
+  }, [dayId, scheduledWorkoutId, initialTargetDate, open, ctx?.instance?.scheduled_time]);
 
   const initialFromCtx = useMemo(() => {
     if (initialTargetDate) return initialTargetDate;
@@ -117,6 +154,10 @@ export function MoveWorkoutSheet({
 
   const conflicts = useMemo(() => {
     if (!ctx || !effectiveTarget) return [];
+    // In instance mode the app already supports "many workouts on one date"
+    // by appending order_index — we do not surface same-day swap conflicts.
+    // Other conflicts (block-range, adjacency) are still detected via the
+    // legacy day-based checker; that's read-only and safe here.
     return detectScheduleConflicts({
       dayId: ctx.day.id,
       newDate: effectiveTarget,
@@ -130,6 +171,8 @@ export function MoveWorkoutSheet({
   }, [ctx, effectiveTarget]);
 
   const sameDayConflict = conflicts.find((c) => c.kind === "sameDayWorkout");
+  // Instance mode: same-day is a valid "add to date" (append), NOT a swap.
+  const showSwapButton = !isInstanceMode;
   const isCompleted = !!ctx?.completion?.completed_at;
   const inProgress = !isCompleted && !!ctx?.completion?.in_progress_at;
 
@@ -177,6 +220,16 @@ export function MoveWorkoutSheet({
 
   const moveMutation = useMutation({
     mutationFn: async (args: { newDate: Date; confirmCompletedMove: boolean }) => {
+      if (isInstanceMode) {
+        const res = await moveInstanceFn({
+          data: {
+            instanceId: scheduledWorkoutId!,
+            newDate: toYMD(args.newDate),
+            confirmCompletedMove: args.confirmCompletedMove,
+          },
+        });
+        return { ...res, __instance: true as const };
+      }
       const res = await move({
         data: {
           dayId: dayId!,
@@ -184,18 +237,18 @@ export function MoveWorkoutSheet({
           confirmCompletedMove: args.confirmCompletedMove,
         },
       });
-      return res;
+      return { ...res, __instance: false as const };
     },
     onSuccess: (res) => {
       if (!res.ok) {
-        if (res.requiresCompletedConfirmation) {
+        if ((res as any).requiresCompletedConfirmation) {
           setConfirmCompleted(true);
-          toast.warning(res.message);
+          toast.warning((res as any).message);
           return;
         }
         return;
       }
-      if (res.noop) {
+      if ((res as any).noop) {
         toast.info("That workout was already on that date.");
         onOpenChange(false);
         return;
@@ -204,13 +257,51 @@ export function MoveWorkoutSheet({
       void queryClient.invalidateQueries({ queryKey: ["client-cardio-resolved"] });
       void queryClient.invalidateQueries({ queryKey: ["cal-client-cardio"] });
       void queryClient.invalidateQueries({ queryKey: ["week-sched-data"] });
+
+      // Instance-scoped undo — restore date/time/orderIndex on the same
+      // instance id. Never touches pl_days.scheduled_date.
+      if (res.__instance && (res as any).previous && scheduledWorkoutId) {
+        const prev = (res as any).previous as {
+          scheduledDate: string;
+          scheduledTime: string | null;
+          orderIndex: number;
+        };
+        const capturedInstanceId = scheduledWorkoutId;
+        toast.success("Workout moved.", {
+          action: {
+            label: "Undo",
+            onClick: async () => {
+              try {
+                await moveInstanceFn({
+                  data: {
+                    instanceId: capturedInstanceId,
+                    newDate: prev.scheduledDate,
+                    time: prev.scheduledTime,
+                    orderIndex: prev.orderIndex,
+                    confirmCompletedMove: true,
+                  },
+                });
+                toast.success("Move undone.");
+                void queryClient.invalidateQueries();
+              } catch (e: any) {
+                toast.error(e?.message ?? "Could not undo.");
+              }
+            },
+          },
+          duration: 6000,
+        });
+        onOpenChange(false);
+        return;
+      }
+
+      const batchId = (res as any).batchId as string | undefined;
       toast.success("Workout moved.", {
-        action: res.batchId
+        action: batchId
           ? {
               label: "Undo",
               onClick: async () => {
                 try {
-                  await undo({ data: { batchId: res.batchId! } });
+                  await undo({ data: { batchId } });
                   toast.success("Move undone.");
                   void queryClient.invalidateQueries();
                   void queryClient.invalidateQueries({ queryKey: ["client-cardio-resolved"] });
@@ -233,6 +324,10 @@ export function MoveWorkoutSheet({
 
   const swapMutation = useMutation({
     mutationFn: async (otherDayId: string) => {
+      if (isInstanceMode) {
+        // Should never fire: swap button is hidden in instance mode.
+        throw new Error("Swap not supported for scheduled instances — move to append instead.");
+      }
       return swap({ data: { dayIdA: dayId!, dayIdB: otherDayId } });
     },
     onSuccess: (res) => {
@@ -263,6 +358,27 @@ export function MoveWorkoutSheet({
       onOpenChange(false);
     },
     onError: (e: any) => toast.error(e?.message ?? "Could not swap workouts."),
+  });
+
+  const changeTimeMutation = useMutation({
+    mutationFn: async (t: string | null) =>
+      updateInstanceTimeFn({ data: { instanceId: scheduledWorkoutId!, time: t } }),
+    onSuccess: () => {
+      toast.success("Time updated.");
+      void queryClient.invalidateQueries();
+    },
+    onError: (e: any) => toast.error(e?.message ?? "Could not update time."),
+  });
+
+  const removeMutation = useMutation({
+    mutationFn: async () =>
+      removeInstanceFn({ data: { instanceId: scheduledWorkoutId! } }),
+    onSuccess: () => {
+      toast.success("Removed from schedule.");
+      void queryClient.invalidateQueries();
+      onOpenChange(false);
+    },
+    onError: (e: any) => toast.error(e?.message ?? "Could not remove."),
   });
 
   const handleConfirm = () => {
@@ -422,6 +538,7 @@ export function MoveWorkoutSheet({
                   <div className="flex-1">
                     <div>{c.message}</div>
                     {c.kind === "sameDayWorkout" && typeof c.payload?.otherDayId === "string" && (
+                      showSwapButton ? (
                       <Button
                         size="sm"
                         variant="outline"
@@ -431,6 +548,11 @@ export function MoveWorkoutSheet({
                       >
                         <Replace className="mr-1 h-3.5 w-3.5" /> Swap workouts
                       </Button>
+                      ) : (
+                        <div className="mt-1 text-[11px] text-muted-foreground">
+                          Another workout is already on that date. Moving here will add this one as an additional workout for that day.
+                        </div>
+                      )
                     )}
                   </div>
                 </div>
@@ -444,6 +566,55 @@ export function MoveWorkoutSheet({
               <ArrowRight className="mx-2 inline h-3.5 w-3.5" />
               <span className="font-semibold">{format(effectiveTarget, "EEE, MMM d, yyyy")}</span>
               {sameDayConflict && <Badge variant="outline" className="ml-2">Conflict</Badge>}
+            </div>
+          )}
+
+          {/* Coach-only instance controls (change time / remove). */}
+          {isInstanceMode && coachControls && ctx?.instance && !isCompleted && (
+            <div className="rounded-md border border-border p-3 space-y-2">
+              <div className="text-xs font-semibold uppercase text-muted-foreground">
+                Instance actions
+              </div>
+              <div className="flex items-end gap-2">
+                <div className="flex-1">
+                  <Label className="text-xs flex items-center gap-1"><Clock className="h-3 w-3" /> Time</Label>
+                  <Input
+                    type="time"
+                    value={timeInput}
+                    onChange={(e) => setTimeInput(e.target.value)}
+                  />
+                </div>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={changeTimeMutation.isPending}
+                  onClick={() => changeTimeMutation.mutate(timeInput || null)}
+                >
+                  {changeTimeMutation.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Save time"}
+                </Button>
+                {timeInput && (
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => { setTimeInput(""); changeTimeMutation.mutate(null); }}
+                  >
+                    Clear
+                  </Button>
+                )}
+              </div>
+              <Button
+                size="sm"
+                variant="destructive"
+                className="w-full"
+                disabled={removeMutation.isPending}
+                onClick={() => {
+                  if (confirm("Remove this scheduled workout? Program structure and past logs are preserved.")) {
+                    removeMutation.mutate();
+                  }
+                }}
+              >
+                <Trash2 className="mr-1 h-3.5 w-3.5" /> Remove future workout
+              </Button>
             </div>
           )}
         </div>

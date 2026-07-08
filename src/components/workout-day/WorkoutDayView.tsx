@@ -2108,6 +2108,7 @@ function WorkoutDay({
         open={moveOpen}
         onOpenChange={setMoveOpen}
         currentScheduledDate={scheduledDate}
+        scheduledWorkoutId={(search as any)?.instance ?? null}
       />
     </>
   );
