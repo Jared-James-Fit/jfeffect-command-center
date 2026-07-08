@@ -22,6 +22,15 @@ const DO_NOT_PERSIST_PREFIXES = [
   "admin-",
   "chat-gif-favorites",
   "chat-sound-favorites",
+  // React Query's sync-storage persister uses JSON.stringify, which
+  // silently turns Set/Map values into `{}`. This query stores a
+  // `Set<string>` of favorite exercise ids; if we persist it, the next
+  // page load rehydrates `favs` as a plain object and `favs.has(...)`
+  // throws "h.has is not a function" during the program-builder render,
+  // which the block editor's error boundary surfaces as
+  // "Couldn't open this block". Keep it out of disk cache; the in-hook
+  // localStorage fallback (writeFavCache) already provides instant load.
+  "pl-exercise-favorites",
 ];
 
 export function shouldPersistQueryKey(queryKey: readonly unknown[]): boolean {
