@@ -1,6 +1,8 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useMemo, useState, useCallback } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { z } from "zod";
+import { zodValidator, fallback } from "@tanstack/zod-adapter";
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/app-shell";
 import { Card } from "@/components/ui/card";
@@ -12,11 +14,31 @@ import { format } from "date-fns";
 import { SearchableSelect, type SearchableOption } from "@/components/analytics/searchable-select";
 import { ANALYTICS_COLORS, exerciseColor, exerciseGroup, fmtNum, fmtDelta, muscleColor, shortMuscleLabel } from "@/lib/analytics-format";
 import { GraphDotDetail, type GraphDotPoint } from "@/components/analytics/graph-dot-detail";
-import { AnalyticsFilterBar, defaultAnalyticsFilter, type AnalyticsFilter } from "@/components/analytics/analytics-filter-bar";
+import {
+  AnalyticsFilterBar,
+  defaultAnalyticsFilter,
+  exactBlockFilter,
+  type AnalyticsFilter,
+} from "@/components/analytics/analytics-filter-bar";
+import { BlockPickerSheet } from "@/components/analytics/block-picker-sheet";
+import {
+  type AnalyticsBlock,
+  hasOverlappingBlocks,
+  normalizeAnalyticsBlock,
+  resolveCurrentBlock,
+} from "@/lib/analytics/blocks";
 import { PowerliftingExposureSection } from "@/components/analytics/powerlifting-exposure-section";
 import { useEffect } from "react";
 
-export const Route = createFileRoute("/_authenticated/admin/client-programs/$clientId/analytics")({ component: AnalyticsPage });
+const analyticsSearchSchema = z.object({
+  filter: fallback(z.string(), "").default(""),
+  blockId: fallback(z.string(), "").default(""),
+});
+
+export const Route = createFileRoute("/_authenticated/admin/client-programs/$clientId/analytics")({
+  validateSearch: zodValidator(analyticsSearchSchema),
+  component: AnalyticsPage,
+});
 
 function AnalyticsPage() {
   const { clientId } = Route.useParams();
