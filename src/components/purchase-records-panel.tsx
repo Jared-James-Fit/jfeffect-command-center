@@ -26,38 +26,12 @@ import { updatePurchaseTermDates, getPurchaseStripeFailures } from "@/lib/purcha
 import { toast } from "sonner";
 import { SendPaymentRequestDialog } from "@/components/send-payment-request-dialog";
 import { differenceInDays, format, parseISO } from "date-fns";
+import { resolvePaymentDisplay, formatMoney } from "@/lib/payment-display";
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
-function statusTone(s?: string | null) {
-  switch (s) {
-    case "Paid":
-    case "Active Subscription":
-      return "border-green-500/40 text-green-500 bg-green-500/10";
-    case "Overdue":
-    case "Failed":
-    case "Manual Payment Needed":
-      return "border-destructive/40 text-destructive bg-destructive/5";
-    case "Refunded":
-    case "Cancelled":
-    case "Expired":
-      return "border-border text-muted-foreground";
-    default:
-      return "border-warning/40 text-warning bg-warning/5";
-  }
-}
-
 function isPending(s?: string | null) {
   return s !== "Paid" && s !== "Active Subscription" && s !== "Cancelled" && s !== "Refunded";
-}
-
-function requestLabel(s?: string | null) {
-  if (s === "Paid") return "Paid";
-  if (s === "Active Subscription") return "Active subscription";
-  if (s === "Cancelled") return "Cancelled request";
-  if (s === "Refunded") return "Refunded";
-  if (s === "Overdue" || s === "Failed" || s === "Manual Payment Needed") return `Payment ${s.toLowerCase()}`;
-  return "Pending payment setup request";
 }
 
 function expiryStatus(endDate?: string | null): { label: string; tone: string; daysLeft: number } | null {
