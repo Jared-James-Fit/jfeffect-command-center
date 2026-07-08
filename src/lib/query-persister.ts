@@ -4,7 +4,9 @@ import type { Persister } from "@tanstack/react-query-persist-client";
 // Bumping the buster invalidates all previously persisted caches across
 // every browser/PWA. Bump when the persisted query shapes change in a
 // breaking way.
-export const QUERY_PERSIST_BUSTER = "v2";
+// Bumped to v3 to evict pre-existing broken caches where a Set-valued
+// query (pl-exercise-favorites) had been JSON.stringify'd into `{}`.
+export const QUERY_PERSIST_BUSTER = "v3";
 export const QUERY_PERSIST_KEY = "jfeffect-rq-cache";
 export const QUERY_PERSIST_MAX_AGE = 24 * 60 * 60 * 1000; // 24h
 
