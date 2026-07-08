@@ -284,6 +284,11 @@ export function ClientMoreMenu({
 
         <DropdownMenuSeparator />
         <DropdownMenuLabel className="text-xs">Training</DropdownMenuLabel>
+        {r.block_id && (
+          <DropdownMenuItem onSelect={(e) => { e.preventDefault(); setScheduleOpen(true); }}>
+            <Plus className="mr-2 h-4 w-4" /> Schedule Workout
+          </DropdownMenuItem>
+        )}
         {r.block_id ? (
           <DropdownMenuItem asChild>
             <Link to="/admin/client-programs/$clientId" params={{ clientId: r.id }} className="flex items-center gap-2">
