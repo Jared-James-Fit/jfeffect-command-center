@@ -5,6 +5,7 @@ import { getClientWorkouts } from "@/lib/pl-programs";
 import { resolveWeekDayDates } from "@/lib/workout-today";
 import { listGoogleEventsRange, getGoogleConnectionStatus } from "@/lib/google-cal.functions";
 import { resolveClientWeekDays, type ResolvedWorkoutDate } from "@/lib/resolved-client-days";
+import { toLocalISO } from "@/lib/today";
 
 /**
  * Phase 1 calendar item — a single chip rendered on the calendar grid.
@@ -321,7 +322,7 @@ export function useClientCalendarSources(clientId: string | null | undefined) {
         for (const it of weekItems) {
           const resolved = dateMap.get(it.day.id);
           if (!resolved) continue;
-          const date = toLocalDate(resolved.toISOString());
+          const date = toLocalISO(resolved);
           const completed = !!it.completion?.completed_at;
           out.push({
             id: `workout:${it.day.id}`,
@@ -379,7 +380,7 @@ export function useClientCalendarSources(clientId: string | null | undefined) {
             const d = dateMap.get(it.day.id);
             if (d) {
               workoutDatesInRange.push({
-                date: toLocalDate(d.toISOString()),
+                date: toLocalISO(d),
                 workoutId: it.day.id,
                 workout: it.day,
                 isWorkoutOverride: !!it.day.schedule_locked,
