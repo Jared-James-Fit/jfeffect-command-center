@@ -126,14 +126,30 @@ function PortalAnalytics() {
   const [prFilter, setPrFilter] = useState<string>("all");
   const [selectedDot, setSelectedDot] = useState<GraphDotPoint | null>(null);
 
-  const history = useMemo(() => buildExerciseHistory(results as any), [results]);
+  // Global filter applied to all in-range analytics (kept separate from the
+  // exposure section which does its own range-aware queries).
+  const filteredResults = useMemo(() => {
+    const startMs = filter.start.getTime();
+    const endMs = filter.end.getTime();
+    return (results as any[]).filter((r: any) => {
+      if (!r.date) return false;
+      const t = new Date(r.date).getTime();
+      return t >= startMs && t <= endMs;
+    });
+  }, [results, filter.start, filter.end]);
+
+  const BIG_DAYS = 365000; // effectively lifetime — filtering already happened
+  const history = useMemo(
+    () => buildExerciseHistory(filteredResults as any),
+    [filteredResults],
+  );
   const volume = useMemo(
-    () => weeklyMuscleVolume(results as any[], volumeDays),
-    [results, volumeDays],
+    () => weeklyMuscleVolume(filteredResults as any[], BIG_DAYS),
+    [filteredResults],
   );
   const prs = useMemo(
-    () => recentPRs(results as any[], rangeDays),
-    [results, rangeDays],
+    () => recentPRs(filteredResults as any[], BIG_DAYS),
+    [filteredResults],
   );
 
   const activeEx = selectedEx || history[0]?.name || "";
@@ -264,43 +280,29 @@ function PortalAnalytics() {
     [volume],
   );
 
-  const rangeOptions: SearchableOption[] = [
-    { value: "7", label: "Last 7 days" },
-    { value: "30", label: "Last 30 days" },
-    { value: "90", label: "Last 90 days" },
-    { value: "365", label: "Last year" },
-  ];
-  const volumeRangeOptions: SearchableOption[] = [
-    { value: "7", label: "Last 7 days" },
-    { value: "14", label: "Last 14 days" },
-    { value: "30", label: "Last 30 days" },
-  ];
+  // Range chips removed — the global AnalyticsFilterBar controls date range for
+  // all in-range analytics (PRs, volume, 1RM chart).
 
   // Summary stats (display only; computed from already-loaded data).
   const summary = useMemo(() => {
-    const now = Date.now();
-    const prs30 = (results as any[]).length
-      ? recentPRs(results as any[], 30).length
-      : 0;
-    const last7Sets = (results as any[]).filter(
-      (r: any) => r.date && now - new Date(r.date).getTime() <= 7 * 86400000,
-    ).length;
+    const prsInRange = prs.length;
+    const setsInRange = filteredResults.length;
     const workouts = new Set(
-      (results as any[])
+      filteredResults
         .filter((r: any) => r.date)
         .map((r: any) => format(new Date(r.date), "yyyy-MM-dd")),
     ).size;
     // Top improved lift in selected range.
     const top = [...prs].sort((a: any, b: any) => b.delta - a.delta)[0];
     return {
-      prs30,
-      last7Sets,
+      prsInRange,
+      setsInRange,
       workouts,
       topLift: top
         ? { name: top.exercise_name, delta: conv(top.delta) }
         : null,
     };
-  }, [results, prs, conv]);
+  }, [filteredResults, prs, conv]);
 
   return (
     <>
@@ -348,6 +350,11 @@ function PortalAnalytics() {
           <AnalyticsEmptyPreview />
         ) : (
           <>
+            {filteredResults.length === 0 && (
+              <Card className="border-dashed border-border/70 bg-card/60 p-6 text-center text-sm text-muted-foreground">
+                No training data logged in this period ({filter.label}).
+              </Card>
+            )}
             {/* SUMMARY STATS */}
             <section
               aria-label="Summary"
@@ -355,14 +362,14 @@ function PortalAnalytics() {
             >
               <StatCard
                 icon={<Trophy className="h-4 w-4" />}
-                label="PRs · 30d"
-                value={String(summary.prs30)}
+                label="PRs in range"
+                value={String(summary.prsInRange)}
                 color={ANALYTICS_COLORS.green}
               />
               <StatCard
                 icon={<Flame className="h-4 w-4" />}
-                label="Sets · 7d"
-                value={String(summary.last7Sets)}
+                label="Sets in range"
+                value={String(summary.setsInRange)}
                 color={ANALYTICS_COLORS.red}
               />
               <StatCard
@@ -392,6 +399,9 @@ function PortalAnalytics() {
             {/* RECENT PRS */}
             {client?.id && (
               <section aria-label="Planned vs Actual">
+                <div className="mb-1 text-[11px] font-semibold text-muted-foreground">
+                  Note: showing the 5 most recent completed workouts (not filtered by {filter.label}).
+                </div>
                 <PlannedVsActualCard
                   clientId={client.id}
                   formula={analyticsSettings?.e1rm_formula}
@@ -406,15 +416,7 @@ function PortalAnalytics() {
                   <Trophy className="h-5 w-5 shrink-0 text-primary" />
                   <span className="truncate">Recent PRs</span>
                 </h2>
-                <div className="flex shrink-0 items-center gap-2">
-                  <SearchableSelect
-                    options={rangeOptions}
-                    value={String(rangeDays)}
-                    onChange={(v) => setRangeDays(Number(v))}
-                    triggerClassName="h-9 w-36"
-                    ariaLabel="PR range"
-                  />
-                </div>
+                <span className="shrink-0 text-xs font-semibold text-muted-foreground">{filter.label}</span>
               </div>
               <div className="mb-3 grid gap-2 sm:grid-cols-[1fr_auto] sm:items-center">
                 <SearchableSelect
@@ -676,17 +678,11 @@ function PortalAnalytics() {
                   <Dumbbell className="h-5 w-5 shrink-0 text-primary" />
                   <span className="truncate">Volume by Muscle Group</span>
                 </h2>
-                <SearchableSelect
-                  options={volumeRangeOptions}
-                  value={String(volumeDays)}
-                  onChange={(v) => setVolumeDays(Number(v))}
-                  triggerClassName="h-9 w-36 shrink-0"
-                  ariaLabel="Volume range"
-                />
+                <span className="shrink-0 text-xs font-semibold text-muted-foreground">{filter.label}</span>
               </div>
               {volumeData.length === 0 ? (
                 <Card className="p-6 text-sm text-muted-foreground">
-                  No working sets logged in the last {volumeDays} days.
+                  No working sets logged in this period.
                 </Card>
               ) : (
                 <Card className="border-border/80 bg-card p-4">
@@ -734,7 +730,7 @@ function PortalAnalytics() {
                                   {d.muscle}
                                 </div>
                                 <div className="text-xs text-muted-foreground">
-                                  {d.sets} {d.sets === 1 ? "set" : "sets"} · last {volumeDays} days
+                                  {d.sets} {d.sets === 1 ? "set" : "sets"}
                                 </div>
                               </div>
                             );

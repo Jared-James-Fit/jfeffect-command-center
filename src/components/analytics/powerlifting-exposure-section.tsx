@@ -481,7 +481,7 @@ function PlannedVsCompletedTable({
 
       const { data: rows } = await supabase
         .from("pl_exercise_rows")
-        .select("id, purpose_label, movement_family, day_id")
+        .select("id, purpose_label, movement_family, day_id, sets")
         .in("day_id", inRangeDayIds);
       const relevantRows = (rows ?? []).filter(
         (r) =>
@@ -492,38 +492,37 @@ function PlannedVsCompletedTable({
       );
       const relevantRowIds = relevantRows.map((r) => r.id);
 
-      const [{ data: prepSetRows }, { data: resultRows }] = await Promise.all([
-        relevantRowIds.length
-          ? supabase.from("pl_row_results").select("row_id, actual_reps").in("row_id", relevantRowIds)
-          : Promise.resolve({ data: [] as any[] }) as any,
-        Promise.resolve({ data: [] as any[] }) as any,
-      ]);
-
-      // Planned sets: use pl_row_results row count where actual_reps IS NULL (planned only)
-      // Simpler and safe: planned = count of prescribed sets on the row, completed = count with actual_reps.
-      // We don't have direct planned-set count without pl_block_set_rows, so fall back to counting
-      // pl_row_results per row.
+      // Planned: sum row.sets (fallback 1) per (family, role) across ALL qualifying
+      // rows, regardless of whether anything was logged.
+      // Completed: count pl_row_results per (family, role) where actual_reps IS NOT NULL.
       const planned: Record<string, Record<string, number>> = {};
       const completed: Record<string, Record<string, number>> = {};
       const bucket = (obj: any, fam: string, role: string) => {
         obj[fam] = obj[fam] ?? {};
         obj[fam][role] = obj[fam][role] ?? 0;
       };
-      const rowMeta = new Map(relevantRows.map((r) => [r.id, r]));
-      for (const setRow of prepSetRows ?? []) {
-        const meta = rowMeta.get(setRow.row_id);
-        if (!meta) continue;
-        const fam = meta.movement_family!.toLowerCase();
-        const role = meta.purpose_label!;
+      for (const r of relevantRows) {
+        const fam = r.movement_family!.toLowerCase();
+        const role = r.purpose_label!;
         bucket(planned, fam, role);
-        planned[fam][role] += 1;
-        if (setRow.actual_reps != null) {
+        planned[fam][role] += Number(r.sets ?? 1);
+      }
+      const rowMeta = new Map(relevantRows.map((r) => [r.id, r]));
+      if (relevantRowIds.length) {
+        const { data: resultRows } = await supabase
+          .from("pl_row_results")
+          .select("row_id, actual_reps")
+          .in("row_id", relevantRowIds)
+          .not("actual_reps", "is", null);
+        for (const rr of resultRows ?? []) {
+          const meta = rowMeta.get(rr.row_id);
+          if (!meta) continue;
+          const fam = meta.movement_family!.toLowerCase();
+          const role = meta.purpose_label!;
           bucket(completed, fam, role);
           completed[fam][role] += 1;
         }
       }
-      // suppress unused var
-      void resultRows;
       return { planned, completed };
     },
   });
@@ -536,13 +535,13 @@ function PlannedVsCompletedTable({
   const families: LiftFamily[] = ["squat", "bench", "deadlift"];
   const roles: Role[] = ["Primary", "Secondary", "Tertiary", "Quaternary"];
   const anyData = families.some((f) => planned[f] && Object.keys(planned[f]).length > 0);
-  if (!anyData) return <div className="text-sm text-muted-foreground">No planned sets in this range.</div>;
+  if (!anyData) return <div className="text-sm text-muted-foreground">No prescribed sets in this range.</div>;
 
   return (
     <div className="space-y-4">
       {families.map((fam) => {
         const p = planned[fam];
-        if (!p) return null;
+        if (!p || Object.keys(p).length === 0) return null;
         return (
           <div key={fam}>
             <div className="mb-1 flex items-center gap-2">
@@ -574,6 +573,7 @@ function PlannedVsCompletedTable({
                         <td className="py-1 pr-4">{pl}</td>
                         <td className={`py-1 ${isShort ? "text-amber-500" : "text-foreground"}`}>
                           <span className="font-bold">{co}</span>
+                          <span className="text-muted-foreground"> / {pl}</span>
                           {isShort && (
                             <Badge variant="outline" className="ml-2 border-amber-500/40 text-amber-500">
                               short

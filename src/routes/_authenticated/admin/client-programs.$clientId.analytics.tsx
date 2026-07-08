@@ -45,9 +45,19 @@ function AnalyticsPage() {
   }, [analyticsFilter, clientBlocks]);
   const filter = analyticsFilter ?? defaultAnalyticsFilter(clientBlocks);
 
-  const history = useMemo(() => buildExerciseHistory(results as any), [results]);
-  const volume = useMemo(() => weeklyMuscleVolume(results as any[], 7), [results]);
-  const prs = useMemo(() => recentPRs(results as any[], 30), [results]);
+  const filteredResults = useMemo(() => {
+    const startMs = filter.start.getTime();
+    const endMs = filter.end.getTime();
+    return (results as any[]).filter((r: any) => {
+      if (!r.date) return false;
+      const t = new Date(r.date).getTime();
+      return t >= startMs && t <= endMs;
+    });
+  }, [results, filter.start, filter.end]);
+  const BIG_DAYS = 365000;
+  const history = useMemo(() => buildExerciseHistory(filteredResults as any), [filteredResults]);
+  const volume = useMemo(() => weeklyMuscleVolume(filteredResults as any[], BIG_DAYS), [filteredResults]);
+  const prs = useMemo(() => recentPRs(filteredResults as any[], BIG_DAYS), [filteredResults]);
   const [selectedEx, setSelectedEx] = useState<string>("");
   const [selectedDot, setSelectedDot] = useState<GraphDotPoint | null>(null);
   const activeEx = selectedEx || history[0]?.name || "";
@@ -138,11 +148,17 @@ function AnalyticsPage() {
                 </p>
               </Card>
             )}
+            {(results as any[]).length > 0 && filteredResults.length === 0 && (
+              <Card className="border-dashed border-border/70 bg-card/60 p-6 text-center text-sm text-muted-foreground">
+                No training data logged in this period ({filter.label}).
+              </Card>
+            )}
             <section>
-              <h2 className="mb-3 flex items-center gap-2 text-sm font-bold uppercase tracking-widest text-muted-foreground">
-                <Trophy className="h-4 w-4" /> Recent PRs (last 30 days)
+              <h2 className="mb-1 flex items-center gap-2 text-sm font-bold uppercase tracking-widest text-muted-foreground">
+                <Trophy className="h-4 w-4" /> Recent PRs
               </h2>
-              {prs.length === 0 ? <Card className="p-6 text-sm text-muted-foreground">No new PRs in the last 30 days.</Card> : (
+              <div className="mb-3 text-xs font-semibold text-muted-foreground">{filter.label}</div>
+              {prs.length === 0 ? <Card className="p-6 text-sm text-muted-foreground">No new PRs in this period.</Card> : (
                 <div className="grid gap-2 md:grid-cols-2 lg:grid-cols-3">
                   {prs.map((p: any) => {
                     const color = exerciseColor(p.exercise_name, p.muscle_group);
@@ -166,9 +182,12 @@ function AnalyticsPage() {
 
             <section>
               <div className="mb-3 flex flex-wrap items-center gap-3">
-                <h2 className="flex items-center gap-2 text-sm font-bold uppercase tracking-widest text-muted-foreground">
-                  <TrendingUp className="h-4 w-4" /> Estimated 1RM Progress
-                </h2>
+                <div>
+                  <h2 className="flex items-center gap-2 text-sm font-bold uppercase tracking-widest text-muted-foreground">
+                    <TrendingUp className="h-4 w-4" /> Estimated 1RM Progress
+                  </h2>
+                  <div className="mt-0.5 text-xs font-semibold text-muted-foreground">{filter.label}</div>
+                </div>
                 <div className="w-full sm:w-72">
                   <SearchableSelect
                     options={exerciseOptions}
@@ -220,10 +239,11 @@ function AnalyticsPage() {
             </section>
 
             <section>
-              <h2 className="mb-3 flex items-center gap-2 text-sm font-bold uppercase tracking-widest text-muted-foreground">
-                <Dumbbell className="h-4 w-4" /> Weekly Volume by Muscle Group (last 7 days)
+              <h2 className="mb-1 flex items-center gap-2 text-sm font-bold uppercase tracking-widest text-muted-foreground">
+                <Dumbbell className="h-4 w-4" /> Volume by Muscle Group
               </h2>
-              {volumeData.length === 0 ? <Card className="p-6 text-sm text-muted-foreground">No sets logged in the last 7 days.</Card> : (
+              <div className="mb-3 text-xs font-semibold text-muted-foreground">{filter.label}</div>
+              {volumeData.length === 0 ? <Card className="p-6 text-sm text-muted-foreground">No sets logged in this period.</Card> : (
                 <Card className="p-4">
                   <div className="h-64">
                     <ResponsiveContainer width="100%" height="100%">
