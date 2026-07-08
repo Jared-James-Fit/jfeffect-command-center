@@ -620,3 +620,69 @@ export function CardioApplyDefaultsDialog({
     </Dialog>
   );
 }
+
+function WeeklyPreview({
+  trainingDays,
+  highDayWeekday,
+  fullRestEnabled,
+  fullRestWeekday,
+  rows,
+}: {
+  trainingDays: string[];
+  highDayWeekday: WeekDay;
+  fullRestEnabled: boolean;
+  fullRestWeekday: WeekDay;
+  rows: RowDraft[];
+}) {
+  const trainingSet = new Set(trainingDays);
+  const trainingRow = rows.find((r) => r.day_type === "Training Day" && r.enabled);
+  const highRow = rows.find((r) => r.day_type === "High Day" && r.enabled);
+  const restRow = rows.find(
+    (r) => (r.day_type === "Rest Day" || r.day_type === "Non-Training Day") && r.enabled,
+  );
+  return (
+    <div className="rounded-md border border-border bg-secondary/20 p-2">
+      <div className="mb-1 text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+        Weekly preview
+      </div>
+      <ul className="grid grid-cols-7 gap-1">
+        {(WEEK_DAYS as readonly WeekDay[]).map((d) => {
+          const isTraining = trainingSet.has(d);
+          const isHigh = d === highDayWeekday;
+          const isFullRest = fullRestEnabled && d === fullRestWeekday && !isTraining && !isHigh;
+          let tone = "border-border bg-background text-muted-foreground";
+          let label = "";
+          let sub = "";
+          if (isHigh) {
+            tone = "border-amber-500/50 bg-amber-500/10 text-amber-700 dark:text-amber-500";
+            label = "High";
+            sub = highRow?.cardio_type ?? "";
+          } else if (isTraining) {
+            tone = "border-primary/40 bg-primary/10 text-primary";
+            label = "Training";
+            sub = trainingRow?.cardio_type ?? "";
+          } else if (isFullRest) {
+            tone = "border-muted-foreground/40 bg-muted/40 text-muted-foreground";
+            label = "Rest";
+            sub = "Cardio Rest";
+          } else {
+            tone = "border-border bg-background text-foreground";
+            label = "Non-Training";
+            sub = restRow?.cardio_type ?? "";
+          }
+          return (
+            <li
+              key={d}
+              className={`rounded border p-1 text-center transition-colors ${tone}`}
+              title={`${d} · ${label}${sub ? " · " + sub : ""}`}
+            >
+              <div className="text-[9px] font-black uppercase tracking-widest">{SHORT_DAY[d]}</div>
+              <div className="text-[9px] font-bold leading-tight">{label}</div>
+              {sub && <div className="truncate text-[8px] opacity-80">{sub}</div>}
+            </li>
+          );
+        })}
+      </ul>
+    </div>
+  );
+}
