@@ -1,0 +1,6 @@
+{
+  "$schema": "./findings.schema.md",
+  "generated_at": "2026-07-08T03:22:00Z",
+  "source": "Lovable security scanner (supabase + supabase_lov)",
+  "critical_findings": []
+}
