@@ -197,7 +197,37 @@ function AnalyticsPage() {
           <ArrowLeft className="mr-1 h-4 w-4" /> Back to programs
         </Link>
 
-        <AnalyticsFilterBar blocks={clientBlocks} value={filter} onChange={setAnalyticsFilter} />
+        <AnalyticsFilterBar
+          blocks={clientBlocks}
+          value={filter}
+          onChange={handleFilterChange}
+          selectedBlockId={selectedBlockId}
+          resolvedCurrentBlockId={resolvedCurrentBlockId}
+          onOpenPicker={() => setPickerOpen(true)}
+        />
+
+        <BlockPickerSheet
+          open={pickerOpen}
+          onOpenChange={setPickerOpen}
+          blocks={clientBlocks}
+          selectedBlockId={selectedBlockId}
+          resolvedCurrentBlockId={resolvedCurrentBlockId}
+          isLoading={blocksLoading}
+          isError={blocksError}
+          onRetry={() => { void refetchBlocks(); }}
+          onSelect={(b) => handleFilterChange(exactBlockFilter(b, clientBlocks))}
+        />
+
+        {overlapping && (
+          <div className="rounded-md border border-border bg-muted/40 p-3 text-xs text-muted-foreground">
+            This client has overlapping blocks. Exact block filtering prevents their analytics from being combined.
+          </div>
+        )}
+        {filter.preset === "exact_block" && !(filter as any).hasBlockDates && (
+          <div className="rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-xs text-amber-700 dark:text-amber-300">
+            This block has not been scheduled yet.
+          </div>
+        )}
 
         {isLoading ? <p className="text-sm text-muted-foreground">Loading…</p> : (
           <>
