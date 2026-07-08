@@ -670,17 +670,11 @@ function PortalAnalytics() {
                   <Dumbbell className="h-5 w-5 shrink-0 text-primary" />
                   <span className="truncate">Volume by Muscle Group</span>
                 </h2>
-                <SearchableSelect
-                  options={volumeRangeOptions}
-                  value={String(volumeDays)}
-                  onChange={(v) => setVolumeDays(Number(v))}
-                  triggerClassName="h-9 w-36 shrink-0"
-                  ariaLabel="Volume range"
-                />
+                <span className="shrink-0 text-xs font-semibold text-muted-foreground">{filter.label}</span>
               </div>
               {volumeData.length === 0 ? (
                 <Card className="p-6 text-sm text-muted-foreground">
-                  No working sets logged in the last {volumeDays} days.
+                  No working sets logged in this period.
                 </Card>
               ) : (
                 <Card className="border-border/80 bg-card p-4">
@@ -728,7 +722,7 @@ function PortalAnalytics() {
                                   {d.muscle}
                                 </div>
                                 <div className="text-xs text-muted-foreground">
-                                  {d.sets} {d.sets === 1 ? "set" : "sets"} · last {volumeDays} days
+                                  {d.sets} {d.sets === 1 ? "set" : "sets"}
                                 </div>
                               </div>
                             );
