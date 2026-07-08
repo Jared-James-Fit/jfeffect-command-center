@@ -146,15 +146,35 @@ export function resolveWorkoutDatesFromItems(
   items: any[],
   committedTrainingDays?: string[] | null,
 ): ResolvedWorkoutDate[] {
-  const byWeek = new Map<string, any[]>();
+  // Phase 2a: when the item carries an instance-level date, use it verbatim.
+  // pl_scheduled_workouts is the canonical schedule source; falling back to
+  // resolveWeekDayDates for these items would recompute a derived date and
+  // undo manual moves / stacking.
+  const derivedInputs: any[] = [];
+  const out: ResolvedWorkoutDate[] = [];
   for (const item of items ?? []) {
     if (!item?.day?.id || !item?.week?.id) continue;
+    if (item.scheduledDate) {
+      out.push({
+        date: item.scheduledDate,
+        workoutId: item.day.id,
+        workout: item.day,
+        isWorkoutOverride:
+          !!item.day.schedule_locked ||
+          (item.scheduleSource != null && item.scheduleSource !== "program"),
+      });
+      continue;
+    }
+    derivedInputs.push(item);
+  }
+
+  const byWeek = new Map<string, any[]>();
+  for (const item of derivedInputs) {
     const list = byWeek.get(item.week.id) ?? [];
     list.push(item);
     byWeek.set(item.week.id, list);
   }
 
-  const out: ResolvedWorkoutDate[] = [];
   for (const [, weekItems] of byWeek) {
     const week = weekItems[0]?.week;
     const block = weekItems[0]?.block;
