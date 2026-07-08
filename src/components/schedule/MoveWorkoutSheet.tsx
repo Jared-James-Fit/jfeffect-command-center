@@ -634,12 +634,6 @@ export function MoveWorkoutSheet({
             </Button>
           )}
         </DrawerFooter>
-            ) : (
-              <CalendarIcon className="mr-1 h-4 w-4" />
-            )}
-            Move workout
-          </Button>
-        </DrawerFooter>
       </DrawerContent>
     </Drawer>
   );
