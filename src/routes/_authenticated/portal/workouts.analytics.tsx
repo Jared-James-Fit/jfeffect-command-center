@@ -132,7 +132,7 @@ function PortalAnalytics() {
   const handleFilterChange = (next: AnalyticsFilter) => {
     setAnalyticsFilter(next);
     navigate({
-      search: (prev) => ({
+      search: (prev: any) => ({
         ...prev,
         filter: next.preset === "exact_block" ? "exact_block" : "",
         blockId: next.preset === "exact_block" ? (next as any).blockId : "",
