@@ -126,7 +126,7 @@ export function ClientBirthdayCard() {
         else setOpen(true);
       }}
     >
-      <DialogContent className="max-w-md border-0 bg-transparent p-0 shadow-none">
+      <DialogContent className="z-[70] max-w-md border-0 bg-transparent p-0 shadow-none">
         <BirthdayCardView
           card={resolved}
           firstName={firstName}
