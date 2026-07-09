@@ -59,6 +59,7 @@ function MemberLayout() {
       <Outlet />
       <BroadcastPopupGate />
       <MemberSetupGate />
+      {/* Birthday card mounts LAST so it stacks above other member gates. */}
       <ClientBirthdayCard />
     </AppShell>
   );
