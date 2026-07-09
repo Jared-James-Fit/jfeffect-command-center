@@ -703,6 +703,9 @@ function AdminDashboard() {
           <div className="min-w-0 space-y-4">
             <UpcomingAppointmentsCard mode="admin" />
 
+            {/* Upcoming birthdays — surfaced directly on Home */}
+            <UpcomingBirthdaysWidget />
+
             {/* MORE — collapsed by default */}
             <MoreSection
               clients={clients}
@@ -782,12 +785,6 @@ function MoreSection({ clients, shortcuts }: { clients: any[]; shortcuts: { name
                 </li>
               ))}
             </ul>
-          </div>
-
-          {/* Birthdays (compact widget, max 2 handled by widget) */}
-          <div>
-            <SectionHeader title="Upcoming birthdays" icon={Cake} />
-            <UpcomingBirthdaysWidget />
           </div>
 
           {/* Events */}
