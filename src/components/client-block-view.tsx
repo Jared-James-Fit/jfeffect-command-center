@@ -198,6 +198,15 @@ export function ClientBlockView({
     return m;
   }, [tree?.rows]);
 
+  // Canonical per-day scheduled date — same pipeline used by the Overview
+  // tab, SmartTodayCard, and workout-logger header. Honors explicit
+  // day.scheduled_date, then week.training_days, then a linear fallback.
+  // Declared BEFORE weeklyPriorities (which calls dayDate inside a
+  // useMemo that runs during render) so the TDZ doesn't throw once
+  // `days` becomes non-empty.
+  const dayDate = (d: any): Date | null =>
+    resolvedWeek ? dayScheduledDate({ day: d, week: resolvedWeek, block, completion: null }) : null;
+
   // Weekly priority summary — collects non-Assistance labelled rows across
   // every day in the current week and groups by (movement family, label).
   const weeklyPriorities = useMemo(() => {
@@ -230,12 +239,6 @@ export function ClientBlockView({
     items.sort((a, b) => a.rank - b.rank || a.family.localeCompare(b.family));
     return items;
   }, [days, rowsByDay, block, resolvedWeek]);
-
-  // Canonical per-day scheduled date — same pipeline used by the Overview
-  // tab, SmartTodayCard, and workout-logger header. Honors explicit
-  // day.scheduled_date, then week.training_days, then a linear fallback.
-  const dayDate = (d: any): Date | null =>
-    resolvedWeek ? dayScheduledDate({ day: d, week: resolvedWeek, block, completion: null }) : null;
 
   // ── Selected day (URL-persisted via parent). Falls back to today, then the
   // first not-yet-completed day, then index 0. Invalid IDs fall back safely. ──
