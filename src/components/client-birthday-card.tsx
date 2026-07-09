@@ -102,6 +102,7 @@ export function ClientBirthdayCard() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["my-birthday-view", client?.id, year] });
+      qc.invalidateQueries({ queryKey: ["birthday-card-views", year - 1, year] });
     },
   });
   useEffect(() => {
@@ -130,6 +131,7 @@ export function ClientBirthdayCard() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["my-birthday-view", client?.id, year] });
+      qc.invalidateQueries({ queryKey: ["birthday-card-views", year - 1, year] });
     },
   });
 

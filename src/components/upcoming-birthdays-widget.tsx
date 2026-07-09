@@ -11,6 +11,7 @@ import {
   Check,
   MessageSquare,
   Eye,
+  EyeOff,
   Pencil,
   User as UserIcon,
   Send,
@@ -92,8 +93,31 @@ export function UpcomingBirthdaysWidget() {
     },
   });
 
+  const { data: views = [] } = useQuery({
+    queryKey: ["birthday-card-views", currentYear - 1, currentYear],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("client_birthday_card_views" as any)
+        .select("client_id, birthday_year, seen_at, dismissed_at")
+        .in("birthday_year", [currentYear - 1, currentYear]);
+      if (error) throw error;
+      return (data ?? []) as unknown as Array<{
+        client_id: string;
+        birthday_year: number;
+        seen_at: string | null;
+        dismissed_at: string | null;
+      }>;
+    },
+  });
+
   const wishMap = new Map<string, number>();
   for (const w of wishes) wishMap.set(`${w.client_id}:${w.birthday_year}`, 1);
+
+  const viewMap = new Map<
+    string,
+    { seen_at: string | null; dismissed_at: string | null }
+  >();
+  for (const v of views) viewMap.set(`${v.client_id}:${v.birthday_year}`, v);
 
   const markWished = useMutation({
     mutationFn: async ({ clientId, year }: { clientId: string; year: number }) => {
@@ -221,6 +245,10 @@ export function UpcomingBirthdaysWidget() {
             const firstName = r.first_name || r.preferred_name || name.split(" ")[0];
             const overdueDays = r.status === "overdue" ? Math.abs(r.delta) : 0;
             const isToday = r.status === "today";
+            const view = viewMap.get(`${r.id}:${r.year}`);
+            const hasSeen = !!view?.seen_at;
+            const hasDismissed = !!view?.dismissed_at;
+            const showReadStatus = isToday || r.status === "overdue";
             return (
               <li
                 key={r.id}
@@ -280,6 +308,21 @@ export function UpcomingBirthdaysWidget() {
                   </Link>
 
                   <div className="flex flex-wrap items-center gap-1.5 shrink-0">
+                    {showReadStatus && (
+                      <Badge
+                        variant={hasSeen ? "default" : "outline"}
+                        className={cn(
+                          "h-7 gap-1 px-2 text-[11px] font-medium",
+                          hasSeen
+                            ? "border-emerald-200 bg-emerald-500/15 text-emerald-600 hover:bg-emerald-500/15"
+                            : "text-muted-foreground",
+                        )}
+                        title={hasSeen ? (hasDismissed ? "Client saw and dismissed the card" : "Client saw the card") : "Client has not opened the birthday card yet"}
+                      >
+                        {hasSeen ? <Eye className="h-3 w-3" /> : <EyeOff className="h-3 w-3" />}
+                        {hasSeen ? "Seen" : "Not seen"}
+                      </Badge>
+                    )}
                     <Button
                       size="sm"
                       variant="outline"
