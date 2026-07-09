@@ -87,6 +87,31 @@ export function ClientBirthdayCard() {
     setOpen(true);
   }, [birthdayToday, client?.id, resolved.enabled, view?.dismissed_at, dismissed]);
 
+  // Record that the client has seen the card as soon as the dialog opens —
+  // this is the "read confirmation" surfaced to the admin. Fires once per year.
+  const markSeen = useMutation({
+    mutationFn: async () => {
+      if (!client?.id) return;
+      const { error } = await supabase
+        .from("client_birthday_card_views" as any)
+        .upsert(
+          { client_id: client.id, birthday_year: year, seen_at: new Date().toISOString() },
+          { onConflict: "client_id,birthday_year", ignoreDuplicates: false },
+        );
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["my-birthday-view", client?.id, year] });
+    },
+  });
+  useEffect(() => {
+    if (!open) return;
+    if (view?.seen_at) return;
+    if (markSeen.isPending) return;
+    markSeen.mutate();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, view?.seen_at]);
+
   const markDismissed = useMutation({
     mutationFn: async () => {
       if (!client?.id) return;
