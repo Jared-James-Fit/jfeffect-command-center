@@ -22,11 +22,13 @@ function PortalLayout() {
             <SetupChecklistBanner /> in /portal/index.tsx. */}
         <Outlet />
         <BroadcastPopupGate />
-        <ClientBirthdayCard />
         <EventPopupGate />
         <FormPopupGate />
         <HomeScreenSetupGate />
         <LegalAcceptanceGate />
+        {/* Birthday card mounts LAST so its dialog stacks above other portal
+            gates (setup prompts, event/form popups). */}
+        <ClientBirthdayCard />
       </AppShell>
     </>
   );
