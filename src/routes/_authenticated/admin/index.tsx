@@ -14,7 +14,7 @@ import {
   Users, UserPlus, AlertTriangle, Calendar, DollarSign, Plus, ExternalLink,
   Activity, Eye, ClipboardCheck, MessageCircle, Video, Timer, ShoppingCart,
   HardDrive, Mail, Apple, ChefHat, FileText, Megaphone, Zap, ClipboardList,
-  ArrowRight, ChevronDown, LayoutGrid, MoreHorizontal, CheckCircle2, Cake, Settings as SettingsIcon,
+  ArrowRight, ChevronDown, LayoutGrid, MoreHorizontal, CheckCircle2, Settings as SettingsIcon,
 } from "lucide-react";
 import { derivePhase, displayTitle, toneClasses, type TrainingPhase } from "@/lib/training-phases";
 import type { ConversationState, Message } from "@/lib/messages";
