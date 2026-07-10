@@ -1290,7 +1290,9 @@ function SidebarFlyoutRow({
         side="right"
         align="start"
         sideOffset={6}
-        className="w-60 p-1.5"
+        collisionPadding={12}
+        avoidCollisions
+        className="w-60 max-h-[calc(100vh-24px)] overflow-y-auto p-1.5"
         onOpenAutoFocus={(e) => e.preventDefault()}
         onMouseEnter={() => { clearTimers(); setOpen(true); }}
         onMouseLeave={scheduleClose}
@@ -1298,8 +1300,17 @@ function SidebarFlyoutRow({
         <div className="px-2 py-1 text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
           {item.label}
         </div>
-        <ul className="flex flex-col gap-0.5">
-          {(item.children ?? []).map((c) => {
+        {(() => {
+          const kids = item.children ?? [];
+          const primary = kids.filter((c) => !c.section);
+          const sections: { label: string; items: NavItem[] }[] = [];
+          for (const c of kids) {
+            if (!c.section) continue;
+            const existing = sections.find((s) => s.label === c.section);
+            if (existing) existing.items.push(c);
+            else sections.push({ label: c.section, items: [c] });
+          }
+          const renderRow = (c: NavItem) => {
             const CIcon = c.icon;
             const active = pathname === c.to || pathname.startsWith(c.to + "/");
             const cb = navBadges[c.to];
@@ -1321,8 +1332,21 @@ function SidebarFlyoutRow({
                 </Link>
               </li>
             );
-          })}
-        </ul>
+          };
+          return (
+            <>
+              <ul className="flex flex-col gap-0.5">{primary.map(renderRow)}</ul>
+              {sections.map((s) => (
+                <div key={s.label} className="mt-1.5 border-t border-border/60 pt-1.5">
+                  <div className="px-2 pb-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/80">
+                    {s.label}
+                  </div>
+                  <ul className="flex flex-col gap-0.5">{s.items.map(renderRow)}</ul>
+                </div>
+              ))}
+            </>
+          );
+        })()}
       </PopoverContent>
     </Popover>
   );
