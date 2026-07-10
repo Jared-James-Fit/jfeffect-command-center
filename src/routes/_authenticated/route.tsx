@@ -2,6 +2,7 @@ import { createFileRoute, Outlet, redirect } from "@tanstack/react-router";
 import { supabase } from "@/integrations/supabase/client";
 import { DashboardSplash } from "@/components/dashboard-splash";
 import { ClientProfileOverlayMount } from "@/components/clients/profile/client-profile-overlay";
+import { MemberProfileOverlayMount } from "@/components/members/member-profile-overlay";
 
 export const Route = createFileRoute("/_authenticated")({
   ssr: false,
@@ -47,6 +48,7 @@ function AuthenticatedLayout() {
     <>
       <Outlet />
       <ClientProfileOverlayMount />
+      <MemberProfileOverlayMount />
     </>
   );
 }
