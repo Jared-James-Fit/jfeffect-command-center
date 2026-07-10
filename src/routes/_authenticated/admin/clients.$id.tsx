@@ -2008,11 +2008,12 @@ function CommsToggleRow({ title, description, checked, onChange }: { title: stri
 }
 
 function ClientOverviewSnapshot({
-  form, clientId, canPov, onMessage, onPov, onSendSetup, onRequestUpdate, onGoToTab,
+  form, clientId, canPov, embedded = false, onMessage, onPov, onSendSetup, onRequestUpdate, onGoToTab,
 }: {
   form: any;
   clientId: string;
   canPov: boolean;
+  embedded?: boolean;
   onMessage: () => void;
   onPov: () => void;
   onSendSetup: () => unknown | Promise<unknown>;
@@ -2040,7 +2041,8 @@ function ClientOverviewSnapshot({
 
   return (
     <div className="md:col-span-3 space-y-6">
-      {/* Header card: identity + key facts */}
+      {/* Header card: identity + key facts (hidden when embedded — sticky header covers this) */}
+      {!embedded && (
       <Card className="border-border bg-card p-5 md:p-6">
         <div className="flex flex-col gap-5 md:flex-row md:items-start">
           <div className="flex items-center gap-4">
@@ -2070,8 +2072,10 @@ function ClientOverviewSnapshot({
           </div>
         </div>
       </Card>
+      )}
 
-      {/* Quick actions — 48–52px buttons */}
+      {/* Quick actions — 48–52px buttons (hidden when embedded — Action Center covers this) */}
+      {!embedded && (
       <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
         {canPov && (
           <Button onClick={onPov} className="min-h-[52px] justify-start bg-warning/15 text-warning border border-warning/40 hover:bg-warning/25 text-base">
@@ -2098,6 +2102,7 @@ function ClientOverviewSnapshot({
           </Button>
         </Link>
       </div>
+      )}
 
       <div className="grid gap-6 md:grid-cols-3">
         <div className="space-y-6 md:col-span-2">
