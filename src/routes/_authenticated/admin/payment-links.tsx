@@ -452,7 +452,7 @@ export function PaymentLinksPage({ embedded = false }: { embedded?: boolean } = 
                 <Button variant="outline" onClick={() => setManageMode(true)}>
                   <ListChecks className="mr-2 h-4 w-4" /> Manage products
                 </Button>
-                <Button className="bg-gradient-primary font-bold uppercase tracking-wide" onClick={() => setEditing({ open: true, product: null })}>
+                <Button className="bg-gradient-primary font-bold uppercase tracking-wide" onClick={() => setNewProductOpen(true)}>
                   <Plus className="mr-2 h-4 w-4" /> New product
                 </Button>
               </>
@@ -469,7 +469,7 @@ export function PaymentLinksPage({ embedded = false }: { embedded?: boolean } = 
               <Button variant="outline" onClick={() => setManageMode(true)}>
                 <ListChecks className="mr-2 h-4 w-4" /> Manage products
               </Button>
-              <Button className="bg-gradient-primary font-bold uppercase tracking-wide" onClick={() => setEditing({ open: true, product: null })}>
+              <Button className="bg-gradient-primary font-bold uppercase tracking-wide" onClick={() => setNewProductOpen(true)}>
                 <Plus className="mr-2 h-4 w-4" /> New product
               </Button>
             </>
