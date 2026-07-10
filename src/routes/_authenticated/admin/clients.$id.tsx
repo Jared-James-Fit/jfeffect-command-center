@@ -2001,6 +2001,10 @@ function PowerlifterSection({ form, set }: { form: any; set: (k: string, v: any)
   );
 }
 
+/**
+ * Coaching client sticky header — thin adapter over the shared
+ * WorkspaceIdentityHeader so Coaching and Membership stay pixel-identical.
+ */
 function EmbeddedIdentityHeader({
   form,
   canPov,
@@ -2025,62 +2029,50 @@ function EmbeddedIdentityHeader({
   const lastActive = form.last_active_at ?? form.last_signed_in_at ?? null;
   const lastActiveLabel = lastActive ? new Date(lastActive).toLocaleDateString() : null;
   return (
-    <div className="sticky top-0 z-30 border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80">
-      <div className="flex items-center gap-3 px-4 py-3 md:px-6">
-        <UserAvatar
-          src={form.profile_picture_url}
-          name={form.full_name}
-          size={44}
-          className="rounded-xl shrink-0"
-        />
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2 min-w-0">
-            <div className="truncate text-base font-bold leading-tight md:text-lg">
-              {form.full_name ?? "Unnamed client"}
-            </div>
-            {form.is_powerlifter && <PowerlifterBadge label={form.powerlifter_badge_label} size="xs" />}
-          </div>
-          <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-muted-foreground">
-            {form.status && <Badge variant="outline" className="text-[10px] leading-none py-0.5">{form.status}</Badge>}
-            {form.coaching_package && <span className="truncate">{form.coaching_package}</span>}
-            {form.program_phase && <span className="truncate">· {form.program_phase}</span>}
-            {form.assigned_coach_name && <span className="truncate hidden sm:inline">· Coach {form.assigned_coach_name}</span>}
-            {lastActiveLabel && <span className="truncate hidden md:inline">· Active {lastActiveLabel}</span>}
-          </div>
-        </div>
-        <div className="flex items-center gap-1.5 shrink-0">
-          <Button variant="outline" size="sm" onClick={onMessage} className="hidden sm:inline-flex">
-            <MessageSquare className="mr-2 h-4 w-4" />Message
+    <WorkspaceIdentityHeader
+      identity={{
+        avatarUrl: form.profile_picture_url,
+        name: form.full_name ?? "Unnamed client",
+        titleAfter: form.is_powerlifter ? (
+          <PowerlifterBadge label={form.powerlifter_badge_label} size="xs" />
+        ) : null,
+        badges: form.status ? [{ label: form.status }] : [],
+        meta: [
+          form.coaching_package,
+          form.program_phase ? `· ${form.program_phase}` : null,
+          form.assigned_coach_name ? (
+            <span className="hidden sm:inline">· Coach {form.assigned_coach_name}</span>
+          ) : null,
+          lastActiveLabel ? (
+            <span className="hidden md:inline">· Active {lastActiveLabel}</span>
+          ) : null,
+        ].filter(Boolean) as React.ReactNode[],
+      }}
+      onClose={onClose}
+      onMessage={onMessage}
+      onSave={onSave}
+      isDirty={isDirty}
+      saving={saving}
+      primaryAction={
+        canPov ? (
+          <Button
+            size="sm"
+            onClick={onPov}
+            className="hidden sm:inline-flex bg-warning/15 text-warning border border-warning/40 hover:bg-warning/25"
+          >
+            <Eye className="mr-2 h-4 w-4" />POV
           </Button>
-          <Button variant="ghost" size="icon" onClick={onMessage} className="sm:hidden" aria-label="Message">
-            <MessageSquare className="h-5 w-5" />
-          </Button>
-          {canPov && (
-            <Button
-              size="sm"
-              onClick={onPov}
-              className="hidden sm:inline-flex bg-warning/15 text-warning border border-warning/40 hover:bg-warning/25"
-            >
-              <Eye className="mr-2 h-4 w-4" />POV
-            </Button>
-          )}
-          {isDirty && (
-            <Button size="sm" className="bg-gradient-primary uppercase font-bold" onClick={onSave} disabled={saving}>
-              <Save className="mr-2 h-4 w-4" />Save
-            </Button>
-          )}
-          {moreMenu}
-          {onClose && (
-            <Button variant="ghost" size="icon" onClick={onClose} aria-label="Close" className="hidden md:inline-flex">
-              <ArrowLeft className="h-5 w-5" />
-            </Button>
-          )}
-        </div>
-      </div>
-    </div>
+        ) : null
+      }
+      moreMenu={moreMenu}
+    />
   );
 }
 
+/**
+ * Coaching action center — feeds the coaching-specific action set into
+ * the shared WorkspaceActionCenter. Membership feeds its own array.
+ */
 function EmbeddedActionCenter({
   clientId,
   canPov,
@@ -2098,42 +2090,32 @@ function EmbeddedActionCenter({
   onIntake: () => void;
   onRequestUpdate: () => unknown | Promise<unknown>;
 }) {
-  return (
-    <div className="mb-4">
-      <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground mb-2">
-        Actions
-      </div>
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
-        <Button onClick={onMessage} variant="outline" className="min-h-[48px] justify-start text-sm">
-          <MessageSquare className="mr-2 h-4 w-4" /> Message
-        </Button>
-        {canPov && (
-          <Button
-            onClick={onPov}
-            className="min-h-[48px] justify-start text-sm bg-warning/15 text-warning border border-warning/40 hover:bg-warning/25"
-          >
-            <Eye className="mr-2 h-4 w-4" /> Client POV
-          </Button>
-        )}
-        <Link to="/admin/client-programs/$clientId" params={{ clientId }} className="block">
-          <Button variant="outline" className="min-h-[48px] w-full justify-start text-sm">
-            <Dumbbell className="mr-2 h-4 w-4" /> Assign Program
-          </Button>
-        </Link>
-        <Link to="/admin/clients/$id/schedule" params={{ id: clientId }} className="block">
-          <Button variant="outline" className="min-h-[48px] w-full justify-start text-sm">
-            <Calendar className="mr-2 h-4 w-4" /> Schedule
-          </Button>
-        </Link>
-        <Button variant="outline" className="min-h-[48px] justify-start text-sm" onClick={onIntake}>
-          <Target className="mr-2 h-4 w-4" /> Intake & Goals
-        </Button>
-        <Button variant="outline" className="min-h-[48px] justify-start text-sm" onClick={() => onRequestUpdate()}>
-          <BellRing className="mr-2 h-4 w-4" /> {form.info_update_requested ? "Update sent" : "Request Update"}
-        </Button>
-      </div>
-    </div>
-  );
+  const actions: WorkspaceAction[] = [
+    { key: "message", label: "Message", icon: MessageSquare, onClick: onMessage },
+    { key: "pov", label: "Client POV", icon: Eye, onClick: onPov, tone: "warn", hidden: !canPov },
+    {
+      key: "program",
+      label: "Assign Program",
+      icon: Dumbbell,
+      to: "/admin/client-programs/$clientId",
+      params: { clientId },
+    },
+    {
+      key: "schedule",
+      label: "Schedule",
+      icon: Calendar,
+      to: "/admin/clients/$id/schedule",
+      params: { id: clientId },
+    },
+    { key: "intake", label: "Intake & Goals", icon: Target, onClick: onIntake },
+    {
+      key: "update",
+      label: form.info_update_requested ? "Update sent" : "Request Update",
+      icon: BellRing,
+      onClick: () => { void onRequestUpdate(); },
+    },
+  ];
+  return <WorkspaceActionCenter actions={actions} />;
 }
 
 function CommsToggleRow({ title, description, checked, onChange }: { title: string; description: string; checked: boolean; onChange: (v: boolean) => void | Promise<void> }) {
@@ -2332,26 +2314,9 @@ function ClientOverviewSnapshot({
   );
 }
 
-function SnapshotField({ label, value, fallbackAction }: { label: string; value?: string | null; fallbackAction?: { label: string; onClick: () => void } | null }) {
-  return (
-    <div>
-      <div className="text-[10px] uppercase tracking-widest text-muted-foreground">{label}</div>
-      {value ? (
-        <div className="mt-0.5 font-semibold truncate">{value}</div>
-      ) : fallbackAction ? (
-        <button
-          type="button"
-          onClick={fallbackAction.onClick}
-          className="mt-0.5 inline-flex min-h-[32px] items-center gap-1 rounded-md border border-warning/40 bg-warning/10 px-2 py-0.5 text-xs font-semibold text-warning hover:bg-warning/20"
-        >
-          <AlertCircle className="h-3.5 w-3.5" /> {fallbackAction.label}
-        </button>
-      ) : (
-        <div className="mt-0.5 font-semibold text-muted-foreground">—</div>
-      )}
-    </div>
-  );
-}
+// Snapshot field — thin re-export of the shared workspace primitive so the
+// coaching snapshot and the membership snapshot render identical rows.
+const SnapshotField = WorkspaceSnapshotField;
 
 function StartingMaxesCard({ form, onEdit }: { form: any; onEdit?: () => void }) {
   const unit = form.intake_lift_unit === "kg" ? "kg" : "lb";
