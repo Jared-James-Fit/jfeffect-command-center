@@ -649,8 +649,8 @@ export function AppShell({ items, bottomItems: customBottomItems, title, childre
         </div>
 
         {/* Workout library quick search / Cmd+K trigger */}
-        <div className={cn("border-b border-sidebar-border", isCollapsed ? "p-1.5" : "p-2")}>
-          {isCollapsed ? (
+        <div className={cn("border-b border-sidebar-border", iconOnly ? "p-1.5" : "p-2")}>
+          {iconOnly ? (
             <Tooltip>
               <TooltipTrigger asChild>
                 <button
@@ -675,19 +675,19 @@ export function AppShell({ items, bottomItems: customBottomItems, title, childre
           )}
         </div>
 
-        <nav className={cn("flex-1 overflow-y-auto", isCollapsed ? "p-1.5" : "p-2")}>
-          <div className={isCollapsed ? "space-y-2" : "space-y-2.5"}>
+        <nav className={cn("flex-1 overflow-y-auto", iconOnly ? "p-1.5" : "p-2")}>
+          <div className={iconOnly ? "space-y-2" : "space-y-2.5"}>
             {/* Pinned shortcuts */}
             {pinnedItems.length > 0 && (
               <div>
-                {!isCollapsed && (
+                {!iconOnly && (
                   <div className="flex items-center justify-between rounded px-2.5 pb-1 pt-1.5">
                     <span className="text-[10px] font-semibold uppercase tracking-wider text-amber-300/80">
                       Pinned · {pinCount}/{MAX_PINS}
                     </span>
                   </div>
                 )}
-                {isCollapsed && <div className="my-1 mx-2 h-px bg-amber-400/40" />}
+                {iconOnly && <div className="my-1 mx-2 h-px bg-amber-400/40" />}
                 <ul className="space-y-0.5">
                   {pinnedItems.map((item) => {
                     const active = item.to === activeTo;
@@ -707,14 +707,14 @@ export function AppShell({ items, bottomItems: customBottomItems, title, childre
                             : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground border-l-2 border-amber-400/40",
                         )}
                       >
-                        <div className="relative"><Icon className="h-4 w-4 shrink-0" /><SidebarBadge badge={navBadges[item.to]} isCollapsed={isCollapsed} /></div>
-                        {!isCollapsed && <span className="truncate flex-1">{item.label}</span>}
-                        {!isCollapsed && <SidebarBadge badge={navBadges[item.to]} isCollapsed={false} />}
+                        <div className="relative"><Icon className="h-4 w-4 shrink-0" /><SidebarBadge badge={navBadges[item.to]} iconOnly={iconOnly} /></div>
+                        {!iconOnly && <span className="truncate flex-1">{item.label}</span>}
+                        {!iconOnly && <SidebarBadge badge={navBadges[item.to]} iconOnly={false} />}
                       </Link>
                     );
                     return (
                       <li key={`pin-${item.to}`}>
-                        {isCollapsed ? (
+                        {iconOnly ? (
                           <Tooltip>
                             <TooltipTrigger asChild>{link}</TooltipTrigger>
                             <TooltipContent side="right">📌 {item.label}</TooltipContent>
@@ -746,7 +746,7 @@ export function AppShell({ items, bottomItems: customBottomItems, title, childre
                 : false;
               return (
                 <div key={group.label ?? "default"}>
-                  {group.label && !isCollapsed && !isTablet && (
+                  {group.label && !iconOnly && !isTablet && (
                     <button
                       onClick={() => toggleSection(group.label!, allGroupLabels)}
                       className="group flex w-full items-center justify-between rounded px-2.5 pb-1 pt-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground hover:text-foreground"
@@ -760,15 +760,15 @@ export function AppShell({ items, bottomItems: customBottomItems, title, childre
                       />
                     </button>
                   )}
-                  {group.label && !isCollapsed && isTablet && (
+                  {group.label && !iconOnly && isTablet && (
                     <div className="px-2.5 pb-1 pt-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
                       {group.label}
                     </div>
                   )}
-                  {group.label && isCollapsed && (
+                  {group.label && iconOnly && (
                     <div className="my-1 mx-2 h-px bg-sidebar-border/60" />
                   )}
-                  {(!sectionCollapsed || isCollapsed) && (
+                  {(!sectionCollapsed || iconOnly) && (
                     <ul className="space-y-0.5">
                       {group.items.map((item) => {
                         const active = item.to === activeTo;
@@ -793,10 +793,10 @@ export function AppShell({ items, bottomItems: customBottomItems, title, childre
                                 : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground border-l-2 border-transparent",
                             )}
                           >
-                              <div className="relative"><Icon className="h-4 w-4 shrink-0" /><SidebarBadge badge={groupBadge} isCollapsed={isCollapsed} /></div>
-                            {!isCollapsed && <span className="truncate flex-1">{item.label}</span>}
-                              {!isCollapsed && <SidebarBadge badge={groupBadge} isCollapsed={false} />}
-                              {!isCollapsed && item.children && (
+                              <div className="relative"><Icon className="h-4 w-4 shrink-0" /><SidebarBadge badge={groupBadge} iconOnly={iconOnly} /></div>
+                            {!iconOnly && <span className="truncate flex-1">{item.label}</span>}
+                              {!iconOnly && <SidebarBadge badge={groupBadge} iconOnly={false} />}
+                              {!iconOnly && item.children && (
                                 <ChevronRight className="ml-1 h-3 w-3 shrink-0 text-muted-foreground" aria-hidden />
                               )}
                           </Link>
@@ -815,10 +815,10 @@ export function AppShell({ items, bottomItems: customBottomItems, title, childre
                                   item={item}
                                   pathname={pathname}
                                   navBadges={navBadges}
-                                  isCollapsed={isCollapsed}
+                                  iconOnly={iconOnly}
                                   trigger={link}
                                 />
-                              ) : isCollapsed ? (
+                              ) : iconOnly ? (
                               <Tooltip>
                                 <TooltipTrigger asChild>{link}</TooltipTrigger>
                                 <TooltipContent side="right">{item.label}</TooltipContent>
