@@ -811,12 +811,12 @@ export const submitOrEditReview = createServerFn({ method: "POST" })
       let clientId: string;
       let usedOverride = false;
       if (data.actAsClientId) {
-        const [{ data: isAdmin }, { data: isCoach }] = await Promise.all([
+        const [{ data: isAdmin }, { data: isAssigned }] = await Promise.all([
           supabase.rpc("has_role", { _user_id: userId, _role: "admin" }),
-          supabase.rpc("has_role", { _user_id: userId, _role: "coach" }),
+          supabase.rpc("is_assigned_coach_for_client", { _client_id: data.actAsClientId }),
         ]);
-        if (!isAdmin && !isCoach) {
-          throw new Error("Only admins or coaches can submit a review on behalf of a client");
+        if (!isAdmin && !isAssigned) {
+          throw new Error("Only admins or the client's assigned coach can submit a review on their behalf");
         }
         clientId = data.actAsClientId;
         usedOverride = true;
