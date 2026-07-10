@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { isMemberAccessActive } from "@/lib/memberAccess";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
@@ -17,9 +17,12 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Link2, KeyRound, Trash2, Plus, Eye } from "lucide-react";
+import {
+  Link2, KeyRound, Trash2, Plus, Eye, MessageSquare, CreditCard, Gift, Package,
+  Settings2, ShoppingBag, AlertCircle, AlertTriangle, Camera, Phone,
+} from "lucide-react";
 import { toast } from "sonner";
-import { useState, lazy, Suspense } from "react";
+import { useState, lazy, Suspense, useEffect } from "react";
 import { cn } from "@/lib/utils";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
@@ -29,6 +32,14 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Calendar } from "@/components/ui/calendar";
 import { CalendarIcon } from "lucide-react";
 import { format } from "date-fns";
+import {
+  WorkspaceIdentityHeader,
+  WorkspaceActionCenter,
+  WorkspaceAlertsStrip,
+  WorkspaceSnapshotField,
+  type WorkspaceAction,
+  type WorkspaceAlert,
+} from "@/components/workspace";
 const MemberFeatureToggles = lazy(() =>
   import("@/components/admin/member-feature-toggles").then((m) => ({ default: m.MemberFeatureToggles })),
 );
@@ -40,7 +51,12 @@ function PanelFallback() {
 }
 import { ACCOUNT_TYPES, type AccountType } from "@/lib/membership";
 
-export const Route = createFileRoute("/_authenticated/admin/members/$memberId")({ component: MemberProfile });
+export const Route = createFileRoute("/_authenticated/admin/members/$memberId")({ component: MemberProfileRoute });
+
+function MemberProfileRoute() {
+  const { memberId } = Route.useParams();
+  return <MemberProfileWorkspace memberId={memberId} />;
+}
 
 function copy(s: string) { navigator.clipboard.writeText(s).then(() => toast.success("Copied")); }
 
@@ -49,8 +65,17 @@ function fmtWhen(s: string | null | undefined) {
   try { return new Date(s).toLocaleString(); } catch { return s; }
 }
 
-function MemberProfile() {
-  const { memberId } = Route.useParams();
+export function MemberProfileWorkspace({
+  memberId,
+  embedded = false,
+  initialTab,
+  onClose,
+}: {
+  memberId: string;
+  embedded?: boolean;
+  initialTab?: string;
+  onClose?: () => void;
+}) {
   const qc = useQueryClient();
   const fetch = useServerFn(getMember);
   const update = useServerFn(updateAppMember);
@@ -80,7 +105,9 @@ function MemberProfile() {
   const member = data?.member;
   const access = data?.access ?? [];
   const [newKey, setNewKey] = useState("");
-  const [tab, setTab] = useState("summary");
+  const [tab, setTab] = useState(initialTab ?? "summary");
+  // If the caller opens the overlay with a different tab later, follow.
+  useEffect(() => { if (initialTab) setTab(initialTab); }, [initialTab]);
 
   if (!member) return <div className="p-6 text-sm text-muted-foreground">Loading…</div>;
 
@@ -89,48 +116,185 @@ function MemberProfile() {
 
   const accessActive = isMemberAccessActive(member);
 
-  return (
-    <div className="space-y-5">
-      <MembershipAccessCard
-        member={member}
-        memberId={memberId}
-        accessActive={accessActive}
-        update={update}
-        refresh={refresh}
-      />
+  const onEnterPov = async () => {
+    try {
+      await copyPov({ data: { memberId } });
+      setPovFlag(`as:${member.full_name || member.email}`);
+      toast.success("Entering member POV");
+      navigate({ to: "/m" });
+    } catch (e: any) { toast.error(e?.message ?? "Failed"); }
+  };
+  const onCopySetupLink = async () => {
+    try {
+      const { link } = await setup({ data: { memberId } });
+      copy(link); refresh();
+    } catch (e: any) { toast.error(e?.message ?? "Failed"); }
+  };
 
-      {member.account_type === "jf_member" && member.profile_picture_required && !member.avatar_url && (
-        <div className="rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs font-semibold text-amber-300">
-          Setup incomplete — profile picture required.
-        </div>
+  // Membership-specific action set — no coaching actions.
+  const memberActions: WorkspaceAction[] = [
+    { key: "pov", label: "Open Member POV", icon: Eye, onClick: onEnterPov, tone: "warn" },
+    { key: "message", label: "Message Member", icon: MessageSquare, onClick: () => setTab("sms") },
+    { key: "manage", label: "Manage Membership", icon: Settings2, onClick: () => setTab("subscription") },
+    { key: "plan", label: "Change Plan", icon: Package, onClick: () => setTab("subscription") },
+    { key: "grant", label: "Grant Access", icon: Gift, onClick: () => setTab("access") },
+    { key: "purchases", label: "View Purchases", icon: ShoppingBag, onClick: () => setTab("subscription") },
+  ];
+
+  // Membership-specific alerts.
+  const memberAlerts: WorkspaceAlert[] = [];
+  if (["Past Due", "Payment Failed"].includes(member.subscription_status ?? "")) {
+    memberAlerts.push({
+      key: "billing",
+      tone: "rose",
+      icon: CreditCard,
+      message: `Payment issue — ${member.subscription_status}`,
+      action: { label: "Open subscription", onClick: () => setTab("subscription") },
+    });
+  }
+  if (member.subscription_status === "Trialing" && member.trial_end_at) {
+    const daysLeft = Math.ceil((new Date(member.trial_end_at).getTime() - Date.now()) / (24 * 60 * 60 * 1000));
+    if (daysLeft <= 3 && daysLeft > 0) {
+      memberAlerts.push({
+        key: "trial",
+        tone: "warn",
+        message: `Trial ends in ${daysLeft} day${daysLeft === 1 ? "" : "s"} — ${new Date(member.trial_end_at).toLocaleDateString()}`,
+        action: { label: "Manage", onClick: () => setTab("subscription") },
+      });
+    }
+  }
+  if (!member.user_id) {
+    memberAlerts.push({
+      key: "setup",
+      tone: "warn",
+      icon: AlertCircle,
+      message: "Setup incomplete — member has no account yet",
+      action: { label: "Copy setup link", onClick: onCopySetupLink },
+    });
+  }
+  if (member.account_type === "jf_member" && member.profile_picture_required && !member.avatar_url) {
+    memberAlerts.push({
+      key: "pfp",
+      tone: "warn",
+      icon: Camera,
+      message: "Profile picture required",
+    });
+  }
+  if (!member.phone) {
+    memberAlerts.push({
+      key: "phone",
+      tone: "info",
+      icon: Phone,
+      message: "No phone on file — SMS automations will not reach this member",
+      action: { label: "Add phone", onClick: () => setTab("summary") },
+    });
+  }
+  if (accessActive === false) {
+    memberAlerts.push({
+      key: "access",
+      tone: "rose",
+      icon: AlertTriangle,
+      message: "Access is currently blocked",
+      action: { label: "Open access", onClick: () => setTab("access") },
+    });
+  }
+
+  const lastActive = member.last_signed_in_at ?? null;
+  const lastActiveLabel = lastActive ? new Date(lastActive).toLocaleDateString() : null;
+
+  return (
+    <div className={embedded ? "" : "space-y-5"}>
+      {embedded ? (
+        <WorkspaceIdentityHeader
+          identity={{
+            avatarUrl: member.avatar_url,
+            name: member.full_name || member.email,
+            badges: [
+              { label: "JF Membership", tone: "success" },
+              { label: acctLabel },
+              { label: member.status },
+              ...(member.subscription_status ? [{ label: member.subscription_status }] : []),
+            ],
+            meta: [
+              member.email,
+              lastActiveLabel ? (
+                <span className="hidden md:inline">· Active {lastActiveLabel}</span>
+              ) : null,
+            ].filter(Boolean) as React.ReactNode[],
+          }}
+          onClose={onClose}
+          onMessage={() => setTab("sms")}
+          primaryAction={
+            <Button
+              size="sm"
+              onClick={onEnterPov}
+              className="hidden sm:inline-flex bg-warning/15 text-warning border border-warning/40 hover:bg-warning/25"
+            >
+              <Eye className="mr-2 h-4 w-4" />POV
+            </Button>
+          }
+        />
+      ) : (
+        <>
+          <MembershipAccessCard
+            member={member}
+            memberId={memberId}
+            accessActive={accessActive}
+            update={update}
+            refresh={refresh}
+          />
+          <PageHeader
+            backTo="/admin/members"
+            backLabel="Back to Members"
+            breadcrumbs={[{ label: "Members", to: "/admin/members" }, { label: member.full_name || member.email }]}
+            title={member.full_name || member.email}
+            subtitle={member.email}
+            actions={<div className="flex flex-wrap items-center gap-2">
+              <Badge variant="outline" className="bg-emerald-500/10 text-emerald-300 border-emerald-500/30 font-bold uppercase tracking-wider">
+                JF Membership
+              </Badge>
+              <Badge variant="outline" className={(ACCOUNT_TYPES as any)[member.account_type]?.tone}>
+                {acctLabel}
+              </Badge>
+              <Badge>{member.status}</Badge>
+              {member.subscription_status && <Badge variant="outline">{member.subscription_status}</Badge>}
+              <Button size="sm" variant="outline" onClick={onEnterPov}>
+                <Eye className="mr-1 h-3.5 w-3.5" />View as this member
+              </Button>
+            </div>}
+          />
+        </>
       )}
-      <PageHeader
-        backTo="/admin/members"
-        backLabel="Back to Members"
-        breadcrumbs={[{ label: "Members", to: "/admin/members" }, { label: member.full_name || member.email }]}
-        title={member.full_name || member.email}
-        subtitle={member.email}
-        actions={<div className="flex flex-wrap items-center gap-2">
-          <Badge variant="outline" className="bg-emerald-500/10 text-emerald-300 border-emerald-500/30 font-bold uppercase tracking-wider">
-            JF Membership
-          </Badge>
-          <Badge variant="outline" className={(ACCOUNT_TYPES as any)[member.account_type]?.tone}>
-            {acctLabel}
-          </Badge>
-          <Badge>{member.status}</Badge>
-          {member.subscription_status && <Badge variant="outline">{member.subscription_status}</Badge>}
-          <Button size="sm" variant="outline" onClick={async () => {
-            try {
-              await copyPov({ data: { memberId } });
-              setPovFlag(`as:${member.full_name || member.email}`);
-              toast.success("Entering member POV");
-              navigate({ to: "/m" });
-            } catch (e: any) { toast.error(e?.message ?? "Failed"); }
-          }}>
-            <Eye className="mr-1 h-3.5 w-3.5" />View as this member
-          </Button>
-        </div>}
-      />
+
+      <div className={embedded ? "p-4 md:p-6" : ""}>
+        {/* Membership Action Center (embedded only — non-embedded route keeps existing top cards) */}
+        {embedded && <WorkspaceActionCenter actions={memberActions} />}
+        {/* Membership Alerts */}
+        {embedded && <WorkspaceAlertsStrip alerts={memberAlerts} />}
+
+        {/* Membership Snapshot (embedded only, before tabs) */}
+        {embedded && (
+          <Card className="mb-4 border-border bg-card p-4 md:p-5">
+            <div className="mb-3 text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+              Membership Snapshot
+            </div>
+            <div className="grid grid-cols-2 gap-4 text-sm sm:grid-cols-3 lg:grid-cols-6">
+              <WorkspaceSnapshotField label="Status" value={member.status} />
+              <WorkspaceSnapshotField label="Plan" value={acctLabel} />
+              <WorkspaceSnapshotField
+                label="Subscription"
+                value={member.subscription_status}
+                fallbackAction={member.subscription_status ? null : { label: "Set up billing", onClick: () => setTab("subscription") }}
+              />
+              <WorkspaceSnapshotField
+                label="Next bill"
+                value={member.current_period_end ? new Date(member.current_period_end).toLocaleDateString() : null}
+              />
+              <WorkspaceSnapshotField label="Access" value={accessActive ? "Active" : "Blocked"} />
+              <WorkspaceSnapshotField label="Last active" value={lastActiveLabel} />
+            </div>
+          </Card>
+        )}
 
       <Tabs value={tab} onValueChange={setTab}>
         <TabsList className="mb-4 flex flex-wrap h-auto">
@@ -144,6 +308,15 @@ function MemberProfile() {
 
         {/* ───────────── Summary ───────────── */}
         <TabsContent value="summary" className="space-y-5">
+          {embedded && (
+            <MembershipAccessCard
+              member={member}
+              memberId={memberId}
+              accessActive={accessActive}
+              update={update}
+              refresh={refresh}
+            />
+          )}
           <MemberAccessSummary member={member} access={access} />
 
           <Card className="space-y-3 p-5">
