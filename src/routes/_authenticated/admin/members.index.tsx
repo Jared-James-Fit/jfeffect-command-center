@@ -1,4 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
+import { useOpenMemberProfile } from "@/lib/open-member-profile";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { listMembers } from "@/lib/members.functions";
@@ -32,6 +33,7 @@ function fmtDate(d: string | null | undefined) {
 function MembersList() {
   const fetch = useServerFn(listMembers);
   const [tab, setTab] = useState<string>("all");
+  const openMember = useOpenMemberProfile();
 
   const { data: all } = useQuery({ queryKey: ["admin-members", tab], queryFn: () => {
     if (tab === "all") return fetch({ data: {} });
@@ -77,7 +79,12 @@ function MembersList() {
           <Card className="mt-3 divide-y">
             {members.length === 0 && <div className="p-6 text-sm text-muted-foreground">No members yet.</div>}
             {members.map((m: any) => (
-              <Link key={m.id} to="/admin/members/$memberId" params={{ memberId: m.id }} className="block p-4 hover:bg-muted/40">
+              <a
+                key={m.id}
+                href={`/admin/members/${m.id}`}
+                onClick={(e) => openMember(m.id, { event: e })}
+                className="block cursor-pointer p-4 hover:bg-muted/40"
+              >
                 <div className="flex items-center justify-between gap-3">
                   <div className="min-w-0">
                     <div className="truncate font-semibold">{m.full_name || m.email}</div>
@@ -112,7 +119,7 @@ function MembersList() {
                     {!m.user_id && <Badge variant="outline">Setup pending</Badge>}
                   </div>
                 </div>
-              </Link>
+              </a>
             ))}
           </Card>
         </TabsContent>
