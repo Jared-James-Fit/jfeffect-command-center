@@ -430,6 +430,15 @@ export function AppShell({ items, bottomItems: customBottomItems, title, childre
         if (hay.includes(q)) {
           results.push({ item: it, group: g.label ?? "" });
         }
+        // Also search flyout children so mobile users can find secondary pages
+        for (const c of it.children ?? []) {
+          const chay = [c.label, it.label, g.label ?? "", ...(c.keywords ?? [])]
+            .join(" ")
+            .toLowerCase();
+          if (chay.includes(q)) {
+            results.push({ item: c, group: `${g.label ?? ""} · ${it.label}` });
+          }
+        }
       }
     }
     return results;
