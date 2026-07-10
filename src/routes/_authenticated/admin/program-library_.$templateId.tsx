@@ -1369,7 +1369,7 @@ export function BlockPayloadEditor({ weeksData, setWeeksData, exercises, compact
   };
   const addWeek = () => {
     const nextIdx = (weeksData[weeksData.length - 1]?.week_index ?? 0) + 1;
-    setWeeksData([...weeksData, { week_index: nextIdx, days: [{ day_index: 1, title: "Day 1", rows: [] }] }]);
+    setWeeksData([...weeksData, { week_index: nextIdx, days: [{ day_index: 1, title: "", subtitle: "", rows: [] }] }]);
     setActiveIdx(weeksData.length);
   };
   const dupWeek = (i: number) => {
