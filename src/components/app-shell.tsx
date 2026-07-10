@@ -1728,3 +1728,263 @@ export function PageHeader({
     </div>
   );
 }
+
+/**
+ * Mobile full-screen navigation drawer.
+ *
+ * Two views:
+ *  - Root: real destinations shown immediately, grouped by section label, with
+ *    a right-side chevron ONLY on categories that have secondary pages.
+ *  - Submenu: replaces the root when a chevron is tapped; shows a `< Back`
+ *    row plus the parent's children as a flat list (respecting `child.section`
+ *    dividers). No accordions, no nested indentation.
+ *
+ * Search always renders a flat result list and short-circuits both views.
+ */
+function MobileNavDrawer({
+  open, onOpenChange, title, grouped, activeTo, pathname, navBadges,
+  query, setQuery, filteredResults,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  title: string;
+  grouped: { label: string | undefined; items: NavItem[] }[];
+  activeTo: string | null;
+  pathname: string;
+  navBadges: Record<string, { count?: number; dot?: boolean }>;
+  query: string;
+  setQuery: (q: string) => void;
+  filteredResults: { item: NavItem; group: string }[] | null;
+}) {
+  const [submenu, setSubmenu] = useState<NavItem | null>(null);
+  // Reset submenu when the drawer closes so reopening always lands on root.
+  useEffect(() => {
+    if (!open) setSubmenu(null);
+  }, [open]);
+
+  const close = () => onOpenChange(false);
+
+  return (
+    <Sheet open={open} onOpenChange={onOpenChange}>
+      <SheetContent
+        side="bottom"
+        className="h-[100dvh] max-h-[100dvh] w-full overflow-hidden p-0 md:hidden"
+      >
+        <SheetHeader
+          className="border-b border-border px-4 pb-3"
+          style={{ paddingTop: "calc(env(safe-area-inset-top) + 0.75rem)" }}
+        >
+          <div className="flex items-center gap-2">
+            {submenu ? (
+              <button
+                type="button"
+                onClick={() => setSubmenu(null)}
+                className="grid h-11 w-11 -ml-2 place-items-center rounded-md text-foreground hover:bg-sidebar-accent active:bg-sidebar-accent/70"
+                aria-label="Back"
+              >
+                <ArrowLeft className="h-5 w-5" />
+              </button>
+            ) : (
+              <img src="/logo.png" alt="" className="h-8 w-8 shrink-0 rounded-md object-cover" />
+            )}
+            <SheetTitle className="flex-1 truncate text-left text-base font-black tracking-tight">
+              {submenu ? submenu.label : title}
+            </SheetTitle>
+          </div>
+        </SheetHeader>
+
+        {!submenu && (
+          <div className="border-b border-border px-3 py-2">
+            <div className="relative">
+              <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Search pages…"
+                className="h-10 pl-8"
+              />
+            </div>
+          </div>
+        )}
+
+        <div
+          className="flex-1 overflow-y-auto px-2 py-2"
+          style={{
+            height: submenu
+              ? "calc(100dvh - env(safe-area-inset-top) - 4rem)"
+              : "calc(100dvh - env(safe-area-inset-top) - 8rem)",
+            paddingBottom: "calc(env(safe-area-inset-bottom) + 1.5rem)",
+          }}
+        >
+          {submenu ? (
+            <MobileSubmenu
+              parent={submenu}
+              pathname={pathname}
+              onNavigate={close}
+            />
+          ) : filteredResults ? (
+            <ul className="space-y-0.5">
+              {filteredResults.length === 0 && (
+                <li className="px-3 py-6 text-center text-sm text-muted-foreground">No matches.</li>
+              )}
+              {filteredResults.map(({ item, group }) => {
+                const Icon = item.icon;
+                return (
+                  <li key={`${group}:${item.to}:${item.label}`}>
+                    <Link
+                      to={item.to}
+                      onClick={() => { setQuery(""); close(); }}
+                      className="flex min-h-[52px] items-center gap-3 rounded-md px-3 py-3 text-base hover:bg-sidebar-accent active:bg-sidebar-accent/70"
+                    >
+                      <Icon className="h-5 w-5 shrink-0 text-muted-foreground" />
+                      <div className="min-w-0 flex-1">
+                        <div className="truncate font-semibold">{item.label}</div>
+                        {group && (
+                          <div className="truncate text-[12px] text-muted-foreground">{group}</div>
+                        )}
+                      </div>
+                    </Link>
+                  </li>
+                );
+              })}
+            </ul>
+          ) : (
+            <MobileRoot
+              grouped={grouped}
+              activeTo={activeTo}
+              pathname={pathname}
+              navBadges={navBadges}
+              onOpenCategory={setSubmenu}
+              onNavigate={close}
+            />
+          )}
+        </div>
+      </SheetContent>
+    </Sheet>
+  );
+}
+
+function MobileRoot({
+  grouped, activeTo, pathname, navBadges, onOpenCategory, onNavigate,
+}: {
+  grouped: { label: string | undefined; items: NavItem[] }[];
+  activeTo: string | null;
+  pathname: string;
+  navBadges: Record<string, { count?: number; dot?: boolean }>;
+  onOpenCategory: (item: NavItem) => void;
+  onNavigate: () => void;
+}) {
+  return (
+    <div className="space-y-3">
+      {grouped.map((group) => (
+        <div key={group.label ?? "default"}>
+          {group.label && (
+            <div className="px-3 pb-1 pt-1 text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+              {group.label}
+            </div>
+          )}
+          <ul className="space-y-0.5">
+            {group.items.map((item) => {
+              const Icon = item.icon;
+              const active = item.to === activeTo;
+              const hasChildren = !!item.children && item.children.length > 0;
+              const b = navBadgeFor(item, navBadges);
+              return (
+                <li key={item.to} className="relative flex items-stretch">
+                  <Link
+                    to={item.to}
+                    onClick={onNavigate}
+                    className={cn(
+                      "flex min-h-[52px] flex-1 items-center gap-3 rounded-md px-3 py-3 text-base font-medium transition-colors",
+                      hasChildren && "pr-14",
+                      active
+                        ? "bg-primary/15 text-primary font-semibold"
+                        : "text-foreground hover:bg-sidebar-accent active:bg-sidebar-accent/70",
+                    )}
+                  >
+                    <div className="relative">
+                      <Icon className="h-5 w-5 shrink-0" />
+                      <SidebarBadge badge={b} isCollapsed={true} />
+                    </div>
+                    <span className="truncate flex-1">{item.label}</span>
+                    {!hasChildren && <SidebarBadge badge={b} isCollapsed={false} />}
+                  </Link>
+                  {hasChildren && (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        onOpenCategory(item);
+                      }}
+                      aria-label={`Open ${item.label} submenu`}
+                      className="absolute right-1 top-1/2 grid h-11 w-11 -translate-y-1/2 place-items-center rounded-md text-muted-foreground hover:bg-sidebar-accent hover:text-foreground active:bg-sidebar-accent/70"
+                      style={{ WebkitTapHighlightColor: "transparent" }}
+                    >
+                      <ChevronRight className="h-5 w-5" />
+                    </button>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function MobileSubmenu({
+  parent, pathname, onNavigate,
+}: {
+  parent: NavItem;
+  pathname: string;
+  onNavigate: () => void;
+}) {
+  const kids = parent.children ?? [];
+  const primary = kids.filter((c) => !c.section);
+  const sections: { label: string; items: NavItem[] }[] = [];
+  for (const c of kids) {
+    if (!c.section) continue;
+    const existing = sections.find((s) => s.label === c.section);
+    if (existing) existing.items.push(c);
+    else sections.push({ label: c.section, items: [c] });
+  }
+  const renderRow = (c: NavItem) => {
+    const CIcon = c.icon;
+    const active = pathname === c.to || pathname.startsWith(c.to + "/");
+    return (
+      <li key={c.to}>
+        <Link
+          to={c.to}
+          onClick={onNavigate}
+          className={cn(
+            "flex min-h-[52px] items-center gap-3 rounded-md px-3 py-3 text-base font-medium transition-colors",
+            active
+              ? "bg-primary/15 text-primary font-semibold"
+              : "text-foreground hover:bg-sidebar-accent active:bg-sidebar-accent/70",
+          )}
+        >
+          <CIcon className="h-5 w-5 shrink-0" />
+          <span className="truncate">{c.label}</span>
+        </Link>
+      </li>
+    );
+  };
+  return (
+    <div className="space-y-2">
+      <div className="px-3 pb-1 pt-1 text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+        {parent.label}
+      </div>
+      <ul className="space-y-0.5">{primary.map(renderRow)}</ul>
+      {sections.map((s) => (
+        <div key={s.label} className="pt-2">
+          <div className="px-3 pb-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/80">
+            {s.label}
+          </div>
+          <ul className="space-y-0.5">{s.items.map(renderRow)}</ul>
+        </div>
+      ))}
+    </div>
+  );
+}
