@@ -243,6 +243,8 @@ const REGISTRY: Entry[] = [
 /** Membership-mode overrides (admin viewing the JF Membership workspace).
  *  Adds member-ops entries that don't belong in default coaching mode. */
 const MEMBERSHIP_OVERLAY: Entry[] = [
+  { to: "/admin", label: "← Exit to Coaching", icon: LayoutDashboard, group: "Overview",
+    visibleTo: ["admin"] },
   { to: "/admin/membership", label: "Membership Home", icon: LayoutDashboard, group: "Overview",
     visibleTo: ["admin"] },
   { to: "/admin/membership/action-needed", label: "Action Needed", icon: AlertCircle, group: "Clients",
@@ -364,6 +366,68 @@ export function buildInternalNav(
     merged.set(item.to, item as NavItem);
   }
   return Array.from(merged.values());
+}
+
+/**
+ * Trainerize-style collapsed nav. Overview items stay flat; every other
+ * workspace is folded into ONE top-level `NavItem` whose `to` is the
+ * first (primary) route in that group and whose `children` are the
+ * remaining pages, rendered as a hover flyout on desktop and a subpanel
+ * on mobile.
+ *
+ * The primary label is generic ("Messages", "Clients", …) so the sidebar
+ * matches the requested IA — the actual first entry's label becomes the
+ * first flyout child so nothing is lost.
+ */
+const WORKSPACE_LABELS: Partial<Record<WorkspaceKey, { label: string }>> = {
+  Messages: { label: "Messages" },
+  Clients: { label: "Clients" },
+  Payments: { label: "Payments" },
+  Programming: { label: "Programs" },
+  Scheduling: { label: "Scheduling" },
+  Business: { label: "Business" },
+  Team: { label: "Team" },
+  "Add-ons": { label: "Add-ons" },
+  Settings: { label: "Settings" },
+};
+
+export function buildInternalNavCollapsed(
+  roleTag: StaffRoleTag,
+  opts: { mode?: "coaching" | "membership" } = {},
+): NavItem[] {
+  const flat = buildInternalNav(roleTag, opts);
+  const byGroup = new Map<string, NavItem[]>();
+  for (const item of flat) {
+    const g = (item.group ?? "Overview") as string;
+    const arr = byGroup.get(g) ?? [];
+    arr.push(item);
+    byGroup.set(g, arr);
+  }
+  const out: NavItem[] = [];
+  // Overview — stay flat
+  for (const it of byGroup.get("Overview") ?? []) {
+    out.push({ ...it, group: "Overview" });
+  }
+  byGroup.delete("Overview");
+  // Remaining workspaces — fold into one row per workspace
+  for (const key of WORKSPACE_ORDER) {
+    if (key === "Overview") continue;
+    const items = byGroup.get(key);
+    if (!items || items.length === 0) continue;
+    const primary = items[0];
+    const rest = items.slice(1);
+    const groupBucket: "Main Menu" | "Other" =
+      key === "Add-ons" || key === "Settings" ? "Other" : "Main Menu";
+    out.push({
+      to: primary.to,
+      label: WORKSPACE_LABELS[key]?.label ?? primary.label,
+      icon: primary.icon,
+      group: groupBucket,
+      keywords: primary.keywords,
+      children: rest.length > 0 ? [primary, ...rest] : undefined,
+    });
+  }
+  return out;
 }
 
 /**

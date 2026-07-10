@@ -3,7 +3,7 @@ import { useEffect, useMemo } from "react";
 import { useAuth } from "@/lib/auth";
 import { AppShell } from "@/components/app-shell";
 import { coachingAdminNav, coachNav } from "@/lib/admin-nav";
-import { buildInternalNav, resolveStaffRoleTag } from "@/lib/internal-nav";
+import { buildInternalNavCollapsed, resolveStaffRoleTag } from "@/lib/internal-nav";
 import { useDashboardMode, setDashboardMode } from "@/lib/dashboard-mode";
 import { AdminTopBar } from "@/components/admin-top-bar";
 import { TaskPopupGate } from "@/components/tasks/task-popup-gate";
@@ -55,7 +55,7 @@ function AdminLayout() {
   // mapped (defensive — keeps existing behaviour for unknown future roles).
   const roleTag = resolveStaffRoleTag(role);
   const nav = roleTag
-    ? buildInternalNav(roleTag, { mode: isMembership ? "membership" : "coaching" })
+    ? buildInternalNavCollapsed(roleTag, { mode: isMembership ? "membership" : "coaching" })
     : (isCoach ? coachNav : coachingAdminNav);
   const title = isCoach ? "Coach" : isMembership ? "Membership Admin" : "Admin";
   // Use a dedicated "membership" bar scope when in membership mode so the

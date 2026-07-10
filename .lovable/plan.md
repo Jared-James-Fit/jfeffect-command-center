@@ -1,142 +1,87 @@
-
 ## Goal
 
-Add a thin scheduling layer over the existing workout system so coaches can manually place any assigned workout onto any date, multiple workouts can live on the same date, and clients can move their scheduled workouts (with permission controls). Reuse `pl_blocks / pl_weeks / pl_days / pl_exercise_rows / pl_day_completions` — do not duplicate programs, exercises, or completions.
+Replace the accordion-heavy admin sidebar with a compact, one-click launcher. Every top-level item opens its primary route in one click; secondary pages appear in a desktop hover flyout or a mobile submenu panel. No route deletions this pass — only nav restructuring plus redirects for a small set of confirmed duplicates. Membership sidebar keeps its route list but adopts the same visual/behavioural system.
 
-## What's already in place (reuse as-is)
+## New admin sidebar structure
 
-- `pl_days.scheduled_date`, `schedule_source` (`auto`|`manual`), `schedule_locked` — move flow already writes these.
-- `MoveWorkoutSheet` — single-workout move with same-day conflict + swap.
-- `moveWorkout`, `swapWorkouts`, `undoScheduleChange`, `getMoveContext` server fns in `schedule-manager.functions.ts`.
-- Calendar + selected-day list already renders multiple workouts per date (just fixed).
-- Client impersonation for "Admin Client POV".
+Source of truth: `src/lib/admin-nav.ts` (`adminNav` and `coachingAdminNav`). Each entry maps to an existing route; `children` populate the flyout.
 
-## Backend changes (one migration)
+**OVERVIEW**
+- Dashboard → `/admin`
+- Tasks → `/admin/tasks`
+- Support Alerts → `/admin/support-alerts`
 
-### 1. New table `pl_scheduled_workouts` (the scheduling layer)
+**MAIN MENU**
+- Messages → `/admin/messages` — flyout: Inbox (`/admin/messages`), Broadcasts (`/admin/broadcasts`), Popups (`/admin/popups`), Call Access (`/admin/call-access`)
+- Clients → `/admin/clients` — flyout: All Clients, Check-In Reviews, Lift Reviews, Media Review Inbox, Action Requests, Check-Ins & Forms, Agreements, Native Agreements
+- Payments → `/admin/payments` — flyout: Transactions (`/admin/payments`), Products (`/admin/payment-links`), Promo Codes, Purchases, Billing Sources & Legacy, Legacy Migration Board
+- Programs → `/admin/program-library` — flyout: Program Library, Exercise Library, Cardio Targets, Warm-Up Protocols, Recipe Library, Nutrition Dashboard, Resources, Member Programs (`/admin/member-plans`), Member Resources
+- Scheduling → `/admin/calendar` — flyout: Calendar, Events, Appointments, PT Calendar (`/admin/pt-calendar`), Booking Links, Google Calendar
+- Business → `/admin/crm` — flyout: CRM Dashboard, CRM Contacts, Coaching Applications, Coaching Sales Page, Membership Sales Page (admin only), Training Intelligence
+- Team → `/admin/coaches` — flyout: Coaches, Staff & Media Managers, Approvals Queue, Program Submissions, Media Archives, Archive Manager
 
-Non-destructive additive record. Each row is one instance of a workout on a date.
+**OTHER**
+- Add-ons → `/admin/apps` — flyout: Integrations, Operations, FAQ Manager, Fillout Submissions, Chat GIF Library, Chat Sound Library, Content Ideas, Testimonials, Feature Flags, SOPs, Training Phases, Legal, Onboarding, Coaching, Content, Communication, Programming, Native Forms, Automations, Discount Codes, Popups (dup), Client POV, Nutrition Targets, Offers, Products History
+- Settings → `/admin/settings` — flyout: General (`/admin/settings`), SMS (`/admin/settings/sms`), Chat (`/admin/settings/chat`), Nutrition Automation, Coaching-Application Alerts, Floating Bar Customizer, Account
+- App Members (admin only, when NOT in membership mode) → `/admin/members` — flyout: App Members, Membership Home (`/admin/membership`) — kept as a fast switch into the Membership shell
 
-```
-id                  uuid pk
-client_id           uuid → clients.id
-source_day_id       uuid → pl_days.id       -- the prescription (block/week/day + rows)
-scheduled_date      date
-scheduled_time      time null               -- optional
-order_index         int  default 0          -- ordering when 2+ share a date
-schedule_source     text default 'manual'   -- 'program' | 'manual' | 'moved' | 'copied'
-created_by          uuid → auth.users null
-original_date       date null               -- first scheduled_date, kept when moved
-note                text null
-created_at / updated_at
-UNIQUE(client_id, source_day_id, scheduled_date, order_index)  -- prevents dup submits
-```
+Coach role gets the same layout with Business/Team/Payments/Add-ons hidden.
 
-RLS: authenticated read/write scoped to `client_id = auth.uid()`'s own client OR admin/coach via existing `has_role`.
+## Desktop flyouts
 
-### 2. Backfill
+Extend `AppShell` (`src/components/app-shell.tsx`) so any nav item with `children` renders:
+- The primary label is a normal `<Link>` — clicking it navigates to `item.to` (no flyout-only parents).
+- On hover/focus, a Radix `Popover` opens to the right of the sidebar with the child links.
+- ~120ms open delay, ~200ms close delay to prevent flicker; pointer-into-flyout keeps it open (bridge via `onMouseEnter` on trigger + content).
+- Chevron shown only when `children` exists.
+- Escape / outside-click closes. Full keyboard support via Radix defaults.
+- Active state on parent when any child route matches.
 
-One-time INSERT selecting every `pl_days` row that already has `scheduled_date` (the current program-derived schedule) as `schedule_source='program'`. Then existing calendar/workout queries can keep working during rollout because we also keep reading `pl_days.scheduled_date` — see rollout.
+## Mobile / drawer
 
-### 3. New table `client_schedule_permissions` (or column)
+In the existing mobile sheet, tapping a parent navigates. A small chevron on the right opens a second panel that replaces the current list (with a back arrow), instead of the accordion expand. Reuse the existing sheet — add local `openGroup` state.
 
-Simplest: add column `clients.workout_scheduling_permission text default 'move'` with allowed values `off | move | add_current_block | full_program`.
+## Safe consolidation & redirects
 
-### 4. Extend `moveWorkout` server fn (minimum change)
+Add `beforeLoad: () => redirect(...)` on these routes (all currently accessible URLs preserved, no data changes):
+- `/admin/programming` → `/admin/program-library` (already a dispatcher-style page; low use)
+- `/admin/programs` → `/admin/program-library`
+- `/admin/coaching` → `/admin/clients`
+- `/admin/communication` → `/admin/messages` (preserving `?tab=support-inbox`)
+- `/admin/content` → `/admin/broadcasts`
 
-- Continue to update `pl_days.scheduled_date` for program instances (single-instance case) so nothing breaks.
-- When the target row is a manual instance, update `pl_scheduled_workouts` instead.
-- Enforce `workout_scheduling_permission` when caller is the client.
+Everything else stays reachable at its current URL. No table, function, or permission change.
 
-### 5. New server fns in `schedule-manager.functions.ts`
+## Membership sidebar
 
-- `scheduleWorkouts({ clientId, sourceDayIds[], date, time?, orderIndex? })` — coach/admin only; inserts N `pl_scheduled_workouts` rows in a single transaction. Rejects duplicates.
-- `removeScheduledWorkout({ instanceId })` — coach/admin; only removes the manual instance, never the source day.
-- `reorderScheduledWorkouts({ date, clientId, orderedInstanceIds[] })` — updates `order_index`.
-- `updateScheduledTime({ instanceId, time })`.
-- `copyScheduledWorkout({ instanceId, newDate })` — coach/admin.
+Keep `membershipNav` route list intact. Apply the same shell behaviours (flyouts, mobile panel, active state) since they're driven by `AppShell` + `children`. Add one Overview-group entry pointing back to `/admin` labelled "Exit to Coaching" so the switch is obvious. No route moves inside membership.
 
-All: middleware `requireSupabaseAuth`, permission-gated for client callers.
+## Global search
 
-## Frontend changes
+Keep the existing `CommandPalette` (⌘K) and the sidebar's compact search input that opens it. No new backend. Nothing added if the palette weren't already wired — it is.
 
-### 6. Calendar data source (`src/lib/calendar-sources.ts`, `WorkoutsExperience.tsx`)
+## Files changed
 
-- Fetch **both** program-derived days (existing query) **and** `pl_scheduled_workouts` for the client.
-- Merge into the same `WorkoutItem` shape keyed by date. Each manual instance carries `instanceId` and resolves `day/week/block` via `source_day_id`.
-- Sort within a date by `order_index` then created_at.
-- Cardio/nutrition day resolver already handles multi-workout dates — no change.
+- `src/lib/admin-nav.ts` — rewrite `adminNav`, `coachingAdminNav`, `coachNav` with new groups + `children`.
+- `src/lib/internal-nav.ts` — align group ordering / mode filtering.
+- `src/components/app-shell.tsx` — add desktop hover-flyout Popover for items with `children`; add mobile submenu panel; keep pins, badges, palette, membership mode.
+- `src/routes/_authenticated/admin/programming.tsx`, `programs.tsx`, `coaching.tsx`, `communication.tsx`, `content.tsx` — convert to `beforeLoad` redirect stubs (originals become pure redirects; underlying pages they proxy remain reachable via their canonical route).
+- `src/lib/membership-nav.ts` — add "Exit to Coaching" entry.
 
-### 7. `+ Schedule Workout` action (single new UI, reused everywhere)
+## Not in scope
 
-New component `ScheduleWorkoutSheet.tsx` (bottom sheet, mobile-first):
+- Cross-entity search backend.
+- Redesigning any destination page.
+- Deleting routes or tables.
+- Moving client/member sidebars.
 
-Step 1 — Date (default: currently selected calendar date)
-Step 2 — Program (assigned to client only)
-Step 3 — Block (Active first, then other blocks in active program, then other assigned programs, then archived for admin only)
-Step 4 — Workouts (multi-select, searchable, shows day title + est duration)
-Step 5 — Optional time + order
-Step 6 — Confirm with preview: "Friday · adds 2 workouts. Currently scheduled: Upper Body Day. Will be added as Workout 2, 3."
+## Risks & how they're mitigated
 
-Entry points (reuse, no new pages):
-- `WorkoutsExperience` header action row.
-- Coach schedule manager toolbar.
-- Admin messages thread quick-actions dropdown (open sheet pre-scoped to that client).
+- **Accidental route hide**: everything not in the primary/flyout lists still resolves at its URL. Command palette still surfaces them.
+- **Flyout flicker**: bridged hover with delays; Radix Popover handles focus.
+- **Membership admins losing routes**: membership route list unchanged.
+- **Bookmarks**: only 5 routes redirect, all to their obvious successor; original URLs still respond (via redirect).
 
-### 8. Client "Move Workout" action
+## Final report will include
 
-- On any incomplete scheduled workout in `SelectedDayCard`, show only: **Start / Resume**, **Move Workout**, **Change Time or Order**. Hide Add/Copy/Replace/Remove.
-- `MoveWorkoutSheet` gets a permission check: if `workout_scheduling_permission='off'`, show read-only message.
-- Same-day landing dialog:
-  ```
-  Friday already has 1 workout.
-  ○ Add this as Workout 2
-  ○ Move Friday's workout to Saturday
-  ○ Choose another date
-  ```
-
-### 9. Coach/admin "More" menu on a workout card
-
-Extend the existing `DropdownMenu` on `SelectedDayCard` (coach mode) with: Add workout on this date, Copy to another date, Replace with…, Remove scheduled workout (only for manual instances), Change time, Change order.
-
-### 10. Messages quick action
-
-In the admin thread header/quick actions menu, add "Schedule Workout" — opens the same `ScheduleWorkoutSheet` with `clientId` prefilled. No new mutations.
-
-## Permissions matrix (enforced in server fns)
-
-| Permission | Move own | Add from current block | Add from any assigned program | Copy | Remove | Replace |
-|---|---|---|---|---|---|---|
-| off | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ |
-| move (default) | ✓ | ✗ | ✗ | ✗ | ✗ | ✗ |
-| add_current_block | ✓ | ✓ | ✗ | ✗ | ✗ | ✗ |
-| full_program | ✓ | ✓ | ✓ | ✓ | ✗ | ✗ |
-| coach/admin | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
-
-Remove/Replace are coach/admin only in every tier per spec.
-
-## Safety invariants
-
-- Manual scheduling never mutates `pl_days` rows other than `scheduled_date`/`order_index` on the specific instance.
-- `pl_day_completions` and `pl_row_results` are never touched by scheduling operations.
-- A completed instance's `source_day_id` stays locked; copies create a new instance with the same `source_day_id`, no completion copied.
-- Move/add operations never advance `pl_blocks.status` or `pl_weeks`.
-
-## Rollout order
-
-1. Migration (table + column + backfill of existing `pl_days.scheduled_date` into `pl_scheduled_workouts` as `schedule_source='program'`).
-2. Server fns (schedule/remove/reorder/copy) + extend `moveWorkout` permission check.
-3. Update calendar merge in `calendar-sources.ts` / `WorkoutsExperience.tsx`.
-4. Build `ScheduleWorkoutSheet` + wire into Workouts header, schedule manager, messages menu.
-5. Restrict client `SelectedDayCard` menu based on permission.
-6. Tests: multi-instance render, conflict handling, permission gating, completion preservation.
-
-## Out of scope
-
-- No redesign of calendar/week strip/month grid.
-- No changes to `pl_row_results`, `pl_day_completions`, workout player, program assignment logic, or block progression.
-- No new cardio/nutrition wiring — existing resolver already reads scheduled dates.
-
-## Open question
-
-Should the "add from current block" tier be enabled per-client from the client detail page, or globally off with per-client override? Spec implies per-client with `move` as the default; I'll add a select on the client profile.
+Previous vs new structure, per-flyout link list, redirects added, pages parked in Add-ons, files changed, and any route I found that appears broken or unused (documented, not deleted).

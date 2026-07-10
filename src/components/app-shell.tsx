@@ -61,6 +61,8 @@ function groupNavItems(items: NavItem[]) {
     // `buildInternalNav()` from `@/lib/internal-nav`. Legacy groups remain
     // below for back-compat with any nav source still using the old labels.
     "Overview",
+    "Main Menu",
+    "Other",
     "Messages",
     "Clients",
     "Payments",
@@ -428,6 +430,15 @@ export function AppShell({ items, bottomItems: customBottomItems, title, childre
         if (hay.includes(q)) {
           results.push({ item: it, group: g.label ?? "" });
         }
+        // Also search flyout children so mobile users can find secondary pages
+        for (const c of it.children ?? []) {
+          const chay = [c.label, it.label, g.label ?? "", ...(c.keywords ?? [])]
+            .join(" ")
+            .toLowerCase();
+          if (chay.includes(q)) {
+            results.push({ item: c, group: `${g.label ?? ""} · ${it.label}` });
+          }
+        }
       }
     }
     return results;
@@ -686,6 +697,10 @@ export function AppShell({ items, bottomItems: customBottomItems, title, childre
                         const active = item.to === activeTo;
                         const Icon = item.icon;
                         const pinned = isPinned(item.to);
+                          const childActive = !!item.children?.some(
+                            (c) => pathname === c.to || pathname.startsWith(c.to + "/"),
+                          );
+                          const groupBadge = navBadgeFor(item, navBadges);
                         const link = (
                           <Link
                             to={item.to}
@@ -696,19 +711,30 @@ export function AppShell({ items, bottomItems: customBottomItems, title, childre
                               "sidebar-nav-row group/row flex w-full items-center min-w-0 rounded-md transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-sidebar",
                               rowPadding,
                               rowText,
-                              active
+                                active || childActive
                                 ? "bg-primary/15 text-primary font-semibold border-l-2 border-primary"
                                 : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground border-l-2 border-transparent",
                             )}
                           >
-                            <div className="relative"><Icon className="h-4 w-4 shrink-0" /><SidebarBadge badge={navBadges[item.to]} isCollapsed={isCollapsed} /></div>
+                              <div className="relative"><Icon className="h-4 w-4 shrink-0" /><SidebarBadge badge={groupBadge} isCollapsed={isCollapsed} /></div>
                             {!isCollapsed && <span className="truncate flex-1">{item.label}</span>}
-                            {!isCollapsed && <SidebarBadge badge={navBadges[item.to]} isCollapsed={false} />}
+                              {!isCollapsed && <SidebarBadge badge={groupBadge} isCollapsed={false} />}
+                              {!isCollapsed && item.children && (
+                                <ChevronRight className="ml-1 h-3 w-3 shrink-0 text-muted-foreground" aria-hidden />
+                              )}
                           </Link>
                         );
                         return (
                           <li key={item.to}>
-                            {isCollapsed ? (
+                              {item.children ? (
+                                <SidebarFlyoutRow
+                                  item={item}
+                                  pathname={pathname}
+                                  navBadges={navBadges}
+                                  isCollapsed={isCollapsed}
+                                  trigger={link}
+                                />
+                              ) : isCollapsed ? (
                               <Tooltip>
                                 <TooltipTrigger asChild>{link}</TooltipTrigger>
                                 <TooltipContent side="right">{item.label}</TooltipContent>
@@ -906,6 +932,31 @@ export function AppShell({ items, bottomItems: customBottomItems, title, childre
                                   <Icon className="h-5 w-5 shrink-0" />
                                   <span className="truncate">{item.label}</span>
                                 </Link>
+                                {item.children && item.children.length > 0 && (
+                                  <ul className="ml-9 mt-0.5 space-y-0.5 border-l border-border/50 pl-2">
+                                    {item.children.map((c) => {
+                                      const CIcon = c.icon;
+                                      const cactive = pathname === c.to || pathname.startsWith(c.to + "/");
+                                      return (
+                                        <li key={c.to}>
+                                          <Link
+                                            to={c.to}
+                                            onClick={() => setMoreOpen(false)}
+                                            className={cn(
+                                              "flex min-h-[44px] items-center gap-2.5 rounded-md px-3 py-2 text-sm",
+                                              cactive
+                                                ? "bg-primary/10 font-semibold text-primary"
+                                                : "text-foreground/90 hover:bg-sidebar-accent",
+                                            )}
+                                          >
+                                            <CIcon className="h-4 w-4 shrink-0 text-muted-foreground" />
+                                            <span className="truncate">{c.label}</span>
+                                          </Link>
+                                        </li>
+                                      );
+                                    })}
+                                  </ul>
+                                )}
                               </li>
                             );
                           })}
@@ -1172,6 +1223,101 @@ function SidebarBadge({ badge, isCollapsed }: { badge?: { count?: number; dot?: 
     return <span className="ml-auto h-2 w-2 rounded-full bg-destructive" />;
   }
   return null;
+}
+
+/**
+ * Desktop hover flyout for a sidebar row that has `children`. Clicking the
+ * primary label navigates immediately (the caller passes the fully rendered
+ * `<Link>` as `trigger`). Hover / focus opens a Radix Popover to the right
+ * of the sidebar with the child links. A short bridged delay prevents
+ * flicker when the cursor moves from the row into the flyout.
+ */
+function SidebarFlyoutRow({
+  item, pathname, navBadges, isCollapsed, trigger,
+}: {
+  item: NavItem;
+  pathname: string;
+  navBadges: Record<string, { count?: number; dot?: boolean }>;
+  isCollapsed: boolean;
+  trigger: ReactNode;
+}) {
+  const [open, setOpen] = useState(false);
+  const openTimer = useRef<number | null>(null);
+  const closeTimer = useRef<number | null>(null);
+  const clearTimers = () => {
+    if (openTimer.current) { clearTimeout(openTimer.current); openTimer.current = null; }
+    if (closeTimer.current) { clearTimeout(closeTimer.current); closeTimer.current = null; }
+  };
+  const scheduleOpen = () => {
+    clearTimers();
+    openTimer.current = window.setTimeout(() => setOpen(true), 90);
+  };
+  const scheduleClose = () => {
+    clearTimers();
+    closeTimer.current = window.setTimeout(() => setOpen(false), 180);
+  };
+  useEffect(() => () => clearTimers(), []);
+  // Close whenever the pathname changes so navigating from within the
+  // flyout dismisses it immediately.
+  useEffect(() => { setOpen(false); }, [pathname]);
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <div
+          onMouseEnter={scheduleOpen}
+          onMouseLeave={scheduleClose}
+          onFocusCapture={() => setOpen(true)}
+          className="relative"
+        >
+          {isCollapsed ? (
+            <Tooltip>
+              <TooltipTrigger asChild>{trigger as any}</TooltipTrigger>
+              <TooltipContent side="right">{item.label}</TooltipContent>
+            </Tooltip>
+          ) : trigger}
+        </div>
+      </PopoverTrigger>
+      <PopoverContent
+        side="right"
+        align="start"
+        sideOffset={6}
+        className="w-60 p-1.5"
+        onOpenAutoFocus={(e) => e.preventDefault()}
+        onMouseEnter={() => { clearTimers(); setOpen(true); }}
+        onMouseLeave={scheduleClose}
+      >
+        <div className="px-2 py-1 text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+          {item.label}
+        </div>
+        <ul className="flex flex-col gap-0.5">
+          {(item.children ?? []).map((c) => {
+            const CIcon = c.icon;
+            const active = pathname === c.to || pathname.startsWith(c.to + "/");
+            const cb = navBadges[c.to];
+            return (
+              <li key={c.to}>
+                <Link
+                  to={c.to}
+                  onClick={() => setOpen(false)}
+                  className={cn(
+                    "flex items-center gap-2.5 rounded-md px-2.5 py-2 text-sm transition-colors",
+                    active
+                      ? "bg-primary/15 text-primary font-semibold"
+                      : "text-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
+                  )}
+                >
+                  <CIcon className="h-4 w-4 shrink-0" />
+                  <span className="truncate flex-1">{c.label}</span>
+                  <SidebarBadge badge={cb} isCollapsed={false} />
+                </Link>
+              </li>
+            );
+          })}
+        </ul>
+      </PopoverContent>
+    </Popover>
+  );
 }
 
 function BottomNavBadge({ badge }: { badge?: { count?: number; dot?: boolean } }) {
