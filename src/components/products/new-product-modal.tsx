@@ -371,6 +371,10 @@ export default function NewProductModal({
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [touched, setTouched] = useState<Record<string, boolean>>({});
   const submittedOnce = useRef(false);
+  // Stable per-open idempotency key. A retried Save re-uses the same UUID so
+  // Stripe returns the original product/price/payment_link instead of
+  // duplicating them.
+  const idempotencyKeyRef = useRef<string | null>(null);
 
   useEffect(() => {
     if (open) {
@@ -378,6 +382,10 @@ export default function NewProductModal({
       setShowAdvanced(false);
       setTouched({});
       submittedOnce.current = false;
+      idempotencyKeyRef.current =
+        typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+          ? crypto.randomUUID()
+          : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
     }
   }, [open, defaultWorkspace]);
 
@@ -546,6 +554,7 @@ export default function NewProductModal({
         accessLevel: accessPresetToLevel(form.accessPreset),
         generateStripeLink: generateStripe,
         isMemberFacing: form.workspace !== "coaching",
+        idempotencyKey: idempotencyKeyRef.current,
       };
 
       const res: any = await createFn({ data: payload as any });
