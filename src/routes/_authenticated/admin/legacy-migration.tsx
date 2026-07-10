@@ -1,5 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
+import { ClientNameLink } from "@/components/clients/client-name-link";
 import { useServerFn } from "@tanstack/react-start";
 import { listClientsWithBillingFn, getBillingDashboardFn } from "@/lib/billing-sources.functions";
 import { PageHeader } from "@/components/app-shell";
@@ -120,11 +121,11 @@ function LegacyMigrationPage() {
                         <div className="text-sm font-medium truncate">{c.full_name ?? "Unnamed"}</div>
                         <div className="text-[11px] text-muted-foreground truncate">{c.email ?? "—"}</div>
                       </div>
-                      <Link to="/admin/clients/$id" params={{ id: c.id }}>
+                      <ClientNameLink clientId={c.id}>
                         <Button variant="ghost" size="sm" className="h-7 px-2">
                           Open <ArrowRight className="ml-1 h-3 w-3" />
                         </Button>
-                      </Link>
+                      </ClientNameLink>
                     </div>
                     {c.legacy_billing && (
                       <div className="flex items-center gap-1.5 flex-wrap text-[10px] text-muted-foreground">

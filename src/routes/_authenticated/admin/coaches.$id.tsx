@@ -1,5 +1,6 @@
 import { createFileRoute, Link, useParams } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { ClientNameLink } from "@/components/clients/client-name-link";
 import { useMemo, useState, lazy, Suspense } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/app-shell";
@@ -232,7 +233,7 @@ function CoachDetailPage() {
                 <div className="flex items-center gap-2 min-w-0">
                   <UserAvatar src={(c as any).profile_picture_url} name={c.full_name} size={32} />
                   <div className="min-w-0">
-                    <Link to="/admin/clients/$id" params={{ id: c.id }} className="text-sm font-semibold hover:underline truncate block">{c.full_name}</Link>
+                    <ClientNameLink clientId={c.id} className="text-sm font-semibold hover:underline truncate block">{c.full_name}</ClientNameLink>
                     <div className="text-[11px] text-muted-foreground truncate">{c.email}</div>
                   </div>
                   </div>

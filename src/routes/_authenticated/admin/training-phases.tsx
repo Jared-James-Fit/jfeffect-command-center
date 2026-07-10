@@ -1,5 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
+import { ClientNameLink } from "@/components/clients/client-name-link";
 import { useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/app-shell";
@@ -97,9 +98,9 @@ function TrainingPhasesDashboard() {
                 <div key={r.id} className="grid grid-cols-12 items-center gap-3 px-4 py-3 hover:bg-secondary/30">
                   <div className="col-span-12 md:col-span-3">
                     {r.clients ? (
-                      <Link to="/admin/clients/$id" params={{ id: r.clients.id }} className="font-semibold hover:underline">
+                      <ClientNameLink clientId={r.clients.id} className="font-semibold hover:underline">
                         {r.clients.full_name}
-                      </Link>
+                      </ClientNameLink>
                     ) : <span className="text-muted-foreground">—</span>}
                     <div className="text-xs text-muted-foreground">{displayTitle(r)}</div>
                   </div>

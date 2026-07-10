@@ -1,5 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { ClientNameLink } from "@/components/clients/client-name-link";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Input } from "@/components/ui/input";
@@ -536,14 +537,12 @@ function BlockEditor() {
         unsaved={dirty}
       />
       <div className="sticky top-0 z-30 -mx-2 flex flex-wrap items-center gap-2 border-b border-border bg-background/95 px-2 py-1.5 backdrop-blur md:-mx-3 md:px-3">
-        <Link
-          to="/admin/clients/$id"
-          params={{ id: clientId }}
+        <ClientNameLink clientId={clientId}
           className="inline-flex shrink-0 items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
           aria-label="Back to client"
         >
           <ArrowLeft className="h-3.5 w-3.5" />
-        </Link>
+        </ClientNameLink>
         <ClientBuilderStickyChip
           clientId={clientId}
           clientName={clientName}

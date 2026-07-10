@@ -1,5 +1,6 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
+import { ClientNameLink } from "@/components/clients/client-name-link";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/app-shell";
@@ -143,15 +144,13 @@ function ClientPovPicker() {
                     )}
                   </div>
                   <div className="flex shrink-0 items-center gap-1.5">
-                    <Link
-                      to="/admin/clients/$id"
-                      params={{ id: c.id }}
+                    <ClientNameLink clientId={c.id}
                       aria-label="Open client profile"
                     >
                       <Button size="sm" variant="ghost" className="h-9 px-2 text-xs">
                         Profile
                       </Button>
-                    </Link>
+                    </ClientNameLink>
                     <Button
                       size="icon"
                       variant="outline"

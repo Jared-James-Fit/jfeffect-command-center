@@ -1,5 +1,6 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { ClientNameLink } from "@/components/clients/client-name-link";
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
@@ -534,13 +535,11 @@ function ReviewDetail({
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
               <DropdownMenuItem asChild>
-                <Link
-                  to="/admin/clients/$id"
-                  params={{ id: sub.clientId }}
+                <ClientNameLink clientId={sub.clientId}
                   search={{ tab: "lift-videos" as any }}
                 >
                   <User className="mr-2 h-4 w-4" /> Open Client Profile
-                </Link>
+                </ClientNameLink>
               </DropdownMenuItem>
               {liftVideoOpenUrl(activeClip) && (
                 <DropdownMenuItem asChild>

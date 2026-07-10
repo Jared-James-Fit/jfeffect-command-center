@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { ClientNameLink } from "@/components/clients/client-name-link";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/app-shell";
@@ -130,13 +131,11 @@ export function FilloutSubmissionsPage({ embedded = false }: { embedded?: boolea
                           {s.unmatched ? (
                             <span>Reason: {s.unmatch_reason ?? "unknown"}</span>
                           ) : client ? (
-                            <Link
-                              to="/admin/clients/$id"
-                              params={{ id: s.client_id! }}
+                            <ClientNameLink clientId={s.client_id!}
                               className="hover:underline"
                             >
                               {client.full_name ?? client.email ?? s.client_id}
-                            </Link>
+                            </ClientNameLink>
                           ) : (
                             <span>{s.client_id}</span>
                           )}

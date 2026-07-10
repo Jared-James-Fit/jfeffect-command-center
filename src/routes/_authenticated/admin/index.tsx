@@ -1,5 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
+import { ClientNameLink } from "@/components/clients/client-name-link";
 import { useState, useMemo, useEffect, lazy, Suspense } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/app-shell";
@@ -151,9 +152,9 @@ function TrainingIntelDashboardCard() {
             <li key={c.client_id} className="flex items-start gap-3 py-2.5">
               <UserAvatar src={c.profile_picture_url ?? undefined} name={c.full_name ?? "Client"} size={32} />
               <div className="min-w-0 flex-1">
-                <Link to="/admin/clients/$id" params={{ id: c.client_id }} className="text-sm font-semibold hover:underline truncate block">
+                <ClientNameLink clientId={c.client_id} className="text-sm font-semibold hover:underline truncate block">
                   {c.full_name}
-                </Link>
+                </ClientNameLink>
                 <div className="mt-1 flex flex-wrap gap-1">
                   {(c.labels ?? []).slice(0, 4).map((l: string) => {
                     const meta = (LABEL_META as any)[l];
@@ -508,7 +509,7 @@ function AdminDashboard() {
                   <UserAvatar src={p.avatarUrl ?? undefined} name={p.name} size={36} />
                   <div className="min-w-0 flex-1">
                     {p.clientId ? (
-                      <Link to="/admin/clients/$id" params={{ id: p.clientId }} className="block truncate text-sm font-semibold hover:underline">{p.name}</Link>
+                      <ClientNameLink clientId={p.clientId} className="block truncate text-sm font-semibold hover:underline">{p.name}</ClientNameLink>
                     ) : <div className="truncate text-sm font-semibold">{p.name}</div>}
                     <div className="mt-0.5 flex items-center gap-2">
                       {p.urgent && <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-destructive" />}
@@ -617,9 +618,9 @@ function AdminDashboard() {
                           <div className="flex items-center justify-between gap-2 mb-1">
                             <div className="min-w-0 flex-1">
                               {p.clients ? (
-                                <Link to="/admin/clients/$id" params={{ id: p.clients.id }} search={{ tab: "training" }} className="block truncate text-sm font-semibold hover:underline">
+                                <ClientNameLink clientId={p.clients.id} tab="training" className="block truncate text-sm font-semibold hover:underline">
                                   {p.clients.full_name}
-                                </Link>
+                                </ClientNameLink>
                               ) : <span className="text-sm text-muted-foreground">—</span>}
                               <div className="truncate text-[11px] text-muted-foreground">{displayTitle(p)} · {p.phase_type}</div>
                             </div>
@@ -629,7 +630,7 @@ function AdminDashboard() {
                           </div>
                           <div className="flex items-center gap-2">
                             <Progress value={p.derived.percentComplete} className="h-1 flex-1" />
-                            <Link to="/admin/clients/$id" params={{ id: p.client_id }} search={{ tab: "training" }} className="shrink-0 text-[11px] font-semibold text-primary hover:underline">Update</Link>
+                            <ClientNameLink clientId={p.client_id} tab="training" className="shrink-0 text-[11px] font-semibold text-primary hover:underline">Update</ClientNameLink>
                           </div>
                         </div>
                       ))}
@@ -774,13 +775,13 @@ function MoreSection({ clients, shortcuts }: { clients: any[]; shortcuts: { name
             <ul className="divide-y divide-border">
               {clients.slice(0, 3).map((c) => (
                 <li key={c.id} className="flex items-center justify-between gap-2 py-2 min-w-0">
-                  <Link to="/admin/clients/$id" params={{ id: c.id }} className="flex min-w-0 flex-1 items-center gap-2 hover:opacity-80">
+                  <ClientNameLink clientId={c.id} className="flex min-w-0 flex-1 items-center gap-2 hover:opacity-80">
                     <UserAvatar src={c.profile_picture_url} name={c.full_name} size={28} />
                     <div className="min-w-0 flex-1">
                       <div className="truncate text-sm font-semibold">{c.full_name}</div>
                       <div className="truncate text-[10px] text-muted-foreground">{c.coaching_type ?? "—"}</div>
                     </div>
-                  </Link>
+                  </ClientNameLink>
                   <Badge variant="outline" className="shrink-0 max-w-[40%] truncate text-[10px]">{c.status}</Badge>
                 </li>
               ))}

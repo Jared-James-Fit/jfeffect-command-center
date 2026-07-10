@@ -1,5 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMutation, useQuery } from "@tanstack/react-query";
+import { ClientNameLink } from "@/components/clients/client-name-link";
 import { useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/app-shell";
@@ -524,14 +525,12 @@ function SignedAgreementsPage() {
                         aria-label={`Select all documents for ${g.clientName}`}
                       />
                       {g.clientId ? (
-                        <Link
-                          to="/admin/clients/$id"
-                          params={{ id: g.clientId }}
+                        <ClientNameLink clientId={g.clientId}
                           className="flex items-center gap-2 font-semibold hover:underline"
                         >
                           <User className="h-4 w-4 text-muted-foreground" />
                           {g.clientName}
-                        </Link>
+                        </ClientNameLink>
                       ) : (
                         <span className="flex items-center gap-2 font-semibold text-amber-500">
                           <LinkIcon className="h-4 w-4" />
@@ -660,13 +659,11 @@ function SignedAgreementsPage() {
                               </a>
                             )}
                             {a.client_id ? (
-                              <Link
-                                to="/admin/clients/$id"
-                                params={{ id: a.client_id }}
+                              <ClientNameLink clientId={a.client_id}
                                 className="text-xs text-primary hover:underline inline-flex items-center gap-1"
                               >
                                 <User className="h-3 w-3" /> Client
-                              </Link>
+                              </ClientNameLink>
                             ) : (
                               <Button
                                 size="sm"

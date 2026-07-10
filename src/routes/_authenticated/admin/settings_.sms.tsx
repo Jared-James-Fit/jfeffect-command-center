@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { PageHeader } from "@/components/app-shell";
+import { ClientNameLink } from "@/components/clients/client-name-link";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -363,7 +364,7 @@ function SmsSettings() {
                     </div>
                   </td>
                   <td className="px-3 py-2 text-right">
-                    <Button asChild size="sm" variant="ghost"><Link to="/admin/clients/$id" params={{ id: c.id }}>Open</Link></Button>
+                    <Button asChild size="sm" variant="ghost"><ClientNameLink clientId={c.id}>Open</ClientNameLink></Button>
                   </td>
                 </tr>
               ))}

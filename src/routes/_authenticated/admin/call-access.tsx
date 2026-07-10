@@ -1,5 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { PageHeader } from "@/components/app-shell";
+import { ClientNameLink } from "@/components/clients/client-name-link";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
@@ -266,9 +267,9 @@ function CallAccessPage() {
                               </Button>
                             )}
                             <Button asChild size="icon" variant="ghost" className="h-8 w-8">
-                              <Link to="/admin/clients/$id" params={{ id: c.id }} title="Open profile">
+                              <ClientNameLink clientId={c.id} title="Open profile">
                                 <ExternalLink className="h-4 w-4" />
-                              </Link>
+                              </ClientNameLink>
                             </Button>
                           </div>
                         </td>

@@ -1,5 +1,6 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect } from "react";
+import { ClientNameLink } from "@/components/clients/client-name-link";
 import { useQuery } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
@@ -108,7 +109,7 @@ export function CardioDashboard({ embedded = false }: { embedded?: boolean } = {
                     <Badge variant="outline" className={t.derived.tone}>{t.derived.label}</Badge>
                     <Badge variant="outline" className={dayTypeTone(t.day_type)}>{dayTypeLabel(t)}</Badge>
                     {t.clients && (
-                      <Link to="/admin/clients/$id" params={{ id: t.clients.id }} className="truncate text-sm font-semibold text-primary hover:underline">{t.clients.full_name}</Link>
+                      <ClientNameLink clientId={t.clients.id} className="truncate text-sm font-semibold text-primary hover:underline">{t.clients.full_name}</ClientNameLink>
                     )}
                     <span className="w-full text-xs text-muted-foreground sm:w-auto">
                       {t.cardio_type === "Custom" ? t.custom_type : t.cardio_type} {t.frequency_per_week ? `· ${t.frequency_per_week}x/wk` : ""} {t.duration_minutes ? `· ${t.duration_minutes} min` : ""} {t.intensity ? `· ${t.intensity}` : ""}
@@ -205,7 +206,7 @@ function CardioComplianceSection() {
             const tone = r.rate < 0.5 ? "text-destructive" : r.rate < 0.85 ? "text-amber-500" : "text-emerald-500";
             return (
               <li key={r.clientId} className="flex items-center justify-between gap-3 py-2">
-                <Link to="/admin/clients/$id" params={{ id: r.clientId }} className="truncate text-sm font-semibold text-primary hover:underline">{r.name}</Link>
+                <ClientNameLink clientId={r.clientId} className="truncate text-sm font-semibold text-primary hover:underline">{r.name}</ClientNameLink>
                 <div className="flex shrink-0 items-center gap-3 text-xs">
                   <span className={`font-bold ${tone}`}>{r.completedDays}/{r.assigned} days</span>
                   <span className="text-muted-foreground">{r.last ? `last ${r.last}` : "no logs"}</span>
