@@ -707,9 +707,9 @@ export function AppShell({ items, bottomItems: customBottomItems, title, childre
                             : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground border-l-2 border-amber-400/40",
                         )}
                       >
-                        <div className="relative"><Icon className="h-4 w-4 shrink-0" /><SidebarBadge badge={navBadges[item.to]} iconOnly={iconOnly} /></div>
+                        <div className="relative"><Icon className="h-4 w-4 shrink-0" /><SidebarBadge badge={navBadges[item.to]} isCollapsed={iconOnly} /></div>
                         {!iconOnly && <span className="truncate flex-1">{item.label}</span>}
-                        {!iconOnly && <SidebarBadge badge={navBadges[item.to]} iconOnly={false} />}
+                        {!iconOnly && <SidebarBadge badge={navBadges[item.to]} isCollapsed={false} />}
                       </Link>
                     );
                     return (
@@ -793,9 +793,9 @@ export function AppShell({ items, bottomItems: customBottomItems, title, childre
                                 : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground border-l-2 border-transparent",
                             )}
                           >
-                              <div className="relative"><Icon className="h-4 w-4 shrink-0" /><SidebarBadge badge={groupBadge} iconOnly={iconOnly} /></div>
+                              <div className="relative"><Icon className="h-4 w-4 shrink-0" /><SidebarBadge badge={groupBadge} isCollapsed={iconOnly} /></div>
                             {!iconOnly && <span className="truncate flex-1">{item.label}</span>}
-                              {!iconOnly && <SidebarBadge badge={groupBadge} iconOnly={false} />}
+                              {!iconOnly && <SidebarBadge badge={groupBadge} isCollapsed={false} />}
                               {!iconOnly && item.children && (
                                 <ChevronRight className="ml-1 h-3 w-3 shrink-0 text-muted-foreground" aria-hidden />
                               )}
@@ -815,7 +815,7 @@ export function AppShell({ items, bottomItems: customBottomItems, title, childre
                                   item={item}
                                   pathname={pathname}
                                   navBadges={navBadges}
-                                  iconOnly={iconOnly}
+                                  isCollapsed={iconOnly}
                                   trigger={link}
                                 />
                               ) : iconOnly ? (
