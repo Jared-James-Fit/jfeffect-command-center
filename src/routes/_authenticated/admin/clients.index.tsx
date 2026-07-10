@@ -42,6 +42,7 @@ const searchSchema = z.object({
   page:          fallback(z.number().int().min(1),                                          1).default(1),
   size:          fallback(z.union([z.literal(15), z.literal(25), z.literal(50)]),           15).default(15),
   view:          fallback(z.enum(["clients", "compliance"]),                                "clients").default("clients"),
+  lifecycle:     fallback(z.enum(["active","archived","deactivated"]),                      "active").default("active"),
 });
 
 export const Route = createFileRoute("/_authenticated/admin/clients/")({
@@ -76,6 +77,8 @@ function ClientsDirectoryPage() {
   const [addOpen, setAddOpen] = useState(false);
 
   const activeView = search.view ?? "clients";
+  const lifecycle = search.lifecycle ?? "active";
+  const isActiveLifecycle = lifecycle === "active";
 
   const { data, isFetching, isError, refetch } = useQuery({
     queryKey: ["clients-directory", search],
@@ -89,6 +92,7 @@ function ClientsDirectoryPage() {
           sort: search.sort,
           page: search.page,
           size: search.size,
+          lifecycle,
         },
       }),
     placeholderData: (prev) => prev,
@@ -162,7 +166,10 @@ function ClientsDirectoryPage() {
           <ComplianceDashboard />
         ) : (
           <>
-            <SummaryCards counts={counts} active={search.status as StatusKey} loading={!data && isFetching} />
+            <LifecycleTabs value={lifecycle} />
+            {isActiveLifecycle && (
+              <SummaryCards counts={counts} active={search.status as StatusKey} loading={!data && isFetching} />
+            )}
 
             <ClientToolbar
               search={search.search}
@@ -188,7 +195,7 @@ function ClientsDirectoryPage() {
             ) : (
               <ul className="space-y-2">
                 {rows.map((r) => (
-                  <ClientRow key={r.id} r={r} onArchive={isAdmin ? setArchiveTarget : undefined} />
+                  <ClientRow key={r.id} r={r} onArchive={isAdmin && isActiveLifecycle ? setArchiveTarget : undefined} />
                 ))}
               </ul>
             )}
