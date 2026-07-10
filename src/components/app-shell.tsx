@@ -224,6 +224,7 @@ export function AppShell({ items, bottomItems: customBottomItems, title, childre
   const mediaBadges = useMediaNavBadges();
   const navBadges = useMemo(() => ({ ...clientBadges, ...mediaBadges }), [clientBadges, mediaBadges]);
   const [mode, setMode] = useSidebarMode();
+  const isTablet = useIsTablet();
   const [collapsedSections, toggleSection, setAllSections] = useCollapsedSections();
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
@@ -394,8 +395,12 @@ export function AppShell({ items, bottomItems: customBottomItems, title, childre
     items.find((i) => i.to.endsWith("/account") || i.to.endsWith("/account-settings"))?.to ??
     "/admin/account";
 
-  const isCollapsed = mode === "collapsed";
-  const isCompact = mode === "compact";
+  // On tablet widths we always render the flat expanded sidebar — no
+  // compact/collapsed variants, no group toggles, no flyouts. This keeps
+  // primary navigation one tap away on iPad without desktop hover UI.
+  const effectiveMode: SidebarMode = isTablet ? "expanded" : mode;
+  const isCollapsed = effectiveMode === "collapsed";
+  const isCompact = effectiveMode === "compact";
   const sidebarWidthClass = isCollapsed ? "w-14" : isCompact ? "w-52" : "w-60";
   const rowPadding = isCollapsed
     ? "justify-center px-0 py-2"
