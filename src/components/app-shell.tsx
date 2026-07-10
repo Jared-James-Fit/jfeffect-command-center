@@ -932,6 +932,31 @@ export function AppShell({ items, bottomItems: customBottomItems, title, childre
                                   <Icon className="h-5 w-5 shrink-0" />
                                   <span className="truncate">{item.label}</span>
                                 </Link>
+                                {item.children && item.children.length > 0 && (
+                                  <ul className="ml-9 mt-0.5 space-y-0.5 border-l border-border/50 pl-2">
+                                    {item.children.map((c) => {
+                                      const CIcon = c.icon;
+                                      const cactive = pathname === c.to || pathname.startsWith(c.to + "/");
+                                      return (
+                                        <li key={c.to}>
+                                          <Link
+                                            to={c.to}
+                                            onClick={() => setMoreOpen(false)}
+                                            className={cn(
+                                              "flex min-h-[44px] items-center gap-2.5 rounded-md px-3 py-2 text-sm",
+                                              cactive
+                                                ? "bg-primary/10 font-semibold text-primary"
+                                                : "text-foreground/90 hover:bg-sidebar-accent",
+                                            )}
+                                          >
+                                            <CIcon className="h-4 w-4 shrink-0 text-muted-foreground" />
+                                            <span className="truncate">{c.label}</span>
+                                          </Link>
+                                        </li>
+                                      );
+                                    })}
+                                  </ul>
+                                )}
                               </li>
                             );
                           })}
