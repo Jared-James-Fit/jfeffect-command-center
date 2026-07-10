@@ -8,7 +8,19 @@ import { createFileRoute } from "@tanstack/react-router";
 export const Route = createFileRoute("/api/public/hooks/birthday-notifications")({
   server: {
     handlers: {
-      POST: async () => {
+      POST: async ({ request }) => {
+        // ---------- Worker secret guard (matches sibling scheduled hooks) ----------
+        const expected = process.env.SCHEDULED_WORKER_SECRET ?? "";
+        const provided = request.headers.get("x-worker-secret") ?? "";
+        if (
+          !expected ||
+          !provided ||
+          provided.length !== expected.length ||
+          !timingSafeEqualStr(provided, expected)
+        ) {
+          return new Response("unauthorized", { status: 401 });
+        }
+
         const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
         const { sendWebPushToUser } = await import("@/lib/push/push.server");
 
@@ -69,3 +81,11 @@ export const Route = createFileRoute("/api/public/hooks/birthday-notifications")
     },
   },
 });
+
+/** Constant-time string compare. Strings must already be the same length. */
+function timingSafeEqualStr(a: string, b: string): boolean {
+  if (a.length !== b.length) return false;
+  let diff = 0;
+  for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  return diff === 0;
+}
