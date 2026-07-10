@@ -1,90 +1,112 @@
-# Client Profile Overlay Workspace
+# Simplify the New Product workflow
 
-Open the existing admin client profile in a large overlay on top of whatever page the admin was on (Clients list, Payments, Check-Ins, etc.), while keeping the underlying route mounted with all filters, sort, pagination, tab, selection, and scroll intact. The standalone `/admin/clients/$id` URL keeps working for direct links / refresh / share.
+Rebuild the New Product dialog in `src/routes/_authenticated/admin/payment-links.tsx` as a focused modal that reads like a selling workflow rather than a Stripe configuration form. Existing product records, Stripe sync, payment links, purchases, tax logic, and the Edit flow are all preserved — the redesign is a UI + validation + defaults pass on top of the same data source.
 
-## Architecture — route-driven overlay via a search param
+## Scope
 
-TanStack Router doesn't have a first-class "background location" like React Router, but the same UX is achievable with a global search param on the `_authenticated` layout.
+- Rebuild the **create** path only (button labeled "New Product"). The **edit** path keeps the current fuller form for now so existing Stripe-linked products remain fully editable without regressions. Advanced Options in the new create modal exposes the same technical fields on demand.
+- Do not delete existing columns, server functions, Stripe records, or route paths.
+- All writes go through the same `upsertCoachingProduct` / Stripe sync path that Products & Offers, Payments, Transactions, client profiles, and My Purchases already read from.
 
-- Add `?clientId=<uuid>` (and optional `clientTab=summary|coaching|...`) to the `_authenticated` layout's `validateSearch`. When present, the layout renders `<ClientProfileOverlay clientId=... />` above `<Outlet />` without touching the underlying route.
-- Opening a client sets the search param via `navigate({ search: prev => ({ ...prev, clientId, clientTab }) })` from the current `from`. The underlying route stays matched — its loader is not re-run, its component is not unmounted, so filters/scroll/selection are all preserved.
-- Closing the overlay clears the param the same way. Browser Back naturally clears it (history entry pop) → overlay closes and admin lands on the exact scroll/state they had. Forward reopens it.
-- Direct visits to `/admin/clients/$id` keep loading the full-page profile route as today — no deep links break.
+## New create-modal structure
 
-Why this over a modal without URL state: it satisfies Back/Forward, shareable "focused" URLs (`?clientId=...` on any list), and lets `useBlocker` intercept unsaved-changes closes.
+Single dialog (desktop: centered, max-w ~1000px, sticky header + footer, internal scroll; mobile: full-screen sheet with safe-area padding, sticky title + primary action).
 
-## Reuse strategy — no duplicate profile
+Sections, in order:
 
-Today `src/routes/_authenticated/admin/clients.$id.tsx` is a 2148-line route that owns the loader + UI. Extract the page body into a plain, route-free component so both the standalone route and the overlay render the same thing.
+1. **Product basics** — Category dropdown (Online Coaching / In-Person Training / Hybrid Coaching / Membership / Program / Session Package / Consultation / Digital Product / Other), Product name, single Description (with an "Add more details" disclosure that reveals the long-form field only when needed), optional Product image.
+2. **Pricing** — Segmented control: One-time / Recurring / Payment plan / Free. Price + currency (default CAD). Recurring reveals billing frequency + subscription duration (Renews until cancelled / Fixed number of payments / Fixed end date). Payment plan reveals total, optional deposit, instalments, frequency. Free hides price entirely and skips Stripe price creation. A one-line plain-English summary (`$499 CAD every month for 12 payments`) renders directly under the controls.
+3. **Product duration & start rules** — Only rendered when the category actually implies timed access. Access duration (Ongoing / days / weeks / months / fixed end date) and Starts (Immediately / After current product ends / Next Monday / Fixed date / Manual). "Billing duration" and "Service duration" are labeled and stored separately.
+4. **What's included** — Repeatable list rows (Add / Remove / drag reorder) instead of a large textarea. Pasting multi-line text auto-splits into rows. Persisted as an array on the product so it can render on checkout, product detail, admin purchase record, and My Purchases.
+5. **Sessions & access** — Only rendered for Session Package, In-Person Training, or Consultation categories: sessions included, session length, expiry, booking eligibility. App access uses labeled presets (No app access / Basic member / Full membership / Online coaching client / In-person coaching client / Custom) that map to the existing numeric `access_level`. The raw 0–5 dropdown moves to Advanced Options.
+6. **Agreement** — Single toggle "Require agreement before access is activated". When on, reveal template picker + send-automatically + block-until-signed + admin-override. All hidden when off.
+7. **Selling controls** — Toggles: self-purchase, promotion codes, self-cancellation, new-customers-only, visible on sales page (last one only when self-purchase is on).
+8. **Live summary panel** — Sticky right-column on desktop, collapsible card on mobile. Reflects name, plain-language price, service duration, start rule, included items, checkout mode, tax notice, promo-codes state. Updates on every keystroke.
+9. **Advanced Options** — Collapsed by default. Contains Stripe Product ID, Stripe Price ID, Stripe Payment Link ID, raw checkout mode, raw access level, Stripe metadata, internal notes, custom tax behaviour, legacy sync toggles, Status (Draft / Active). Auto-generated values are read-only with an explicit "Unlink & replace" confirm dialog before edits.
 
-- New: `src/components/clients/profile/client-profile-workspace.tsx` — takes `{ clientId, mode: "page" | "overlay", initialTab? }`, contains everything currently rendered by `clients.$id.tsx` (summary, tabs, forms, POV actions, coaching setup, notes, etc.).
-- `src/routes/_authenticated/admin/clients.$id.tsx` becomes a thin route wrapper: `<ClientProfileWorkspace clientId={id} mode="page" />`. All queries, mutations, permission checks, and POV impersonation flow stay in the same components — one source of truth.
-- The overlay renders the same `<ClientProfileWorkspace clientId={clientId} mode="overlay" initialTab={clientTab} />` inside a dialog shell. `mode` only toggles chrome (hide the page's own PageHeader/back-link, show the overlay's fixed header with close button).
+Header: "Add Product" + optional subtitle. Footer: Cancel + primary action (`Create Product` normally, `Create Product & Checkout Link` when self-purchase is on). No separate Back button.
 
-Data-loading: React Query cache keys stay identical, so opening the overlay right after visiting the standalone page (or vice versa) is instant. First-open shows the workspace's existing skeleton. Heavy tabs are already lazy inside the current profile; no change.
+## Field consolidation
 
-## Overlay shell
+Removed from the default view (moved to Advanced Options or inferred):
 
-New: `src/components/clients/profile/client-profile-overlay.tsx`
+- Product type (old free-form) — replaced by Category dropdown.
+- Status — moved to Advanced Options footer; defaults to Draft, flips to Active on successful Stripe sync unless the current flow needs immediate activation.
+- Payment structure — merged into Payment type (single source of truth).
+- Stripe payment type — inferred from Payment type.
+- Checkout Mode — inferred: One-time → payment, Recurring → subscription, Payment plan → subscription schedule, Free → no Stripe.
+- Stripe Price ID — read-only in Advanced Options; auto-created on save.
+- Term length + Term unit — merged into the recurring / duration blocks with explicit "Billing duration" vs "Service duration" labeling.
+- Short description — merged into the single Description; long-form available via "Add more details".
+- Internal notes — Advanced Options.
+- Access level 0–5 — replaced by labeled presets; raw value stays in Advanced Options.
 
-- Desktop (`md+`): shadcn `Dialog` with custom `DialogContent` sized `w-[90vw] max-w-[1400px] h-[92vh]`, rounded top, dark backdrop, fixed header (photo, name, status, assigned coach, quick actions: Open POV / Message / More menu / Close), internal scroll body.
-- Mobile/small tablet (`< md`): full-screen `Sheet` from bottom, `h-[100dvh]` with `pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)]`, sticky header with back-arrow close, horizontally scrollable tab bar, body scroll only.
-- `useBlocker({ shouldBlockFn: () => hasUnsavedProfileEdit, withResolver: true })` gates Escape / backdrop / close-button / route-change / browser-back. A shared "isDirty" signal is exposed by the workspace via a small context (`ClientProfileDirtyContext`) that existing edit forms already flip.
-- Focus trap + restore: `Dialog`/`Sheet` handle it. We store the triggering element ref in the layout and refocus after close.
-- Accessibility: `DialogTitle` = client name, `aria-describedby` = status line, close button `aria-label="Close client workspace"`, ESC closes, focus visible.
+Consolidated: Payment structure + Stripe payment type → Payment type. Short description + Full details → Description (+ disclosure). What's included textarea → repeatable list.
 
-## Call-site changes — click-a-name opens overlay
+Inferred automatically: Stripe checkout mode, Stripe Price creation, Payment Link creation, promotion-codes flag, billing-address requirement (when tax needs it), metadata linking back to the JF Effect product.
 
-New helper hook: `useOpenClientProfile()` in `src/lib/open-client-profile.ts` returns `(clientId, opts?: { tab?, event? }) => void`. It calls `navigate({ to: '.', search: prev => ({ ...prev, clientId, clientTab: opts?.tab }), replace: false })` from the current location and, when the caller passes a `MouseEvent`, honors modifier keys (⌘/Ctrl/middle-click) by falling through to a normal `<Link to="/admin/clients/$id">` for new-tab opens.
+## Product workspace scoping
 
-Also new: `<ClientNameLink clientId name />` — renders an `<a>` that goes to `/admin/clients/$id` (so ⌘-click / right-click "Open in new tab" work) but intercepts plain left-clicks to open the overlay. Replaces raw `<Link to="/_authenticated/admin/clients/$id">` in every current call site:
+New field: **Product workspace** = Coaching / Membership / Both. Default derives from where the modal was opened (Coaching Admin vs Membership Admin). Written to the same product record; existing filters in Products & Offers, Payments, and Membership Payments continue to key off the existing scope columns.
 
-- Clients list rows: `client-row.tsx`, `clients-mobile-card.tsx`, `clients/quick-actions.tsx` (Open Client button), `clients/compliance-dashboard.tsx`, `clients/add-client-dialog.tsx`
-- Payments/Transactions: `payments/transaction-detail-drawer.tsx`, `admin/transactions.tsx`, `admin/payments.tsx`, `admin/purchases.$id.tsx`, `purchase-agreement-status.tsx`
-- Check-Ins / Progress / Reviews: `progress/progress-summary-card.tsx`, `progress/progress-review-queue.tsx`, `admin/check-in-reviews.tsx`, `admin/check-ins.tsx`
-- Scheduling / Calendar: `admin-calendar/upcoming-panel.tsx`, `admin-calendar/pt-calendar-panel.tsx`, `lib/calendar-sources.ts`, `admin/calendar.tsx`, `admin/appointments.tsx`
-- Messages / Support: `admin/messages.tsx`, `admin/support-alerts.tsx`, `notification-bell.tsx`
-- Forms / Agreements / Lift videos: `admin/fillout-submissions.tsx`, `admin/agreements.index.tsx`, `admin/agreements.signed.tsx`, `sent-agreements-manager.tsx`, `admin/lift-videos.tsx`
-- Search / Dashboard widgets: `lib/global-search.functions.ts` result rendering, `upcoming-birthdays-widget.tsx`, `intel-actions.tsx`, dashboard cards on `admin/index.tsx`
-- Deliberate full-page nav preserved: sub-routes `/admin/clients/$id/schedule`, `/admin/clients/$id/progress`, `/admin/client-programs/$clientId` — those keep normal `<Link>` navigation.
+## Validation
 
-## Permission & security
+All validated inline (not on submit):
 
-- The overlay renders inside `_authenticated/route.tsx` (already gated by auth). Server-side authorization is unchanged: profile data is fetched by the same `getAdminClientProfileAndGoalsFn` server function, which enforces admin-or-assigned-coach on the server. Unauthorized clients show the same "Forbidden" empty state the standalone route already shows — no data leak while loading (query starts in `pending`, renders skeleton, then error).
-- Client POV keeps using the existing impersonation flow from inside the workspace header.
+- One-time cannot use subscription checkout mode.
+- Recurring requires billing frequency.
+- Fixed-payments requires a payment count ≥ 1.
+- Price cannot be negative; zero only for Free.
+- Free cannot create paid checkout.
+- Product / service duration cannot be zero.
+- Session packages require at least one session.
+- Agreement enforcement requires a template.
 
-## Mobile / tablet
+Submit is disabled while any inline error is unresolved. Duplicate submissions blocked with an in-flight flag.
 
-- `< md` (< 768px): full-screen `Sheet`. Underlying page keeps mounted but visually hidden.
-- `md`–`lg` (768–1024px): dialog at `w-[95vw] h-[95vh]`.
-- `lg+`: dialog at `w-[90vw] max-w-[1400px] h-[92vh]`.
+## Stripe automation
 
-## Files
+Save flow (all through the existing `upsertCoachingProduct` + Stripe sync path — no new sync system):
 
-New:
-- `src/components/clients/profile/client-profile-overlay.tsx` — dialog/sheet shell.
-- `src/components/clients/profile/client-profile-workspace.tsx` — extracted body from `clients.$id.tsx`.
-- `src/components/clients/client-name-link.tsx` — smart link component.
-- `src/lib/open-client-profile.ts` — `useOpenClientProfile` hook + search param zod schema.
+1. Persist the JF Effect product (Draft).
+2. If paid: create/reuse Stripe Product, create Stripe Price with correct interval/type, create Payment Link with `allow_promotion_codes` from the toggle, attach metadata `{ jf_product_id }`.
+3. Save Stripe IDs back to the product.
+4. Flip status to Active (or keep Draft if the workflow requires manual activation).
+5. Return to the product list with a toast + inline card offering Copy Link / Open Checkout / Assign to Client / View in Stripe.
 
-Edited:
-- `src/routes/_authenticated/route.tsx` — add `validateSearch` for `clientId`/`clientTab`, mount `<ClientProfileOverlay />` after `<Outlet />`.
-- `src/routes/_authenticated/admin/clients.$id.tsx` — thin wrapper over `<ClientProfileWorkspace mode="page" />`.
-- ~30 call-site files listed above — swap raw `<Link>` for `<ClientNameLink>` / `useOpenClientProfile`.
+If any Stripe step fails: preserve the form, show the exact failed step, allow retry, and surface whether the app product was already saved. No hidden duplicate Stripe records — the sync function already dedupes by `jf_product_id` metadata; the new flow reuses that guarantee.
 
-Unchanged / preserved:
-- `/admin/clients/$id`, `/admin/clients/$id/schedule`, `/admin/clients/$id/progress`, `/admin/client-programs/$clientId` routes and their deep links.
-- All profile server functions, mutations, POV flow, permission checks, cache keys.
+## Tax
+
+Existing Canadian GST/HST logic and Stripe Tax config are untouched. The bold red "STRIPE CHECKOUT SESSION" block is replaced by a compact one-line notice next to the price: "Taxes are calculated automatically from the customer's billing address and added at checkout." Red is reserved for actual errors.
+
+## Modal shell + list state
+
+- Modal renders over the Products page; the list stays mounted, so filters / search / sort / scroll are preserved on close.
+- Content is code-split (`React.lazy`) so the modal only loads when opened.
+- Route stays on `/admin/payment-links`; no navigation on open or close.
+- Mobile PWA: full-screen sheet, sticky primary action pinned above the safe-area inset, large tap targets, no horizontal scroll.
+
+## Files touched
+
+- `src/routes/_authenticated/admin/payment-links.tsx` — swap the current New Product dialog trigger to open the new modal component (edit flow unchanged).
+- `src/components/products/new-product-modal.tsx` (new) — the redesigned modal shell + form.
+- `src/components/products/sections/*.tsx` (new) — one file per section (basics, pricing, duration, included, sessions-access, agreement, selling, advanced) so nothing balloons past ~250 lines.
+- `src/components/products/live-summary.tsx` (new) — the plain-language summary panel.
+- `src/lib/product-form/` (new) — Zod schema, category → duration/session/access-preset mapping, access-preset ↔ numeric level mapping, plain-language price formatter, submit orchestrator that calls the existing `upsertCoachingProduct` + Stripe sync server fns.
+- No changes to `src/lib/coaching-products.functions.ts`, `src/lib/payments.functions.ts`, `src/lib/stripe-checkout.functions.ts`, `src/routes/api/public/stripe-webhook.ts`, or the DB schema.
+
+## Explicitly out of scope for this pass
+
+- Editing existing products keeps the current fuller form (a follow-up pass can port it onto the new shell once the create flow is proven).
+- Membership plan creation (`/admin/member-plans/new`) is a separate form and is not touched here.
+- No new columns, no migrations, no changes to Stripe sync internals or tax config.
+- No changes to the coaching / membership sidebar wiring shipped in the previous turn.
 
 ## Verification
 
-- Typecheck (`tsgo`).
-- Playwright smoke: open `/admin/clients`, click a client name → overlay appears, underlying list still visible; press Escape → back to list at same scroll; ⌘-click same name → new tab loads standalone profile; navigate to `/admin/payments`, click a client in a row → overlay opens without navigating away.
-- Manual check on mobile viewport (Playwright 390×844) — sheet fills screen, safe-area padded.
+- `bunx tsgo --noEmit` passes.
+- Playwright smoke: open modal from `/admin/payment-links`, create a Recurring $499 CAD / monthly / 12-payments / 12-month-access product, confirm summary text, submit, verify Stripe Product + Price + Payment Link are created (single set), verify the new row appears in the list with filters preserved.
+- Manual pass on desktop, tablet (`iPad`), and installed PWA widths.
 
-## Out of scope for this pass
-
-- No schema, RLS, or data changes.
-- No new tabs — reuse existing sections.
-- No changes to the standalone sub-routes (`schedule`, `progress`, `client-programs`).
-- Cross-entity global search unchanged.
+Please approve and I'll implement in one pass.
