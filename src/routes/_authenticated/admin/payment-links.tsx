@@ -826,10 +826,23 @@ function ProductFormDialog({
   const updateFn = useServerFn(updateCoachingProduct);
   const [form, setForm] = useState<FormState>(emptyForm());
   const [submitting, setSubmitting] = useState(false);
+  // Stable per-attempt Stripe idempotency key. Minted when the dialog opens
+  // for a *new* product, reused across retries after a failed save so that
+  // Stripe returns the original product/price/payment_link rather than
+  // duplicating them. Retired only after a confirmed successful create, or
+  // when the dialog reopens for a genuinely new product.
+  const idempotencyKeyRef = useRef<string | null>(null);
 
   useEffect(() => {
     if (!open) return;
     setForm(product ? productToForm(product) : emptyForm());
+    // Reopening for an existing product (edit) never touches Stripe create,
+    // so no key is needed. New-product opens get a fresh UUID.
+    idempotencyKeyRef.current = product
+      ? null
+      : typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+        ? crypto.randomUUID()
+        : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
   }, [open, product]);
 
   const set = <K extends keyof FormState>(k: K, v: FormState[K]) => setForm((f) => ({ ...f, [k]: v }));
@@ -883,11 +896,23 @@ function ProductFormDialog({
         accessLevel: form.accessLevel ? parseInt(form.accessLevel, 10) : null,
       };
 
+      if (submitting) return;
       if (product) {
         await updateFn({ data: { id: product.id, ...payload, ...(imagePath !== undefined ? { imagePath } : {}) } as any });
         toast.success("Product updated");
       } else {
-        await createFn({ data: { ...payload, imagePath: imagePath ?? null, generateStripeLink: form.generateStripeProduct } as any });
+        await createFn({
+          data: {
+            ...payload,
+            imagePath: imagePath ?? null,
+            generateStripeLink: form.generateStripeProduct,
+            idempotencyKey: idempotencyKeyRef.current,
+          } as any,
+        });
+        // Confirmed success — retire the key. Any future submit from this
+        // dialog instance represents a genuinely new product and will mint
+        // a fresh UUID on reopen.
+        idempotencyKeyRef.current = null;
         toast.success("Product saved");
       }
       onSaved();
