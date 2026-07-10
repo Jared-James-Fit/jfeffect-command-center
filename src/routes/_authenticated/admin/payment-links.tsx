@@ -1,7 +1,7 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, lazy, Suspense } from "react";
 import { PageHeader } from "@/components/app-shell";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -31,6 +31,8 @@ import {
 import { createPreviewCheckoutSession } from "@/lib/stripe-checkout.functions";
 import { ProductAccessGrantDialog } from "@/components/product-access-grant-dialog";
 import { Lock as LockIcon } from "lucide-react";
+
+const NewProductModal = lazy(() => import("@/components/products/new-product-modal"));
 
 export const Route = createFileRoute("/_authenticated/admin/payment-links")({
   component: PaymentLinksRedirect,
