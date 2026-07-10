@@ -762,7 +762,7 @@ export function AppShell({ items, bottomItems: customBottomItems, title, childre
                         );
                         return (
                           <li key={item.to}>
-                              {item.children ? (
+                              {item.children && !isTablet ? (
                                 <SidebarFlyoutRow
                                   item={item}
                                   pathname={pathname}
