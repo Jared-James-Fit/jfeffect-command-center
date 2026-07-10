@@ -214,8 +214,14 @@ export async function createBlock(input: { client_id: string; prep_id?: string |
   return block;
 }
 
-export async function addDay(weekId: string, dayIndex: number, title: string) {
-  const { data, error } = await sb.from("pl_days").insert({ week_id: weekId, day_index: dayIndex, title }).select("*").single();
+export async function addDay(weekId: string, dayIndex: number, title?: string | null) {
+  // `title` is now optional / nullable. The day's visible label ("Day N") is
+  // derived from `day_index` at render time; only pass a value here when the
+  // coach has typed a real title (rare — most days should leave it NULL and
+  // use `subtitle` instead).
+  const insert: any = { week_id: weekId, day_index: dayIndex };
+  if (title && title.trim()) insert.title = title.trim();
+  const { data, error } = await sb.from("pl_days").insert(insert).select("*").single();
   if (error) throw error;
   return data;
 }
