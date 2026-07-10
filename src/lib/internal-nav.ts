@@ -164,6 +164,8 @@ const REGISTRY: Entry[] = [
   // ── SCHEDULING ───────────────────────────────────────────────────────
   { to: "/admin/calendar", label: "Calendar", icon: Calendar, group: "Scheduling",
     visibleTo: ["admin", "coach", "assistant_coach", "sales", "support", "operations", "media_manager"] },
+  { to: "/admin/pt-calendar", label: "PT Calendar", icon: Calendar, group: "Scheduling",
+    visibleTo: ["admin", "coach"] },
   { to: "/admin/appointments", label: "Appointments", icon: Calendar, group: "Scheduling",
     visibleTo: ["admin", "coach", "sales"] },
   { to: "/admin/booking-links", label: "Booking Links", icon: LinkIcon, group: "Scheduling",
