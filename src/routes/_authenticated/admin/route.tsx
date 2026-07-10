@@ -3,7 +3,7 @@ import { useEffect, useMemo } from "react";
 import { useAuth } from "@/lib/auth";
 import { AppShell } from "@/components/app-shell";
 import { coachingAdminNav, coachNav } from "@/lib/admin-nav";
-import { buildInternalNavCollapsed, resolveStaffRoleTag } from "@/lib/internal-nav";
+import { buildInternalNavCollapsed, buildMembershipAdminNav, resolveStaffRoleTag } from "@/lib/internal-nav";
 import { useDashboardMode, setDashboardMode } from "@/lib/dashboard-mode";
 import { AdminTopBar } from "@/components/admin-top-bar";
 import { TaskPopupGate } from "@/components/tasks/task-popup-gate";
@@ -24,13 +24,18 @@ function AdminLayout() {
     pathname.startsWith("/admin/membership") ||
     pathname.startsWith("/admin/members") ||
     pathname.startsWith("/admin/member-plans") ||
+    pathname.startsWith("/admin/member-resources") ||
     pathname === "/admin/sales/membership" ||
     pathname === "/admin/legal" ||
     (pathname === "/admin/communication" && search?.tab === "support-inbox");
-  // Keep Membership mode active across every route in the Membership sidebar.
+  // Only auto-activate Membership mode when the user lands on a
+  // membership-scoped path. Do NOT auto-exit to Coaching on shared routes —
+  // the top mode switcher (and the sidebar's single "Back to Coaching"
+  // action) are the only ways out. This lets Membership mode persist across
+  // routes like /admin/messages or /admin/programming while an admin is
+  // running the membership workspace.
   useEffect(() => {
     if (isMembershipWorkspacePath && mode !== "membership") setDashboardMode("membership");
-    if (!isMembershipWorkspacePath && mode === "membership") setDashboardMode("coaching");
     if (mode === "media") setDashboardMode(isMembershipWorkspacePath ? "membership" : "coaching");
   }, [isMembershipWorkspacePath, mode]);
   useEffect(() => {
@@ -54,9 +59,11 @@ function AdminLayout() {
   // Falls back to the legacy per-role registries if the role isn't yet
   // mapped (defensive — keeps existing behaviour for unknown future roles).
   const roleTag = resolveStaffRoleTag(role);
-  const nav = roleTag
-    ? buildInternalNavCollapsed(roleTag, { mode: isMembership ? "membership" : "coaching" })
-    : (isCoach ? coachNav : coachingAdminNav);
+  const nav = isMembership && roleTag === "admin"
+    ? buildMembershipAdminNav()
+    : roleTag
+      ? buildInternalNavCollapsed(roleTag, { mode: "coaching" })
+      : (isCoach ? coachNav : coachingAdminNav);
   const title = isCoach ? "Coach" : isMembership ? "Membership Admin" : "Admin";
   // Use a dedicated "membership" bar scope when in membership mode so the
   // admin can customize a different floating bar for member-facing ops.
