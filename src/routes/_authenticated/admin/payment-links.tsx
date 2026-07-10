@@ -1,7 +1,7 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, lazy, Suspense } from "react";
 import { PageHeader } from "@/components/app-shell";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -31,6 +31,8 @@ import {
 import { createPreviewCheckoutSession } from "@/lib/stripe-checkout.functions";
 import { ProductAccessGrantDialog } from "@/components/product-access-grant-dialog";
 import { Lock as LockIcon } from "lucide-react";
+
+const NewProductModal = lazy(() => import("@/components/products/new-product-modal"));
 
 export const Route = createFileRoute("/_authenticated/admin/payment-links")({
   component: PaymentLinksRedirect,
@@ -205,6 +207,7 @@ export function PaymentLinksPage({ embedded = false }: { embedded?: boolean } = 
   const [previewingCheckout, setPreviewingCheckout] = useState<string | null>(null);
   const [generatingLink, setGeneratingLink] = useState<string | null>(null);
   const [sharing, setSharing] = useState<Product | null>(null);
+  const [newProductOpen, setNewProductOpen] = useState(false);
 
   const handleGenerateLink = async (p: Product) => {
     if (!(p as any).stripe_price_id) {
@@ -449,7 +452,7 @@ export function PaymentLinksPage({ embedded = false }: { embedded?: boolean } = 
                 <Button variant="outline" onClick={() => setManageMode(true)}>
                   <ListChecks className="mr-2 h-4 w-4" /> Manage products
                 </Button>
-                <Button className="bg-gradient-primary font-bold uppercase tracking-wide" onClick={() => setEditing({ open: true, product: null })}>
+                <Button className="bg-gradient-primary font-bold uppercase tracking-wide" onClick={() => setNewProductOpen(true)}>
                   <Plus className="mr-2 h-4 w-4" /> New product
                 </Button>
               </>
@@ -466,7 +469,7 @@ export function PaymentLinksPage({ embedded = false }: { embedded?: boolean } = 
               <Button variant="outline" onClick={() => setManageMode(true)}>
                 <ListChecks className="mr-2 h-4 w-4" /> Manage products
               </Button>
-              <Button className="bg-gradient-primary font-bold uppercase tracking-wide" onClick={() => setEditing({ open: true, product: null })}>
+              <Button className="bg-gradient-primary font-bold uppercase tracking-wide" onClick={() => setNewProductOpen(true)}>
                 <Plus className="mr-2 h-4 w-4" /> New product
               </Button>
             </>
@@ -726,6 +729,18 @@ export function PaymentLinksPage({ embedded = false }: { embedded?: boolean } = 
         onClose={() => setEditing({ open: false, product: null })}
         onSaved={() => { qc.invalidateQueries({ queryKey: ["coaching-products"] }); setEditing({ open: false, product: null }); }}
       />
+
+      {newProductOpen && (
+        <Suspense fallback={null}>
+          <NewProductModal
+            open={newProductOpen}
+            defaultWorkspace="coaching"
+            agreementTemplates={agreementTemplates as any[]}
+            onClose={() => setNewProductOpen(false)}
+            onCreated={() => qc.invalidateQueries({ queryKey: ["coaching-products"] })}
+          />
+        </Suspense>
+      )}
 
       <AssignOfferDialog offer={assigning} onClose={() => setAssigning(null)} />
 
