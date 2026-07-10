@@ -15,7 +15,7 @@ import { cn } from "@/lib/utils";
 import { buildScheduleChips } from "@/lib/schedule-calendar-chips";
 
 export type ScheduleDay = {
-  id: string; day_index: number; title: string | null; focus: string | null;
+  id: string; day_index: number; title: string | null; subtitle?: string | null; focus: string | null;
   scheduled_date: string | null; schedule_source: string | null;
   schedule_locked: boolean | null; week_id: string;
 };
