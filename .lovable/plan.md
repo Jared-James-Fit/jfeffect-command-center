@@ -1,87 +1,57 @@
+# Bring Membership onto the Coaching workspace framework
 
-## Goal
+The scope you described spans ~35 membership routes plus the member-facing `/m/*` app. Trying to redo everything in one pass will produce a giant, unreviewable change and almost certainly break something. I want to do it in **four staged phases** and get your sign-off (or reordering) before I start.
 
-Kill the accordion-everywhere sidebar. Ship three renderers over one nav source:
+## Phase 1 — Extract shared "workspace" primitives from Coaching
 
-- **Desktop** (fine pointer, ≥1280px): flat sidebar, hover flyout for children — mostly what exists.
-- **Tablet** (coarse pointer OR 768–1279px): flat permanent sidebar, primary label = one tap, chevron button = tap-triggered floating side panel with children.
-- **Mobile** (<768px): full-screen drawer that shows real destinations immediately; tapping a category chevron **replaces** the drawer contents with that category's submenu (with `< Back` header). No "All sections" intermediate screen. No stacked accordions.
+The Coaching client overlay already contains the exact pattern you want (sticky identity header → action center → alerts → snapshot → section nav → content). Right now those pieces live only inside `src/routes/_authenticated/admin/clients.$id.tsx`. I will lift them into reusable components so both Coaching and Membership consume the same code:
 
-One `items: NavItem[]` config keeps driving all three (already grouped via `group`, children via `children`, badges via `useClientNavBadges` / `useMediaNavBadges`).
+- `src/components/workspace/WorkspaceShell.tsx` — sticky header + action center + alerts + snapshot slot + section nav + content slot
+- `src/components/workspace/IdentityHeader.tsx`
+- `src/components/workspace/ActionCenter.tsx` (accepts an actions array — Coaching passes coaching actions, Membership passes membership actions)
+- `src/components/workspace/SectionNav.tsx` (already exists inline — extract + keep `compact` prop)
+- `src/components/workspace/OverviewSnapshot.tsx` (slot-based so Membership can inject membership-specific tiles)
 
-## What changes
+Coaching client overlay is refactored to consume these. No visual change on Coaching side — this is a pure extract.
 
-### 1. Detection (`src/components/app-shell.tsx`)
+## Phase 2 — Member profile overlay uses the same shell
 
-Add `usePointerCapability()` returning `"fine" | "coarse"` via `matchMedia("(pointer: fine)")`. Combine with width:
+- Create `src/components/members/member-profile-overlay.tsx` mirroring `client-profile-overlay.tsx`.
+- Create `src/routes/_authenticated/admin/members.$memberId.tsx` workspace (or refactor the existing one) to render `WorkspaceShell` with:
+  - Identity header: avatar, name, plan badge, status, joined date, last active, quick actions
+  - Action Center: **Open Member POV, Message Member, Manage Membership, Change Plan, Grant Complimentary Access, View Purchases** (exactly your list — no coaching actions)
+  - Alerts: failed payment, expired trial, setup incomplete, missing PFP/phone
+  - Snapshot: subscription status, current plan, next billing, access state, recent purchases
+  - Section nav → Profile / Membership Plan / Purchases / Progress / Messages / Notes
+- Member row in members list opens the overlay (same pattern as client-row).
 
-```
-device = width < 768                       → "mobile"
-       | pointer==="coarse" || width<1280  → "tablet"
-       | else                              → "desktop"
-```
+## Phase 3 — Membership dashboard reordered + responsive fixes
 
-Replace current `useIsTablet` uses.
+Rework `admin/membership.index.tsx` to the priority order you specified:
 
-### 2. Desktop renderer — keep, trim
+1. **Actions strip** (top): Manage Members, Payment Issues, Grant Access, Sales & Plans
+2. **Alerts**: Failed payments, Expired trials, Setup problems (using the same alert card style as Coaching)
+3. **Analytics** (bottom, collapsed by default on mobile): subscription counts, access counts, health metrics
 
-- Keep `SidebarFlyoutRow` hover popover for items with `children`.
-- Remove accordion "collapse all / expand all" controls when device !== desktop (already partly done).
-- Sidebar sections still collapsible on desktop only.
+All cards moved to the same `Card` + spacing tokens Coaching uses (`gap-4 md:gap-6`, `p-4 md:p-6`, consistent `min-h`, container `max-w-7xl mx-auto px-4 md:px-6`). Grids standardized to `grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4`.
 
-### 3. Tablet renderer — new
+## Phase 4 — Responsive audit + `/m/*` member app polish
 
-- Sidebar is always `expanded`, no group toggles, no density cycling, no pins reorder UI.
-- **Flat list**: render every group's items back-to-back, section labels as tiny inert dividers only when a label exists — no chevron on group headers.
-- Each row = `<Link>` (label) + optional chevron button (only when `item.children?.length`). Two separate tap targets, each ≥44px, with visible pressed state.
-- Chevron opens a Radix `Popover` anchored to the row, `side="right"`, `sideOffset=8`, `collisionPadding=12`, `w-72`, closes on outside tap or child selection. Tap (not hover) triggers open.
-- Reuse the child-rendering block from `SidebarFlyoutRow` (extract as `<FlyoutChildren item />`).
+Sweep every membership route (list below) and align to Coaching's container/grid/spacing tokens. This is a mechanical pass, not a redesign.
 
-### 4. Mobile renderer — new full-screen drawer
+Admin membership routes audited: `membership.index`, `members.index`, `members.$memberId`, `member-plans.*`, `member-resources.*`, `membership.billing`, `membership.billing-events`, `membership.action-needed`, `membership.launch-readiness`, `membership.signup-stats`, `membership.calendar`, `membership.challenges`, `membership.stripe-sync`, `sales.membership`.
 
-Replace current Sheet at lines 899–1022:
+Member-facing `/m/*` routes audited against `/portal/*` equivalents: `m/index`, `m/my-plans`, `m/plans`, `m/nutrition.*`, `m/progress`, `m/resources`, `m/support`, `m/announcements`, `m/billing`, `m/account`, `m/tools`, `m/upgrade`.
 
-- `Sheet side="left"` (or bottom, keep bottom for muscle memory), `h-[100dvh] w-full` (or `h-[92vh]`), safe-area padding.
-- **Header**: title (`JF Effect Admin` or workspace title) + workspace chip + close button.
-- **Search**: compact input; filtering identical to current `moreFiltered` — flat result list of `{item, group}` with icon + label + group.
-- **Body — two states**:
-  - **Root view**: iterates `grouped`. Renders section label as small uppercase inert row, then each item as a full-width row = Link (label + icon) + optional right-side chevron button when `children?.length`. No accordion, no nested indent.
-  - **Submenu view** (when `openCategory !== null`): renders `< {parentLabel}` back button + section header for parent, then parent's `children` as flat list (respecting `child.section` dividers). Tapping any child navigates + closes drawer. Replaces root view, not stacked.
-- State: `const [openCategory, setOpenCategory] = useState<NavItem | null>(null)`. Reset on drawer close.
-- Chevron button uses `onClick={(e)=>{e.preventDefault(); e.stopPropagation(); setOpenCategory(item)}}`.
-- No group collapsing.
+Only spacing / container / grid / card sizing changes — no logic edits.
 
-### 5. Duplicate parent/child label cleanup
+## What I need from you
 
-`internal-nav.ts` currently emits children like `Messages → Messages` and `Clients → Clients`. Rename first-child entries to match user's list:
+This is a lot. Before I start, please confirm:
 
-- Messages: children = `Inbox` (was Messages), `Communication Hub`, `Broadcasts`, then Chat Assets section.
-- Clients: children = `All Clients`, `Check-In Reviews`, `Lift Reviews`, `Action Requests`, `Progress Media`, `Forms`, `Agreements`.
-- Payments: children = `Overview`, `Transactions`, `Products & Offers`, `Payment Links`, `Coupons`, `Failed Payments`.
-- Programs, Scheduling: same rename pattern (first duplicate child → `Overview`, `Program Library`, `Calendar`, etc. per spec).
+1. **Order of phases** — do 1 → 2 → 3 → 4 as above, or would you rather I do Phase 3 (dashboard reordering) first because it's the most visible?
+2. **Scope of Phase 4** — audit *all* the routes listed, or just the ones you screenshotted? (Screenshots weren't attached to this message — if you resend them I can prioritize those exact pages.)
+3. **Member overlay behaviour** — should opening a member from the members list open the **same overlay component** as clients (i.e. share `ClientProfileOverlayMount` with a `mode: "member"` prop), or keep two overlay mounts that both wrap the same `WorkspaceShell`? I'd recommend the latter — cleaner separation, same UX.
+4. **Coaching-only actions on members** — is it OK to fully remove Assign Program / Lift Review / Coaching Schedule from the member workspace even for members who *also* have a coaching add-on, or should those appear conditionally?
 
-Only edit labels; routes, permissions, badges, workspace metadata stay untouched.
-
-### 6. Preserve context
-
-Nothing here re-mounts the underlying route — the drawer is a portal `Sheet`. Confirm: no `key` on `<Outlet />`, no navigation on drawer open/close. `openCategory` lives inside the shell so browser back can't restore stale submenu.
-
-## Files touched
-
-- `src/components/app-shell.tsx` — new `usePointerCapability`, `useDevice`, refactored tablet branch, replaced mobile Sheet body, extracted `FlyoutChildren`, `TabletFlyoutRow`, `MobileDrawerRoot`, `MobileDrawerSubmenu`. Remove `moreOpenGroup` state and `NEVER_COLLAPSE_SECTIONS` special-casing on non-desktop.
-- `src/lib/internal-nav.ts` — rename duplicate child labels only.
-
-Nothing else changes. Desktop sidebar, floating bar, command palette, POV bar all untouched.
-
-## Out of scope
-
-- No changes to `client-portal`, `member`, `media` shells beyond what the shared `AppShell` gives them.
-- No route additions.
-- No changes to `useClientNavBadges` / `useMediaNavBadges`.
-
-## Verification
-
-- `tsgo` (harness auto-runs).
-- Manual: iPad viewport 1024×768 — sidebar flat, chevron opens right-side panel, tap outside closes.
-- Manual: iPhone 393×852 — open drawer, tap Messages chevron → submenu replaces list, back button returns.
-- Confirm route stays mounted (open client overlay, open drawer, close drawer — overlay still there).
+Reply with answers (or "go, do 1→4, keep them separate, remove coaching actions") and I'll start with Phase 1.
