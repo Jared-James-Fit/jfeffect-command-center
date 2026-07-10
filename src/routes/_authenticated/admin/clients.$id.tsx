@@ -686,7 +686,83 @@ export function ClientProfileWorkspace({
           </>
         }
       />}
-      <div className="p-6 md:p-8">
+      {embedded && (
+        <EmbeddedIdentityHeader
+          form={form}
+          canPov={canPov}
+          onClose={onClose}
+          onMessage={() => setTab("messages")}
+          onPov={() => {
+            if (!form.user_id) {
+              toast.error("Client has no account yet — send a setup link first.");
+              return;
+            }
+            impersonation.start(
+              { id, user_id: form.user_id, full_name: form.full_name },
+              typeof window !== "undefined" ? window.location.pathname + window.location.search : `/admin/clients/${id}`,
+            );
+            navigate({ to: "/portal" });
+          }}
+          onSave={save}
+          isDirty={isDirty}
+          saving={saving}
+          moreMenu={(
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="sm"><MoreHorizontal className="mr-2 h-4 w-4" />More</Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-64">
+                <DropdownMenuLabel>Setup & Access</DropdownMenuLabel>
+                <DropdownMenuItem onSelect={sendSetup}><Mail className="mr-2 h-4 w-4" />Send setup email</DropdownMenuItem>
+                <DropdownMenuItem onSelect={copySetupLink}><Copy className="mr-2 h-4 w-4" />Copy setup link</DropdownMenuItem>
+                <DropdownMenuItem onSelect={sendReset}><KeyRound className="mr-2 h-4 w-4" />Send password reset</DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuLabel>Scheduling & Offers</DropdownMenuLabel>
+                <DropdownMenuItem onSelect={() => setBookingLinkOpen(true)}><Link2 className="mr-2 h-4 w-4" />Send booking link</DropdownMenuItem>
+                <DropdownMenuItem onSelect={() => setPriceCardOpen(true)}><Tag className="mr-2 h-4 w-4" />Assign offer / price card</DropdownMenuItem>
+                {form.drive_folder_link && (
+                  <DropdownMenuItem onSelect={() => window.open(form.drive_folder_link, "_blank", "noreferrer")}>
+                    <FolderOpen className="mr-2 h-4 w-4" />Open Drive folder
+                  </DropdownMenuItem>
+                )}
+                <DropdownMenuSeparator />
+                <DropdownMenuLabel>Lifecycle</DropdownMenuLabel>
+                {form.status === "Deactivated" ? (
+                  <DropdownMenuItem onSelect={() => setReactivateOpen(true)}><Eye className="mr-2 h-4 w-4" />Reactivate</DropdownMenuItem>
+                ) : (
+                  <DropdownMenuItem onSelect={() => setDeactivateOpen(true)}><Eye className="mr-2 h-4 w-4" />Deactivate</DropdownMenuItem>
+                )}
+                <DropdownMenuItem onSelect={archive}><Archive className="mr-2 h-4 w-4" />{form.archived ? "Restore" : "Archive"}</DropdownMenuItem>
+                <DropdownMenuItem className="text-destructive focus:text-destructive" onSelect={() => setDeleteStep(1)}>
+                  <Trash2 className="mr-2 h-4 w-4" />Delete client
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
+        />
+      )}
+      <div className={embedded ? "p-4 md:p-6" : "p-6 md:p-8"}>
+      {embedded && (
+        <EmbeddedActionCenter
+          clientId={id}
+          canPov={canPov}
+          form={form}
+          onMessage={() => setTab("messages")}
+          onPov={() => {
+            if (!form.user_id) {
+              toast.error("Client has no account yet — send a setup link first.");
+              return;
+            }
+            impersonation.start(
+              { id, user_id: form.user_id, full_name: form.full_name },
+              typeof window !== "undefined" ? window.location.pathname + window.location.search : `/admin/clients/${id}`,
+            );
+            navigate({ to: "/portal" });
+          }}
+          onIntake={() => setTab("goals-setup")}
+          onRequestUpdate={requestUpdate}
+        />
+      )}
       {form.status === "Deactivated" && (
         <div className="mb-4 rounded-md border border-warning/40 bg-warning/10 px-4 py-3 text-sm">
           <div className="font-semibold text-warning">Account Deactivated</div>
