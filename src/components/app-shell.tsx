@@ -61,6 +61,8 @@ function groupNavItems(items: NavItem[]) {
     // `buildInternalNav()` from `@/lib/internal-nav`. Legacy groups remain
     // below for back-compat with any nav source still using the old labels.
     "Overview",
+    "Main Menu",
+    "Other",
     "Messages",
     "Clients",
     "Payments",
