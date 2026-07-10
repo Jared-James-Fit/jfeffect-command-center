@@ -2011,7 +2011,7 @@ function EmbeddedIdentityHeader({
   onClose?: () => void;
   onMessage: () => void;
   onPov: () => void;
-  onSave: () => void | Promise<void>;
+  onSave: () => unknown | Promise<unknown>;
   isDirty: boolean;
   saving: boolean;
   moreMenu: React.ReactNode;
