@@ -43,6 +43,14 @@ export interface NavItem {
   keywords?: string[];
   /** Optional grouped sub-items shown on tap/long-press in the mobile bottom bar. */
   children?: NavItem[];
+  /**
+   * Optional sub-section label for a flyout child. Children with no `section`
+   * render at the top of the flyout as the primary workflow list. Children
+   * that share the same `section` value render together under a labelled
+   * divider at the bottom (setup / diagnostics / advanced). Purely visual —
+   * does not affect routing or permissions.
+   */
+  section?: string;
 }
 
 function groupNavItems(items: NavItem[]) {
