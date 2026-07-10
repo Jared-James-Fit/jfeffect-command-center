@@ -64,10 +64,12 @@ export function WorkspaceIdentityHeader({
                 {b.label}
               </Badge>
             ))}
+            {/* Caller is responsible for any leading "·" prefix and responsive
+                visibility on each meta chunk — the header just wraps each in a
+                truncating span so both Coaching and Membership can render the
+                exact same layout without shell-side special-casing. */}
             {identity.meta?.map((chunk, i) => (
-              <span key={i} className="truncate">
-                {i === 0 && !identity.badges?.length ? chunk : <>· {chunk}</>}
-              </span>
+              <span key={i} className="truncate">{chunk}</span>
             ))}
           </div>
         </div>
