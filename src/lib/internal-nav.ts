@@ -243,6 +243,8 @@ const REGISTRY: Entry[] = [
 /** Membership-mode overrides (admin viewing the JF Membership workspace).
  *  Adds member-ops entries that don't belong in default coaching mode. */
 const MEMBERSHIP_OVERLAY: Entry[] = [
+  { to: "/admin", label: "← Exit to Coaching", icon: LayoutDashboard, group: "Overview",
+    visibleTo: ["admin"] },
   { to: "/admin/membership", label: "Membership Home", icon: LayoutDashboard, group: "Overview",
     visibleTo: ["admin"] },
   { to: "/admin/membership/action-needed", label: "Action Needed", icon: AlertCircle, group: "Clients",
