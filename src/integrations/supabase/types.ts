@@ -13409,6 +13409,7 @@ export type Database = {
           schedule_source: string | null
           scheduled_date: string | null
           source_day_id: string | null
+          subtitle: string | null
           title: string | null
           updated_at: string
           warmup_mode: string
@@ -13435,6 +13436,7 @@ export type Database = {
           schedule_source?: string | null
           scheduled_date?: string | null
           source_day_id?: string | null
+          subtitle?: string | null
           title?: string | null
           updated_at?: string
           warmup_mode?: string
@@ -13461,6 +13463,7 @@ export type Database = {
           schedule_source?: string | null
           scheduled_date?: string | null
           source_day_id?: string | null
+          subtitle?: string | null
           title?: string | null
           updated_at?: string
           warmup_mode?: string
@@ -13490,6 +13493,33 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      pl_days_title_migration_log: {
+        Row: {
+          action: string
+          created_at: string
+          day_id: string
+          extracted_subtitle: string | null
+          id: string
+          original_title: string | null
+        }
+        Insert: {
+          action: string
+          created_at?: string
+          day_id: string
+          extracted_subtitle?: string | null
+          id?: string
+          original_title?: string | null
+        }
+        Update: {
+          action?: string
+          created_at?: string
+          day_id?: string
+          extracted_subtitle?: string | null
+          id?: string
+          original_title?: string | null
+        }
+        Relationships: []
       }
       pl_exercise_blocks: {
         Row: {
