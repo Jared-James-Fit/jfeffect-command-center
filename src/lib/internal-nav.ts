@@ -454,3 +454,123 @@ export function resolveStaffRoleTag(role: string | null | undefined): StaffRoleT
   if (role === "media_manager") return "media_manager";
   return null;
 }
+
+/**
+ * Dedicated Membership Admin sidebar.
+ *
+ * Not derived from the coaching registry — it is a separate information
+ * architecture with its own top-level groups (Members / Payments / Content /
+ * Sales / Communication / Onboarding) and its own labels ("Members" rather
+ * than "Clients", "Membership Payments" rather than "Payments", …).
+ *
+ * Only Overview items are flat. Every MAIN MENU / OTHER entry is a single
+ * top-level row whose `to` is the primary destination and whose `children`
+ * become the desktop hover flyout / mobile submenu. All URLs point at
+ * existing routes so old bookmarks keep working; a few children use query
+ * params (`?status=…`, `?scope=membership`) that pages can adopt over time
+ * without breaking navigation.
+ */
+export function buildMembershipAdminNav(): NavItem[] {
+  return [
+    // ── OVERVIEW (flat) ──────────────────────────────────────────────
+    { to: "/admin", label: "← Back to Coaching", icon: HomeIcon, group: "Overview",
+      keywords: ["exit membership", "coaching admin", "switch workspace"] },
+    { to: "/admin/membership", label: "Membership Home", icon: LayoutDashboard, group: "Overview" },
+    { to: "/admin/tasks", label: "Tasks", icon: ListChecks, group: "Overview" },
+    { to: "/admin/membership/action-needed", label: "Membership Alerts", icon: AlertCircle, group: "Overview",
+      keywords: ["failed payments", "expired trials", "expired access", "incomplete setup", "missing profile", "stripe sync"] },
+
+    // ── MAIN MENU ────────────────────────────────────────────────────
+    { to: "/admin/members", label: "Members", icon: Users, group: "Main Menu",
+      keywords: ["members", "trialing", "active", "past due", "paused", "cancelled", "complimentary", "access overrides"],
+      children: [
+        { to: "/admin/members", label: "All Members", icon: Users },
+        { to: "/admin/members?status=trialing", label: "Trialing", icon: Users },
+        { to: "/admin/members?status=active", label: "Active", icon: Users },
+        { to: "/admin/members?status=past_due", label: "Past Due", icon: AlertCircle },
+        { to: "/admin/members?status=paused", label: "Paused", icon: Users },
+        { to: "/admin/members?status=cancelled", label: "Cancelled", icon: Users },
+        { to: "/admin/members?status=complimentary", label: "Complimentary Access", icon: ShieldCheck },
+        { to: "/admin/members?status=override", label: "Access Overrides", icon: KeyRound },
+      ],
+    },
+
+    { to: "/admin/membership/billing", label: "Membership Payments", icon: CreditCard, group: "Main Menu",
+      keywords: ["subscriptions", "billing", "stripe", "invoices", "refunds", "failed payments"],
+      children: [
+        { to: "/admin/transactions?scope=membership", label: "Membership Transactions", icon: Activity },
+        { to: "/admin/membership/billing", label: "Subscriptions", icon: CreditCard },
+        { to: "/admin/membership/action-needed?tab=failed", label: "Failed Payments", icon: AlertCircle },
+        { to: "/admin/purchases?type=refunds", label: "Refunds", icon: RefreshCw },
+        { to: "/admin/purchases", label: "Invoices & Receipts", icon: FileText },
+        { to: "/admin/membership/stripe-sync", label: "Stripe Sync", icon: RefreshCw },
+        { to: "/admin/membership/action-needed", label: "Payment Issues", icon: AlertCircle },
+      ],
+    },
+
+    { to: "/admin/member-plans", label: "Membership Content", icon: Library, group: "Main Menu",
+      keywords: ["programs", "workouts", "exercises", "meal plans", "recipes", "resources", "challenges"],
+      children: [
+        { to: "/admin/programming", label: "Membership Programs", icon: BookOpen },
+        { to: "/admin/program-library", label: "Workout Library", icon: Library },
+        { to: "/admin/exercises", label: "Exercise Library", icon: Dumbbell },
+        { to: "/admin/nutrition-dashboard", label: "Meal Plans", icon: ChefHat },
+        { to: "/admin/recipes", label: "Recipes", icon: ChefHat },
+        { to: "/admin/member-resources", label: "Resources", icon: FolderOpen },
+        { to: "/admin/membership/challenges", label: "Challenges", icon: Trophy },
+      ],
+    },
+
+    { to: "/admin/sales/membership", label: "Membership Sales", icon: ShoppingBag, group: "Main Menu",
+      keywords: ["plans", "pricing", "offers", "promotions", "referral codes", "sales page", "checkout", "analytics"],
+      children: [
+        { to: "/admin/member-plans", label: "Plans & Pricing", icon: Library },
+        { to: "/admin/payment-links", label: "Products & Offers", icon: ShoppingBag },
+        { to: "/admin/membership/promo-tools", label: "Promotions", icon: Tag },
+        { to: "/admin/promo-codes", label: "Referral Codes", icon: Ticket },
+        { to: "/admin/sales/membership", label: "Sales Page", icon: Sparkles },
+        { to: "/admin/membership/checkout-settings", label: "Checkout", icon: PowerOff },
+        { to: "/admin/membership/signup-stats", label: "Membership Analytics", icon: BarChart3 },
+      ],
+    },
+
+    { to: "/admin/messages", label: "Member Messages", icon: MessagesSquare, group: "Main Menu",
+      keywords: ["inbox", "groups", "broadcasts", "announcements", "push notifications"],
+      children: [
+        { to: "/admin/membership/support", label: "Inbox", icon: MessageCircle },
+        { to: "/admin/messages", label: "Groups", icon: MessagesSquare },
+        { to: "/admin/broadcasts", label: "Broadcasts", icon: Megaphone },
+        { to: "/admin/membership/welcome-messages", label: "Announcements", icon: Megaphone },
+        { to: "/admin/membership/notifications", label: "Push Notifications", icon: AlertCircle },
+      ],
+    },
+
+    { to: "/admin/onboarding", label: "Member Onboarding", icon: ClipboardCheck, group: "Main Menu",
+      keywords: ["welcome email", "incomplete setup", "missing profiles", "sms consent", "access setup"],
+      children: [
+        { to: "/admin/onboarding", label: "Onboarding Status", icon: ClipboardCheck },
+        { to: "/admin/membership/welcome-messages", label: "Welcome Email", icon: Megaphone },
+        { to: "/admin/membership/action-needed?tab=incomplete", label: "Incomplete Setup", icon: AlertCircle },
+        { to: "/admin/members?status=missing_profile", label: "Missing Profiles", icon: Users },
+        { to: "/admin/settings/sms", label: "SMS Consent", icon: MessageCircle },
+        { to: "/admin/membership/access-checklist", label: "Access Setup", icon: ShieldCheck },
+      ],
+    },
+
+    // ── OTHER ────────────────────────────────────────────────────────
+    { to: "/admin/apps", label: "Membership Add-ons", icon: Layers, group: "Other" },
+    { to: "/admin/settings", label: "Membership Settings", icon: Settings, group: "Other",
+      keywords: ["general", "branding", "access rules", "trial settings", "notifications", "billing", "stripe", "integrations"],
+      children: [
+        { to: "/admin/settings", label: "General", icon: Settings },
+        { to: "/admin/content", label: "Branding", icon: Sparkles },
+        { to: "/admin/membership/access-checklist", label: "Access Rules", icon: ShieldCheck },
+        { to: "/admin/membership/checkout-settings", label: "Trial Settings", icon: PowerOff },
+        { to: "/admin/membership/notifications", label: "Notifications", icon: AlertCircle },
+        { to: "/admin/membership/billing", label: "Billing", icon: CreditCard },
+        { to: "/admin/membership/stripe-sync", label: "Stripe", icon: RefreshCw },
+        { to: "/admin/apps", label: "Integrations", icon: Layers },
+      ],
+    },
+  ];
+}
