@@ -86,11 +86,16 @@ function TabFallback() {
   return <div className="md:col-span-3 p-6 text-sm text-muted-foreground">Loading…</div>;
 }
 
-function SectionNav({ activeTab, onChange }: { activeTab: TabValue; onChange: (v: TabValue) => void }) {
+function SectionNav({ activeTab, onChange, compact = false, heading }: { activeTab: TabValue; onChange: (v: TabValue) => void; compact?: boolean; heading?: string }) {
   const activeSection = TAB_TO_SECTION[activeTab] ?? "client-profile";
   const current = SECTIONS.find((s) => s.id === activeSection)!;
   return (
-    <div className="mb-6 space-y-4">
+    <div className={compact ? "space-y-3" : "mb-6 space-y-4"}>
+      {heading && (
+        <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+          {heading}
+        </div>
+      )}
       {/* Top-level sections — large touch targets, 1 col on phones, 2 on small tablets, 5 across on desktop */}
       <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 sm:gap-3 lg:grid-cols-5">
         {SECTIONS.map((s) => {
@@ -102,21 +107,27 @@ function SectionNav({ activeTab, onChange }: { activeTab: TabValue; onChange: (v
               type="button"
               onClick={() => onChange(s.tabs[0].value)}
               className={[
-                "group flex min-h-[64px] items-center gap-3 rounded-xl border p-3 text-left transition-all sm:flex-col sm:items-start sm:gap-2 sm:p-4",
+                compact
+                  ? "group flex min-h-[52px] items-center gap-2.5 rounded-lg border p-2.5 text-left transition-all sm:flex-col sm:items-start sm:gap-1.5 sm:p-3"
+                  : "group flex min-h-[64px] items-center gap-3 rounded-xl border p-3 text-left transition-all sm:flex-col sm:items-start sm:gap-2 sm:p-4",
                 isActive
                   ? "border-primary bg-primary/10 shadow-sm"
                   : "border-border bg-card hover:border-primary/40 hover:bg-secondary/40 active:scale-[0.99]",
               ].join(" ")}
             >
               <div className={[
-                "grid h-11 w-11 shrink-0 place-items-center rounded-lg sm:h-10 sm:w-10",
+                compact
+                  ? "grid h-9 w-9 shrink-0 place-items-center rounded-md sm:h-8 sm:w-8"
+                  : "grid h-11 w-11 shrink-0 place-items-center rounded-lg sm:h-10 sm:w-10",
                 isActive ? "bg-primary text-primary-foreground" : "bg-secondary text-foreground/80 group-hover:bg-primary/15 group-hover:text-primary",
               ].join(" ")}>
-                <Icon className="h-5 w-5 sm:h-4 sm:w-4" />
+                <Icon className={compact ? "h-4 w-4 sm:h-3.5 sm:w-3.5" : "h-5 w-5 sm:h-4 sm:w-4"} />
               </div>
               <div className="min-w-0 flex-1">
-                <div className={["text-sm font-semibold leading-tight", isActive ? "text-primary" : "text-foreground"].join(" ")}>{s.label}</div>
-                <div className="mt-0.5 text-[11px] leading-tight text-muted-foreground line-clamp-2">{s.description}</div>
+                <div className={[compact ? "text-[13px] font-semibold leading-tight" : "text-sm font-semibold leading-tight", isActive ? "text-primary" : "text-foreground"].join(" ")}>{s.label}</div>
+                {!compact && (
+                  <div className="mt-0.5 text-[11px] leading-tight text-muted-foreground line-clamp-2">{s.description}</div>
+                )}
               </div>
             </button>
           );
@@ -143,7 +154,9 @@ function SectionNav({ activeTab, onChange }: { activeTab: TabValue; onChange: (v
                 type="button"
                 onClick={() => onChange(t.value)}
                 className={[
-                  "group flex min-h-[64px] items-start gap-3 rounded-lg border p-3 text-left transition-all sm:min-h-[88px] sm:flex-col sm:gap-2 sm:p-4",
+                  compact
+                    ? "group flex min-h-[48px] items-center gap-2 rounded-md border p-2 text-left transition-all sm:min-h-[60px] sm:flex-col sm:items-start sm:gap-1.5 sm:p-2.5"
+                    : "group flex min-h-[64px] items-start gap-3 rounded-lg border p-3 text-left transition-all sm:min-h-[88px] sm:flex-col sm:gap-2 sm:p-4",
                   isActive
                     ? "border-primary bg-primary/15 shadow-sm"
                     : "border-border bg-card/60 hover:border-primary/40 hover:bg-secondary/40 active:scale-[0.99]",
@@ -151,14 +164,16 @@ function SectionNav({ activeTab, onChange }: { activeTab: TabValue; onChange: (v
                 aria-pressed={isActive}
               >
                 <div className={[
-                  "grid h-10 w-10 shrink-0 place-items-center rounded-md",
+                  compact
+                    ? "grid h-8 w-8 shrink-0 place-items-center rounded"
+                    : "grid h-10 w-10 shrink-0 place-items-center rounded-md",
                   isActive ? "bg-primary text-primary-foreground" : "bg-secondary text-foreground/80 group-hover:bg-primary/15 group-hover:text-primary",
                 ].join(" ")}>
-                  <TIcon className="h-5 w-5" />
+                  <TIcon className={compact ? "h-4 w-4" : "h-5 w-5"} />
                 </div>
                 <div className="min-w-0 flex-1">
-                  <div className={["text-sm font-semibold leading-tight", isActive ? "text-primary" : "text-foreground"].join(" ")}>{t.label}</div>
-                  {t.description && (
+                  <div className={[compact ? "text-[13px] font-semibold leading-tight" : "text-sm font-semibold leading-tight", isActive ? "text-primary" : "text-foreground"].join(" ")}>{t.label}</div>
+                  {!compact && t.description && (
                     <div className="mt-0.5 text-[11px] leading-tight text-muted-foreground line-clamp-2">{t.description}</div>
                   )}
                 </div>
