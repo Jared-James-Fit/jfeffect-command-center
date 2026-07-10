@@ -1,5 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
+import { ClientNameLink } from "@/components/clients/client-name-link";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { PageHeader } from "@/components/app-shell";
@@ -145,9 +146,9 @@ function NutritionDashboard() {
                   <div className="flex flex-col md:flex-row md:items-center gap-3">
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
-                        <Link to="/admin/clients/$id" params={{ id: r.client_id }} className="font-bold truncate hover:underline">
+                        <ClientNameLink clientId={r.client_id} className="font-bold truncate hover:underline">
                           {r.clients?.full_name ?? "—"}
-                        </Link>
+                        </ClientNameLink>
                         <Badge variant="outline" className={`text-[10px] ${meta.tone}`}>{meta.label}</Badge>
                         {r.open_submission ? (
                           <Badge variant="outline" className="text-[10px] bg-blue-500/10 text-blue-300 border-blue-500/30">New submission</Badge>
@@ -172,7 +173,7 @@ function NutritionDashboard() {
                         </Button>
                       ) : (
                         <Button size="sm" variant="outline" asChild>
-                          <Link to="/admin/clients/$id" params={{ id: r.client_id }}>Update Plan</Link>
+                          <ClientNameLink clientId={r.client_id}>Update Plan</ClientNameLink>
                         </Button>
                       )}
                       <DropdownMenu>

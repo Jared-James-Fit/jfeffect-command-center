@@ -1,5 +1,6 @@
 import { Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
+import { ClientNameLink } from "@/components/clients/client-name-link";
 import { useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/app-shell";
@@ -101,7 +102,7 @@ export function PtCalendarPanel() {
                   </div>
                   <div className="flex flex-wrap items-center gap-2 sm:shrink-0">
                     {s.clients && (
-                      <Link to="/admin/clients/$id" params={{ id: s.clients.id }} className="truncate text-sm font-semibold text-primary hover:underline">{s.clients.full_name}</Link>
+                      <ClientNameLink clientId={s.clients.id} className="truncate text-sm font-semibold text-primary hover:underline">{s.clients.full_name}</ClientNameLink>
                     )}
                     <Button size="sm" variant="ghost" onClick={() => { setEditing(s); setOpen(true); }}><Pencil className="h-4 w-4" /></Button>
                   </div>

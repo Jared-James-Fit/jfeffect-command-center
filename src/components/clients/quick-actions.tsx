@@ -1,3 +1,4 @@
+import { ClientNameLink } from "@/components/clients/client-name-link";
 import { Link } from "@tanstack/react-router";
 import { useState } from "react";
 import {
@@ -140,9 +141,9 @@ export function QuickActionsMenu({ r }: { r: DirectoryRow }) {
           </DropdownMenuItem>
         )}
         <DropdownMenuItem asChild>
-          <Link to="/admin/clients/$id" params={{ id: r.id }} search={{ tab: "training" } as any} className="flex items-center gap-2">
+          <ClientNameLink clientId={r.id} tab="training" className="flex items-center gap-2">
             <CalendarDays className="h-4 w-4" /> View Schedule
-          </Link>
+          </ClientNameLink>
         </DropdownMenuItem>
         {hasProgram && (
           <DropdownMenuItem onSelect={(e) => { e.preventDefault(); setScheduleOpen(true); }}>
@@ -167,14 +168,14 @@ export function QuickActionsMenu({ r }: { r: DirectoryRow }) {
         <DropdownMenuSeparator />
         <DropdownMenuLabel className="text-xs">Nutrition &amp; Cardio</DropdownMenuLabel>
         <DropdownMenuItem asChild>
-          <Link to="/admin/clients/$id" params={{ id: r.id }} search={{ tab: "nutrition" } as any} className="flex items-center gap-2">
+          <ClientNameLink clientId={r.id} tab="nutrition" className="flex items-center gap-2">
             <Apple className="h-4 w-4" /> {!r.f_missing_nutrition ? "Update Nutrition" : "Add Nutrition"}
-          </Link>
+          </ClientNameLink>
         </DropdownMenuItem>
         <DropdownMenuItem asChild>
-          <Link to="/admin/clients/$id" params={{ id: r.id }} search={{ tab: "cardio" } as any} className="flex items-center gap-2">
+          <ClientNameLink clientId={r.id} tab="nutrition" className="flex items-center gap-2">
             <HeartPulse className="h-4 w-4" /> {!r.f_missing_cardio ? "Update Cardio" : "Add Cardio"}
-          </Link>
+          </ClientNameLink>
         </DropdownMenuItem>
         <DropdownMenuItem
           disabled={pdfs.mealPending}
@@ -191,9 +192,9 @@ export function QuickActionsMenu({ r }: { r: DirectoryRow }) {
         <DropdownMenuSeparator />
         <DropdownMenuLabel className="text-xs">Client</DropdownMenuLabel>
         <DropdownMenuItem asChild>
-          <Link to="/admin/clients/$id" params={{ id: r.id }} search={{ tab: "messages" } as any} className="flex items-center gap-2">
+          <ClientNameLink clientId={r.id} tab="messages" className="flex items-center gap-2">
             <MessageSquare className="h-4 w-4" /> Send Message
-          </Link>
+          </ClientNameLink>
         </DropdownMenuItem>
         {r.pending_reviews > 0 && (
           <DropdownMenuItem asChild>
@@ -203,22 +204,22 @@ export function QuickActionsMenu({ r }: { r: DirectoryRow }) {
           </DropdownMenuItem>
         )}
         <DropdownMenuItem asChild>
-          <Link to="/admin/clients/$id" params={{ id: r.id }} search={{ tab: "sessions" } as any} className="flex items-center gap-2">
+          <ClientNameLink clientId={r.id} tab="sessions" className="flex items-center gap-2">
             <CalendarDays className="h-4 w-4" /> Book Session
-          </Link>
+          </ClientNameLink>
         </DropdownMenuItem>
         <DropdownMenuItem onSelect={(e) => { e.preventDefault(); setSellOpen(true); }}>
           <ShoppingCart className="mr-2 h-4 w-4 text-primary" /> Quick Sell / Send Payment Link
         </DropdownMenuItem>
         <DropdownMenuItem asChild>
-          <Link to="/admin/clients/$id" params={{ id: r.id }} search={{ tab: "billing" } as any} className="flex items-center gap-2">
+          <ClientNameLink clientId={r.id} tab="billing" className="flex items-center gap-2">
             <CreditCard className="h-4 w-4" /> Add Payment
-          </Link>
+          </ClientNameLink>
         </DropdownMenuItem>
         <DropdownMenuItem asChild>
-          <Link to="/admin/clients/$id" params={{ id: r.id }} className="flex items-center gap-2">
+          <ClientNameLink clientId={r.id} className="flex items-center gap-2">
             <User className="h-4 w-4" /> Open Profile
-          </Link>
+          </ClientNameLink>
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
@@ -272,14 +273,14 @@ export function ClientMoreMenu({
       <DropdownMenuContent align="end" className="w-64">
         <DropdownMenuLabel className="text-xs">{r.full_name}</DropdownMenuLabel>
         <DropdownMenuItem asChild>
-          <Link to="/admin/clients/$id" params={{ id: r.id }} className="flex items-center gap-2">
+          <ClientNameLink clientId={r.id} className="flex items-center gap-2">
             <Star className="h-4 w-4" /> Open Client
-          </Link>
+          </ClientNameLink>
         </DropdownMenuItem>
         <DropdownMenuItem asChild>
-          <Link to="/admin/clients/$id" params={{ id: r.id }} search={{ tab: "training" } as any} className="flex items-center gap-2">
+          <ClientNameLink clientId={r.id} tab="training" className="flex items-center gap-2">
             <CalendarDays className="h-4 w-4" /> View Schedule
-          </Link>
+          </ClientNameLink>
         </DropdownMenuItem>
 
         <DropdownMenuSeparator />
@@ -330,14 +331,14 @@ export function ClientMoreMenu({
         <DropdownMenuSeparator />
         <DropdownMenuLabel className="text-xs">Coaching</DropdownMenuLabel>
         <DropdownMenuItem asChild>
-          <Link to="/admin/clients/$id" params={{ id: r.id }} search={{ tab: "nutrition" } as any} className="flex items-center gap-2">
+          <ClientNameLink clientId={r.id} tab="nutrition" className="flex items-center gap-2">
             <Apple className="h-4 w-4" /> {!r.f_missing_nutrition ? "Update Nutrition" : "Add Nutrition"}
-          </Link>
+          </ClientNameLink>
         </DropdownMenuItem>
         <DropdownMenuItem asChild>
-          <Link to="/admin/clients/$id" params={{ id: r.id }} search={{ tab: "cardio" } as any} className="flex items-center gap-2">
+          <ClientNameLink clientId={r.id} tab="nutrition" className="flex items-center gap-2">
             <HeartPulse className="h-4 w-4" /> {!r.f_missing_cardio ? "Update Cardio" : "Add Cardio"}
-          </Link>
+          </ClientNameLink>
         </DropdownMenuItem>
         <DropdownMenuItem
           disabled={pdfs.mealPending}
@@ -351,14 +352,14 @@ export function ClientMoreMenu({
           Download Meal Plan PDF
         </DropdownMenuItem>
         <DropdownMenuItem asChild>
-          <Link to="/admin/clients/$id" params={{ id: r.id }} search={{ tab: "messages" } as any} className="flex items-center gap-2">
+          <ClientNameLink clientId={r.id} tab="messages" className="flex items-center gap-2">
             <MessageSquare className="h-4 w-4" /> Send Message
-          </Link>
+          </ClientNameLink>
         </DropdownMenuItem>
         <DropdownMenuItem asChild>
-          <Link to="/admin/clients/$id" params={{ id: r.id }} search={{ tab: "sessions" } as any} className="flex items-center gap-2">
+          <ClientNameLink clientId={r.id} tab="sessions" className="flex items-center gap-2">
             <CalendarDays className="h-4 w-4" /> Book Session
-          </Link>
+          </ClientNameLink>
         </DropdownMenuItem>
 
         <DropdownMenuSeparator />
@@ -367,32 +368,32 @@ export function ClientMoreMenu({
           <ShoppingCart className="mr-2 h-4 w-4 text-primary" /> Quick Sell / Send Payment Link
         </DropdownMenuItem>
         <DropdownMenuItem asChild>
-          <Link to="/admin/clients/$id" params={{ id: r.id }} search={{ tab: "billing" } as any} className="flex items-center gap-2">
+          <ClientNameLink clientId={r.id} tab="billing" className="flex items-center gap-2">
             <CreditCard className="h-4 w-4" /> View Payments
-          </Link>
+          </ClientNameLink>
         </DropdownMenuItem>
         <DropdownMenuItem asChild>
-          <Link to="/admin/clients/$id" params={{ id: r.id }} search={{ tab: "purchases" } as any} className="flex items-center gap-2">
+          <ClientNameLink clientId={r.id} tab="purchases" className="flex items-center gap-2">
             <CreditCard className="h-4 w-4" /> Manage Package
-          </Link>
+          </ClientNameLink>
         </DropdownMenuItem>
 
         <DropdownMenuSeparator />
         <DropdownMenuLabel className="text-xs">Account</DropdownMenuLabel>
         <DropdownMenuItem asChild>
-          <Link to="/admin/clients/$id" params={{ id: r.id }} search={{ tab: "info" } as any} className="flex items-center gap-2">
+          <ClientNameLink clientId={r.id} tab="info" className="flex items-center gap-2">
             <User className="h-4 w-4" /> Edit Client
-          </Link>
+          </ClientNameLink>
         </DropdownMenuItem>
         <DropdownMenuItem asChild>
-          <Link to="/admin/clients/$id" params={{ id: r.id }} search={{ tab: "account" } as any} className="flex items-center gap-2">
+          <ClientNameLink clientId={r.id} tab="account" className="flex items-center gap-2">
             <User className="h-4 w-4" /> Manage Access
-          </Link>
+          </ClientNameLink>
         </DropdownMenuItem>
         <DropdownMenuItem asChild>
-          <Link to="/admin/clients/$id" params={{ id: r.id }} search={{ tab: "agreements" } as any} className="flex items-center gap-2">
+          <ClientNameLink clientId={r.id} tab="agreements" className="flex items-center gap-2">
             <BookOpen className="h-4 w-4" /> View Agreements
-          </Link>
+          </ClientNameLink>
         </DropdownMenuItem>
 
         {onArchive && (

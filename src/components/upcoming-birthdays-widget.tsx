@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { ClientNameLink } from "@/components/clients/client-name-link";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { supabase } from "@/integrations/supabase/client";
 import { Card } from "@/components/ui/card";
@@ -261,10 +262,7 @@ export function UpcomingBirthdaysWidget() {
                   <span className="absolute inset-y-0 left-0 w-1 bg-primary" />
                 )}
                 <div className="flex flex-col gap-3 p-3 sm:flex-row sm:items-center sm:justify-between">
-                  <Link
-                    to="/admin/clients/$id"
-                    params={{ id: r.id }}
-                    search={{ tab: "info" }}
+                  <ClientNameLink clientId={r.id} tab="info"
                     className="flex min-w-0 flex-1 items-center gap-3"
                   >
                     <UserAvatar
@@ -305,7 +303,7 @@ export function UpcomingBirthdaysWidget() {
                         </span>
                       </div>
                     </div>
-                  </Link>
+                  </ClientNameLink>
 
                   <div className="flex flex-wrap items-center gap-1.5 shrink-0">
                     {showReadStatus && (
@@ -355,17 +353,14 @@ export function UpcomingBirthdaysWidget() {
                       <Eye className="h-3.5 w-3.5" />
                       <span className="hidden sm:inline">Preview</span>
                     </Button>
-                    <Link
-                      to="/admin/clients/$id"
-                      params={{ id: r.id }}
-                      search={{ tab: "info" }}
+                    <ClientNameLink clientId={r.id} tab="info"
                       title="View profile"
                     >
                       <Button size="sm" variant="ghost" className="h-8 gap-1 px-2 text-xs">
                         <UserIcon className="h-3.5 w-3.5" />
                         <span className="hidden sm:inline">Profile</span>
                       </Button>
-                    </Link>
+                    </ClientNameLink>
                     {(r.status === "today" || r.status === "overdue") && (
                       <Button
                         size="sm"

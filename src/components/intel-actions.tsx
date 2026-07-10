@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Link, useNavigate } from "@tanstack/react-router";
+import { ClientNameLink } from "@/components/clients/client-name-link";
 import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
@@ -29,9 +30,9 @@ export function ClientQuickLinks({ c, compact = false }: { c: { client_id: strin
       <Link to="/admin/messages" search={{ client: c.client_id }}>
         <Button size="sm" variant="outline" className="h-7 px-2"><MessageSquare className="h-3.5 w-3.5" /></Button>
       </Link>
-      <Link to="/admin/clients/$id" params={{ id: c.client_id }}>
+      <ClientNameLink clientId={c.client_id}>
         <Button size="sm" variant="ghost" className="h-7 px-2"><UserCircle className="h-4 w-4" /></Button>
-      </Link>
+      </ClientNameLink>
       <Link to="/admin/client-programs/$clientId" params={{ clientId: c.client_id }}>
         <Button size="sm" variant="ghost" className="h-7 px-2"><Dumbbell className="h-4 w-4" /></Button>
       </Link>

@@ -1,5 +1,6 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
+import { ClientNameLink } from "@/components/clients/client-name-link";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
 import { toast } from "sonner";
@@ -784,9 +785,9 @@ function BirthdaysPanel() {
               </div>
               <div className="flex gap-2">
                 <Button asChild size="sm" variant="outline">
-                  <Link to="/admin/clients/$id" params={{ id: r.client_id }}>
+                  <ClientNameLink clientId={r.client_id}>
                     <Pencil className="mr-1 h-3.5 w-3.5" /> Edit client
-                  </Link>
+                  </ClientNameLink>
                 </Button>
                 <Button asChild size="sm" variant="outline">
                   <Link to="/admin/client-pov">

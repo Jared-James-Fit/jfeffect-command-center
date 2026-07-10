@@ -1,5 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
+import { ClientNameLink } from "@/components/clients/client-name-link";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
@@ -209,9 +210,9 @@ function ArchivesPage() {
                     <td className="p-2"><Badge variant="secondary">{r.type_label}</Badge></td>
                     <td className="p-2">
                       {r.client_id ? (
-                        <Link to="/admin/clients/$id" params={{ id: r.client_id }} className="text-primary hover:underline">
+                        <ClientNameLink clientId={r.client_id} className="text-primary hover:underline">
                           {r.client_name ?? r.client_id.slice(0, 8)}
-                        </Link>
+                        </ClientNameLink>
                       ) : <span className="text-muted-foreground">—</span>}
                     </td>
                     <td className="p-2 text-muted-foreground">
@@ -222,7 +223,7 @@ function ArchivesPage() {
                       <div className="flex justify-end gap-1">
                         {r.type === "clients" && (
                           <Button asChild size="icon" variant="ghost">
-                            <Link to="/admin/clients/$id" params={{ id: r.id }} title="View"><Eye className="h-4 w-4" /></Link>
+                            <ClientNameLink clientId={r.id} title="View"><Eye className="h-4 w-4" /></ClientNameLink>
                           </Button>
                         )}
                         <Button size="icon" variant="ghost" title="Restore" onClick={() => handleRestore([r])}>

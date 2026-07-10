@@ -238,16 +238,48 @@ export const Route = createFileRoute("/_authenticated/admin/clients/$id")({
     const t = parsed.tab ? (remap[parsed.tab] ?? parsed.tab) : undefined;
     return { tab: t && (TAB_VALUES as readonly string[]).includes(t) ? (t as TabValue) : undefined };
   },
-  component: ClientDetail,
+  component: ClientDetailRoute,
 });
+
+function ClientDetailRoute() {
+  const { id } = Route.useParams();
+  const { tab } = Route.useSearch();
+  const navigate = useNavigate();
+  return (
+    <ClientProfileWorkspace
+      clientId={id}
+      initialTab={tab}
+      onTabChange={(t) =>
+        navigate({ to: ".", params: { id }, search: { tab: t }, replace: true })
+      }
+    />
+  );
+}
 
 const STATUSES = ["Active", "New Client", "Needs Attention", "Check-In Overdue", "Payment Overdue", "Injured / Modified Plan", "Paused", "Cancelling", "Deactivated", "Archived", "High Priority"];
 const PAY_STATUSES = ["Not Sent", "Sent", "Paid", "Failed", "Overdue", "Cancelled", "Refunded"];
 const ACCOUNT_FIELDS = ["first_name", "last_name", "preferred_name", "email", "phone", "date_of_birth", "height_cm", "preferred_height_unit", "address", "city", "province", "postal_code", "country", "timezone", "emergency_contact_name", "emergency_contact_phone"] as const;
 
-function ClientDetail() {
-  const { id } = Route.useParams();
-  const { tab } = Route.useSearch();
+export function ClientProfileWorkspace({
+  clientId,
+  initialTab,
+  embedded = false,
+  onClose,
+  onTabChange,
+}: {
+  clientId: string;
+  initialTab?: TabValue;
+  embedded?: boolean;
+  onClose?: () => void;
+  onTabChange?: (tab: TabValue) => void;
+}) {
+  const id = clientId;
+  const [tabState, setTabState] = useState<TabValue | undefined>(initialTab);
+  const tab = tabState;
+  const setTab = (t: TabValue) => {
+    setTabState(t);
+    onTabChange?.(t);
+  };
   const qc = useQueryClient();
   const navigate = useNavigate();
   const { role } = useAuth();
@@ -347,7 +379,7 @@ function ClientDetail() {
     const { error } = await supabase.from("clients").update({ archived: !form.archived, status: !form.archived ? "Archived" : "Active" }).eq("id", id);
     if (error) return toast.error(error.message);
     toast.success(form.archived ? "Restored" : "Archived");
-    navigate({ to: "/admin/clients" });
+    if (embedded) onClose?.(); else navigate({ to: "/admin/clients" });
   };
 
   const sendSetup = async () => {
@@ -433,7 +465,7 @@ function ClientDetail() {
       toast.success("Client deleted");
       setDeleteStep(0);
       qc.invalidateQueries({ queryKey: ["clients"] });
-      navigate({ to: "/admin/clients" });
+      if (embedded) onClose?.(); else navigate({ to: "/admin/clients" });
     } catch (e: any) {
       toast.error(e?.message ?? "Failed to delete");
     }
@@ -548,7 +580,7 @@ function ClientDetail() {
 
   return (
     <>
-      <PageHeader
+      {!embedded && <PageHeader
         backTo="/admin/clients"
         backLabel="Back to Clients"
         breadcrumbs={[{ label: "Clients", to: "/admin/clients" }, { label: form.full_name }]}
@@ -568,7 +600,7 @@ function ClientDetail() {
             <Button
               variant="outline"
               size="sm"
-              onClick={() => navigate({ to: ".", params: { id }, search: { tab: "messages" }, replace: true })}
+              onClick={() => setTab("messages")}
             >
               <MessageSquare className="mr-2 h-4 w-4" />Message
             </Button>
@@ -581,7 +613,7 @@ function ClientDetail() {
             <Button
               variant="outline"
               size="sm"
-              onClick={() => navigate({ to: ".", params: { id }, search: { tab: "nutrition" }, replace: true })}
+              onClick={() => setTab("nutrition")}
             >
               <Apple className="mr-2 h-4 w-4" />Nutrition
             </Button>
@@ -638,7 +670,7 @@ function ClientDetail() {
             <Button size="sm" className="bg-gradient-primary uppercase font-bold" onClick={save}><Save className="mr-2 h-4 w-4" />Save</Button>
           </>
         }
-      />
+      />}
       <div className="p-6 md:p-8">
       {form.status === "Deactivated" && (
         <div className="mb-4 rounded-md border border-warning/40 bg-warning/10 px-4 py-3 text-sm">
@@ -660,15 +692,15 @@ function ClientDetail() {
         onSendReset={sendReset}
         onCopyReset={copyResetLink}
         onSetPassword={() => { setPwValue(""); setPwOpen(true); }}
-        onGoToAccountTab={() => navigate({ to: ".", params: { id }, search: { tab: "account" }, replace: true })}
+        onGoToAccountTab={() => setTab("account")}
       />
       <Tabs
         value={tab ?? "summary"}
-        onValueChange={(v) => navigate({ to: ".", params: { id }, search: { tab: v as TabValue }, replace: true })}
+        onValueChange={(v) => setTab(v as TabValue)}
       >
         <SectionNav
           activeTab={(tab ?? "summary") as TabValue}
-          onChange={(v) => navigate({ to: ".", params: { id }, search: { tab: v }, replace: true })}
+          onChange={(v) => setTab(v)}
         />
 
         <TabsContent value="summary" className="grid gap-6 md:grid-cols-3">
@@ -676,7 +708,7 @@ function ClientDetail() {
             form={form}
             clientId={id}
             canPov={canPov}
-            onMessage={() => navigate({ to: ".", params: { id }, search: { tab: "messages" }, replace: true })}
+            onMessage={() => setTab("messages")}
             onPov={() => {
               if (!form.user_id) {
                 toast.error("Client has no account yet — send a setup link first.");
@@ -690,7 +722,7 @@ function ClientDetail() {
             }}
             onSendSetup={sendSetup}
             onRequestUpdate={requestUpdate}
-            onGoToTab={(t: TabValue) => navigate({ to: ".", params: { id }, search: { tab: t }, replace: true })}
+            onGoToTab={(t: TabValue) => setTab(t)}
           />
         </TabsContent>
 

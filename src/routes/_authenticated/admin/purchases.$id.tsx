@@ -1,5 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { ClientNameLink } from "@/components/clients/client-name-link";
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/app-shell";
 import { Card } from "@/components/ui/card";
@@ -208,7 +209,7 @@ function PurchaseDetail() {
               {offer?.requires_agreement ? `Offer requires a signed agreement${offer.agreement_before_service ? " before service start." : "."}` : "This offer doesn't require a signed agreement."}
             </div>
             {linkedAgreements.length === 0 && offer?.requires_agreement && (
-              <Link to="/admin/clients/$id" params={{ id: form.clients?.id ?? form.client_id }} search={{ tab: "agreements" }} className="text-xs text-primary underline">Create or link an agreement for this purchase</Link>
+              <ClientNameLink clientId={form.clients?.id ?? form.client_id} tab="agreements" className="text-xs text-primary underline">Create or link an agreement for this purchase</ClientNameLink>
             )}
             {linkedAgreements.length > 0 && (
               <ul className="space-y-1 pt-1">

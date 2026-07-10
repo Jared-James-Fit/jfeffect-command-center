@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { ClientNameLink } from "@/components/clients/client-name-link";
 import { Link } from "@tanstack/react-router";
 import { supabase } from "@/integrations/supabase/client";
 import { useServerFn } from "@tanstack/react-start";
@@ -388,9 +389,9 @@ function AgreementRow({
         <div className="flex-1 min-w-0">
           <div className="flex flex-wrap items-center gap-2">
             {a.clients ? (
-              <Link to="/admin/clients/$id" params={{ id: a.clients.id }} search={{ tab: "agreements" }} className="font-semibold text-sm hover:text-primary truncate">
+              <ClientNameLink clientId={a.clients.id} tab="agreements" className="font-semibold text-sm hover:text-primary truncate">
                 {a.clients.full_name ?? "Client"}
-              </Link>
+              </ClientNameLink>
             ) : (
               <span className="font-semibold text-sm">Unknown client</span>
             )}
@@ -423,9 +424,9 @@ function AgreementRow({
 
       <div className="flex flex-wrap gap-1.5 ml-8">
         {a.clients && (
-          <Link to="/admin/clients/$id" params={{ id: a.clients.id }} search={{ tab: "agreements" }}>
+          <ClientNameLink clientId={a.clients.id} tab="agreements">
             <Button size="sm" variant="ghost"><User className="h-3 w-3 mr-1" />Open client</Button>
-          </Link>
+          </ClientNameLink>
         )}
 
         {!isTerminal && !a.archived && (

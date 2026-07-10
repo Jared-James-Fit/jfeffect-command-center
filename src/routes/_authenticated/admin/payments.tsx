@@ -1,5 +1,6 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { ClientNameLink } from "@/components/clients/client-name-link";
 import { useEffect, useState, useMemo } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { supabase } from "@/integrations/supabase/client";
@@ -174,7 +175,7 @@ export function PaymentsPage({ embedded = false }: { embedded?: boolean } = {}) 
                   <div className="min-w-0">
                     <Link to="/admin/purchases/$id" params={{ id: r.id }} className="font-bold hover:underline">{r.offer_name}</Link>
                     <div className="text-xs text-muted-foreground">
-                      <Link to="/admin/clients/$id" params={{ id: r.clients?.id ?? r.client_id }} className="hover:underline">{r.clients?.full_name ?? "—"}</Link>
+                      <ClientNameLink clientId={r.clients?.id ?? r.client_id} className="hover:underline">{r.clients?.full_name ?? "—"}</ClientNameLink>
                       {" · "}{new Date(r.purchased_at).toLocaleDateString()}{" · "}{r.offer_type}
                     </div>
                   </div>

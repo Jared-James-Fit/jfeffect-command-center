@@ -1,5 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
+import { ClientNameLink } from "@/components/clients/client-name-link";
 import { useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/app-shell";
@@ -142,9 +143,9 @@ function OfferHistory() {
                 ) : (purchases as any[]).map((p) => (
                   <tr key={p.id} className="border-t border-border">
                     <td className="px-4 py-2">
-                      <Link to="/admin/clients/$id" params={{ id: p.client_id }} className="font-medium hover:underline">
+                      <ClientNameLink clientId={p.client_id} className="font-medium hover:underline">
                         {p.clients?.full_name ?? "Unknown"}
-                      </Link>
+                      </ClientNameLink>
                       <div className="text-xs text-muted-foreground">{p.clients?.email}</div>
                     </td>
                     <td className="px-4 py-2"><Badge variant="outline" className={statusTone(p.payment_status)}>{p.payment_status ?? "—"}</Badge></td>

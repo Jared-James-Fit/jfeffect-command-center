@@ -1,6 +1,8 @@
 import { Link } from "@tanstack/react-router";
 import { useState } from "react";
 import { UserAvatar } from "@/components/user-avatar";
+import { ClientNameLink } from "@/components/clients/client-name-link";
+import { useOpenClientProfile } from "@/lib/open-client-profile";
 import { Button } from "@/components/ui/button";
 import {
   ChevronRight, MoreHorizontal, CalendarDays, Dumbbell,
@@ -118,13 +120,12 @@ export function ClientRow({ r, onArchive }: { r: DirectoryRow; onArchive?: (r: D
             className="shrink-0"
           />
           <div className="min-w-0">
-            <Link
-              to="/admin/clients/$id"
-              params={{ id: r.id }}
+            <ClientNameLink
+              clientId={r.id}
               className="block truncate text-sm font-semibold hover:underline"
             >
               {r.full_name || "(no name)"}
-            </Link>
+            </ClientNameLink>
             <div className="truncate text-xs text-muted-foreground">{r.email || "—"}</div>
             <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[10px] text-muted-foreground">
               {r.coaching_type && (
@@ -243,14 +244,13 @@ export function ClientRow({ r, onArchive }: { r: DirectoryRow; onArchive?: (r: D
             }
           />
 
-          <Link
-            to="/admin/clients/$id"
-            params={{ id: r.id }}
-            aria-label={`Open ${r.full_name ?? "client"}`}
+          <ClientNameLink
+            clientId={r.id}
+            ariaLabel={`Open ${r.full_name ?? "client"}`}
             className="hidden h-9 w-9 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground md:flex"
           >
             <ChevronRight className="h-5 w-5" />
-          </Link>
+          </ClientNameLink>
         </div>
       </li>
     </TooltipProvider>
@@ -467,11 +467,11 @@ function primaryActionTarget(action: DirectoryNextAction, clientId: string) {
       );
     case "nutrition":
       return (
-        <Link to="/admin/clients/$id" params={{ id: clientId }} search={{ tab: "nutrition" } as any}>{label}</Link>
+        <ClientNameLink clientId={clientId} tab="nutrition">{label}</ClientNameLink>
       );
     case "cardio":
       return (
-        <Link to="/admin/clients/$id" params={{ id: clientId }} search={{ tab: "cardio" } as any}>{label}</Link>
+        <ClientNameLink clientId={clientId} tab="nutrition">{label}</ClientNameLink>
       );
     case "review":
       return (
@@ -479,16 +479,16 @@ function primaryActionTarget(action: DirectoryNextAction, clientId: string) {
       );
     case "payment":
       return (
-        <Link to="/admin/clients/$id" params={{ id: clientId }} search={{ tab: "billing" } as any}>{label}</Link>
+        <ClientNameLink clientId={clientId} tab="billing">{label}</ClientNameLink>
       );
     case "setup":
       return (
-        <Link to="/admin/clients/$id" params={{ id: clientId }}>{label}</Link>
+        <ClientNameLink clientId={clientId}>{label}</ClientNameLink>
       );
     case "open":
     default:
       return (
-        <Link to="/admin/clients/$id" params={{ id: clientId }}>{label}</Link>
+        <ClientNameLink clientId={clientId}>{label}</ClientNameLink>
       );
   }
 }

@@ -1,5 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
+import { ClientNameLink } from "@/components/clients/client-name-link";
 import { useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/app-shell";
@@ -91,7 +92,7 @@ function NutritionDashboard() {
                   <div className="flex items-center gap-3 flex-wrap">
                     <Badge variant="outline" className={t.derived.tone}>{t.derived.label}</Badge>
                     {t.clients && (
-                      <Link to="/admin/clients/$id" params={{ id: t.clients.id }} className="text-sm font-semibold text-primary hover:underline">{t.clients.full_name}</Link>
+                      <ClientNameLink clientId={t.clients.id} className="text-sm font-semibold text-primary hover:underline">{t.clients.full_name}</ClientNameLink>
                     )}
                     <span className="text-xs text-muted-foreground">{t.phase === "Custom" ? t.custom_phase : t.phase} · {t.goal === "Custom" ? t.custom_goal : t.goal}</span>
                     <span className="text-xs text-muted-foreground">{t.start_date} → {t.end_date ?? "ongoing"}</span>

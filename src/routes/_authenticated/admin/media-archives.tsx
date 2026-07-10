@@ -1,5 +1,6 @@
 import { runJob } from "@/lib/progress-jobs";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { ClientNameLink } from "@/components/clients/client-name-link";
 import { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
@@ -145,9 +146,9 @@ export function MediaArchivesPage({ embedded = false }: { embedded?: boolean } =
                 {rows.map((r) => (
                   <tr key={r.id} className="border-t border-border/50 align-top">
                     <td className="px-3 py-2">
-                      <Link to="/admin/clients/$id" params={{ id: r.client_id }} className="hover:underline">
+                      <ClientNameLink clientId={r.client_id} className="hover:underline">
                         {r.clients?.full_name ?? r.client_id.slice(0, 8)}
-                      </Link>
+                      </ClientNameLink>
                     </td>
                     <td className="px-3 py-2 text-xs">{SOURCE_LABEL[r.source_type] ?? r.source_type}</td>
                     <td className="px-3 py-2 text-xs">

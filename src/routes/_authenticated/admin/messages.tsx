@@ -1,5 +1,6 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
+import { ClientNameLink } from "@/components/clients/client-name-link";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { z } from "zod";
 import { supabase } from "@/integrations/supabase/client";
@@ -524,9 +525,9 @@ export function MessagesInbox({
                 <DropdownMenuContent align="end" className="w-56">
                   <DropdownMenuLabel className="text-xs">Conversation</DropdownMenuLabel>
                   <DropdownMenuItem asChild>
-                    <Link to="/admin/clients/$id" params={{ id: selected.id }}>
+                    <ClientNameLink clientId={selected.id}>
                       <ExternalLink className="mr-2 h-4 w-4" /> Open client profile
-                    </Link>
+                    </ClientNameLink>
                   </DropdownMenuItem>
                   <DropdownMenuSeparator />
                   <DropdownMenuItem onClick={handleMarkUnread}>
