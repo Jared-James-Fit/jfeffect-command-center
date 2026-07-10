@@ -33,6 +33,47 @@ import { AddClientDialog } from "@/components/clients/add-client-dialog";
 import { ComplianceDashboard } from "@/components/clients/compliance-dashboard";
 import { cn } from "@/lib/utils";
 
+function LifecycleTabs({ value }: { value: "active" | "archived" | "deactivated" }) {
+  const navigate = useNavigate({ from: "/admin/clients" });
+  const OPTIONS: { key: "active" | "archived" | "deactivated"; label: string }[] = [
+    { key: "active", label: "Active" },
+    { key: "archived", label: "Archived" },
+    { key: "deactivated", label: "Deactivated" },
+  ];
+  return (
+    <div className="flex gap-1 rounded-xl border border-border bg-card/60 p-1 w-fit">
+      {OPTIONS.map((o) => {
+        const isActive = value === o.key;
+        return (
+          <button
+            key={o.key}
+            type="button"
+            onClick={() =>
+              navigate({
+                search: (prev: Record<string, unknown>) => ({
+                  ...prev,
+                  lifecycle: o.key === "active" ? undefined : o.key,
+                  status: "all",
+                  page: 1,
+                }),
+                resetScroll: false,
+              })
+            }
+            className={cn(
+              "rounded-lg px-3 py-1.5 text-sm font-semibold transition-colors",
+              isActive
+                ? "bg-primary text-primary-foreground"
+                : "text-muted-foreground hover:text-foreground hover:bg-secondary/40",
+            )}
+          >
+            {o.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 const searchSchema = z.object({
   search:        fallback(z.string(),                                                       "").default(""),
   status:        fallback(z.enum(["all","needs_setup","needs_review","program_ending","payment_issues","new_clients","missed_workouts","inactive"]), "all").default("all"),
