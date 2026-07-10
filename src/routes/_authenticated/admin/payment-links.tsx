@@ -855,6 +855,7 @@ function ProductFormDialog({
 
   const handleSave = async () => {
     try {
+      if (submitting) return;
       if (!form.name.trim()) { toast.error("Product name is required"); return; }
       const priceNum = parseFloat(form.priceText || "0");
       const cents = Math.round((Number.isFinite(priceNum) ? priceNum : 0) * 100);
@@ -896,7 +897,6 @@ function ProductFormDialog({
         accessLevel: form.accessLevel ? parseInt(form.accessLevel, 10) : null,
       };
 
-      if (submitting) return;
       if (product) {
         await updateFn({ data: { id: product.id, ...payload, ...(imagePath !== undefined ? { imagePath } : {}) } as any });
         toast.success("Product updated");
