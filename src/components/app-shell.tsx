@@ -43,6 +43,14 @@ export interface NavItem {
   keywords?: string[];
   /** Optional grouped sub-items shown on tap/long-press in the mobile bottom bar. */
   children?: NavItem[];
+  /**
+   * Optional sub-section label for a flyout child. Children with no `section`
+   * render at the top of the flyout as the primary workflow list. Children
+   * that share the same `section` value render together under a labelled
+   * divider at the bottom (setup / diagnostics / advanced). Purely visual —
+   * does not affect routing or permissions.
+   */
+  section?: string;
 }
 
 function groupNavItems(items: NavItem[]) {
@@ -872,7 +880,10 @@ export function AppShell({ items, bottomItems: customBottomItems, title, childre
               />
             </div>
           </div>
-          <div className="h-[calc(88vh-7.5rem)] overflow-y-auto px-2 py-2">
+          <div
+            className="h-[calc(88vh-7.5rem)] overflow-y-auto px-2 py-2"
+            style={{ paddingBottom: "calc(env(safe-area-inset-bottom) + 1.5rem)" }}
+          >
             {moreFiltered ? (
               <ul className="space-y-1">
                 {moreFiltered.length === 0 && (
@@ -934,11 +945,18 @@ export function AppShell({ items, bottomItems: customBottomItems, title, childre
                                 </Link>
                                 {item.children && item.children.length > 0 && (
                                   <ul className="ml-9 mt-0.5 space-y-0.5 border-l border-border/50 pl-2">
-                                    {item.children.map((c) => {
+                                    {item.children.map((c, idx) => {
                                       const CIcon = c.icon;
                                       const cactive = pathname === c.to || pathname.startsWith(c.to + "/");
+                                      const prev = idx > 0 ? item.children![idx - 1] : undefined;
+                                      const showSectionHeader = c.section && (!prev || prev.section !== c.section);
                                       return (
                                         <li key={c.to}>
+                                          {showSectionHeader && (
+                                            <div className="mt-1.5 pt-1.5 px-3 border-t border-border/50 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/80">
+                                              {c.section}
+                                            </div>
+                                          )}
                                           <Link
                                             to={c.to}
                                             onClick={() => setMoreOpen(false)}
@@ -1282,7 +1300,9 @@ function SidebarFlyoutRow({
         side="right"
         align="start"
         sideOffset={6}
-        className="w-60 p-1.5"
+        collisionPadding={12}
+        avoidCollisions
+        className="w-60 max-h-[calc(100vh-24px)] overflow-y-auto p-1.5"
         onOpenAutoFocus={(e) => e.preventDefault()}
         onMouseEnter={() => { clearTimers(); setOpen(true); }}
         onMouseLeave={scheduleClose}
@@ -1290,8 +1310,17 @@ function SidebarFlyoutRow({
         <div className="px-2 py-1 text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
           {item.label}
         </div>
-        <ul className="flex flex-col gap-0.5">
-          {(item.children ?? []).map((c) => {
+        {(() => {
+          const kids = item.children ?? [];
+          const primary = kids.filter((c) => !c.section);
+          const sections: { label: string; items: NavItem[] }[] = [];
+          for (const c of kids) {
+            if (!c.section) continue;
+            const existing = sections.find((s) => s.label === c.section);
+            if (existing) existing.items.push(c);
+            else sections.push({ label: c.section, items: [c] });
+          }
+          const renderRow = (c: NavItem) => {
             const CIcon = c.icon;
             const active = pathname === c.to || pathname.startsWith(c.to + "/");
             const cb = navBadges[c.to];
@@ -1313,8 +1342,21 @@ function SidebarFlyoutRow({
                 </Link>
               </li>
             );
-          })}
-        </ul>
+          };
+          return (
+            <>
+              <ul className="flex flex-col gap-0.5">{primary.map(renderRow)}</ul>
+              {sections.map((s) => (
+                <div key={s.label} className="mt-1.5 border-t border-border/60 pt-1.5">
+                  <div className="px-2 pb-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/80">
+                    {s.label}
+                  </div>
+                  <ul className="flex flex-col gap-0.5">{s.items.map(renderRow)}</ul>
+                </div>
+              ))}
+            </>
+          );
+        })()}
       </PopoverContent>
     </Popover>
   );
