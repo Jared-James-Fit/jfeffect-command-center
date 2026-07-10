@@ -2,12 +2,13 @@ import {
   LayoutDashboard, Users, CreditCard, AlertCircle, FolderOpen, Calendar, Megaphone, UserPlus,
   HelpCircle, ChefHat, BookOpen, Settings, ListChecks, KeyRound,
   Link2 as LinkIcon, BarChart3, RefreshCw, ShoppingBag, Tag, MessagesSquare, Trophy, ShieldCheck,
-  Rocket, Bell, Activity, PowerOff,
+  Rocket, Bell, Activity, PowerOff, ArrowLeftCircle,
 } from "lucide-react";
 import type { NavItem } from "@/components/app-shell";
 
 export const membershipNav: NavItem[] = [
   // OVERVIEW
+  { to: "/admin", label: "← Exit to Coaching", icon: ArrowLeftCircle, group: "Overview" },
   { to: "/admin/membership", label: "Membership Dashboard", icon: LayoutDashboard, group: "Overview" },
   { to: "/admin/membership/launch-readiness", label: "Launch Readiness", icon: Rocket, group: "Overview" },
   { to: "/admin/membership/signup-stats", label: "Signup Stats", icon: BarChart3, group: "Overview" },
