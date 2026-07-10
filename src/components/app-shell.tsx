@@ -149,6 +149,24 @@ function useSidebarMode() {
   return [mode, update] as const;
 }
 
+/**
+ * Tablet detection — anything between md (768px) and xl (1280px) is treated
+ * as tablet. Tablet gets a flat sidebar: no collapsing groups, no hover
+ * flyouts, no density cycling. Optimises for finger taps, not mouse.
+ */
+function useIsTablet() {
+  const [isTablet, setIsTablet] = useState(false);
+  useEffect(() => {
+    if (typeof window === "undefined" || !window.matchMedia) return;
+    const mq = window.matchMedia("(min-width: 768px) and (max-width: 1279px)");
+    const sync = () => setIsTablet(mq.matches);
+    sync();
+    mq.addEventListener?.("change", sync);
+    return () => mq.removeEventListener?.("change", sync);
+  }, []);
+  return isTablet;
+}
+
 // Sections that must never be collapsed — they contain primary navigation items
 // that users need to access at all times.
 const NEVER_COLLAPSE_SECTIONS = new Set<string>([
