@@ -158,11 +158,27 @@ function useIsTablet() {
   const [isTablet, setIsTablet] = useState(false);
   useEffect(() => {
     if (typeof window === "undefined" || !window.matchMedia) return;
-    const mq = window.matchMedia("(min-width: 768px) and (max-width: 1279px)");
-    const sync = () => setIsTablet(mq.matches);
+    // Treat any coarse-pointer device ≥768px as tablet, regardless of width.
+    // A 13" iPad in landscape is 1180+ CSS px but still touch-only, and
+    // must NOT get desktop hover flyouts. Fine-pointer + ≥1280 = desktop.
+    const mqTabletWidth = window.matchMedia(
+      "(min-width: 768px) and (max-width: 1279px)",
+    );
+    const mqCoarse = window.matchMedia("(pointer: coarse)");
+    const mqMobile = window.matchMedia("(max-width: 767px)");
+    const sync = () =>
+      setIsTablet(
+        !mqMobile.matches && (mqTabletWidth.matches || mqCoarse.matches),
+      );
     sync();
-    mq.addEventListener?.("change", sync);
-    return () => mq.removeEventListener?.("change", sync);
+    mqTabletWidth.addEventListener?.("change", sync);
+    mqCoarse.addEventListener?.("change", sync);
+    mqMobile.addEventListener?.("change", sync);
+    return () => {
+      mqTabletWidth.removeEventListener?.("change", sync);
+      mqCoarse.removeEventListener?.("change", sync);
+      mqMobile.removeEventListener?.("change", sync);
+    };
   }, []);
   return isTablet;
 }
