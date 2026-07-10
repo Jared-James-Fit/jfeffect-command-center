@@ -1418,6 +1418,105 @@ function SidebarFlyoutRow({
 }
 
 function BottomNavBadge({ badge }: { badge?: { count?: number; dot?: boolean } }) {
+  // (defined below)
+  return _BottomNavBadge({ badge });
+}
+
+/**
+ * Tap-triggered flyout for the tablet sidebar. The label link still
+ * navigates on tap; a dedicated chevron button opens the child popover.
+ * Two separate tap targets, each ≥44px, no hover requirement.
+ */
+function TabletFlyoutRow({
+  item, pathname, navBadges, trigger,
+}: {
+  item: NavItem;
+  pathname: string;
+  navBadges: Record<string, { count?: number; dot?: boolean }>;
+  trigger: ReactNode;
+}) {
+  const [open, setOpen] = useState(false);
+  useEffect(() => { setOpen(false); }, [pathname]);
+  const kids = item.children ?? [];
+  const primary = kids.filter((c) => !c.section);
+  const sections: { label: string; items: NavItem[] }[] = [];
+  for (const c of kids) {
+    if (!c.section) continue;
+    const existing = sections.find((s) => s.label === c.section);
+    if (existing) existing.items.push(c);
+    else sections.push({ label: c.section, items: [c] });
+  }
+  const renderRow = (c: NavItem) => {
+    const CIcon = c.icon;
+    const active = pathname === c.to || pathname.startsWith(c.to + "/");
+    const cb = navBadges[c.to];
+    return (
+      <li key={c.to}>
+        <Link
+          to={c.to}
+          onClick={() => setOpen(false)}
+          className={cn(
+            "flex min-h-[44px] items-center gap-2.5 rounded-md px-3 py-2.5 text-sm transition-colors",
+            active
+              ? "bg-primary/15 text-primary font-semibold"
+              : "text-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground active:bg-sidebar-accent/70",
+          )}
+        >
+          <CIcon className="h-4 w-4 shrink-0" />
+          <span className="truncate flex-1">{c.label}</span>
+          <SidebarBadge badge={cb} isCollapsed={false} />
+        </Link>
+      </li>
+    );
+  };
+  return (
+    <div className="relative">
+      {trigger}
+      <Popover open={open} onOpenChange={setOpen}>
+        <PopoverTrigger asChild>
+          <button
+            type="button"
+            aria-label={`Open ${item.label} submenu`}
+            aria-expanded={open}
+            onClick={(e) => { e.preventDefault(); e.stopPropagation(); setOpen((o) => !o); }}
+            className={cn(
+              "absolute right-1 top-1/2 -translate-y-1/2 grid h-8 w-8 place-items-center rounded-md text-muted-foreground",
+              "hover:bg-sidebar-accent hover:text-foreground active:bg-sidebar-accent/70",
+              open && "bg-sidebar-accent text-foreground",
+            )}
+            style={{ WebkitTapHighlightColor: "transparent" }}
+          >
+            <ChevronRight className={cn("h-4 w-4 transition-transform", open && "rotate-90")} />
+          </button>
+        </PopoverTrigger>
+        <PopoverContent
+          side="right"
+          align="start"
+          sideOffset={8}
+          collisionPadding={12}
+          avoidCollisions
+          className="w-72 max-h-[calc(100vh-24px)] overflow-y-auto p-2"
+          onOpenAutoFocus={(e) => e.preventDefault()}
+        >
+          <div className="px-2 pb-1.5 text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+            {item.label}
+          </div>
+          <ul className="flex flex-col gap-0.5">{primary.map(renderRow)}</ul>
+          {sections.map((s) => (
+            <div key={s.label} className="mt-1.5 border-t border-border/60 pt-1.5">
+              <div className="px-2 pb-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/80">
+                {s.label}
+              </div>
+              <ul className="flex flex-col gap-0.5">{s.items.map(renderRow)}</ul>
+            </div>
+          ))}
+        </PopoverContent>
+      </Popover>
+    </div>
+  );
+}
+
+function _BottomNavBadge({ badge }: { badge?: { count?: number; dot?: boolean } }) {
   if (!badge) return null;
   if (badge.count != null && badge.count > 0) {
     return (
