@@ -132,18 +132,36 @@ export function MemberProfileWorkspace({
   };
 
   // Membership-specific action set — no coaching actions.
+  // "Change Plan" and "View Purchases" are intentionally omitted until they
+  // have distinct destinations — three actions that all opened the
+  // subscription tab was misleading. A missing action is better than a fake
+  // one. Restore them when their own workflows exist.
   const memberActions: WorkspaceAction[] = [
     { key: "pov", label: "Open Member POV", icon: Eye, onClick: onEnterPov, tone: "warn" },
     { key: "message", label: "Message Member", icon: MessageSquare, onClick: () => setTab("sms") },
     { key: "manage", label: "Manage Membership", icon: Settings2, onClick: () => setTab("subscription") },
-    { key: "plan", label: "Change Plan", icon: Package, onClick: () => setTab("subscription") },
     { key: "grant", label: "Grant Access", icon: Gift, onClick: () => setTab("access") },
-    { key: "purchases", label: "View Purchases", icon: ShoppingBag, onClick: () => setTab("subscription") },
   ];
 
   // Membership-specific alerts.
   const memberAlerts: WorkspaceAlert[] = [];
-  if (["Past Due", "Payment Failed"].includes(member.subscription_status ?? "")) {
+  const billingIssue = ["Past Due", "Payment Failed"].includes(member.subscription_status ?? "");
+  // Merge the billing + access alert pair when access is blocked *because of*
+  // the billing failure. Keep them independent when access is blocked for
+  // another reason (manual block, expired comp, setup restriction, etc.),
+  // which the current data model does not yet distinguish — the safe read is
+  // "billing failed AND access inactive ⇒ combined", otherwise show whichever
+  // conditions actually apply.
+  const mergedBillingAccess = billingIssue && accessActive === false;
+  if (mergedBillingAccess) {
+    memberAlerts.push({
+      key: "billing-access",
+      tone: "rose",
+      icon: CreditCard,
+      message: `Payment failed — membership access is blocked (${member.subscription_status})`,
+      action: { label: "Open subscription", onClick: () => setTab("subscription") },
+    });
+  } else if (billingIssue) {
     memberAlerts.push({
       key: "billing",
       tone: "rose",
@@ -189,7 +207,7 @@ export function MemberProfileWorkspace({
       action: { label: "Add phone", onClick: () => setTab("summary") },
     });
   }
-  if (accessActive === false) {
+  if (accessActive === false && !mergedBillingAccess) {
     memberAlerts.push({
       key: "access",
       tone: "rose",
