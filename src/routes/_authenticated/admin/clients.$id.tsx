@@ -46,6 +46,12 @@ import { ActionButton } from "@/components/action-button";
 import { IntakeAnswersBigButton } from "@/components/clients/intake-answers-dialog";
 import { UserAvatar } from "@/components/user-avatar";
 import {
+  WorkspaceIdentityHeader,
+  WorkspaceActionCenter,
+  WorkspaceSnapshotField,
+  type WorkspaceAction,
+} from "@/components/workspace";
+import {
   IdentityCard,
   ContactCard,
   PersonalDetailsCard,
