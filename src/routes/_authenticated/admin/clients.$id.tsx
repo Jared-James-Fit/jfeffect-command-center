@@ -788,17 +788,23 @@ export function ClientProfileWorkspace({
       <Tabs
         value={tab ?? "summary"}
         onValueChange={(v) => setTab(v as TabValue)}
+        className={embedded ? "flex flex-col" : undefined}
       >
-        <SectionNav
-          activeTab={(tab ?? "summary") as TabValue}
-          onChange={(v) => setTab(v)}
-        />
+        <div className={embedded && tab === "summary" ? "order-2 mt-6" : "order-1"}>
+          <SectionNav
+            activeTab={(tab ?? "summary") as TabValue}
+            onChange={(v) => setTab(v)}
+            compact={embedded}
+            heading={embedded ? "Workspace" : undefined}
+          />
+        </div>
 
-        <TabsContent value="summary" className="grid gap-6 md:grid-cols-3">
+        <TabsContent value="summary" className={embedded ? "order-1 grid gap-6 md:grid-cols-3" : "grid gap-6 md:grid-cols-3"}>
           <ClientOverviewSnapshot
             form={form}
             clientId={id}
             canPov={canPov}
+            embedded={embedded}
             onMessage={() => setTab("messages")}
             onPov={() => {
               if (!form.user_id) {
