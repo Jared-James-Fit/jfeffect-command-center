@@ -1946,7 +1946,11 @@ function DayEditor({ day, setDay, exercises, compact, dayKey }: { day: any; setD
           )}
           {isActive && (
             <span className="inline-flex items-center rounded bg-primary px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-primary-foreground">
-              Editing{day?.title ? ` · ${day.title}` : ""}
+              Editing{(() => {
+                const sub = formatDaySubtitle(day);
+                const label = formatDayLabel(day);
+                return ` · ${label}${sub ? ` — ${sub}` : ""}`;
+              })()}
             </span>
           )}
         </span>
