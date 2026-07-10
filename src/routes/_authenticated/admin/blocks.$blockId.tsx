@@ -99,6 +99,7 @@ function treeToPayload(tree: any) {
             _dbId: d.id,
             day_index: d.day_index,
             title: d.title ?? "",
+            subtitle: d.subtitle ?? "",
             focus: d.focus ?? "",
             notes: d.notes ?? "",
             scheduled_date: d.scheduled_date ?? null,
@@ -193,15 +194,26 @@ async function applyPayloadDiff(blockId: string, originalTree: any, current: any
       let od = cd._dbId ? owDays.find((o) => o._dbId === cd._dbId) : undefined;
 
       if (!cd._dbId) {
-        const created = await addDayFn(cw._dbId, wantDayIdx, cd.title || `Day ${wantDayIdx}`);
+        // Do NOT pre-seed the row's `title` with a generated "Day N" string —
+        // Day labels are derived from position at render time. Preserve any
+        // real coach-typed title only if it looks non-generic; otherwise keep
+        // it NULL so the label stays clean on reload.
+        const seedTitle = (cd.title ?? "").trim();
+        const created = await addDayFn(cw._dbId, wantDayIdx, seedTitle || null);
         cd._dbId = created.id;
-        od = { _dbId: created.id, day_index: created.day_index, title: created.title, focus: "", notes: "", rows: [] };
-        if (cd.focus || cd.notes || cd.scheduled_date) {
-          await updateDay(created.id, { focus: cd.focus || null, notes: cd.notes || null, scheduled_date: cd.scheduled_date || null });
+        od = { _dbId: created.id, day_index: created.day_index, title: created.title, subtitle: "", focus: "", notes: "", rows: [] };
+        if (cd.subtitle || cd.focus || cd.notes || cd.scheduled_date) {
+          await updateDay(created.id, {
+            subtitle: cd.subtitle || null,
+            focus: cd.focus || null,
+            notes: cd.notes || null,
+            scheduled_date: cd.scheduled_date || null,
+          });
         }
       } else {
         const dPatch: any = {};
         if ((cd.title ?? "") !== (od?.title ?? "")) dPatch.title = cd.title || null;
+        if ((cd.subtitle ?? "") !== (od?.subtitle ?? "")) dPatch.subtitle = cd.subtitle || null;
         if ((cd.focus ?? "") !== (od?.focus ?? "")) dPatch.focus = cd.focus || null;
         if ((cd.notes ?? "") !== (od?.notes ?? "")) dPatch.notes = cd.notes || null;
         if ((cd.scheduled_date ?? null) !== (od?.scheduled_date ?? null)) dPatch.scheduled_date = cd.scheduled_date || null;

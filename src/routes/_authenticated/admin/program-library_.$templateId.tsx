@@ -23,6 +23,8 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Palette } from "lucide-react";
 import { GripVertical } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { DayDateButton } from "@/components/workout-day/day-date-button";
+import { formatDayLabel, formatDaySubtitle } from "@/lib/workout-day-label";
 import { useAutosave } from "@/hooks/use-autosave";
 import { SaveStatus } from "@/components/save-status";
 import { useConflictWatch } from "@/hooks/use-conflict-watch";
@@ -1367,7 +1369,7 @@ export function BlockPayloadEditor({ weeksData, setWeeksData, exercises, compact
   };
   const addWeek = () => {
     const nextIdx = (weeksData[weeksData.length - 1]?.week_index ?? 0) + 1;
-    setWeeksData([...weeksData, { week_index: nextIdx, days: [{ day_index: 1, title: "Day 1", rows: [] }] }]);
+    setWeeksData([...weeksData, { week_index: nextIdx, days: [{ day_index: 1, title: "", subtitle: "", rows: [] }] }]);
     setActiveIdx(weeksData.length);
   };
   const dupWeek = (i: number) => {
@@ -1655,12 +1657,23 @@ function WeekEditor({ week, setWeek, exercises, onCopyDayToFuture, hideHeader, c
   const days = week.days || [];
   const addDay = () => {
     const nextIdx = (days[days.length - 1]?.day_index ?? 0) + 1;
-    setWeek({ ...week, days: [...days, { day_index: nextIdx, title: `Day ${nextIdx}`, rows: [] }] });
+    // Do not seed `title` with a generated "Day N" string — the label is
+    // derived from position at render time. Keep `title` NULL and let the
+    // coach fill in an optional workout `subtitle` (e.g. "Final Heavy").
+    setWeek({ ...week, days: [...days, { day_index: nextIdx, title: "", subtitle: "", rows: [] }] });
   };
   const dupDay = (i: number) => {
     const copy = JSON.parse(JSON.stringify(days[i]));
     copy.day_index = (days[days.length - 1]?.day_index ?? 0) + 1;
-    copy.title = `${copy.title || `Day ${copy.day_index}`} (copy)`;
+    // Do not stuff " (copy)" into the derived-only title. If the source
+    // day had a coach subtitle, append " (copy)" there instead so the
+    // duplicated day is easy to tell apart. Otherwise leave subtitle empty.
+    copy.title = "";
+    const srcSub = (copy.subtitle ?? "").trim();
+    copy.subtitle = srcSub ? `${srcSub} (copy)` : "";
+    // Never inherit the source's specific scheduled_date — it would otherwise
+    // silently double-book a calendar slot.
+    copy.scheduled_date = null;
     setWeek({ ...week, days: [...days, copy] });
   };
   const delDay = (i: number) => { if (!confirm("Remove day?")) return; setWeek({ ...week, days: days.filter((_: any, j: number) => j !== i) }); };
@@ -1690,26 +1703,51 @@ function WeekEditor({ week, setWeek, exercises, onCopyDayToFuture, hideHeader, c
       {days.map((d: any, i: number) => {
         const dayMinutes = estimateDayMinutes(d.rows || []);
         const dKey = `${dayKeyPrefix ?? `wk${week.week_index ?? 0}`}:d${d.day_index ?? i}`;
+        const positional = i + 1;
+        const dayLabel = formatDayLabel(d, positional);
         return (
         <Card key={i} className={cn("border-l-[3px] border-l-primary/40", compact ? "p-2" : "p-3")}>
-          <div className={cn("flex items-center gap-2 flex-wrap", compact ? "mb-1" : "mb-2")}>
-            <Input className={cn("max-w-xs font-bold", compact && "h-7 text-xs")} value={d.title ?? ""} onChange={(e) => { const copy = [...days]; copy[i] = { ...d, title: e.target.value }; setWeek({ ...week, days: copy }); }} />
-            <Input className={cn("max-w-xs", compact && "h-7 text-xs")} placeholder="Focus" value={d.focus ?? ""} onChange={(e) => { const copy = [...days]; copy[i] = { ...d, focus: e.target.value }; setWeek({ ...week, days: copy }); }} />
-            {/* Scheduled date — required for extra/peak days to show on the correct calendar date */}
-            <div className="flex items-center gap-1">
-              <span className="text-xs text-muted-foreground whitespace-nowrap">Date:</span>
-              <input
-                type="date"
-                className={cn("border border-input rounded-md bg-background px-2 text-xs h-7 focus:outline-none focus:ring-1 focus:ring-ring", !d.scheduled_date && "text-muted-foreground")}
-                value={d.scheduled_date ?? ""}
-                onChange={(e) => { const copy = [...days]; copy[i] = { ...d, scheduled_date: e.target.value || null }; setWeek({ ...week, days: copy }); }}
-                title="Set the actual calendar date for this workout. Required for extra/peak days."
+          <div className={cn("flex flex-col gap-2", compact ? "mb-1" : "mb-2")}>
+            <div className="flex items-start gap-3 flex-wrap">
+              {/* Derived Day label + optional coach subtitle. Reordering
+                  updates the visible number automatically. */}
+              <div className="min-w-0 flex-1">
+                <div className={cn("font-black leading-none tracking-tight", compact ? "text-sm" : "text-lg")}>
+                  {dayLabel}
+                </div>
+                <Input
+                  className={cn("mt-1 max-w-md", compact && "h-7 text-xs")}
+                  value={d.subtitle ?? ""}
+                  placeholder="Optional — e.g. Final Heavy or Technique Day"
+                  aria-label="Workout subtitle"
+                  onChange={(e) => {
+                    const copy = [...days];
+                    copy[i] = { ...d, subtitle: e.target.value };
+                    setWeek({ ...week, days: copy });
+                  }}
+                />
+              </div>
+              <DayDateButton
+                value={d.scheduled_date ?? null}
+                onChange={(iso) => {
+                  const copy = [...days];
+                  copy[i] = { ...d, scheduled_date: iso };
+                  setWeek({ ...week, days: copy });
+                }}
+                compact={compact}
               />
             </div>
-            <span className="inline-flex items-center gap-1 rounded-full bg-secondary px-2 py-0.5 text-xs text-secondary-foreground">
-              <Clock className="h-3 w-3" /> {durationRange(dayMinutes)}
-            </span>
-            <div className="ml-auto flex gap-0.5">
+            <div className="flex items-center gap-2 flex-wrap">
+              <Input
+                className={cn("max-w-xs", compact && "h-7 text-xs")}
+                placeholder="Focus (e.g. Squat, Upper)"
+                value={d.focus ?? ""}
+                onChange={(e) => { const copy = [...days]; copy[i] = { ...d, focus: e.target.value }; setWeek({ ...week, days: copy }); }}
+              />
+              <span className="inline-flex items-center gap-1 rounded-full bg-secondary px-2 py-0.5 text-xs text-secondary-foreground">
+                <Clock className="h-3 w-3" /> {durationRange(dayMinutes)}
+              </span>
+              <div className="ml-auto flex gap-0.5">
               {onCopyDayToFuture && (
                 <Button size="sm" variant="ghost" className="h-7 px-2 text-[10px]" onClick={() => onCopyDayToFuture(i)} title="Copy this day → same day in future weeks">
                   <ArrowRight className="mr-1 h-3 w-3" /> → future
@@ -1717,6 +1755,7 @@ function WeekEditor({ week, setWeek, exercises, onCopyDayToFuture, hideHeader, c
               )}
               <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => dupDay(i)} title="Duplicate"><Copy className="h-3.5 w-3.5" /></Button>
               <Button size="icon" variant="ghost" className="h-7 w-7 text-destructive" onClick={() => delDay(i)}><Trash2 className="h-3.5 w-3.5" /></Button>
+              </div>
             </div>
           </div>
           <DayEditor day={d} setDay={(nd) => { const copy = [...days]; copy[i] = nd; setWeek({ ...week, days: copy }); }} exercises={exercises} compact={compact} dayKey={dKey} />
@@ -1907,7 +1946,11 @@ function DayEditor({ day, setDay, exercises, compact, dayKey }: { day: any; setD
           )}
           {isActive && (
             <span className="inline-flex items-center rounded bg-primary px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-primary-foreground">
-              Editing{day?.title ? ` · ${day.title}` : ""}
+              Editing{(() => {
+                const sub = formatDaySubtitle(day);
+                const label = formatDayLabel(day);
+                return ` · ${label}${sub ? ` — ${sub}` : ""}`;
+              })()}
             </span>
           )}
         </span>

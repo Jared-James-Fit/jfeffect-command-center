@@ -1,57 +1,104 @@
-# Bring Membership onto the Coaching workspace framework
 
-The scope you described spans ~35 membership routes plus the member-facing `/m/*` app. Trying to redo everything in one pass will produce a giant, unreviewable change and almost certainly break something. I want to do it in **four staged phases** and get your sign-off (or reordering) before I start.
+## Goal
 
-## Phase 1 — Extract shared "workspace" primitives from Coaching
+Split the current combined `pl_days.title` (which today mixes "Day 1", weekday, date, and coach notes like "Final Heavy") into three clearly separated pieces of information, consistently across builder, weekly, and client views:
 
-The Coaching client overlay already contains the exact pattern you want (sticky identity header → action center → alerts → snapshot → section nav → content). Right now those pieces live only inside `src/routes/_authenticated/admin/clients.$id.tsx`. I will lift them into reusable components so both Coaching and Membership consume the same code:
+1. **Day label** — derived from ordering, never stored as text.
+2. **Workout subtitle** — optional coach label (e.g. "Final Heavy").
+3. **Training date** — prominent, human-readable date card with picker.
 
-- `src/components/workspace/WorkspaceShell.tsx` — sticky header + action center + alerts + snapshot slot + section nav + content slot
-- `src/components/workspace/IdentityHeader.tsx`
-- `src/components/workspace/ActionCenter.tsx` (accepts an actions array — Coaching passes coaching actions, Membership passes membership actions)
-- `src/components/workspace/SectionNav.tsx` (already exists inline — extract + keep `compact` prop)
-- `src/components/workspace/OverviewSnapshot.tsx` (slot-based so Membership can inject membership-specific tiles)
+## Data model decision
 
-Coaching client overlay is refactored to consume these. No visual change on Coaching side — this is a pure extract.
+Current `pl_days` columns of interest:
+- `day_index` (number) → source of truth for "Day N"
+- `title` (nullable text) → currently overloaded
+- `focus` (nullable text) → short focus tag (e.g. "Squat", "Upper"), semantically different from a per-workout subtitle
+- `notes` (nullable text) → long-form coach notes
+- `scheduled_date` (nullable date)
 
-## Phase 2 — Member profile overlay uses the same shell
+`focus` is already used elsewhere as a small tag next to the day (see `ScheduleWorkoutSheet`, `MissedWorkoutCard`) and is not the "Final Heavy" concept. `notes` is long-form. Neither cleanly matches "workout subtitle".
 
-- Create `src/components/members/member-profile-overlay.tsx` mirroring `client-profile-overlay.tsx`.
-- Create `src/routes/_authenticated/admin/members.$memberId.tsx` workspace (or refactor the existing one) to render `WorkspaceShell` with:
-  - Identity header: avatar, name, plan badge, status, joined date, last active, quick actions
-  - Action Center: **Open Member POV, Message Member, Manage Membership, Change Plan, Grant Complimentary Access, View Purchases** (exactly your list — no coaching actions)
-  - Alerts: failed payment, expired trial, setup incomplete, missing PFP/phone
-  - Snapshot: subscription status, current plan, next billing, access state, recent purchases
-  - Section nav → Profile / Membership Plan / Purchases / Progress / Messages / Notes
-- Member row in members list opens the overlay (same pattern as client-row).
+**Decision:** add a new nullable column `pl_days.subtitle text`. Keep `title` for backward compatibility but stop writing generated date/day text into it — new writes leave it null and reads treat any legacy content as fallback.
 
-## Phase 3 — Membership dashboard reordered + responsive fixes
+## Migration
 
-Rework `admin/membership.index.tsx` to the priority order you specified:
+Single SQL migration:
+1. `ALTER TABLE pl_days ADD COLUMN subtitle text` (nullable, no default).
+2. Backfill via safe parser on existing `title`:
+   - Strip a leading `Day\s*\d+` token.
+   - Strip a weekday word (`Mon…Sun` / full names) and any following date token (`Aug 31`, `August 31, 2026`, `2026-08-31`, ISO, etc.).
+   - Strip separators (`—`, `–`, `-`, `·`, `|`).
+   - Whatever non-empty coach text remains → `subtitle` (only if `subtitle` is currently NULL).
+   - If the remainder is empty or the whole title matches only "Day N" / date pattern → set `title = NULL`.
+   - If parsing is ambiguous (unknown extra tokens) → leave `title` untouched and do not populate `subtitle`; those rows are logged into a temporary `pl_days_title_migration_log` table for review.
 
-1. **Actions strip** (top): Manage Members, Payment Issues, Grant Access, Sales & Plans
-2. **Alerts**: Failed payments, Expired trials, Setup problems (using the same alert card style as Coaching)
-3. **Analytics** (bottom, collapsed by default on mobile): subscription counts, access counts, health metrics
+Migration is idempotent and touches only rows where `subtitle IS NULL`.
 
-All cards moved to the same `Card` + spacing tokens Coaching uses (`gap-4 md:gap-6`, `p-4 md:p-6`, consistent `min-h`, container `max-w-7xl mx-auto px-4 md:px-6`). Grids standardized to `grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4`.
+## Types / server
 
-## Phase 4 — Responsive audit + `/m/*` member app polish
+- Regenerated Supabase types will surface `subtitle`.
+- Any server function that writes `title` today (create day, duplicate day, copy week, program templates) is updated to write `subtitle` instead when the value is coach-specific and to leave `title` alone.
+- Reordering already updates `day_index`; no change needed — the visible label is derived.
 
-Sweep every membership route (list below) and align to Coaching's container/grid/spacing tokens. This is a mechanical pass, not a redesign.
+## UI: builder (coach)
 
-Admin membership routes audited: `membership.index`, `members.index`, `members.$memberId`, `member-plans.*`, `member-resources.*`, `membership.billing`, `membership.billing-events`, `membership.action-needed`, `membership.launch-readiness`, `membership.signup-stats`, `membership.calendar`, `membership.challenges`, `membership.stripe-sync`, `sales.membership`.
+`WorkoutDayView.tsx` and related builder rows:
+- Header block, in order:
+  1. `DAY {day_index}` — bold, primary heading, always derived.
+  2. `{subtitle}` — smaller, only rendered when non-empty; input placeholder `Optional — e.g. Final Heavy or Technique Day`, label `Workout subtitle`. Autosaves using the existing autosave pattern.
+  3. Training date card — full-width tap target ≥44px, calendar icon, `TRAINING DATE` eyebrow, weekday on one line, full readable date on the next; clicking anywhere opens the existing date popover. When `scheduled_date` is null, renders `Unscheduled` with a "Set date" affordance. A small "Clear" action is available when clearing is currently permitted by existing guards.
+  4. Existing focus / notes / duration below.
+- Collapsed day cards (Full Block, Weekly): show `Day N`, subtitle on a second line only if present, and the readable date on a third line. No blank subtitle space when empty.
 
-Member-facing `/m/*` routes audited against `/portal/*` equivalents: `m/index`, `m/my-plans`, `m/plans`, `m/nutrition.*`, `m/progress`, `m/resources`, `m/support`, `m/announcements`, `m/billing`, `m/account`, `m/tools`, `m/upgrade`.
+## UI: client / member
 
-Only spacing / container / grid / card sizing changes — no logic edits.
+`WorkoutDayView` client-facing header, `week-schedule-view`, `MemberBlockWeekColumns`, `MemberPlanCalendar`:
+- Same three-line structure, shorter date format on narrow widths (`Mon, Aug 31`).
+- No merged heading, no ISO date shown as primary.
 
-## What I need from you
+## Views audited and updated
 
-This is a lot. Before I start, please confirm:
+Builder / coach:
+- `src/components/workout-day/WorkoutDayView.tsx` (main header, full-screen header, exercise sheet subtitles)
+- `src/components/schedule/WeeklyScheduleEditor.tsx`
+- `src/components/schedule/ScheduleCalendar.tsx`
+- `src/components/schedule/ScheduleWorkoutSheet.tsx`
+- `src/components/schedule/MissedWorkoutCard.tsx`
+- `src/components/schedule/MoveWorkoutSheet.tsx`
+- `src/components/schedule/BulkMoveDialog.tsx`
+- `src/components/schedule/ScheduleHistoryDrawer.tsx`
+- `src/components/program-planner/ProgramAssignmentPlanner.tsx` (preview list)
+- `src/routes/_authenticated/admin/blocks.$blockId.tsx` (Full Block view)
 
-1. **Order of phases** — do 1 → 2 → 3 → 4 as above, or would you rather I do Phase 3 (dashboard reordering) first because it's the most visible?
-2. **Scope of Phase 4** — audit *all* the routes listed, or just the ones you screenshotted? (Screenshots weren't attached to this message — if you resend them I can prioritize those exact pages.)
-3. **Member overlay behaviour** — should opening a member from the members list open the **same overlay component** as clients (i.e. share `ClientProfileOverlayMount` with a `mode: "member"` prop), or keep two overlay mounts that both wrap the same `WorkspaceShell`? I'd recommend the latter — cleaner separation, same UX.
-4. **Coaching-only actions on members** — is it OK to fully remove Assign Program / Lift Review / Coaching Schedule from the member workspace even for members who *also* have a coaching add-on, or should those appear conditionally?
+Member / client:
+- `src/components/member/member-block-week-columns.tsx`
+- `src/components/member/member-plan-calendar.tsx`
+- `src/routes/_authenticated/m/my-plans.$enrollmentId.tsx` (next-workout card)
+- `src/routes/_authenticated/portal/workouts.$dayId.tsx` (opens `WorkoutDayView`, inherits new header)
 
-Reply with answers (or "go, do 1→4, keep them separate, remove coaching actions") and I'll start with Phase 1.
+Shared helper:
+- Introduce `src/lib/workout-day-label.ts` exporting `formatDayLabel({ dayIndex })`, `formatSubtitle(day)`, `formatTrainingDate(dateISO, { long | short })`, and a `parseLegacyTitle(title)` fallback used only for reads on rows the migration could not safely clean up.
+
+## Scheduling guardrails
+
+- No change to `pl_scheduled_workouts`, completion writes, client rescheduled instances, or program copy semantics.
+- The date card writes `pl_days.scheduled_date` exactly like the current small input — it is a display swap, not a write-path change.
+- When the row already backs completed logs or client-rescheduled instances, existing `schedule_locked` / mutation guards continue to apply; the date card respects them (disabled state with tooltip).
+- Confirm builder date represents source-program date vs scheduled instance in-context per the current call site (client adapter passes instance id when applicable) — no cross-write.
+
+## Reporting
+
+At the end I will report: field decision, backfill result counts (rows updated, rows left for manual review), how Day numbers are computed, views updated, guardrail verification, typecheck + build results, files changed.
+
+## Sequencing
+
+1. Migration (adds `subtitle`, backfills, log table). Stops for approval.
+2. After types regenerate: shared helper + builder header + collapsed card refactor.
+3. Weekly, schedule, planner, client/member views.
+4. Typecheck, build, brief live smoke test on one block.
+
+## Out of scope
+
+- Changing scheduling / completion write logic.
+- PDF export format (only reused if it already renders the same header component; otherwise deferred).
+- Redesigning `focus`/`notes` fields.
