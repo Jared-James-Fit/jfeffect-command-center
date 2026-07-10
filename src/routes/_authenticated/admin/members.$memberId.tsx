@@ -542,6 +542,7 @@ export function MemberProfileWorkspace({
         </TabsContent>
       </Tabs>
 
+      </div>
       <DangerZone
         memberEmail={member.email}
         onDelete={async () => {
