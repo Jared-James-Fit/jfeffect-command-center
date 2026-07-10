@@ -149,6 +149,24 @@ function useSidebarMode() {
   return [mode, update] as const;
 }
 
+/**
+ * Tablet detection — anything between md (768px) and xl (1280px) is treated
+ * as tablet. Tablet gets a flat sidebar: no collapsing groups, no hover
+ * flyouts, no density cycling. Optimises for finger taps, not mouse.
+ */
+function useIsTablet() {
+  const [isTablet, setIsTablet] = useState(false);
+  useEffect(() => {
+    if (typeof window === "undefined" || !window.matchMedia) return;
+    const mq = window.matchMedia("(min-width: 768px) and (max-width: 1279px)");
+    const sync = () => setIsTablet(mq.matches);
+    sync();
+    mq.addEventListener?.("change", sync);
+    return () => mq.removeEventListener?.("change", sync);
+  }, []);
+  return isTablet;
+}
+
 // Sections that must never be collapsed — they contain primary navigation items
 // that users need to access at all times.
 const NEVER_COLLAPSE_SECTIONS = new Set<string>([
@@ -206,6 +224,7 @@ export function AppShell({ items, bottomItems: customBottomItems, title, childre
   const mediaBadges = useMediaNavBadges();
   const navBadges = useMemo(() => ({ ...clientBadges, ...mediaBadges }), [clientBadges, mediaBadges]);
   const [mode, setMode] = useSidebarMode();
+  const isTablet = useIsTablet();
   const [collapsedSections, toggleSection, setAllSections] = useCollapsedSections();
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
@@ -376,8 +395,12 @@ export function AppShell({ items, bottomItems: customBottomItems, title, childre
     items.find((i) => i.to.endsWith("/account") || i.to.endsWith("/account-settings"))?.to ??
     "/admin/account";
 
-  const isCollapsed = mode === "collapsed";
-  const isCompact = mode === "compact";
+  // On tablet widths we always render the flat expanded sidebar — no
+  // compact/collapsed variants, no group toggles, no flyouts. This keeps
+  // primary navigation one tap away on iPad without desktop hover UI.
+  const effectiveMode: SidebarMode = isTablet ? "expanded" : mode;
+  const isCollapsed = effectiveMode === "collapsed";
+  const isCompact = effectiveMode === "compact";
   const sidebarWidthClass = isCollapsed ? "w-14" : isCompact ? "w-52" : "w-60";
   const rowPadding = isCollapsed
     ? "justify-center px-0 py-2"
@@ -536,6 +559,7 @@ export function AppShell({ items, bottomItems: customBottomItems, title, childre
                   <div className="truncate text-[9px] text-muted-foreground leading-tight">{user?.email}</div>
                 )}
               </div>
+              {!isTablet && (
               <Tooltip>
                 <TooltipTrigger asChild>
                   <button
@@ -550,6 +574,8 @@ export function AppShell({ items, bottomItems: customBottomItems, title, childre
                   {mode === "expanded" ? "Compact" : mode === "compact" ? "Collapse" : "Expand"}
                 </TooltipContent>
               </Tooltip>
+              )}
+              {!isTablet && (
               <Tooltip>
                 <TooltipTrigger asChild>
                   <button
@@ -568,6 +594,7 @@ export function AppShell({ items, bottomItems: customBottomItems, title, childre
                   {allCollapsed ? "Open all (⌘⇧E)" : "Close all (⌘⇧E)"}
                 </TooltipContent>
               </Tooltip>
+              )}
               <Tooltip>
                 <TooltipTrigger asChild>
                   <button
@@ -675,14 +702,14 @@ export function AppShell({ items, bottomItems: customBottomItems, title, childre
                 </ul>
               </div>
             )}
-            {grouped.map((group) => {
+              {grouped.map((group) => {
               const containsActive = group.label === activeGroupLabel;
-              const sectionCollapsed = group.label && !isMembershipAdminShell
+              const sectionCollapsed = group.label && !isMembershipAdminShell && !isTablet
                 ? collapsedSections.has(group.label) && !containsActive
                 : false;
               return (
                 <div key={group.label ?? "default"}>
-                  {group.label && !isCollapsed && (
+                  {group.label && !isCollapsed && !isTablet && (
                     <button
                       onClick={() => toggleSection(group.label!, allGroupLabels)}
                       className="group flex w-full items-center justify-between rounded px-2.5 pb-1 pt-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground hover:text-foreground"
@@ -695,6 +722,11 @@ export function AppShell({ items, bottomItems: customBottomItems, title, childre
                         )}
                       />
                     </button>
+                  )}
+                  {group.label && !isCollapsed && isTablet && (
+                    <div className="px-2.5 pb-1 pt-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                      {group.label}
+                    </div>
                   )}
                   {group.label && isCollapsed && (
                     <div className="my-1 mx-2 h-px bg-sidebar-border/60" />
@@ -734,7 +766,7 @@ export function AppShell({ items, bottomItems: customBottomItems, title, childre
                         );
                         return (
                           <li key={item.to}>
-                              {item.children ? (
+                              {item.children && !isTablet ? (
                                 <SidebarFlyoutRow
                                   item={item}
                                   pathname={pathname}
