@@ -535,9 +535,7 @@ function ReviewDetail({
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
               <DropdownMenuItem asChild>
-                <ClientNameLink clientId={sub.clientId}
-                  search={{ tab: "lift-videos" as any }}
-                >
+                <ClientNameLink clientId={sub.clientId}>
                   <User className="mr-2 h-4 w-4" /> Open Client Profile
                 </ClientNameLink>
               </DropdownMenuItem>
