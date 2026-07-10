@@ -103,6 +103,10 @@ const InputSchema = z.object({
     .default("attention"),
   page: z.number().int().min(1).optional().default(1),
   size: z.number().int().min(5).max(100).optional().default(15),
+  lifecycle: z
+    .enum(["active", "archived", "deactivated"])
+    .optional()
+    .default("active"),
 });
 
 export const listClientsDirectoryFn = createServerFn({ method: "POST" })
@@ -120,6 +124,7 @@ export const listClientsDirectoryFn = createServerFn({ method: "POST" })
         p_sort: data.sort,
         p_limit: data.size,
         p_offset: offset,
+        p_lifecycle: data.lifecycle,
       } as any,
     );
     if (error) throw new Error(error.message);
