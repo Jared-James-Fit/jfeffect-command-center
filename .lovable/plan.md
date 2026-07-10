@@ -1,112 +1,87 @@
-# Simplify the New Product workflow
 
-Rebuild the New Product dialog in `src/routes/_authenticated/admin/payment-links.tsx` as a focused modal that reads like a selling workflow rather than a Stripe configuration form. Existing product records, Stripe sync, payment links, purchases, tax logic, and the Edit flow are all preserved — the redesign is a UI + validation + defaults pass on top of the same data source.
+## Goal
 
-## Scope
+Kill the accordion-everywhere sidebar. Ship three renderers over one nav source:
 
-- Rebuild the **create** path only (button labeled "New Product"). The **edit** path keeps the current fuller form for now so existing Stripe-linked products remain fully editable without regressions. Advanced Options in the new create modal exposes the same technical fields on demand.
-- Do not delete existing columns, server functions, Stripe records, or route paths.
-- All writes go through the same `upsertCoachingProduct` / Stripe sync path that Products & Offers, Payments, Transactions, client profiles, and My Purchases already read from.
+- **Desktop** (fine pointer, ≥1280px): flat sidebar, hover flyout for children — mostly what exists.
+- **Tablet** (coarse pointer OR 768–1279px): flat permanent sidebar, primary label = one tap, chevron button = tap-triggered floating side panel with children.
+- **Mobile** (<768px): full-screen drawer that shows real destinations immediately; tapping a category chevron **replaces** the drawer contents with that category's submenu (with `< Back` header). No "All sections" intermediate screen. No stacked accordions.
 
-## New create-modal structure
+One `items: NavItem[]` config keeps driving all three (already grouped via `group`, children via `children`, badges via `useClientNavBadges` / `useMediaNavBadges`).
 
-Single dialog (desktop: centered, max-w ~1000px, sticky header + footer, internal scroll; mobile: full-screen sheet with safe-area padding, sticky title + primary action).
+## What changes
 
-Sections, in order:
+### 1. Detection (`src/components/app-shell.tsx`)
 
-1. **Product basics** — Category dropdown (Online Coaching / In-Person Training / Hybrid Coaching / Membership / Program / Session Package / Consultation / Digital Product / Other), Product name, single Description (with an "Add more details" disclosure that reveals the long-form field only when needed), optional Product image.
-2. **Pricing** — Segmented control: One-time / Recurring / Payment plan / Free. Price + currency (default CAD). Recurring reveals billing frequency + subscription duration (Renews until cancelled / Fixed number of payments / Fixed end date). Payment plan reveals total, optional deposit, instalments, frequency. Free hides price entirely and skips Stripe price creation. A one-line plain-English summary (`$499 CAD every month for 12 payments`) renders directly under the controls.
-3. **Product duration & start rules** — Only rendered when the category actually implies timed access. Access duration (Ongoing / days / weeks / months / fixed end date) and Starts (Immediately / After current product ends / Next Monday / Fixed date / Manual). "Billing duration" and "Service duration" are labeled and stored separately.
-4. **What's included** — Repeatable list rows (Add / Remove / drag reorder) instead of a large textarea. Pasting multi-line text auto-splits into rows. Persisted as an array on the product so it can render on checkout, product detail, admin purchase record, and My Purchases.
-5. **Sessions & access** — Only rendered for Session Package, In-Person Training, or Consultation categories: sessions included, session length, expiry, booking eligibility. App access uses labeled presets (No app access / Basic member / Full membership / Online coaching client / In-person coaching client / Custom) that map to the existing numeric `access_level`. The raw 0–5 dropdown moves to Advanced Options.
-6. **Agreement** — Single toggle "Require agreement before access is activated". When on, reveal template picker + send-automatically + block-until-signed + admin-override. All hidden when off.
-7. **Selling controls** — Toggles: self-purchase, promotion codes, self-cancellation, new-customers-only, visible on sales page (last one only when self-purchase is on).
-8. **Live summary panel** — Sticky right-column on desktop, collapsible card on mobile. Reflects name, plain-language price, service duration, start rule, included items, checkout mode, tax notice, promo-codes state. Updates on every keystroke.
-9. **Advanced Options** — Collapsed by default. Contains Stripe Product ID, Stripe Price ID, Stripe Payment Link ID, raw checkout mode, raw access level, Stripe metadata, internal notes, custom tax behaviour, legacy sync toggles, Status (Draft / Active). Auto-generated values are read-only with an explicit "Unlink & replace" confirm dialog before edits.
+Add `usePointerCapability()` returning `"fine" | "coarse"` via `matchMedia("(pointer: fine)")`. Combine with width:
 
-Header: "Add Product" + optional subtitle. Footer: Cancel + primary action (`Create Product` normally, `Create Product & Checkout Link` when self-purchase is on). No separate Back button.
+```
+device = width < 768                       → "mobile"
+       | pointer==="coarse" || width<1280  → "tablet"
+       | else                              → "desktop"
+```
 
-## Field consolidation
+Replace current `useIsTablet` uses.
 
-Removed from the default view (moved to Advanced Options or inferred):
+### 2. Desktop renderer — keep, trim
 
-- Product type (old free-form) — replaced by Category dropdown.
-- Status — moved to Advanced Options footer; defaults to Draft, flips to Active on successful Stripe sync unless the current flow needs immediate activation.
-- Payment structure — merged into Payment type (single source of truth).
-- Stripe payment type — inferred from Payment type.
-- Checkout Mode — inferred: One-time → payment, Recurring → subscription, Payment plan → subscription schedule, Free → no Stripe.
-- Stripe Price ID — read-only in Advanced Options; auto-created on save.
-- Term length + Term unit — merged into the recurring / duration blocks with explicit "Billing duration" vs "Service duration" labeling.
-- Short description — merged into the single Description; long-form available via "Add more details".
-- Internal notes — Advanced Options.
-- Access level 0–5 — replaced by labeled presets; raw value stays in Advanced Options.
+- Keep `SidebarFlyoutRow` hover popover for items with `children`.
+- Remove accordion "collapse all / expand all" controls when device !== desktop (already partly done).
+- Sidebar sections still collapsible on desktop only.
 
-Consolidated: Payment structure + Stripe payment type → Payment type. Short description + Full details → Description (+ disclosure). What's included textarea → repeatable list.
+### 3. Tablet renderer — new
 
-Inferred automatically: Stripe checkout mode, Stripe Price creation, Payment Link creation, promotion-codes flag, billing-address requirement (when tax needs it), metadata linking back to the JF Effect product.
+- Sidebar is always `expanded`, no group toggles, no density cycling, no pins reorder UI.
+- **Flat list**: render every group's items back-to-back, section labels as tiny inert dividers only when a label exists — no chevron on group headers.
+- Each row = `<Link>` (label) + optional chevron button (only when `item.children?.length`). Two separate tap targets, each ≥44px, with visible pressed state.
+- Chevron opens a Radix `Popover` anchored to the row, `side="right"`, `sideOffset=8`, `collisionPadding=12`, `w-72`, closes on outside tap or child selection. Tap (not hover) triggers open.
+- Reuse the child-rendering block from `SidebarFlyoutRow` (extract as `<FlyoutChildren item />`).
 
-## Product workspace scoping
+### 4. Mobile renderer — new full-screen drawer
 
-New field: **Product workspace** = Coaching / Membership / Both. Default derives from where the modal was opened (Coaching Admin vs Membership Admin). Written to the same product record; existing filters in Products & Offers, Payments, and Membership Payments continue to key off the existing scope columns.
+Replace current Sheet at lines 899–1022:
 
-## Validation
+- `Sheet side="left"` (or bottom, keep bottom for muscle memory), `h-[100dvh] w-full` (or `h-[92vh]`), safe-area padding.
+- **Header**: title (`JF Effect Admin` or workspace title) + workspace chip + close button.
+- **Search**: compact input; filtering identical to current `moreFiltered` — flat result list of `{item, group}` with icon + label + group.
+- **Body — two states**:
+  - **Root view**: iterates `grouped`. Renders section label as small uppercase inert row, then each item as a full-width row = Link (label + icon) + optional right-side chevron button when `children?.length`. No accordion, no nested indent.
+  - **Submenu view** (when `openCategory !== null`): renders `< {parentLabel}` back button + section header for parent, then parent's `children` as flat list (respecting `child.section` dividers). Tapping any child navigates + closes drawer. Replaces root view, not stacked.
+- State: `const [openCategory, setOpenCategory] = useState<NavItem | null>(null)`. Reset on drawer close.
+- Chevron button uses `onClick={(e)=>{e.preventDefault(); e.stopPropagation(); setOpenCategory(item)}}`.
+- No group collapsing.
 
-All validated inline (not on submit):
+### 5. Duplicate parent/child label cleanup
 
-- One-time cannot use subscription checkout mode.
-- Recurring requires billing frequency.
-- Fixed-payments requires a payment count ≥ 1.
-- Price cannot be negative; zero only for Free.
-- Free cannot create paid checkout.
-- Product / service duration cannot be zero.
-- Session packages require at least one session.
-- Agreement enforcement requires a template.
+`internal-nav.ts` currently emits children like `Messages → Messages` and `Clients → Clients`. Rename first-child entries to match user's list:
 
-Submit is disabled while any inline error is unresolved. Duplicate submissions blocked with an in-flight flag.
+- Messages: children = `Inbox` (was Messages), `Communication Hub`, `Broadcasts`, then Chat Assets section.
+- Clients: children = `All Clients`, `Check-In Reviews`, `Lift Reviews`, `Action Requests`, `Progress Media`, `Forms`, `Agreements`.
+- Payments: children = `Overview`, `Transactions`, `Products & Offers`, `Payment Links`, `Coupons`, `Failed Payments`.
+- Programs, Scheduling: same rename pattern (first duplicate child → `Overview`, `Program Library`, `Calendar`, etc. per spec).
 
-## Stripe automation
+Only edit labels; routes, permissions, badges, workspace metadata stay untouched.
 
-Save flow (all through the existing `upsertCoachingProduct` + Stripe sync path — no new sync system):
+### 6. Preserve context
 
-1. Persist the JF Effect product (Draft).
-2. If paid: create/reuse Stripe Product, create Stripe Price with correct interval/type, create Payment Link with `allow_promotion_codes` from the toggle, attach metadata `{ jf_product_id }`.
-3. Save Stripe IDs back to the product.
-4. Flip status to Active (or keep Draft if the workflow requires manual activation).
-5. Return to the product list with a toast + inline card offering Copy Link / Open Checkout / Assign to Client / View in Stripe.
-
-If any Stripe step fails: preserve the form, show the exact failed step, allow retry, and surface whether the app product was already saved. No hidden duplicate Stripe records — the sync function already dedupes by `jf_product_id` metadata; the new flow reuses that guarantee.
-
-## Tax
-
-Existing Canadian GST/HST logic and Stripe Tax config are untouched. The bold red "STRIPE CHECKOUT SESSION" block is replaced by a compact one-line notice next to the price: "Taxes are calculated automatically from the customer's billing address and added at checkout." Red is reserved for actual errors.
-
-## Modal shell + list state
-
-- Modal renders over the Products page; the list stays mounted, so filters / search / sort / scroll are preserved on close.
-- Content is code-split (`React.lazy`) so the modal only loads when opened.
-- Route stays on `/admin/payment-links`; no navigation on open or close.
-- Mobile PWA: full-screen sheet, sticky primary action pinned above the safe-area inset, large tap targets, no horizontal scroll.
+Nothing here re-mounts the underlying route — the drawer is a portal `Sheet`. Confirm: no `key` on `<Outlet />`, no navigation on drawer open/close. `openCategory` lives inside the shell so browser back can't restore stale submenu.
 
 ## Files touched
 
-- `src/routes/_authenticated/admin/payment-links.tsx` — swap the current New Product dialog trigger to open the new modal component (edit flow unchanged).
-- `src/components/products/new-product-modal.tsx` (new) — the redesigned modal shell + form.
-- `src/components/products/sections/*.tsx` (new) — one file per section (basics, pricing, duration, included, sessions-access, agreement, selling, advanced) so nothing balloons past ~250 lines.
-- `src/components/products/live-summary.tsx` (new) — the plain-language summary panel.
-- `src/lib/product-form/` (new) — Zod schema, category → duration/session/access-preset mapping, access-preset ↔ numeric level mapping, plain-language price formatter, submit orchestrator that calls the existing `upsertCoachingProduct` + Stripe sync server fns.
-- No changes to `src/lib/coaching-products.functions.ts`, `src/lib/payments.functions.ts`, `src/lib/stripe-checkout.functions.ts`, `src/routes/api/public/stripe-webhook.ts`, or the DB schema.
+- `src/components/app-shell.tsx` — new `usePointerCapability`, `useDevice`, refactored tablet branch, replaced mobile Sheet body, extracted `FlyoutChildren`, `TabletFlyoutRow`, `MobileDrawerRoot`, `MobileDrawerSubmenu`. Remove `moreOpenGroup` state and `NEVER_COLLAPSE_SECTIONS` special-casing on non-desktop.
+- `src/lib/internal-nav.ts` — rename duplicate child labels only.
 
-## Explicitly out of scope for this pass
+Nothing else changes. Desktop sidebar, floating bar, command palette, POV bar all untouched.
 
-- Editing existing products keeps the current fuller form (a follow-up pass can port it onto the new shell once the create flow is proven).
-- Membership plan creation (`/admin/member-plans/new`) is a separate form and is not touched here.
-- No new columns, no migrations, no changes to Stripe sync internals or tax config.
-- No changes to the coaching / membership sidebar wiring shipped in the previous turn.
+## Out of scope
+
+- No changes to `client-portal`, `member`, `media` shells beyond what the shared `AppShell` gives them.
+- No route additions.
+- No changes to `useClientNavBadges` / `useMediaNavBadges`.
 
 ## Verification
 
-- `bunx tsgo --noEmit` passes.
-- Playwright smoke: open modal from `/admin/payment-links`, create a Recurring $499 CAD / monthly / 12-payments / 12-month-access product, confirm summary text, submit, verify Stripe Product + Price + Payment Link are created (single set), verify the new row appears in the list with filters preserved.
-- Manual pass on desktop, tablet (`iPad`), and installed PWA widths.
-
-Please approve and I'll implement in one pass.
+- `tsgo` (harness auto-runs).
+- Manual: iPad viewport 1024×768 — sidebar flat, chevron opens right-side panel, tap outside closes.
+- Manual: iPhone 393×852 — open drawer, tap Messages chevron → submenu replaces list, back button returns.
+- Confirm route stays mounted (open client overlay, open drawer, close drawer — overlay still there).
