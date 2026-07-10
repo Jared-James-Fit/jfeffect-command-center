@@ -207,6 +207,7 @@ export function PaymentLinksPage({ embedded = false }: { embedded?: boolean } = 
   const [previewingCheckout, setPreviewingCheckout] = useState<string | null>(null);
   const [generatingLink, setGeneratingLink] = useState<string | null>(null);
   const [sharing, setSharing] = useState<Product | null>(null);
+  const [newProductOpen, setNewProductOpen] = useState(false);
 
   const handleGenerateLink = async (p: Product) => {
     if (!(p as any).stripe_price_id) {
