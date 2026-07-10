@@ -417,7 +417,14 @@ export function buildInternalNavCollapsed(
     const items = byGroup.get(key);
     if (!items || items.length === 0) continue;
     const primary = items[0];
-    const rest = items.slice(1);
+    // Keep primary at top; among the rest, preserve REGISTRY order but push
+    // any child tagged with a `section` to the bottom so the flyout shows
+    // frequent / high-priority pages first and setup / diagnostic / advanced
+    // pages under a labelled divider.
+    const rest = items
+      .slice(1)
+      .slice()
+      .sort((a, b) => Number(!!a.section) - Number(!!b.section));
     const groupBucket: "Main Menu" | "Other" =
       key === "Add-ons" || key === "Settings" ? "Other" : "Main Menu";
     out.push({
