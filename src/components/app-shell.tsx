@@ -919,130 +919,21 @@ export function AppShell({ items, bottomItems: customBottomItems, title, childre
       </div>
 
       {/* Mobile "More" sheet — full grouped menu + search */}
-      <Sheet open={moreOpen} onOpenChange={setMoreOpen}>
-        <SheetContent side="bottom" className="h-[88vh] overflow-hidden p-0 md:hidden">
-          <SheetHeader className="border-b border-border px-4 py-3">
-            <SheetTitle className="text-left text-sm font-black tracking-tight">All sections</SheetTitle>
-          </SheetHeader>
-          <div className="border-b border-border px-3 py-2">
-            <div className="relative">
-              <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                value={moreQuery}
-                onChange={(e) => setMoreQuery(e.target.value)}
-                placeholder="Search pages…"
-                className="h-9 pl-8"
-              />
-            </div>
-          </div>
-          <div
-            className="h-[calc(88vh-7.5rem)] overflow-y-auto px-2 py-2"
-            style={{ paddingBottom: "calc(env(safe-area-inset-bottom) + 1.5rem)" }}
-          >
-            {moreFiltered ? (
-              <ul className="space-y-1">
-                {moreFiltered.length === 0 && (
-                  <li className="px-3 py-6 text-center text-sm text-muted-foreground">No matches.</li>
-                )}
-                {moreFiltered.map(({ item, group }) => {
-                  const Icon = item.icon;
-                  return (
-                    <li key={item.to}>
-                      <Link
-                        to={item.to}
-                        onClick={() => { setMoreOpen(false); setMoreQuery(""); }}
-                        className="flex min-h-[52px] items-center gap-3 rounded-md px-3 py-3.5 text-base hover:bg-sidebar-accent"
-                      >
-                        <Icon className="h-5 w-5 shrink-0 text-muted-foreground" />
-                        <div className="min-w-0 flex-1">
-                          <div className="truncate font-semibold">{item.label}</div>
-                          {group && <div className="truncate text-[12px] text-muted-foreground">{group}</div>}
-                        </div>
-                      </Link>
-                    </li>
-                  );
-                })}
-              </ul>
-            ) : (
-              <div className="space-y-1.5">
-                {grouped.map((group) => {
-                  const label = group.label ?? "All sections";
-                  const isOpen = moreOpenGroup === label;
-                  return (
-                    <div key={label} className="rounded-md border border-border/60">
-                      <button
-                        type="button"
-                        onClick={() => setMoreOpenGroup(isOpen ? null : label)}
-                        className="flex w-full items-center justify-between px-3 py-2.5 text-[11px] font-bold uppercase tracking-wider text-muted-foreground"
-                      >
-                        <span>{label}</span>
-                        <ChevronDown className={cn("h-4 w-4 transition-transform", !isOpen && "-rotate-90")} />
-                      </button>
-                      {isOpen && (
-                        <ul className="border-t border-border/60 p-1">
-                          {group.items.map((item) => {
-                            const Icon = item.icon;
-                            const active = item.to === activeTo;
-                            return (
-                              <li key={item.to}>
-                                <Link
-                                  to={item.to}
-                                  onClick={() => setMoreOpen(false)}
-                                  className={cn(
-                                    "flex min-h-[52px] items-center gap-3 rounded-md px-3 py-3.5 text-base font-medium",
-                                    active
-                                      ? "bg-primary/15 font-semibold text-primary"
-                                      : "hover:bg-sidebar-accent",
-                                  )}
-                                >
-                                  <Icon className="h-5 w-5 shrink-0" />
-                                  <span className="truncate">{item.label}</span>
-                                </Link>
-                                {item.children && item.children.length > 0 && (
-                                  <ul className="ml-9 mt-0.5 space-y-0.5 border-l border-border/50 pl-2">
-                                    {item.children.map((c, idx) => {
-                                      const CIcon = c.icon;
-                                      const cactive = pathname === c.to || pathname.startsWith(c.to + "/");
-                                      const prev = idx > 0 ? item.children![idx - 1] : undefined;
-                                      const showSectionHeader = c.section && (!prev || prev.section !== c.section);
-                                      return (
-                                        <li key={c.to}>
-                                          {showSectionHeader && (
-                                            <div className="mt-1.5 pt-1.5 px-3 border-t border-border/50 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/80">
-                                              {c.section}
-                                            </div>
-                                          )}
-                                          <Link
-                                            to={c.to}
-                                            onClick={() => setMoreOpen(false)}
-                                            className={cn(
-                                              "flex min-h-[44px] items-center gap-2.5 rounded-md px-3 py-2 text-sm",
-                                              cactive
-                                                ? "bg-primary/10 font-semibold text-primary"
-                                                : "text-foreground/90 hover:bg-sidebar-accent",
-                                            )}
-                                          >
-                                            <CIcon className="h-4 w-4 shrink-0 text-muted-foreground" />
-                                            <span className="truncate">{c.label}</span>
-                                          </Link>
-                                        </li>
-                                      );
-                                    })}
-                                  </ul>
-                                )}
-                              </li>
-                            );
-                          })}
-                        </ul>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-        </SheetContent>
-      </Sheet>
+      <MobileNavDrawer
+        open={moreOpen}
+        onOpenChange={(o) => {
+          setMoreOpen(o);
+          if (!o) { setMoreQuery(""); }
+        }}
+        title={title}
+        grouped={grouped}
+        activeTo={activeTo}
+        pathname={pathname}
+        navBadges={navBadges}
+        query={moreQuery}
+        setQuery={setMoreQuery}
+        filteredResults={moreFiltered}
+      />
 
       {/* Global Command Palette — ⌘K / Ctrl+K (mobile: full-screen sheet) */}
       <CommandPalette
