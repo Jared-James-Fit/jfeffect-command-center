@@ -1417,11 +1417,6 @@ function SidebarFlyoutRow({
   );
 }
 
-function BottomNavBadge({ badge }: { badge?: { count?: number; dot?: boolean } }) {
-  // (defined below)
-  return _BottomNavBadge({ badge });
-}
-
 /**
  * Tap-triggered flyout for the tablet sidebar. The label link still
  * navigates on tap; a dedicated chevron button opens the child popover.
@@ -1516,7 +1511,7 @@ function TabletFlyoutRow({
   );
 }
 
-function _BottomNavBadge({ badge }: { badge?: { count?: number; dot?: boolean } }) {
+function BottomNavBadge({ badge }: { badge?: { count?: number; dot?: boolean } }) {
   if (!badge) return null;
   if (badge.count != null && badge.count > 0) {
     return (
