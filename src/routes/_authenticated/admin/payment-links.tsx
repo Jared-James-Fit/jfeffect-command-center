@@ -208,6 +208,15 @@ export function PaymentLinksPage({ embedded = false }: { embedded?: boolean } = 
   const [generatingLink, setGeneratingLink] = useState<string | null>(null);
   const [sharing, setSharing] = useState<Product | null>(null);
   const [newProductOpen, setNewProductOpen] = useState(false);
+  // One idempotency key per in-flight "Generate payment link" attempt, keyed
+  // by product id. A retried Generate for the same product reuses the same
+  // Stripe Idempotency-Key so a timed-out first attempt does not spawn a
+  // duplicate Stripe payment_link. Cleared only after confirmed success.
+  const generateLinkIdemRef = useRef<Record<string, string>>({});
+  const mintUuid = () =>
+    typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+      ? crypto.randomUUID()
+      : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
 
   const handleGenerateLink = async (p: Product) => {
     if (!(p as any).stripe_price_id) {
@@ -215,7 +224,15 @@ export function PaymentLinksPage({ embedded = false }: { embedded?: boolean } = 
       setEditing({ open: true, product: p });
       return;
     }
+    // Prevent rapid duplicate submits for the same product.
+    if (generatingLink === p.id) return;
     setGeneratingLink(p.id);
+    // Reuse the same key across retries for this product until we get a
+    // confirmed success back from the server.
+    if (!generateLinkIdemRef.current[p.id]) {
+      generateLinkIdemRef.current[p.id] = mintUuid();
+    }
+    const idempotencyKey = generateLinkIdemRef.current[p.id];
     let linkUrl = "";
     try {
       await runJob<{ url: string }>(
@@ -227,7 +244,7 @@ export function PaymentLinksPage({ embedded = false }: { embedded?: boolean } = 
         },
         async (job) => {
           job.completeStep(0);
-          const res = await generateLinkFn({ data: { id: p.id } });
+          const res = await generateLinkFn({ data: { id: p.id, idempotencyKey } });
           linkUrl = res.url;
           job.completeStep(1); job.completeStep(2); job.completeStep(3);
           qc.invalidateQueries({ queryKey: ["coaching-products"] });
@@ -236,6 +253,9 @@ export function PaymentLinksPage({ embedded = false }: { embedded?: boolean } = 
           return res;
         },
       );
+      // Confirmed success — retire the key so a genuinely new "Generate"
+      // click mints a fresh one.
+      delete generateLinkIdemRef.current[p.id];
       // After success: attach success CTAs (Open / Copy) to the just-completed job.
       const { jobStore } = await import("@/lib/progress-jobs");
       const latest = jobStore.getSnapshot().find((j) => j.title === "Creating Stripe checkout link" && j.status === "success");
@@ -246,7 +266,9 @@ export function PaymentLinksPage({ embedded = false }: { embedded?: boolean } = 
         });
       }
     } catch {
-      // runJob handled the toast
+      // runJob handled the toast. Keep the idempotency key alive so a retry
+      // reuses it and Stripe returns the original link if the first attempt
+      // actually reached them.
     } finally {
       setGeneratingLink(null);
     }
