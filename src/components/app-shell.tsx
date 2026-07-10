@@ -698,14 +698,14 @@ export function AppShell({ items, bottomItems: customBottomItems, title, childre
                 </ul>
               </div>
             )}
-            {grouped.map((group) => {
+              {grouped.map((group) => {
               const containsActive = group.label === activeGroupLabel;
-              const sectionCollapsed = group.label && !isMembershipAdminShell
+              const sectionCollapsed = group.label && !isMembershipAdminShell && !isTablet
                 ? collapsedSections.has(group.label) && !containsActive
                 : false;
               return (
                 <div key={group.label ?? "default"}>
-                  {group.label && !isCollapsed && (
+                  {group.label && !isCollapsed && !isTablet && (
                     <button
                       onClick={() => toggleSection(group.label!, allGroupLabels)}
                       className="group flex w-full items-center justify-between rounded px-2.5 pb-1 pt-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground hover:text-foreground"
@@ -718,6 +718,11 @@ export function AppShell({ items, bottomItems: customBottomItems, title, childre
                         )}
                       />
                     </button>
+                  )}
+                  {group.label && !isCollapsed && isTablet && (
+                    <div className="px-2.5 pb-1 pt-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                      {group.label}
+                    </div>
                   )}
                   {group.label && isCollapsed && (
                     <div className="my-1 mx-2 h-px bg-sidebar-border/60" />
