@@ -107,8 +107,11 @@ export function ClientRow({ r, onArchive }: { r: DirectoryRow; onArchive?: (r: D
         className={cn(
           "group relative grid gap-3 rounded-xl border border-border bg-card p-4 transition",
           "hover:border-primary/30 hover:bg-accent/20",
-          // desktop 5-area grid: identity | status | program | action | open
-          "md:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)_minmax(0,1.3fr)_auto_auto] md:items-center",
+          // desktop 5-area grid: identity | status | program | action | open.
+          // Only activate the compressed grid at true desktop widths — iPad
+          // and other tablet widths keep the stacked/wrapping layout so
+          // badges, program pills, and action buttons never overlap.
+          "xl:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)_minmax(0,1.3fr)_auto_auto] xl:items-center",
         )}
       >
         {/* Identity */}
@@ -215,7 +218,7 @@ export function ClientRow({ r, onArchive }: { r: DirectoryRow; onArchive?: (r: D
                   onClick={enterPov}
                   disabled={povBusy}
                   aria-label={`Enter ${r.full_name ?? "client"} POV`}
-                  className="h-11 w-11 border border-warning/50 bg-warning/15 text-warning shadow-sm hover:bg-warning/25 md:h-10 md:w-10"
+                  className="h-11 w-11 border border-warning/50 bg-warning/15 text-warning shadow-sm hover:bg-warning/25 xl:h-10 xl:w-10"
                 >
                   <Eye className="h-5 w-5" />
                 </Button>
@@ -247,7 +250,7 @@ export function ClientRow({ r, onArchive }: { r: DirectoryRow; onArchive?: (r: D
           <ClientNameLink
             clientId={r.id}
             ariaLabel={`Open ${r.full_name ?? "client"}`}
-            className="hidden h-9 w-9 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground md:flex"
+            className="hidden h-9 w-9 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground xl:flex"
           >
             <ChevronRight className="h-5 w-5" />
           </ClientNameLink>
@@ -495,7 +498,7 @@ function primaryActionTarget(action: DirectoryNextAction, clientId: string) {
 
 export function ClientRowSkeleton() {
   return (
-    <li className="grid animate-pulse gap-3 rounded-xl border border-border bg-card p-4 md:grid-cols-[1.4fr_1fr_1.3fr_auto_auto]">
+    <li className="grid animate-pulse gap-3 rounded-xl border border-border bg-card p-4 xl:grid-cols-[1.4fr_1fr_1.3fr_auto_auto]">
       <div className="flex items-center gap-3">
         <div className="h-11 w-11 rounded-full bg-muted" />
         <div className="space-y-2">
