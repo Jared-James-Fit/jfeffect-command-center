@@ -90,12 +90,12 @@ function MembershipDashboard() {
   };
 
   return (
-    <div className="space-y-5">
+    <div className="mx-auto w-full max-w-7xl space-y-6 px-4 md:px-6">
       <PageHeader
         title="Membership Admin Dashboard"
         subtitle="JF Membership signups, subscriptions, setup health & content."
         actions={
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <Button onClick={enterPov} disabled={povBusy} className="bg-emerald-600 hover:bg-emerald-700">
               <Eye className="mr-2 h-4 w-4" /> Enter Membership POV
             </Button>
@@ -105,120 +105,128 @@ function MembershipDashboard() {
         }
       />
 
-      <div className="flex items-center gap-2 text-xs text-muted-foreground">
+      <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
         <Badge variant="outline" className="border-emerald-500/30 bg-emerald-500/10 text-emerald-300">
           <Sparkles className="mr-1 h-3 w-3" />JF Membership Mode
         </Badge>
         <span>Switch back to Coaching above to manage coaching clients.</span>
       </div>
 
-      <div>
-        <h2 className="mb-2 text-xs font-bold uppercase tracking-widest text-muted-foreground">Quick Access</h2>
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          <QuickCard to="/admin/members" icon={ShieldCheck} title="Manage Member Access"
-            desc="Turn access on/off, set status, dates, grant comp access, add notes." tone="primary" featured />
-          <QuickCard to="/admin/membership/action-needed" icon={AlertTriangle} title="Expired & Payment Issues"
-            desc="Trial ended, failed payments, grace period, members needing reactivation." tone="rose" featured />
-          <QuickCard to="/admin/members" icon={Gift} title="Grant Complimentary Access"
-            desc="Find a member and activate without Stripe — pick duration or end date." tone="primary" featured />
-          <QuickCard to="/admin/members" icon={UserSearch} title="View All Members"
-            desc="Full member list with search and status filters." featured />
-          <QuickCard to="/admin/membership/checkout-settings" icon={Package} title="Membership Plans & Pricing"
-            desc="$29/mo plan, trial, checkout visibility. Annual hidden." />
-          <QuickCard to="/admin/membership/promo-tools" icon={Tags} title="Promotions & Referral Codes"
-            desc="Discount codes, referral codes, usage, and referred purchases." />
-          <QuickCard to="/admin/membership/sales-page" icon={FileText} title="Membership Sales Page"
-            desc="Edit and preview jfeffect.com/join." />
-          <QuickCard to="/admin/membership/stripe-sync" icon={Activity} title="Stripe Sync & System Health"
-            desc="Failed webhooks, subscription mismatches, manual sync." />
+      {/* 1. PRIORITY — Actions */}
+      <section>
+        <h2 className="mb-3 text-xs font-bold uppercase tracking-widest text-muted-foreground">Membership Actions</h2>
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <QuickCard to="/admin/members" icon={ShieldCheck} title="Manage Members"
+            desc="Search, filter, and manage every JF member." tone="primary" featured />
+          <QuickCard to="/admin/membership/action-needed" icon={AlertTriangle} title="Payment Issues"
+            desc="Trial ended, failed payments, reactivations." tone="rose" featured />
+          <QuickCard to="/admin/members" icon={Gift} title="Grant Access"
+            desc="Give complimentary access without Stripe." tone="primary" featured />
+          <QuickCard to="/admin/membership/checkout-settings" icon={Package} title="Sales & Plans"
+            desc="Plans, pricing, checkout, promotions." featured />
         </div>
-      </div>
+      </section>
 
-      <div>
-        <h2 className="mb-2 text-xs font-bold uppercase tracking-widest text-muted-foreground">Subscriptions</h2>
-        <div className="grid grid-cols-2 gap-3 md:grid-cols-4 lg:grid-cols-6">
+      {/* 2. SECONDARY — Important alerts */}
+      <section className="grid gap-4 lg:grid-cols-3">
+        <Card className="p-4 lg:col-span-2">
+          <div className="mb-2 flex items-center justify-between gap-2">
+            <h3 className="flex items-center gap-2 text-sm font-bold">
+              <AlertTriangle className="h-4 w-4 text-rose-300" />
+              Recently expired members
+            </h3>
+            <Link to="/admin/membership/action-needed" className="text-xs text-primary hover:underline">View all</Link>
+          </div>
+          {expiredQuery.isLoading ? (
+            <div className="text-xs text-muted-foreground">Loading…</div>
+          ) : expiredQuery.data?.members?.length ? (
+            <ul className="divide-y divide-border text-sm">
+              {expiredQuery.data.members.map((m: any) => (
+                <li key={m.id} className="flex items-center justify-between gap-3 py-2">
+                  <div className="min-w-0 flex-1">
+                    <Link to="/admin/members/$memberId" params={{ memberId: m.id }} className="block truncate font-medium hover:underline">
+                      {m.full_name || m.email}
+                    </Link>
+                    <div className="text-xs text-muted-foreground">
+                      Expired {m._expiredAt ? new Date(m._expiredAt).toLocaleDateString() : "—"}
+                      {m.subscription_status ? ` · ${m.subscription_status}` : ""}
+                    </div>
+                  </div>
+                  <Button
+                    size="sm"
+                    onClick={() => onGrant(m.id, m.full_name || m.email)}
+                    disabled={grantingId === m.id}
+                    className="shrink-0 bg-emerald-600 hover:bg-emerald-700"
+                  >
+                    <Gift className="mr-1 h-3.5 w-3.5" />
+                    {grantingId === m.id ? "Granting…" : "Grant 7 days"}
+                  </Button>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <div className="text-xs text-muted-foreground">No recently expired members in the last 30 days.</div>
+          )}
+        </Card>
+
+        <Card className="p-4">
+          <h3 className="mb-2 text-sm font-bold">Setup issues</h3>
+          <ul className="space-y-1.5 text-sm">
+            <AlertRow label="Payment failed / past due" value={c?.past_due ?? 0} icon={CreditCard} tone="rose" to="/admin/membership/action-needed" isLoading={isLoading} />
+            <AlertRow label="Incomplete setup" value={c?.incomplete_setup ?? 0} icon={ListChecks} tone="warn" to="/admin/membership/action-needed" isLoading={isLoading} />
+            <AlertRow label="Missing profile pic" value={c?.missing_pfp ?? 0} icon={Camera} tone="warn" to="/admin/membership/action-needed" isLoading={isLoading} />
+            <AlertRow label="Missing phone" value={c?.missing_phone ?? 0} icon={Phone} to="/admin/membership/action-needed" isLoading={isLoading} />
+            <AlertRow label="SMS consent missing" value={c?.missing_sms ?? 0} icon={MessageCircle} to="/admin/membership/action-needed" isLoading={isLoading} />
+          </ul>
+        </Card>
+      </section>
+
+      {/* 3. TERTIARY — More management surfaces */}
+      <section>
+        <h2 className="mb-3 text-xs font-bold uppercase tracking-widest text-muted-foreground">More</h2>
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <QuickCard to="/admin/membership/promo-tools" icon={Tags} title="Promotions & Referrals"
+            desc="Discount and referral codes." />
+          <QuickCard to="/admin/membership/sales-page" icon={FileText} title="Sales Page"
+            desc="Edit and preview jfeffect.com/join." />
+          <QuickCard to="/admin/membership/stripe-sync" icon={Activity} title="Stripe Sync & Health"
+            desc="Webhooks, mismatches, manual sync." />
+          <QuickCard to="/admin/membership/signup-stats" icon={TrendingUp} title="Signup Stats"
+            desc="Growth trends and cohort snapshots." />
+        </div>
+      </section>
+
+      {/* 4. ANALYTICS — Bottom */}
+      <section>
+        <h2 className="mb-3 text-xs font-bold uppercase tracking-widest text-muted-foreground">Analytics</h2>
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
           <Stat label="Active" value={isLoading ? "…" : c?.active ?? 0} icon={Users} tone="primary" />
           <Stat label="Trialing" value={isLoading ? "…" : c?.trialing ?? 0} icon={Clock} tone="warn" />
           <Stat label="Past Due" value={isLoading ? "…" : c?.past_due ?? 0} icon={CreditCard} tone="rose" />
           <Stat label="Paused" value={isLoading ? "…" : c?.paused ?? 0} icon={Pause} />
           <Stat label="Hold Plan" value={isLoading ? "…" : c?.hold ?? 0} icon={ListChecks} />
           <Stat label="Cancelled" value={isLoading ? "…" : c?.cancelled ?? 0} icon={XCircle} />
-        </div>
-      </div>
-
-      <div>
-        <h2 className="mb-2 text-xs font-bold uppercase tracking-widest text-muted-foreground">Access Control</h2>
-        <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
           <Stat label="Access Active" value={isLoading ? "…" : c?.access_active ?? 0} icon={ShieldCheck} tone="primary" to="/admin/members" />
           <Stat label="Access Expired" value={isLoading ? "…" : c?.access_expired ?? 0} icon={AlertTriangle} tone="rose" to="/admin/members" />
           <Stat label="Manual Override" value={isLoading ? "…" : c?.manual_override ?? 0} icon={UserCog} tone="warn" to="/admin/members" />
         </div>
-      </div>
+      </section>
 
-      <div>
-        <h2 className="mb-2 text-xs font-bold uppercase tracking-widest text-muted-foreground">Setup health</h2>
-        <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-          <Stat label="Incomplete Setup" value={isLoading ? "…" : c?.incomplete_setup ?? 0} icon={ListChecks} tone="warn" to="/admin/membership/action-needed" />
-          <Stat label="Missing Profile Pic" value={isLoading ? "…" : c?.missing_pfp ?? 0} icon={Camera} tone="warn" to="/admin/membership/action-needed" />
-          <Stat label="Missing Phone" value={isLoading ? "…" : c?.missing_phone ?? 0} icon={Phone} to="/admin/membership/action-needed" />
-          <Stat label="SMS Consent Missing" value={isLoading ? "…" : c?.missing_sms ?? 0} icon={MessageCircle} to="/admin/membership/action-needed" />
-        </div>
-      </div>
-
-      <Card className="p-4">
-        <div className="mb-2 flex items-center justify-between">
-          <h3 className="text-sm font-bold flex items-center gap-2">
-            <AlertTriangle className="h-4 w-4 text-rose-300" />
-            Recently expired members
-          </h3>
-          <Link to="/admin/membership/action-needed" className="text-xs text-primary hover:underline">View all</Link>
-        </div>
-        {expiredQuery.isLoading ? (
-          <div className="text-xs text-muted-foreground">Loading…</div>
-        ) : expiredQuery.data?.members?.length ? (
-          <ul className="divide-y divide-border text-sm">
-            {expiredQuery.data.members.map((m: any) => (
-              <li key={m.id} className="flex items-center justify-between gap-3 py-2">
-                <div className="min-w-0 flex-1">
-                  <Link to="/admin/members/$memberId" params={{ memberId: m.id }} className="block truncate font-medium hover:underline">
-                    {m.full_name || m.email}
-                  </Link>
-                  <div className="text-xs text-muted-foreground">
-                    Expired {m._expiredAt ? new Date(m._expiredAt).toLocaleDateString() : "—"}
-                    {m.subscription_status ? ` · ${m.subscription_status}` : ""}
-                  </div>
-                </div>
-                <Button
-                  size="sm"
-                  onClick={() => onGrant(m.id, m.full_name || m.email)}
-                  disabled={grantingId === m.id}
-                  className="bg-emerald-600 hover:bg-emerald-700"
-                >
-                  <Gift className="mr-1 h-3.5 w-3.5" />
-                  {grantingId === m.id ? "Granting…" : "Grant 7-day access"}
-                </Button>
-              </li>
-            ))}
-          </ul>
-        ) : (
-          <div className="text-xs text-muted-foreground">No recently expired members in the last 30 days.</div>
-        )}
-      </Card>
-
-      <div className="grid gap-4 md:grid-cols-2">
+      {/* Recent activity */}
+      <section className="grid gap-4 md:grid-cols-2">
         <Card className="p-4">
-          <div className="mb-2 flex items-center justify-between">
+        <div className="mb-2 flex items-center justify-between">
             <h3 className="text-sm font-bold">Recent signups</h3>
             <Link to="/admin/membership/signup-stats" className="text-xs text-primary hover:underline"><TrendingUp className="mr-1 inline h-3 w-3" />View signup stats</Link>
           </div>
           {data?.recentSignups?.length ? (
             <ul className="divide-y divide-border text-sm">
               {data.recentSignups.map((m: any) => (
-                <li key={m.id} className="flex items-center justify-between py-2">
+                <li key={m.id} className="flex items-center justify-between gap-2 py-2">
                   <Link to="/admin/members/$memberId" params={{ memberId: m.id }} className="truncate hover:underline">
                     {m.full_name || m.email}
                   </Link>
-                  <span className="text-xs text-muted-foreground">{new Date(m.created_at).toLocaleDateString()}</span>
+                  <span className="shrink-0 text-xs text-muted-foreground">{new Date(m.created_at).toLocaleDateString()}</span>
                 </li>
               ))}
             </ul>
@@ -230,19 +238,36 @@ function MembershipDashboard() {
           {data?.upcomingTrialEndings?.length ? (
             <ul className="divide-y divide-border text-sm">
               {data.upcomingTrialEndings.map((m: any) => (
-                <li key={m.id} className="flex items-center justify-between py-2">
-                  <Link to="/admin/members/$memberId" params={{ memberId: m.id }} className="truncate hover:underline">
+                <li key={m.id} className="flex items-center justify-between gap-2 py-2">
+                  <Link to="/admin/members/$memberId" params={{ memberId: m.id }} className="min-w-0 truncate hover:underline">
                     {m.full_name || m.email}
                   </Link>
-                  <span className="text-xs text-amber-300">Trial ends {new Date(m.trial_end_at).toLocaleDateString()}</span>
+                  <span className="shrink-0 text-xs text-amber-300">Trial ends {new Date(m.trial_end_at).toLocaleDateString()}</span>
                 </li>
               ))}
             </ul>
           ) : <div className="text-xs text-muted-foreground">No trials ending in the next 7 days.</div>}
         </Card>
-      </div>
+      </section>
     </div>
   );
+}
+
+function AlertRow({ label, value, icon: Icon, tone = "default", to, isLoading }: { label: string; value: number | string; icon: any; tone?: "default" | "warn" | "rose"; to?: string; isLoading?: boolean }) {
+  const dot =
+    tone === "rose" ? "text-rose-300" :
+    tone === "warn" ? "text-amber-300" :
+    "text-muted-foreground";
+  const row = (
+    <div className="flex items-center justify-between gap-2 rounded-md px-2 py-1.5 hover:bg-muted/40">
+      <div className="flex min-w-0 items-center gap-2">
+        <Icon className={`h-3.5 w-3.5 shrink-0 ${dot}`} />
+        <span className="truncate text-xs">{label}</span>
+      </div>
+      <span className={`shrink-0 text-sm font-bold ${dot}`}>{isLoading ? "…" : value}</span>
+    </div>
+  );
+  return <li>{to ? <Link to={to as any}>{row}</Link> : row}</li>;
 }
 
 function QuickCard({
