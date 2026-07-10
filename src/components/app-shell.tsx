@@ -782,7 +782,14 @@ export function AppShell({ items, bottomItems: customBottomItems, title, childre
                         );
                         return (
                           <li key={item.to}>
-                              {item.children && !isTablet ? (
+                              {item.children && isTablet ? (
+                                <TabletFlyoutRow
+                                  item={item}
+                                  pathname={pathname}
+                                  navBadges={navBadges}
+                                  trigger={link}
+                                />
+                              ) : item.children && !isTablet ? (
                                 <SidebarFlyoutRow
                                   item={item}
                                   pathname={pathname}
