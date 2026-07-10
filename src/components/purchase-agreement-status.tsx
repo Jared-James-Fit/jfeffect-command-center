@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { Badge } from "@/components/ui/badge";
+import { ClientNameLink } from "@/components/clients/client-name-link";
 import { Link } from "@tanstack/react-router";
 import { supabase } from "@/integrations/supabase/client";
 import { ShieldCheck, AlertTriangle, FileText, CircleSlash } from "lucide-react";
@@ -91,9 +92,9 @@ export function PurchaseAgreementInlineBadge({
   const node = <PurchaseAgreementBadge status={status} />;
   if (status === "Missing" || status === "Blocking Start" || status === "Manual Action Needed") {
     return (
-      <Link to="/admin/clients/$id" params={{ id: clientId }} search={{ tab: "agreements" }} onClick={(e) => e.stopPropagation()}>
+      <ClientNameLink clientId={clientId} tab="agreements" onClick={(e) => e.stopPropagation()}>
         {node}
-      </Link>
+      </ClientNameLink>
     );
   }
   return node;

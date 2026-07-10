@@ -1,9 +1,16 @@
 import { createFileRoute, Outlet, redirect } from "@tanstack/react-router";
 import { supabase } from "@/integrations/supabase/client";
 import { DashboardSplash } from "@/components/dashboard-splash";
+import { ClientProfileOverlayMount } from "@/components/clients/profile/client-profile-overlay";
+import { z } from "zod";
+import { fallback } from "@tanstack/zod-adapter";
 
 export const Route = createFileRoute("/_authenticated")({
   ssr: false,
+  validateSearch: z.object({
+    clientId: fallback(z.string().optional(), undefined),
+    clientTab: fallback(z.string().optional(), undefined),
+  }).passthrough(),
   beforeLoad: async ({ location }) => {
     // Resilient session read for PWA cold launches on flaky networks.
     // A transient failure here (offline moment, slow Supabase response on
@@ -38,5 +45,14 @@ export const Route = createFileRoute("/_authenticated")({
   },
   pendingMs: 0,
   pendingComponent: () => <DashboardSplash />,
-  component: () => <Outlet />,
+  component: AuthenticatedLayout,
 });
+
+function AuthenticatedLayout() {
+  return (
+    <>
+      <Outlet />
+      <ClientProfileOverlayMount />
+    </>
+  );
+}

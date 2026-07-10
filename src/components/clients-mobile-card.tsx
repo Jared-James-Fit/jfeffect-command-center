@@ -1,3 +1,4 @@
+import { ClientNameLink } from "@/components/clients/client-name-link";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -97,10 +98,10 @@ export function ClientMobileCard(props: ClientCardProps) {
       <div className="flex items-start gap-3">
         <UserAvatar src={c.profile_picture_url} name={c.full_name} size={44} />
         <div className="min-w-0 flex-1">
-          <Link to="/admin/clients/$id" params={{ id: c.id }} className="block">
+          <ClientNameLink clientId={c.id} className="block">
             <div className="font-semibold truncate">{c.full_name}</div>
             <div className="text-xs text-muted-foreground truncate">{c.coaching_type ?? "—"}</div>
-          </Link>
+          </ClientNameLink>
           {c.email && <div className="text-xs text-muted-foreground truncate mt-0.5">{c.email}</div>}
         </div>
         <Badge variant="outline" className="shrink-0 text-[10px]">{c.status}</Badge>
@@ -120,11 +121,11 @@ export function ClientMobileCard(props: ClientCardProps) {
       </div>
 
       <div className="flex items-center gap-2 pt-1">
-        <Link to="/admin/clients/$id" params={{ id: c.id }} className="flex-1">
+        <ClientNameLink clientId={c.id} className="flex-1">
           <Button variant="outline" size="sm" className="w-full font-semibold">
             <Eye className="mr-1.5 h-3.5 w-3.5" /> View
           </Button>
-        </Link>
+        </ClientNameLink>
         <Link to="/admin/messages" search={{ client: c.id }} className="flex-1">
           <Button variant="outline" size="sm" className="w-full font-semibold">
             <MessageCircle className="mr-1.5 h-3.5 w-3.5" /> Message
@@ -153,22 +154,22 @@ export function ClientMobileCard(props: ClientCardProps) {
           <DropdownMenuContent align="end" className="w-56">
             <DropdownMenuLabel>Manage</DropdownMenuLabel>
             <DropdownMenuItem asChild>
-              <Link to="/admin/clients/$id" params={{ id: c.id }} search={{ tab: "training" }}>
+              <ClientNameLink clientId={c.id} tab="training" >
                 <Dumbbell className="mr-2 h-4 w-4" /> Add Training Phase
-              </Link>
+              </ClientNameLink>
             </DropdownMenuItem>
             <DropdownMenuItem onSelect={onAssign}>
               <Library className="mr-2 h-4 w-4" /> Assign from Library
             </DropdownMenuItem>
             <DropdownMenuItem asChild>
-              <Link to="/admin/clients/$id" params={{ id: c.id }} search={{ tab: "nutrition" }}>
+              <ClientNameLink clientId={c.id} tab="nutrition" >
                 <Apple className="mr-2 h-4 w-4" /> Add Nutrition Targets
-              </Link>
+              </ClientNameLink>
             </DropdownMenuItem>
             <DropdownMenuItem asChild>
-              <Link to="/admin/clients/$id" params={{ id: c.id }} search={{ tab: "cardio" }}>
+              <ClientNameLink clientId={c.id} tab="nutrition" >
                 <HeartPulse className="mr-2 h-4 w-4" /> Add Cardio Targets
-              </Link>
+              </ClientNameLink>
             </DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuItem onSelect={onSell}>

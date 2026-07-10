@@ -1,5 +1,6 @@
 import { Link } from "@tanstack/react-router";
 import { ChevronRight, ExternalLink, MessageSquare, User as UserIcon, LibraryBig } from "lucide-react";
+import { ClientNameLink } from "@/components/clients/client-name-link";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
@@ -54,14 +55,12 @@ export function ClientBuilderIdentityHeader(props: {
         <Link to="/admin/clients" className="hover:text-foreground">Clients</Link>
         <ChevronRight className="h-3 w-3 opacity-50" />
         {hasClient ? (
-          <Link
-            to="/admin/clients/$id"
-            params={{ id: clientId as string }}
+          <ClientNameLink clientId={clientId as string}
             className="max-w-[28ch] truncate hover:text-foreground"
             title={clientName}
           >
             {clientName}
-          </Link>
+          </ClientNameLink>
         ) : (
           <span className="max-w-[28ch] truncate text-foreground" title={clientName}>{clientName}</span>
         )}
@@ -108,21 +107,16 @@ export function ClientBuilderIdentityHeader(props: {
         <div className="ml-auto flex shrink-0 flex-wrap items-center gap-1">
           {hasClient ? (
             <>
-              <Link
-                to="/admin/clients/$id"
-                params={{ id: clientId as string }}
+              <ClientNameLink clientId={clientId as string}
                 className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 text-[11px] text-muted-foreground hover:bg-muted hover:text-foreground"
               >
                 <ExternalLink className="h-3 w-3" /> View profile
-              </Link>
-              <Link
-                to="/admin/clients/$id"
-                params={{ id: clientId as string }}
-                search={{ tab: "messages" } as any}
+              </ClientNameLink>
+              <ClientNameLink clientId={clientId as string} tab="messages"
                 className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 text-[11px] text-muted-foreground hover:bg-muted hover:text-foreground"
               >
                 <MessageSquare className="h-3 w-3" /> Messages
-              </Link>
+              </ClientNameLink>
             </>
           ) : null}
         </div>
@@ -164,9 +158,7 @@ export function ClientBuilderStickyChip(props: {
     );
   }
   return (
-    <Link
-      to="/admin/clients/$id"
-      params={{ id: clientId as string }}
+    <ClientNameLink clientId={clientId as string}
       className="inline-flex min-w-0 max-w-full items-center gap-1.5 rounded-md border border-primary/30 bg-primary/10 px-2 py-1 text-[11px] font-medium text-primary hover:bg-primary/15"
       title={`${clientName} · ${blockName}${currentWeek ? ` · Week ${currentWeek}` : ""}`}
     >
@@ -180,7 +172,7 @@ export function ClientBuilderStickyChip(props: {
           <span className="shrink-0 text-primary/80">W{currentWeek}</span>
         </>
       ) : null}
-    </Link>
+    </ClientNameLink>
   );
 }
 

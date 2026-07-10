@@ -15,6 +15,7 @@
  *   Red    = Overdue / missing
  */
 import { useState, useMemo } from "react";
+import { ClientNameLink } from "@/components/clients/client-name-link";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { supabase } from "@/integrations/supabase/client";
@@ -378,13 +379,11 @@ export function ComplianceDashboard() {
                   <div className="flex justify-center">
                     <ScoreBadge score={r.overall_score} />
                   </div>
-                  <Link
-                    to="/admin/clients/$id"
-                    params={{ id: r.id }}
+                  <ClientNameLink clientId={r.id}
                     className="flex h-7 w-7 items-center justify-center rounded-md hover:bg-secondary/40"
                   >
                     <ChevronRight className="h-4 w-4 text-muted-foreground" />
-                  </Link>
+                  </ClientNameLink>
                 </li>
               );
             })}

@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { Link, useNavigate, useSearch } from "@tanstack/react-router";
+import { ClientNameLink } from "@/components/clients/client-name-link";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { listUpcomingUnified, type UnifiedRow } from "@/lib/calendar-upcoming.functions";
@@ -355,9 +356,9 @@ function UpcomingRow({ row, onChanged }: { row: UnifiedRow; onChanged: () => voi
             </Link>
           )}
           {row.client_id && row.client_is_active && (
-            <Link to="/admin/clients/$id" params={{ id: row.client_id }}>
+            <ClientNameLink clientId={row.client_id}>
               <Button size="sm" variant="outline" className="h-7 text-xs">Client</Button>
-            </Link>
+            </ClientNameLink>
           )}
           {row.meet_link && (
             <a href={row.meet_link} target="_blank" rel="noreferrer">

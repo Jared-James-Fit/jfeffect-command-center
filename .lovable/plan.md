@@ -1,87 +1,90 @@
-## Goal
+# Client Profile Overlay Workspace
 
-Replace the accordion-heavy admin sidebar with a compact, one-click launcher. Every top-level item opens its primary route in one click; secondary pages appear in a desktop hover flyout or a mobile submenu panel. No route deletions this pass — only nav restructuring plus redirects for a small set of confirmed duplicates. Membership sidebar keeps its route list but adopts the same visual/behavioural system.
+Open the existing admin client profile in a large overlay on top of whatever page the admin was on (Clients list, Payments, Check-Ins, etc.), while keeping the underlying route mounted with all filters, sort, pagination, tab, selection, and scroll intact. The standalone `/admin/clients/$id` URL keeps working for direct links / refresh / share.
 
-## New admin sidebar structure
+## Architecture — route-driven overlay via a search param
 
-Source of truth: `src/lib/admin-nav.ts` (`adminNav` and `coachingAdminNav`). Each entry maps to an existing route; `children` populate the flyout.
+TanStack Router doesn't have a first-class "background location" like React Router, but the same UX is achievable with a global search param on the `_authenticated` layout.
 
-**OVERVIEW**
-- Dashboard → `/admin`
-- Tasks → `/admin/tasks`
-- Support Alerts → `/admin/support-alerts`
+- Add `?clientId=<uuid>` (and optional `clientTab=summary|coaching|...`) to the `_authenticated` layout's `validateSearch`. When present, the layout renders `<ClientProfileOverlay clientId=... />` above `<Outlet />` without touching the underlying route.
+- Opening a client sets the search param via `navigate({ search: prev => ({ ...prev, clientId, clientTab }) })` from the current `from`. The underlying route stays matched — its loader is not re-run, its component is not unmounted, so filters/scroll/selection are all preserved.
+- Closing the overlay clears the param the same way. Browser Back naturally clears it (history entry pop) → overlay closes and admin lands on the exact scroll/state they had. Forward reopens it.
+- Direct visits to `/admin/clients/$id` keep loading the full-page profile route as today — no deep links break.
 
-**MAIN MENU**
-- Messages → `/admin/messages` — flyout: Inbox (`/admin/messages`), Broadcasts (`/admin/broadcasts`), Popups (`/admin/popups`), Call Access (`/admin/call-access`)
-- Clients → `/admin/clients` — flyout: All Clients, Check-In Reviews, Lift Reviews, Media Review Inbox, Action Requests, Check-Ins & Forms, Agreements, Native Agreements
-- Payments → `/admin/payments` — flyout: Transactions (`/admin/payments`), Products (`/admin/payment-links`), Promo Codes, Purchases, Billing Sources & Legacy, Legacy Migration Board
-- Programs → `/admin/program-library` — flyout: Program Library, Exercise Library, Cardio Targets, Warm-Up Protocols, Recipe Library, Nutrition Dashboard, Resources, Member Programs (`/admin/member-plans`), Member Resources
-- Scheduling → `/admin/calendar` — flyout: Calendar, Events, Appointments, PT Calendar (`/admin/pt-calendar`), Booking Links, Google Calendar
-- Business → `/admin/crm` — flyout: CRM Dashboard, CRM Contacts, Coaching Applications, Coaching Sales Page, Membership Sales Page (admin only), Training Intelligence
-- Team → `/admin/coaches` — flyout: Coaches, Staff & Media Managers, Approvals Queue, Program Submissions, Media Archives, Archive Manager
+Why this over a modal without URL state: it satisfies Back/Forward, shareable "focused" URLs (`?clientId=...` on any list), and lets `useBlocker` intercept unsaved-changes closes.
 
-**OTHER**
-- Add-ons → `/admin/apps` — flyout: Integrations, Operations, FAQ Manager, Fillout Submissions, Chat GIF Library, Chat Sound Library, Content Ideas, Testimonials, Feature Flags, SOPs, Training Phases, Legal, Onboarding, Coaching, Content, Communication, Programming, Native Forms, Automations, Discount Codes, Popups (dup), Client POV, Nutrition Targets, Offers, Products History
-- Settings → `/admin/settings` — flyout: General (`/admin/settings`), SMS (`/admin/settings/sms`), Chat (`/admin/settings/chat`), Nutrition Automation, Coaching-Application Alerts, Floating Bar Customizer, Account
-- App Members (admin only, when NOT in membership mode) → `/admin/members` — flyout: App Members, Membership Home (`/admin/membership`) — kept as a fast switch into the Membership shell
+## Reuse strategy — no duplicate profile
 
-Coach role gets the same layout with Business/Team/Payments/Add-ons hidden.
+Today `src/routes/_authenticated/admin/clients.$id.tsx` is a 2148-line route that owns the loader + UI. Extract the page body into a plain, route-free component so both the standalone route and the overlay render the same thing.
 
-## Desktop flyouts
+- New: `src/components/clients/profile/client-profile-workspace.tsx` — takes `{ clientId, mode: "page" | "overlay", initialTab? }`, contains everything currently rendered by `clients.$id.tsx` (summary, tabs, forms, POV actions, coaching setup, notes, etc.).
+- `src/routes/_authenticated/admin/clients.$id.tsx` becomes a thin route wrapper: `<ClientProfileWorkspace clientId={id} mode="page" />`. All queries, mutations, permission checks, and POV impersonation flow stay in the same components — one source of truth.
+- The overlay renders the same `<ClientProfileWorkspace clientId={clientId} mode="overlay" initialTab={clientTab} />` inside a dialog shell. `mode` only toggles chrome (hide the page's own PageHeader/back-link, show the overlay's fixed header with close button).
 
-Extend `AppShell` (`src/components/app-shell.tsx`) so any nav item with `children` renders:
-- The primary label is a normal `<Link>` — clicking it navigates to `item.to` (no flyout-only parents).
-- On hover/focus, a Radix `Popover` opens to the right of the sidebar with the child links.
-- ~120ms open delay, ~200ms close delay to prevent flicker; pointer-into-flyout keeps it open (bridge via `onMouseEnter` on trigger + content).
-- Chevron shown only when `children` exists.
-- Escape / outside-click closes. Full keyboard support via Radix defaults.
-- Active state on parent when any child route matches.
+Data-loading: React Query cache keys stay identical, so opening the overlay right after visiting the standalone page (or vice versa) is instant. First-open shows the workspace's existing skeleton. Heavy tabs are already lazy inside the current profile; no change.
 
-## Mobile / drawer
+## Overlay shell
 
-In the existing mobile sheet, tapping a parent navigates. A small chevron on the right opens a second panel that replaces the current list (with a back arrow), instead of the accordion expand. Reuse the existing sheet — add local `openGroup` state.
+New: `src/components/clients/profile/client-profile-overlay.tsx`
 
-## Safe consolidation & redirects
+- Desktop (`md+`): shadcn `Dialog` with custom `DialogContent` sized `w-[90vw] max-w-[1400px] h-[92vh]`, rounded top, dark backdrop, fixed header (photo, name, status, assigned coach, quick actions: Open POV / Message / More menu / Close), internal scroll body.
+- Mobile/small tablet (`< md`): full-screen `Sheet` from bottom, `h-[100dvh]` with `pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)]`, sticky header with back-arrow close, horizontally scrollable tab bar, body scroll only.
+- `useBlocker({ shouldBlockFn: () => hasUnsavedProfileEdit, withResolver: true })` gates Escape / backdrop / close-button / route-change / browser-back. A shared "isDirty" signal is exposed by the workspace via a small context (`ClientProfileDirtyContext`) that existing edit forms already flip.
+- Focus trap + restore: `Dialog`/`Sheet` handle it. We store the triggering element ref in the layout and refocus after close.
+- Accessibility: `DialogTitle` = client name, `aria-describedby` = status line, close button `aria-label="Close client workspace"`, ESC closes, focus visible.
 
-Add `beforeLoad: () => redirect(...)` on these routes (all currently accessible URLs preserved, no data changes):
-- `/admin/programming` → `/admin/program-library` (already a dispatcher-style page; low use)
-- `/admin/programs` → `/admin/program-library`
-- `/admin/coaching` → `/admin/clients`
-- `/admin/communication` → `/admin/messages` (preserving `?tab=support-inbox`)
-- `/admin/content` → `/admin/broadcasts`
+## Call-site changes — click-a-name opens overlay
 
-Everything else stays reachable at its current URL. No table, function, or permission change.
+New helper hook: `useOpenClientProfile()` in `src/lib/open-client-profile.ts` returns `(clientId, opts?: { tab?, event? }) => void`. It calls `navigate({ to: '.', search: prev => ({ ...prev, clientId, clientTab: opts?.tab }), replace: false })` from the current location and, when the caller passes a `MouseEvent`, honors modifier keys (⌘/Ctrl/middle-click) by falling through to a normal `<Link to="/admin/clients/$id">` for new-tab opens.
 
-## Membership sidebar
+Also new: `<ClientNameLink clientId name />` — renders an `<a>` that goes to `/admin/clients/$id` (so ⌘-click / right-click "Open in new tab" work) but intercepts plain left-clicks to open the overlay. Replaces raw `<Link to="/_authenticated/admin/clients/$id">` in every current call site:
 
-Keep `membershipNav` route list intact. Apply the same shell behaviours (flyouts, mobile panel, active state) since they're driven by `AppShell` + `children`. Add one Overview-group entry pointing back to `/admin` labelled "Exit to Coaching" so the switch is obvious. No route moves inside membership.
+- Clients list rows: `client-row.tsx`, `clients-mobile-card.tsx`, `clients/quick-actions.tsx` (Open Client button), `clients/compliance-dashboard.tsx`, `clients/add-client-dialog.tsx`
+- Payments/Transactions: `payments/transaction-detail-drawer.tsx`, `admin/transactions.tsx`, `admin/payments.tsx`, `admin/purchases.$id.tsx`, `purchase-agreement-status.tsx`
+- Check-Ins / Progress / Reviews: `progress/progress-summary-card.tsx`, `progress/progress-review-queue.tsx`, `admin/check-in-reviews.tsx`, `admin/check-ins.tsx`
+- Scheduling / Calendar: `admin-calendar/upcoming-panel.tsx`, `admin-calendar/pt-calendar-panel.tsx`, `lib/calendar-sources.ts`, `admin/calendar.tsx`, `admin/appointments.tsx`
+- Messages / Support: `admin/messages.tsx`, `admin/support-alerts.tsx`, `notification-bell.tsx`
+- Forms / Agreements / Lift videos: `admin/fillout-submissions.tsx`, `admin/agreements.index.tsx`, `admin/agreements.signed.tsx`, `sent-agreements-manager.tsx`, `admin/lift-videos.tsx`
+- Search / Dashboard widgets: `lib/global-search.functions.ts` result rendering, `upcoming-birthdays-widget.tsx`, `intel-actions.tsx`, dashboard cards on `admin/index.tsx`
+- Deliberate full-page nav preserved: sub-routes `/admin/clients/$id/schedule`, `/admin/clients/$id/progress`, `/admin/client-programs/$clientId` — those keep normal `<Link>` navigation.
 
-## Global search
+## Permission & security
 
-Keep the existing `CommandPalette` (⌘K) and the sidebar's compact search input that opens it. No new backend. Nothing added if the palette weren't already wired — it is.
+- The overlay renders inside `_authenticated/route.tsx` (already gated by auth). Server-side authorization is unchanged: profile data is fetched by the same `getAdminClientProfileAndGoalsFn` server function, which enforces admin-or-assigned-coach on the server. Unauthorized clients show the same "Forbidden" empty state the standalone route already shows — no data leak while loading (query starts in `pending`, renders skeleton, then error).
+- Client POV keeps using the existing impersonation flow from inside the workspace header.
 
-## Files changed
+## Mobile / tablet
 
-- `src/lib/admin-nav.ts` — rewrite `adminNav`, `coachingAdminNav`, `coachNav` with new groups + `children`.
-- `src/lib/internal-nav.ts` — align group ordering / mode filtering.
-- `src/components/app-shell.tsx` — add desktop hover-flyout Popover for items with `children`; add mobile submenu panel; keep pins, badges, palette, membership mode.
-- `src/routes/_authenticated/admin/programming.tsx`, `programs.tsx`, `coaching.tsx`, `communication.tsx`, `content.tsx` — convert to `beforeLoad` redirect stubs (originals become pure redirects; underlying pages they proxy remain reachable via their canonical route).
-- `src/lib/membership-nav.ts` — add "Exit to Coaching" entry.
+- `< md` (< 768px): full-screen `Sheet`. Underlying page keeps mounted but visually hidden.
+- `md`–`lg` (768–1024px): dialog at `w-[95vw] h-[95vh]`.
+- `lg+`: dialog at `w-[90vw] max-w-[1400px] h-[92vh]`.
 
-## Not in scope
+## Files
 
-- Cross-entity search backend.
-- Redesigning any destination page.
-- Deleting routes or tables.
-- Moving client/member sidebars.
+New:
+- `src/components/clients/profile/client-profile-overlay.tsx` — dialog/sheet shell.
+- `src/components/clients/profile/client-profile-workspace.tsx` — extracted body from `clients.$id.tsx`.
+- `src/components/clients/client-name-link.tsx` — smart link component.
+- `src/lib/open-client-profile.ts` — `useOpenClientProfile` hook + search param zod schema.
 
-## Risks & how they're mitigated
+Edited:
+- `src/routes/_authenticated/route.tsx` — add `validateSearch` for `clientId`/`clientTab`, mount `<ClientProfileOverlay />` after `<Outlet />`.
+- `src/routes/_authenticated/admin/clients.$id.tsx` — thin wrapper over `<ClientProfileWorkspace mode="page" />`.
+- ~30 call-site files listed above — swap raw `<Link>` for `<ClientNameLink>` / `useOpenClientProfile`.
 
-- **Accidental route hide**: everything not in the primary/flyout lists still resolves at its URL. Command palette still surfaces them.
-- **Flyout flicker**: bridged hover with delays; Radix Popover handles focus.
-- **Membership admins losing routes**: membership route list unchanged.
-- **Bookmarks**: only 5 routes redirect, all to their obvious successor; original URLs still respond (via redirect).
+Unchanged / preserved:
+- `/admin/clients/$id`, `/admin/clients/$id/schedule`, `/admin/clients/$id/progress`, `/admin/client-programs/$clientId` routes and their deep links.
+- All profile server functions, mutations, POV flow, permission checks, cache keys.
 
-## Final report will include
+## Verification
 
-Previous vs new structure, per-flyout link list, redirects added, pages parked in Add-ons, files changed, and any route I found that appears broken or unused (documented, not deleted).
+- Typecheck (`tsgo`).
+- Playwright smoke: open `/admin/clients`, click a client name → overlay appears, underlying list still visible; press Escape → back to list at same scroll; ⌘-click same name → new tab loads standalone profile; navigate to `/admin/payments`, click a client in a row → overlay opens without navigating away.
+- Manual check on mobile viewport (Playwright 390×844) — sheet fills screen, safe-area padded.
+
+## Out of scope for this pass
+
+- No schema, RLS, or data changes.
+- No new tabs — reuse existing sections.
+- No changes to the standalone sub-routes (`schedule`, `progress`, `client-programs`).
+- Cross-entity global search unchanged.
