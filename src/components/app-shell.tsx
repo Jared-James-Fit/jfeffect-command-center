@@ -1191,6 +1191,101 @@ function SidebarBadge({ badge, isCollapsed }: { badge?: { count?: number; dot?: 
   return null;
 }
 
+/**
+ * Desktop hover flyout for a sidebar row that has `children`. Clicking the
+ * primary label navigates immediately (the caller passes the fully rendered
+ * `<Link>` as `trigger`). Hover / focus opens a Radix Popover to the right
+ * of the sidebar with the child links. A short bridged delay prevents
+ * flicker when the cursor moves from the row into the flyout.
+ */
+function SidebarFlyoutRow({
+  item, pathname, navBadges, isCollapsed, trigger,
+}: {
+  item: NavItem;
+  pathname: string;
+  navBadges: Record<string, { count?: number; dot?: boolean }>;
+  isCollapsed: boolean;
+  trigger: ReactNode;
+}) {
+  const [open, setOpen] = useState(false);
+  const openTimer = useRef<number | null>(null);
+  const closeTimer = useRef<number | null>(null);
+  const clearTimers = () => {
+    if (openTimer.current) { clearTimeout(openTimer.current); openTimer.current = null; }
+    if (closeTimer.current) { clearTimeout(closeTimer.current); closeTimer.current = null; }
+  };
+  const scheduleOpen = () => {
+    clearTimers();
+    openTimer.current = window.setTimeout(() => setOpen(true), 90);
+  };
+  const scheduleClose = () => {
+    clearTimers();
+    closeTimer.current = window.setTimeout(() => setOpen(false), 180);
+  };
+  useEffect(() => () => clearTimers(), []);
+  // Close whenever the pathname changes so navigating from within the
+  // flyout dismisses it immediately.
+  useEffect(() => { setOpen(false); }, [pathname]);
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <div
+          onMouseEnter={scheduleOpen}
+          onMouseLeave={scheduleClose}
+          onFocusCapture={() => setOpen(true)}
+          className="relative"
+        >
+          {isCollapsed ? (
+            <Tooltip>
+              <TooltipTrigger asChild>{trigger as any}</TooltipTrigger>
+              <TooltipContent side="right">{item.label}</TooltipContent>
+            </Tooltip>
+          ) : trigger}
+        </div>
+      </PopoverTrigger>
+      <PopoverContent
+        side="right"
+        align="start"
+        sideOffset={6}
+        className="w-60 p-1.5"
+        onOpenAutoFocus={(e) => e.preventDefault()}
+        onMouseEnter={() => { clearTimers(); setOpen(true); }}
+        onMouseLeave={scheduleClose}
+      >
+        <div className="px-2 py-1 text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+          {item.label}
+        </div>
+        <ul className="flex flex-col gap-0.5">
+          {(item.children ?? []).map((c) => {
+            const CIcon = c.icon;
+            const active = pathname === c.to || pathname.startsWith(c.to + "/");
+            const cb = navBadges[c.to];
+            return (
+              <li key={c.to}>
+                <Link
+                  to={c.to}
+                  onClick={() => setOpen(false)}
+                  className={cn(
+                    "flex items-center gap-2.5 rounded-md px-2.5 py-2 text-sm transition-colors",
+                    active
+                      ? "bg-primary/15 text-primary font-semibold"
+                      : "text-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
+                  )}
+                >
+                  <CIcon className="h-4 w-4 shrink-0" />
+                  <span className="truncate flex-1">{c.label}</span>
+                  <SidebarBadge badge={cb} isCollapsed={false} />
+                </Link>
+              </li>
+            );
+          })}
+        </ul>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
 function BottomNavBadge({ badge }: { badge?: { count?: number; dot?: boolean } }) {
   if (!badge) return null;
   if (badge.count != null && badge.count > 0) {
