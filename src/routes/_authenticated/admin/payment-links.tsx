@@ -730,6 +730,18 @@ export function PaymentLinksPage({ embedded = false }: { embedded?: boolean } = 
         onSaved={() => { qc.invalidateQueries({ queryKey: ["coaching-products"] }); setEditing({ open: false, product: null }); }}
       />
 
+      {newProductOpen && (
+        <Suspense fallback={null}>
+          <NewProductModal
+            open={newProductOpen}
+            defaultWorkspace="coaching"
+            agreementTemplates={agreementTemplates as any[]}
+            onClose={() => setNewProductOpen(false)}
+            onCreated={() => qc.invalidateQueries({ queryKey: ["coaching-products"] })}
+          />
+        </Suspense>
+      )}
+
       <AssignOfferDialog offer={assigning} onClose={() => setAssigning(null)} />
 
       <ProductAccessGrantDialog
