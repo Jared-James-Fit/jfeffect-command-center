@@ -158,11 +158,27 @@ function useIsTablet() {
   const [isTablet, setIsTablet] = useState(false);
   useEffect(() => {
     if (typeof window === "undefined" || !window.matchMedia) return;
-    const mq = window.matchMedia("(min-width: 768px) and (max-width: 1279px)");
-    const sync = () => setIsTablet(mq.matches);
+    // Treat any coarse-pointer device ≥768px as tablet, regardless of width.
+    // A 13" iPad in landscape is 1180+ CSS px but still touch-only, and
+    // must NOT get desktop hover flyouts. Fine-pointer + ≥1280 = desktop.
+    const mqTabletWidth = window.matchMedia(
+      "(min-width: 768px) and (max-width: 1279px)",
+    );
+    const mqCoarse = window.matchMedia("(pointer: coarse)");
+    const mqMobile = window.matchMedia("(max-width: 767px)");
+    const sync = () =>
+      setIsTablet(
+        !mqMobile.matches && (mqTabletWidth.matches || mqCoarse.matches),
+      );
     sync();
-    mq.addEventListener?.("change", sync);
-    return () => mq.removeEventListener?.("change", sync);
+    mqTabletWidth.addEventListener?.("change", sync);
+    mqCoarse.addEventListener?.("change", sync);
+    mqMobile.addEventListener?.("change", sync);
+    return () => {
+      mqTabletWidth.removeEventListener?.("change", sync);
+      mqCoarse.removeEventListener?.("change", sync);
+      mqMobile.removeEventListener?.("change", sync);
+    };
   }, []);
   return isTablet;
 }
@@ -766,7 +782,14 @@ export function AppShell({ items, bottomItems: customBottomItems, title, childre
                         );
                         return (
                           <li key={item.to}>
-                              {item.children && !isTablet ? (
+                              {item.children && isTablet ? (
+                                <TabletFlyoutRow
+                                  item={item}
+                                  pathname={pathname}
+                                  navBadges={navBadges}
+                                  trigger={link}
+                                />
+                              ) : item.children && !isTablet ? (
                                 <SidebarFlyoutRow
                                   item={item}
                                   pathname={pathname}
@@ -896,130 +919,21 @@ export function AppShell({ items, bottomItems: customBottomItems, title, childre
       </div>
 
       {/* Mobile "More" sheet — full grouped menu + search */}
-      <Sheet open={moreOpen} onOpenChange={setMoreOpen}>
-        <SheetContent side="bottom" className="h-[88vh] overflow-hidden p-0 md:hidden">
-          <SheetHeader className="border-b border-border px-4 py-3">
-            <SheetTitle className="text-left text-sm font-black tracking-tight">All sections</SheetTitle>
-          </SheetHeader>
-          <div className="border-b border-border px-3 py-2">
-            <div className="relative">
-              <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                value={moreQuery}
-                onChange={(e) => setMoreQuery(e.target.value)}
-                placeholder="Search pages…"
-                className="h-9 pl-8"
-              />
-            </div>
-          </div>
-          <div
-            className="h-[calc(88vh-7.5rem)] overflow-y-auto px-2 py-2"
-            style={{ paddingBottom: "calc(env(safe-area-inset-bottom) + 1.5rem)" }}
-          >
-            {moreFiltered ? (
-              <ul className="space-y-1">
-                {moreFiltered.length === 0 && (
-                  <li className="px-3 py-6 text-center text-sm text-muted-foreground">No matches.</li>
-                )}
-                {moreFiltered.map(({ item, group }) => {
-                  const Icon = item.icon;
-                  return (
-                    <li key={item.to}>
-                      <Link
-                        to={item.to}
-                        onClick={() => { setMoreOpen(false); setMoreQuery(""); }}
-                        className="flex min-h-[52px] items-center gap-3 rounded-md px-3 py-3.5 text-base hover:bg-sidebar-accent"
-                      >
-                        <Icon className="h-5 w-5 shrink-0 text-muted-foreground" />
-                        <div className="min-w-0 flex-1">
-                          <div className="truncate font-semibold">{item.label}</div>
-                          {group && <div className="truncate text-[12px] text-muted-foreground">{group}</div>}
-                        </div>
-                      </Link>
-                    </li>
-                  );
-                })}
-              </ul>
-            ) : (
-              <div className="space-y-1.5">
-                {grouped.map((group) => {
-                  const label = group.label ?? "All sections";
-                  const isOpen = moreOpenGroup === label;
-                  return (
-                    <div key={label} className="rounded-md border border-border/60">
-                      <button
-                        type="button"
-                        onClick={() => setMoreOpenGroup(isOpen ? null : label)}
-                        className="flex w-full items-center justify-between px-3 py-2.5 text-[11px] font-bold uppercase tracking-wider text-muted-foreground"
-                      >
-                        <span>{label}</span>
-                        <ChevronDown className={cn("h-4 w-4 transition-transform", !isOpen && "-rotate-90")} />
-                      </button>
-                      {isOpen && (
-                        <ul className="border-t border-border/60 p-1">
-                          {group.items.map((item) => {
-                            const Icon = item.icon;
-                            const active = item.to === activeTo;
-                            return (
-                              <li key={item.to}>
-                                <Link
-                                  to={item.to}
-                                  onClick={() => setMoreOpen(false)}
-                                  className={cn(
-                                    "flex min-h-[52px] items-center gap-3 rounded-md px-3 py-3.5 text-base font-medium",
-                                    active
-                                      ? "bg-primary/15 font-semibold text-primary"
-                                      : "hover:bg-sidebar-accent",
-                                  )}
-                                >
-                                  <Icon className="h-5 w-5 shrink-0" />
-                                  <span className="truncate">{item.label}</span>
-                                </Link>
-                                {item.children && item.children.length > 0 && (
-                                  <ul className="ml-9 mt-0.5 space-y-0.5 border-l border-border/50 pl-2">
-                                    {item.children.map((c, idx) => {
-                                      const CIcon = c.icon;
-                                      const cactive = pathname === c.to || pathname.startsWith(c.to + "/");
-                                      const prev = idx > 0 ? item.children![idx - 1] : undefined;
-                                      const showSectionHeader = c.section && (!prev || prev.section !== c.section);
-                                      return (
-                                        <li key={c.to}>
-                                          {showSectionHeader && (
-                                            <div className="mt-1.5 pt-1.5 px-3 border-t border-border/50 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/80">
-                                              {c.section}
-                                            </div>
-                                          )}
-                                          <Link
-                                            to={c.to}
-                                            onClick={() => setMoreOpen(false)}
-                                            className={cn(
-                                              "flex min-h-[44px] items-center gap-2.5 rounded-md px-3 py-2 text-sm",
-                                              cactive
-                                                ? "bg-primary/10 font-semibold text-primary"
-                                                : "text-foreground/90 hover:bg-sidebar-accent",
-                                            )}
-                                          >
-                                            <CIcon className="h-4 w-4 shrink-0 text-muted-foreground" />
-                                            <span className="truncate">{c.label}</span>
-                                          </Link>
-                                        </li>
-                                      );
-                                    })}
-                                  </ul>
-                                )}
-                              </li>
-                            );
-                          })}
-                        </ul>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-        </SheetContent>
-      </Sheet>
+      <MobileNavDrawer
+        open={moreOpen}
+        onOpenChange={(o) => {
+          setMoreOpen(o);
+          if (!o) { setMoreQuery(""); }
+        }}
+        title={title}
+        grouped={grouped}
+        activeTo={activeTo}
+        pathname={pathname}
+        navBadges={navBadges}
+        query={moreQuery}
+        setQuery={setMoreQuery}
+        filteredResults={moreFiltered}
+      />
 
       {/* Global Command Palette — ⌘K / Ctrl+K (mobile: full-screen sheet) */}
       <CommandPalette
@@ -1394,6 +1308,100 @@ function SidebarFlyoutRow({
   );
 }
 
+/**
+ * Tap-triggered flyout for the tablet sidebar. The label link still
+ * navigates on tap; a dedicated chevron button opens the child popover.
+ * Two separate tap targets, each ≥44px, no hover requirement.
+ */
+function TabletFlyoutRow({
+  item, pathname, navBadges, trigger,
+}: {
+  item: NavItem;
+  pathname: string;
+  navBadges: Record<string, { count?: number; dot?: boolean }>;
+  trigger: ReactNode;
+}) {
+  const [open, setOpen] = useState(false);
+  useEffect(() => { setOpen(false); }, [pathname]);
+  const kids = item.children ?? [];
+  const primary = kids.filter((c) => !c.section);
+  const sections: { label: string; items: NavItem[] }[] = [];
+  for (const c of kids) {
+    if (!c.section) continue;
+    const existing = sections.find((s) => s.label === c.section);
+    if (existing) existing.items.push(c);
+    else sections.push({ label: c.section, items: [c] });
+  }
+  const renderRow = (c: NavItem) => {
+    const CIcon = c.icon;
+    const active = pathname === c.to || pathname.startsWith(c.to + "/");
+    const cb = navBadges[c.to];
+    return (
+      <li key={c.to}>
+        <Link
+          to={c.to}
+          onClick={() => setOpen(false)}
+          className={cn(
+            "flex min-h-[44px] items-center gap-2.5 rounded-md px-3 py-2.5 text-sm transition-colors",
+            active
+              ? "bg-primary/15 text-primary font-semibold"
+              : "text-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground active:bg-sidebar-accent/70",
+          )}
+        >
+          <CIcon className="h-4 w-4 shrink-0" />
+          <span className="truncate flex-1">{c.label}</span>
+          <SidebarBadge badge={cb} isCollapsed={false} />
+        </Link>
+      </li>
+    );
+  };
+  return (
+    <div className="relative">
+      {trigger}
+      <Popover open={open} onOpenChange={setOpen}>
+        <PopoverTrigger asChild>
+          <button
+            type="button"
+            aria-label={`Open ${item.label} submenu`}
+            aria-expanded={open}
+            onClick={(e) => { e.preventDefault(); e.stopPropagation(); setOpen((o) => !o); }}
+            className={cn(
+              "absolute right-1 top-1/2 -translate-y-1/2 grid h-8 w-8 place-items-center rounded-md text-muted-foreground",
+              "hover:bg-sidebar-accent hover:text-foreground active:bg-sidebar-accent/70",
+              open && "bg-sidebar-accent text-foreground",
+            )}
+            style={{ WebkitTapHighlightColor: "transparent" }}
+          >
+            <ChevronRight className={cn("h-4 w-4 transition-transform", open && "rotate-90")} />
+          </button>
+        </PopoverTrigger>
+        <PopoverContent
+          side="right"
+          align="start"
+          sideOffset={8}
+          collisionPadding={12}
+          avoidCollisions
+          className="w-72 max-h-[calc(100vh-24px)] overflow-y-auto p-2"
+          onOpenAutoFocus={(e) => e.preventDefault()}
+        >
+          <div className="px-2 pb-1.5 text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+            {item.label}
+          </div>
+          <ul className="flex flex-col gap-0.5">{primary.map(renderRow)}</ul>
+          {sections.map((s) => (
+            <div key={s.label} className="mt-1.5 border-t border-border/60 pt-1.5">
+              <div className="px-2 pb-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/80">
+                {s.label}
+              </div>
+              <ul className="flex flex-col gap-0.5">{s.items.map(renderRow)}</ul>
+            </div>
+          ))}
+        </PopoverContent>
+      </Popover>
+    </div>
+  );
+}
+
 function BottomNavBadge({ badge }: { badge?: { count?: number; dot?: boolean } }) {
   if (!badge) return null;
   if (badge.count != null && badge.count > 0) {
@@ -1717,6 +1725,266 @@ export function PageHeader({
         {actions}
         <NotificationBell />
       </div>
+    </div>
+  );
+}
+
+/**
+ * Mobile full-screen navigation drawer.
+ *
+ * Two views:
+ *  - Root: real destinations shown immediately, grouped by section label, with
+ *    a right-side chevron ONLY on categories that have secondary pages.
+ *  - Submenu: replaces the root when a chevron is tapped; shows a `< Back`
+ *    row plus the parent's children as a flat list (respecting `child.section`
+ *    dividers). No accordions, no nested indentation.
+ *
+ * Search always renders a flat result list and short-circuits both views.
+ */
+function MobileNavDrawer({
+  open, onOpenChange, title, grouped, activeTo, pathname, navBadges,
+  query, setQuery, filteredResults,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  title: string;
+  grouped: { label: string | undefined; items: NavItem[] }[];
+  activeTo: string | null;
+  pathname: string;
+  navBadges: Record<string, { count?: number; dot?: boolean }>;
+  query: string;
+  setQuery: (q: string) => void;
+  filteredResults: { item: NavItem; group: string }[] | null;
+}) {
+  const [submenu, setSubmenu] = useState<NavItem | null>(null);
+  // Reset submenu when the drawer closes so reopening always lands on root.
+  useEffect(() => {
+    if (!open) setSubmenu(null);
+  }, [open]);
+
+  const close = () => onOpenChange(false);
+
+  return (
+    <Sheet open={open} onOpenChange={onOpenChange}>
+      <SheetContent
+        side="bottom"
+        className="h-[100dvh] max-h-[100dvh] w-full overflow-hidden p-0 md:hidden"
+      >
+        <SheetHeader
+          className="border-b border-border px-4 pb-3"
+          style={{ paddingTop: "calc(env(safe-area-inset-top) + 0.75rem)" }}
+        >
+          <div className="flex items-center gap-2">
+            {submenu ? (
+              <button
+                type="button"
+                onClick={() => setSubmenu(null)}
+                className="grid h-11 w-11 -ml-2 place-items-center rounded-md text-foreground hover:bg-sidebar-accent active:bg-sidebar-accent/70"
+                aria-label="Back"
+              >
+                <ArrowLeft className="h-5 w-5" />
+              </button>
+            ) : (
+              <img src="/logo.png" alt="" className="h-8 w-8 shrink-0 rounded-md object-cover" />
+            )}
+            <SheetTitle className="flex-1 truncate text-left text-base font-black tracking-tight">
+              {submenu ? submenu.label : title}
+            </SheetTitle>
+          </div>
+        </SheetHeader>
+
+        {!submenu && (
+          <div className="border-b border-border px-3 py-2">
+            <div className="relative">
+              <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Search pages…"
+                className="h-10 pl-8"
+              />
+            </div>
+          </div>
+        )}
+
+        <div
+          className="flex-1 overflow-y-auto px-2 py-2"
+          style={{
+            height: submenu
+              ? "calc(100dvh - env(safe-area-inset-top) - 4rem)"
+              : "calc(100dvh - env(safe-area-inset-top) - 8rem)",
+            paddingBottom: "calc(env(safe-area-inset-bottom) + 1.5rem)",
+          }}
+        >
+          {submenu ? (
+            <MobileSubmenu
+              parent={submenu}
+              pathname={pathname}
+              onNavigate={close}
+            />
+          ) : filteredResults ? (
+            <ul className="space-y-0.5">
+              {filteredResults.length === 0 && (
+                <li className="px-3 py-6 text-center text-sm text-muted-foreground">No matches.</li>
+              )}
+              {filteredResults.map(({ item, group }) => {
+                const Icon = item.icon;
+                return (
+                  <li key={`${group}:${item.to}:${item.label}`}>
+                    <Link
+                      to={item.to}
+                      onClick={() => { setQuery(""); close(); }}
+                      className="flex min-h-[52px] items-center gap-3 rounded-md px-3 py-3 text-base hover:bg-sidebar-accent active:bg-sidebar-accent/70"
+                    >
+                      <Icon className="h-5 w-5 shrink-0 text-muted-foreground" />
+                      <div className="min-w-0 flex-1">
+                        <div className="truncate font-semibold">{item.label}</div>
+                        {group && (
+                          <div className="truncate text-[12px] text-muted-foreground">{group}</div>
+                        )}
+                      </div>
+                    </Link>
+                  </li>
+                );
+              })}
+            </ul>
+          ) : (
+            <MobileRoot
+              grouped={grouped}
+              activeTo={activeTo}
+              pathname={pathname}
+              navBadges={navBadges}
+              onOpenCategory={setSubmenu}
+              onNavigate={close}
+            />
+          )}
+        </div>
+      </SheetContent>
+    </Sheet>
+  );
+}
+
+function MobileRoot({
+  grouped, activeTo, pathname, navBadges, onOpenCategory, onNavigate,
+}: {
+  grouped: { label: string | undefined; items: NavItem[] }[];
+  activeTo: string | null;
+  pathname: string;
+  navBadges: Record<string, { count?: number; dot?: boolean }>;
+  onOpenCategory: (item: NavItem) => void;
+  onNavigate: () => void;
+}) {
+  return (
+    <div className="space-y-3">
+      {grouped.map((group) => (
+        <div key={group.label ?? "default"}>
+          {group.label && (
+            <div className="px-3 pb-1 pt-1 text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+              {group.label}
+            </div>
+          )}
+          <ul className="space-y-0.5">
+            {group.items.map((item) => {
+              const Icon = item.icon;
+              const active = item.to === activeTo;
+              const hasChildren = !!item.children && item.children.length > 0;
+              const b = navBadgeFor(item, navBadges);
+              return (
+                <li key={item.to} className="relative flex items-stretch">
+                  <Link
+                    to={item.to}
+                    onClick={onNavigate}
+                    className={cn(
+                      "flex min-h-[52px] flex-1 items-center gap-3 rounded-md px-3 py-3 text-base font-medium transition-colors",
+                      hasChildren && "pr-14",
+                      active
+                        ? "bg-primary/15 text-primary font-semibold"
+                        : "text-foreground hover:bg-sidebar-accent active:bg-sidebar-accent/70",
+                    )}
+                  >
+                    <div className="relative">
+                      <Icon className="h-5 w-5 shrink-0" />
+                      <SidebarBadge badge={b} isCollapsed={true} />
+                    </div>
+                    <span className="truncate flex-1">{item.label}</span>
+                    {!hasChildren && <SidebarBadge badge={b} isCollapsed={false} />}
+                  </Link>
+                  {hasChildren && (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        onOpenCategory(item);
+                      }}
+                      aria-label={`Open ${item.label} submenu`}
+                      className="absolute right-1 top-1/2 grid h-11 w-11 -translate-y-1/2 place-items-center rounded-md text-muted-foreground hover:bg-sidebar-accent hover:text-foreground active:bg-sidebar-accent/70"
+                      style={{ WebkitTapHighlightColor: "transparent" }}
+                    >
+                      <ChevronRight className="h-5 w-5" />
+                    </button>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function MobileSubmenu({
+  parent, pathname, onNavigate,
+}: {
+  parent: NavItem;
+  pathname: string;
+  onNavigate: () => void;
+}) {
+  const kids = parent.children ?? [];
+  const primary = kids.filter((c) => !c.section);
+  const sections: { label: string; items: NavItem[] }[] = [];
+  for (const c of kids) {
+    if (!c.section) continue;
+    const existing = sections.find((s) => s.label === c.section);
+    if (existing) existing.items.push(c);
+    else sections.push({ label: c.section, items: [c] });
+  }
+  const renderRow = (c: NavItem) => {
+    const CIcon = c.icon;
+    const active = pathname === c.to || pathname.startsWith(c.to + "/");
+    return (
+      <li key={c.to}>
+        <Link
+          to={c.to}
+          onClick={onNavigate}
+          className={cn(
+            "flex min-h-[52px] items-center gap-3 rounded-md px-3 py-3 text-base font-medium transition-colors",
+            active
+              ? "bg-primary/15 text-primary font-semibold"
+              : "text-foreground hover:bg-sidebar-accent active:bg-sidebar-accent/70",
+          )}
+        >
+          <CIcon className="h-5 w-5 shrink-0" />
+          <span className="truncate">{c.label}</span>
+        </Link>
+      </li>
+    );
+  };
+  return (
+    <div className="space-y-2">
+      <div className="px-3 pb-1 pt-1 text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+        {parent.label}
+      </div>
+      <ul className="space-y-0.5">{primary.map(renderRow)}</ul>
+      {sections.map((s) => (
+        <div key={s.label} className="pt-2">
+          <div className="px-3 pb-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/80">
+            {s.label}
+          </div>
+          <ul className="space-y-0.5">{s.items.map(renderRow)}</ul>
+        </div>
+      ))}
     </div>
   );
 }

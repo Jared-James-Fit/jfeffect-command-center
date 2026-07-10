@@ -429,16 +429,44 @@ export function buildInternalNavCollapsed(
       .sort((a, b) => Number(!!a.section) - Number(!!b.section));
     const groupBucket: "Main Menu" | "Other" =
       key === "Add-ons" || key === "Settings" ? "Other" : "Main Menu";
+    // Avoid the "Messages → Messages", "Clients → Clients" duplication in the
+    // desktop flyout / tablet flyout / mobile submenu. Rename the first
+    // child (which IS the primary destination) to something descriptive.
+    const primaryChildLabel = primaryChildAlias(key, primary.label);
     out.push({
       to: primary.to,
       label: WORKSPACE_LABELS[key]?.label ?? primary.label,
       icon: primary.icon,
       group: groupBucket,
       keywords: primary.keywords,
-      children: rest.length > 0 ? [primary, ...rest] : undefined,
+      children:
+        rest.length > 0
+          ? [{ ...primary, label: primaryChildLabel }, ...rest]
+          : undefined,
     });
   }
   return out;
+}
+
+/**
+ * Friendlier label for the first child in a folded workspace flyout. The
+ * folded builder puts the primary destination first in `children`, but its
+ * label is identical to the parent (e.g. "Messages → Messages"), which reads
+ * as a duplicate. Return a clearer, workspace-specific alias.
+ */
+function primaryChildAlias(workspace: string, primaryLabel: string): string {
+  switch (workspace) {
+    case "Messages": return "Inbox";
+    case "Clients": return "All Clients";
+    case "Payments": return "Overview";
+    case "Programming": return "Overview";
+    case "Scheduling": return "Overview";
+    case "Business": return "Overview";
+    case "Team": return "Overview";
+    case "Add-ons": return "Overview";
+    case "Settings": return "Overview";
+    default: return primaryLabel;
+  }
 }
 
 /**
