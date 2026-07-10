@@ -518,10 +518,10 @@ export function AppShell({ items, bottomItems: customBottomItems, title, childre
         {/* Logo header */}
         <div className={cn(
           "flex items-center gap-2 border-b border-sidebar-border",
-          isCollapsed ? "justify-center px-2 py-3" : "px-3.5 py-3",
+          iconOnly ? "justify-center px-2 py-3" : "px-3.5 py-3",
         )}>
           <img src="/logo.png" alt="JF Effect" className="h-8 w-8 rounded-md object-cover" />
-          {!isCollapsed && (
+          {!iconOnly && (
             <div className="leading-tight min-w-0">
               <div className="text-[13px] font-black tracking-tight">JF EFFECT</div>
               <div className="truncate text-[9px] uppercase tracking-widest text-muted-foreground">{title}</div>
@@ -530,8 +530,8 @@ export function AppShell({ items, bottomItems: customBottomItems, title, childre
         </div>
 
         {/* Account / Sign out / Density (moved up from footer) */}
-        <div className={cn("border-b border-sidebar-border", isCollapsed ? "p-1.5" : "p-2")}>
-          {isCollapsed ? (
+        <div className={cn("border-b border-sidebar-border", iconOnly ? "p-1.5" : "p-2")}>
+          {iconOnly ? (
             <div className="flex flex-col items-center gap-1">
               <SettingsMenu
                 items={items}
@@ -561,10 +561,13 @@ export function AppShell({ items, bottomItems: customBottomItems, title, childre
                 <TooltipTrigger asChild>
                   <button
                     onClick={cycleMode}
-                    className="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground hover:bg-sidebar-accent hover:text-foreground"
+                    className={cn(
+                      "flex items-center justify-center rounded-md text-muted-foreground hover:bg-sidebar-accent hover:text-foreground",
+                      isTablet ? "h-11 w-11" : "h-7 w-7",
+                    )}
                     aria-label="Expand sidebar"
                   >
-                    <ChevronRight className="h-3.5 w-3.5" />
+                    <ChevronRight className={cn(isTablet ? "h-5 w-5" : "h-3.5 w-3.5")} />
                   </button>
                 </TooltipTrigger>
                 <TooltipContent side="right">Expand sidebar</TooltipContent>
@@ -590,22 +593,25 @@ export function AppShell({ items, bottomItems: customBottomItems, title, childre
                   <div className="truncate text-[9px] text-muted-foreground leading-tight">{user?.email}</div>
                 )}
               </div>
-              {!isTablet && (
               <Tooltip>
                 <TooltipTrigger asChild>
                   <button
                     onClick={cycleMode}
-                    className="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground hover:bg-sidebar-accent hover:text-foreground"
-                    aria-label="Toggle sidebar density"
+                    className={cn(
+                      "flex items-center justify-center rounded-md text-muted-foreground hover:bg-sidebar-accent hover:text-foreground",
+                      isTablet ? "h-9 w-9" : "h-7 w-7",
+                    )}
+                    aria-label="Collapse sidebar"
                   >
                     <ChevronLeft className="h-3.5 w-3.5" />
                   </button>
                 </TooltipTrigger>
                 <TooltipContent side="top">
-                  {mode === "expanded" ? "Compact" : mode === "compact" ? "Collapse" : "Expand"}
+                  {isTablet
+                    ? (effectiveMode === "expanded" ? "Collapse to icons" : "Expand sidebar")
+                    : (mode === "expanded" ? "Compact" : mode === "compact" ? "Collapse" : "Expand")}
                 </TooltipContent>
               </Tooltip>
-              )}
               {!isTablet && (
               <Tooltip>
                 <TooltipTrigger asChild>
