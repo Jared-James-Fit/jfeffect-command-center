@@ -880,7 +880,10 @@ export function AppShell({ items, bottomItems: customBottomItems, title, childre
               />
             </div>
           </div>
-          <div className="h-[calc(88vh-7.5rem)] overflow-y-auto px-2 py-2">
+          <div
+            className="h-[calc(88vh-7.5rem)] overflow-y-auto px-2 py-2"
+            style={{ paddingBottom: "calc(env(safe-area-inset-bottom) + 1.5rem)" }}
+          >
             {moreFiltered ? (
               <ul className="space-y-1">
                 {moreFiltered.length === 0 && (
