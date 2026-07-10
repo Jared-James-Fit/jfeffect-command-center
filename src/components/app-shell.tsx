@@ -688,6 +688,10 @@ export function AppShell({ items, bottomItems: customBottomItems, title, childre
                         const active = item.to === activeTo;
                         const Icon = item.icon;
                         const pinned = isPinned(item.to);
+                          const childActive = !!item.children?.some(
+                            (c) => pathname === c.to || pathname.startsWith(c.to + "/"),
+                          );
+                          const groupBadge = navBadgeFor(item, navBadges);
                         const link = (
                           <Link
                             to={item.to}
@@ -698,19 +702,30 @@ export function AppShell({ items, bottomItems: customBottomItems, title, childre
                               "sidebar-nav-row group/row flex w-full items-center min-w-0 rounded-md transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-sidebar",
                               rowPadding,
                               rowText,
-                              active
+                                active || childActive
                                 ? "bg-primary/15 text-primary font-semibold border-l-2 border-primary"
                                 : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground border-l-2 border-transparent",
                             )}
                           >
-                            <div className="relative"><Icon className="h-4 w-4 shrink-0" /><SidebarBadge badge={navBadges[item.to]} isCollapsed={isCollapsed} /></div>
+                              <div className="relative"><Icon className="h-4 w-4 shrink-0" /><SidebarBadge badge={groupBadge} isCollapsed={isCollapsed} /></div>
                             {!isCollapsed && <span className="truncate flex-1">{item.label}</span>}
-                            {!isCollapsed && <SidebarBadge badge={navBadges[item.to]} isCollapsed={false} />}
+                              {!isCollapsed && <SidebarBadge badge={groupBadge} isCollapsed={false} />}
+                              {!isCollapsed && item.children && (
+                                <ChevronRight className="ml-1 h-3 w-3 shrink-0 text-muted-foreground" aria-hidden />
+                              )}
                           </Link>
                         );
                         return (
                           <li key={item.to}>
-                            {isCollapsed ? (
+                              {item.children ? (
+                                <SidebarFlyoutRow
+                                  item={item}
+                                  pathname={pathname}
+                                  navBadges={navBadges}
+                                  isCollapsed={isCollapsed}
+                                  trigger={link}
+                                />
+                              ) : isCollapsed ? (
                               <Tooltip>
                                 <TooltipTrigger asChild>{link}</TooltipTrigger>
                                 <TooltipContent side="right">{item.label}</TooltipContent>
