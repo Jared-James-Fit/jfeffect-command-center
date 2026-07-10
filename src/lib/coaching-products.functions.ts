@@ -19,13 +19,23 @@ function formEncode(params: Record<string, string | number | boolean | undefined
   return usp.toString();
 }
 
-async function stripeFetch(path: string, init: { method?: string; body?: string } = {}) {
+async function stripeFetch(
+  path: string,
+  init: { method?: string; body?: string; idempotencyKey?: string } = {},
+) {
+  const headers: Record<string, string> = {
+    Authorization: `Bearer ${getStripeKey()}`,
+    "Content-Type": "application/x-www-form-urlencoded",
+  };
+  // Stripe idempotency: safe replays of the exact same POST return the
+  // original response instead of creating a duplicate. Only meaningful on
+  // mutating verbs; harmless on GET.
+  if (init.idempotencyKey && (init.method ?? "GET").toUpperCase() !== "GET") {
+    headers["Idempotency-Key"] = init.idempotencyKey;
+  }
   const res = await fetch(`${STRIPE_API}${path}`, {
     method: init.method ?? "GET",
-    headers: {
-      Authorization: `Bearer ${getStripeKey()}`,
-      "Content-Type": "application/x-www-form-urlencoded",
-    },
+    headers,
     body: init.body,
   });
   const json: any = await res.json().catch(() => ({}));
@@ -87,6 +97,10 @@ const createSchema = z.object({
   notes: z.string().trim().max(4000).optional().nullable(),
   pastedPaymentLinkUrl: z.string().url().max(2000).optional().nullable(),
   generateStripeLink: z.boolean().optional().default(false),
+  // Optional client-issued UUID so a retried Create Product submit does not
+  // spawn duplicate Stripe products/prices/payment_links. The modal mints
+  // one per open and reuses it across retries.
+  idempotencyKey: z.string().uuid().optional().nullable(),
   // Stripe Checkout Session fields
   stripePriceId: z.string().trim().max(100).optional().nullable(),
   checkoutMode: z.enum(["payment", "subscription", "auto"]).optional().default("auto"),
@@ -111,8 +125,14 @@ export const createCoachingProduct = createServerFn({ method: "POST" })
     let payment_link_url: string | null = data.pastedPaymentLinkUrl ?? null;
 
     if (data.generateStripeLink && data.priceCents >= 50) {
+      // Derive per-call idempotency suffixes from the shared client key so
+      // each of the three Stripe POSTs is individually idempotent while
+      // still sharing a single logical "create" attempt.
+      const idem = data.idempotencyKey ?? null;
+      const idemFor = (suffix: string) => (idem ? `${idem}:${suffix}` : undefined);
       const product = await stripeFetch("/products", {
         method: "POST",
+        idempotencyKey: idemFor("product"),
         body: formEncode({
           name: data.name,
           ...(data.description ? { description: data.description } : {}),
@@ -131,10 +151,12 @@ export const createCoachingProduct = createServerFn({ method: "POST" })
       }
       const price = await stripeFetch("/prices", {
         method: "POST",
+        idempotencyKey: idemFor("price"),
         body: formEncode(priceParams),
       });
       const link = await stripeFetch("/payment_links", {
         method: "POST",
+        idempotencyKey: idemFor("link"),
         body: formEncode({
           "line_items[0][price]": price.id,
           "line_items[0][quantity]": 1,
