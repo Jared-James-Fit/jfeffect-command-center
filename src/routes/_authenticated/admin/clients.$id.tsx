@@ -86,11 +86,16 @@ function TabFallback() {
   return <div className="md:col-span-3 p-6 text-sm text-muted-foreground">Loading…</div>;
 }
 
-function SectionNav({ activeTab, onChange }: { activeTab: TabValue; onChange: (v: TabValue) => void }) {
+function SectionNav({ activeTab, onChange, compact = false, heading }: { activeTab: TabValue; onChange: (v: TabValue) => void; compact?: boolean; heading?: string }) {
   const activeSection = TAB_TO_SECTION[activeTab] ?? "client-profile";
   const current = SECTIONS.find((s) => s.id === activeSection)!;
   return (
-    <div className="mb-6 space-y-4">
+    <div className={compact ? "space-y-3" : "mb-6 space-y-4"}>
+      {heading && (
+        <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+          {heading}
+        </div>
+      )}
       {/* Top-level sections — large touch targets, 1 col on phones, 2 on small tablets, 5 across on desktop */}
       <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 sm:gap-3 lg:grid-cols-5">
         {SECTIONS.map((s) => {
@@ -102,21 +107,27 @@ function SectionNav({ activeTab, onChange }: { activeTab: TabValue; onChange: (v
               type="button"
               onClick={() => onChange(s.tabs[0].value)}
               className={[
-                "group flex min-h-[64px] items-center gap-3 rounded-xl border p-3 text-left transition-all sm:flex-col sm:items-start sm:gap-2 sm:p-4",
+                compact
+                  ? "group flex min-h-[52px] items-center gap-2.5 rounded-lg border p-2.5 text-left transition-all sm:flex-col sm:items-start sm:gap-1.5 sm:p-3"
+                  : "group flex min-h-[64px] items-center gap-3 rounded-xl border p-3 text-left transition-all sm:flex-col sm:items-start sm:gap-2 sm:p-4",
                 isActive
                   ? "border-primary bg-primary/10 shadow-sm"
                   : "border-border bg-card hover:border-primary/40 hover:bg-secondary/40 active:scale-[0.99]",
               ].join(" ")}
             >
               <div className={[
-                "grid h-11 w-11 shrink-0 place-items-center rounded-lg sm:h-10 sm:w-10",
+                compact
+                  ? "grid h-9 w-9 shrink-0 place-items-center rounded-md sm:h-8 sm:w-8"
+                  : "grid h-11 w-11 shrink-0 place-items-center rounded-lg sm:h-10 sm:w-10",
                 isActive ? "bg-primary text-primary-foreground" : "bg-secondary text-foreground/80 group-hover:bg-primary/15 group-hover:text-primary",
               ].join(" ")}>
-                <Icon className="h-5 w-5 sm:h-4 sm:w-4" />
+                <Icon className={compact ? "h-4 w-4 sm:h-3.5 sm:w-3.5" : "h-5 w-5 sm:h-4 sm:w-4"} />
               </div>
               <div className="min-w-0 flex-1">
-                <div className={["text-sm font-semibold leading-tight", isActive ? "text-primary" : "text-foreground"].join(" ")}>{s.label}</div>
-                <div className="mt-0.5 text-[11px] leading-tight text-muted-foreground line-clamp-2">{s.description}</div>
+                <div className={[compact ? "text-[13px] font-semibold leading-tight" : "text-sm font-semibold leading-tight", isActive ? "text-primary" : "text-foreground"].join(" ")}>{s.label}</div>
+                {!compact && (
+                  <div className="mt-0.5 text-[11px] leading-tight text-muted-foreground line-clamp-2">{s.description}</div>
+                )}
               </div>
             </button>
           );
@@ -143,7 +154,9 @@ function SectionNav({ activeTab, onChange }: { activeTab: TabValue; onChange: (v
                 type="button"
                 onClick={() => onChange(t.value)}
                 className={[
-                  "group flex min-h-[64px] items-start gap-3 rounded-lg border p-3 text-left transition-all sm:min-h-[88px] sm:flex-col sm:gap-2 sm:p-4",
+                  compact
+                    ? "group flex min-h-[48px] items-center gap-2 rounded-md border p-2 text-left transition-all sm:min-h-[60px] sm:flex-col sm:items-start sm:gap-1.5 sm:p-2.5"
+                    : "group flex min-h-[64px] items-start gap-3 rounded-lg border p-3 text-left transition-all sm:min-h-[88px] sm:flex-col sm:gap-2 sm:p-4",
                   isActive
                     ? "border-primary bg-primary/15 shadow-sm"
                     : "border-border bg-card/60 hover:border-primary/40 hover:bg-secondary/40 active:scale-[0.99]",
@@ -151,14 +164,16 @@ function SectionNav({ activeTab, onChange }: { activeTab: TabValue; onChange: (v
                 aria-pressed={isActive}
               >
                 <div className={[
-                  "grid h-10 w-10 shrink-0 place-items-center rounded-md",
+                  compact
+                    ? "grid h-8 w-8 shrink-0 place-items-center rounded"
+                    : "grid h-10 w-10 shrink-0 place-items-center rounded-md",
                   isActive ? "bg-primary text-primary-foreground" : "bg-secondary text-foreground/80 group-hover:bg-primary/15 group-hover:text-primary",
                 ].join(" ")}>
-                  <TIcon className="h-5 w-5" />
+                  <TIcon className={compact ? "h-4 w-4" : "h-5 w-5"} />
                 </div>
                 <div className="min-w-0 flex-1">
-                  <div className={["text-sm font-semibold leading-tight", isActive ? "text-primary" : "text-foreground"].join(" ")}>{t.label}</div>
-                  {t.description && (
+                  <div className={[compact ? "text-[13px] font-semibold leading-tight" : "text-sm font-semibold leading-tight", isActive ? "text-primary" : "text-foreground"].join(" ")}>{t.label}</div>
+                  {!compact && t.description && (
                     <div className="mt-0.5 text-[11px] leading-tight text-muted-foreground line-clamp-2">{t.description}</div>
                   )}
                 </div>
@@ -671,7 +686,83 @@ export function ClientProfileWorkspace({
           </>
         }
       />}
-      <div className="p-6 md:p-8">
+      {embedded && (
+        <EmbeddedIdentityHeader
+          form={form}
+          canPov={canPov}
+          onClose={onClose}
+          onMessage={() => setTab("messages")}
+          onPov={() => {
+            if (!form.user_id) {
+              toast.error("Client has no account yet — send a setup link first.");
+              return;
+            }
+            impersonation.start(
+              { id, user_id: form.user_id, full_name: form.full_name },
+              typeof window !== "undefined" ? window.location.pathname + window.location.search : `/admin/clients/${id}`,
+            );
+            navigate({ to: "/portal" });
+          }}
+          onSave={save}
+          isDirty={isDirty}
+          saving={saving}
+          moreMenu={(
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="sm"><MoreHorizontal className="mr-2 h-4 w-4" />More</Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-64">
+                <DropdownMenuLabel>Setup & Access</DropdownMenuLabel>
+                <DropdownMenuItem onSelect={sendSetup}><Mail className="mr-2 h-4 w-4" />Send setup email</DropdownMenuItem>
+                <DropdownMenuItem onSelect={copySetupLink}><Copy className="mr-2 h-4 w-4" />Copy setup link</DropdownMenuItem>
+                <DropdownMenuItem onSelect={sendReset}><KeyRound className="mr-2 h-4 w-4" />Send password reset</DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuLabel>Scheduling & Offers</DropdownMenuLabel>
+                <DropdownMenuItem onSelect={() => setBookingLinkOpen(true)}><Link2 className="mr-2 h-4 w-4" />Send booking link</DropdownMenuItem>
+                <DropdownMenuItem onSelect={() => setPriceCardOpen(true)}><Tag className="mr-2 h-4 w-4" />Assign offer / price card</DropdownMenuItem>
+                {form.drive_folder_link && (
+                  <DropdownMenuItem onSelect={() => window.open(form.drive_folder_link, "_blank", "noreferrer")}>
+                    <FolderOpen className="mr-2 h-4 w-4" />Open Drive folder
+                  </DropdownMenuItem>
+                )}
+                <DropdownMenuSeparator />
+                <DropdownMenuLabel>Lifecycle</DropdownMenuLabel>
+                {form.status === "Deactivated" ? (
+                  <DropdownMenuItem onSelect={() => setReactivateOpen(true)}><Eye className="mr-2 h-4 w-4" />Reactivate</DropdownMenuItem>
+                ) : (
+                  <DropdownMenuItem onSelect={() => setDeactivateOpen(true)}><Eye className="mr-2 h-4 w-4" />Deactivate</DropdownMenuItem>
+                )}
+                <DropdownMenuItem onSelect={archive}><Archive className="mr-2 h-4 w-4" />{form.archived ? "Restore" : "Archive"}</DropdownMenuItem>
+                <DropdownMenuItem className="text-destructive focus:text-destructive" onSelect={() => setDeleteStep(1)}>
+                  <Trash2 className="mr-2 h-4 w-4" />Delete client
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
+        />
+      )}
+      <div className={embedded ? "p-4 md:p-6" : "p-6 md:p-8"}>
+      {embedded && (
+        <EmbeddedActionCenter
+          clientId={id}
+          canPov={canPov}
+          form={form}
+          onMessage={() => setTab("messages")}
+          onPov={() => {
+            if (!form.user_id) {
+              toast.error("Client has no account yet — send a setup link first.");
+              return;
+            }
+            impersonation.start(
+              { id, user_id: form.user_id, full_name: form.full_name },
+              typeof window !== "undefined" ? window.location.pathname + window.location.search : `/admin/clients/${id}`,
+            );
+            navigate({ to: "/portal" });
+          }}
+          onIntake={() => setTab("goals-setup")}
+          onRequestUpdate={requestUpdate}
+        />
+      )}
       {form.status === "Deactivated" && (
         <div className="mb-4 rounded-md border border-warning/40 bg-warning/10 px-4 py-3 text-sm">
           <div className="font-semibold text-warning">Account Deactivated</div>
@@ -697,17 +788,23 @@ export function ClientProfileWorkspace({
       <Tabs
         value={tab ?? "summary"}
         onValueChange={(v) => setTab(v as TabValue)}
+        className={embedded ? "flex flex-col" : undefined}
       >
-        <SectionNav
-          activeTab={(tab ?? "summary") as TabValue}
-          onChange={(v) => setTab(v)}
-        />
+        <div className={embedded && tab === "summary" ? "order-2 mt-6" : "order-1"}>
+          <SectionNav
+            activeTab={(tab ?? "summary") as TabValue}
+            onChange={(v) => setTab(v)}
+            compact={embedded}
+            heading={embedded ? "Workspace" : undefined}
+          />
+        </div>
 
-        <TabsContent value="summary" className="grid gap-6 md:grid-cols-3">
+        <TabsContent value="summary" className={embedded ? "order-1 grid gap-6 md:grid-cols-3" : "grid gap-6 md:grid-cols-3"}>
           <ClientOverviewSnapshot
             form={form}
             clientId={id}
             canPov={canPov}
+            embedded={embedded}
             onMessage={() => setTab("messages")}
             onPov={() => {
               if (!form.user_id) {
@@ -1898,6 +1995,141 @@ function PowerlifterSection({ form, set }: { form: any; set: (k: string, v: any)
   );
 }
 
+function EmbeddedIdentityHeader({
+  form,
+  canPov,
+  onClose,
+  onMessage,
+  onPov,
+  onSave,
+  isDirty,
+  saving,
+  moreMenu,
+}: {
+  form: any;
+  canPov: boolean;
+  onClose?: () => void;
+  onMessage: () => void;
+  onPov: () => void;
+  onSave: () => unknown | Promise<unknown>;
+  isDirty: boolean;
+  saving: boolean;
+  moreMenu: React.ReactNode;
+}) {
+  const lastActive = form.last_active_at ?? form.last_signed_in_at ?? null;
+  const lastActiveLabel = lastActive ? new Date(lastActive).toLocaleDateString() : null;
+  return (
+    <div className="sticky top-0 z-30 border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80">
+      <div className="flex items-center gap-3 px-4 py-3 md:px-6">
+        <UserAvatar
+          src={form.profile_picture_url}
+          name={form.full_name}
+          size={44}
+          className="rounded-xl shrink-0"
+        />
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2 min-w-0">
+            <div className="truncate text-base font-bold leading-tight md:text-lg">
+              {form.full_name ?? "Unnamed client"}
+            </div>
+            {form.is_powerlifter && <PowerlifterBadge label={form.powerlifter_badge_label} size="xs" />}
+          </div>
+          <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-muted-foreground">
+            {form.status && <Badge variant="outline" className="text-[10px] leading-none py-0.5">{form.status}</Badge>}
+            {form.coaching_package && <span className="truncate">{form.coaching_package}</span>}
+            {form.program_phase && <span className="truncate">· {form.program_phase}</span>}
+            {form.assigned_coach_name && <span className="truncate hidden sm:inline">· Coach {form.assigned_coach_name}</span>}
+            {lastActiveLabel && <span className="truncate hidden md:inline">· Active {lastActiveLabel}</span>}
+          </div>
+        </div>
+        <div className="flex items-center gap-1.5 shrink-0">
+          <Button variant="outline" size="sm" onClick={onMessage} className="hidden sm:inline-flex">
+            <MessageSquare className="mr-2 h-4 w-4" />Message
+          </Button>
+          <Button variant="ghost" size="icon" onClick={onMessage} className="sm:hidden" aria-label="Message">
+            <MessageSquare className="h-5 w-5" />
+          </Button>
+          {canPov && (
+            <Button
+              size="sm"
+              onClick={onPov}
+              className="hidden sm:inline-flex bg-warning/15 text-warning border border-warning/40 hover:bg-warning/25"
+            >
+              <Eye className="mr-2 h-4 w-4" />POV
+            </Button>
+          )}
+          {isDirty && (
+            <Button size="sm" className="bg-gradient-primary uppercase font-bold" onClick={onSave} disabled={saving}>
+              <Save className="mr-2 h-4 w-4" />Save
+            </Button>
+          )}
+          {moreMenu}
+          {onClose && (
+            <Button variant="ghost" size="icon" onClick={onClose} aria-label="Close" className="hidden md:inline-flex">
+              <ArrowLeft className="h-5 w-5" />
+            </Button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function EmbeddedActionCenter({
+  clientId,
+  canPov,
+  form,
+  onMessage,
+  onPov,
+  onIntake,
+  onRequestUpdate,
+}: {
+  clientId: string;
+  canPov: boolean;
+  form: any;
+  onMessage: () => void;
+  onPov: () => void;
+  onIntake: () => void;
+  onRequestUpdate: () => unknown | Promise<unknown>;
+}) {
+  return (
+    <div className="mb-4">
+      <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground mb-2">
+        Actions
+      </div>
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
+        <Button onClick={onMessage} variant="outline" className="min-h-[48px] justify-start text-sm">
+          <MessageSquare className="mr-2 h-4 w-4" /> Message
+        </Button>
+        {canPov && (
+          <Button
+            onClick={onPov}
+            className="min-h-[48px] justify-start text-sm bg-warning/15 text-warning border border-warning/40 hover:bg-warning/25"
+          >
+            <Eye className="mr-2 h-4 w-4" /> Client POV
+          </Button>
+        )}
+        <Link to="/admin/client-programs/$clientId" params={{ clientId }} className="block">
+          <Button variant="outline" className="min-h-[48px] w-full justify-start text-sm">
+            <Dumbbell className="mr-2 h-4 w-4" /> Assign Program
+          </Button>
+        </Link>
+        <Link to="/admin/clients/$id/schedule" params={{ id: clientId }} className="block">
+          <Button variant="outline" className="min-h-[48px] w-full justify-start text-sm">
+            <Calendar className="mr-2 h-4 w-4" /> Schedule
+          </Button>
+        </Link>
+        <Button variant="outline" className="min-h-[48px] justify-start text-sm" onClick={onIntake}>
+          <Target className="mr-2 h-4 w-4" /> Intake & Goals
+        </Button>
+        <Button variant="outline" className="min-h-[48px] justify-start text-sm" onClick={() => onRequestUpdate()}>
+          <BellRing className="mr-2 h-4 w-4" /> {form.info_update_requested ? "Update sent" : "Request Update"}
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 function CommsToggleRow({ title, description, checked, onChange }: { title: string; description: string; checked: boolean; onChange: (v: boolean) => void | Promise<void> }) {
   return (
     <label className="flex min-h-[64px] items-center justify-between gap-3 rounded-md border border-border bg-secondary/30 px-4 py-3 text-sm">
@@ -1911,11 +2143,12 @@ function CommsToggleRow({ title, description, checked, onChange }: { title: stri
 }
 
 function ClientOverviewSnapshot({
-  form, clientId, canPov, onMessage, onPov, onSendSetup, onRequestUpdate, onGoToTab,
+  form, clientId, canPov, embedded = false, onMessage, onPov, onSendSetup, onRequestUpdate, onGoToTab,
 }: {
   form: any;
   clientId: string;
   canPov: boolean;
+  embedded?: boolean;
   onMessage: () => void;
   onPov: () => void;
   onSendSetup: () => unknown | Promise<unknown>;
@@ -1943,7 +2176,8 @@ function ClientOverviewSnapshot({
 
   return (
     <div className="md:col-span-3 space-y-6">
-      {/* Header card: identity + key facts */}
+      {/* Header card: identity + key facts (hidden when embedded — sticky header covers this) */}
+      {!embedded && (
       <Card className="border-border bg-card p-5 md:p-6">
         <div className="flex flex-col gap-5 md:flex-row md:items-start">
           <div className="flex items-center gap-4">
@@ -1973,8 +2207,10 @@ function ClientOverviewSnapshot({
           </div>
         </div>
       </Card>
+      )}
 
-      {/* Quick actions — 48–52px buttons */}
+      {/* Quick actions — 48–52px buttons (hidden when embedded — Action Center covers this) */}
+      {!embedded && (
       <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
         {canPov && (
           <Button onClick={onPov} className="min-h-[52px] justify-start bg-warning/15 text-warning border border-warning/40 hover:bg-warning/25 text-base">
@@ -2001,6 +2237,7 @@ function ClientOverviewSnapshot({
           </Button>
         </Link>
       </div>
+      )}
 
       <div className="grid gap-6 md:grid-cols-3">
         <div className="space-y-6 md:col-span-2">
