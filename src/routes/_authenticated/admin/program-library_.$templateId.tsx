@@ -23,6 +23,8 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Palette } from "lucide-react";
 import { GripVertical } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { DayDateButton } from "@/components/workout-day/day-date-button";
+import { formatDayLabel, formatDaySubtitle } from "@/lib/workout-day-label";
 import { useAutosave } from "@/hooks/use-autosave";
 import { SaveStatus } from "@/components/save-status";
 import { useConflictWatch } from "@/hooks/use-conflict-watch";
