@@ -1490,13 +1490,23 @@ function WorkoutDay({
       <PageHeader
         backTo={navigation.backTo}
         backLabel="Back to Workouts"
-        title={cleanDayTitle(day.title, day.day_index)}
-        subtitle={[
-          block?.name,
-          week?.week_index != null ? `Week ${week.week_index}` : null,
-          (week as any)?.phase || null,
-          day.focus || null,
-        ].filter(Boolean).join(" · ")}
+        title={formatDayLabel(day)}
+        subtitle={(() => {
+          // Three information layers, in order of importance:
+          //   1. Coach-typed workout subtitle (e.g. "Final Heavy")
+          //   2. Full weekday + readable date (never an ISO string)
+          //   3. Block / week / focus context
+          const sub = formatDaySubtitle(day);
+          const dateParts = formatTrainingDate(day.scheduled_date ?? null);
+          const dateLabel = dateParts ? `${dateParts.weekday}, ${dateParts.medium}` : null;
+          const context = [
+            block?.name,
+            week?.week_index != null ? `Week ${week.week_index}` : null,
+            (week as any)?.phase || null,
+            day.focus || null,
+          ].filter(Boolean).join(" · ");
+          return [sub, dateLabel, context].filter(Boolean).join(" · ");
+        })()}
         actions={
           !readonly ? (
             <div className="flex items-center gap-2">
