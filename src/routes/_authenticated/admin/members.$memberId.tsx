@@ -18,8 +18,8 @@ import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import {
-  Link2, KeyRound, Trash2, Plus, Eye, MessageSquare, CreditCard, Gift, Package,
-  Settings2, ShoppingBag, AlertCircle, AlertTriangle, Camera, Phone,
+  Link2, KeyRound, Trash2, Plus, Eye, MessageSquare, CreditCard, Gift,
+  Settings2, AlertCircle, AlertTriangle, Camera, Phone,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useState, lazy, Suspense, useEffect } from "react";
