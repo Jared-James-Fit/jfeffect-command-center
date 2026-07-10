@@ -413,7 +413,17 @@ export const toggleCoachingProductActive = createServerFn({ method: "POST" })
 // onto the coaching_products row.
 export const generatePaymentLinkForProduct = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input) => z.object({ id: z.string().uuid() }).parse(input))
+  .inputValidator((input) =>
+    z
+      .object({
+        id: z.string().uuid(),
+        // Optional per-attempt UUID from the admin UI. Reused across retries
+        // so Stripe returns the original payment_link on replays instead of
+        // duplicating it.
+        idempotencyKey: z.string().uuid().optional().nullable(),
+      })
+      .parse(input),
+  )
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context as any;
     await assertAdmin(supabase, userId);
@@ -443,6 +453,7 @@ export const generatePaymentLinkForProduct = createServerFn({ method: "POST" })
 
     const link = await stripeFetch("/payment_links", {
       method: "POST",
+      idempotencyKey: data.idempotencyKey ? `${data.idempotencyKey}:link` : undefined,
       body: formEncode({
         "line_items[0][price]": product.stripe_price_id,
         "line_items[0][quantity]": 1,

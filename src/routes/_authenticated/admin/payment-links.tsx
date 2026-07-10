@@ -1,7 +1,7 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { useEffect, useMemo, useState, lazy, Suspense } from "react";
+import { useEffect, useMemo, useState, useRef, lazy, Suspense } from "react";
 import { PageHeader } from "@/components/app-shell";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -208,6 +208,15 @@ export function PaymentLinksPage({ embedded = false }: { embedded?: boolean } = 
   const [generatingLink, setGeneratingLink] = useState<string | null>(null);
   const [sharing, setSharing] = useState<Product | null>(null);
   const [newProductOpen, setNewProductOpen] = useState(false);
+  // One idempotency key per in-flight "Generate payment link" attempt, keyed
+  // by product id. A retried Generate for the same product reuses the same
+  // Stripe Idempotency-Key so a timed-out first attempt does not spawn a
+  // duplicate Stripe payment_link. Cleared only after confirmed success.
+  const generateLinkIdemRef = useRef<Record<string, string>>({});
+  const mintUuid = () =>
+    typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+      ? crypto.randomUUID()
+      : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
 
   const handleGenerateLink = async (p: Product) => {
     if (!(p as any).stripe_price_id) {
@@ -215,7 +224,15 @@ export function PaymentLinksPage({ embedded = false }: { embedded?: boolean } = 
       setEditing({ open: true, product: p });
       return;
     }
+    // Prevent rapid duplicate submits for the same product.
+    if (generatingLink === p.id) return;
     setGeneratingLink(p.id);
+    // Reuse the same key across retries for this product until we get a
+    // confirmed success back from the server.
+    if (!generateLinkIdemRef.current[p.id]) {
+      generateLinkIdemRef.current[p.id] = mintUuid();
+    }
+    const idempotencyKey = generateLinkIdemRef.current[p.id];
     let linkUrl = "";
     try {
       await runJob<{ url: string }>(
@@ -227,7 +244,7 @@ export function PaymentLinksPage({ embedded = false }: { embedded?: boolean } = 
         },
         async (job) => {
           job.completeStep(0);
-          const res = await generateLinkFn({ data: { id: p.id } });
+          const res = await generateLinkFn({ data: { id: p.id, idempotencyKey } });
           linkUrl = res.url;
           job.completeStep(1); job.completeStep(2); job.completeStep(3);
           qc.invalidateQueries({ queryKey: ["coaching-products"] });
@@ -236,6 +253,9 @@ export function PaymentLinksPage({ embedded = false }: { embedded?: boolean } = 
           return res;
         },
       );
+      // Confirmed success — retire the key so a genuinely new "Generate"
+      // click mints a fresh one.
+      delete generateLinkIdemRef.current[p.id];
       // After success: attach success CTAs (Open / Copy) to the just-completed job.
       const { jobStore } = await import("@/lib/progress-jobs");
       const latest = jobStore.getSnapshot().find((j) => j.title === "Creating Stripe checkout link" && j.status === "success");
@@ -246,7 +266,9 @@ export function PaymentLinksPage({ embedded = false }: { embedded?: boolean } = 
         });
       }
     } catch {
-      // runJob handled the toast
+      // runJob handled the toast. Keep the idempotency key alive so a retry
+      // reuses it and Stripe returns the original link if the first attempt
+      // actually reached them.
     } finally {
       setGeneratingLink(null);
     }
@@ -804,10 +826,23 @@ function ProductFormDialog({
   const updateFn = useServerFn(updateCoachingProduct);
   const [form, setForm] = useState<FormState>(emptyForm());
   const [submitting, setSubmitting] = useState(false);
+  // Stable per-attempt Stripe idempotency key. Minted when the dialog opens
+  // for a *new* product, reused across retries after a failed save so that
+  // Stripe returns the original product/price/payment_link rather than
+  // duplicating them. Retired only after a confirmed successful create, or
+  // when the dialog reopens for a genuinely new product.
+  const idempotencyKeyRef = useRef<string | null>(null);
 
   useEffect(() => {
     if (!open) return;
     setForm(product ? productToForm(product) : emptyForm());
+    // Reopening for an existing product (edit) never touches Stripe create,
+    // so no key is needed. New-product opens get a fresh UUID.
+    idempotencyKeyRef.current = product
+      ? null
+      : typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+        ? crypto.randomUUID()
+        : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
   }, [open, product]);
 
   const set = <K extends keyof FormState>(k: K, v: FormState[K]) => setForm((f) => ({ ...f, [k]: v }));
@@ -820,6 +855,7 @@ function ProductFormDialog({
 
   const handleSave = async () => {
     try {
+      if (submitting) return;
       if (!form.name.trim()) { toast.error("Product name is required"); return; }
       const priceNum = parseFloat(form.priceText || "0");
       const cents = Math.round((Number.isFinite(priceNum) ? priceNum : 0) * 100);
@@ -865,7 +901,18 @@ function ProductFormDialog({
         await updateFn({ data: { id: product.id, ...payload, ...(imagePath !== undefined ? { imagePath } : {}) } as any });
         toast.success("Product updated");
       } else {
-        await createFn({ data: { ...payload, imagePath: imagePath ?? null, generateStripeLink: form.generateStripeProduct } as any });
+        await createFn({
+          data: {
+            ...payload,
+            imagePath: imagePath ?? null,
+            generateStripeLink: form.generateStripeProduct,
+            idempotencyKey: idempotencyKeyRef.current,
+          } as any,
+        });
+        // Confirmed success — retire the key. Any future submit from this
+        // dialog instance represents a genuinely new product and will mint
+        // a fresh UUID on reopen.
+        idempotencyKeyRef.current = null;
         toast.success("Product saved");
       }
       onSaved();

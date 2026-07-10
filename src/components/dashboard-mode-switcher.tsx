@@ -44,7 +44,10 @@ function Tab({ active, onClick, icon, label }: { active: boolean; onClick: () =>
       aria-label={label}
       title={label}
       className={cn(
-        "flex min-h-[36px] items-center gap-1.5 rounded-md px-2 py-1.5 font-semibold transition-colors xl:min-h-0 xl:px-3",
+        // Tap target: on tablet widths (md, no label) the switcher renders as
+        // icon-only, so force a real ≥44×44 clickable box. Desktop shows the
+        // label and can compact back down via xl:min-* resets.
+        "flex min-h-[44px] min-w-[44px] items-center justify-center gap-1.5 rounded-md px-2 py-1.5 font-semibold transition-colors xl:min-h-0 xl:min-w-0 xl:justify-start xl:px-3",
         active ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted hover:text-foreground",
       )}
     >
