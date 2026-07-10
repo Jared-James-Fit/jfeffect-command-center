@@ -61,12 +61,6 @@ async function resolveActor(
     if (coach?.user_id === userId) return { actor: "coach", client };
   }
 
-  const { data: isCoachRole } = await supabase.rpc("has_role", {
-    _user_id: userId,
-    _role: "coach",
-  });
-  if (isCoachRole === true) return { actor: "coach", client };
-
   if (client.user_id === userId) return { actor: "client", client };
   throw new Error("You don't have permission to change this schedule.");
 }

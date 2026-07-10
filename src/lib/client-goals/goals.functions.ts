@@ -16,10 +16,6 @@ async function assertCoachOrAdmin(ctx: any, clientId: string) {
     _user_id: ctx.userId, _role: "admin",
   });
   if (isAdmin) return;
-  const { data: isCoach } = await ctx.supabase.rpc("has_role", {
-    _user_id: ctx.userId, _role: "coach",
-  });
-  if (isCoach) return;
   const { data: isAssigned } = await ctx.supabase.rpc("is_assigned_coach_for_client", {
     _client_id: clientId,
   });

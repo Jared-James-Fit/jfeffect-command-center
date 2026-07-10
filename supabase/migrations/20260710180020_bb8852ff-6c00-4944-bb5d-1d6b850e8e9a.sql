@@ -1,0 +1,1 @@
+REVOKE EXECUTE ON FUNCTION public.admin_clients_directory(text, text, text, uuid, text, integer, integer, text) FROM anon, PUBLIC;
