@@ -25,8 +25,10 @@ export function DashboardModeSwitcher() {
   };
 
   return (
-    <div className="mx-4 mt-4 inline-flex items-center gap-1 rounded-lg border border-border bg-card p-1 text-xs md:mx-6">
-      <span className="px-2 text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Dashboard Mode</span>
+    <div className="mx-3 mt-2 inline-flex items-center gap-1 rounded-lg border border-border bg-card p-0.5 text-xs md:mx-6 xl:mt-4 xl:p-1">
+      <span className="hidden px-2 text-[10px] font-bold uppercase tracking-widest text-muted-foreground xl:inline">
+        Dashboard Mode
+      </span>
       <Tab active={mode === "coaching"} onClick={() => select("coaching")} icon={<Briefcase className="h-3.5 w-3.5" />} label="Coaching" />
       <Tab active={mode === "membership"} onClick={() => select("membership")} icon={<Sparkles className="h-3.5 w-3.5" />} label="Membership" />
       <Tab active={mode === "media"} onClick={() => select("media")} icon={<Film className="h-3.5 w-3.5" />} label="Media Manager" />
@@ -39,12 +41,15 @@ function Tab({ active, onClick, icon, label }: { active: boolean; onClick: () =>
     <button
       type="button"
       onClick={onClick}
+      aria-label={label}
+      title={label}
       className={cn(
-        "flex items-center gap-1.5 rounded-md px-3 py-1.5 font-semibold transition-colors",
+        "flex min-h-[36px] items-center gap-1.5 rounded-md px-2 py-1.5 font-semibold transition-colors xl:min-h-0 xl:px-3",
         active ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted hover:text-foreground",
       )}
     >
-      {icon}{label}
+      {icon}
+      <span className="hidden xl:inline">{label}</span>
     </button>
   );
 }
