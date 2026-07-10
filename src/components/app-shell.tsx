@@ -942,11 +942,18 @@ export function AppShell({ items, bottomItems: customBottomItems, title, childre
                                 </Link>
                                 {item.children && item.children.length > 0 && (
                                   <ul className="ml-9 mt-0.5 space-y-0.5 border-l border-border/50 pl-2">
-                                    {item.children.map((c) => {
+                                    {item.children.map((c, idx) => {
                                       const CIcon = c.icon;
                                       const cactive = pathname === c.to || pathname.startsWith(c.to + "/");
+                                      const prev = idx > 0 ? item.children![idx - 1] : undefined;
+                                      const showSectionHeader = c.section && (!prev || prev.section !== c.section);
                                       return (
                                         <li key={c.to}>
+                                          {showSectionHeader && (
+                                            <div className="mt-1.5 pt-1.5 px-3 border-t border-border/50 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/80">
+                                              {c.section}
+                                            </div>
+                                          )}
                                           <Link
                                             to={c.to}
                                             onClick={() => setMoreOpen(false)}
