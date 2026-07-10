@@ -208,7 +208,8 @@ export async function createBlock(input: { client_id: string; prep_id?: string |
   for (let i = 1; i <= input.weeks; i++) {
     const { data: w } = await sb.from("pl_weeks").insert({ block_id: block.id, week_index: i }).select("*").single();
     if (w) {
-      await sb.from("pl_days").insert({ week_id: w.id, day_index: 1, title: "Day 1" });
+      // No generated "Day 1" title — the label is derived from day_index at render time.
+      await sb.from("pl_days").insert({ week_id: w.id, day_index: 1 });
     }
   }
   return block;
@@ -292,7 +293,13 @@ export async function duplicateDay(dayId: string) {
   const nextIdx = Math.max(0, ...(siblings ?? []).map((s: any) => s.day_index ?? 0)) + 1;
   const { data: newDay, error } = await sb.from("pl_days").insert({
     week_id: src.week_id, day_index: nextIdx,
-    title: (src.title ?? `Day ${src.day_index}`) + " (copy)",
+    // Derive the label from position; carry any coach-typed title/subtitle
+    // forward, appending "(copy)" to whichever is set so the coach can tell
+    // duplicates apart without stuffing generated text into the title.
+    title: src.title ?? null,
+    subtitle: src.subtitle
+      ? `${src.subtitle} (copy)`
+      : (src.title ? null : null),
     focus: src.focus, notes: src.notes, notes_client_visible: src.notes_client_visible,
     duration_estimate_min: src.duration_estimate_min,
   }).select("*").single();
@@ -319,7 +326,7 @@ export async function duplicateWeek(weekId: string) {
   const { data: days } = await sb.from("pl_days").select("*").eq("week_id", weekId).order("day_index");
   for (const d of days ?? []) {
     const { data: newDay } = await sb.from("pl_days").insert({
-      week_id: newWeek.id, day_index: d.day_index, title: d.title, focus: d.focus, notes: d.notes, notes_client_visible: d.notes_client_visible,
+      week_id: newWeek.id, day_index: d.day_index, title: d.title, subtitle: d.subtitle, focus: d.focus, notes: d.notes, notes_client_visible: d.notes_client_visible,
       duration_estimate_min: d.duration_estimate_min,
     }).select("*").single();
     const { data: rows } = await sb.from("pl_exercise_rows").select("*").eq("day_id", d.id).order("sort_order");
