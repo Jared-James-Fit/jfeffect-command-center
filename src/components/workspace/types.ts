@@ -22,6 +22,7 @@ export type WorkspaceAlert = {
   key: string;
   tone: Exclude<WorkspaceTone, "default"> | "info";
   message: ReactNode;
+  description?: ReactNode;
   icon?: ComponentType<{ className?: string }>;
   action?: { label: string; onClick?: () => void; to?: string; params?: Record<string, string> };
 };
