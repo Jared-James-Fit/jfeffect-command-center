@@ -19,9 +19,14 @@ export function WorkspaceAlertsStrip({ alerts, className }: { alerts: WorkspaceA
         const tone = TONE_TO_CLASS[a.tone] ?? TONE_TO_CLASS.warn;
         const body = (
           <div className={`flex flex-wrap items-center justify-between gap-3 rounded-md border px-3 py-2 text-sm font-semibold ${tone}`}>
-            <span className="flex min-w-0 items-center gap-2">
-              <Icon className="h-4 w-4 shrink-0" />
-              <span className="min-w-0">{a.message}</span>
+            <span className="flex min-w-0 flex-col gap-0.5">
+              <span className="flex items-center gap-2">
+                <Icon className="h-4 w-4 shrink-0" />
+                <span className="min-w-0">{a.message}</span>
+              </span>
+              {a.description && (
+                <span className="min-w-0 text-xs font-normal opacity-90">{a.description}</span>
+              )}
             </span>
             {a.action && (
               a.action.to ? (

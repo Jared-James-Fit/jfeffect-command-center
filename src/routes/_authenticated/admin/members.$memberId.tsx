@@ -158,7 +158,8 @@ export function MemberProfileWorkspace({
       key: "billing-access",
       tone: "rose",
       icon: CreditCard,
-      message: `Payment failed — membership access is blocked (${member.subscription_status})`,
+      message: `Payment issue detected — membership access is also blocked (${member.subscription_status})`,
+      description: "Review the subscription and access status to resolve both issues.",
       action: { label: "Open subscription", onClick: () => setTab("subscription") },
     });
   } else if (billingIssue) {
