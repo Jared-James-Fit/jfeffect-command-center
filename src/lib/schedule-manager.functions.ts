@@ -484,27 +484,10 @@ export const getMoveContext = createServerFn({ method: "GET" })
       block_id: weekMap.get(d.week_id)?.block_id ?? block.id,
     }));
 
-    let completion: any = null;
-    if (data.scheduledWorkoutId) {
-      const { data: c } = await supabase
-        .from("pl_day_completions")
-        .select("id, completed_at, in_progress_at, scheduled_workout_id")
-        .eq("scheduled_workout_id", data.scheduledWorkoutId)
-        .maybeSingle();
-      completion = c ?? null;
-    } else {
-      const { data: c } = await supabase
-        .from("pl_day_completions")
-        .select("id, completed_at, in_progress_at")
-        .eq("day_id", data.dayId)
-        .is("scheduled_workout_id", null)
-        .maybeSingle();
-      completion = c ?? null;
-    }
-
-    // Load the instance itself (if provided) and any other instances on
-    // this client that share the source_day_id — used by callers to
-    // detect "same-day conflict" without touching pl_days.scheduled_date.
+    // Load the exact instance when provided. If the caller arrived through a
+    // legacy URL without ?instance= but this day has exactly one scheduled
+    // instance, resolve it here so the move sheet does not accidentally read
+    // an old day-level completion row and lock an otherwise movable instance.
     let instance: any = null;
     let siblingInstances: any[] = [];
     if (data.scheduledWorkoutId) {
@@ -516,13 +499,44 @@ export const getMoveContext = createServerFn({ method: "GET" })
         .eq("id", data.scheduledWorkoutId)
         .maybeSingle();
       instance = inst ?? null;
-      if (inst?.client_id) {
-        const { data: sibs } = await supabase
-          .from("pl_scheduled_workouts")
-          .select("id, source_day_id, scheduled_date, scheduled_time, order_index")
-          .eq("client_id", inst.client_id);
-        siblingInstances = sibs ?? [];
-      }
+    } else {
+      const { data: insts } = await supabase
+        .from("pl_scheduled_workouts")
+        .select(
+          "id, client_id, source_day_id, scheduled_date, scheduled_time, order_index, schedule_source",
+        )
+        .eq("client_id", block.client_id)
+        .eq("source_day_id", data.dayId)
+        .order("scheduled_date", { ascending: true })
+        .order("order_index", { ascending: true })
+        .limit(2);
+      if ((insts ?? []).length === 1) instance = insts![0] ?? null;
+    }
+    if (instance?.client_id) {
+      const { data: sibs } = await supabase
+        .from("pl_scheduled_workouts")
+        .select("id, source_day_id, scheduled_date, scheduled_time, order_index")
+        .eq("client_id", instance.client_id);
+      siblingInstances = sibs ?? [];
+    }
+
+    let completion: any = null;
+    const scopedInstanceId = data.scheduledWorkoutId ?? instance?.id ?? null;
+    if (scopedInstanceId) {
+      const { data: c } = await supabase
+        .from("pl_day_completions")
+        .select("id, completed_at, in_progress_at, scheduled_workout_id")
+        .eq("scheduled_workout_id", scopedInstanceId)
+        .maybeSingle();
+      completion = c ?? null;
+    } else {
+      const { data: c } = await supabase
+        .from("pl_day_completions")
+        .select("id, completed_at, in_progress_at")
+        .eq("day_id", data.dayId)
+        .is("scheduled_workout_id", null)
+        .maybeSingle();
+      completion = c ?? null;
     }
 
     return {

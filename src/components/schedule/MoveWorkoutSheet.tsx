@@ -115,8 +115,6 @@ export function MoveWorkoutSheet({
   const updateInstanceTimeFn = useServerFn(updateScheduledWorkoutTime);
   const removeInstanceFn = useServerFn(removeScheduledWorkout);
 
-  const isInstanceMode = !!scheduledWorkoutId;
-
   const ctxQuery = useQuery({
     queryKey: ["schedule-move-context", dayId, scheduledWorkoutId ?? null],
     enabled: !!dayId && open,
@@ -131,6 +129,8 @@ export function MoveWorkoutSheet({
 
   const today = startOfToday();
   const ctx = ctxQuery.data;
+  const effectiveScheduledWorkoutId = scheduledWorkoutId ?? (ctx?.instance?.id ? String(ctx.instance.id) : null);
+  const isInstanceMode = !!effectiveScheduledWorkoutId;
 
   const [target, setTarget] = useState<Date | null>(null);
   const [timeInput, setTimeInput] = useState<string>("");
@@ -221,7 +221,7 @@ export function MoveWorkoutSheet({
       if (isInstanceMode) {
         const res = await moveInstanceFn({
           data: {
-            instanceId: scheduledWorkoutId!,
+            instanceId: effectiveScheduledWorkoutId!,
             newDate: toYMD(args.newDate),
           },
         });
@@ -251,13 +251,13 @@ export function MoveWorkoutSheet({
 
       // Instance-scoped undo — restore date/time/orderIndex on the same
       // instance id. Never touches pl_days.scheduled_date.
-      if (res.__instance && (res as any).previous && scheduledWorkoutId) {
+      if (res.__instance && (res as any).previous && effectiveScheduledWorkoutId) {
         const prev = (res as any).previous as {
           scheduledDate: string;
           scheduledTime: string | null;
           orderIndex: number;
         };
-        const capturedInstanceId = scheduledWorkoutId;
+        const capturedInstanceId = effectiveScheduledWorkoutId;
         toast.success("Workout moved.", {
           action: {
             label: "Undo",
@@ -352,7 +352,7 @@ export function MoveWorkoutSheet({
 
   const changeTimeMutation = useMutation({
     mutationFn: async (t: string | null) =>
-      updateInstanceTimeFn({ data: { instanceId: scheduledWorkoutId!, time: t } }),
+      updateInstanceTimeFn({ data: { instanceId: effectiveScheduledWorkoutId!, time: t } }),
     onSuccess: () => {
       toast.success("Time updated.");
       void queryClient.invalidateQueries();
@@ -362,7 +362,7 @@ export function MoveWorkoutSheet({
 
   const removeMutation = useMutation({
     mutationFn: async () =>
-      removeInstanceFn({ data: { instanceId: scheduledWorkoutId! } }),
+      removeInstanceFn({ data: { instanceId: effectiveScheduledWorkoutId! } }),
     onSuccess: () => {
       toast.success("Removed from schedule.");
       void queryClient.invalidateQueries();
