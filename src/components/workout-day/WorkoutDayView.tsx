@@ -2152,7 +2152,14 @@ function WorkoutDay({
         open={moveOpen}
         onOpenChange={setMoveOpen}
         currentScheduledDate={scheduledDate}
-        scheduledWorkoutId={(search as any)?.instance ?? null}
+        // Prefer the resolved scheduledWorkoutId (adapter/URL) so the sheet
+        // routes through moveScheduledWorkout when a pl_scheduled_workouts
+        // instance exists. Falling back to URL-only left the sheet in the
+        // legacy pl_days path and the server rejected the move with
+        // "This workout uses the new scheduling system." whenever the
+        // day was opened via a link that didn't carry ?instance= (e.g.
+        // home tiles, notifications, older bookmarks).
+        scheduledWorkoutId={scheduledWorkoutId}
       />
     </>
   );
