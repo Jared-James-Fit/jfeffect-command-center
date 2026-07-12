@@ -52,18 +52,19 @@ export function MissedWorkoutCard({ clientId }: MissedWorkoutCardProps) {
         .in("id", dayIds);
       const dayById = new Map((days ?? []).map((d: any) => [d.id, d]));
       const instanceIds = instRows.map((i: any) => i.id);
+      // Only instance-scoped completions can mark a scheduled instance done.
+      // Legacy day-level completions (scheduled_workout_id IS NULL) belong to
+      // an older copy of that source day and must NOT hide a live instance —
+      // otherwise a stale row from a prior week silently locks a movable
+      // workout out of the missed list.
       const { data: comps } = await supabase
         .from("pl_day_completions")
-        .select("scheduled_workout_id, day_id, completed_at, in_progress_at")
-        .or(
-          `scheduled_workout_id.in.(${instanceIds.join(",")}),and(scheduled_workout_id.is.null,day_id.in.(${dayIds.join(",")}))`,
-        );
+        .select("scheduled_workout_id, completed_at, in_progress_at")
+        .in("scheduled_workout_id", instanceIds);
       const completedInstance = new Set<string>();
-      const completedLegacyDay = new Set<string>();
       for (const c of comps ?? []) {
         if (!(c.completed_at || c.in_progress_at)) continue;
         if (c.scheduled_workout_id) completedInstance.add(c.scheduled_workout_id);
-        else if (c.day_id) completedLegacyDay.add(c.day_id);
       }
       const out: Array<{
         instanceId: string;
@@ -76,7 +77,6 @@ export function MissedWorkoutCard({ clientId }: MissedWorkoutCardProps) {
         const d = dayById.get(inst.source_day_id) as any;
         if (!d || d.archived) continue;
         if (completedInstance.has(inst.id)) continue;
-        if (completedLegacyDay.has(inst.source_day_id)) continue;
         out.push({
           instanceId: inst.id,
           dayId: inst.source_day_id,
