@@ -2267,35 +2267,46 @@ function UnsupportedExerciseCard({ row }: { row: any }) {
 function PreviousLiftChip({
   clientId,
   exerciseId,
+  exerciseName,
   currentDayId,
   displayUnit,
 }: {
   clientId: string | undefined | null;
   exerciseId: string | null;
+  exerciseName?: string | null;
   currentDayId: string;
   displayUnit: "kg" | "lb";
 }) {
   const { data } = useQuery({
-    queryKey: ["previous-lift", clientId, exerciseId, currentDayId],
-    enabled: !!clientId && !!exerciseId,
+    queryKey: ["previous-lift", clientId, exerciseId, exerciseName ?? null, currentDayId],
+    enabled: !!clientId && !!(exerciseId || exerciseName),
     staleTime: 60_000,
     queryFn: async () => {
-      const { data: rows } = await (supabase as any)
+      // Prefer matching by exercise_id when present, otherwise fall back to
+      // the row's `exercise_name_override` so clients whose plan rows aren't
+      // linked to an `exercises` row (custom names typed by the coach) still
+      // see their last session.
+      let query = (supabase as any)
         .from("pl_row_results")
         .select(
           `id, set_index, completed_at, created_at, actual_reps,
            entered_value, entered_unit, normalized_kg, normalized_lb,
            actual_load, actual_load_unit, completed_duration_seconds,
            pl_exercise_rows!inner(
-             exercise_id,
+             exercise_id, exercise_name_override,
              pl_days!inner(id, day_index, scheduled_date, pl_weeks!inner(week_index))
            )`,
         )
         .eq("client_id", clientId)
-        .eq("pl_exercise_rows.exercise_id", exerciseId)
         .not("completed_at", "is", null)
         .order("completed_at", { ascending: false })
         .limit(60);
+      if (exerciseId) {
+        query = query.eq("pl_exercise_rows.exercise_id", exerciseId);
+      } else if (exerciseName) {
+        query = query.eq("pl_exercise_rows.exercise_name_override", exerciseName);
+      }
+      const { data: rows } = await query;
       const list = (rows ?? []) as any[];
       // Skip the current day (any set logged today shouldn't count as
       // "last time"). Pick the most recent day, then the heaviest set on it.
@@ -2625,10 +2636,11 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
         {row.tempo && <span className="ml-2 text-xs font-normal text-muted-foreground">tempo {row.tempo}</span>}
       </div>
       {/* Compact "Last time" chip — subtle so it never outshines today's prescription. */}
-      {clientId && exerciseId && (
+      {clientId && (exerciseId || name) && (
         <PreviousLiftChip
           clientId={clientId}
           exerciseId={exerciseId}
+          exerciseName={name}
           currentDayId={dayId}
           displayUnit={activeUnit}
         />
