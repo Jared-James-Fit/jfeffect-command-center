@@ -76,8 +76,8 @@ export function ExerciseHistorySheet({
   }, [open, clientId, exerciseId, queryClient]);
 
   const { data: rows = [], isLoading, isFetching } = useQuery({
-    queryKey: ["exercise-history", clientId, exerciseId, days],
-    enabled: !!clientId && !!exerciseId && open,
+    queryKey: ["exercise-history", clientId, exerciseId ?? null, exerciseName, days],
+    enabled: !!clientId && (!!exerciseId || !!exerciseName) && open,
     staleTime: 2 * 60_000,   // cache for 2 min — avoids re-fetch on every open
     gcTime: 10 * 60_000,
     retry: 1,
@@ -90,14 +90,21 @@ export function ExerciseHistorySheet({
           entered_value, entered_unit, normalized_kg, normalized_lb,
           actual_load, actual_load_unit,
           pl_exercise_rows!inner(
-            id, exercise_id,
+            id, exercise_id, exercise_name_override,
             pl_days!inner(id, day_index, title, scheduled_date, pl_weeks!inner(id, week_index, pl_blocks!inner(id, name)))
           )
         `)
         .eq("client_id", clientId)
-        .eq("pl_exercise_rows.exercise_id", exerciseId)
         .order("updated_at", { ascending: false })
         .limit(500);
+      // Match by canonical exercise id when we have one; otherwise fall
+      // back to the row's custom name override so custom-named exercises
+      // (no exercise_id) still show a training history.
+      if (exerciseId) {
+        q = q.eq("pl_exercise_rows.exercise_id", exerciseId);
+      } else if (exerciseName) {
+        q = q.eq("pl_exercise_rows.exercise_name_override", exerciseName);
+      }
       if (days) {
         const cutoff = new Date(Date.now() - days * 86400000).toISOString();
         q = q.gte("updated_at", cutoff);
