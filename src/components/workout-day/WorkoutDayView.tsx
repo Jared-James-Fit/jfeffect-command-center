@@ -2675,7 +2675,7 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
           Log the load used
         </div>
       )}
-      {row.notes && <p className="mt-1 text-xs text-muted-foreground italic">{row.notes}</p>}
+      {row.notes && <ExerciseNotesBlock notes={row.notes} />}
       {/* Row 3 — compact horizontal action row (secondary controls: lighter weight) */}
       <div className="mt-2 flex flex-wrap items-center gap-1 opacity-70 hover:opacity-100 transition-opacity">
         {clientId && (exerciseId || name) && (
