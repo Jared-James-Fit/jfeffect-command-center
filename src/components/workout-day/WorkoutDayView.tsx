@@ -2678,7 +2678,7 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
       {row.notes && <p className="mt-1 text-xs text-muted-foreground italic">{row.notes}</p>}
       {/* Row 3 — compact horizontal action row (secondary controls: lighter weight) */}
       <div className="mt-2 flex flex-wrap items-center gap-1 opacity-70 hover:opacity-100 transition-opacity">
-        {clientId && exerciseId && (
+        {clientId && (exerciseId || name) && (
           <ExerciseHistoryButton
             clientId={clientId}
             exerciseId={exerciseId}
