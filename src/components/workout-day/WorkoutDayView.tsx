@@ -2258,6 +2258,35 @@ function UnsupportedExerciseCard({ row }: { row: any }) {
 }
 
 /**
+ * Long coach descriptions on an exercise (multi-sentence programming notes)
+ * used to render as a wall of italic text above every set input. Now short
+ * notes still render inline, but anything longer collapses behind a
+ * "Read notes" toggle so it doesn't push the logging UI off-screen.
+ */
+function ExerciseNotesBlock({ notes }: { notes: string }) {
+  const [open, setOpen] = useState(false);
+  const isLong = notes.length > 140 || notes.split(/\r?\n/).length > 2;
+  if (!isLong) {
+    return <p className="mt-1 text-xs text-muted-foreground italic whitespace-pre-wrap">{notes}</p>;
+  }
+  return (
+    <div className="mt-1">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="inline-flex items-center gap-1 rounded-md border bg-secondary/40 px-2 py-1 text-xs font-medium text-foreground/80 hover:bg-secondary"
+        aria-expanded={open}
+      >
+        {open ? "Hide notes" : "Read notes"}
+      </button>
+      {open && (
+        <p className="mt-2 text-xs text-muted-foreground italic whitespace-pre-wrap">{notes}</p>
+      )}
+    </div>
+  );
+}
+
+/**
  * Compact "Last time" chip — shows the top set (heaviest × reps) the client
  * logged the last time they trained this exercise on a *different* day.
  * Intentionally small so it doesn't outshine the coach's prescribed load,
