@@ -406,7 +406,7 @@ export function ExerciseHistoryButton({
   currentDayIndex?: number | null;
 }) {
   const [open, setOpen] = useState(false);
-  if (!clientId || !exerciseId) return null;
+  if (!clientId || (!exerciseId && !exerciseName)) return null;
   return (
     <>
       <Button size="sm" variant="outline" className={cn("w-full", className)} onClick={() => setOpen(true)}>
