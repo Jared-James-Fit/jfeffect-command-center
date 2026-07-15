@@ -1531,14 +1531,21 @@ export function MessageThread({
                 {mine && !isDeleted && m.id === lastOwnMessageId && !selectionMode && (() => {
                   const readAt = role === "admin" ? m.read_by_client_at : m.read_by_admin_at;
                   const hasReactions = (reactionsByMsg.get(m.id)?.length ?? 0) > 0;
+                  const status = m.delivery_status;
+                  const label = status === "sending"
+                    ? "Sending…"
+                    : status === "failed"
+                    ? "Not delivered · tap to retry"
+                    : readAt
+                    ? `Seen ${format(parseISO(readAt), "h:mm a")}`
+                    : "Delivered";
                   return (
                     <div className={cn(
                       "absolute right-1 text-[10px] text-muted-foreground",
                       hasReactions ? "-bottom-8" : "-bottom-4",
+                      status === "failed" && "text-destructive",
                     )}>
-                      {readAt
-                        ? `Seen ${format(parseISO(readAt), "h:mm a")}`
-                        : "Delivered"}
+                      {label}
                     </div>
                   );
                 })()}
