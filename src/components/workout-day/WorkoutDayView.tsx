@@ -2054,6 +2054,7 @@ function WorkoutDay({
               });
               if (draftKey) clearLocalDraft(draftKey);
               clearHeartbeatTimestamps(completion?.id ?? null);
+              clearWorkoutPageOpen(dayId);
               setNotes("");
               setActualMin("");
               // Use refetchQueries (not invalidateQueries) so the UI updates
