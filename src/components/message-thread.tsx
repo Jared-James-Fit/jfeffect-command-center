@@ -988,7 +988,7 @@ export function MessageThread({
   const lastOwnMessageId = useMemo(() => {
     for (let i = visibleMessages.length - 1; i >= 0; i--) {
       const m = visibleMessages[i];
-      if (m.sender_role === role && !m.is_internal_note) return m.id;
+      if (m.sender_role === role && !m.is_internal_note && !m.deleted_at) return m.id;
     }
     return null;
   }, [visibleMessages, role]);
