@@ -830,6 +830,19 @@ export function MessageThread({
           const existing = prev ?? [];
           // Deduplicate: skip if already in cache (e.g. our own optimistic send)
           if (existing.some((m) => m.id === newMsg.id)) return existing;
+          // If this is our own message that we optimistically appended (temp id),
+          // swap the temp row for the real one instead of appending a duplicate.
+          const tempIdx = existing.findIndex((m) =>
+            m.id.startsWith("optimistic-") &&
+            m.sender_id === newMsg.sender_id &&
+            m.sender_role === newMsg.sender_role &&
+            m.body === newMsg.body,
+          );
+          if (tempIdx >= 0) {
+            const copy = existing.slice();
+            copy[tempIdx] = newMsg;
+            return copy;
+          }
           return [...existing, newMsg];
         });
         // Still update conversation state and notification counts
