@@ -14,6 +14,7 @@ import { RefreshCw, Snowflake, Pause, CreditCard, XCircle, ExternalLink, Gift, S
 import { useState } from "react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { ManageSubscriptionPanel } from "@/components/billing/manage-subscription";
 
 function fmt(d: string | null | undefined) { return d ? new Date(d).toLocaleString() : "—"; }
 
@@ -125,6 +126,14 @@ export function JfAdminBillingCard({ member }: { member: any }) {
 
   return (
     <Card className="border-border p-5 space-y-4">
+      {/* Live Stripe-backed subscription management (cancel / undo) */}
+      {member.stripe_subscription_id && (
+        <ManageSubscriptionPanel
+          member={{ id: member.id, full_name: member.full_name, email: member.email }}
+          onChanged={invalidate}
+        />
+      )}
+
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
           <div className="text-xs uppercase tracking-wider text-muted-foreground">JF Billing</div>
