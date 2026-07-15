@@ -171,7 +171,14 @@ function acquireNotificationsChannel(userId: string, qc: QC): () => void {
     };
     const invalidate = () => {
       if (entry.timer) clearTimeout(entry.timer);
-      entry.timer = setTimeout(() => { qc.invalidateQueries({ queryKey: ["notifications"] }); }, 300);
+      entry.timer = setTimeout(() => {
+        qc.invalidateQueries({ queryKey: ["notifications"] });
+        // Keep sidebar nav badges in lockstep with the bell so counts drop
+        // together instead of the sidebar lagging a full refetch cycle behind.
+        qc.invalidateQueries({ queryKey: ["client-nav-badges"] });
+        qc.invalidateQueries({ queryKey: ["admin-nav-badges"] });
+        qc.invalidateQueries({ queryKey: ["media-nav-badges"] });
+      }, 80);
     };
     entry.ch = supabase
       .channel(`notifications-${userId}`)
