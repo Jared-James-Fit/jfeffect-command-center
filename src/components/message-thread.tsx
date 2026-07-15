@@ -1161,29 +1161,64 @@ export function MessageThread({
         linkAtts.push({ type: detectAttachmentType(u), url: u });
       }
     }
-    setSending(true);
+    // ---------- Optimistic send (iMessage-style) ----------
+    // Immediately append a temporary bubble so the composer clears and the
+    // message appears with no server round-trip. Replace with the real row
+    // when the insert resolves; mark failed on error.
+    const allAtts = [...atts, ...linkAtts];
+    const tempId = `optimistic-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const nowIso = new Date().toISOString();
+    const key = ["messages", clientId, role] as const;
+    const optimistic: Message = {
+      id: tempId,
+      client_id: clientId,
+      sender_id: user.id,
+      sender_role: role,
+      body: text,
+      attachments: allAtts,
+      message_type: messageType,
+      priority: role === "admin" ? priority : null,
+      is_internal_note: role === "admin" ? internalNote : false,
+      read_by_admin_at: role === "admin" ? nowIso : null,
+      read_by_client_at: role === "client" ? nowIso : null,
+      created_at: nowIso,
+      updated_at: nowIso,
+      delivery_status: "sending",
+    };
+    qc.setQueryData<Message[]>(key, (prev) => [...(prev ?? []), optimistic]);
+    setBody("");
+    setAttachments([]);
+    setInternalNote(false);
+    broadcastTyping(true);
     try {
       const sent = await sendMessage({
         clientId,
         senderId: user.id,
         senderRole: role,
         body: text,
-        attachments: [...atts, ...linkAtts],
+        attachments: allAtts,
         messageType,
         isInternalNote: role === "admin" ? internalNote : false,
         priority: role === "admin" ? priority : undefined,
       });
-      setBody("");
-      setAttachments([]);
-      setInternalNote(false);
-      broadcastTyping(true);
-      qc.invalidateQueries({ queryKey: ["messages", clientId, role] });
+      // Swap the optimistic row for the persisted row (dedupe if realtime
+      // already delivered it via INSERT).
+      qc.setQueryData<Message[]>(key, (prev) => {
+        const list = prev ?? [];
+        const withoutTemp = list.filter((m) => m.id !== tempId);
+        if (withoutTemp.some((m) => m.id === sent.id)) return withoutTemp;
+        return [...withoutTemp, sent];
+      });
       return sent;
     } catch (e: any) {
+      // Mark the optimistic bubble as failed so the user can see it didn't send.
+      qc.setQueryData<Message[]>(key, (prev) =>
+        (prev ?? []).map((m) => m.id === tempId
+          ? { ...m, delivery_status: "failed" as const, delivery_error: e?.message ?? "Failed to send" }
+          : m),
+      );
       toast.error(e?.message ?? "Failed to send");
       return null;
-    } finally {
-      setSending(false);
     }
   };
 
