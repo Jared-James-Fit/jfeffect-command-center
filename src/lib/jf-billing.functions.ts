@@ -1278,8 +1278,8 @@ async function writeBillingAudit(
       actor_user_id: ctx?.userId ?? null,
       target_table: "app_members",
       target_id: memberId,
-      details,
-    });
+      details: details as any,
+    } as any);
   } catch (e) {
     console.error("[jf-billing] audit log failed", e);
   }
