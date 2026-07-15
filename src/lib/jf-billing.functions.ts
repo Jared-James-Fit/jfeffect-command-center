@@ -1145,8 +1145,145 @@ export const adminCancelMember = createServerFn({ method: "POST" })
     });
     await applyStripeStateToMember(m.id, sub, s.hold_price_id);
     await fireMemberSms(m.id, "subscription_cancelled");
+    await writeBillingAudit(context, m.id, "subscription_cancel_at_period_end", {
+      subscription_id: m.stripe_subscription_id,
+      cancel_at: nowIsoFromUnix(sub.cancel_at) ?? nowIsoFromUnix(sub.current_period_end),
+    });
     return { ok: true };
   });
+
+/**
+ * Cancel the Stripe subscription immediately. Access ends now
+ * (no automatic refund). Local state is only mutated after Stripe confirms.
+ */
+export const adminCancelMemberImmediately = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => MemberIdInput.parse(d))
+  .handler(async ({ data, context }) => {
+    await assertAdmin(context);
+    const m = await loadMemberOrThrow(data.member_id);
+    if (!m.stripe_subscription_id) throw new Error("No subscription.");
+    const s = await loadSettings();
+    const { apiKey } = resolveStripeKey(s, "adminCancelNow");
+    const sub = await stripeFetch(`/subscriptions/${m.stripe_subscription_id}`, {
+      method: "DELETE",
+      apiKey,
+    });
+    await applyStripeStateToMember(m.id, sub, s.hold_price_id);
+    await fireMemberSms(m.id, "subscription_cancelled");
+    await writeBillingAudit(context, m.id, "subscription_cancel_immediately", {
+      subscription_id: m.stripe_subscription_id,
+      canceled_at: nowIsoFromUnix(sub.canceled_at),
+    });
+    return { ok: true };
+  });
+
+/**
+ * Undo a scheduled cancellation — clears cancel_at_period_end. Only works
+ * while Stripe still shows the subscription as active/trialing with the
+ * flag set; a fully canceled subscription cannot be revived here.
+ */
+export const adminUndoScheduledCancel = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => MemberIdInput.parse(d))
+  .handler(async ({ data, context }) => {
+    await assertAdmin(context);
+    const m = await loadMemberOrThrow(data.member_id);
+    if (!m.stripe_subscription_id) throw new Error("No subscription.");
+    const s = await loadSettings();
+    const { apiKey } = resolveStripeKey(s, "adminUndoCancel");
+    const current = await stripeFetch(`/subscriptions/${m.stripe_subscription_id}`, { apiKey });
+    if (!current.cancel_at_period_end) {
+      return { ok: true, noop: true };
+    }
+    if (current.status === "canceled") {
+      throw new Error("This subscription is already fully cancelled and cannot be resumed.");
+    }
+    const sub = await stripeFetch(`/subscriptions/${m.stripe_subscription_id}`, {
+      method: "POST",
+      body: formEncode({ cancel_at_period_end: "false" }),
+      apiKey,
+    });
+    await applyStripeStateToMember(m.id, sub, s.hold_price_id);
+    await writeBillingAudit(context, m.id, "subscription_cancel_undone", {
+      subscription_id: m.stripe_subscription_id,
+    });
+    return { ok: true };
+  });
+
+/**
+ * Fetch the live Stripe subscription so the admin UI can render an
+ * authoritative "Manage Subscription" panel (plan, amount, interval,
+ * next payment, scheduled cancel date) without waiting for a webhook.
+ */
+export const adminGetMemberSubscription = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => MemberIdInput.parse(d))
+  .handler(async ({ data, context }) => {
+    await assertAdmin(context);
+    const m = await loadMemberOrThrow(data.member_id);
+    if (!m.stripe_subscription_id) {
+      return { has_subscription: false as const };
+    }
+    const s = await loadSettings();
+    const { apiKey, mode } = resolveStripeKey(s, "adminGetSubscription");
+    const { sub, missing } = await safeFetchSubscription(m.stripe_subscription_id, apiKey);
+    if (missing || !sub) {
+      return { has_subscription: false as const, missing: true, stripe_mode: mode };
+    }
+    const item = sub.items?.data?.[0];
+    const price = item?.price;
+    const product = price?.product;
+    const amount_cents = typeof price?.unit_amount === "number" ? price.unit_amount : null;
+    const currency = price?.currency ?? "usd";
+    const interval = price?.recurring?.interval ?? null;
+    const interval_count = price?.recurring?.interval_count ?? 1;
+    return {
+      has_subscription: true as const,
+      stripe_mode: mode,
+      subscription_id: sub.id,
+      status: sub.status as string,
+      display_status: statusFromSubscription(sub, s.hold_price_id),
+      cancel_at_period_end: !!sub.cancel_at_period_end,
+      cancel_at: nowIsoFromUnix(sub.cancel_at),
+      canceled_at: nowIsoFromUnix(sub.canceled_at),
+      current_period_end: nowIsoFromUnix(sub.current_period_end),
+      trial_end: nowIsoFromUnix(sub.trial_end),
+      plan: {
+        price_id: price?.id ?? null,
+        product_id: typeof product === "string" ? product : product?.id ?? null,
+        nickname: price?.nickname ?? null,
+        amount_cents,
+        currency,
+        interval,
+        interval_count,
+      },
+    };
+  });
+
+/**
+ * Best-effort audit trail for billing actions. Never throws — a failure
+ * to log must not block the Stripe mutation from succeeding.
+ */
+async function writeBillingAudit(
+  ctx: any,
+  memberId: string,
+  action: string,
+  details: Record<string, unknown>,
+) {
+  try {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    await supabaseAdmin.from("admin_audit_log").insert({
+      action,
+      actor_user_id: ctx?.userId ?? null,
+      target_table: "app_members",
+      target_id: memberId,
+      details,
+    });
+  } catch (e) {
+    console.error("[jf-billing] audit log failed", e);
+  }
+}
 
 export const adminFreezeMember = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
