@@ -84,7 +84,14 @@ import { computeActiveSeconds } from "@/lib/workout-duration";
 import { LoggingQualityBadge } from "@/components/workout/shared/logging-quality-badge";
 import { CompletedWorkoutActions } from "@/components/workout/shared/completed-workout-actions";
 import { WorkoutStatusBar } from "@/components/workout-day/WorkoutStatusBar";
-import { WorkoutTimer, computeActiveDurationMin } from "@/components/workout-day/WorkoutTimer";
+import {
+  WorkoutTimer,
+  computeActiveDurationMin,
+  markWorkoutPageOpen,
+  readWorkoutPageOpenAt,
+  clearWorkoutPageOpen,
+  effectiveWorkoutStart,
+} from "@/components/workout-day/WorkoutTimer";
 
 /* -------------------------------------------------------------------------- */
 /* Target-parsing helpers (Suggested → Draft → Confirmed fast-logging)         */
@@ -863,6 +870,18 @@ function WorkoutDay({
   // workout is in-flight so the final active_duration_seconds reflects
   // real engaged time and survives a mid-workout refresh.
   const heartbeatEnabled = !!completion?.id && !completion?.completed_at && !readonly && !isImpersonating;
+
+  // Client-side page-open timestamp. The server's `started_at` upsert is
+  // best-effort (races the Finish tap and often lands identical to
+  // `completed_at`, producing a bogus "1 min" duration). We record when
+  // the workout view first mounts for this dayId — persisted in
+  // localStorage so a refresh mid-session doesn't reset it — and treat
+  // it as the authoritative start for duration display + persistence.
+  useEffect(() => {
+    if (readonly || isImpersonating) return;
+    if (completion?.completed_at) return;
+    markWorkoutPageOpen(dayId);
+  }, [dayId, readonly, isImpersonating, completion?.completed_at]);
   // Ping shape depends on the mounted adapter: members address workouts by
   // (enrollmentId, weekIndex, dayIndex) tuples (the member adapter encodes
   // these into the `"week:day"` dayId), so the heartbeat must report the
@@ -1511,7 +1530,12 @@ function WorkoutDay({
           !readonly ? (
             <div className="flex items-center gap-2">
               <WorkoutTimer
-                startedAt={completion?.started_at ?? completion?.in_progress_at ?? null}
+                startedAt={
+                  (effectiveWorkoutStart(
+                    completion?.started_at ?? completion?.in_progress_at ?? null,
+                    readWorkoutPageOpenAt(dayId),
+                  )?.toISOString()) ?? null
+                }
                 completedAt={completion?.completed_at ?? null}
               />
               <UndoButton />
@@ -1928,9 +1952,11 @@ function WorkoutDay({
               // backgrounded/hidden — same math as the live WorkoutTimer
               // badge) over wall-clock so the recap matches what the client
               // actually experienced.
-              const activeMin = computeActiveDurationMin(
+              const effStart = effectiveWorkoutStart(
                 completion?.started_at ?? completion?.in_progress_at ?? null,
+                readWorkoutPageOpenAt(dayId),
               );
+              const activeMin = computeActiveDurationMin(effStart);
               const resolvedDurationMin = Number.isFinite(typedMin) && typedMin > 0
                 ? typedMin
                 : activeMin ?? completion?.actual_duration_min ?? null;
@@ -2033,6 +2059,7 @@ function WorkoutDay({
               });
               if (draftKey) clearLocalDraft(draftKey);
               clearHeartbeatTimestamps(completion?.id ?? null);
+              clearWorkoutPageOpen(dayId);
               setNotes("");
               setActualMin("");
               // Use refetchQueries (not invalidateQueries) so the UI updates
@@ -2125,7 +2152,10 @@ function WorkoutDay({
             // open — matching the live timer badge and the value persisted
             // on Finish.
             computeActiveDurationMin(
-              completion?.started_at ?? completion?.in_progress_at ?? null,
+              effectiveWorkoutStart(
+                completion?.started_at ?? completion?.in_progress_at ?? null,
+                readWorkoutPageOpenAt(dayId),
+              ),
               completion?.completed_at ?? undefined,
             ) ?? completion?.actual_duration_min ?? null
           }

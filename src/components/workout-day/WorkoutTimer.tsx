@@ -3,6 +3,69 @@ import { Clock, RotateCcw } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 /**
+ * Page-open tracker. The server-side `started_at` on `pl_day_completions`
+ * is unreliable — the auto-start upsert can race the "Finish" tap so the
+ * completion row ends up with `started_at ≈ completed_at`, yielding a
+ * "1 min" duration for an hour-long workout. We defensively record when
+ * the workout view first mounts (per dayId, survives refresh) and treat
+ * it as the authoritative start for duration display and the value we
+ * persist to `actual_duration_min` / `active_duration_seconds`.
+ */
+const PAGE_OPEN_PREFIX = "wsb-open:";
+
+export function markWorkoutPageOpen(dayId: string | null | undefined, at: number = Date.now()): number | null {
+  if (!dayId || typeof window === "undefined") return null;
+  try {
+    const key = `${PAGE_OPEN_PREFIX}${dayId}`;
+    const existing = window.localStorage.getItem(key);
+    if (existing) {
+      const n = Number(existing);
+      if (Number.isFinite(n) && n > 0) return n;
+    }
+    window.localStorage.setItem(key, String(at));
+    return at;
+  } catch {
+    return null;
+  }
+}
+
+export function readWorkoutPageOpenAt(dayId: string | null | undefined): number | null {
+  if (!dayId || typeof window === "undefined") return null;
+  try {
+    const raw = window.localStorage.getItem(`${PAGE_OPEN_PREFIX}${dayId}`);
+    if (!raw) return null;
+    const n = Number(raw);
+    return Number.isFinite(n) && n > 0 ? n : null;
+  } catch {
+    return null;
+  }
+}
+
+export function clearWorkoutPageOpen(dayId: string | null | undefined): void {
+  if (!dayId || typeof window === "undefined") return;
+  try { window.localStorage.removeItem(`${PAGE_OPEN_PREFIX}${dayId}`); } catch { /* ignore */ }
+}
+
+/**
+ * Pick the effective workout start — the earliest of (server started_at,
+ * client page-open timestamp). Falls back gracefully when either side is
+ * missing.
+ */
+export function effectiveWorkoutStart(
+  serverStartedAt: string | Date | null | undefined,
+  pageOpenedAt: number | null | undefined,
+): Date | null {
+  const candidates: number[] = [];
+  if (serverStartedAt) {
+    const t = new Date(serverStartedAt).getTime();
+    if (Number.isFinite(t)) candidates.push(t);
+  }
+  if (pageOpenedAt && Number.isFinite(pageOpenedAt)) candidates.push(pageOpenedAt);
+  if (!candidates.length) return null;
+  return new Date(Math.min(...candidates));
+}
+
+/**
  * Read the cumulative paused-while-hidden duration (in ms) the WorkoutTimer
  * has persisted for a given workout session. Includes any currently-open
  * hidden interval up to `endsAt` (defaults to now), so callers compute the
