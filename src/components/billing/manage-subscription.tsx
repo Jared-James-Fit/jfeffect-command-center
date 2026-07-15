@@ -131,25 +131,25 @@ export function ManageSubscriptionPanel({
       </Card>
     );
   }
-  if (!data?.has_subscription) {
+  if (!data || !data.has_subscription) {
     return (
       <Card className="border-border p-4 text-sm text-muted-foreground">
         No Stripe subscription on file for this member.
       </Card>
     );
   }
-
-  const displayStatus = data.display_status ?? data.status;
-  const isScheduled = data.cancel_at_period_end && data.status !== "canceled";
-  const isCanceled = data.status === "canceled";
-  const planLabel = data.plan.nickname
-    ? data.plan.nickname
-    : data.plan.amount_cents != null
-    ? `${fmtMoney(data.plan.amount_cents, data.plan.currency)} ${fmtInterval(data.plan.interval, data.plan.interval_count)}`
+  const sub = data as Extract<typeof data, { has_subscription: true }>;
+  const displayStatus = sub.display_status ?? sub.status;
+  const isScheduled = sub.cancel_at_period_end && sub.status !== "canceled";
+  const isCanceled = sub.status === "canceled";
+  const planLabel = sub.plan.nickname
+    ? sub.plan.nickname
+    : sub.plan.amount_cents != null
+    ? `${fmtMoney(sub.plan.amount_cents, sub.plan.currency)} ${fmtInterval(sub.plan.interval, sub.plan.interval_count)}`
     : "Plan";
 
   const finalAccessDate = isScheduled
-    ? (data.cancel_at ?? data.current_period_end)
+    ? (sub.cancel_at ?? sub.current_period_end)
     : null;
 
   return (
@@ -177,11 +177,11 @@ export function ManageSubscriptionPanel({
 
       <div className="grid gap-2 sm:grid-cols-2 text-sm">
         <div><span className="text-muted-foreground text-xs">Plan:</span> {planLabel}</div>
-        <div><span className="text-muted-foreground text-xs">Amount:</span> {fmtMoney(data.plan.amount_cents, data.plan.currency)}</div>
-        <div><span className="text-muted-foreground text-xs">Billing:</span> {fmtInterval(data.plan.interval, data.plan.interval_count)}</div>
-        <div><span className="text-muted-foreground text-xs">Next payment:</span> {isScheduled || isCanceled ? "—" : fmtDate(data.current_period_end)}</div>
+        <div><span className="text-muted-foreground text-xs">Amount:</span> {fmtMoney(sub.plan.amount_cents, sub.plan.currency)}</div>
+        <div><span className="text-muted-foreground text-xs">Billing:</span> {fmtInterval(sub.plan.interval, sub.plan.interval_count)}</div>
+        <div><span className="text-muted-foreground text-xs">Next payment:</span> {isScheduled || isCanceled ? "—" : fmtDate(sub.current_period_end)}</div>
         <div><span className="text-muted-foreground text-xs">Scheduled cancel:</span> {isScheduled ? fmtDate(finalAccessDate) : "—"}</div>
-        <div><span className="text-muted-foreground text-xs">Cancelled at:</span> {fmtDate(data.canceled_at)}</div>
+        <div><span className="text-muted-foreground text-xs">Cancelled at:</span> {fmtDate(sub.canceled_at)}</div>
       </div>
 
       <div className="flex flex-wrap gap-2 pt-2 border-t border-border">
@@ -227,7 +227,7 @@ export function ManageSubscriptionPanel({
                   <span className="text-muted-foreground">Plan:</span>
                   <span>{planLabel}</span>
                   <span className="text-muted-foreground">Next payment:</span>
-                  <span>{fmtDate(data.current_period_end)}</span>
+                  <span>{fmtDate(sub.current_period_end)}</span>
                   <span className="text-muted-foreground">Cancellation type:</span>
                   <span>
                     {mode === "immediate" && "Immediate"}
@@ -237,7 +237,7 @@ export function ManageSubscriptionPanel({
                   <span className="text-muted-foreground">Final access date:</span>
                   <span>
                     {mode === "immediate" && "Today"}
-                    {mode === "period_end" && fmtDate(data.current_period_end)}
+                    {mode === "period_end" && fmtDate(sub.current_period_end)}
                     {mode === "undo" && "Ongoing"}
                   </span>
                 </div>
