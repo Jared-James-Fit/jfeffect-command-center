@@ -171,7 +171,14 @@ function acquireNotificationsChannel(userId: string, qc: QC): () => void {
     };
     const invalidate = () => {
       if (entry.timer) clearTimeout(entry.timer);
-      entry.timer = setTimeout(() => { qc.invalidateQueries({ queryKey: ["notifications"] }); }, 300);
+      entry.timer = setTimeout(() => {
+        qc.invalidateQueries({ queryKey: ["notifications"] });
+        // Keep sidebar nav badges in lockstep with the bell so counts drop
+        // together instead of the sidebar lagging a full refetch cycle behind.
+        qc.invalidateQueries({ queryKey: ["client-nav-badges"] });
+        qc.invalidateQueries({ queryKey: ["admin-nav-badges"] });
+        qc.invalidateQueries({ queryKey: ["media-nav-badges"] });
+      }, 80);
     };
     entry.ch = supabase
       .channel(`notifications-${userId}`)
@@ -686,6 +693,19 @@ export function NotificationPanel({
     if (prev) qc.setQueryData(cacheKey, prev);
   };
 
+  // Cancel any in-flight notifications refetch so an optimistic patch can't be
+  // clobbered by a realtime-triggered refetch that started a moment earlier.
+  const cancelInflight = () => qc.cancelQueries({ queryKey: ["notifications"] });
+
+  // Drop badge counts sitewide the instant a mutation resolves — otherwise the
+  // sidebar/bell counts wait for the next realtime debounce (up to ~100ms +
+  // one refetch round-trip) before catching up.
+  const invalidateBadgeCaches = () => {
+    qc.invalidateQueries({ queryKey: ["client-nav-badges"] });
+    qc.invalidateQueries({ queryKey: ["admin-nav-badges"] });
+    qc.invalidateQueries({ queryKey: ["media-nav-badges"] });
+  };
+
   // Filtered items per view
   const filtered = useMemo(() => {
     let base: BellItem[];
@@ -736,42 +756,50 @@ export function NotificationPanel({
     mutationFn: async (target: BellItem) => {
       await Promise.all([rpc("notif_mark_read", toPairs([target])), markSourceRead(target, role)]);
     },
-    onMutate: (target) => {
+    onMutate: async (target) => {
+      await cancelInflight();
       const prev = snapshot();
       patchCache(qc, role, userId, (it) => it.id === target.id ? { ...it, isRead: true } : it);
       return { prev };
     },
     onError: (_e, _v, ctx) => { restore(ctx?.prev); toast.error("That notification could not be updated. Try again."); },
+    onSettled: invalidateBadgeCaches,
   });
 
   const markUnreadMut = useMutation({
     mutationFn: async (target: BellItem) => { await rpc("notif_mark_unread", toPairs([target])); },
-    onMutate: (target) => {
+    onMutate: async (target) => {
+      await cancelInflight();
       const prev = snapshot();
       patchCache(qc, role, userId, (it) => it.id === target.id ? { ...it, isRead: false } : it);
       return { prev };
     },
     onError: (_e, _v, ctx) => { restore(ctx?.prev); toast.error("That notification could not be updated. Try again."); },
+    onSettled: invalidateBadgeCaches,
   });
 
   const archiveMut = useMutation({
     mutationFn: async (target: BellItem) => { await rpc("notif_archive", toPairs([target])); },
-    onMutate: (target) => {
+    onMutate: async (target) => {
+      await cancelInflight();
       const prev = snapshot();
       patchCache(qc, role, userId, (it) => it.id === target.id ? { ...it, isArchived: true, isRead: true } : it);
       return { prev };
     },
     onError: (_e, _v, ctx) => { restore(ctx?.prev); toast.error("That notification could not be updated. Try again."); },
+    onSettled: invalidateBadgeCaches,
   });
 
   const restoreMut = useMutation({
     mutationFn: async (target: BellItem) => { await rpc("notif_restore", toPairs([target])); },
-    onMutate: (target) => {
+    onMutate: async (target) => {
+      await cancelInflight();
       const prev = snapshot();
       patchCache(qc, role, userId, (it) => it.id === target.id ? { ...it, isArchived: false } : it);
       return { prev };
     },
     onError: (_e, _v, ctx) => { restore(ctx?.prev); toast.error("That notification could not be updated. Try again."); },
+    onSettled: invalidateBadgeCaches,
   });
 
   const markAllMut = useMutation({
@@ -782,13 +810,15 @@ export function NotificationPanel({
         ...targets.map((i) => markSourceRead(i, role)),
       ]);
     },
-    onMutate: () => {
+    onMutate: async () => {
+      await cancelInflight();
       const prev = snapshot();
       patchCache(qc, role, userId, (it) => it.isArchived ? it : { ...it, isRead: true });
       return { prev };
     },
     onSuccess: () => toast.success("All notifications marked as read."),
     onError: (_e, _v, ctx) => { restore(ctx?.prev); toast.error("Couldn't mark notifications as read. Try again."); },
+    onSettled: invalidateBadgeCaches,
   });
 
   const clearReadMut = useMutation({
@@ -796,13 +826,15 @@ export function NotificationPanel({
       const targets = items.filter((i) => i.isRead && !i.isArchived);
       await rpc("notif_archive", toPairs(targets));
     },
-    onMutate: () => {
+    onMutate: async () => {
+      await cancelInflight();
       const prev = snapshot();
       patchCache(qc, role, userId, (it) => (it.isRead && !it.isArchived) ? { ...it, isArchived: true } : it);
       return { prev };
     },
     onSuccess: () => toast.success("Read notifications cleared."),
     onError: (_e, _v, ctx) => { restore(ctx?.prev); toast.error("Couldn't clear notifications. Try again."); },
+    onSettled: invalidateBadgeCaches,
   });
 
   const archiveAllMut = useMutation({
@@ -810,13 +842,15 @@ export function NotificationPanel({
       const targets = items.filter((i) => !i.isArchived);
       await rpc("notif_archive", toPairs(targets));
     },
-    onMutate: () => {
+    onMutate: async () => {
+      await cancelInflight();
       const prev = snapshot();
       patchCache(qc, role, userId, (it) => ({ ...it, isArchived: true, isRead: true }));
       return { prev };
     },
     onSuccess: () => toast.success("All notifications archived."),
     onError: (_e, _v, ctx) => { restore(ctx?.prev); toast.error("Couldn't archive notifications. Try again."); },
+    onSettled: invalidateBadgeCaches,
   });
 
   // ---- Row click: navigate + mark read -----------------------------------
