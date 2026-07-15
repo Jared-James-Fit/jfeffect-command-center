@@ -1530,7 +1530,12 @@ function WorkoutDay({
           !readonly ? (
             <div className="flex items-center gap-2">
               <WorkoutTimer
-                startedAt={completion?.started_at ?? completion?.in_progress_at ?? null}
+                startedAt={
+                  (effectiveWorkoutStart(
+                    completion?.started_at ?? completion?.in_progress_at ?? null,
+                    readWorkoutPageOpenAt(dayId),
+                  )?.toISOString()) ?? null
+                }
                 completedAt={completion?.completed_at ?? null}
               />
               <UndoButton />
