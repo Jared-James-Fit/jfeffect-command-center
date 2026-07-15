@@ -1541,7 +1541,7 @@ export function MessageThread({
                   );
                 })()}
                 {/* Read receipt (only under my latest message) */}
-                {mine && !isDeleted && m.id === lastOwnMessageId && !selectionMode && (() => {
+                {mine && m.id === lastOwnMessageId && !selectionMode && (() => {
                   const readAt = role === "admin" ? m.read_by_client_at : m.read_by_admin_at;
                   const hasReactions = (reactionsByMsg.get(m.id)?.length ?? 0) > 0;
                   const status = m.delivery_status;
