@@ -1947,9 +1947,11 @@ function WorkoutDay({
               // backgrounded/hidden — same math as the live WorkoutTimer
               // badge) over wall-clock so the recap matches what the client
               // actually experienced.
-              const activeMin = computeActiveDurationMin(
+              const effStart = effectiveWorkoutStart(
                 completion?.started_at ?? completion?.in_progress_at ?? null,
+                readWorkoutPageOpenAt(dayId),
               );
+              const activeMin = computeActiveDurationMin(effStart);
               const resolvedDurationMin = Number.isFinite(typedMin) && typedMin > 0
                 ? typedMin
                 : activeMin ?? completion?.actual_duration_min ?? null;
