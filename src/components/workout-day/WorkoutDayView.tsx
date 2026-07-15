@@ -2146,7 +2146,10 @@ function WorkoutDay({
             // open — matching the live timer badge and the value persisted
             // on Finish.
             computeActiveDurationMin(
-              completion?.started_at ?? completion?.in_progress_at ?? null,
+              effectiveWorkoutStart(
+                completion?.started_at ?? completion?.in_progress_at ?? null,
+                readWorkoutPageOpenAt(dayId),
+              ),
               completion?.completed_at ?? undefined,
             ) ?? completion?.actual_duration_min ?? null
           }
