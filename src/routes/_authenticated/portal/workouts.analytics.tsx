@@ -188,7 +188,6 @@ function PortalAnalytics() {
   const [rangeDays, setRangeDays] = useState<number>(30);
   const [volumeDays, setVolumeDays] = useState<number>(7);
   const [selectedEx, setSelectedEx] = useState<string>("");
-  const [prFilter, setPrFilter] = useState<string>("all");
   const [selectedDot, setSelectedDot] = useState<GraphDotPoint | null>(null);
 
   // Global filter applied to all in-range analytics (kept separate from the
@@ -302,28 +301,6 @@ function PortalAnalytics() {
         };
       }),
     [history, conv, displayUnit],
-  );
-
-  // PR filter selector options.
-  const prOptions: SearchableOption[] = useMemo(() => {
-    const exNames = Array.from(new Set(prs.map((p: any) => p.exercise_name)));
-    return [
-      { value: "all", label: "All exercises" },
-      ...exNames.map((n) => ({
-        value: n,
-        label: n,
-        color: exerciseColor(n),
-        group: exerciseGroup(n),
-      })),
-    ];
-  }, [prs]);
-
-  const filteredPrs = useMemo(
-    () =>
-      prFilter === "all"
-        ? prs
-        : prs.filter((p: any) => p.exercise_name === prFilter),
-    [prs, prFilter],
   );
 
   // Volume data with stable colours + short labels.
