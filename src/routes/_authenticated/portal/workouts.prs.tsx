@@ -107,7 +107,7 @@ function AllPRsPage() {
             <span>All PRs</span>
           </div>
         }
-        description={client?.full_name ?? undefined}
+        subtitle={client?.full_name ?? undefined}
         actions={
           <Link
             to="/portal/workouts/analytics"
