@@ -1,53 +1,22 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
-import { useEffect, useMemo, useState, useCallback } from "react";
-import { useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { z } from "zod";
 import { zodValidator, fallback } from "@tanstack/zod-adapter";
 import { supabase } from "@/integrations/supabase/client";
 import { usePortalUserId } from "@/lib/client-impersonation";
 import { PageHeader } from "@/components/app-shell";
-import { Card } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
-import { ArrowLeft, TrendingUp, Trophy, Dumbbell, Calendar, Flame } from "lucide-react";
+import { ArrowLeft } from "lucide-react";
 import {
-  LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer,
-  CartesianGrid, BarChart, Bar, Cell, ReferenceDot, Area, ComposedChart,
-} from "recharts";
-import {
-  getClientResults, buildExerciseHistory, weeklyMuscleVolume, recentPRs,
-} from "@/lib/pl-programs";
-import { format, isSameDay } from "date-fns";
-import { AnalyticsFilterBar, defaultAnalyticsFilter, type AnalyticsFilter } from "@/components/analytics/analytics-filter-bar";
-import { exactBlockFilter } from "@/components/analytics/analytics-filter-bar";
-import { BlockPickerSheet } from "@/components/analytics/block-picker-sheet";
+  exactBlockFilter,
+  defaultAnalyticsFilter,
+  type AnalyticsFilter,
+} from "@/components/analytics/analytics-filter-bar";
 import {
   type AnalyticsBlock,
   normalizeAnalyticsBlock,
-  resolveCurrentBlock,
 } from "@/lib/analytics/blocks";
-import { PowerliftingExposureSection } from "@/components/analytics/powerlifting-exposure-section";
-import {
-  SearchableSelect,
-  type SearchableOption,
-} from "@/components/analytics/searchable-select";
-import { PlannedVsActualCard } from "@/components/analytics/planned-vs-actual-card";
-import { WeightLiftedCard } from "@/components/analytics/weight-lifted-card";
-import { GraphDotDetail, type GraphDotPoint } from "@/components/analytics/graph-dot-detail";
-import { PRCard } from "@/components/analytics/pr-card";
-import { getClientAnalyticsSettings } from "@/lib/analytics/settings";
-import {
-  ANALYTICS_COLORS,
-  exerciseColor,
-  exerciseGroup,
-  fmtDelta,
-  fmtNum,
-  fmtWeight,
-  liftFamily,
-  muscleColor,
-  shortMuscleLabel,
-} from "@/lib/analytics-format";
+import { ClientAnalyticsDashboard } from "@/components/analytics/client-analytics-dashboard";
 
 /**
  * Client-facing analytics dashboard.
@@ -67,14 +36,6 @@ export const Route = createFileRoute("/_authenticated/portal/workouts/analytics"
   component: PortalAnalytics,
 });
 
-type Unit = "lb" | "kg";
-const LB_PER_KG = 2.2046226;
-
-function convertWeight(value: number, from: Unit, to: Unit) {
-  if (!value || from === to) return value;
-  return to === "lb" ? value * LB_PER_KG : value / LB_PER_KG;
-}
-
 function PortalAnalytics() {
   const portalUserId = usePortalUserId();
   const search = Route.useSearch();
@@ -88,7 +49,7 @@ function PortalAnalytics() {
         .eq("user_id", portalUserId!).maybeSingle()).data,
   });
 
-  const { data: clientBlocks = [], isLoading: blocksLoading, isError: blocksError, refetch: refetchBlocks } = useQuery<AnalyticsBlock[]>({
+  const { data: clientBlocks = [] } = useQuery<AnalyticsBlock[]>({
     queryKey: ["pl-blocks-for-analytics", client?.id],
     enabled: !!client?.id,
     staleTime: 60_000,
@@ -100,38 +61,21 @@ function PortalAnalytics() {
         )
         .eq("client_id", client!.id)
         .order("sort_order", { ascending: true });
-      // Normalize pl_preps once at the route/query boundary.
       return (data ?? []).map(normalizeAnalyticsBlock);
     },
   });
 
-  const resolvedCurrentBlockId = useMemo(
-    () => resolveCurrentBlock(clientBlocks)?.id ?? null,
-    [clientBlocks],
-  );
-
-  // Decide whether the requested block scope is active.
-  const isExactBlockUrl = search.filter === "exact_block" && !!search.blockId;
-  const requestedBlock = useMemo(
-    () => (isExactBlockUrl ? clientBlocks.find((b) => b.id === search.blockId) ?? null : null),
-    [clientBlocks, isExactBlockUrl, search.blockId],
-  );
-
-  const [analyticsFilter, setAnalyticsFilter] = useState<AnalyticsFilter | null>(null);
-  useEffect(() => {
-    if (!clientBlocks.length && !analyticsFilter) return;
-    if (analyticsFilter) return;
-    if (isExactBlockUrl && requestedBlock) {
-      setAnalyticsFilter(exactBlockFilter(requestedBlock, clientBlocks));
-    } else {
-      setAnalyticsFilter(defaultAnalyticsFilter(clientBlocks));
+  // Resolve URL-requested initial filter so deep-links keep working.
+  const initialFilter: AnalyticsFilter | null = useMemo(() => {
+    if (!clientBlocks.length) return null;
+    if (search.filter === "exact_block" && search.blockId) {
+      const block = clientBlocks.find((b) => b.id === search.blockId);
+      if (block) return exactBlockFilter(block, clientBlocks);
     }
-  }, [analyticsFilter, clientBlocks, isExactBlockUrl, requestedBlock]);
-  const filter = analyticsFilter ?? defaultAnalyticsFilter(clientBlocks);
+    return defaultAnalyticsFilter(clientBlocks);
+  }, [clientBlocks, search.filter, search.blockId]);
 
-  // URL persistence — always preserve other search params.
   const handleFilterChange = (next: AnalyticsFilter) => {
-    setAnalyticsFilter(next);
     navigate({
       search: (prev: any) => ({
         ...prev,
@@ -142,53 +86,41 @@ function PortalAnalytics() {
     });
   };
 
-  const [pickerOpen, setPickerOpen] = useState(false);
+  const preferredUnit = client?.preferred_weight_unit === "kg" ? "kg" : "lb";
 
-  // Only fetch logged results when we know the block scope. When an exact
-  // block is selected the query key includes blockId so cache is scoped.
-  const activeBlockId =
-    filter.preset === "current_block" ||
-    filter.preset === "previous_block" ||
-    filter.preset === "exact_block"
-      ? (filter as any).blockId as string
-      : null;
-
-  const { data: results = [], isLoading } = useQuery({
-    queryKey: ["pl-results", client?.id, activeBlockId],
-    enabled: !!client?.id,
-    staleTime: 30_000,
-    queryFn: () => getClientResults(client!.id, { blockId: activeBlockId ?? undefined }),
-  });
-
-  const selectedBlockId = activeBlockId;
-
-  const { data: analyticsSettings } = useQuery({
-    queryKey: ["client-analytics-settings", client?.id],
-    enabled: !!client?.id,
-    staleTime: 60_000,
-    queryFn: () => getClientAnalyticsSettings(client!.id),
-  });
-
-  // `getClientResults` always returns loads in LB (normalized at the data
-  // layer from each set's logged unit), so the source unit here is fixed
-  // to LB. The display unit defaults to the client's preferred unit and
-  // can be toggled freely without re-mixing kg/lb numbers.
-  const sourceUnit: Unit = "lb";
-  const preferredUnit: Unit = client?.preferred_weight_unit === "kg" ? "kg" : "lb";
-  const [displayUnit, setDisplayUnit] = useState<Unit>(preferredUnit);
-  // Once the client record loads, sync the toggle to their preferred unit.
-  // Runs once per client load — the user can still toggle freely after.
-  const [unitSynced, setUnitSynced] = useState(false);
-  useEffect(() => {
-    if (client && !unitSynced) {
-      setDisplayUnit(preferredUnit);
-      setUnitSynced(true);
-    }
-  }, [client, preferredUnit, unitSynced]);
-  const [rangeDays, setRangeDays] = useState<number>(30);
-  const [volumeDays, setVolumeDays] = useState<number>(7);
-  const [selectedEx, setSelectedEx] = useState<string>("");
-  const [selectedDot, setSelectedDot] = useState<GraphDotPoint | null>(null);
+  return (
+    <>
+      <PageHeader title="Training Analytics" subtitle={client?.full_name ?? ""} />
+      <div className="p-4 pb-10 md:p-8">
+        {client?.id ? (
+          <ClientAnalyticsDashboard
+            clientId={client.id}
+            preferredUnit={preferredUnit}
+            initialFilter={initialFilter}
+            onFilterChange={handleFilterChange}
+            headerLeadingNode={
+              <Link
+                to="/portal/workouts"
+                className="inline-flex min-w-0 items-center truncate text-sm font-semibold text-muted-foreground transition-colors hover:text-foreground"
+              >
+                <ArrowLeft className="mr-1 h-4 w-4 shrink-0" />
+                <span className="truncate">Back to workouts</span>
+              </Link>
+            }
+            viewAllPRsNode={
+              <Link
+                to="/portal/workouts/prs"
+                className="text-xs font-bold uppercase tracking-wider text-primary hover:underline"
+              >
+                View All
+              </Link>
+            }
+          />
+        ) : null}
+      </div>
+    </>
+  );
+}
 
   // Global filter applied to all in-range analytics (kept separate from the
   // exposure section which does its own range-aware queries).
