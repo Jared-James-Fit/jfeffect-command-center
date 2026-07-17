@@ -35,6 +35,7 @@ import {
 import { PlannedVsActualCard } from "@/components/analytics/planned-vs-actual-card";
 import { WeightLiftedCard } from "@/components/analytics/weight-lifted-card";
 import { GraphDotDetail, type GraphDotPoint } from "@/components/analytics/graph-dot-detail";
+import { PRCard } from "@/components/analytics/pr-card";
 import { getClientAnalyticsSettings } from "@/lib/analytics/settings";
 import {
   ANALYTICS_COLORS,
@@ -187,7 +188,6 @@ function PortalAnalytics() {
   const [rangeDays, setRangeDays] = useState<number>(30);
   const [volumeDays, setVolumeDays] = useState<number>(7);
   const [selectedEx, setSelectedEx] = useState<string>("");
-  const [prFilter, setPrFilter] = useState<string>("all");
   const [selectedDot, setSelectedDot] = useState<GraphDotPoint | null>(null);
 
   // Global filter applied to all in-range analytics (kept separate from the
@@ -301,28 +301,6 @@ function PortalAnalytics() {
         };
       }),
     [history, conv, displayUnit],
-  );
-
-  // PR filter selector options.
-  const prOptions: SearchableOption[] = useMemo(() => {
-    const exNames = Array.from(new Set(prs.map((p: any) => p.exercise_name)));
-    return [
-      { value: "all", label: "All exercises" },
-      ...exNames.map((n) => ({
-        value: n,
-        label: n,
-        color: exerciseColor(n),
-        group: exerciseGroup(n),
-      })),
-    ];
-  }, [prs]);
-
-  const filteredPrs = useMemo(
-    () =>
-      prFilter === "all"
-        ? prs
-        : prs.filter((p: any) => p.exercise_name === prFilter),
-    [prs, prFilter],
   );
 
   // Volume data with stable colours + short labels.
@@ -519,70 +497,40 @@ function PortalAnalytics() {
                   <Trophy className="h-5 w-5 shrink-0 text-primary" />
                   <span className="truncate">Recent PRs</span>
                 </h2>
-                <span className="shrink-0 text-xs font-semibold text-muted-foreground">{filter.label}</span>
+                <div className="flex shrink-0 items-center gap-3">
+                  <span className="text-xs font-semibold text-muted-foreground">{filter.label}</span>
+                  {prs.length > 0 && (
+                    <Link
+                      to="/portal/workouts/prs"
+                      className="text-xs font-bold uppercase tracking-wider text-primary hover:underline"
+                    >
+                      View All
+                    </Link>
+                  )}
+                </div>
               </div>
-              <div className="mb-3 grid gap-2 sm:grid-cols-[1fr_auto] sm:items-center">
-                <SearchableSelect
-                  options={prOptions}
-                  value={prFilter}
-                  onChange={setPrFilter}
-                  placeholder="Filter exercise"
-                  searchPlaceholder="Search PR exercise…"
-                  emptyText="No exercises match your search."
-                  triggerClassName="h-9"
-                  ariaLabel="Filter PRs by exercise"
-                />
-              </div>
-              {filteredPrs.length === 0 ? (
+              {prs.length === 0 ? (
                 <Card className="p-6 text-base text-muted-foreground">
-                  {prs.length === 0
-                    ? "No new PRs in the selected range."
-                    : "No PRs match this filter."}
+                  No new PRs in the selected range.
                 </Card>
               ) : (
-                <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
-                  {filteredPrs.map((p: any) => {
-                    const color = exerciseColor(p.exercise_name, p.muscle_group);
-                    return (
-                      <Card
-                        key={p.id}
-                        className="relative overflow-hidden border-border/80 bg-card p-4 shadow-sm transition-colors hover:border-primary/40"
-                        style={{ borderLeft: `4px solid ${color}` }}
+                <>
+                  <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
+                    {prs.slice(0, 5).map((p: any) => (
+                      <PRCard key={p.id} pr={p} displayUnit={displayUnit} conv={conv} dense />
+                    ))}
+                  </div>
+                  {prs.length > 5 && (
+                    <div className="mt-3 text-center">
+                      <Link
+                        to="/portal/workouts/prs"
+                        className="text-sm font-semibold text-primary hover:underline"
                       >
-                        <div className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-2">
-                          <div className="min-w-0 text-base font-extrabold leading-tight text-foreground">
-                            <span className="truncate">{p.exercise_name}</span>
-                          </div>
-                          <Badge
-                            className="shrink-0 border-transparent text-xs font-bold"
-                            style={{
-                              background: `color-mix(in oklab, ${ANALYTICS_COLORS.green} 18%, transparent)`,
-                              color: ANALYTICS_COLORS.green,
-                            }}
-                          >
-                            {fmtDelta(conv(p.delta), displayUnit)}
-                          </Badge>
-                        </div>
-                        <div className="mt-1 text-xs font-medium text-muted-foreground">
-                          {format(new Date(p.date), "MMM d, yyyy")}
-                        </div>
-                        <div className="mt-3 text-3xl font-black tracking-tight text-foreground">
-                          {fmtNum(conv(p.est_1rm))}{" "}
-                          <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                            {displayUnit} · est 1RM
-                          </span>
-                        </div>
-                        <div className="mt-2 text-sm font-medium text-foreground/80">
-                          {fmtWeight(conv(p.load), displayUnit)} × {p.reps}
-                        </div>
-                        <div className="mt-0.5 text-xs text-muted-foreground">
-                          Previous best{" "}
-                          {fmtWeight(conv(p.prior_est), displayUnit)}
-                        </div>
-                      </Card>
-                    );
-                  })}
-                </div>
+                        +{prs.length - 5} more PR{prs.length - 5 === 1 ? "" : "s"} → View All
+                      </Link>
+                    </div>
+                  )}
+                </>
               )}
             </section>
 
