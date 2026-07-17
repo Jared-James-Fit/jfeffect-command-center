@@ -11,7 +11,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, ExternalLink, Save, Trash2, Mail, Archive, KeyRound, Copy, CheckCircle2, AlertCircle, BellRing, Tag, Dumbbell, MessageSquare, Link2, MoreHorizontal, User as UserIcon, Apple, DollarSign, LayoutDashboard, IdCard, Target, Settings2, LogIn, Phone, Calendar, ChevronRight } from "lucide-react";
+import { ArrowLeft, ExternalLink, Save, Trash2, Mail, Archive, KeyRound, Copy, CheckCircle2, AlertCircle, BellRing, Tag, Dumbbell, MessageSquare, Link2, MoreHorizontal, User as UserIcon, Apple, DollarSign, LayoutDashboard, IdCard, Target, Settings2, LogIn, Phone, Calendar, ChevronRight, BarChart3 } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { SendBookingLinkDialog } from "@/components/appointments/send-booking-link-dialog";
 import { SendPasswordResetDialog } from "@/components/account/send-password-reset-dialog";
@@ -74,6 +74,7 @@ const NutritionTargetsPanel = lazyDefault(() => import("@/components/nutrition-t
 const CardioTargetsPanel = lazyDefault(() => import("@/components/cardio-targets-panel"), "CardioTargetsPanel");
 const LiftVideosPanel = lazyDefault(() => import("@/components/lift-videos-panel"), "LiftVideosPanel");
 const ProgressMetricsPanel = lazyDefault(() => import("@/components/progress-metrics-panel"), "ProgressMetricsPanel");
+const ClientAnalyticsDashboard = lazyDefault(() => import("@/components/analytics/client-analytics-dashboard"), "ClientAnalyticsDashboard");
 const BasicInfoForm = lazyDefault(() => import("@/components/basic-info-form"), "BasicInfoForm");
 const ClientExerciseNotesCard = lazyDefault(() => import("@/components/client-exercise-notes-card"), "ClientExerciseNotesCard");
 const ProfilePictureCapture = lazyDefault(() => import("@/components/profile-picture-capture"), "ProfilePictureCapture");
@@ -213,7 +214,7 @@ function AssignedCoachSelect({ value, onChange }: { value: string | null; onChan
   );
 }
 
-const TAB_VALUES = ["summary", "info", "goals-setup", "coaching", "account", "training", "nutrition", "metrics", "messages", "lift-videos", "documents", "sessions", "purchases", "billing", "agreements", "notes"] as const;
+const TAB_VALUES = ["summary", "info", "goals-setup", "coaching", "account", "training", "analytics", "nutrition", "metrics", "messages", "lift-videos", "documents", "sessions", "purchases", "billing", "agreements", "notes"] as const;
 type TabValue = typeof TAB_VALUES[number];
 
 type SectionId = "client-profile" | "training" | "nutrition" | "communication" | "business";
@@ -228,6 +229,7 @@ const SECTIONS: { id: SectionId; label: string; description: string; icon: Compo
   ]},
   { id: "training", label: "Training", description: "Program, metrics, sessions, videos", icon: Dumbbell, tabs: [
     { value: "training", label: "Training Program", icon: Dumbbell },
+    { value: "analytics", label: "Analytics", description: "PRs, 1RM trend, volume", icon: BarChart3 },
     { value: "metrics", label: "Progress Metrics", icon: Target },
     { value: "lift-videos", label: "Lift Videos", icon: Dumbbell },
     { value: "sessions", label: "Sessions", icon: Calendar },
@@ -1007,6 +1009,16 @@ export function ClientProfileWorkspace({
               defaultUnit={(form?.preferred_weight_unit as "lb" | "kg") ?? "lb"}
               canEdit
               showExport
+            />
+          </Suspense>
+        </TabsContent>
+
+        <TabsContent value="analytics">
+          <Suspense fallback={<TabFallback />}>
+            <ClientAnalyticsDashboard
+              clientId={id}
+              preferredUnit={(form?.preferred_weight_unit as "lb" | "kg") ?? "lb"}
+              canOpenLog
             />
           </Suspense>
         </TabsContent>
