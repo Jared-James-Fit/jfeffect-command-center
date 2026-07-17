@@ -1013,6 +1013,16 @@ export function ClientProfileWorkspace({
           </Suspense>
         </TabsContent>
 
+        <TabsContent value="analytics">
+          <Suspense fallback={<TabFallback />}>
+            <ClientAnalyticsDashboard
+              clientId={id}
+              preferredUnit={(form?.preferred_weight_unit as "lb" | "kg") ?? "lb"}
+              canOpenLog
+            />
+          </Suspense>
+        </TabsContent>
+
         <TabsContent value="messages" className="grid gap-6">
           <Suspense fallback={<TabFallback />}>
             <ClientMessagesTab clientId={id} />
