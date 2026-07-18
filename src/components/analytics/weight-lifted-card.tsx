@@ -151,7 +151,7 @@ export function WeightLiftedCard({
 
   const summary = useMemo<Summary | null>(() => {
     if (!data) return null;
-    const { sets, days, prep, block } = data;
+    const { sets, days, prep, block: scopedBlock } = data;
 
     // Sum sets per calendar day in LB.
     const setsByDay = new Map<string, number>();
@@ -219,19 +219,19 @@ export function WeightLiftedCard({
       .filter((d) => d.date.getTime() >= monthCut && d.date.getTime() <= rangeEndMs)
       .reduce((s, x) => s + x.weight_lb, 0);
 
-    let block = 0;
+    let blockLb = 0;
     let blockName: string | null = null;
     // Prefer the scoped block (matches the block being viewed in the
     // analytics filter). Fall back to the client's active/planned prep
     // window for the legacy "no block scoped" case.
-    const scope = block ?? prep;
+    const scope = scopedBlock ?? prep;
     if (scope?.start_date) {
       // Intersect the current block with the global range.
       const blockStart = new Date(scope.start_date).getTime();
       const blockEnd = scope.end_date ? new Date(scope.end_date + "T23:59:59").getTime() : now;
       const start = Math.max(blockStart, rangeStartMs);
       const end = Math.min(blockEnd, rangeEndMs);
-      block = all
+      blockLb = all
         .filter((d) => d.date.getTime() >= start && d.date.getTime() <= end)
         .reduce((s, x) => s + x.weight_lb, 0);
       blockName = scope.name ?? scope.title ?? null;
@@ -245,7 +245,7 @@ export function WeightLiftedCard({
       last_date: lastDate,
       week_lb: week,
       month_lb: month,
-      block_lb: block,
+      block_lb: blockLb,
       block_name: blockName,
       sessions: all.length,
       fallbackSessions,
