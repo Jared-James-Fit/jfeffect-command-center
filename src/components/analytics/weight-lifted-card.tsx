@@ -127,17 +127,31 @@ export function WeightLiftedCard({
           .limit(1)
           .maybeSingle(),
       ]);
+      // Fallback: when the caller has scoped analytics to a specific block,
+      // also read that block's metadata so the "Current block" tile can
+      // resolve a name + date window even if no pl_preps row exists (blocks
+      // and preps are independent entities — a client can have blocks
+      // without a peaking prep).
+      let scopedBlock: any = null;
+      if (blockId) {
+        const { data: b } = await (supabase.from("pl_blocks") as any)
+          .select("id, name, start_date, end_date, status")
+          .eq("id", blockId)
+          .maybeSingle();
+        scopedBlock = b ?? null;
+      }
       return {
         sets: (setsRes.data ?? []) as any[],
         days: (daysRes.data ?? []) as any[],
         prep: (prepRes.data ?? null) as any,
+        block: scopedBlock,
       };
     },
   });
 
   const summary = useMemo<Summary | null>(() => {
     if (!data) return null;
-    const { sets, days, prep } = data;
+    const { sets, days, prep, block } = data;
 
     // Sum sets per calendar day in LB.
     const setsByDay = new Map<string, number>();
@@ -207,16 +221,20 @@ export function WeightLiftedCard({
 
     let block = 0;
     let blockName: string | null = null;
-    if (prep?.start_date) {
+    // Prefer the scoped block (matches the block being viewed in the
+    // analytics filter). Fall back to the client's active/planned prep
+    // window for the legacy "no block scoped" case.
+    const scope = block ?? prep;
+    if (scope?.start_date) {
       // Intersect the current block with the global range.
-      const blockStart = new Date(prep.start_date).getTime();
-      const blockEnd = prep.end_date ? new Date(prep.end_date + "T23:59:59").getTime() : now;
+      const blockStart = new Date(scope.start_date).getTime();
+      const blockEnd = scope.end_date ? new Date(scope.end_date + "T23:59:59").getTime() : now;
       const start = Math.max(blockStart, rangeStartMs);
       const end = Math.min(blockEnd, rangeEndMs);
       block = all
         .filter((d) => d.date.getTime() >= start && d.date.getTime() <= end)
         .reduce((s, x) => s + x.weight_lb, 0);
-      blockName = prep.name ?? prep.title ?? null;
+      blockName = scope.name ?? scope.title ?? null;
     }
 
     const fallbackSessions = all.filter((d) => d.fromFallback).length;
