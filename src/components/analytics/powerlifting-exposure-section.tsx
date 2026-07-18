@@ -133,6 +133,58 @@ export function PowerliftingExposureSection({
   const stats = useMemo(() => exposureStats(exposures), [exposures]);
   const timeline = useMemo(() => exposureTimeline(exposures), [exposures]);
 
+  // Fallback for blocks that have SBD movement_family assigned but no
+  // purpose_label yet. Group by (day, family) so the coach + client still
+  // see "how many squat / bench / deadlift sessions happened" instead of
+  // an empty state. A banner surfaces the missing-role gap to admins.
+  const familyOnly = useMemo(() => {
+    if (!exposureData) return null;
+    if (exposures.length > 0) return null;
+    if (!exposureData.hasSbdRows) return null;
+    const dayById = new Map(exposureData.days.map((d) => [d.id, d]));
+    const completedByDay = new Set(
+      exposureData.completions
+        .filter((c) => c.completed_at != null)
+        .map((c) => c.day_id),
+    );
+    const startMs = filter.start.getTime();
+    const endMs = filter.end.getTime();
+    const seen = new Set<string>();
+    const perFamily: Record<LiftFamily, { planned: number; completed: number }> = {
+      squat: { planned: 0, completed: 0 },
+      bench: { planned: 0, completed: 0 },
+      deadlift: { planned: 0, completed: 0 },
+    };
+    type Cell = { dayId: string; completed: boolean };
+    const perWeekFamily = new Map<number, Record<LiftFamily, Cell[]>>();
+    for (const r of exposureData.rows) {
+      const fam = (r.movement_family ?? "").toLowerCase();
+      if (fam !== "squat" && fam !== "bench" && fam !== "deadlift") continue;
+      const day = dayById.get(r.day_id);
+      if (!day) continue;
+      if (day.scheduled_date) {
+        const t = new Date(day.scheduled_date).getTime();
+        if (isFinite(t) && (t < startMs || t > endMs)) continue;
+      }
+      const key = `${day.id}|${fam}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      const completed = completedByDay.has(day.id);
+      const family = fam as LiftFamily;
+      perFamily[family].planned += 1;
+      if (completed) perFamily[family].completed += 1;
+      const wk =
+        perWeekFamily.get(day.week_index) ??
+        { squat: [] as Cell[], bench: [] as Cell[], deadlift: [] as Cell[] };
+      wk[family].push({ dayId: day.id, completed });
+      perWeekFamily.set(day.week_index, wk);
+    }
+    const weeks = [...perWeekFamily.entries()]
+      .map(([weekIndex, cells]) => ({ weekIndex, ...cells }))
+      .sort((a, b) => a.weekIndex - b.weekIndex);
+    return { perFamily, weeks };
+  }, [exposureData, exposures, filter.start, filter.end]);
+
   // Coach alerts (admin)
   const alerts = useMemo(() => {
     const list: { kind: "missed-primary" | "no-roles"; message: string }[] = [];
@@ -185,22 +237,16 @@ export function PowerliftingExposureSection({
   // Empty state for client-facing view
   if (!hasRoleData && !admin) {
     if (!exposureData?.hasSbdRows) return null;
-    return (
-      <section aria-label="Powerlifting Exposure">
-        <div className="mb-3 flex items-center gap-2">
-          <h2 className="flex items-center gap-2 text-base font-black uppercase tracking-wider text-foreground">
-            <Target className="h-5 w-5 shrink-0 text-primary" />
-            Powerlifting Exposure
-          </h2>
-        </div>
-        <Card className="p-6 text-sm text-muted-foreground">
-          This block does not have powerlifting priority roles assigned yet.
-        </Card>
-      </section>
-    );
+    // Fall through: render the family-only fallback so clients still see
+    // their squat/bench/deadlift session counts even when roles are unset.
   }
 
-  if (!hasRoleData && admin && alerts.length === 0) {
+  // Admins always see the section when SBD rows exist so they can act on
+  // the missing-role gap (either alerts or the family-only fallback).
+  if (!hasRoleData && !familyOnly && admin && alerts.length === 0) {
+    return null;
+  }
+  if (!hasRoleData && !familyOnly && !admin) {
     return null;
   }
 
@@ -215,6 +261,121 @@ export function PowerliftingExposureSection({
           Powerlifting Exposure Analytics
         </h2>
       </div>
+
+      {/* Roles-missing banner + family-only summary fallback */}
+      {familyOnly && (
+        <>
+          <Card className="border-amber-500/40 bg-amber-500/10 p-4">
+            <div className="flex items-start gap-2 text-sm">
+              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" />
+              <div className="flex-1 text-amber-800 dark:text-amber-300">
+                Priority roles (Primary / Secondary / Tertiary / Quaternary) haven’t been
+                assigned for this block yet. Showing squat, bench and deadlift session
+                counts by movement family until roles are set.
+                {admin && navigateToBuilderHref && (
+                  <>
+                    {" "}
+                    <a
+                      href={navigateToBuilderHref}
+                      className="font-semibold underline text-amber-700 dark:text-amber-200"
+                    >
+                      Assign roles →
+                    </a>
+                  </>
+                )}
+              </div>
+            </div>
+          </Card>
+
+          <Card className="p-4">
+            <div className="mb-3 text-xs font-bold uppercase tracking-widest text-muted-foreground">
+              SBD Session Summary
+            </div>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+              {FAMILIES.map((fam) => {
+                const s = familyOnly.perFamily[fam];
+                if (s.planned === 0) return null;
+                const pct = Math.round((s.completed / s.planned) * 100);
+                return (
+                  <div key={fam} className="rounded-md border border-border bg-card/60 p-3">
+                    <div className="flex items-center gap-2">
+                      <span
+                        aria-hidden
+                        className="h-2.5 w-2.5 rounded-full"
+                        style={{ background: FAMILY_COLOR[fam] }}
+                      />
+                      <span className="text-xs font-bold uppercase text-muted-foreground">
+                        {FAMILY_LABEL[fam]}
+                      </span>
+                    </div>
+                    <div className="mt-1 text-2xl font-black text-foreground">
+                      {s.completed}
+                      <span className="text-sm font-semibold text-muted-foreground"> / {s.planned}</span>
+                    </div>
+                    <div className="text-xs text-muted-foreground">{pct}% complete</div>
+                  </div>
+                );
+              })}
+            </div>
+          </Card>
+
+          <Card className="p-4">
+            <div className="mb-3 text-xs font-bold uppercase tracking-widest text-muted-foreground">
+              Weekly SBD Sessions
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="text-left text-xs font-semibold uppercase text-muted-foreground">
+                    <th className="pb-2 pr-4">Week</th>
+                    <th className="pb-2 pr-4">Squat</th>
+                    <th className="pb-2 pr-4">Bench</th>
+                    <th className="pb-2 pr-4">Deadlift</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {familyOnly.weeks.map((w) => (
+                    <tr key={w.weekIndex} className="border-t border-border/60">
+                      <td className="py-2 pr-4 font-bold text-foreground">W{w.weekIndex}</td>
+                      {(["squat", "bench", "deadlift"] as LiftFamily[]).map((fam) => {
+                        const cells = w[fam];
+                        return (
+                          <td key={fam} className="py-2 pr-4">
+                            {cells.length === 0 ? (
+                              <span className="text-xs text-muted-foreground">—</span>
+                            ) : (
+                              <div className="flex flex-wrap gap-1">
+                                {cells.map((c, i) => (
+                                  <button
+                                    key={`${c.dayId}:${i}`}
+                                    type="button"
+                                    onClick={() => {
+                                      if (admin) return;
+                                      navigate({
+                                        to: "/portal/workouts/$dayId",
+                                        params: { dayId: c.dayId },
+                                      });
+                                    }}
+                                    className={`inline-flex h-6 min-w-6 items-center justify-center rounded-full border px-2 text-[11px] font-bold ${c.completed ? "text-foreground" : "text-muted-foreground"}`}
+                                    style={{ borderColor: `color-mix(in oklab, ${FAMILY_COLOR[fam]} 40%, var(--border))` }}
+                                    title={c.completed ? "Completed" : "Scheduled"}
+                                  >
+                                    {c.completed ? "✓" : "•"}
+                                  </button>
+                                ))}
+                              </div>
+                            )}
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </Card>
+        </>
+      )}
 
       {/* Coach alerts */}
       {admin && alerts.length > 0 && (
