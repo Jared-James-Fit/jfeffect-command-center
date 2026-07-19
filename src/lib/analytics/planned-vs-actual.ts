@@ -11,6 +11,12 @@
 import { supabase } from "@/integrations/supabase/client";
 import { estimate1RM, isWorkingSet, type E1RMFormula } from "./e1rm";
 
+type CompletionSummary = {
+  id: string;
+  day_id: string;
+  completed_at: string | null;
+};
+
 export interface PlannedVsActualRow {
   rowId: string;
   exerciseName: string;
@@ -72,6 +78,54 @@ function rowHitRepTarget(reps: number, min: number | null, max: number | null): 
   return true;
 }
 
+function uniqueStrings(values: Array<string | null | undefined>): string[] {
+  return [...new Set(values.filter((v): v is string => !!v))];
+}
+
+function isDateAtStartOfDay(d: Date): boolean {
+  return (
+    d.getHours() === 0 &&
+    d.getMinutes() === 0 &&
+    d.getSeconds() === 0 &&
+    d.getMilliseconds() === 0
+  );
+}
+
+function toBoundaryIso(
+  d: Date | string | null | undefined,
+  boundary: "start" | "end",
+): string | null {
+  if (d == null) return null;
+  const parsed = d instanceof Date ? new Date(d) : new Date(d);
+  if (Number.isNaN(parsed.getTime())) return null;
+  // Block/date-picker filters pass calendar dates at midnight. Treat the end
+  // date as inclusive for the whole training day, otherwise completions later
+  // on the block end date are silently excluded.
+  if (boundary === "end" && isDateAtStartOfDay(parsed)) {
+    parsed.setHours(23, 59, 59, 999);
+  }
+  return parsed.toISOString();
+}
+
+function dedupeCompletionsByDay(rows: CompletionSummary[]): CompletionSummary[] {
+  const byDay = new Map<string, CompletionSummary>();
+  for (const row of rows) {
+    if (!row.day_id) continue;
+    const existing = byDay.get(row.day_id);
+    if (!existing) {
+      byDay.set(row.day_id, row);
+      continue;
+    }
+    const rowTime = row.completed_at ? new Date(row.completed_at).getTime() : 0;
+    const existingTime = existing.completed_at ? new Date(existing.completed_at).getTime() : 0;
+    if (rowTime > existingTime) byDay.set(row.day_id, row);
+  }
+  return [...byDay.values()].sort(
+    (a, b) =>
+      new Date(b.completed_at ?? 0).getTime() - new Date(a.completed_at ?? 0).getTime(),
+  );
+}
+
 /**
  * Fetch the last `limit` completed workout days for a client and return a
  * planned-vs-actual comparison for each.
@@ -91,52 +145,138 @@ export async function getRecentPlannedVsActual(
   const limit = opts.limit ?? 5;
   const formula = opts.formula ?? "epley";
   const rpeMin = opts.workingRpeMin ?? 6;
-  const toIso = (d: Date | string | null | undefined) =>
-    d == null ? null : (d instanceof Date ? d.toISOString() : new Date(d).toISOString());
-  const startIso = toIso(opts.startDate);
-  const endIso = toIso(opts.endDate);
+  const startIso = toBoundaryIso(opts.startDate, "start");
+  const endIso = toBoundaryIso(opts.endDate, "end");
 
   // Resolve block scope once — pl_day_completions.day_id must be in this set.
   let blockDayIds: string[] | null = null;
   if (opts.blockId) {
-    const { data: weeks } = await supabase.from("pl_weeks").select("id").eq("block_id", opts.blockId);
+    const { data: weeks, error: weeksErr } = await supabase
+      .from("pl_weeks")
+      .select("id")
+      .eq("block_id", opts.blockId);
+    if (weeksErr) throw weeksErr;
     const weekIds = (weeks ?? []).map((w: any) => w.id);
     if (weekIds.length === 0) return [];
-    const { data: days } = await supabase.from("pl_days").select("id").in("week_id", weekIds);
+    const { data: days, error: daysErr } = await supabase
+      .from("pl_days")
+      .select("id")
+      .in("week_id", weekIds);
+    if (daysErr) throw daysErr;
     blockDayIds = (days ?? []).map((d: any) => d.id);
     if (blockDayIds.length === 0) return [];
   }
 
+  const blockDayIdSet = blockDayIds ? new Set(blockDayIds) : null;
+
+  const fetchFallbackCompletionsFromResults = async (): Promise<CompletionSummary[]> => {
+    let resultQuery = supabase
+      .from("pl_row_results")
+      .select("row_id, completed_at")
+      .eq("client_id", clientId)
+      .not("completed_at", "is", null);
+    if (startIso) resultQuery = resultQuery.gte("completed_at", startIso);
+    if (endIso) resultQuery = resultQuery.lte("completed_at", endIso);
+
+    const { data: recentResults, error: resultErr } = await resultQuery
+      .order("completed_at", { ascending: false })
+      .limit(500);
+    if (resultErr) throw resultErr;
+
+    const candidateRowIds = uniqueStrings((recentResults ?? []).map((r: any) => r.row_id));
+    if (candidateRowIds.length === 0) return [];
+
+    const { data: candidateRows, error: candidateRowsErr } = await supabase
+      .from("pl_exercise_rows")
+      .select("id, day_id")
+      .in("id", candidateRowIds);
+    if (candidateRowsErr) throw candidateRowsErr;
+
+    const dayByRow = new Map((candidateRows ?? []).map((r: any) => [r.id, r.day_id]));
+    const byDay = new Map<string, CompletionSummary>();
+    for (const result of recentResults ?? []) {
+      const dayId = dayByRow.get((result as any).row_id);
+      if (!dayId) continue;
+      if (blockDayIdSet && !blockDayIdSet.has(dayId)) continue;
+      if (!byDay.has(dayId)) {
+        byDay.set(dayId, {
+          id: `result:${dayId}`,
+          day_id: dayId,
+          completed_at: (result as any).completed_at ?? null,
+        });
+      }
+    }
+    return dedupeCompletionsByDay([...byDay.values()]).slice(0, limit);
+  };
+
   let completionsQuery = supabase
     .from("pl_day_completions")
-    .select("id, day_id, completed_at, pl_days(title, day_index)")
+    .select("id, day_id, completed_at")
     .eq("client_id", clientId)
     .not("completed_at", "is", null);
   if (startIso) completionsQuery = completionsQuery.gte("completed_at", startIso);
   if (endIso) completionsQuery = completionsQuery.lte("completed_at", endIso);
   if (blockDayIds) completionsQuery = completionsQuery.in("day_id", blockDayIds);
-  const { data: completions, error: cErr } = await completionsQuery
+  const { data: completionRows, error: cErr } = await completionsQuery
     .order("completed_at", { ascending: false })
-    .limit(limit);
+    .limit(Math.max(limit * 5, 25));
   if (cErr) throw cErr;
+  let completions = dedupeCompletionsByDay((completionRows ?? []) as CompletionSummary[]).slice(
+    0,
+    limit,
+  );
+
+  // Some older workout sessions have set results but no day-completion row.
+  // Use those results as a read-only fallback so the analytics card still
+  // reflects real completed training instead of showing an empty state.
+  if (completions.length === 0) {
+    completions = await fetchFallbackCompletionsFromResults();
+  }
   if (!completions || completions.length === 0) return [];
 
-  const dayIds = completions.map((c: any) => c.day_id);
+  const dayIds = uniqueStrings(completions.map((c) => c.day_id));
+
+  const { data: dayMetaRows, error: dayMetaErr } = await supabase
+    .from("pl_days")
+    .select("id, title, day_index")
+    .in("id", dayIds);
+  if (dayMetaErr) throw dayMetaErr;
+  const dayMetaById = new Map((dayMetaRows ?? []).map((d: any) => [d.id, d]));
 
   const { data: rows, error: rErr } = await supabase
     .from("pl_exercise_rows")
-    .select("id, day_id, sort_order, sets, reps_text, load_kg, load_lb, measurement_type, duration_seconds, exercise_name_override, exercises(name)")
+    .select(
+      "id, day_id, sort_order, sets, reps_text, load_kg, load_lb, measurement_type, duration_seconds, exercise_id, exercise_name_override",
+    )
     .in("day_id", dayIds);
   if (rErr) throw rErr;
 
-  const rowIds = (rows ?? []).map((r: any) => r.id);
+  const rowIds = uniqueStrings((rows ?? []).map((r: any) => r.id));
   if (rowIds.length === 0) return [];
 
-  const { data: results, error: resErr } = await supabase
+  const exerciseIds = uniqueStrings((rows ?? []).map((r: any) => r.exercise_id));
+  const exerciseNameById = new Map<string, string>();
+  if (exerciseIds.length > 0) {
+    const { data: exercises, error: exercisesErr } = await supabase
+      .from("exercises")
+      .select("id, name")
+      .in("id", exerciseIds);
+    if (exercisesErr) throw exercisesErr;
+    for (const ex of exercises ?? []) {
+      if ((ex as any).id && (ex as any).name) {
+        exerciseNameById.set((ex as any).id, (ex as any).name);
+      }
+    }
+  }
+
+  let resultsQuery = supabase
     .from("pl_row_results")
     .select("row_id, set_index, actual_load, actual_reps, actual_rpe, actual_rpe_num, is_working_set, completed_at, completed_duration_seconds")
     .eq("client_id", clientId)
     .in("row_id", rowIds);
+  if (startIso) resultsQuery = resultsQuery.gte("completed_at", startIso);
+  if (endIso) resultsQuery = resultsQuery.lte("completed_at", endIso);
+  const { data: results, error: resErr } = await resultsQuery;
   if (resErr) throw resErr;
 
   const resultsByRow = new Map<string, any[]>();
@@ -168,7 +308,8 @@ export async function getRecentPlannedVsActual(
               ? true
               : s.is_working_set === false
                 ? false
-                : isWorkingSet({
+                : Number(s.actual_reps) > 0 ||
+                  isWorkingSet({
                     load: s.actual_load,
                     reps: s.actual_reps,
                     rpe: s.actual_rpe_num ?? s.actual_rpe,
@@ -236,7 +377,8 @@ export async function getRecentPlannedVsActual(
 
       return {
         rowId: row.id,
-        exerciseName: row.exercises?.name ?? row.exercise_name_override ?? "Exercise",
+        exerciseName:
+          exerciseNameById.get(row.exercise_id) ?? row.exercise_name_override ?? "Exercise",
         measurementType: isTime ? "time" : "reps",
         plannedSets,
         plannedRepsText: row.reps_text ?? null,
@@ -263,7 +405,11 @@ export async function getRecentPlannedVsActual(
 
     return {
       dayId: c.day_id,
-      dayName: c.pl_days?.title ?? (c.pl_days?.day_index != null ? `Day ${c.pl_days.day_index + 1}` : null),
+      dayName:
+        dayMetaById.get(c.day_id)?.title ??
+        (dayMetaById.get(c.day_id)?.day_index != null
+          ? `Day ${Number(dayMetaById.get(c.day_id)?.day_index) + 1}`
+          : null),
       completedAt: c.completed_at ?? null,
       rows: comparisonRows,
       totals: {
