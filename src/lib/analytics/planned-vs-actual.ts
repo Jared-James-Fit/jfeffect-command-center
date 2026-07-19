@@ -84,10 +84,7 @@ function uniqueStrings(values: Array<string | null | undefined>): string[] {
 
 function isDateAtStartOfDay(d: Date): boolean {
   return (
-    d.getHours() === 0 &&
-    d.getMinutes() === 0 &&
-    d.getSeconds() === 0 &&
-    d.getMilliseconds() === 0
+    d.getHours() === 0 && d.getMinutes() === 0 && d.getSeconds() === 0 && d.getMilliseconds() === 0
   );
 }
 
@@ -121,8 +118,7 @@ function dedupeCompletionsByDay(rows: CompletionSummary[]): CompletionSummary[] 
     if (rowTime > existingTime) byDay.set(row.day_id, row);
   }
   return [...byDay.values()].sort(
-    (a, b) =>
-      new Date(b.completed_at ?? 0).getTime() - new Date(a.completed_at ?? 0).getTime(),
+    (a, b) => new Date(b.completed_at ?? 0).getTime() - new Date(a.completed_at ?? 0).getTime(),
   );
 }
 
@@ -271,7 +267,9 @@ export async function getRecentPlannedVsActual(
 
   let resultsQuery = supabase
     .from("pl_row_results")
-    .select("row_id, set_index, actual_load, actual_reps, actual_rpe, actual_rpe_num, is_working_set, completed_at, completed_duration_seconds")
+    .select(
+      "row_id, set_index, actual_load, actual_reps, actual_rpe, actual_rpe_num, is_working_set, completed_at, completed_duration_seconds",
+    )
     .eq("client_id", clientId)
     .in("row_id", rowIds);
   if (startIso) resultsQuery = resultsQuery.gte("completed_at", startIso);
@@ -330,23 +328,20 @@ export async function getRecentPlannedVsActual(
       const actualVolume = isTime
         ? 0
         : working.reduce(
-        (s, r) => s + (Number(r.actual_load) || 0) * (Number(r.actual_reps) || 0),
-        0,
-      );
+            (s, r) => s + (Number(r.actual_load) || 0) * (Number(r.actual_reps) || 0),
+            0,
+          );
       const bestE1RM = isTime
         ? 0
         : working.reduce((best, r) => {
-        const e = estimate1RM(Number(r.actual_load) || 0, Number(r.actual_reps) || 0, formula);
-        return e > best ? e : best;
-      }, 0);
+            const e = estimate1RM(Number(r.actual_load) || 0, Number(r.actual_reps) || 0, formula);
+            return e > best ? e : best;
+          }, 0);
       const actualDurationTotalSeconds = isTime
         ? working.reduce((s, r) => s + (Number(r.completed_duration_seconds) || 0), 0)
         : 0;
       const bestDurationSeconds = isTime
-        ? working.reduce(
-            (best, r) => Math.max(best, Number(r.completed_duration_seconds) || 0),
-            0,
-          )
+        ? working.reduce((best, r) => Math.max(best, Number(r.completed_duration_seconds) || 0), 0)
         : 0;
 
       const setsPct =
@@ -417,7 +412,8 @@ export async function getRecentPlannedVsActual(
         plannedSets,
         actualSets,
         actualVolume,
-        setsPct: plannedSets > 0 ? Math.min(100, Math.round((actualSets / plannedSets) * 100)) : null,
+        setsPct:
+          plannedSets > 0 ? Math.min(100, Math.round((actualSets / plannedSets) * 100)) : null,
         repsHitPct:
           rowsWithRepTarget.length > 0
             ? Math.round(
