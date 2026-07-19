@@ -309,11 +309,12 @@ export async function getRecentPlannedVsActual(
               : s.is_working_set === false
                 ? false
                 : Number(s.actual_reps) > 0 ||
-                  isWorkingSet({
+                  (isWorkingSet({
                     load: s.actual_load,
                     reps: s.actual_reps,
                     rpe: s.actual_rpe_num ?? s.actual_rpe,
-                  }) && (s.actual_rpe_num == null || Number(s.actual_rpe_num) >= rpeMin),
+                  }) &&
+                    (s.actual_rpe_num == null || Number(s.actual_rpe_num) >= rpeMin)),
           );
 
       const { min, max } = parseRepsText(row.reps_text);
