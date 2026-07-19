@@ -109,7 +109,7 @@ export async function getRecentPlannedVsActual(
 
   let completionsQuery = supabase
     .from("pl_day_completions")
-    .select("id, day_id, completed_at, pl_days(name, sort_order)")
+    .select("id, day_id, completed_at, pl_days(title, day_index)")
     .eq("client_id", clientId)
     .not("completed_at", "is", null);
   if (startIso) completionsQuery = completionsQuery.gte("completed_at", startIso);
@@ -263,7 +263,7 @@ export async function getRecentPlannedVsActual(
 
     return {
       dayId: c.day_id,
-      dayName: c.pl_days?.name ?? null,
+      dayName: c.pl_days?.title ?? (c.pl_days?.day_index != null ? `Day ${c.pl_days.day_index + 1}` : null),
       completedAt: c.completed_at ?? null,
       rows: comparisonRows,
       totals: {
