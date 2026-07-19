@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { ChevronDown, Target } from "lucide-react";
+import { ChevronDown, Loader2, Target } from "lucide-react";
 import { useState } from "react";
 import { format } from "date-fns";
 import { getRecentPlannedVsActual } from "@/lib/analytics/planned-vs-actual";
@@ -39,7 +39,7 @@ export function PlannedVsActualCard({
 }) {
   const [expandedDay, setExpandedDay] = useState<string | null>(null);
 
-  const { data: days = [], isLoading } = useQuery({
+  const { data: days = [], error, isError, isFetching, isLoading, refetch } = useQuery({
     queryKey: [
       "planned-vs-actual",
       clientId,
@@ -63,9 +63,54 @@ export function PlannedVsActualCard({
 
   if (isLoading) {
     return (
-      <Card className="p-4 text-sm text-muted-foreground">Loading planned vs actual…</Card>
+      <Card
+        role="status"
+        aria-busy="true"
+        aria-live="polite"
+        className="overflow-hidden p-4"
+      >
+        <div className="flex items-start gap-3">
+          <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
+            <Loader2 className="h-4 w-4 animate-spin" />
+          </div>
+          <div className="min-w-0 flex-1">
+            <div className="text-sm font-semibold text-foreground">Loading planned vs actual</div>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Checking completed workouts, programmed rows, and logged sets for this range.
+            </p>
+            <div className="mt-4 space-y-2" aria-hidden="true">
+              <div className="h-3 w-3/4 rounded-full bg-muted" />
+              <div className="h-3 w-1/2 rounded-full bg-muted" />
+              <div className="h-3 w-2/3 rounded-full bg-muted" />
+            </div>
+          </div>
+        </div>
+      </Card>
     );
   }
+
+  if (isError) {
+    return (
+      <Card role="alert" className="p-4">
+        <div className="flex items-center gap-2 text-sm font-semibold">
+          <Target className="h-4 w-4 text-primary" />
+          Planned vs Actual
+        </div>
+        <p className="mt-1 text-xs text-muted-foreground">
+          Unable to load this comparison right now
+          {error instanceof Error && error.message ? `: ${error.message}` : "."}
+        </p>
+        <button
+          type="button"
+          onClick={() => void refetch()}
+          className="mt-3 min-h-11 rounded-md border border-border px-3 text-xs font-semibold text-foreground transition hover:bg-muted/60"
+        >
+          Try again
+        </button>
+      </Card>
+    );
+  }
+
   if (!days.length) {
     return (
       <Card className="p-4">
@@ -86,6 +131,12 @@ export function PlannedVsActualCard({
         <div className="flex items-center gap-2">
           <Target className="h-4 w-4 text-primary" />
           <h3 className="text-sm font-semibold">Planned vs Actual</h3>
+          {isFetching && (
+            <span className="ml-auto inline-flex items-center gap-1 rounded-full bg-primary/10 px-2 py-1 text-[11px] font-semibold text-primary">
+              <Loader2 className="h-3 w-3 animate-spin" />
+              Updating
+            </span>
+          )}
         </div>
         <p className="mt-1 text-xs text-muted-foreground">
           How closely your last {days.length} workout{days.length === 1 ? "" : "s"} matched
