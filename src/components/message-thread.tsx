@@ -722,6 +722,21 @@ export function MessageThread({
 
   const canLoadOlder = messages.length >= 25;
 
+  // Collect every attachment storage_path across visible messages so we can
+  // resolve them in one batched createSignedUrls() call instead of N.
+  const attachmentPaths = useMemo(() => {
+    const out: string[] = [];
+    for (const m of allMessages) {
+      const atts = m.attachments;
+      if (!atts?.length) continue;
+      for (const a of atts) {
+        if (a?.storage_path) out.push(a.storage_path);
+      }
+    }
+    return out;
+  }, [allMessages]);
+  const signedUrlMap = useSignedUrls(attachmentPaths);
+
   const loadOlder = async () => {
     if (loadingOlder) return;
     const earliest = allMessages[0];
