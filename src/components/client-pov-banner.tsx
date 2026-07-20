@@ -19,9 +19,9 @@ export function ClientPovBanner() {
   return (
     <div
       className="sticky top-0 z-50 w-full border-b border-warning/40 bg-warning/15 text-warning-foreground backdrop-blur"
-      style={{ minHeight: 48 }}
+      style={{ paddingTop: "env(safe-area-inset-top)" }}
     >
-      <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2 px-3 py-2 text-sm sm:px-4">
+      <div className="grid min-h-12 grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2 px-3 py-2 text-sm sm:px-4">
         <Eye className="h-4 w-4 shrink-0 text-warning" />
         <div className="min-w-0 flex items-center gap-2">
           <span className="truncate font-semibold">Viewing as {client.full_name ?? "client"}</span>
