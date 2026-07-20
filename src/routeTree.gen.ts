@@ -39,7 +39,6 @@ import { Route as LegalSlugRouteImport } from './routes/legal.$slug'
 import { Route as EmailUnsubscribeRouteImport } from './routes/email/unsubscribe'
 import { Route as CoachingApplyRouteImport } from './routes/coaching.apply'
 import { Route as BookSlugRouteImport } from './routes/book.$slug'
-import { Route as ApiFilloutWebhookRouteImport } from './routes/api/fillout-webhook'
 import { Route as ApiDriveUploadRouteImport } from './routes/api/drive-upload'
 import { Route as AuthenticatedNotificationsRouteImport } from './routes/_authenticated/notifications'
 import { Route as BookRouteImport } from './routes/book.'
@@ -434,11 +433,6 @@ const CoachingApplyRoute = CoachingApplyRouteImport.update({
 const BookSlugRoute = BookSlugRouteImport.update({
   id: '/book/$slug',
   path: '/book/$slug',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ApiFilloutWebhookRoute = ApiFilloutWebhookRouteImport.update({
-  id: '/api/fillout-webhook',
-  path: '/api/fillout-webhook',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiDriveUploadRoute = ApiDriveUploadRouteImport.update({
@@ -1907,7 +1901,6 @@ export interface FileRoutesByFullPath {
   '/book/': typeof BookRoute
   '/notifications': typeof AuthenticatedNotificationsRoute
   '/api/drive-upload': typeof ApiDriveUploadRoute
-  '/api/fillout-webhook': typeof ApiFilloutWebhookRoute
   '/book/$slug': typeof BookSlugRoute
   '/coaching/apply': typeof CoachingApplyRoute
   '/email/unsubscribe': typeof EmailUnsubscribeRoute
@@ -2180,7 +2173,6 @@ export interface FileRoutesByTo {
   '/book': typeof BookRoute
   '/notifications': typeof AuthenticatedNotificationsRoute
   '/api/drive-upload': typeof ApiDriveUploadRoute
-  '/api/fillout-webhook': typeof ApiFilloutWebhookRoute
   '/book/$slug': typeof BookSlugRoute
   '/coaching/apply': typeof CoachingApplyRoute
   '/email/unsubscribe': typeof EmailUnsubscribeRoute
@@ -2458,7 +2450,6 @@ export interface FileRoutesById {
   '/book/': typeof BookRoute
   '/_authenticated/notifications': typeof AuthenticatedNotificationsRoute
   '/api/drive-upload': typeof ApiDriveUploadRoute
-  '/api/fillout-webhook': typeof ApiFilloutWebhookRoute
   '/book/$slug': typeof BookSlugRoute
   '/coaching/apply': typeof CoachingApplyRoute
   '/email/unsubscribe': typeof EmailUnsubscribeRoute
@@ -2737,7 +2728,6 @@ export interface FileRouteTypes {
     | '/book/'
     | '/notifications'
     | '/api/drive-upload'
-    | '/api/fillout-webhook'
     | '/book/$slug'
     | '/coaching/apply'
     | '/email/unsubscribe'
@@ -3010,7 +3000,6 @@ export interface FileRouteTypes {
     | '/book'
     | '/notifications'
     | '/api/drive-upload'
-    | '/api/fillout-webhook'
     | '/book/$slug'
     | '/coaching/apply'
     | '/email/unsubscribe'
@@ -3287,7 +3276,6 @@ export interface FileRouteTypes {
     | '/book/'
     | '/_authenticated/notifications'
     | '/api/drive-upload'
-    | '/api/fillout-webhook'
     | '/book/$slug'
     | '/coaching/apply'
     | '/email/unsubscribe'
@@ -3560,7 +3548,6 @@ export interface RootRouteChildren {
   UnsubscribeRoute: typeof UnsubscribeRoute
   BookRoute: typeof BookRoute
   ApiDriveUploadRoute: typeof ApiDriveUploadRoute
-  ApiFilloutWebhookRoute: typeof ApiFilloutWebhookRoute
   BookSlugRoute: typeof BookSlugRoute
   CoachingApplyRoute: typeof CoachingApplyRoute
   EmailUnsubscribeRoute: typeof EmailUnsubscribeRoute
@@ -3803,13 +3790,6 @@ declare module '@tanstack/react-router' {
       path: '/book/$slug'
       fullPath: '/book/$slug'
       preLoaderRoute: typeof BookSlugRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/api/fillout-webhook': {
-      id: '/api/fillout-webhook'
-      path: '/api/fillout-webhook'
-      fullPath: '/api/fillout-webhook'
-      preLoaderRoute: typeof ApiFilloutWebhookRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/drive-upload': {
@@ -6304,7 +6284,6 @@ const rootRouteChildren: RootRouteChildren = {
   UnsubscribeRoute: UnsubscribeRoute,
   BookRoute: BookRoute,
   ApiDriveUploadRoute: ApiDriveUploadRoute,
-  ApiFilloutWebhookRoute: ApiFilloutWebhookRoute,
   BookSlugRoute: BookSlugRoute,
   CoachingApplyRoute: CoachingApplyRoute,
   EmailUnsubscribeRoute: EmailUnsubscribeRoute,

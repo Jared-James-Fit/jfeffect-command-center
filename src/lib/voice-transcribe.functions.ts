@@ -17,10 +17,20 @@ export const transcribeVoiceMessage = createServerFn({ method: "POST" })
     // Verify caller can access this message (RLS-scoped client)
     const { data: msg, error: mErr } = await supabase
       .from("messages")
-      .select("id, client_id")
+      .select("id, client_id, attachments")
       .eq("id", data.messageId)
       .maybeSingle();
     if (mErr || !msg) throw new Error("Message not found or access denied");
+
+    // Verify storagePath belongs to this message's attachments (prevents IDOR
+    // via attacker-supplied path being downloaded through service-role client).
+    const attachments = Array.isArray((msg as { attachments?: unknown }).attachments)
+      ? ((msg as { attachments: Array<Record<string, unknown>> }).attachments)
+      : [];
+    const pathAllowed = attachments.some(
+      (a) => typeof a?.storage_path === "string" && a.storage_path === data.storagePath,
+    );
+    if (!pathAllowed) throw new Error("Storage path does not belong to this message");
 
     const apiKey = process.env.LOVABLE_API_KEY;
     if (!apiKey) {
