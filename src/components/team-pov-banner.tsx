@@ -17,8 +17,11 @@ export function TeamPovBanner() {
   };
 
   return (
-    <div className="sticky top-0 z-50 w-full min-h-[40px] border-b border-sky-500/40 bg-sky-500/15 text-sky-950 dark:text-sky-50 backdrop-blur xl:min-h-[48px]">
-      <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2 px-3 py-1.5 text-xs sm:px-4 xl:py-2 xl:text-sm">
+    <div
+      className="sticky top-0 z-50 w-full border-b border-sky-500/40 bg-sky-500/15 text-sky-950 dark:text-sky-50 backdrop-blur"
+      style={{ paddingTop: "env(safe-area-inset-top)" }}
+    >
+      <div className="grid min-h-10 grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2 px-3 py-1.5 text-xs sm:px-4 xl:min-h-12 xl:py-2 xl:text-sm">
         <Eye className="h-4 w-4 shrink-0 text-sky-600" />
         <div className="min-w-0 flex items-center gap-2">
           <span className="truncate font-semibold">
