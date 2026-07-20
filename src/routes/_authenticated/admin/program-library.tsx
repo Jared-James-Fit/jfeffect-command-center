@@ -1589,35 +1589,66 @@ function MaxesGate({
   onSaved: () => void | Promise<void>;
   onNotifyAndContinue: () => void | Promise<void>;
 }) {
-  const COMMON_LIFTS = ["Competition Squat", "Competition Bench Press", "Competition Deadlift"];
-  const [lift, setLift] = useState<string>(COMMON_LIFTS[0]);
-  const [oneRm, setOneRm] = useState<string>("");
-  const [tm, setTm] = useState<string>("");
+  const COMMON_LIFTS = [
+    "Competition Squat",
+    "Competition Bench Press",
+    "Competition Deadlift",
+    "Overhead Press",
+    "Front Squat",
+    "Romanian Deadlift",
+  ];
+  type Row = { lift: string; oneRm: string; tm: string };
   const [unit, setUnit] = useState<"kg" | "lb">("kg");
+  const [rows, setRows] = useState<Row[]>([
+    { lift: "Competition Squat", oneRm: "", tm: "" },
+    { lift: "Competition Bench Press", oneRm: "", tm: "" },
+    { lift: "Competition Deadlift", oneRm: "", tm: "" },
+  ]);
   const [saving, setSaving] = useState(false);
 
+  const updateRow = (i: number, patch: Partial<Row>) =>
+    setRows((rs) => rs.map((r, idx) => (idx === i ? { ...r, ...patch } : r)));
+  const removeRow = (i: number) =>
+    setRows((rs) => (rs.length <= 1 ? rs : rs.filter((_, idx) => idx !== i)));
+  const addRow = () =>
+    setRows((rs) => [...rs, { lift: "", oneRm: "", tm: "" }]);
+
   const save = async () => {
-    const orm = oneRm ? Number(oneRm) : null;
-    const trm = tm ? Number(tm) : null;
-    if (!lift.trim()) return toast.error("Pick a lift");
-    if (orm == null && trm == null) return toast.error("Enter 1RM or Training Max");
+    const filled = rows
+      .map((r) => ({
+        lift: r.lift.trim(),
+        one_rm: r.oneRm ? Number(r.oneRm) : null,
+        training_max: r.tm ? Number(r.tm) : null,
+      }))
+      .filter((r) => r.lift && (r.one_rm != null || r.training_max != null));
+    if (filled.length === 0) {
+      return toast.error("Enter a 1RM or Training Max for at least one lift");
+    }
+    const seen = new Set<string>();
+    for (const r of filled) {
+      const key = r.lift.toLowerCase();
+      if (seen.has(key)) return toast.error(`Duplicate lift: ${r.lift}`);
+      seen.add(key);
+    }
     try {
       setSaving(true);
-      await upsertClientMax({
-        client_id: clientId,
-        lift: lift.trim(),
-        one_rm: orm,
-        training_max: trm,
-        unit,
-        source: "manual",
-        active: true,
-        manual_override: false,
-        rounding_mode: "nearest",
-        rounding_step: unit === "kg" ? 2.5 : 5,
-      } as any);
+      for (const r of filled) {
+        await upsertClientMax({
+          client_id: clientId,
+          lift: r.lift,
+          one_rm: r.one_rm,
+          training_max: r.training_max,
+          unit,
+          source: "manual",
+          active: true,
+          manual_override: false,
+          rounding_mode: "nearest",
+          rounding_step: unit === "kg" ? 2.5 : 5,
+        } as any);
+      }
       await onSaved();
     } catch (e: any) {
-      toast.error(e?.message ?? "Could not save max");
+      toast.error(e?.message ?? "Could not save maxes");
     } finally {
       setSaving(false);
     }
@@ -1638,40 +1669,78 @@ function MaxesGate({
           <span className="font-semibold">"{templateName}"</span> won't calculate until at
           least one is added.
         </p>
-        <div className="rounded-md border border-border bg-secondary/30 p-3 space-y-2">
-          <div>
-            <Label className="text-[11px] uppercase tracking-wider text-muted-foreground">Lift</Label>
-            <Select value={lift} onValueChange={setLift}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
+        <div className="flex items-center justify-between">
+          <div className="text-[11px] uppercase tracking-wider text-muted-foreground">Lifts</div>
+          <div className="flex items-center gap-2">
+            <Label className="text-[11px] uppercase tracking-wider text-muted-foreground">Unit</Label>
+            <Select value={unit} onValueChange={(v) => setUnit(v as "kg" | "lb")}>
+              <SelectTrigger className="h-8 w-20"><SelectValue /></SelectTrigger>
               <SelectContent>
-                {COMMON_LIFTS.map((l) => <SelectItem key={l} value={l}>{l}</SelectItem>)}
+                <SelectItem value="kg">kg</SelectItem>
+                <SelectItem value="lb">lb</SelectItem>
               </SelectContent>
             </Select>
           </div>
-          <div className="grid grid-cols-3 gap-2">
-            <div>
-              <Label className="text-[11px] uppercase tracking-wider text-muted-foreground">1RM</Label>
-              <Input inputMode="decimal" value={oneRm} onChange={(e) => setOneRm(e.target.value)} placeholder="e.g. 200" />
-            </div>
-            <div>
-              <Label className="text-[11px] uppercase tracking-wider text-muted-foreground">Training Max</Label>
-              <Input inputMode="decimal" value={tm} onChange={(e) => setTm(e.target.value)} placeholder="e.g. 180" />
-            </div>
-            <div>
-              <Label className="text-[11px] uppercase tracking-wider text-muted-foreground">Unit</Label>
-              <Select value={unit} onValueChange={(v) => setUnit(v as "kg" | "lb")}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="kg">kg</SelectItem>
-                  <SelectItem value="lb">lb</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
         </div>
+        <div className="space-y-2 max-h-[45vh] overflow-y-auto pr-1">
+          {rows.map((r, i) => {
+            const isCustom = r.lift !== "" && !COMMON_LIFTS.includes(r.lift);
+            return (
+              <div key={i} className="rounded-md border border-border bg-secondary/30 p-2 space-y-2">
+                <div className="flex items-center gap-2">
+                  <div className="flex-1 min-w-0">
+                    <Select
+                      value={isCustom ? "__custom__" : r.lift || undefined}
+                      onValueChange={(v) => updateRow(i, { lift: v === "__custom__" ? "" : v })}
+                    >
+                      <SelectTrigger className="h-9"><SelectValue placeholder="Pick lift" /></SelectTrigger>
+                      <SelectContent>
+                        {COMMON_LIFTS.map((l) => <SelectItem key={l} value={l}>{l}</SelectItem>)}
+                        <SelectItem value="__custom__">Custom lift…</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    {isCustom && (
+                      <Input
+                        className="mt-2"
+                        value={r.lift}
+                        onChange={(e) => updateRow(i, { lift: e.target.value })}
+                        placeholder="Custom lift name"
+                      />
+                    )}
+                  </div>
+                  {rows.length > 1 && (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8 text-muted-foreground"
+                      onClick={() => removeRow(i)}
+                      aria-label="Remove lift"
+                    >
+                      ×
+                    </Button>
+                  )}
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <Label className="text-[11px] uppercase tracking-wider text-muted-foreground">1RM</Label>
+                    <Input inputMode="decimal" value={r.oneRm} onChange={(e) => updateRow(i, { oneRm: e.target.value })} placeholder="e.g. 200" />
+                  </div>
+                  <div>
+                    <Label className="text-[11px] uppercase tracking-wider text-muted-foreground">Training Max</Label>
+                    <Input inputMode="decimal" value={r.tm} onChange={(e) => updateRow(i, { tm: e.target.value })} placeholder="e.g. 180" />
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+        <Button type="button" variant="outline" size="sm" onClick={addRow} className="w-full">
+          + Add another lift
+        </Button>
         <p className="text-[11px] text-muted-foreground">
-          Need to add more lifts? Save this one first, then open the client's profile to add the rest.
-          Or skip & we'll email + SMS you so you don't forget.
+          Enter every lift the program uses. Leave a row's 1RM/TM blank to skip it, or use
+          "Skip & notify me" and we'll email + SMS you a reminder.
         </p>
       </div>
       <DialogFooter className="gap-2 sm:gap-2">
@@ -1684,7 +1753,7 @@ function MaxesGate({
           {notifying ? "Notifying…" : "Skip & notify me"}
         </Button>
         <Button onClick={save} disabled={saving || notifying}>
-          {saving ? "Saving…" : "Save max"}
+          {saving ? "Saving…" : "Save maxes"}
         </Button>
       </DialogFooter>
     </>
