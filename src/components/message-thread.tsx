@@ -1282,6 +1282,7 @@ export function MessageThread({
     : "text-muted-foreground";
 
   return (
+    <SignedUrlContext.Provider value={signedUrlMap}>
     <div className={cn(
       "flex flex-col",
       fullBleed
@@ -2139,6 +2140,7 @@ export function MessageThread({
         </AlertDialogContent>
       </AlertDialog>
     </div>
+    </SignedUrlContext.Provider>
   );
 }
 
