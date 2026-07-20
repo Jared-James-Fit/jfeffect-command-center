@@ -1,4 +1,4 @@
-import React, { Fragment, useEffect, useMemo, useRef, useState } from "react";
+import React, { createContext, Fragment, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { useAuth } from "@/lib/auth";
@@ -117,24 +117,48 @@ async function uploadAttachment(clientId: string, file: File): Promise<MessageAt
 
 /* ------------------------------- Signed URLs ------------------------------- */
 
-function useSignedUrl(path?: string) {
-  const q = useQuery({
-    queryKey: ["msg-attach", path],
-    enabled: !!path,
-    staleTime: 1000 * 60 * 50,
+// Batch signed-URL resolver. One createSignedUrls() call for all attachment
+// paths in the visible thread, cached for 24h. Prevents per-attachment
+// waterfalls that made media pop in slowly.
+function useSignedUrls(paths: string[]) {
+  const sorted = useMemo(() => {
+    const uniq = Array.from(new Set(paths.filter(Boolean)));
+    uniq.sort();
+    return uniq;
+  }, [paths]);
+  const key = sorted.join("|");
+  const q = useQuery<Map<string, string>>({
+    queryKey: ["msg-attach-batch", key],
+    enabled: sorted.length > 0,
+    staleTime: 1000 * 60 * 60 * 24,
+    gcTime: 1000 * 60 * 60 * 24,
     queryFn: async () => {
-      const { data, error } = await supabase.storage.from("message-attachments").createSignedUrl(path!, 60 * 60);
+      const { data, error } = await supabase.storage
+        .from("message-attachments")
+        .createSignedUrls(sorted, 3600);
       if (error) throw error;
-      return data.signedUrl;
+      const map = new Map<string, string>();
+      for (const item of data ?? []) {
+        if (item?.path && item.signedUrl) map.set(item.path, item.signedUrl);
+      }
+      return map;
     },
   });
-  return q.data;
+  return q.data ?? EMPTY_URL_MAP;
+}
+
+const EMPTY_URL_MAP: ReadonlyMap<string, string> = new Map();
+const SignedUrlContext = createContext<ReadonlyMap<string, string>>(EMPTY_URL_MAP);
+
+function useSignedUrlFor(path?: string): string | undefined {
+  const map = useContext(SignedUrlContext);
+  return path ? map.get(path) : undefined;
 }
 
 /* ------------------------------- Attachment Renderers ------------------------------- */
 
 function ImageAttachment({ att }: { att: MessageAttachment }) {
-  const signed = useSignedUrl(att.storage_path);
+  const signed = useSignedUrlFor(att.storage_path);
   const src = att.storage_path ? signed : att.url;
   const [errored, setErrored] = useState(false);
   const [lightboxOpen, setLightboxOpen] = useState(false);
@@ -177,10 +201,10 @@ function ImageAttachment({ att }: { att: MessageAttachment }) {
 }
 
 function VideoAttachment({ att }: { att: MessageAttachment }) {
-  const signed = useSignedUrl(att.storage_path);
+  const signed = useSignedUrlFor(att.storage_path);
   const src = att.storage_path ? signed : att.url;
   if (!src) return null;
-  return <video src={src} controls playsInline className="max-h-80 w-full max-w-[280px] rounded-md bg-black" />;
+  return <video src={src} controls playsInline preload="none" className="max-h-80 w-full max-w-[280px] rounded-md bg-black" />;
 }
 
 function fakePeaks(n = 40, seed = 1) {
@@ -242,7 +266,7 @@ function AudioAttachment({
   mine: boolean;
   message?: Message;
 }) {
-  const signed = useSignedUrl(att.storage_path);
+  const signed = useSignedUrlFor(att.storage_path);
   const src = att.storage_path ? signed : att.url;
   const ref = useRef<HTMLAudioElement | null>(null);
   const [playing, setPlaying] = useState(false);
@@ -349,7 +373,7 @@ function AudioAttachment({
 }
 
 function FileAttachment({ att, mine }: { att: MessageAttachment; mine: boolean }) {
-  const signed = useSignedUrl(att.storage_path);
+  const signed = useSignedUrlFor(att.storage_path);
   const src = att.storage_path ? signed : att.url;
   const Icon = attachIcon(att.type);
   return (
@@ -697,6 +721,21 @@ export function MessageThread({
   }, [olderMessages, messages]);
 
   const canLoadOlder = messages.length >= 25;
+
+  // Collect every attachment storage_path across visible messages so we can
+  // resolve them in one batched createSignedUrls() call instead of N.
+  const attachmentPaths = useMemo(() => {
+    const out: string[] = [];
+    for (const m of allMessages) {
+      const atts = m.attachments;
+      if (!atts?.length) continue;
+      for (const a of atts) {
+        if (a?.storage_path) out.push(a.storage_path);
+      }
+    }
+    return out;
+  }, [allMessages]);
+  const signedUrlMap = useSignedUrls(attachmentPaths);
 
   const loadOlder = async () => {
     if (loadingOlder) return;
@@ -1243,6 +1282,7 @@ export function MessageThread({
     : "text-muted-foreground";
 
   return (
+    <SignedUrlContext.Provider value={signedUrlMap}>
     <div className={cn(
       "flex flex-col",
       fullBleed
@@ -2100,6 +2140,7 @@ export function MessageThread({
         </AlertDialogContent>
       </AlertDialog>
     </div>
+    </SignedUrlContext.Provider>
   );
 }
 
