@@ -422,9 +422,9 @@ function AssignmentStatusStrip({
           ? `Program ends in ${daysLeft}d (${format(parseISO(endIso), "MMM d")}) · no next block`
           : `Program ends ${format(parseISO(endIso), "MMM d")} · no next block queued`;
         return (
-          <Link
-            to="/admin/program-assign/$clientId"
-            params={{ clientId: r.id }}
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); setAssignProgramOpen(true); }}
             className={cn(
               "inline-flex max-w-full items-center gap-1.5 rounded-full border px-2 py-1 text-[11px] font-medium transition hover:brightness-110",
               tone,
@@ -434,7 +434,7 @@ function AssignmentStatusStrip({
             {ended || ending ? <AlertTriangle className="h-3 w-3 shrink-0" /> : <Upload className="h-3 w-3 shrink-0" />}
             <span className="truncate">{label}</span>
             <Plus className="h-3 w-3 shrink-0" />
-          </Link>
+          </button>
         );
       })()}
       <ClientQuickSheet
