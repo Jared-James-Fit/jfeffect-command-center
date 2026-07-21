@@ -651,6 +651,14 @@ export function QuickSwapButton({
 
           {mode === "suggestions" && (
             <div className="mt-4 space-y-2">
+              <Button
+                variant="outline"
+                className="w-full"
+                onClick={() => setMode("search")}
+                disabled={!exerciseId}
+              >
+                <Search className="mr-2 h-4 w-4" /> Search All Exercises
+              </Button>
               {!exerciseId && (
                 <p className="text-sm text-muted-foreground">
                   This row isn't linked to an exercise, so we can't suggest alternates.
@@ -712,15 +720,6 @@ export function QuickSwapButton({
               {filteredSuggestions.map(({ ex, reason }) => (
                 <ExerciseRowCard key={ex.id} ex={ex} reason={reason} onSelect={() => startSelect(ex)} />
               ))}
-
-              <Button
-                variant="outline"
-                className="mt-3 w-full"
-                onClick={() => setMode("search")}
-                disabled={!exerciseId}
-              >
-                <Search className="mr-2 h-4 w-4" /> Search All Exercises
-              </Button>
             </div>
           )}
 
