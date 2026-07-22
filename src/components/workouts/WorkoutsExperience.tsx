@@ -54,6 +54,7 @@ const TrainingAnalyticsPreviewCard = lazy(() =>
     default: m.TrainingAnalyticsPreviewCard,
   })),
 );
+import { RecoveryPreviewCard } from "@/components/analytics/recovery-preview-card";
 
 type Mode = "self" | "coach";
 
@@ -539,6 +540,14 @@ export function WorkoutsExperience({
                 (byDate.get(toLocalISO(selectedDate))?.length ?? 0) > 0 ? "training" : "rest"
               }
               date={selectedDate}
+            />
+            <RecoveryPreviewCard
+              clientId={clientId}
+              analyticsTo={
+                mode === "coach"
+                  ? `/admin/clients/${clientId}`
+                  : "/portal/workouts/analytics"
+              }
             />
             <DeferredAnalytics clientId={clientId} />
           </>
