@@ -1,13 +1,11 @@
-import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { Battery, TrendingUp, TrendingDown, Minus, ArrowRight, ChevronDown } from "lucide-react";
+import { Battery, TrendingUp, TrendingDown, Minus, ArrowRight } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { recoveryTrendLabel, fetchRecoveryScoreSeries } from "@/lib/analytics/recovery-score";
 import { pickCurrentBlock } from "@/lib/block-dates";
-import { cn } from "@/lib/utils";
 
 interface Props {
   clientId: string;
@@ -147,8 +145,6 @@ export function RecoveryPreviewCard({ clientId, analyticsTo }: Props) {
     },
   });
 
-  const [expanded, setExpanded] = useState(false);
-
   const header = (
     <div className="mb-3 flex items-center gap-2">
       <Battery className="h-5 w-5 shrink-0 text-primary" />
@@ -196,33 +192,18 @@ export function RecoveryPreviewCard({ clientId, analyticsTo }: Props) {
     <section aria-label="Training Readiness">
       {header}
       <Card className="border-border/80 bg-card p-4">
-        <button
-          type="button"
-          onClick={() => setExpanded((v) => !v)}
-          aria-expanded={expanded}
-          aria-controls="readiness-preview-details"
-          className="-mx-1 -mt-1 flex w-full items-start justify-between gap-3 rounded-lg p-1 text-left transition-colors hover:bg-muted/30"
-        >
-          <div className="min-w-0 flex-1">
-            <BatteryMeter bars={readiness.bars} barClass={readiness.barClass} />
-            <div className="mt-2 flex items-baseline gap-2">
-              <span className={`text-2xl font-black uppercase tracking-wider leading-tight ${readiness.labelClass}`}>
-                {readiness.label}
-              </span>
-              <span className="text-sm font-bold text-foreground tabular-nums">{data.latest}%</span>
-            </div>
-            <div className="mt-0.5 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
-              Estimated training readiness
-            </div>
+        <div className="min-w-0">
+          <BatteryMeter bars={readiness.bars} barClass={readiness.barClass} />
+          <div className="mt-2 flex items-baseline gap-2">
+            <span className={`text-2xl font-black uppercase tracking-wider leading-tight ${readiness.labelClass}`}>
+              {readiness.label}
+            </span>
+            <span className="text-sm font-bold text-foreground tabular-nums">{data.latest}%</span>
           </div>
-          <ChevronDown
-            className={cn(
-              "mt-2 h-4 w-4 shrink-0 text-muted-foreground transition-transform",
-              expanded && "rotate-180",
-            )}
-            aria-hidden="true"
-          />
-        </button>
+          <div className="mt-0.5 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
+            Estimated training readiness
+          </div>
+        </div>
 
         <div className="mt-3 grid grid-cols-2 gap-2">
           <div className="rounded-lg border border-border bg-muted/40 px-3 py-2">
@@ -257,29 +238,27 @@ export function RecoveryPreviewCard({ clientId, analyticsTo }: Props) {
           </div>
         )}
 
-        {expanded && (
-          <div id="readiness-preview-details" className="mt-3 space-y-3 border-t border-border/60 pt-3">
-            <div>
-              <div className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
-                Today's Focus
-              </div>
-              <p className="mt-1 rounded-md border border-border/60 bg-muted/30 px-3 py-2 text-xs text-foreground">
-                {readiness.focus}
-              </p>
-              <p className="mt-1.5 text-[10px] text-muted-foreground">
-                Guidance only — your coach's program always comes first.
-              </p>
+        <div className="mt-3 space-y-3 border-t border-border/60 pt-3">
+          <div>
+            <div className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+              Today's Focus
             </div>
-            <div className="flex justify-end">
-              <Link to={analyticsTo} hash="recovery">
-                <Button size="sm" variant="outline" className="font-bold uppercase tracking-wider">
-                  View Full Analytics
-                  <ArrowRight className="ml-1 h-3.5 w-3.5" />
-                </Button>
-              </Link>
-            </div>
+            <p className="mt-1 rounded-md border border-border/60 bg-muted/30 px-3 py-2 text-xs text-foreground">
+              {readiness.focus}
+            </p>
+            <p className="mt-1.5 text-[10px] text-muted-foreground">
+              Guidance only — your coach's program always comes first.
+            </p>
           </div>
-        )}
+          <div className="flex justify-end">
+            <Link to={analyticsTo} hash="recovery">
+              <Button size="sm" variant="outline" className="font-bold uppercase tracking-wider">
+                View Recovery Details
+                <ArrowRight className="ml-1 h-3.5 w-3.5" />
+              </Button>
+            </Link>
+          </div>
+        </div>
       </Card>
     </section>
   );
