@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { Sparkles, TrendingUp, TrendingDown, Minus, ArrowRight, ChevronDown } from "lucide-react";
@@ -81,18 +81,18 @@ export function RecoveryPreviewCard({ clientId, analyticsTo }: Props) {
       const curAvg = avg(curScores);
       const prevAvg = avg(prevScores);
 
-      // Insight — pick the first supported line.
+      // Coach Insight — one short actionable sentence.
       let insight: string | null = null;
-      if (last3.length === 3 && last3[0] < last3[1] && last3[1] < last3[2]) {
-        insight = "Recovery is improving across your last 3 workouts.";
-      } else if (curAvg != null && latest >= curAvg + 4) {
-        insight = "Recovery is above your current block average.";
-      } else if (curAvg != null && latest <= curAvg - 4) {
-        insight = "Recovery is below your current block average.";
-      } else if (prevAvg != null && curAvg != null && curAvg > prevAvg + 3) {
-        insight = "Recovery is trending up vs your previous block.";
+      if (curAvg != null && latest >= curAvg + 5) {
+        insight = "Recovery is above your average. A good day to push performance.";
+      } else if (curAvg != null && latest <= curAvg - 5) {
+        insight = "Recovery is slightly below your normal. Today's workout may feel harder.";
+      } else if (last3.length === 3 && last3[0] < last3[1] && last3[1] < last3[2]) {
+        insight = "Recovery is trending up across your last few workouts.";
+      } else if (last3.length === 3 && last3[0] > last3[1] && last3[1] > last3[2]) {
+        insight = "Recovery is trending down. Consider dialing back intensity today.";
       } else if (curAvg != null) {
-        insight = "Recovery is holding steady in your current block.";
+        insight = "Recovery has been consistent over your last few workouts.";
       }
 
       return {
@@ -103,6 +103,7 @@ export function RecoveryPreviewCard({ clientId, analyticsTo }: Props) {
         latestScores,
         trend: recoveryTrendLabel(curAvg, prevAvg),
         insight,
+        hasTrendData: curScores.length >= 2 && prevScores.length >= 1,
       };
     },
   });
@@ -150,6 +151,8 @@ export function RecoveryPreviewCard({ clientId, analyticsTo }: Props) {
       : trend === "Declining" ? "text-rose-600 dark:text-rose-400"
       : "text-muted-foreground";
 
+  const recentScores = (data.latestScores ?? []).slice(-4);
+
   return (
     <section aria-label="Recovery">
       {header}
@@ -162,12 +165,12 @@ export function RecoveryPreviewCard({ clientId, analyticsTo }: Props) {
           className="-mx-1 -mt-1 flex w-full items-start justify-between gap-3 rounded-lg p-1 text-left transition-colors hover:bg-muted/30"
         >
           <div className="min-w-0">
-            <div className={`text-sm font-black uppercase tracking-wider ${status.className}`}>
+            <div className={`text-3xl font-black uppercase tracking-wider leading-tight ${status.className}`}>
               {status.label}
             </div>
-            <div className="mt-0.5 flex items-baseline gap-1.5">
-              <span className="text-4xl font-black text-foreground">{data.latest}</span>
-              <span className="text-sm font-semibold text-muted-foreground">/ 100</span>
+            <div className="mt-1 flex items-baseline gap-1.5">
+              <span className="text-lg font-bold text-foreground tabular-nums">{data.latest}</span>
+              <span className="text-xs font-semibold text-muted-foreground">/ 100</span>
             </div>
             <div className="mt-0.5 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
               Latest recovery score
@@ -183,10 +186,16 @@ export function RecoveryPreviewCard({ clientId, analyticsTo }: Props) {
               </div>
               <div className="rounded-lg border border-border bg-muted/40 px-3 py-2">
                 <div className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Trend</div>
-                <div className={`mt-0.5 inline-flex items-center gap-1 text-xs font-bold ${trendClass}`}>
-                  {trendIcon}
-                  {trend ?? "—"}
-                </div>
+                {data.hasTrendData && trend ? (
+                  <div className={`mt-0.5 inline-flex items-center gap-1 text-xs font-bold ${trendClass}`}>
+                    {trendIcon}
+                    {trend}
+                  </div>
+                ) : (
+                  <div className="mt-0.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                    Not Enough Data
+                  </div>
+                )}
               </div>
             </div>
             <ChevronDown
@@ -201,35 +210,40 @@ export function RecoveryPreviewCard({ clientId, analyticsTo }: Props) {
 
         {expanded && (
           <div id="recovery-preview-details" className="mt-3 space-y-3 border-t border-border/60 pt-3">
-            {data.latestScores && data.latestScores.length > 0 && (
+            {recentScores.length > 0 && (
               <div>
                 <div className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
-                  Latest recovery scores
+                  Recent recovery
                 </div>
-                <div className="mt-1.5 flex flex-wrap gap-1.5">
-                  {data.latestScores.map((s, i) => {
-                    const isLatest = i === data.latestScores.length - 1;
-                    return (
-                      <span
-                        key={i}
-                        className={cn(
-                          "inline-flex min-w-[38px] items-center justify-center rounded-md border px-2 py-1 text-xs font-bold tabular-nums",
-                          isLatest
-                            ? "border-primary bg-primary/10 text-primary"
-                            : "border-border bg-muted/40 text-foreground",
-                        )}
-                      >
-                        {s}
-                      </span>
-                    );
-                  })}
+                <div className="mt-1.5 flex items-center gap-3">
+                  <div className="flex gap-1.5">
+                    {recentScores.map((s, i) => {
+                      const isLatest = i === recentScores.length - 1;
+                      return (
+                        <span
+                          key={i}
+                          className={cn(
+                            "inline-flex min-w-[38px] items-center justify-center rounded-md border px-2 py-1 text-xs font-bold tabular-nums",
+                            isLatest
+                              ? "border-primary bg-primary/10 text-primary"
+                              : "border-border bg-muted/40 text-foreground",
+                          )}
+                        >
+                          {s}
+                        </span>
+                      );
+                    })}
+                  </div>
+                  {recentScores.length >= 2 && (
+                    <Sparkline values={recentScores} className="ml-auto" />
+                  )}
                 </div>
               </div>
             )}
             {data.insight && (
               <div>
                 <div className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
-                  Recovery pattern
+                  Coach Insight
                 </div>
                 <p className="mt-1 rounded-md border border-border/60 bg-muted/30 px-3 py-2 text-xs text-foreground">
                   {data.insight}
@@ -248,5 +262,36 @@ export function RecoveryPreviewCard({ clientId, analyticsTo }: Props) {
         )}
       </Card>
     </section>
+  );
+}
+
+function Sparkline({ values, className }: { values: number[]; className?: string }) {
+  const { path, w, h } = useMemo(() => {
+    const w = 72;
+    const h = 24;
+    const min = Math.min(...values);
+    const max = Math.max(...values);
+    const range = Math.max(1, max - min);
+    const step = values.length > 1 ? w / (values.length - 1) : 0;
+    const pts = values.map((v, i) => {
+      const x = i * step;
+      const y = h - ((v - min) / range) * h;
+      return `${x.toFixed(1)},${y.toFixed(1)}`;
+    });
+    return { path: `M ${pts.join(" L ")}`, w, h };
+  }, [values]);
+  const first = values[0];
+  const last = values[values.length - 1];
+  const stroke = last > first ? "stroke-emerald-500" : last < first ? "stroke-rose-500" : "stroke-muted-foreground";
+  return (
+    <svg
+      width={w}
+      height={h}
+      viewBox={`0 0 ${w} ${h}`}
+      className={cn("overflow-visible", className)}
+      aria-hidden="true"
+    >
+      <path d={path} fill="none" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className={stroke} />
+    </svg>
   );
 }
