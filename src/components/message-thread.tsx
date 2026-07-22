@@ -183,7 +183,7 @@ function ImageAttachment({ att }: { att: MessageAttachment }) {
           src={src}
           alt={att.name ?? ""}
           className={cn(
-            looksLikeGif ? "h-[180px] w-[180px] object-cover" : "max-h-80 w-auto object-cover",
+            looksLikeGif ? "h-[180px] w-[180px] object-cover" : "max-h-64 w-auto object-cover",
             "rounded-md",
           )}
           loading="lazy"

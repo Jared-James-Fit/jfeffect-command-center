@@ -53,21 +53,20 @@ export function ChatImageLightbox({
       role="dialog"
       aria-modal="true"
       aria-label={alt ?? "Image"}
-      className="fixed inset-0 z-[100] flex items-center justify-center bg-black/90"
+      className="fixed inset-0 z-[100] flex items-center justify-center bg-black/90 pointer-events-auto"
       onClick={onClose}
     >
       <button
         type="button"
         aria-label="Close image"
         onClick={(e) => { e.stopPropagation(); onClose(); }}
-        className="absolute right-3 top-3 z-10 inline-flex h-10 w-10 items-center justify-center rounded-full bg-black/60 text-white hover:bg-black/80"
+        className="fixed right-3 top-3 z-[9999] inline-flex h-11 w-11 min-h-[44px] min-w-[44px] items-center justify-center rounded-full bg-black/70 text-white shadow-lg ring-1 ring-white/20 hover:bg-black/90"
       >
         <X className="h-5 w-5" />
       </button>
       <div
         className="relative flex h-full w-full items-center justify-center overflow-auto p-4"
         style={{ touchAction: "pinch-zoom" }}
-        onClick={(e) => e.stopPropagation()}
       >
         {!loaded && !errored && (
           <div className="absolute inset-0 flex items-center justify-center text-xs text-white/70">
@@ -79,7 +78,7 @@ export function ChatImageLightbox({
             <div className="text-sm">Couldn’t load this image.</div>
             <button
               type="button"
-              onClick={() => { setErrored(false); setLoaded(false); }}
+              onClick={(e) => { e.stopPropagation(); setErrored(false); setLoaded(false); }}
               className="rounded-md border border-white/40 px-3 py-1 text-xs hover:bg-white/10"
             >
               Try again
@@ -92,6 +91,7 @@ export function ChatImageLightbox({
             alt={alt ?? ""}
             onLoad={() => setLoaded(true)}
             onError={() => setErrored(true)}
+            onClick={(e) => e.stopPropagation()}
             className={cn(
               "max-h-full max-w-full select-none rounded object-contain",
               !loaded && "opacity-0",
