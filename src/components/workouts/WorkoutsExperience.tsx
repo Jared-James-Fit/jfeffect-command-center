@@ -543,11 +543,7 @@ export function WorkoutsExperience({
             />
             <RecoveryPreviewCard
               clientId={clientId}
-              analyticsTo={
-                mode === "coach"
-                  ? `/admin/clients/${clientId}`
-                  : "/portal/workouts/analytics"
-              }
+              analyticsTo={"/portal/workouts/analytics"}
             />
             <DeferredAnalytics clientId={clientId} />
           </>
