@@ -4,32 +4,13 @@ import { Sparkles, TrendingUp, TrendingDown, Minus, ArrowRight } from "lucide-re
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
-import { computeRecoveryScore, recoveryTrendLabel } from "@/lib/analytics/recovery-score";
+import { recoveryTrendLabel, fetchRecoveryScoreSeries } from "@/lib/analytics/recovery-score";
 import { pickCurrentBlock } from "@/lib/block-dates";
 
 interface Props {
   clientId: string;
   /** Full-analytics route to open when tapping "View Recovery". */
   analyticsTo: string;
-}
-
-type Review = {
-  overall_rating: number | null;
-  session_rpe: number | null;
-  strength_feel: string | null;
-  fatigue_feel: string | null;
-  pain: boolean | null;
-  review_submitted_at: string;
-};
-
-function scoreOf(r: Review): number {
-  return computeRecoveryScore({
-    overallRating: r.overall_rating,
-    sessionRpe: r.session_rpe,
-    strengthFeel: r.strength_feel,
-    fatigueFeel: r.fatigue_feel,
-    pain: !!r.pain,
-  }).score;
 }
 
 function statusFor(score: number): { label: string; className: string } {
@@ -70,24 +51,19 @@ export function RecoveryPreviewCard({ clientId, analyticsTo }: Props) {
         prev = idx > 0 ? visible[idx - 1] : null;
       }
 
-      // Pull recent reviews (last 180 days is plenty for a snapshot).
+      // Pull last 180d of recovery signal from reviews + completions + row logs.
       const since = new Date();
       since.setDate(since.getDate() - 180);
-      const { data: reviews } = await (supabase as any)
-        .from("member_workout_reviews")
-        .select(
-          "overall_rating, session_rpe, strength_feel, fatigue_feel, pain, review_submitted_at, member_plan_enrollments!inner(client_id)",
-        )
-        .eq("member_plan_enrollments.client_id", clientId)
-        .gte("review_submitted_at", since.toISOString())
-        .order("review_submitted_at", { ascending: true });
+      const series = await fetchRecoveryScoreSeries(
+        supabase as any,
+        clientId,
+        since.toISOString(),
+      );
+      if (!series.length) return { hasData: false as const };
 
-      const rs = (reviews ?? []) as Review[];
-      if (!rs.length) return { hasData: false as const };
-
-      const inRange = (r: Review, block: any | null): boolean => {
+      const inRange = (ts: string, block: any | null): boolean => {
         if (!block) return false;
-        const t = new Date(r.review_submitted_at).getTime();
+        const t = new Date(ts).getTime();
         const s = block.start_date ? new Date(block.start_date).getTime() : null;
         const e = block.end_date ? new Date(block.end_date + "T23:59:59Z").getTime() : null;
         if (s != null && t < s) return false;
@@ -95,10 +71,10 @@ export function RecoveryPreviewCard({ clientId, analyticsTo }: Props) {
         return true;
       };
 
-      const curScores = rs.filter((r) => inRange(r, cur)).map(scoreOf);
-      const prevScores = rs.filter((r) => inRange(r, prev)).map(scoreOf);
-      const last3 = rs.slice(-3).map(scoreOf);
-      const latest = scoreOf(rs[rs.length - 1]);
+      const curScores = series.filter((r) => inRange(r.ts, cur)).map((r) => r.score);
+      const prevScores = series.filter((r) => inRange(r.ts, prev)).map((r) => r.score);
+      const last3 = series.slice(-3).map((r) => r.score);
+      const latest = series[series.length - 1].score;
       const curAvg = avg(curScores);
       const prevAvg = avg(prevScores);
 
