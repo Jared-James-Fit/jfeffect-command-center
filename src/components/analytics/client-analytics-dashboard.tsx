@@ -475,7 +475,7 @@ export function ClientAnalyticsDashboard({
               blockId={activeBlockId}
             />
 
-            <div className="grid gap-4 md:grid-cols-2">
+            <div id="recovery" className="grid gap-4 scroll-mt-24 md:grid-cols-2">
               <RecoverySummaryCard
                 clientId={clientId}
                 rangeStart={filter.start}
