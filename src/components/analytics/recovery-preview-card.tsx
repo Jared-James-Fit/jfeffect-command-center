@@ -1,11 +1,13 @@
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { Sparkles, TrendingUp, TrendingDown, Minus, ArrowRight } from "lucide-react";
+import { Sparkles, TrendingUp, TrendingDown, Minus, ArrowRight, ChevronDown } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { recoveryTrendLabel, fetchRecoveryScoreSeries } from "@/lib/analytics/recovery-score";
 import { pickCurrentBlock } from "@/lib/block-dates";
+import { cn } from "@/lib/utils";
 
 interface Props {
   clientId: string;
@@ -74,6 +76,7 @@ export function RecoveryPreviewCard({ clientId, analyticsTo }: Props) {
       const curScores = series.filter((r) => inRange(r.ts, cur)).map((r) => r.score);
       const prevScores = series.filter((r) => inRange(r.ts, prev)).map((r) => r.score);
       const last3 = series.slice(-3).map((r) => r.score);
+      const latestScores = series.slice(-6).map((r) => r.score);
       const latest = series[series.length - 1].score;
       const curAvg = avg(curScores);
       const prevAvg = avg(prevScores);
@@ -97,11 +100,14 @@ export function RecoveryPreviewCard({ clientId, analyticsTo }: Props) {
         latest,
         curAvg,
         prevAvg,
+        latestScores,
         trend: recoveryTrendLabel(curAvg, prevAvg),
         insight,
       };
     },
   });
+
+  const [expanded, setExpanded] = useState(false);
 
   const header = (
     <div className="mb-3 flex items-center gap-2">
@@ -148,7 +154,13 @@ export function RecoveryPreviewCard({ clientId, analyticsTo }: Props) {
     <section aria-label="Recovery">
       {header}
       <Card className="border-border/80 bg-card p-4">
-        <div className="flex items-start justify-between gap-3">
+        <button
+          type="button"
+          onClick={() => setExpanded((v) => !v)}
+          aria-expanded={expanded}
+          aria-controls="recovery-preview-details"
+          className="-mx-1 -mt-1 flex w-full items-start justify-between gap-3 rounded-lg p-1 text-left transition-colors hover:bg-muted/30"
+        >
           <div className="min-w-0">
             <div className={`text-sm font-black uppercase tracking-wider ${status.className}`}>
               {status.label}
@@ -161,37 +173,79 @@ export function RecoveryPreviewCard({ clientId, analyticsTo }: Props) {
               Latest recovery score
             </div>
           </div>
-          <div className="grid shrink-0 grid-cols-2 gap-2 text-right">
-            <div className="rounded-lg border border-border bg-muted/40 px-3 py-2">
-              <div className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Block avg</div>
-              <div className="mt-0.5 text-lg font-black text-foreground">
-                {data.curAvg ?? "—"}
+          <div className="flex shrink-0 items-start gap-2">
+            <div className="grid grid-cols-2 gap-2 text-right">
+              <div className="rounded-lg border border-border bg-muted/40 px-3 py-2">
+                <div className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Block avg</div>
+                <div className="mt-0.5 text-lg font-black text-foreground">
+                  {data.curAvg ?? "—"}
+                </div>
+              </div>
+              <div className="rounded-lg border border-border bg-muted/40 px-3 py-2">
+                <div className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Trend</div>
+                <div className={`mt-0.5 inline-flex items-center gap-1 text-xs font-bold ${trendClass}`}>
+                  {trendIcon}
+                  {trend ?? "—"}
+                </div>
               </div>
             </div>
-            <div className="rounded-lg border border-border bg-muted/40 px-3 py-2">
-              <div className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Trend</div>
-              <div className={`mt-0.5 inline-flex items-center gap-1 text-xs font-bold ${trendClass}`}>
-                {trendIcon}
-                {trend ?? "—"}
+            <ChevronDown
+              className={cn(
+                "mt-2 h-4 w-4 shrink-0 text-muted-foreground transition-transform",
+                expanded && "rotate-180",
+              )}
+              aria-hidden="true"
+            />
+          </div>
+        </button>
+
+        {expanded && (
+          <div id="recovery-preview-details" className="mt-3 space-y-3 border-t border-border/60 pt-3">
+            {data.latestScores && data.latestScores.length > 0 && (
+              <div>
+                <div className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+                  Latest recovery scores
+                </div>
+                <div className="mt-1.5 flex flex-wrap gap-1.5">
+                  {data.latestScores.map((s, i) => {
+                    const isLatest = i === data.latestScores.length - 1;
+                    return (
+                      <span
+                        key={i}
+                        className={cn(
+                          "inline-flex min-w-[38px] items-center justify-center rounded-md border px-2 py-1 text-xs font-bold tabular-nums",
+                          isLatest
+                            ? "border-primary bg-primary/10 text-primary"
+                            : "border-border bg-muted/40 text-foreground",
+                        )}
+                      >
+                        {s}
+                      </span>
+                    );
+                  })}
+                </div>
               </div>
+            )}
+            {data.insight && (
+              <div>
+                <div className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+                  Recovery pattern
+                </div>
+                <p className="mt-1 rounded-md border border-border/60 bg-muted/30 px-3 py-2 text-xs text-foreground">
+                  {data.insight}
+                </p>
+              </div>
+            )}
+            <div className="flex justify-end">
+              <Link to={analyticsTo} hash="recovery">
+                <Button size="sm" variant="outline" className="font-bold uppercase tracking-wider">
+                  View Full Analytics
+                  <ArrowRight className="ml-1 h-3.5 w-3.5" />
+                </Button>
+              </Link>
             </div>
           </div>
-        </div>
-
-        {data.insight && (
-          <p className="mt-3 rounded-md border border-border/60 bg-muted/30 px-3 py-2 text-xs text-foreground">
-            {data.insight}
-          </p>
         )}
-
-        <div className="mt-3 flex justify-end">
-          <Link to={analyticsTo} hash="recovery">
-            <Button size="sm" variant="outline" className="font-bold uppercase tracking-wider">
-              View Recovery
-              <ArrowRight className="ml-1 h-3.5 w-3.5" />
-            </Button>
-          </Link>
-        </div>
       </Card>
     </section>
   );
