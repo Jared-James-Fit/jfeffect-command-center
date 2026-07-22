@@ -72,8 +72,27 @@ export function RecoverySummaryCard({ clientId, rangeStart, rangeEnd, rangeLabel
     },
   });
 
-  if (!data || data.curAvg == null) return null;
-  const trend = recoveryTrendLabel(data.curAvg, data.prevAvg);
+  const trend = data ? recoveryTrendLabel(data.curAvg, data.prevAvg) : null;
+
+  if (!data || data.curAvg == null) {
+    return (
+      <section aria-label="Recovery">
+        <div className="mb-3 grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2 sm:flex sm:flex-wrap sm:justify-between">
+          <h2 className="flex min-w-0 items-center gap-2 truncate text-base font-black uppercase tracking-wider text-foreground">
+            <Sparkles className="h-5 w-5 shrink-0 text-primary" />
+            <span className="truncate">Recovery</span>
+          </h2>
+          <span className="shrink-0 text-xs font-semibold text-muted-foreground">{rangeLabel}</span>
+        </div>
+        <Card className="border-border/80 bg-card p-4">
+          <div className="text-sm font-bold text-foreground">Not Enough Data</div>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Complete more workouts to build your recovery trend.
+          </p>
+        </Card>
+      </section>
+    );
+  }
   const trendIcon = trend === "Improving" ? <TrendingUp className="h-3.5 w-3.5" />
     : trend === "Declining" ? <TrendingDown className="h-3.5 w-3.5" />
     : <Minus className="h-3.5 w-3.5" />;
