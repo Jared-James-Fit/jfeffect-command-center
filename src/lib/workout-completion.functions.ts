@@ -859,7 +859,8 @@ export const submitOrEditReview = createServerFn({ method: "POST" })
         strength_feel: data.strengthFeel ?? null,
         fatigue_feel: data.fatigueFeel ?? null,
         hit_target: data.hitTarget ?? null,
-      };
+        recovery_today: data.recoveryToday ?? null,
+      } as any;
 
       if (existing?.id) {
         const { data: row, error } = await writer
@@ -923,7 +924,8 @@ export const submitOrEditReview = createServerFn({ method: "POST" })
       strength_feel: data.strengthFeel ?? null,
       fatigue_feel: data.fatigueFeel ?? null,
       hit_target: data.hitTarget ?? null,
-    };
+      recovery_today: data.recoveryToday ?? null,
+    } as any;
 
     if (existing?.id) {
       const { data: row, error } = await supabase
