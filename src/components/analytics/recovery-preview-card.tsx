@@ -190,15 +190,15 @@ export function RecoveryPreviewCard({ clientId, analyticsTo }: Props) {
     <section aria-label="Training Readiness">
       {header}
       <Card className="border-border/80 bg-card p-4">
-        <div className="min-w-0">
-          <BatteryMeter bars={readiness.bars} barClass={readiness.barClass} />
-          <div className="mt-2 flex items-baseline gap-2">
-            <span className={`text-2xl font-black uppercase tracking-wider leading-tight ${readiness.labelClass}`}>
-              {readiness.label}
-            </span>
-            <span className="text-sm font-bold text-foreground tabular-nums">{data.latest}%</span>
-          </div>
-          <div className="mt-0.5 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
+        <div className="flex flex-col items-center text-center">
+          <ReadinessRing
+            score={data.latest}
+            label={readiness.label}
+            labelClass={readiness.labelClass}
+            ringClass={readiness.ringClass}
+            ringSoftClass={readiness.ringSoftClass}
+          />
+          <div className="mt-2 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
             Estimated training readiness
           </div>
         </div>
@@ -227,58 +227,78 @@ export function RecoveryPreviewCard({ clientId, analyticsTo }: Props) {
           </div>
         </div>
 
-        {data.insight && (
-          <div className="mt-3">
-            <div className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
-              Coach's Note
-            </div>
-            <p className="mt-1 text-xs text-foreground">{data.insight}</p>
+        <div className="mt-3">
+          <div className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+            Today's Focus
           </div>
-        )}
-
-        <div className="mt-3 space-y-3 border-t border-border/60 pt-3">
-          <div>
-            <div className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
-              Today's Focus
-            </div>
-            <p className="mt-1 rounded-md border border-border/60 bg-muted/30 px-3 py-2 text-xs text-foreground">
-              {readiness.focus}
-            </p>
-            <p className="mt-1.5 text-[10px] text-muted-foreground">
-              Guidance only — your coach's program always comes first.
-            </p>
-          </div>
-          <div className="flex justify-end">
-            <Link to={analyticsTo} hash="recovery">
-              <Button size="sm" variant="outline" className="font-bold uppercase tracking-wider">
-                View Recovery Details
-                <ArrowRight className="ml-1 h-3.5 w-3.5" />
-              </Button>
-            </Link>
-          </div>
+          <p className="mt-1 rounded-md border border-border/60 bg-muted/30 px-3 py-2 text-xs text-foreground">
+            {readiness.focus}
+          </p>
+          <p className="mt-1.5 text-[10px] text-muted-foreground">
+            Guidance only — your coach's program always comes first.
+          </p>
         </div>
       </Card>
     </section>
   );
 }
 
-function BatteryMeter({ bars, barClass }: { bars: number; barClass: string }) {
-  const total = 5;
+function ReadinessRing({
+  score,
+  label,
+  labelClass,
+  ringClass,
+  ringSoftClass,
+}: {
+  score: number;
+  label: string;
+  labelClass: string;
+  ringClass: string;
+  ringSoftClass: string;
+}) {
+  const size = 132;
+  const stroke = 10;
+  const r = (size - stroke) / 2;
+  const c = 2 * Math.PI * r;
+  const pct = Math.max(0, Math.min(100, score));
+  const dash = (pct / 100) * c;
   return (
     <div
-      className="flex items-center gap-1"
+      className="relative"
+      style={{ width: size, height: size }}
       role="img"
-      aria-label={`Readiness ${bars} of ${total} bars`}
+      aria-label={`Training readiness ${pct}% — ${label}`}
     >
-      {Array.from({ length: total }).map((_, i) => (
-        <span
-          key={i}
-          className={cn(
-            "h-3 w-6 rounded-sm border border-border/70",
-            i < bars ? barClass : "bg-muted/40",
-          )}
+      <svg width={size} height={size} className="-rotate-90">
+        <circle
+          cx={size / 2}
+          cy={size / 2}
+          r={r}
+          fill="none"
+          strokeWidth={stroke}
+          className={`stroke-current ${ringSoftClass}`}
         />
-      ))}
+        <circle
+          cx={size / 2}
+          cy={size / 2}
+          r={r}
+          fill="none"
+          strokeWidth={stroke}
+          strokeLinecap="round"
+          strokeDasharray={`${dash} ${c - dash}`}
+          className={`stroke-current ${ringClass} transition-[stroke-dasharray] duration-500`}
+        />
+      </svg>
+      <div className="absolute inset-0 flex flex-col items-center justify-center">
+        <span className="text-3xl font-black leading-none tabular-nums text-foreground">
+          {pct}%
+        </span>
+        <span
+          className={`mt-1 text-xs font-black uppercase tracking-widest leading-none ${labelClass}`}
+        >
+          {label}
+        </span>
+      </div>
     </div>
   );
 }
