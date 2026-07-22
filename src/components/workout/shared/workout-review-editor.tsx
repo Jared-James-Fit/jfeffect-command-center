@@ -311,6 +311,59 @@ export function WorkoutReviewEditor({
               Edited {initial.editCount} time{initial.editCount === 1 ? "" : "s"}.
             </p>
           )}
+
+          {/* Optional single-tap Recovery Today rating */}
+          <div className="space-y-2 pt-2">
+            <div className="flex items-baseline justify-between">
+              <label className="text-sm font-bold">
+                Recovery Today
+                <span className="ml-1 font-normal text-xs text-muted-foreground">(optional)</span>
+              </label>
+              {recoveryToday != null && (
+                <button
+                  type="button"
+                  onClick={() => setRecoveryToday(null)}
+                  className="text-[11px] text-muted-foreground underline"
+                >
+                  Clear
+                </button>
+              )}
+            </div>
+            <div className="grid grid-cols-5 gap-1.5">
+              {[
+                { v: 1, emoji: "😫", label: "Very Poor" },
+                { v: 2, emoji: "😕", label: "Poor" },
+                { v: 3, emoji: "😐", label: "Average" },
+                { v: 4, emoji: "🙂", label: "Good" },
+                { v: 5, emoji: "💪", label: "Excellent" },
+              ].map((o) => {
+                const active = recoveryToday === o.v;
+                return (
+                  <button
+                    key={o.v}
+                    type="button"
+                    onClick={() => setRecoveryToday(active ? null : o.v)}
+                    aria-pressed={active}
+                    aria-label={`Recovery ${o.v} — ${o.label}`}
+                    className={cn(
+                      "flex flex-col items-center justify-center rounded-xl border-2 py-2.5 transition-all active:scale-95",
+                      active
+                        ? "border-primary bg-primary/10"
+                        : "border-border bg-card hover:bg-secondary/30",
+                    )}
+                  >
+                    <span className="text-2xl leading-none">{o.emoji}</span>
+                    <span className={cn("mt-1 text-[10px] font-semibold", active ? "text-primary" : "text-muted-foreground")}>
+                      {o.v}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+            <p className="text-[11px] text-muted-foreground leading-snug">
+              Helps improve your recovery score. Skip if unsure.
+            </p>
+          </div>
         </div>
 
         <SheetFooter className="sticky bottom-0 z-10 flex-row gap-2 border-t bg-background/95 px-5 py-3 backdrop-blur sm:flex-row">
