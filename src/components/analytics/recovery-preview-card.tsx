@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { recoveryTrendLabel, fetchRecoveryScoreSeries } from "@/lib/analytics/recovery-score";
 import { pickCurrentBlock } from "@/lib/block-dates";
+import { cn } from "@/lib/utils";
 
 interface Props {
   clientId: string;
