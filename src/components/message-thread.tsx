@@ -120,6 +120,8 @@ async function uploadAttachment(clientId: string, file: File): Promise<MessageAt
 // Batch signed-URL resolver. One createSignedUrls() call for all attachment
 // paths in the visible thread, cached for 24h. Prevents per-attachment
 // waterfalls that made media pop in slowly.
+const EMPTY_URL_RECORD: Record<string, string> = {};
+
 function useSignedUrls(paths: string[]) {
   const sorted = useMemo(() => {
     const uniq = Array.from(new Set(paths.filter(Boolean)));
@@ -127,7 +129,7 @@ function useSignedUrls(paths: string[]) {
     return uniq;
   }, [paths]);
   const key = sorted.join("|");
-  const q = useQuery<Map<string, string>>({
+  const q = useQuery<Record<string, string>>({
     queryKey: ["msg-attach-batch", key],
     enabled: sorted.length > 0,
     staleTime: 1000 * 60 * 60 * 24,
@@ -137,22 +139,21 @@ function useSignedUrls(paths: string[]) {
         .from("message-attachments")
         .createSignedUrls(sorted, 3600);
       if (error) throw error;
-      const map = new Map<string, string>();
+      const record: Record<string, string> = {};
       for (const item of data ?? []) {
-        if (item?.path && item.signedUrl) map.set(item.path, item.signedUrl);
+        if (item?.path && item.signedUrl) record[item.path] = item.signedUrl;
       }
-      return map;
+      return record;
     },
   });
-  return q.data ?? EMPTY_URL_MAP;
+  return q.data ?? EMPTY_URL_RECORD;
 }
 
-const EMPTY_URL_MAP: ReadonlyMap<string, string> = new Map();
-const SignedUrlContext = createContext<ReadonlyMap<string, string>>(EMPTY_URL_MAP);
+const SignedUrlContext = createContext<Record<string, string>>(EMPTY_URL_RECORD);
 
 function useSignedUrlFor(path?: string): string | undefined {
-  const map = useContext(SignedUrlContext);
-  return path ? map.get(path) : undefined;
+  const record = useContext(SignedUrlContext);
+  return path ? record[path] : undefined;
 }
 
 /* ------------------------------- Attachment Renderers ------------------------------- */
