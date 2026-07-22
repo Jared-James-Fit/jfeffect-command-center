@@ -169,6 +169,18 @@ export function ClientAnalyticsDashboard({
     }
   }, [preferredUnit, unitSynced]);
 
+  // Scroll to the Recovery section when the URL ends with #recovery so the
+  // "View Recovery" CTA on the Workouts page lands the user in the right
+  // place inside Full Analytics.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (window.location.hash !== "#recovery") return;
+    const t = window.setTimeout(() => {
+      document.getElementById("recovery")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 250);
+    return () => window.clearTimeout(t);
+  }, []);
+
   const [selectedEx, setSelectedEx] = useState<string>("");
   const [selectedDot, setSelectedDot] = useState<GraphDotPoint | null>(null);
   // Chart metric toggle for the Estimated 1RM Progress card.
@@ -475,7 +487,7 @@ export function ClientAnalyticsDashboard({
               blockId={activeBlockId}
             />
 
-            <div className="grid gap-4 md:grid-cols-2">
+            <div id="recovery" className="grid gap-4 scroll-mt-24 md:grid-cols-2">
               <RecoverySummaryCard
                 clientId={clientId}
                 rangeStart={filter.start}
