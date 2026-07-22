@@ -700,11 +700,11 @@ export function MessageThread({
   const { data: messages = [] } = useQuery({
     queryKey: ["messages", clientId, role],
     enabled: !!clientId,
-    staleTime: 30_000,       // 30s: prevents re-render flicker on tab focus
+    staleTime: 0,              // Always fetch fresh on mount for latest messages
     gcTime: 5 * 60_000,
     refetchOnWindowFocus: false,
-    refetchOnMount: false,
-    queryFn: () => listMessages(clientId, { includeInternal: role === "admin", limit: 100 }),
+    refetchOnMount: true,
+    queryFn: () => listMessages(clientId, { includeInternal: role === "admin", limit: 25 }),
   });
 
   const [olderMessages, setOlderMessages] = useState<Message[]>([]);
@@ -976,22 +976,20 @@ export function MessageThread({
     const isInitialLoad = initialScrollDoneRef.current !== clientId;
 
     if (isInitialLoad) {
-      // Initial open: use 4 RAFs to wait for full layout (images, avatars, keyboard).
-      // No smooth scroll — instant jump prevents the visible glitch.
-      let r1 = 0, r2 = 0, r3 = 0, r4 = 0;
-      r1 = requestAnimationFrame(() => {
-        r2 = requestAnimationFrame(() => {
-          r3 = requestAnimationFrame(() => {
-            r4 = requestAnimationFrame(() => {
-              el.scrollTop = el.scrollHeight;
-              initialScrollDoneRef.current = clientId ?? null;
-            });
-          });
-        });
-      });
+      // Initial open: scroll to bottom immediately and keep pinned for 1.5s
+      // so images loading in don't leave the user stuck mid-thread.
+      el.scrollTop = el.scrollHeight;
+      initialScrollDoneRef.current = clientId ?? null;
+      // Keep pinning for 1.5s to catch late-loading images/attachments
+      const pin = () => { el.scrollTop = el.scrollHeight; };
+      const t1 = setTimeout(pin, 100);
+      const t2 = setTimeout(pin, 300);
+      const t3 = setTimeout(pin, 600);
+      const t4 = setTimeout(pin, 1000);
+      const t5 = setTimeout(pin, 1500);
       return () => {
-        cancelAnimationFrame(r1); cancelAnimationFrame(r2);
-        cancelAnimationFrame(r3); cancelAnimationFrame(r4);
+        clearTimeout(t1); clearTimeout(t2); clearTimeout(t3);
+        clearTimeout(t4); clearTimeout(t5);
       };
     } else {
       // New message arrived: only auto-scroll if user is near the bottom.
