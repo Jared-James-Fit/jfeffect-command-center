@@ -211,7 +211,7 @@ export async function fetchRecoveryScoreSeries(
   let reviewsQ = supabase
     .from("member_workout_reviews")
     .select(
-      "overall_rating, session_rpe, strength_feel, fatigue_feel, pain, review_submitted_at, member_plan_enrollments!inner(client_id)",
+      "overall_rating, session_rpe, strength_feel, fatigue_feel, pain, recovery_today, review_submitted_at, member_plan_enrollments!inner(client_id)",
     )
     .eq("member_plan_enrollments.client_id", clientId)
     .gte("review_submitted_at", sinceIso);
@@ -277,6 +277,7 @@ export async function fetchRecoveryScoreSeries(
       strengthFeel: r.strength_feel ?? null,
       fatigueFeel: r.fatigue_feel ?? null,
       pain: !!r.pain,
+      recoveryToday: r.recovery_today ?? null,
     });
     if (s.hasData) out.push({ ts: r.review_submitted_at, score: s.score });
   }
