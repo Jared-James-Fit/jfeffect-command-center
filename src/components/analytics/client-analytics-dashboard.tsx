@@ -35,6 +35,10 @@ import { PlannedVsActualCard } from "@/components/analytics/planned-vs-actual-ca
 import { WeightLiftedCard } from "@/components/analytics/weight-lifted-card";
 import { GraphDotDetail, type GraphDotPoint } from "@/components/analytics/graph-dot-detail";
 import { PRCard } from "@/components/analytics/pr-card";
+import { RecoverySummaryCard } from "@/components/analytics/recovery-summary-card";
+import { CardioSummaryCard } from "@/components/analytics/cardio-summary-card";
+import { RecoveryPatternsCard } from "@/components/analytics/recovery-patterns-card";
+import { PredictedWindowCard } from "@/components/analytics/predicted-window-card";
 import { getClientAnalyticsSettings } from "@/lib/analytics/settings";
 import {
   ANALYTICS_COLORS,
@@ -167,6 +171,8 @@ export function ClientAnalyticsDashboard({
 
   const [selectedEx, setSelectedEx] = useState<string>("");
   const [selectedDot, setSelectedDot] = useState<GraphDotPoint | null>(null);
+  // Chart metric toggle for the Estimated 1RM Progress card.
+  const [chartMetric, setChartMetric] = useState<"est" | "load" | "rpe">("est");
 
   const filteredResults = useMemo(() => {
     const startMs = filter.start.getTime();
@@ -238,6 +244,7 @@ export function ClientAnalyticsDashboard({
         : sameDay
           ? format(d, "MMM d")
           : format(d, "MMM d");
+      const rpeRaw = p.rpe != null && p.rpe !== "" ? Number(p.rpe) : null;
       return {
         idx: i,
         date: label,
@@ -246,9 +253,20 @@ export function ClientAnalyticsDashboard({
         est: Number(conv(p.est_1rm).toFixed(1)),
         load: Number(conv(p.load).toFixed(1)),
         reps: p.reps,
+        rpe: rpeRaw != null && Number.isFinite(rpeRaw) ? rpeRaw : null,
       };
     });
   }, [activeSeries, conv]);
+
+  // Previous-block date range for the Recovery card comparison chip.
+  const { prevBlockStart, prevBlockEnd } = useMemo(() => {
+    if (!activeBlockId) return { prevBlockStart: null, prevBlockEnd: null };
+    const idx = clientBlocks.findIndex((b) => b.id === activeBlockId);
+    if (idx <= 0) return { prevBlockStart: null, prevBlockEnd: null };
+    const prev = clientBlocks[idx - 1];
+    if (!prev?.start_date || !prev?.end_date) return { prevBlockStart: null, prevBlockEnd: null };
+    return { prevBlockStart: new Date(prev.start_date), prevBlockEnd: new Date(prev.end_date) };
+  }, [activeBlockId, clientBlocks]);
 
   const activePr = activeSeries?.pr;
   const activeColor = exerciseColor(activeEx, activeSeries?.points?.[0]?.muscle_group);
@@ -422,6 +440,23 @@ export function ClientAnalyticsDashboard({
               rangeLabel={filter.label}
               blockId={activeBlockId}
             />
+
+            <div className="grid gap-4 md:grid-cols-2">
+              <RecoverySummaryCard
+                clientId={clientId}
+                rangeStart={filter.start}
+                rangeEnd={filter.end}
+                rangeLabel={filter.label}
+                prevStart={prevBlockStart}
+                prevEnd={prevBlockEnd}
+              />
+              <CardioSummaryCard
+                clientId={clientId}
+                rangeStart={filter.start}
+                rangeEnd={filter.end}
+                rangeLabel={filter.label}
+              />
+            </div>
 
             <section aria-label="Planned vs Actual">
               <div className="mb-1 text-[11px] font-semibold text-muted-foreground">
