@@ -89,6 +89,17 @@ export function RouterErrorFallback({ error, reset }: Props) {
             ? "The page couldn't load. This is usually a temporary network hiccup."
             : "Please try again in a moment."}
         </p>
+        {error?.message && (
+          <details className="mt-3 rounded-md border border-border bg-muted/30 p-2 text-left text-[11px] text-muted-foreground">
+            <summary className="cursor-pointer select-none font-medium">
+              Error details
+            </summary>
+            <pre className="mt-2 whitespace-pre-wrap break-words">
+              {error.message}
+              {error.stack ? `\n\n${error.stack}` : ""}
+            </pre>
+          </details>
+        )}
         <div className="mt-6 flex justify-center gap-3">
           <button
             type="button"
