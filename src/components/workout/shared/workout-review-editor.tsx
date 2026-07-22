@@ -312,11 +312,11 @@ export function WorkoutReviewEditor({
             </p>
           )}
 
-          {/* Optional single-tap Recovery Today rating */}
+          {/* Optional single-tap Recovery rating — one input into the Estimated Recovery Score */}
           <div className="space-y-2 pt-2">
             <div className="flex items-baseline justify-between">
               <label className="text-sm font-bold">
-                Recovery Today
+                Recovery
                 <span className="ml-1 font-normal text-xs text-muted-foreground">(optional)</span>
               </label>
               {recoveryToday != null && (
@@ -344,24 +344,24 @@ export function WorkoutReviewEditor({
                     type="button"
                     onClick={() => setRecoveryToday(active ? null : o.v)}
                     aria-pressed={active}
-                    aria-label={`Recovery ${o.v} — ${o.label}`}
+                    aria-label={`Recovery: ${o.label}`}
                     className={cn(
-                      "flex flex-col items-center justify-center rounded-xl border-2 py-2.5 transition-all active:scale-95",
+                      "flex min-h-[68px] flex-col items-center justify-center gap-1 rounded-xl border-2 px-1 py-2 transition-all active:scale-95",
                       active
                         ? "border-primary bg-primary/10"
                         : "border-border bg-card hover:bg-secondary/30",
                     )}
                   >
-                    <span className="text-2xl leading-none">{o.emoji}</span>
-                    <span className={cn("mt-1 text-[10px] font-semibold", active ? "text-primary" : "text-muted-foreground")}>
-                      {o.v}
+                    <span className="text-2xl leading-none" aria-hidden="true">{o.emoji}</span>
+                    <span className={cn("text-[10px] font-semibold leading-tight text-center", active ? "text-primary" : "text-muted-foreground")}>
+                      {o.label}
                     </span>
                   </button>
                 );
               })}
             </div>
             <p className="text-[11px] text-muted-foreground leading-snug">
-              Helps improve your recovery score. Skip if unsure.
+              Optional — improves your recovery score accuracy. Skip if unsure.
             </p>
           </div>
         </div>
