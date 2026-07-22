@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Trophy, Dumbbell, Activity, CheckCircle2, XCircle, Flame, Clock, Star, Calendar, ChevronLeft } from "lucide-react";
 import type { WorkoutSummary } from "@/lib/workout-summary";
 import { format } from "date-fns";
+import { computeRecoveryScore } from "@/lib/analytics/recovery-score";
 
 type Props = {
   open: boolean;
@@ -12,10 +13,14 @@ type Props = {
   durationMin?: number | null;
   workoutDate?: string | Date | null;
   sessionRating?: number | null;
+  /** Self-reported session RPE (1–10). Optional. */
+  sessionRpe?: number | null;
+  /** Client-reported pain flag. Optional. */
+  pain?: boolean | null;
   onClose?: () => void;
 };
 
-export function WorkoutSubmissionSummary({ open, onOpenChange, summary, workoutTitle, durationMin, workoutDate, sessionRating, onClose }: Props) {
+export function WorkoutSubmissionSummary({ open, onOpenChange, summary, workoutTitle, durationMin, workoutDate, sessionRating, sessionRpe, pain, onClose }: Props) {
   const headline =
     summary.score >= 90 ? "Crushed it!"
     : summary.score >= 75 ? "Great work!"
@@ -41,6 +46,13 @@ export function WorkoutSubmissionSummary({ open, onOpenChange, summary, workoutT
     if (!workoutDate) return null;
     try { return format(new Date(workoutDate), "EEE, MMM d, yyyy"); } catch { return null; }
   })();
+  const recovery = computeRecoveryScore({
+    completionPct: summary.completionPct,
+    avgRpe: summary.avgRpe ?? null,
+    sessionRpe: sessionRpe ?? null,
+    overallRating: sessionRating ?? null,
+    pain: pain ?? null,
+  });
 
   return (
     <Dialog open={open} onOpenChange={(v) => { onOpenChange(v); if (!v) onClose?.(); }}>
@@ -79,15 +91,32 @@ export function WorkoutSubmissionSummary({ open, onOpenChange, summary, workoutT
             {motivational}
           </div>
 
-          {/* Score */}
-          <div className="rounded-2xl border border-border bg-card p-4 text-center">
-            <div className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Workout Score</div>
-            <div className="mt-1 flex items-center justify-center gap-1">
-              <span className="text-5xl font-black leading-none text-primary">{summary.score}</span>
-              <span className="text-xl font-bold leading-none text-muted-foreground">/100</span>
+          {/* Score + Recovery */}
+          <div className="grid grid-cols-2 gap-2">
+            <div className="rounded-2xl border border-border bg-card p-4 text-center">
+              <div className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Workout Score</div>
+              <div className="mt-1 flex items-baseline justify-center gap-1">
+                <span className="text-4xl font-black leading-none text-primary">{summary.score}</span>
+                <span className="text-base font-bold leading-none text-muted-foreground">/100</span>
+              </div>
+              <div className="mt-1 text-xs text-muted-foreground">
+                {summary.completionPct}% completed
+              </div>
             </div>
-            <div className="mt-1 text-xs text-muted-foreground">
-              {summary.completionPct}% completed
+            <div className="rounded-2xl border border-border bg-card p-4 text-center">
+              <div className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Est. Recovery</div>
+              <div className="mt-1 flex items-baseline justify-center gap-1">
+                <span className="text-4xl font-black leading-none text-primary">{recovery.hasData ? recovery.score : "—"}</span>
+                <span className="text-base font-bold leading-none text-muted-foreground">/100</span>
+              </div>
+              <div className="mt-1 text-xs text-muted-foreground truncate">
+                {recovery.hasData
+                  ? recovery.score >= 80 ? "Fresh"
+                    : recovery.score >= 60 ? "Steady"
+                    : recovery.score >= 40 ? "Depleted"
+                    : "Very Depleted"
+                  : "Add a review"}
+              </div>
             </div>
           </div>
 
