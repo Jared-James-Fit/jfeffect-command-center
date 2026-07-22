@@ -648,7 +648,7 @@ export function ClientAnalyticsDashboard({
                               stroke={axisColor}
                               fontSize={11}
                               tickMargin={4}
-                              domain={chartMetric === "rpe" ? [0, 10] : ["auto", "auto"]}
+                              domain={chartMetric === "effort" ? [0, 10] : ["auto", "auto"]}
                               tickFormatter={(v) => fmtNum(v)}
                               width={40}
                             />
@@ -661,9 +661,18 @@ export function ClientAnalyticsDashboard({
                               content={({ active, payload }) => {
                                 if (!active || !payload?.length) return null;
                                 const d: any = payload[0].payload;
-                                const metricLabel = chartMetric === "est" ? "est 1RM" : chartMetric === "load" ? "top set" : "RPE";
-                                const metricValue = chartMetric === "rpe"
-                                  ? (d.rpe != null ? d.rpe : "—")
+                                const metricLabel =
+                                  chartMetric === "est" ? "est 1RM"
+                                  : chartMetric === "load" ? "top set"
+                                  : effortLabel.toLowerCase();
+                                const effortDisplay =
+                                  d.effortSource === "RIR"
+                                    ? `${d.rir} RIR`
+                                    : d.effortSource === "RPE"
+                                      ? `RPE ${d.rpe}`
+                                      : "—";
+                                const metricValue = chartMetric === "effort"
+                                  ? effortDisplay
                                   : `${fmtNum(d[chartMetric])} ${displayUnit}`;
                                 return (
                                   <div className="max-w-[220px] rounded-lg border border-border bg-popover px-3 py-2 text-sm text-popover-foreground shadow-xl">
@@ -688,7 +697,11 @@ export function ClientAnalyticsDashboard({
                                     </div>
                                     <div className="text-xs text-muted-foreground">
                                       {fmtNum(d.load)} {displayUnit} × {d.reps}
-                                      {d.rpe != null && chartMetric !== "rpe" ? ` · RPE ${d.rpe}` : ""}
+                                      {chartMetric !== "effort" && (d.effortSource === "RPE"
+                                        ? ` · RPE ${d.rpe}`
+                                        : d.effortSource === "RIR"
+                                          ? ` · ${d.rir} RIR`
+                                          : "")}
                                     </div>
                                   </div>
                                 );
