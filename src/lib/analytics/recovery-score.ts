@@ -33,6 +33,8 @@ export interface RecoveryInputs {
   performanceRatio?: number | null;
   /** Recent training load — workouts in the last 7 days including this one. */
   recentWorkouts7d?: number | null;
+  /** Optional self-reported recovery for the day (1–5). Higher = better. */
+  recoveryToday?: number | null;
 }
 
 export interface RecoveryReason {
@@ -155,6 +157,23 @@ export function computeRecoveryScore(inp: RecoveryInputs): RecoveryResult {
     signals++;
     score -= 10;
     reasons.push({ label: "Pain", value: "Reported" });
+  }
+
+  // Recovery Today — direct self-report. Strong but capped signal.
+  if (inp.recoveryToday != null) {
+    signals++;
+    const r = Math.max(1, Math.min(5, inp.recoveryToday));
+    // 1 -> -12, 2 -> -6, 3 -> 0, 4 -> +6, 5 -> +10
+    const map: Record<number, number> = { 1: -12, 2: -6, 3: 0, 4: 6, 5: 10 };
+    score += map[r] ?? 0;
+    const labels: Record<number, string> = {
+      1: "Very Poor",
+      2: "Poor",
+      3: "Average",
+      4: "Good",
+      5: "Excellent",
+    };
+    reasons.push({ label: "Recovery Today", value: labels[r] });
   }
 
   score = Math.max(0, Math.min(100, Math.round(score)));
