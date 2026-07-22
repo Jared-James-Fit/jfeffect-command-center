@@ -7,7 +7,7 @@ import { PageHeader } from "@/components/app-shell";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { ClipboardCheck, MessageCircle, ChevronRight, ExternalLink } from "lucide-react";
+import { ClipboardCheck, MessageCircle, ChevronRight, ExternalLink, ChevronDown } from "lucide-react";
 import {
   listFormsForClient,
   listSubmissionsForClient,
@@ -21,6 +21,7 @@ import {
 import { listManualReviewsForClient } from "@/lib/manual-check-in-reviews";
 import { buildFilloutUrl } from "@/lib/fillout";
 import { CheckInReviewThread } from "@/components/check-in-review-thread";
+import { useState } from "react";
 
 export const Route = createFileRoute("/_authenticated/portal/check-ins")({
   component: ClientCheckInsList,
@@ -129,9 +130,9 @@ function ClientCheckInsList() {
               </div>
               <Badge variant="outline">{manualReviews.length}</Badge>
             </div>
-            <div className="space-y-4">
-              {manualReviews.map((r) => (
-                <CheckInReviewThread key={r.id} review={r} viewerRole="client" />
+            <div className="space-y-2">
+              {manualReviews.map((r, i) => (
+                <CollapsibleReview key={r.id} review={r} defaultOpen={i === 0} />
               ))}
             </div>
           </Card>
@@ -261,3 +262,31 @@ function ClientCheckInsList() {
 }
 
 export {};
+
+function CollapsibleReview({ review, defaultOpen }: { review: any; defaultOpen: boolean }) {
+  const [open, setOpen] = useState(defaultOpen);
+  const when = review.created_at
+    ? new Date(review.created_at).toLocaleDateString([], { month: "short", day: "numeric", year: "numeric" })
+    : "";
+  return (
+    <div className="rounded-xl border border-border bg-background/40">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="flex w-full items-center justify-between gap-3 px-3 py-2 text-left hover:bg-muted/40 rounded-xl"
+        aria-expanded={open}
+      >
+        <div className="min-w-0">
+          <div className="truncate text-sm font-bold">{review.title || "Check-In Response"}</div>
+          <div className="text-[11px] text-muted-foreground">{when}</div>
+        </div>
+        <ChevronDown className={"h-4 w-4 text-muted-foreground transition-transform " + (open ? "rotate-180" : "")} />
+      </button>
+      {open && (
+        <div className="px-3 pb-3">
+          <CheckInReviewThread review={review} viewerRole="client" />
+        </div>
+      )}
+    </div>
+  );
+}
