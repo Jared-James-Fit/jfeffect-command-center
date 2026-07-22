@@ -167,3 +167,121 @@ export function recoveryTrendLabel(current: number | null, previous: number | nu
   if (Math.abs(diff) < 5) return "Stable";
   return diff > 0 ? "Improving" : "Declining";
 }
+
+/**
+ * Fetch per-session recovery scores for a client over a date range.
+ * Sources (merged, deduped by scheduled_workout_id/day):
+ *   - member_workout_reviews (richest signal when present)
+ *   - pl_day_completions (session_rating) + pl_row_results (avg RPE/RIR)
+ *
+ * Requires a Supabase client so this stays framework-agnostic.
+ */
+export async function fetchRecoveryScoreSeries(
+  supabase: any,
+  clientId: string,
+  sinceIso: string,
+  untilIso?: string | null,
+): Promise<Array<{ ts: string; score: number }>> {
+  const parseRir = (v: any): number | null => {
+    if (v == null) return null;
+    const n = Number(String(v).replace(/[^0-9.]/g, ""));
+    return Number.isFinite(n) ? n : null;
+  };
+
+  // 1) Reviews (may be empty for most projects)
+  let reviewsQ = supabase
+    .from("member_workout_reviews")
+    .select(
+      "overall_rating, session_rpe, strength_feel, fatigue_feel, pain, review_submitted_at, member_plan_enrollments!inner(client_id)",
+    )
+    .eq("member_plan_enrollments.client_id", clientId)
+    .gte("review_submitted_at", sinceIso);
+  if (untilIso) reviewsQ = reviewsQ.lte("review_submitted_at", untilIso);
+  const { data: reviews } = await reviewsQ;
+
+  // 2) Completions
+  let compQ = supabase
+    .from("pl_day_completions")
+    .select("id, day_id, scheduled_workout_id, completed_at, session_rating, logging_percentage")
+    .eq("client_id", clientId)
+    .not("completed_at", "is", null)
+    .gte("completed_at", sinceIso);
+  if (untilIso) compQ = compQ.lte("completed_at", untilIso);
+  const { data: comps } = await compQ;
+
+  // 3) Row results (for avg RPE/RIR per session)
+  let rowsQ = supabase
+    .from("pl_row_results")
+    .select("scheduled_workout_id, row_id, actual_rpe_num, actual_rpe, actual_rir, completed_at")
+    .eq("client_id", clientId)
+    .not("completed_at", "is", null)
+    .gte("completed_at", sinceIso);
+  if (untilIso) rowsQ = rowsQ.lte("completed_at", untilIso);
+  const { data: rows } = await rowsQ;
+
+  // Group row RPE/RIR by scheduled_workout_id + by date fallback.
+  const byInstance = new Map<string, { rpe: number[]; rir: number[] }>();
+  const byDate = new Map<string, { rpe: number[]; rir: number[] }>();
+  for (const r of (rows ?? []) as any[]) {
+    const rpe =
+      r.actual_rpe_num != null && Number.isFinite(Number(r.actual_rpe_num))
+        ? Number(r.actual_rpe_num)
+        : r.actual_rpe != null
+          ? Number(String(r.actual_rpe).replace(/[^0-9.]/g, ""))
+          : NaN;
+    const rir = parseRir(r.actual_rir);
+    const dateKey = String(r.completed_at).slice(0, 10);
+    const inst = r.scheduled_workout_id ? `i:${r.scheduled_workout_id}` : null;
+    if (inst) {
+      if (!byInstance.has(inst)) byInstance.set(inst, { rpe: [], rir: [] });
+      if (Number.isFinite(rpe)) byInstance.get(inst)!.rpe.push(rpe);
+      if (rir != null) byInstance.get(inst)!.rir.push(rir);
+    }
+    if (!byDate.has(dateKey)) byDate.set(dateKey, { rpe: [], rir: [] });
+    if (Number.isFinite(rpe)) byDate.get(dateKey)!.rpe.push(rpe);
+    if (rir != null) byDate.get(dateKey)!.rir.push(rir);
+  }
+  const meanOr = (a: number[]): number | null =>
+    a.length ? a.reduce((s, n) => s + n, 0) / a.length : null;
+
+  const seen = new Set<string>();
+  const out: Array<{ ts: string; score: number }> = [];
+
+  // Reviews first (richer signal). Dedupe roughly by day.
+  for (const r of (reviews ?? []) as any[]) {
+    const key = `r:${String(r.review_submitted_at).slice(0, 10)}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    const s = computeRecoveryScore({
+      overallRating: r.overall_rating ?? null,
+      sessionRpe: r.session_rpe ?? null,
+      strengthFeel: r.strength_feel ?? null,
+      fatigueFeel: r.fatigue_feel ?? null,
+      pain: !!r.pain,
+    });
+    if (s.hasData) out.push({ ts: r.review_submitted_at, score: s.score });
+  }
+
+  // Completions
+  for (const c of (comps ?? []) as any[]) {
+    const dateKey = String(c.completed_at).slice(0, 10);
+    const dupKey = `r:${dateKey}`;
+    if (seen.has(dupKey)) continue;
+    const instKey = c.scheduled_workout_id ? `i:${c.scheduled_workout_id}` : null;
+    const bucket =
+      (instKey && byInstance.get(instKey)) || byDate.get(dateKey) || { rpe: [], rir: [] };
+    const rpeAvg = meanOr(bucket.rpe);
+    const rirAvg = meanOr(bucket.rir);
+    // Convert RIR to an effective RPE (RPE ≈ 10 - RIR) when RPE missing.
+    const effRpe = rpeAvg ?? (rirAvg != null ? 10 - rirAvg : null);
+    const s = computeRecoveryScore({
+      completionPct: c.logging_percentage != null ? Number(c.logging_percentage) : null,
+      overallRating: c.session_rating ?? null,
+      sessionRpe: effRpe,
+    });
+    if (s.hasData) out.push({ ts: c.completed_at, score: s.score });
+  }
+
+  out.sort((a, b) => new Date(a.ts).getTime() - new Date(b.ts).getTime());
+  return out;
+}
