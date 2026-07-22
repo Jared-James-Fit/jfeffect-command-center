@@ -501,7 +501,12 @@ export function ClientAnalyticsDashboard({
               blockId={activeBlockId}
             />
 
-            <div id="recovery" className="grid gap-4 scroll-mt-24 md:grid-cols-2">
+            <div
+              id="recovery"
+              className={`grid gap-4 scroll-mt-24 rounded-xl transition-shadow duration-500 md:grid-cols-2 ${
+                recoveryHighlight ? "ring-2 ring-primary/70 ring-offset-2 ring-offset-background shadow-lg" : ""
+              }`}
+            >
               <RecoverySummaryCard
                 clientId={clientId}
                 rangeStart={filter.start}
