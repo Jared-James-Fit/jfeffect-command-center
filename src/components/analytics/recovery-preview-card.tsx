@@ -1,16 +1,13 @@
 import { useQuery } from "@tanstack/react-query";
-import { Link } from "@tanstack/react-router";
-import { Battery, TrendingUp, TrendingDown, Minus, ArrowRight } from "lucide-react";
+import { Battery, TrendingUp, TrendingDown, Minus } from "lucide-react";
 import { Card } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { recoveryTrendLabel, fetchRecoveryScoreSeries } from "@/lib/analytics/recovery-score";
 import { pickCurrentBlock } from "@/lib/block-dates";
-import { cn } from "@/lib/utils";
 
 interface Props {
   clientId: string;
-  /** Full-analytics route to open when tapping "View Recovery". */
+  /** Reserved for future deep-link; kept for call-site compatibility. */
   analyticsTo: string;
 }
 
@@ -19,46 +16,46 @@ type ReadinessTier = "Ready" | "Good" | "Take It Easy" | "Low Readiness";
 function readinessFor(score: number): {
   label: ReadinessTier;
   labelClass: string;
-  barClass: string;
-  bars: number;
+  ringClass: string;
+  ringSoftClass: string;
   focus: string;
 } {
-  if (score >= 85) {
+  if (score >= 80) {
     return {
       label: "Ready",
       labelClass: "text-emerald-600 dark:text-emerald-400",
-      barClass: "bg-emerald-500",
-      bars: 5,
+      ringClass: "text-emerald-500",
+      ringSoftClass: "text-emerald-500/15",
       focus:
-        "Train as planned. If your warm-ups feel great, push your top sets.",
+        "Train as planned. Push your top sets if warm-ups feel good.",
     };
   }
-  if (score >= 70) {
+  if (score >= 65) {
     return {
       label: "Good",
       labelClass: "text-emerald-600 dark:text-emerald-400",
-      barClass: "bg-emerald-500",
-      bars: 4,
+      ringClass: "text-emerald-500",
+      ringSoftClass: "text-emerald-500/15",
       focus: "Train as planned.",
     };
   }
-  if (score >= 55) {
+  if (score >= 50) {
     return {
       label: "Take It Easy",
       labelClass: "text-amber-600 dark:text-amber-400",
-      barClass: "bg-amber-500",
-      bars: 3,
+      ringClass: "text-amber-500",
+      ringSoftClass: "text-amber-500/15",
       focus:
-        "Train as programmed, but be conservative. Stay within your prescribed RPE/RIR and don't force extra weight if you're not feeling it.",
+        "Stay within today's prescribed RPE/RIR and be conservative if weights feel heavier than expected.",
     };
   }
   return {
     label: "Low Readiness",
     labelClass: "text-rose-600 dark:text-rose-400",
-    barClass: "bg-rose-500",
-    bars: 2,
+    ringClass: "text-rose-500",
+    ringSoftClass: "text-rose-500/15",
     focus:
-      "Complete today's workout, focus on quality technique, and stay conservative if things feel harder than expected.",
+      "Complete today's workout with quality technique and don't force extra weight if today's performance feels off.",
   };
 }
 
