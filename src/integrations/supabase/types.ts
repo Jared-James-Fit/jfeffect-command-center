@@ -18460,6 +18460,10 @@ export type Database = {
       is_active_coach: { Args: { _user_id: string }; Returns: boolean }
       is_admin_or_media_manager: { Args: { _uid: string }; Returns: boolean }
       is_assigned_coach: { Args: { _client_id: string }; Returns: boolean }
+      is_assigned_coach_by_user_id: {
+        Args: { _user_id: string }
+        Returns: boolean
+      }
       is_assigned_coach_for_client: {
         Args: { _client_id: string }
         Returns: boolean
