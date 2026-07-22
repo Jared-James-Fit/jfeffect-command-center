@@ -23,6 +23,8 @@ export interface WorkoutSessionMeta {
   date: string;
   completionPct?: number | null;
   avgRpe?: number | null;
+  /** Average RIR (reps in reserve) across working sets that day. */
+  avgRir?: number | null;
   sessionRpe?: number | null;
   overallRating?: number | null;
   strengthFeel?: string | null;
