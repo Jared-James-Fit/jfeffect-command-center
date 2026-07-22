@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { usePortalUserId } from "@/lib/client-impersonation";
@@ -21,7 +21,6 @@ import {
 import { listManualReviewsForClient } from "@/lib/manual-check-in-reviews";
 import { buildFilloutUrl } from "@/lib/fillout";
 import { CheckInReviewThread } from "@/components/check-in-review-thread";
-import { useState } from "react";
 
 export const Route = createFileRoute("/_authenticated/portal/check-ins")({
   component: ClientCheckInsList,
