@@ -10079,6 +10079,7 @@ export type Database = {
           pain_area: string | null
           pain_level: number | null
           pain_note: string | null
+          recovery_today: number | null
           review_edit_count: number
           review_last_edited_at: string | null
           review_submitted_at: string
@@ -10104,6 +10105,7 @@ export type Database = {
           pain_area?: string | null
           pain_level?: number | null
           pain_note?: string | null
+          recovery_today?: number | null
           review_edit_count?: number
           review_last_edited_at?: string | null
           review_submitted_at?: string
@@ -10129,6 +10131,7 @@ export type Database = {
           pain_area?: string | null
           pain_level?: number | null
           pain_note?: string | null
+          recovery_today?: number | null
           review_edit_count?: number
           review_last_edited_at?: string | null
           review_submitted_at?: string
@@ -14528,6 +14531,7 @@ export type Database = {
           pain_area: string | null
           pain_level: number | null
           pain_note: string | null
+          recovery_today: number | null
           review_edit_count: number
           review_last_edited_at: string | null
           review_submitted_at: string | null
@@ -14552,6 +14556,7 @@ export type Database = {
           pain_area?: string | null
           pain_level?: number | null
           pain_note?: string | null
+          recovery_today?: number | null
           review_edit_count?: number
           review_last_edited_at?: string | null
           review_submitted_at?: string | null
@@ -14576,6 +14581,7 @@ export type Database = {
           pain_area?: string | null
           pain_level?: number | null
           pain_note?: string | null
+          recovery_today?: number | null
           review_edit_count?: number
           review_last_edited_at?: string | null
           review_submitted_at?: string | null
@@ -18584,6 +18590,7 @@ export type Database = {
           pain_area: string | null
           pain_level: number | null
           pain_note: string | null
+          recovery_today: number | null
           review_edit_count: number
           review_last_edited_at: string | null
           review_submitted_at: string | null

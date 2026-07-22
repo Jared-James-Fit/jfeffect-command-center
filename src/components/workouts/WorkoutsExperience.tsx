@@ -906,6 +906,7 @@ function SelectedDayCard({
         strengthFeel: existingReview.strength_feel ?? null,
         fatigueFeel: existingReview.fatigue_feel ?? null,
         hitTarget: existingReview.hit_target ?? null,
+        recoveryToday: existingReview.recovery_today ?? null,
         editCount: existingReview.review_edit_count ?? 0,
         submittedAt:
           existingReview.review_submitted_at ?? existingReview.created_at ?? null,

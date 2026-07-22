@@ -33,6 +33,8 @@ export interface RecoveryInputs {
   performanceRatio?: number | null;
   /** Recent training load — workouts in the last 7 days including this one. */
   recentWorkouts7d?: number | null;
+  /** Optional self-reported recovery for the day (1–5). Higher = better. */
+  recoveryToday?: number | null;
 }
 
 export interface RecoveryReason {
@@ -157,6 +159,23 @@ export function computeRecoveryScore(inp: RecoveryInputs): RecoveryResult {
     reasons.push({ label: "Pain", value: "Reported" });
   }
 
+  // Recovery Today — direct self-report. Strong but capped signal.
+  if (inp.recoveryToday != null) {
+    signals++;
+    const r = Math.max(1, Math.min(5, inp.recoveryToday));
+    // 1 -> -12, 2 -> -6, 3 -> 0, 4 -> +6, 5 -> +10
+    const map: Record<number, number> = { 1: -12, 2: -6, 3: 0, 4: 6, 5: 10 };
+    score += map[r] ?? 0;
+    const labels: Record<number, string> = {
+      1: "Very Poor",
+      2: "Poor",
+      3: "Average",
+      4: "Good",
+      5: "Excellent",
+    };
+    reasons.push({ label: "Recovery Today", value: labels[r] });
+  }
+
   score = Math.max(0, Math.min(100, Math.round(score)));
   return { score, reasons, hasData: signals > 0 };
 }
@@ -192,7 +211,7 @@ export async function fetchRecoveryScoreSeries(
   let reviewsQ = supabase
     .from("member_workout_reviews")
     .select(
-      "overall_rating, session_rpe, strength_feel, fatigue_feel, pain, review_submitted_at, member_plan_enrollments!inner(client_id)",
+      "overall_rating, session_rpe, strength_feel, fatigue_feel, pain, recovery_today, review_submitted_at, member_plan_enrollments!inner(client_id)",
     )
     .eq("member_plan_enrollments.client_id", clientId)
     .gte("review_submitted_at", sinceIso);
@@ -258,6 +277,7 @@ export async function fetchRecoveryScoreSeries(
       strengthFeel: r.strength_feel ?? null,
       fatigueFeel: r.fatigue_feel ?? null,
       pain: !!r.pain,
+      recoveryToday: r.recovery_today ?? null,
     });
     if (s.hasData) out.push({ ts: r.review_submitted_at, score: s.score });
   }
