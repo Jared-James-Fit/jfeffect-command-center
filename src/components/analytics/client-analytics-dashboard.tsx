@@ -171,14 +171,28 @@ export function ClientAnalyticsDashboard({
 
   // Scroll to the Recovery section when the URL ends with #recovery so the
   // "View Recovery" CTA on the Workouts page lands the user in the right
-  // place inside Full Analytics.
+  // place inside Full Analytics. Also briefly highlights the section so it's
+  // obvious where the user landed.
+  const [recoveryHighlight, setRecoveryHighlight] = useState(false);
   useEffect(() => {
     if (typeof window === "undefined") return;
     if (window.location.hash !== "#recovery") return;
-    const t = window.setTimeout(() => {
-      document.getElementById("recovery")?.scrollIntoView({ behavior: "smooth", block: "start" });
-    }, 250);
-    return () => window.clearTimeout(t);
+    // Wait for the section to be present after data fetches / layout.
+    let cancelled = false;
+    let attempts = 0;
+    const tryScroll = () => {
+      if (cancelled) return;
+      const el = document.getElementById("recovery");
+      if (el) {
+        el.scrollIntoView({ behavior: "smooth", block: "start" });
+        setRecoveryHighlight(true);
+        window.setTimeout(() => setRecoveryHighlight(false), 2200);
+        return;
+      }
+      if (attempts++ < 20) window.setTimeout(tryScroll, 150);
+    };
+    const t = window.setTimeout(tryScroll, 200);
+    return () => { cancelled = true; window.clearTimeout(t); };
   }, []);
 
   const [selectedEx, setSelectedEx] = useState<string>("");
@@ -487,7 +501,12 @@ export function ClientAnalyticsDashboard({
               blockId={activeBlockId}
             />
 
-            <div id="recovery" className="grid gap-4 scroll-mt-24 md:grid-cols-2">
+            <div
+              id="recovery"
+              className={`grid gap-4 scroll-mt-24 rounded-xl transition-shadow duration-500 md:grid-cols-2 ${
+                recoveryHighlight ? "ring-2 ring-primary/70 ring-offset-2 ring-offset-background shadow-lg" : ""
+              }`}
+            >
               <RecoverySummaryCard
                 clientId={clientId}
                 rangeStart={filter.start}
