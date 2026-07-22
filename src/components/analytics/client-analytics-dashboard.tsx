@@ -172,7 +172,10 @@ export function ClientAnalyticsDashboard({
   const [selectedEx, setSelectedEx] = useState<string>("");
   const [selectedDot, setSelectedDot] = useState<GraphDotPoint | null>(null);
   // Chart metric toggle for the Estimated 1RM Progress card.
-  const [chartMetric, setChartMetric] = useState<"est" | "load" | "rpe">("est");
+  // "effort" = RPE or RIR (whichever was logged), normalized to a common
+  // 0–10 effort scale for chart display; original value is preserved for
+  // the tooltip label ("RPE 8" vs "2 RIR").
+  const [chartMetric, setChartMetric] = useState<"est" | "load" | "effort">("est");
 
   const filteredResults = useMemo(() => {
     const startMs = filter.start.getTime();
@@ -245,6 +248,21 @@ export function ClientAnalyticsDashboard({
           ? format(d, "MMM d")
           : format(d, "MMM d");
       const rpeRaw = p.rpe != null && p.rpe !== "" ? Number(p.rpe) : null;
+      const rirRaw = p.rir != null && p.rir !== "" ? Number(p.rir) : null;
+      // Normalize to a common effort scale (higher = harder).
+      // RPE stays as-is; RIR converts via 10 - RIR (RIR 0 = RPE 10, RIR 2 = RPE 8).
+      const effortNorm =
+        rpeRaw != null && Number.isFinite(rpeRaw)
+          ? rpeRaw
+          : rirRaw != null && Number.isFinite(rirRaw)
+            ? Math.max(0, Math.min(10, 10 - rirRaw))
+            : null;
+      const effortSource: "RPE" | "RIR" | null =
+        rpeRaw != null && Number.isFinite(rpeRaw)
+          ? "RPE"
+          : rirRaw != null && Number.isFinite(rirRaw)
+            ? "RIR"
+            : null;
       return {
         idx: i,
         date: label,
@@ -254,9 +272,25 @@ export function ClientAnalyticsDashboard({
         load: Number(conv(p.load).toFixed(1)),
         reps: p.reps,
         rpe: rpeRaw != null && Number.isFinite(rpeRaw) ? rpeRaw : null,
+        rir: rirRaw != null && Number.isFinite(rirRaw) ? rirRaw : null,
+        effort: effortNorm,
+        effortSource,
       };
     });
   }, [activeSeries, conv]);
+
+  // Which effort systems appear in the current chart window (for labeling).
+  const effortSystems = useMemo(() => {
+    const set = new Set<string>();
+    for (const p of lineData) if (p.effortSource) set.add(p.effortSource);
+    return set;
+  }, [lineData]);
+  const effortLabel =
+    effortSystems.size === 2
+      ? "Effort (RPE / RIR)"
+      : effortSystems.has("RIR")
+        ? "Effort (RIR)"
+        : "Effort (RPE)";
 
   // Previous-block date range for the Recovery card comparison chip.
   const { prevBlockStart, prevBlockEnd } = useMemo(() => {
@@ -519,8 +553,8 @@ export function ClientAnalyticsDashboard({
                   <ToggleGroupItem value="load" className="h-8 px-3 text-[11px] font-bold uppercase data-[state=on]:bg-primary data-[state=on]:text-primary-foreground">
                     Weight
                   </ToggleGroupItem>
-                  <ToggleGroupItem value="rpe" className="h-8 px-3 text-[11px] font-bold uppercase data-[state=on]:bg-primary data-[state=on]:text-primary-foreground">
-                    RPE
+                  <ToggleGroupItem value="effort" className="h-8 px-3 text-[11px] font-bold uppercase data-[state=on]:bg-primary data-[state=on]:text-primary-foreground">
+                    Effort
                   </ToggleGroupItem>
                 </ToggleGroup>
               </div>
@@ -614,7 +648,7 @@ export function ClientAnalyticsDashboard({
                               stroke={axisColor}
                               fontSize={11}
                               tickMargin={4}
-                              domain={chartMetric === "rpe" ? [0, 10] : ["auto", "auto"]}
+                              domain={chartMetric === "effort" ? [0, 10] : ["auto", "auto"]}
                               tickFormatter={(v) => fmtNum(v)}
                               width={40}
                             />
@@ -627,9 +661,18 @@ export function ClientAnalyticsDashboard({
                               content={({ active, payload }) => {
                                 if (!active || !payload?.length) return null;
                                 const d: any = payload[0].payload;
-                                const metricLabel = chartMetric === "est" ? "est 1RM" : chartMetric === "load" ? "top set" : "RPE";
-                                const metricValue = chartMetric === "rpe"
-                                  ? (d.rpe != null ? d.rpe : "—")
+                                const metricLabel =
+                                  chartMetric === "est" ? "est 1RM"
+                                  : chartMetric === "load" ? "top set"
+                                  : effortLabel.toLowerCase();
+                                const effortDisplay =
+                                  d.effortSource === "RIR"
+                                    ? `${d.rir} RIR`
+                                    : d.effortSource === "RPE"
+                                      ? `RPE ${d.rpe}`
+                                      : "—";
+                                const metricValue = chartMetric === "effort"
+                                  ? effortDisplay
                                   : `${fmtNum(d[chartMetric])} ${displayUnit}`;
                                 return (
                                   <div className="max-w-[220px] rounded-lg border border-border bg-popover px-3 py-2 text-sm text-popover-foreground shadow-xl">
@@ -654,7 +697,11 @@ export function ClientAnalyticsDashboard({
                                     </div>
                                     <div className="text-xs text-muted-foreground">
                                       {fmtNum(d.load)} {displayUnit} × {d.reps}
-                                      {d.rpe != null && chartMetric !== "rpe" ? ` · RPE ${d.rpe}` : ""}
+                                      {chartMetric !== "effort" && (d.effortSource === "RPE"
+                                        ? ` · RPE ${d.rpe}`
+                                        : d.effortSource === "RIR"
+                                          ? ` · ${d.rir} RIR`
+                                          : "")}
                                     </div>
                                   </div>
                                 );

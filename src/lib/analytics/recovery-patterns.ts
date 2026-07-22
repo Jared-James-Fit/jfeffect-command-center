@@ -23,6 +23,8 @@ export interface WorkoutSessionMeta {
   date: string;
   completionPct?: number | null;
   avgRpe?: number | null;
+  /** Average RIR (reps in reserve) across working sets that day. */
+  avgRir?: number | null;
   sessionRpe?: number | null;
   overallRating?: number | null;
   strengthFeel?: string | null;
@@ -99,19 +101,29 @@ export function detectRecoveryPatterns(sessions: WorkoutSessionMeta[]): Pattern[
   const nextAfterHigh: number[] = [];
   const nextAfterLow: number[] = [];
   for (let i = 1; i < sorted.length; i++) {
-    const prevRpe = sorted[i - 1].sessionRpe ?? sorted[i - 1].avgRpe ?? null;
-    if (prevRpe == null) continue;
+    // Prefer explicit RPE. Fall back to normalized effort from RIR
+    // (avgRir → effort as 10 - RIR). This treats low-RIR sessions as
+    // high-effort without over-weighting them.
+    const prevRpeRaw = sorted[i - 1].sessionRpe ?? sorted[i - 1].avgRpe ?? null;
+    const prevRirRaw = (sorted[i - 1] as any).avgRir as number | null | undefined;
+    const prevEffort =
+      prevRpeRaw != null && Number.isFinite(prevRpeRaw)
+        ? Number(prevRpeRaw)
+        : prevRirRaw != null && Number.isFinite(prevRirRaw)
+          ? Math.max(0, Math.min(10, 10 - Number(prevRirRaw)))
+          : null;
+    if (prevEffort == null) continue;
     pairSupport++;
     const score = scoreForSession(sorted[i]);
-    if (prevRpe >= 8.5) nextAfterHigh.push(score);
-    else if (prevRpe <= 7) nextAfterLow.push(score);
+    if (prevEffort >= 8.5) nextAfterHigh.push(score);
+    else if (prevEffort <= 7) nextAfterLow.push(score);
   }
   if (nextAfterHigh.length >= 4 && nextAfterLow.length >= 4) {
     const diff = mean(nextAfterLow) - mean(nextAfterHigh);
     if (diff >= 6) {
       patterns.push({
         id: "rpe_next_recovery",
-        text: "Higher session RPEs are usually followed by lower recovery scores.",
+        text: "Higher-effort sessions (RPE 9–10 / RIR 0–1) are usually followed by lower recovery scores.",
         support: pairSupport,
       });
     }
