@@ -18,6 +18,7 @@ import { format } from "date-fns";
 import { ExternalLink, Star, FileText, Clock, Dumbbell, Activity, Heart } from "lucide-react";
 import { fmtNum } from "@/lib/analytics-format";
 import { Link } from "@tanstack/react-router";
+import { useRef } from "react";
 
 export type GraphDotPoint = {
   id: string;           // pl_row_results.id
@@ -66,6 +67,8 @@ function RatingStars({ rating }: { rating: number }) {
 
 export function GraphDotDetail({ point, clientId, onClose, canOpenLog = false }: Props) {
   const open = !!point;
+  const notesRef = useRef<HTMLDivElement | null>(null);
+  const scrollToNotes = () => notesRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
 
   // Lazy-fetch exercise note for this specific row (only when a dot is tapped)
   const { data: exerciseNote } = useQuery({
@@ -176,7 +179,7 @@ export function GraphDotDetail({ point, clientId, onClose, canOpenLog = false }:
           )}
 
           {/* ── Exercise note ── */}
-          <div className="rounded-lg border border-border bg-muted/30 p-3">
+          <div ref={notesRef} className="rounded-lg border border-border bg-muted/30 p-3">
             <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold mb-1 flex items-center gap-1">
               <FileText className="h-3 w-3" /> Exercise Note
             </div>
@@ -257,18 +260,24 @@ export function GraphDotDetail({ point, clientId, onClose, canOpenLog = false }:
 
           {/* ── Action buttons ── */}
           <div className="flex flex-col gap-2 pt-2 border-t border-border">
-            {canOpenLog && clientId && point.day_id && (
+            {noteContent && (
+              <Button variant="outline" className="w-full" size="lg" onClick={scrollToNotes}>
+                <FileText className="mr-2 h-4 w-4" /> View Notes
+              </Button>
+            )}
+            {canOpenLog && clientId && point.day_id ? (
               <Button asChild className="w-full" size="lg">
                 <Link to="/admin/client-programs/$clientId" params={{ clientId }}>
-                  <ExternalLink className="mr-2 h-4 w-4" /> Open Workout Log
+                  <ExternalLink className="mr-2 h-4 w-4" /> View Workout
                 </Link>
               </Button>
-            )}
-            {review?.completion_id && (
-              <Button variant="outline" className="w-full" size="lg" onClick={onClose}>
-                <Star className="mr-2 h-4 w-4" /> View Full Review
+            ) : point.day_id ? (
+              <Button asChild className="w-full" size="lg">
+                <Link to="/portal/workouts/$dayId" params={{ dayId: point.day_id }}>
+                  <ExternalLink className="mr-2 h-4 w-4" /> View Workout
+                </Link>
               </Button>
-            )}
+            ) : null}
             <Button variant="ghost" className="w-full" size="lg" onClick={onClose}>
               Close
             </Button>

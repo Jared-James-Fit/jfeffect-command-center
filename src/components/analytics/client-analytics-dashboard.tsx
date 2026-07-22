@@ -35,6 +35,10 @@ import { PlannedVsActualCard } from "@/components/analytics/planned-vs-actual-ca
 import { WeightLiftedCard } from "@/components/analytics/weight-lifted-card";
 import { GraphDotDetail, type GraphDotPoint } from "@/components/analytics/graph-dot-detail";
 import { PRCard } from "@/components/analytics/pr-card";
+import { RecoverySummaryCard } from "@/components/analytics/recovery-summary-card";
+import { CardioSummaryCard } from "@/components/analytics/cardio-summary-card";
+import { RecoveryPatternsCard } from "@/components/analytics/recovery-patterns-card";
+import { PredictedWindowCard } from "@/components/analytics/predicted-window-card";
 import { getClientAnalyticsSettings } from "@/lib/analytics/settings";
 import {
   ANALYTICS_COLORS,
@@ -167,6 +171,8 @@ export function ClientAnalyticsDashboard({
 
   const [selectedEx, setSelectedEx] = useState<string>("");
   const [selectedDot, setSelectedDot] = useState<GraphDotPoint | null>(null);
+  // Chart metric toggle for the Estimated 1RM Progress card.
+  const [chartMetric, setChartMetric] = useState<"est" | "load" | "rpe">("est");
 
   const filteredResults = useMemo(() => {
     const startMs = filter.start.getTime();
@@ -238,6 +244,7 @@ export function ClientAnalyticsDashboard({
         : sameDay
           ? format(d, "MMM d")
           : format(d, "MMM d");
+      const rpeRaw = p.rpe != null && p.rpe !== "" ? Number(p.rpe) : null;
       return {
         idx: i,
         date: label,
@@ -246,9 +253,20 @@ export function ClientAnalyticsDashboard({
         est: Number(conv(p.est_1rm).toFixed(1)),
         load: Number(conv(p.load).toFixed(1)),
         reps: p.reps,
+        rpe: rpeRaw != null && Number.isFinite(rpeRaw) ? rpeRaw : null,
       };
     });
   }, [activeSeries, conv]);
+
+  // Previous-block date range for the Recovery card comparison chip.
+  const { prevBlockStart, prevBlockEnd } = useMemo(() => {
+    if (!activeBlockId) return { prevBlockStart: null, prevBlockEnd: null };
+    const idx = clientBlocks.findIndex((b) => b.id === activeBlockId);
+    if (idx <= 0) return { prevBlockStart: null, prevBlockEnd: null };
+    const prev = clientBlocks[idx - 1];
+    if (!prev?.start_date || !prev?.end_date) return { prevBlockStart: null, prevBlockEnd: null };
+    return { prevBlockStart: new Date(prev.start_date), prevBlockEnd: new Date(prev.end_date) };
+  }, [activeBlockId, clientBlocks]);
 
   const activePr = activeSeries?.pr;
   const activeColor = exerciseColor(activeEx, activeSeries?.points?.[0]?.muscle_group);
@@ -423,6 +441,23 @@ export function ClientAnalyticsDashboard({
               blockId={activeBlockId}
             />
 
+            <div className="grid gap-4 md:grid-cols-2">
+              <RecoverySummaryCard
+                clientId={clientId}
+                rangeStart={filter.start}
+                rangeEnd={filter.end}
+                rangeLabel={filter.label}
+                prevStart={prevBlockStart}
+                prevEnd={prevBlockEnd}
+              />
+              <CardioSummaryCard
+                clientId={clientId}
+                rangeStart={filter.start}
+                rangeEnd={filter.end}
+                rangeLabel={filter.label}
+              />
+            </div>
+
             <section aria-label="Planned vs Actual">
               <div className="mb-1 text-[11px] font-semibold text-muted-foreground">
                 {filter.label} · 5 most recent completed workouts in this range
@@ -470,8 +505,24 @@ export function ClientAnalyticsDashboard({
               <div className="mb-3 grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2 sm:flex sm:flex-wrap sm:justify-between">
                 <h2 className="flex min-w-0 items-center gap-2 truncate text-base font-black uppercase tracking-wider text-foreground">
                   <TrendingUp className="h-5 w-5 shrink-0 text-primary" />
-                  <span className="truncate">Estimated 1RM Progress</span>
+                  <span className="truncate">Exercise Progress</span>
                 </h2>
+                <ToggleGroup
+                  type="single"
+                  value={chartMetric}
+                  onValueChange={(v) => v && setChartMetric(v as any)}
+                  className="rounded-lg border border-border bg-card p-0.5"
+                >
+                  <ToggleGroupItem value="est" className="h-8 px-3 text-[11px] font-bold uppercase data-[state=on]:bg-primary data-[state=on]:text-primary-foreground">
+                    Est 1RM
+                  </ToggleGroupItem>
+                  <ToggleGroupItem value="load" className="h-8 px-3 text-[11px] font-bold uppercase data-[state=on]:bg-primary data-[state=on]:text-primary-foreground">
+                    Weight
+                  </ToggleGroupItem>
+                  <ToggleGroupItem value="rpe" className="h-8 px-3 text-[11px] font-bold uppercase data-[state=on]:bg-primary data-[state=on]:text-primary-foreground">
+                    RPE
+                  </ToggleGroupItem>
+                </ToggleGroup>
               </div>
               <Card className="border-border/80 bg-card p-4">
                 <div className="mb-4">
@@ -563,7 +614,7 @@ export function ClientAnalyticsDashboard({
                               stroke={axisColor}
                               fontSize={11}
                               tickMargin={4}
-                              domain={["auto", "auto"]}
+                              domain={chartMetric === "rpe" ? [0, 10] : ["auto", "auto"]}
                               tickFormatter={(v) => fmtNum(v)}
                               width={40}
                             />
@@ -576,6 +627,10 @@ export function ClientAnalyticsDashboard({
                               content={({ active, payload }) => {
                                 if (!active || !payload?.length) return null;
                                 const d: any = payload[0].payload;
+                                const metricLabel = chartMetric === "est" ? "est 1RM" : chartMetric === "load" ? "top set" : "RPE";
+                                const metricValue = chartMetric === "rpe"
+                                  ? (d.rpe != null ? d.rpe : "—")
+                                  : `${fmtNum(d[chartMetric])} ${displayUnit}`;
                                 return (
                                   <div className="max-w-[220px] rounded-lg border border-border bg-popover px-3 py-2 text-sm text-popover-foreground shadow-xl">
                                     <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-muted-foreground">
@@ -592,13 +647,14 @@ export function ClientAnalyticsDashboard({
                                       )}
                                     </div>
                                     <div className="mt-1 font-extrabold text-foreground">
-                                      {fmtNum(d.est)} {displayUnit}{" "}
+                                      {metricValue}{" "}
                                       <span className="text-xs font-medium text-muted-foreground">
-                                        est 1RM
+                                        {metricLabel}
                                       </span>
                                     </div>
                                     <div className="text-xs text-muted-foreground">
                                       {fmtNum(d.load)} {displayUnit} × {d.reps}
+                                      {d.rpe != null && chartMetric !== "rpe" ? ` · RPE ${d.rpe}` : ""}
                                     </div>
                                   </div>
                                 );
@@ -606,19 +662,21 @@ export function ClientAnalyticsDashboard({
                             />
                             <Area
                               type="monotone"
-                              dataKey="est"
+                              dataKey={chartMetric}
                               stroke="none"
                               fill={`url(#fill-${activeEx.replace(/\W+/g, "")})`}
+                              connectNulls
                             />
                             <Line
                               type="monotone"
-                              dataKey="est"
+                              dataKey={chartMetric}
                               stroke={activeColor}
                               strokeWidth={2.5}
                               dot={{ r: 3.5, fill: activeColor, strokeWidth: 0 }}
                               activeDot={{ r: 8, strokeWidth: 2, stroke: "var(--background)", fill: activeColor, cursor: "pointer" }}
+                              connectNulls
                             />
-                            {activePr && lineData.length > 1 && (
+                            {chartMetric === "est" && activePr && lineData.length > 1 && (
                               <ReferenceDot
                                 x={lineData.findIndex(
                                   (d) => d.est === Number(conv(activePr.est_1rm).toFixed(1)),
@@ -735,6 +793,17 @@ export function ClientAnalyticsDashboard({
               results={results as any[]}
               displayUnit={displayUnit}
               blockId={activeBlockId}
+            />
+
+            <RecoveryPatternsCard
+              clientId={clientId}
+              rangeStart={filter.start}
+              rangeEnd={filter.end}
+            />
+
+            <PredictedWindowCard
+              clientId={clientId}
+              currentBlockId={activeBlockId ?? resolvedCurrentBlockId}
             />
           </>
         )}
