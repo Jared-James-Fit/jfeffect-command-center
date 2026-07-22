@@ -553,8 +553,8 @@ export function ClientAnalyticsDashboard({
                   <ToggleGroupItem value="load" className="h-8 px-3 text-[11px] font-bold uppercase data-[state=on]:bg-primary data-[state=on]:text-primary-foreground">
                     Weight
                   </ToggleGroupItem>
-                  <ToggleGroupItem value="rpe" className="h-8 px-3 text-[11px] font-bold uppercase data-[state=on]:bg-primary data-[state=on]:text-primary-foreground">
-                    RPE
+                  <ToggleGroupItem value="effort" className="h-8 px-3 text-[11px] font-bold uppercase data-[state=on]:bg-primary data-[state=on]:text-primary-foreground">
+                    Effort
                   </ToggleGroupItem>
                 </ToggleGroup>
               </div>
