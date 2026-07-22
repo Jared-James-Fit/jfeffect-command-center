@@ -121,6 +121,7 @@ export type ReviewInitial = {
   strengthFeel?: string | null;
   fatigueFeel?: string | null;
   hitTarget?: string | null;
+  recoveryToday?: number | null;
 };
 
 type Props = {
@@ -163,11 +164,13 @@ export function WorkoutReviewEditor({
 
   const [status, setStatus] = useState<StatusKey | null>(() => inferStatus(initial));
   const [note, setNote] = useState<string>(initial?.clientNote ?? "");
+  const [recoveryToday, setRecoveryToday] = useState<number | null>(initial?.recoveryToday ?? null);
 
   useEffect(() => {
     if (!open) return;
     setStatus(inferStatus(initial));
     setNote(initial?.clientNote ?? "");
+    setRecoveryToday(initial?.recoveryToday ?? null);
   }, [open, initial?.submittedAt]);
 
   const selectedCard = STATUS_CARDS.find((c) => c.key === status) ?? null;
@@ -191,6 +194,7 @@ export function WorkoutReviewEditor({
           strengthFeel: null,
           fatigueFeel: null,
           hitTarget: null,
+          recoveryToday: recoveryToday,
           actAsClientId: actAsClientId ?? null,
         },
       });
