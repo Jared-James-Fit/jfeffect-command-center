@@ -3,7 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Card } from "@/components/ui/card";
 import { Sparkles, TrendingUp, TrendingDown, Minus } from "lucide-react";
 import { format } from "date-fns";
-import { computeRecoveryScore, recoveryTrendLabel } from "@/lib/analytics/recovery-score";
+import { recoveryTrendLabel, fetchRecoveryScoreSeries } from "@/lib/analytics/recovery-score";
 
 interface Props {
   clientId: string;
@@ -32,39 +32,12 @@ export function RecoverySummaryCard({ clientId, rangeStart, rangeEnd, rangeLabel
     enabled: !!clientId,
     staleTime: 60_000,
     queryFn: async () => {
-      // Reviews for this client via enrollment_id → clients.id
-      const { data: reviewsCur } = await (supabase as any)
-        .from("member_workout_reviews")
-        .select("overall_rating, session_rpe, strength_feel, fatigue_feel, pain, review_submitted_at, enrollment_id, member_plan_enrollments!inner(client_id)")
-        .eq("member_plan_enrollments.client_id", clientId)
-        .gte("review_submitted_at", startCur)
-        .lte("review_submitted_at", endCur);
-      const curScores = (reviewsCur ?? []).map((r: any) =>
-        computeRecoveryScore({
-          overallRating: r.overall_rating ?? null,
-          sessionRpe: r.session_rpe ?? null,
-          strengthFeel: r.strength_feel ?? null,
-          fatigueFeel: r.fatigue_feel ?? null,
-          pain: !!r.pain,
-        }).score,
-      );
+      const curSeries = await fetchRecoveryScoreSeries(supabase as any, clientId, startCur, endCur);
+      const curScores = curSeries.map((r) => r.score);
       let prevAvg: number | null = null;
       if (startPrev && endPrev) {
-        const { data: reviewsPrev } = await (supabase as any)
-          .from("member_workout_reviews")
-          .select("overall_rating, session_rpe, strength_feel, fatigue_feel, pain, member_plan_enrollments!inner(client_id)")
-          .eq("member_plan_enrollments.client_id", clientId)
-          .gte("review_submitted_at", startPrev)
-          .lte("review_submitted_at", endPrev);
-        const prevScores = (reviewsPrev ?? []).map((r: any) =>
-          computeRecoveryScore({
-            overallRating: r.overall_rating ?? null,
-            sessionRpe: r.session_rpe ?? null,
-            strengthFeel: r.strength_feel ?? null,
-            fatigueFeel: r.fatigue_feel ?? null,
-            pain: !!r.pain,
-          }).score,
-        );
+        const prevSeries = await fetchRecoveryScoreSeries(supabase as any, clientId, startPrev, endPrev);
+        const prevScores = prevSeries.map((r) => r.score);
         if (prevScores.length) prevAvg = Math.round(prevScores.reduce((s: number, n: number) => s + n, 0) / prevScores.length);
       }
       const curAvg = curScores.length ? Math.round(curScores.reduce((s: number, n: number) => s + n, 0) / curScores.length) : null;
