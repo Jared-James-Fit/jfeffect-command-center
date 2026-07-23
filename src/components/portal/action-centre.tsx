@@ -143,7 +143,34 @@ function Row({ item }: { item: ActionItem }) {
     </div>
   );
 
-  if (item.to) return <Link to={item.to} params={item.params as any} search={item.search as any} className="block">{body}</Link>;
+  if (item.to) {
+    // Pre-interpolate `$param` placeholders so we never hand TanStack a
+    // template string with a missing/misaligned params prop. Extra params
+    // become search params (safe for TanStack `search`).
+    let resolved = item.to;
+    const leftover: Record<string, unknown> = {};
+    if (item.params) {
+      for (const [k, v] of Object.entries(item.params)) {
+        const tag = `$${k}`;
+        if (resolved.includes(tag)) {
+          resolved = resolved.split(tag).join(encodeURIComponent(String(v)));
+        } else {
+          leftover[k] = v;
+        }
+      }
+    }
+    const mergedSearch = { ...(item.search ?? {}), ...leftover };
+    const hasSearch = Object.keys(mergedSearch).length > 0;
+    return (
+      <Link
+        to={resolved}
+        search={hasSearch ? (mergedSearch as any) : undefined}
+        className="block"
+      >
+        {body}
+      </Link>
+    );
+  }
   if (item.href) return (
     <a href={item.href} target="_blank" rel="noopener noreferrer" className="block">{body}</a>
   );
