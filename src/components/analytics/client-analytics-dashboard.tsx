@@ -524,6 +524,13 @@ export function ClientAnalyticsDashboard({
               />
             </div>
 
+            <SleepInsightsCard
+              clientId={clientId}
+              blockStart={filter.start}
+              blockEnd={filter.end}
+              blockLabel={filter.label}
+            />
+
             <section aria-label="Planned vs Actual">
               <div className="mb-1 text-[11px] font-semibold text-muted-foreground">
                 {filter.label} · 5 most recent completed workouts in this range
