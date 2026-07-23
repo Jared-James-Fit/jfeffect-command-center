@@ -8,7 +8,7 @@ import {
 import {
   Calendar as CalendarIcon, ChevronLeft, ChevronRight, ClipboardList,
   History, Loader2, Move, MoreVertical, Play, Pencil, Sun, Activity, Download,
-  RotateCcw, MessageSquare, Trophy,
+  RotateCcw, MessageSquare, Trophy, ChevronDown,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/app-shell";
@@ -35,6 +35,7 @@ import { ScheduleHistoryDrawer } from "@/components/schedule/ScheduleHistoryDraw
 import { ClientBlockView } from "@/components/client-block-view";
 import { WorkoutStatusSheet } from "@/components/workout-status-sheet";
 import { CircleDot } from "lucide-react";
+import { InlineWorkoutPreview } from "@/components/workout/shared/inline-workout-preview";
 import { TrainingScheduleCard } from "@/components/training-schedule-card";
 import { toast } from "sonner";
 import { ClientCardioSection } from "@/components/cardio/ClientCardioSection";
@@ -866,6 +867,7 @@ function SelectedDayCard({
   clientId: string;
 }) {
   const [previewOpen, setPreviewOpen] = useState(false);
+  const [inlineOpen, setInlineOpen] = useState(false);
   const [moveOpen, setMoveOpen] = useState(false);
   const [statusOpen, setStatusOpen] = useState(false);
   const [resetOpen, setResetOpen] = useState(false);
@@ -1042,9 +1044,6 @@ function SelectedDayCard({
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
-                <DropdownMenuItem onSelect={() => setPreviewOpen(true)}>
-                  <ClipboardList className="mr-2 h-4 w-4" /> Preview workout
-                </DropdownMenuItem>
                 <DropdownMenuItem onSelect={() => setMoveOpen(true)}>
                   <Move className="mr-2 h-4 w-4" /> Move workout
                 </DropdownMenuItem>
@@ -1124,7 +1123,22 @@ function SelectedDayCard({
                 <Move className="mr-1 h-3.5 w-3.5" /> Reschedule
               </Button>
             )}
+          <Button
+            size="sm"
+            variant="ghost"
+            className="text-muted-foreground"
+            onClick={() => setInlineOpen((v) => !v)}
+            aria-expanded={inlineOpen}
+          >
+            <ChevronDown className={cn("mr-1 h-3.5 w-3.5 transition-transform", inlineOpen && "rotate-180")} />
+            {inlineOpen ? "Hide Preview" : "Preview Workout"}
+          </Button>
         </div>
+        {inlineOpen && item.day?.id && (
+          <div className="mt-3">
+            <InlineWorkoutPreview dayId={item.day.id} clientId={clientId} />
+          </div>
+        )}
       </Card>
 
       {!readonly && (
@@ -1208,22 +1222,26 @@ function primaryCtaFor(item: WorkoutItem, status: WorkoutStatus): {
   secondary?: { label: string; search?: Record<string, any> };
 } {
   const inProgress = !!item.completion && !item.completion?.completed_at;
+  const partial = status === "in_progress" || (inProgress && (item.logged_sets_count ?? 0) > 0);
+  if (partial) {
+    return { label: "Continue Workout", tone: "bg-amber-500 text-black hover:bg-amber-400", icon: <Play className="mr-1 h-4 w-4" /> };
+  }
   if (inProgress) {
-    return { label: "Resume Workout", tone: "bg-amber-500 text-black hover:bg-amber-400", icon: <Play className="mr-1 h-4 w-4" /> };
+    return { label: "Continue Workout", tone: "bg-amber-500 text-black hover:bg-amber-400", icon: <Play className="mr-1 h-4 w-4" /> };
   }
   switch (status) {
     case "completed_today":
     case "completed_on_scheduled":
     case "completed_different_day":
       return {
-        label: "View / Edit Workout",
+        label: "View Workout",
         tone: "bg-emerald-600 text-white hover:bg-emerald-500",
         icon: <Pencil className="mr-1 h-4 w-4" />,
         search: { edit: 1 },
       };
     case "missed":
       return {
-        label: "Complete Workout",
+        label: "Continue Workout",
         tone: "bg-primary text-primary-foreground hover:bg-primary/90",
         icon: <Play className="mr-1 h-4 w-4" />,
         secondary: { label: "Reschedule" },

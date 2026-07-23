@@ -2,14 +2,24 @@ import { useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Dumbbell, ChevronRight, Calendar as CalendarIcon, Pencil, MessageSquare, Move } from "lucide-react";
+import { Dumbbell, ChevronRight, Calendar as CalendarIcon, Pencil, MessageSquare, Move, ChevronDown } from "lucide-react";
 import { format } from "date-fns";
 import { getWorkoutStatus } from "@/lib/workout-status";
 import { durationRange } from "@/lib/pl-programs";
 import { cleanDayTitle, dayScheduledDate } from "@/lib/workout-today";
 import { MoveWorkoutSheet } from "@/components/schedule/MoveWorkoutSheet";
+import { InlineWorkoutPreview } from "@/components/workout/shared/inline-workout-preview";
+import { cn } from "@/lib/utils";
 
-export function WorkoutListCard({ item, readonly = false }: { item: any; readonly?: boolean }) {
+export function WorkoutListCard({
+  item,
+  readonly = false,
+  clientId,
+}: {
+  item: any;
+  readonly?: boolean;
+  clientId?: string | null;
+}) {
   if (!item.day?.id) return null;
   const status = getWorkoutStatus(item);
   const title = cleanDayTitle(item.day.title, item.day.day_index);
@@ -18,6 +28,8 @@ export function WorkoutListCard({ item, readonly = false }: { item: any; readonl
   const isCompleted = !!item.completion?.completed_at;
   const hasReview = !!item.completion?.has_feedback;
   const [moveOpen, setMoveOpen] = useState(false);
+  const [expanded, setExpanded] = useState(false);
+  const previewClientId = clientId ?? item.completion?.client_id ?? null;
   return (
     <div className="space-y-1.5">
     <Link
@@ -55,6 +67,17 @@ export function WorkoutListCard({ item, readonly = false }: { item: any; readonl
       </Card>
     </Link>
     <div className="flex flex-wrap items-center gap-1.5 pl-1">
+      {previewClientId && (
+        <button
+          type="button"
+          onClick={(e) => { e.stopPropagation(); setExpanded((v) => !v); }}
+          aria-expanded={expanded}
+          className="inline-flex items-center gap-1 rounded-full border border-border bg-background px-2.5 py-1 text-[11px] font-semibold text-muted-foreground hover:bg-secondary hover:text-foreground"
+        >
+          <ChevronDown className={cn("h-3 w-3 transition-transform", expanded && "rotate-180")} />
+          {expanded ? "Hide Preview" : "Preview Workout"}
+        </button>
+      )}
       {!readonly && (
         <button
           type="button"
@@ -87,6 +110,11 @@ export function WorkoutListCard({ item, readonly = false }: { item: any; readonl
         </Link>
       </>)}
     </div>
+    {expanded && previewClientId && (
+      <div className="pt-1">
+        <InlineWorkoutPreview dayId={item.day.id} clientId={previewClientId} />
+      </div>
+    )}
     {!readonly && (
       <MoveWorkoutSheet
         dayId={item.day.id}

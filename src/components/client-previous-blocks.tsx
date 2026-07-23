@@ -138,6 +138,7 @@ function BlockHistoryDetail({ blockId, clientId, readonly }: { blockId: string; 
                       key={d.id}
                       item={{ day: d, week: w, block: { id: blockId }, completion }}
                       readonly={readonly}
+                      clientId={clientId}
                     />
                   );
                 })}
