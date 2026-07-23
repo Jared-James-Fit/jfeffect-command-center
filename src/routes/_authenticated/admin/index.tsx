@@ -458,7 +458,6 @@ function AdminDashboard() {
           <DashboardRefreshIndicator />
         </div>
         <DriveSetupBanner />
-        <NotificationSetupPrompt />
 
         {/* TODAY PRIORITY */}
         <Card className="border-border bg-card p-4">
