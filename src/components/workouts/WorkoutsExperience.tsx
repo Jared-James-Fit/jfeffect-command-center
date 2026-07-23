@@ -866,6 +866,7 @@ function SelectedDayCard({
   clientId: string;
 }) {
   const [previewOpen, setPreviewOpen] = useState(false);
+  const [inlineOpen, setInlineOpen] = useState(false);
   const [moveOpen, setMoveOpen] = useState(false);
   const [statusOpen, setStatusOpen] = useState(false);
   const [resetOpen, setResetOpen] = useState(false);
