@@ -1,79 +1,95 @@
-# Smarter Training Analytics
+## Goal
 
-Goal: keep the current Training Analytics page looking almost identical while making it smarter. No new forms, no new dashboards, no schema changes for user input. Everything derives from data we already collect (set logs, RPE, planned vs completed, reviews, pain, cardio completions).
+Turn the Action Centre into an intelligent, automated coaching task system: recurring schedules, client-local time zones, plain-language due status, smart priority, in-place completion, and per-athlete overrides. Keep the current visual style — only functionality changes.
 
-## Scope
+Because this is a large surface, I'll ship it in **four incremental phases**, each shippable on its own. Please confirm before I start Phase 1.
 
-All work stays inside:
-- `src/components/analytics/*`
-- `src/lib/analytics/*` (new helpers)
-- Small additions to the workout-complete summary UI
+---
 
-No API/table changes. New helpers are pure functions over existing tables:
-`pl_row_results`, `pl_exercise_rows`, `pl_day_completions`, `member_workout_reviews`, `member_workout_completions`, `cardio_completions`, `cardio_targets`.
+## Phase 1 — Data foundation & schedules
 
-## Changes
+New tables (RLS, GRANTs, service_role) via one migration:
 
-### 1. Exercise 1RM chart: Est.1RM | Weight | RPE toggle
-In the existing per-exercise chart inside `client-analytics-dashboard.tsx`:
-- Add a 3-way segmented toggle above the chart.
-- Reuse the same series data (already includes load and rpe on each point via `pl_row_results`).
-- Tap detail (in `graph-dot-detail.tsx`) shows: Top set (load × reps), Est.1RM, Top set RPE.
+- `coach_task_definitions` — global/coach-owned defaults per task type (weekly_checkin, nutrition_review, progress_photos, bodyweight, technique_review, monthly_assessment, custom_form). Fields: `frequency` (weekly, biweekly, monthly, custom_days), `interval_days`, `due_day_of_week`, `due_time_local`, `tz_mode` (client|coach|fixed), `fixed_tz`, `reminder_offsets` (int[] days), `enabled`, `form_id?`.
+- `client_task_overrides` — per-athlete overrides of the same fields, `client_id + task_type` unique.
+- `client_task_occurrences` — generated instances: `client_id`, `task_type`, `title`, `due_at_utc`, `due_local_date`, `client_tz`, `status` (upcoming|due_soon|due_today|overdue|completed|skipped), `completed_at`, `source_definition_id`, `source_override_id`, `payload_ref` (form submission id / photo submission id / etc.), `reminder_state jsonb`.
+- `client_time_zone` on `clients` (nullable text) with auto-update from client device on portal load (unless user disables in Settings).
 
-### 2. "View Notes" + "View Workout" on exercise view
-On the exercise detail (already opened from PR / chart), add two buttons:
-- **View Notes** → sheet listing existing notes for the workouts backing the chart:
-  coach notes (`pl_exercise_rows.notes`), client notes (`pl_row_results.notes`),
-  pain notes (`member_workout_reviews.pain_notes` / row-level pain), workout review
-  comments (`member_workout_reviews.notes`).
-- **View Workout** → links to `/portal/workouts/$dayId` (or admin equivalent) for the workout tied to the tapped point.
-No new tables; pure read.
+Server functions (`src/lib/action-centre.functions.ts`):
 
-### 3. Estimated Recovery Score beside Workout Score
-In the workout-complete summary component:
-- Compute recovery 0–100 from:
-  session RPE (`avg_rpe`), completion %, planned-vs-actual for that day,
-  recent 7/14-day load trend, workout frequency, performance vs recent e1RM,
-  existing review sliders (soreness/sleep/energy if present), pain flag.
-- Show alongside Workout Score with same styling.
-- Tap → small popover with the contributing factor lines (Performance / Completion / Session Difficulty / Recent Load).
-Helper: `src/lib/analytics/recovery-score.ts`.
+- `listActionCentre({ clientId })` — returns prioritized, non-completed occurrences + status labels ("Due Today", "2 Days Overdue", etc.), computed in client tz.
+- `completeTaskOccurrence({ occurrenceId, payloadRef? })` — marks completed and schedules next occurrence per definition/override.
+- `generateNextOccurrence({ clientId, taskType })` — internal helper.
+- `getEffectiveSchedule({ clientId, taskType })` — merges override → definition → hard-coded defaults.
 
-### 4. Recovery summary card in Analytics
-One compact card in the dashboard:
-- Current block avg, previous block avg, trend chip (Improving/Stable/Declining ≥5pt diff).
-- Hidden when fewer than 3 scored workouts in current block.
+Cron (pg_cron → `/api/public/hooks/action-centre-tick`):
+- Every 15 min: transition upcoming → due_soon → due_today → overdue using each row's `due_at_utc` and current UTC; fire reminder push per `reminder_offsets`.
+- Nightly: back-generate any missing next-occurrences (self-healing).
 
-### 5. Cardio summary card
-Compact card using `cardio_completions` + `cardio_targets`:
-Completed / Prescribed, Adherence %, Total Minutes. Hidden when no cardio target.
+Defaults seeded in migration exactly as spec (weekly check-in Sat 11:59 PM client local, bodyweight daily w/ reminder after 3 days & overdue after 5, progress photos 4w, nutrition 2w, monthly assessment 4w, technique manual).
 
-### 6. Recovery pattern detection
-Helper `recovery-patterns.ts` runs only when ≥ 4 weeks of completed workouts exist.
-Detect a small fixed set of patterns from existing data:
-- Rest-day effect (recovery/perf by days-since-last-workout)
-- High-volume week dip (recovery vs weekly volume quartile)
-- RPE → next-session recovery correlation
-- Lift performance vs recovery-above-average
-Only display patterns with strong support (n ≥ 6 and effect ≥ threshold). Render as bullet list in a small "Patterns" card. Empty state → card hidden.
+---
 
-### 7. Predicted Best Performance Window
-Helper `predicted-window.ts`. Uses current block's week-by-week e1RM/RPE/recovery trend plus prior blocks' peak-week distribution. Outputs `{ week, confidence }`. Confidence:
-- High: ≥ 2 prior blocks agree AND current trend consistent
-- Moderate: 1 prior block or current trend only
-- Otherwise hide the card.
+## Phase 2 — Client Action Centre UX
 
-## Technical notes
+Update `src/components/portal/action-centre.tsx` + `src/routes/_authenticated/portal/index.tsx`:
 
-- All new logic is pure TS in `src/lib/analytics/`; unit-testable.
-- Reuse existing queries in `client-analytics-dashboard.tsx`; add memoized derivations.
-- Segmented control: existing `ToggleGroup` from shadcn.
-- Charts already use Recharts — same `<LineChart>`, swap `dataKey`.
-- No new secrets, no migrations.
+- Consume `listActionCentre` instead of ad-hoc props (keep same card aesthetic).
+- Plain-language status chip ("Due Today", "2 Days Overdue"…) with tone colors:
+  🟢 completed, 🟡 due tomorrow, 🟠 due today, 🔴 overdue.
+- Priority sort: overdue coach-requested > coach replies > coach feedback > due today > due tomorrow > upcoming.
+- Completed rows disappear immediately (optimistic).
+- Empty state: "✅ You're all caught up."
+- Every row opens a **premium bottom sheet** (`ActionTaskSheet`) rendering task-specific inline UI:
+  - Weekly / Nutrition / Custom form → embed the existing form flow.
+  - Progress photos → existing uploader.
+  - Bodyweight → inline number entry (already exists as card, wire same mutation).
+  - Coach Feedback (renamed from Lift Reviews) → video + notes + reply + mark viewed, swipeable between reviews.
+- Success animation → auto-close → row removed → next occurrence appears if scheduled.
 
-## Out of scope
+Time-zone capture: on portal load, if `clients.time_zone` differs from `Intl.DateTimeFormat().resolvedOptions().timeZone` and auto-detect is on, persist quietly.
 
-- No new forms, no new questionnaires.
-- No new tables/columns.
-- No heart-rate zones, calories, distance for cardio.
-- No AI predictions or complex forecasting graphs.
+---
+
+## Phase 3 — Admin scheduling UI
+
+New admin surface `src/routes/_authenticated/admin/coaching/schedules.tsx`:
+
+- Grid of task types with the dummy-proof form (Automatic Scheduling toggle, Frequency, Default Due Day, Default Due Time, Time Zone mode, Reminder Timing checkboxes).
+- Copy: "Changes only affect future occurrences."
+
+Per-athlete override panel inside existing client workspace (`clients.$id.tsx`) → new "Task Schedule" tab:
+- Shows effective schedule per task type with an "Override" toggle → same form scoped to that client.
+- "Reset to default" clears the override row.
+
+Coach view-mode toggle (`viewTz`: client|coach) persisted in `admin_dashboard_prefs`; formats all admin due dates accordingly.
+
+---
+
+## Phase 4 — Coach Feedback rename & polish
+
+- Rename all client-facing "Lift Review" strings to "Coach Feedback" (labels only; DB names unchanged).
+- Coach Feedback sheet: title like "Coach reviewed your squat", video, notes, exercise chip, reply box, "Mark as viewed" button.
+- Swipe/paginate between multiple unseen feedback items.
+- Final QA: iPhone SE, iPhone Pro Max, iPad; safe-area insets; 44px tap targets; screen-reader labels for status chips.
+
+---
+
+## Technical section
+
+- All date math uses `date-fns-tz` (`formatInTimeZone`, `zonedTimeToUtc`) — add dependency.
+- Status labels computed server-side (single source of truth) and re-checked client-side for optimistic updates.
+- `completeTaskOccurrence` is idempotent (unique `(client_id, task_type, due_local_date)` partial index on non-completed rows) so double-taps and cron re-runs are safe.
+- Cron endpoint under `/api/public/hooks/action-centre-tick` uses `apikey` header (Supabase anon) per house rules.
+- No changes to workout completion, messaging, or analytics tables — pure additive.
+
+---
+
+## What I will NOT touch
+
+- Visual design of the Action Centre card, dashboard order, workout/analytics pages.
+- Existing `messages`, `lift_videos`, `nf_forms`, `progress_*` schemas — the new occurrence rows *reference* them via `payload_ref`, not replace them.
+
+---
+
+Reply **"go phase 1"** to start with the migration + server functions, or tell me to reshape scope first.
