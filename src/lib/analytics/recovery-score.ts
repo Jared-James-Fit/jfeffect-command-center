@@ -35,6 +35,42 @@ export interface RecoveryInputs {
   recentWorkouts7d?: number | null;
   /** Optional self-reported recovery for the day (1–5). Higher = better. */
   recoveryToday?: number | null;
+  /** Optional self-reported sleep bucket the night before. */
+  sleepBucket?: SleepBucket | null;
+}
+
+export type SleepBucket = "lt5" | "5_6" | "6_7" | "7_8" | "8_9" | "gte9";
+
+/** Midpoint hours for a sleep bucket. */
+export function sleepBucketHours(b: SleepBucket | null | undefined): number | null {
+  if (!b) return null;
+  switch (b) {
+    case "lt5": return 4.5;
+    case "5_6": return 5.5;
+    case "6_7": return 6.5;
+    case "7_8": return 7.5;
+    case "8_9": return 8.5;
+    case "gte9": return 9.5;
+  }
+}
+
+export function sleepBucketLabel(b: SleepBucket | null | undefined): string {
+  if (!b) return "—";
+  return { lt5: "<5h", "5_6": "5–6h", "6_7": "6–7h", "7_8": "7–8h", "8_9": "8–9h", gte9: "9h+" }[b];
+}
+
+/** Contribution of sleep to readiness score, bounded so one night can't dominate. */
+function sleepDelta(b: SleepBucket | null | undefined): { delta: number; label: string } | null {
+  if (!b) return null;
+  const map: Record<SleepBucket, { delta: number; label: string }> = {
+    lt5: { delta: -6, label: "<5h" },
+    "5_6": { delta: -3, label: "5–6h" },
+    "6_7": { delta: 1, label: "6–7h" },
+    "7_8": { delta: 4, label: "7–8h" },
+    "8_9": { delta: 5, label: "8–9h" },
+    gte9: { delta: 3, label: "9h+" },
+  };
+  return map[b];
 }
 
 export interface RecoveryReason {
@@ -176,6 +212,14 @@ export function computeRecoveryScore(inp: RecoveryInputs): RecoveryResult {
     reasons.push({ label: "Recovery Today", value: labels[r] });
   }
 
+  // Sleep — bounded ±6 pts so one bad night influences but doesn't determine readiness.
+  const sd = sleepDelta(inp.sleepBucket);
+  if (sd) {
+    signals++;
+    score += sd.delta;
+    reasons.push({ label: "Sleep", value: sd.label });
+  }
+
   score = Math.max(0, Math.min(100, Math.round(score)));
   return { score, reasons, hasData: signals > 0 };
 }
@@ -211,7 +255,7 @@ export async function fetchRecoveryScoreSeries(
   let reviewsQ = supabase
     .from("member_workout_reviews")
     .select(
-      "overall_rating, session_rpe, strength_feel, fatigue_feel, pain, recovery_today, review_submitted_at, member_plan_enrollments!inner(client_id)",
+      "overall_rating, session_rpe, strength_feel, fatigue_feel, pain, recovery_today, sleep_bucket, review_submitted_at, member_plan_enrollments!inner(client_id)",
     )
     .eq("member_plan_enrollments.client_id", clientId)
     .gte("review_submitted_at", sinceIso);
@@ -227,6 +271,18 @@ export async function fetchRecoveryScoreSeries(
     .gte("completed_at", sinceIso);
   if (untilIso) compQ = compQ.lte("completed_at", untilIso);
   const { data: comps } = await compQ;
+
+  // Sleep buckets from pl_workout_feedback, keyed by completion_id.
+  let fbQ = supabase
+    .from("pl_workout_feedback")
+    .select("completion_id, sleep_bucket")
+    .eq("client_id", clientId)
+    .not("sleep_bucket", "is", null);
+  const { data: feedbacks } = await fbQ;
+  const sleepByCompletion = new Map<string, SleepBucket>();
+  for (const f of (feedbacks ?? []) as any[]) {
+    if (f.completion_id && f.sleep_bucket) sleepByCompletion.set(f.completion_id, f.sleep_bucket);
+  }
 
   // 3) Row results (for avg RPE/RIR per session)
   let rowsQ = supabase
@@ -278,6 +334,7 @@ export async function fetchRecoveryScoreSeries(
       fatigueFeel: r.fatigue_feel ?? null,
       pain: !!r.pain,
       recoveryToday: r.recovery_today ?? null,
+      sleepBucket: (r.sleep_bucket ?? null) as SleepBucket | null,
     });
     if (s.hasData) out.push({ ts: r.review_submitted_at, score: s.score });
   }
@@ -298,6 +355,7 @@ export async function fetchRecoveryScoreSeries(
       completionPct: c.logging_percentage != null ? Number(c.logging_percentage) : null,
       overallRating: c.session_rating ?? null,
       sessionRpe: effRpe,
+      sleepBucket: sleepByCompletion.get(c.id) ?? null,
     });
     if (s.hasData) out.push({ ts: c.completed_at, score: s.score });
   }

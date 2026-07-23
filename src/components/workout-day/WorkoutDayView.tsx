@@ -1489,6 +1489,8 @@ function WorkoutDay({
                           fatigueFeel: existingReview.fatigue_feel ?? null,
                           hitTarget: existingReview.hit_target ?? null,
                           recoveryToday: existingReview.recovery_today ?? null,
+                          sleepBucket: existingReview.sleep_bucket ?? null,
+                          sleepNotes: existingReview.sleep_notes ?? null,
                           editCount: existingReview.review_edit_count ?? 0,
                           submittedAt: existingReview.review_submitted_at ?? existingReview.created_at ?? null,
                         }
@@ -1883,6 +1885,8 @@ function WorkoutDay({
                     fatigueFeel: existingReview.fatigue_feel ?? null,
                     hitTarget: existingReview.hit_target ?? null,
                     recoveryToday: existingReview.recovery_today ?? null,
+                    sleepBucket: existingReview.sleep_bucket ?? null,
+                    sleepNotes: existingReview.sleep_notes ?? null,
                     editCount: existingReview.review_edit_count ?? 0,
                     submittedAt:
                       existingReview.review_submitted_at ??

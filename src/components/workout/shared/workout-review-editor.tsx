@@ -31,7 +31,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
-import { Loader2, CheckCircle2, AlertCircle, AlertTriangle } from "lucide-react";
+import { Loader2, CheckCircle2, AlertCircle, AlertTriangle, ChevronDown, ChevronUp } from "lucide-react";
 import { submitOrEditReview, type WorkoutCompletionCtx } from "@/lib/workout-completion.functions";
 
 // ── Status card definitions ───────────────────────────────────────────────────
@@ -122,7 +122,20 @@ export type ReviewInitial = {
   fatigueFeel?: string | null;
   hitTarget?: string | null;
   recoveryToday?: number | null;
+  sleepBucket?: SleepBucket | null;
+  sleepNotes?: string | null;
 };
+
+export type SleepBucket = "lt5" | "5_6" | "6_7" | "7_8" | "8_9" | "gte9";
+
+const SLEEP_OPTIONS: { v: SleepBucket; label: string }[] = [
+  { v: "lt5", label: "<5h" },
+  { v: "5_6", label: "5–6h" },
+  { v: "6_7", label: "6–7h" },
+  { v: "7_8", label: "7–8h" },
+  { v: "8_9", label: "8–9h" },
+  { v: "gte9", label: "9h+" },
+];
 
 type Props = {
   open: boolean;
@@ -164,13 +177,17 @@ export function WorkoutReviewEditor({
 
   const [status, setStatus] = useState<StatusKey | null>(() => inferStatus(initial));
   const [note, setNote] = useState<string>(initial?.clientNote ?? "");
-  const [recoveryToday, setRecoveryToday] = useState<number | null>(initial?.recoveryToday ?? null);
+  const [sleepBucket, setSleepBucket] = useState<SleepBucket | null>(initial?.sleepBucket ?? null);
+  const [sleepNotes, setSleepNotes] = useState<string>(initial?.sleepNotes ?? "");
+  const [sleepNotesOpen, setSleepNotesOpen] = useState<boolean>(!!(initial?.sleepNotes ?? "").trim());
 
   useEffect(() => {
     if (!open) return;
     setStatus(inferStatus(initial));
     setNote(initial?.clientNote ?? "");
-    setRecoveryToday(initial?.recoveryToday ?? null);
+    setSleepBucket(initial?.sleepBucket ?? null);
+    setSleepNotes(initial?.sleepNotes ?? "");
+    setSleepNotesOpen(!!(initial?.sleepNotes ?? "").trim());
   }, [open, initial?.submittedAt]);
 
   const selectedCard = STATUS_CARDS.find((c) => c.key === status) ?? null;
@@ -194,7 +211,9 @@ export function WorkoutReviewEditor({
           strengthFeel: null,
           fatigueFeel: null,
           hitTarget: null,
-          recoveryToday: recoveryToday,
+          recoveryToday: null,
+          sleepBucket: sleepBucket,
+          sleepNotes: sleepNotes.trim() ? sleepNotes.trim() : null,
           actAsClientId: actAsClientId ?? null,
         },
       });
@@ -312,57 +331,68 @@ export function WorkoutReviewEditor({
             </p>
           )}
 
-          {/* Optional single-tap Recovery rating — one input into the Estimated Recovery Score */}
+          {/* Sleep — segmented one-tap buckets. Feeds Estimated Training Readiness. */}
           <div className="space-y-2 pt-2">
             <div className="flex items-baseline justify-between">
               <label className="text-sm font-bold">
-                Recovery
-                <span className="ml-1 font-normal text-xs text-muted-foreground">(optional)</span>
+                <span aria-hidden="true">😴 </span>Sleep
               </label>
-              {recoveryToday != null && (
+              {sleepBucket != null && (
                 <button
                   type="button"
-                  onClick={() => setRecoveryToday(null)}
+                  onClick={() => setSleepBucket(null)}
                   className="text-[11px] text-muted-foreground underline"
                 >
                   Clear
                 </button>
               )}
             </div>
-            <div className="grid grid-cols-5 gap-1.5">
-              {[
-                { v: 1, emoji: "😫", label: "Very Poor" },
-                { v: 2, emoji: "😕", label: "Poor" },
-                { v: 3, emoji: "😐", label: "Average" },
-                { v: 4, emoji: "🙂", label: "Good" },
-                { v: 5, emoji: "💪", label: "Excellent" },
-              ].map((o) => {
-                const active = recoveryToday === o.v;
+            <p className="text-xs text-muted-foreground">
+              How many hours did you sleep before this workout?
+            </p>
+            <div className="grid grid-cols-3 gap-1.5 sm:grid-cols-6">
+              {SLEEP_OPTIONS.map((o) => {
+                const active = sleepBucket === o.v;
                 return (
                   <button
                     key={o.v}
                     type="button"
-                    onClick={() => setRecoveryToday(active ? null : o.v)}
+                    onClick={() => setSleepBucket(o.v)}
                     aria-pressed={active}
-                    aria-label={`Recovery: ${o.label}`}
+                    aria-label={`Sleep ${o.label}`}
                     className={cn(
-                      "flex min-h-[68px] flex-col items-center justify-center gap-1 rounded-xl border-2 px-1 py-2 transition-all active:scale-95",
+                      "flex min-h-[52px] items-center justify-center rounded-xl border-2 px-2 py-2 text-sm font-bold transition-all active:scale-95",
                       active
-                        ? "border-primary bg-primary/10"
-                        : "border-border bg-card hover:bg-secondary/30",
+                        ? "border-primary bg-primary/10 text-primary"
+                        : "border-border bg-card text-foreground hover:bg-secondary/30",
                     )}
                   >
-                    <span className="text-2xl leading-none" aria-hidden="true">{o.emoji}</span>
-                    <span className={cn("text-[10px] font-semibold leading-tight text-center", active ? "text-primary" : "text-muted-foreground")}>
-                      {o.label}
-                    </span>
+                    {o.label}
                   </button>
                 );
               })}
             </div>
-            <p className="text-[11px] text-muted-foreground leading-snug">
-              Optional — improves your recovery score accuracy. Skip if unsure.
-            </p>
+
+            {/* Collapsible sleep notes */}
+            <button
+              type="button"
+              onClick={() => setSleepNotesOpen((v) => !v)}
+              className="mt-1 inline-flex items-center gap-1 text-xs font-semibold text-muted-foreground hover:text-foreground"
+              aria-expanded={sleepNotesOpen}
+            >
+              {sleepNotesOpen ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+              Sleep Notes (optional)
+            </button>
+            {sleepNotesOpen && (
+              <Textarea
+                value={sleepNotes}
+                onChange={(e) => setSleepNotes(e.target.value)}
+                placeholder="e.g. baby kept me awake, night shift, travel, felt very rested…"
+                rows={2}
+                maxLength={400}
+                className="resize-none"
+              />
+            )}
           </div>
         </div>
 

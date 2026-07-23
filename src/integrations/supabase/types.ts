@@ -10087,6 +10087,8 @@ export type Database = {
           reviewed_at: string | null
           reviewed_by: string | null
           session_rpe: number
+          sleep_bucket: string | null
+          sleep_notes: string | null
           strength_feel: string | null
           updated_at: string
           week_index: number
@@ -10113,6 +10115,8 @@ export type Database = {
           reviewed_at?: string | null
           reviewed_by?: string | null
           session_rpe: number
+          sleep_bucket?: string | null
+          sleep_notes?: string | null
           strength_feel?: string | null
           updated_at?: string
           week_index: number
@@ -10139,6 +10143,8 @@ export type Database = {
           reviewed_at?: string | null
           reviewed_by?: string | null
           session_rpe?: number
+          sleep_bucket?: string | null
+          sleep_notes?: string | null
           strength_feel?: string | null
           updated_at?: string
           week_index?: number
@@ -14539,6 +14545,8 @@ export type Database = {
           reviewed_at: string | null
           reviewed_by: string | null
           session_rpe: number
+          sleep_bucket: string | null
+          sleep_notes: string | null
           strength_feel: string | null
           updated_at: string
         }
@@ -14564,6 +14572,8 @@ export type Database = {
           reviewed_at?: string | null
           reviewed_by?: string | null
           session_rpe: number
+          sleep_bucket?: string | null
+          sleep_notes?: string | null
           strength_feel?: string | null
           updated_at?: string
         }
@@ -14589,6 +14599,8 @@ export type Database = {
           reviewed_at?: string | null
           reviewed_by?: string | null
           session_rpe?: number
+          sleep_bucket?: string | null
+          sleep_notes?: string | null
           strength_feel?: string | null
           updated_at?: string
         }
@@ -18598,6 +18610,8 @@ export type Database = {
           reviewed_at: string | null
           reviewed_by: string | null
           session_rpe: number
+          sleep_bucket: string | null
+          sleep_notes: string | null
           strength_feel: string | null
           updated_at: string
         }
