@@ -151,9 +151,9 @@ export function RecoveryPreviewCard({ clientId }: Props) {
         .eq("client_id", clientId)
         .not("completed_at", "is", null)
         .gte("completed_at", since30.toISOString());
-      const completedTs = (comps ?? []).map((c: any) => new Date(c.completed_at).getTime());
-      const workouts7d = completedTs.filter((t) => t >= since7.getTime()).length;
-      const workouts14d = completedTs.filter((t) => t >= since14.getTime()).length;
+      const completedTs: number[] = (comps ?? []).map((c: any) => new Date(c.completed_at).getTime());
+      const workouts7d = completedTs.filter((t: number) => t >= since7.getTime()).length;
+      const workouts14d = completedTs.filter((t: number) => t >= since14.getTime()).length;
       const completed30d = completedTs.length;
 
       // Scheduled workouts in last 30d (best-effort)
