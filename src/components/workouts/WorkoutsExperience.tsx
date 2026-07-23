@@ -1044,9 +1044,6 @@ function SelectedDayCard({
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
-                <DropdownMenuItem onSelect={() => setPreviewOpen(true)}>
-                  <ClipboardList className="mr-2 h-4 w-4" /> Preview workout
-                </DropdownMenuItem>
                 <DropdownMenuItem onSelect={() => setMoveOpen(true)}>
                   <Move className="mr-2 h-4 w-4" /> Move workout
                 </DropdownMenuItem>
