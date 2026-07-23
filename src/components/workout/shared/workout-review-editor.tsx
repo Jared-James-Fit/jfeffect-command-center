@@ -246,28 +246,26 @@ export function WorkoutReviewEditor({
         hideCloseButton
         className="z-[70] flex max-h-[92svh] flex-col rounded-t-3xl p-0"
       >
-        {/* Sticky header — flush Back button, no floating overlap */}
+        {/* Sticky header — compact, single-line back button + title */}
         <div
           className="sticky top-0 z-10 border-b border-border/60 bg-background/95 backdrop-blur"
           style={{ paddingTop: "env(safe-area-inset-top)" }}
         >
-          <div className="flex items-center gap-2 px-3 pb-3 pt-2 sm:px-5">
+          <div className="flex items-start gap-2 px-4 py-3 sm:px-5">
             <button
               type="button"
               onClick={() => onOpenChange(false)}
               aria-label="Back"
-              className="inline-flex h-10 items-center gap-1 rounded-full px-2 text-sm font-semibold text-foreground transition hover:bg-secondary focus:outline-none focus:ring-2 focus:ring-ring"
+              className="inline-flex h-9 items-center gap-0.5 rounded-full px-2 text-sm font-semibold text-foreground transition hover:bg-secondary focus:outline-none focus:ring-2 focus:ring-ring"
             >
               <ChevronLeft className="h-5 w-5" />
               <span>Back</span>
             </button>
-          </div>
-          <div className="px-5 pb-4">
-            <SheetHeader className="space-y-1 text-left">
-              <SheetTitle className="text-xl font-black">
+            <SheetHeader className="mt-0.5 space-y-0.5 text-left">
+              <SheetTitle className="text-lg font-black leading-tight">
                 {isEdit ? "Edit your review" : "Workout Status"}
               </SheetTitle>
-              <SheetDescription>
+              <SheetDescription className="text-xs">
                 {hasCoach
                   ? "Your coach can see this."
                   : "Notes for your own records."}
