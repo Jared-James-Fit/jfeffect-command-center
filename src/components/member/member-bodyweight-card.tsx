@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
-import { Scale, TrendingDown, TrendingUp, Minus, Trash2, Loader2 } from "lucide-react";
+import { Scale, TrendingDown, TrendingUp, Minus, Trash2, Loader2, Pencil, Check, X } from "lucide-react";
 import { format } from "date-fns";
 import { parseLocalDate, todayLocalISO } from "@/lib/today";
 import { toast } from "sonner";
@@ -16,6 +16,7 @@ import {
   listBodyweight,
   logBodyweight,
   deleteBodyweight,
+  updateBodyweight,
   type ProgressBodyweight,
 } from "@/lib/progress";
 
@@ -30,6 +31,10 @@ export function MemberBodyweightCard() {
   const [unit, setUnit] = useState<WeightUnit>("lb");
   const [weight, setWeight] = useState("");
   const [date, setDate] = useState(todayLocalISO());
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editWeight, setEditWeight] = useState("");
+  const [editDate, setEditDate] = useState("");
+  const [editUnit, setEditUnit] = useState<WeightUnit>("lb");
 
   useEffect(() => {
     let mounted = true;
@@ -75,6 +80,32 @@ export function MemberBodyweightCard() {
     },
     onError: (e: Error) => toast.error(e.message),
   });
+
+  const update = useMutation({
+    mutationFn: async () => {
+      if (!editingId) throw new Error("No entry selected");
+      const w = parseFloat(editWeight);
+      if (!Number.isFinite(w) || w <= 0) throw new Error("Enter a valid weight");
+      await updateBodyweight(editingId, {
+        weight_value: w,
+        weight_unit: editUnit,
+        logged_date: editDate,
+      } as Partial<ProgressBodyweight>);
+    },
+    onSuccess: () => {
+      toast.success("Entry updated");
+      setEditingId(null);
+      qc.invalidateQueries({ queryKey: ["progress-bw", userId] });
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const startEdit = (r: ProgressBodyweight) => {
+    setEditingId(r.id);
+    setEditWeight(String(r.weight_value));
+    setEditDate(r.logged_date);
+    setEditUnit((r.weight_unit as WeightUnit) ?? "lb");
+  };
 
   // normalize series to display unit
   const series = (rows as ProgressBodyweight[])
@@ -160,21 +191,89 @@ export function MemberBodyweightCard() {
         <div className="space-y-1">
           <div className="text-xs font-semibold text-muted-foreground">Recent</div>
           <ul className="divide-y rounded-md border">
-            {[...series].reverse().slice(0, 6).map((r) => (
-              <li key={r.id} className="flex items-center justify-between gap-2 px-3 py-2 text-sm">
-                <span className="text-muted-foreground">{format(parseLocalDate(r.entry_date)!, "MMM d")}</span>
-                <span className="font-semibold tabular-nums">{r.normalized.toFixed(1)} {unit}</span>
-                <Button
-                  size="icon"
-                  variant="ghost"
-                  className="h-8 w-8"
-                  onClick={() => remove.mutate(r.id)}
-                  aria-label="Delete entry"
-                >
-                  <Trash2 className="h-4 w-4" />
-                </Button>
-              </li>
-            ))}
+            {[...series].reverse().slice(0, 6).map((r) => {
+              const isEditing = editingId === r.id;
+              const raw = (rows as ProgressBodyweight[]).find((x) => x.id === r.id);
+              if (isEditing) {
+                return (
+                  <li key={r.id} className="flex flex-wrap items-center gap-2 px-3 py-2 text-sm">
+                    <Input
+                      type="date"
+                      value={editDate}
+                      max={todayLocalISO()}
+                      onChange={(e) => setEditDate(e.target.value)}
+                      className="h-9 w-[140px]"
+                    />
+                    <Input
+                      type="number"
+                      step="0.1"
+                      inputMode="decimal"
+                      value={editWeight}
+                      onChange={(e) => setEditWeight(e.target.value)}
+                      className="h-9 w-20"
+                    />
+                    <ToggleGroup
+                      type="single"
+                      size="sm"
+                      value={editUnit}
+                      onValueChange={(v) => v && setEditUnit(v as WeightUnit)}
+                    >
+                      <ToggleGroupItem value="lb" className="h-9 px-2 text-xs">lb</ToggleGroupItem>
+                      <ToggleGroupItem value="kg" className="h-9 px-2 text-xs">kg</ToggleGroupItem>
+                    </ToggleGroup>
+                    <div className="ml-auto flex items-center gap-1">
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        className="h-8 w-8"
+                        onClick={() => update.mutate()}
+                        disabled={update.isPending}
+                        aria-label="Save"
+                      >
+                        {update.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+                      </Button>
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        className="h-8 w-8"
+                        onClick={() => setEditingId(null)}
+                        aria-label="Cancel"
+                      >
+                        <X className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </li>
+                );
+              }
+              return (
+                <li key={r.id} className="flex items-center justify-between gap-2 px-3 py-2 text-sm">
+                  <span className="text-muted-foreground">{format(parseLocalDate(r.entry_date)!, "MMM d")}</span>
+                  <span className="font-semibold tabular-nums">{r.normalized.toFixed(1)} {unit}</span>
+                  <div className="flex items-center gap-1">
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      className="h-8 w-8"
+                      onClick={() => raw && startEdit(raw)}
+                      aria-label="Edit entry"
+                    >
+                      <Pencil className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      className="h-8 w-8"
+                      onClick={() => {
+                        if (confirm("Remove this bodyweight entry?")) remove.mutate(r.id);
+                      }}
+                      aria-label="Delete entry"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </li>
+              );
+            })}
           </ul>
         </div>
       )}
