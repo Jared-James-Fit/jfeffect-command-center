@@ -3,7 +3,7 @@ import { zodValidator, fallback } from "@tanstack/zod-adapter";
 import { z } from "zod";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/app-shell";
@@ -19,12 +19,13 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { UserPlus, Users, ShieldAlert } from "lucide-react";
+import { UserPlus, Users, ShieldAlert, ChevronDown, ChevronUp, BarChart3 } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import { listClientsDirectoryFn } from "@/lib/clients-directory.functions";
 import { archiveClient } from "@/lib/clients.functions";
 import type { DirectoryRow } from "@/lib/clients-directory.functions";
 import { SummaryCards } from "@/components/clients/summary-cards";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { ClientToolbar } from "@/components/clients/client-toolbar";
 import { ClientRow, ClientRowSkeleton } from "@/components/clients/client-row";
 import { Pager } from "@/components/clients/pager";
@@ -79,7 +80,7 @@ const searchSchema = z.object({
   status:        fallback(z.enum(["all","needs_setup","needs_review","program_ending","payment_issues","new_clients","missed_workouts","inactive"]), "all").default("all"),
   coachingType:  fallback(z.string(),                                                       "all").default("all"),
   coachId:       fallback(z.string().uuid().optional(),                                     undefined as any),
-  sort:          fallback(z.enum(["attention","recent","name","ending","activity"]),       "attention").default("attention"),
+  sort:          fallback(z.enum(["attention","recent","name","ending","activity"]),       "name").default("name"),
   page:          fallback(z.number().int().min(1),                                          1).default(1),
   size:          fallback(z.union([z.literal(15), z.literal(25), z.literal(50)]),           15).default(15),
   view:          fallback(z.enum(["clients", "compliance"]),                                "clients").default("clients"),
@@ -116,6 +117,27 @@ function ClientsDirectoryPage() {
   const archiveFn = useServerFn(archiveClient);
   const [archiveTarget, setArchiveTarget] = useState<DirectoryRow | null>(null);
   const [addOpen, setAddOpen] = useState(false);
+  const isMobile = useIsMobile();
+  // Persist per-coach preference for the mobile overview collapse state.
+  // Default: collapsed on phones, expanded on tablets/desktop.
+  const OVERVIEW_KEY = "clients-overview-collapsed-v1";
+  const [overviewOpen, setOverviewOpen] = useState<boolean | null>(null);
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const stored = window.localStorage.getItem(OVERVIEW_KEY);
+    if (stored === "true") setOverviewOpen(false);
+    else if (stored === "false") setOverviewOpen(true);
+    else setOverviewOpen(!isMobile); // default: collapsed on mobile
+  }, [isMobile]);
+  const toggleOverview = () => {
+    setOverviewOpen((prev) => {
+      const next = !prev;
+      if (typeof window !== "undefined") {
+        window.localStorage.setItem(OVERVIEW_KEY, next ? "false" : "true");
+      }
+      return next;
+    });
+  };
 
   const activeView = search.view ?? "clients";
   const lifecycle = search.lifecycle ?? "active";
@@ -208,10 +230,10 @@ function ClientsDirectoryPage() {
         ) : (
           <>
             <LifecycleTabs value={lifecycle} />
-            {isActiveLifecycle && (
-              <SummaryCards counts={counts} active={search.status as StatusKey} loading={!data && isFetching} />
-            )}
 
+            {/* Toolbar (search + filters + sort) — pinned near the top for
+                fast lookups. Rendered BEFORE the analytics overview so the
+                client list stays the primary focus on every viewport. */}
             <ClientToolbar
               search={search.search}
               coachingType={search.coachingType}
@@ -221,6 +243,38 @@ function ClientsDirectoryPage() {
               isAdmin={isAdmin}
               totalLabel={totalLabel}
             />
+
+            {isActiveLifecycle && (
+              <div className="rounded-xl border border-border bg-card/40">
+                <button
+                  type="button"
+                  onClick={toggleOverview}
+                  className="flex w-full items-center justify-between gap-2 px-3 py-2.5 text-left"
+                  aria-expanded={!!overviewOpen}
+                  aria-controls="clients-overview-panel"
+                >
+                  <span className="flex items-center gap-2 text-sm font-semibold">
+                    <BarChart3 className="h-4 w-4 text-primary" aria-hidden />
+                    Client Overview
+                    {counts && (
+                      <span className="text-xs font-normal text-muted-foreground">
+                        · {counts.all} active
+                      </span>
+                    )}
+                  </span>
+                  {overviewOpen ? (
+                    <ChevronUp className="h-4 w-4 text-muted-foreground" />
+                  ) : (
+                    <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                  )}
+                </button>
+                {overviewOpen && (
+                  <div id="clients-overview-panel" className="border-t border-border/60 p-3">
+                    <SummaryCards counts={counts} active={search.status as StatusKey} loading={!data && isFetching} />
+                  </div>
+                )}
+              </div>
+            )}
 
             {isError ? (
               <Card className="p-8 text-center">
