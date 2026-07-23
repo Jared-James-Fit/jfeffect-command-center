@@ -865,6 +865,8 @@ export const submitOrEditReview = createServerFn({ method: "POST" })
         fatigue_feel: data.fatigueFeel ?? null,
         hit_target: data.hitTarget ?? null,
         recovery_today: data.recoveryToday ?? null,
+        sleep_bucket: data.sleepBucket ?? null,
+        sleep_notes: data.sleepNotes ?? null,
       } as any;
 
       if (existing?.id) {
@@ -930,6 +932,8 @@ export const submitOrEditReview = createServerFn({ method: "POST" })
       fatigue_feel: data.fatigueFeel ?? null,
       hit_target: data.hitTarget ?? null,
       recovery_today: data.recoveryToday ?? null,
+        sleep_bucket: data.sleepBucket ?? null,
+        sleep_notes: data.sleepNotes ?? null,
     } as any;
 
     if (existing?.id) {
