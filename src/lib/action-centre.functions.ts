@@ -150,8 +150,8 @@ async function loadEffectiveSchedule(
 async function resolveClientTz(supabase: any, clientId: string, sched: EffectiveSchedule): Promise<string> {
   if (sched.tz_mode === "fixed" && sched.fixed_tz) return sched.fixed_tz;
   if (sched.tz_mode === "coach") return "UTC";
-  const { data } = await supabase.from("clients").select("time_zone").eq("id", clientId).maybeSingle();
-  return (data?.time_zone as string | null) || "UTC";
+  const { data } = await supabase.from("clients").select("timezone").eq("id", clientId).maybeSingle();
+  return ((data as any)?.timezone as string | null) || "UTC";
 }
 
 // ============================================================
@@ -306,13 +306,14 @@ export const completeTaskOccurrence = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: { occurrenceId: string; payloadRef?: Record<string, unknown> }) => d)
   .handler(async ({ data, context }) => {
-    const { data: occ, error } = await context.supabase
+    const { data: occRaw, error } = await context.supabase
       .from("client_task_occurrences")
       .select("*")
       .eq("id", data.occurrenceId)
       .maybeSingle();
     if (error) throw new Error(error.message);
-    if (!occ) throw new Error("Occurrence not found");
+    if (!occRaw) throw new Error("Occurrence not found");
+    const occ = occRaw as any;
 
     const { error: upErr } = await context.supabase
       .from("client_task_occurrences")
@@ -341,9 +342,10 @@ export const setClientTimeZone = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: { timeZone: string }) => z.object({ timeZone: z.string().min(1).max(64) }).parse(d))
   .handler(async ({ data, context }) => {
-    const { data: c } = await context.supabase.from("clients").select("id, time_zone").eq("user_id", context.userId).maybeSingle();
-    if (!c) return { ok: false as const, reason: "no_client" };
-    if (c.time_zone === data.timeZone) return { ok: true as const, unchanged: true };
-    await context.supabase.from("clients").update({ time_zone: data.timeZone }).eq("id", c.id);
-    return { ok: true as const };
+    const { data: c } = await context.supabase.from("clients").select("id, timezone").eq("user_id", context.userId).maybeSingle();
+    const row = c as any;
+    if (!row) return { ok: false, reason: "no_client" as const, unchanged: false };
+    if (row.timezone === data.timeZone) return { ok: true, reason: null, unchanged: true };
+    await context.supabase.from("clients").update({ timezone: data.timeZone }).eq("id", row.id);
+    return { ok: true, reason: null, unchanged: false };
   });
