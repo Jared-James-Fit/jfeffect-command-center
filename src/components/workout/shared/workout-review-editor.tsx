@@ -31,7 +31,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
-import { Loader2, CheckCircle2, AlertCircle, AlertTriangle, ChevronDown, ChevronUp } from "lucide-react";
+import { Loader2, CheckCircle2, AlertCircle, AlertTriangle, ChevronDown, ChevronUp, ChevronLeft } from "lucide-react";
 import { submitOrEditReview, type WorkoutCompletionCtx } from "@/lib/workout-completion.functions";
 
 // ── Status card definitions ───────────────────────────────────────────────────
@@ -137,6 +137,14 @@ const SLEEP_OPTIONS: { v: SleepBucket; label: string }[] = [
   { v: "gte9", label: "9h+" },
 ];
 
+const RECOVERY_OPTIONS: { v: number; emoji: string; label: string }[] = [
+  { v: 1, emoji: "😫", label: "Very Poor" },
+  { v: 2, emoji: "🙁", label: "Poor" },
+  { v: 3, emoji: "😐", label: "Average" },
+  { v: 4, emoji: "🙂", label: "Good" },
+  { v: 5, emoji: "💪", label: "Excellent" },
+];
+
 type Props = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -180,6 +188,7 @@ export function WorkoutReviewEditor({
   const [sleepBucket, setSleepBucket] = useState<SleepBucket | null>(initial?.sleepBucket ?? null);
   const [sleepNotes, setSleepNotes] = useState<string>(initial?.sleepNotes ?? "");
   const [sleepNotesOpen, setSleepNotesOpen] = useState<boolean>(!!(initial?.sleepNotes ?? "").trim());
+  const [recoveryToday, setRecoveryToday] = useState<number | null>(initial?.recoveryToday ?? null);
 
   useEffect(() => {
     if (!open) return;
@@ -188,6 +197,7 @@ export function WorkoutReviewEditor({
     setSleepBucket(initial?.sleepBucket ?? null);
     setSleepNotes(initial?.sleepNotes ?? "");
     setSleepNotesOpen(!!(initial?.sleepNotes ?? "").trim());
+    setRecoveryToday(initial?.recoveryToday ?? null);
   }, [open, initial?.submittedAt]);
 
   const selectedCard = STATUS_CARDS.find((c) => c.key === status) ?? null;
@@ -211,7 +221,7 @@ export function WorkoutReviewEditor({
           strengthFeel: null,
           fatigueFeel: null,
           hitTarget: null,
-          recoveryToday: null,
+          recoveryToday: recoveryToday,
           sleepBucket: sleepBucket,
           sleepNotes: sleepNotes.trim() ? sleepNotes.trim() : null,
           actAsClientId: actAsClientId ?? null,
@@ -233,22 +243,40 @@ export function WorkoutReviewEditor({
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent
         side="bottom"
-        className="z-[70] max-h-[92svh] overflow-y-auto rounded-t-3xl p-0 pb-[env(safe-area-inset-bottom)]"
+        hideCloseButton
+        className="z-[70] flex max-h-[92svh] flex-col rounded-t-3xl p-0"
       >
-        <div className="px-5 pt-5">
-          <SheetHeader className="space-y-1 text-left">
-            <SheetTitle className="text-xl font-black">
-              {isEdit ? "Edit your review" : "Workout Status"}
-            </SheetTitle>
-            <SheetDescription>
-              {hasCoach
-                ? "Your coach can see this."
-                : "Notes for your own records."}
-            </SheetDescription>
-          </SheetHeader>
+        {/* Sticky header — flush Back button, no floating overlap */}
+        <div
+          className="sticky top-0 z-10 border-b border-border/60 bg-background/95 backdrop-blur"
+          style={{ paddingTop: "env(safe-area-inset-top)" }}
+        >
+          <div className="flex items-center gap-2 px-3 pb-3 pt-2 sm:px-5">
+            <button
+              type="button"
+              onClick={() => onOpenChange(false)}
+              aria-label="Back"
+              className="inline-flex h-10 items-center gap-1 rounded-full px-2 text-sm font-semibold text-foreground transition hover:bg-secondary focus:outline-none focus:ring-2 focus:ring-ring"
+            >
+              <ChevronLeft className="h-5 w-5" />
+              <span>Back</span>
+            </button>
+          </div>
+          <div className="px-5 pb-4">
+            <SheetHeader className="space-y-1 text-left">
+              <SheetTitle className="text-xl font-black">
+                {isEdit ? "Edit your review" : "Workout Status"}
+              </SheetTitle>
+              <SheetDescription>
+                {hasCoach
+                  ? "Your coach can see this."
+                  : "Notes for your own records."}
+              </SheetDescription>
+            </SheetHeader>
+          </div>
         </div>
 
-        <div className="space-y-3 px-5 pb-4 pt-5">
+        <div className="flex-1 space-y-5 overflow-y-auto px-5 pb-6 pt-5">
           {/* 3 large status cards */}
           <div className="space-y-2">
             {STATUS_CARDS.map((card) => {
@@ -288,51 +316,8 @@ export function WorkoutReviewEditor({
             })}
           </div>
 
-          {/* Conditional: tell your coach (shown for Minor Issue + Need Attention) */}
-          {showNotes && (
-            <div className="space-y-1.5 pt-1">
-              <label htmlFor="review-concern" className="text-sm font-bold">
-                Tell your coach what happened
-              </label>
-              <Textarea
-                id="review-concern"
-                value={note}
-                onChange={(e) => setNote(e.target.value)}
-                placeholder="e.g. shoulder discomfort, knee pain, illness, travel fatigue…"
-                rows={3}
-                maxLength={600}
-                className="resize-none"
-              />
-            </div>
-          )}
-
-          {/* Optional notes (always shown, but not required) */}
-          {!showNotes && (
-            <div className="space-y-1.5 pt-1">
-              <label htmlFor="review-note" className="text-sm font-bold text-muted-foreground">
-                {hasCoach ? "Anything your coach should know?" : "Anything you want to note?"}
-                <span className="ml-1 font-normal text-xs">(optional)</span>
-              </label>
-              <Textarea
-                id="review-note"
-                value={note}
-                onChange={(e) => setNote(e.target.value)}
-                placeholder="Work stress, travel, recovery concerns, nutrition…"
-                rows={2}
-                maxLength={600}
-                className="resize-none"
-              />
-            </div>
-          )}
-
-          {isEdit && initial?.editCount != null && initial.editCount > 0 && (
-            <p className="text-[11px] text-muted-foreground">
-              Edited {initial.editCount} time{initial.editCount === 1 ? "" : "s"}.
-            </p>
-          )}
-
           {/* Sleep — segmented one-tap buckets. Feeds Estimated Training Readiness. */}
-          <div className="space-y-2 pt-2">
+          <div className="space-y-2">
             <div className="flex items-baseline justify-between">
               <label className="text-sm font-bold">
                 <span aria-hidden="true">😴 </span>Sleep
@@ -372,12 +357,92 @@ export function WorkoutReviewEditor({
                 );
               })}
             </div>
+          </div>
 
-            {/* Collapsible sleep notes */}
+          {/* Recovery — reflects how recovered they felt BEFORE this session. */}
+          <div className="space-y-2">
+            <div className="flex items-baseline justify-between">
+              <label className="text-sm font-bold">
+                <span aria-hidden="true">💪 </span>Recovery
+              </label>
+              {recoveryToday != null && (
+                <button
+                  type="button"
+                  onClick={() => setRecoveryToday(null)}
+                  className="text-[11px] text-muted-foreground underline"
+                >
+                  Clear
+                </button>
+              )}
+            </div>
+            <p className="text-xs text-muted-foreground">
+              How recovered did you feel before today's workout? Think energy, soreness, fatigue.
+            </p>
+            <div className="grid grid-cols-5 gap-1.5">
+              {RECOVERY_OPTIONS.map((o) => {
+                const active = recoveryToday === o.v;
+                return (
+                  <button
+                    key={o.v}
+                    type="button"
+                    onClick={() => setRecoveryToday(o.v)}
+                    aria-pressed={active}
+                    aria-label={`Recovery ${o.label}`}
+                    className={cn(
+                      "flex min-h-[72px] flex-col items-center justify-center gap-1 rounded-xl border-2 px-1 py-2 text-[11px] font-semibold transition-all active:scale-95",
+                      active
+                        ? "border-primary bg-primary/10 text-primary"
+                        : "border-border bg-card text-muted-foreground hover:bg-secondary/30",
+                    )}
+                  >
+                    <span className="text-2xl leading-none" aria-hidden="true">{o.emoji}</span>
+                    <span className="leading-tight">{o.label}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Coach Notes */}
+          {showNotes ? (
+            <div className="space-y-1.5">
+              <label htmlFor="review-concern" className="text-sm font-bold">
+                Tell your coach what happened
+              </label>
+              <Textarea
+                id="review-concern"
+                value={note}
+                onChange={(e) => setNote(e.target.value)}
+                placeholder="e.g. shoulder discomfort, knee pain, illness, travel fatigue…"
+                rows={3}
+                maxLength={600}
+                className="resize-none"
+              />
+            </div>
+          ) : (
+            <div className="space-y-1.5">
+              <label htmlFor="review-note" className="text-sm font-bold text-muted-foreground">
+                {hasCoach ? "Anything your coach should know?" : "Anything you want to note?"}
+                <span className="ml-1 font-normal text-xs">(optional)</span>
+              </label>
+              <Textarea
+                id="review-note"
+                value={note}
+                onChange={(e) => setNote(e.target.value)}
+                placeholder="Work stress, travel, nutrition…"
+                rows={2}
+                maxLength={600}
+                className="resize-none"
+              />
+            </div>
+          )}
+
+          {/* Sleep Notes — collapsed by default */}
+          <div className="space-y-2">
             <button
               type="button"
               onClick={() => setSleepNotesOpen((v) => !v)}
-              className="mt-1 inline-flex items-center gap-1 text-xs font-semibold text-muted-foreground hover:text-foreground"
+              className="inline-flex items-center gap-1 text-xs font-semibold text-muted-foreground hover:text-foreground"
               aria-expanded={sleepNotesOpen}
             >
               {sleepNotesOpen ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
@@ -394,9 +459,18 @@ export function WorkoutReviewEditor({
               />
             )}
           </div>
+
+          {isEdit && initial?.editCount != null && initial.editCount > 0 && (
+            <p className="text-[11px] text-muted-foreground">
+              Edited {initial.editCount} time{initial.editCount === 1 ? "" : "s"}.
+            </p>
+          )}
         </div>
 
-        <SheetFooter className="sticky bottom-0 z-10 flex-row gap-2 border-t bg-background/95 px-5 py-3 backdrop-blur sm:flex-row">
+        <SheetFooter
+          className="flex-row gap-2 border-t bg-background/95 px-5 py-3 backdrop-blur sm:flex-row"
+          style={{ paddingBottom: "calc(env(safe-area-inset-bottom) + 0.75rem)" }}
+        >
           <Button variant="ghost" className="flex-1" onClick={() => onOpenChange(false)} disabled={mutation.isPending}>
             Close
           </Button>
