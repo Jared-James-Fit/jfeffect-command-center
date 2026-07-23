@@ -29,36 +29,9 @@ const PriceCardPickerDialog = lazy(() =>
 );
 import { UserAvatar } from "@/components/user-avatar";
 import { getCoachIntel, filterIntel, LABEL_META } from "@/lib/coach-intel";
-import { getCoachingApplicationsMetrics } from "@/lib/coaching-applications.functions";
-import { useServerFn } from "@tanstack/react-start";
-import { Inbox, Flame, CalendarCheck, TrendingUp } from "lucide-react";
 import { DashboardRefreshIndicator } from "@/components/portal/dashboard-refresh-indicator";
 import { DashboardOfflineEmpty, useIsOfflineWithoutCache } from "@/components/portal/dashboard-offline-empty";
 import { NotificationSetupPrompt } from "@/components/notification-setup-prompt";
-
-function CoachingApplicationsTiles() {
-  const fetchMetrics = useServerFn(getCoachingApplicationsMetrics);
-  const { data } = useQuery({
-    queryKey: ["coaching-applications-metrics"],
-    queryFn: () => fetchMetrics(),
-  });
-  const m = data ?? { total: 0, newCount: 0, booked: 0, hot: 0, conversionRate: 0 };
-  return (
-    <div className="space-y-2">
-      <SectionHeader
-        title="Coaching applications (30d)"
-        icon={Inbox}
-        viewAll={{ to: "/admin/sales/coaching-applications" }}
-      />
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-        <StatTile label="New" value={m.newCount} icon={Inbox} tone="primary" to="/admin/sales/coaching-applications" />
-        <StatTile label="Hot leads" value={m.hot} icon={Flame} tone="warn" to="/admin/sales/coaching-applications" />
-        <StatTile label="Calls booked" value={m.booked} icon={CalendarCheck} to="/admin/sales/coaching-applications" />
-        <StatTile label="Conversion %" value={`${m.conversionRate}%`} icon={TrendingUp} to="/admin/sales/coaching-applications" />
-      </div>
-    </div>
-  );
-}
 
 export const Route = createFileRoute("/_authenticated/admin/")({
   component: AdminDashboard,
@@ -485,7 +458,6 @@ function AdminDashboard() {
           <DashboardRefreshIndicator />
         </div>
         <DriveSetupBanner />
-        <NotificationSetupPrompt />
 
         {/* TODAY PRIORITY */}
         <Card className="border-border bg-card p-4">
@@ -559,8 +531,6 @@ function AdminDashboard() {
           <StatTile label="Reviews waiting" value={reviewsWaiting} icon={ClipboardCheck} to="/admin/check-in-reviews" />
           <StatTile label="Payments overdue" value={overdue} icon={DollarSign} tone="warn" to="/admin/payments" />
         </div>
-
-        <CoachingApplicationsTiles />
 
         {/* WORK QUEUES (desktop side-by-side with appointments) */}
         <div className="grid gap-4 lg:grid-cols-3">
@@ -702,10 +672,12 @@ function AdminDashboard() {
 
           {/* RIGHT COLUMN */}
           <div className="min-w-0 space-y-4">
-            <UpcomingAppointmentsCard mode="admin" />
-
             {/* Upcoming birthdays — surfaced directly on Home */}
             <UpcomingBirthdaysWidget />
+
+            <UpcomingAppointmentsCard mode="admin" />
+
+            <NotificationSetupPrompt />
 
             {/* MORE — collapsed by default */}
             <MoreSection
