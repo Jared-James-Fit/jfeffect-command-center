@@ -261,7 +261,7 @@ export function WorkoutReviewEditor({
               <ChevronLeft className="h-5 w-5" />
               <span>Back</span>
             </button>
-            <SheetHeader className="mt-0.5 space-y-0.5 text-left">
+            <SheetHeader className="mt-0.5 space-y-0.5 pr-0 text-left">
               <SheetTitle className="text-lg font-black leading-tight">
                 {isEdit ? "Edit your review" : "Workout Status"}
               </SheetTitle>
