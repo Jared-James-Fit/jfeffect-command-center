@@ -1222,22 +1222,26 @@ function primaryCtaFor(item: WorkoutItem, status: WorkoutStatus): {
   secondary?: { label: string; search?: Record<string, any> };
 } {
   const inProgress = !!item.completion && !item.completion?.completed_at;
+  const partial = status === "in_progress" || (inProgress && (item.logged_sets_count ?? 0) > 0);
+  if (partial) {
+    return { label: "Continue Workout", tone: "bg-amber-500 text-black hover:bg-amber-400", icon: <Play className="mr-1 h-4 w-4" /> };
+  }
   if (inProgress) {
-    return { label: "Resume Workout", tone: "bg-amber-500 text-black hover:bg-amber-400", icon: <Play className="mr-1 h-4 w-4" /> };
+    return { label: "Continue Workout", tone: "bg-amber-500 text-black hover:bg-amber-400", icon: <Play className="mr-1 h-4 w-4" /> };
   }
   switch (status) {
     case "completed_today":
     case "completed_on_scheduled":
     case "completed_different_day":
       return {
-        label: "View / Edit Workout",
+        label: "View Workout",
         tone: "bg-emerald-600 text-white hover:bg-emerald-500",
         icon: <Pencil className="mr-1 h-4 w-4" />,
         search: { edit: 1 },
       };
     case "missed":
       return {
-        label: "Complete Workout",
+        label: "Continue Workout",
         tone: "bg-primary text-primary-foreground hover:bg-primary/90",
         icon: <Play className="mr-1 h-4 w-4" />,
         secondary: { label: "Reschedule" },
