@@ -30,7 +30,7 @@ export function NutritionHelpSheet({
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="bottom" className="h-[92vh] overflow-y-auto p-0">
+      <SheetContent side="bottom" className="h-[92vh] overflow-y-auto p-0" hideCloseButton>
         <div className="sticky top-0 z-10 bg-background border-b">
           <SheetHeader className="p-4 pr-14">
             <div className="flex items-center gap-2">
