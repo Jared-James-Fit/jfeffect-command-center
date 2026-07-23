@@ -4,7 +4,7 @@ import { useAuth } from "@/lib/auth";
 import { supabase } from "@/integrations/supabase/client";
 import { usePortalUserId } from "@/lib/client-impersonation";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Bell, ClipboardCheck, ShieldAlert, MessageCircle, Mail, CheckCheck, AlertTriangle, Dumbbell, Settings, Receipt, FileSignature, Calendar as CalendarIcon, Target, Video } from "lucide-react";
+import { Bell, ClipboardCheck, ShieldAlert, MessageCircle, Mail, CheckCheck, AlertTriangle, Dumbbell, Settings, Receipt, FileSignature, Calendar as CalendarIcon, Target, Video, ChevronDown, Smartphone } from "lucide-react";
 import { isGoalsSetupComplete, type ClientGoalsSetupRow } from "@/lib/client-goals/schema";
 import type { TrainingPhase } from "@/lib/training-phases";
 import { derivePhase } from "@/lib/training-phases";
@@ -16,7 +16,6 @@ import { ManualCheckInReviewModal } from "@/components/manual-check-in-review-mo
 import { ClientActionRequestModal } from "@/components/client-action-request-modal";
 import { UpcomingEventsPanel } from "@/components/events/upcoming-events-panel";
 import { InstallAppCard } from "@/components/portal/install-app-card";
-import { IntakeAnswersBigButton } from "@/components/clients/intake-answers-dialog";
 import { ActionCentre, type ActionItem } from "@/components/portal/action-centre";
 import { TrainingBlockCard } from "@/components/portal/training-block-card";
 import { ProgressSummaryCard } from "@/components/progress/progress-summary-card";
@@ -34,6 +33,7 @@ import { DashboardOfflineEmpty, useIsOfflineWithoutCache } from "@/components/po
 import { DeferRender } from "@/components/defer-render";
 import { logPerf } from "@/lib/perf-timing";
 import { NotificationSetupPrompt } from "@/components/notification-setup-prompt";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 
 export const Route = createFileRoute("/_authenticated/portal/")({ component: PortalHome });
 
