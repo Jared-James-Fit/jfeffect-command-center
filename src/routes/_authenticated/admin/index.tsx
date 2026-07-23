@@ -672,10 +672,12 @@ function AdminDashboard() {
 
           {/* RIGHT COLUMN */}
           <div className="min-w-0 space-y-4">
-            <UpcomingAppointmentsCard mode="admin" />
-
             {/* Upcoming birthdays — surfaced directly on Home */}
             <UpcomingBirthdaysWidget />
+
+            <UpcomingAppointmentsCard mode="admin" />
+
+            <NotificationSetupPrompt />
 
             {/* MORE — collapsed by default */}
             <MoreSection
