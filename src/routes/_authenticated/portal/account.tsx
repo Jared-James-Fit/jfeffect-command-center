@@ -194,12 +194,12 @@ function AccountPage() {
         subtitle="Manage your contact info, profile picture, and password."
         actions={<SavedIndicator state={saveState} />}
       />
-      <div className="grid gap-6 p-6 md:p-8 md:grid-cols-3">
+      <div className="grid gap-5 px-4 py-4 md:gap-6 md:p-8 md:grid-cols-3">
         {/* Sticky quick-jump navigation so clients can find any section
             fast on mobile without scrolling through the whole page. */}
-        <div className="md:col-span-3 sticky top-16 z-20 -mx-6 md:-mx-8 md:top-20">
-          <div className="border-y border-border bg-background/95 px-6 py-2 backdrop-blur md:px-8">
-            <div className="flex gap-2 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        <div className="md:col-span-3 sticky top-14 z-20 -mx-4 md:-mx-8 md:top-20">
+          <div className="border-y border-border bg-background/95 px-4 py-2 backdrop-blur md:px-8">
+            <div className="flex items-center gap-2 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
               {[
                 { id: "basic-information", label: "Basic Info" },
                 { id: "profile-picture", label: "Photo" },

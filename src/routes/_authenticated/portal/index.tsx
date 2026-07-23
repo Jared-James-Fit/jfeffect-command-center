@@ -4,7 +4,7 @@ import { useAuth } from "@/lib/auth";
 import { supabase } from "@/integrations/supabase/client";
 import { usePortalUserId } from "@/lib/client-impersonation";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Bell, ClipboardCheck, ShieldAlert, MessageCircle, Mail, CheckCheck, AlertTriangle, Dumbbell, Settings, Receipt, FileSignature, Calendar as CalendarIcon, Target, Video } from "lucide-react";
+import { Bell, ClipboardCheck, ShieldAlert, MessageCircle, Mail, CheckCheck, AlertTriangle, Dumbbell, Settings, Receipt, FileSignature, Calendar as CalendarIcon, Target, Video, ChevronDown, Smartphone } from "lucide-react";
 import { isGoalsSetupComplete, type ClientGoalsSetupRow } from "@/lib/client-goals/schema";
 import type { TrainingPhase } from "@/lib/training-phases";
 import { derivePhase } from "@/lib/training-phases";
@@ -16,7 +16,6 @@ import { ManualCheckInReviewModal } from "@/components/manual-check-in-review-mo
 import { ClientActionRequestModal } from "@/components/client-action-request-modal";
 import { UpcomingEventsPanel } from "@/components/events/upcoming-events-panel";
 import { InstallAppCard } from "@/components/portal/install-app-card";
-import { IntakeAnswersBigButton } from "@/components/clients/intake-answers-dialog";
 import { ActionCentre, type ActionItem } from "@/components/portal/action-centre";
 import { TrainingBlockCard } from "@/components/portal/training-block-card";
 import { ProgressSummaryCard } from "@/components/progress/progress-summary-card";
@@ -34,6 +33,7 @@ import { DashboardOfflineEmpty, useIsOfflineWithoutCache } from "@/components/po
 import { DeferRender } from "@/components/defer-render";
 import { logPerf } from "@/lib/perf-timing";
 import { NotificationSetupPrompt } from "@/components/notification-setup-prompt";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 
 export const Route = createFileRoute("/_authenticated/portal/")({ component: PortalHome });
 
@@ -423,7 +423,6 @@ function PortalHome() {
       <div className="-mt-2 flex justify-end">
         <DashboardRefreshIndicator />
       </div>
-      <NotificationSetupPrompt />
 
       {/* 2 — Profile-missing fallback (workouts moved off the dashboard
             for perf — clients reach training via Quick Actions / nav). */}
@@ -437,39 +436,12 @@ function PortalHome() {
           </SectionErrorBoundary>
         )}
 
-        {/* Action Centre — pinned to the top so urgent items are seen first */}
+        {/* 1 — Action Centre (top priority) */}
         <SectionErrorBoundary label="Action centre">
           <ActionCentre items={actions.slice(0, 5)} />
         </SectionErrorBoundary>
 
-        {/* 3 — Progress summary */}
-        {portalUserId ? (
-          <SectionErrorBoundary label="Progress">
-            <ProgressSummaryCard
-              userId={portalUserId}
-              currentUserId={portalUserId}
-              viewerRole="owner"
-              progressHref={{ kind: "portal" }}
-              liftHref="/portal/lift-videos"
-              checkInHref={weeklyCheckInHref}
-            />
-          </SectionErrorBoundary>
-        ) : (
-          <SectionSkeleton height="h-44" />
-        )}
-
-        {/* 3a — Water Today */}
-        {portalUserId && (
-          <SectionErrorBoundary label="Water">
-            <HomeWaterCard
-              userId={portalUserId}
-              currentUserId={portalUserId}
-              surface="portal"
-            />
-          </SectionErrorBoundary>
-        )}
-
-        {/* 3b — Bodyweight tracker (syncs with Progress > Weight tracker) */}
+        {/* 2 — Bodyweight tracker (syncs with Progress > Weight tracker) */}
         {client?.id ? (
           <DeferRender placeholderHeight="h-52">
             <SectionErrorBoundary label="Bodyweight">
@@ -483,19 +455,31 @@ function PortalHome() {
           <SectionSkeleton height="h-52" />
         ) : null}
 
-        {/* 3a — Install JF Effect on Your Phone (permanent action) */}
-        {client && <InstallAppCard />}
-
-        {/* 3b — Intake & form answers (one-tap access for the client) */}
-        {client && (
-          <SectionErrorBoundary label="Intake answers">
-            <IntakeAnswersBigButton
-              clientId={client.id}
-              clientName={client.full_name ?? null}
-              label="My Intake & Form Answers"
-              subtitle="Review everything you’ve filled out — sign-up intake & in-app forms"
+        {/* 3 — Water Today */}
+        {portalUserId && (
+          <SectionErrorBoundary label="Water">
+            <HomeWaterCard
+              userId={portalUserId}
+              currentUserId={portalUserId}
+              surface="portal"
             />
           </SectionErrorBoundary>
+        )}
+
+        {/* 4 — Progress summary */}
+        {portalUserId ? (
+          <SectionErrorBoundary label="Progress">
+            <ProgressSummaryCard
+              userId={portalUserId}
+              currentUserId={portalUserId}
+              viewerRole="owner"
+              progressHref={{ kind: "portal" }}
+              liftHref="/portal/lift-videos"
+              checkInHref={weeklyCheckInHref}
+            />
+          </SectionErrorBoundary>
+        ) : (
+          <SectionSkeleton height="h-44" />
         )}
 
         {/* 5 — Current Training Block */}
@@ -523,11 +507,19 @@ function PortalHome() {
           </SectionErrorBoundary>
         </DeferRender>
 
-        {/* 9 — Secondary links */}
+        {/* Setup — install app + notifications, grouped together */}
         {client && (
-          <SecondaryLinks
-            handleAgreementComplete={markAgreementComplete}
-          />
+          <SectionGroup title="Setup" subtitle="Get the most out of JF Effect">
+            <InstallAppCard />
+            <NotificationSetupPrompt />
+          </SectionGroup>
+        )}
+
+        {/* Manage — purchases, agreements, account; expand inline */}
+        {client && (
+          <SectionGroup title="Manage" subtitle="Your billing, agreements, and account">
+            <ManageAccordion clientId={client.id} />
+          </SectionGroup>
         )}
       </div>
     </>
@@ -624,6 +616,232 @@ function SecondaryLinks({ handleAgreementComplete: _ }: { handleAgreementComplet
               <Icon className="h-5 w-5 text-muted-foreground" />
               <span className="flex-1 text-sm font-semibold">{it.label}</span>
             </Link>
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
+
+function SectionGroup({
+  title,
+  subtitle,
+  children,
+}: {
+  title: string;
+  subtitle?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <section className="space-y-3">
+      <div className="px-1">
+        <h2 className="text-xs font-black uppercase tracking-widest text-muted-foreground">
+          {title}
+        </h2>
+        {subtitle && (
+          <p className="mt-0.5 text-[11px] text-muted-foreground/80">{subtitle}</p>
+        )}
+      </div>
+      <div className="space-y-3">{children}</div>
+    </section>
+  );
+}
+
+function ManageAccordion({ clientId }: { clientId: string }) {
+  const [open, setOpen] = useState<string | null>(null);
+
+  const { data: purchases = [] } = useQuery({
+    queryKey: ["portal-manage-purchases", clientId],
+    enabled: open === "purchases",
+    staleTime: 60_000,
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("purchase_records")
+        .select("id, item_name, payment_status, amount_paid, currency, purchased_at")
+        .eq("client_id", clientId)
+        .order("purchased_at", { ascending: false })
+        .limit(5);
+      return (data ?? []) as any[];
+    },
+  });
+
+  const { data: agreements = [] } = useQuery({
+    queryKey: ["portal-manage-agreements", clientId],
+    enabled: open === "agreements",
+    staleTime: 60_000,
+    queryFn: async () => {
+      const { data } = await (supabase.from("agreements") as any)
+        .select("id, template_name, status, signnow_signing_link, client_marked_complete_at")
+        .eq("client_id", clientId)
+        .order("created_at", { ascending: false })
+        .limit(5);
+      return (data ?? []) as any[];
+    },
+  });
+
+  const { data: accountSummary } = useQuery({
+    queryKey: ["portal-manage-account", clientId],
+    enabled: open === "account",
+    staleTime: 60_000,
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("clients")
+        .select("full_name, email, phone, timezone, assigned_coach_id")
+        .eq("id", clientId)
+        .maybeSingle();
+      return data as any;
+    },
+  });
+
+  const rows: Array<{
+    key: "purchases" | "agreements" | "account";
+    label: string;
+    hint: string;
+    icon: any;
+    fullHref: string;
+    render: () => React.ReactNode;
+  }> = [
+    {
+      key: "purchases",
+      label: "Purchases",
+      hint: "Receipts & payment history",
+      icon: Receipt,
+      fullHref: "/portal/purchases",
+      render: () =>
+        purchases.length === 0 ? (
+          <p className="text-xs text-muted-foreground">No purchases yet.</p>
+        ) : (
+          <ul className="space-y-2">
+            {purchases.map((p: any) => (
+              <li
+                key={p.id}
+                className="flex items-center justify-between gap-3 rounded-lg border border-border/70 bg-background px-3 py-2 text-xs"
+              >
+                <div className="min-w-0">
+                  <div className="truncate font-semibold">{p.item_name || "Purchase"}</div>
+                  <div className="text-[10px] text-muted-foreground">
+                    {p.purchased_at ? new Date(p.purchased_at).toLocaleDateString() : "—"} · {p.payment_status}
+                  </div>
+                </div>
+                {p.amount_paid != null && (
+                  <div className="shrink-0 text-xs font-bold tabular-nums">
+                    ${Number(p.amount_paid).toFixed(2)}
+                  </div>
+                )}
+              </li>
+            ))}
+          </ul>
+        ),
+    },
+    {
+      key: "agreements",
+      label: "Agreements",
+      hint: "Contracts & signatures",
+      icon: FileSignature,
+      fullHref: "/portal/agreements",
+      render: () =>
+        agreements.length === 0 ? (
+          <p className="text-xs text-muted-foreground">No agreements on file.</p>
+        ) : (
+          <ul className="space-y-2">
+            {agreements.map((a: any) => (
+              <li
+                key={a.id}
+                className="flex items-center justify-between gap-3 rounded-lg border border-border/70 bg-background px-3 py-2 text-xs"
+              >
+                <div className="min-w-0">
+                  <div className="truncate font-semibold">{a.template_name || "Agreement"}</div>
+                  <div className="text-[10px] text-muted-foreground">
+                    {a.client_marked_complete_at ? "Marked complete" : a.status || "—"}
+                  </div>
+                </div>
+                {a.signnow_signing_link && !a.client_marked_complete_at && (
+                  <a
+                    href={a.signnow_signing_link}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="shrink-0 rounded-md bg-primary px-2.5 py-1 text-[11px] font-bold text-primary-foreground"
+                  >
+                    Sign
+                  </a>
+                )}
+              </li>
+            ))}
+          </ul>
+        ),
+    },
+    {
+      key: "account",
+      label: "Account & Coaching",
+      hint: "Contact info, coach & preferences",
+      icon: Settings,
+      fullHref: "/portal/account",
+      render: () =>
+        !accountSummary ? (
+          <p className="text-xs text-muted-foreground">Loading…</p>
+        ) : (
+          <dl className="grid grid-cols-1 gap-2 text-xs sm:grid-cols-2">
+            {[
+              ["Name", accountSummary.full_name],
+              ["Email", accountSummary.email],
+              ["Phone", accountSummary.phone],
+              ["Timezone", accountSummary.timezone],
+            ].map(([k, v]) => (
+              <div
+                key={k as string}
+                className="rounded-lg border border-border/70 bg-background px-3 py-2"
+              >
+                <dt className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                  {k}
+                </dt>
+                <dd className="mt-0.5 truncate text-xs font-semibold">{(v as string) || "—"}</dd>
+              </div>
+            ))}
+          </dl>
+        ),
+    },
+  ];
+
+  return (
+    <ul className="overflow-hidden rounded-2xl border border-border bg-card">
+      {rows.map((row, i) => {
+        const Icon = row.icon;
+        const isOpen = open === row.key;
+        return (
+          <li key={row.key} className={i > 0 ? "border-t border-border/70" : ""}>
+            <Collapsible open={isOpen} onOpenChange={(v) => setOpen(v ? row.key : null)}>
+              <CollapsibleTrigger asChild>
+                <button
+                  type="button"
+                  className="flex min-h-[64px] w-full items-center gap-3 px-4 py-3 text-left transition active:bg-secondary/30"
+                  aria-expanded={isOpen}
+                >
+                  <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-border bg-secondary/40">
+                    <Icon className="h-5 w-5 text-muted-foreground" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="text-sm font-bold">{row.label}</div>
+                    <div className="truncate text-[11px] text-muted-foreground">{row.hint}</div>
+                  </div>
+                  <ChevronDown
+                    className={`h-4 w-4 shrink-0 text-muted-foreground transition-transform ${
+                      isOpen ? "rotate-180" : ""
+                    }`}
+                  />
+                </button>
+              </CollapsibleTrigger>
+              <CollapsibleContent>
+                <div className="space-y-3 border-t border-border/70 bg-secondary/10 px-4 py-4">
+                  {row.render()}
+                  <Link
+                    to={row.fullHref}
+                    className="inline-flex min-h-[40px] w-full items-center justify-center rounded-lg border border-border bg-card px-3 text-xs font-bold text-foreground transition hover:bg-secondary/40"
+                  >
+                    Open full {row.label.toLowerCase()} page
+                  </Link>
+                </div>
+              </CollapsibleContent>
+            </Collapsible>
           </li>
         );
       })}
