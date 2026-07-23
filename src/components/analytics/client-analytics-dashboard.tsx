@@ -36,6 +36,7 @@ import { WeightLiftedCard } from "@/components/analytics/weight-lifted-card";
 import { GraphDotDetail, type GraphDotPoint } from "@/components/analytics/graph-dot-detail";
 import { PRCard } from "@/components/analytics/pr-card";
 import { RecoverySummaryCard } from "@/components/analytics/recovery-summary-card";
+import { SleepInsightsCard } from "@/components/analytics/sleep-insights-card";
 import { CardioSummaryCard } from "@/components/analytics/cardio-summary-card";
 import { RecoveryPatternsCard } from "@/components/analytics/recovery-patterns-card";
 import { PredictedWindowCard } from "@/components/analytics/predicted-window-card";
