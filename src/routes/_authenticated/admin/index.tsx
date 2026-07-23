@@ -29,9 +29,6 @@ const PriceCardPickerDialog = lazy(() =>
 );
 import { UserAvatar } from "@/components/user-avatar";
 import { getCoachIntel, filterIntel, LABEL_META } from "@/lib/coach-intel";
-import { getCoachingApplicationsMetrics } from "@/lib/coaching-applications.functions";
-import { useServerFn } from "@tanstack/react-start";
-import { Inbox, Flame, CalendarCheck, TrendingUp } from "lucide-react";
 import { DashboardRefreshIndicator } from "@/components/portal/dashboard-refresh-indicator";
 import { DashboardOfflineEmpty, useIsOfflineWithoutCache } from "@/components/portal/dashboard-offline-empty";
 import { NotificationSetupPrompt } from "@/components/notification-setup-prompt";
