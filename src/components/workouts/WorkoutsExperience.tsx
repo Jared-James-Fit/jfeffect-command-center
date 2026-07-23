@@ -1123,7 +1123,22 @@ function SelectedDayCard({
                 <Move className="mr-1 h-3.5 w-3.5" /> Reschedule
               </Button>
             )}
+          <Button
+            size="sm"
+            variant="ghost"
+            className="text-muted-foreground"
+            onClick={() => setInlineOpen((v) => !v)}
+            aria-expanded={inlineOpen}
+          >
+            <ChevronDown className={cn("mr-1 h-3.5 w-3.5 transition-transform", inlineOpen && "rotate-180")} />
+            {inlineOpen ? "Hide Preview" : "Preview Workout"}
+          </Button>
         </div>
+        {inlineOpen && item.day?.id && (
+          <div className="mt-3">
+            <InlineWorkoutPreview dayId={item.day.id} clientId={clientId} />
+          </div>
+        )}
       </Card>
 
       {!readonly && (
