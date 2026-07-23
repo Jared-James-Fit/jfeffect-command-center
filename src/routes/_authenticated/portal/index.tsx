@@ -423,7 +423,6 @@ function PortalHome() {
       <div className="-mt-2 flex justify-end">
         <DashboardRefreshIndicator />
       </div>
-      <NotificationSetupPrompt />
 
       {/* 2 — Profile-missing fallback (workouts moved off the dashboard
             for perf — clients reach training via Quick Actions / nav). */}
@@ -437,39 +436,12 @@ function PortalHome() {
           </SectionErrorBoundary>
         )}
 
-        {/* Action Centre — pinned to the top so urgent items are seen first */}
+        {/* 1 — Action Centre (top priority) */}
         <SectionErrorBoundary label="Action centre">
           <ActionCentre items={actions.slice(0, 5)} />
         </SectionErrorBoundary>
 
-        {/* 3 — Progress summary */}
-        {portalUserId ? (
-          <SectionErrorBoundary label="Progress">
-            <ProgressSummaryCard
-              userId={portalUserId}
-              currentUserId={portalUserId}
-              viewerRole="owner"
-              progressHref={{ kind: "portal" }}
-              liftHref="/portal/lift-videos"
-              checkInHref={weeklyCheckInHref}
-            />
-          </SectionErrorBoundary>
-        ) : (
-          <SectionSkeleton height="h-44" />
-        )}
-
-        {/* 3a — Water Today */}
-        {portalUserId && (
-          <SectionErrorBoundary label="Water">
-            <HomeWaterCard
-              userId={portalUserId}
-              currentUserId={portalUserId}
-              surface="portal"
-            />
-          </SectionErrorBoundary>
-        )}
-
-        {/* 3b — Bodyweight tracker (syncs with Progress > Weight tracker) */}
+        {/* 2 — Bodyweight tracker (syncs with Progress > Weight tracker) */}
         {client?.id ? (
           <DeferRender placeholderHeight="h-52">
             <SectionErrorBoundary label="Bodyweight">
@@ -483,19 +455,31 @@ function PortalHome() {
           <SectionSkeleton height="h-52" />
         ) : null}
 
-        {/* 3a — Install JF Effect on Your Phone (permanent action) */}
-        {client && <InstallAppCard />}
-
-        {/* 3b — Intake & form answers (one-tap access for the client) */}
-        {client && (
-          <SectionErrorBoundary label="Intake answers">
-            <IntakeAnswersBigButton
-              clientId={client.id}
-              clientName={client.full_name ?? null}
-              label="My Intake & Form Answers"
-              subtitle="Review everything you’ve filled out — sign-up intake & in-app forms"
+        {/* 3 — Water Today */}
+        {portalUserId && (
+          <SectionErrorBoundary label="Water">
+            <HomeWaterCard
+              userId={portalUserId}
+              currentUserId={portalUserId}
+              surface="portal"
             />
           </SectionErrorBoundary>
+        )}
+
+        {/* 4 — Progress summary */}
+        {portalUserId ? (
+          <SectionErrorBoundary label="Progress">
+            <ProgressSummaryCard
+              userId={portalUserId}
+              currentUserId={portalUserId}
+              viewerRole="owner"
+              progressHref={{ kind: "portal" }}
+              liftHref="/portal/lift-videos"
+              checkInHref={weeklyCheckInHref}
+            />
+          </SectionErrorBoundary>
+        ) : (
+          <SectionSkeleton height="h-44" />
         )}
 
         {/* 5 — Current Training Block */}
@@ -523,11 +507,19 @@ function PortalHome() {
           </SectionErrorBoundary>
         </DeferRender>
 
-        {/* 9 — Secondary links */}
+        {/* Setup — install app + notifications, grouped together */}
         {client && (
-          <SecondaryLinks
-            handleAgreementComplete={markAgreementComplete}
-          />
+          <SectionGroup title="Setup" subtitle="Get the most out of JF Effect">
+            <InstallAppCard />
+            <NotificationSetupPrompt />
+          </SectionGroup>
+        )}
+
+        {/* Manage — purchases, agreements, account; expand inline */}
+        {client && (
+          <SectionGroup title="Manage" subtitle="Your billing, agreements, and account">
+            <ManageAccordion clientId={client.id} />
+          </SectionGroup>
         )}
       </div>
     </>
