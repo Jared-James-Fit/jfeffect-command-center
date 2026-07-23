@@ -2,7 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Battery, TrendingUp, TrendingDown, Minus } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { supabase } from "@/integrations/supabase/client";
-import { recoveryTrendLabel, fetchRecoveryScoreSeries } from "@/lib/analytics/recovery-score";
+import { fetchRecoveryScoreSeries } from "@/lib/analytics/recovery-score";
 import { pickCurrentBlock } from "@/lib/block-dates";
 
 interface Props {
@@ -65,6 +65,33 @@ function avg(nums: number[]): number | null {
 }
 
 /**
+ * Rolling-window trend: recent 3 vs previous 3 valid readiness scores.
+ *  - Improving: recent avg >= previous avg + 3
+ *  - Stable:    difference between -2 and +2
+ *  - Dropping:  recent avg <= previous avg - 3
+ * Anything in the (2, 3) gap rounds to Stable.
+ * Requires at least 6 valid scores; caller shows "Building Trend" below that.
+ */
+function rollingTrend(scores: number[]): {
+  label: "Improving" | "Stable" | "Dropping" | null;
+  recentAvg: number | null;
+  prevAvg: number | null;
+} {
+  const valid = scores.filter((n) => Number.isFinite(n));
+  if (valid.length < 6) return { label: null, recentAvg: null, prevAvg: null };
+  const recent = valid.slice(-3);
+  const previous = valid.slice(-6, -3);
+  const r = recent.reduce((s, n) => s + n, 0) / recent.length;
+  const p = previous.reduce((s, n) => s + n, 0) / previous.length;
+  const diff = r - p;
+  let label: "Improving" | "Stable" | "Dropping";
+  if (diff >= 3) label = "Improving";
+  else if (diff <= -3) label = "Dropping";
+  else label = "Stable";
+  return { label, recentAvg: Math.round(r), prevAvg: Math.round(p) };
+}
+
+/**
  * Compact Recovery snapshot rendered on the main Workouts page.
  * Uses existing review data; never asks the client for new input.
  */
@@ -111,11 +138,11 @@ export function RecoveryPreviewCard({ clientId, analyticsTo }: Props) {
       };
 
       const curScores = series.filter((r) => inRange(r.ts, cur)).map((r) => r.score);
-      const prevScores = series.filter((r) => inRange(r.ts, prev)).map((r) => r.score);
-      const last3 = series.slice(-3).map((r) => r.score);
-      const latest = series[series.length - 1].score;
+      const allScores = series.map((r) => r.score);
+      const last3 = allScores.slice(-3);
+      const latest = allScores[allScores.length - 1];
       const curAvg = avg(curScores);
-      const prevAvg = avg(prevScores);
+      const trend = rollingTrend(allScores);
 
       // Coach's Note — one short sentence.
       let insight: string | null = null;
@@ -135,10 +162,12 @@ export function RecoveryPreviewCard({ clientId, analyticsTo }: Props) {
         hasData: true as const,
         latest,
         curAvg,
-        prevAvg,
-        trend: recoveryTrendLabel(curAvg, prevAvg),
+        prevAvg: trend.prevAvg,
+        recentAvg: trend.recentAvg,
+        trend: trend.label,
         insight,
-        hasTrendData: curScores.length >= 2 && prevScores.length >= 1,
+        validCount: allScores.length,
+        hasTrendData: trend.label != null,
       };
     },
   });
@@ -177,13 +206,12 @@ export function RecoveryPreviewCard({ clientId, analyticsTo }: Props) {
   const trend = data.trend;
   const trendIcon =
     trend === "Improving" ? <TrendingUp className="h-3.5 w-3.5" />
-      : trend === "Declining" ? <TrendingDown className="h-3.5 w-3.5" />
+      : trend === "Dropping" ? <TrendingDown className="h-3.5 w-3.5" />
       : <Minus className="h-3.5 w-3.5" />;
-  const trendLabel =
-    trend === "Declining" ? "Dropping" : trend ?? null;
+  const trendLabel = trend ?? null;
   const trendClass =
     trend === "Improving" ? "text-emerald-600 dark:text-emerald-400"
-      : trend === "Declining" ? "text-rose-600 dark:text-rose-400"
+      : trend === "Dropping" ? "text-rose-600 dark:text-rose-400"
       : "text-muted-foreground";
 
   return (
@@ -221,7 +249,7 @@ export function RecoveryPreviewCard({ clientId, analyticsTo }: Props) {
               </div>
             ) : (
               <div className="mt-0.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                Not Enough Data
+                Building Trend
               </div>
             )}
           </div>
