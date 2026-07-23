@@ -51,7 +51,7 @@ export type ActionCentreItem = {
   is_coach_requested: boolean;
   chip: StatusChip;
   priority: number;
-  metadata: Record<string, unknown>;
+  metadata: Record<string, string | number | boolean | null>;
 };
 
 // ============================================================
