@@ -33,30 +33,6 @@ import { DashboardRefreshIndicator } from "@/components/portal/dashboard-refresh
 import { DashboardOfflineEmpty, useIsOfflineWithoutCache } from "@/components/portal/dashboard-offline-empty";
 import { NotificationSetupPrompt } from "@/components/notification-setup-prompt";
 
-function CoachingApplicationsTiles() {
-  const fetchMetrics = useServerFn(getCoachingApplicationsMetrics);
-  const { data } = useQuery({
-    queryKey: ["coaching-applications-metrics"],
-    queryFn: () => fetchMetrics(),
-  });
-  const m = data ?? { total: 0, newCount: 0, booked: 0, hot: 0, conversionRate: 0 };
-  return (
-    <div className="space-y-2">
-      <SectionHeader
-        title="Coaching applications (30d)"
-        icon={Inbox}
-        viewAll={{ to: "/admin/sales/coaching-applications" }}
-      />
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-        <StatTile label="New" value={m.newCount} icon={Inbox} tone="primary" to="/admin/sales/coaching-applications" />
-        <StatTile label="Hot leads" value={m.hot} icon={Flame} tone="warn" to="/admin/sales/coaching-applications" />
-        <StatTile label="Calls booked" value={m.booked} icon={CalendarCheck} to="/admin/sales/coaching-applications" />
-        <StatTile label="Conversion %" value={`${m.conversionRate}%`} icon={TrendingUp} to="/admin/sales/coaching-applications" />
-      </div>
-    </div>
-  );
-}
-
 export const Route = createFileRoute("/_authenticated/admin/")({
   component: AdminDashboard,
 });
