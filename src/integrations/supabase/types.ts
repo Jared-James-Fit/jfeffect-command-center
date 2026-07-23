@@ -2699,6 +2699,159 @@ export type Database = {
           },
         ]
       }
+      client_task_occurrences: {
+        Row: {
+          client_id: string
+          client_tz: string
+          completed_at: string | null
+          completed_by: string | null
+          created_at: string
+          due_at_utc: string
+          due_local_date: string
+          id: string
+          is_coach_requested: boolean
+          metadata: Json
+          payload_ref: Json
+          priority: number
+          reminder_state: Json
+          source_definition_id: string | null
+          source_override_id: string | null
+          status: string
+          subtitle: string | null
+          task_type: string
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          client_id: string
+          client_tz: string
+          completed_at?: string | null
+          completed_by?: string | null
+          created_at?: string
+          due_at_utc: string
+          due_local_date: string
+          id?: string
+          is_coach_requested?: boolean
+          metadata?: Json
+          payload_ref?: Json
+          priority?: number
+          reminder_state?: Json
+          source_definition_id?: string | null
+          source_override_id?: string | null
+          status?: string
+          subtitle?: string | null
+          task_type: string
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          client_id?: string
+          client_tz?: string
+          completed_at?: string | null
+          completed_by?: string | null
+          created_at?: string
+          due_at_utc?: string
+          due_local_date?: string
+          id?: string
+          is_coach_requested?: boolean
+          metadata?: Json
+          payload_ref?: Json
+          priority?: number
+          reminder_state?: Json
+          source_definition_id?: string | null
+          source_override_id?: string | null
+          status?: string
+          subtitle?: string | null
+          task_type?: string
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "client_task_occurrences_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "client_task_occurrences_source_definition_id_fkey"
+            columns: ["source_definition_id"]
+            isOneToOne: false
+            referencedRelation: "coach_task_definitions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "client_task_occurrences_source_override_id_fkey"
+            columns: ["source_override_id"]
+            isOneToOne: false
+            referencedRelation: "client_task_overrides"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      client_task_overrides: {
+        Row: {
+          client_id: string
+          created_at: string
+          due_day_of_week: number | null
+          due_time_local: string | null
+          enabled: boolean | null
+          fixed_tz: string | null
+          frequency: string | null
+          id: string
+          interval_days: number | null
+          overdue_after_days: number | null
+          reminder_after_days: number | null
+          reminder_offsets: number[] | null
+          task_type: string
+          tz_mode: string | null
+          updated_at: string
+        }
+        Insert: {
+          client_id: string
+          created_at?: string
+          due_day_of_week?: number | null
+          due_time_local?: string | null
+          enabled?: boolean | null
+          fixed_tz?: string | null
+          frequency?: string | null
+          id?: string
+          interval_days?: number | null
+          overdue_after_days?: number | null
+          reminder_after_days?: number | null
+          reminder_offsets?: number[] | null
+          task_type: string
+          tz_mode?: string | null
+          updated_at?: string
+        }
+        Update: {
+          client_id?: string
+          created_at?: string
+          due_day_of_week?: number | null
+          due_time_local?: string | null
+          enabled?: boolean | null
+          fixed_tz?: string | null
+          frequency?: string | null
+          id?: string
+          interval_days?: number | null
+          overdue_after_days?: number | null
+          reminder_after_days?: number | null
+          reminder_offsets?: number[] | null
+          task_type?: string
+          tz_mode?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "client_task_overrides_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       clients: {
         Row: {
           account_created_at: string | null
@@ -3493,6 +3646,63 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      coach_task_definitions: {
+        Row: {
+          created_at: string
+          due_day_of_week: number | null
+          due_time_local: string
+          enabled: boolean
+          fixed_tz: string | null
+          form_id: string | null
+          frequency: string
+          id: string
+          interval_days: number | null
+          overdue_after_days: number | null
+          reminder_after_days: number | null
+          reminder_offsets: number[]
+          task_type: string
+          title: string
+          tz_mode: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          due_day_of_week?: number | null
+          due_time_local?: string
+          enabled?: boolean
+          fixed_tz?: string | null
+          form_id?: string | null
+          frequency?: string
+          id?: string
+          interval_days?: number | null
+          overdue_after_days?: number | null
+          reminder_after_days?: number | null
+          reminder_offsets?: number[]
+          task_type: string
+          title: string
+          tz_mode?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          due_day_of_week?: number | null
+          due_time_local?: string
+          enabled?: boolean
+          fixed_tz?: string | null
+          form_id?: string | null
+          frequency?: string
+          id?: string
+          interval_days?: number | null
+          overdue_after_days?: number | null
+          reminder_after_days?: number | null
+          reminder_offsets?: number[]
+          task_type?: string
+          title?: string
+          tz_mode?: string
+          updated_at?: string
+        }
+        Relationships: []
       }
       coaches: {
         Row: {
