@@ -31,7 +31,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
-import { Loader2, CheckCircle2, AlertCircle, AlertTriangle } from "lucide-react";
+import { Loader2, CheckCircle2, AlertCircle, AlertTriangle, ChevronDown, ChevronUp } from "lucide-react";
 import { submitOrEditReview, type WorkoutCompletionCtx } from "@/lib/workout-completion.functions";
 
 // ── Status card definitions ───────────────────────────────────────────────────
@@ -122,7 +122,20 @@ export type ReviewInitial = {
   fatigueFeel?: string | null;
   hitTarget?: string | null;
   recoveryToday?: number | null;
+  sleepBucket?: SleepBucket | null;
+  sleepNotes?: string | null;
 };
+
+export type SleepBucket = "lt5" | "5_6" | "6_7" | "7_8" | "8_9" | "gte9";
+
+const SLEEP_OPTIONS: { v: SleepBucket; label: string }[] = [
+  { v: "lt5", label: "<5h" },
+  { v: "5_6", label: "5–6h" },
+  { v: "6_7", label: "6–7h" },
+  { v: "7_8", label: "7–8h" },
+  { v: "8_9", label: "8–9h" },
+  { v: "gte9", label: "9h+" },
+];
 
 type Props = {
   open: boolean;
@@ -164,13 +177,17 @@ export function WorkoutReviewEditor({
 
   const [status, setStatus] = useState<StatusKey | null>(() => inferStatus(initial));
   const [note, setNote] = useState<string>(initial?.clientNote ?? "");
-  const [recoveryToday, setRecoveryToday] = useState<number | null>(initial?.recoveryToday ?? null);
+  const [sleepBucket, setSleepBucket] = useState<SleepBucket | null>(initial?.sleepBucket ?? null);
+  const [sleepNotes, setSleepNotes] = useState<string>(initial?.sleepNotes ?? "");
+  const [sleepNotesOpen, setSleepNotesOpen] = useState<boolean>(!!(initial?.sleepNotes ?? "").trim());
 
   useEffect(() => {
     if (!open) return;
     setStatus(inferStatus(initial));
     setNote(initial?.clientNote ?? "");
-    setRecoveryToday(initial?.recoveryToday ?? null);
+    setSleepBucket(initial?.sleepBucket ?? null);
+    setSleepNotes(initial?.sleepNotes ?? "");
+    setSleepNotesOpen(!!(initial?.sleepNotes ?? "").trim());
   }, [open, initial?.submittedAt]);
 
   const selectedCard = STATUS_CARDS.find((c) => c.key === status) ?? null;
@@ -194,7 +211,9 @@ export function WorkoutReviewEditor({
           strengthFeel: null,
           fatigueFeel: null,
           hitTarget: null,
-          recoveryToday: recoveryToday,
+          recoveryToday: null,
+          sleepBucket: sleepBucket,
+          sleepNotes: sleepNotes.trim() ? sleepNotes.trim() : null,
           actAsClientId: actAsClientId ?? null,
         },
       });
