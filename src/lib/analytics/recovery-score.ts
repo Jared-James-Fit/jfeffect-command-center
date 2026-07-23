@@ -255,7 +255,7 @@ export async function fetchRecoveryScoreSeries(
   let reviewsQ = supabase
     .from("member_workout_reviews")
     .select(
-      "overall_rating, session_rpe, strength_feel, fatigue_feel, pain, recovery_today, review_submitted_at, member_plan_enrollments!inner(client_id)",
+      "overall_rating, session_rpe, strength_feel, fatigue_feel, pain, recovery_today, sleep_bucket, review_submitted_at, member_plan_enrollments!inner(client_id)",
     )
     .eq("member_plan_enrollments.client_id", clientId)
     .gte("review_submitted_at", sinceIso);
@@ -271,6 +271,18 @@ export async function fetchRecoveryScoreSeries(
     .gte("completed_at", sinceIso);
   if (untilIso) compQ = compQ.lte("completed_at", untilIso);
   const { data: comps } = await compQ;
+
+  // Sleep buckets from pl_workout_feedback, keyed by completion_id.
+  let fbQ = supabase
+    .from("pl_workout_feedback")
+    .select("completion_id, sleep_bucket")
+    .eq("client_id", clientId)
+    .not("sleep_bucket", "is", null);
+  const { data: feedbacks } = await fbQ;
+  const sleepByCompletion = new Map<string, SleepBucket>();
+  for (const f of (feedbacks ?? []) as any[]) {
+    if (f.completion_id && f.sleep_bucket) sleepByCompletion.set(f.completion_id, f.sleep_bucket);
+  }
 
   // 3) Row results (for avg RPE/RIR per session)
   let rowsQ = supabase
@@ -322,6 +334,7 @@ export async function fetchRecoveryScoreSeries(
       fatigueFeel: r.fatigue_feel ?? null,
       pain: !!r.pain,
       recoveryToday: r.recovery_today ?? null,
+      sleepBucket: (r.sleep_bucket ?? null) as SleepBucket | null,
     });
     if (s.hasData) out.push({ ts: r.review_submitted_at, score: s.score });
   }
@@ -342,6 +355,7 @@ export async function fetchRecoveryScoreSeries(
       completionPct: c.logging_percentage != null ? Number(c.logging_percentage) : null,
       overallRating: c.session_rating ?? null,
       sessionRpe: effRpe,
+      sleepBucket: sleepByCompletion.get(c.id) ?? null,
     });
     if (s.hasData) out.push({ ts: c.completed_at, score: s.score });
   }
