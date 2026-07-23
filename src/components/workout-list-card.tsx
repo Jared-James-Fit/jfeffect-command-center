@@ -9,6 +9,8 @@ import { durationRange } from "@/lib/pl-programs";
 import { cleanDayTitle, dayScheduledDate } from "@/lib/workout-today";
 import { MoveWorkoutSheet } from "@/components/schedule/MoveWorkoutSheet";
 import { InlineWorkoutPreview } from "@/components/workout/shared/inline-workout-preview";
+import { WorkoutProgressRing } from "@/components/workout/shared/workout-progress-ring";
+import { useWorkoutProgress } from "@/lib/workout-progress";
 import { cn } from "@/lib/utils";
 
 export function WorkoutListCard({
@@ -30,6 +32,7 @@ export function WorkoutListCard({
   const [moveOpen, setMoveOpen] = useState(false);
   const [expanded, setExpanded] = useState(false);
   const previewClientId = clientId ?? item.completion?.client_id ?? null;
+  const { data: progress } = useWorkoutProgress(item.day?.id, previewClientId);
   return (
     <div className="space-y-1.5">
     <Link
@@ -63,6 +66,14 @@ export function WorkoutListCard({
             {dur && <span>· {durationRange(dur)}</span>}
           </div>
         </div>
+        {progress && progress.prescribedSets > 0 && (
+          <WorkoutProgressRing
+            pct={progress.pct}
+            status={progress.status}
+            size={36}
+            className="shrink-0"
+          />
+        )}
         <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
       </Card>
     </Link>

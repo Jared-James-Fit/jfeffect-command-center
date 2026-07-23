@@ -36,6 +36,8 @@ import { ClientBlockView } from "@/components/client-block-view";
 import { WorkoutStatusSheet } from "@/components/workout-status-sheet";
 import { CircleDot } from "lucide-react";
 import { InlineWorkoutPreview } from "@/components/workout/shared/inline-workout-preview";
+import { WorkoutProgressRing } from "@/components/workout/shared/workout-progress-ring";
+import { useWorkoutProgress } from "@/lib/workout-progress";
 import { TrainingScheduleCard } from "@/components/training-schedule-card";
 import { toast } from "sonner";
 import { ClientCardioSection } from "@/components/cardio/ClientCardioSection";
@@ -1016,6 +1018,7 @@ function SelectedDayCard({
   const title = cleanDayTitle(item.day?.title, item.day?.day_index);
   const dur = item.day?.duration_override_min ?? item.day?.duration_estimate_min ?? null;
   const cta = primaryCtaFor(item, status.status);
+  const { data: progress } = useWorkoutProgress(item.day?.id, clientId);
 
   return (
     <>
@@ -1025,6 +1028,13 @@ function SelectedDayCard({
             <div className="flex flex-wrap items-center gap-2">
               <div className="truncate text-lg font-black">{title}</div>
               <Badge variant="outline" className={cn("text-[10px]", status.tone)}>{status.label}</Badge>
+              {progress && progress.prescribedSets > 0 && (
+                <WorkoutProgressRing
+                  pct={progress.pct}
+                  status={progress.status}
+                  size={36}
+                />
+              )}
             </div>
             <div className="mt-1 text-xs text-muted-foreground">
               {[

@@ -2,6 +2,9 @@ import { useQuery } from "@tanstack/react-query";
 import { Check, Circle, CircleDot } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
+import { derivePurposeLabels, purposeLabelBadgeClass } from "@/lib/exercise-metadata";
+import { computeWorkoutProgress } from "@/lib/workout-progress";
+import { WorkoutProgressRing } from "@/components/workout/shared/workout-progress-ring";
 
 /**
  * Read-only inline preview of a workout day. Shows exercise order,
@@ -26,7 +29,17 @@ type Row = {
   load_kg: number | null;
   load_lb: number | null;
   measurement_type: string | null;
-  exercises: { name: string | null } | null;
+  card_color: string | null;
+  movement_family: string | null;
+  exercise_id: string | null;
+  exercises:
+    | {
+        name: string | null;
+        competition_lift_type?: string | null;
+        is_competition_lift?: boolean | null;
+        exercise_category?: string | null;
+      }
+    | null;
 };
 
 type Result = {
@@ -39,24 +52,6 @@ type Result = {
   actual_rir: number | string | null;
   completed_duration_seconds: number | null;
 };
-
-function classificationFor(profile: string | null | undefined): { label: string; tone: string } | null {
-  switch (profile) {
-    case "main_lift":
-      return { label: "PRIMARY", tone: "border-primary/40 bg-primary/10 text-primary" };
-    case "secondary_lift":
-      return { label: "SECONDARY", tone: "border-sky-500/40 bg-sky-500/10 text-sky-700 dark:text-sky-300" };
-    case "accessory_compound":
-    case "accessory_isolation":
-      return { label: "ACCESSORY", tone: "border-muted-foreground/30 bg-muted/40 text-muted-foreground" };
-    case "warmup_mobility":
-      return { label: "WARM-UP", tone: "border-muted-foreground/20 bg-muted/30 text-muted-foreground" };
-    case "conditioning":
-      return { label: "CONDITIONING", tone: "border-muted-foreground/30 bg-muted/40 text-muted-foreground" };
-    default:
-      return null;
-  }
-}
 
 function formatSetLine(set: Result, kind: string | null): string {
   const rpeSuffix =
@@ -113,7 +108,7 @@ export function InlineWorkoutPreview({
         supabase
           .from("pl_exercise_rows")
           .select(
-            "id, sort_order, exercise_name_override, purpose_label, time_profile, sets, reps_text, rpe, load_kg, load_lb, measurement_type, exercises(name)",
+            "id, sort_order, exercise_name_override, purpose_label, time_profile, sets, reps_text, rpe, load_kg, load_lb, measurement_type, card_color, movement_family, exercise_id, exercises(name, competition_lift_type, is_competition_lift, exercise_category)",
           )
           .eq("day_id", dayId)
           .order("sort_order", { ascending: true }),
@@ -155,8 +150,32 @@ export function InlineWorkoutPreview({
     );
   }
 
+  const allResults: Result[] = [];
+  data?.resultsByRow.forEach((list) => list.forEach((r) => allResults.push(r)));
+  const progress = computeWorkoutProgress(
+    rows.map((r) => ({ id: r.id, sets: r.sets })),
+    allResults.map((r) => ({
+      row_id: r.row_id,
+      actual_reps: r.actual_reps,
+      actual_load: r.actual_load,
+      completed_duration_seconds: r.completed_duration_seconds,
+    })),
+  );
+  const purposeLabels = derivePurposeLabels(rows as any[], (r: any) => r.exercises ?? null);
+
   return (
     <div className="space-y-2 rounded-lg border border-border/60 bg-background/60 p-2.5">
+      <div className="flex items-center gap-3 border-b border-border/50 px-1 pb-2">
+        <WorkoutProgressRing pct={progress.pct} status={progress.status} size={40} />
+        <div className="min-w-0">
+          <div className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+            Workout Progress
+          </div>
+          <div className="text-[12px] font-semibold tabular-nums text-foreground">
+            {progress.completedSets} of {progress.prescribedSets} Sets Completed
+          </div>
+        </div>
+      </div>
       {rows.map((row, i) => {
         const results = (data?.resultsByRow.get(row.id) ?? []).filter(
           (r) =>
@@ -168,7 +187,8 @@ export function InlineWorkoutPreview({
         const loggedCount = results.length;
         const isComplete = loggedCount >= prescribedSets;
         const isPartial = loggedCount > 0 && !isComplete;
-        const chip = classificationFor(row.time_profile);
+        const label = purposeLabels[i];
+        const chip = label && label.trim() ? { label: label.toUpperCase(), tone: purposeLabelBadgeClass(label) } : null;
         const name = row.exercise_name_override || row.exercises?.name || "Exercise";
         const prescribed = prescribedLine(row);
         return (
