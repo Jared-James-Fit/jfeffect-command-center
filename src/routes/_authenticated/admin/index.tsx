@@ -532,8 +532,6 @@ function AdminDashboard() {
           <StatTile label="Payments overdue" value={overdue} icon={DollarSign} tone="warn" to="/admin/payments" />
         </div>
 
-        <CoachingApplicationsTiles />
-
         {/* WORK QUEUES (desktop side-by-side with appointments) */}
         <div className="grid gap-4 lg:grid-cols-3">
           <div className="min-w-0 space-y-4 lg:col-span-2">
