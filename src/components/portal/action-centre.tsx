@@ -14,6 +14,8 @@ export type ActionItem = {
   chip?: string;
   onClick?: () => void;
   to?: string;
+  params?: Record<string, string>;
+  search?: Record<string, unknown>;
   href?: string;
 };
 
@@ -141,7 +143,7 @@ function Row({ item }: { item: ActionItem }) {
     </div>
   );
 
-  if (item.to) return <Link to={item.to} className="block">{body}</Link>;
+  if (item.to) return <Link to={item.to} params={item.params as any} search={item.search as any} className="block">{body}</Link>;
   if (item.href) return (
     <a href={item.href} target="_blank" rel="noopener noreferrer" className="block">{body}</a>
   );
