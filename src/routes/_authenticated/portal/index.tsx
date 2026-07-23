@@ -388,6 +388,7 @@ function PortalHome() {
       title: "Submit Form/Check-In/Nutrition",
       message: dueForm.kind === "external" ? "External check-in form" : "Tap to fill in",
       to: "/portal/check-ins/$formId",
+      params: { formId: dueForm.id },
       chip: "Due",
     } as any);
   }
