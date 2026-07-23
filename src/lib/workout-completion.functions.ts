@@ -793,6 +793,11 @@ const ReviewInput = z.intersection(
     fatigueFeel: z.string().nullable().optional(),
     hitTarget: z.string().nullable().optional(),
     recoveryToday: z.number().int().min(1).max(5).nullable().optional(),
+    sleepBucket: z
+      .enum(["lt5", "5_6", "6_7", "7_8", "8_9", "gte9"])
+      .nullable()
+      .optional(),
+    sleepNotes: z.string().nullable().optional(),
     // When an admin/coach is in Client POV mode, the signed-in user has no
     // `clients` row of their own. Pass the impersonated client's id and we
     // resolve scope from that — after verifying the caller really is an
