@@ -35,6 +35,42 @@ export interface RecoveryInputs {
   recentWorkouts7d?: number | null;
   /** Optional self-reported recovery for the day (1–5). Higher = better. */
   recoveryToday?: number | null;
+  /** Optional self-reported sleep bucket the night before. */
+  sleepBucket?: SleepBucket | null;
+}
+
+export type SleepBucket = "lt5" | "5_6" | "6_7" | "7_8" | "8_9" | "gte9";
+
+/** Midpoint hours for a sleep bucket. */
+export function sleepBucketHours(b: SleepBucket | null | undefined): number | null {
+  if (!b) return null;
+  switch (b) {
+    case "lt5": return 4.5;
+    case "5_6": return 5.5;
+    case "6_7": return 6.5;
+    case "7_8": return 7.5;
+    case "8_9": return 8.5;
+    case "gte9": return 9.5;
+  }
+}
+
+export function sleepBucketLabel(b: SleepBucket | null | undefined): string {
+  if (!b) return "—";
+  return { lt5: "<5h", "5_6": "5–6h", "6_7": "6–7h", "7_8": "7–8h", "8_9": "8–9h", gte9: "9h+" }[b];
+}
+
+/** Contribution of sleep to readiness score, bounded so one night can't dominate. */
+function sleepDelta(b: SleepBucket | null | undefined): { delta: number; label: string } | null {
+  if (!b) return null;
+  const map: Record<SleepBucket, { delta: number; label: string }> = {
+    lt5: { delta: -6, label: "<5h" },
+    "5_6": { delta: -3, label: "5–6h" },
+    "6_7": { delta: 1, label: "6–7h" },
+    "7_8": { delta: 4, label: "7–8h" },
+    "8_9": { delta: 5, label: "8–9h" },
+    gte9: { delta: 3, label: "9h+" },
+  };
+  return map[b];
 }
 
 export interface RecoveryReason {
@@ -174,6 +210,14 @@ export function computeRecoveryScore(inp: RecoveryInputs): RecoveryResult {
       5: "Excellent",
     };
     reasons.push({ label: "Recovery Today", value: labels[r] });
+  }
+
+  // Sleep — bounded ±6 pts so one bad night influences but doesn't determine readiness.
+  const sd = sleepDelta(inp.sleepBucket);
+  if (sd) {
+    signals++;
+    score += sd.delta;
+    reasons.push({ label: "Sleep", value: sd.label });
   }
 
   score = Math.max(0, Math.min(100, Math.round(score)));
