@@ -113,7 +113,7 @@ export function BodyweightSummaryCard({ clientId, defaultUnit = "lb" }: Props) {
   const hasData = series.length > 0;
 
   return (
-    <Card className="border-border bg-card p-5">
+    <Card id="bodyweight-card" className="border-border bg-card p-5">
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-2">
           <Scale className="h-5 w-5 text-primary" />
