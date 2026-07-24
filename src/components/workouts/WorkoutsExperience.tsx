@@ -920,6 +920,10 @@ function SelectedDayCard({
     : null;
   const hasReview = !!reviewInitial?.submittedAt;
 
+  // NOTE: must be called before any early return to preserve hook order
+  // across rest days (item === null) and active days.
+  const { data: progress } = useWorkoutProgress(item?.day?.id, clientId);
+
   const handleReset = async () => {
     if (!dayId) return;
     setResetting(true);
@@ -1018,7 +1022,6 @@ function SelectedDayCard({
   const title = cleanDayTitle(item.day?.title, item.day?.day_index);
   const dur = item.day?.duration_override_min ?? item.day?.duration_estimate_min ?? null;
   const cta = primaryCtaFor(item, status.status);
-  const { data: progress } = useWorkoutProgress(item.day?.id, clientId);
 
   return (
     <>
