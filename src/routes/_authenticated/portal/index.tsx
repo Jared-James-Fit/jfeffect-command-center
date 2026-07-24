@@ -450,7 +450,7 @@ function PortalHome() {
 
         {/* 1 — Action Centre (top priority) */}
         <SectionErrorBoundary label="Action centre">
-          <ActionCentre items={actions.slice(0, 5)} />
+          <ActionCentre items={actions.slice(0, 5)} clientId={client?.id ?? null} />
         </SectionErrorBoundary>
 
         {/* 2 — Bodyweight tracker (syncs with Progress > Weight tracker) */}
