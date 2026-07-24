@@ -1,6 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { z } from "zod";
+import { zodValidator, fallback } from "@tanstack/zod-adapter";
 import { supabase } from "@/integrations/supabase/client";
 import { usePortalUserId } from "@/lib/client-impersonation";
 import { PageHeader } from "@/components/app-shell";
@@ -12,7 +14,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { ActionButton } from "@/components/action-button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { Plus, Video, ChevronRight, MoreVertical, Pencil, Link2, Trash2, Settings2 } from "lucide-react";
+import { Plus, Video, ChevronRight, MoreVertical, Pencil, Link2, Trash2, Settings2, Inbox, Upload as UploadIcon, CheckCircle2 } from "lucide-react";
 import { formatDistanceToNow, parseISO } from "date-fns";
 import { toast } from "sonner";
 import { listLiftVideos, markClientViewed, statusTone, deleteLiftVideos, type LiftVideo } from "@/lib/lift-videos";
@@ -23,20 +25,51 @@ import { useLiftUploadActiveCount, useLiftUploadState } from "@/lib/lift-upload-
 import { useBlocker } from "@tanstack/react-router";
 import { AlertTriangle, Loader2 } from "lucide-react";
 import { Progress } from "@/components/ui/progress";
+import { cn } from "@/lib/utils";
+
+const searchSchema = z.object({
+  tab: fallback(z.enum(["replies", "upload"]), "upload").default("upload"),
+  openId: fallback(z.string(), "").default(""),
+  unread: fallback(z.coerce.number(), 0).default(0),
+});
 
 export const Route = createFileRoute("/_authenticated/portal/lift-videos")({
+  validateSearch: zodValidator(searchSchema),
   component: ClientLiftVideos,
 });
+
+const TAB_KEY = "jf:lift-videos:tab:v1";
 
 function ClientLiftVideos() {
   const portalUserId = usePortalUserId();
   const qc = useQueryClient();
+  const search = Route.useSearch();
+  const navigate = Route.useNavigate();
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<LiftVideo | null>(null);
   const [detailKey, setDetailKey] = useState<string | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [deleting, setDeleting] = useState(false);
   const [manageMode, setManageMode] = useState(false);
+
+  // Tab: URL wins; otherwise last-used from localStorage; default upload.
+  const initialTab = useMemo<"replies" | "upload">(() => {
+    if (search.tab === "replies") return "replies";
+    if (search.tab === "upload") return "upload";
+    if (typeof window !== "undefined") {
+      const saved = window.localStorage.getItem(TAB_KEY);
+      if (saved === "replies" || saved === "upload") return saved;
+    }
+    return "upload";
+  }, [search.tab]);
+  const [tab, setTab] = useState<"replies" | "upload">(initialTab);
+  useEffect(() => { setTab(initialTab); }, [initialTab]);
+  const changeTab = (next: "replies" | "upload") => {
+    setTab(next);
+    try { window.localStorage.setItem(TAB_KEY, next); } catch { /* noop */ }
+    navigate({ search: (prev: any) => ({ ...prev, tab: next }), replace: true });
+  };
+  const unreadOnly = tab === "replies" && Number(search.unread) > 0;
 
   const { data: client } = useQuery({
     queryKey: ["my-client-id", portalUserId],
@@ -104,6 +137,20 @@ function ClientLiftVideos() {
 
   const openGroup = detailKey ? groups.find((g) => g.key === detailKey) : null;
 
+  // Deep-link: `?openId=<videoId>` auto-opens that video's group once loaded.
+  const openIdParam = search.openId || "";
+  const autoOpenedRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!openIdParam) return;
+    if (autoOpenedRef.current === openIdParam) return;
+    const g = groups.find((gr) => gr.clips.some((c) => c.id === openIdParam));
+    if (!g) return;
+    autoOpenedRef.current = openIdParam;
+    setDetailKey(g.key);
+    // Strip openId from the URL so refresh does not re-trigger.
+    navigate({ search: (prev: any) => ({ ...prev, openId: undefined }), replace: true });
+  }, [openIdParam, groups, navigate]);
+
   const allSelected = groups.length > 0 && groups.every((g) => selected.has(g.key));
   const someSelected = selected.size > 0 && !allSelected;
   const toggleOne = (key: string) => {
@@ -151,13 +198,23 @@ function ClientLiftVideos() {
       <PageHeader title="Coach Feedback" subtitle="Send lifts for coach review and read replies." />
       <UploadGuard />
       <div className="space-y-4 p-4 pb-32 sm:p-6 md:p-8 md:pb-32 min-w-0 max-w-full overflow-x-hidden">
+        {/* Context tabs — deep-links from the Action Centre land on Replies. */}
+        <div className="flex rounded-full border border-border bg-card p-1">
+          <TabBtn active={tab === "replies"} onClick={() => changeTab("replies")}>
+            <Inbox className="h-3.5 w-3.5" /> Replies
+          </TabBtn>
+          <TabBtn active={tab === "upload"} onClick={() => changeTab("upload")}>
+            <UploadIcon className="h-3.5 w-3.5" /> Upload Lift
+          </TabBtn>
+        </div>
+
         {!client && (
           <Card className="border-border bg-card p-6 text-sm text-muted-foreground">
             Your coach hasn't set up your profile yet. Uploads will be available once they do.
           </Card>
         )}
 
-        {client && (
+        {client && tab === "upload" && (
           <ClientLiftVideoUploader
             clientId={client.id}
             clientName={(client as any).full_name}
@@ -166,7 +223,7 @@ function ClientLiftVideos() {
           />
         )}
 
-        {client && videos.length === 0 && (
+        {client && videos.length === 0 && tab === "upload" && (
           <Card className="border-border bg-card p-10 text-center text-sm text-muted-foreground">
             No lift videos yet. Upload your first lift above.
           </Card>
@@ -174,34 +231,69 @@ function ClientLiftVideos() {
 
         {/* ── Video Review Hub ─────────────────────────────────────────── */}
         {(() => {
+          if (tab !== "replies") return null;
           const reviewedGroups = groups.filter((g) => {
             const fb = feedbackLabel(g.clips);
             return fb === "Reviewed by Jared" || fb === "Feedback Added";
           });
-          const unreadCount = reviewedGroups.filter((g) =>
-            g.clips.some((c) => c.reviewed_at && (!c.client_last_viewed_at || new Date(c.client_last_viewed_at) < new Date(c.reviewed_at!)))
-          ).length;
-          if (reviewedGroups.length === 0) return null;
+          const isGroupUnread = (g: typeof reviewedGroups[number]) =>
+            g.clips.some(
+              (c) =>
+                c.reviewed_at &&
+                (!c.client_last_viewed_at ||
+                  new Date(c.client_last_viewed_at) < new Date(c.reviewed_at!)),
+            );
+          const unreadGroups = reviewedGroups.filter(isGroupUnread);
+          const readGroups = reviewedGroups.filter((g) => !isGroupUnread(g));
+          // When arriving from the notification with unread=1, show unread only.
+          const listed = unreadOnly ? unreadGroups : [...unreadGroups, ...readGroups];
+
+          if (reviewedGroups.length === 0) {
+            return (
+              <Card className="border-border bg-card p-8 text-center">
+                <CheckCircle2 className="mx-auto mb-2 h-6 w-6 text-emerald-500" />
+                <div className="text-sm font-semibold">No new coach feedback</div>
+                <div className="mt-1 text-xs text-muted-foreground">
+                  When your coach reviews a lift, their reply lands here.
+                </div>
+              </Card>
+            );
+          }
+          if (unreadOnly && unreadGroups.length === 0) {
+            return (
+              <Card className="border-border bg-card p-8 text-center">
+                <CheckCircle2 className="mx-auto mb-2 h-6 w-6 text-emerald-500" />
+                <div className="text-sm font-semibold">No new coach feedback</div>
+                <button
+                  type="button"
+                  onClick={() => navigate({ search: (p: any) => ({ ...p, unread: undefined }), replace: true })}
+                  className="mt-2 text-xs font-semibold uppercase tracking-wider text-primary hover:underline"
+                >
+                  Show all replies
+                </button>
+              </Card>
+            );
+          }
           return (
             <Card className="border-primary/20 bg-card p-4">
               <div className="flex items-center justify-between mb-3">
                 <div className="flex items-center gap-2">
                   <Video className="h-4 w-4 text-primary" />
                   <h3 className="text-sm font-bold">Video Reviews</h3>
-                  {unreadCount > 0 && (
+                  {unreadGroups.length > 0 && (
                     <span className="rounded-full bg-primary/15 px-2 py-0.5 text-[10px] font-bold uppercase tracking-widest text-primary">
-                      {unreadCount} unread
+                      {unreadGroups.length} unread
                     </span>
                   )}
                 </div>
                 <div className="text-xs text-muted-foreground">
-                  {reviewedGroups.length} reviewed
+                  {unreadOnly ? `${unreadGroups.length} unread` : `${reviewedGroups.length} reviewed`}
                 </div>
               </div>
               <ul className="divide-y divide-border/60">
-                {reviewedGroups.slice(0, 5).map((g) => {
+                {listed.slice(0, 20).map((g) => {
                   const v = g.clips[0];
-                  const isUnread = v.reviewed_at && (!v.client_last_viewed_at || new Date(v.client_last_viewed_at) < new Date(v.reviewed_at!));
+                  const isUnread = isGroupUnread(g);
                   return (
                     <li key={g.key}>
                       <button
@@ -232,16 +324,11 @@ function ClientLiftVideos() {
                   );
                 })}
               </ul>
-              {reviewedGroups.length > 5 && (
-                <div className="mt-2 text-center text-xs text-muted-foreground">
-                  +{reviewedGroups.length - 5} more reviewed videos below
-                </div>
-              )}
             </Card>
           );
         })()}
 
-        {groups.length > 0 && (
+        {groups.length > 0 && tab === "upload" && (
           <div className="flex items-center justify-between px-1">
             <div className="text-xs text-muted-foreground">
               {groups.length} submission{groups.length === 1 ? "" : "s"}
@@ -300,6 +387,7 @@ function ClientLiftVideos() {
           </div>
         )}
 
+        {tab === "upload" && (
         <div className="space-y-2">
           {groups.map((g) => {
             const v = g.head;
@@ -409,6 +497,7 @@ function ClientLiftVideos() {
             );
           })}
         </div>
+        )}
       </div>
 
       <Dialog open={!!openGroup} onOpenChange={(o) => { if (!o) setDetailKey(null); }}>
@@ -544,5 +633,22 @@ function ClipUploadRow({ videoId, fallbackName }: { videoId: string; fallbackNam
       </div>
       <Progress value={state.status === "done" ? 100 : state.progress} className="h-1" />
     </div>
+  );
+}
+
+function TabBtn({
+  active, onClick, children,
+}: { active: boolean; onClick: () => void; children: React.ReactNode }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        "flex flex-1 items-center justify-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold uppercase tracking-wider transition",
+        active ? "bg-primary text-primary-foreground shadow-sm" : "text-muted-foreground hover:text-foreground",
+      )}
+    >
+      {children}
+    </button>
   );
 }

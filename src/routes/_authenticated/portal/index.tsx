@@ -189,6 +189,7 @@ function PortalHome() {
         (supabase.from("lift_videos") as any)
           .select("id, exercise, watched_at, liked_at, reviewed_at, status, client_last_viewed_at, updated_at")
           .eq("client_id", client!.id)
+          .eq("archived", false)
           .order("updated_at", { ascending: false })
           .limit(20),
         (supabase.from("lift_video_comments") as any)
@@ -367,6 +368,12 @@ function PortalHome() {
   if (liftPings.length > 0) {
     const count = liftPings.length;
     const firstExercise = liftPings[0]?.exercise || "Lift video";
+    // Direct navigation: single unread reply jumps into that video's thread;
+    // multiple unread replies open the Replies tab filtered to unread only.
+    const search: Record<string, unknown> =
+      count === 1
+        ? { tab: "replies", openId: liftPings[0].videoId }
+        : { tab: "replies", unread: 1 };
     actions.push({
       key: "lift-reviews-grouped",
       icon: Dumbbell,
@@ -374,6 +381,7 @@ function PortalHome() {
       title: count === 1 ? `Coach feedback on ${firstExercise}` : `${count} new coach feedback replies`,
       message: count === 1 ? (liftPings[0]?.preview || "Coach reviewed your video.") : `Coach reviewed ${count} videos. Tap to view.`,
       to: "/portal/lift-videos",
+      search,
       chip: count > 1 ? String(count) : "New",
     });
   }
