@@ -286,7 +286,11 @@ async function ensureNextOccurrence(
   const tz = await resolveClientTz(supabase, clientId, sched);
   const next = computeNextDueUtc(sched, tz, after);
   if (!next) return;
-  const { error } = await supabase.from("client_task_occurrences").insert({
+  // Occurrence generation is a system-side write (client role has no INSERT
+  // policy on client_task_occurrences). Use the admin client so bootstrap /
+  // completion flows can seed the next row regardless of the caller.
+  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+  const { error } = await supabaseAdmin.from("client_task_occurrences").insert({
     client_id: clientId,
     task_type: taskType,
     title: sched.title,
