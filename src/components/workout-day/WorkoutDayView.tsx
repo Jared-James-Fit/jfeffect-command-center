@@ -9,10 +9,11 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, Clock, CheckCircle2, Circle, Play, StickyNote, NotebookPen, Info, Maximize2, Minimize2, AlertTriangle, RefreshCw, Send, MessageCircle, ChevronDown, ChevronUp, Move, Zap, Trophy } from "lucide-react";
+import { ArrowLeft, Clock, CheckCircle2, Circle, Play, StickyNote, NotebookPen, Info, Maximize2, Minimize2, AlertTriangle, RefreshCw, Send, MessageCircle, ChevronDown, ChevronUp, Move, Zap, Trophy, MoreHorizontal, Undo2, HelpCircle } from "lucide-react";
 import { MoveWorkoutSheet } from "@/components/schedule/MoveWorkoutSheet";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { getExerciseVideoSource } from "@/lib/exercise-video";
 import { useExerciseVideoSetGlobal } from "@/hooks/use-exercise-video-set";
 import { toast } from "sonner";
@@ -31,7 +32,7 @@ import { useUnsavedWarning } from "@/hooks/use-unsaved-warning";
 import { useBodyScrollLock } from "@/hooks/use-body-scroll-lock";
 import { SaveStatus } from "@/components/save-status";
 import { ActionButton } from "@/components/action-button";
-import { TrainingHelpButton } from "@/components/training-help-sheet";
+import { TrainingHelpButton, TrainingHelpSheet } from "@/components/training-help-sheet";
 import { WarmupButton } from "@/components/warmup-sheet";
 import { dayScheduledDate, cleanDayTitle } from "@/lib/workout-today";
 import { formatDayLabel, formatDaySubtitle, formatTrainingDate } from "@/lib/workout-day-label";
@@ -52,7 +53,7 @@ import { useClientImpersonation } from "@/lib/client-impersonation";
 import { writeSetEditAudit } from "@/lib/logged-set-audit";
 import { resolveExerciseUnit, modeUnit, saveExerciseUnitPref, type WUnit } from "@/lib/exercise-unit-prefs";
 import { persistedUnitForValue } from "@/lib/workout-unit-persistence";
-import { WorkoutUndoProvider, useWorkoutUndo, UndoButton } from "@/lib/workout-undo";
+import { WorkoutUndoProvider, useWorkoutUndo } from "@/lib/workout-undo";
 import { WorkoutSyncBanner } from "@/components/workout-sync-banner";
 import { writePlanCache, cachedInitialData } from "@/lib/workout-plan-cache";
 import { enqueueOfflineWrite, registerQueueHandler } from "@/lib/workout-offline-queue";
@@ -82,6 +83,7 @@ import {
 import { useWorkoutHeartbeat, readHeartbeatTimestamps, clearHeartbeatTimestamps } from "@/hooks/use-workout-heartbeat";
 import { computeActiveSeconds } from "@/lib/workout-duration";
 import { LoggingQualityBadge } from "@/components/workout/shared/logging-quality-badge";
+import { WorkoutProgressRing } from "@/components/workout/shared/workout-progress-ring";
 import { CompletedWorkoutActions } from "@/components/workout/shared/completed-workout-actions";
 import { WorkoutStatusBar } from "@/components/workout-day/WorkoutStatusBar";
 import {
@@ -1531,31 +1533,11 @@ function WorkoutDay({
         })()}
         actions={
           !readonly ? (
-            <div className="flex items-center gap-2">
-              <WorkoutTimer
-                startedAt={
-                  (effectiveWorkoutStart(
-                    completion?.started_at ?? completion?.in_progress_at ?? null,
-                    readWorkoutPageOpenAt(dayId),
-                  )?.toISOString()) ?? null
-                }
-                completedAt={completion?.completed_at ?? null}
-              />
-              <UndoButton />
-            </div>
+            <WorkoutTopMenu />
           ) : undefined
         }
       />
       <div className="p-4 md:p-8 space-y-4 pb-[calc(var(--bottom-nav-clearance,96px)+env(safe-area-inset-bottom)+24px)] md:pb-8">
-
-        {statusBarVisible && (
-          <WorkoutStatusBar
-            exercisesDone={statusSummary.exercisesDone}
-            exercisesTotal={statusSummary.exercisesTotal}
-            setsDone={statusSummary.setsDone}
-            setsTotal={statusSummary.setsTotal}
-          />
-        )}
 
         <WorkoutSyncBanner
           clientId={client?.id ?? null}
@@ -1563,13 +1545,8 @@ function WorkoutDay({
           pageRoute={`/portal/workouts/${dayId}`}
         />
 
-        <div className="flex flex-wrap items-center gap-2">
-          <Badge variant="outline"><Clock className="mr-1 h-3 w-3" /> {(() => {
-            // Prefer a coach-set override; otherwise derive from prescribed
-            // sets + per-row rest so the pill matches what's actually
-            // programmed instead of a stale 60-min default. Hardened with a
-            // try/catch so a malformed row never crashes the whole workout
-            // screen — fall back to the static estimate on any failure.
+        <CompactWorkoutSummaryRow
+          durationLabel={(() => {
             try {
               if (day.duration_override_min) return durationRange(day.duration_override_min);
               const safeRows = Array.isArray(rows) ? (rows as any[]) : [];
@@ -1586,24 +1563,20 @@ function WorkoutDay({
               console.warn("[WorkoutDayView] duration pill fallback:", e);
             }
             return durationRange(day.duration_estimate_min ?? 60);
-          })()}</Badge>
-          {completion?.completed_at && (
-            <>
-              <Badge variant="outline" className="text-green-500 border-green-500/30 bg-green-500/10"><CheckCircle2 className="mr-1 h-3 w-3" /> Completed</Badge>
-              <Button
-                size="sm"
-                variant="outline"
-                className="h-7 gap-1.5 border-primary/40 bg-primary/10 px-2.5 text-xs font-bold text-primary hover:bg-primary/20"
-                onClick={openRecapSummary}
-              >
-                <Trophy className="h-3.5 w-3.5" /> View Score
-              </Button>
-            </>
-          )}
-          {completion && !completion.completed_at && (completion.in_progress_at || completion.started_at) && (
-            <Badge variant="outline" className="border-amber-500/30 bg-amber-500/10 text-amber-500">In progress</Badge>
-          )}
-          {(() => {
+          })()}
+          setsDone={statusSummary.setsDone}
+          setsTotal={statusSummary.setsTotal}
+          exercisesDone={statusSummary.exercisesDone}
+          exercisesTotal={statusSummary.exercisesTotal}
+          startedAt={
+            (effectiveWorkoutStart(
+              completion?.started_at ?? completion?.in_progress_at ?? null,
+              readWorkoutPageOpenAt(dayId),
+            )?.toISOString()) ?? null
+          }
+          completedAt={completion?.completed_at ?? null}
+          onViewScore={completion?.completed_at ? openRecapSummary : undefined}
+          loggingQuality={(() => {
             try {
               const required: RequiredRowSpec[] = (rows as any[]).map((r: any) => ({
                 rowId: String(r.id),
@@ -1628,34 +1601,23 @@ function WorkoutDay({
               }));
               if (required.length === 0) return null;
               const sum = summarizeCompleteness(required, logged);
-              return <LoggingQualityBadge quality={sum.loggingQuality} percentage={sum.loggingPercentage} />;
+              return { quality: sum.loggingQuality, percentage: sum.loggingPercentage };
             } catch { return null; }
           })()}
-          <div className="ml-auto flex items-center gap-2">
-            {/* Global KG/LB toggle removed — per-exercise unit controls remain
-                the single source of truth for unit selection. */}
-            {!readonly && (
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => setMoveOpen(true)}
-                className="h-9 gap-1"
-                aria-label="Move workout to another date"
-              >
-                <Move className="h-4 w-4" /> Move
-              </Button>
-            )}
-            {!readonly && (
-              <Button
-                size="lg"
-                onClick={() => setFocusMode(true)}
-                className="h-11 gap-2 bg-gradient-to-r from-primary to-primary/80 px-5 text-base font-bold text-primary-foreground shadow-lg shadow-primary/30 hover:from-primary/90 hover:to-primary/70 hover:shadow-primary/40"
-              >
-                <Maximize2 className="h-5 w-5" /> Full Screen
-              </Button>
-            )}
+        />
+        {!readonly && (
+          <div>
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => setMoveOpen(true)}
+              className="h-8 gap-1 px-2 text-xs text-muted-foreground hover:text-foreground"
+              aria-label="Move workout to another date"
+            >
+              <Move className="h-3.5 w-3.5" /> Move
+            </Button>
           </div>
-        </div>
+        )}
 
         {isImpersonating && client?.id && (!adapter || adapter.kind !== "member") && (
           <Card className="border-primary/30 bg-primary/5 p-3">
@@ -1751,7 +1713,6 @@ function WorkoutDay({
               dayProtocolId={(day as any).warmup_protocol_id}
               exerciseRows={rows as any[]}
             />
-            <TrainingHelpButton size="sm" variant="outline" />
           </div>
         )}
 
@@ -4202,5 +4163,134 @@ function WorkoutLoadFailureCard({
         </Button>
       </div>
     </Card>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/* Compact top-of-page summary + overflow menu                                 */
+/* -------------------------------------------------------------------------- */
+
+function WorkoutTopMenu() {
+  const { undo, canUndo } = useWorkoutUndo();
+  const [helpOpen, setHelpOpen] = useState(false);
+  return (
+    <>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button
+            size="icon"
+            variant="ghost"
+            className="h-9 w-9 text-muted-foreground hover:text-foreground"
+            aria-label="More actions"
+          >
+            <MoreHorizontal className="h-5 w-5" />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="w-44">
+          <DropdownMenuItem disabled={!canUndo} onSelect={() => void undo()}>
+            <Undo2 className="mr-2 h-4 w-4" /> Undo
+          </DropdownMenuItem>
+          <DropdownMenuItem onSelect={() => setHelpOpen(true)}>
+            <HelpCircle className="mr-2 h-4 w-4" /> Help
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+      <TrainingHelpSheet open={helpOpen} onOpenChange={setHelpOpen} />
+    </>
+  );
+}
+
+function scrollToFirstIncompleteExercise() {
+  if (typeof document === "undefined") return;
+  const target =
+    document.querySelector<HTMLElement>("[data-exercise-status='incomplete']") ??
+    document.querySelector<HTMLElement>("[data-workout-exercise]");
+  if (target && typeof target.scrollIntoView === "function") {
+    target.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+}
+
+function CompactWorkoutSummaryRow({
+  durationLabel,
+  setsDone,
+  setsTotal,
+  exercisesDone,
+  exercisesTotal,
+  startedAt,
+  completedAt,
+  onViewScore,
+  loggingQuality,
+}: {
+  durationLabel: string;
+  setsDone: number;
+  setsTotal: number;
+  exercisesDone: number;
+  exercisesTotal: number;
+  startedAt: string | null;
+  completedAt: string | null;
+  onViewScore?: () => void;
+  loggingQuality: { quality: any; percentage: number } | null;
+}) {
+  const pct = setsTotal > 0 ? Math.min(100, Math.round((setsDone / setsTotal) * 100)) : 0;
+  const status: import("@/lib/workout-progress").WorkoutProgressStatus =
+    completedAt || (setsTotal > 0 && setsDone >= setsTotal)
+      ? "completed"
+      : setsDone > 0
+        ? "in_progress"
+        : "not_started";
+  const showTimer = !!startedAt;
+  return (
+    <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-xs text-muted-foreground">
+      {showTimer && (
+        <div className="inline-flex items-center gap-1.5 rounded-md bg-secondary/60 px-2 py-1">
+          <Clock className="h-3.5 w-3.5 text-primary" />
+          <span className="font-semibold uppercase tracking-wide text-[10px] text-muted-foreground">
+            Workout Session
+          </span>
+          <WorkoutTimer startedAt={startedAt} completedAt={completedAt} className="ml-0.5" />
+        </div>
+      )}
+      <button
+        type="button"
+        onClick={scrollToFirstIncompleteExercise}
+        className="inline-flex items-center gap-2 rounded-md px-1 py-1 tabular-nums transition-colors hover:bg-secondary/60 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+        aria-label={`Workout progress ${pct}%, ${exercisesDone} of ${exercisesTotal} exercises. Scroll to first incomplete exercise.`}
+      >
+        <WorkoutProgressRing pct={pct} status={status} size={28} strokeWidth={3} />
+        <span className="font-bold text-foreground">
+          {pct}% · {exercisesDone}/{exercisesTotal}
+        </span>
+      </button>
+      <span className="inline-flex items-center gap-1 text-muted-foreground">
+        <span aria-hidden className="opacity-40">•</span>
+        {durationLabel}
+      </span>
+      {loggingQuality && (
+        <LoggingQualityBadge
+          quality={loggingQuality.quality}
+          percentage={loggingQuality.percentage}
+        />
+      )}
+      {completedAt && (
+        <>
+          <Badge
+            variant="outline"
+            className="border-green-500/30 bg-green-500/10 text-green-500"
+          >
+            <CheckCircle2 className="mr-1 h-3 w-3" /> Completed
+          </Badge>
+          {onViewScore && (
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-7 gap-1.5 border-primary/40 bg-primary/10 px-2.5 text-xs font-bold text-primary hover:bg-primary/20"
+              onClick={onViewScore}
+            >
+              <Trophy className="h-3.5 w-3.5" /> View Score
+            </Button>
+          )}
+        </>
+      )}
+    </div>
   );
 }
