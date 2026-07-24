@@ -63,8 +63,6 @@ import { RestTimerButton } from "@/components/workout-day/RestTimerButton";
 import { ExerciseHistoryButton } from "@/components/exercise-history-sheet";
 import { QuickSwapButton } from "@/components/workout-day/QuickSwapButton";
 import { convertWeight } from "@/lib/progress-metrics";
-import { submitOrEditReview } from "@/lib/workout-completion.functions";
-void submitOrEditReview;
 import { DurationTimerInCard } from "@/components/workout-day/DurationTimerInCard";
 import { WorkoutSubmissionSummary } from "@/components/workout-submission-summary";
 import { computeWorkoutSummary, type WorkoutSummary } from "@/lib/workout-summary";
