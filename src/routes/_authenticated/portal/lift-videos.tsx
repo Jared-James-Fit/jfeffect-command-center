@@ -148,7 +148,7 @@ function ClientLiftVideos() {
 
   return (
     <>
-      <PageHeader title="Lift Videos" subtitle="Send lifts for coach review." />
+      <PageHeader title="Coach Feedback" subtitle="Send lifts for coach review and read replies." />
       <UploadGuard />
       <div className="space-y-4 p-4 pb-32 sm:p-6 md:p-8 md:pb-32 min-w-0 max-w-full overflow-x-hidden">
         {!client && (

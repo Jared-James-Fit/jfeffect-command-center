@@ -382,3 +382,152 @@ export const setClientTimeZone = createServerFn({ method: "POST" })
     await context.supabase.from("clients").update({ timezone: data.timeZone }).eq("id", row.id);
     return { ok: true, reason: null, unchanged: false };
   });
+
+// ============================================================
+// Admin scheduling (Phase 3)
+// RLS on coach_task_definitions / client_task_overrides restricts writes to
+// admins via public.has_role; these fns act as the signed-in user, so
+// non-admins are rejected at the DB layer.
+// ============================================================
+
+export type TaskDefinition = {
+  id: string;
+  task_type: string;
+  title: string;
+  enabled: boolean;
+  frequency: "weekly" | "biweekly" | "monthly" | "custom_days" | "daily" | "manual";
+  interval_days: number | null;
+  due_day_of_week: number | null;
+  due_time_local: string;
+  tz_mode: "client" | "coach" | "fixed";
+  fixed_tz: string | null;
+  reminder_offsets: number[];
+  overdue_after_days: number | null;
+  reminder_after_days: number | null;
+  form_id: string | null;
+};
+
+export type TaskOverride = {
+  id: string;
+  client_id: string;
+  task_type: string;
+  enabled: boolean | null;
+  frequency: string | null;
+  interval_days: number | null;
+  due_day_of_week: number | null;
+  due_time_local: string | null;
+  tz_mode: string | null;
+  fixed_tz: string | null;
+  reminder_offsets: number[] | null;
+  overdue_after_days: number | null;
+  reminder_after_days: number | null;
+};
+
+export const listTaskDefinitions = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }): Promise<TaskDefinition[]> => {
+    const { data, error } = await context.supabase
+      .from("coach_task_definitions")
+      .select("*")
+      .order("task_type", { ascending: true });
+    if (error) throw new Error(error.message);
+    return (data ?? []) as TaskDefinition[];
+  });
+
+const definitionPatchSchema = z.object({
+  task_type: z.string().min(1).max(64),
+  title: z.string().min(1).max(120).optional(),
+  enabled: z.boolean().optional(),
+  frequency: z.enum(["weekly", "biweekly", "monthly", "custom_days", "daily", "manual"]).optional(),
+  interval_days: z.number().int().min(1).max(365).nullable().optional(),
+  due_day_of_week: z.number().int().min(0).max(6).nullable().optional(),
+  due_time_local: z.string().regex(/^\d{2}:\d{2}(:\d{2})?$/).optional(),
+  tz_mode: z.enum(["client", "coach", "fixed"]).optional(),
+  fixed_tz: z.string().max(64).nullable().optional(),
+  reminder_offsets: z.array(z.number().int().min(-30).max(30)).optional(),
+  overdue_after_days: z.number().int().min(0).max(60).nullable().optional(),
+  reminder_after_days: z.number().int().min(0).max(60).nullable().optional(),
+});
+
+export const upsertTaskDefinition = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => definitionPatchSchema.parse(d))
+  .handler(async ({ data, context }) => {
+    const { task_type, ...patch } = data;
+    const { data: existing } = await context.supabase
+      .from("coach_task_definitions").select("id").eq("task_type", task_type).maybeSingle();
+    if (existing) {
+      const { error } = await context.supabase
+        .from("coach_task_definitions")
+        .update({ ...patch, updated_at: new Date().toISOString() })
+        .eq("task_type", task_type);
+      if (error) throw new Error(error.message);
+    } else {
+      const { error } = await context.supabase
+        .from("coach_task_definitions")
+        .insert({ task_type, title: patch.title ?? task_type, ...patch });
+      if (error) throw new Error(error.message);
+    }
+    return { ok: true };
+  });
+
+export const listClientOverrides = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { clientId: string }) => z.object({ clientId: z.string().uuid() }).parse(d))
+  .handler(async ({ data, context }): Promise<TaskOverride[]> => {
+    const { data: rows, error } = await context.supabase
+      .from("client_task_overrides")
+      .select("*")
+      .eq("client_id", data.clientId);
+    if (error) throw new Error(error.message);
+    return (rows ?? []) as TaskOverride[];
+  });
+
+const overridePatchSchema = z.object({
+  clientId: z.string().uuid(),
+  task_type: z.string().min(1).max(64),
+  enabled: z.boolean().nullable().optional(),
+  frequency: z.enum(["weekly", "biweekly", "monthly", "custom_days", "daily", "manual"]).nullable().optional(),
+  interval_days: z.number().int().min(1).max(365).nullable().optional(),
+  due_day_of_week: z.number().int().min(0).max(6).nullable().optional(),
+  due_time_local: z.string().regex(/^\d{2}:\d{2}(:\d{2})?$/).nullable().optional(),
+  tz_mode: z.enum(["client", "coach", "fixed"]).nullable().optional(),
+  fixed_tz: z.string().max(64).nullable().optional(),
+  reminder_offsets: z.array(z.number().int().min(-30).max(30)).nullable().optional(),
+});
+
+export const upsertTaskOverride = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => overridePatchSchema.parse(d))
+  .handler(async ({ data, context }) => {
+    const { clientId, task_type, ...patch } = data;
+    const { data: existing } = await context.supabase
+      .from("client_task_overrides").select("id")
+      .eq("client_id", clientId).eq("task_type", task_type).maybeSingle();
+    if (existing) {
+      const { error } = await context.supabase
+        .from("client_task_overrides")
+        .update({ ...patch, updated_at: new Date().toISOString() })
+        .eq("client_id", clientId).eq("task_type", task_type);
+      if (error) throw new Error(error.message);
+    } else {
+      const { error } = await context.supabase
+        .from("client_task_overrides")
+        .insert({ client_id: clientId, task_type, ...patch });
+      if (error) throw new Error(error.message);
+    }
+    return { ok: true };
+  });
+
+export const resetTaskOverride = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { clientId: string; task_type: string }) =>
+    z.object({ clientId: z.string().uuid(), task_type: z.string().min(1).max(64) }).parse(d))
+  .handler(async ({ data, context }) => {
+    const { error } = await context.supabase
+      .from("client_task_overrides")
+      .delete()
+      .eq("client_id", data.clientId).eq("task_type", data.task_type);
+    if (error) throw new Error(error.message);
+    return { ok: true };
+  });
