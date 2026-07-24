@@ -17,7 +17,7 @@
  *   Historical submissions remain fully intact.
  */
 import { useEffect, useState } from "react";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import {
   Sheet,
@@ -181,6 +181,7 @@ export function WorkoutReviewEditor({
   actAsClientId,
 }: Props) {
   const submit = useServerFn(submitOrEditReview);
+  const qc = useQueryClient();
   const isEdit = !!initial?.submittedAt;
 
   const [status, setStatus] = useState<StatusKey | null>(() => inferStatus(initial));
@@ -230,6 +231,16 @@ export function WorkoutReviewEditor({
     },
     onSuccess: (res: any) => {
       toast.success(res?.edited ? "Review updated." : "Review saved.");
+      // Recovery/sleep answers feed the Training Readiness ring. Invalidate
+      // both member and coaching readiness queries so the ring reflects the
+      // just-saved (or edited/cleared) Recovery value immediately.
+      qc.invalidateQueries({ queryKey: ["training-readiness"] });
+      qc.invalidateQueries({
+        predicate: (q) => {
+          const k = q.queryKey?.[0];
+          return typeof k === "string" && (k.startsWith("recovery") || k === "readiness");
+        },
+      });
       onSaved?.();
       onViewScore?.(selectedCard?.overallRating ?? null);
       onOpenChange(false);

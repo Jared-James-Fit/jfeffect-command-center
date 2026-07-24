@@ -275,13 +275,15 @@ export async function fetchRecoveryScoreSeries(
   // Sleep buckets from pl_workout_feedback, keyed by completion_id.
   let fbQ = supabase
     .from("pl_workout_feedback")
-    .select("completion_id, sleep_bucket")
-    .eq("client_id", clientId)
-    .not("sleep_bucket", "is", null);
+    .select("completion_id, sleep_bucket, recovery_today")
+    .eq("client_id", clientId);
   const { data: feedbacks } = await fbQ;
   const sleepByCompletion = new Map<string, SleepBucket>();
+  const recoveryByCompletion = new Map<string, number>();
   for (const f of (feedbacks ?? []) as any[]) {
-    if (f.completion_id && f.sleep_bucket) sleepByCompletion.set(f.completion_id, f.sleep_bucket);
+    if (!f.completion_id) continue;
+    if (f.sleep_bucket) sleepByCompletion.set(f.completion_id, f.sleep_bucket);
+    if (f.recovery_today != null) recoveryByCompletion.set(f.completion_id, Number(f.recovery_today));
   }
 
   // 3) Row results (for avg RPE/RIR per session)
@@ -356,6 +358,7 @@ export async function fetchRecoveryScoreSeries(
       overallRating: c.session_rating ?? null,
       sessionRpe: effRpe,
       sleepBucket: sleepByCompletion.get(c.id) ?? null,
+      recoveryToday: recoveryByCompletion.get(c.id) ?? null,
     });
     if (s.hasData) out.push({ ts: c.completed_at, score: s.score });
   }

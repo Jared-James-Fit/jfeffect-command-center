@@ -134,11 +134,11 @@ function buildRecoveryFeel(samples: Array<{ ts: string; rating: number }>): Fact
     };
   }
   const map: Record<number, { s: number; label: string }> = {
-    1: { s: 25, label: "Very Poor" },
-    2: { s: 45, label: "Poor" },
-    3: { s: 65, label: "Average" },
-    4: { s: 85, label: "Good" },
-    5: { s: 96, label: "Excellent" },
+    1: { s: 20, label: "Very Poor" },
+    2: { s: 40, label: "Poor" },
+    3: { s: 60, label: "Average" },
+    4: { s: 80, label: "Good" },
+    5: { s: 100, label: "Excellent" },
   };
   const info = map[Math.round(latest.rating)] ?? map[3];
   const last7 = samples.slice(-7).map((s) => s.rating);
