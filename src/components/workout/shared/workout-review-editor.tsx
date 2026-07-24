@@ -246,32 +246,33 @@ export function WorkoutReviewEditor({
         hideCloseButton
         className="z-[70] flex max-h-[92svh] flex-col rounded-t-3xl p-0"
       >
-        {/* Sticky header — compact, single-line back button + title */}
+        {/* Sticky header — Back pill top-left, then a title/subtitle stack.
+            Structured as two rows inside a single header block so the Back
+            control never overlaps the first review card and always feels
+            attached to the header on iOS, Android, and desktop. */}
         <div
           className="sticky top-0 z-10 border-b border-border/60 bg-background/95 backdrop-blur"
           style={{ paddingTop: "env(safe-area-inset-top)" }}
         >
-          <div className="flex items-start gap-2 px-4 py-3 sm:px-5">
+          <div className="flex items-center px-3 pt-2 sm:px-4">
             <button
               type="button"
               onClick={() => onOpenChange(false)}
               aria-label="Back"
-              className="inline-flex h-9 items-center gap-0.5 rounded-full px-2 text-sm font-semibold text-foreground transition hover:bg-secondary focus:outline-none focus:ring-2 focus:ring-ring"
+              className="inline-flex h-9 items-center gap-0.5 rounded-full px-2 -ml-1 text-sm font-semibold text-foreground transition hover:bg-secondary focus:outline-none focus:ring-2 focus:ring-ring"
             >
               <ChevronLeft className="h-5 w-5" />
               <span>Back</span>
             </button>
-            <SheetHeader className="mt-0.5 space-y-0.5 pr-0 text-left">
-              <SheetTitle className="text-lg font-black leading-tight">
-                {isEdit ? "Edit your review" : "Workout Status"}
-              </SheetTitle>
-              <SheetDescription className="text-xs">
-                {hasCoach
-                  ? "Your coach can see this."
-                  : "Notes for your own records."}
-              </SheetDescription>
-            </SheetHeader>
           </div>
+          <SheetHeader className="space-y-0.5 px-5 pb-3 pt-1 text-left">
+            <SheetTitle className="text-lg font-black leading-tight">
+              {isEdit ? "Edit your review" : "Workout Review"}
+            </SheetTitle>
+            <SheetDescription className="text-xs">
+              {hasCoach ? "Your coach can see this." : "Notes for your own records."}
+            </SheetDescription>
+          </SheetHeader>
         </div>
 
         <div className="flex-1 space-y-5 overflow-y-auto px-5 pb-6 pt-5">
