@@ -64,10 +64,6 @@ function PortalHome() {
       if (tz) void persistTz({ data: { timeZone: tz } }).catch(() => {});
     } catch {}
   }, [persistTz]);
-  useEffect(() => {
-    if (!client?.id) return;
-    void bootstrapOcc({ data: { clientId: client.id } }).catch(() => {});
-  }, [client?.id, bootstrapOcc]);
 
   // Bootstrap query — collapses the dashboard startup waterfall.
   // Previously each dependent query (training_phases, client_goals_setup, etc.)
