@@ -1,47 +1,97 @@
-## Where we are
+## Performance Insights — plan
 
-Phase 1 (data + server functions + cron) already shipped:
-- `coach_task_definitions`, `client_task_overrides`, `client_task_occurrences` tables
-- `src/lib/action-centre.functions.ts` (list / complete / next / setTimeZone)
-- `/api/public/hooks/action-centre-tick` for status transitions
+Adds an expandable **Performance Insights** section to the existing Training Analytics page. The current analytics stay untouched. Adaptive: powerlifters see comp-lift breakdowns first, bodybuilders see muscle-group volume first, hybrid athletes see both.
 
-Phases 2, 3, 4 are still open. Rather than mash them into one turn (high risk of breakage across portal + admin + rename sweep), I'll ship them as three focused follow-ups. Reply **"go"** and I start Phase 2.
+### Scope
 
----
+**In**
+- New collapsed card on `ClientAnalyticsDashboard` (client + coach analytics both consume it).
+- Muscle-group volume grid (12 groups) with weekly / monthly / avg / tonnage / trend.
+- Top Muscle Groups (Most Trained, Highest Tonnage, Biggest Growth, Most Consistent).
+- Powerlifting block (S/B/D weekly volume, comp-lift tonnage, avg intensity, avg RPE, top sets, e1RM trend, variation breakdown).
+- Time filter: Week / Month / Block / Year / All Time.
+- Smart insights generator (data-driven, no generic strings).
+- Share cards: portrait (story) + square (post), light + dark, "Save image" + Web Share API.
+- Coach view: same data + adherence, volume compliance, missed volume, muscle-group balance.
 
-## Phase 2 — Client Action Centre UX (next)
+**Out (not requested)**
+- Client-vs-client comparisons over time (leaving as follow-up; note in code).
+- Manual per-set muscle tagging UI. Uses existing `exercises.primary_muscle` / `secondary_muscles`.
 
-Files:
-- `src/components/portal/action-centre.tsx` — consume `listActionCentre`, render server-provided chip + tone, priority-sorted, optimistic remove on complete, "You're all caught up" empty state.
-- `src/components/portal/action-task-sheet.tsx` (new) — premium bottom sheet router by `task_type`:
-  - `weekly_checkin` / `nutrition_review` / `custom_form` → embed existing form flow (deep-link into `nf_forms` runner).
-  - `progress_photos` → existing uploader component.
-  - `bodyweight` → inline number entry reusing `MemberBodyweightCard` mutation.
-  - `technique_review` (Coach Feedback) → video + notes + reply + mark viewed.
-- `src/routes/_authenticated/portal/index.tsx` — swap ad-hoc props for `listActionCentre` query, call `setClientTimeZone` quietly on mount when device tz differs.
-- On success: call `completeTaskOccurrence`, remove row optimistically, refetch.
+### Data model — reuse only, no schema changes
 
-## Phase 3 — Admin scheduling UI
+- Volume + tonnage from `pl_row_results` joined to `pl_exercise_rows` → `exercises`.
+- Muscle mapping from `exercises.primary_muscle` (1.0 weight) and `exercises.secondary_muscles` (0.5 weight per set).
+- Powerlifting comp-lift detection: `exercises.category`/tags already in library (fallback to name match for Squat/Bench/Deadlift + common variations).
+- Intensity / e1RM via `src/lib/analytics/e1rm.ts` (already unified).
+- Adherence + missed volume from `pl_exercise_rows.sets` vs logged results (same math as `src/lib/workout-progress.ts`).
 
-Files:
-- `src/routes/_authenticated/admin/coaching/schedules.tsx` (new) — grid of task types with dummy-proof form (Auto toggle, Frequency, Due Day, Due Time, TZ mode, Reminder Timing checkboxes). Writes `coach_task_definitions`.
-- New tab in `src/routes/_authenticated/admin/clients.$id.tsx` — "Task Schedule": effective schedule per task type, per-task Override toggle, Reset-to-default button. Writes `client_task_overrides`.
-- Server fns added to `action-centre.functions.ts`: `upsertTaskDefinition`, `upsertTaskOverride`, `resetTaskOverride`, `listAllEffectiveSchedules`.
-- Coach view-mode toggle (`viewTz: client|coach`) persisted in `admin_dashboard_prefs`; admin due-date formatter reads it.
+If `primary_muscle` is missing on some exercises, those rows are surfaced in a single "Uncategorized volume — tap to map" affordance rather than silently dropped.
 
-## Phase 4 — Coach Feedback rename & polish
+### File layout
 
-- Rename client-facing "Lift Review(s)" strings → "Coach Feedback" (labels only, DB unchanged). Grep sweep across portal/member surfaces.
-- Coach Feedback sheet: title like "Coach reviewed your squat", video, exercise chip, notes, reply box, "Mark as viewed", swipe between unseen items.
-- QA pass: safe-area, 44px targets, aria-label on chips, iPhone SE / Pro Max / iPad.
+```text
+src/lib/analytics/performance-insights.ts   // pure calculators + types
+src/lib/analytics/muscle-map.ts             // exercise → muscle-group weights
+src/lib/analytics/insight-generator.ts      // data-driven insight strings
 
----
+src/components/analytics/performance-insights/
+  index.tsx                       // collapsed shell + expanded orchestrator
+  time-filter.tsx                 // Week/Month/Block/Year/All
+  muscle-group-grid.tsx           // 12 cards + rings
+  top-muscle-groups.tsx           // 4 highlight tiles
+  powerlifting-panel.tsx          // S/B/D + variations + e1RM trend
+  smart-insights.tsx              // list of generated insights, each with Share
+  coach-extras.tsx                // adherence / compliance / balance (coach only)
+  share-card.tsx                  // canvas renderer (portrait + square, dark/light)
+  share-sheet.tsx                 // preview + Save / Share buttons
+```
 
-## Technical notes
+### UX
 
-- No new deps — existing Intl-based tz helpers cover all date math.
-- All new tables already have RLS + GRANTs from Phase 1.
-- Optimistic UI uses TanStack Query `setQueryData` on the `["action-centre", clientId]` cache.
-- Rename in Phase 4 touches labels/JSX only — no route, table, or column renames.
+- Collapsed: single card titled **Performance Insights** with 3-stat teaser (Total Volume, Top Muscle, Trend) + "Explore" chevron. No layout shift on the main page.
+- Expanded: time filter row → adaptive hero (PL panel or Muscle grid based on `client.training_focus`) → secondary section → Smart Insights → Coach Extras (coach only).
+- Every muscle card + insight has a small `Share` icon → opens Share Sheet.
+- Share sheet renders on an offscreen `<canvas>` via `html2canvas`-free approach (native Canvas 2D for reliability in Workers/edge preview). Provides:
+  - Download PNG (`a[download]`)
+  - `navigator.share({ files })` on mobile when supported, fallback to download.
 
-Reply **"go"** to start Phase 2, or tell me to reshape scope.
+### Adaptive logic
+
+```ts
+type Focus = "powerlifting" | "bodybuilding" | "hybrid" | "unknown";
+// derive from client.training_focus + block.training_focus; if PL exercises
+// dominate last 30d volume, treat as PL. Hybrid shows both hero panels.
+```
+
+### Time filter semantics
+
+- **Week**: rolling 7 days.
+- **Month**: rolling 30 days.
+- **Block**: current `pl_blocks` window (start_date → today or end_date).
+- **Year**: rolling 365 days.
+- **All Time**: no lower bound.
+
+Trend arrow compares selected window to the immediately-preceding equal window.
+
+### Coach view
+
+Same component tree with `variant="coach"` flag; renders `coach-extras.tsx` at the bottom. Client comparisons deferred (documented TODO in file).
+
+### Non-goals / guardrails
+
+- No changes to main workout page.
+- No new tables, no migrations, no edge functions.
+- No hardcoded colors — all tokens from `src/styles.css`.
+- Share card uses branded gradient tokens; portrait 1080×1920, square 1080×1080.
+- Everything memoized; heavy queries fetch once per filter change with TanStack Query.
+
+### Technical notes
+
+- Adds one dep: none required — native Canvas 2D for share cards.
+- All new server-side reads reuse existing browser Supabase client patterns already used by `ClientAnalyticsDashboard`.
+- Insight generator returns `{ id, icon, headline, subline, shareable: true, sharePayload }`; strings are built from numbers so nothing is generic.
+
+### Rollout
+
+Ship behind no flag — additive UI, collapsed by default, safe to release.

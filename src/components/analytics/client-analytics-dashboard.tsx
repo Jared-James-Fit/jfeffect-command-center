@@ -35,6 +35,7 @@ import { PlannedVsActualCard } from "@/components/analytics/planned-vs-actual-ca
 import { WeightLiftedCard } from "@/components/analytics/weight-lifted-card";
 import { GraphDotDetail, type GraphDotPoint } from "@/components/analytics/graph-dot-detail";
 import { PRCard } from "@/components/analytics/pr-card";
+import { PerformanceInsights } from "@/components/analytics/performance-insights";
 import { RecoverySummaryCard } from "@/components/analytics/recovery-summary-card";
 import { SleepInsightsCard } from "@/components/analytics/sleep-insights-card";
 import { CardioSummaryCard } from "@/components/analytics/cardio-summary-card";
@@ -455,6 +456,7 @@ export function ClientAnalyticsDashboard({
           <AnalyticsEmptyPreview />
         ) : (
           <>
+            <PerformanceInsights clientId={clientId} />
             {filteredResults.length === 0 && (
               <Card className="border-dashed border-border/70 bg-card/60 p-6 text-center text-sm text-muted-foreground">
                 No training data logged in this period ({filter.label}).
