@@ -15,7 +15,7 @@ import {
 } from "lucide-react";
 import { ClipboardList, FileSignature, UtensilsCrossed, ChevronRight } from "lucide-react";
 import { format, parseISO, isToday, isYesterday } from "date-fns";
-import { useMediaViewer, getCachedRatio, setCachedRatio } from "@/components/media-viewer";
+import { ChatImageAttachment } from "@/components/chat-media-attachment";
 
 /* ------------------------------- Attachment Types (shared shape) ------------------------------- */
 
@@ -429,70 +429,9 @@ export function useVoiceRecorder() {
 
 /* ------------------------------- Attachment renderers ------------------------------- */
 
-function ImageAttachment({ att }: { att: SharedAttachment }) {
+function ImageAttachment({ att, messageId }: { att: SharedAttachment; messageId?: string }) {
   const signed = useSignedUrl(att.storage_path);
-  const src = att.storage_path ? signed : att.url;
-  const [errored, setErrored] = useState(false);
-  const [loaded, setLoaded] = useState(false);
-  const [retry, setRetry] = useState(0);
-  const viewer = useMediaViewer();
-  const looksLikeGif = !!att.url && /tenor\.com|\.gif(\?|$)/i.test(att.url);
-  const cacheKey = att.storage_path || att.url || att.name || "";
-  // Reserve layout space using the cached natural ratio (default 4:3) so the
-  // thread does not jump as thumbnails decode.
-  const cachedRatio = getCachedRatio(cacheKey);
-  const ratio = looksLikeGif ? 1 : cachedRatio ?? 4 / 3;
-  const displaySrc = src ? (retry > 0 ? `${src}${src.includes("?") ? "&" : "?"}_r=${retry}` : src) : "";
-  if (!src || errored) {
-    return (
-      <div className="flex w-[180px] flex-col items-center justify-center gap-2 rounded-xl border border-border bg-secondary/40 p-4">
-        <span className="text-4xl">{att.fallback_emoji ?? fallbackEmoji(att.name, att.category)}</span>
-        {att.name && <span className="line-clamp-1 text-[11px] text-muted-foreground">{att.name}</span>}
-        {errored && (
-          <button
-            type="button"
-            onClick={() => { setErrored(false); setLoaded(false); setRetry((r) => r + 1); }}
-            className="rounded-md border border-border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground hover:bg-secondary"
-          >
-            Retry
-          </button>
-        )}
-      </div>
-    );
-  }
-  return (
-    <button
-      type="button"
-      onClick={() => viewer.open(src, { alt: att.name, previewSrc: src })}
-      className="relative block w-[240px] max-w-full cursor-zoom-in overflow-hidden rounded-md bg-muted"
-      style={{ aspectRatio: String(ratio) }}
-      aria-label={att.name ? `Open image ${att.name}` : "Open image"}
-    >
-      {!loaded && (
-        <div className="absolute inset-0 animate-pulse bg-gradient-to-br from-muted to-secondary/50" aria-hidden="true" />
-      )}
-      <img
-        key={displaySrc}
-        src={displaySrc}
-        alt={att.name ?? ""}
-        loading="lazy"
-        decoding="async"
-        className={cn(
-          "absolute inset-0 h-full w-full transition-opacity",
-          looksLikeGif ? "object-cover" : "object-cover",
-          loaded ? "opacity-100" : "opacity-0",
-        )}
-        onLoad={(e) => {
-          const el = e.currentTarget;
-          if (el.naturalWidth && el.naturalHeight) {
-            setCachedRatio(cacheKey, el.naturalWidth / el.naturalHeight);
-          }
-          setLoaded(true);
-        }}
-        onError={() => setErrored(true)}
-      />
-    </button>
-  );
+  return <ChatImageAttachment att={att} messageId={messageId} initialSignedUrl={signed} />;
 }
 
 function VideoAttachment({ att }: { att: SharedAttachment }) {
@@ -651,12 +590,13 @@ function LinkAttachment({ att, mine }: { att: SharedAttachment; mine: boolean })
 }
 
 export function AttachmentView({
-  att, mine, transcript, transcriptStatus,
+  att, mine, transcript, transcriptStatus, messageId,
 }: {
   att: SharedAttachment;
   mine: boolean;
   transcript?: string | null;
   transcriptStatus?: string | null;
+  messageId?: string | null;
 }) {
   if (att.kind === "payment_request") {
     return <PaymentRequestCard att={att} mine={mine} />;
@@ -698,7 +638,7 @@ export function AttachmentView({
       </a>
     );
   }
-  if (att.type === "image") return <ImageAttachment att={att} />;
+  if (att.type === "image") return <ImageAttachment att={att} messageId={messageId ?? undefined} />;
   if (att.type === "video") return <VideoAttachment att={att} />;
   if (att.type === "audio") return <AudioAttachment att={att} mine={mine} transcript={transcript} transcriptStatus={transcriptStatus} />;
   if (att.type === "pdf" || att.type === "file") return <FileAttachment att={att} mine={mine} />;
