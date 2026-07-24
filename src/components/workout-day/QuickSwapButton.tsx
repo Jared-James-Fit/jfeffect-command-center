@@ -573,18 +573,21 @@ export function QuickSwapButton({
 
   const { data: searchResults, isFetching: isSearching } = useQuery({
     queryKey: ["quick-swap-search", debouncedSearch, page, exerciseId],
-    enabled: open && mode === "search" && debouncedSearch.length >= 2,
+    enabled: open && mode === "search" && searchTokens(debouncedSearch).length > 0 && debouncedSearch.length >= 2,
     staleTime: 60_000,
     queryFn: async () => {
       const from = page * PAGE_SIZE;
       const to = from + PAGE_SIZE - 1;
+      const tokens = searchTokens(debouncedSearch);
       let q = supabase
         .from("exercises")
         .select(SELECT_COLS, { count: "exact" })
         .eq("archived", false)
-        .ilike("name", `%${debouncedSearch}%`)
         .order("name")
         .range(from, to);
+      // Each token must appear in the name (order-agnostic). Chaining
+      // .ilike() is an AND at the PostgREST level.
+      for (const t of tokens) q = q.ilike("name", `%${t}%`);
       if (exerciseId) q = q.neq("id", exerciseId);
       const { data, error, count } = await q;
       if (error) throw error;
@@ -803,7 +806,12 @@ export function QuickSwapButton({
                 <p className="text-sm text-muted-foreground">No matches.</p>
               )}
               {(searchResults?.rows ?? []).map((ex) => (
-                <ExerciseRowCard key={ex.id} ex={ex} onSelect={() => startSelect(ex)} />
+                <ExerciseRowCard
+                  key={ex.id}
+                  ex={ex}
+                  highlightTokens={searchTokens(debouncedSearch)}
+                  onSelect={() => startSelect(ex)}
+                />
               ))}
 
               {searchResults && searchResults.total > PAGE_SIZE && (
