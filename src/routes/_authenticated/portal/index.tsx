@@ -391,24 +391,13 @@ function PortalHome() {
       to: "/portal/check-ins",
     });
   }
-  // Surface the nearest due check-in form into Action Centre.
-  const dueForm = (assignedForms ?? [])[0];
+  // Note: the "Submit Form/Check-In/Nutrition" tile was removed here —
+  // the Action Centre's task occurrences already cover Weekly Check-In,
+  // Nutrition Review, Monthly Assessment, etc. one item per assignment.
   const weeklyCheckInForm = pickWeeklyCheckInForm(assignedForms as any);
   const weeklyCheckInHref = weeklyCheckInForm?.id
     ? `/portal/check-ins/${weeklyCheckInForm.id}`
     : "/portal/check-ins";
-  if (dueForm) {
-    actions.push({
-      key: `form-${dueForm.id}`,
-      icon: ClipboardCheck,
-      tone: "primary",
-      title: "Submit Form/Check-In/Nutrition",
-      message: dueForm.kind === "external" ? "External check-in form" : "Tap to fill in",
-      to: "/portal/check-ins/$formId",
-      params: { formId: dueForm.id },
-      chip: "Due",
-    } as any);
-  }
 
   // We render the shell + per-section skeletons immediately so the dashboard
   // never blocks waiting on one query. Each section is wrapped in a local
@@ -453,9 +442,10 @@ function PortalHome() {
           </SectionErrorBoundary>
         )}
 
-        {/* 1 — Action Centre (top priority) */}
+        {/* 1 — Action Centre (top priority). Pass full list; the component
+            collapses to the top 2–3 by default with a "View all" toggle. */}
         <SectionErrorBoundary label="Action centre">
-          <ActionCentre items={actions.slice(0, 5)} clientId={client?.id ?? null} />
+          <ActionCentre items={actions} clientId={client?.id ?? null} />
         </SectionErrorBoundary>
 
         {/* 2 — Bodyweight tracker (syncs with Progress > Weight tracker) */}

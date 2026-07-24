@@ -1,5 +1,5 @@
-import { Link } from "@tanstack/react-router";
-import { CheckCircle2, ChevronRight, ClipboardCheck, Camera, Scale, Dumbbell, Ruler, FileText } from "lucide-react";
+import { Link, useNavigate } from "@tanstack/react-router";
+import { CheckCircle2, ChevronDown, ChevronRight, ChevronUp, ClipboardCheck, Camera, Scale, Dumbbell, Ruler, FileText } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
@@ -28,6 +28,8 @@ export type ActionItem = {
 const toneOrder: Record<ActionTone, number> = { warning: 0, primary: 1, success: 2 };
 
 const SEEN_KEY = "jf:action-centre:seen-keys:v1";
+const EXPAND_KEY = "jf:action-centre:expanded:v1";
+const COMPACT_LIMIT = 3;
 
 function readSeen(): Set<string> {
   if (typeof window === "undefined") return new Set();
@@ -66,23 +68,106 @@ function toneFromChip(t: ActionCentreItem["chip"]["tone"]): ActionTone {
   return "primary";
 }
 
-function occurrenceToItem(occ: ActionCentreItem, onOpen: (occ: ActionCentreItem) => void): ActionItem {
-  return {
+/**
+ * Compact chip label — replaces the noisier server label with a short
+ * scannable status ("Today", "Tomorrow", "3 Days", "1 Week", "Overdue").
+ */
+function compactChip(label: string): string {
+  const l = label.toLowerCase();
+  if (l.includes("overdue")) return "Overdue";
+  if (l === "due today") return "Today";
+  if (l === "due tomorrow") return "Tomorrow";
+  const m = l.match(/due in (\d+) days?/);
+  if (m) {
+    const n = Number(m[1]);
+    if (n >= 7) {
+      const weeks = Math.round(n / 7);
+      return weeks === 1 ? "1 Week" : `${weeks} Weeks`;
+    }
+    return `${n} Days`;
+  }
+  return label;
+}
+
+/** Direct destination for an occurrence — skip the intermediate sheet. */
+function occurrenceTarget(occ: ActionCentreItem): { to: string; params?: Record<string, string>; search?: Record<string, unknown> } | null {
+  const meta = (occ.metadata ?? {}) as Record<string, any>;
+  switch (occ.task_type) {
+    case "weekly_checkin":
+    case "nutrition_review":
+    case "custom_form": {
+      const formId = meta.form_id as string | undefined;
+      return formId
+        ? { to: "/portal/check-ins/$formId", params: { formId } }
+        : { to: "/portal/check-ins" };
+    }
+    case "progress_photos":
+      return { to: "/portal/progress", search: { action: "photos" } };
+    case "monthly_assessment":
+      // Legacy alias still redirects to /portal/progress?action=bodyweight
+      return { to: "/portal/progress-metrics" };
+    case "bodyweight":
+      // Stay on home; the bodyweight card opens its log sheet via event.
+      return null;
+    case "technique_review":
+      return { to: "/portal/lift-videos" as any };
+    default:
+      return null;
+  }
+}
+
+function occurrenceToItem(occ: ActionCentreItem, onFallback: (occ: ActionCentreItem) => void): ActionItem {
+  const chip = compactChip(occ.chip.label);
+  const target = occurrenceTarget(occ);
+  const base: ActionItem = {
     key: `occ-${occ.id}`,
     icon: TASK_ICONS[occ.task_type] ?? ClipboardCheck,
     tone: toneFromChip(occ.chip.tone),
     title: occ.title,
     message: occ.subtitle ?? undefined,
-    chip: occ.chip.label,
-    onClick: () => onOpen(occ),
+    chip,
     occurrence: occ,
   };
+  if (occ.task_type === "bodyweight") {
+    base.onClick = () => {
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new CustomEvent("portal:log-bodyweight"));
+        // Ensure the card is in view.
+        const el = document.getElementById("bodyweight-card");
+        if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+      }
+    };
+    return base;
+  }
+  if (target) {
+    base.to = target.to;
+    base.params = target.params;
+    base.search = target.search;
+    return base;
+  }
+  // Unknown task type — fall back to the confirmation sheet so the client
+  // always has a path forward.
+  base.onClick = () => onFallback(occ);
+  return base;
+}
+
+function readExpanded(): boolean {
+  if (typeof window === "undefined") return false;
+  try { return window.localStorage.getItem(EXPAND_KEY) === "1"; } catch { return false; }
+}
+function writeExpanded(v: boolean) {
+  if (typeof window === "undefined") return;
+  try { window.localStorage.setItem(EXPAND_KEY, v ? "1" : "0"); } catch { /* noop */ }
 }
 
 export function ActionCentre({ items, clientId }: { items: ActionItem[]; clientId?: string | null }) {
   const [activeOcc, setActiveOcc] = useState<ActionCentreItem | null>(null);
   const [sheetOpen, setSheetOpen] = useState(false);
   const [locallyCompleted, setLocallyCompleted] = useState<Set<string>>(new Set());
+  const [expanded, setExpanded] = useState<boolean>(() => readExpanded());
+  const [justCompleted, setJustCompleted] = useState<string | null>(null);
+  const navigate = useNavigate();
+  void navigate;
 
   const list = useServerFn(listActionCentre);
   const { data: occurrences = [] } = useQuery({
@@ -108,6 +193,8 @@ export function ActionCentre({ items, clientId }: { items: ActionItem[]; clientI
   }, [occurrences, items, locallyCompleted]);
 
   const sorted = [...merged].sort((a, b) => toneOrder[a.tone] - toneOrder[b.tone]);
+  const visible = expanded ? sorted : sorted.slice(0, COMPACT_LIMIT);
+  const hiddenCount = Math.max(0, sorted.length - visible.length);
   const [seen, setSeen] = useState<Set<string>>(() => readSeen());
 
   const currentKeys = sorted.map((it) => it.key);
@@ -146,7 +233,9 @@ export function ActionCentre({ items, clientId }: { items: ActionItem[]; clientI
   return (
     <section aria-label="Action Centre" className="space-y-2">
       <div className="flex items-center justify-between px-1">
-        <h3 className="text-base font-bold">Action Centre</h3>
+        <h3 className="text-base font-bold">
+          Today's Tasks{sorted.length > 0 ? ` (${sorted.length})` : ""}
+        </h3>
         {unseenCount > 0 && (
           <span className="rounded-full bg-primary/15 px-2 py-0.5 text-[10px] font-bold uppercase tracking-widest text-primary">
             {unseenCount}
@@ -158,29 +247,58 @@ export function ActionCentre({ items, clientId }: { items: ActionItem[]; clientI
           <CheckCircle2 className="h-5 w-5 text-emerald-500" />
           <div className="min-w-0">
             <div className="text-sm font-semibold">✅ You're all caught up</div>
-            <div className="text-xs text-muted-foreground">No actions require your attention.</div>
+            <div className="text-xs text-muted-foreground">No forms are due right now.</div>
           </div>
         </div>
       ) : (
-        <ul className="overflow-hidden rounded-2xl border border-border bg-card">
-          {sorted.map((it, i) => (
-            <li key={it.key} className={i > 0 ? "border-t border-border/70" : ""}>
-              <Row item={it} />
-            </li>
-          ))}
-        </ul>
+        <>
+          <ul className="overflow-hidden rounded-2xl border border-border bg-card">
+            {visible.map((it, i) => (
+              <li key={it.key} className={i > 0 ? "border-t border-border/70" : ""}>
+                <Row item={it} justCompleted={justCompleted === it.key} />
+              </li>
+            ))}
+          </ul>
+          {(hiddenCount > 0 || expanded) && sorted.length > COMPACT_LIMIT && (
+            <button
+              type="button"
+              onClick={() => {
+                const next = !expanded;
+                setExpanded(next);
+                writeExpanded(next);
+              }}
+              className="mx-auto flex items-center gap-1 rounded-full px-3 py-1 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground transition hover:text-foreground"
+            >
+              {expanded ? (
+                <>
+                  <ChevronUp className="h-3.5 w-3.5" /> Show fewer
+                </>
+              ) : (
+                <>
+                  <ChevronDown className="h-3.5 w-3.5" /> View all tasks ({hiddenCount} more)
+                </>
+              )}
+            </button>
+          )}
+        </>
       )}
       <ActionTaskSheet
         item={activeOcc}
         open={sheetOpen}
         onOpenChange={setSheetOpen}
-        onCompleted={(id) => setLocallyCompleted((prev) => new Set(prev).add(id))}
+        onCompleted={(id) => {
+          setJustCompleted(`occ-${id}`);
+          window.setTimeout(() => {
+            setLocallyCompleted((prev) => new Set(prev).add(id));
+            setJustCompleted(null);
+          }, 450);
+        }}
       />
     </section>
   );
 }
 
-function Row({ item }: { item: ActionItem }) {
+function Row({ item, justCompleted }: { item: ActionItem; justCompleted?: boolean }) {
   const Icon = item.icon;
   const toneIcon =
     item.tone === "warning" ? "text-warning"
@@ -192,13 +310,20 @@ function Row({ item }: { item: ActionItem }) {
     : "bg-primary/15 text-primary";
 
   const body = (
-    <div className="flex min-h-[64px] items-center gap-3 px-4 py-3 transition active:bg-secondary/30">
-      <Icon className={cn("h-5 w-5 shrink-0", toneIcon)} />
+    <div className={cn(
+      "flex min-h-[56px] items-center gap-3 px-4 py-2.5 transition active:bg-secondary/30",
+      justCompleted && "bg-emerald-500/10",
+    )}>
+      {justCompleted ? (
+        <CheckCircle2 className="h-5 w-5 shrink-0 text-emerald-500 animate-in fade-in zoom-in" />
+      ) : (
+        <Icon className={cn("h-5 w-5 shrink-0", toneIcon)} />
+      )}
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">
-          <div className="truncate text-sm font-bold">{item.title}</div>
+          <div className="truncate text-sm font-semibold">{item.title}</div>
           {item.chip && (
-            <span className={cn("shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-widest", toneChip)}>
+            <span className={cn("shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider", toneChip)}>
               {item.chip}
             </span>
           )}

@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card } from "@/components/ui/card";
@@ -68,6 +68,15 @@ export function BodyweightSummaryCard({ clientId, defaultUnit = "lb" }: Props) {
     setSheetOpen(true);
   };
 
+  // Allow the Action Centre "Bodyweight Update" task to open the log sheet
+  // in-place without navigating away from the home page.
+  useEffect(() => {
+    const onOpen = () => openSheet();
+    window.addEventListener("portal:log-bodyweight", onOpen);
+    return () => window.removeEventListener("portal:log-bodyweight", onOpen);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [todayEntry?.bodyweight, unit]);
+
   const save = async () => {
     const v = Number(weight);
     if (!weight || Number.isNaN(v) || v <= 0) throw new Error("Enter a valid bodyweight.");
@@ -104,7 +113,7 @@ export function BodyweightSummaryCard({ clientId, defaultUnit = "lb" }: Props) {
   const hasData = series.length > 0;
 
   return (
-    <Card className="border-border bg-card p-5">
+    <Card id="bodyweight-card" className="border-border bg-card p-5">
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-2">
           <Scale className="h-5 w-5 text-primary" />
