@@ -652,6 +652,12 @@ function FactorSheet({ factor }: { factor: FactorDetail }) {
         </SheetDescription>
       </SheetHeader>
 
+      {factor.tooltip && (
+        <p className="mt-2 text-xs leading-snug text-muted-foreground">
+          {factor.tooltip}
+        </p>
+      )}
+
       <div className="mt-4 flex items-center gap-4 rounded-2xl border border-border/50 bg-muted/30 p-4">
         <div className="relative shrink-0" style={{ width: 72, height: 72 }}>
           {(() => {
