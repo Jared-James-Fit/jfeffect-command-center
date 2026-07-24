@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { Card } from "@/components/ui/card";
 import { Trophy, Dumbbell, TrendingUp, CalendarCheck } from "lucide-react";
 import { MUSCLE_EMOJI } from "@/lib/analytics/muscle-map";
@@ -25,7 +26,7 @@ export function TopMuscleGroupsCard({ top }: { top: TopMuscleGroups }) {
       title: `${MUSCLE_EMOJI[top.most_consistent.group]} ${top.most_consistent.group}`,
       value: `${top.most_consistent.weeks_hit}/${top.most_consistent.window_weeks} weeks`,
     },
-  ].filter(Boolean) as { icon: JSX.Element; label: string; title: string; value: string }[];
+  ].filter(Boolean) as { icon: ReactNode; label: string; title: string; value: string }[];
 
   if (!items.length) return null;
 
