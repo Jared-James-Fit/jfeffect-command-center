@@ -1713,7 +1713,6 @@ function WorkoutDay({
               dayProtocolId={(day as any).warmup_protocol_id}
               exerciseRows={rows as any[]}
             />
-            <TrainingHelpButton size="sm" variant="outline" />
           </div>
         )}
 
