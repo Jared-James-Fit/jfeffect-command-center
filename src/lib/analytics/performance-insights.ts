@@ -202,8 +202,7 @@ export function topMuscleGroups(
     .sort((a, b) => b.monthly_sets - a.monthly_sets)[0] ?? null;
   const tonn = [...stats].filter((s) => s.monthly_tonnage > 0)
     .sort((a, b) => b.monthly_tonnage - a.monthly_tonnage)[0] ?? null;
-  const growth = [...stats].filter((s) => s.trend_pct != null && s.window_sets_present())
-    // Fallback: window_sets_present isn't a field; guard using monthly_sets>0.
+  const growth = [...stats].filter((s) => s.trend_pct != null && s.monthly_sets > 0)
     .sort((a, b) => (b.trend_pct ?? -Infinity) - (a.trend_pct ?? -Infinity))[0] ?? null;
   // "Most consistent": most distinct weeks with ≥1 set inside the window.
   const perGroup = new Map<MuscleGroup, Set<string>>();
@@ -234,14 +233,6 @@ export function topMuscleGroups(
     biggest_growth: growth && growth.trend_pct != null && growth.trend_pct > 0 ? growth : null,
     most_consistent: consistent,
   };
-}
-
-// Small ergonomic shim so the sort predicate above stays readable without
-// adding another field to MuscleStat.
-declare module "./performance-insights" {
-  interface MuscleStat {
-    window_sets_present?: () => boolean;
-  }
 }
 
 function detectCompLift(s: InsightSet): CompLift | null {
