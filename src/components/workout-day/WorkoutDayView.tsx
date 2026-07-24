@@ -1623,26 +1623,9 @@ function WorkoutDay({
                     successToast="Tap to finish"
                     icon={<CheckCircle2 className="h-4 w-4" />}
                     onAction={async () => {
-                      if (!client?.id) return;
-                      if (completion?.completed_at) {
-                        qc.invalidateQueries({ queryKey: ["pl-day-completion", dayId] });
-                        return;
-                      }
-                      await metaSave.flush();
-                      try {
-                        await startWorkoutSrv({
-                          data: {
-                            kind: "client",
-                            dayId,
-                          scheduledWorkoutId,
-                            actAsClientId: isImpersonating && client?.id ? client.id : null,
-                          } as any,
-                        });
-                      } catch {}
-                      if (draftKey) clearLocalDraft(draftKey);
-                      refresh();
                       setFocusMode(false);
-                      setCompleteOpen(true);
+                      await handleFinishWorkout();
+                      refresh();
                     }}
                   >
                     Finish Workout
