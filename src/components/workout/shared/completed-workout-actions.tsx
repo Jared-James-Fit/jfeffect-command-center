@@ -9,7 +9,7 @@
  * so the editor writes to the correct backing table (pl_workout_feedback
  * for clients, member_workout_reviews for members).
  */
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { MessageSquare, Pencil } from "lucide-react";
@@ -29,6 +29,14 @@ type Props = {
   logAnchorId?: string;
   /** Admin/coach POV: submit on behalf of this client id. */
   actAsClientId?: string | null;
+  /**
+   * Auto-open the shared review editor once when this flips truthy.
+   * Used by the Finish Workout flow to hand the athlete directly into
+   * the full review immediately after their completion is persisted —
+   * so the initial review and Edit Review reuse the same component.
+   */
+  autoOpenReview?: boolean;
+  onAutoOpenReviewConsumed?: () => void;
 };
 
 export function CompletedWorkoutActions({
@@ -39,9 +47,19 @@ export function CompletedWorkoutActions({
   onViewScore,
   logAnchorId,
   actAsClientId,
+  autoOpenReview,
+  onAutoOpenReviewConsumed,
 }: Props) {
   const [reviewOpen, setReviewOpen] = useState(false);
   const hasReview = !!initialReview?.submittedAt;
+  const autoOpenedRef = useRef(false);
+  useEffect(() => {
+    if (!autoOpenReview) return;
+    if (autoOpenedRef.current) return;
+    autoOpenedRef.current = true;
+    setReviewOpen(true);
+    onAutoOpenReviewConsumed?.();
+  }, [autoOpenReview, onAutoOpenReviewConsumed]);
 
   return (
     <>
