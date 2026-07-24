@@ -762,6 +762,11 @@ export function MessageThread({
     if (loadingOlder) return;
     const earliest = allMessages[0];
     if (!earliest) return;
+    // Capture current scroll geometry so we can restore the exact viewport
+    // once older messages have been prepended (prevents jump-to-top).
+    const el = scrollerRef.current;
+    const prevHeight = el?.scrollHeight ?? 0;
+    const prevTop = el?.scrollTop ?? 0;
     setLoadingOlder(true);
     try {
       const older = await listOlderMessages(clientId, earliest.created_at, 50, {
@@ -772,6 +777,14 @@ export function MessageThread({
           const seen = new Set([...prev, ...messages].map((m) => m.id));
           const fresh = older.filter((m) => !seen.has(m.id));
           return [...fresh, ...prev];
+        });
+        // After layout with the newly prepended rows, keep the user anchored
+        // to what they were reading by preserving (scrollHeight - scrollTop).
+        requestAnimationFrame(() => {
+          const node = scrollerRef.current;
+          if (!node) return;
+          const delta = node.scrollHeight - prevHeight;
+          node.scrollTop = prevTop + delta;
         });
       }
     } catch (e: any) {
