@@ -371,7 +371,7 @@ function PortalHome() {
       key: "lift-reviews-grouped",
       icon: Dumbbell,
       tone: "primary",
-      title: count === 1 ? `Coach feedback on ${firstExercise}` : `${count} New Lift Reviews`,
+      title: count === 1 ? `Coach feedback on ${firstExercise}` : `${count} new coach feedback replies`,
       message: count === 1 ? (liftPings[0]?.preview || "Coach reviewed your video.") : `Coach reviewed ${count} videos. Tap to view.`,
       to: "/portal/lift-videos",
       chip: count > 1 ? String(count) : "New",
