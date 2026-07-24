@@ -1664,6 +1664,8 @@ function WorkoutDay({
                     setLastSessionRating(rating);
                     setTimeout(() => openRecapSummary(), 350);
                   }}
+                  autoOpenReview={autoOpenReviewAfterFinish}
+                  onAutoOpenReviewConsumed={() => setAutoOpenReviewAfterFinish(false)}
                 />
               </div>
             )}
