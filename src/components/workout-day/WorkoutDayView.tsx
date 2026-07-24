@@ -1958,30 +1958,8 @@ function WorkoutDay({
               successToast="Tap to finish"
               icon={<CheckCircle2 className="h-4 w-4" />}
               onAction={async () => {
-                if (!client?.id) return;
-                // Guard: if already completed, open Edit Review instead of re-completing
-                if (completion?.completed_at) {
-                  qc.invalidateQueries({ queryKey: ["pl-day-completion", dayId] });
-                  return;
-                }
-                await metaSave.flush();
-                // Ensure a draft row + started_at/in_progress_at exist before the
-                // complete sheet opens. startWorkout is idempotent.
-                try {
-                  await startWorkoutSrv({
-                    data: {
-                      kind: "client",
-                      dayId,
-                      scheduledWorkoutId,
-                      actAsClientId: isImpersonating && client?.id ? client.id : null,
-                    } as any,
-                  });
-                } catch (err) {
-                  console.warn("pre-complete startWorkout failed", err);
-                }
-                if (draftKey) clearLocalDraft(draftKey);
+                await handleFinishWorkout();
                 refresh();
-                setCompleteOpen(true);
               }}
             >
               Finish Workout
