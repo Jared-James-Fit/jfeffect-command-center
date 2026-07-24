@@ -278,12 +278,16 @@ function HighlightedName({ text, tokens }: { text: string; tokens: string[] }) {
     .sort((a, b) => b.length - a.length)
     .map((t) => t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
   const re = new RegExp(`(${escaped.join("|")})`, "gi");
-  const parts = text.split(re);
+  const parts = text.split(re).filter((p) => p !== "");
+  const tokenSet = new Set(tokens.map((t) => t.toLowerCase()));
   return (
     <>
       {parts.map((p, i) =>
-        re.test(p) ? (
-          <mark key={i} className="rounded bg-primary/20 px-0.5 text-foreground">
+        tokenSet.has(p.toLowerCase()) ? (
+          <mark
+            key={i}
+            className="rounded bg-primary/20 px-0.5 text-foreground"
+          >
             {p}
           </mark>
         ) : (
