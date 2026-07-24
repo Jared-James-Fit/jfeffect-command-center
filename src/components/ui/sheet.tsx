@@ -59,22 +59,37 @@ interface SheetContentProps
 const SheetContent = React.forwardRef<
   React.ElementRef<typeof SheetPrimitive.Content>,
   SheetContentProps
->(({ side = "right", className, children, hideCloseButton, ...props }, ref) => (
-  <SheetPortal>
-    <SheetOverlay />
-    <SheetPrimitive.Content ref={ref} className={cn(sheetVariants({ side }), className)} {...props}>
-      {!hideCloseButton && <SheetPrimitive.Close
-        aria-label="Back"
-        style={{ top: "calc(env(safe-area-inset-top) + 0.75rem)" }}
-        className="absolute left-3 z-20 inline-flex h-10 min-w-[72px] items-center justify-center gap-1 rounded-full border border-border bg-background/90 px-3 text-sm font-semibold text-foreground shadow-sm ring-offset-background backdrop-blur cursor-pointer transition hover:bg-secondary focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none"
-      >
-        <ChevronLeft className="h-4 w-4" />
-        <span>Back</span>
-      </SheetPrimitive.Close>}
-      {children}
-    </SheetPrimitive.Content>
-  </SheetPortal>
-));
+>(({ side = "right", className, children, hideCloseButton, ...props }, ref) => {
+  // Bottom sheets originate at the bottom of the viewport, so
+  // `env(safe-area-inset-top)` would push the Back pill *down* into the
+  // sheet's content. Only offset for sheets that actually touch the top
+  // of the viewport (top / left / right).
+  const anchorsToViewportTop = side !== "bottom";
+  const closeStyle = anchorsToViewportTop
+    ? { top: "calc(env(safe-area-inset-top) + 0.75rem)" }
+    : undefined;
+  return (
+    <SheetPortal>
+      <SheetOverlay />
+      <SheetPrimitive.Content ref={ref} className={cn(sheetVariants({ side }), className)} {...props}>
+        {!hideCloseButton && (
+          <SheetPrimitive.Close
+            aria-label="Back"
+            style={closeStyle}
+            className={cn(
+              "absolute left-3 z-20 inline-flex h-10 min-w-[72px] items-center justify-center gap-1 rounded-full border border-border bg-background/90 px-3 text-sm font-semibold text-foreground shadow-sm ring-offset-background backdrop-blur cursor-pointer transition hover:bg-secondary focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none",
+              anchorsToViewportTop ? undefined : "top-3",
+            )}
+          >
+            <ChevronLeft className="h-4 w-4" />
+            <span>Back</span>
+          </SheetPrimitive.Close>
+        )}
+        {children}
+      </SheetPrimitive.Content>
+    </SheetPortal>
+  );
+});
 SheetContent.displayName = SheetPrimitive.Content.displayName;
 
 const SheetHeader = ({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) => (
