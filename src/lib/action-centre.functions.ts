@@ -338,6 +338,39 @@ export const generateNextOccurrence = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
+/**
+ * Bootstrap: for the current user's client, ensure every enabled task
+ * definition has at least one active (non-completed) occurrence. Safe to call
+ * on every portal load — inserts are guarded by the unique partial index on
+ * (client_id, task_type, due_local_date) for non-completed rows.
+ */
+export const bootstrapClientOccurrences = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { clientId?: string }) => d)
+  .handler(async ({ data, context }) => {
+    let clientId = data.clientId;
+    if (!clientId) {
+      const { data: c } = await context.supabase
+        .from("clients").select("id").eq("user_id", context.userId).maybeSingle();
+      clientId = (c as any)?.id;
+    }
+    if (!clientId) return { ok: false, reason: "no_client" as const };
+
+    const { data: defs } = await context.supabase
+      .from("coach_task_definitions").select("task_type, enabled").eq("enabled", true);
+    const { data: existing } = await context.supabase
+      .from("client_task_occurrences")
+      .select("task_type")
+      .eq("client_id", clientId)
+      .not("status", "in", "(completed,skipped)");
+    const have = new Set((existing ?? []).map((r: any) => r.task_type));
+    const now = new Date();
+    for (const d of (defs ?? []) as any[]) {
+      if (have.has(d.task_type)) continue;
+      await ensureNextOccurrence(context.supabase, clientId, d.task_type, now);
+    }
+    return { ok: true };
+  });
 export const setClientTimeZone = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: { timeZone: string }) => z.object({ timeZone: z.string().min(1).max(64) }).parse(d))
