@@ -259,6 +259,45 @@ function useDebounced<T>(value: T, ms: number): T {
   return v;
 }
 
+/** Split a search query into whitespace-separated tokens (>=1 char). */
+function searchTokens(q: string): string[] {
+  return q
+    .toLowerCase()
+    .split(/\s+/)
+    .map((t) => t.trim())
+    .filter(Boolean);
+}
+
+/** Highlight every occurrence of any token (order-agnostic) in `text`. */
+function HighlightedName({ text, tokens }: { text: string; tokens: string[] }) {
+  if (tokens.length === 0) return <>{text}</>;
+  // Build one alternation regex, escaping each token, longest-first so
+  // "bench press" highlights the whole phrase before its parts.
+  const escaped = tokens
+    .slice()
+    .sort((a, b) => b.length - a.length)
+    .map((t) => t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
+  const re = new RegExp(`(${escaped.join("|")})`, "gi");
+  const parts = text.split(re).filter((p) => p !== "");
+  const tokenSet = new Set(tokens.map((t) => t.toLowerCase()));
+  return (
+    <>
+      {parts.map((p, i) =>
+        tokenSet.has(p.toLowerCase()) ? (
+          <mark
+            key={i}
+            className="rounded bg-primary/20 px-0.5 text-foreground"
+          >
+            {p}
+          </mark>
+        ) : (
+          <span key={i}>{p}</span>
+        ),
+      )}
+    </>
+  );
+}
+
 function youtubeEmbed(url: string | null | undefined): string | null {
   if (!url) return null;
   // Match v=ID or youtu.be/ID or /embed/ID
@@ -276,10 +315,12 @@ function ExerciseRowCard({
   ex,
   reason,
   onSelect,
+  highlightTokens,
 }: {
   ex: ExerciseLite;
   reason?: string;
   onSelect: () => void;
+  highlightTokens?: string[];
 }) {
   const [playing, setPlaying] = useState(false);
   const meta = [ex.muscle_group, ex.equipment].filter(Boolean).join(" · ");
@@ -293,7 +334,9 @@ function ExerciseRowCard({
     <div className="rounded-md border border-border bg-card">
       <div className="flex items-center justify-between gap-2 px-3 py-2">
         <div className="min-w-0 flex-1">
-          <div className="truncate text-sm font-medium">{ex.name}</div>
+          <div className="truncate text-sm font-medium">
+            <HighlightedName text={ex.name} tokens={highlightTokens ?? []} />
+          </div>
           {reason && <div className="mt-0.5 text-[11px] font-medium text-primary/80">{reason}</div>}
           {meta && <div className="mt-0.5 truncate text-[11px] text-muted-foreground">{meta}</div>}
         </div>
@@ -530,18 +573,21 @@ export function QuickSwapButton({
 
   const { data: searchResults, isFetching: isSearching } = useQuery({
     queryKey: ["quick-swap-search", debouncedSearch, page, exerciseId],
-    enabled: open && mode === "search" && debouncedSearch.length >= 2,
+    enabled: open && mode === "search" && searchTokens(debouncedSearch).length > 0 && debouncedSearch.length >= 2,
     staleTime: 60_000,
     queryFn: async () => {
       const from = page * PAGE_SIZE;
       const to = from + PAGE_SIZE - 1;
+      const tokens = searchTokens(debouncedSearch);
       let q = supabase
         .from("exercises")
         .select(SELECT_COLS, { count: "exact" })
         .eq("archived", false)
-        .ilike("name", `%${debouncedSearch}%`)
         .order("name")
         .range(from, to);
+      // Each token must appear in the name (order-agnostic). Chaining
+      // .ilike() is an AND at the PostgREST level.
+      for (const t of tokens) q = q.ilike("name", `%${t}%`);
       if (exerciseId) q = q.neq("id", exerciseId);
       const { data, error, count } = await q;
       if (error) throw error;
@@ -635,7 +681,11 @@ export function QuickSwapButton({
         <ArrowLeftRight className="mr-1 h-3 w-3" /> Swap
       </Button>
       <Sheet open={open} onOpenChange={setOpen}>
-        <SheetContent side="bottom" className="max-h-[85vh] overflow-y-auto">
+        <SheetContent
+          side="bottom"
+          hideCloseButton
+          className="max-h-[85vh] overflow-y-auto"
+        >
           <SheetHeader className="text-left">
             <SheetTitle className="truncate">{exerciseName}</SheetTitle>
             <SheetDescription>
@@ -756,7 +806,12 @@ export function QuickSwapButton({
                 <p className="text-sm text-muted-foreground">No matches.</p>
               )}
               {(searchResults?.rows ?? []).map((ex) => (
-                <ExerciseRowCard key={ex.id} ex={ex} onSelect={() => startSelect(ex)} />
+                <ExerciseRowCard
+                  key={ex.id}
+                  ex={ex}
+                  highlightTokens={searchTokens(debouncedSearch)}
+                  onSelect={() => startSelect(ex)}
+                />
               ))}
 
               {searchResults && searchResults.total > PAGE_SIZE && (
