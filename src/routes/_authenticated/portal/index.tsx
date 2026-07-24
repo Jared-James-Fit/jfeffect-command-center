@@ -105,6 +105,11 @@ function PortalHome() {
   });
   useEffect(() => { if (client) logPerf("card:client loaded"); }, [client]);
 
+  useEffect(() => {
+    if (!client?.id) return;
+    void bootstrapOcc({ data: { clientId: client.id } }).catch(() => {});
+  }, [client?.id, bootstrapOcc]);
+
   const { data: assignedForms = [] } = useQuery({
     queryKey: ["nf-forms-for-client", client?.id],
     enabled: !!client?.id,
