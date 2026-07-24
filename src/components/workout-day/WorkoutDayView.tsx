@@ -4165,3 +4165,132 @@ function WorkoutLoadFailureCard({
     </Card>
   );
 }
+
+/* -------------------------------------------------------------------------- */
+/* Compact top-of-page summary + overflow menu                                 */
+/* -------------------------------------------------------------------------- */
+
+function WorkoutTopMenu() {
+  const { undo, canUndo } = useWorkoutUndo();
+  const [helpOpen, setHelpOpen] = useState(false);
+  return (
+    <>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button
+            size="icon"
+            variant="ghost"
+            className="h-9 w-9 text-muted-foreground hover:text-foreground"
+            aria-label="More actions"
+          >
+            <MoreHorizontal className="h-5 w-5" />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="w-44">
+          <DropdownMenuItem disabled={!canUndo} onSelect={() => void undo()}>
+            <Undo2 className="mr-2 h-4 w-4" /> Undo
+          </DropdownMenuItem>
+          <DropdownMenuItem onSelect={() => setHelpOpen(true)}>
+            <HelpCircle className="mr-2 h-4 w-4" /> Help
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+      <TrainingHelpSheet open={helpOpen} onOpenChange={setHelpOpen} />
+    </>
+  );
+}
+
+function scrollToFirstIncompleteExercise() {
+  if (typeof document === "undefined") return;
+  const target =
+    document.querySelector<HTMLElement>("[data-exercise-status='incomplete']") ??
+    document.querySelector<HTMLElement>("[data-workout-exercise]");
+  if (target && typeof target.scrollIntoView === "function") {
+    target.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+}
+
+function CompactWorkoutSummaryRow({
+  durationLabel,
+  setsDone,
+  setsTotal,
+  exercisesDone,
+  exercisesTotal,
+  startedAt,
+  completedAt,
+  onViewScore,
+  loggingQuality,
+}: {
+  durationLabel: string;
+  setsDone: number;
+  setsTotal: number;
+  exercisesDone: number;
+  exercisesTotal: number;
+  startedAt: string | null;
+  completedAt: string | null;
+  onViewScore?: () => void;
+  loggingQuality: { quality: any; percentage: number } | null;
+}) {
+  const pct = setsTotal > 0 ? Math.min(100, Math.round((setsDone / setsTotal) * 100)) : 0;
+  const status: import("@/lib/workout-progress").WorkoutProgressStatus =
+    completedAt || (setsTotal > 0 && setsDone >= setsTotal)
+      ? "completed"
+      : setsDone > 0
+        ? "in_progress"
+        : "not_started";
+  const showTimer = !!startedAt;
+  return (
+    <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-xs text-muted-foreground">
+      {showTimer && (
+        <div className="inline-flex items-center gap-1.5 rounded-md bg-secondary/60 px-2 py-1">
+          <Clock className="h-3.5 w-3.5 text-primary" />
+          <span className="font-semibold uppercase tracking-wide text-[10px] text-muted-foreground">
+            Workout Session
+          </span>
+          <WorkoutTimer startedAt={startedAt} completedAt={completedAt} className="ml-0.5" />
+        </div>
+      )}
+      <button
+        type="button"
+        onClick={scrollToFirstIncompleteExercise}
+        className="inline-flex items-center gap-2 rounded-md px-1 py-1 tabular-nums transition-colors hover:bg-secondary/60 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+        aria-label={`Workout progress ${pct}%, ${exercisesDone} of ${exercisesTotal} exercises. Scroll to first incomplete exercise.`}
+      >
+        <WorkoutProgressRing pct={pct} status={status} size={28} strokeWidth={3} />
+        <span className="font-bold text-foreground">
+          {pct}% · {exercisesDone}/{exercisesTotal}
+        </span>
+      </button>
+      <span className="inline-flex items-center gap-1 text-muted-foreground">
+        <span aria-hidden className="opacity-40">•</span>
+        {durationLabel}
+      </span>
+      {loggingQuality && (
+        <LoggingQualityBadge
+          quality={loggingQuality.quality}
+          percentage={loggingQuality.percentage}
+        />
+      )}
+      {completedAt && (
+        <>
+          <Badge
+            variant="outline"
+            className="border-green-500/30 bg-green-500/10 text-green-500"
+          >
+            <CheckCircle2 className="mr-1 h-3 w-3" /> Completed
+          </Badge>
+          {onViewScore && (
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-7 gap-1.5 border-primary/40 bg-primary/10 px-2.5 text-xs font-bold text-primary hover:bg-primary/20"
+              onClick={onViewScore}
+            >
+              <Trophy className="h-3.5 w-3.5" /> View Score
+            </Button>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
