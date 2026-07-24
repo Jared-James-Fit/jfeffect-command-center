@@ -26,6 +26,7 @@ import { SetupChecklistBanner } from "@/components/portal/setup-checklist-banner
 import { useEffect, useState } from "react";
 import { listMyPortalAppointments } from "@/lib/appointments.functions";
 import { useServerFn } from "@tanstack/react-start";
+import { setClientTimeZone, bootstrapClientOccurrences } from "@/lib/action-centre.functions";
 import { format, parseISO, isToday, isTomorrow } from "date-fns";
 import { SectionErrorBoundary } from "@/components/section-error-boundary";
 import { DashboardRefreshIndicator } from "@/components/portal/dashboard-refresh-indicator";
@@ -52,6 +53,17 @@ function PortalHome() {
 
   // Dev-only first-load timing.
   useEffect(() => { logPerf("dashboard mounted"); }, []);
+
+  // Quietly persist device tz + ensure the client has at least one active
+  // occurrence per enabled task definition. Both are idempotent server-side.
+  const persistTz = useServerFn(setClientTimeZone);
+  const bootstrapOcc = useServerFn(bootstrapClientOccurrences);
+  useEffect(() => {
+    try {
+      const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+      if (tz) void persistTz({ data: { timeZone: tz } }).catch(() => {});
+    } catch {}
+  }, [persistTz]);
 
   // Bootstrap query — collapses the dashboard startup waterfall.
   // Previously each dependent query (training_phases, client_goals_setup, etc.)
