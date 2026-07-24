@@ -139,10 +139,9 @@ export function RecoveryPreviewCard({ clientId }: Props) {
       // Feedback for sleep buckets (keyed via completion→client_id already scoped)
       const { data: feedback } = await (supabase as any)
         .from("pl_workout_feedback")
-        .select("created_at, sleep_bucket, client_id")
+        .select("created_at, sleep_bucket, recovery_today, client_id")
         .eq("client_id", clientId)
-        .gte("created_at", since180.toISOString())
-        .not("sleep_bucket", "is", null);
+        .gte("created_at", since180.toISOString());
 
       // Completions
       const { data: comps } = await (supabase as any)
@@ -177,9 +176,29 @@ export function RecoveryPreviewCard({ clientId }: Props) {
       }
       sleepSamples.sort((a, b) => new Date(a.ts).getTime() - new Date(b.ts).getTime());
 
-      const recoverySamples = ((reviews ?? []) as any[])
-        .filter((r) => r.recovery_today != null)
-        .map((r) => ({ ts: r.review_submitted_at, rating: Number(r.recovery_today) }));
+      // Recovery samples come from both member reviews and coaching-client
+      // workout feedback so every completed review's Recovery answer feeds
+      // the readiness ring — regardless of which surface the client used.
+      const recoverySamples: Array<{ ts: string; rating: number }> = [];
+      for (const r of (reviews ?? []) as any[]) {
+        if (r.recovery_today != null) {
+          recoverySamples.push({
+            ts: r.review_submitted_at,
+            rating: Number(r.recovery_today),
+          });
+        }
+      }
+      for (const f of (feedback ?? []) as any[]) {
+        if (f.recovery_today != null) {
+          recoverySamples.push({
+            ts: f.created_at,
+            rating: Number(f.recovery_today),
+          });
+        }
+      }
+      recoverySamples.sort(
+        (a, b) => new Date(a.ts).getTime() - new Date(b.ts).getTime(),
+      );
 
       const painDays7d = ((reviews ?? []) as any[])
         .filter((r) => r.pain === true && new Date(r.review_submitted_at).getTime() >= since7.getTime())
