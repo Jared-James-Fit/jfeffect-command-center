@@ -1,7 +1,11 @@
 import { Link } from "@tanstack/react-router";
-import { CheckCircle2, ChevronRight } from "lucide-react";
-import { useEffect, useState } from "react";
+import { CheckCircle2, ChevronRight, ClipboardCheck, Camera, Scale, Dumbbell, Ruler, FileText } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { useServerFn } from "@tanstack/react-start";
 import { cn } from "@/lib/utils";
+import { listActionCentre, type ActionCentreItem } from "@/lib/action-centre.functions";
+import { ActionTaskSheet } from "./action-task-sheet";
 
 export type ActionTone = "warning" | "primary" | "success";
 
@@ -17,6 +21,8 @@ export type ActionItem = {
   params?: Record<string, string>;
   search?: Record<string, unknown>;
   href?: string;
+  /** Present when this row is backed by a scheduled task occurrence. */
+  occurrence?: ActionCentreItem;
 };
 
 const toneOrder: Record<ActionTone, number> = { warning: 0, primary: 1, success: 2 };
@@ -44,8 +50,64 @@ function writeSeen(keys: Set<string>) {
   }
 }
 
-export function ActionCentre({ items }: { items: ActionItem[] }) {
-  const sorted = [...items].sort((a, b) => toneOrder[a.tone] - toneOrder[b.tone]);
+const TASK_ICONS: Record<string, any> = {
+  weekly_checkin: ClipboardCheck,
+  nutrition_review: FileText,
+  progress_photos: Camera,
+  monthly_assessment: Ruler,
+  bodyweight: Scale,
+  technique_review: Dumbbell,
+  custom_form: FileText,
+};
+
+function toneFromChip(t: ActionCentreItem["chip"]["tone"]): ActionTone {
+  if (t === "danger" || t === "warning") return "warning";
+  if (t === "success") return "success";
+  return "primary";
+}
+
+function occurrenceToItem(occ: ActionCentreItem, onOpen: (occ: ActionCentreItem) => void): ActionItem {
+  return {
+    key: `occ-${occ.id}`,
+    icon: TASK_ICONS[occ.task_type] ?? ClipboardCheck,
+    tone: toneFromChip(occ.chip.tone),
+    title: occ.title,
+    message: occ.subtitle ?? undefined,
+    chip: occ.chip.label,
+    onClick: () => onOpen(occ),
+    occurrence: occ,
+  };
+}
+
+export function ActionCentre({ items, clientId }: { items: ActionItem[]; clientId?: string | null }) {
+  const [activeOcc, setActiveOcc] = useState<ActionCentreItem | null>(null);
+  const [sheetOpen, setSheetOpen] = useState(false);
+  const [locallyCompleted, setLocallyCompleted] = useState<Set<string>>(new Set());
+
+  const list = useServerFn(listActionCentre);
+  const { data: occurrences = [] } = useQuery({
+    queryKey: ["action-centre", clientId],
+    enabled: !!clientId,
+    staleTime: 30_000,
+    queryFn: () => list({ data: { clientId: clientId! } }),
+  });
+
+  const openSheet = (occ: ActionCentreItem) => {
+    setActiveOcc(occ);
+    setSheetOpen(true);
+  };
+
+  const merged = useMemo<ActionItem[]>(() => {
+    const occItems = (occurrences as ActionCentreItem[])
+      .filter((o) => !locallyCompleted.has(o.id))
+      .map((o) => occurrenceToItem(o, openSheet));
+    const dedupKeys = new Set(occItems.map((i) => i.key));
+    const legacyFiltered = items.filter((i) => !dedupKeys.has(i.key));
+    return [...occItems, ...legacyFiltered];
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [occurrences, items, locallyCompleted]);
+
+  const sorted = [...merged].sort((a, b) => toneOrder[a.tone] - toneOrder[b.tone]);
   const [seen, setSeen] = useState<Set<string>>(() => readSeen());
 
   const currentKeys = sorted.map((it) => it.key);
@@ -95,7 +157,7 @@ export function ActionCentre({ items }: { items: ActionItem[] }) {
         <div className="flex items-center gap-3 rounded-2xl border border-border bg-card px-4 py-3">
           <CheckCircle2 className="h-5 w-5 text-emerald-500" />
           <div className="min-w-0">
-            <div className="text-sm font-semibold">You're all caught up</div>
+            <div className="text-sm font-semibold">✅ You're all caught up</div>
             <div className="text-xs text-muted-foreground">No actions require your attention.</div>
           </div>
         </div>
@@ -108,6 +170,12 @@ export function ActionCentre({ items }: { items: ActionItem[] }) {
           ))}
         </ul>
       )}
+      <ActionTaskSheet
+        item={activeOcc}
+        open={sheetOpen}
+        onOpenChange={setSheetOpen}
+        onCompleted={(id) => setLocallyCompleted((prev) => new Set(prev).add(id))}
+      />
     </section>
   );
 }
