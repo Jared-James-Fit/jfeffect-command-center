@@ -1787,32 +1787,42 @@ function MobileNavDrawer({
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent
-        side="bottom"
-        className="h-[100dvh] max-h-[100dvh] w-full overflow-hidden p-0 md:hidden"
-      >
-        <SheetHeader
-          className="border-b border-border px-4 pb-3"
-          style={{ paddingTop: "calc(env(safe-area-inset-top) + 0.75rem)" }}
+        <SheetContent
+          side="bottom"
+          hideCloseButton
+          className="h-[100dvh] max-h-[100dvh] w-full overflow-hidden p-0 md:hidden"
         >
-          <div className="flex items-center gap-2">
-            {submenu ? (
-              <button
-                type="button"
-                onClick={() => setSubmenu(null)}
-                className="grid h-11 w-11 -ml-2 place-items-center rounded-md text-foreground hover:bg-sidebar-accent active:bg-sidebar-accent/70"
-                aria-label="Back"
-              >
-                <ArrowLeft className="h-5 w-5" />
-              </button>
-            ) : (
-              <img src="/logo.png" alt="" className="h-8 w-8 shrink-0 rounded-md object-cover" />
-            )}
-            <SheetTitle className="flex-1 truncate text-left text-base font-black tracking-tight">
-              {submenu ? submenu.label : title}
-            </SheetTitle>
-          </div>
-        </SheetHeader>
+          <SheetHeader
+            className="border-b border-border px-4 pb-3"
+            style={{ paddingTop: "calc(env(safe-area-inset-top) + 0.75rem)" }}
+          >
+            <div className="flex items-center gap-2">
+              {submenu ? (
+                <button
+                  type="button"
+                  onClick={() => setSubmenu(null)}
+                  className="inline-flex h-10 min-w-[72px] items-center justify-center gap-1 rounded-full border border-border bg-background/90 px-3 text-sm font-semibold text-foreground shadow-sm ring-offset-background backdrop-blur transition hover:bg-secondary active:bg-secondary/80"
+                  aria-label="Back"
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                  <span>Back</span>
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => onOpenChange(false)}
+                  className="inline-flex h-10 min-w-[72px] items-center justify-center gap-1 rounded-full border border-border bg-background/90 px-3 text-sm font-semibold text-foreground shadow-sm ring-offset-background backdrop-blur transition hover:bg-secondary active:bg-secondary/80"
+                  aria-label="Back"
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                  <span>Back</span>
+                </button>
+              )}
+              <SheetTitle className="flex-1 truncate text-left text-base font-black tracking-tight">
+                {submenu ? submenu.label : title}
+              </SheetTitle>
+            </div>
+          </SheetHeader>
 
         {!submenu && (
           <div className="border-b border-border px-3 py-2">
