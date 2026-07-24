@@ -14,7 +14,7 @@ import {
 } from "@/lib/messages";
 import { transcribeVoiceMessage } from "@/lib/voice-transcribe.functions";
 import { Button } from "@/components/ui/button";
-import { useMediaViewer, getCachedRatio, setCachedRatio } from "@/components/media-viewer";
+import { ChatImageAttachment } from "@/components/chat-media-attachment";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -118,7 +118,7 @@ async function uploadAttachment(clientId: string, file: File): Promise<MessageAt
 /* ------------------------------- Signed URLs ------------------------------- */
 
 // Batch signed-URL resolver. One createSignedUrls() call for all attachment
-// paths in the visible thread, cached for 24h. Prevents per-attachment
+// paths in the visible thread, cached shorter than the signed URL TTL. Prevents per-attachment
 // waterfalls that made media pop in slowly.
 const EMPTY_URL_RECORD: Record<string, string> = {};
 
@@ -132,8 +132,8 @@ function useSignedUrls(paths: string[]) {
   const q = useQuery<Record<string, string>>({
     queryKey: ["msg-attach-batch", key],
     enabled: sorted.length > 0,
-    staleTime: 1000 * 60 * 60 * 24,
-    gcTime: 1000 * 60 * 60 * 24,
+    staleTime: 1000 * 60 * 50,
+    gcTime: 1000 * 60 * 55,
     queryFn: async () => {
       const { data, error } = await supabase.storage
         .from("message-attachments")
@@ -158,67 +158,9 @@ function useSignedUrlFor(path?: string): string | undefined {
 
 /* ------------------------------- Attachment Renderers ------------------------------- */
 
-function ImageAttachment({ att }: { att: MessageAttachment }) {
+function ImageAttachment({ att, messageId }: { att: MessageAttachment; messageId?: string }) {
   const signed = useSignedUrlFor(att.storage_path);
-  const src = att.storage_path ? signed : att.url;
-  const [errored, setErrored] = useState(false);
-  const [loaded, setLoaded] = useState(false);
-  const [retry, setRetry] = useState(0);
-  const viewer = useMediaViewer();
-  const looksLikeGif = !!att.url && /tenor\.com|\.gif(\?|$)/i.test(att.url);
-  const cacheKey = att.storage_path || att.url || att.name || "";
-  const cachedRatio = getCachedRatio(cacheKey);
-  const ratio = looksLikeGif ? 1 : cachedRatio ?? 4 / 3;
-  const displaySrc = src ? (retry > 0 ? `${src}${src.includes("?") ? "&" : "?"}_r=${retry}` : src) : "";
-  if (!src || errored) {
-    return (
-      <div className="flex w-[180px] flex-col items-center justify-center gap-2 rounded-xl border border-border bg-secondary/40 p-4">
-        <span className="text-4xl">{att.fallback_emoji ?? fallbackEmoji(att.name, att.category)}</span>
-        {att.name && <span className="line-clamp-1 text-[11px] text-muted-foreground">{att.name}</span>}
-        {errored && (
-          <button
-            type="button"
-            onClick={() => { setErrored(false); setLoaded(false); setRetry((r) => r + 1); }}
-            className="rounded-md border border-border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground hover:bg-secondary"
-          >
-            Retry
-          </button>
-        )}
-      </div>
-    );
-  }
-  return (
-    <button
-      type="button"
-      onClick={() => viewer.open(src, { alt: att.name, previewSrc: src })}
-      className="relative block w-[240px] max-w-full cursor-zoom-in overflow-hidden rounded-md bg-muted"
-      style={{ aspectRatio: String(ratio) }}
-      aria-label={att.name ? `Open image ${att.name}` : "Open image"}
-    >
-      {!loaded && (
-        <div className="absolute inset-0 animate-pulse bg-gradient-to-br from-muted to-secondary/50" aria-hidden="true" />
-      )}
-      <img
-        key={displaySrc}
-        src={displaySrc}
-        alt={att.name ?? ""}
-        loading="lazy"
-        decoding="async"
-        className={cn(
-          "absolute inset-0 h-full w-full object-cover transition-opacity",
-          loaded ? "opacity-100" : "opacity-0",
-        )}
-        onLoad={(e) => {
-          const el = e.currentTarget;
-          if (el.naturalWidth && el.naturalHeight) {
-            setCachedRatio(cacheKey, el.naturalWidth / el.naturalHeight);
-          }
-          setLoaded(true);
-        }}
-        onError={() => setErrored(true)}
-      />
-    </button>
-  );
+  return <ChatImageAttachment att={att} messageId={messageId} initialSignedUrl={signed} />;
 }
 
 function VideoAttachment({ att }: { att: MessageAttachment }) {
@@ -460,7 +402,7 @@ function AttachmentView({ att, mine, message }: { att: MessageAttachment; mine: 
       </a>
     );
   }
-  if (att.type === "image") return <ImageAttachment att={att} />;
+  if (att.type === "image") return <ImageAttachment att={att} messageId={message?.id} />;
   if (att.type === "video") return <VideoAttachment att={att} />;
   if (att.type === "audio") return <AudioAttachment att={att} mine={mine} message={message} />;
   if (att.type === "pdf" || att.type === "file") return <FileAttachment att={att} mine={mine} />;

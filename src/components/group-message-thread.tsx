@@ -702,7 +702,7 @@ export function GroupMessageThread({
                   {!isDeleted && !isEditing && m.attachments?.length > 0 && (
                     <div className="mt-2 space-y-2">
                       {m.attachments.map((a, i) => (
-                        <AttachmentView key={i} att={a as SharedAttachment} mine={mine} />
+                        <AttachmentView key={i} att={a as SharedAttachment} mine={mine} messageId={m.id} />
                       ))}
                     </div>
                   )}
