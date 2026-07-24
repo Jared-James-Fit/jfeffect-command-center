@@ -259,6 +259,41 @@ function useDebounced<T>(value: T, ms: number): T {
   return v;
 }
 
+/** Split a search query into whitespace-separated tokens (>=1 char). */
+function searchTokens(q: string): string[] {
+  return q
+    .toLowerCase()
+    .split(/\s+/)
+    .map((t) => t.trim())
+    .filter(Boolean);
+}
+
+/** Highlight every occurrence of any token (order-agnostic) in `text`. */
+function HighlightedName({ text, tokens }: { text: string; tokens: string[] }) {
+  if (tokens.length === 0) return <>{text}</>;
+  // Build one alternation regex, escaping each token, longest-first so
+  // "bench press" highlights the whole phrase before its parts.
+  const escaped = tokens
+    .slice()
+    .sort((a, b) => b.length - a.length)
+    .map((t) => t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
+  const re = new RegExp(`(${escaped.join("|")})`, "gi");
+  const parts = text.split(re);
+  return (
+    <>
+      {parts.map((p, i) =>
+        re.test(p) ? (
+          <mark key={i} className="rounded bg-primary/20 px-0.5 text-foreground">
+            {p}
+          </mark>
+        ) : (
+          <span key={i}>{p}</span>
+        ),
+      )}
+    </>
+  );
+}
+
 function youtubeEmbed(url: string | null | undefined): string | null {
   if (!url) return null;
   // Match v=ID or youtu.be/ID or /embed/ID
