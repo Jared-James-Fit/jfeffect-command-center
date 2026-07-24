@@ -635,7 +635,11 @@ export function QuickSwapButton({
         <ArrowLeftRight className="mr-1 h-3 w-3" /> Swap
       </Button>
       <Sheet open={open} onOpenChange={setOpen}>
-        <SheetContent side="bottom" className="max-h-[85vh] overflow-y-auto">
+        <SheetContent
+          side="bottom"
+          hideCloseButton
+          className="max-h-[85vh] overflow-y-auto"
+        >
           <SheetHeader className="text-left">
             <SheetTitle className="truncate">{exerciseName}</SheetTitle>
             <SheetDescription>
