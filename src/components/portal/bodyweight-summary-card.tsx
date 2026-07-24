@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card } from "@/components/ui/card";
@@ -67,6 +67,15 @@ export function BodyweightSummaryCard({ clientId, defaultUnit = "lb" }: Props) {
     setDate(todayLocalISO());
     setSheetOpen(true);
   };
+
+  // Allow the Action Centre "Bodyweight Update" task to open the log sheet
+  // in-place without navigating away from the home page.
+  useEffect(() => {
+    const onOpen = () => openSheet();
+    window.addEventListener("portal:log-bodyweight", onOpen);
+    return () => window.removeEventListener("portal:log-bodyweight", onOpen);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [todayEntry?.bodyweight, unit]);
 
   const save = async () => {
     const v = Number(weight);
