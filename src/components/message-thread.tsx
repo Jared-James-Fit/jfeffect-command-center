@@ -14,7 +14,7 @@ import {
 } from "@/lib/messages";
 import { transcribeVoiceMessage } from "@/lib/voice-transcribe.functions";
 import { Button } from "@/components/ui/button";
-import { ChatImageLightbox } from "@/components/chat-image-lightbox";
+import { useMediaViewer, getCachedRatio, setCachedRatio } from "@/components/media-viewer";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -162,42 +162,62 @@ function ImageAttachment({ att }: { att: MessageAttachment }) {
   const signed = useSignedUrlFor(att.storage_path);
   const src = att.storage_path ? signed : att.url;
   const [errored, setErrored] = useState(false);
-  const [lightboxOpen, setLightboxOpen] = useState(false);
+  const [loaded, setLoaded] = useState(false);
+  const [retry, setRetry] = useState(0);
+  const viewer = useMediaViewer();
   const looksLikeGif = !!att.url && /tenor\.com|\.gif(\?|$)/i.test(att.url);
+  const cacheKey = att.storage_path || att.url || att.name || "";
+  const cachedRatio = getCachedRatio(cacheKey);
+  const ratio = looksLikeGif ? 1 : cachedRatio ?? 4 / 3;
+  const displaySrc = src ? (retry > 0 ? `${src}${src.includes("?") ? "&" : "?"}_r=${retry}` : src) : "";
   if (!src || errored) {
     return (
-      <div className="flex w-[180px] flex-col items-center justify-center gap-1 rounded-xl border border-border bg-secondary/40 p-4">
-        <span className="text-5xl">{att.fallback_emoji ?? fallbackEmoji(att.name, att.category)}</span>
-        {att.name && <span className="text-[11px] text-muted-foreground">{att.name}</span>}
+      <div className="flex w-[180px] flex-col items-center justify-center gap-2 rounded-xl border border-border bg-secondary/40 p-4">
+        <span className="text-4xl">{att.fallback_emoji ?? fallbackEmoji(att.name, att.category)}</span>
+        {att.name && <span className="line-clamp-1 text-[11px] text-muted-foreground">{att.name}</span>}
+        {errored && (
+          <button
+            type="button"
+            onClick={() => { setErrored(false); setLoaded(false); setRetry((r) => r + 1); }}
+            className="rounded-md border border-border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground hover:bg-secondary"
+          >
+            Retry
+          </button>
+        )}
       </div>
     );
   }
   return (
-    <>
-      <button
-        type="button"
-        onClick={() => setLightboxOpen(true)}
-        className="block max-w-[280px] cursor-zoom-in"
-        aria-label={att.name ? `Open image ${att.name}` : "Open image"}
-      >
-        <img
-          src={src}
-          alt={att.name ?? ""}
-          className={cn(
-            looksLikeGif ? "h-[180px] w-[180px] object-cover" : "max-h-64 w-auto object-cover",
-            "rounded-md",
-          )}
-          loading="lazy"
-          onError={() => setErrored(true)}
-        />
-      </button>
-      <ChatImageLightbox
-        src={src}
-        alt={att.name}
-        open={lightboxOpen}
-        onClose={() => setLightboxOpen(false)}
+    <button
+      type="button"
+      onClick={() => viewer.open(src, { alt: att.name, previewSrc: src })}
+      className="relative block w-[240px] max-w-full cursor-zoom-in overflow-hidden rounded-md bg-muted"
+      style={{ aspectRatio: String(ratio) }}
+      aria-label={att.name ? `Open image ${att.name}` : "Open image"}
+    >
+      {!loaded && (
+        <div className="absolute inset-0 animate-pulse bg-gradient-to-br from-muted to-secondary/50" aria-hidden="true" />
+      )}
+      <img
+        key={displaySrc}
+        src={displaySrc}
+        alt={att.name ?? ""}
+        loading="lazy"
+        decoding="async"
+        className={cn(
+          "absolute inset-0 h-full w-full object-cover transition-opacity",
+          loaded ? "opacity-100" : "opacity-0",
+        )}
+        onLoad={(e) => {
+          const el = e.currentTarget;
+          if (el.naturalWidth && el.naturalHeight) {
+            setCachedRatio(cacheKey, el.naturalWidth / el.naturalHeight);
+          }
+          setLoaded(true);
+        }}
+        onError={() => setErrored(true)}
       />
-    </>
+    </button>
   );
 }
 
@@ -742,6 +762,11 @@ export function MessageThread({
     if (loadingOlder) return;
     const earliest = allMessages[0];
     if (!earliest) return;
+    // Capture current scroll geometry so we can restore the exact viewport
+    // once older messages have been prepended (prevents jump-to-top).
+    const el = scrollerRef.current;
+    const prevHeight = el?.scrollHeight ?? 0;
+    const prevTop = el?.scrollTop ?? 0;
     setLoadingOlder(true);
     try {
       const older = await listOlderMessages(clientId, earliest.created_at, 50, {
@@ -752,6 +777,14 @@ export function MessageThread({
           const seen = new Set([...prev, ...messages].map((m) => m.id));
           const fresh = older.filter((m) => !seen.has(m.id));
           return [...fresh, ...prev];
+        });
+        // After layout with the newly prepended rows, keep the user anchored
+        // to what they were reading by preserving (scrollHeight - scrollTop).
+        requestAnimationFrame(() => {
+          const node = scrollerRef.current;
+          if (!node) return;
+          const delta = node.scrollHeight - prevHeight;
+          node.scrollTop = prevTop + delta;
         });
       }
     } catch (e: any) {
