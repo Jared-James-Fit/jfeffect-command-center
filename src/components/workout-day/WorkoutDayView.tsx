@@ -1263,6 +1263,178 @@ function WorkoutDay({
   };
 
 
+  /**
+   * Shared Finish Workout handler. Persists the completion, then hands the
+   * athlete into the shared WorkoutReviewEditor (via CompletedWorkoutActions
+   * with autoOpenReview) so the first review and Edit Review use the exact
+   * same form. sessionRating/notes are intentionally submitted as null here —
+   * the shared review sheet writes the rating, sleep, recovery, and coach
+   * notes to pl_workout_feedback / member_workout_reviews as a single UPSERT.
+   */
+  async function handleFinishWorkout() {
+    if (!client?.id) return;
+    if (completion?.completed_at) {
+      qc.invalidateQueries({ queryKey: ["pl-day-completion", dayId] });
+      setAutoOpenReviewAfterFinish(true);
+      return;
+    }
+    await metaSave.flush();
+    try {
+      const isMemberStart = adapter?.kind === "member";
+      const memberRefStart = isMemberStart ? (adapter?.ref as any) : null;
+      const startData = isMemberStart && memberRefStart?.enrollmentId
+        ? {
+            kind: "member" as const,
+            enrollmentId: memberRefStart.enrollmentId,
+            weekIndex: Number(String(dayId).split(":")[0]),
+            dayIndex: Number(String(dayId).split(":")[1]),
+          }
+        : {
+            kind: "client" as const,
+            dayId,
+            scheduledWorkoutId,
+            actAsClientId: isImpersonating && client?.id ? client.id : null,
+          };
+      await startWorkoutSrv({ data: startData as any });
+    } catch (err) {
+      console.warn("pre-complete startWorkout failed", err);
+    }
+
+    const displayUnit: "kg" | "lb" =
+      ((client as any)?.preferred_weight_unit === "kg" ? "kg" : "lb");
+    const computed = computeWorkoutSummary(rows as any[], results as any[], {
+      displayUnit,
+      hasNote: false,
+    });
+    const requiredRows: RequiredRowSpec[] = (rows as any[]).map((r: any) => ({
+      rowId: String(r.id),
+      prescribedSets: Math.max(1, Number(r.sets) || 1),
+      skipped: !!r.skipped,
+      metricKind: ((
+        r?.tracking_type === "time" ||
+        r?.measurement_type === "time" ||
+        (r as any)?.exercises?.default_measurement_type === "time" ||
+        (r?.duration_seconds != null && Number(r.duration_seconds) > 0) ||
+        /\b(sec(onds?)?|min(utes?)?)\b/i.test(String(r?.reps_text ?? ""))
+      ) ? "timed" : "load_reps") as RowMetricKind,
+    }));
+    const heartbeats = readHeartbeatTimestamps(completion?.id ?? null);
+    const typedMin = Number.parseInt(actualMin, 10);
+    const effStart = effectiveWorkoutStart(
+      completion?.started_at ?? completion?.in_progress_at ?? null,
+      readWorkoutPageOpenAt(dayId),
+    );
+    const activeMin = computeActiveDurationMin(effStart);
+    const resolvedDurationMin = Number.isFinite(typedMin) && typedMin > 0
+      ? typedMin
+      : activeMin ?? completion?.actual_duration_min ?? null;
+
+    if (typeof navigator !== "undefined" && navigator.onLine === false) {
+      saveOfflineCompletion({
+        id: `${dayId}:${client.id}`,
+        dayId,
+        clientId: client.id,
+        payload: {
+          kind: "client",
+          dayId,
+          scheduledWorkoutId,
+          requiredRows,
+          activityTimestamps: heartbeats,
+          completionMethod: "manual",
+          completionSource: "workout_view",
+          sessionRating: null,
+          notes: completion?.client_notes ?? null,
+          actualDurationMin: resolvedDurationMin,
+          sessionWeightTotal: computed.totalLifted > 0 ? computed.totalLifted : null,
+          sessionWeightUnit: computed.totalLifted > 0 ? displayUnit : null,
+          confirmedMissingLogs: true,
+        },
+      });
+      setLastSummary(computed);
+      recapFromSubmitRef.current = true;
+      setTimeout(() => {
+        try {
+          document.body.style.overflow = "";
+          document.body.style.pointerEvents = "";
+          document.body.style.position = "";
+          document.body.style.top = "";
+        } catch {}
+        setSummaryOpen(true);
+      }, 200);
+      toast.message("Workout saved offline", {
+        description: "We'll sync it when you're back online.",
+      });
+      return;
+    }
+
+    const isMember = adapter?.kind === "member";
+    const memberEnrollmentId = isMember ? (adapter?.ref as any)?.enrollmentId : null;
+    const [memberWeekRaw, memberDayRaw] = isMember ? String(dayId).split(":") : [];
+    const memberWeekIndex = isMember ? Number(memberWeekRaw) : null;
+    const memberDayIndex = isMember ? Number(memberDayRaw) : null;
+    try {
+      await completeWorkoutSrv({
+        data: isMember && memberEnrollmentId && Number.isFinite(memberWeekIndex) && Number.isFinite(memberDayIndex)
+          ? {
+              kind: "member" as const,
+              enrollmentId: memberEnrollmentId,
+              weekIndex: memberWeekIndex!,
+              dayIndex: memberDayIndex!,
+              requiredRows,
+              activityTimestamps: heartbeats,
+              completionMethod: "manual",
+              completionSource: "workout_view",
+              sessionRating: null,
+              notes: null,
+              actualDurationMin: resolvedDurationMin,
+              sessionWeightTotal: computed.totalLifted > 0 ? computed.totalLifted : null,
+              sessionWeightUnit: computed.totalLifted > 0 ? displayUnit : null,
+              confirmedMissingLogs: true,
+            }
+          : {
+              kind: "client" as const,
+              dayId,
+              scheduledWorkoutId,
+              requiredRows,
+              activityTimestamps: heartbeats,
+              completionMethod: "manual",
+              completionSource: "workout_view",
+              sessionRating: null,
+              notes: completion?.client_notes ?? null,
+              actualDurationMin: resolvedDurationMin,
+              sessionWeightTotal: computed.totalLifted > 0 ? computed.totalLifted : null,
+              sessionWeightUnit: computed.totalLifted > 0 ? displayUnit : null,
+              confirmedMissingLogs: true,
+              actAsClientId: isImpersonating && client?.id ? client.id : null,
+            },
+      });
+    } catch (err: any) {
+      toast.error("Could not submit workout", { description: err?.message });
+      return;
+    }
+
+    if (draftKey) clearLocalDraft(draftKey);
+    clearHeartbeatTimestamps(completion?.id ?? null);
+    clearWorkoutPageOpen(dayId);
+    setNotes("");
+    setActualMin("");
+    await qc.refetchQueries({ queryKey: ["pl-day-completion", dayId] });
+    if (client?.id) {
+      await Promise.all([
+        qc.invalidateQueries({ queryKey: ["my-workouts", client.id] }),
+        qc.invalidateQueries({ queryKey: ["workouts-experience-client", client.id] }),
+        qc.invalidateQueries({ queryKey: ["workouts-priority-rows", client.id] }),
+        qc.invalidateQueries({ queryKey: ["portal-workouts-client"] }),
+        qc.invalidateQueries({ queryKey: ["schedule"] }),
+        qc.invalidateQueries({ queryKey: ["resolved-client-days"] }),
+        qc.invalidateQueries({ queryKey: ["pl-workout-feedback", dayId, client.id] }),
+      ]);
+    }
+    setLastSummary(computed);
+    recapFromSubmitRef.current = true;
+    setAutoOpenReviewAfterFinish(true);
+  }
+
   if (!day) {
     return (
       <div className="mx-auto w-full max-w-3xl space-y-3 p-6" aria-busy="true" aria-label="Loading workout">
