@@ -315,10 +315,12 @@ function ExerciseRowCard({
   ex,
   reason,
   onSelect,
+  highlightTokens,
 }: {
   ex: ExerciseLite;
   reason?: string;
   onSelect: () => void;
+  highlightTokens?: string[];
 }) {
   const [playing, setPlaying] = useState(false);
   const meta = [ex.muscle_group, ex.equipment].filter(Boolean).join(" · ");
@@ -332,7 +334,9 @@ function ExerciseRowCard({
     <div className="rounded-md border border-border bg-card">
       <div className="flex items-center justify-between gap-2 px-3 py-2">
         <div className="min-w-0 flex-1">
-          <div className="truncate text-sm font-medium">{ex.name}</div>
+          <div className="truncate text-sm font-medium">
+            <HighlightedName text={ex.name} tokens={highlightTokens ?? []} />
+          </div>
           {reason && <div className="mt-0.5 text-[11px] font-medium text-primary/80">{reason}</div>}
           {meta && <div className="mt-0.5 truncate text-[11px] text-muted-foreground">{meta}</div>}
         </div>
