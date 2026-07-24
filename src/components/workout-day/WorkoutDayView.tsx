@@ -3044,7 +3044,7 @@ function ExerciseNotesSheet({ open, onOpenChange, clientId, dayId, dayTitle, row
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="bottom" className="h-[88vh] overflow-y-auto p-0 sm:max-w-xl sm:mx-auto sm:rounded-t-2xl">
+      <SheetContent side="bottom" hideCloseButton className="h-[88vh] overflow-y-auto p-0 sm:max-w-xl sm:mx-auto sm:rounded-t-2xl">
         <SheetHeader className="sticky top-0 z-10 bg-background/95 backdrop-blur border-b border-border px-5 py-3 text-left">
           <SheetTitle className="text-base font-black">{exerciseName}</SheetTitle>
           <SheetDescription className="text-xs">{dayTitle} · Exercise notes</SheetDescription>
