@@ -108,8 +108,9 @@ export function RecoveryPreviewCard({ clientId }: Props) {
       const now = new Date();
       const since180 = new Date(now); since180.setDate(now.getDate() - 180);
       const since30 = new Date(now); since30.setDate(now.getDate() - 30);
-      const since14 = new Date(now); since14.setDate(now.getDate() - 14);
+      const since35 = new Date(now); since35.setDate(now.getDate() - 35);
       const since7 = new Date(now); since7.setDate(now.getDate() - 7);
+      const since14 = new Date(now); since14.setDate(now.getDate() - 14);
 
       // Blocks for "current block avg"
       const { data: blocks } = await (supabase as any)
@@ -149,22 +150,92 @@ export function RecoveryPreviewCard({ clientId }: Props) {
         .select("completed_at")
         .eq("client_id", clientId)
         .not("completed_at", "is", null)
-        .gte("completed_at", since30.toISOString());
+        .gte("completed_at", since180.toISOString());
       const completedTs: number[] = (comps ?? []).map((c: any) => new Date(c.completed_at).getTime());
       const workouts7d = completedTs.filter((t: number) => t >= since7.getTime()).length;
-      const workouts14d = completedTs.filter((t: number) => t >= since14.getTime()).length;
-      const completed30d = completedTs.length;
+      const completed30d = completedTs.filter((t: number) => t >= since30.getTime()).length;
+      const completedPrev30d = completedTs.filter(
+        (t: number) => t < since30.getTime() && t >= since30.getTime() - 30 * 86_400_000,
+      ).length;
 
-      // Scheduled workouts in last 30d (best-effort)
+      // Consecutive-workout streak from the most recent completed session
+      // walking backwards: any completed session within 7 days of the previous
+      // counts as continuing the streak.
+      const sortedDesc = [...completedTs].sort((a, b) => b - a);
+      let streak = 0;
+      for (let i = 0; i < sortedDesc.length; i++) {
+        if (i === 0) { streak = 1; continue; }
+        if (sortedDesc[i - 1] - sortedDesc[i] <= 7 * 86_400_000) streak += 1;
+        else break;
+      }
+
+      // Scheduled workouts in last 30d + rescheduled count (best-effort).
       let scheduled30d: number | null = null;
+      let rescheduled30d = 0;
+      let scheduledPrev30d: number | null = null;
       try {
-        const { count } = await (supabase as any)
+        const { data: sched } = await (supabase as any)
           .from("pl_scheduled_workouts")
-          .select("id", { count: "exact", head: true })
+          .select("scheduled_date, original_date")
           .eq("client_id", clientId)
-          .gte("scheduled_date", since30.toISOString().slice(0, 10));
-        scheduled30d = typeof count === "number" ? count : null;
+          .gte("scheduled_date", (new Date(now.getTime() - 60 * 86_400_000)).toISOString().slice(0, 10));
+        const rows = (sched ?? []) as Array<{ scheduled_date: string; original_date: string | null }>;
+        const cutoff30 = since30.toISOString().slice(0, 10);
+        const cutoff60 = new Date(now.getTime() - 60 * 86_400_000).toISOString().slice(0, 10);
+        const in30 = rows.filter((r) => r.scheduled_date >= cutoff30);
+        const inPrev30 = rows.filter((r) => r.scheduled_date < cutoff30 && r.scheduled_date >= cutoff60);
+        scheduled30d = in30.length;
+        scheduledPrev30d = inPrev30.length;
+        rescheduled30d = in30.filter(
+          (r) => r.original_date && r.original_date !== r.scheduled_date,
+        ).length;
       } catch { scheduled30d = null; }
+
+      // Training load: sets, tonnage, avg RPE for last 7 vs last 28 days.
+      const LB_PER_KG = 2.2046226;
+      const { data: setRows } = await (supabase as any)
+        .from("pl_row_results")
+        .select(
+          "completed_at, actual_reps, actual_rpe, actual_load, actual_load_unit, entered_value, entered_unit, normalized_lb, normalized_kg",
+        )
+        .eq("client_id", clientId)
+        .not("actual_reps", "is", null)
+        .gte("completed_at", since35.toISOString());
+      const setsAll = ((setRows ?? []) as any[]).map((r) => {
+        let load_lb = 0;
+        if (r.normalized_lb != null) load_lb = Number(r.normalized_lb) || 0;
+        else if (r.normalized_kg != null) load_lb = (Number(r.normalized_kg) || 0) * LB_PER_KG;
+        else {
+          const raw = Number(r.entered_value ?? r.actual_load) || 0;
+          const unit = (r.entered_unit ?? r.actual_load_unit ?? "lb") as string;
+          load_lb = unit === "kg" ? raw * LB_PER_KG : raw;
+        }
+        return {
+          t: new Date(r.completed_at).getTime(),
+          reps: Number(r.actual_reps) || 0,
+          load_lb,
+          rpe: r.actual_rpe != null ? Number(r.actual_rpe) : null,
+        };
+      });
+      const buildWindow = (fromMs: number, toMs: number) => {
+        const rows = setsAll.filter((s) => s.t >= fromMs && s.t < toMs);
+        const sets = rows.length;
+        const tonnage = rows.reduce((s, r) => s + r.load_lb * r.reps, 0);
+        const rpeVals = rows.map((r) => r.rpe).filter((n): n is number => n != null);
+        const avgRpe = rpeVals.length
+          ? Number((rpeVals.reduce((s, n) => s + n, 0) / rpeVals.length).toFixed(2))
+          : null;
+        const days = new Set(rows.map((r) => new Date(r.t).toISOString().slice(0, 10))).size;
+        return { sets, tonnage, avgRpe, days };
+      };
+      const current7 = buildWindow(since7.getTime(), now.getTime() + 1);
+      const baseline28 = buildWindow(now.getTime() - 28 * 86_400_000, since7.getTime());
+
+      const previousAdherence =
+        scheduledPrev30d && scheduledPrev30d > 0
+          ? Math.round((completedPrev30d / scheduledPrev30d) * 100)
+          : null;
+      const missed30d = scheduled30d != null ? Math.max(0, scheduled30d - completed30d) : 0;
 
       // Sleep samples merged (reviews + feedback)
       const sleepSamples: SleepSample[] = [];
@@ -222,13 +293,20 @@ export function RecoveryPreviewCard({ clientId }: Props) {
       const breakdown = buildReadinessBreakdown({
         sleepSamples,
         recoverySamples,
-        workouts7d,
-        workouts14d,
-        completed30d,
-        scheduled30d,
+        load: { current7, baseline28 },
+        consistency: {
+          scheduled: scheduled30d ?? 0,
+          completed: completed30d,
+          missed: missed30d,
+          rescheduled: rescheduled30d,
+          streak,
+          previousAdherence,
+        },
         scores: allScores,
         painDays7d,
       });
+      // avoid unused var warning under strict TS
+      void workouts7d; void since14;
 
       const insights = buildPersonalInsights(series, sleepSamples, completed30d, scheduled30d);
 
@@ -573,6 +651,12 @@ function FactorSheet({ factor }: { factor: FactorDetail }) {
           Detail view for {factor.label}
         </SheetDescription>
       </SheetHeader>
+
+      {factor.tooltip && (
+        <p className="mt-2 text-xs leading-snug text-muted-foreground">
+          {factor.tooltip}
+        </p>
+      )}
 
       <div className="mt-4 flex items-center gap-4 rounded-2xl border border-border/50 bg-muted/30 p-4">
         <div className="relative shrink-0" style={{ width: 72, height: 72 }}>

@@ -32,8 +32,19 @@ export interface FactorDetail {
   trend: "Improving" | "Stable" | "Dropping" | "Building" | "—";
   impact: "Positive" | "Neutral" | "Limiting";
   recommendation: string;
+  /** One-sentence dummy-proof explanation of the metric. */
+  tooltip: string;
   isMissing?: boolean;
 }
+
+const TOOLTIPS: Record<FactorKey, string> = {
+  sleep: "Sleep before your recent training sessions.",
+  recovery: "Your reported recovery from recent workout reviews.",
+  load: "Your recent training stress compared with your normal workload.",
+  consistency: "How consistently you've completed your scheduled workouts.",
+  performance: "How your lifting performance has changed over recent workouts.",
+  pain: "Reported pain or injury affecting training.",
+};
 
 export interface ReadinessBreakdown {
   factors: Record<FactorKey, FactorDetail>;
@@ -77,6 +88,7 @@ function buildSleep(samples: SleepSample[]): FactorDetail {
       trend: "—",
       impact: "Neutral",
       recommendation: "Log sleep in your next workout review so we can factor it in.",
+      tooltip: TOOLTIPS.sleep,
       isMissing: true,
     };
   }
@@ -112,7 +124,7 @@ function buildSleep(samples: SleepSample[]): FactorDetail {
       { label: "7-Day Average", value: avg7 != null ? `${avg7.toFixed(1)} h` : "—" },
       { label: "30-Day Average", value: avg30 != null ? `${avg30.toFixed(1)} h` : "—" },
     ],
-    trend, impact, recommendation: rec,
+    trend, impact, recommendation: rec, tooltip: TOOLTIPS.sleep,
   };
 }
 
@@ -130,6 +142,7 @@ function buildRecoveryFeel(samples: Array<{ ts: string; rating: number }>): Fact
       trend: "—",
       impact: "Neutral",
       recommendation: "Rate how recovered you feel in your next check-in for a sharper score.",
+      tooltip: TOOLTIPS.recovery,
       isMissing: true,
     };
   }
@@ -167,69 +180,198 @@ function buildRecoveryFeel(samples: Array<{ ts: string; rating: number }>): Fact
         : info.s >= 60
           ? "Warm up carefully and let today's top set dictate the load."
           : "Reduce optional volume and keep effort under the prescribed RPE cap today.",
+    tooltip: TOOLTIPS.recovery,
   };
 }
 
-function buildLoad(workouts7d: number, workouts14d: number): FactorDetail {
-  let score = 90;
-  let status: string;
-  if (workouts7d === 0) { score = 60; status = "Under-training"; }
-  else if (workouts7d <= 2) { score = 88; status = "Light"; }
-  else if (workouts7d <= 4) { score = 92; status = "Moderate"; }
-  else if (workouts7d === 5) { score = 72; status = "High"; }
-  else { score = 55; status = "Very High"; }
-  const prior = workouts14d - workouts7d;
-  const deltaPct = prior > 0 ? Math.round(((workouts7d - prior) / prior) * 100) : 0;
-  const trend: FactorDetail["trend"] =
-    prior === 0 ? "Building" : Math.abs(deltaPct) < 15 ? "Stable" : deltaPct > 0 ? "Improving" : "Dropping";
+export interface LoadWindow {
+  /** Working sets counted in the window. */
+  sets: number;
+  /** Total tonnage in lb. */
+  tonnage: number;
+  /** Average RPE across logged sets. null when nothing logged. */
+  avgRpe: number | null;
+  /** Distinct training days in the window. */
+  days: number;
+}
+
+function buildLoad(current7: LoadWindow, baseline28: LoadWindow): FactorDetail {
+  const hasBaseline = baseline28.sets > 0 || baseline28.tonnage > 0;
+  // Normalize baseline to a 7-day rate for a fair compare.
+  const baseWeeklySets = hasBaseline ? baseline28.sets / 4 : 0;
+  const baseWeeklyTon = hasBaseline ? baseline28.tonnage / 4 : 0;
+  const setsDelta = current7.sets - baseWeeklySets;
+  const tonDeltaPct =
+    baseWeeklyTon > 0 ? Math.round(((current7.tonnage - baseWeeklyTon) / baseWeeklyTon) * 100) : 0;
+  const rpeDelta =
+    baseline28.avgRpe != null && current7.avgRpe != null
+      ? Number((current7.avgRpe - baseline28.avgRpe).toFixed(1))
+      : null;
+
+  // Bucket relative to baseline tonnage.
+  let label:
+    | "Much Lower"
+    | "Lower"
+    | "Normal"
+    | "Slightly Elevated"
+    | "High"
+    | "Very High";
+  let score: number;
+  if (!hasBaseline || current7.sets === 0) {
+    label = "Normal"; score = 75;
+  } else if (tonDeltaPct <= -40) { label = "Much Lower"; score = 70; }
+  else if (tonDeltaPct <= -15) { label = "Lower"; score = 82; }
+  else if (tonDeltaPct < 10) { label = "Normal"; score = 92; }
+  else if (tonDeltaPct < 25) { label = "Slightly Elevated"; score = 80; }
+  else if (tonDeltaPct < 45) { label = "High"; score = 62; }
+  else { label = "Very High"; score = 45; }
+
+  const trend: FactorDetail["trend"] = !hasBaseline
+    ? "Building"
+    : Math.abs(tonDeltaPct) < 8
+      ? "Stable"
+      : tonDeltaPct > 0
+        ? "Improving"
+        : "Dropping";
   const impact: FactorDetail["impact"] =
     score >= 80 ? "Positive" : score >= 60 ? "Neutral" : "Limiting";
-  const rec =
-    workouts7d >= 5
-      ? "Your workload has increased recently. Stay within today's prescribed RPE and prioritize quality over extra volume."
-      : workouts7d === 0
-        ? "Ease back in — keep first working sets 1–2 RIR to rebuild feel."
-        : "Load is well-managed. Train as planned.";
+
+  const contribParts: string[] = [];
+  if (hasBaseline) {
+    if (Math.abs(setsDelta) >= 3) {
+      contribParts.push(`${setsDelta > 0 ? "+" : ""}${Math.round(setsDelta)} working sets`);
+    }
+    if (Math.abs(tonDeltaPct) >= 5) {
+      contribParts.push(`${tonDeltaPct > 0 ? "+" : ""}${tonDeltaPct}% tonnage`);
+    }
+    if (rpeDelta != null && Math.abs(rpeDelta) >= 0.3) {
+      contribParts.push(
+        `avg RPE ${baseline28.avgRpe!.toFixed(1)} → ${current7.avgRpe!.toFixed(1)}`,
+      );
+    }
+  }
+  const contribLine = contribParts.length ? `Main contributors: ${contribParts.join(", ")}.` : "";
+
+  let rec: string;
+  if (!hasBaseline) {
+    rec = "Building a baseline of your normal workload. Train as planned.";
+  } else if (label === "Very High" || label === "High") {
+    rec = `Your workload is ${Math.abs(tonDeltaPct)}% above your normal training volume. Stay within today's prescribed RPE and avoid adding extra back-off sets.`;
+  } else if (label === "Slightly Elevated") {
+    rec = `Workload is slightly above baseline (+${tonDeltaPct}%). Execute prescribed work — skip optional finishers.`;
+  } else if (label === "Much Lower" || label === "Lower") {
+    rec = `Your workload is ${Math.abs(tonDeltaPct)}% below your baseline. You appear well recovered — a good day to push prescribed top sets if they move well.`;
+  } else {
+    rec = "Workload is in your normal range. Train as planned.";
+  }
+  if (contribLine) rec = `${rec} ${contribLine}`.trim();
+
   return {
     key: "load",
     label: "Training Load",
     emoji: "📈",
     score,
     status: statusFor(score),
-    currentValue: status,
+    currentValue: label,
+    subtitle: hasBaseline
+      ? `${tonDeltaPct >= 0 ? "+" : ""}${tonDeltaPct}% vs your normal`
+      : undefined,
     metrics: [
-      { label: "Last 7 Days", value: `${workouts7d} workouts` },
-      { label: "Previous 7 Days", value: `${prior} workouts` },
-      { label: "Change", value: prior === 0 ? "—" : `${deltaPct >= 0 ? "+" : ""}${deltaPct}%` },
+      { label: "Last 7 Days", value: `${current7.sets} sets · ${Math.round(current7.tonnage).toLocaleString()} lb` },
+      {
+        label: "Baseline (28d)",
+        value: hasBaseline
+          ? `${Math.round(baseWeeklySets)} sets · ${Math.round(baseWeeklyTon).toLocaleString()} lb / wk`
+          : "—",
+      },
+      {
+        label: "Avg RPE",
+        value:
+          current7.avgRpe != null
+            ? `${current7.avgRpe.toFixed(1)}${baseline28.avgRpe != null ? ` (base ${baseline28.avgRpe.toFixed(1)})` : ""}`
+            : "—",
+      },
+      {
+        label: "vs Normal",
+        value: hasBaseline ? `${tonDeltaPct >= 0 ? "+" : ""}${tonDeltaPct}%` : "—",
+      },
     ],
-    trend, impact, recommendation: rec,
+    trend,
+    impact,
+    recommendation: rec,
+    tooltip: TOOLTIPS.load,
   };
 }
 
-function buildConsistency(completed30d: number, scheduled30d: number | null): FactorDetail {
-  const target = scheduled30d && scheduled30d > 0 ? scheduled30d : Math.max(completed30d, 12);
-  const pct = Math.min(100, Math.round((completed30d / target) * 100));
+export interface ConsistencyInput {
+  scheduled: number;
+  completed: number;
+  missed: number;
+  rescheduled: number;
+  streak: number;
+  /** Adherence % over the prior comparable window, for trend. */
+  previousAdherence: number | null;
+}
+
+function buildConsistency(inp: ConsistencyInput): FactorDetail {
+  const { scheduled, completed, missed, rescheduled, streak, previousAdherence } = inp;
+  const hasSchedule = scheduled > 0;
+  // Adherence: completed vs scheduled. Small penalty for reschedules.
+  const raw = hasSchedule ? (completed / scheduled) * 100 : completed > 0 ? 100 : 0;
+  const penalty = hasSchedule ? Math.min(8, rescheduled * 1.5) : 0;
+  const pct = Math.max(0, Math.min(100, Math.round(raw - penalty)));
+
+  let trend: FactorDetail["trend"] = "Stable";
+  if (previousAdherence != null) {
+    const diff = pct - previousAdherence;
+    trend = Math.abs(diff) < 5 ? "Stable" : diff > 0 ? "Improving" : "Dropping";
+  } else if (!hasSchedule) {
+    trend = "Building";
+  }
+
   const impact: FactorDetail["impact"] =
-    pct >= 80 ? "Positive" : pct >= 60 ? "Neutral" : "Limiting";
+    pct >= 85 ? "Positive" : pct >= 65 ? "Neutral" : "Limiting";
+
+  let rec: string;
+  if (!hasSchedule) {
+    rec = "No scheduled workouts detected yet. Once a program is assigned we'll track adherence here.";
+  } else if (pct >= 90) {
+    rec = "Excellent adherence. Keep completing scheduled sessions.";
+  } else if (pct >= 75) {
+    rec = missed > 0
+      ? `You have missed ${missed} workout${missed === 1 ? "" : "s"} this window. Lock in the remaining sessions to hold your streak.`
+      : "Consistency is solid. Stay on plan this week.";
+  } else {
+    rec = missed > 0
+      ? `You have missed ${missed} workout${missed === 1 ? "" : "s"} recently. Prioritize showing up — even a shorter session beats a skipped one.`
+      : "Focus on showing up — even a shorter session beats a skipped one.";
+  }
+
+  const metrics: FactorDetail["metrics"] = [
+    {
+      label: "Completed",
+      value: hasSchedule
+        ? `${completed} / ${scheduled} workouts`
+        : `${completed} workouts`,
+    },
+    { label: "Adherence", value: hasSchedule ? `${pct}%` : "—" },
+    { label: "Current Streak", value: `${streak} workout${streak === 1 ? "" : "s"}` },
+    { label: "Missed", value: `${missed}` },
+  ];
+
   return {
     key: "consistency",
     label: "Consistency",
     emoji: "🏋️",
     score: pct,
     status: statusFor(pct),
-    currentValue: `${pct}%`,
-    metrics: [
-      { label: "Completed (30d)", value: `${completed30d} workouts` },
-      { label: "Target", value: `${target} workouts` },
-    ],
-    trend: "Stable",
+    currentValue: hasSchedule ? `${pct}%` : `${completed} done`,
+    subtitle: hasSchedule ? `${completed} of ${scheduled} scheduled` : undefined,
+    metrics,
+    trend,
     impact,
-    recommendation:
-      pct >= 80
-        ? "Great consistency. Keep the streak going."
-        : pct >= 60
-          ? "Stack one more session this week to lock in momentum."
-          : "Focus on showing up — even a shorter session beats a skipped one.",
+    recommendation: rec,
+    tooltip: TOOLTIPS.consistency,
   };
 }
 
@@ -246,6 +388,7 @@ function buildPerformance(scores: number[]): FactorDetail {
       trend: "Building",
       impact: "Neutral",
       recommendation: "A few more sessions will unlock a full performance trend.",
+      tooltip: TOOLTIPS.performance,
       isMissing: scores.length === 0,
     };
   }
@@ -278,6 +421,7 @@ function buildPerformance(scores: number[]): FactorDetail {
         : trend === "Dropping"
           ? "Trend is slipping. Prioritize technique and stay 1 RIR from failure."
           : "Performance is holding steady. Execute as prescribed.",
+    tooltip: TOOLTIPS.performance,
   };
 }
 
@@ -300,16 +444,15 @@ function buildPain(painDays7d: number): FactorDetail {
     recommendation: clean
       ? "No pain flagged — train freely within today's prescription."
       : "Sub in a pain-free variation for anything that flares up and let your coach know.",
+    tooltip: TOOLTIPS.pain,
   };
 }
 
 export interface BreakdownInput {
   sleepSamples: SleepSample[];
   recoverySamples: Array<{ ts: string; rating: number }>;
-  workouts7d: number;
-  workouts14d: number;
-  completed30d: number;
-  scheduled30d: number | null;
+  load: { current7: LoadWindow; baseline28: LoadWindow };
+  consistency: ConsistencyInput;
   scores: number[];
   painDays7d: number;
 }
@@ -318,8 +461,8 @@ export function buildReadinessBreakdown(inp: BreakdownInput): ReadinessBreakdown
   const factors: Record<FactorKey, FactorDetail> = {
     sleep: buildSleep(inp.sleepSamples),
     recovery: buildRecoveryFeel(inp.recoverySamples),
-    load: buildLoad(inp.workouts7d, inp.workouts14d),
-    consistency: buildConsistency(inp.completed30d, inp.scheduled30d),
+    load: buildLoad(inp.load.current7, inp.load.baseline28),
+    consistency: buildConsistency(inp.consistency),
     performance: buildPerformance(inp.scores),
     pain: buildPain(inp.painDays7d),
   };
