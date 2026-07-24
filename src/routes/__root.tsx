@@ -12,6 +12,7 @@ import { ClientImpersonationProvider } from "@/lib/client-impersonation";
 import { TeamImpersonationProvider } from "@/lib/team-impersonation";
 import { ProgressDrawer } from "@/components/progress-drawer";
 import { GlobalHighlight } from "@/components/global-highlight";
+import { MediaViewerProvider, MediaViewerRoot } from "@/components/media-viewer";
 import {
   Outlet,
   Link,
@@ -390,14 +391,18 @@ function RootComponent() {
     <AuthProvider>
       <ClientImpersonationProvider>
         <TeamImpersonationProvider>
-          {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
-          <Outlet />
-          <RouteTracker />
-          <Toaster position="top-right" theme="dark" richColors />
-          <ProgressDrawer />
-          <GlobalHighlight />
-          <OnlineOfflineBanner />
-          <PwaUpdateToast />
+          <MediaViewerProvider>
+            {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
+            <Outlet />
+            <RouteTracker />
+            <Toaster position="top-right" theme="dark" richColors />
+            <ProgressDrawer />
+            <GlobalHighlight />
+            <OnlineOfflineBanner />
+            <PwaUpdateToast />
+            {/* Single global media viewer — portalled above every overlay. */}
+            <MediaViewerRoot />
+          </MediaViewerProvider>
         </TeamImpersonationProvider>
       </ClientImpersonationProvider>
     </AuthProvider>
