@@ -1180,6 +1180,13 @@ function WorkoutDay({
   const [summaryOpen, setSummaryOpen] = useState(false);
   const [lastSummary, setLastSummary] = useState<WorkoutSummary | null>(null);
   const [lastSessionRating, setLastSessionRating] = useState<number | null>(null);
+  // After a successful completion via the Finish Workout flow, hand the
+  // athlete directly into the shared WorkoutReviewEditor (rendered inside
+  // <CompletedWorkoutActions/>) so the first review and Edit Review use the
+  // exact same form. Consumed once by CompletedWorkoutActions via its
+  // autoOpenReview prop.
+  const [autoOpenReviewAfterFinish, setAutoOpenReviewAfterFinish] = useState(false);
+  void completeOpen; void completeSubmitting; void setCompleteOpen; void setCompleteSubmitting;
   // Notifications can deep-link with ?review=1 to nudge the member to finish
   // an in-progress workout. Auto-open the quick popup once it lands.
   const reviewParam = search.review === 1;
