@@ -185,10 +185,17 @@ export function ActionCentre({ items, clientId }: { items: ActionItem[]; clientI
   const merged = useMemo<ActionItem[]>(() => {
     const occItems = (occurrences as ActionCentreItem[])
       .filter((o) => !locallyCompleted.has(o.id))
+      // Home "Forms" section: only surface Weekly Check-In and Nutrition
+      // form tasks. Other task types (progress photos, bodyweight, etc.)
+      // live on their own dedicated home cards and would double up here.
+      .filter((o) => o.task_type === "weekly_checkin" || o.task_type === "nutrition_review")
       .map((o) => occurrenceToItem(o, openSheet));
     const dedupKeys = new Set(occItems.map((i) => i.key));
-    const legacyFiltered = items.filter((i) => !dedupKeys.has(i.key));
-    return [...occItems, ...legacyFiltered];
+    // Legacy items (billing, agreements, coach replies, etc.) are surfaced
+    // elsewhere on the home screen. Keep this section strictly "Forms".
+    void items;
+    void dedupKeys;
+    return occItems;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [occurrences, items, locallyCompleted]);
 
@@ -234,7 +241,7 @@ export function ActionCentre({ items, clientId }: { items: ActionItem[]; clientI
     <section aria-label="Action Centre" className="space-y-2">
       <div className="flex items-center justify-between px-1">
         <h3 className="text-base font-bold">
-          Today's Tasks{sorted.length > 0 ? ` (${sorted.length})` : ""}
+          Forms{sorted.length > 0 ? ` (${sorted.length})` : ""}
         </h3>
         {unseenCount > 0 && (
           <span className="rounded-full bg-primary/15 px-2 py-0.5 text-[10px] font-bold uppercase tracking-widest text-primary">

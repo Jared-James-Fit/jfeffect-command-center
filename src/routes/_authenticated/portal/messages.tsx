@@ -83,9 +83,13 @@ function ClientMessages() {
         // NOT shrink on iOS Safari, which is what creates the dead black
         // gap above the keyboard). Falls back to 100dvh on browsers without
         // the Visual Viewport API.
-        top: "calc(var(--vv-top, 0px) + var(--shell-topbar-h, 0px))",
+        // NOTE: --shell-topbar-h only measures the topbar's content row; on
+        // notched devices the topbar also has env(safe-area-inset-top) of
+        // padding above it. Include that inset here so the fixed messenger
+        // starts BELOW the "Client Portal" top bar instead of covering it.
+        top: "calc(var(--vv-top, 0px) + env(safe-area-inset-top) + var(--shell-topbar-h, 0px))",
         height:
-          "calc(var(--vv-h, 100dvh) - var(--shell-topbar-h, 0px) - var(--bottom-nav-clearance, 0px))",
+          "calc(var(--vv-h, 100dvh) - env(safe-area-inset-top) - var(--shell-topbar-h, 0px) - var(--bottom-nav-clearance, 0px))",
       }}
     >
       {/* Slim chat header — coach identity, not a giant page hero */}
