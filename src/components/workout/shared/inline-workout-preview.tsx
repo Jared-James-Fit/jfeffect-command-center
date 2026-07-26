@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { Check, Circle, CircleDot } from "lucide-react";
+import { Check, Circle, CircleDot, RefreshCw } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
 import { derivePurposeLabels, purposeLabelBadgeClass } from "@/lib/exercise-metadata";
@@ -99,30 +99,39 @@ export function InlineWorkoutPreview({
   clientId: string;
   enabled?: boolean;
 }) {
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError, error, refetch, isFetching } = useQuery({
     queryKey: ["inline-workout-preview", dayId, clientId],
     enabled: enabled && !!dayId && !!clientId,
     staleTime: 15_000,
+    retry: 1,
     queryFn: async () => {
-      const [rowsRes, resultsRes] = await Promise.all([
-        supabase
-          .from("pl_exercise_rows")
-          .select(
-            "id, sort_order, exercise_name_override, purpose_label, time_profile, sets, reps_text, rpe, load_kg, load_lb, measurement_type, card_color, movement_family, exercise_id, exercises(name, competition_lift_type, is_competition_lift, exercise_category)",
-          )
-          .eq("day_id", dayId)
-          .order("sort_order", { ascending: true }),
-        supabase
+      // Fetch rows first, then scope results by row ids. Filtering
+      // `pl_row_results` through an `!inner` embedded relation can
+      // silently return 0 rows (or a 400) on some PostgREST configs,
+      // which used to leave the preview stuck in a loading/empty state.
+      const rowsRes = await supabase
+        .from("pl_exercise_rows")
+        .select(
+          "id, sort_order, exercise_name_override, purpose_label, time_profile, sets, reps_text, rpe, load_kg, load_lb, measurement_type, card_color, movement_family, exercise_id, exercises(name, competition_lift_type, is_competition_lift, exercise_category)",
+        )
+        .eq("day_id", dayId)
+        .order("sort_order", { ascending: true });
+      if (rowsRes.error) throw rowsRes.error;
+      const rows = ((rowsRes.data ?? []) as unknown) as Row[];
+      const rowIds = rows.map((r) => r.id);
+      let results: Result[] = [];
+      if (rowIds.length > 0) {
+        const resultsRes = await supabase
           .from("pl_row_results")
           .select(
-            "row_id, set_index, actual_load, actual_load_unit, actual_reps, actual_rpe, actual_rir, completed_duration_seconds, pl_exercise_rows!inner(day_id)",
+            "row_id, set_index, actual_load, actual_load_unit, actual_reps, actual_rpe, actual_rir, completed_duration_seconds",
           )
           .eq("client_id", clientId)
-          .eq("pl_exercise_rows.day_id", dayId)
-          .order("set_index", { ascending: true }),
-      ]);
-      const rows = ((rowsRes.data ?? []) as unknown) as Row[];
-      const results = ((resultsRes.data ?? []) as unknown) as Result[];
+          .in("row_id", rowIds)
+          .order("set_index", { ascending: true });
+        if (resultsRes.error) throw resultsRes.error;
+        results = ((resultsRes.data ?? []) as unknown) as Result[];
+      }
       const resultsByRow = new Map<string, Result[]>();
       for (const r of results) {
         const list = resultsByRow.get(r.row_id) ?? [];
@@ -134,10 +143,26 @@ export function InlineWorkoutPreview({
   });
 
   if (!enabled) return null;
-  if (isLoading) {
+  if (isLoading || (isFetching && !data)) {
     return (
       <div className="rounded-lg border border-border/60 bg-muted/20 p-3 text-xs text-muted-foreground">
         Loading exercises…
+      </div>
+    );
+  }
+  if (isError) {
+    return (
+      <div className="flex items-center justify-between gap-2 rounded-lg border border-destructive/40 bg-destructive/5 p-3 text-xs text-destructive">
+        <span className="truncate">
+          Couldn't load exercises{error instanceof Error && error.message ? `: ${error.message}` : "."}
+        </span>
+        <button
+          type="button"
+          onClick={() => refetch()}
+          className="inline-flex items-center gap-1 rounded-md border border-destructive/40 px-2 py-1 font-semibold hover:bg-destructive/10"
+        >
+          <RefreshCw className="h-3 w-3" /> Retry
+        </button>
       </div>
     );
   }
