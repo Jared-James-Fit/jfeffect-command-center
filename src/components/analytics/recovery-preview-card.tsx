@@ -169,27 +169,133 @@ export function RecoveryPreviewCard({ clientId }: Props) {
         else break;
       }
 
-      // Scheduled workouts in last 30d + rescheduled count (best-effort).
-      let scheduled30d: number | null = null;
-      let rescheduled30d = 0;
-      let scheduledPrev30d: number | null = null;
+      // ── Consistency (This Week first) ──────────────────────────────
+      // Timeframes:
+      //   • This Week (Mon–Sun local): main ring; due-so-far denominator.
+      //   • Last 4 completed weeks: supporting context, drives trend.
+      //   • Current Block: supporting context.
+      // We fetch a wide scheduled window (block start OR last 8 weeks —
+      // whichever is earlier) so all three timeframes come from one query.
+      const ymd = (d: Date) =>
+        `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+      const startOfWeek = (d: Date) => {
+        const x = new Date(d);
+        x.setHours(0, 0, 0, 0);
+        const dow = x.getDay(); // 0 = Sun, 1 = Mon…
+        const diffToMon = (dow + 6) % 7;
+        x.setDate(x.getDate() - diffToMon);
+        return x;
+      };
+      const weekStart = startOfWeek(now);
+      const weekEnd = new Date(weekStart); weekEnd.setDate(weekStart.getDate() + 7);
+      const todayISO = ymd(now);
+      const weekStartISO = ymd(weekStart);
+      const weekEndISO = ymd(weekEnd);
+
+      // Fetch scheduled workouts back to the earlier of (block start, 8 weeks ago).
+      const eightWeeksAgo = new Date(weekStart); eightWeeksAgo.setDate(weekStart.getDate() - 8 * 7);
+      const blockStartDate = curBlock?.start_date ? new Date(curBlock.start_date) : null;
+      const schedLowerBound = blockStartDate && blockStartDate < eightWeeksAgo
+        ? blockStartDate
+        : eightWeeksAgo;
+
+      let scheduledRows: Array<{ scheduled_date: string; original_date: string | null }> = [];
       try {
         const { data: sched } = await (supabase as any)
           .from("pl_scheduled_workouts")
           .select("scheduled_date, original_date")
           .eq("client_id", clientId)
-          .gte("scheduled_date", (new Date(now.getTime() - 60 * 86_400_000)).toISOString().slice(0, 10));
-        const rows = (sched ?? []) as Array<{ scheduled_date: string; original_date: string | null }>;
-        const cutoff30 = since30.toISOString().slice(0, 10);
-        const cutoff60 = new Date(now.getTime() - 60 * 86_400_000).toISOString().slice(0, 10);
-        const in30 = rows.filter((r) => r.scheduled_date >= cutoff30);
-        const inPrev30 = rows.filter((r) => r.scheduled_date < cutoff30 && r.scheduled_date >= cutoff60);
-        scheduled30d = in30.length;
-        scheduledPrev30d = inPrev30.length;
-        rescheduled30d = in30.filter(
-          (r) => r.original_date && r.original_date !== r.scheduled_date,
+          .gte("scheduled_date", ymd(schedLowerBound));
+        scheduledRows = (sched ?? []) as typeof scheduledRows;
+      } catch { scheduledRows = []; }
+
+      // Completed-date set — a scheduled workout is "completed" if a
+      // pl_day_completions row exists on that date (best-effort match).
+      const completedDates = new Set(
+        completedTs.map((t) => ymd(new Date(t))),
+      );
+
+      // This Week counts
+      const weekSched = scheduledRows.filter(
+        (r) => r.scheduled_date >= weekStartISO && r.scheduled_date < weekEndISO,
+      );
+      const weekTotalScheduled = weekSched.length;
+      const weekDueSoFar = weekSched.filter((r) => r.scheduled_date <= todayISO).length;
+      // Completions logged during this week (early completions of future
+      // scheduled workouts count in the numerator per spec).
+      const weekCompleted = completedTs.filter(
+        (t) => t >= weekStart.getTime() && t < weekEnd.getTime(),
+      ).length;
+      const weekMissed = Math.max(0, weekDueSoFar - Math.min(weekCompleted, weekDueSoFar));
+      const weekRemaining = Math.max(0, weekTotalScheduled - weekDueSoFar);
+
+      // Last 4 completed weeks (weeks strictly before the current week).
+      const priorWeekStart = new Date(weekStart); priorWeekStart.setDate(weekStart.getDate() - 4 * 7);
+      const priorWeekEnd = new Date(weekStart);
+      const last4Scheduled = scheduledRows.filter(
+        (r) => r.scheduled_date >= ymd(priorWeekStart) && r.scheduled_date < ymd(priorWeekEnd),
+      ).length;
+      const last4Completed = completedTs.filter(
+        (t) => t >= priorWeekStart.getTime() && t < priorWeekEnd.getTime(),
+      ).length;
+      const last4 = last4Scheduled > 0
+        ? { scheduled: last4Scheduled, completed: Math.min(last4Completed, last4Scheduled) }
+        : null;
+
+      // Current Block (start → min(today+1, blockEnd)).
+      let block: { scheduled: number; completed: number } | null = null;
+      if (curBlock?.start_date) {
+        const bStart = new Date(curBlock.start_date);
+        const bEnd = curBlock.end_date
+          ? new Date(curBlock.end_date + "T23:59:59Z")
+          : new Date(now.getTime() + 86_400_000);
+        const cap = bEnd < now ? bEnd : now;
+        const bStartISO = ymd(bStart);
+        const capISO = ymd(cap);
+        const bSched = scheduledRows.filter(
+          (r) => r.scheduled_date >= bStartISO && r.scheduled_date <= capISO,
         ).length;
-      } catch { scheduled30d = null; }
+        const bComp = completedTs.filter(
+          (t) => t >= bStart.getTime() && t <= cap.getTime(),
+        ).length;
+        if (bSched > 0) block = { scheduled: bSched, completed: Math.min(bComp, bSched) };
+      }
+
+      // Streak: consecutive scheduled workouts (date ≤ today) completed
+      // walking backwards. A missed scheduled workout breaks the streak.
+      const streakSched = scheduledRows
+        .filter((r) => r.scheduled_date <= todayISO)
+        .sort((a, b) => b.scheduled_date.localeCompare(a.scheduled_date));
+      let scheduledStreak = 0;
+      for (const r of streakSched) {
+        if (completedDates.has(r.scheduled_date)) scheduledStreak += 1;
+        else break;
+      }
+
+      // Trend: previous 4 completed weeks vs the 4 weeks before that.
+      // Only compare when we have adherence data for both windows.
+      const weekAdherence = (offsetWeeks: number): number | null => {
+        const wStart = new Date(weekStart);
+        wStart.setDate(weekStart.getDate() - offsetWeeks * 7);
+        const wEnd = new Date(wStart); wEnd.setDate(wStart.getDate() + 7);
+        const s = scheduledRows.filter(
+          (r) => r.scheduled_date >= ymd(wStart) && r.scheduled_date < ymd(wEnd),
+        ).length;
+        if (s === 0) return null;
+        const c = completedTs.filter(
+          (t) => t >= wStart.getTime() && t < wEnd.getTime(),
+        ).length;
+        return Math.min(100, Math.round((c / s) * 100));
+      };
+      const recent4 = [1, 2, 3, 4].map(weekAdherence).filter((v): v is number => v != null);
+      const prior4 = [5, 6, 7, 8].map(weekAdherence).filter((v): v is number => v != null);
+      let consistencyTrend: "Improving" | "Stable" | "Dropping" | "Building" = "Building";
+      if (recent4.length >= 3 && prior4.length >= 3) {
+        const rAvg = recent4.reduce((a, b) => a + b, 0) / recent4.length;
+        const pAvg = prior4.reduce((a, b) => a + b, 0) / prior4.length;
+        const diff = rAvg - pAvg;
+        consistencyTrend = Math.abs(diff) < 5 ? "Stable" : diff > 0 ? "Improving" : "Dropping";
+      }
 
       // Training load: sets, tonnage, avg RPE for last 7 vs last 28 days.
       const LB_PER_KG = 2.2046226;
@@ -231,11 +337,12 @@ export function RecoveryPreviewCard({ clientId }: Props) {
       const current7 = buildWindow(since7.getTime(), now.getTime() + 1);
       const baseline28 = buildWindow(now.getTime() - 28 * 86_400_000, since7.getTime());
 
-      const previousAdherence =
-        scheduledPrev30d && scheduledPrev30d > 0
-          ? Math.round((completedPrev30d / scheduledPrev30d) * 100)
-          : null;
-      const missed30d = scheduled30d != null ? Math.max(0, scheduled30d - completed30d) : 0;
+      // Kept for legacy insight builder (30-day adherence sentence).
+      const scheduled30dInsight = scheduledRows.filter(
+        (r) => r.scheduled_date >= since30.toISOString().slice(0, 10)
+          && r.scheduled_date <= todayISO,
+      ).length || null;
+      void completedPrev30d;
 
       // Sleep samples merged (reviews + feedback)
       const sleepSamples: SleepSample[] = [];
@@ -295,20 +402,23 @@ export function RecoveryPreviewCard({ clientId }: Props) {
         recoverySamples,
         load: { current7, baseline28 },
         consistency: {
-          scheduled: scheduled30d ?? 0,
-          completed: completed30d,
-          missed: missed30d,
-          rescheduled: rescheduled30d,
-          streak,
-          previousAdherence,
+          weekDueSoFar,
+          weekCompleted,
+          weekTotalScheduled,
+          weekRemaining,
+          weekMissed,
+          last4,
+          block,
+          streak: scheduledStreak,
+          trend: consistencyTrend,
         },
         scores: allScores,
         painDays7d,
       });
       // avoid unused var warning under strict TS
-      void workouts7d; void since14;
+      void workouts7d; void since14; void streak;
 
-      const insights = buildPersonalInsights(series, sleepSamples, completed30d, scheduled30d);
+      const insights = buildPersonalInsights(series, sleepSamples, completed30d, scheduled30dInsight);
 
       return {
         hasData: latest != null,
