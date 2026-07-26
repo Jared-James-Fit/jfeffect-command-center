@@ -304,69 +304,129 @@ function buildLoad(current7: LoadWindow, baseline28: LoadWindow): FactorDetail {
 }
 
 export interface ConsistencyInput {
-  scheduled: number;
-  completed: number;
-  missed: number;
-  rescheduled: number;
+  /** Scheduled workouts this week whose date <= today (denominator). */
+  weekDueSoFar: number;
+  /** Completions logged this week (Mon–Sun). Future-early completions count. */
+  weekCompleted: number;
+  /** All scheduled workouts this week (any day, Mon–Sun). */
+  weekTotalScheduled: number;
+  /** Scheduled this week whose date is still in the future and not yet completed. */
+  weekRemaining: number;
+  /** weekDueSoFar - weekCompleted, clamped to 0. */
+  weekMissed: number;
+  /** Last 4 fully-completed weeks (excluding the current unfinished week). */
+  last4: { scheduled: number; completed: number } | null;
+  /** Current training block window (start → min(today, end)). */
+  block: { scheduled: number; completed: number } | null;
+  /** Consecutive scheduled workouts completed with no missed scheduled workout between. */
   streak: number;
-  /** Adherence % over the prior comparable window, for trend. */
-  previousAdherence: number | null;
+  /** Rolling 4-vs-4 completed-week comparison. */
+  trend: FactorDetail["trend"];
 }
 
 function buildConsistency(inp: ConsistencyInput): FactorDetail {
-  const { scheduled, completed, missed, rescheduled, streak, previousAdherence } = inp;
-  const hasSchedule = scheduled > 0;
-  // Adherence: completed vs scheduled. Small penalty for reschedules.
-  const raw = hasSchedule ? (completed / scheduled) * 100 : completed > 0 ? 100 : 0;
-  const penalty = hasSchedule ? Math.min(8, rescheduled * 1.5) : 0;
-  const pct = Math.max(0, Math.min(100, Math.round(raw - penalty)));
+  const {
+    weekDueSoFar,
+    weekCompleted,
+    weekTotalScheduled,
+    weekRemaining,
+    weekMissed,
+    last4,
+    block,
+    streak,
+    trend,
+  } = inp;
 
-  let trend: FactorDetail["trend"] = "Stable";
-  if (previousAdherence != null) {
-    const diff = pct - previousAdherence;
-    trend = Math.abs(diff) < 5 ? "Stable" : diff > 0 ? "Improving" : "Dropping";
-  } else if (!hasSchedule) {
-    trend = "Building";
-  }
+  // ── Live weekly score ───────────────────────────────────────────────
+  // Score is *this week's adherence*: completions ÷ workouts due so far.
+  // Future workouts don't enter the denominator until they become due,
+  // but if the athlete completes a future workout early we still count
+  // it in the numerator (capped at 100%).
+  const hasDueThisWeek = weekDueSoFar > 0;
+  const weeklyPct = hasDueThisWeek
+    ? Math.min(100, Math.round((weekCompleted / weekDueSoFar) * 100))
+    : null;
+
+  // Ring score: prefer weekly pct. If nothing has been due yet this
+  // week fall back to last-4-week adherence so overall readiness isn't
+  // artificially inflated to 100%. Absent any history, don't penalize.
+  const last4Pct = last4 && last4.scheduled > 0
+    ? Math.round((last4.completed / last4.scheduled) * 100)
+    : null;
+  const blockPct = block && block.scheduled > 0
+    ? Math.round((block.completed / block.scheduled) * 100)
+    : null;
+
+  const score = weeklyPct ?? last4Pct ?? 100;
+
+  // ── Label thresholds (spec) ─────────────────────────────────────────
+  const weeklyLabel = (() => {
+    if (weeklyPct == null) return "No workouts due yet";
+    if (weeklyPct >= 100) return "On Track";
+    if (weeklyPct >= 80) return "Mostly On Track";
+    if (weeklyPct >= 60) return "Needs Attention";
+    return "Off Track";
+  })();
 
   const impact: FactorDetail["impact"] =
-    pct >= 85 ? "Positive" : pct >= 65 ? "Neutral" : "Limiting";
+    weeklyPct == null ? "Neutral"
+      : weeklyPct >= 85 ? "Positive"
+      : weeklyPct >= 65 ? "Neutral"
+      : "Limiting";
 
+  // ── Recommendation logic (spec) ─────────────────────────────────────
   let rec: string;
-  if (!hasSchedule) {
-    rec = "No scheduled workouts detected yet. Once a program is assigned we'll track adherence here.";
-  } else if (pct >= 90) {
-    rec = "Excellent adherence. Keep completing scheduled sessions.";
-  } else if (pct >= 75) {
-    rec = missed > 0
-      ? `You have missed ${missed} workout${missed === 1 ? "" : "s"} this window. Lock in the remaining sessions to hold your streak.`
-      : "Consistency is solid. Stay on plan this week.";
+  if (weekTotalScheduled === 0 && !last4Pct) {
+    rec = "No scheduled workouts yet. Once a program is assigned we'll track adherence here.";
+  } else if (!hasDueThisWeek && weekTotalScheduled > 0) {
+    rec = "Your first scheduled workout this week is coming up. No consistency score yet.";
+  } else if (weeklyPct != null && weeklyPct >= 100) {
+    rec = "You're on track. Keep following your scheduled training.";
+  } else if (weekMissed === 0 && weekRemaining > 0) {
+    rec = `You are on track so far. ${weekRemaining} workout${weekRemaining === 1 ? "" : "s"} remain this week.`;
+  } else if (weekMissed > 0) {
+    rec = `You completed ${weekCompleted} of ${weekDueSoFar} workout${weekDueSoFar === 1 ? "" : "s"} due this week. Resume your normal schedule with the next session.`;
   } else {
-    rec = missed > 0
-      ? `You have missed ${missed} workout${missed === 1 ? "" : "s"} recently. Prioritize showing up — even a shorter session beats a skipped one.`
-      : "Focus on showing up — even a shorter session beats a skipped one.";
+    rec = "Stay on plan this week.";
   }
 
+  // ── Metrics grid: This Week + supporting context ────────────────────
+  const weekValue = hasDueThisWeek
+    ? `${weekCompleted} of ${weekDueSoFar} due · ${weeklyPct}%`
+    : weekTotalScheduled > 0
+      ? `0 of 0 due · first workout upcoming`
+      : "No workouts scheduled";
+
   const metrics: FactorDetail["metrics"] = [
+    { label: "This Week", value: weekValue },
     {
-      label: "Completed",
-      value: hasSchedule
-        ? `${completed} / ${scheduled} workouts`
-        : `${completed} workouts`,
+      label: "Last 4 Weeks",
+      value: last4 && last4.scheduled > 0
+        ? `${last4.completed} of ${last4.scheduled} · ${last4Pct}%`
+        : "—",
     },
-    { label: "Adherence", value: hasSchedule ? `${pct}%` : "—" },
-    { label: "Current Streak", value: `${streak} workout${streak === 1 ? "" : "s"}` },
-    { label: "Missed", value: `${missed}` },
+    {
+      label: "Current Block",
+      value: block && block.scheduled > 0
+        ? `${block.completed} of ${block.scheduled} · ${blockPct}%`
+        : "—",
+    },
+    { label: "Current Streak", value: `${streak} scheduled workout${streak === 1 ? "" : "s"}` },
+    { label: "Missed This Week", value: `${weekMissed}` },
   ];
 
   return {
     key: "consistency",
     label: "Consistency",
     emoji: "🏋️",
-    score: pct,
-    status: statusFor(pct),
-    currentValue: hasSchedule ? `${pct}%` : `${completed} done`,
-    subtitle: hasSchedule ? `${completed} of ${scheduled} scheduled` : undefined,
+    score,
+    status: statusFor(score),
+    currentValue: weeklyPct != null ? `${weeklyPct}% · ${weeklyLabel}` : weeklyLabel,
+    subtitle: hasDueThisWeek
+      ? `${weekCompleted} of ${weekDueSoFar} due workouts completed`
+      : weekTotalScheduled > 0
+        ? `${weekTotalScheduled} scheduled this week`
+        : undefined,
     metrics,
     trend,
     impact,
