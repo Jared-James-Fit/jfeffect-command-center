@@ -411,10 +411,11 @@ export function AppShell({ items, bottomItems: customBottomItems, title, childre
     items.find((i) => i.to.endsWith("/account") || i.to.endsWith("/account-settings"))?.to ??
     "/admin/account";
 
-  // Tablet gets a two-state sidebar (expanded ↔ compact icon rail) — never
-  // fully collapses to nothing, and never uses hover flyouts. Desktop keeps
-  // the three-state cycle. Both persist per-user via localStorage.
-  const effectiveMode: SidebarMode = isTablet && mode === "collapsed" ? "compact" : mode;
+  // Desktop keeps the sidebar permanently expanded — no collapse/compact toggle.
+  // Tablet still gets a two-state sidebar (expanded ↔ compact icon rail) so it
+  // stays usable on touch screens without hovering. Both persist per-user via
+  // localStorage, but the desktop mode is forced to expanded.
+  const effectiveMode: SidebarMode = isTablet ? (mode === "collapsed" ? "compact" : mode) : "expanded";
   const isCollapsed = effectiveMode === "collapsed";
   const isCompact = effectiveMode === "compact";
   // Tablet compact stays a comfortable icon rail (~72px) so tap targets are ≥44px.
