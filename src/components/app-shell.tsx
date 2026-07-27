@@ -578,7 +578,6 @@ export function AppShell({ items, bottomItems: customBottomItems, title, childre
                   <div className="truncate text-[9px] text-muted-foreground leading-tight">{user?.email}</div>
                 )}
               </div>
-              {isTablet && (
               <Tooltip>
                 <TooltipTrigger asChild>
                   <button
@@ -587,7 +586,7 @@ export function AppShell({ items, bottomItems: customBottomItems, title, childre
                       "flex items-center justify-center rounded-md text-muted-foreground hover:bg-sidebar-accent hover:text-foreground",
                       isTablet ? "h-9 w-9" : "h-7 w-7",
                     )}
-                    aria-label="Collapse sidebar"
+                    aria-label={effectiveMode === "expanded" ? "Collapse sidebar" : "Expand sidebar"}
                   >
                     <ChevronLeft className="h-3.5 w-3.5" />
                   </button>
@@ -596,27 +595,6 @@ export function AppShell({ items, bottomItems: customBottomItems, title, childre
                   {effectiveMode === "expanded" ? "Collapse to icons" : "Expand sidebar"}
                 </TooltipContent>
               </Tooltip>
-              )}
-              {!isTablet && (
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <button
-                    onClick={toggleAllOpen}
-                    className="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground hover:bg-sidebar-accent hover:text-foreground"
-                    aria-label={allCollapsed ? "Open all sections" : "Close all sections"}
-                  >
-                    {allCollapsed ? (
-                      <ChevronsUpDown className="h-3.5 w-3.5" />
-                    ) : (
-                      <ChevronsDownUp className="h-3.5 w-3.5" />
-                    )}
-                  </button>
-                </TooltipTrigger>
-                <TooltipContent side="top">
-                  {allCollapsed ? "Open all (⌘⇧E)" : "Close all (⌘⇧E)"}
-                </TooltipContent>
-              </Tooltip>
-              )}
               <Tooltip>
                 <TooltipTrigger asChild>
                   <button
