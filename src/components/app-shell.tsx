@@ -416,25 +416,13 @@ export function AppShell({ items, bottomItems: customBottomItems, title, childre
   // stays usable on touch screens without hovering. Both persist per-user via
   // localStorage, but the desktop mode is forced to expanded.
   const effectiveMode: SidebarMode = isTablet ? (mode === "collapsed" ? "compact" : mode) : "expanded";
-  const isCollapsed = effectiveMode === "collapsed";
   const isCompact = effectiveMode === "compact";
   // Tablet compact stays a comfortable icon rail (~72px) so tap targets are ≥44px.
-  const sidebarWidthClass = isCollapsed
-    ? "w-14"
-    : isCompact
-    ? isTablet ? "w-[72px]" : "w-52"
-    : "w-60";
-  const rowPadding = isCollapsed
-    ? "justify-center px-0 py-2"
-    : isCompact && isTablet
-    ? "justify-center px-0 py-2.5"
-    : isCompact
-    ? "px-2.5 py-1.5 gap-2.5"
-    : "px-3 py-2 gap-3";
+  const sidebarWidthClass = isCompact ? "w-[72px]" : "w-60";
+  const rowPadding = isCompact ? "justify-center px-0 py-2.5" : "px-3 py-2 gap-3";
   const rowText = isCompact ? "text-[13px]" : "text-sm";
-  // When the tablet compact rail is active, hide labels/chevrons/pin controls
-  // just like desktop `collapsed`, but keep the wider tap target.
-  const iconOnly = isCollapsed || (isCompact && isTablet);
+  // When the tablet compact rail is active, hide labels/chevrons/pin controls.
+  const iconOnly = isCompact && isTablet;
 
   const cycleMode = () => {
     if (isTablet) {
