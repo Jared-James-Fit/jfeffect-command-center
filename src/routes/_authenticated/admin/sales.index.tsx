@@ -10,7 +10,7 @@ import { PromoCodesPage } from "./promo-codes";
 import { DiscountCodesPage } from "./discount-codes";
 import { AdminTransactionsPage } from "./transactions";
 import { PaymentsOverviewPanel } from "@/components/admin/payments-overview";
-import BillingSourcesRoute from "./billing-sources";
+import { BillingSourcesPage } from "./billing-sources";
 
 type TabKey = "pipeline" | "products-payments" | "sales-pages" | "promotions";
 
@@ -138,11 +138,7 @@ function ProductsPaymentsPanel({ sub, onSub }: { sub?: string; onSub: (s: string
         <PaymentsOverviewPanel onNavigateSub={onSub} />
       )}
       {active === "discount-codes" && <DiscountCodesPage embedded />}
-      {active === "settings" && (
-        <div className="p-4 md:p-6">
-          <BillingSourcesRoute />
-        </div>
-      )}
+      {active === "settings" && <BillingSourcesPage />}
     </div>
   );
 }
