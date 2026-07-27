@@ -181,6 +181,7 @@ import { Route as AuthenticatedAdminAccountRouteImport } from './routes/_authent
 import { Route as AuthenticatedPortalWorkoutsIndexRouteImport } from './routes/_authenticated/portal/workouts.index'
 import { Route as AuthenticatedPortalRecipesIndexRouteImport } from './routes/_authenticated/portal/recipes.index'
 import { Route as AuthenticatedPortalAgreementsIndexRouteImport } from './routes/_authenticated/portal/agreements.index'
+import { Route as AuthenticatedMWorkoutsIndexRouteImport } from './routes/_authenticated/m/workouts.index'
 import { Route as AuthenticatedMNutritionIndexRouteImport } from './routes/_authenticated/m/nutrition.index'
 import { Route as AuthenticatedAdminSalesIndexRouteImport } from './routes/_authenticated/admin/sales.index'
 import { Route as AuthenticatedAdminProductsHistoryIndexRouteImport } from './routes/_authenticated/admin/products-history.index'
@@ -1255,6 +1256,12 @@ const AuthenticatedPortalAgreementsIndexRoute =
     path: '/agreements/',
     getParentRoute: () => AuthenticatedPortalRouteRoute,
   } as any)
+const AuthenticatedMWorkoutsIndexRoute =
+  AuthenticatedMWorkoutsIndexRouteImport.update({
+    id: '/workouts/',
+    path: '/workouts/',
+    getParentRoute: () => AuthenticatedMRouteRoute,
+  } as any)
 const AuthenticatedMNutritionIndexRoute =
   AuthenticatedMNutritionIndexRouteImport.update({
     id: '/nutrition/',
@@ -2141,6 +2148,7 @@ export interface FileRoutesByFullPath {
   '/admin/products-history/': typeof AuthenticatedAdminProductsHistoryIndexRoute
   '/admin/sales/': typeof AuthenticatedAdminSalesIndexRoute
   '/m/nutrition/': typeof AuthenticatedMNutritionIndexRoute
+  '/m/workouts/': typeof AuthenticatedMWorkoutsIndexRoute
   '/portal/agreements/': typeof AuthenticatedPortalAgreementsIndexRoute
   '/portal/recipes/': typeof AuthenticatedPortalRecipesIndexRoute
   '/portal/workouts/': typeof AuthenticatedPortalWorkoutsIndexRoute
@@ -2413,6 +2421,7 @@ export interface FileRoutesByTo {
   '/admin/products-history': typeof AuthenticatedAdminProductsHistoryIndexRoute
   '/admin/sales': typeof AuthenticatedAdminSalesIndexRoute
   '/m/nutrition': typeof AuthenticatedMNutritionIndexRoute
+  '/m/workouts': typeof AuthenticatedMWorkoutsIndexRoute
   '/portal/agreements': typeof AuthenticatedPortalAgreementsIndexRoute
   '/portal/recipes': typeof AuthenticatedPortalRecipesIndexRoute
   '/portal/workouts': typeof AuthenticatedPortalWorkoutsIndexRoute
@@ -2692,6 +2701,7 @@ export interface FileRoutesById {
   '/_authenticated/admin/products-history/': typeof AuthenticatedAdminProductsHistoryIndexRoute
   '/_authenticated/admin/sales/': typeof AuthenticatedAdminSalesIndexRoute
   '/_authenticated/m/nutrition/': typeof AuthenticatedMNutritionIndexRoute
+  '/_authenticated/m/workouts/': typeof AuthenticatedMWorkoutsIndexRoute
   '/_authenticated/portal/agreements/': typeof AuthenticatedPortalAgreementsIndexRoute
   '/_authenticated/portal/recipes/': typeof AuthenticatedPortalRecipesIndexRoute
   '/_authenticated/portal/workouts/': typeof AuthenticatedPortalWorkoutsIndexRoute
@@ -2971,6 +2981,7 @@ export interface FileRouteTypes {
     | '/admin/products-history/'
     | '/admin/sales/'
     | '/m/nutrition/'
+    | '/m/workouts/'
     | '/portal/agreements/'
     | '/portal/recipes/'
     | '/portal/workouts/'
@@ -3243,6 +3254,7 @@ export interface FileRouteTypes {
     | '/admin/products-history'
     | '/admin/sales'
     | '/m/nutrition'
+    | '/m/workouts'
     | '/portal/agreements'
     | '/portal/recipes'
     | '/portal/workouts'
@@ -3521,6 +3533,7 @@ export interface FileRouteTypes {
     | '/_authenticated/admin/products-history/'
     | '/_authenticated/admin/sales/'
     | '/_authenticated/m/nutrition/'
+    | '/_authenticated/m/workouts/'
     | '/_authenticated/portal/agreements/'
     | '/_authenticated/portal/recipes/'
     | '/_authenticated/portal/workouts/'
@@ -4800,6 +4813,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedPortalAgreementsIndexRouteImport
       parentRoute: typeof AuthenticatedPortalRouteRoute
     }
+    '/_authenticated/m/workouts/': {
+      id: '/_authenticated/m/workouts/'
+      path: '/workouts'
+      fullPath: '/m/workouts/'
+      preLoaderRoute: typeof AuthenticatedMWorkoutsIndexRouteImport
+      parentRoute: typeof AuthenticatedMRouteRoute
+    }
     '/_authenticated/m/nutrition/': {
       id: '/_authenticated/m/nutrition/'
       path: '/nutrition'
@@ -6027,6 +6047,7 @@ interface AuthenticatedMRouteRouteChildren {
   AuthenticatedMNutritionTargetsManageRoute: typeof AuthenticatedMNutritionTargetsManageRoute
   AuthenticatedMNutritionTargetsSetupRoute: typeof AuthenticatedMNutritionTargetsSetupRoute
   AuthenticatedMNutritionIndexRoute: typeof AuthenticatedMNutritionIndexRoute
+  AuthenticatedMWorkoutsIndexRoute: typeof AuthenticatedMWorkoutsIndexRoute
   AuthenticatedMFormsAssignmentIdCompleteRoute: typeof AuthenticatedMFormsAssignmentIdCompleteRoute
   AuthenticatedMWorkoutsEnrollmentIdWeekDayRoute: typeof AuthenticatedMWorkoutsEnrollmentIdWeekDayRoute
 }
@@ -6049,6 +6070,7 @@ const AuthenticatedMRouteRouteChildren: AuthenticatedMRouteRouteChildren = {
   AuthenticatedMNutritionTargetsSetupRoute:
     AuthenticatedMNutritionTargetsSetupRoute,
   AuthenticatedMNutritionIndexRoute: AuthenticatedMNutritionIndexRoute,
+  AuthenticatedMWorkoutsIndexRoute: AuthenticatedMWorkoutsIndexRoute,
   AuthenticatedMFormsAssignmentIdCompleteRoute:
     AuthenticatedMFormsAssignmentIdCompleteRoute,
   AuthenticatedMWorkoutsEnrollmentIdWeekDayRoute:
