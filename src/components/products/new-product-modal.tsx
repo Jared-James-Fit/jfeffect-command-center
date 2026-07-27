@@ -1297,3 +1297,82 @@ function SegmentedPayment({
     </div>
   );
 }
+
+function Req() {
+  return (
+    <span aria-label="required" className="ml-0.5 text-destructive">
+      *
+    </span>
+  );
+}
+
+function SummaryContent({
+  form,
+  hasErrors,
+  missingFields,
+}: {
+  form: FormState;
+  hasErrors: boolean;
+  missingFields: string[];
+}) {
+  return (
+    <div>
+      <div className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
+        Live summary
+      </div>
+      <h3 className="mt-1.5 text-base font-bold break-words">
+        {form.name || "Untitled product"}
+      </h3>
+      <p className="mt-1 text-sm">{priceLine(form)}</p>
+      {durationLine(form) && (
+        <p className="mt-1 text-xs text-muted-foreground">{durationLine(form)}</p>
+      )}
+      {startLine(form) && (
+        <p className="mt-0.5 text-xs text-muted-foreground">{startLine(form)}.</p>
+      )}
+      {form.includedItems.filter(Boolean).length > 0 && (
+        <div className="mt-3">
+          <div className="text-[10px] font-semibold uppercase text-muted-foreground">
+            Includes
+          </div>
+          <ul className="mt-1 space-y-0.5 text-xs">
+            {form.includedItems.filter(Boolean).map((i, idx) => (
+              <li key={idx}>• {i}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+      <div className="mt-3 space-y-1 text-[11px] text-muted-foreground border-t border-border pt-3">
+        <div>
+          <span className="font-semibold text-foreground">Checkout:</span>{" "}
+          {form.paymentType === "free"
+            ? "No paid checkout"
+            : form.paymentType === "one_time"
+              ? "Stripe one-time payment"
+              : "Stripe subscription"}
+        </div>
+        {form.paymentType !== "free" && <div>Taxes added at checkout</div>}
+        {form.paymentType !== "free" && form.allowPromotionCodes && (
+          <div>Promotion codes enabled</div>
+        )}
+        {form.agreementRequired && <div>Agreement required</div>}
+        <div>
+          Workspace:{" "}
+          <span className="capitalize text-foreground">{form.workspace}</span>
+        </div>
+      </div>
+      {hasErrors ? (
+        <div className="mt-3 rounded-md border border-destructive/30 bg-destructive/5 p-2 text-[11px] text-destructive">
+          <div className="font-semibold">Missing required fields:</div>
+          <div className="mt-0.5">{missingFields.join(", ")}</div>
+        </div>
+      ) : (
+        form.name && (
+          <div className="mt-3 flex items-center gap-1.5 rounded-md border border-emerald-500/30 bg-emerald-500/5 p-2 text-[11px] text-emerald-700">
+            <Sparkles className="h-3 w-3" /> Ready to create.
+          </div>
+        )
+      )}
+    </div>
+  );
+}
