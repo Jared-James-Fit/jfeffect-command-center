@@ -703,27 +703,11 @@ export function AppShell({ items, bottomItems: customBottomItems, title, childre
               </div>
             )}
               {grouped.map((group) => {
-              const containsActive = group.label === activeGroupLabel;
-              const sectionCollapsed = group.label && !isMembershipAdminShell && !isTablet
-                ? collapsedSections.has(group.label) && !containsActive
-                : false;
+              // Sidebar sections are always expanded — no per-group collapse.
+              const sectionCollapsed = false;
               return (
                 <div key={group.label ?? "default"}>
-                  {group.label && !iconOnly && !isTablet && (
-                    <button
-                      onClick={() => toggleSection(group.label!, allGroupLabels)}
-                      className="group flex w-full items-center justify-between rounded px-2.5 pb-1 pt-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground hover:text-foreground"
-                    >
-                      <span>{group.label}</span>
-                      <ChevronDown
-                        className={cn(
-                          "h-3 w-3 transition-transform",
-                          sectionCollapsed && "-rotate-90",
-                        )}
-                      />
-                    </button>
-                  )}
-                  {group.label && !iconOnly && isTablet && (
+                  {group.label && !iconOnly && (
                     <div className="px-2.5 pb-1 pt-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
                       {group.label}
                     </div>
