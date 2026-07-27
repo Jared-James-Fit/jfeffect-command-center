@@ -411,29 +411,18 @@ export function AppShell({ items, bottomItems: customBottomItems, title, childre
     items.find((i) => i.to.endsWith("/account") || i.to.endsWith("/account-settings"))?.to ??
     "/admin/account";
 
-  // Tablet gets a two-state sidebar (expanded ↔ compact icon rail) — never
-  // fully collapses to nothing, and never uses hover flyouts. Desktop keeps
-  // the three-state cycle. Both persist per-user via localStorage.
-  const effectiveMode: SidebarMode = isTablet && mode === "collapsed" ? "compact" : mode;
-  const isCollapsed = effectiveMode === "collapsed";
+  // Desktop keeps the sidebar permanently expanded — no collapse/compact toggle.
+  // Tablet still gets a two-state sidebar (expanded ↔ compact icon rail) so it
+  // stays usable on touch screens without hovering. Both persist per-user via
+  // localStorage, but the desktop mode is forced to expanded.
+  const effectiveMode: SidebarMode = isTablet ? (mode === "collapsed" ? "compact" : mode) : "expanded";
   const isCompact = effectiveMode === "compact";
   // Tablet compact stays a comfortable icon rail (~72px) so tap targets are ≥44px.
-  const sidebarWidthClass = isCollapsed
-    ? "w-14"
-    : isCompact
-    ? isTablet ? "w-[72px]" : "w-52"
-    : "w-60";
-  const rowPadding = isCollapsed
-    ? "justify-center px-0 py-2"
-    : isCompact && isTablet
-    ? "justify-center px-0 py-2.5"
-    : isCompact
-    ? "px-2.5 py-1.5 gap-2.5"
-    : "px-3 py-2 gap-3";
+  const sidebarWidthClass = isCompact ? "w-[72px]" : "w-60";
+  const rowPadding = isCompact ? "justify-center px-0 py-2.5" : "px-3 py-2 gap-3";
   const rowText = isCompact ? "text-[13px]" : "text-sm";
-  // When the tablet compact rail is active, hide labels/chevrons/pin controls
-  // just like desktop `collapsed`, but keep the wider tap target.
-  const iconOnly = isCollapsed || (isCompact && isTablet);
+  // When the tablet compact rail is active, hide labels/chevrons/pin controls.
+  const iconOnly = isCompact && isTablet;
 
   const cycleMode = () => {
     if (isTablet) {
@@ -593,6 +582,7 @@ export function AppShell({ items, bottomItems: customBottomItems, title, childre
                   <div className="truncate text-[9px] text-muted-foreground leading-tight">{user?.email}</div>
                 )}
               </div>
+              {isTablet && (
               <Tooltip>
                 <TooltipTrigger asChild>
                   <button
@@ -607,11 +597,10 @@ export function AppShell({ items, bottomItems: customBottomItems, title, childre
                   </button>
                 </TooltipTrigger>
                 <TooltipContent side="top">
-                  {isTablet
-                    ? (effectiveMode === "expanded" ? "Collapse to icons" : "Expand sidebar")
-                    : (mode === "expanded" ? "Compact" : mode === "compact" ? "Collapse" : "Expand")}
+                  {effectiveMode === "expanded" ? "Collapse to icons" : "Expand sidebar"}
                 </TooltipContent>
               </Tooltip>
+              )}
               {!isTablet && (
               <Tooltip>
                 <TooltipTrigger asChild>
