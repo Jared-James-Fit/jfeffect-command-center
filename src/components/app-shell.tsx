@@ -421,15 +421,12 @@ export function AppShell({ items, bottomItems: customBottomItems, title, childre
   const rowPadding = isCompact ? "justify-center px-0 py-2.5" : "px-3 py-2 gap-3";
   const rowText = isCompact ? "text-[13px]" : "text-sm";
   // When the tablet compact rail is active, hide labels/chevrons/pin controls.
-  const iconOnly = isCompact && isTablet;
+  const iconOnly = isCompact;
 
   const cycleMode = () => {
-    if (isTablet) {
-      // Tablet: just toggle expanded ↔ compact rail.
-      setMode(effectiveMode === "expanded" ? "compact" : "expanded");
-      return;
-    }
-    setMode(mode === "expanded" ? "compact" : mode === "compact" ? "collapsed" : "expanded");
+    // Desktop and tablet: two-state toggle between expanded and the compact
+    // icon rail. No fully-collapsed state — sidebar is always visible.
+    setMode(effectiveMode === "expanded" ? "compact" : "expanded");
   };
 
   // Expand-all / collapse-all toggle for sidebar sections.
