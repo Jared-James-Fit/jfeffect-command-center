@@ -4,22 +4,14 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
 import { getCurrentMember } from "@/lib/members.functions";
-import { supabase } from "@/integrations/supabase/client";
-import { isMemberAccessActive } from "@/lib/memberAccess";
 import { PageHeader } from "@/components/app-shell";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Progress } from "@/components/ui/progress";
-import { BookOpen, Wrench, PlayCircle, Megaphone, HelpCircle } from "lucide-react";
-import { Star } from "lucide-react";
-import { UpgradeCTA } from "@/components/upgrade-cta";
+import { Settings, ChevronRight } from "lucide-react";
 import { SetupChecklist } from "@/components/member/setup-checklist-card";
 import { ProgressSummaryCard } from "@/components/progress/progress-summary-card";
 import { HomeWaterCard } from "@/components/home/home-water-card";
 import { HomeBodyweightCard } from "@/components/home/home-bodyweight-card";
-import { MemberTodayCard } from "@/components/member/member-today-card";
-import { HomeActionTiles, type HomeActionTile } from "@/components/portal/home-action-tiles";
 import { DashboardRefreshIndicator } from "@/components/portal/dashboard-refresh-indicator";
 import { DashboardOfflineEmpty, useIsOfflineWithoutCache } from "@/components/portal/dashboard-offline-empty";
 
@@ -42,110 +34,17 @@ function MemberHome() {
   }, [search.upgrade, qc]);
   const { data: me } = useQuery({ queryKey: ["m-me"], queryFn: () => fetchMe() });
 
-  const { data: activeEnrollment } = useQuery({
-    queryKey: ["m-active", me?.member?.id],
-    enabled: !!me?.member?.id,
-    queryFn: async () => {
-      const { data } = await supabase
-        .from("member_plan_enrollments")
-        .select("*, member_plans(id,name,weeks,days_per_week,cover_image_url)")
-        .eq("member_id", me!.member!.id)
-        .eq("status", "Active")
-        .maybeSingle();
-      return data as any;
-    },
-  });
-
-  const accessKeys = new Set((me?.access ?? []).map((a: any) => a.access_level_key));
-  const hasAnyAccess = accessKeys.size > 0;
-  // Use canonical access helper: respects manual overrides, grace periods, hard expiry.
-  // Do NOT show the upsell if the member has canonical access (even if raw access rows are empty).
-  const canonicalAccess = isMemberAccessActive(me?.member);
-  const showUpgrade = (!hasAnyAccess && !canonicalAccess) || me?.member?.account_type === "program_only";
-
-  const { data: featured = [] } = useQuery({
-    queryKey: ["m-featured"],
-    queryFn: async () => {
-      const { data } = await supabase
-        .from("featured_member_items")
-        .select("id,position,note,member_plans(id,name,cover_image_url,required_access_level,difficulty,weeks,days_per_week,status)")
-        .eq("item_type", "plan")
-        .eq("active", true)
-        .order("position", { ascending: true });
-      return (data ?? []).filter((r: any) => r.member_plans && r.member_plans.status === "Published");
-    },
-  });
-  const subscriptionStatus = me?.member?.status ?? "—";
-  const progress = activeEnrollment
-    ? Math.round(((activeEnrollment.workouts_completed ?? 0) / Math.max(activeEnrollment.workouts_total ?? 1, 1)) * 100)
-    : 0;
-
   if (offlineNoCache) return <DashboardOfflineEmpty />;
 
   return (
     <div className="space-y-6 pb-safe-bottom">
       <PageHeader
         title={`Welcome${me?.member?.full_name ? `, ${me.member.full_name.split(" ")[0]}` : ""}`}
-        subtitle="Your training, plans, and resources."
-        actions={<Badge variant="outline">{subscriptionStatus}</Badge>}
+        subtitle="Your training at a glance."
       />
       <div className="-mt-3 flex justify-end">
         <DashboardRefreshIndicator />
       </div>
-      {showUpgrade && (
-        <UpgradeCTA
-          title={hasAnyAccess ? "Unlock the full App Member experience" : "Activate your membership"}
-          subtitle={hasAnyAccess
-            ? "You currently have program-only access. Upgrade for the full library, resources, and tools."
-            : "Choose a plan to unlock workouts, resources, and tools."}
-          perks={["Full Plan Library", "Resource Library access", "All in-app tools"]}
-        />
-      )}
-      <SetupChecklist activeEnrollment={activeEnrollment} />
-      {activeEnrollment ? (
-        <>
-          <MemberTodayCard enrollment={activeEnrollment} />
-          <Card className="p-6">
-            <div className="flex items-center justify-between gap-4">
-              <div>
-                <div className="text-xs uppercase tracking-wider text-muted-foreground">Current plan</div>
-                <div className="mt-1 text-lg font-bold">{activeEnrollment.member_plans?.name}</div>
-                <div className="mt-0.5 text-sm text-muted-foreground">
-                  Week {activeEnrollment.current_week} · {activeEnrollment.workouts_completed} of {activeEnrollment.workouts_total} workouts
-                </div>
-              </div>
-              <Link to="/m/my-plans/$enrollmentId" params={{ enrollmentId: activeEnrollment.id }}>
-                <Button><PlayCircle className="mr-2 h-4 w-4" />Continue</Button>
-              </Link>
-            </div>
-            <Progress value={progress} className="mt-4" />
-          </Card>
-        </>
-      ) : (
-        <Card className="p-6">
-          <div className="text-sm text-muted-foreground">You don't have an active plan yet.</div>
-          <Link to="/m/plans" className="mt-3 inline-block">
-            <Button><BookOpen className="mr-2 h-4 w-4" />Browse Program Library</Button>
-          </Link>
-        </Card>
-      )}
-      {me?.member?.user_id && (
-        <ProgressSummaryCard
-          userId={me.member.user_id}
-          currentUserId={me.member.user_id}
-          viewerRole="owner"
-          progressHref={{ kind: "member" }}
-          extraActions={
-            <HomeActionTiles
-              tiles={[
-                { to: "/m/tools", label: "Tools", icon: Wrench, emphasis: true },
-                { to: "/m/announcements", label: "Announcements", icon: Megaphone },
-                { to: "/m/support", label: "Support", icon: HelpCircle },
-              ] as HomeActionTile[]}
-            />
-          }
-        />
-      )}
       {me?.member?.user_id && (
         <HomeBodyweightCard
           userId={me.member.user_id}
@@ -160,42 +59,30 @@ function MemberHome() {
           surface="member"
         />
       )}
-      {featured.length > 0 && (
-        <Card className="p-6">
-          <div className="mb-3 flex items-center gap-2">
-            <Star className="h-4 w-4 text-amber-500" />
-            <div className="text-xs uppercase tracking-wider text-muted-foreground">Featured plans</div>
-          </div>
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {featured.map((f: any) => {
-              const p = f.member_plans;
-              const locked = !accessKeys.has(p.required_access_level);
-              return (
-                <Link key={f.id} to="/m/plans/$planId" params={{ planId: p.id }}>
-                  <Card className="p-4 transition hover:bg-muted/40">
-                    <div className="flex items-center justify-between">
-                      <div className="text-sm font-semibold">{p.name}</div>
-                      {locked && <Badge variant="outline">Locked</Badge>}
-                    </div>
-                    <div className="mt-1 text-xs text-muted-foreground">
-                      {p.difficulty} · {p.weeks}w / {p.days_per_week}d
-                    </div>
-                  </Card>
-                </Link>
-              );
-            })}
-          </div>
-        </Card>
+      {me?.member?.user_id && (
+        <ProgressSummaryCard
+          userId={me.member.user_id}
+          currentUserId={me.member.user_id}
+          viewerRole="owner"
+          progressHref={{ kind: "member" }}
+        />
       )}
-      <Card className="p-6">
-        <div className="text-xs uppercase tracking-wider text-muted-foreground">Your access</div>
-        <div className="mt-2 flex flex-wrap gap-2">
-          {accessKeys.size ? Array.from(accessKeys).map((k) => (
-            <Badge key={String(k)} variant="secondary">{String(k)}</Badge>
-          )) : (
-            <div className="text-sm text-muted-foreground">No active access yet. Contact support.</div>
-          )}
-        </div>
+      <SetupChecklist />
+      <Card className="p-5">
+        <Link to="/m/more" className="flex items-center gap-3 -m-1 rounded-lg p-1 transition hover:bg-muted/40">
+          <div className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-primary/10 text-primary">
+            <Settings className="h-5 w-5" />
+          </div>
+          <div className="min-w-0 flex-1">
+            <div className="text-sm font-semibold">Manage Membership</div>
+            <div className="text-xs text-muted-foreground">
+              Billing, receipts, profile, notifications, and account settings.
+            </div>
+          </div>
+          <Button variant="ghost" size="icon" tabIndex={-1} aria-hidden>
+            <ChevronRight className="h-4 w-4" />
+          </Button>
+        </Link>
       </Card>
     </div>
   );
