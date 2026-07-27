@@ -31,6 +31,18 @@ import { supabase } from "@/integrations/supabase/client";
 import { createCoachingProduct } from "@/lib/coaching-products.functions";
 
 /* ─────────────────────────────────────────────────────────────
+   Field labels for validation surfacing
+   ───────────────────────────────────────────────────────────── */
+const FIELD_LABELS: Record<string, string> = {
+  name: "Product name",
+  price: "Price",
+  fixedPaymentCount: "Number of payments",
+  serviceDuration: "Access duration",
+  sessionsIncluded: "Sessions included",
+  agreementTemplateId: "Agreement template",
+};
+
+/* ─────────────────────────────────────────────────────────────
    Config
    ───────────────────────────────────────────────────────────── */
 
@@ -371,6 +383,10 @@ export default function NewProductModal({
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [touched, setTouched] = useState<Record<string, boolean>>({});
   const submittedOnce = useRef(false);
+  const fieldRefs = useRef<Record<string, HTMLElement | null>>({});
+  const registerField = (key: string) => (el: HTMLElement | null) => {
+    fieldRefs.current[key] = el;
+  };
   // Stable per-open idempotency key. A retried Save re-uses the same UUID so
   // Stripe returns the original product/price/payment_link instead of
   // duplicating them.
@@ -440,9 +456,21 @@ export default function NewProductModal({
   const handleSave = async () => {
     submittedOnce.current = true;
     if (hasErrors) {
-      toast.error("Please fix the highlighted fields before saving.");
+      const firstKey = Object.keys(errors)[0];
+      const missing = Object.keys(errors)
+        .map((k) => FIELD_LABELS[k] ?? k)
+        .join(", ");
+      toast.error(`Missing required fields: ${missing}`);
       // force re-render for error visibility
       setTouched((t) => ({ ...t }));
+      // scroll/focus first invalid field
+      const el = fieldRefs.current[firstKey];
+      if (el) {
+        try {
+          el.scrollIntoView({ behavior: "smooth", block: "center" });
+          (el as HTMLInputElement).focus?.();
+        } catch {}
+      }
       return;
     }
     setSubmitting(true);
@@ -580,44 +608,48 @@ export default function NewProductModal({
     ? "Create Product & Checkout Link"
     : "Create Product";
 
+  const missingFieldList = Object.keys(errors).map((k) => FIELD_LABELS[k] ?? k);
+
   /* ── render ────────────────────────────────────────────── */
   return (
     <Dialog open={open} onOpenChange={(o) => !o && !submitting && onClose()}>
       <DialogContent
-        className="max-w-[1050px] w-[95vw] p-0 gap-0 max-h-[95vh] flex flex-col overflow-hidden"
+        className="max-w-[1080px] w-[95vw] p-0 gap-0 max-h-[95vh] flex flex-col overflow-hidden"
       >
         {/* Sticky header */}
-        <div className="flex items-center justify-between border-b border-border px-5 py-4 sticky top-0 bg-background z-10">
-          <div>
-            <h2 className="text-lg font-bold">Add Product</h2>
-            <p className="text-xs text-muted-foreground">
-              Create the offer, pricing, and Stripe checkout in one step.
+        {/* Left space (pl-24) reserved for the Dialog's auto "Back" pill */}
+        <div className="flex items-center gap-3 border-b border-border pl-24 pr-4 py-3 sm:pr-5 min-h-[3.5rem] sticky top-0 bg-background z-10">
+          <div className="min-w-0 flex-1">
+            <h2 className="text-base sm:text-lg font-bold leading-tight">Add Product</h2>
+            <p className="text-[11px] sm:text-xs text-muted-foreground truncate">
+              Create the offer, pricing, and checkout in one step.
             </p>
           </div>
           <button
             type="button"
             aria-label="Close"
             onClick={() => !submitting && onClose()}
-            className="rounded-md p-1.5 hover:bg-muted"
+            className="shrink-0 rounded-md p-2 hover:bg-muted"
           >
             <X className="h-4 w-4" />
           </button>
         </div>
 
-        <div className="grid md:grid-cols-[1fr_320px] flex-1 overflow-hidden">
+        <div className="grid md:grid-cols-[minmax(0,1fr)_300px] flex-1 overflow-hidden">
           {/* Scrolling form column */}
           <form
             onSubmit={(e) => {
               e.preventDefault();
               handleSave();
             }}
-            className="overflow-y-auto p-5 space-y-6"
+            className="overflow-y-auto p-4 sm:p-5 space-y-5"
           >
-            {/* 1. Basics */}
-            <Section title="Product basics">
-              <div className="grid gap-3">
+            {/* 1. Product */}
+            <Section title="Product">
+              <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_112px]">
+                <div className="grid gap-3 min-w-0">
                 <div>
-                  <Label>Category</Label>
+                  <Label>Category <Req /></Label>
                   <Select value={form.category} onValueChange={(v) => setCategory(v as Category)}>
                     <SelectTrigger>
                       <SelectValue />
@@ -632,19 +664,22 @@ export default function NewProductModal({
                   </Select>
                 </div>
                 <div>
-                  <Label>Product name</Label>
+                  <Label>Product name <Req /></Label>
                   <Input
+                    ref={registerField("name") as any}
                     value={form.name}
                     onChange={(e) => set("name", e.target.value)}
                     onBlur={() => setTouched((t) => ({ ...t, name: true }))}
                     placeholder="12-Month Online Coaching"
+                    aria-invalid={!!showErr("name")}
+                    className={showErr("name") ? "border-destructive" : ""}
                   />
                   {showErr("name") && <FieldError msg={errors.name!} />}
                 </div>
                 <div>
                   <Label>Description</Label>
                   <Textarea
-                    rows={3}
+                    rows={2}
                     value={form.description}
                     onChange={(e) => set("description", e.target.value)}
                     placeholder="Describe what the client receives, how coaching is delivered, and the main outcome."
@@ -661,7 +696,7 @@ export default function NewProductModal({
                     <div className="mt-2">
                       <Label className="text-xs">Full details</Label>
                       <Textarea
-                        rows={4}
+                        rows={3}
                         value={form.details}
                         onChange={(e) => set("details", e.target.value)}
                         placeholder="Delivery, scheduling notes, service terms, client expectations…"
@@ -669,9 +704,11 @@ export default function NewProductModal({
                     </div>
                   )}
                 </div>
-                <div>
-                  <Label>Product image (optional)</Label>
-                  <label className="mt-1 flex h-32 w-32 cursor-pointer items-center justify-center rounded-md border border-dashed bg-muted/30 overflow-hidden">
+                </div>
+                {/* Compact image uploader (right column on desktop, under fields on mobile) */}
+                <div className="min-w-0">
+                  <Label className="text-xs">Product image</Label>
+                  <label className="mt-1 flex h-20 w-20 cursor-pointer items-center justify-center rounded-md border border-dashed bg-muted/30 overflow-hidden hover:bg-muted/50">
                     {form.imagePreview ? (
                       <img
                         loading="lazy"
@@ -680,7 +717,7 @@ export default function NewProductModal({
                         className="h-full w-full object-cover"
                       />
                     ) : (
-                      <ImagePlus className="h-6 w-6 text-muted-foreground" />
+                      <ImagePlus className="h-5 w-5 text-muted-foreground" />
                     )}
                     <input
                       type="file"
@@ -689,6 +726,9 @@ export default function NewProductModal({
                       onChange={onPickImage}
                     />
                   </label>
+                  <p className="mt-1 text-[10px] text-muted-foreground leading-tight">
+                    Optional. Shown on checkout & sales pages.
+                  </p>
                   {form.imagePreview && (
                     <button
                       type="button"
@@ -696,9 +736,9 @@ export default function NewProductModal({
                         set("imageFile", null);
                         set("imagePreview", null);
                       }}
-                      className="mt-1 text-xs text-muted-foreground hover:text-destructive"
+                      className="mt-1 text-[11px] text-muted-foreground hover:text-destructive"
                     >
-                      Remove image
+                      Remove
                     </button>
                   )}
                 </div>
@@ -707,14 +747,15 @@ export default function NewProductModal({
 
             {/* 2. Pricing */}
             <Section title="Pricing">
-              <div className="space-y-3">
+              <div className="rounded-lg border border-border bg-card/40 p-3 sm:p-4 space-y-3">
                 <SegmentedPayment value={form.paymentType} onChange={(v) => set("paymentType", v)} />
 
                 {form.paymentType !== "free" && (
-                  <div className="grid grid-cols-[1fr_120px] gap-3">
+                  <div className="grid grid-cols-[minmax(0,1fr)_110px] gap-3">
                     <div>
-                      <Label>Price</Label>
+                      <Label>Price <Req /></Label>
                       <Input
+                        ref={registerField("price") as any}
                         type="number"
                         min="0"
                         step="0.01"
@@ -722,6 +763,8 @@ export default function NewProductModal({
                         onChange={(e) => set("priceText", e.target.value)}
                         onBlur={() => setTouched((t) => ({ ...t, price: true }))}
                         placeholder="499.00"
+                        aria-invalid={!!showErr("price")}
+                        className={showErr("price") ? "border-destructive" : ""}
                       />
                       {showErr("price") && <FieldError msg={errors.price!} />}
                     </div>
@@ -784,14 +827,17 @@ export default function NewProductModal({
                     </div>
                     {form.subscriptionDuration === "fixed_payments" && (
                       <div className="col-span-2">
-                        <Label>Number of payments</Label>
+                        <Label>Number of payments <Req /></Label>
                         <Input
+                          ref={registerField("fixedPaymentCount") as any}
                           type="number"
                           min="1"
                           step="1"
                           value={form.fixedPaymentCount}
                           onChange={(e) => set("fixedPaymentCount", e.target.value)}
                           onBlur={() => setTouched((t) => ({ ...t, fixedPaymentCount: true }))}
+                          aria-invalid={!!showErr("fixedPaymentCount")}
+                          className={showErr("fixedPaymentCount") ? "border-destructive" : ""}
                         />
                         {showErr("fixedPaymentCount") && (
                           <FieldError msg={errors.fixedPaymentCount!} />
@@ -806,81 +852,196 @@ export default function NewProductModal({
                 </p>
 
                 {form.paymentType !== "free" && (
-                  <p className="text-xs text-muted-foreground flex items-start gap-1.5">
-                    <Info className="h-3.5 w-3.5 mt-0.5 shrink-0" />
-                    Taxes are calculated automatically from the customer's billing
-                    address and added at checkout.
+                  <p className="text-[11px] text-muted-foreground flex items-start gap-1.5">
+                    <Info className="h-3 w-3 mt-0.5 shrink-0" />
+                    Taxes calculated automatically at checkout.
                   </p>
                 )}
               </div>
             </Section>
 
-            {/* 3. Duration & start */}
+            {/* 3. Access */}
             {CATEGORIES_WITH_ACCESS[form.category] && (
-              <Section title="Access duration">
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <Label>Service duration</Label>
-                    <div className="flex gap-2">
-                      {form.serviceDurationUnit !== "ongoing" && (
-                        <Input
-                          type="number"
-                          min="1"
-                          step="1"
-                          value={form.serviceDurationValue}
-                          onChange={(e) => set("serviceDurationValue", e.target.value)}
-                          className="w-24"
-                        />
+              <Section title="Access">
+                <div className="space-y-3">
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <div>
+                      <Label>Service duration</Label>
+                      <div className="flex gap-2">
+                        {form.serviceDurationUnit !== "ongoing" && (
+                          <Input
+                            ref={registerField("serviceDuration") as any}
+                            type="number"
+                            min="1"
+                            step="1"
+                            value={form.serviceDurationValue}
+                            onChange={(e) => set("serviceDurationValue", e.target.value)}
+                            className={"w-24 " + (showErr("serviceDuration") ? "border-destructive" : "")}
+                          />
+                        )}
+                        <Select
+                          value={form.serviceDurationUnit}
+                          onValueChange={(v) => set("serviceDurationUnit", v as DurationUnit)}
+                        >
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="days">Days</SelectItem>
+                            <SelectItem value="weeks">Weeks</SelectItem>
+                            <SelectItem value="months">Months</SelectItem>
+                            <SelectItem value="ongoing">Ongoing</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      {showErr("serviceDuration") && (
+                        <FieldError msg={errors.serviceDuration!} />
                       )}
+                    </div>
+                    <div>
+                      <Label>Product starts</Label>
                       <Select
-                        value={form.serviceDurationUnit}
-                        onValueChange={(v) => set("serviceDurationUnit", v as DurationUnit)}
+                        value={form.startRule}
+                        onValueChange={(v) => set("startRule", v as StartRule)}
                       >
                         <SelectTrigger>
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="days">Days</SelectItem>
-                          <SelectItem value="weeks">Weeks</SelectItem>
-                          <SelectItem value="months">Months</SelectItem>
-                          <SelectItem value="ongoing">Ongoing</SelectItem>
+                          <SelectItem value="immediately">Immediately after purchase</SelectItem>
+                          <SelectItem value="after_current">After current product ends</SelectItem>
+                          <SelectItem value="next_monday">Next Monday</SelectItem>
+                          <SelectItem value="manual">Manually activated by admin</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
-                    {showErr("serviceDuration") && (
-                      <FieldError msg={errors.serviceDuration!} />
-                    )}
-                    <p className="mt-1 text-[11px] text-muted-foreground">
-                      How long the client keeps access. Separate from billing.
-                    </p>
                   </div>
+
                   <div>
-                    <Label>Product starts</Label>
+                    <Label>App access</Label>
                     <Select
-                      value={form.startRule}
-                      onValueChange={(v) => set("startRule", v as StartRule)}
+                      value={form.accessPreset}
+                      onValueChange={(v) => set("accessPreset", v as AccessPreset)}
                     >
                       <SelectTrigger>
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="immediately">Immediately after purchase</SelectItem>
-                        <SelectItem value="after_current">After current product ends</SelectItem>
-                        <SelectItem value="next_monday">Next Monday</SelectItem>
-                        <SelectItem value="manual">Manually activated by admin</SelectItem>
+                        {(Object.keys(ACCESS_PRESET_LABELS) as AccessPreset[]).map((k) => (
+                          <SelectItem key={k} value={k}>
+                            {ACCESS_PRESET_LABELS[k]}
+                          </SelectItem>
+                        ))}
                       </SelectContent>
                     </Select>
+                    <p className="mt-1 text-[11px] text-muted-foreground">
+                      Controls what the client can access after purchase.
+                    </p>
+                  </div>
+
+                  <div className="rounded-md border border-border px-3 py-2">
+                    <label className="flex items-center gap-3 cursor-pointer">
+                      <Switch
+                        checked={form.agreementRequired}
+                        onCheckedChange={(v) => set("agreementRequired", v)}
+                      />
+                      <span className="text-sm">Require agreement before access</span>
+                    </label>
+                    {form.agreementRequired && (
+                      <div className="mt-3 space-y-2">
+                        <div>
+                          <Label className="text-xs">Agreement template <Req /></Label>
+                          <Select
+                            value={form.agreementTemplateId ?? ""}
+                            onValueChange={(v) => set("agreementTemplateId", v || null)}
+                          >
+                            <SelectTrigger
+                              ref={registerField("agreementTemplateId") as any}
+                              className={showErr("agreementTemplateId") ? "border-destructive" : ""}
+                            >
+                              <SelectValue placeholder="Pick a template" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {agreementTemplates.map((t) => (
+                                <SelectItem key={t.id} value={t.id}>
+                                  {t.name}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          {showErr("agreementTemplateId") && (
+                            <FieldError msg={errors.agreementTemplateId!} />
+                          )}
+                        </div>
+                        <label className="flex items-center gap-3 cursor-pointer">
+                          <Switch
+                            checked={form.agreementBeforeService}
+                            onCheckedChange={(v) => set("agreementBeforeService", v)}
+                          />
+                          <span className="text-xs">Must be signed before service starts</span>
+                        </label>
+                      </div>
+                    )}
                   </div>
                 </div>
               </Section>
             )}
 
-            {/* 4. What's included */}
+            {/* 4. Selling Options */}
+            <Section title="Selling options">
+              <div className="grid gap-2">
+                <ToggleRow
+                  label="Available for self-purchase"
+                  checked={form.selfPurchase}
+                  onChange={(v) => set("selfPurchase", v)}
+                />
+                <ToggleRow
+                  label="Allow promotion codes"
+                  checked={form.allowPromotionCodes}
+                  onChange={(v) => set("allowPromotionCodes", v)}
+                />
+                <ToggleRow
+                  label="Allow client self-cancellation"
+                  checked={form.allowSelfCancellation}
+                  onChange={(v) => set("allowSelfCancellation", v)}
+                />
+                <ToggleRow
+                  label="Limit to new customers"
+                  checked={form.newCustomersOnly}
+                  onChange={(v) => set("newCustomersOnly", v)}
+                />
+                {form.selfPurchase && (
+                  <ToggleRow
+                    label="Visible on sales page"
+                    checked={form.visibleOnSalesPage}
+                    onChange={(v) => set("visibleOnSalesPage", v)}
+                  />
+                )}
+                <div className="mt-2">
+                  <Label className="text-xs">Product workspace</Label>
+                  <Select
+                    value={form.workspace}
+                    onValueChange={(v) => set("workspace", v as FormState["workspace"])}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="coaching">Coaching</SelectItem>
+                      <SelectItem value="membership">Membership</SelectItem>
+                      <SelectItem value="both">Both</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+            </Section>
+
+            {/* What's included — compact, low priority */}
             <Section title="What's included">
               <div className="space-y-2">
                 {form.includedItems.length === 0 && (
                   <p className="text-xs text-muted-foreground">
-                    No items yet. Add what the client receives with this product.
+                    Optional. Add bullets for what the client receives.
                   </p>
                 )}
                 {form.includedItems.map((item, idx) => (
@@ -914,165 +1075,7 @@ export default function NewProductModal({
               </div>
             </Section>
 
-            {/* 5. Sessions & access */}
-            {CATEGORIES_WITH_SESSIONS[form.category] && (
-              <Section title="Sessions">
-                <div className="grid grid-cols-3 gap-3">
-                  <div>
-                    <Label>Sessions included</Label>
-                    <Input
-                      type="number"
-                      min="1"
-                      value={form.sessionsIncluded}
-                      onChange={(e) => set("sessionsIncluded", e.target.value)}
-                      onBlur={() => setTouched((t) => ({ ...t, sessionsIncluded: true }))}
-                      placeholder="10"
-                    />
-                    {showErr("sessionsIncluded") && (
-                      <FieldError msg={errors.sessionsIncluded!} />
-                    )}
-                  </div>
-                  <div>
-                    <Label>Session length (min)</Label>
-                    <Input
-                      type="number"
-                      min="15"
-                      value={form.sessionLengthMin}
-                      onChange={(e) => set("sessionLengthMin", e.target.value)}
-                    />
-                  </div>
-                  <div>
-                    <Label>Expires (days)</Label>
-                    <Input
-                      type="number"
-                      min="0"
-                      value={form.sessionExpiryDays}
-                      onChange={(e) => set("sessionExpiryDays", e.target.value)}
-                      placeholder="Optional"
-                    />
-                  </div>
-                </div>
-              </Section>
-            )}
-
-            <Section title="App access">
-              <Select
-                value={form.accessPreset}
-                onValueChange={(v) => set("accessPreset", v as AccessPreset)}
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {(Object.keys(ACCESS_PRESET_LABELS) as AccessPreset[]).map((k) => (
-                    <SelectItem key={k} value={k}>
-                      {ACCESS_PRESET_LABELS[k]}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <p className="mt-1 text-[11px] text-muted-foreground">
-                Controls what the client can see in the app after payment.
-              </p>
-            </Section>
-
-            {/* 6. Agreement */}
-            <Section title="Agreement">
-              <div className="flex items-center gap-3">
-                <Switch
-                  checked={form.agreementRequired}
-                  onCheckedChange={(v) => set("agreementRequired", v)}
-                />
-                <Label className="cursor-pointer">
-                  Require agreement before access is activated
-                </Label>
-              </div>
-              {form.agreementRequired && (
-                <div className="mt-3 space-y-3">
-                  <div>
-                    <Label>Agreement template</Label>
-                    <Select
-                      value={form.agreementTemplateId ?? ""}
-                      onValueChange={(v) => set("agreementTemplateId", v || null)}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Pick a template" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {agreementTemplates.map((t) => (
-                          <SelectItem key={t.id} value={t.id}>
-                            {t.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    {showErr("agreementTemplateId") && (
-                      <FieldError msg={errors.agreementTemplateId!} />
-                    )}
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <Switch
-                      checked={form.agreementBeforeService}
-                      onCheckedChange={(v) => set("agreementBeforeService", v)}
-                    />
-                    <Label className="cursor-pointer">
-                      Must be signed before service starts
-                    </Label>
-                  </div>
-                </div>
-              )}
-            </Section>
-
-            {/* 7. Selling controls */}
-            <Section title="Selling">
-              <div className="grid gap-2">
-                <ToggleRow
-                  label="Available for self-purchase"
-                  checked={form.selfPurchase}
-                  onChange={(v) => set("selfPurchase", v)}
-                />
-                <ToggleRow
-                  label="Allow promotion codes"
-                  checked={form.allowPromotionCodes}
-                  onChange={(v) => set("allowPromotionCodes", v)}
-                />
-                <ToggleRow
-                  label="Allow client self-cancellation"
-                  checked={form.allowSelfCancellation}
-                  onChange={(v) => set("allowSelfCancellation", v)}
-                />
-                <ToggleRow
-                  label="Limit to new customers"
-                  checked={form.newCustomersOnly}
-                  onChange={(v) => set("newCustomersOnly", v)}
-                />
-                {form.selfPurchase && (
-                  <ToggleRow
-                    label="Visible on sales page"
-                    checked={form.visibleOnSalesPage}
-                    onChange={(v) => set("visibleOnSalesPage", v)}
-                  />
-                )}
-                <div className="mt-2">
-                  <Label>Product workspace</Label>
-                  <Select
-                    value={form.workspace}
-                    onValueChange={(v) => set("workspace", v as FormState["workspace"])}
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="coaching">Coaching</SelectItem>
-                      <SelectItem value="membership">Membership</SelectItem>
-                      <SelectItem value="both">Both</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-            </Section>
-
-            {/* Advanced */}
+            {/* 5. Advanced options (collapsed by default) */}
             <div className="rounded-md border border-border">
               <button
                 type="button"
@@ -1088,18 +1091,56 @@ export default function NewProductModal({
                   Advanced options
                 </span>
                 <span className="text-xs font-normal text-muted-foreground">
-                  Stripe IDs, internal notes, status
+                  Sessions, status, internal notes
                 </span>
               </button>
               {showAdvanced && (
                 <div className="border-t border-border p-3 space-y-3">
+                  {CATEGORIES_WITH_SESSIONS[form.category] && (
+                    <div className="grid grid-cols-3 gap-3">
+                      <div>
+                        <Label className="text-xs">Sessions included <Req /></Label>
+                        <Input
+                          ref={registerField("sessionsIncluded") as any}
+                          type="number"
+                          min="1"
+                          value={form.sessionsIncluded}
+                          onChange={(e) => set("sessionsIncluded", e.target.value)}
+                          onBlur={() => setTouched((t) => ({ ...t, sessionsIncluded: true }))}
+                          placeholder="10"
+                          className={showErr("sessionsIncluded") ? "border-destructive" : ""}
+                        />
+                        {showErr("sessionsIncluded") && (
+                          <FieldError msg={errors.sessionsIncluded!} />
+                        )}
+                      </div>
+                      <div>
+                        <Label className="text-xs">Session length (min)</Label>
+                        <Input
+                          type="number"
+                          min="15"
+                          value={form.sessionLengthMin}
+                          onChange={(e) => set("sessionLengthMin", e.target.value)}
+                        />
+                      </div>
+                      <div>
+                        <Label className="text-xs">Expires (days)</Label>
+                        <Input
+                          type="number"
+                          min="0"
+                          value={form.sessionExpiryDays}
+                          onChange={(e) => set("sessionExpiryDays", e.target.value)}
+                          placeholder="Optional"
+                        />
+                      </div>
+                    </div>
+                  )}
                   <p className="text-xs text-muted-foreground">
-                    Stripe Product ID, Price ID, and Payment Link ID are generated
-                    automatically when you save. To edit them for an existing
-                    product use the Edit button on the product list.
+                    Stripe IDs are generated automatically on save. Edit existing
+                    products from the product list.
                   </p>
                   <div>
-                    <Label>Status</Label>
+                    <Label className="text-xs">Status</Label>
                     <Select
                       value={form.status}
                       onValueChange={(v) => set("status", v as "Draft" | "Active")}
@@ -1112,13 +1153,9 @@ export default function NewProductModal({
                         <SelectItem value="Active">Active</SelectItem>
                       </SelectContent>
                     </Select>
-                    <p className="mt-1 text-[11px] text-muted-foreground">
-                      Draft is safest for new products. Flip to Active once Stripe
-                      setup succeeds.
-                    </p>
                   </div>
                   <div>
-                    <Label>Internal notes</Label>
+                    <Label className="text-xs">Internal notes</Label>
                     <Textarea
                       rows={3}
                       value={form.notes}
@@ -1129,71 +1166,25 @@ export default function NewProductModal({
                 </div>
               )}
             </div>
+
+            {/* Mobile summary */}
+            <div className="md:hidden rounded-lg border border-border bg-muted/20 p-3">
+              <SummaryContent
+                form={form}
+                hasErrors={hasErrors}
+                missingFields={missingFieldList}
+              />
+            </div>
           </form>
 
           {/* Summary panel */}
-          <aside className="hidden md:block border-l border-border bg-muted/20 overflow-y-auto p-5">
-            <div className="sticky top-0">
-              <div className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
-                Live summary
-              </div>
-              <h3 className="mt-2 text-base font-bold">
-                {form.name || "Untitled product"}
-              </h3>
-              <p className="mt-1 text-sm">{priceLine(form)}</p>
-              {durationLine(form) && (
-                <p className="mt-1 text-xs text-muted-foreground">
-                  {durationLine(form)}
-                </p>
-              )}
-              {startLine(form) && (
-                <p className="mt-0.5 text-xs text-muted-foreground">
-                  {startLine(form)}.
-                </p>
-              )}
-              {form.includedItems.filter(Boolean).length > 0 && (
-                <div className="mt-3">
-                  <div className="text-[11px] font-semibold uppercase text-muted-foreground">
-                    Includes
-                  </div>
-                  <ul className="mt-1 space-y-0.5 text-xs">
-                    {form.includedItems.filter(Boolean).map((i, idx) => (
-                      <li key={idx}>• {i}</li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-              <div className="mt-4 space-y-1 text-[11px] text-muted-foreground border-t border-border pt-3">
-                <div>
-                  <span className="font-semibold text-foreground">Checkout:</span>{" "}
-                  {form.paymentType === "free"
-                    ? "No paid checkout"
-                    : form.paymentType === "one_time"
-                      ? "Stripe one-time payment"
-                      : "Stripe subscription"}
-                </div>
-                {form.paymentType !== "free" && (
-                  <div>Taxes added at checkout</div>
-                )}
-                {form.paymentType !== "free" && form.allowPromotionCodes && (
-                  <div>Promotion codes enabled</div>
-                )}
-                {form.agreementRequired && <div>Agreement required</div>}
-                <div>
-                  Workspace:{" "}
-                  <span className="capitalize text-foreground">{form.workspace}</span>
-                </div>
-              </div>
-              {hasErrors && (
-                <div className="mt-4 rounded-md border border-destructive/30 bg-destructive/5 p-2 text-[11px] text-destructive">
-                  Resolve the highlighted fields before saving.
-                </div>
-              )}
-              {!hasErrors && form.name && (
-                <div className="mt-4 flex items-center gap-1.5 rounded-md border border-emerald-500/30 bg-emerald-500/5 p-2 text-[11px] text-emerald-700">
-                  <Sparkles className="h-3 w-3" /> Ready to create.
-                </div>
-              )}
+          <aside className="hidden md:block border-l border-border bg-muted/20 overflow-y-auto">
+            <div className="sticky top-0 p-4">
+              <SummaryContent
+                form={form}
+                hasErrors={hasErrors}
+                missingFields={missingFieldList}
+              />
             </div>
           </aside>
         </div>
@@ -1303,6 +1294,85 @@ function SegmentedPayment({
           </button>
         ))}
       </div>
+    </div>
+  );
+}
+
+function Req() {
+  return (
+    <span aria-label="required" className="ml-0.5 text-destructive">
+      *
+    </span>
+  );
+}
+
+function SummaryContent({
+  form,
+  hasErrors,
+  missingFields,
+}: {
+  form: FormState;
+  hasErrors: boolean;
+  missingFields: string[];
+}) {
+  return (
+    <div>
+      <div className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
+        Live summary
+      </div>
+      <h3 className="mt-1.5 text-base font-bold break-words">
+        {form.name || "Untitled product"}
+      </h3>
+      <p className="mt-1 text-sm">{priceLine(form)}</p>
+      {durationLine(form) && (
+        <p className="mt-1 text-xs text-muted-foreground">{durationLine(form)}</p>
+      )}
+      {startLine(form) && (
+        <p className="mt-0.5 text-xs text-muted-foreground">{startLine(form)}.</p>
+      )}
+      {form.includedItems.filter(Boolean).length > 0 && (
+        <div className="mt-3">
+          <div className="text-[10px] font-semibold uppercase text-muted-foreground">
+            Includes
+          </div>
+          <ul className="mt-1 space-y-0.5 text-xs">
+            {form.includedItems.filter(Boolean).map((i, idx) => (
+              <li key={idx}>• {i}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+      <div className="mt-3 space-y-1 text-[11px] text-muted-foreground border-t border-border pt-3">
+        <div>
+          <span className="font-semibold text-foreground">Checkout:</span>{" "}
+          {form.paymentType === "free"
+            ? "No paid checkout"
+            : form.paymentType === "one_time"
+              ? "Stripe one-time payment"
+              : "Stripe subscription"}
+        </div>
+        {form.paymentType !== "free" && <div>Taxes added at checkout</div>}
+        {form.paymentType !== "free" && form.allowPromotionCodes && (
+          <div>Promotion codes enabled</div>
+        )}
+        {form.agreementRequired && <div>Agreement required</div>}
+        <div>
+          Workspace:{" "}
+          <span className="capitalize text-foreground">{form.workspace}</span>
+        </div>
+      </div>
+      {hasErrors ? (
+        <div className="mt-3 rounded-md border border-destructive/30 bg-destructive/5 p-2 text-[11px] text-destructive">
+          <div className="font-semibold">Missing required fields:</div>
+          <div className="mt-0.5">{missingFields.join(", ")}</div>
+        </div>
+      ) : (
+        form.name && (
+          <div className="mt-3 flex items-center gap-1.5 rounded-md border border-emerald-500/30 bg-emerald-500/5 p-2 text-[11px] text-emerald-700">
+            <Sparkles className="h-3 w-3" /> Ready to create.
+          </div>
+        )
+      )}
     </div>
   );
 }
