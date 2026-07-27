@@ -22,7 +22,7 @@ export const Route = createFileRoute("/_authenticated/admin/payments")({ compone
 function PaymentsRedirect() {
   const navigate = useNavigate();
   useEffect(() => {
-    navigate({ to: "/admin/sales", search: { tab: "products-payments", sub: "payments" } as any, replace: true });
+    navigate({ to: "/admin/sales", search: { tab: "products-payments", sub: "overview" } as any, replace: true });
   }, [navigate]);
   return null;
 }
