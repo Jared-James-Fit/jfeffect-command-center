@@ -14,7 +14,7 @@ export const Route = createFileRoute("/_authenticated/admin/purchases")({ compon
 function PurchasesRedirect() {
   const navigate = useNavigate();
   useEffect(() => {
-    navigate({ to: "/admin/sales", search: { tab: "products-payments", sub: "purchases" } as any, replace: true });
+    navigate({ to: "/admin/sales", search: { tab: "products-payments", sub: "transactions" } as any, replace: true });
   }, [navigate]);
   return null;
 }
