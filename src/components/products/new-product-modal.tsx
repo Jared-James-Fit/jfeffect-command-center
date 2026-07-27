@@ -383,6 +383,10 @@ export default function NewProductModal({
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [touched, setTouched] = useState<Record<string, boolean>>({});
   const submittedOnce = useRef(false);
+  const fieldRefs = useRef<Record<string, HTMLElement | null>>({});
+  const registerField = (key: string) => (el: HTMLElement | null) => {
+    fieldRefs.current[key] = el;
+  };
   // Stable per-open idempotency key. A retried Save re-uses the same UUID so
   // Stripe returns the original product/price/payment_link instead of
   // duplicating them.
@@ -452,9 +456,21 @@ export default function NewProductModal({
   const handleSave = async () => {
     submittedOnce.current = true;
     if (hasErrors) {
-      toast.error("Please fix the highlighted fields before saving.");
+      const firstKey = Object.keys(errors)[0];
+      const missing = Object.keys(errors)
+        .map((k) => FIELD_LABELS[k] ?? k)
+        .join(", ");
+      toast.error(`Missing required fields: ${missing}`);
       // force re-render for error visibility
       setTouched((t) => ({ ...t }));
+      // scroll/focus first invalid field
+      const el = fieldRefs.current[firstKey];
+      if (el) {
+        try {
+          el.scrollIntoView({ behavior: "smooth", block: "center" });
+          (el as HTMLInputElement).focus?.();
+        } catch {}
+      }
       return;
     }
     setSubmitting(true);
