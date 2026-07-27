@@ -1,51 +1,60 @@
-# Payments Section Cleanup
 
-Goal: Collapse the Payments sidebar to exactly **Overview · Transactions · Products · Discount Codes · Settings**, and make every remaining page open cleanly by consolidating routes we already have. No new payment logic — everything reuses existing Stripe/DB reads.
+# Membership → Coaching UI Parity
 
-## Phase 1 — Navigation (this pass)
+Precision migration. No component duplication — reuse existing Coaching (`/portal/*`) building blocks inside the `/m/*` shell. No business logic changes; presentation and navigation only.
 
-Rewrite the `Payments` group in `src/lib/internal-nav.ts` (the source used by AppShell) to only:
+## 1. Bottom Navigation (`src/lib/admin-nav.ts`)
 
-| Label | Route | Reused page |
-|---|---|---|
-| 🏠 Overview | `/admin/payments` | Existing `payments.tsx` (rename tab: "Overview") |
-| 💳 Transactions | `/admin/transactions` | Existing `transactions.tsx` |
-| 📦 Products | `/admin/payment-links` | Existing `payment-links.tsx` (label → "Products") |
-| 🎟 Discount Codes | `/admin/discount-codes` | Existing `discount-codes.tsx` |
-| ⚙️ Settings | `/admin/billing-sources` | Existing `billing-sources.tsx` (label → "Settings") |
+Replace `memberBottomNav`:
+- Home → `/m`
+- Workouts → `/m/workouts` (renamed from My Plans)
+- Nutrition → `/m/nutrition`
+- Support → `/m/support`
+- More → `/m/more`
 
-Remove from Payments group: Sales, Product Sales, Products/Offers (renamed above), Invoices, Coaching Sales Page, Membership Sales Page, Stripe Discount Codes (dedupe with above), Stripe Webhook Events.
+Trim `memberNav` (left rail): Home, Workouts, Nutrition, Support, More. Everything account-flavored lives under More.
 
-Move the same block in `src/lib/admin-nav.ts` (legacy source) to match, so both nav sources stay in sync.
+## 2. Route renames / additions
 
-Add lightweight redirects (small route stubs like the existing `offers.tsx → payment-links`) for the removed URLs so no dead links exist:
+- Rename `m/my-plans.tsx` → `m/workouts.index.tsx`; keep `m/my-plans.$enrollmentId.tsx` re-exporting the same view under a new `m/workouts.$enrollmentId.tsx` path (or add redirect).
+- New `m/more.tsx` — a Manage Membership hub linking to Profile, Membership, Billing, Receipts, Notifications, Privacy, Support, Delete Account.
+- Legacy `m/plans.tsx` (Program Library page) becomes internal component only, mounted inside a Sheet on the Workouts page — no more standalone tab.
+- Keep `m/account.tsx`, `m/billing.tsx`, `m/announcements.tsx`, `m/tools.tsx`, `m/resources.tsx` reachable via More; drop from bottom nav.
+- Add redirects: `/m/my-plans` → `/m/workouts`, `/m/plans` → `/m/workouts`.
 
-- `/admin/sales` → `/admin/payments` (Overview)
-- `/admin/products-history` → `/admin/transactions`
-- `/admin/purchases` → `/admin/transactions`
-- `/admin/promo-codes` → `/admin/discount-codes`
-- `/admin/sales/coaching` → `/admin/payment-links`
-- `/admin/sales/membership` → `/admin/payment-links`
-- `/admin/membership/billing-events` → `/admin/billing-sources?tab=developer`
+## 3. Home page (`m/index.tsx`) reorder
 
-The Sales Page editors themselves stay live under **/admin/sales** (Sales Pages tab) since the sales workspace already houses them — we only remove the nav items pointing at them from Payments.
+Top-to-bottom, all reusing existing Coaching cards:
+1. Bodyweight tracker — reuse the same card `/portal` home uses.
+2. Water tracker — keep current.
+3. Progress Snapshot — reuse Coaching's progress-hub entry card (Log Weight / Photos / Measurements / Videos / View Progress Hub).
+4. Setup card — collapsed rows; only "Install JF Effect" + "Enable Notifications"; hide entirely once both done (persist in localStorage as today).
+5. Manage Membership card → links to `/m/more`.
 
-## Phase 2 — Overview dashboard (follow-up)
+Remove: current access badges, permission chips, "Complete Profile / Pick First Program / Open First Workout" rows, debug info.
 
-Turn `/admin/payments` into the Overview dashboard: MRR / Gross / Net / Refunds / Failed / Outstanding / Active clients KPI grid + Revenue chart (30/90/365) + Revenue Sources donut + Recent 10 transactions + Quick actions (Create Product, Create Discount Code, Open Stripe). Reuses `admin_transactions_v1` view and existing membership queries — no new webhook / Stripe endpoints.
+## 4. Workouts page (`m/workouts.index.tsx`)
 
-## Phase 3 — Transactions inline expand (follow-up)
+Single page (no tabs):
+- Current Active Program card: Program name, Week, Progress bar, Continue Workout button, Calendar button. Nothing else. No warning banners unless action required.
+- "Add Workout Program" button opens a Sheet containing the existing Program Library UI (extracted from `m/plans.tsx` into a component `MemberProgramLibraryPanel`). Default filter "All Programs". Instant search + filters + preview + Add to Training preserved. On add: close sheet, invalidate active-program queries.
+- Below: Workout Analytics — reuse the exact Coaching analytics dashboard component (`client-analytics-dashboard` or the portal wrapper) so Training Readiness, Recovery, Sleep, Load, Consistency, Performance, Pain, Recommendations, Insights all appear identically. Pass the member's userId.
 
-Add inline expand row on `transactions.tsx` (Stripe IDs, timeline, coupons, taxes, receipt, refund history, notes + Open Stripe / Copy Receipt / Refund buttons). Removes the current navigate-away drawer.
+## 5. Account → More
 
-## Phase 4 — Products & Discount Codes merge (follow-up)
+`m/more.tsx` = one page grouping links to existing routes (Profile section from `m/account`, Billing, Receipts (from billing), Notifications, Privacy, Support, Delete Account). Reuse Coaching settings list layout. No duplicated forms — link out to existing pages where they already exist.
 
-Add Category tabs (Memberships / Coaching / Programs / Digital / Merchandise) to `payment-links.tsx`; ensure card shows Price · Active subs · Revenue · Status with Edit/Duplicate/Archive/Copy Link/Open Checkout. Merge the two discount code lists into one on `discount-codes.tsx` and hide `promo-codes.tsx` behind a redirect.
+## 6. Shared components — reuse, don't fork
 
-## Phase 5 — Settings tabs (follow-up)
+- Bodyweight card, water card, progress hub entry, setup card rows, analytics dashboard, skeleton loaders, virtualization, image caching, animations: import from `@/components/portal/*` or shared `@/components/*` used by `/portal`. Where a member-specific data adapter is needed, pass a viewer/userId prop rather than cloning the component.
 
-Wrap `/admin/billing-sources` with tabs: Stripe · Business · Taxes · Branding · Notifications · Advanced (Developer → webhook logs, admin-only).
+## Out of scope
+- No changes to workout logging, nutrition detail, billing/Stripe logic, or DB schema.
+- No visual redesign beyond adopting Coaching spacing/typography via reused components.
 
-## Delivery
-
-I'll ship Phase 1 in this response (nav + redirects — the visible cleanup), then do Phases 2–5 in follow-ups so each stays reviewable. This lets us take the win of a clean sidebar immediately without a giant hard-to-audit patch.
+## Technical notes
+- `AppShell` already accepts `bottomItems`; only nav arrays change.
+- `m/route.tsx` unchanged except nav wiring.
+- Program Library extraction: pull the list/search/filter body out of `m/plans.tsx` into `src/components/member/member-program-library-panel.tsx`, then render it both inside the new Workouts sheet and inside `/m/plans` (kept only as a soft redirect to `/m/workouts`).
+- Analytics reuse: `/portal/workouts.analytics.tsx` renders `ClientAnalyticsDashboard` (or similar). Import the same component into the Workouts page, wired with `member.user_id`.
+- Delete: none — legacy routes stay as redirects to avoid breaking bookmarks/deep links.
