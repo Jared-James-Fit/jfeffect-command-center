@@ -14,6 +14,7 @@ import {
 import { PlayCircle, CalendarDays, Plus, BookOpen, Loader2 } from "lucide-react";
 import { PlanLibrary } from "./plans";
 import { ClientAnalyticsDashboard } from "@/components/analytics/client-analytics-dashboard";
+import { RecoveryPreviewCard } from "@/components/analytics/recovery-preview-card";
 
 export const Route = createFileRoute("/_authenticated/m/workouts/")({
   component: MemberWorkouts,
@@ -119,13 +120,20 @@ function MemberWorkouts() {
 
       {/* Workout Analytics — same component as Coaching */}
       {clientId ? (
-        <div className="pt-2">
+        <div className="space-y-4 pt-2">
+          {/* Training Readiness / Recovery — matches Coaching client parity */}
+          <RecoveryPreviewCard clientId={clientId} analyticsTo="/m/workouts#recovery" />
           <ClientAnalyticsDashboard
             clientId={clientId}
             preferredUnit={preferredUnit}
           />
         </div>
-      ) : null}
+      ) : (
+        <Card className="p-6 text-sm text-muted-foreground">
+          Analytics and readiness insights will appear here once your first
+          workouts are logged.
+        </Card>
+      )}
 
       {/* Program Library Sheet */}
       <Sheet open={libraryOpen} onOpenChange={setLibraryOpen}>
