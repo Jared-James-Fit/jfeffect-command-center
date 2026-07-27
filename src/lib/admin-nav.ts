@@ -15,7 +15,7 @@ import {
 } from "lucide-react";
 import { Camera } from "lucide-react";
 import { Sparkles } from "lucide-react";
-import { ShoppingBag, Activity } from "lucide-react";
+import { ShoppingBag } from "lucide-react";
 import type { NavItem } from "@/components/app-shell";
 
 export const adminNav: NavItem[] = [
