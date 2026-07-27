@@ -46,7 +46,15 @@ type LibraryPlan = {
 
 const PAGE_SIZE = 24;
 
-function PlanLibrary() {
+export function PlanLibrary({
+  defaultCategory = "recommended",
+  onEnrolled,
+  hideHeader = false,
+}: {
+  defaultCategory?: CategoryId;
+  onEnrolled?: (enrollmentId: string) => void;
+  hideHeader?: boolean;
+} = {}) {
   const fetchLibrary = useServerFn(listMembershipLibrary);
   const fetchGoals = useServerFn(getMyGoalsSetupFn);
   const enrollFn = useServerFn(enrollLibraryPlan);
@@ -54,7 +62,7 @@ function PlanLibrary() {
   const qc = useQueryClient();
 
   const [q, setQ] = useState("");
-  const [category, setCategory] = useState<CategoryId>("recommended");
+  const [category, setCategory] = useState<CategoryId>(defaultCategory);
   const [filters, setFilters] = useState<FilterState>({});
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
   const [pendingId, setPendingId] = useState<string | null>(null);
@@ -147,7 +155,11 @@ function PlanLibrary() {
       toast.success("Added to your training");
       qc.invalidateQueries({ queryKey: ["m-enrollments"] });
       qc.invalidateQueries({ queryKey: ["m-active"] });
-      navigate({ to: "/m/my-plans/$enrollmentId", params: { enrollmentId: res.enrollmentId! } });
+      if (onEnrolled) {
+        onEnrolled(res.enrollmentId!);
+      } else {
+        navigate({ to: "/m/my-plans/$enrollmentId", params: { enrollmentId: res.enrollmentId! } });
+      }
     } catch (e: any) {
       toast.error(e?.message ?? "Couldn't add this program");
     } finally {
@@ -160,7 +172,9 @@ function PlanLibrary() {
 
   return (
     <div className="space-y-5 pb-24">
-      <PageHeader title="Program Library" subtitle="Find a program built around your goals." />
+      {!hideHeader && (
+        <PageHeader title="Program Library" subtitle="Find a program built around your goals." />
+      )}
 
       <div className="flex items-center gap-1 rounded-md border border-border bg-muted/30 p-0.5 w-fit">
         <button
