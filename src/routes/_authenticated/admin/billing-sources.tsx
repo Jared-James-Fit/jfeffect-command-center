@@ -73,7 +73,7 @@ function BillingSourceBadge({ source }: { source: string }) {
   );
 }
 
-function BillingSourcesPage() {
+export function BillingSourcesPage() {
   const qc = useQueryClient();
   const listFn = useServerFn(listClientsWithBillingFn);
   const dashFn = useServerFn(getBillingDashboardFn);
