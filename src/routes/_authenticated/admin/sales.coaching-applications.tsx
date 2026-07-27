@@ -105,17 +105,8 @@ export function ApplicationsInbox({ embedded = false }: { embedded?: boolean } =
               </button>
               {open && (
                 <div className="mt-3 grid gap-3 md:grid-cols-2">
-                  <div className="space-y-2 text-sm">
-                    <Detail label="Main goal" value={a.main_goal} />
-                    <Detail label="Desired result" value={a.target_outcome} />
-                    <Detail label="Why now" value={a.why_now} />
-                    <Detail label="Obstacle" value={[a.obstacle, a.obstacle_other].filter(Boolean).join(" — ")} />
-                    <Detail label="Training" value={[a.training_location, a.days_per_week ? `${a.days_per_week} days/wk` : null].filter(Boolean).join(" · ")} />
-                    <Detail label="Coaching interest" value={a.coaching_interest} />
-                    <Detail label="Readiness" value={a.readiness} />
-                    <Detail label="Tracking" value={a.tracking_willingness} />
-                    <Detail label="Investment" value={a.investment_readiness} />
-                    <Detail label="Preferred contact" value={[a.preferred_contact, a.best_time].filter(Boolean).join(" · ")} />
+                  <div className="space-y-4 text-sm">
+                    <ApplicationSections app={a} />
                     {a.scoring && <ScoreBreakdown scoring={a.scoring} />}
                   </div>
                   <div className="space-y-2">
@@ -185,13 +176,101 @@ export function ApplicationsInbox({ embedded = false }: { embedded?: boolean } =
   );
 }
 
-function Detail({ label, value }: { label: string; value?: string | null }) {
-  if (!value) return null;
+function humanize(v: unknown): string {
+  if (v === null || v === undefined) return "";
+  if (typeof v === "number") return String(v);
+  if (typeof v === "boolean") return v ? "Yes" : "No";
+  if (Array.isArray(v)) return v.map(humanize).filter(Boolean).join(", ");
+  const s = String(v).trim();
+  if (!s) return "";
+  // Special-case common enum values for clarity.
+  const map: Record<string, string> = {
+    help_me_choose: "Help me choose",
+    explain_options: "Explain pricing options",
+    fully_ready: "Fully ready",
+    ready_soon: "Ready soon",
+    not_ready: "Not ready yet",
+    full_gym: "Full gym",
+    home_gym: "Home gym",
+    commercial_gym: "Commercial gym",
+    garage_gym: "Garage gym",
+    limited_equipment: "Limited equipment",
+  };
+  if (map[s]) return map[s];
+  // "4_days_week" → "4 days/week"
+  const daysMatch = s.match(/^(\d+)[_\s-]*days?[_\s-]*(week|wk)$/i);
+  if (daysMatch) return `${daysMatch[1]} days/week`;
+  // Generic: snake/kebab → Sentence case
+  const cleaned = s.replace(/[_-]+/g, " ").replace(/\s+/g, " ").trim();
+  return cleaned.charAt(0).toUpperCase() + cleaned.slice(1);
+}
+
+function Field({ label, value }: { label: string; value?: unknown }) {
+  const display = humanize(value);
   return (
     <div>
       <div className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">{label}</div>
-      <div className="whitespace-pre-line">{value}</div>
+      {display ? (
+        <div className="whitespace-pre-line text-foreground">{display}</div>
+      ) : (
+        <div className="italic text-muted-foreground/70">— Not answered</div>
+      )}
     </div>
+  );
+}
+
+function Section({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <div className="rounded-md border border-border/60 bg-muted/20 p-3">
+      <div className="mb-2 text-[11px] font-bold uppercase tracking-[0.18em] text-muted-foreground">{title}</div>
+      <div className="grid gap-3">{children}</div>
+    </div>
+  );
+}
+
+function ApplicationSections({ app: a }: { app: any }) {
+  const obstacle = [a.obstacle, a.obstacle_other].filter(Boolean).map(humanize).join(" — ");
+  const training = [
+    a.training_location ? humanize(a.training_location) : null,
+    a.days_per_week ? `${a.days_per_week} days/week` : null,
+  ].filter(Boolean).join("\n");
+  const contact = [
+    a.preferred_contact ? humanize(a.preferred_contact) : null,
+    a.best_time ? humanize(a.best_time) : null,
+  ].filter(Boolean).join("\n");
+  return (
+    <>
+      <Section title="Goals">
+        <Field label="Main goal" value={a.main_goal} />
+        <Field label="Desired result" value={a.target_outcome} />
+        <Field label="Why now" value={a.why_now} />
+        <Field label="Biggest obstacle" value={obstacle} />
+        <Field label="90-day win" value={a.win_90_days} />
+      </Section>
+      <Section title="Training">
+        <Field label="Current training" value={training} />
+        <Field label="Gym access" value={a.gym_access} />
+        <Field label="Training history" value={a.training_history} />
+        <Field label="Current bodyweight" value={a.current_weight} />
+        <Field label="Injuries" value={a.injuries} />
+        <Field label="Tried before" value={a.tried_before} />
+      </Section>
+      <Section title="Coaching">
+        <Field label="Coaching interest" value={a.coaching_interest} />
+        <Field label="Readiness" value={a.readiness} />
+        <Field label="Tracking" value={a.tracking_willingness} />
+        <Field label="Investment" value={a.investment_readiness} />
+        <Field label="Monthly investment" value={a.monthly_investment} />
+        <Field label="Timeline to start" value={a.timeline} />
+      </Section>
+      <Section title="Contact">
+        <Field label="Preferred contact" value={contact} />
+        <Field label="Email" value={a.email} />
+        <Field label="Phone" value={a.phone} />
+        <Field label="Instagram" value={a.instagram} />
+        <Field label="Timezone" value={a.location_timezone} />
+      </Section>
+    </>
   );
 }
 
