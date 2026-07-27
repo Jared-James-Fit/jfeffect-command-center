@@ -104,14 +104,6 @@ function useSetupChecklistData() {
 
   const items: Item[] = useMemo(() => [
     {
-      key: "profile",
-      label: "Complete your profile",
-      icon: UserCircle,
-      done: setupComplete,
-      to: "/m/account",
-      cta: setupComplete ? "Review" : "Finish profile",
-    },
-    {
       key: "install",
       label: "Install JF Effect on your phone",
       icon: Smartphone,
@@ -133,22 +125,6 @@ function useSetupChecklistData() {
       cta: notifGranted ? "On" : notif.denied ? "Blocked" : notif.unsupported ? "Unavailable" : "Enable",
       disabled: notif.unsupported,
     },
-    {
-      key: "plan",
-      label: "Pick your first program",
-      icon: ClipboardList,
-      done: false, // wired in caller via active enrollment if needed
-      to: "/m/plans",
-      cta: "Browse library",
-    },
-    {
-      key: "workout",
-      label: "Open your first workout",
-      icon: Dumbbell,
-      done: false,
-      to: "/m/my-plans",
-      cta: "Start training",
-    },
   ], [setupComplete, isInstalled, notifGranted, notif.denied, notif.unsupported]);
 
   return {
@@ -158,15 +134,9 @@ function useSetupChecklistData() {
   };
 }
 
-export function SetupChecklist({ activeEnrollment }: { activeEnrollment?: any }) {
+export function SetupChecklist({ activeEnrollment: _activeEnrollment }: { activeEnrollment?: any } = {}) {
   const data = useSetupChecklistData();
-
-  // Patch dynamic completion based on caller-supplied data.
-  const items = data.items.map((it) => {
-    if (it.key === "plan") return { ...it, done: !!activeEnrollment };
-    if (it.key === "workout") return { ...it, done: !!activeEnrollment && (activeEnrollment.workouts_completed ?? 0) > 0 };
-    return it;
-  });
+  const items = data.items;
   const done = items.filter((i) => i.done).length;
   const total = items.length;
   if (done === total) return null;
