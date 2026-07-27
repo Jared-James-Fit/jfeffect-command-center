@@ -60,7 +60,7 @@ export function PaymentsOverviewPanel({
     queryFn: async () => {
       const { data, error } = await supabase
         .from("coaching_products")
-        .select("id,name,is_active,archived_at,base_price_cents,currency");
+        .select("id,name,status,active,archived,archived_at,price_cents,currency");
       if (error) throw error;
       return data ?? [];
     },
@@ -102,7 +102,12 @@ export function PaymentsOverviewPanel({
 
   const productStats = useMemo(() => {
     const rows = productsQuery.data ?? [];
-    const active = rows.filter((r: any) => r.is_active && !r.archived_at).length;
+    const active = rows.filter(
+      (r: any) =>
+        (r.status === "Active" || (r.status == null && r.active)) &&
+        !r.archived_at &&
+        !r.archived
+    ).length;
     return { total: rows.length, active };
   }, [productsQuery.data]);
 
