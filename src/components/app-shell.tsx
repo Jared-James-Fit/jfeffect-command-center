@@ -582,6 +582,7 @@ export function AppShell({ items, bottomItems: customBottomItems, title, childre
                   <div className="truncate text-[9px] text-muted-foreground leading-tight">{user?.email}</div>
                 )}
               </div>
+              {isTablet && (
               <Tooltip>
                 <TooltipTrigger asChild>
                   <button
@@ -596,11 +597,10 @@ export function AppShell({ items, bottomItems: customBottomItems, title, childre
                   </button>
                 </TooltipTrigger>
                 <TooltipContent side="top">
-                  {isTablet
-                    ? (effectiveMode === "expanded" ? "Collapse to icons" : "Expand sidebar")
-                    : (mode === "expanded" ? "Compact" : mode === "compact" ? "Collapse" : "Expand")}
+                  {effectiveMode === "expanded" ? "Collapse to icons" : "Expand sidebar"}
                 </TooltipContent>
               </Tooltip>
+              )}
               {!isTablet && (
               <Tooltip>
                 <TooltipTrigger asChild>
