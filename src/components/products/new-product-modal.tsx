@@ -31,6 +31,18 @@ import { supabase } from "@/integrations/supabase/client";
 import { createCoachingProduct } from "@/lib/coaching-products.functions";
 
 /* ─────────────────────────────────────────────────────────────
+   Field labels for validation surfacing
+   ───────────────────────────────────────────────────────────── */
+const FIELD_LABELS: Record<string, string> = {
+  name: "Product name",
+  price: "Price",
+  fixedPaymentCount: "Number of payments",
+  serviceDuration: "Access duration",
+  sessionsIncluded: "Sessions included",
+  agreementTemplateId: "Agreement template",
+};
+
+/* ─────────────────────────────────────────────────────────────
    Config
    ───────────────────────────────────────────────────────────── */
 
