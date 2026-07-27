@@ -411,11 +411,10 @@ export function AppShell({ items, bottomItems: customBottomItems, title, childre
     items.find((i) => i.to.endsWith("/account") || i.to.endsWith("/account-settings"))?.to ??
     "/admin/account";
 
-  // Desktop keeps the sidebar permanently expanded — no collapse/compact toggle.
-  // Tablet still gets a two-state sidebar (expanded ↔ compact icon rail) so it
-  // stays usable on touch screens without hovering. Both persist per-user via
-  // localStorage, but the desktop mode is forced to expanded.
-  const effectiveMode: SidebarMode = isTablet ? (mode === "collapsed" ? "compact" : mode) : "expanded";
+  // Desktop and tablet both get a two-state sidebar (expanded ↔ compact icon
+  // rail). Persisted per-user via localStorage. Legacy "collapsed" state is
+  // coerced to "compact" so the rail is always at least visible.
+  const effectiveMode: SidebarMode = mode === "collapsed" ? "compact" : mode;
   const isCompact = effectiveMode === "compact";
   // Tablet compact stays a comfortable icon rail (~72px) so tap targets are ≥44px.
   const sidebarWidthClass = isCompact ? "w-[72px]" : "w-60";
