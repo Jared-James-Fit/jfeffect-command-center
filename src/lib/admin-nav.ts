@@ -199,25 +199,19 @@ export const clientBottomNav: NavItem[] = [
 
 // App Member portal navigation
 export const memberNav: NavItem[] = [
-  { to: "/m", label: "Dashboard", icon: LayoutDashboard },
-  { to: "/m/my-plans", label: "My Plans", icon: ClipboardCheck },
-  { to: "/m/plans", label: "Program Library", icon: BookOpen },
-  { to: "/m/nutrition", label: "Nutrition & Recipes", icon: ChefHat },
-  { to: "/m/progress", label: "Progress", icon: Camera, keywords: ["progress","photos","bodyweight","measurements","compare"] },
-  { to: "/m/tools", label: "Tools", icon: Wrench },
-  { to: "/m/announcements", label: "Announcements", icon: Megaphone },
-  { to: "/m/support", label: "Support", icon: HelpCircle },
-  { to: "/install", label: "Install App", icon: Download },
-  { to: "/m/billing", label: "Billing", icon: CreditCard },
-  { to: "/m/account", label: "My Account", icon: UserCog },
+  { to: "/m", label: "Home", icon: LayoutDashboard },
+  { to: "/m/workouts", label: "Workouts", icon: ClipboardCheck, keywords: ["plans","program","training","library"] },
+  { to: "/m/nutrition", label: "Nutrition", icon: ChefHat, keywords: ["recipes","targets","meal"] },
+  { to: "/m/support", label: "Support", icon: HelpCircle, keywords: ["help","messages","contact"] },
+  { to: "/m/more", label: "More", icon: UserCog, keywords: ["account","billing","profile","settings","manage","receipts","agreements","announcements","tools","progress","install"] },
 ];
 
-// Mobile bottom-tab nav for the App Member portal. Five short labels max so
-// nothing wraps and Program Library always stays one tap away on phones.
+// Mobile bottom-tab nav for the App Member portal. Five short labels max.
+// Coaching-style structure: Home / Workouts / Nutrition / Support / More.
 export const memberBottomNav: NavItem[] = [
   { to: "/m", label: "Home", icon: LayoutDashboard },
-  { to: "/m/my-plans", label: "My Plans", icon: ClipboardCheck },
-  { to: "/m/plans", label: "Library", icon: BookOpen },
+  { to: "/m/workouts", label: "Workouts", icon: ClipboardCheck },
   { to: "/m/nutrition", label: "Nutrition", icon: ChefHat },
-  { to: "/m/account", label: "Account", icon: UserCog },
+  { to: "/m/support", label: "Support", icon: HelpCircle },
+  { to: "/m/more", label: "More", icon: UserCog },
 ];
