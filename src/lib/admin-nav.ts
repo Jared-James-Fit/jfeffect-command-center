@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { Camera } from "lucide-react";
 import { Sparkles } from "lucide-react";
+import { ShoppingBag } from "lucide-react";
 import type { NavItem } from "@/components/app-shell";
 
 export const adminNav: NavItem[] = [
@@ -52,16 +53,14 @@ export const adminNav: NavItem[] = [
   { to: "/admin/fillout-submissions", label: "Fillout Submissions", icon: ClipboardList, group: "Programming" },
   { to: "/admin/faqs", label: "FAQ Manager", icon: HelpCircle, group: "Programming" },
   // BUSINESS
-  { to: "/admin/sales/membership", label: "Membership Sales Page", icon: Sparkles, group: "Business" },
-  { to: "/admin/sales/coaching", label: "Coaching Sales Page", icon: Sparkles, group: "Business" },
   { to: "/admin/sales/coaching-applications", label: "Coaching Applications", icon: ClipboardList, group: "Business" },
   { to: "/admin/crm", label: "CRM Dashboard", icon: UserCheck, group: "Business" },
   { to: "/admin/crm/contacts", label: "CRM Contacts", icon: Users, group: "Business" },
-  { to: "/admin/payment-links", label: "Products", icon: CreditCard, group: "Business" },
-  { to: "/admin/payments", label: "Payments", icon: DollarSign, group: "Business" },
-  { to: "/admin/promo-codes", label: "Promo Codes", icon: Ticket, group: "Business" },
-  { to: "/admin/purchases", label: "Purchases", icon: ClipboardCheck, group: "Business" },
-  { to: "/admin/billing-sources", label: "Billing Sources & Legacy", icon: CreditCard, group: "Business", keywords: ["legacy","trainerize","billing source","dual billing","migration"] },
+  { to: "/admin/payments", label: "Overview", icon: DollarSign, group: "Payments", keywords: ["dashboard","revenue","mrr"] },
+  { to: "/admin/transactions", label: "Transactions", icon: Activity, group: "Payments", keywords: ["purchases","invoices","refunds","receipts"] },
+  { to: "/admin/payment-links", label: "Products", icon: ShoppingBag, group: "Payments", keywords: ["offers","memberships","coaching","programs"] },
+  { to: "/admin/discount-codes", label: "Discount Codes", icon: Ticket, group: "Payments", keywords: ["promo","coupon","referral"] },
+  { to: "/admin/billing-sources", label: "Settings", icon: CreditCard, group: "Payments", keywords: ["stripe","taxes","webhooks","developer","legacy"] },
   { to: "/admin/legacy-migration", label: "Legacy Migration Board", icon: CreditCard, group: "Business", keywords: ["legacy","trainerize","migration","board","kanban"] },
   { to: "/admin/calendar", label: "Calendar", icon: Calendar, group: "Business", keywords: ["calendar", "appointments", "booking", "booking links", "pt calendar", "google calendar", "availability", "schedule"] },
   { to: "/admin/events", label: "Events", icon: Calendar, group: "Business" },
@@ -117,14 +116,14 @@ export const coachingAdminNav: NavItem[] = [
   { to: "/admin/fillout-submissions", label: "Fillout Submissions", icon: ClipboardList, group: "Programming" },
   { to: "/admin/faqs", label: "FAQ Manager", icon: HelpCircle, group: "Programming" },
   // BUSINESS
-  { to: "/admin/sales/coaching", label: "Coaching Sales Page", icon: Sparkles, group: "Business" },
   { to: "/admin/sales/coaching-applications", label: "Coaching Applications", icon: ClipboardList, group: "Business" },
   { to: "/admin/crm", label: "CRM Dashboard", icon: UserCheck, group: "Business" },
   { to: "/admin/crm/contacts", label: "CRM Contacts", icon: Users, group: "Business" },
-  { to: "/admin/payment-links", label: "Products", icon: CreditCard, group: "Business" },
-  { to: "/admin/payments", label: "Payments", icon: DollarSign, group: "Business" },
-  { to: "/admin/promo-codes", label: "Promo Codes", icon: Ticket, group: "Business" },
-  { to: "/admin/purchases", label: "Purchases", icon: ClipboardCheck, group: "Business" },
+  { to: "/admin/payments", label: "Overview", icon: DollarSign, group: "Payments", keywords: ["dashboard","revenue","mrr"] },
+  { to: "/admin/transactions", label: "Transactions", icon: Activity, group: "Payments", keywords: ["purchases","invoices","refunds","receipts"] },
+  { to: "/admin/payment-links", label: "Products", icon: ShoppingBag, group: "Payments", keywords: ["offers","memberships","coaching","programs"] },
+  { to: "/admin/discount-codes", label: "Discount Codes", icon: Ticket, group: "Payments", keywords: ["promo","coupon","referral"] },
+  { to: "/admin/billing-sources", label: "Settings", icon: CreditCard, group: "Payments", keywords: ["stripe","taxes","webhooks","developer"] },
   { to: "/admin/calendar", label: "Calendar", icon: Calendar, group: "Business", keywords: ["calendar", "appointments", "booking", "booking links", "pt calendar", "google calendar", "availability", "schedule"] },
   { to: "/admin/events", label: "Events", icon: Calendar, group: "Business" },
   // DOCUMENTS
