@@ -16,7 +16,7 @@ function MemberLayout() {
   const pov = getPovFlag();
   const { status, subscriptionStatus, subscriptionActive, hasAccess, loading: accessLoading, accountType, member } = useMemberAccess();
   const location = useLocation();
-  const allowList = ["/m/billing", "/m/welcome", "/m/account"];
+  const allowList = ["/m/billing", "/m/welcome", "/m/account", "/m/more"];
   const isAllowed = allowList.some((p) => location.pathname.startsWith(p));
 
   useEffect(() => {
