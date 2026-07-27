@@ -615,10 +615,10 @@ export default function NewProductModal({
     <Dialog open={open} onOpenChange={(o) => !o && !submitting && onClose()}>
       <DialogContent
         className="max-w-[1080px] w-[95vw] p-0 gap-0 max-h-[95vh] flex flex-col overflow-hidden"
-        hideCloseButton
       >
         {/* Sticky header */}
-        <div className="flex items-center gap-3 border-b border-border px-4 py-3 sm:px-5 sticky top-0 bg-background z-10">
+        {/* Left space (pl-24) reserved for the Dialog's auto "Back" pill */}
+        <div className="flex items-center gap-3 border-b border-border pl-24 pr-4 py-3 sm:pr-5 min-h-[3.5rem] sticky top-0 bg-background z-10">
           <div className="min-w-0 flex-1">
             <h2 className="text-base sm:text-lg font-bold leading-tight">Add Product</h2>
             <p className="text-[11px] sm:text-xs text-muted-foreground truncate">
