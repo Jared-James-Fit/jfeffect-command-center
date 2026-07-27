@@ -122,7 +122,7 @@ function MemberWorkouts() {
       {clientId ? (
         <div className="space-y-4 pt-2">
           {/* Training Readiness / Recovery — matches Coaching client parity */}
-          <RecoveryPreviewCard clientId={clientId} />
+          <RecoveryPreviewCard clientId={clientId} analyticsTo="/m/workouts#recovery" />
           <ClientAnalyticsDashboard
             clientId={clientId}
             preferredUnit={preferredUnit}
