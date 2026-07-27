@@ -6,10 +6,11 @@ import { useAuth } from "@/lib/auth";
 import { SalesPageEditor } from "@/components/admin/sales-page-editor";
 import { CrmDashboard } from "./crm.index";
 import { PaymentLinksPage } from "./payment-links";
-import { PaymentsPage } from "./payments";
-import { PurchasesPage } from "./purchases";
 import { PromoCodesPage } from "./promo-codes";
 import { DiscountCodesPage } from "./discount-codes";
+import { AdminTransactionsPage } from "./transactions";
+import { PaymentsOverviewPanel } from "@/components/admin/payments-overview";
+import { BillingSourcesPage } from "./billing-sources";
 
 type TabKey = "pipeline" | "products-payments" | "sales-pages" | "promotions";
 
@@ -114,18 +115,30 @@ function PipelinePanel() {
 
 const PP_SUBS = [
   { value: "products", label: "Products" },
-  { value: "payments", label: "Payments" },
-  { value: "purchases", label: "Purchases" },
+  { value: "transactions", label: "Transactions" },
+  { value: "overview", label: "Overview" },
+  { value: "discount-codes", label: "Discount Codes" },
+  { value: "settings", label: "Settings" },
 ] as const;
 
 function ProductsPaymentsPanel({ sub, onSub }: { sub?: string; onSub: (s: string) => void }) {
-  const active = (PP_SUBS.find((s) => s.value === sub)?.value) ?? "products";
+  // Back-compat: old links still point at ?sub=payments|purchases. Both
+  // routed to the same purchase-records table, which is now the Transactions
+  // view (backed by admin_transactions_v1).
+  const normalized =
+    sub === "payments" || sub === "purchases" ? "transactions" : sub;
+  const active =
+    (PP_SUBS.find((s) => s.value === normalized)?.value) ?? "products";
   return (
     <div>
       <SubTabs items={PP_SUBS as any} active={active} onChange={onSub} />
       {active === "products" && <PaymentLinksPage embedded />}
-      {active === "payments" && <PaymentsPage embedded />}
-      {active === "purchases" && <PurchasesPage embedded />}
+      {active === "transactions" && <AdminTransactionsPage embedded />}
+      {active === "overview" && (
+        <PaymentsOverviewPanel onNavigateSub={onSub} />
+      )}
+      {active === "discount-codes" && <DiscountCodesPage embedded />}
+      {active === "settings" && <BillingSourcesPage />}
     </div>
   );
 }
@@ -148,16 +161,14 @@ function SalesPagesPanel({ sub, onSub }: { sub?: string; onSub: (s: string) => v
 }
 
 const PROMO_SUBS = [
-  { value: "codes", label: "Discount Codes" },
   { value: "redemptions", label: "Redemption History" },
 ] as const;
 
 function PromotionsPanel({ sub, onSub }: { sub?: string; onSub: (s: string) => void }) {
-  const active = (PROMO_SUBS.find((s) => s.value === sub)?.value) ?? "codes";
+  const active = (PROMO_SUBS.find((s) => s.value === sub)?.value) ?? "redemptions";
   return (
     <div>
       <SubTabs items={PROMO_SUBS as any} active={active} onChange={onSub} />
-      {active === "codes" && <DiscountCodesPage embedded />}
       {active === "redemptions" && <PromoCodesPage embedded />}
     </div>
   );

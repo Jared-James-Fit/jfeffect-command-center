@@ -32,7 +32,7 @@ import {
 import { ledgerStatusTone } from "@/lib/payment-display";
 
 export const Route = createFileRoute("/_authenticated/admin/transactions")({
-  component: AdminTransactionsPage,
+  component: () => <AdminTransactionsPage />,
 });
 
 const statusTone = ledgerStatusTone;
@@ -142,7 +142,7 @@ const RANGE_LABEL: Record<string, string> = {
   "all": "All time",
 };
 
-function AdminTransactionsPage() {
+export function AdminTransactionsPage({ embedded = false }: { embedded?: boolean } = {}) {
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState<string>("all");
   const [source, setSource] = useState<string>("all");
@@ -211,11 +211,13 @@ function AdminTransactionsPage() {
 
   return (
     <>
-      <PageHeader
-        title="Transactions"
-        subtitle="Every payment across client purchases and memberships, with direct Stripe deep-links."
-      />
-      <div className="p-6 md:p-8 space-y-6">
+      {!embedded && (
+        <PageHeader
+          title="Transactions"
+          subtitle="Every payment across client purchases and memberships, with direct Stripe deep-links."
+        />
+      )}
+      <div className={embedded ? "p-4 md:p-6 space-y-6" : "p-6 md:p-8 space-y-6"}>
         {/* Totals */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           <Card className="p-4">
