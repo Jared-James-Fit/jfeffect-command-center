@@ -411,26 +411,22 @@ export function AppShell({ items, bottomItems: customBottomItems, title, childre
     items.find((i) => i.to.endsWith("/account") || i.to.endsWith("/account-settings"))?.to ??
     "/admin/account";
 
-  // Desktop keeps the sidebar permanently expanded — no collapse/compact toggle.
-  // Tablet still gets a two-state sidebar (expanded ↔ compact icon rail) so it
-  // stays usable on touch screens without hovering. Both persist per-user via
-  // localStorage, but the desktop mode is forced to expanded.
-  const effectiveMode: SidebarMode = isTablet ? (mode === "collapsed" ? "compact" : mode) : "expanded";
+  // Desktop and tablet both get a two-state sidebar (expanded ↔ compact icon
+  // rail). Persisted per-user via localStorage. Legacy "collapsed" state is
+  // coerced to "compact" so the rail is always at least visible.
+  const effectiveMode: SidebarMode = mode === "collapsed" ? "compact" : mode;
   const isCompact = effectiveMode === "compact";
   // Tablet compact stays a comfortable icon rail (~72px) so tap targets are ≥44px.
   const sidebarWidthClass = isCompact ? "w-[72px]" : "w-60";
   const rowPadding = isCompact ? "justify-center px-0 py-2.5" : "px-3 py-2 gap-3";
   const rowText = isCompact ? "text-[13px]" : "text-sm";
   // When the tablet compact rail is active, hide labels/chevrons/pin controls.
-  const iconOnly = isCompact && isTablet;
+  const iconOnly = isCompact;
 
   const cycleMode = () => {
-    if (isTablet) {
-      // Tablet: just toggle expanded ↔ compact rail.
-      setMode(effectiveMode === "expanded" ? "compact" : "expanded");
-      return;
-    }
-    setMode(mode === "expanded" ? "compact" : mode === "compact" ? "collapsed" : "expanded");
+    // Desktop and tablet: two-state toggle between expanded and the compact
+    // icon rail. No fully-collapsed state — sidebar is always visible.
+    setMode(effectiveMode === "expanded" ? "compact" : "expanded");
   };
 
   // Expand-all / collapse-all toggle for sidebar sections.
@@ -582,7 +578,6 @@ export function AppShell({ items, bottomItems: customBottomItems, title, childre
                   <div className="truncate text-[9px] text-muted-foreground leading-tight">{user?.email}</div>
                 )}
               </div>
-              {isTablet && (
               <Tooltip>
                 <TooltipTrigger asChild>
                   <button
@@ -591,7 +586,7 @@ export function AppShell({ items, bottomItems: customBottomItems, title, childre
                       "flex items-center justify-center rounded-md text-muted-foreground hover:bg-sidebar-accent hover:text-foreground",
                       isTablet ? "h-9 w-9" : "h-7 w-7",
                     )}
-                    aria-label="Collapse sidebar"
+                    aria-label={effectiveMode === "expanded" ? "Collapse sidebar" : "Expand sidebar"}
                   >
                     <ChevronLeft className="h-3.5 w-3.5" />
                   </button>
@@ -600,27 +595,6 @@ export function AppShell({ items, bottomItems: customBottomItems, title, childre
                   {effectiveMode === "expanded" ? "Collapse to icons" : "Expand sidebar"}
                 </TooltipContent>
               </Tooltip>
-              )}
-              {!isTablet && (
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <button
-                    onClick={toggleAllOpen}
-                    className="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground hover:bg-sidebar-accent hover:text-foreground"
-                    aria-label={allCollapsed ? "Open all sections" : "Close all sections"}
-                  >
-                    {allCollapsed ? (
-                      <ChevronsUpDown className="h-3.5 w-3.5" />
-                    ) : (
-                      <ChevronsDownUp className="h-3.5 w-3.5" />
-                    )}
-                  </button>
-                </TooltipTrigger>
-                <TooltipContent side="top">
-                  {allCollapsed ? "Open all (⌘⇧E)" : "Close all (⌘⇧E)"}
-                </TooltipContent>
-              </Tooltip>
-              )}
               <Tooltip>
                 <TooltipTrigger asChild>
                   <button
@@ -729,27 +703,11 @@ export function AppShell({ items, bottomItems: customBottomItems, title, childre
               </div>
             )}
               {grouped.map((group) => {
-              const containsActive = group.label === activeGroupLabel;
-              const sectionCollapsed = group.label && !isMembershipAdminShell && !isTablet
-                ? collapsedSections.has(group.label) && !containsActive
-                : false;
+              // Sidebar sections are always expanded — no per-group collapse.
+              const sectionCollapsed = false;
               return (
                 <div key={group.label ?? "default"}>
-                  {group.label && !iconOnly && !isTablet && (
-                    <button
-                      onClick={() => toggleSection(group.label!, allGroupLabels)}
-                      className="group flex w-full items-center justify-between rounded px-2.5 pb-1 pt-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground hover:text-foreground"
-                    >
-                      <span>{group.label}</span>
-                      <ChevronDown
-                        className={cn(
-                          "h-3 w-3 transition-transform",
-                          sectionCollapsed && "-rotate-90",
-                        )}
-                      />
-                    </button>
-                  )}
-                  {group.label && !iconOnly && isTablet && (
+                  {group.label && !iconOnly && (
                     <div className="px-2.5 pb-1 pt-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
                       {group.label}
                     </div>
