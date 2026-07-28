@@ -103,10 +103,10 @@ function ClientPurchase() {
               </div>
             )}
 
-            {d.nextBillingDate && (
+            {d.renewal.kind !== "none" && (
               <div className="text-sm">
-                <span className="text-muted-foreground">Next payment:</span>{" "}
-                <span className="font-semibold">{new Date(d.nextBillingDate).toLocaleDateString()}</span>
+                <span className="text-muted-foreground">{d.renewal.label}:</span>{" "}
+                <span className={`font-semibold ${d.renewal.tone}`}>{d.renewal.valueText}</span>
               </div>
             )}
 

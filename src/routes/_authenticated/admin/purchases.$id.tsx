@@ -134,12 +134,15 @@ function PurchaseDetail() {
             <div className="rounded-md border border-border bg-secondary/20 p-3 space-y-1 text-sm">
               <div className="flex items-center gap-2">
                 <Badge variant="outline" className={display.statusTone}>{display.statusLabel}</Badge>
-                {display.isRecurring && display.nextBillingDate && (
-                  <span className="text-xs text-muted-foreground">
-                    Next: {format(parseISO(display.nextBillingDate), "MMM d, yyyy")}
+                {display.renewal.kind !== "none" && (
+                  <span className={`text-xs ${display.renewal.tone}`}>
+                    {display.renewal.label}: {display.renewal.valueText}
                   </span>
                 )}
               </div>
+              {display.renewal.helper && (
+                <div className="text-[11px] text-muted-foreground">{display.renewal.helper}</div>
+              )}
               <div className="text-xs">
                 <span className="text-muted-foreground">Paid: </span>
                 <span className="font-semibold">{formatMoney(display.amountPaid, display.currency)}</span>
