@@ -11,6 +11,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, Dialog
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import { todayLocalISO } from "@/lib/today";
+import { resolvePaymentDisplay } from "@/lib/payment-display";
 import {
   getClientBillingOverview,
   recordPayment,
@@ -119,6 +120,7 @@ function PurchaseRow({ purchase, clientId, onChanged, ledger, isPaid }: { purcha
   const paid = Number(purchase.amount_paid_cents ?? 0);
   const outstandingRaw = Number(purchase.amount_outstanding_cents ?? Math.max(0, contract - paid));
   const outstanding = isPaid ? 0 : outstandingRaw;
+  const renewal = resolvePaymentDisplay(purchase).renewal;
 
   return (
     <Card className="p-4 space-y-3">
@@ -129,6 +131,15 @@ function PurchaseRow({ purchase, clientId, onChanged, ledger, isPaid }: { purcha
             {purchase.payment_structure ?? "—"} · {purchase.term_start_date ?? "?"} → {purchase.term_end_date ?? "?"}
             {purchase.sessions_purchased > 0 && ` · ${purchase.sessions_purchased} sessions`}
           </div>
+          {renewal.kind !== "none" && (
+            <div className="text-xs mt-1">
+              <span className="text-muted-foreground">{renewal.label}:</span>{" "}
+              <span className={`font-semibold ${renewal.tone}`}>{renewal.valueText}</span>
+              {renewal.helper && (
+                <span className="ml-2 text-[11px] text-muted-foreground">({renewal.helper})</span>
+              )}
+            </div>
+          )}
         </div>
         <div className="text-right text-sm">
           <div>Contract <span className="font-mono">{fmt(contract, currency)}</span></div>
