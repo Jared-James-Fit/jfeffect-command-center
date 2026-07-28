@@ -49,6 +49,31 @@ export type PaymentDisplay = {
   invoicePdfUrl: string | null;
   stripePaymentIntentId: string | null;
   stripeSubscriptionId: string | null;
+  /**
+   * Renewal / next-payment display for admin/coach + client billing surfaces.
+   * Never fabricated: `date` is only set when we have a real stored date.
+   */
+  renewal: RenewalDisplay;
+};
+
+export type RenewalKind =
+  | "renew"           // active recurring, next charge on `date`
+  | "cancels"         // set to cancel at period end — access ends on `date`
+  | "first_payment"  // trialing — first charge on `date`
+  | "retry"           // past-due, retry attempt on `date` if known
+  | "past_due"        // past-due, no retry date available
+  | "cancelled"       // subscription cancelled / ended
+  | "none"            // one-time paid product — no renewal
+  | "free"            // $0 product — no payment
+  | "unavailable";    // recurring but no synced date yet
+
+export type RenewalDisplay = {
+  kind: RenewalKind;
+  label: string;            // e.g. "Next payment", "Cancels on", "No renewal"
+  date: string | null;      // ISO date/timestamp when applicable
+  valueText: string;        // rendered value (formatted date or plain phrase)
+  tone: string;             // Tailwind classes for muted/neutral/warning/destructive
+  helper: string | null;    // small admin-only hint, e.g. missing sync message
 };
 
 type PurchaseInput = {
@@ -80,6 +105,9 @@ type PurchaseInput = {
   } | null;
   // Joined subscription info (optional)
   next_billing_date?: string | null;
+  cancel_at_period_end?: boolean | null;
+  stripe_subscription_status?: string | null;
+  term_end_date?: string | null;
 };
 
 function toNum(v: number | string | null | undefined, fallback = 0): number {
@@ -196,6 +224,13 @@ export function resolvePaymentDisplay(p: PurchaseInput): PaymentDisplay {
   const nextBillingDate =
     isRecurring && !terminated && p.next_billing_date ? p.next_billing_date : null;
 
+  const renewal = resolveRenewal(p, {
+    status,
+    contractTotal,
+    isRecurring,
+    nextBillingDate,
+  });
+
   return {
     status,
     statusLabel,
@@ -218,6 +253,137 @@ export function resolvePaymentDisplay(p: PurchaseInput): PaymentDisplay {
     invoicePdfUrl: p.latest_ledger?.invoice_pdf_url ?? null,
     stripePaymentIntentId: p.stripe_payment_intent_id ?? null,
     stripeSubscriptionId: p.stripe_subscription_id ?? null,
+    renewal,
+  };
+}
+
+function fmtDate(iso: string | null | undefined): string | null {
+  if (!iso) return null;
+  try {
+    // Accept both YYYY-MM-DD and full ISO
+    const d = new Date(iso.length === 10 ? `${iso}T00:00:00` : iso);
+    if (Number.isNaN(d.getTime())) return null;
+    return d.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
+  } catch {
+    return null;
+  }
+}
+
+const RENEWAL_TONE = {
+  neutral: "text-muted-foreground",
+  info: "text-foreground",
+  warn: "text-amber-500",
+  danger: "text-destructive",
+} as const;
+
+function resolveRenewal(
+  p: PurchaseInput,
+  ctx: { status: PaymentDisplayStatus; contractTotal: number; isRecurring: boolean; nextBillingDate: string | null },
+): RenewalDisplay {
+  const subStatus = (p.stripe_subscription_status ?? "").toLowerCase();
+  const cancelAtPeriodEnd = !!p.cancel_at_period_end;
+  const isCancelled =
+    ctx.status === "cancelled" ||
+    ctx.status === "voided" ||
+    subStatus === "canceled" ||
+    subStatus === "cancelled" ||
+    subStatus === "incomplete_expired";
+
+  // Free product — never a payment.
+  if (ctx.contractTotal <= 0 && !ctx.isRecurring) {
+    return { kind: "free", label: "No payment", date: null, valueText: "No payment", tone: RENEWAL_TONE.neutral, helper: null };
+  }
+
+  // One-time (non-recurring) paid product.
+  if (!ctx.isRecurring) {
+    return { kind: "none", label: "Renewal", date: null, valueText: "No renewal", tone: RENEWAL_TONE.neutral, helper: null };
+  }
+
+  // Cancelled subscriptions must NEVER show an active renewal.
+  if (isCancelled) {
+    const endDate = p.next_billing_date ?? p.term_end_date ?? null;
+    return {
+      kind: "cancelled",
+      label: endDate ? "Ended" : "Cancelled",
+      date: endDate,
+      valueText: endDate ? (fmtDate(endDate) ?? "Cancelled") : "Cancelled",
+      tone: RENEWAL_TONE.neutral,
+      helper: null,
+    };
+  }
+
+  // Scheduled to cancel at period end — show Cancels on, not Next payment.
+  if (cancelAtPeriodEnd) {
+    const d = p.next_billing_date ?? p.term_end_date ?? null;
+    return {
+      kind: "cancels",
+      label: "Cancels on",
+      date: d,
+      valueText: fmtDate(d) ?? "Cancels at period end",
+      tone: RENEWAL_TONE.warn,
+      helper: null,
+    };
+  }
+
+  // Trialing — first payment date.
+  if (subStatus === "trialing") {
+    const d = p.next_billing_date ?? null;
+    return {
+      kind: "first_payment",
+      label: "First payment",
+      date: d,
+      valueText: fmtDate(d) ?? "Trial in progress",
+      tone: RENEWAL_TONE.info,
+      helper: d ? null : "Trial end date not synced yet.",
+    };
+  }
+
+  // Past due — retry attempt.
+  if (subStatus === "past_due" || subStatus === "unpaid" || ctx.status === "past_due") {
+    const d = p.next_billing_date ?? null;
+    if (d) {
+      return {
+        kind: "retry",
+        label: "Payment retry",
+        date: d,
+        valueText: fmtDate(d) ?? "Retry scheduled",
+        tone: RENEWAL_TONE.danger,
+        helper: null,
+      };
+    }
+    return {
+      kind: "past_due",
+      label: "Past due",
+      date: null,
+      valueText: "Next retry unavailable",
+      tone: RENEWAL_TONE.danger,
+      helper: null,
+    };
+  }
+
+  // Active recurring — next payment.
+  if (ctx.nextBillingDate) {
+    return {
+      kind: "renew",
+      label: "Next payment",
+      date: ctx.nextBillingDate,
+      valueText: fmtDate(ctx.nextBillingDate) ?? "Scheduled",
+      tone: RENEWAL_TONE.info,
+      helper: null,
+    };
+  }
+
+  // Recurring, but no synced date yet.
+  const helper = p.stripe_subscription_id
+    ? "Stripe renewal data has not synced yet."
+    : "Manual product — no Stripe renewal found";
+  return {
+    kind: "unavailable",
+    label: "Next payment",
+    date: null,
+    valueText: "Next payment unavailable",
+    tone: RENEWAL_TONE.warn,
+    helper,
   };
 }
 
