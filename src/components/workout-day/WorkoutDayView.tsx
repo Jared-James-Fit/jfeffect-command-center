@@ -86,11 +86,11 @@ import { CompletedWorkoutActions } from "@/components/workout/shared/completed-w
 import { WorkoutStatusBar } from "@/components/workout-day/WorkoutStatusBar";
 import {
   WorkoutTimer,
-  computeActiveDurationMin,
-  markWorkoutPageOpen,
-  readWorkoutPageOpenAt,
-  clearWorkoutPageOpen,
-  effectiveWorkoutStart,
+  beginWorkoutSession,
+  clearWorkoutSession,
+  readWorkoutSession,
+  sessionDurationMin,
+  estimateDurationFromLogs,
 } from "@/components/workout-day/WorkoutTimer";
 
 /* -------------------------------------------------------------------------- */
