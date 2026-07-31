@@ -82,7 +82,17 @@ function resolveSaleStatus(r: any, d: PaymentDisplay): { label: string; tone: st
 }
 
 /** Next Payment cell text — mirrors resolveRenewal, never fabricated. */
-function nextPaymentCell(d: PaymentDisplay) {
+function nextPaymentCell(d: PaymentDisplay, raw?: any) {
+  if (d.status === "draft") {
+    return { text: "Not started", tone: "text-muted-foreground", helper: "Draft record — no payment requested." as string | null };
+  }
+  if (d.status === "pending_payment") {
+    return {
+      text: "Awaiting payment",
+      tone: "text-amber-500",
+      helper: raw?.stripe_payment_link ? "Payment link created — waiting on Stripe confirmation." : "Payment request created.",
+    };
+  }
   const r = d.renewal;
   if (r.kind === "none") return { text: "No renewal", tone: "text-muted-foreground", helper: null as string | null };
   if (r.kind === "free") return { text: "No payment", tone: "text-muted-foreground", helper: null };
@@ -134,7 +144,7 @@ export function ClientSalesTable({ clientId }: { clientId: string }) {
   const rows: Row[] = useMemo(() => {
     const built = (records ?? []).map((raw: any) => {
       const display = resolvePaymentDisplay(raw);
-      return { raw, display, status: resolveSaleStatus(raw, display), next: nextPaymentCell(display) };
+      return { raw, display, status: resolveSaleStatus(raw, display), next: nextPaymentCell(display, raw) };
     });
     const byDate = (v: string | null | undefined) => (v ? new Date(v).getTime() : Number.POSITIVE_INFINITY);
     return [...built].sort((a, b) => {
