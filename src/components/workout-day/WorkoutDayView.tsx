@@ -1,5 +1,5 @@
 import { Link, useNavigate } from "@tanstack/react-router";
-import { Component, createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { Component, createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { usePortalUserId } from "@/lib/client-impersonation";
@@ -86,11 +86,11 @@ import { CompletedWorkoutActions } from "@/components/workout/shared/completed-w
 import { WorkoutStatusBar } from "@/components/workout-day/WorkoutStatusBar";
 import {
   WorkoutTimer,
-  computeActiveDurationMin,
-  markWorkoutPageOpen,
-  readWorkoutPageOpenAt,
-  clearWorkoutPageOpen,
-  effectiveWorkoutStart,
+  beginWorkoutSession,
+  clearWorkoutSession,
+  readWorkoutSession,
+  sessionDurationMin,
+  estimateDurationFromLogs,
 } from "@/components/workout-day/WorkoutTimer";
 
 /* -------------------------------------------------------------------------- */
@@ -871,16 +871,13 @@ function WorkoutDay({
   // real engaged time and survives a mid-workout refresh.
   const heartbeatEnabled = !!completion?.id && !completion?.completed_at && !readonly && !isImpersonating;
 
-  // Client-side page-open timestamp. The server's `started_at` upsert is
-  // best-effort (races the Finish tap and often lands identical to
-  // `completed_at`, producing a bogus "1 min" duration). We record when
-  // the workout view first mounts for this dayId — persisted in
-  // localStorage so a refresh mid-session doesn't reset it — and treat
-  // it as the authoritative start for duration display + persistence.
-  useEffect(() => {
+  // NOTE: opening the page is browsing, not training — the Workout Session
+  // clock is started explicitly (Start control) or auto-started on the first
+  // meaningful logging action via `beginSessionOnAction()` below.
+  const beginSessionOnAction = useCallback(() => {
     if (readonly || isImpersonating) return;
     if (completion?.completed_at) return;
-    markWorkoutPageOpen(dayId);
+    beginWorkoutSession(dayId);
   }, [dayId, readonly, isImpersonating, completion?.completed_at]);
   // Ping shape depends on the mounted adapter: members address workouts by
   // (enrollmentId, weekIndex, dayIndex) tuples (the member adapter encodes
@@ -1168,6 +1165,7 @@ function WorkoutDay({
   const refresh = () => {
     qc.invalidateQueries({ queryKey: ["pl-day-results", dayId] });
     qc.invalidateQueries({ queryKey: ["pl-day-completion", dayId] });
+    beginSessionOnAction();
     markInProgress();
   };
 
@@ -1254,6 +1252,7 @@ function WorkoutDay({
   const refreshNotes = () => {
     qc.invalidateQueries({ queryKey: ["pl-day-exercise-notes", dayId] });
     qc.invalidateQueries({ queryKey: ["client-exercise-notes", client?.id] });
+    beginSessionOnAction();
     markInProgress();
   };
 
@@ -1315,11 +1314,13 @@ function WorkoutDay({
     }));
     const heartbeats = readHeartbeatTimestamps(completion?.id ?? null);
     const typedMin = Number.parseInt(actualMin, 10);
-    const effStart = effectiveWorkoutStart(
-      completion?.started_at ?? completion?.in_progress_at ?? null,
-      readWorkoutPageOpenAt(dayId),
-    );
-    const activeMin = computeActiveDurationMin(effStart);
+    // Real session time first; if the timer never ran, estimate from the
+    // first logged set to now. Never persist a 0 or an abandoned-session value.
+    const firstLogAt = (results as any[])
+      .map((x: any) => x?.completed_at)
+      .filter(Boolean)
+      .sort()[0] ?? null;
+    const activeMin = sessionDurationMin(dayId) ?? estimateDurationFromLogs(firstLogAt);
     const resolvedDurationMin = Number.isFinite(typedMin) && typedMin > 0
       ? typedMin
       : activeMin ?? completion?.actual_duration_min ?? null;
@@ -1410,7 +1411,9 @@ function WorkoutDay({
 
     if (draftKey) clearLocalDraft(draftKey);
     clearHeartbeatTimestamps(completion?.id ?? null);
-    clearWorkoutPageOpen(dayId);
+    // Session is finished — drop the local clock so reopening the completed
+    // workout to edit logs can never overwrite the stored duration.
+    clearWorkoutSession(dayId);
     setNotes("");
     setActualMin("");
     await qc.refetchQueries({ queryKey: ["pl-day-completion", dayId] });
@@ -1727,12 +1730,9 @@ function WorkoutDay({
           setsTotal={statusSummary.setsTotal}
           exercisesDone={statusSummary.exercisesDone}
           exercisesTotal={statusSummary.exercisesTotal}
-          startedAt={
-            (effectiveWorkoutStart(
-              completion?.started_at ?? completion?.in_progress_at ?? null,
-              readWorkoutPageOpenAt(dayId),
-            )?.toISOString()) ?? null
-          }
+          dayId={dayId}
+          readonly={readonly || isImpersonating}
+          savedDurationMin={completion?.actual_duration_min ?? null}
           completedAt={completion?.completed_at ?? null}
           onViewScore={completion?.completed_at ? openRecapSummary : undefined}
           loggingQuality={(() => {
@@ -2019,13 +2019,7 @@ function WorkoutDay({
             // the duration tile reflects time the workout view was actually
             // open — matching the live timer badge and the value persisted
             // on Finish.
-            computeActiveDurationMin(
-              effectiveWorkoutStart(
-                completion?.started_at ?? completion?.in_progress_at ?? null,
-                readWorkoutPageOpenAt(dayId),
-              ),
-              completion?.completed_at ?? undefined,
-            ) ?? completion?.actual_duration_min ?? null
+            completion?.actual_duration_min ?? sessionDurationMin(dayId) ?? null
           }
           workoutDate={completion?.completed_at ?? scheduledDate ?? null}
           sessionRating={
@@ -2480,6 +2474,7 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
 
   const applyToRemaining = async (fromSetIndex: number, payload: { load: string; reps: string; rpe: string; unit: "kg" | "lb" }) => {
     if (!clientId) return;
+    beginWorkoutSession(dayId);
     const loadNum = payload.load ? Number(payload.load) : null;
     const repsNum = payload.reps ? parseInt(payload.reps, 10) : null;
     const rpeNum = payload.rpe ? Number(payload.rpe) : null;
@@ -2574,7 +2569,11 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
       )}
       {/* Big, dummy-proof rest timer — tap to start, auto-resets at 0 */}
       <div className="mt-2">
-        <RestTimerButton seconds={effectiveRest ?? null} label={restDisplay} />
+        <RestTimerButton
+          seconds={effectiveRest ?? null}
+          label={restDisplay}
+          onStart={() => beginWorkoutSession(dayId)}
+        />
       </div>
       {/* Suggested load badges */}
       {row.manual_override && (row.load_kg || row.load_lb) && (
@@ -3334,6 +3333,8 @@ function SetRow({
       if (readonly) return;
       if (!clientId) return;
       if (!load && !reps && !rpe && !existing) return;
+      // Auto-start the Workout Session clock on the first meaningful log.
+      beginWorkoutSession(workoutId ?? null);
       // Validate numerics; silently skip persistence for invalid values (input stays).
       const loadNum = load ? Number(load) : null;
       const repsNum = reps ? parseInt(reps, 10) : null;
@@ -3532,6 +3533,7 @@ function SetRow({
       toast.error(isTimeKind ? "Complete the timer first" : hideWeight ? "Enter reps before marking complete" : "Enter reps and weight before marking complete (use 0 for bodyweight)");
       return;
     }
+    if (nextCompletedAt) beginWorkoutSession(workoutId ?? null);
     let payload: Record<string, any> = {
         row_id: rowId,
         client_id: clientId,
@@ -3628,6 +3630,7 @@ function SetRow({
   }) => {
     // Allow saving even when prescribedSec is null (e.g. reps_text-detected time exercises)
     if (readonly || !clientId) return;
+    beginWorkoutSession(workoutId ?? null);
     const nowIso = opts.completedAt ?? new Date().toISOString();
       const payload: Record<string, any> = withMemberWorkoutIndexes({
       row_id: rowId,
@@ -4117,7 +4120,9 @@ function CompactWorkoutSummaryRow({
   setsTotal,
   exercisesDone,
   exercisesTotal,
-  startedAt,
+  dayId,
+  readonly,
+  savedDurationMin,
   completedAt,
   onViewScore,
   loggingQuality,
@@ -4127,7 +4132,9 @@ function CompactWorkoutSummaryRow({
   setsTotal: number;
   exercisesDone: number;
   exercisesTotal: number;
-  startedAt: string | null;
+  dayId: string;
+  readonly?: boolean;
+  savedDurationMin?: number | null;
   completedAt: string | null;
   onViewScore?: () => void;
   loggingQuality: { quality: any; percentage: number } | null;
@@ -4139,18 +4146,21 @@ function CompactWorkoutSummaryRow({
       : setsDone > 0
         ? "in_progress"
         : "not_started";
-  const showTimer = !!startedAt;
   return (
     <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-xs text-muted-foreground">
-      {showTimer && (
-        <div className="inline-flex items-center gap-1.5 rounded-md bg-secondary/60 px-2 py-1">
-          <Clock className="h-3.5 w-3.5 text-primary" />
-          <span className="font-semibold uppercase tracking-wide text-[10px] text-muted-foreground">
-            Workout Session
-          </span>
-          <WorkoutTimer startedAt={startedAt} completedAt={completedAt} className="ml-0.5" />
-        </div>
-      )}
+      <div className="inline-flex items-center gap-1.5 rounded-md bg-secondary/60 px-2 py-1">
+        <Clock className="h-3.5 w-3.5 text-primary" />
+        <span className="font-semibold uppercase tracking-wide text-[10px] text-muted-foreground">
+          Workout Session
+        </span>
+        <WorkoutTimer
+          dayId={dayId}
+          completedAt={completedAt}
+          savedDurationMin={savedDurationMin ?? null}
+          readonly={readonly}
+          className="ml-0.5"
+        />
+      </div>
       <button
         type="button"
         onClick={scrollToFirstIncompleteExercise}

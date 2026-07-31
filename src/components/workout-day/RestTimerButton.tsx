@@ -12,10 +12,13 @@ export function RestTimerButton({
   seconds,
   label,
   className,
+  onStart,
 }: {
   seconds: number | null;
   label: string;
   className?: string;
+  /** Fired when the rest countdown begins — used to auto-start the workout session clock. */
+  onStart?: () => void;
 }) {
   const [remaining, setRemaining] = useState<number | null>(null);
   const [paused, setPaused] = useState(false);
@@ -51,6 +54,7 @@ export function RestTimerButton({
 
   const start = () => {
     if (!seconds || seconds <= 0) return;
+    onStart?.();
     setPaused(false);
     setRemaining(seconds);
     tick();
