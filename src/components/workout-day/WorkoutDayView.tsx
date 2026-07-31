@@ -2474,6 +2474,7 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
 
   const applyToRemaining = async (fromSetIndex: number, payload: { load: string; reps: string; rpe: string; unit: "kg" | "lb" }) => {
     if (!clientId) return;
+    beginWorkoutSession(dayId);
     const loadNum = payload.load ? Number(payload.load) : null;
     const repsNum = payload.reps ? parseInt(payload.reps, 10) : null;
     const rpeNum = payload.rpe ? Number(payload.rpe) : null;
@@ -3328,6 +3329,8 @@ function SetRow({
       if (readonly) return;
       if (!clientId) return;
       if (!load && !reps && !rpe && !existing) return;
+      // Auto-start the Workout Session clock on the first meaningful log.
+      beginWorkoutSession(workoutId ?? null);
       // Validate numerics; silently skip persistence for invalid values (input stays).
       const loadNum = load ? Number(load) : null;
       const repsNum = reps ? parseInt(reps, 10) : null;
@@ -3526,6 +3529,7 @@ function SetRow({
       toast.error(isTimeKind ? "Complete the timer first" : hideWeight ? "Enter reps before marking complete" : "Enter reps and weight before marking complete (use 0 for bodyweight)");
       return;
     }
+    if (nextCompletedAt) beginWorkoutSession(workoutId ?? null);
     let payload: Record<string, any> = {
         row_id: rowId,
         client_id: clientId,
@@ -3622,6 +3626,7 @@ function SetRow({
   }) => {
     // Allow saving even when prescribedSec is null (e.g. reps_text-detected time exercises)
     if (readonly || !clientId) return;
+    beginWorkoutSession(workoutId ?? null);
     const nowIso = opts.completedAt ?? new Date().toISOString();
       const payload: Record<string, any> = withMemberWorkoutIndexes({
       row_id: rowId,
