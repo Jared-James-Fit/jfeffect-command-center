@@ -133,6 +133,16 @@ export function ClientSalesTable({ clientId }: { clientId: string }) {
       if (error) throw error;
       return data ?? [];
     },
+    // Targeted freshness only: refetch on focus, and poll slowly *only* while
+    // a payment request is still awaiting Stripe confirmation. No global polling.
+    refetchOnWindowFocus: true,
+    refetchInterval: (q) => {
+      const rows = (q.state.data as any[]) ?? [];
+      const waiting = rows.some((r) =>
+        ["Pending Payment", "Payment Link Sent", "Pending"].includes(String(r.payment_status ?? "")),
+      );
+      return waiting ? 45_000 : false;
+    },
   });
 
   const { data: offers = [] } = useQuery({
