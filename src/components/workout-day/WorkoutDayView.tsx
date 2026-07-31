@@ -871,16 +871,13 @@ function WorkoutDay({
   // real engaged time and survives a mid-workout refresh.
   const heartbeatEnabled = !!completion?.id && !completion?.completed_at && !readonly && !isImpersonating;
 
-  // Client-side page-open timestamp. The server's `started_at` upsert is
-  // best-effort (races the Finish tap and often lands identical to
-  // `completed_at`, producing a bogus "1 min" duration). We record when
-  // the workout view first mounts for this dayId — persisted in
-  // localStorage so a refresh mid-session doesn't reset it — and treat
-  // it as the authoritative start for duration display + persistence.
-  useEffect(() => {
+  // NOTE: opening the page is browsing, not training — the Workout Session
+  // clock is started explicitly (Start control) or auto-started on the first
+  // meaningful logging action via `beginSessionOnAction()` below.
+  const beginSessionOnAction = useCallback(() => {
     if (readonly || isImpersonating) return;
     if (completion?.completed_at) return;
-    markWorkoutPageOpen(dayId);
+    beginWorkoutSession(dayId);
   }, [dayId, readonly, isImpersonating, completion?.completed_at]);
   // Ping shape depends on the mounted adapter: members address workouts by
   // (enrollmentId, weekIndex, dayIndex) tuples (the member adapter encodes
