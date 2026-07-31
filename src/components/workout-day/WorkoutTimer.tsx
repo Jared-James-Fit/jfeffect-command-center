@@ -1,255 +1,299 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Clock, RotateCcw } from "lucide-react";
+import { Clock, Pause, Play, RotateCcw } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 /**
- * Page-open tracker. The server-side `started_at` on `pl_day_completions`
- * is unreliable — the auto-start upsert can race the "Finish" tap so the
- * completion row ends up with `started_at ≈ completed_at`, yielding a
- * "1 min" duration for an hour-long workout. We defensively record when
- * the workout view first mounts (per dayId, survives refresh) and treat
- * it as the authoritative start for duration display and the value we
- * persist to `actual_duration_min` / `active_duration_seconds`.
- */
-const PAGE_OPEN_PREFIX = "wsb-open:";
-
-export function markWorkoutPageOpen(dayId: string | null | undefined, at: number = Date.now()): number | null {
-  if (!dayId || typeof window === "undefined") return null;
-  try {
-    const key = `${PAGE_OPEN_PREFIX}${dayId}`;
-    const existing = window.localStorage.getItem(key);
-    if (existing) {
-      const n = Number(existing);
-      if (Number.isFinite(n) && n > 0) return n;
-    }
-    window.localStorage.setItem(key, String(at));
-    return at;
-  } catch {
-    return null;
-  }
-}
-
-export function readWorkoutPageOpenAt(dayId: string | null | undefined): number | null {
-  if (!dayId || typeof window === "undefined") return null;
-  try {
-    const raw = window.localStorage.getItem(`${PAGE_OPEN_PREFIX}${dayId}`);
-    if (!raw) return null;
-    const n = Number(raw);
-    return Number.isFinite(n) && n > 0 ? n : null;
-  } catch {
-    return null;
-  }
-}
-
-export function clearWorkoutPageOpen(dayId: string | null | undefined): void {
-  if (!dayId || typeof window === "undefined") return;
-  try { window.localStorage.removeItem(`${PAGE_OPEN_PREFIX}${dayId}`); } catch { /* ignore */ }
-}
-
-/**
- * Pick the effective workout start — the earliest of (server started_at,
- * client page-open timestamp). Falls back gracefully when either side is
- * missing.
- */
-export function effectiveWorkoutStart(
-  serverStartedAt: string | Date | null | undefined,
-  pageOpenedAt: number | null | undefined,
-): Date | null {
-  const candidates: number[] = [];
-  if (serverStartedAt) {
-    const t = new Date(serverStartedAt).getTime();
-    if (Number.isFinite(t)) candidates.push(t);
-  }
-  if (pageOpenedAt && Number.isFinite(pageOpenedAt)) candidates.push(pageOpenedAt);
-  if (!candidates.length) return null;
-  return new Date(Math.min(...candidates));
-}
-
-/**
- * Read the cumulative paused-while-hidden duration (in ms) the WorkoutTimer
- * has persisted for a given workout session. Includes any currently-open
- * hidden interval up to `endsAt` (defaults to now), so callers compute the
- * same "active app time" the live timer badge displays.
+ * Workout Session timer.
  *
- * Used by the post-workout summary so the "Duration" stat reflects time the
- * client actually had the workout open — not wall-clock — and pauses
- * whenever the tab is hidden or the app is backgrounded.
+ * ROOT CAUSE of the old "0:00" bug: the previous implementation derived
+ * elapsed time from the server `started_at` minus a "paused while hidden"
+ * accumulator. On unmount it wrote `hiddenAt = now` and only cleared it on a
+ * `visibilitychange -> visible` event — which never fires when the page is
+ * remounted already-visible. The open hidden interval therefore grew forever
+ * and swallowed the whole session, clamping the badge to 0:00. Completed
+ * workouts hit the same wall whenever `started_at ≈ completed_at` (the
+ * mount-time auto-start raced the Finish tap).
+ *
+ * The model is now an explicit, timestamp-based session persisted in
+ * localStorage per dayId:
+ *   { startedAt, pausedMs, pausedAt }
+ * Elapsed time is always computed from stored timestamps, so it survives
+ * refreshes, backgrounding and navigation. A JS interval only drives repaints.
+ *
+ * This is the total workout-session clock. Rest timers are a separate,
+ * untouched mechanism (RestTimerButton / DurationTimerInCard).
  */
-export function readWorkoutPausedMs(
-  startedAt: string | Date | null | undefined,
-  endsAt: number = Date.now(),
-): number {
-  if (!startedAt || typeof window === "undefined") return 0;
-  const startKey = typeof startedAt === "string" ? startedAt : new Date(startedAt).toISOString();
+
+const SESSION_PREFIX = "wsession:";
+/** Sessions running longer than this are treated as abandoned, not real. */
+export const MAX_SESSION_MS = 6 * 60 * 60 * 1000;
+
+export type WorkoutSession = {
+  startedAt: number;
+  pausedMs: number;
+  /** Non-null while paused. */
+  pausedAt: number | null;
+};
+
+function key(dayId: string) { return `${SESSION_PREFIX}${dayId}`; }
+
+export function readWorkoutSession(dayId: string | null | undefined): WorkoutSession | null {
+  if (!dayId || typeof window === "undefined") return null;
   try {
-    const raw = window.localStorage.getItem(`wsb-pause:${startKey}`);
-    if (!raw) return 0;
-    const parsed = JSON.parse(raw);
-    const pausedMs = Number(parsed?.pausedMs) || 0;
-    const hiddenAt = parsed?.hiddenAt != null ? Number(parsed.hiddenAt) : null;
-    const live = hiddenAt != null ? Math.max(0, endsAt - hiddenAt) : 0;
-    return Math.max(0, pausedMs + live);
-  } catch {
-    return 0;
-  }
+    const raw = window.localStorage.getItem(key(dayId));
+    if (!raw) return null;
+    const p = JSON.parse(raw);
+    const startedAt = Number(p?.startedAt);
+    if (!Number.isFinite(startedAt) || startedAt <= 0) return null;
+    return {
+      startedAt,
+      pausedMs: Math.max(0, Number(p?.pausedMs) || 0),
+      pausedAt: p?.pausedAt != null && Number.isFinite(Number(p.pausedAt)) ? Number(p.pausedAt) : null,
+    };
+  } catch { return null; }
+}
+
+function writeWorkoutSession(dayId: string, s: WorkoutSession) {
+  if (typeof window === "undefined") return;
+  try { window.localStorage.setItem(key(dayId), JSON.stringify(s)); } catch { /* quota */ }
+}
+
+/** Idempotent start — safe to call from every meaningful logging action. */
+export function beginWorkoutSession(
+  dayId: string | null | undefined,
+  at: number = Date.now(),
+): WorkoutSession | null {
+  if (!dayId || typeof window === "undefined") return null;
+  const existing = readWorkoutSession(dayId);
+  if (existing) return existing;
+  const next: WorkoutSession = { startedAt: at, pausedMs: 0, pausedAt: null };
+  writeWorkoutSession(dayId, next);
+  return next;
+}
+
+export function pauseWorkoutSession(dayId: string, at: number = Date.now()): WorkoutSession | null {
+  const s = readWorkoutSession(dayId);
+  if (!s || s.pausedAt != null) return s;
+  const next = { ...s, pausedAt: at };
+  writeWorkoutSession(dayId, next);
+  return next;
+}
+
+export function resumeWorkoutSession(dayId: string, at: number = Date.now()): WorkoutSession | null {
+  const s = readWorkoutSession(dayId);
+  if (!s || s.pausedAt == null) return s;
+  const next: WorkoutSession = {
+    startedAt: s.startedAt,
+    pausedMs: s.pausedMs + Math.max(0, at - s.pausedAt),
+    pausedAt: null,
+  };
+  writeWorkoutSession(dayId, next);
+  return next;
+}
+
+/** Restart the clock from now (used by the abandoned-session guard). */
+export function resetWorkoutSession(dayId: string, at: number = Date.now()): WorkoutSession {
+  const next: WorkoutSession = { startedAt: at, pausedMs: 0, pausedAt: null };
+  writeWorkoutSession(dayId, next);
+  return next;
+}
+
+export function clearWorkoutSession(dayId: string | null | undefined) {
+  if (!dayId || typeof window === "undefined") return;
+  try { window.localStorage.removeItem(key(dayId)); } catch { /* ignore */ }
+}
+
+export function sessionElapsedMs(s: WorkoutSession, now: number = Date.now()): number {
+  const end = s.pausedAt != null ? s.pausedAt : now;
+  return Math.max(0, end - s.startedAt - s.pausedMs);
+}
+
+/** True when a session has been running implausibly long (app left open). */
+export function isSessionAbandoned(s: WorkoutSession, now: number = Date.now()): boolean {
+  return sessionElapsedMs(s, now) > MAX_SESSION_MS;
 }
 
 /**
- * Active duration in minutes between `startedAt` and `endsAt` (defaults to
- * now), excluding any paused-while-hidden time tracked by WorkoutTimer.
- * Returns null when no valid start timestamp is available.
+ * Duration to persist on completion, in whole minutes.
+ * Returns null when nothing trustworthy was captured (never 0).
  */
-export function computeActiveDurationMin(
-  startedAt: string | Date | null | undefined,
-  endsAt?: string | Date | null,
+export function sessionDurationMin(
+  dayId: string | null | undefined,
+  endsAt: number = Date.now(),
 ): number | null {
-  if (!startedAt) return null;
-  const start = new Date(startedAt).getTime();
-  if (!Number.isFinite(start)) return null;
-  const end = endsAt ? new Date(endsAt).getTime() : Date.now();
-  if (!Number.isFinite(end) || end < start) return null;
-  const wallMs = Math.max(0, end - start);
-  const paused = readWorkoutPausedMs(startedAt, end);
-  // Only trust the paused-while-hidden tracker when it stayed under the full
-  // wall-clock window. The Page Visibility API is unreliable in PWAs (iOS
-  // Safari, backgrounded standalone apps, page reloads mid-session), so a
-  // paused value that swallows most/all of the session almost always means
-  // the tracker missed a "visible" event and we should fall back to wall
-  // clock — otherwise the summary reports "1 min" for a real hour-long
-  // workout. We keep the subtraction only when the paused window is a
-  // sensible fraction (<75%) of wall time.
-  const trustedPause = paused > 0 && paused < wallMs * 0.75 ? paused : 0;
-  const activeMs = Math.max(0, wallMs - trustedPause);
-  return Math.max(1, Math.round(activeMs / 60000));
+  const s = readWorkoutSession(dayId);
+  if (!s) return null;
+  const ms = sessionElapsedMs(s, endsAt);
+  if (ms <= 0 || ms > MAX_SESSION_MS) return null;
+  return Math.max(1, Math.round(ms / 60000));
 }
 
 /**
- * Standalone workout elapsed-time badge with pause-on-hidden and reset.
+ * Fallback used when the session timer never started: estimate from the
+ * first logged action to the completion time. Returns null when unusable.
+ */
+export function estimateDurationFromLogs(
+  firstLogAt: string | Date | null | undefined,
+  endsAt: number = Date.now(),
+): number | null {
+  if (!firstLogAt) return null;
+  const start = new Date(firstLogAt).getTime();
+  if (!Number.isFinite(start)) return null;
+  const ms = endsAt - start;
+  if (ms <= 0 || ms > MAX_SESSION_MS) return null;
+  return Math.max(1, Math.round(ms / 60000));
+}
+
+export function formatElapsed(totalSeconds: number): string {
+  const s = Math.max(0, Math.floor(totalSeconds));
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  const sec = s % 60;
+  const mm = String(m).padStart(2, "0");
+  const ss = String(sec).padStart(2, "0");
+  return h > 0 ? `${h}:${mm}:${ss}` : `${m}:${ss}`;
+}
+
+export function formatDurationMin(min: number): string {
+  const h = Math.floor(min / 60);
+  const m = min % 60;
+  return h > 0 ? `${h}h ${m}m` : `${m} min`;
+}
+
+/**
+ * Live Workout Session badge with Start / Pause / Resume controls.
+ * Completed workouts render the saved duration instead.
  */
 export function WorkoutTimer({
-  startedAt,
+  dayId,
   completedAt,
+  savedDurationMin,
+  readonly,
   className,
+  onSessionChange,
 }: {
-  startedAt?: string | null;
+  dayId: string;
   completedAt?: string | null;
+  savedDurationMin?: number | null;
+  readonly?: boolean;
   className?: string;
+  onSessionChange?: (s: WorkoutSession | null) => void;
 }) {
+  const [session, setSession] = useState<WorkoutSession | null>(null);
   const [now, setNow] = useState(() => Date.now());
+  const notifyRef = useRef(onSessionChange);
+  notifyRef.current = onSessionChange;
 
-  const storageKey = startedAt ? `wsb-pause:${startedAt}` : null;
-  type Persisted = { pausedMs: number; hiddenAt: number | null };
-  const readState = useCallback((): Persisted => {
-    if (!storageKey || typeof window === "undefined") return { pausedMs: 0, hiddenAt: null };
-    try {
-      const raw = window.localStorage.getItem(storageKey);
-      if (!raw) return { pausedMs: 0, hiddenAt: null };
-      const parsed = JSON.parse(raw);
-      return {
-        pausedMs: Number(parsed?.pausedMs) || 0,
-        hiddenAt: parsed?.hiddenAt != null ? Number(parsed.hiddenAt) : null,
-      };
-    } catch { return { pausedMs: 0, hiddenAt: null }; }
-  }, [storageKey]);
-  const writeState = useCallback((s: Persisted) => {
-    if (!storageKey || typeof window === "undefined") return;
-    try { window.localStorage.setItem(storageKey, JSON.stringify(s)); } catch { /* ignore */ }
-  }, [storageKey]);
+  const sync = useCallback((s: WorkoutSession | null) => {
+    setSession(s);
+    notifyRef.current?.(s);
+  }, []);
 
-  const [persisted, setPersisted] = useState<Persisted>(() => ({ pausedMs: 0, hiddenAt: null }));
-  useEffect(() => { setPersisted(readState()); }, [readState]);
-
-  const isActive = !!startedAt && !completedAt;
-
+  // Hydrate from storage (client-only, so SSR renders the neutral state).
   useEffect(() => {
-    if (!isActive) return;
-    const id = setInterval(() => setNow(Date.now()), 1000);
-    return () => clearInterval(id);
-  }, [isActive]);
+    sync(readWorkoutSession(dayId));
+  }, [dayId, sync]);
 
-  const persistedRef = useRef(persisted);
-  persistedRef.current = persisted;
+  // Pick up sessions started elsewhere in the page (auto-start on logging)
+  // and re-read after refocus so a backgrounded tab shows the right value.
   useEffect(() => {
-    if (!isActive || typeof document === "undefined") return;
-    const onVis = () => {
-      const cur = persistedRef.current;
-      if (document.visibilityState === "hidden") {
-        if (cur.hiddenAt == null) {
-          const next = { ...cur, hiddenAt: Date.now() };
-          setPersisted(next); writeState(next);
-        }
-      } else if (document.visibilityState === "visible") {
-        if (cur.hiddenAt != null) {
-          const next = { pausedMs: cur.pausedMs + Math.max(0, Date.now() - cur.hiddenAt), hiddenAt: null };
-          setPersisted(next); writeState(next);
-        }
-      }
-    };
-    document.addEventListener("visibilitychange", onVis);
+    if (completedAt) return;
+    const reread = () => sync(readWorkoutSession(dayId));
+    const id = window.setInterval(() => {
+      setNow(Date.now());
+      reread();
+    }, 1000);
+    window.addEventListener("focus", reread);
+    document.addEventListener("visibilitychange", reread);
     return () => {
-      document.removeEventListener("visibilitychange", onVis);
-      const cur = persistedRef.current;
-      if (cur.hiddenAt == null) writeState({ ...cur, hiddenAt: Date.now() });
+      window.clearInterval(id);
+      window.removeEventListener("focus", reread);
+      document.removeEventListener("visibilitychange", reread);
     };
-  }, [isActive, writeState]);
+  }, [dayId, completedAt, sync]);
 
-  const elapsedSeconds = (() => {
-    if (!startedAt) return null;
-    const start = new Date(startedAt).getTime();
-    if (!Number.isFinite(start)) return null;
-    const end = completedAt ? new Date(completedAt).getTime() : now;
-    const liveHidden = persisted.hiddenAt != null && !completedAt
-      ? Math.max(0, end - persisted.hiddenAt)
-      : 0;
-    const ms = end - start - persisted.pausedMs - liveHidden;
-    return Math.max(0, Math.floor(ms / 1000));
-  })();
-
-  const resetTimer = () => {
-    if (!startedAt || completedAt) return;
-    const start = new Date(startedAt).getTime();
-    if (!Number.isFinite(start)) return;
-    const next: Persisted = { pausedMs: Math.max(0, Date.now() - start), hiddenAt: null };
-    setPersisted(next); writeState(next);
-    setNow(Date.now());
-  };
-
-  const fmt = (s: number) => {
-    const h = Math.floor(s / 3600);
-    const m = Math.floor((s % 3600) / 60);
-    const sec = s % 60;
-    const mm = String(m).padStart(2, "0");
-    const ss = String(sec).padStart(2, "0");
-    return h > 0 ? `${h}:${mm}:${ss}` : `${m}:${ss}`;
-  };
-
-  if (elapsedSeconds === null) return null;
-
-  return (
-    <div className={cn("flex shrink-0 items-center gap-1", className)}>
-      <div
+  // ── Completed workout: show the stored duration, never a live clock. ──
+  if (completedAt) {
+    const saved = savedDurationMin != null && savedDurationMin > 0 ? savedDurationMin : null;
+    return (
+      <span
         className={cn(
-          "flex items-center gap-1.5 rounded-md px-2 py-1 font-mono text-xs font-black tabular-nums",
-          completedAt
-            ? "bg-emerald-500/10 text-emerald-500"
-            : "bg-primary/10 text-primary",
+          "inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-bold tabular-nums",
+          saved ? "bg-emerald-500/10 text-emerald-500" : "text-muted-foreground",
+          className,
         )}
-        aria-label={`Elapsed ${fmt(elapsedSeconds)}`}
       >
         <Clock className="h-3.5 w-3.5" />
-        {fmt(elapsedSeconds)}
-      </div>
-      {!completedAt && (
+        {saved ? `Duration · ${formatDurationMin(saved)}` : "No session time recorded"}
+      </span>
+    );
+  }
+
+  const abandoned = session ? isSessionAbandoned(session, now) : false;
+
+  // ── Abandoned guard: never silently report a 19-hour workout. ──
+  if (session && abandoned) {
+    return (
+      <span className={cn("inline-flex items-center gap-1.5", className)}>
+        <span className="text-xs font-semibold text-muted-foreground">Workout started earlier</span>
+        {!readonly && (
+          <button
+            type="button"
+            onClick={() => sync(resetWorkoutSession(dayId))}
+            className="inline-flex h-7 items-center gap-1 rounded-md bg-secondary px-2 text-[11px] font-bold text-foreground"
+          >
+            <RotateCcw className="h-3 w-3" /> Restart
+          </button>
+        )}
+      </span>
+    );
+  }
+
+  // ── Not started ──
+  if (!session) {
+    return (
+      <span className={cn("inline-flex items-center gap-1.5", className)}>
+        <span className="text-xs font-semibold text-muted-foreground">Not started</span>
+        {!readonly && (
+          <button
+            type="button"
+            onClick={() => sync(beginWorkoutSession(dayId))}
+            className="inline-flex h-7 min-h-[28px] items-center gap-1 rounded-md bg-primary/10 px-2 text-[11px] font-black uppercase tracking-wide text-primary"
+            aria-label="Start workout session"
+          >
+            <Play className="h-3 w-3" /> Start
+          </button>
+        )}
+      </span>
+    );
+  }
+
+  const paused = session.pausedAt != null;
+  const elapsed = Math.floor(sessionElapsedMs(session, now) / 1000);
+
+  return (
+    <span className={cn("inline-flex items-center gap-1", className)}>
+      <span
+        className={cn(
+          "inline-flex items-center gap-1.5 rounded-md px-2 py-1 font-mono text-xs font-black tabular-nums",
+          paused ? "bg-secondary text-muted-foreground" : "bg-primary/10 text-primary",
+        )}
+        aria-label={`${paused ? "Paused" : "Workout session"} ${formatElapsed(elapsed)}`}
+      >
+        <Clock className="h-3.5 w-3.5" />
+        {paused ? `Paused · ${formatElapsed(elapsed)}` : formatElapsed(elapsed)}
+      </span>
+      {!readonly && (
         <button
           type="button"
-          onClick={resetTimer}
+          onClick={() => sync(paused ? resumeWorkoutSession(dayId) : pauseWorkoutSession(dayId))}
           className="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
-          aria-label="Reset timer"
-          title="Reset timer"
+          aria-label={paused ? "Resume workout session" : "Pause workout session"}
+          title={paused ? "Resume" : "Pause"}
         >
-          <RotateCcw className="h-3.5 w-3.5" />
+          {paused ? <Play className="h-3.5 w-3.5" /> : <Pause className="h-3.5 w-3.5" />}
         </button>
       )}
-    </div>
+    </span>
   );
 }
