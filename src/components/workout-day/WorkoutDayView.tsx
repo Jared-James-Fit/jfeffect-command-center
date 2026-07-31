@@ -2569,7 +2569,11 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
       )}
       {/* Big, dummy-proof rest timer — tap to start, auto-resets at 0 */}
       <div className="mt-2">
-        <RestTimerButton seconds={effectiveRest ?? null} label={restDisplay} />
+        <RestTimerButton
+          seconds={effectiveRest ?? null}
+          label={restDisplay}
+          onStart={() => beginWorkoutSession(dayId)}
+        />
       </div>
       {/* Suggested load badges */}
       {row.manual_override && (row.load_kg || row.load_lb) && (
