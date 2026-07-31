@@ -80,7 +80,7 @@ const ClientExerciseNotesCard = lazyDefault(() => import("@/components/client-ex
 const ProfilePictureCapture = lazyDefault(() => import("@/components/profile-picture-capture"), "ProfilePictureCapture");
 const MessageThread = lazyDefault(() => import("@/components/message-thread"), "MessageThread");
 const AgreementStatusPanel = lazyDefault(() => import("@/components/agreement-status-panel"), "AgreementStatusPanel");
-const PurchaseRecordsPanel = lazyDefault(() => import("@/components/purchase-records-panel"), "PurchaseRecordsPanel");
+const ClientSalesTable = lazyDefault(() => import("@/components/admin/client-sales-table"), "ClientSalesTable");
 const PriceCardPickerDialog = lazyDefault(() => import("@/components/price-card-picker-dialog"), "PriceCardPickerDialog");
 const AgreementsPanel = lazyDefault(() => import("@/components/agreements-panel"), "AgreementsPanel");
 const AssignedProgramsCard = lazyDefault(() => import("@/components/assigned-programs-card"), "AssignedProgramsCard");
@@ -242,8 +242,8 @@ const SECTIONS: { id: SectionId; label: string; description: string; icon: Compo
     { value: "notes", label: "Notes", icon: MessageSquare },
     { value: "documents", label: "Documents & Forms", icon: MessageSquare },
   ]},
-  { id: "business", label: "Business", description: "Purchases, billing, agreements", icon: DollarSign, tabs: [
-    { value: "purchases", label: "Purchases", icon: DollarSign },
+  { id: "business", label: "Business", description: "Sales, billing, agreements", icon: DollarSign, tabs: [
+    { value: "purchases", label: "Sales", description: "Products sold & renewals", icon: DollarSign },
     { value: "billing", label: "Billing", icon: DollarSign },
     { value: "agreements", label: "Agreements", icon: DollarSign },
   ]},
@@ -1159,8 +1159,7 @@ export function ClientProfileWorkspace({
 
         <TabsContent value="purchases" className="grid gap-6 md:grid-cols-3">
           <Suspense fallback={<TabFallback />}>
-            <AgreementStatusPanel client={form} />
-            <PurchaseRecordsPanel clientId={id} />
+            <ClientSalesTable clientId={id} />
           </Suspense>
         </TabsContent>
 
@@ -2155,6 +2154,22 @@ function ClientOverviewSnapshot({
   onRequestUpdate: () => unknown | Promise<unknown>;
   onGoToTab: (t: TabValue) => void;
 }) {
+  // A live sale can legitimately satisfy "package" / "start date" — the
+  // completion card used to flag them as missing even when the client had
+  // an active purchase. Read-only lookup, no writes.
+  const { data: salesLite = [] } = useQuery({
+    queryKey: ["client-purchases-lite", clientId],
+    queryFn: async () =>
+      (await supabase
+        .from("purchase_records")
+        .select("offer_name, offer_type, term_start_date, payment_status, purchased_at")
+        .eq("client_id", clientId)).data ?? [],
+  });
+  const liveSale = (salesLite as any[]).find(
+    (s) => !["Cancelled", "Refunded", "Voided"].includes(String(s.payment_status ?? "")),
+  );
+  const saleStart = liveSale?.term_start_date ?? null;
+
   // Profile completion: count critical fields populated
   const critical: { key: string; label: string; jumpTo: TabValue; populated: boolean }[] = [
     { key: "first_name", label: "Name", jumpTo: "info", populated: !!form.first_name || !!form.full_name },
@@ -2164,8 +2179,18 @@ function ClientOverviewSnapshot({
     { key: "date_of_birth", label: "Date of birth", jumpTo: "info", populated: !!form.date_of_birth },
     { key: "timezone", label: "Time zone", jumpTo: "info", populated: !!form.timezone },
     { key: "assigned_coach_id", label: "Assigned coach", jumpTo: "coaching", populated: !!form.assigned_coach_id },
-    { key: "coaching_package", label: "Coaching package", jumpTo: "coaching", populated: !!form.coaching_package },
-    { key: "start_date", label: "Start date", jumpTo: "coaching", populated: !!form.start_date },
+    {
+      key: "coaching_package",
+      label: "Coaching package",
+      jumpTo: form.coaching_package ? "coaching" : "purchases",
+      populated: !!form.coaching_package || !!liveSale,
+    },
+    {
+      key: "start_date",
+      label: "Start date",
+      jumpTo: form.start_date ? "coaching" : "purchases",
+      populated: !!form.start_date || !!saleStart,
+    },
     { key: "user_id", label: "Login account", jumpTo: "account", populated: !!form.user_id },
   ];
   const populated = critical.filter((c) => c.populated).length;
@@ -2201,7 +2226,11 @@ function ClientOverviewSnapshot({
             <SnapshotField label="Email" value={form.email} fallbackAction={form.email ? null : { label: "Add email", onClick: () => onGoToTab("info") }} />
             <SnapshotField label="Phone" value={form.phone} fallbackAction={form.phone ? null : { label: "Add phone", onClick: () => onGoToTab("info") }} />
             <SnapshotField label="Assigned coach" value={form.assigned_coach_name ?? (form.assigned_coach_id ? "Assigned" : null)} fallbackAction={form.assigned_coach_id ? null : { label: "Assign coach", onClick: () => onGoToTab("coaching") }} />
-            <SnapshotField label="Coaching package" value={form.coaching_package} fallbackAction={form.coaching_package ? null : { label: "Add package", onClick: () => onGoToTab("coaching") }} />
+            <SnapshotField
+              label="Coaching package"
+              value={form.coaching_package ?? (liveSale ? `${liveSale.offer_name} (from sale)` : null)}
+              fallbackAction={form.coaching_package || liveSale ? null : { label: "Add package", onClick: () => onGoToTab("coaching") }}
+            />
             <SnapshotField label="Program phase" value={form.program_phase} fallbackAction={form.program_phase ? null : { label: "Add phase", onClick: () => onGoToTab("coaching") }} />
             <SnapshotField label="Login" value={form.user_id ? "Account active" : null} fallbackAction={form.user_id ? null : { label: "Send setup link", onClick: () => onSendSetup() }} />
           </div>
