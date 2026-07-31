@@ -2019,13 +2019,7 @@ function WorkoutDay({
             // the duration tile reflects time the workout view was actually
             // open — matching the live timer badge and the value persisted
             // on Finish.
-            computeActiveDurationMin(
-              effectiveWorkoutStart(
-                completion?.started_at ?? completion?.in_progress_at ?? null,
-                readWorkoutPageOpenAt(dayId),
-              ),
-              completion?.completed_at ?? undefined,
-            ) ?? completion?.actual_duration_min ?? null
+            completion?.actual_duration_min ?? sessionDurationMin(dayId) ?? null
           }
           workoutDate={completion?.completed_at ?? scheduledDate ?? null}
           sessionRating={
@@ -4117,7 +4111,9 @@ function CompactWorkoutSummaryRow({
   setsTotal,
   exercisesDone,
   exercisesTotal,
-  startedAt,
+  dayId,
+  readonly,
+  savedDurationMin,
   completedAt,
   onViewScore,
   loggingQuality,
@@ -4127,7 +4123,9 @@ function CompactWorkoutSummaryRow({
   setsTotal: number;
   exercisesDone: number;
   exercisesTotal: number;
-  startedAt: string | null;
+  dayId: string;
+  readonly?: boolean;
+  savedDurationMin?: number | null;
   completedAt: string | null;
   onViewScore?: () => void;
   loggingQuality: { quality: any; percentage: number } | null;
@@ -4139,18 +4137,21 @@ function CompactWorkoutSummaryRow({
       : setsDone > 0
         ? "in_progress"
         : "not_started";
-  const showTimer = !!startedAt;
   return (
     <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-xs text-muted-foreground">
-      {showTimer && (
-        <div className="inline-flex items-center gap-1.5 rounded-md bg-secondary/60 px-2 py-1">
-          <Clock className="h-3.5 w-3.5 text-primary" />
-          <span className="font-semibold uppercase tracking-wide text-[10px] text-muted-foreground">
-            Workout Session
-          </span>
-          <WorkoutTimer startedAt={startedAt} completedAt={completedAt} className="ml-0.5" />
-        </div>
-      )}
+      <div className="inline-flex items-center gap-1.5 rounded-md bg-secondary/60 px-2 py-1">
+        <Clock className="h-3.5 w-3.5 text-primary" />
+        <span className="font-semibold uppercase tracking-wide text-[10px] text-muted-foreground">
+          Workout Session
+        </span>
+        <WorkoutTimer
+          dayId={dayId}
+          completedAt={completedAt}
+          savedDurationMin={savedDurationMin ?? null}
+          readonly={readonly}
+          className="ml-0.5"
+        />
+      </div>
       <button
         type="button"
         onClick={scrollToFirstIncompleteExercise}
