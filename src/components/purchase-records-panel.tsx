@@ -46,7 +46,7 @@ function expiryStatus(endDate?: string | null): { label: string; tone: string; d
   } catch { return null; }
 }
 
-async function downloadPurchasePdf(r: any, clientName?: string | null) {
+export async function downloadPurchasePdf(r: any, clientName?: string | null) {
   try {
     const { jsPDF } = await import("jspdf");
     const doc = new jsPDF();
@@ -108,7 +108,7 @@ async function downloadPurchasePdf(r: any, clientName?: string | null) {
 
 // ── Term Date Editor ─────────────────────────────────────────────────────────
 
-function TermDateEditor({ purchase, clientId, onClose }: { purchase: any; clientId: string; onClose: () => void }) {
+export function TermDateEditor({ purchase, clientId, onClose }: { purchase: any; clientId: string; onClose: () => void }) {
   const qc = useQueryClient();
   const updateFn = useServerFn(updatePurchaseTermDates);
   const [startDate, setStartDate] = useState(purchase.term_start_date ?? "");
