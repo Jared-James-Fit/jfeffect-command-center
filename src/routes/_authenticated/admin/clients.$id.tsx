@@ -80,7 +80,7 @@ const ClientExerciseNotesCard = lazyDefault(() => import("@/components/client-ex
 const ProfilePictureCapture = lazyDefault(() => import("@/components/profile-picture-capture"), "ProfilePictureCapture");
 const MessageThread = lazyDefault(() => import("@/components/message-thread"), "MessageThread");
 const AgreementStatusPanel = lazyDefault(() => import("@/components/agreement-status-panel"), "AgreementStatusPanel");
-const PurchaseRecordsPanel = lazyDefault(() => import("@/components/purchase-records-panel"), "PurchaseRecordsPanel");
+const ClientSalesTable = lazyDefault(() => import("@/components/admin/client-sales-table"), "ClientSalesTable");
 const PriceCardPickerDialog = lazyDefault(() => import("@/components/price-card-picker-dialog"), "PriceCardPickerDialog");
 const AgreementsPanel = lazyDefault(() => import("@/components/agreements-panel"), "AgreementsPanel");
 const AssignedProgramsCard = lazyDefault(() => import("@/components/assigned-programs-card"), "AssignedProgramsCard");
@@ -242,8 +242,8 @@ const SECTIONS: { id: SectionId; label: string; description: string; icon: Compo
     { value: "notes", label: "Notes", icon: MessageSquare },
     { value: "documents", label: "Documents & Forms", icon: MessageSquare },
   ]},
-  { id: "business", label: "Business", description: "Purchases, billing, agreements", icon: DollarSign, tabs: [
-    { value: "purchases", label: "Purchases", icon: DollarSign },
+  { id: "business", label: "Business", description: "Sales, billing, agreements", icon: DollarSign, tabs: [
+    { value: "purchases", label: "Sales", description: "Products sold & renewals", icon: DollarSign },
     { value: "billing", label: "Billing", icon: DollarSign },
     { value: "agreements", label: "Agreements", icon: DollarSign },
   ]},
@@ -1159,8 +1159,7 @@ export function ClientProfileWorkspace({
 
         <TabsContent value="purchases" className="grid gap-6 md:grid-cols-3">
           <Suspense fallback={<TabFallback />}>
-            <AgreementStatusPanel client={form} />
-            <PurchaseRecordsPanel clientId={id} />
+            <ClientSalesTable clientId={id} />
           </Suspense>
         </TabsContent>
 
