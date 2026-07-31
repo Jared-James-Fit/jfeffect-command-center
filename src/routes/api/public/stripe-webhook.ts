@@ -452,6 +452,10 @@ export const Route = createFileRoute("/api/public/stripe-webhook")({
           switch (event.type) {
 
             // ── One-time & subscription checkout completion ─────────────────
+            // `async_payment_succeeded` is the delayed-settlement twin of
+            // `completed` (ACH / bank debits). Same payload shape, same
+            // handling, same idempotency guard.
+            case "checkout.session.async_payment_succeeded":
             case "checkout.session.completed": {
               // Capture promo/discount usage for EVERY completed checkout
               // (JF Membership, coaching, one-time, member upgrade, future).
@@ -818,6 +822,9 @@ export const Route = createFileRoute("/api/public/stripe-webhook")({
             }
 
             // ── Invoice paid (subscription renewal) ─────────────────────────
+            // `invoice.paid` and `invoice.payment_succeeded` fire for the same
+            // settlement; dedupe by event.id already prevents double work.
+            case "invoice.paid":
             case "invoice.payment_succeeded": {
               if (obj.subscription) {
                 let sub: any;
@@ -1045,6 +1052,22 @@ export const Route = createFileRoute("/api/public/stripe-webhook")({
             }
 
             // ── Payment intent failed ────────────────────────────────────────
+            // Delayed-settlement checkout failure (ACH return, etc.)
+            case "checkout.session.async_payment_failed": {
+              const purchase = await resolvePurchase(supabase, obj, {
+                stripe_checkout_session_id: obj.id,
+                stripe_customer_id: obj.customer ?? undefined,
+              });
+              if (purchase) {
+                await supabase.from("purchase_records").update({
+                  payment_status: "Failed",
+                  last_payment_update_source: "stripe_webhook",
+                  last_payment_update_at: now,
+                }).eq("id", purchase.id);
+              }
+              break;
+            }
+
             case "payment_intent.payment_failed": {
               const purchase = await resolvePurchase(supabase, obj, { stripe_payment_intent_id: obj.id });
               if (purchase) {
