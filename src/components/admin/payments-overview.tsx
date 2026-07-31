@@ -1,6 +1,9 @@
 import { Link } from "@tanstack/react-router";
-import { useMemo } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useMemo, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useServerFn } from "@tanstack/react-start";
+import { toast } from "sonner";
+import { syncStripePayments } from "@/lib/stripe-sync.functions";
 import { supabase } from "@/integrations/supabase/client";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -124,6 +127,7 @@ export function PaymentsOverviewPanel({
 
   return (
     <div className="p-4 md:p-6 space-y-6">
+      <StripeSyncBar />
       {isError && (
         <Card className="border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive">
           Couldn't load one of the Overview sources. Try refresh.
