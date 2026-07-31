@@ -2154,6 +2154,22 @@ function ClientOverviewSnapshot({
   onRequestUpdate: () => unknown | Promise<unknown>;
   onGoToTab: (t: TabValue) => void;
 }) {
+  // A live sale can legitimately satisfy "package" / "start date" — the
+  // completion card used to flag them as missing even when the client had
+  // an active purchase. Read-only lookup, no writes.
+  const { data: salesLite = [] } = useQuery({
+    queryKey: ["client-purchases-lite", clientId],
+    queryFn: async () =>
+      (await supabase
+        .from("purchase_records")
+        .select("offer_name, offer_type, term_start_date, payment_status, purchased_at")
+        .eq("client_id", clientId)).data ?? [],
+  });
+  const liveSale = (salesLite as any[]).find(
+    (s) => !["Cancelled", "Refunded", "Voided"].includes(String(s.payment_status ?? "")),
+  );
+  const saleStart = liveSale?.term_start_date ?? null;
+
   // Profile completion: count critical fields populated
   const critical: { key: string; label: string; jumpTo: TabValue; populated: boolean }[] = [
     { key: "first_name", label: "Name", jumpTo: "info", populated: !!form.first_name || !!form.full_name },
@@ -2163,8 +2179,18 @@ function ClientOverviewSnapshot({
     { key: "date_of_birth", label: "Date of birth", jumpTo: "info", populated: !!form.date_of_birth },
     { key: "timezone", label: "Time zone", jumpTo: "info", populated: !!form.timezone },
     { key: "assigned_coach_id", label: "Assigned coach", jumpTo: "coaching", populated: !!form.assigned_coach_id },
-    { key: "coaching_package", label: "Coaching package", jumpTo: "coaching", populated: !!form.coaching_package },
-    { key: "start_date", label: "Start date", jumpTo: "coaching", populated: !!form.start_date },
+    {
+      key: "coaching_package",
+      label: "Coaching package",
+      jumpTo: form.coaching_package ? "coaching" : "purchases",
+      populated: !!form.coaching_package || !!liveSale,
+    },
+    {
+      key: "start_date",
+      label: "Start date",
+      jumpTo: form.start_date ? "coaching" : "purchases",
+      populated: !!form.start_date || !!saleStart,
+    },
     { key: "user_id", label: "Login account", jumpTo: "account", populated: !!form.user_id },
   ];
   const populated = critical.filter((c) => c.populated).length;
