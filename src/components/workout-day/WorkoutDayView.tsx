@@ -1,5 +1,5 @@
 import { Link, useNavigate } from "@tanstack/react-router";
-import { Component, createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { Component, createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { usePortalUserId } from "@/lib/client-impersonation";
@@ -1165,6 +1165,7 @@ function WorkoutDay({
   const refresh = () => {
     qc.invalidateQueries({ queryKey: ["pl-day-results", dayId] });
     qc.invalidateQueries({ queryKey: ["pl-day-completion", dayId] });
+    beginSessionOnAction();
     markInProgress();
   };
 
@@ -1251,6 +1252,7 @@ function WorkoutDay({
   const refreshNotes = () => {
     qc.invalidateQueries({ queryKey: ["pl-day-exercise-notes", dayId] });
     qc.invalidateQueries({ queryKey: ["client-exercise-notes", client?.id] });
+    beginSessionOnAction();
     markInProgress();
   };
 
@@ -1312,11 +1314,13 @@ function WorkoutDay({
     }));
     const heartbeats = readHeartbeatTimestamps(completion?.id ?? null);
     const typedMin = Number.parseInt(actualMin, 10);
-    const effStart = effectiveWorkoutStart(
-      completion?.started_at ?? completion?.in_progress_at ?? null,
-      readWorkoutPageOpenAt(dayId),
-    );
-    const activeMin = computeActiveDurationMin(effStart);
+    // Real session time first; if the timer never ran, estimate from the
+    // first logged set to now. Never persist a 0 or an abandoned-session value.
+    const firstLogAt = (results as any[])
+      .map((x: any) => x?.completed_at)
+      .filter(Boolean)
+      .sort()[0] ?? null;
+    const activeMin = sessionDurationMin(dayId) ?? estimateDurationFromLogs(firstLogAt);
     const resolvedDurationMin = Number.isFinite(typedMin) && typedMin > 0
       ? typedMin
       : activeMin ?? completion?.actual_duration_min ?? null;
@@ -1407,7 +1411,9 @@ function WorkoutDay({
 
     if (draftKey) clearLocalDraft(draftKey);
     clearHeartbeatTimestamps(completion?.id ?? null);
-    clearWorkoutPageOpen(dayId);
+    // Session is finished — drop the local clock so reopening the completed
+    // workout to edit logs can never overwrite the stored duration.
+    clearWorkoutSession(dayId);
     setNotes("");
     setActualMin("");
     await qc.refetchQueries({ queryKey: ["pl-day-completion", dayId] });
@@ -1724,12 +1730,9 @@ function WorkoutDay({
           setsTotal={statusSummary.setsTotal}
           exercisesDone={statusSummary.exercisesDone}
           exercisesTotal={statusSummary.exercisesTotal}
-          startedAt={
-            (effectiveWorkoutStart(
-              completion?.started_at ?? completion?.in_progress_at ?? null,
-              readWorkoutPageOpenAt(dayId),
-            )?.toISOString()) ?? null
-          }
+          dayId={dayId}
+          readonly={readonly || isImpersonating}
+          savedDurationMin={completion?.actual_duration_min ?? null}
           completedAt={completion?.completed_at ?? null}
           onViewScore={completion?.completed_at ? openRecapSummary : undefined}
           loggingQuality={(() => {
