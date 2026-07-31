@@ -52,6 +52,16 @@ const TONE = {
 
 /** Clean, never-misleading status label derived from stored billing state. */
 function resolveSaleStatus(r: any, d: PaymentDisplay): { label: string; tone: string } {
+  // Payment-request lifecycle wins over renewal inference: a purchase that is
+  // only awaiting checkout must never read as "Active".
+  if (d.status === "draft") return { label: "Draft", tone: TONE.muted };
+  if (d.status === "pending_payment") {
+    return r.stripe_payment_link
+      ? { label: "Payment Link Sent", tone: TONE.warn }
+      : { label: "Pending Payment", tone: TONE.warn };
+  }
+  if ((r.payment_status ?? "") === "Failed") return { label: "Failed", tone: TONE.bad };
+
   const kind = d.renewal.kind;
   if (kind === "cancelled") return { label: "Cancelled", tone: TONE.muted };
   if (kind === "cancels") return { label: "Cancelling", tone: TONE.warn };
