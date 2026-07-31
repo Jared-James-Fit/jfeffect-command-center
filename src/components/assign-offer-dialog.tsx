@@ -202,7 +202,9 @@ export function AssignOfferDialog({ offer, onClose, fixedClientId }: { offer: an
                   <ActionButton size="sm" variant="outline" onClick={async () => { try { await navigator.clipboard.writeText(checkoutUrl); toast.success("Copied"); } catch {} }}>Copy link</ActionButton>
                   <ActionButton size="sm" variant="outline" onClick={() => window.open(checkoutUrl, "_blank")}>Open</ActionButton>
                 </div>
-                <p className="text-xs text-muted-foreground">Send this link to the client. The webhook will mark this exact purchase as paid when they complete checkout.</p>
+                <p className="text-xs text-muted-foreground">
+                  {emailNote ?? "Payment link created. Copy and send this link to the client."} The webhook marks this exact purchase as paid when they complete checkout.
+                </p>
               </div>
             )}
             <div className="rounded-md border border-border bg-secondary/30 p-3">
@@ -231,7 +233,9 @@ export function AssignOfferDialog({ offer, onClose, fixedClientId }: { offer: an
                   Coaching Agreement: <Badge variant="outline">{selectedClient.agreement_status ?? "Not Sent"}</Badge>
                 </div>
                 {!selectedClient.agreement_signed && (
-                  <p className="mt-1 text-xs text-destructive">This client does not have a signed Coaching Agreement on file. You can still assign the offer.</p>
+                  <p className="mt-1 text-xs text-destructive">
+                    This client does not have a signed Coaching Agreement on file. You can still send the payment request, but access may require agreement completion first.
+                  </p>
                 )}
               </div>
             )}
@@ -239,9 +243,23 @@ export function AssignOfferDialog({ offer, onClose, fixedClientId }: { offer: an
               <Label>Admin notes (optional)</Label>
               <Textarea rows={2} value={adminNotes} onChange={(e) => setAdminNotes(e.target.value)} />
             </div>
-            <div className="flex items-center gap-3">
-              <Switch checked={recordPaid} onCheckedChange={setRecordPaid} />
-              <Label>Mark as already paid in full</Label>
+            <div className="space-y-2">
+              <Label>What should happen?</Label>
+              <Select value={mode} onValueChange={(v) => setMode(v as AssignMode)}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="payment_request">Send payment request (Stripe checkout)</SelectItem>
+                  <SelectItem value="paid_in_full">Mark as already paid in full (manual)</SelectItem>
+                  <SelectItem value="draft">Draft / manual record only</SelectItem>
+                </SelectContent>
+              </Select>
+              <div className="rounded-md border border-border bg-secondary/20 p-3 text-sm">
+                <div className="flex items-center gap-2 font-semibold">
+                  {(() => { const Icon = MODE_COPY[mode].icon; return <Icon className="h-4 w-4 text-primary" />; })()}
+                  {MODE_COPY[mode].title}
+                </div>
+                <p className="mt-1 text-xs text-muted-foreground">{MODE_COPY[mode].blurb}</p>
+              </div>
             </div>
 
             <div className="rounded-md border border-border bg-secondary/20 p-3 space-y-2">
