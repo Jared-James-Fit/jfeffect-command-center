@@ -2226,7 +2226,11 @@ function ClientOverviewSnapshot({
             <SnapshotField label="Email" value={form.email} fallbackAction={form.email ? null : { label: "Add email", onClick: () => onGoToTab("info") }} />
             <SnapshotField label="Phone" value={form.phone} fallbackAction={form.phone ? null : { label: "Add phone", onClick: () => onGoToTab("info") }} />
             <SnapshotField label="Assigned coach" value={form.assigned_coach_name ?? (form.assigned_coach_id ? "Assigned" : null)} fallbackAction={form.assigned_coach_id ? null : { label: "Assign coach", onClick: () => onGoToTab("coaching") }} />
-            <SnapshotField label="Coaching package" value={form.coaching_package} fallbackAction={form.coaching_package ? null : { label: "Add package", onClick: () => onGoToTab("coaching") }} />
+            <SnapshotField
+              label="Coaching package"
+              value={form.coaching_package ?? (liveSale ? `${liveSale.offer_name} (from sale)` : null)}
+              fallbackAction={form.coaching_package || liveSale ? null : { label: "Add package", onClick: () => onGoToTab("coaching") }}
+            />
             <SnapshotField label="Program phase" value={form.program_phase} fallbackAction={form.program_phase ? null : { label: "Add phase", onClick: () => onGoToTab("coaching") }} />
             <SnapshotField label="Login" value={form.user_id ? "Account active" : null} fallbackAction={form.user_id ? null : { label: "Send setup link", onClick: () => onSendSetup() }} />
           </div>
