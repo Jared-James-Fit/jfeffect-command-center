@@ -194,22 +194,30 @@ export const syncStripePayments = createServerFn({ method: "POST" })
         }
       }
 
-      // Ledger row — idempotent on external_reference (the session id).
+      // Ledger row — idempotent on external_reference (the checkout session id).
       if (s.amount_total && s.amount_total > 0) {
-        await supabase.from("payment_ledger").upsert({
-          client_id: purchase.client_id,
-          purchase_id: purchase.id,
-          txn_type: "payment",
-          method: "stripe",
-          amount_minor: s.amount_total,
-          currency: (s.currency ?? "usd").toUpperCase(),
-          transaction_date: (occurredAt ?? new Date().toISOString()).slice(0, 10),
-          received_at: occurredAt,
-          external_reference: s.id,
-          stripe_payment_intent_id: s.payment_intent ?? null,
-          source: "stripe_sync",
-          internal_note: `Stripe sync — checkout session ${s.id}`,
-        }, { onConflict: "external_reference", ignoreDuplicates: true }).then(() => {}, () => {});
+        const { data: existing } = await supabase
+          .from("payment_ledger").select("id").eq("external_reference", s.id).maybeSingle();
+        if (!existing) {
+          await supabase.from("payment_ledger").insert({
+            client_id: purchase.client_id,
+            purchase_id: purchase.id,
+            txn_type: "payment",
+            method: "stripe",
+            amount_minor: s.amount_total,
+            currency: (s.currency ?? "usd").toUpperCase(),
+            transaction_date: (occurredAt ?? new Date().toISOString()).slice(0, 10),
+            received_at: occurredAt,
+            external_reference: s.id,
+            stripe_checkout_session_id: s.id,
+            stripe_payment_intent_id: s.payment_intent ?? null,
+            stripe_customer_id: s.customer ?? null,
+            stripe_subscription_id: s.subscription ?? null,
+            stripe_mode: data.mode,
+            source: "stripe_sync",
+            internal_note: `Stripe sync — checkout session ${s.id}`,
+          });
+        }
       }
 
       entries.push({
@@ -226,14 +234,6 @@ export const syncStripePayments = createServerFn({ method: "POST" })
       skipped: entries.filter((e) => e.action === "skipped").length,
       unmapped: entries.filter((e) => e.action === "unmapped").length,
     };
-
-    await supabase.from("client_activity_log").insert({
-      client_id: null,
-      actor_user_id: userId,
-      actor_role: "admin",
-      action: "stripe_payments_synced",
-      details: { mode: data.mode, days: data.days, scanned: sessions.length, ...counts },
-    }).then(() => {}, () => {});
 
     return { ok: true, scanned: sessions.length, counts, entries };
   });
