@@ -52,6 +52,16 @@ const TONE = {
 
 /** Clean, never-misleading status label derived from stored billing state. */
 function resolveSaleStatus(r: any, d: PaymentDisplay): { label: string; tone: string } {
+  // Payment-request lifecycle wins over renewal inference: a purchase that is
+  // only awaiting checkout must never read as "Active".
+  if (d.status === "draft") return { label: "Draft", tone: TONE.muted };
+  if (d.status === "pending_payment") {
+    return r.stripe_payment_link
+      ? { label: "Payment Link Sent", tone: TONE.warn }
+      : { label: "Pending Payment", tone: TONE.warn };
+  }
+  if ((r.payment_status ?? "") === "Failed") return { label: "Failed", tone: TONE.bad };
+
   const kind = d.renewal.kind;
   if (kind === "cancelled") return { label: "Cancelled", tone: TONE.muted };
   if (kind === "cancels") return { label: "Cancelling", tone: TONE.warn };
@@ -72,7 +82,17 @@ function resolveSaleStatus(r: any, d: PaymentDisplay): { label: string; tone: st
 }
 
 /** Next Payment cell text — mirrors resolveRenewal, never fabricated. */
-function nextPaymentCell(d: PaymentDisplay) {
+function nextPaymentCell(d: PaymentDisplay, raw?: any) {
+  if (d.status === "draft") {
+    return { text: "Not started", tone: "text-muted-foreground", helper: "Draft record — no payment requested." as string | null };
+  }
+  if (d.status === "pending_payment") {
+    return {
+      text: "Awaiting payment",
+      tone: "text-amber-500",
+      helper: raw?.stripe_payment_link ? "Payment link created — waiting on Stripe confirmation." : "Payment request created.",
+    };
+  }
   const r = d.renewal;
   if (r.kind === "none") return { text: "No renewal", tone: "text-muted-foreground", helper: null as string | null };
   if (r.kind === "free") return { text: "No payment", tone: "text-muted-foreground", helper: null };
@@ -113,6 +133,16 @@ export function ClientSalesTable({ clientId }: { clientId: string }) {
       if (error) throw error;
       return data ?? [];
     },
+    // Targeted freshness only: refetch on focus, and poll slowly *only* while
+    // a payment request is still awaiting Stripe confirmation. No global polling.
+    refetchOnWindowFocus: true,
+    refetchInterval: (q) => {
+      const rows = (q.state.data as any[]) ?? [];
+      const waiting = rows.some((r) =>
+        ["Pending Payment", "Payment Link Sent", "Pending"].includes(String(r.payment_status ?? "")),
+      );
+      return waiting ? 45_000 : false;
+    },
   });
 
   const { data: offers = [] } = useQuery({
@@ -124,7 +154,7 @@ export function ClientSalesTable({ clientId }: { clientId: string }) {
   const rows: Row[] = useMemo(() => {
     const built = (records ?? []).map((raw: any) => {
       const display = resolvePaymentDisplay(raw);
-      return { raw, display, status: resolveSaleStatus(raw, display), next: nextPaymentCell(display) };
+      return { raw, display, status: resolveSaleStatus(raw, display), next: nextPaymentCell(display, raw) };
     });
     const byDate = (v: string | null | undefined) => (v ? new Date(v).getTime() : Number.POSITIVE_INFINITY);
     return [...built].sort((a, b) => {

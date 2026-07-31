@@ -1,6 +1,9 @@
 import { Link } from "@tanstack/react-router";
-import { useMemo } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useMemo, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useServerFn } from "@tanstack/react-start";
+import { toast } from "sonner";
+import { syncStripePayments } from "@/lib/stripe-sync.functions";
 import { supabase } from "@/integrations/supabase/client";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -124,6 +127,7 @@ export function PaymentsOverviewPanel({
 
   return (
     <div className="p-4 md:p-6 space-y-6">
+      <StripeSyncBar />
       {isError && (
         <Card className="border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive">
           Couldn't load one of the Overview sources. Try refresh.
@@ -338,5 +342,64 @@ function JumpCard({
         <p className="mt-1 text-xs text-muted-foreground">{desc}</p>
       </Card>
     </button>
+  );
+}
+/**
+ * Stripe sync / backfill.
+ *
+ * Read-only against Stripe: it scans recent Checkout Sessions and updates the
+ * matching purchase records and ledger rows in this app. It never charges,
+ * refunds, cancels, or edits anything in Stripe.
+ */
+function StripeSyncBar() {
+  const qc = useQueryClient();
+  const syncFn = useServerFn(syncStripePayments);
+  const [busy, setBusy] = useState(false);
+  const [result, setResult] = useState<any | null>(null);
+
+  const run = async () => {
+    setBusy(true);
+    try {
+      const res: any = await syncFn({ data: { days: 30, mode: "live" } });
+      setResult(res);
+      if (res?.ok === false) {
+        toast.error(res.error ?? "Sync unavailable");
+      } else {
+        const c = res.counts;
+        toast.success(
+          `Scanned ${res.scanned} Stripe checkouts — ${c.updated} updated, ${c.no_change} already correct, ${c.unmapped} unmatched.`,
+        );
+        qc.invalidateQueries({ queryKey: ["pp-overview-transactions-30d"] });
+        qc.invalidateQueries({ queryKey: ["admin-transactions"] });
+        qc.invalidateQueries({ queryKey: ["purchase-records"] });
+      }
+    } catch (e: any) {
+      toast.error(e?.message ?? "Stripe sync failed");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Card className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
+      <div>
+        <div className="text-sm font-semibold">Stripe sync</div>
+        <p className="text-xs text-muted-foreground">
+          Pulls the last 30 days of Stripe checkouts and repairs any purchase that didn't update.
+          Read-only in Stripe — nothing is charged or cancelled.
+        </p>
+        {result?.ok && (
+          <p className="mt-1 text-xs text-muted-foreground">
+            Last run: {result.scanned} scanned · {result.counts.updated} updated ·{" "}
+            {result.counts.unmapped} unmatched
+            {result.counts.unmapped > 0 ? " (needs manual review)" : ""}
+          </p>
+        )}
+      </div>
+      <Button size="sm" variant="outline" onClick={run} disabled={busy} className="min-h-11 shrink-0">
+        <RefreshCw className={`mr-2 h-4 w-4 ${busy ? "animate-spin" : ""}`} />
+        {busy ? "Syncing…" : "Sync from Stripe"}
+      </Button>
+    </Card>
   );
 }

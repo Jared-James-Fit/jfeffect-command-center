@@ -25,7 +25,9 @@ export type PaymentDisplayStatus =
   | "voided"
   | "cancelled"
   | "active_subscription"
-  | "pending_setup";
+  | "pending_setup"
+  | "pending_payment"
+  | "draft";
 
 export type PaymentDisplay = {
   status: PaymentDisplayStatus;
@@ -175,6 +177,8 @@ export function resolvePaymentDisplay(p: PurchaseInput): PaymentDisplay {
   else if (isPaidInFull || rawStatus === "Paid") status = "paid";
   else if (amountPaid > 0 && amountOutstanding > 0) status = "partially_paid";
   else if (rawStatus === "Unpaid") status = "unpaid";
+  else if (rawStatus === "Draft") status = "draft";
+  else if (rawStatus === "Pending Payment" || rawStatus === "Payment Link Sent") status = "pending_payment";
   else status = "pending_setup";
 
   const statusLabel = (() => {
@@ -187,6 +191,8 @@ export function resolvePaymentDisplay(p: PurchaseInput): PaymentDisplay {
       case "voided": return "Voided";
       case "cancelled": return "Cancelled";
       case "active_subscription": return "Active Subscription";
+      case "pending_payment": return "Pending Payment";
+      case "draft": return "Draft";
       case "pending_setup": return "Payment setup pending";
     }
   })();
@@ -204,7 +210,9 @@ export function resolvePaymentDisplay(p: PurchaseInput): PaymentDisplay {
       case "refunded":
       case "voided":
       case "cancelled":
+      case "draft":
         return "border-border text-muted-foreground";
+      case "pending_payment":
       case "pending_setup":
         return "border-warning/40 text-warning bg-warning/5";
     }

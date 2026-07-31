@@ -150,7 +150,7 @@ export function AdminTransactionsPage({ embedded = false }: { embedded?: boolean
   const [days, setDays] = useState<string>("90");
   const [selected, setSelected] = useState<AdminTransactionRow | null>(null);
 
-  const { data = [], isLoading } = useQuery({
+  const { data: ledgerRows = [], isLoading } = useQuery({
     queryKey: ["admin-transactions", days],
     queryFn: async () => {
       // Query the unified view. It's not in the generated types, so cast.
@@ -172,6 +172,63 @@ export function AdminTransactionsPage({ embedded = false }: { embedded?: boolean
       return (data ?? []) as AdminTransactionRow[];
     },
   });
+
+  // Awaiting-checkout purchases have no ledger row yet, but admins need to see
+  // that a payment request is outstanding. Merge them in as synthetic rows.
+  const { data: pendingRows = [] } = useQuery({
+    queryKey: ["admin-transactions-pending"],
+    queryFn: async () => {
+      const client = supabase as unknown as { from: (t: string) => any };
+      const { data, error } = await client
+        .from("purchase_records")
+        .select("*, clients:client_id(id, full_name, email)")
+        .in("payment_status", ["Pending Payment", "Payment Link Sent", "Pending"])
+        .order("purchased_at", { ascending: false })
+        .limit(200);
+      if (error) throw error;
+      return (data ?? []).map((r: any): AdminTransactionRow => ({
+        id: `pending:${r.id}`,
+        source: "client",
+        occurred_on: String(r.purchased_at ?? r.created_at ?? "").slice(0, 10),
+        occurred_at: r.purchased_at ?? r.created_at ?? new Date().toISOString(),
+        subject_id: r.client_id ?? null,
+        subject_kind: "client",
+        subject_name: r.clients?.full_name ?? null,
+        subject_email: r.clients?.email ?? null,
+        purchase_id: r.id,
+        offer_id: r.offer_id ?? null,
+        product_name: r.offer_name ?? r.product_name ?? "Purchase",
+        purchase_type: r.offer_type ?? null,
+        amount: Number(r.full_payable_amount ?? r.price ?? 0),
+        currency: r.currency ?? "USD",
+        txn_type: "payment_request",
+        method: "stripe",
+        status: "Pending Payment",
+        stripe_customer_id: r.stripe_customer_id ?? null,
+        stripe_payment_intent_id: null,
+        stripe_charge_id: null,
+        stripe_invoice_id: null,
+        stripe_checkout_session_id: r.stripe_checkout_session_id ?? null,
+        stripe_subscription_id: r.stripe_subscription_id ?? null,
+        stripe_product_id: null,
+        stripe_price_id: r.stripe_price_id ?? null,
+        receipt_url: null,
+        hosted_invoice_url: null,
+        invoice_pdf_url: null,
+        stripe_mode: r.stripe_mode ?? null,
+        admin_notes: r.admin_notes ?? null,
+        voided: false,
+      }));
+    },
+  });
+
+  const data = useMemo(
+    () =>
+      [...pendingRows, ...ledgerRows].sort((a, b) =>
+        String(b.occurred_at).localeCompare(String(a.occurred_at)),
+      ),
+    [pendingRows, ledgerRows],
+  );
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
