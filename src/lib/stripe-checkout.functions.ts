@@ -350,11 +350,22 @@ export const createCheckoutSessionForAssignment = createServerFn({ method: "POST
       "metadata[client_id]": client.id,
       "metadata[offer_id]": purchase.offer_id ?? "",
       "metadata[assigned_by]": userId,
+      // Mapping metadata — lets the webhook and the Stripe backfill resolve
+      // this payment back to the exact app record without fuzzy matching.
+      // Deliberately excludes health data and coaching notes.
+      "metadata[product_id]": purchase.offer_id ?? "",
+      "metadata[payment_request_id]": purchase.id,
+      "metadata[workspace]": "jfeffect",
+      "metadata[environment]": priceId.startsWith("price_") && getStripeKey().includes("_test_") ? "test" : "live",
       // Stripe Tax: calculate GST/HST automatically from billing address
       "automatic_tax[enabled]": "true",
       // Require billing address so Stripe Tax can determine the correct rate
       billing_address_collection: "required",
     };
+    // Link the client's auth user when one exists (never required).
+    const { data: clientUser } = await supabase
+      .from("clients").select("user_id").eq("id", client.id).maybeSingle();
+    if (clientUser?.user_id) sessionParams["metadata[user_id]"] = clientUser.user_id;
     // Enable invoice creation for one-time payments so customers receive a tax receipt
     if (checkoutMode === "payment") {
       sessionParams["invoice_creation[enabled]"] = "true";
@@ -380,7 +391,9 @@ export const createCheckoutSessionForAssignment = createServerFn({ method: "POST
         stripe_payment_link: session.url,
         stripe_checkout_session_id: session.id,
         stripe_price_id: priceId,
-        payment_status: "Pending",
+        stripe_customer_id: stripeCustomerId ?? null,
+        stripe_mode: getStripeKey().includes("_test_") ? "test" : "live",
+        payment_status: "Pending Payment",
         last_payment_update_source: "admin_assignment",
         last_payment_update_at: new Date().toISOString(),
       })
