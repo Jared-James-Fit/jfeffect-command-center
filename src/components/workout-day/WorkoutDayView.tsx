@@ -2199,6 +2199,9 @@ function PreviousLiftChip({
   displayUnit: "kg" | "lb";
 }) {
   const adapter = useOptionalAdapter();
+  const currentScheduledWorkoutId = adapter?.kind === "client"
+    ? adapter.ref.scheduledWorkoutId ?? null
+    : null;
   // In membership and some impersonation/loading states there is no coaching
   // `clients` row available to the day view. The adapter still carries the
   // canonical history owner, so do not suppress the preview while that
@@ -2269,7 +2272,7 @@ function PreviousLiftChip({
       if (!matchingRows.length) return null;
       const { data: resultRows, error } = await (supabase as any)
         .from("pl_row_results")
-        .select(`id, row_id, set_index, completed_at, updated_at, created_at, actual_reps,
+        .select(`id, row_id, scheduled_workout_id, set_index, completed_at, updated_at, created_at, actual_reps,
           entered_value, entered_unit, normalized_kg, normalized_lb,
           actual_load, actual_load_unit, completed_duration_seconds`)
         .eq("client_id", historyOwnerId)
@@ -2289,19 +2292,41 @@ function PreviousLiftChip({
           new Date(b.completed_at ?? b.updated_at ?? b.created_at ?? 0).getTime() -
           new Date(a.completed_at ?? a.updated_at ?? a.created_at ?? 0).getTime(),
       );
-      // Skip the current day (any set logged today shouldn't count as
-      // "last time"). Pick the most recent day, then the heaviest set on it.
-      const otherDay = list.find((result) => result?.historyRow?.day_id !== currentDayId);
+      // A recurring calendar workout reuses the same source day/row ids for
+      // every occurrence. Exclude only the instance currently being logged;
+      // excluding the source day would also hide every previous occurrence.
+      // Legacy (non-instance) workouts still exclude their current source day.
+      const previous = list.filter((result) =>
+        currentScheduledWorkoutId
+          ? result.scheduled_workout_id !== currentScheduledWorkoutId
+          : !(result?.historyRow?.day_id === currentDayId && !result.scheduled_workout_id),
+      );
+      const otherDay = previous[0];
       if (!otherDay) return null;
-      const dayId = otherDay.historyRow.day_id;
-      const daySets = list.filter((result) => result?.historyRow?.day_id === dayId);
+      const sessionKey = otherDay.scheduled_workout_id
+        ? `instance:${otherDay.scheduled_workout_id}`
+        : `day:${otherDay.historyRow.day_id}`;
+      const daySets = previous.filter((result) =>
+        result.scheduled_workout_id
+          ? `instance:${result.scheduled_workout_id}` === sessionKey
+          : `day:${result?.historyRow?.day_id}` === sessionKey,
+      );
       const scoreOf = (s: any) => {
         const kg = s.normalized_kg != null ? Number(s.normalized_kg) : null;
         const reps = s.actual_reps != null ? Number(s.actual_reps) : 0;
         return kg != null ? kg * Math.max(1, reps) : reps;
       };
       const top = daySets.slice().sort((a, b) => scoreOf(b) - scoreOf(a))[0];
-      return { top, day: otherDay.historyRow.pl_days };
+      let scheduledDate = otherDay.historyRow.pl_days?.scheduled_date ?? null;
+      if (otherDay.scheduled_workout_id) {
+        const { data: scheduled } = await (supabase as any)
+          .from("pl_scheduled_workouts")
+          .select("scheduled_date")
+          .eq("id", otherDay.scheduled_workout_id)
+          .maybeSingle();
+        scheduledDate = scheduled?.scheduled_date ?? scheduledDate;
+      }
+      return { top, day: { scheduled_date: scheduledDate } };
     },
   });
   if (!data?.top) return null;
