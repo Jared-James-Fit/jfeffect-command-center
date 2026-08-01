@@ -2199,9 +2199,14 @@ function PreviousLiftChip({
   displayUnit: "kg" | "lb";
 }) {
   const adapter = useOptionalAdapter();
+  // In membership and some impersonation/loading states there is no coaching
+  // `clients` row available to the day view. The adapter still carries the
+  // canonical history owner, so do not suppress the preview while that
+  // optional client lookup is absent.
+  const historyOwnerId = clientId ?? adapter?.ref.ownerId ?? null;
   const { data } = useQuery({
-    queryKey: ["previous-lift", adapter?.kind ?? "client", clientId, exerciseId, exerciseName ?? null, currentDayId],
-    enabled: !!clientId && !!(exerciseId || exerciseName),
+    queryKey: ["previous-lift", adapter?.kind ?? "client", historyOwnerId, exerciseId, exerciseName ?? null, currentDayId],
+    enabled: !!historyOwnerId && !!(exerciseId || exerciseName),
     staleTime: 60_000,
     queryFn: async () => {
       if (adapter?.kind === "member" && exerciseId) {
@@ -2267,7 +2272,7 @@ function PreviousLiftChip({
         .select(`id, row_id, set_index, completed_at, updated_at, created_at, actual_reps,
           entered_value, entered_unit, normalized_kg, normalized_lb,
           actual_load, actual_load_unit, completed_duration_seconds`)
-        .eq("client_id", clientId)
+        .eq("client_id", historyOwnerId)
         .in("row_id", matchingRows.map((row) => row.id))
         .order("updated_at", { ascending: false })
         .limit(500);
@@ -2616,7 +2621,7 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
         {row.tempo && <span className="ml-2 text-xs font-normal text-muted-foreground">tempo {row.tempo}</span>}
       </div>
       {/* Compact "Last time" chip — subtle so it never outshines today's prescription. */}
-      {clientId && (exerciseId || name) && (
+      {(exerciseId || name) && (
         <PreviousLiftChip
           clientId={clientId}
           exerciseId={exerciseId}
