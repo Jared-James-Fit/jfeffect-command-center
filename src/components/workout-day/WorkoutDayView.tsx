@@ -2203,32 +2203,56 @@ function PreviousLiftChip({
     enabled: !!clientId && !!(exerciseId || exerciseName),
     staleTime: 60_000,
     queryFn: async () => {
-      // Prefer matching by exercise_id when present, otherwise fall back to
-      // the row's `exercise_name_override` so clients whose plan rows aren't
-      // linked to an `exercises` row (custom names typed by the coach) still
-      // see their last session.
-      let query = (supabase as any)
-        .from("pl_row_results")
-        .select(
-          `id, set_index, completed_at, created_at, actual_reps,
+      // History rows are linked to an exercise in one of two ways and the two
+      // drift apart over time: some plan rows carry `exercise_id`, others only
+      // `exercise_name_override` (coach typed the name, or the library link was
+      // added later). Matching on one field only silently dropped history —
+      // the "Last time" pill appeared for some cards and not others in the same
+      // workout. Match on BOTH: every exercise id that shares this name, plus
+      // the raw name override, then merge.
+      const SELECT = `id, set_index, completed_at, created_at, actual_reps,
            entered_value, entered_unit, normalized_kg, normalized_lb,
            actual_load, actual_load_unit, completed_duration_seconds,
            pl_exercise_rows!inner(
              exercise_id, exercise_name_override,
              pl_days!inner(id, day_index, scheduled_date, pl_weeks!inner(week_index))
-           )`,
-        )
-        .eq("client_id", clientId)
-        .not("completed_at", "is", null)
-        .order("completed_at", { ascending: false })
-        .limit(60);
-      if (exerciseId) {
-        query = query.eq("pl_exercise_rows.exercise_id", exerciseId);
-      } else if (exerciseName) {
-        query = query.eq("pl_exercise_rows.exercise_name_override", exerciseName);
+           )`;
+      const base = () =>
+        (supabase as any)
+          .from("pl_row_results")
+          .select(SELECT)
+          .eq("client_id", clientId)
+          .not("completed_at", "is", null)
+          .order("completed_at", { ascending: false })
+          .limit(80);
+
+      // Resolve every library exercise that shares this display name so a
+      // renamed / re-linked exercise still resolves to the same history.
+      const ids = new Set<string>();
+      if (exerciseId) ids.add(exerciseId);
+      if (exerciseName) {
+        const { data: named } = await (supabase as any)
+          .from("exercises")
+          .select("id")
+          .ilike("name", exerciseName)
+          .limit(10);
+        for (const e of (named ?? []) as any[]) if (e?.id) ids.add(e.id);
       }
-      const { data: rows } = await query;
-      const list = (rows ?? []) as any[];
+
+      const queries: Promise<any>[] = [];
+      if (ids.size) queries.push(base().in("pl_exercise_rows.exercise_id", [...ids]));
+      if (exerciseName) queries.push(base().ilike("pl_exercise_rows.exercise_name_override", exerciseName));
+      if (!queries.length) return null;
+      const results = await Promise.all(queries);
+      const byId = new Map<string, any>();
+      for (const res of results) {
+        for (const r of ((res?.data ?? []) as any[])) if (r?.id) byId.set(r.id, r);
+      }
+      const list = [...byId.values()].sort(
+        (a, b) =>
+          new Date(b.completed_at ?? b.created_at ?? 0).getTime() -
+          new Date(a.completed_at ?? a.created_at ?? 0).getTime(),
+      );
       // Skip the current day (any set logged today shouldn't count as
       // "last time"). Pick the most recent day, then the heaviest set on it.
       const otherDay = list.find((r) => r?.pl_exercise_rows?.pl_days?.id !== currentDayId);
