@@ -2198,33 +2198,45 @@ function PreviousLiftChip({
   currentDayId: string;
   displayUnit: "kg" | "lb";
 }) {
+  const adapter = useOptionalAdapter();
+  // In membership and some impersonation/loading states there is no coaching
+  // `clients` row available to the day view. The adapter still carries the
+  // canonical history owner, so do not suppress the preview while that
+  // optional client lookup is absent.
+  const historyOwnerId = clientId ?? adapter?.ref.ownerId ?? null;
   const { data } = useQuery({
-    queryKey: ["previous-lift", clientId, exerciseId, exerciseName ?? null, currentDayId],
-    enabled: !!clientId && !!(exerciseId || exerciseName),
+    queryKey: ["previous-lift", adapter?.kind ?? "client", historyOwnerId, exerciseId, exerciseName ?? null, currentDayId],
+    enabled: !!historyOwnerId && !!(exerciseId || exerciseName),
     staleTime: 60_000,
     queryFn: async () => {
-      // History rows are linked to an exercise in one of two ways and the two
-      // drift apart over time: some plan rows carry `exercise_id`, others only
-      // `exercise_name_override` (coach typed the name, or the library link was
-      // added later). Matching on one field only silently dropped history —
-      // the "Last time" pill appeared for some cards and not others in the same
-      // workout. Match on BOTH: every exercise id that shares this name, plus
-      // the raw name override, then merge.
-      const SELECT = `id, set_index, completed_at, created_at, actual_reps,
-           entered_value, entered_unit, normalized_kg, normalized_lb,
-           actual_load, actual_load_unit, completed_duration_seconds,
-           pl_exercise_rows!inner(
-             exercise_id, exercise_name_override,
-             pl_days!inner(id, day_index, scheduled_date, pl_weeks!inner(week_index))
-           )`;
-      const base = () =>
-        (supabase as any)
-          .from("pl_row_results")
-          .select(SELECT)
-          .eq("client_id", clientId)
-          .not("completed_at", "is", null)
-          .order("completed_at", { ascending: false })
-          .limit(80);
+      if (adapter?.kind === "member" && exerciseId) {
+        const history = await adapter.listExerciseHistory(exerciseId, { limit: 80 });
+        const latestDate = history.find((entry) => entry.date && entry.date !== currentDayId)?.date;
+        const latest = latestDate
+          ? history.filter((entry) => entry.date === latestDate)
+          : history;
+        if (!latest.length) return null;
+        const top = latest.slice().sort((a, b) =>
+          Number(b.loadLb ?? 0) * Math.max(1, Number(b.reps ?? 0)) -
+          Number(a.loadLb ?? 0) * Math.max(1, Number(a.reps ?? 0))
+        )[0];
+        return {
+          top: {
+            actual_reps: top.reps,
+            normalized_lb: top.loadLb,
+            normalized_kg: top.loadLb != null ? Number(top.loadLb) / 2.2046226218 : null,
+            completed_at: latestDate ? `${latestDate}T12:00:00` : null,
+          },
+          day: { scheduled_date: latestDate ?? null },
+        };
+      }
+
+      // Resolve matching plan rows first, then fetch their results by row_id.
+      // Embedded relation filters on pl_row_results have returned empty parent
+      // sets in production, even when the History sheet can see those logs.
+      // This also intentionally accepts legacy logs without completed_at: older
+      // sessions stored reps/load and updated_at but did not stamp completion.
+      const rowSelect = "id, day_id, exercise_id, exercise_name_override, pl_days(id, scheduled_date)";
 
       // Resolve every library exercise that shares this display name so a
       // renamed / re-linked exercise still resolves to the same history.
@@ -2239,33 +2251,57 @@ function PreviousLiftChip({
         for (const e of (named ?? []) as any[]) if (e?.id) ids.add(e.id);
       }
 
-      const queries: Promise<any>[] = [];
-      if (ids.size) queries.push(base().in("pl_exercise_rows.exercise_id", [...ids]));
-      if (exerciseName) queries.push(base().ilike("pl_exercise_rows.exercise_name_override", exerciseName));
-      if (!queries.length) return null;
-      const results = await Promise.all(queries);
-      const byId = new Map<string, any>();
-      for (const res of results) {
-        for (const r of ((res?.data ?? []) as any[])) if (r?.id) byId.set(r.id, r);
+      const rowQueries: Promise<any>[] = [];
+      if (ids.size) {
+        rowQueries.push((supabase as any).from("pl_exercise_rows").select(rowSelect).in("exercise_id", [...ids]));
       }
-      const list = [...byId.values()].sort(
+      if (exerciseName) {
+        rowQueries.push((supabase as any).from("pl_exercise_rows").select(rowSelect).ilike("exercise_name_override", exerciseName));
+      }
+      if (!rowQueries.length) return null;
+      const rowResults = await Promise.all(rowQueries);
+      const rowById = new Map<string, any>();
+      for (const result of rowResults) {
+        if (result?.error) throw result.error;
+        for (const row of (result?.data ?? []) as any[]) if (row?.id) rowById.set(row.id, row);
+      }
+      const matchingRows = [...rowById.values()];
+      if (!matchingRows.length) return null;
+      const { data: resultRows, error } = await (supabase as any)
+        .from("pl_row_results")
+        .select(`id, row_id, set_index, completed_at, updated_at, created_at, actual_reps,
+          entered_value, entered_unit, normalized_kg, normalized_lb,
+          actual_load, actual_load_unit, completed_duration_seconds`)
+        .eq("client_id", historyOwnerId)
+        .in("row_id", matchingRows.map((row) => row.id))
+        .order("updated_at", { ascending: false })
+        .limit(500);
+      if (error) throw error;
+      const list = ((resultRows ?? []) as any[])
+        .filter((result) =>
+          result.actual_reps != null || result.actual_load != null ||
+          result.entered_value != null || result.normalized_lb != null ||
+          result.normalized_kg != null || result.completed_duration_seconds != null
+        )
+        .map((result) => ({ ...result, historyRow: rowById.get(result.row_id) }))
+        .sort(
         (a, b) =>
-          new Date(b.completed_at ?? b.created_at ?? 0).getTime() -
-          new Date(a.completed_at ?? a.created_at ?? 0).getTime(),
+          new Date(b.completed_at ?? b.updated_at ?? b.created_at ?? 0).getTime() -
+          new Date(a.completed_at ?? a.updated_at ?? a.created_at ?? 0).getTime(),
       );
       // Skip the current day (any set logged today shouldn't count as
       // "last time"). Pick the most recent day, then the heaviest set on it.
-      const otherDay = list.find((r) => r?.pl_exercise_rows?.pl_days?.id !== currentDayId);
+      const otherDay = list.find((result) => result?.historyRow?.day_id !== currentDayId);
       if (!otherDay) return null;
-      const dayId = otherDay.pl_exercise_rows.pl_days.id;
-      const daySets = list.filter((r) => r?.pl_exercise_rows?.pl_days?.id === dayId);
+      const dayId = otherDay.historyRow.day_id;
+      const daySets = list.filter((result) => result?.historyRow?.day_id === dayId);
       const scoreOf = (s: any) => {
         const kg = s.normalized_kg != null ? Number(s.normalized_kg) : null;
         const reps = s.actual_reps != null ? Number(s.actual_reps) : 0;
         return kg != null ? kg * Math.max(1, reps) : reps;
       };
       const top = daySets.slice().sort((a, b) => scoreOf(b) - scoreOf(a))[0];
-      return { top, day: otherDay.pl_exercise_rows.pl_days };
+      return { top, day: otherDay.historyRow.pl_days };
     },
   });
   if (!data?.top) return null;
@@ -2326,7 +2362,10 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
   const adapter = useOptionalAdapter();
   const name = row.exercises?.name ?? row.exercise_name_override ?? "Exercise";
   const exercise = row.exercises ?? null;
-  const exerciseId = exercise?.id ?? null;
+  // Keep the row's canonical id even when the nested exercise relation is
+  // temporarily absent (RLS/cache/network). History identity must not depend
+  // on the optional display-details join resolving successfully.
+  const exerciseId = exercise?.id ?? row.exercise_id ?? null;
   // Local mirror of the active unit so the per-exercise KG/LB toggle is always
   // instantly responsive — even if the parent's resolved-unit state takes a
   // tick to recompute or the persistence call is slow. Stays in sync with the
@@ -2582,7 +2621,7 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
         {row.tempo && <span className="ml-2 text-xs font-normal text-muted-foreground">tempo {row.tempo}</span>}
       </div>
       {/* Compact "Last time" chip — subtle so it never outshines today's prescription. */}
-      {clientId && (exerciseId || name) && (
+      {(exerciseId || name) && (
         <PreviousLiftChip
           clientId={clientId}
           exerciseId={exerciseId}
