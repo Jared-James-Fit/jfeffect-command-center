@@ -2357,7 +2357,10 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
   const adapter = useOptionalAdapter();
   const name = row.exercises?.name ?? row.exercise_name_override ?? "Exercise";
   const exercise = row.exercises ?? null;
-  const exerciseId = exercise?.id ?? null;
+  // Keep the row's canonical id even when the nested exercise relation is
+  // temporarily absent (RLS/cache/network). History identity must not depend
+  // on the optional display-details join resolving successfully.
+  const exerciseId = exercise?.id ?? row.exercise_id ?? null;
   // Local mirror of the active unit so the per-exercise KG/LB toggle is always
   // instantly responsive — even if the parent's resolved-unit state takes a
   // tick to recompute or the persistence call is slow. Stays in sync with the
