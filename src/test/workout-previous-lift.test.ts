@@ -35,11 +35,11 @@ describe("workout previous lift selection", () => {
     const selected = selectPreviousLifts(
       [{ rowId: "current-row", exerciseId: "squat-id", exerciseName: "Competition Squat" }],
       [
-        log({ id: "current", sessionKey: "instance:current", normalizedKg: 200, reps: 1 }),
-        log({ id: "lighter", normalizedKg: 160, reps: 5 }),
-        log({ id: "winner", normalizedKg: 170, reps: 3 }),
-        log({ id: "same-load-more-reps", normalizedKg: 170, reps: 4 }),
-        log({ id: "other-client-shape", exerciseId: "leg-press", exerciseName: "Leg Press", normalizedKg: 300 }),
+        log({ id: "current", sessionKey: "instance:current", normalizedKg: 200, normalizedLb: 440.9245, reps: 1 }),
+        log({ id: "lighter", normalizedKg: 160, normalizedLb: 352.7396, reps: 5 }),
+        log({ id: "winner", normalizedKg: 170, normalizedLb: 374.7858, reps: 3 }),
+        log({ id: "same-load-more-reps", normalizedKg: 170, normalizedLb: 374.7858, reps: 4 }),
+        log({ id: "other-client-shape", exerciseId: "leg-press", exerciseName: "Leg Press", normalizedKg: 300, normalizedLb: 661.3868 }),
       ],
       "instance:current",
     ).get("current-row");
