@@ -63,6 +63,13 @@ import { RestTimerButton } from "@/components/workout-day/RestTimerButton";
 import { ExerciseHistoryButton } from "@/components/exercise-history-sheet";
 import { QuickSwapButton } from "@/components/workout-day/QuickSwapButton";
 import { convertWeight } from "@/lib/progress-metrics";
+import {
+  formatPreviousLiftLoad,
+  selectPreviousLifts,
+  type PreviousLift,
+  type PreviousLiftIdentity,
+  type PreviousLiftLog,
+} from "@/lib/workout-previous-lift";
 import { DurationTimerInCard } from "@/components/workout-day/DurationTimerInCard";
 import { WorkoutSubmissionSummary } from "@/components/workout-submission-summary";
 import { computeWorkoutSummary, type WorkoutSummary } from "@/lib/workout-summary";
@@ -619,6 +626,120 @@ function WorkoutDay({
       return r;
     },
   });
+
+  const historyOwnerId = client?.id ?? adapter?.ref.ownerId ?? null;
+  const currentHistorySessionKey = adapter?.kind === "member"
+    ? `member:${dayId}`
+    : scheduledWorkoutId
+      ? `instance:${scheduledWorkoutId}`
+      : `day:${dayId}`;
+  const previousLiftIdentities = useMemo<PreviousLiftIdentity[]>(
+    () => (rows as any[]).map((row) => {
+      const name = row.exercises?.name ?? row.exercise_name_override ?? "Exercise";
+      const tracking = row.tracking_type ?? row.measurement_type ?? row.exercises?.default_measurement_type;
+      return {
+        rowId: row.id,
+        exerciseId: row.exercises?.id ?? row.exercise_id ?? null,
+        exerciseName: name,
+        repsOnly: tracking === "reps",
+      };
+    }),
+    [rows],
+  );
+  const previousLiftIdentityKey = useMemo(
+    () => previousLiftIdentities
+      .map((identity) => `${identity.exerciseId ?? "name"}:${identity.exerciseName}`)
+      .sort()
+      .join("|"),
+    [previousLiftIdentities],
+  );
+  const { data: previousLiftLogs = [] } = useQuery<PreviousLiftLog[]>({
+    queryKey: [
+      "workout-previous-lifts",
+      adapter?.kind ?? "client",
+      historyOwnerId,
+      dayId,
+      scheduledWorkoutId,
+      previousLiftIdentityKey,
+    ],
+    enabled: !!historyOwnerId && previousLiftIdentities.length > 0,
+    staleTime: 2 * 60_000,
+    gcTime: 10 * 60_000,
+    retry: 1,
+    queryFn: async () => {
+      if (adapter?.kind === "member") {
+        if (!adapter.ref.enrollmentId) return [];
+        const { data, error } = await (supabase as any)
+          .from("member_set_logs")
+          .select("id, week_index, day_index, exercise_id, logged_at, updated_at, reps, rpe, rir, entered_value, entered_unit, normalized_kg, normalized_lb, load_kg, load_lb, is_working_set")
+          .eq("enrollment_id", adapter.ref.enrollmentId)
+          .order("logged_at", { ascending: false })
+          .limit(2000);
+        if (error) throw error;
+        return ((data ?? []) as any[]).map((log) => ({
+          id: log.id,
+          exerciseId: log.exercise_id ?? null,
+          exerciseName: null,
+          sessionKey: `member:${log.week_index}:${log.day_index}`,
+          occurredAt: log.logged_at ?? log.updated_at ?? null,
+          reps: log.reps ?? null,
+          rpe: log.rpe ?? null,
+          rir: log.rir ?? null,
+          enteredValue: log.entered_value ?? log.load_kg ?? log.load_lb ?? null,
+          enteredUnit: log.entered_unit === "kg" || log.entered_unit === "lb"
+            ? log.entered_unit
+            : log.load_kg != null
+              ? "kg"
+              : log.load_lb != null
+                ? "lb"
+                : null,
+          normalizedKg: log.normalized_kg ?? log.load_kg ?? null,
+          normalizedLb: log.normalized_lb ?? log.load_lb ?? null,
+          isWorkingSet: log.is_working_set ?? null,
+        }));
+      }
+
+      const { data, error } = await (supabase as any)
+        .from("pl_row_results")
+        .select(`id, row_id, scheduled_workout_id, completed_at, updated_at, created_at,
+          actual_reps, actual_rpe, actual_rir, entered_value, entered_unit,
+          normalized_kg, normalized_lb, actual_load, actual_load_unit, is_working_set,
+          pl_exercise_rows(exercise_id, exercise_name_override, day_id, exercises(name))`)
+        .eq("client_id", historyOwnerId)
+        .order("updated_at", { ascending: false })
+        .limit(2000);
+      if (error) throw error;
+      return ((data ?? []) as any[]).map((log) => {
+        const historyRow = log.pl_exercise_rows;
+        const enteredUnit = log.entered_unit === "kg" || log.entered_unit === "lb"
+          ? log.entered_unit
+          : log.actual_load_unit === "kg" || log.actual_load_unit === "lb"
+            ? log.actual_load_unit
+            : null;
+        return {
+          id: log.id,
+          exerciseId: historyRow?.exercise_id ?? null,
+          exerciseName: historyRow?.exercises?.name ?? historyRow?.exercise_name_override ?? null,
+          sessionKey: log.scheduled_workout_id
+            ? `instance:${log.scheduled_workout_id}`
+            : `day:${historyRow?.day_id ?? "unknown"}`,
+          occurredAt: log.completed_at ?? log.updated_at ?? log.created_at ?? null,
+          reps: log.actual_reps ?? null,
+          rpe: log.actual_rpe ?? null,
+          rir: log.actual_rir ?? null,
+          enteredValue: log.entered_value ?? log.actual_load ?? null,
+          enteredUnit,
+          normalizedKg: log.normalized_kg ?? null,
+          normalizedLb: log.normalized_lb ?? null,
+          isWorkingSet: log.is_working_set ?? null,
+        };
+      });
+    },
+  });
+  const previousLiftByRow = useMemo(
+    () => selectPreviousLifts(previousLiftIdentities, previousLiftLogs, currentHistorySessionKey),
+    [previousLiftIdentities, previousLiftLogs, currentHistorySessionKey],
+  );
 
   // ── Cross-device real-time sync ──────────────────────────────────────────
   // Subscribe to Supabase Realtime for pl_row_results so that when a set is
@@ -1588,6 +1709,7 @@ function WorkoutDay({
                   dayTitle={cleanDayTitle(day.title, day.day_index)}
                   dayIndex={day?.day_index ?? null}
                   clientId={client?.id}
+                  previousLift={previousLiftByRow.get(r.id) ?? null}
                   blockId={blockId}
                   existingResults={(results as any[]).filter((x) => x.row_id === r.id)}
                   existingNote={notesByRowId.get(r.id)}
@@ -1924,6 +2046,7 @@ function WorkoutDay({
                 dayTitle={cleanDayTitle(day.title, day.day_index)}
                 dayIndex={day?.day_index ?? null}
                 clientId={client?.id}
+                previousLift={previousLiftByRow.get(r.id) ?? null}
                 blockId={blockId}
                 existingResults={(results as any[]).filter((x) => x.row_id === r.id)}
                 existingNote={notesByRowId.get(r.id)}
@@ -2185,189 +2308,14 @@ function ExerciseNotesBlock({ notes }: { notes: string }) {
  * but explicit ("Last time" label + date) so the client can't mistake it
  * for today's target.
  */
-function PreviousLiftChip({
-  clientId,
-  exerciseId,
-  exerciseName,
-  currentDayId,
-  displayUnit,
-}: {
-  clientId: string | undefined | null;
-  exerciseId: string | null;
-  exerciseName?: string | null;
-  currentDayId: string;
-  displayUnit: "kg" | "lb";
-}) {
-  const adapter = useOptionalAdapter();
-  const currentScheduledWorkoutId = adapter?.kind === "client"
-    ? adapter.ref.scheduledWorkoutId ?? null
-    : null;
-  // In membership and some impersonation/loading states there is no coaching
-  // `clients` row available to the day view. The adapter still carries the
-  // canonical history owner, so do not suppress the preview while that
-  // optional client lookup is absent.
-  const historyOwnerId = clientId ?? adapter?.ref.ownerId ?? null;
-  const { data } = useQuery({
-    queryKey: ["previous-lift", adapter?.kind ?? "client", historyOwnerId, exerciseId, exerciseName ?? null, currentDayId],
-    enabled: !!historyOwnerId && !!(exerciseId || exerciseName),
-    staleTime: 60_000,
-    queryFn: async () => {
-      if (adapter?.kind === "member" && exerciseId) {
-        const history = await adapter.listExerciseHistory(exerciseId, { limit: 80 });
-        const latestDate = history.find((entry) => entry.date && entry.date !== currentDayId)?.date;
-        const latest = latestDate
-          ? history.filter((entry) => entry.date === latestDate)
-          : history;
-        if (!latest.length) return null;
-        const top = latest.slice().sort((a, b) =>
-          Number(b.loadLb ?? 0) * Math.max(1, Number(b.reps ?? 0)) -
-          Number(a.loadLb ?? 0) * Math.max(1, Number(a.reps ?? 0))
-        )[0];
-        return {
-          top: {
-            actual_reps: top.reps,
-            normalized_lb: top.loadLb,
-            normalized_kg: top.loadLb != null ? Number(top.loadLb) / 2.2046226218 : null,
-            completed_at: latestDate ? `${latestDate}T12:00:00` : null,
-          },
-          day: { scheduled_date: latestDate ?? null },
-        };
-      }
-
-      // Resolve matching plan rows first, then fetch their results by row_id.
-      // Embedded relation filters on pl_row_results have returned empty parent
-      // sets in production, even when the History sheet can see those logs.
-      // This also intentionally accepts legacy logs without completed_at: older
-      // sessions stored reps/load and updated_at but did not stamp completion.
-      const rowSelect = "id, day_id, exercise_id, exercise_name_override, pl_days(id, scheduled_date)";
-
-      // Resolve every library exercise that shares this display name so a
-      // renamed / re-linked exercise still resolves to the same history.
-      const ids = new Set<string>();
-      if (exerciseId) ids.add(exerciseId);
-      if (exerciseName) {
-        const { data: named } = await (supabase as any)
-          .from("exercises")
-          .select("id")
-          .ilike("name", exerciseName)
-          .limit(10);
-        for (const e of (named ?? []) as any[]) if (e?.id) ids.add(e.id);
-      }
-
-      const rowQueries: Promise<any>[] = [];
-      if (ids.size) {
-        rowQueries.push((supabase as any).from("pl_exercise_rows").select(rowSelect).in("exercise_id", [...ids]));
-      }
-      if (exerciseName) {
-        rowQueries.push((supabase as any).from("pl_exercise_rows").select(rowSelect).ilike("exercise_name_override", exerciseName));
-      }
-      if (!rowQueries.length) return null;
-      const rowResults = await Promise.all(rowQueries);
-      const rowById = new Map<string, any>();
-      for (const result of rowResults) {
-        if (result?.error) throw result.error;
-        for (const row of (result?.data ?? []) as any[]) if (row?.id) rowById.set(row.id, row);
-      }
-      const matchingRows = [...rowById.values()];
-      if (!matchingRows.length) return null;
-      const { data: resultRows, error } = await (supabase as any)
-        .from("pl_row_results")
-        .select(`id, row_id, scheduled_workout_id, set_index, completed_at, updated_at, created_at, actual_reps,
-          entered_value, entered_unit, normalized_kg, normalized_lb,
-          actual_load, actual_load_unit, completed_duration_seconds`)
-        .eq("client_id", historyOwnerId)
-        .in("row_id", matchingRows.map((row) => row.id))
-        .order("updated_at", { ascending: false })
-        .limit(500);
-      if (error) throw error;
-      const list = ((resultRows ?? []) as any[])
-        .filter((result) =>
-          result.actual_reps != null || result.actual_load != null ||
-          result.entered_value != null || result.normalized_lb != null ||
-          result.normalized_kg != null || result.completed_duration_seconds != null
-        )
-        .map((result) => ({ ...result, historyRow: rowById.get(result.row_id) }))
-        .sort(
-        (a, b) =>
-          new Date(b.completed_at ?? b.updated_at ?? b.created_at ?? 0).getTime() -
-          new Date(a.completed_at ?? a.updated_at ?? a.created_at ?? 0).getTime(),
-      );
-      // A recurring calendar workout reuses the same source day/row ids for
-      // every occurrence. Exclude only the instance currently being logged;
-      // excluding the source day would also hide every previous occurrence.
-      // Legacy (non-instance) workouts still exclude their current source day.
-      const previous = list.filter((result) =>
-        currentScheduledWorkoutId
-          ? result.scheduled_workout_id !== currentScheduledWorkoutId
-          : !(result?.historyRow?.day_id === currentDayId && !result.scheduled_workout_id),
-      );
-      const otherDay = previous[0];
-      if (!otherDay) return null;
-      const sessionKey = otherDay.scheduled_workout_id
-        ? `instance:${otherDay.scheduled_workout_id}`
-        : `day:${otherDay.historyRow.day_id}`;
-      const daySets = previous.filter((result) =>
-        result.scheduled_workout_id
-          ? `instance:${result.scheduled_workout_id}` === sessionKey
-          : `day:${result?.historyRow?.day_id}` === sessionKey,
-      );
-      const scoreOf = (s: any) => {
-        const kg = s.normalized_kg != null ? Number(s.normalized_kg) : null;
-        const reps = s.actual_reps != null ? Number(s.actual_reps) : 0;
-        return kg != null ? kg * Math.max(1, reps) : reps;
-      };
-      const top = daySets.slice().sort((a, b) => scoreOf(b) - scoreOf(a))[0];
-      let scheduledDate = otherDay.historyRow.pl_days?.scheduled_date ?? null;
-      if (otherDay.scheduled_workout_id) {
-        const { data: scheduled } = await (supabase as any)
-          .from("pl_scheduled_workouts")
-          .select("scheduled_date")
-          .eq("id", otherDay.scheduled_workout_id)
-          .maybeSingle();
-        scheduledDate = scheduled?.scheduled_date ?? scheduledDate;
-      }
-      return { top, day: { scheduled_date: scheduledDate } };
-    },
-  });
-  if (!data?.top) return null;
-  const s = data.top;
-  const enteredUnit: "kg" | "lb" | null =
-    s.entered_unit === "kg" || s.entered_unit === "lb"
-      ? s.entered_unit
-      : s.actual_load_unit === "kg" || s.actual_load_unit === "lb"
-        ? s.actual_load_unit
-        : null;
-  let loadStr = "";
-  if (s.completed_duration_seconds != null && s.actual_reps == null) {
-    loadStr = `${s.completed_duration_seconds}s`;
-  } else {
-    let n: number | null = null;
-    let unit: "kg" | "lb" = enteredUnit ?? displayUnit;
-    if (enteredUnit && s.entered_value != null) n = Number(s.entered_value);
-    else if (enteredUnit && s.actual_load != null) n = Number(s.actual_load);
-    else {
-      const v = displayUnit === "kg" ? s.normalized_kg : s.normalized_lb;
-      if (v != null) { n = Number(v); unit = displayUnit; }
-    }
-    if (n != null && !Number.isNaN(n)) {
-      const rounded = Math.abs(n - Math.round(n)) < 0.05 ? Math.round(n) : Number(n.toFixed(1));
-      loadStr = `${rounded} ${unit}`;
-    }
-  }
-  const repsStr = s.actual_reps != null ? ` × ${s.actual_reps}` : "";
+function PreviousLiftChip({ data, displayUnit }: { data: PreviousLift | null; displayUnit: "kg" | "lb" }) {
+  if (!data) return null;
+  const loadStr = formatPreviousLiftLoad(data, displayUnit) ?? "";
+  const repsStr = data.reps != null ? ` × ${data.reps}` : "";
   if (!loadStr && !repsStr) return null;
-  const scheduled: string | null = data.day?.scheduled_date ?? null;
   let when = "";
-  if (scheduled) {
-    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(scheduled);
-    if (m) {
-      const d = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
-      const now = new Date();
-      const days = Math.round((now.getTime() - d.getTime()) / 86400000);
-      when = days <= 0 ? "today" : days === 1 ? "yesterday" : days < 14 ? `${days}d ago` : d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
-    }
-  } else if (s.completed_at) {
-    const d = new Date(s.completed_at);
+  if (data.occurredAt) {
+    const d = new Date(data.occurredAt);
     const days = Math.round((Date.now() - d.getTime()) / 86400000);
     when = days <= 0 ? "today" : days === 1 ? "yesterday" : days < 14 ? `${days}d ago` : d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
   }
@@ -2383,7 +2331,7 @@ function PreviousLiftChip({
   );
 }
 
-function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, existingResults, existingNote, notesLoading = false, readonly = false, unit = "kg", onUnitChange, focusMode = false, onChange, onNoteChange, purposeLabel = null, swapContext = undefined }: { row: any; dayId: string; dayTitle: string; dayIndex?: number | null; clientId: string | undefined; blockId?: string | null; existingResults: any[]; existingNote?: any; notesLoading?: boolean; readonly?: boolean; unit?: "kg" | "lb"; onUnitChange?: (u: "kg" | "lb") => void; focusMode?: boolean; onChange: () => void; onNoteChange: () => void; purposeLabel?: string | null; swapContext?: { kind: "client" } | { kind: "member"; enrollmentId: string; weekIndex: number; dayIndex: number; exerciseIndex: number } | undefined }) {
+function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, existingResults, previousLift = null, existingNote, notesLoading = false, readonly = false, unit = "kg", onUnitChange, focusMode = false, onChange, onNoteChange, purposeLabel = null, swapContext = undefined }: { row: any; dayId: string; dayTitle: string; dayIndex?: number | null; clientId: string | undefined; blockId?: string | null; existingResults: any[]; previousLift?: PreviousLift | null; existingNote?: any; notesLoading?: boolean; readonly?: boolean; unit?: "kg" | "lb"; onUnitChange?: (u: "kg" | "lb") => void; focusMode?: boolean; onChange: () => void; onNoteChange: () => void; purposeLabel?: string | null; swapContext?: { kind: "client" } | { kind: "member"; enrollmentId: string; weekIndex: number; dayIndex: number; exerciseIndex: number } | undefined }) {
   const adapter = useOptionalAdapter();
   const name = row.exercises?.name ?? row.exercise_name_override ?? "Exercise";
   const exercise = row.exercises ?? null;
@@ -2648,10 +2596,7 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
       {/* Compact "Last time" chip — subtle so it never outshines today's prescription. */}
       {(exerciseId || name) && (
         <PreviousLiftChip
-          clientId={clientId}
-          exerciseId={exerciseId}
-          exerciseName={name}
-          currentDayId={dayId}
+          data={previousLift}
           displayUnit={activeUnit}
         />
       )}
