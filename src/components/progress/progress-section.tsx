@@ -1348,6 +1348,12 @@ function BodyweightTab({
     qc.invalidateQueries({ queryKey: ["progress-bw", ctx.userId] });
   }
 
+  const canEdit = ctx.viewerRole === "owner" || ctx.viewerRole === "admin";
+  const [editRow, setEditRow] = useState<null | {
+    id: string; date: string; value: number; unit: "kg" | "lb"; note?: string | null;
+    source: "progress_bodyweight" | "progress_metrics";
+  }>(null);
+
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between">
@@ -1425,18 +1431,132 @@ function BodyweightTab({
         <Card className="divide-y">
           {combinedRows.slice(0, 50).map((r) => (
             <div key={r.id} className="flex items-center justify-between p-3">
-              <div>
+              <button
+                type="button"
+                disabled={!canEdit}
+                onClick={() => canEdit && setEditRow(r)}
+                className="min-h-11 flex-1 text-left disabled:cursor-default"
+              >
                 <p className="font-medium">{r.value} {r.unit}</p>
                 <p className="text-xs text-muted-foreground">{fmtDate(r.date)} {r.note ? `· ${r.note}` : ""}</p>
-              </div>
-              {(ctx.viewerRole === "owner" || ctx.viewerRole === "admin") && r.source === "progress_bodyweight" ? (
-                <Button size="sm" variant="ghost" onClick={() => remove(r.id)}><Trash2 className="h-4 w-4" /></Button>
+              </button>
+              {canEdit ? (
+                <Button size="sm" variant="ghost" aria-label="Edit weigh-in" onClick={() => setEditRow(r)}>
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
               ) : null}
             </div>
           ))}
         </Card>
       )}
+      <EditBodyweightDialog
+        ctx={ctx}
+        row={editRow}
+        onOpenChange={(o) => { if (!o) setEditRow(null); }}
+      />
     </div>
+  );
+}
+
+function EditBodyweightDialog({
+  ctx, row, onOpenChange,
+}: {
+  ctx: ProgressContext;
+  row: null | { id: string; date: string; value: number; unit: "kg" | "lb"; note?: string | null; source: "progress_bodyweight" | "progress_metrics" };
+  onOpenChange: (b: boolean) => void;
+}) {
+  const qc = useQueryClient();
+  const [val, setVal] = useState("");
+  const [unit, setUnit] = useState<"kg" | "lb">("lb");
+  const [date, setDate] = useState("");
+  const [note, setNote] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    if (!row) return;
+    setVal(String(row.value));
+    setUnit(row.unit);
+    setDate(row.date);
+    setNote(row.note ?? "");
+  }, [row]);
+
+  function refresh() {
+    qc.invalidateQueries({ queryKey: ["progress-bw", ctx.userId] });
+    qc.invalidateQueries({ queryKey: ["progress-metrics", ctx.clientId] });
+  }
+
+  async function save() {
+    if (!row) return;
+    const n = Number(val);
+    if (!val || !Number.isFinite(n) || n <= 0) { toast.error("Enter a valid weight"); return; }
+    setBusy(true);
+    try {
+      if (row.source === "progress_bodyweight") {
+        await updateBodyweight(row.id, {
+          weight_value: n, weight_unit: unit, logged_date: date, note: note || null,
+        } as never);
+      } else {
+        const { error } = await supabase.from("progress_metrics").update({
+          bodyweight: n, bodyweight_unit: unit, entry_date: date, notes: note || null,
+        } as never).eq("id", row.id);
+        if (error) throw error;
+      }
+      refresh();
+      toast.success("Weigh-in updated");
+      onOpenChange(false);
+    } catch (e: any) { toast.error(e?.message ?? "Couldn't update weigh-in"); }
+    finally { setBusy(false); }
+  }
+
+  async function remove() {
+    if (!row) return;
+    if (!confirm("Delete this weigh-in?")) return;
+    setBusy(true);
+    try {
+      if (row.source === "progress_bodyweight") {
+        await deleteBodyweight(row.id);
+      } else {
+        const { error } = await supabase.from("progress_metrics").update({
+          bodyweight: null, bodyweight_unit: null,
+        } as never).eq("id", row.id);
+        if (error) throw error;
+      }
+      refresh();
+      toast.success("Weigh-in removed");
+      onOpenChange(false);
+    } catch (e: any) { toast.error(e?.message ?? "Couldn't remove weigh-in"); }
+    finally { setBusy(false); }
+  }
+
+  return (
+    <Dialog open={!!row} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-sm">
+        <DialogHeader><DialogTitle>Edit Weigh-In</DialogTitle></DialogHeader>
+        <div className="space-y-3">
+          <div className="flex gap-2">
+            <Input
+              type="text" inputMode="decimal" value={val}
+              onChange={(e) => setVal(e.target.value.replace(/[^0-9.]/g, "").replace(/(\..*)\./g, "$1"))}
+              placeholder="Weight"
+            />
+            <Select value={unit} onValueChange={(v: any) => setUnit(v)}>
+              <SelectTrigger className="w-24"><SelectValue /></SelectTrigger>
+              <SelectContent><SelectItem value="kg">kg</SelectItem><SelectItem value="lb">lb</SelectItem></SelectContent>
+            </Select>
+          </div>
+          <DateField value={date} onChange={setDate} />
+          <Textarea placeholder="Note (optional)" rows={2} value={note} onChange={(e) => setNote(e.target.value)} />
+        </div>
+        <DialogFooter className="gap-2 sm:justify-between">
+          <Button variant="outline" className="text-destructive" onClick={remove} disabled={busy}>
+            <Trash2 className="mr-1 h-4 w-4" />Delete
+          </Button>
+          <Button onClick={save} disabled={busy || !val}>
+            {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : "Save"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 
