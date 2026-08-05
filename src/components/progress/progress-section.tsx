@@ -28,6 +28,7 @@ import {
   listSubmissions, getSubmission, createSubmission, updateSubmission, deleteSubmission,
   submitForReview, listMediaForSubmission, createMedia, updateMedia, deleteMedia,
   uploadProgressFile, getSignedMediaUrl, listBodyweight, logBodyweight, deleteBodyweight,
+  updateBodyweight,
   listMeasurements, logMeasurement, deleteMeasurement, bodyweightStats,
   listReviewResponses, addReviewResponse,
   listSubmissionsPaged, listPrimaryThumbsForSubmissions, getSignedMediaUrlsBatch,
