@@ -282,7 +282,7 @@ export function MemberBlockWeekColumns({
         </Button>
       </div>
 
-      <Sheet open={!editing} onOpenChange={(o) => !o && setEditing(null)}>
+      <Sheet open={!!editing} onOpenChange={(o) => !o && setEditing(null)}>
         <SheetContent side="bottom" className="max-h-[90vh]">
           <SheetHeader>
             <SheetTitle>Move {editing?.title}</SheetTitle>
