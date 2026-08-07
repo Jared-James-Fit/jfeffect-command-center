@@ -14,7 +14,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
 import { Eye, EyeOff, Receipt, Check, X as XIcon } from "lucide-react";
 import { SalesPageShell, Section, SectionTitle } from "@/components/sales/sales-page-shell";
-import { MembershipHero, MemberHeroCta, MemberHeroGhost, HeroDecisionArea, MemberDetailsLink } from "@/components/sales/membership-hero";
+import { MembershipHero, MemberHeroCta, MemberHeroGhost, MemberDetailsLink } from "@/components/sales/membership-hero";
 import { FeatureGrid } from "@/components/sales/feature-grid";
 import { ProofWall } from "@/components/sales/proof-wall";
 import { FaqAccordion } from "@/components/sales/faq-accordion";
@@ -22,7 +22,7 @@ import { StickyMobileCta } from "@/components/sales/sticky-mobile-cta";
 import { AppPreviewGrid } from "@/components/sales/app-preview-grid";
 import { FinalCta } from "@/components/sales/final-cta";
 import { Reveal } from "@/components/sales/reveal";
-import { ArrowRight, Headphones, CheckCircle2, Library, Dumbbell, Home as HomeIcon, Flame, Trophy } from "lucide-react";
+import { CheckCircle2, Library, Dumbbell, Home as HomeIcon, Flame, Trophy } from "lucide-react";
 import { normalizePhoneToE164 } from "@/lib/phone-e164";
 import appPreviewDashboard from "@/assets/app-preview-dashboard.jpg";
 import appPreviewLogging from "@/assets/app-preview-logging.jpg";
@@ -300,11 +300,6 @@ export function SignupJf({ floatingHeader = false }: { floatingHeader?: boolean 
         headline={"Everything you need, in one place."}
         sub={"Strength, muscle, and fat loss programs — with demos, tracking, and a clear plan every session."}
         heroImage={null}
-        decisionArea={
-          <HeroDecisionArea
-            onCoachingClick={() => { window.location.href = "/coaching"; }}
-          />
-        }
         primary={<MemberHeroCta onClick={scrollToForm}>Start Free Trial</MemberHeroCta>}
         secondary={
           <MemberHeroGhost onClick={scrollToFeatures}>See What's Included</MemberHeroGhost>
@@ -314,39 +309,7 @@ export function SignupJf({ floatingHeader = false }: { floatingHeader?: boolean 
       />
       )}
 
-      {/* Coaching callout — sits directly under the hero so Private Coaching
-          is visible as a real path within five seconds of landing. */}
-      <Section className="!py-8">
-        <Link to="/coaching" className="block">
-          <div className="mx-auto max-w-5xl rounded-2xl border border-primary/30 bg-gradient-to-br from-[#0F1116] via-[#0B0D12] to-[#0B0D12] p-5 md:p-6 shadow-[0_20px_60px_-20px_rgba(220,38,38,0.35)] hover:border-primary/50 transition-colors">
-            <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-              <div className="flex items-start gap-3">
-                <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-primary/40 bg-primary/15 text-primary">
-                  <Headphones className="h-5 w-5" />
-                </div>
-                <div>
-                  <div className="text-base font-black tracking-tight md:text-lg">
-                    Want a Coach in Your Corner Directly?
-                  </div>
-                  <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
-                    Private Coaching means a plan built for you, weekly check-ins, real adjustments, and direct access to your dedicated coach.
-                  </p>
-                  <p className="mt-1 text-[11px] uppercase tracking-[0.18em] text-muted-foreground/80">
-                    Application required · We keep the roster small on purpose
-                  </p>
-                </div>
-              </div>
-              <div className="shrink-0">
-                <Button size="lg" variant="outline" className="h-11 px-5 text-sm font-bold">
-                  View Private Coaching <ArrowRight className="ml-2 h-4 w-4" />
-                </Button>
-              </div>
-            </div>
-          </div>
-        </Link>
-      </Section>
-
-      {/* Early social proof — transformations under the hero/coaching callout */}
+      {/* Early social proof — transformations directly under the hero */}
       <Reveal>
         <TransformationsStrip
           eyebrow="REAL RESULTS"
@@ -393,14 +356,6 @@ export function SignupJf({ floatingHeader = false }: { floatingHeader?: boolean 
       /></Reveal>
 
       <Reveal><CoachTimelineSection /></Reveal>
-
-      {/* 6. Membership vs Coaching — one-line low-priority cross-sell */}
-      <Section>
-        <p className="mx-auto max-w-3xl text-center text-sm text-muted-foreground md:text-base">
-          Most people are set right here. Want a plan built just for you, with weekly check-ins? That's{" "}
-          <Link to="/coaching" className="font-semibold text-primary underline underline-offset-2 hover:text-primary/80">Coaching</Link> — by application.
-        </p>
-      </Section>
 
       {/* 7. FAQ */}
       <Reveal><FaqAccordion items={mergeTaxFaq(Array.isArray(s.faq) && s.faq.length > 0 ? s.faq : DEFAULT_FAQ)} /></Reveal>

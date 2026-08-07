@@ -1,4 +1,4 @@
-import { Link, useRouterState } from "@tanstack/react-router";
+import { Link } from "@tanstack/react-router";
 import { Button } from "@/components/ui/button";
 import type { ReactNode } from "react";
 
@@ -16,11 +16,6 @@ export function SalesPageShell({
   hideMarketingNav?: boolean;
 }) {
   const themeClass = theme === "light" ? "theme-light" : "";
-  const pathname = useRouterState({ select: (s) => s.location.pathname });
-  const isMembershipActive = pathname === "/membership" || pathname.startsWith("/join") || pathname.startsWith("/signup");
-  const isCoachingActive = pathname.startsWith("/coaching");
-  const navBtn =
-    "px-2 sm:px-3 text-xs sm:text-sm transition-colors data-[active=true]:bg-primary data-[active=true]:text-primary-foreground data-[active=true]:font-bold data-[active=true]:shadow-sm";
   return (
     <div
       className={`min-h-screen bg-background text-foreground ${themeClass}`}
@@ -37,22 +32,6 @@ export function SalesPageShell({
         <div className="container mx-auto flex items-center justify-between gap-2 px-4 py-3">
           <Link to="/" className="text-base sm:text-lg font-black tracking-tight">JF Effect</Link>
           <nav className="flex items-center gap-1 sm:gap-2">
-            {!hideMarketingNav && (
-              <>
-                <Link to="/membership" data-active={isMembershipActive ? "true" : undefined}>
-                  <Button size="sm" variant="ghost" data-active={isMembershipActive ? "true" : undefined} className={navBtn}>
-                    <span className="sm:hidden">Membership</span>
-                    <span className="hidden sm:inline">Self-Guided Membership</span>
-                  </Button>
-                </Link>
-                <Link to="/coaching" data-active={isCoachingActive ? "true" : undefined}>
-                  <Button size="sm" variant="ghost" data-active={isCoachingActive ? "true" : undefined} className={navBtn}>
-                    <span className="sm:hidden">Coaching</span>
-                    <span className="hidden sm:inline">Private Coaching</span>
-                  </Button>
-                </Link>
-              </>
-            )}
             <Link to="/auth"><Button size="sm" variant="outline" className="px-2 sm:px-3 text-xs sm:text-sm">Sign In</Button></Link>
           </nav>
         </div>
