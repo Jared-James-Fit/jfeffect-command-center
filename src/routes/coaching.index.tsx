@@ -1,10 +1,10 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { getPublicSalesPage } from "@/lib/sales-pages.functions";
 import { SalesPageShell, Section, SectionTitle } from "@/components/sales/sales-page-shell";
 import { HeroCta } from "@/components/sales/sales-hero";
-import { CoachingHero, CoachingVsMembership } from "@/components/sales/coaching-hero";
+import { CoachingHero } from "@/components/sales/coaching-hero";
 import { HowItWorks } from "@/components/sales/how-it-works";
 import { ProofWall } from "@/components/sales/proof-wall";
 import { FaqAccordion } from "@/components/sales/faq-accordion";
@@ -144,14 +144,6 @@ function CoachingPage() {
         headline={"Coaching for people who are done settling."}
         sub={"A plan built around your life. A coaching team that knows your numbers. Real progress, held to a standard."}
         primary={<HeroCta onClick={handleApply}>Apply for Coaching</HeroCta>}
-        secondary={
-          <Link
-            to="/membership"
-            className="text-sm font-semibold text-white/70 underline-offset-4 hover:text-white hover:underline"
-          >
-            Explore the Membership →
-          </Link>
-        }
       />
       )}
 
@@ -188,9 +180,6 @@ function CoachingPage() {
       /></Reveal>
 
       <Reveal stagger={4}><CoachTimelineSection /></Reveal>
-
-      {/* 8. Coaching vs Membership */}
-      <Reveal stagger={4}><CoachingVsMembership onApply={handleApply} /></Reveal>
 
       {/* 9. The Jared story */}
       <Reveal stagger={4}><JaredStory /></Reveal>
