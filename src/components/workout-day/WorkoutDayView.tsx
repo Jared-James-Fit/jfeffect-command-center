@@ -2802,6 +2802,7 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
               prescribedDurationSeconds={effectivePrescribedDurationSec}
               existing={existing}
               prevExisting={prevExisting}
+              repMaxBests={repMaxBests}
               targetReps={row.reps_text}
               targetRpe={row.rpe}
               targetRir={row.rir}
@@ -3095,6 +3096,7 @@ function SetRow({
   rowId, workoutId, exerciseId, exerciseName, clientId, setIndex, existing, prevExisting,
   targetReps, targetRpe, targetRir, suggestedWeight,
   repTarget, rpeTarget, rirTarget,
+  repMaxBests = null,
   hasUncompletedAfter, onApplyToRemaining, forceHydrateToken = 0,
   forcedFill = null,
   readonly = false, unit = "kg", hideWeight = false, focusMode = false, onChange, onSetCompleted,
@@ -3118,6 +3120,8 @@ function SetRow({
   repTarget?: RangeTarget;
   rpeTarget?: RangeTarget;
   rirTarget?: RangeTarget;
+  /** Historical best set per exact rep count (1–12) for PR badge detection. */
+  repMaxBests?: Map<number, PreviousLiftLog> | null;
   hasUncompletedAfter?: boolean;
   onApplyToRemaining?: (fromSetIndex: number, payload: { load: string; reps: string; rpe: string; unit: "kg" | "lb" }) => Promise<void> | void;
   /** Bumped by parent after a "Fill All Sets" write to force re-hydration
