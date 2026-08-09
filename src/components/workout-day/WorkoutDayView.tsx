@@ -2072,6 +2072,7 @@ function WorkoutDay({
                 dayIndex={day?.day_index ?? null}
                 clientId={client?.id}
                 previousLift={previousLiftByRow.get(r.id) ?? null}
+                repMaxBests={repMaxBestsByRow.get(r.id) ?? null}
                 blockId={blockId}
                 existingResults={(results as any[]).filter((x) => x.row_id === r.id)}
                 existingNote={notesByRowId.get(r.id)}
@@ -2356,7 +2357,7 @@ function PreviousLiftChip({ data, displayUnit }: { data: PreviousLift | null; di
   );
 }
 
-function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, existingResults, previousLift = null, existingNote, notesLoading = false, readonly = false, unit = "kg", onUnitChange, focusMode = false, onChange, onNoteChange, purposeLabel = null, swapContext = undefined }: { row: any; dayId: string; dayTitle: string; dayIndex?: number | null; clientId: string | undefined; blockId?: string | null; existingResults: any[]; previousLift?: PreviousLift | null; existingNote?: any; notesLoading?: boolean; readonly?: boolean; unit?: "kg" | "lb"; onUnitChange?: (u: "kg" | "lb") => void; focusMode?: boolean; onChange: () => void; onNoteChange: () => void; purposeLabel?: string | null; swapContext?: { kind: "client" } | { kind: "member"; enrollmentId: string; weekIndex: number; dayIndex: number; exerciseIndex: number } | undefined }) {
+function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, existingResults, previousLift = null, repMaxBests = null, existingNote, notesLoading = false, readonly = false, unit = "kg", onUnitChange, focusMode = false, onChange, onNoteChange, purposeLabel = null, swapContext = undefined }: { row: any; dayId: string; dayTitle: string; dayIndex?: number | null; clientId: string | undefined; blockId?: string | null; existingResults: any[]; previousLift?: PreviousLift | null; repMaxBests?: Map<number, PreviousLiftLog> | null; existingNote?: any; notesLoading?: boolean; readonly?: boolean; unit?: "kg" | "lb"; onUnitChange?: (u: "kg" | "lb") => void; focusMode?: boolean; onChange: () => void; onNoteChange: () => void; purposeLabel?: string | null; swapContext?: { kind: "client" } | { kind: "member"; enrollmentId: string; weekIndex: number; dayIndex: number; exerciseIndex: number } | undefined }) {
   const adapter = useOptionalAdapter();
   const name = row.exercises?.name ?? row.exercise_name_override ?? "Exercise";
   const exercise = row.exercises ?? null;
