@@ -3948,6 +3948,18 @@ function SetRow({
         )}
       </div>
     </div>
+    {/* Exact rep-max PR badge — small, inline, never interrupts logging */}
+    {prBadge && (
+      <div className="px-3 pb-1.5">
+        <span
+          className="inline-flex items-center gap-1 rounded-full border border-amber-500/40 bg-amber-500/10 px-2 py-0.5 text-[11px] font-bold text-amber-500"
+          title={`New ${prBadge.reps}-rep max — beats your previous best by ${fmtNum(prBadge.amount)} ${prBadge.unit}`}
+        >
+          <Trophy className="h-3 w-3" />
+          {prBadge.reps}RM PR · +{fmtNum(prBadge.amount)} {prBadge.unit}
+        </span>
+      </div>
+    )}
     {!readonly && !isConfirmed && save.state === "error" && (
       <div className="flex items-center justify-between gap-2 px-3 pb-1.5">
         <SaveStatus
