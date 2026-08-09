@@ -12,7 +12,7 @@ export function Pager({
   size: number;
   total: number;
 }) {
-  const navigate = useNavigate({ from: "/admin/clients" });
+  const navigate = useNavigate({ from: "/admin/clients/" });
   const totalPages = Math.max(1, Math.ceil(total / size));
   const from = total === 0 ? 0 : (page - 1) * size + 1;
   const to = Math.min(total, page * size);

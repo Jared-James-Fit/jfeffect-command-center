@@ -35,7 +35,7 @@ import { ComplianceDashboard } from "@/components/clients/compliance-dashboard";
 import { cn } from "@/lib/utils";
 
 function LifecycleTabs({ value }: { value: "active" | "archived" | "deactivated" }) {
-  const navigate = useNavigate({ from: "/admin/clients" });
+  const navigate = useNavigate({ from: "/admin/clients/" });
   const OPTIONS: { key: "active" | "archived" | "deactivated"; label: string }[] = [
     { key: "active", label: "Active" },
     { key: "archived", label: "Archived" },
@@ -109,7 +109,7 @@ function AdminRouteSkeleton() {
 
 function ClientsDirectoryPage() {
   const search = Route.useSearch();
-  const navigate = useNavigate({ from: "/admin/clients" });
+  const navigate = useNavigate({ from: "/admin/clients/" });
   const { role } = useAuth();
   const isAdmin = role === "admin";
   const qc = useQueryClient();
