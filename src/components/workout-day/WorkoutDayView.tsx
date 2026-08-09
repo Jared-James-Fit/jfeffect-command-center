@@ -1734,6 +1734,7 @@ function WorkoutDay({
                   dayIndex={day?.day_index ?? null}
                   clientId={client?.id}
                   previousLift={previousLiftByRow.get(r.id) ?? null}
+                  repMaxBests={repMaxBestsByRow.get(r.id) ?? null}
                   blockId={blockId}
                   existingResults={(results as any[]).filter((x) => x.row_id === r.id)}
                   existingNote={notesByRowId.get(r.id)}
