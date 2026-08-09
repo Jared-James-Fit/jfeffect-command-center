@@ -19,7 +19,7 @@ export const Route = createFileRoute("/_authenticated/m/workouts/$enrollmentId/$
   // Mirror the portal route's search contract so deep links into the
   // member workout (readonly preview, "edit past workout", "leave a
   // review") behave identically across both surfaces.
-  validateSearch: (s: Record<string, unknown>) => ({
+  validateSearch: (s: Record<string, unknown>): { readonly?: 1; edit?: 1; review?: 1; recap?: 1 } => ({
     readonly: s.readonly === 1 || s.readonly === "1" || s.readonly === true ? 1 : undefined,
     edit: s.edit === 1 || s.edit === "1" || s.edit === true ? 1 : undefined,
     review: s.review === 1 || s.review === "1" || s.review === true ? 1 : undefined,

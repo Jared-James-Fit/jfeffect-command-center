@@ -13,7 +13,7 @@ import { resolvePaymentDisplay, formatMoney } from "@/lib/payment-display";
 
 export const Route = createFileRoute("/_authenticated/portal/purchases")({
   component: MyPurchases,
-  validateSearch: (s: Record<string, unknown>) => ({
+  validateSearch: (s: Record<string, unknown>): { checkout?: string } => ({
     checkout: s.checkout as string | undefined,
   }),
 });

@@ -15,7 +15,7 @@ export function SummaryCards({
   active: StatusKey;
   loading?: boolean;
 }) {
-  const navigate = useNavigate({ from: "/admin/clients" });
+  const navigate = useNavigate({ from: "/admin/clients/" });
   return (
     <TooltipProvider delayDuration={300}>
       <div

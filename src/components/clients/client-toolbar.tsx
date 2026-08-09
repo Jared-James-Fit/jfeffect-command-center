@@ -30,7 +30,7 @@ type Props = {
 };
 
 export function ClientToolbar({ search, coachingType, coachId, coaches, sort, isAdmin, totalLabel }: Props) {
-  const navigate = useNavigate({ from: "/admin/clients" });
+  const navigate = useNavigate({ from: "/admin/clients/" });
   const [local, setLocal] = useState(search);
 
   // Debounce search → URL

@@ -10,7 +10,7 @@ import { StreakCelebration } from "@/components/progress/streak-celebration";
 
 export const Route = createFileRoute("/_authenticated/portal/progress")({
   component: PortalProgress,
-  validateSearch: (s: Record<string, unknown>) => {
+  validateSearch: (s: Record<string, unknown>): { action?: ProgressInitialAction } => {
     const a = s.action as string | undefined;
     const allowed: ProgressInitialAction[] = ["photo", "video", "lift", "weight", "bodyweight", "measure", "history"];
     return { action: (allowed as string[]).includes(a ?? "") ? (a as ProgressInitialAction) : undefined };
