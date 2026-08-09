@@ -48,3 +48,14 @@ export const Route = createFileRoute("/api/public/hooks/action-centre-tick")({
     },
   },
 });
+
+function authorizeWorker(request: Request): boolean {
+  const expected = process.env.SCHEDULED_WORKER_SECRET ?? "";
+  if (!expected) return false;
+  const provided =
+    request.headers.get("x-worker-secret") ?? "";
+  if (!provided || provided.length !== expected.length) return false;
+  let diff = 0;
+  for (let i = 0; i < provided.length; i++) diff |= provided.charCodeAt(i) ^ expected.charCodeAt(i);
+  return diff === 0;
+}
