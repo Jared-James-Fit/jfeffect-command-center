@@ -1,0 +1,1 @@
+UPDATE clients SET status = 'Active', archived = false, archived_at = NULL, archived_by = NULL WHERE id = '7502d3be-1eaa-4417-b97d-88f55ba85e0a';
