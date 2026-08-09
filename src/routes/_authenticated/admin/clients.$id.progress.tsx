@@ -11,7 +11,7 @@ import { useAuth } from "@/lib/auth";
 
 export const Route = createFileRoute("/_authenticated/admin/clients/$id/progress")({
   component: AdminClientProgress,
-  validateSearch: (s: Record<string, unknown>) => {
+  validateSearch: (s: Record<string, unknown>): { action?: ProgressInitialAction } => {
     const a = s.action as string | undefined;
     const allowed: ProgressInitialAction[] = ["photo", "weight", "bodyweight", "measure", "history"];
     return { action: (allowed as string[]).includes(a ?? "") ? (a as ProgressInitialAction) : undefined };

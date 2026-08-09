@@ -17,7 +17,7 @@ import { DashboardOfflineEmpty, useIsOfflineWithoutCache } from "@/components/po
 
 export const Route = createFileRoute("/_authenticated/m/")({
   component: MemberHome,
-  validateSearch: (s: Record<string, unknown>) => ({ upgrade: (s.upgrade as string) ?? undefined }),
+  validateSearch: (s: Record<string, unknown>): { upgrade?: string } => ({ upgrade: (s.upgrade as string) ?? undefined }),
 });
 
 function MemberHome() {

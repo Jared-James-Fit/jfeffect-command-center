@@ -9,7 +9,7 @@ import { canRequestProgressReviewForMember } from "@/lib/progress-access";
 
 export const Route = createFileRoute("/_authenticated/m/progress")({
   component: MemberProgress,
-  validateSearch: (s: Record<string, unknown>) => {
+  validateSearch: (s: Record<string, unknown>): { action?: ProgressInitialAction } => {
     const a = s.action as string | undefined;
     const allowed: ProgressInitialAction[] = ["photo", "video", "lift", "weight", "bodyweight", "measure", "history"];
     return { action: (allowed as string[]).includes(a ?? "") ? (a as ProgressInitialAction) : undefined };

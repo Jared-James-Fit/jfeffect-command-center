@@ -13,7 +13,7 @@ import { ClientCardioSection } from "@/components/cardio/ClientCardioSection";
 import { parseLocalDate } from "@/lib/today";
 
 export const Route = createFileRoute("/_authenticated/portal/workouts/$dayId")({
-  validateSearch: (s: Record<string, unknown>) => ({
+  validateSearch: (s: Record<string, unknown>): { readonly?: 1; edit?: 1; review?: 1; recap?: 1; instance?: string } => ({
     readonly: s.readonly === 1 || s.readonly === "1" || s.readonly === true ? 1 : undefined,
     // Coach- or client-initiated "open in edit mode" — auto-unlocks past workouts
     // and auto-opens the feedback sheet when the user wants to edit a review.

@@ -254,7 +254,7 @@ const TAB_TO_SECTION: Record<TabValue, SectionId> = SECTIONS.reduce((acc, s) => 
 }, {} as Record<TabValue, SectionId>);
 
 export const Route = createFileRoute("/_authenticated/admin/clients/$id")({
-  validateSearch: (s) => {
+  validateSearch: (s): { tab?: TabValue } => {
     const parsed = z.object({ tab: z.string().optional() }).parse(s);
     // Redirect deprecated tabs after the Client Profile / Nutrition consolidation.
     const remap: Record<string, TabValue> = { profile: "info", cardio: "nutrition" };
