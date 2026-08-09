@@ -7,14 +7,22 @@ type Props = {
   reset: () => void;
 };
 
+const MAX_AUTO_RETRIES = 2;
+
 /**
  * Default error UI for route/loader failures. Most failures on the published
  * site are transient SSR/cold-start cancellations from the edge runtime, so we
- * auto-retry once before showing the fallback UI.
+ * auto-retry with backoff before showing the fallback UI.
+ *
+ * Error categories are kept strictly separate:
+ * - Failed/outdated JS chunk (stale deployment) → one guarded recovery reload,
+ *   then a "Refresh App" screen (the ONLY screen with a hard reload).
+ * - Ordinary route/loader failure → quiet auto-retries in place, then a
+ *   "Try again" screen. No hard reload is offered until retries are exhausted.
  */
 export function RouterErrorFallback({ error, reset }: Props) {
   const router = useRouter();
-  const [autoRetried, setAutoRetried] = useState(false);
+  const [retryCount, setRetryCount] = useState(0);
   const chunkError = isChunkLoadError(error);
 
   useEffect(() => {
@@ -27,19 +35,19 @@ export function RouterErrorFallback({ error, reset }: Props) {
 
   useEffect(() => {
     if (chunkError) return;
-    if (autoRetried) return;
-    setAutoRetried(true);
+    if (retryCount >= MAX_AUTO_RETRIES) return;
     // Surface the underlying error so we can see why routes fail in
     // production logs (Sentry/console). Without this the fallback UI is
     // the only signal that something went wrong.
     // eslint-disable-next-line no-console
     console.error("[router-error]", error);
     const id = window.setTimeout(() => {
+      setRetryCount((c) => c + 1);
       void router.invalidate().then(() => reset());
-    }, 600);
+    }, 600 * (retryCount + 1));
     return () => window.clearTimeout(id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [retryCount, chunkError]);
 
   if (chunkError) {
     return (
@@ -70,10 +78,15 @@ export function RouterErrorFallback({ error, reset }: Props) {
     );
   }
 
-  if (!autoRetried) {
+  if (retryCount < MAX_AUTO_RETRIES) {
     return (
       <div className="flex min-h-[60vh] items-center justify-center px-4">
-        <p className="text-sm text-muted-foreground">Loading…</p>
+        <div className="flex flex-col items-center gap-3 text-center">
+          <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary/30 border-t-primary" />
+          <p className="text-sm text-muted-foreground">
+            {retryCount === 0 ? "Loading…" : "Still loading — retrying…"}
+          </p>
+        </div>
       </div>
     );
   }

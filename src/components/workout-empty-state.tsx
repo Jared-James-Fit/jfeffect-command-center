@@ -36,8 +36,9 @@ export function WorkoutEmptyCard({
       await Promise.resolve(onRetry());
       toast.success("Refreshed", { description: "Pulled the latest workout data." });
     } catch (err: any) {
-      toast.error("Retry failed", { description: err?.message ?? "Reloading the page…" });
-      if (typeof window !== "undefined") window.location.reload();
+      // A failed retry must NOT hard-reload the app — the user keeps their
+      // place and can try again; section-level error states handle the rest.
+      toast.error("Retry failed", { description: err?.message ?? "Please try again in a moment." });
     } finally {
       setRetrying(false);
     }

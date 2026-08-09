@@ -9,6 +9,7 @@ import { SubscriptionRestrictedBanner } from "@/components/subscription-restrict
 import { useMemberAccess } from "@/lib/member-access";
 import { MemberSetupGate } from "@/components/member/member-setup-gate";
 import { ClientBirthdayCard } from "@/components/client-birthday-card";
+import { FullPageLoader } from "@/components/full-page-loader";
 
 function MemberLayout() {
   const { role, loading } = useAuth();
@@ -38,7 +39,7 @@ function MemberLayout() {
   }, [loading, accessLoading, accountType, hasAccess, isAllowed, navigate]);
 
   if (loading || !role) {
-    return <div className="grid min-h-screen place-items-center text-muted-foreground">Loading…</div>;
+    return <FullPageLoader />;
   }
   const showToggle = role === "admin" || role === "coach";
 

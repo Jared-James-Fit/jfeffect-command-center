@@ -8,6 +8,7 @@ import { setDashboardMode, useDashboardMode } from "@/lib/dashboard-mode";
 import { TaskPopupGate } from "@/components/tasks/task-popup-gate";
 import { ContentDrawerProvider } from "@/components/media/content-drawer";
 import { TeamPovBanner } from "@/components/team-pov-banner";
+import { FullPageLoader } from "@/components/full-page-loader";
 
 export const Route = createFileRoute("/_authenticated/media")({
   component: MediaLayout,
@@ -29,10 +30,10 @@ function MediaLayout() {
   }, [role, loading, navigate]);
 
   if (loading || !role) {
-    return <div className="grid min-h-screen place-items-center text-muted-foreground">Loading…</div>;
+    return <FullPageLoader />;
   }
   if (role !== "media_manager" && role !== "admin") {
-    return <div className="grid min-h-screen place-items-center text-muted-foreground">Redirecting…</div>;
+    return <FullPageLoader label="Redirecting…" />;
   }
 
   const nav = useMemo(() => buildInternalNav("media_manager"), []);
