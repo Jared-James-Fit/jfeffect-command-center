@@ -88,37 +88,61 @@ export function PtSessionsPanel({ clientId, client }: { clientId: string; client
     },
   });
 
-  const purchaseIds = balance.map((b) => b.purchase_id).filter(Boolean);
-  const { data: purchases = [] } = useQuery<any[]>({
-    queryKey: ["pt-pack-purchases", clientId, purchaseIds.join(",")],
-    enabled: purchaseIds.length > 0,
+  // All session-pack purchases — including pending-payment ones that have no
+  // ledger activity yet (and therefore don't appear in session_balance).
+  const { data: sessionPurchases = [] } = useQuery<any[]>({
+    queryKey: ["pt-pack-purchases", clientId],
     queryFn: async () => {
       const { data } = await supabase
         .from("purchase_records")
-        .select("id, payment_status, contract_value_cents, full_payable_amount, currency, sessions_purchased, package_expiry_date")
-        .in("id", purchaseIds);
+        .select("id, offer_name, payment_status, contract_value_cents, full_payable_amount, currency, sessions_purchased, package_expiry_date")
+        .eq("client_id", clientId)
+        .gt("sessions_purchased", 0)
+        .order("created_at", { ascending: false });
       return data ?? [];
     },
   });
-  const purchaseById = Object.fromEntries(purchases.map((p) => [p.id, p]));
+
+  // Ad-hoc credits (quick grants / adjustments) have no purchase attached and
+  // are invisible to session_balance — add their net count to the balance.
+  const { data: adhocRemaining = 0 } = useQuery<number>({
+    queryKey: ["pt-adhoc-credits", clientId],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("session_ledger_events")
+        .select("session_count")
+        .eq("client_id", clientId)
+        .is("purchase_id", null);
+      return (data ?? []).reduce((s, e) => s + Number(e.session_count ?? 0), 0);
+    },
+  });
+
+  // Merge: every session purchase gets a card (with or without ledger row),
+  // plus any balance rows whose purchase no longer matches (defensive).
+  const packRows = [
+    ...sessionPurchases.map((p) => ({ key: p.id, purchase: p, row: balance.find((b) => b.purchase_id === p.id) })),
+    ...balance
+      .filter((b) => !sessionPurchases.some((p) => p.id === b.purchase_id))
+      .map((b) => ({ key: b.purchase_id ?? b.offer_name, purchase: undefined as any, row: b })),
+  ];
 
   const totalPurchased = balance.reduce((s, r) => s + Number(r.granted ?? 0), 0);
   const totalUsed = balance.reduce((s, r) => s + Number(r.used ?? 0), 0);
-  const totalRemaining = balance.reduce((s, r) => s + Number(r.remaining ?? 0), 0);
+  const totalRemaining = balance.reduce((s, r) => s + Number(r.remaining ?? 0), 0) + adhocRemaining;
 
   const today = todayISO();
   const upcoming = sessions.filter((s) => s.status === "Scheduled" && s.session_date >= today)
     .sort((a, b) => (a.session_date + a.start_time).localeCompare(b.session_date + b.start_time));
   const past = sessions.filter((s) => !upcoming.includes(s));
   const completedCount = sessions.filter((s) => s.status === "Completed").length;
-  const hasPacks = balance.length > 0;
+  const hasPacks = packRows.length > 0 || adhocRemaining > 0;
 
-  const packStatus = (row: any) => {
-    const purchase = purchaseById[row.purchase_id];
+  const packStatus = (row: any, purchase: any) => {
     const expired =
-      (row.expires_at && row.expires_at < today) ||
+      (row?.expires_at && row.expires_at < today) ||
       (purchase?.package_expiry_date && purchase.package_expiry_date < today);
-    if (Number(row.remaining ?? 0) <= 0) return { label: "Used Up", cls: "border-border bg-secondary/40 text-muted-foreground" };
+    if (purchase && purchase.payment_status !== "Paid" && !row) return { label: "Pending Payment", cls: "border-warning/40 bg-warning/10 text-warning" };
+    if (row && Number(row.remaining ?? 0) <= 0) return { label: "Used Up", cls: "border-border bg-secondary/40 text-muted-foreground" };
     if (expired) return { label: "Expired", cls: "border-destructive/40 bg-destructive/10 text-destructive" };
     if (purchase && purchase.payment_status !== "Paid") return { label: "Pending Payment", cls: "border-warning/40 bg-warning/10 text-warning" };
     return { label: "Paid in Full", cls: "border-success/40 bg-success/10 text-success" };
@@ -221,29 +245,31 @@ export function PtSessionsPanel({ clientId, client }: { clientId: string; client
       )}
 
       {/* Session packs */}
-      {hasPacks && (
+      {packRows.length > 0 && (
         <div className="space-y-2">
-          {balance.map((row) => {
-            const purchase = purchaseById[row.purchase_id];
-            const st = packStatus(row);
+          {packRows.map(({ key, purchase, row }) => {
+            const st = packStatus(row, purchase);
             const totalMinor = purchase
               ? (purchase.contract_value_cents ?? (purchase.full_payable_amount != null ? Math.round(Number(purchase.full_payable_amount) * 100) : null))
               : null;
-            const packSessions = Number(purchase?.sessions_purchased ?? row.granted ?? 0);
+            const packSessions = Number(purchase?.sessions_purchased ?? row?.granted ?? 0);
             const perSession = totalMinor != null && packSessions > 0 ? Math.round(totalMinor / packSessions) : null;
-            const expiry = row.expires_at ?? purchase?.package_expiry_date ?? null;
+            const expiry = row?.expires_at ?? purchase?.package_expiry_date ?? null;
+            const counts = row
+              ? <>{row.granted} purchased · {row.used} used · <strong className="text-foreground">{row.remaining} remaining</strong></>
+              : <>{packSessions} sessions · <strong className="text-foreground">not active yet</strong></>;
             return (
-              <div key={row.purchase_id ?? row.offer_name} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border bg-secondary/20 px-3 py-2">
+              <div key={key} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border bg-secondary/20 px-3 py-2">
                 <div className="min-w-0">
-                  <div className="truncate text-sm font-bold">{row.offer_name || "Session pack"}</div>
+                  <div className="truncate text-sm font-bold">{purchase?.offer_name || row?.offer_name || "Session pack"}</div>
                   <div className="text-xs text-muted-foreground">
-                    {row.granted} purchased · {row.used} used · <strong className="text-foreground">{row.remaining} remaining</strong>
+                    {counts}
                     {expiry ? ` · expires ${new Date(expiry + "T00:00:00").toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}` : ""}
                   </div>
                   {totalMinor != null && (
                     <div className="text-xs text-muted-foreground">
-                      {fmtMoney(totalMinor, purchase?.currency ?? row.currency ?? "CAD")} total
-                      {perSession != null ? ` · ${fmtMoney(perSession, purchase?.currency ?? row.currency ?? "CAD")}/session` : ""}
+                      {fmtMoney(totalMinor, purchase?.currency ?? row?.currency ?? "CAD")} total
+                      {perSession != null ? ` · ${fmtMoney(perSession, purchase?.currency ?? row?.currency ?? "CAD")}/session` : ""}
                     </div>
                   )}
                 </div>
