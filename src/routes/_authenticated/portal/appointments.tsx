@@ -2,6 +2,10 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { listMyPortalAppointments } from "@/lib/appointments.functions";
+import { supabase } from "@/integrations/supabase/client";
+import { usePortalUserId, useClientImpersonation } from "@/lib/client-impersonation";
+import { statusTone, fmtSessionDateTime, fmtTimeRange } from "@/lib/pt-sessions";
+import { todayLocalISO } from "@/lib/today";
 import { PageHeader } from "@/components/app-shell";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -18,11 +22,57 @@ function PortalAppointments() {
   const qc = useQueryClient();
   const { data, isLoading } = useQuery({ queryKey: ["portal-appointments"], queryFn: () => fn() });
 
+  // Resolve the effective client (supports admin Client POV, same pattern as
+  // the portal Calendar page) so upcoming PT sessions can be merged into the
+  // appointments list. PT sessions are appointments from the client's view.
+  const portalUserId = usePortalUserId();
+  const { client: povClient } = useClientImpersonation();
+  const { data: myClient } = useQuery({
+    queryKey: ["my-client", portalUserId],
+    enabled: !!portalUserId,
+    queryFn: async () => (await supabase.from("clients").select("id").eq("user_id", portalUserId!).maybeSingle()).data,
+  });
+  const clientId = povClient?.id ?? myClient?.id;
+
+  const { data: ptSessions, isLoading: ptLoading } = useQuery({
+    queryKey: ["portal-appt-pt-sessions", clientId],
+    enabled: !!clientId,
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("pt_sessions")
+        .select("id,title,session_type,session_date,start_time,end_time,starts_at,status,location,client_visible_notes")
+        .eq("client_id", clientId!)
+        .eq("visible_to_client", true)
+        .gte("session_date", todayLocalISO())
+        .in("status", ["Scheduled", "Rescheduled"])
+        .order("session_date", { ascending: true })
+        .order("start_time", { ascending: true });
+      return (data ?? []) as any[];
+    },
+  });
+
+  // Merge PT sessions into the upcoming appointments list, sorted by start.
+  const upcoming = [...(data?.upcoming ?? [])];
+  for (const s of ptSessions ?? []) {
+    upcoming.push({
+      ...s,
+      isPt: true,
+      starts_at: s.starts_at ?? `${s.session_date}T${s.start_time ?? "00:00"}`,
+    });
+  }
+  upcoming.sort((a, b) => new Date(a.starts_at).getTime() - new Date(b.starts_at).getTime());
+
   return (
     <>
       <PageHeader title="Appointments" subtitle="Your upcoming calls and sessions." />
       <div className="p-6 md:p-8 space-y-6">
-        <Section title="Upcoming" rows={data?.upcoming ?? []} isLoading={isLoading} canReschedule onChanged={() => qc.invalidateQueries({ queryKey: ["portal-appointments"] })} />
+        <Section
+          title="Upcoming"
+          rows={upcoming}
+          isLoading={isLoading || ptLoading}
+          canReschedule
+          onChanged={() => qc.invalidateQueries({ queryKey: ["portal-appointments"] })}
+        />
         <Section title="Past" rows={data?.past ?? []} isLoading={isLoading} />
       </div>
     </>
@@ -43,6 +93,30 @@ function Section({ title, rows, isLoading, canReschedule, onChanged }: any) {
       ) : (
         <div className="space-y-2">
           {rows.map((a: any) => {
+            if (a.isPt) {
+              return (
+                <Card key={`pt:${a.id}`} className="border-border bg-card p-4">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2 mb-1">
+                        <Badge variant="outline" className="bg-violet-500/15 text-violet-300 border-violet-500/30">PT Session</Badge>
+                        <Badge variant="outline" className={statusTone(a.status)}>{a.status === "Scheduled" ? "Upcoming" : a.status}</Badge>
+                      </div>
+                      <div className="font-semibold">{a.title || a.session_type || "PT Session"}</div>
+                      <div className="text-xs text-muted-foreground mt-1">
+                        {a.start_time && a.end_time
+                          ? `${new Date(`${a.session_date}T${a.start_time}`).toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" })} · ${fmtTimeRange(a.start_time, a.end_time)}`
+                          : a.start_time
+                            ? fmtSessionDateTime(a.session_date, a.start_time)
+                            : a.session_date}
+                      </div>
+                      {a.location && <div className="text-xs text-muted-foreground mt-1 inline-flex items-center gap-1"><MapPin className="h-3 w-3" /> {a.location}</div>}
+                      {a.client_visible_notes && <div className="text-xs text-muted-foreground mt-2">{a.client_visible_notes}</div>}
+                    </div>
+                  </div>
+                </Card>
+              );
+            }
             const when = new Date(a.starts_at).toLocaleString(undefined, { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
             return (
               <Card key={a.id} className="border-border bg-card p-4">
