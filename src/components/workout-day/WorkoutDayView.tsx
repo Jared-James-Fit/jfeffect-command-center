@@ -70,6 +70,18 @@ import {
   type PreviousLiftIdentity,
   type PreviousLiftLog,
 } from "@/lib/workout-previous-lift";
+import { computeRepMaxBests, detectSetPR } from "@/lib/workout-pr";
+import {
+  parseRepQuickTarget,
+  parseEffortQuickTarget,
+  repQuickOptions,
+  rpeQuickOptions,
+  rirQuickOptions,
+  moreOptions,
+  RPE_FULL_OPTIONS,
+  RIR_FULL_OPTIONS,
+} from "@/lib/workout-quick-select";
+import { QuickValueSelect } from "@/components/workout-day/quick-value-select";
 import { DurationTimerInCard } from "@/components/workout-day/DurationTimerInCard";
 import { WorkoutSubmissionSummary } from "@/components/workout-submission-summary";
 import { computeWorkoutSummary, type WorkoutSummary } from "@/lib/workout-summary";
@@ -740,6 +752,18 @@ function WorkoutDay({
     () => selectPreviousLifts(previousLiftIdentities, previousLiftLogs, currentHistorySessionKey),
     [previousLiftIdentities, previousLiftLogs, currentHistorySessionKey],
   );
+  // Exact rep-max PR baselines: best historical set per rep count (1–12) for
+  // every row, computed locally from the SAME batched history query as
+  // Last Time (no extra DB round-trips). The current session is excluded so
+  // today's sets never become their own baseline.
+  const repMaxBestsByRow = useMemo(() => {
+    const map = new Map<string, Map<number, PreviousLiftLog>>();
+    for (const identity of previousLiftIdentities) {
+      const bests = computeRepMaxBests(identity, previousLiftLogs, currentHistorySessionKey);
+      if (bests.size > 0) map.set(identity.rowId, bests);
+    }
+    return map;
+  }, [previousLiftIdentities, previousLiftLogs, currentHistorySessionKey]);
 
   // ── Cross-device real-time sync ──────────────────────────────────────────
   // Subscribe to Supabase Realtime for pl_row_results so that when a set is
