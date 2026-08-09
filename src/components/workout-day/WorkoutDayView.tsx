@@ -3696,6 +3696,13 @@ function SetRow({
   const effortSelectValue = showRir
     ? (rpe !== "" && Number.isFinite(Number(rpe)) ? String(Math.max(0, 10 - Number(rpe))) : "")
     : rpe;
+  // Block the server-hydration effect briefly after a selector pick so a
+  // racing refetch can never clobber the value before autosave lands.
+  const guardRecentSave = () => {
+    recentlySavedRef.current = true;
+    if (recentlySavedTimerRef.current) clearTimeout(recentlySavedTimerRef.current);
+    recentlySavedTimerRef.current = setTimeout(() => { recentlySavedRef.current = false; }, 8000);
+  };
   const pickReps = (v: string) => {
     setReps(v);
     setRepsEdited(true);
@@ -3830,97 +3837,37 @@ function SetRow({
           onComplete={(secs, method) => void saveTimeCompletion(secs, { method })}
         />
       ) : (
-      /* Quick Log reps chip — tap to edit */
-      repsChipOpen ? (
-        <Input
-          autoFocus
-          className={cn(focusMode ? "h-9 text-base px-2" : "h-8 text-sm px-2")}
-          inputMode="numeric"
-          type="text"
-          pattern="[0-9]*"
-          placeholder="reps"
-          aria-label={`Set ${setIndex} reps`}
-          value={reps}
-          onChange={(e) => { setReps(e.target.value.replace(/[^0-9]/g, "")); setRepsEdited(true); }}
-          onFocus={() => setFocusedField("reps")}
-          onKeyDown={onEnter}
-          onBlur={() => {
-            // Block server-reset effect immediately (optimistic guard) so the
-            // refetch triggered by flush() can never overwrite what was typed.
-            recentlySavedRef.current = true;
-            if (recentlySavedTimerRef.current) clearTimeout(recentlySavedTimerRef.current);
-            recentlySavedTimerRef.current = setTimeout(() => { recentlySavedRef.current = false; }, 8000);
-            flushSaveAfterEdit();
-            setRepsChipOpen(false);
-          }}
-          readOnly={readonly}
-          disabled={readonly}
-        />
-      ) : (
-        <button
-          type="button"
-          onClick={() => { if (!readonly) setRepsChipOpen(true); }}
-          aria-label={`Set ${setIndex} reps — tap to edit`}
-          className={cn(
-            "flex items-center justify-center rounded-md border px-2 text-sm font-medium transition-colors whitespace-nowrap",
-            focusMode ? "h-9 text-base" : "h-8",
-            !reps
-              ? "border-blue-500/40 bg-blue-500/10 text-foreground"
-              : "border-border/60 bg-muted/40 text-muted-foreground",
-            !readonly && !reps && "hover:border-blue-500/60 hover:bg-blue-500/10 cursor-pointer",
-            !readonly && !!reps && "hover:bg-muted/60 cursor-pointer",
-            readonly && "cursor-default",
-          )}
-        >
-          {reps || "—"}
-        </button>
-      )
+      /* Fast tap reps selector — smart chips from the prescription, custom entry inside */
+      <QuickValueSelect
+        value={reps}
+        onPick={pickReps}
+        options={repSelectOptions}
+        moreOptions={repSelectMore}
+        ariaLabel={`Set ${setIndex} reps`}
+        title="Reps"
+        inputMode="numeric"
+        sanitize={(v) => v.replace(/[^0-9]/g, "").slice(0, 3)}
+        disabled={readonly}
+        focusMode={focusMode}
+        customPlaceholder="Reps"
+      />
       )}
       {/* Quick Log RPE chip — tap to edit (hidden for time rows: timer handles the full middle column) */}
-      {!isTime && rpeChipOpen ? (
-        <Input autoFocus
-          className={cn(focusMode ? "h-9 text-base px-2" : "h-8 text-sm px-2")}
-          inputMode="decimal" type="text" pattern="[0-9]*\.?[0-9]*"
-          placeholder={showRir ? "rir" : "rpe"}
-          aria-label={`Set ${setIndex} ${showRir ? "RIR" : "RPE"}`}
-          value={showRir && rpe !== "" ? String(Math.max(0, 10 - Number(rpe))) : rpe}
-          onChange={(e) => {
-            const cleaned = e.target.value.replace(/[^0-9.]/g, "");
-            setRpeEdited(true);
-            if (showRir && cleaned !== "") {
-              const n = Number(cleaned);
-              if (isFinite(n)) { setRpe(String(Math.max(0, Math.min(10, 10 - n)))); return; }
-            }
-            setRpe(cleaned);
-          }}
-          onFocus={() => setFocusedField("rpe")}
-          onKeyDown={onEnter}
-          onBlur={() => {
-            recentlySavedRef.current = true;
-            if (recentlySavedTimerRef.current) clearTimeout(recentlySavedTimerRef.current);
-            recentlySavedTimerRef.current = setTimeout(() => { recentlySavedRef.current = false; }, 8000);
-            flushSaveAfterEdit();
-            setRpeChipOpen(false);
-          }}
-          readOnly={readonly} disabled={readonly}
+      {/* Fast tap RPE/RIR selector — half-step smart chips from the prescription */}
+      {!isTime && (
+        <QuickValueSelect
+          value={effortSelectValue}
+          onPick={pickEffort}
+          options={effortSelectOptions}
+          moreOptions={effortSelectMore}
+          ariaLabel={`Set ${setIndex} ${showRir ? "RIR" : "RPE"}`}
+          title={showRir ? "RIR" : "RPE"}
+          inputMode="decimal"
+          sanitize={(v) => v.replace(/[^0-9.]/g, "").slice(0, 4)}
+          disabled={readonly}
+          focusMode={focusMode}
+          customPlaceholder={showRir ? "RIR" : "RPE"}
         />
-      ) : (
-        <button type="button"
-          onClick={() => { if (!readonly) setRpeChipOpen(true); }}
-          aria-label={`Set ${setIndex} ${showRir ? "RIR" : "RPE"} — tap to edit`}
-          className={cn(
-            "flex items-center justify-center rounded-md border px-2 text-sm font-medium transition-colors whitespace-nowrap",
-            focusMode ? "h-9 text-base" : "h-8",
-            !rpe
-              ? "border-blue-500/40 bg-blue-500/10 text-foreground"
-              : "border-border/60 bg-muted/40 text-muted-foreground",
-            !readonly && !rpe && "hover:border-blue-500/60 hover:bg-blue-500/10 cursor-pointer",
-            !readonly && !!rpe && "hover:bg-muted/60 cursor-pointer",
-            readonly && "cursor-default",
-          )}
-        >
-          {rpe ? (showRir ? String(Math.max(0, 10 - Number(rpe))) : rpe) : "—"}
-        </button>
       )}
       {!isTime && !hideWeight && (
       <Input
