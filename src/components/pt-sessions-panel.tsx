@@ -44,6 +44,7 @@ export function PtSessionsPanel({ clientId, client }: { clientId: string; client
     qc.invalidateQueries({ queryKey: ["pt-sessions", clientId] });
     qc.invalidateQueries({ queryKey: ["pt-balance", clientId] });
     qc.invalidateQueries({ queryKey: ["pt-pack-purchases", clientId] });
+    qc.invalidateQueries({ queryKey: ["pt-adhoc-credits", clientId] });
     qc.invalidateQueries({ queryKey: ["client-session-credits", clientId] });
     qc.invalidateQueries({ queryKey: ["client-purchases", clientId] });
     qc.invalidateQueries({ queryKey: ["client", clientId] });
