@@ -8,7 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Switch } from "@/components/ui/switch";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { SESSION_TYPES, SESSION_STATUSES, COMMON_TIMEZONES } from "@/lib/pt-sessions";
 import { AlertTriangle, Repeat, CalendarDays } from "lucide-react";
 
@@ -90,9 +90,18 @@ export function PtSessionDialog({ open, onOpenChange, clientId, clients = [], in
 
   const selectedClient = form ? clients.find((c) => c.id === form.client_id) : undefined;
   const tracking = !!selectedClient?.package_tracking_enabled;
-  const purchased = Number(selectedClient?.sessions_purchased ?? 0);
-  const used = Number(selectedClient?.sessions_used ?? 0);
-  const remaining = Math.max(purchased - used, 0);
+  // Ledger-driven credit balance (grants minus completions). Booking itself
+  // never deducts — credits are consumed when a session is marked Completed.
+  const { data: balanceRows } = useQuery<any[]>({
+    queryKey: ["pt-balance", form?.client_id ?? null],
+    enabled: open && !!form?.client_id,
+    queryFn: async () => {
+      const { data } = await (supabase as any).rpc("session_balance", { _client_id: form.client_id });
+      return (data ?? []) as any[];
+    },
+  });
+  const remaining = (balanceRows ?? []).reduce((sum, r) => sum + Math.max(Number(r.remaining ?? 0), 0), 0);
+  const hasCredits = (balanceRows ?? []).some((r) => Number(r.granted ?? 0) > 0);
 
   const previewDates = useMemo(() => {
     if (!form || !form._isRecurring) return [form?.session_date].filter(Boolean) as string[];
@@ -110,7 +119,7 @@ export function PtSessionDialog({ open, onOpenChange, clientId, clients = [], in
 
   const isNewBooking = !form.id;
   const bookingCount = isNewBooking ? previewDates.length : 0;
-  const willReserve = tracking && isNewBooking && form.status === "Scheduled" ? bookingCount : 0;
+  const willReserve = (tracking || hasCredits) && isNewBooking && form.status === "Scheduled" ? bookingCount : 0;
   const overbook = willReserve > remaining;
 
   const save = async () => {
@@ -151,13 +160,6 @@ export function PtSessionDialog({ open, onOpenChange, clientId, clients = [], in
       const rows = previewDates.map((d) => ({ ...basePayload, session_date: d }));
       const { error: e } = await supabase.from("pt_sessions").insert(rows);
       error = e;
-      // Reserve credits at booking time (only for Scheduled + tracking-enabled)
-      if (!e && tracking && form.status === "Scheduled" && rows.length > 0) {
-        await supabase
-          .from("clients")
-          .update({ sessions_used: used + rows.length })
-          .eq("id", form.client_id);
-      }
     }
 
     setSaving(false);
@@ -171,6 +173,7 @@ export function PtSessionDialog({ open, onOpenChange, clientId, clients = [], in
     );
     qc.invalidateQueries({ queryKey: ["pt-sessions"] });
     qc.invalidateQueries({ queryKey: ["pt-sessions", form.client_id] });
+    qc.invalidateQueries({ queryKey: ["pt-balance", form.client_id] });
     qc.invalidateQueries({ queryKey: ["client", form.client_id] });
     onOpenChange(false);
   };
@@ -182,7 +185,7 @@ export function PtSessionDialog({ open, onOpenChange, clientId, clients = [], in
           <DialogTitle>{form.id ? "Edit / Reschedule Session" : "Book Personal Training Session"}</DialogTitle>
         </DialogHeader>
 
-        {tracking && isNewBooking && (
+        {(tracking || hasCredits) && isNewBooking && (
           <div className={`rounded-md border px-3 py-2 text-sm ${overbook ? "border-destructive/60 bg-destructive/10" : remaining <= 2 ? "border-amber-500/60 bg-amber-500/10" : "border-primary/40 bg-primary/10"}`}>
             <div className="flex items-center justify-between gap-3">
               <div className="flex items-center gap-2">
