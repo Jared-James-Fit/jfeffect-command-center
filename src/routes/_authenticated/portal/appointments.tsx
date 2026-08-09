@@ -104,8 +104,11 @@ function Section({ title, rows, isLoading, canReschedule, onChanged }: any) {
                       </div>
                       <div className="font-semibold">{a.title || a.session_type || "PT Session"}</div>
                       <div className="text-xs text-muted-foreground mt-1">
-                        {a.start_time ? fmtSessionDateTime(a.session_date, a.start_time) : a.session_date}
-                        {a.start_time && a.end_time ? ` · ${fmtTimeRange(a.start_time, a.end_time)}` : ""}
+                        {a.start_time && a.end_time
+                          ? `${new Date(`${a.session_date}T${a.start_time}`).toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" })} · ${fmtTimeRange(a.start_time, a.end_time)}`
+                          : a.start_time
+                            ? fmtSessionDateTime(a.session_date, a.start_time)
+                            : a.session_date}
                       </div>
                       {a.location && <div className="text-xs text-muted-foreground mt-1 inline-flex items-center gap-1"><MapPin className="h-3 w-3" /> {a.location}</div>}
                       {a.client_visible_notes && <div className="text-xs text-muted-foreground mt-2">{a.client_visible_notes}</div>}
