@@ -20,11 +20,12 @@ export const Route = createFileRoute("/book/")({
     email: typeof search.email === "string" ? search.email : "",
     phone: typeof search.phone === "string" ? search.phone : "",
     application_id: typeof search.application_id === "string" ? search.application_id : "",
+    slug: typeof search.slug === "string" ? search.slug : "",
   }),
 });
 
 function BookingPage() {
-  const { slug } = Route.useParams();
+  const { slug } = Route.useSearch();
   const prefill = Route.useSearch();
   const getFn = useServerFn(getBookingLinkPublic);
   const slotsFn = useServerFn(computeAvailableSlots);

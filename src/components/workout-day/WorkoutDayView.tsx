@@ -70,6 +70,18 @@ import {
   type PreviousLiftIdentity,
   type PreviousLiftLog,
 } from "@/lib/workout-previous-lift";
+import { computeRepMaxBests, detectSetPR } from "@/lib/workout-pr";
+import {
+  parseRepQuickTarget,
+  parseEffortQuickTarget,
+  repQuickOptions,
+  rpeQuickOptions,
+  rirQuickOptions,
+  moreOptions,
+  RPE_FULL_OPTIONS,
+  RIR_FULL_OPTIONS,
+} from "@/lib/workout-quick-select";
+import { QuickValueSelect } from "@/components/workout-day/quick-value-select";
 import { DurationTimerInCard } from "@/components/workout-day/DurationTimerInCard";
 import { WorkoutSubmissionSummary } from "@/components/workout-submission-summary";
 import { computeWorkoutSummary, type WorkoutSummary } from "@/lib/workout-summary";
@@ -740,6 +752,18 @@ function WorkoutDay({
     () => selectPreviousLifts(previousLiftIdentities, previousLiftLogs, currentHistorySessionKey),
     [previousLiftIdentities, previousLiftLogs, currentHistorySessionKey],
   );
+  // Exact rep-max PR baselines: best historical set per rep count (1–12) for
+  // every row, computed locally from the SAME batched history query as
+  // Last Time (no extra DB round-trips). The current session is excluded so
+  // today's sets never become their own baseline.
+  const repMaxBestsByRow = useMemo(() => {
+    const map = new Map<string, Map<number, PreviousLiftLog>>();
+    for (const identity of previousLiftIdentities) {
+      const bests = computeRepMaxBests(identity, previousLiftLogs, currentHistorySessionKey);
+      if (bests.size > 0) map.set(identity.rowId, bests);
+    }
+    return map;
+  }, [previousLiftIdentities, previousLiftLogs, currentHistorySessionKey]);
 
   // ── Cross-device real-time sync ──────────────────────────────────────────
   // Subscribe to Supabase Realtime for pl_row_results so that when a set is
@@ -1710,6 +1734,7 @@ function WorkoutDay({
                   dayIndex={day?.day_index ?? null}
                   clientId={client?.id}
                   previousLift={previousLiftByRow.get(r.id) ?? null}
+                  repMaxBests={repMaxBestsByRow.get(r.id) ?? null}
                   blockId={blockId}
                   existingResults={(results as any[]).filter((x) => x.row_id === r.id)}
                   existingNote={notesByRowId.get(r.id)}
@@ -2047,6 +2072,7 @@ function WorkoutDay({
                 dayIndex={day?.day_index ?? null}
                 clientId={client?.id}
                 previousLift={previousLiftByRow.get(r.id) ?? null}
+                repMaxBests={repMaxBestsByRow.get(r.id) ?? null}
                 blockId={blockId}
                 existingResults={(results as any[]).filter((x) => x.row_id === r.id)}
                 existingNote={notesByRowId.get(r.id)}
@@ -2331,7 +2357,7 @@ function PreviousLiftChip({ data, displayUnit }: { data: PreviousLift | null; di
   );
 }
 
-function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, existingResults, previousLift = null, existingNote, notesLoading = false, readonly = false, unit = "kg", onUnitChange, focusMode = false, onChange, onNoteChange, purposeLabel = null, swapContext = undefined }: { row: any; dayId: string; dayTitle: string; dayIndex?: number | null; clientId: string | undefined; blockId?: string | null; existingResults: any[]; previousLift?: PreviousLift | null; existingNote?: any; notesLoading?: boolean; readonly?: boolean; unit?: "kg" | "lb"; onUnitChange?: (u: "kg" | "lb") => void; focusMode?: boolean; onChange: () => void; onNoteChange: () => void; purposeLabel?: string | null; swapContext?: { kind: "client" } | { kind: "member"; enrollmentId: string; weekIndex: number; dayIndex: number; exerciseIndex: number } | undefined }) {
+function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, existingResults, previousLift = null, repMaxBests = null, existingNote, notesLoading = false, readonly = false, unit = "kg", onUnitChange, focusMode = false, onChange, onNoteChange, purposeLabel = null, swapContext = undefined }: { row: any; dayId: string; dayTitle: string; dayIndex?: number | null; clientId: string | undefined; blockId?: string | null; existingResults: any[]; previousLift?: PreviousLift | null; repMaxBests?: Map<number, PreviousLiftLog> | null; existingNote?: any; notesLoading?: boolean; readonly?: boolean; unit?: "kg" | "lb"; onUnitChange?: (u: "kg" | "lb") => void; focusMode?: boolean; onChange: () => void; onNoteChange: () => void; purposeLabel?: string | null; swapContext?: { kind: "client" } | { kind: "member"; enrollmentId: string; weekIndex: number; dayIndex: number; exerciseIndex: number } | undefined }) {
   const adapter = useOptionalAdapter();
   const name = row.exercises?.name ?? row.exercise_name_override ?? "Exercise";
   const exercise = row.exercises ?? null;
@@ -2776,6 +2802,7 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
               prescribedDurationSeconds={effectivePrescribedDurationSec}
               existing={existing}
               prevExisting={prevExisting}
+              repMaxBests={repMaxBests}
               targetReps={row.reps_text}
               targetRpe={row.rpe}
               targetRir={row.rir}
@@ -3069,6 +3096,7 @@ function SetRow({
   rowId, workoutId, exerciseId, exerciseName, clientId, setIndex, existing, prevExisting,
   targetReps, targetRpe, targetRir, suggestedWeight,
   repTarget, rpeTarget, rirTarget,
+  repMaxBests = null,
   hasUncompletedAfter, onApplyToRemaining, forceHydrateToken = 0,
   forcedFill = null,
   readonly = false, unit = "kg", hideWeight = false, focusMode = false, onChange, onSetCompleted,
@@ -3092,6 +3120,8 @@ function SetRow({
   repTarget?: RangeTarget;
   rpeTarget?: RangeTarget;
   rirTarget?: RangeTarget;
+  /** Historical best set per exact rep count (1–12) for PR badge detection. */
+  repMaxBests?: Map<number, PreviousLiftLog> | null;
   hasUncompletedAfter?: boolean;
   onApplyToRemaining?: (fromSetIndex: number, payload: { load: string; reps: string; rpe: string; unit: "kg" | "lb" }) => Promise<void> | void;
   /** Bumped by parent after a "Fill All Sets" write to force re-hydration
@@ -3150,9 +3180,6 @@ function SetRow({
   // Track whether the client has manually edited reps/RPE away from the prescription.
   const [repsEdited, setRepsEdited] = useState(Boolean(existing?.actual_reps));
   const [rpeEdited, setRpeEdited] = useState(Boolean(existing?.actual_rpe_num != null || existing?.actual_rpe));
-  // Chip open state — when false, show tappable chip; when true, show inline input.
-  const [repsChipOpen, setRepsChipOpen] = useState(false);
-  const [rpeChipOpen, setRpeChipOpen] = useState(false);
   const [statusSaving, setStatusSaving] = useState(false);
   const [statusError, setStatusError] = useState<string | null>(null);
   useEffect(() => { setStatusError(null); }, [existing?.id, existing?.completed_at]);
@@ -3648,6 +3675,70 @@ function SetRow({
 
   const hasAnyTarget = suggestedWeight != null || repChipValues.length > 0 || rpeChipValues.length > 0 || rirChipValues.length > 0;
 
+  // ── Fast tap selectors (reps / RPE / RIR) ─────────────────────────────
+  // Smart one-tap options parsed locally from the prescription text — no
+  // DB queries. Custom manual entry stays available inside the popover.
+  const repSelectOptions = useMemo(() => repQuickOptions(parseRepQuickTarget(targetReps)), [targetReps]);
+  const repSelectMore = useMemo(
+    () => moreOptions(Array.from({ length: 20 }, (_, i) => i + 1), repSelectOptions),
+    [repSelectOptions],
+  );
+  const effortSelectOptions = useMemo(
+    () => (showRir ? rirQuickOptions(parseEffortQuickTarget(targetRir)) : rpeQuickOptions(parseEffortQuickTarget(targetRpe))),
+    [showRir, targetRir, targetRpe],
+  );
+  const effortSelectMore = useMemo(
+    () => moreOptions(showRir ? RIR_FULL_OPTIONS : RPE_FULL_OPTIONS, effortSelectOptions),
+    [showRir, effortSelectOptions],
+  );
+  // Selector-facing value: for RIR rows the stored value is RPE (10 − RIR),
+  // so the selector displays/picks the RIR number and we convert on pick.
+  const effortSelectValue = showRir
+    ? (rpe !== "" && Number.isFinite(Number(rpe)) ? String(Math.max(0, 10 - Number(rpe))) : "")
+    : rpe;
+  // Block the server-hydration effect briefly after a selector pick so a
+  // racing refetch can never clobber the value before autosave lands.
+  const guardRecentSave = () => {
+    recentlySavedRef.current = true;
+    if (recentlySavedTimerRef.current) clearTimeout(recentlySavedTimerRef.current);
+    recentlySavedTimerRef.current = setTimeout(() => { recentlySavedRef.current = false; }, 8000);
+  };
+  const pickReps = (v: string) => {
+    setReps(v);
+    setRepsEdited(true);
+    guardRecentSave();
+  };
+  const pickEffort = (v: string) => {
+    setRpeEdited(true);
+    if (v === "") {
+      setRpe("");
+    } else if (showRir) {
+      const n = Number(v);
+      if (Number.isFinite(n)) setRpe(String(Math.max(0, Math.min(10, 10 - n))));
+    } else {
+      setRpe(v);
+    }
+    guardRecentSave();
+  };
+
+  // ── Exact rep-max PR badge ────────────────────────────────────────────
+  // Compares the confirmed set against the historical best for the same
+  // rep count (current session excluded upstream). Ties/lower → no badge.
+  const prBadge = useMemo(() => {
+    if (!repMaxBests || !existing?.completed_at) return null;
+    return detectSetPR(
+      {
+        reps: existing.actual_reps != null ? Number(existing.actual_reps) : null,
+        load: existing.actual_load != null ? Number(existing.actual_load) : null,
+        loadUnit: existing.actual_load_unit === "kg" || existing.actual_load_unit === "lb"
+          ? existing.actual_load_unit
+          : unit,
+      },
+      repMaxBests,
+      unit,
+    );
+  }, [repMaxBests, existing?.completed_at, existing?.actual_reps, existing?.actual_load, existing?.actual_load_unit, unit]);
+
   // ── Time-based completion (per-set countdown timer + quick-confirm) ────
   const isTime = measurementType === "time";
   const prescribedSec = prescribedDurationSeconds ?? null;
@@ -3746,97 +3837,37 @@ function SetRow({
           onComplete={(secs, method) => void saveTimeCompletion(secs, { method })}
         />
       ) : (
-      /* Quick Log reps chip — tap to edit */
-      repsChipOpen ? (
-        <Input
-          autoFocus
-          className={cn(focusMode ? "h-9 text-base px-2" : "h-8 text-sm px-2")}
-          inputMode="numeric"
-          type="text"
-          pattern="[0-9]*"
-          placeholder="reps"
-          aria-label={`Set ${setIndex} reps`}
-          value={reps}
-          onChange={(e) => { setReps(e.target.value.replace(/[^0-9]/g, "")); setRepsEdited(true); }}
-          onFocus={() => setFocusedField("reps")}
-          onKeyDown={onEnter}
-          onBlur={() => {
-            // Block server-reset effect immediately (optimistic guard) so the
-            // refetch triggered by flush() can never overwrite what was typed.
-            recentlySavedRef.current = true;
-            if (recentlySavedTimerRef.current) clearTimeout(recentlySavedTimerRef.current);
-            recentlySavedTimerRef.current = setTimeout(() => { recentlySavedRef.current = false; }, 8000);
-            flushSaveAfterEdit();
-            setRepsChipOpen(false);
-          }}
-          readOnly={readonly}
-          disabled={readonly}
-        />
-      ) : (
-        <button
-          type="button"
-          onClick={() => { if (!readonly) setRepsChipOpen(true); }}
-          aria-label={`Set ${setIndex} reps — tap to edit`}
-          className={cn(
-            "flex items-center justify-center rounded-md border px-2 text-sm font-medium transition-colors whitespace-nowrap",
-            focusMode ? "h-9 text-base" : "h-8",
-            !reps
-              ? "border-blue-500/40 bg-blue-500/10 text-foreground"
-              : "border-border/60 bg-muted/40 text-muted-foreground",
-            !readonly && !reps && "hover:border-blue-500/60 hover:bg-blue-500/10 cursor-pointer",
-            !readonly && !!reps && "hover:bg-muted/60 cursor-pointer",
-            readonly && "cursor-default",
-          )}
-        >
-          {reps || "—"}
-        </button>
-      )
+      /* Fast tap reps selector — smart chips from the prescription, custom entry inside */
+      <QuickValueSelect
+        value={reps}
+        onPick={pickReps}
+        options={repSelectOptions}
+        moreOptions={repSelectMore}
+        ariaLabel={`Set ${setIndex} reps`}
+        title="Reps"
+        inputMode="numeric"
+        sanitize={(v) => v.replace(/[^0-9]/g, "").slice(0, 3)}
+        disabled={readonly}
+        focusMode={focusMode}
+        customPlaceholder="Reps"
+      />
       )}
       {/* Quick Log RPE chip — tap to edit (hidden for time rows: timer handles the full middle column) */}
-      {!isTime && rpeChipOpen ? (
-        <Input autoFocus
-          className={cn(focusMode ? "h-9 text-base px-2" : "h-8 text-sm px-2")}
-          inputMode="decimal" type="text" pattern="[0-9]*\.?[0-9]*"
-          placeholder={showRir ? "rir" : "rpe"}
-          aria-label={`Set ${setIndex} ${showRir ? "RIR" : "RPE"}`}
-          value={showRir && rpe !== "" ? String(Math.max(0, 10 - Number(rpe))) : rpe}
-          onChange={(e) => {
-            const cleaned = e.target.value.replace(/[^0-9.]/g, "");
-            setRpeEdited(true);
-            if (showRir && cleaned !== "") {
-              const n = Number(cleaned);
-              if (isFinite(n)) { setRpe(String(Math.max(0, Math.min(10, 10 - n)))); return; }
-            }
-            setRpe(cleaned);
-          }}
-          onFocus={() => setFocusedField("rpe")}
-          onKeyDown={onEnter}
-          onBlur={() => {
-            recentlySavedRef.current = true;
-            if (recentlySavedTimerRef.current) clearTimeout(recentlySavedTimerRef.current);
-            recentlySavedTimerRef.current = setTimeout(() => { recentlySavedRef.current = false; }, 8000);
-            flushSaveAfterEdit();
-            setRpeChipOpen(false);
-          }}
-          readOnly={readonly} disabled={readonly}
+      {/* Fast tap RPE/RIR selector — half-step smart chips from the prescription */}
+      {!isTime && (
+        <QuickValueSelect
+          value={effortSelectValue}
+          onPick={pickEffort}
+          options={effortSelectOptions}
+          moreOptions={effortSelectMore}
+          ariaLabel={`Set ${setIndex} ${showRir ? "RIR" : "RPE"}`}
+          title={showRir ? "RIR" : "RPE"}
+          inputMode="decimal"
+          sanitize={(v) => v.replace(/[^0-9.]/g, "").slice(0, 4)}
+          disabled={readonly}
+          focusMode={focusMode}
+          customPlaceholder={showRir ? "RIR" : "RPE"}
         />
-      ) : (
-        <button type="button"
-          onClick={() => { if (!readonly) setRpeChipOpen(true); }}
-          aria-label={`Set ${setIndex} ${showRir ? "RIR" : "RPE"} — tap to edit`}
-          className={cn(
-            "flex items-center justify-center rounded-md border px-2 text-sm font-medium transition-colors whitespace-nowrap",
-            focusMode ? "h-9 text-base" : "h-8",
-            !rpe
-              ? "border-blue-500/40 bg-blue-500/10 text-foreground"
-              : "border-border/60 bg-muted/40 text-muted-foreground",
-            !readonly && !rpe && "hover:border-blue-500/60 hover:bg-blue-500/10 cursor-pointer",
-            !readonly && !!rpe && "hover:bg-muted/60 cursor-pointer",
-            readonly && "cursor-default",
-          )}
-        >
-          {rpe ? (showRir ? String(Math.max(0, 10 - Number(rpe))) : rpe) : "—"}
-        </button>
       )}
       {!isTime && !hideWeight && (
       <Input
@@ -3917,6 +3948,18 @@ function SetRow({
         )}
       </div>
     </div>
+    {/* Exact rep-max PR badge — small, inline, never interrupts logging */}
+    {prBadge && (
+      <div className="px-3 pb-1.5">
+        <span
+          className="inline-flex items-center gap-1 rounded-full border border-amber-500/40 bg-amber-500/10 px-2 py-0.5 text-[11px] font-bold text-amber-500"
+          title={`New ${prBadge.reps}-rep max — beats your previous best by ${fmtNum(prBadge.amount)} ${prBadge.unit}`}
+        >
+          <Trophy className="h-3 w-3" />
+          {prBadge.reps}RM PR · +{fmtNum(prBadge.amount)} {prBadge.unit}
+        </span>
+      </div>
+    )}
     {!readonly && !isConfirmed && save.state === "error" && (
       <div className="flex items-center justify-between gap-2 px-3 pb-1.5">
         <SaveStatus
