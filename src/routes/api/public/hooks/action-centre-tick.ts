@@ -6,12 +6,13 @@ import { createFileRoute } from "@tanstack/react-router";
  * the row's `due_at_utc` (already resolved from the client's local tz at
  * generation time), so this stays a simple UTC comparison.
  *
- * Called by pg_cron every 15 minutes with the Supabase anon apikey header.
+ * Gated by the shared x-worker-secret check used by every sibling worker hook.
  */
 export const Route = createFileRoute("/api/public/hooks/action-centre-tick")({
   server: {
     handlers: {
-      POST: async () => {
+      POST: async ({ request }) => {
+        if (!authorizeWorker(request)) return new Response("Unauthorized", { status: 401 });
         const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
         const now = new Date();
         const isoNow = now.toISOString();
