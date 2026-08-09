@@ -66,12 +66,13 @@ export const sellSessionPack = createServerFn({ method: "POST" })
     try {
       const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
       await supabaseAdmin.from("financial_audit_events").insert({
+        client_id: data.clientId,
         actor_user_id: userId,
-        event_type: "session_pack_created",
-        entity_type: "purchase_record",
-        entity_id: purchase.id,
-        metadata: {
-          client_id: data.clientId,
+        actor_role: "admin",
+        action: "session_pack_created",
+        record_type: "purchase_records",
+        record_id: purchase.id,
+        after_state: {
           package_name: data.packageName,
           session_count: data.sessionCount,
           total_price_minor: data.totalPriceMinor,
@@ -79,6 +80,7 @@ export const sellSessionPack = createServerFn({ method: "POST" })
           payment_status: paid ? "Paid" : "Pending",
           source: "sell_sessions_dialog",
         },
+        reason: data.note ?? null,
       } as any);
     } catch { /* audit is best-effort */ }
 
