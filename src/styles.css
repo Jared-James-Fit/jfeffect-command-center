@@ -452,6 +452,11 @@ html[data-keyboard-open="true"] {
   100% { transform: translateX(300%); }
 }
 
+/* Top-of-shell route navigation progress (NavigationProgress component) */
+.animate-nav-progress {
+  animation: indeterminate 1.1s ease-in-out infinite;
+}
+
 /* Hero floating cards — subtle drift used by membership-hero floating panels */
 @keyframes heroFloat {
   0%, 100% { transform: translateY(0); }

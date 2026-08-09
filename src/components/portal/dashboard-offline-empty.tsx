@@ -1,6 +1,7 @@
 import { WifiOff, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useQueryClient } from "@tanstack/react-query";
+import { useRouter } from "@tanstack/react-router";
 import { useOnlineStatus } from "@/hooks/use-online-status";
 
 /**
@@ -12,6 +13,7 @@ import { useOnlineStatus } from "@/hooks/use-online-status";
  */
 export function DashboardOfflineEmpty({ onRetry }: { onRetry?: () => void }) {
   const qc = useQueryClient();
+  const router = useRouter();
   const online = useOnlineStatus();
 
   const handleRetry = () => {
@@ -19,10 +21,11 @@ export function DashboardOfflineEmpty({ onRetry }: { onRetry?: () => void }) {
       onRetry();
       return;
     }
-    // Invalidate everything so queries refetch on next mount/connection.
+    // Soft refresh only: invalidate cached queries + re-run route loaders.
+    // Never hard-reload the app for an ordinary offline retry.
     qc.invalidateQueries();
-    if (online && typeof window !== "undefined") {
-      window.location.reload();
+    if (online) {
+      void router.invalidate();
     }
   };
 

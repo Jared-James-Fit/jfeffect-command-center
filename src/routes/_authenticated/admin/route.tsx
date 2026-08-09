@@ -9,6 +9,7 @@ import { AdminTopBar } from "@/components/admin-top-bar";
 import { TaskPopupGate } from "@/components/tasks/task-popup-gate";
 import { ClipboardList, LayoutDashboard, Users, MessagesSquare, BookOpen, Library } from "lucide-react";
 import { useBarLayout, resolveLayout, withBarActionItems } from "@/lib/floating-bar";
+import { FullPageLoader } from "@/components/full-page-loader";
 
 export const Route = createFileRoute("/_authenticated/admin")({
   component: AdminLayout,
@@ -124,13 +125,13 @@ function AdminLayout() {
   }, [customLayout, nav, defaultBottom]);
 
   if (loading || !role) {
-    return <div className="grid min-h-screen place-items-center text-muted-foreground">Loading…</div>;
+    return <FullPageLoader />;
   }
 
   // While the effect-driven redirect is in flight, render nothing for non-admin/coach
   // so admin UI never flashes to members/clients.
   if (role !== "admin" && role !== "coach") {
-    return <div className="grid min-h-screen place-items-center text-muted-foreground">Redirecting…</div>;
+    return <FullPageLoader label="Redirecting…" />;
   }
 
   return (
