@@ -3180,9 +3180,6 @@ function SetRow({
   // Track whether the client has manually edited reps/RPE away from the prescription.
   const [repsEdited, setRepsEdited] = useState(Boolean(existing?.actual_reps));
   const [rpeEdited, setRpeEdited] = useState(Boolean(existing?.actual_rpe_num != null || existing?.actual_rpe));
-  // Chip open state — when false, show tappable chip; when true, show inline input.
-  const [repsChipOpen, setRepsChipOpen] = useState(false);
-  const [rpeChipOpen, setRpeChipOpen] = useState(false);
   const [statusSaving, setStatusSaving] = useState(false);
   const [statusError, setStatusError] = useState<string | null>(null);
   useEffect(() => { setStatusError(null); }, [existing?.id, existing?.completed_at]);
@@ -3677,6 +3674,63 @@ function SetRow({
   const showRir = !!targetRir && !targetRpe;
 
   const hasAnyTarget = suggestedWeight != null || repChipValues.length > 0 || rpeChipValues.length > 0 || rirChipValues.length > 0;
+
+  // ── Fast tap selectors (reps / RPE / RIR) ─────────────────────────────
+  // Smart one-tap options parsed locally from the prescription text — no
+  // DB queries. Custom manual entry stays available inside the popover.
+  const repSelectOptions = useMemo(() => repQuickOptions(parseRepQuickTarget(targetReps)), [targetReps]);
+  const repSelectMore = useMemo(
+    () => moreOptions(Array.from({ length: 20 }, (_, i) => i + 1), repSelectOptions),
+    [repSelectOptions],
+  );
+  const effortSelectOptions = useMemo(
+    () => (showRir ? rirQuickOptions(parseEffortQuickTarget(targetRir)) : rpeQuickOptions(parseEffortQuickTarget(targetRpe))),
+    [showRir, targetRir, targetRpe],
+  );
+  const effortSelectMore = useMemo(
+    () => moreOptions(showRir ? RIR_FULL_OPTIONS : RPE_FULL_OPTIONS, effortSelectOptions),
+    [showRir, effortSelectOptions],
+  );
+  // Selector-facing value: for RIR rows the stored value is RPE (10 − RIR),
+  // so the selector displays/picks the RIR number and we convert on pick.
+  const effortSelectValue = showRir
+    ? (rpe !== "" && Number.isFinite(Number(rpe)) ? String(Math.max(0, 10 - Number(rpe))) : "")
+    : rpe;
+  const pickReps = (v: string) => {
+    setReps(v);
+    setRepsEdited(true);
+    guardRecentSave();
+  };
+  const pickEffort = (v: string) => {
+    setRpeEdited(true);
+    if (v === "") {
+      setRpe("");
+    } else if (showRir) {
+      const n = Number(v);
+      if (Number.isFinite(n)) setRpe(String(Math.max(0, Math.min(10, 10 - n))));
+    } else {
+      setRpe(v);
+    }
+    guardRecentSave();
+  };
+
+  // ── Exact rep-max PR badge ────────────────────────────────────────────
+  // Compares the confirmed set against the historical best for the same
+  // rep count (current session excluded upstream). Ties/lower → no badge.
+  const prBadge = useMemo(() => {
+    if (!repMaxBests || !existing?.completed_at) return null;
+    return detectSetPR(
+      {
+        reps: existing.actual_reps != null ? Number(existing.actual_reps) : null,
+        load: existing.actual_load != null ? Number(existing.actual_load) : null,
+        loadUnit: existing.actual_load_unit === "kg" || existing.actual_load_unit === "lb"
+          ? existing.actual_load_unit
+          : unit,
+      },
+      repMaxBests,
+      unit,
+    );
+  }, [repMaxBests, existing?.completed_at, existing?.actual_reps, existing?.actual_load, existing?.actual_load_unit, unit]);
 
   // ── Time-based completion (per-set countdown timer + quick-confirm) ────
   const isTime = measurementType === "time";
