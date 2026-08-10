@@ -4,6 +4,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -1372,6 +1373,10 @@ export function BlockPayloadEditor({ weeksData, setWeeksData, exercises, compact
     setWeeksData([...weeksData, { week_index: nextIdx, days: [{ day_index: 1, title: "", subtitle: "", rows: [] }] }]);
     setActiveIdx(weeksData.length);
   };
+  // Per-week "Advanced" toggles (full-block view): week label, week notes and
+  // copy-to-future-weeks live behind these so the basic week header stays
+  // clean (number · stats · duplicate · delete).
+  const [advWeeks, setAdvWeeks] = useState<Record<number, boolean>>({});
   const dupWeek = (i: number) => {
     const w = weeksData[i];
     const next = JSON.parse(JSON.stringify(w));
@@ -1675,8 +1680,11 @@ export function BlockPayloadEditor({ weeksData, setWeeksData, exercises, compact
   );
 }
 
-function WeekEditor({ week, setWeek, exercises, onCopyDayToFuture, hideHeader, compact, dayKeyPrefix, blockId, blockStartDate, blockEndDate, onExtraDayAdded }: { week: any; setWeek: (w: any) => void; exercises: any[]; onCopyDayToFuture?: (dayIdx: number) => void; hideHeader?: boolean; compact?: boolean; dayKeyPrefix?: string; blockId?: string | null; blockStartDate?: string | null; blockEndDate?: string | null; onExtraDayAdded?: () => void }) {
+function WeekEditor({ week, setWeek, exercises, onCopyDayToFuture, hideHeader, hideVolumeSummary, compact, dayKeyPrefix, blockId, blockStartDate, blockEndDate, onExtraDayAdded }: { week: any; setWeek: (w: any) => void; exercises: any[]; onCopyDayToFuture?: (dayIdx: number) => void; hideHeader?: boolean; hideVolumeSummary?: boolean; compact?: boolean; dayKeyPrefix?: string; blockId?: string | null; blockStartDate?: string | null; blockEndDate?: string | null; onExtraDayAdded?: () => void }) {
   const days = week.days || [];
+  // Per-day "Day options" toggles: Focus input and copy-to-future-weeks live
+  // behind these; a day with a saved Focus value keeps it visible.
+  const [dayOpts, setDayOpts] = useState<Record<number, boolean>>({});
   const addDay = () => {
     const nextIdx = (days[days.length - 1]?.day_index ?? 0) + 1;
     // Do not seed `title` with a generated "Day N" string — the label is
@@ -1703,7 +1711,7 @@ function WeekEditor({ week, setWeek, exercises, onCopyDayToFuture, hideHeader, c
     <div className="space-y-3">
       {!hideHeader && (
         <div className="flex items-center gap-2 flex-wrap">
-          <Input className="max-w-xs" placeholder="Week notes" value={week.notes ?? ""} onChange={(e) => setWeek({ ...week, notes: e.target.value })} />
+          <Input className="max-w-xs" placeholder="Week notes (optional) — coach reference only" value={week.notes ?? ""} onChange={(e) => setWeek({ ...week, notes: e.target.value })} />
           <Button size="sm" variant="outline" onClick={addDay}><Plus className="mr-1 h-3 w-3" /> Day</Button>
           {blockId && week._dbId && (
             <AddExtraDayDialog
@@ -1720,7 +1728,7 @@ function WeekEditor({ week, setWeek, exercises, onCopyDayToFuture, hideHeader, c
       {hideHeader && days.length === 0 && (
         <Button size="sm" variant="outline" onClick={addDay}><Plus className="mr-1 h-3 w-3" /> Day</Button>
       )}
-      <WeeklyVolumeSummary week={week} exercises={exercises as any} weekIndex={week?.week_index} />
+      {!hideVolumeSummary && <WeeklyVolumeSummary week={week} exercises={exercises as any} weekIndex={week?.week_index} />}
       <WeekPriorityWarnings week={week} exercises={exercises as any} />
       {days.map((d: any, i: number) => {
         const dayMinutes = estimateDayMinutes(d.rows || []);
@@ -1760,25 +1768,39 @@ function WeekEditor({ week, setWeek, exercises, onCopyDayToFuture, hideHeader, c
               />
             </div>
             <div className="flex items-center gap-2 flex-wrap">
-              <Input
-                className={cn("max-w-xs", compact && "h-7 text-xs")}
-                placeholder="Focus (e.g. Squat, Upper)"
-                value={d.focus ?? ""}
-                onChange={(e) => { const copy = [...days]; copy[i] = { ...d, focus: e.target.value }; setWeek({ ...week, days: copy }); }}
-              />
+              {(dayOpts[i] || d.focus?.trim()) && (
+                <Input
+                  className={cn("max-w-xs", compact && "h-7 text-xs")}
+                  placeholder="Focus (optional) — e.g. Squat, Upper"
+                  value={d.focus ?? ""}
+                  onChange={(e) => { const copy = [...days]; copy[i] = { ...d, focus: e.target.value }; setWeek({ ...week, days: copy }); }}
+                />
+              )}
               <span className="inline-flex items-center gap-1 rounded-full bg-secondary px-2 py-0.5 text-xs text-secondary-foreground">
                 <Clock className="h-3 w-3" /> {durationRange(dayMinutes)}
               </span>
               <div className="ml-auto flex gap-0.5">
-              {onCopyDayToFuture && (
-                <Button size="sm" variant="ghost" className="h-7 px-2 text-[10px]" onClick={() => onCopyDayToFuture(i)} title="Copy this day → same day in future weeks">
-                  <ArrowRight className="mr-1 h-3 w-3" /> → future
-                </Button>
-              )}
+              <Button
+                size="icon"
+                variant="ghost"
+                className="h-7 w-7"
+                onClick={() => setDayOpts((prev) => ({ ...prev, [i]: !prev[i] }))}
+                title="More day options (focus, copy to future weeks)"
+                aria-expanded={!!dayOpts[i]}
+              >
+                <Settings2 className="h-3.5 w-3.5" />
+              </Button>
               <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => dupDay(i)} title="Duplicate"><Copy className="h-3.5 w-3.5" /></Button>
               <Button size="icon" variant="ghost" className="h-7 w-7 text-destructive" onClick={() => delDay(i)}><Trash2 className="h-3.5 w-3.5" /></Button>
               </div>
             </div>
+            {dayOpts[i] && onCopyDayToFuture && (
+              <div className="flex items-center gap-2">
+                <Button size="sm" variant="ghost" className="h-7 px-2 text-[10px]" onClick={() => onCopyDayToFuture(i)} title="Copy this day → same day in future weeks">
+                  <ArrowRight className="mr-1 h-3 w-3" /> Copy to future weeks
+                </Button>
+              </div>
+            )}
           </div>
           <DayEditor day={d} setDay={(nd) => { const copy = [...days]; copy[i] = nd; setWeek({ ...week, days: copy }); }} exercises={exercises} compact={compact} dayKey={dKey} />
         </Card>
