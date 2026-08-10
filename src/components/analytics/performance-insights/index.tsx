@@ -204,25 +204,37 @@ export function PerformanceInsights({
   return (
     <div className="space-y-3">
       <Card className="overflow-hidden rounded-3xl border-border/70 bg-gradient-to-br from-primary/10 via-transparent to-transparent">
-        <button
-          type="button"
-          onClick={() => setExpanded((v) => !v)}
-          className="flex w-full items-center gap-3 p-4 text-left"
-          aria-expanded={expanded}
-        >
-          <div className="grid h-10 w-10 place-items-center rounded-2xl bg-primary/15 text-primary">
-            <Sparkles className="h-5 w-5" />
-          </div>
-          <div className="min-w-0 flex-1">
-            <div className="text-sm font-black">Performance Insights</div>
-            <div className="mt-0.5 flex flex-wrap gap-x-3 gap-y-0.5 text-[11px] text-muted-foreground">
-              <span>{teaser.tonnage.toLocaleString()} lb moved</span>
-              <span>Top: {teaser.topMuscle}</span>
-              <span>Trend: {teaser.trend}</span>
+        <div className="flex items-center gap-2 p-4">
+          <button
+            type="button"
+            onClick={() => setExpanded((v) => !v)}
+            className="flex min-w-0 flex-1 items-center gap-3 text-left"
+            aria-expanded={expanded}
+          >
+            <div className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl bg-primary/15 text-primary">
+              <Sparkles className="h-5 w-5" />
             </div>
-          </div>
-          <ChevronDown className={`h-5 w-5 shrink-0 text-muted-foreground transition-transform ${expanded ? "rotate-180" : ""}`} />
-        </button>
+            <div className="min-w-0 flex-1">
+              <div className="text-sm font-black">Performance Insights</div>
+              <div className="mt-0.5 flex flex-wrap gap-x-3 gap-y-0.5 text-[11px] text-muted-foreground">
+                <span>{teaser.tonnage.toLocaleString()} {displayUnit} moved</span>
+                <span>Top: {teaser.topMuscle}</span>
+                <span>Trend: {teaser.trend}</span>
+              </div>
+            </div>
+            <ChevronDown className={`h-5 w-5 shrink-0 text-muted-foreground transition-transform ${expanded ? "rotate-180" : ""}`} />
+          </button>
+          <InfoTip label="About Performance Insights" title="Performance Insights" align="end">
+            What it means: your logged sets analysed per muscle group —
+            weekly/monthly sets, tonnage, trends, and competition-lift
+            summaries for the selected time window.
+            How to use it: pick a window, scan the smart insights, and tap
+            share on any card to send a summary.
+            Watch out: exercises without a muscle group tag are skipped, and
+            insights based on fewer than ~20 sets are a first snapshot, not a
+            stable pattern.
+          </InfoTip>
+        </div>
       </Card>
 
       {expanded && (
@@ -231,6 +243,12 @@ export function PerformanceInsights({
             <PerformanceTimeFilter value={window} onChange={setWindow} />
             <Button size="sm" variant="outline" onClick={openTotalShare}>Share summary</Button>
           </div>
+          <p className="text-[11px] text-muted-foreground">
+            Based on {windowSets.length} logged {windowSets.length === 1 ? "set" : "sets"} in this window
+            {windowSets.length > 0 && windowSets.length < 20
+              ? " — a small sample, insights may shift with more data"
+              : ""}.
+          </p>
 
           {isLoading ? (
             <Card className="p-6 text-sm text-muted-foreground">Loading…</Card>
