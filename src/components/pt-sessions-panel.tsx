@@ -225,13 +225,13 @@ export function PtSessionsPanel({ clientId, client }: { clientId: string; client
       <div className="flex gap-1">
         {s.status === "Scheduled" && (
           <>
-            <Button size="sm" variant="ghost" title="Mark completed (deducts 1 credit)" onClick={() => markComplete(s)}><CheckCircle2 className="h-4 w-4 text-success" /></Button>
+            <Button size="sm" variant="ghost" title="Mark completed (converts 1 reserved credit to used)" onClick={() => markComplete(s)}><CheckCircle2 className="h-4 w-4 text-success" /></Button>
             <Button size="sm" variant="ghost" title="No-show" onClick={() => markMissed(s)}><Ban className="h-4 w-4 text-warning" /></Button>
-            <Button size="sm" variant="ghost" title="Cancel session" onClick={() => { if (confirm("Cancel this session? No credit is deducted.")) changeStatus(s, "Cancelled"); }}><CircleOff className="h-4 w-4 text-muted-foreground" /></Button>
+            <Button size="sm" variant="ghost" title="Cancel session (releases reserved credit)" onClick={() => { if (confirm("Cancel this session? The reserved credit is released back to available.")) changeStatus(s, "Cancelled"); }}><CircleOff className="h-4 w-4 text-muted-foreground" /></Button>
           </>
         )}
         {s.status === "Completed" && (
-          <Button size="sm" variant="ghost" title="Undo completion (restores 1 credit)" onClick={() => undoComplete(s)}><Undo2 className="h-4 w-4 text-primary" /></Button>
+          <Button size="sm" variant="ghost" title="Undo completion (restores 1 credit to available)" onClick={() => undoComplete(s)}><Undo2 className="h-4 w-4 text-primary" /></Button>
         )}
         <Button size="sm" variant="ghost" title="Edit / reschedule" onClick={() => { setEditing(s); setBookOpen(true); }}><Pencil className="h-4 w-4" /></Button>
         {s.status !== "Completed" && (
