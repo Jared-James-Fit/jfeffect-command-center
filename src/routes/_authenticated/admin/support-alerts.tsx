@@ -178,6 +178,21 @@ function AlertList({ alerts, onUpdateStatus, onAddNote, emptyMessage }: {
   onAddNote: (alert: any, note: string) => Promise<void>,
   emptyMessage: string 
 }) {
+  const qc = useQueryClient();
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [bulkBusy, setBulkBusy] = useState(false);
+  const [confirm, setConfirm] = useState<{ status: "resolved" | "in_progress"; ids: string[] } | null>(null);
+
+  // Prune selection to alerts still visible in this filtered view (e.g. after
+  // an alert moves to another tab via a status change).
+  useEffect(() => {
+    setSelected((prev) => {
+      const visible = new Set(alerts.map((a) => a.id));
+      const next = new Set([...prev].filter((id) => visible.has(id)));
+      return next.size === prev.size ? prev : next;
+    });
+  }, [alerts]);
+
   if (alerts.length === 0) {
     return (
       <Card className="flex flex-col items-center justify-center p-12 text-center opacity-60">
@@ -187,24 +202,166 @@ function AlertList({ alerts, onUpdateStatus, onAddNote, emptyMessage }: {
     );
   }
 
+  const visibleIds = alerts.map((a) => a.id as string);
+  const selectedCount = selected.size;
+  const allSelected = visibleIds.every((id) => selected.has(id));
+  const someSelected = !allSelected && visibleIds.some((id) => selected.has(id));
+
+  const toggleSelectAll = () => {
+    setSelected(allSelected ? new Set() : new Set(visibleIds));
+  };
+  const toggleOne = (id: string) => {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const bulkUpdateStatus = async (status: "resolved" | "in_progress", ids: string[]) => {
+    setBulkBusy(true);
+    const update: any = { status, updated_at: new Date().toISOString() };
+    if (status === "resolved") {
+      const { data: { user } } = await supabase.auth.getUser();
+      update.resolved_by = user?.id ?? null;
+      update.resolved_at = new Date().toISOString();
+    }
+    try {
+      // Preferred path: one safe batch update by selected IDs (RLS-scoped).
+      const { error } = await supabase.from("support_alerts").update(update).in("id", ids);
+      let okCount = ids.length;
+      let failedIds: string[] = [];
+      if (error) {
+        // Fallback: per-row updates so partial failures are reported honestly.
+        okCount = 0;
+        for (const id of ids) {
+          const { error: rowErr } = await supabase.from("support_alerts").update(update).eq("id", id);
+          if (rowErr) failedIds.push(id);
+          else okCount++;
+        }
+      }
+      qc.invalidateQueries({ queryKey: ["support_alerts"] });
+      qc.invalidateQueries({ queryKey: ["admin-nav-badges"] });
+      const label = status === "resolved" ? "resolved" : "in progress";
+      if (failedIds.length === 0) {
+        toast.success(`${okCount} alert${okCount === 1 ? "" : "s"} marked ${label}`);
+        setSelected(new Set());
+      } else {
+        toast.error(`${okCount} alert${okCount === 1 ? "" : "s"} updated. ${failedIds.length} failed. Try again.`);
+        // Leave failed alerts selected so the admin can retry them.
+        setSelected(new Set(failedIds));
+      }
+    } finally {
+      setBulkBusy(false);
+    }
+  };
+
+  const requestBulk = (status: "resolved" | "in_progress") => {
+    const ids = visibleIds.filter((id) => selected.has(id));
+    if (ids.length === 0 || bulkBusy) return;
+    if (ids.length > 5) setConfirm({ status, ids });
+    else void bulkUpdateStatus(status, ids);
+  };
+
   return (
-    <div className="grid gap-4">
-      {alerts.map((alert) => (
-        <AlertCard 
-          key={alert.id} 
-          alert={alert} 
-          onUpdateStatus={onUpdateStatus} 
-          onAddNote={onAddNote}
-        />
-      ))}
-    </div>
+    <>
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-lg border border-border/60 bg-muted/30 px-3 py-2">
+        <label className="flex cursor-pointer items-center gap-2 text-sm font-medium">
+          <Checkbox
+            checked={allSelected ? true : someSelected ? "indeterminate" : false}
+            onCheckedChange={toggleSelectAll}
+            disabled={bulkBusy}
+            aria-label="Select all visible alerts"
+            className="h-5 w-5"
+          />
+          Select All
+        </label>
+        <span className="text-xs text-muted-foreground">
+          {selectedCount} selected
+        </span>
+        <div className="ml-auto flex flex-wrap items-center gap-2">
+          {bulkBusy && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-8"
+            disabled={selectedCount === 0 || bulkBusy}
+            onClick={() => requestBulk("in_progress")}
+          >
+            Mark In Progress
+          </Button>
+          <Button
+            size="sm"
+            className="h-8"
+            disabled={selectedCount === 0 || bulkBusy}
+            onClick={() => requestBulk("resolved")}
+          >
+            Mark Resolved
+          </Button>
+          <Button
+            size="sm"
+            variant="ghost"
+            className="h-8"
+            disabled={selectedCount === 0 || bulkBusy}
+            onClick={() => setSelected(new Set())}
+          >
+            Clear
+          </Button>
+        </div>
+      </div>
+
+      <div className="grid gap-4">
+        {alerts.map((alert) => (
+          <AlertCard
+            key={alert.id}
+            alert={alert}
+            onUpdateStatus={onUpdateStatus}
+            onAddNote={onAddNote}
+            selected={selected.has(alert.id)}
+            onToggleSelected={toggleOne}
+            selectionDisabled={bulkBusy}
+          />
+        ))}
+      </div>
+
+      <AlertDialog open={!!confirm} onOpenChange={(o) => { if (!o && !bulkBusy) setConfirm(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              Mark {confirm?.ids.length} alerts as {confirm?.status === "resolved" ? "resolved" : "in progress"}?
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              This will update the status of all {confirm?.ids.length} selected alerts.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={bulkBusy}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={bulkBusy}
+              onClick={(e) => {
+                e.preventDefault();
+                const c = confirm;
+                setConfirm(null);
+                if (c) void bulkUpdateStatus(c.status, c.ids);
+              }}
+            >
+              Confirm
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
   );
 }
 
-function AlertCard({ alert, onUpdateStatus, onAddNote }: { 
-  alert: any, 
+function AlertCard({ alert, onUpdateStatus, onAddNote, selected, onToggleSelected, selectionDisabled }: {
+  alert: any,
   onUpdateStatus: (id: string, status: string) => Promise<void>,
-  onAddNote: (alert: any, note: string) => Promise<void>
+  onAddNote: (alert: any, note: string) => Promise<void>,
+  selected: boolean,
+  onToggleSelected: (id: string) => void,
+  selectionDisabled: boolean,
 }) {
   const client = alert.clients;
   const coach = alert.coaches;
