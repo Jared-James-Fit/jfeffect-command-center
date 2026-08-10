@@ -1926,7 +1926,14 @@ function DayEditor({ day, setDay, exercises, compact, dayKey }: { day: any; setD
   }, [rows, exercises]);
   // Hard requirements for assignment — surface live so the coach sees gaps
   // as they build (and we can also block assignment without confirmation).
-  const dayIssues = useMemo(() => validateDay(day), [day]);
+  const dayIssues = useMemo(
+    () =>
+      validateDay(
+        day,
+        new Map<string, string>((exercises as any[]).map((e) => [e.id, e.name])),
+      ),
+    [day, exercises],
+  );
   const [dragOver, setDragOver] = useState(false);
   const [dragRowIdx, setDragRowIdx] = useState<number | null>(null);
   const [dropTargetIdx, setDropTargetIdx] = useState<number | null>(null);
