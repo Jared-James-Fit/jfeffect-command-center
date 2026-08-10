@@ -1014,7 +1014,7 @@ export function StructureCanvas({ type, payload, setP, exercises, appendRowToFir
 
 function StructureEditor({ type, payload, setPayload, exercises, compact, templateId, dayScheduleStatus, onFixCalendarIssue }: { type: string; payload: any; setPayload: (p: any) => void; exercises: any[]; compact?: boolean; templateId?: string; dayScheduleStatus?: Map<string, ProgramDayScheduleStatus>; onFixCalendarIssue?: (dayId: string) => void }) {
   if (type === "full_prep" || type === "block") {
-    return <MultiBlockStructureEditor type={type} payload={payload} setPayload={setPayload} exercises={exercises} compact={compact} templateId={templateId} />;
+    return <MultiBlockStructureEditor type={type} payload={payload} setPayload={setPayload} exercises={exercises} compact={compact} templateId={templateId} dayScheduleStatus={dayScheduleStatus} onFixCalendarIssue={onFixCalendarIssue} />;
   }
   if (type === "week") return <WeekEditor week={payload} setWeek={setPayload} exercises={exercises} compact={compact} />;
   if (type === "day") return <DayEditor day={payload} setDay={setPayload} exercises={exercises} compact={compact} dayKey="single" />;
@@ -1026,13 +1026,15 @@ function StructureEditor({ type, payload, setPayload, exercises, compact, templa
 }
 
 // ---------- Multi-block (v2 payload) structure editor -----------------------
-function MultiBlockStructureEditor({ type, payload, setPayload, exercises, compact, templateId }: {
+function MultiBlockStructureEditor({ type, payload, setPayload, exercises, compact, templateId, dayScheduleStatus, onFixCalendarIssue }: {
   type: "block" | "full_prep" | string;
   payload: any;
   setPayload: (p: any) => void;
   exercises: any[];
   compact?: boolean;
   templateId?: string;
+  dayScheduleStatus?: Map<string, ProgramDayScheduleStatus>;
+  onFixCalendarIssue?: (dayId: string) => void;
 }) {
   const navigate = useNavigate();
   // This component is also reused from `/admin/blocks/$blockId`, where the
