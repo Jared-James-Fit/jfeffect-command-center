@@ -30,7 +30,10 @@ export function SellSessionsDialog({ open, onOpenChange, clientId }: Props) {
   const [name, setName] = useState("");
   const [sessions, setSessions] = useState<number>(6);
   const [price, setPrice] = useState<string>("");
-  const [paymentMode, setPaymentMode] = useState<"paid" | "pending">("paid");
+  const [amountPaid, setAmountPaid] = useState<string>("");
+  const [paymentMode, setPaymentMode] = useState<"paid" | "partial" | "pending">("paid");
+  const [paymentMethod, setPaymentMethod] = useState("");
+  const [currency, setCurrency] = useState("CAD");
   const [expiry, setExpiry] = useState<string>("");
   const [note, setNote] = useState("");
   const [showValue, setShowValue] = useState(true);
@@ -56,7 +59,10 @@ export function SellSessionsDialog({ open, onOpenChange, clientId }: Props) {
     setName("");
     setSessions(6);
     setPrice("");
+    setAmountPaid("");
     setPaymentMode("paid");
+    setPaymentMethod("");
+    setCurrency("CAD");
     setExpiry("");
     setNote("");
     setShowValue(true);
@@ -72,11 +78,16 @@ export function SellSessionsDialog({ open, onOpenChange, clientId }: Props) {
   };
 
   const priceNum = Number(price) || 0;
+  const paidNum = paymentMode === "paid" ? priceNum : paymentMode === "partial" ? Number(amountPaid) || 0 : 0;
   const perSession = sessions > 0 && priceNum > 0 ? priceNum / sessions : 0;
+  const paidPerSession = sessions > 0 && paidNum > 0 ? paidNum / sessions : 0;
+  const valueGap = Math.max(priceNum - paidNum, 0);
 
   const save = async () => {
     if (!name.trim()) return toast.error("Package name is required");
     if (!sessions || sessions < 1) return toast.error("Enter the number of sessions");
+    if (paymentMode === "partial" && paidNum <= 0) return toast.error("Enter the amount paid");
+    if (paidNum > priceNum) return toast.error("Amount paid cannot exceed the package value");
     setSaving(true);
     try {
       await sellSessionPack({
@@ -85,14 +96,22 @@ export function SellSessionsDialog({ open, onOpenChange, clientId }: Props) {
           packageName: name.trim(),
           sessionCount: sessions,
           totalPriceMinor: Math.round(priceNum * 100),
-          currency: "CAD",
+          currency,
           paymentMode,
+          amountPaidMinor: Math.round(paidNum * 100),
+          paymentMethod: paymentMethod.trim() || null,
           expiryDate: expiry || null,
           note: note.trim() || null,
           showValueToClient: showValue,
         },
       });
-      toast.success(paymentMode === "paid" ? "Session pack added — sessions active" : "Session pack added — pending payment");
+      toast.success(
+        paymentMode === "paid"
+          ? "Session pack added — sessions active"
+          : paymentMode === "partial"
+            ? `Session pack added — ${currency} ${valueGap.toFixed(2)} still due`
+            : "Session pack added — pending payment",
+      );
       qc.invalidateQueries({ queryKey: ["pt-balance", clientId] });
       qc.invalidateQueries({ queryKey: ["pt-pack-purchases", clientId] });
       qc.invalidateQueries({ queryKey: ["client-session-credits", clientId] });
