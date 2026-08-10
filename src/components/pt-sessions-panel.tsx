@@ -292,9 +292,12 @@ export function PtSessionsPanel({ clientId, client }: { clientId: string; client
               : null;
             const packSessions = Number(purchase?.sessions_purchased ?? row?.granted ?? 0);
             const perSession = totalMinor != null && packSessions > 0 ? Math.round(totalMinor / packSessions) : null;
+            const paidMinor = purchase?.amount_paid_cents != null ? Number(purchase.amount_paid_cents) : null;
+            const paidPerSession = paidMinor != null && packSessions > 0 ? Math.round(paidMinor / packSessions) : null;
+            const packCreditMinor = paidPerSession != null && row ? Math.max(Number(row.remaining ?? 0), 0) * paidPerSession : null;
             const expiry = row?.expires_at ?? purchase?.package_expiry_date ?? null;
             const counts = row
-              ? <>{row.granted} purchased · {row.used} used · <strong className="text-foreground">{row.remaining} remaining</strong></>
+              ? <>{row.granted} purchased{Number(row.reserved ?? 0) > 0 ? <> · {row.reserved} scheduled</> : null} · {row.used} used · <strong className="text-foreground">{row.remaining} available</strong></>
               : <>{packSessions} sessions · <strong className="text-foreground">not active yet</strong></>;
             return (
               <div key={key} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border bg-secondary/20 px-3 py-2">
@@ -306,12 +309,26 @@ export function PtSessionsPanel({ clientId, client }: { clientId: string; client
                   </div>
                   {totalMinor != null && (
                     <div className="text-xs text-muted-foreground">
-                      {fmtMoney(totalMinor, purchase?.currency ?? row?.currency ?? "CAD")} total
-                      {perSession != null ? ` · ${fmtMoney(perSession, purchase?.currency ?? row?.currency ?? "CAD")}/session` : ""}
+                      {fmtMoney(totalMinor, purchase?.currency ?? row?.currency ?? "CAD")} value
+                      {perSession != null ? ` · ${fmtMoney(perSession, purchase?.currency ?? row?.currency ?? "CAD")}/session value` : ""}
+                    </div>
+                  )}
+                  {paidMinor != null && (
+                    <div className="text-xs text-muted-foreground">
+                      {fmtMoney(paidMinor, purchase?.currency ?? "CAD")} paid
+                      {paidPerSession != null ? ` · ${fmtMoney(paidPerSession, purchase?.currency ?? "CAD")}/session paid value` : ""}
+                      {packCreditMinor != null && packCreditMinor > 0 ? ` · ${fmtMoney(packCreditMinor, purchase?.currency ?? "CAD")} credit left` : ""}
                     </div>
                   )}
                 </div>
-                <Badge variant="outline" className={st.cls}>{st.label}</Badge>
+                <div className="flex items-center gap-1.5">
+                  <Badge variant="outline" className={st.cls}>{st.label}</Badge>
+                  {isAdmin && purchase && (
+                    <Button size="icon" variant="ghost" className="h-7 w-7" title="Edit package value & payment" onClick={() => setEditingPack(purchase)}>
+                      <Pencil className="h-3.5 w-3.5" />
+                    </Button>
+                  )}
+                </div>
               </div>
             );
           })}
@@ -323,23 +340,33 @@ export function PtSessionsPanel({ clientId, client }: { clientId: string; client
         <div className="rounded-md border border-dashed border-border p-6 text-center space-y-3">
           <p className="text-sm text-muted-foreground">No personal training sessions sold yet.</p>
           {isAdmin && (
-            <Button size="sm" onClick={() => setSellOpen(true)}><Ticket className="mr-2 h-4 w-4" /> Sell Sessions</Button>
+            <Button size="sm" onClick={() => setSellOpen(true)}><Ticket className="mr-2 h-4 w-4" /> Add Sessions</Button>
           )}
         </div>
       )}
       {hasPacks && upcoming.length === 0 && (
         <div className="rounded-md border border-dashed border-border p-4 text-center space-y-2">
           <p className="text-sm text-muted-foreground">
-            {totalRemaining > 0 ? "No sessions booked yet." : "All sessions used."}
+            {totalAvailable > 0 ? "No sessions booked yet." : "All sessions used."}
           </p>
           <div className="flex justify-center gap-2">
-            {totalRemaining > 0 && (
+            {totalAvailable > 0 && (
               <Button size="sm" variant="outline" onClick={() => { setEditing(null); setBookOpen(true); }}><Plus className="mr-2 h-4 w-4" /> Book Session</Button>
             )}
-            {totalRemaining <= 0 && isAdmin && (
-              <Button size="sm" variant="outline" onClick={() => setSellOpen(true)}><Ticket className="mr-2 h-4 w-4" /> Sell More Sessions</Button>
+            {totalAvailable <= 0 && isAdmin && (
+              <Button size="sm" variant="outline" onClick={() => setSellOpen(true)}><Ticket className="mr-2 h-4 w-4" /> Add More Sessions</Button>
             )}
           </div>
+        </div>
+      )}
+
+      {/* Needs review — past scheduled sessions awaiting an outcome */}
+      {needsReview.length > 0 && (
+        <div className="rounded-lg border border-warning/50 bg-warning/5 p-2">
+          <div className="mb-1 flex items-center gap-1.5 px-1 text-[10px] uppercase tracking-widest text-warning">
+            <AlertTriangle className="h-3 w-3" /> Needs review — pick an outcome ({needsReview.length})
+          </div>
+          <ul className="divide-y divide-border">{needsReview.map(sessionRow)}</ul>
         </div>
       )}
 
@@ -364,6 +391,10 @@ export function PtSessionsPanel({ clientId, client }: { clientId: string; client
       <PtSessionDialog open={bookOpen} onOpenChange={setBookOpen} clientId={clientId} clients={client ? [client] : []} initial={editing ?? undefined} />
       {isAdmin && <SellSessionsDialog open={sellOpen} onOpenChange={setSellOpen} clientId={clientId} />}
       {isAdmin && <AdjustBalanceDialog open={adjustOpen} onOpenChange={setAdjustOpen} clientId={clientId} onSaved={invalidateAll} />}
+      {isAdmin && <ApplyCreditDialog open={upgradeOpen} onOpenChange={setUpgradeOpen} clientId={clientId} />}
+      {isAdmin && editingPack && (
+        <EditPackDialog open={!!editingPack} onOpenChange={(o) => { if (!o) setEditingPack(null); }} pack={editingPack} />
+      )}
     </Card>
   );
 }
@@ -425,9 +456,17 @@ function AdjustBalanceDialog({ open, onOpenChange, clientId, onSaved }: { open: 
   );
 }
 
-function Stat({ label, value, tone }: { label: string; value: number; tone?: "primary" }) {
+function Stat({ label, value, tone }: { label: string; value: number | string; tone?: "primary" | "warning" | "success" }) {
+  const cls =
+    tone === "primary"
+      ? "border-primary/40 bg-primary/10"
+      : tone === "warning"
+        ? "border-warning/50 bg-warning/10"
+        : tone === "success"
+          ? "border-success/50 bg-success/10"
+          : "border-border bg-secondary/40";
   return (
-    <div className={`rounded-md border px-3 py-2 ${tone === "primary" ? "border-primary/40 bg-primary/10" : "border-border bg-secondary/40"}`}>
+    <div className={`rounded-md border px-3 py-2 ${cls}`}>
       <div className="text-[10px] uppercase tracking-widest text-muted-foreground">{label}</div>
       <div className="text-lg font-black">{value}</div>
     </div>
