@@ -391,9 +391,9 @@ export function PtSessionsPanel({ clientId, client }: { clientId: string; client
       <PtSessionDialog open={bookOpen} onOpenChange={setBookOpen} clientId={clientId} clients={client ? [client] : []} initial={editing ?? undefined} />
       {isAdmin && <SellSessionsDialog open={sellOpen} onOpenChange={setSellOpen} clientId={clientId} />}
       {isAdmin && <AdjustBalanceDialog open={adjustOpen} onOpenChange={setAdjustOpen} clientId={clientId} onSaved={invalidateAll} />}
-      {isAdmin && <ApplyCreditDialog open={upgradeOpen} onOpenChange={setUpgradeOpen} clientId={clientId} />}
+      {isAdmin && <ApplyCreditDialog open={upgradeOpen} onOpenChange={setUpgradeOpen} clientId={clientId} onSaved={invalidateAll} />}
       {isAdmin && editingPack && (
-        <EditPackDialog open={!!editingPack} onOpenChange={(o) => { if (!o) setEditingPack(null); }} pack={editingPack} />
+        <EditPackDialog open={!!editingPack} onOpenChange={(o) => { if (!o) setEditingPack(null); }} pack={editingPack} clientId={clientId} onSaved={invalidateAll} />
       )}
     </Card>
   );
