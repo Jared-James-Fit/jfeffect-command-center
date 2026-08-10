@@ -287,7 +287,7 @@ export function WeightLiftedCard({
   const tiles: { icon: typeof Dumbbell; label: string; value: string; sublabel?: string | null }[] = [
     {
       icon: Dumbbell,
-      label: rangeStart || rangeEnd ? "Selected range" : "Lifetime",
+      label: rangeStart || rangeEnd ? "Volume in range" : "Lifetime",
       value: formatBig(conv(summary.lifetime_lb), displayUnit),
       sublabel: summary.sessions > 0 ? `${summary.sessions} session${summary.sessions === 1 ? "" : "s"}` : null,
     },
@@ -312,8 +312,16 @@ export function WeightLiftedCard({
     {
       icon: Layers,
       label: "Current block",
-      value: formatBig(conv(summary.block_lb), displayUnit),
-      sublabel: summary.block_name ?? (summary.block_lb > 0 ? "active block" : "no active block"),
+      value:
+        summary.block_state === "ok"
+          ? formatBig(conv(summary.block_lb), displayUnit)
+          : "—",
+      sublabel:
+        summary.block_state === "ok"
+          ? (summary.block_name ?? "active block")
+          : summary.block_state === "unscheduled"
+            ? `${summary.block_name ?? "Block"} · not scheduled`
+            : "No active block found",
     },
   ];
 
@@ -322,6 +330,14 @@ export function WeightLiftedCard({
       <div className="mb-3 flex items-center gap-2">
         <Dumbbell className="h-5 w-5 text-primary" />
         <h2 className="text-base font-black uppercase tracking-wider">Weight Lifted</h2>
+        <InfoTip label="About weight lifted" title="Weight Lifted" align="start">
+          What it means: volume load — sets × reps × weight — from logged sets.
+          Quick-log sessions without set data use the session total instead.
+          How to use it: track workload trends across the range, last 7 days,
+          last 30 days, and current block.
+          Watch out: volume doesn't measure intensity or difficulty by itself,
+          and bodyweight sets with no external load are not included.
+        </InfoTip>
         {summary.fallbackSessions > 0 && (
           <span className="ml-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
             {summary.fallbackSessions} quick-log session{summary.fallbackSessions === 1 ? "" : "s"} included
