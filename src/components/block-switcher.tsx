@@ -1,8 +1,9 @@
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
-import { Layers } from "lucide-react";
+import { AlertTriangle, Layers, Pencil } from "lucide-react";
 import { listClientBlocks, getBlockTree } from "@/lib/pl-programs";
+import { blockStatusTone, type CanonicalBlockStatus } from "@/lib/block-status";
 import { cn } from "@/lib/utils";
 import {
   AlertDialog,
@@ -32,6 +33,7 @@ export function BlockSwitcher({
   hasUnsavedChanges = false,
   currentBlockName,
   onDiscardUnsaved,
+  statusMap,
 }: {
   clientId: string;
   currentBlockId: string;
@@ -44,6 +46,9 @@ export function BlockSwitcher({
   /** Called when the coach chooses "Discard and switch" — must drop the
    *  local unsaved edits without touching the database. */
   onDiscardUnsaved?: () => void;
+  /** Canonical per-block display statuses (deriveBlockStatuses). When
+   *  omitted, falls back to the raw DB status. */
+  statusMap?: Map<string, CanonicalBlockStatus>;
 }) {
   const navigate = useNavigate();
   const qc = useQueryClient();
@@ -98,12 +103,17 @@ export function BlockSwitcher({
       {(blocks as any[]).map((b) => {
         const active = b.id === currentBlockId;
         const isSwitching = switching === b.id;
+        const status: string | null = statusMap?.get(b.id) ?? b.status ?? null;
+        const missingDates = !b.start_date && (status === "Upcoming" || status === "Draft");
+        const dateRange = b.start_date
+          ? `${b.start_date}${b.end_date ? ` → ${b.end_date}` : ""}`
+          : "No dates scheduled";
         return (
           <button
             key={b.id}
             type="button"
             disabled={!!switching}
-            title={`${b.name}${b.start_date ? ` · ${b.start_date}` : ""}`}
+            title={`${b.name} · ${status ?? "—"} · ${dateRange}`}
             onClick={(e) => handleClick(e, b.id)}
             onMouseEnter={() => handleMouseEnter(b.id)}
             className={cn(
@@ -126,8 +136,22 @@ export function BlockSwitcher({
             ) : (
               <>
                 <span className="max-w-[180px] truncate">{b.name}</span>
-                {b.status && !active && (
-                  <span className="text-[9px] text-muted-foreground">· {b.status}</span>
+                {active ? (
+                  <span className="inline-flex items-center gap-0.5 text-[9px] font-bold uppercase tracking-wide opacity-90">
+                    <Pencil className="h-2.5 w-2.5" /> Editing
+                  </span>
+                ) : (
+                  status && (
+                    <span className={cn("rounded-full border px-1 py-px text-[9px] font-semibold", blockStatusTone(status))}>
+                      {status}
+                    </span>
+                  )
+                )}
+                {missingDates && (
+                  <AlertTriangle
+                    className="h-3 w-3 shrink-0 text-amber-500"
+                    aria-label="No dates scheduled for this block"
+                  />
                 )}
               </>
             )}
