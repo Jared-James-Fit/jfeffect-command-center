@@ -583,6 +583,11 @@ export function ClientAnalyticsDashboard({
                 <h2 className="flex min-w-0 items-center gap-2 truncate text-base font-black uppercase tracking-wider text-foreground">
                   <Trophy className="h-5 w-5 shrink-0 text-primary" />
                   <span className="truncate">Recent PRs</span>
+                  <InfoTip label="About recent PRs" title="Recent PRs" align="start">
+                    Every card is a new estimated 1RM personal best: the logged
+                    set, the previous best it beat, and the gain. Estimates use
+                    the Epley formula — weight × (1 + reps ÷ 30).
+                  </InfoTip>
                 </h2>
                 <div className="flex shrink-0 items-center gap-3">
                   <span className="text-xs font-semibold text-muted-foreground">{filter.label}</span>
@@ -612,6 +617,13 @@ export function ClientAnalyticsDashboard({
                 <h2 className="flex min-w-0 items-center gap-2 truncate text-base font-black uppercase tracking-wider text-foreground">
                   <TrendingUp className="h-5 w-5 shrink-0 text-primary" />
                   <span className="truncate">Exercise Progress</span>
+                  <InfoTip label="About exercise progress" title="Exercise Progress" align="start">
+                    Each point is a logged set for the selected exercise. Switch
+                    between Est 1RM (estimated one-rep max, Epley formula),
+                    Weight (load on the bar), and Effort (RPE or RIR on a 0–10
+                    scale). Tap a point for full set details — the green dot
+                    marks the current PR.
+                  </InfoTip>
                 </h2>
                 <ToggleGroup
                   type="single"
