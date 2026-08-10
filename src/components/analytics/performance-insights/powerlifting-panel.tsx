@@ -6,6 +6,7 @@ import {
 } from "recharts";
 import { format } from "date-fns";
 import type { CompLiftStat, CompLift } from "@/lib/analytics/performance-insights";
+import type { DisplayUnit } from "@/lib/workout-units";
 
 const LIFT_LABEL: Record<CompLift, string> = {
   squat: "Squat", bench: "Bench", deadlift: "Deadlift",
@@ -17,9 +18,15 @@ const LIFT_EMOJI: Record<CompLift, string> = {
 export function PowerliftingPanel({
   lifts,
   onShare,
+  fmtTon,
+  conv,
+  displayUnit,
 }: {
   lifts: CompLiftStat[];
   onShare: (lift: CompLiftStat) => void;
+  fmtTon: (lb: number) => string;
+  conv: (lb: number) => number;
+  displayUnit: DisplayUnit;
 }) {
   if (!lifts.length) {
     return (
@@ -38,7 +45,7 @@ export function PowerliftingPanel({
                 {LIFT_EMOJI[l.lift]} {LIFT_LABEL[l.lift]}
               </div>
               <div className="mt-1 text-2xl font-black">
-                {l.top_set ? `${Math.round(l.top_set.load)} lb × ${l.top_set.reps}` : "—"}
+                {l.top_set ? `${conv(l.top_set.load)} ${displayUnit} × ${l.top_set.reps}` : "—"}
               </div>
               <div className="text-[11px] text-muted-foreground">Top set this window</div>
             </div>
@@ -52,16 +59,16 @@ export function PowerliftingPanel({
             </button>
           </div>
           <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
-            <Metric label="Weekly volume" value={`${l.weekly_volume.toLocaleString()} lb`} />
+            <Metric label="Weekly volume" value={fmtTon(l.weekly_volume)} />
             <Metric label="Weekly sets" value={String(l.weekly_sets)} />
-            <Metric label="Block tonnage" value={`${l.block_tonnage.toLocaleString()} lb`} />
+            <Metric label="Block tonnage" value={fmtTon(l.block_tonnage)} />
             <Metric label="Avg intensity" value={l.avg_intensity_pct != null ? `${l.avg_intensity_pct}%` : "—"} />
             <Metric label="Avg RPE" value={l.avg_rpe != null ? String(l.avg_rpe) : "—"} />
           </div>
           {l.e1rm_trend.length >= 2 && (
             <div className="mt-3 h-24">
               <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={l.e1rm_trend.map((p) => ({ ...p, label: format(new Date(p.date), "MMM d") }))} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
+                <LineChart data={l.e1rm_trend.map((p) => ({ ...p, est_1rm: conv(p.est_1rm), label: format(new Date(p.date), "MMM d") }))} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
                   <CartesianGrid strokeDasharray="3 3" opacity={0.15} />
                   <XAxis dataKey="label" tick={{ fontSize: 9 }} interval="preserveStartEnd" />
                   <YAxis tick={{ fontSize: 9 }} width={30} />
@@ -78,7 +85,7 @@ export function PowerliftingPanel({
                 {l.variations.map((v) => (
                   <li key={v.name} className="flex items-center justify-between gap-2">
                     <span className="truncate">{v.name}</span>
-                    <span className="shrink-0 tabular-nums text-muted-foreground">{v.sets} · {v.tonnage.toLocaleString()} lb</span>
+                    <span className="shrink-0 tabular-nums text-muted-foreground">{v.sets} · {fmtTon(v.tonnage)}</span>
                   </li>
                 ))}
               </ul>

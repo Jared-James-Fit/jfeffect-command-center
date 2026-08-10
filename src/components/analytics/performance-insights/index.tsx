@@ -261,18 +261,18 @@ export function PerformanceInsights({
               {(focus === "powerlifting" || focus === "hybrid") && pl.length > 0 && (
                 <section className="space-y-2">
                   <SectionHeader label="Powerlifting" />
-                  <PowerliftingPanel lifts={pl} onShare={openShareForLift} />
+                  <PowerliftingPanel lifts={pl} onShare={openShareForLift} fmtTon={fmtTon} conv={conv} displayUnit={displayUnit} />
                 </section>
               )}
 
               <section className="space-y-2">
                 <SectionHeader label="Top muscle groups" />
-                <TopMuscleGroupsCard top={top} />
+                <TopMuscleGroupsCard top={top} fmtTon={fmtTon} />
               </section>
 
               <section className="space-y-2">
                 <SectionHeader label="Muscle group volume" />
-                <MuscleGroupGrid stats={stats} onShare={openShareForMuscle} />
+                <MuscleGroupGrid stats={stats} onShare={openShareForMuscle} fmtTon={fmtTon} />
               </section>
 
               {insights.length > 0 && (

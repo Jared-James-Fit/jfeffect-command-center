@@ -4,7 +4,13 @@ import { Trophy, Dumbbell, TrendingUp, CalendarCheck } from "lucide-react";
 import { MUSCLE_EMOJI } from "@/lib/analytics/muscle-map";
 import type { TopMuscleGroups } from "@/lib/analytics/performance-insights";
 
-export function TopMuscleGroupsCard({ top }: { top: TopMuscleGroups }) {
+export function TopMuscleGroupsCard({
+  top,
+  fmtTon,
+}: {
+  top: TopMuscleGroups;
+  fmtTon: (lb: number) => string;
+}) {
   const items = [
     top.most_trained && {
       icon: <Trophy className="h-4 w-4" />, label: "Most Trained",
@@ -14,7 +20,7 @@ export function TopMuscleGroupsCard({ top }: { top: TopMuscleGroups }) {
     top.highest_tonnage && {
       icon: <Dumbbell className="h-4 w-4" />, label: "Highest Tonnage",
       title: `${MUSCLE_EMOJI[top.highest_tonnage.group]} ${top.highest_tonnage.group}`,
-      value: `${top.highest_tonnage.monthly_tonnage.toLocaleString()} lb`,
+      value: fmtTon(top.highest_tonnage.monthly_tonnage),
     },
     top.biggest_growth && {
       icon: <TrendingUp className="h-4 w-4" />, label: "Biggest Growth",
