@@ -294,16 +294,36 @@ async function ensureNextOccurrence(
     client_id: clientId,
     task_type: taskType,
     title: sched.title,
+    subtitle: subtitleFor(sched),
     due_at_utc: next.dueAtUtc.toISOString(),
     due_local_date: next.localDate,
     client_tz: tz,
     status: "upcoming",
     source_definition_id: sched.source_definition_id,
     source_override_id: sched.source_override_id,
+    // Carry the linked form so the Home row can deep-link straight into the
+    // exact form (/portal/check-ins/$formId) instead of the generic list.
+    metadata: sched.form_id ? { form_id: sched.form_id } : {},
   });
   if (error && (error as any).code !== "23505") {
     console.error("[action-centre] ensureNextOccurrence insert failed", { taskType, error });
   }
+}
+
+const DAY_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+
+/** Friendly cadence line shown under the task title on the Home row. */
+function subtitleFor(sched: EffectiveSchedule): string | null {
+  const freq =
+    sched.frequency === "weekly" ? "Weekly"
+    : sched.frequency === "biweekly" ? "Every 2 weeks"
+    : sched.frequency === "monthly" ? "Monthly"
+    : sched.frequency === "daily" ? "Daily"
+    : sched.frequency === "custom_days" ? `Every ${sched.interval_days ?? "few"} days`
+    : null;
+  if (!freq) return null;
+  const day = sched.due_day_of_week != null ? DAY_NAMES[sched.due_day_of_week] : null;
+  return day ? `${freq} · due ${day}` : freq;
 }
 
 export const completeTaskOccurrence = createServerFn({ method: "POST" })
