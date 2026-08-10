@@ -78,7 +78,7 @@ export const SUGGESTED_CARDS: Array<Omit<BookingCard, "id" | "sort_order" | "is_
   },
   {
     name: "Consultation Call",
-    session_type: "Consultation Call",
+    session_type: "Consultation",
     custom_type: null,
     duration_minutes: 30,
     location: "Phone / Video",
