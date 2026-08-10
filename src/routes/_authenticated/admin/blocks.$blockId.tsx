@@ -592,6 +592,9 @@ function BlockEditor() {
     // coach's scroll position / blur the active input.
     const fresh = await getBlockTree(blockId);
     if (fresh) originalTreeRef.current = fresh;
+    // Server truth now equals the saved payload — advance the undo content
+    // fingerprint so a later reload doesn't flag our own history as stale.
+    undoStack.markClean(JSON.stringify(payload));
     // Invalidate sibling caches but skip the tree query — refetching it would
     // overwrite our in-memory payload via the hydration effect on the next mount.
     qc.invalidateQueries({ queryKey: ["pl-block-summary", blockId] });
