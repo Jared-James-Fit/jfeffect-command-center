@@ -42,6 +42,7 @@ import { CardioSummaryCard } from "@/components/analytics/cardio-summary-card";
 import { RecoveryPatternsCard } from "@/components/analytics/recovery-patterns-card";
 import { PredictedWindowCard } from "@/components/analytics/predicted-window-card";
 import { getClientAnalyticsSettings } from "@/lib/analytics/settings";
+import { InfoTip } from "@/components/analytics/info-tip";
 import {
   ANALYTICS_COLORS,
   exerciseColor,
@@ -469,29 +470,59 @@ export function ClientAnalyticsDashboard({
                 label="PRs in range"
                 value={String(summary.prsInRange)}
                 color={ANALYTICS_COLORS.green}
+                tip={
+                  <InfoTip label="About PRs in range" title="PRs in range" align="start">
+                    New estimated 1RM personal bests logged in this range. A PR
+                    counts when a set's estimated 1RM beats every previous
+                    logged set for that exercise — first-time logs don't count,
+                    since there is no previous best to beat. Estimates use the
+                    Epley formula.
+                  </InfoTip>
+                }
               />
               <StatCard
                 icon={<Flame className="h-4 w-4" />}
                 label="Sets in range"
                 value={String(summary.setsInRange)}
                 color={ANALYTICS_COLORS.red}
+                tip={
+                  <InfoTip label="About sets in range" title="Sets in range" align="start">
+                    All sets logged with a weight in this range (warm-ups
+                    included if they were logged). Bodyweight sets with no
+                    external load are not counted here.
+                  </InfoTip>
+                }
               />
               <StatCard
                 icon={<Calendar className="h-4 w-4" />}
                 label="Workouts"
                 value={String(summary.workouts)}
                 color={ANALYTICS_COLORS.blue}
+                tip={
+                  <InfoTip label="About workouts count" title="Workouts" align="end">
+                    Distinct training days with at least one logged set in this
+                    range — workouts with real logged data, not scheduled
+                    sessions.
+                  </InfoTip>
+                }
               />
               <StatCard
                 icon={<TrendingUp className="h-4 w-4" />}
-                label="Top gain"
+                label="Top e1RM gain"
                 value={
                   summary.topLift
                     ? `+${fmtNum(summary.topLift.delta)} ${displayUnit}`
                     : "—"
                 }
-                sublabel={summary.topLift?.name}
+                sublabel={summary.topLift?.name ?? "No PRs in this range"}
                 color={ANALYTICS_COLORS.purple}
+                tip={
+                  <InfoTip label="About top e1RM gain" title="Top e1RM gain" align="end">
+                    The biggest estimated 1RM increase detected in this range —
+                    the PR with the largest jump over the client's previous best
+                    for that exercise.
+                  </InfoTip>
+                }
               />
             </section>
 
@@ -912,13 +943,14 @@ export function ClientAnalyticsDashboard({
 void LineChart;
 
 function StatCard({
-  icon, label, value, sublabel, color,
+  icon, label, value, sublabel, color, tip,
 }: {
   icon: React.ReactNode;
   label: string;
   value: string;
   sublabel?: string;
   color: string;
+  tip?: React.ReactNode;
 }) {
   return (
     <Card
@@ -928,6 +960,7 @@ function StatCard({
       <div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
         <span style={{ color }}>{icon}</span>
         <span className="truncate">{label}</span>
+        {tip && <span className="ml-auto normal-case">{tip}</span>}
       </div>
       <div className="mt-1 truncate text-xl font-black tracking-tight text-foreground">
         {value}
