@@ -10,11 +10,13 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
-  Plus, CalendarDays, Pencil, Trash2, CheckCircle2, Undo2, Ticket, Wallet, Ban, CircleOff,
+  Plus, CalendarDays, Pencil, Trash2, CheckCircle2, Undo2, Ticket, Wallet, Ban, CircleOff, ArrowRightLeft, ScrollText, AlertTriangle,
 } from "lucide-react";
 import { toast } from "sonner";
 import { PtSessionDialog } from "./pt-session-dialog";
 import { SellSessionsDialog } from "./sell-sessions-dialog";
+import { ApplyCreditDialog } from "./apply-credit-dialog";
+import { EditPackDialog } from "./edit-pack-dialog";
 import { adjustSessionCredits } from "@/lib/session-credit-packages.functions";
 import { setPtSessionStatus } from "@/lib/pt-pack.functions";
 import { statusTone, fmtTimeRange } from "@/lib/pt-sessions";
@@ -38,7 +40,9 @@ export function PtSessionsPanel({ clientId, client }: { clientId: string; client
   const [bookOpen, setBookOpen] = useState(false);
   const [sellOpen, setSellOpen] = useState(false);
   const [adjustOpen, setAdjustOpen] = useState(false);
+  const [upgradeOpen, setUpgradeOpen] = useState(false);
   const [editing, setEditing] = useState<any>(null);
+  const [editingPack, setEditingPack] = useState<any>(null);
 
   const invalidateAll = () => {
     qc.invalidateQueries({ queryKey: ["pt-sessions", clientId] });
@@ -56,6 +60,11 @@ export function PtSessionsPanel({ clientId, client }: { clientId: string; client
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "pt_sessions", filter: `client_id=eq.${clientId}` },
+        invalidateAll,
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "session_ledger_events", filter: `client_id=eq.${clientId}` },
         invalidateAll,
       )
       .subscribe();
@@ -96,7 +105,7 @@ export function PtSessionsPanel({ clientId, client }: { clientId: string; client
     queryFn: async () => {
       const { data } = await supabase
         .from("purchase_records")
-        .select("id, offer_name, payment_status, contract_value_cents, full_payable_amount, currency, sessions_purchased, package_expiry_date")
+        .select("id, offer_name, payment_status, contract_value_cents, full_payable_amount, amount_paid_cents, amount_outstanding_cents, show_value_to_client, currency, sessions_purchased, package_expiry_date")
         .eq("client_id", clientId)
         .gt("sessions_purchased", 0)
         .order("created_at", { ascending: false });
