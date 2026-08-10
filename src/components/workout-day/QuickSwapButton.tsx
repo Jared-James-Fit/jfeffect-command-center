@@ -675,7 +675,7 @@ export function QuickSwapButton({
         size="sm"
         variant="outline"
         onClick={() => setOpen(true)}
-        className="h-7 px-2 text-xs"
+        className="h-7 rounded-full px-2.5 text-xs"
         aria-label={`Quick swap ${exerciseName}`}
       >
         <ArrowLeftRight className="mr-1 h-3 w-3" /> Swap

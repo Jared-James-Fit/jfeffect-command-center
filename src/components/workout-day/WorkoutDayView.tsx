@@ -2619,22 +2619,33 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
         })}
         {row.tempo && <span className="ml-2 text-xs font-normal text-muted-foreground">tempo {row.tempo}</span>}
       </div>
-      {/* Compact "Last time" chip — subtle so it never outshines today's prescription. */}
-      {(exerciseId || name) && (
-        <PreviousLiftChip
-          data={previousLift}
-          displayUnit={activeUnit}
-        />
-      )}
-      {/* Big, dummy-proof rest timer — tap to start, auto-resets at 0 */}
-      <div className="mt-2">
-        <RestTimerButton
-          seconds={effectiveRest ?? null}
-          label={restDisplay}
-          onStart={() => beginWorkoutSession(dayId)}
-        />
-      </div>
+      {/* Utility row: Last Time reference, compact History pill, and the compact
       {/* Suggested load badges */}
+      {(exerciseId || name) && (
+        <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+          <PreviousLiftChip
+            data={previousLift}
+            displayUnit={activeUnit}
+            className="mt-0"
+          />
+          {clientId && (
+            <ExerciseHistoryButton
+              clientId={clientId}
+              exerciseId={exerciseId}
+              exerciseName={name}
+              displayUnit={activeUnit}
+              currentDayIndex={dayIndex}
+              className="w-auto h-7 rounded-full px-2.5 text-xs"
+            />
+          )}
+          <RestTimerButton
+            seconds={effectiveRest ?? null}
+            label={restDisplay}
+            onStart={() => beginWorkoutSession(dayId)}
+            className="ml-auto"
+          />
+        </div>
+      )}
       {row.manual_override && (row.load_kg || row.load_lb) && (
         <SuggestedLoadBadge
           load={Number(
@@ -2661,23 +2672,14 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
         </div>
       )}
       {row.notes && <ExerciseNotesBlock notes={row.notes} />}
-      {/* Row 3 — compact horizontal action row (secondary controls: lighter weight) */}
+      {/* Row 3 — compact pill tool row (secondary controls: lighter weight) */}
       <div className="mt-2 flex flex-wrap items-center gap-1 opacity-70 hover:opacity-100 transition-opacity">
-        {clientId && (exerciseId || name) && (
-          <ExerciseHistoryButton
-            clientId={clientId}
-            exerciseId={exerciseId}
-            exerciseName={name}
-            displayUnit={activeUnit}
-            currentDayIndex={dayIndex}
-          />
-        )}
         {hasGuide && (
-          <Button size="sm" variant="outline" onClick={() => setHowToOpen(true)} className="h-7 px-2 text-xs">
+          <Button size="sm" variant="outline" onClick={() => setHowToOpen(true)} className="h-7 rounded-full px-2.5 text-xs">
             <Play className="mr-1 h-3 w-3 fill-current" /> How&nbsp;To
           </Button>
         )}
-        <Button size="sm" variant={hasNote ? "default" : "outline"} onClick={() => setNotesOpen(true)} className="h-7 px-2 text-xs">
+        <Button size="sm" variant={hasNote ? "default" : "outline"} onClick={() => setNotesOpen(true)} className="h-7 rounded-full px-2.5 text-xs">
           <StickyNote className="mr-1 h-3 w-3" /> Notes
         </Button>
         <QuickSwapButton
@@ -2690,16 +2692,23 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
           difficulty={(exercise as any)?.difficulty ?? null}
           swapContext={swapContext}
         />
-        {cues && (
-          <Button size="sm" variant="ghost" onClick={() => setCuesOpen((v) => !v)} className="h-7 px-2 text-xs">
-            {cuesOpen ? <ChevronUp className="mr-1 h-3 w-3" /> : <ChevronDown className="mr-1 h-3 w-3" />}
-            {cuesOpen ? "Hide cues" : "Show cues"}
-          </Button>
-        )}
-        <TrainingHelpButton size="sm" variant="ghost" className="h-7 px-2 text-xs ml-auto" />
       </div>
 
+      {/* Utility row — cues on the left, help on the right; light so it never
       {/* Quick-fill weight button — only show when not readonly and there are uncompleted sets */}
+      <div className="mt-1 flex items-center">
+        {cues && (
+          <button
+            type="button"
+            onClick={() => setCuesOpen((v) => !v)}
+            className="inline-flex h-6 items-center gap-1 px-1 text-[11px] font-medium text-muted-foreground transition hover:text-foreground"
+          >
+            {cuesOpen ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+            {cuesOpen ? "Hide cues" : "Show cues"}
+          </button>
+        )}
+        <TrainingHelpButton size="sm" variant="ghost" className="ml-auto h-6 px-1 text-[11px] text-muted-foreground hover:text-foreground" />
+      </div>
       {!readonly && !trackingType.includes("time") && clientId && (() => {
         const firstSet = existingResults.find((x: any) => x.set_index === 1);
         const firstLoad = firstSet?.actual_load;
