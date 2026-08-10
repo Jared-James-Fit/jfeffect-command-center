@@ -11,7 +11,9 @@ import { ActionButton } from "@/components/action-button";
 import {
   getBlockTree, updateBlock, addWeek as addWeekFn, deleteWeek, addDay as addDayFn, updateDay,
   deleteDay, updateRow, deleteRow,
+  listClientBlocks,
 } from "@/lib/pl-programs";
+import { deriveBlockStatuses, blockStatusTone } from "@/lib/block-status";
 import { cloneBlocksForRowsFn } from "@/lib/exercise-blocks.functions";
 import type { ExerciseRef } from "@/components/program-builder";
 import {
@@ -347,6 +349,20 @@ function BlockEditor() {
         .order("name")).data ?? []) as any,
     staleTime: 5 * 60_000,
   });
+  // Sibling blocks for this client — shared cache key with BlockSwitcher —
+  // used to derive the ONE canonical active block and per-block statuses so
+  // the header + pills never show a stale/conflicting "Active" badge.
+  const { data: siblingBlocks = [] } = useQuery({
+    queryKey: ["pl-blocks", clientIdFromTree],
+    queryFn: () => listClientBlocks(clientIdFromTree as string),
+    enabled: !!clientIdFromTree,
+    staleTime: 30_000,
+  });
+  const blockStatusMap = useMemo(() => deriveBlockStatuses(siblingBlocks as any[]), [siblingBlocks]);
+  const canonicalActiveBlock = useMemo(
+    () => (siblingBlocks as any[]).find((b) => blockStatusMap.get(b.id) === "Active") ?? null,
+    [siblingBlocks, blockStatusMap],
+  );
 
   const [name, setName] = useState<string>("");
   const [payload, setPayload] = useState<any>(null);
