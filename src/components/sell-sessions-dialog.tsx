@@ -173,36 +173,74 @@ export function SellSessionsDialog({ open, onOpenChange, clientId }: Props) {
               />
             </div>
             <div>
-              <Label>Total price (CAD)</Label>
+              <Label>Currency</Label>
+              <Select value={currency} onValueChange={setCurrency}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="CAD">CAD</SelectItem>
+                  <SelectItem value="USD">USD</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <Label>Total package value ({currency})</Label>
               <Input
-                type="number" min={0} step="0.01" value={price} placeholder="300"
+                type="number" min={0} step="0.01" value={price} placeholder="360"
                 onChange={(e) => setPrice(e.target.value)}
+              />
+            </div>
+            <div>
+              <Label>Amount paid ({currency})</Label>
+              <Input
+                type="number" min={0} step="0.01" value={paymentMode === "paid" ? price : amountPaid}
+                placeholder="300"
+                disabled={paymentMode !== "partial"}
+                onChange={(e) => setAmountPaid(e.target.value)}
               />
             </div>
           </div>
 
-          {perSession > 0 && (
-            <div className="rounded-md border border-primary/40 bg-primary/10 px-3 py-2 text-sm">
-              <strong>{sessions}</strong> session{sessions === 1 ? "" : "s"} · <strong>CAD {priceNum.toLocaleString()}</strong> total ·{" "}
-              <strong>${perSession.toFixed(2)}/session</strong>
-            </div>
-          )}
-
           <div>
             <Label>Payment</Label>
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-3 gap-2">
               <Button type="button" variant={paymentMode === "paid" ? "default" : "outline"} onClick={() => setPaymentMode("paid")}>
                 Paid in full
               </Button>
+              <Button type="button" variant={paymentMode === "partial" ? "default" : "outline"} onClick={() => { setPaymentMode("partial"); if (!amountPaid) setAmountPaid(""); }}>
+                Partial
+              </Button>
               <Button type="button" variant={paymentMode === "pending" ? "default" : "outline"} onClick={() => setPaymentMode("pending")}>
-                Pending payment
+                Pending
               </Button>
             </div>
             <p className="mt-1 text-xs text-muted-foreground">
               {paymentMode === "paid"
                 ? "Sessions are activated immediately."
-                : "Sessions activate automatically once the purchase is marked paid (or a Stripe payment is reconciled)."}
+                : "Sessions activate automatically once the pack is paid in full (edit the pack when the balance is paid, or a Stripe payment is reconciled)."}
             </p>
+          </div>
+
+          {perSession > 0 && (
+            <div className="rounded-md border border-primary/40 bg-primary/10 px-3 py-2 text-sm space-y-0.5">
+              <div>
+                <strong>{sessions}</strong> session{sessions === 1 ? "" : "s"} ·{" "}
+                <strong>{currency} {priceNum.toLocaleString()}</strong> value ·{" "}
+                <strong>{currency} {paidNum.toLocaleString()}</strong> paid
+              </div>
+              <div>
+                <strong>${perSession.toFixed(2)}/session</strong> value ·{" "}
+                {paidPerSession > 0 ? <><strong>${paidPerSession.toFixed(2)}/session</strong> paid value</> : "—"}
+                {valueGap > 0 && <> · <span className="text-warning">{currency} {valueGap.toFixed(2)} {paymentMode === "partial" ? "still due" : "unpaid"}</span></>}
+              </div>
+            </div>
+          )}
+
+          <div>
+            <Label>Payment method / source (optional)</Label>
+            <Input value={paymentMethod} onChange={(e) => setPaymentMethod(e.target.value)} placeholder="Cash, e-transfer, Stripe…" />
           </div>
 
           <div>
