@@ -25,6 +25,7 @@ type Session = {
   session_date: string;
   start_time: string;
   end_time: string;
+  uses_credit?: boolean | null;
 };
 
 function sessionSummary(s: Session): string {
@@ -53,7 +54,14 @@ export function NoShowPtDialog({
     setBusy(deduct ? "deduct" : "keep");
     try {
       await setPtSessionStatus({ data: { sessionId: session.id, status: "Missed", deductOnMissed: deduct } });
-      toast.success(deduct ? "No-show recorded — 1 credit deducted" : "No-show recorded — credit released back to available");
+      const usesCredit = session.uses_credit !== false;
+      toast.success(
+        deduct && usesCredit
+          ? "No-show recorded — 1 credit deducted"
+          : usesCredit
+            ? "No-show recorded — credit released back to available"
+            : "No-show recorded — no credit impact",
+      );
       invalidatePtSessionCaches(qc, session.client_id);
       onDone?.();
       onOpenChange(false);
@@ -71,15 +79,26 @@ export function NoShowPtDialog({
           <DialogTitle className="flex items-center gap-2"><Ban className="h-4 w-4 text-warning" /> Mark No-show</DialogTitle>
         </DialogHeader>
         {session && <p className="text-sm text-muted-foreground">{sessionSummary(session)}</p>}
-        <p className="text-sm font-semibold">Deduct a session credit for this no-show?</p>
-        <div className="grid gap-2">
-          <Button variant="destructive" disabled={busy !== null} onClick={() => mark(true)}>
-            {busy === "deduct" ? "Saving…" : "Deduct 1 credit"}
-          </Button>
-          <Button variant="outline" disabled={busy !== null} onClick={() => mark(false)}>
-            {busy === "keep" ? "Saving…" : "Do not deduct — release credit"}
-          </Button>
-        </div>
+        {session?.uses_credit === false ? (
+          <>
+            <p className="text-sm text-muted-foreground">This session doesn't use PT credits — marking it no-show won't affect the credit balance.</p>
+            <Button variant="destructive" disabled={busy !== null} onClick={() => mark(false)}>
+              {busy !== null ? "Saving…" : "Mark no-show"}
+            </Button>
+          </>
+        ) : (
+          <>
+            <p className="text-sm font-semibold">Deduct a session credit for this no-show?</p>
+            <div className="grid gap-2">
+              <Button variant="destructive" disabled={busy !== null} onClick={() => mark(true)}>
+                {busy === "deduct" ? "Saving…" : "Deduct 1 credit"}
+              </Button>
+              <Button variant="outline" disabled={busy !== null} onClick={() => mark(false)}>
+                {busy === "keep" ? "Saving…" : "Do not deduct — release credit"}
+              </Button>
+            </div>
+          </>
+        )}
       </DialogContent>
     </Dialog>
   );
