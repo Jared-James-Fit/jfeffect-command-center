@@ -583,7 +583,7 @@ function WorkoutDay({
       } else {
         const { data, error } = await sb
           .from("pl_exercise_rows")
-          .select("*, exercises(id,name,video_url,vimeo_embed_url,secondary_vimeo_embed_url,active_video_set,thumbnail_url,cues,common_mistakes,muscle_group,category,pl_lift_group,warmup_protocol_id,is_powerlifting,warmup_notes,default_load_unit,exercise_category,is_competition_lift,competition_lift_type,default_measurement_type,duration_seconds)")
+          .select("*, exercises(id,name,video_url,vimeo_embed_url,secondary_vimeo_embed_url,active_video_set,thumbnail_url,cues,common_mistakes,muscle_group,category,pl_lift_group,warmup_protocol_id,is_powerlifting,warmup_notes,default_load_unit,exercise_category,is_competition_lift,competition_lift_type,default_measurement_type)")
           .eq("day_id", dayId)
           .order("sort_order");
         // Surface RLS / network errors to react-query so the failure
