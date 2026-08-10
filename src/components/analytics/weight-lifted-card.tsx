@@ -5,6 +5,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Dumbbell, History, CalendarDays, CalendarRange, Layers } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { format } from "date-fns";
+import { InfoTip } from "@/components/analytics/info-tip";
 
 type Unit = "lb" | "kg";
 const LB_PER_KG = 2.2046226;
@@ -38,6 +39,7 @@ type Summary = {
   month_lb: number;
   block_lb: number;
   block_name: string | null;
+  block_state: "ok" | "unscheduled" | "none";
   sessions: number;
   fallbackSessions: number;
   bodyweightSets: number;
@@ -221,20 +223,26 @@ export function WeightLiftedCard({
 
     let blockLb = 0;
     let blockName: string | null = null;
+    let blockState: "ok" | "unscheduled" | "none" = "none";
     // Prefer the scoped block (matches the block being viewed in the
     // analytics filter). Fall back to the client's active/planned prep
     // window for the legacy "no block scoped" case.
     const scope = scopedBlock ?? prep;
-    if (scope?.start_date) {
-      // Intersect the current block with the global range.
-      const blockStart = new Date(scope.start_date).getTime();
-      const blockEnd = scope.end_date ? new Date(scope.end_date + "T23:59:59").getTime() : now;
-      const start = Math.max(blockStart, rangeStartMs);
-      const end = Math.min(blockEnd, rangeEndMs);
-      blockLb = all
-        .filter((d) => d.date.getTime() >= start && d.date.getTime() <= end)
-        .reduce((s, x) => s + x.weight_lb, 0);
+    if (scope) {
       blockName = scope.name ?? scope.title ?? null;
+      if (scope.start_date) {
+        blockState = "ok";
+        // Intersect the current block with the global range.
+        const blockStart = new Date(scope.start_date).getTime();
+        const blockEnd = scope.end_date ? new Date(scope.end_date + "T23:59:59").getTime() : now;
+        const start = Math.max(blockStart, rangeStartMs);
+        const end = Math.min(blockEnd, rangeEndMs);
+        blockLb = all
+          .filter((d) => d.date.getTime() >= start && d.date.getTime() <= end)
+          .reduce((s, x) => s + x.weight_lb, 0);
+      } else {
+        blockState = "unscheduled";
+      }
     }
 
     const fallbackSessions = all.filter((d) => d.fromFallback).length;
@@ -247,6 +255,7 @@ export function WeightLiftedCard({
       month_lb: month,
       block_lb: blockLb,
       block_name: blockName,
+      block_state: blockState,
       sessions: all.length,
       fallbackSessions,
       bodyweightSets,

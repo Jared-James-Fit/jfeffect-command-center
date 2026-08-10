@@ -172,6 +172,7 @@ export function PlannedVsActualCard({
                   <div className="mt-0.5 text-[11px] text-muted-foreground">
                     {d.totals.actualSets}/{d.totals.plannedSets || "?"} sets
                     {d.totals.repsHitPct != null && ` · ${d.totals.repsHitPct}% reps on target`}
+                    {d.totals.actualSets === 0 && " · no sets logged"}
                   </div>
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
