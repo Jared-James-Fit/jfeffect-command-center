@@ -1417,7 +1417,9 @@ function WorkoutDay({
       setAutoOpenReviewAfterFinish(true);
       return;
     }
-    await metaSave.flush();
+    // flush() now rejects on failure — Finish Workout must still proceed;
+    // the save status indicator surfaces the failed meta save for retry.
+    await metaSave.flush().catch(() => {});
     try {
       const isMemberStart = adapter?.kind === "member";
       const memberRefStart = isMemberStart ? (adapter?.ref as any) : null;
@@ -3520,7 +3522,10 @@ function SetRow({
 
   const flushSaveAfterEdit = () => {
     clearEditGuard();
-    setTimeout(() => { void save.flush(); }, 0);
+    // flush() rejects on failure; the autosave status chip shows the error
+    // and schedules its own retry, so swallow here to avoid an unhandled
+    // rejection.
+    setTimeout(() => { void save.flush().catch(() => {}); }, 0);
   };
 
   const onEnter: React.KeyboardEventHandler<HTMLInputElement> = (e) => {
