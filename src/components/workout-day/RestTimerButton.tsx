@@ -3,10 +3,12 @@ import { Pause, Play, RotateCcw, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 /**
- * Big, dummy-proof rest-timer button.
+ * Compact rest-timer chip.
  * - Tap to start countdown from `seconds`.
  * - Shows MM:SS while running.
  * - When it hits 0, resets back to the original label so the user can tap it again.
+ * Visual weight is intentionally light so the set table stays the card's focus;
+ * the running state gets a subtle highlight instead of a full-width block.
  */
 export function RestTimerButton({
   seconds,
@@ -100,12 +102,12 @@ export function RestTimerButton({
         disabled={disabled}
         aria-label={`Start rest timer for ${label}`}
         className={cn(
-          "inline-flex w-full items-center justify-center gap-2 rounded-lg border border-primary/40 bg-primary/10 px-3 py-2 text-sm font-semibold tabular-nums text-foreground shadow-sm transition hover:bg-primary/20 active:scale-[0.98] disabled:opacity-50 disabled:active:scale-100",
+          "inline-flex h-8 items-center justify-center gap-1.5 rounded-full border border-primary/30 bg-primary/10 px-3 text-xs font-semibold tabular-nums text-foreground transition hover:bg-primary/15 active:scale-[0.97] disabled:opacity-50 disabled:active:scale-100",
           className,
         )}
       >
-        <Play className="h-4 w-4" />
-        <span>Rest: {label} — Tap to start</span>
+        <Play className="h-3 w-3 fill-current" />
+        <span>Rest · {label}</span>
       </button>
     );
   }
@@ -113,7 +115,7 @@ export function RestTimerButton({
   return (
     <div
       className={cn(
-        "flex w-full items-center gap-2 rounded-lg border border-primary bg-primary px-2 py-1.5 text-primary-foreground shadow-sm",
+        "inline-flex h-8 items-center gap-1 rounded-full border border-primary/50 bg-primary/15 px-1 ring-2 ring-primary/10",
         className,
       )}
       role="group"
@@ -123,29 +125,29 @@ export function RestTimerButton({
         type="button"
         onClick={paused ? resume : pause}
         aria-label={paused ? "Resume rest timer" : "Pause rest timer"}
-        className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-primary-foreground/15 transition hover:bg-primary-foreground/25 active:scale-95"
+        className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-primary transition hover:bg-primary/15 active:scale-95"
       >
-        {paused ? <Play className="h-5 w-5" /> : <Pause className="h-5 w-5" />}
+        {paused ? <Play className="h-3.5 w-3.5 fill-current" /> : <Pause className="h-3.5 w-3.5 fill-current" />}
       </button>
-      <div className="flex-1 text-center text-base font-semibold tabular-nums">
+      <div className="px-1 text-sm font-bold tabular-nums text-foreground">
         {display}
-        {paused && <span className="ml-2 text-xs font-medium opacity-80">Paused</span>}
+        {paused && <span className="ml-1 text-[10px] font-medium text-muted-foreground">Paused</span>}
       </div>
       <button
         type="button"
         onClick={restart}
         aria-label="Restart rest timer"
-        className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-primary-foreground/15 transition hover:bg-primary-foreground/25 active:scale-95"
+        className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-muted-foreground transition hover:bg-primary/15 hover:text-foreground active:scale-95"
       >
-        <RotateCcw className="h-5 w-5" />
+        <RotateCcw className="h-3 w-3" />
       </button>
       <button
         type="button"
         onClick={stop}
         aria-label="Stop rest timer"
-        className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-primary-foreground/15 transition hover:bg-primary-foreground/25 active:scale-95"
+        className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-muted-foreground transition hover:bg-primary/15 hover:text-foreground active:scale-95"
       >
-        <X className="h-5 w-5" />
+        <X className="h-3 w-3" />
       </button>
     </div>
   );
