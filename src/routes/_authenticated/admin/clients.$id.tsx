@@ -88,6 +88,7 @@ const ClientWarmupCard = lazyDefault(() => import("@/components/client-warmup-ca
 const ClientBillingPanel = lazyDefault(() => import("@/components/admin/client-billing-panel"), "ClientBillingPanel");
 const GoalsSetupPanel = lazyDefault(() => import("@/components/clients/goals-setup-panel"), "GoalsSetupPanel");
 const SessionCreditsPanel = lazyDefault(() => import("@/components/admin/session-credits-panel"), "SessionCreditsPanel");
+const TrainingProgramHub = lazyDefault(() => import("@/components/clients/training-program-hub"), "TrainingProgramHub");
 
 function TabFallback() {
   return <div className="md:col-span-3 p-6 text-sm text-muted-foreground">Loading…</div>;
@@ -985,6 +986,7 @@ export function ClientProfileWorkspace({
 
         <TabsContent value="training" className="grid gap-6 md:grid-cols-3">
           <Suspense fallback={<TabFallback />}>
+            <TrainingProgramHub clientId={id} clientName={form?.full_name ?? null} />
             <div className="md:col-span-3"><TrainingScheduleCard client={form} /></div>
             <AssignedProgramsCard clientId={id} mode="admin" />
             <TrainingPhasesPanel clientId={id} />
