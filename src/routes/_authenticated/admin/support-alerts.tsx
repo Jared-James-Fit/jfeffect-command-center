@@ -377,7 +377,14 @@ function AlertCard({ alert, onUpdateStatus, onAddNote, selected, onToggleSelecte
     )}>
       <div className="p-4 md:p-5">
         <div className="flex flex-col md:flex-row md:items-start justify-between gap-4">
-          <div className="flex items-start gap-4 min-w-0">
+          <div className="flex items-start gap-3 min-w-0">
+            <Checkbox
+              checked={selected}
+              onCheckedChange={() => onToggleSelected(alert.id)}
+              disabled={selectionDisabled}
+              aria-label={`Select alert for ${client?.full_name || "client"}`}
+              className="mt-2.5 h-5 w-5 shrink-0"
+            />
             <UserAvatar 
               src={client?.profile_picture_url} 
               name={client?.full_name || "Unknown Client"} 
