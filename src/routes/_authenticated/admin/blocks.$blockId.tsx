@@ -142,7 +142,7 @@ function deduplicateDbIds(payload: any) {
  * history) whenever possible. Mutates `current` so newly-inserted entities get
  * their fresh `_dbId` attached.
  */
-async function applyPayloadDiff(blockId: string, originalTree: any, current: any) {
+async function applyPayloadDiff(blockId: string, originalTree: any, current: any, clientId?: string | null) {
   deduplicateDbIds(current);
   const original = treeToPayload(originalTree);
   const origWeeks: any[] = original.weeks_data;
@@ -219,9 +219,21 @@ async function applyPayloadDiff(blockId: string, originalTree: any, current: any
         if ((cd.subtitle ?? "") !== (od?.subtitle ?? "")) dPatch.subtitle = cd.subtitle || null;
         if ((cd.focus ?? "") !== (od?.focus ?? "")) dPatch.focus = cd.focus || null;
         if ((cd.notes ?? "") !== (od?.notes ?? "")) dPatch.notes = cd.notes || null;
-        if ((cd.scheduled_date ?? null) !== (od?.scheduled_date ?? null)) dPatch.scheduled_date = cd.scheduled_date || null;
         if (wantDayIdx !== od?.day_index) dPatch.day_index = wantDayIdx;
         if (Object.keys(dPatch).length) await updateDay(cd._dbId, dPatch);
+        // Training Date writes go through the canonical schedule sync
+        // (instance-first + legacy mirror) so the editor, Schedule Manager,
+        // and calendar can never desync. A direct pl_days write is IGNORED by
+        // the calendar whenever an instance exists — that was the desync bug.
+        if ((cd.scheduled_date ?? null) !== (od?.scheduled_date ?? null)) {
+          if (clientId) {
+            await syncProgramDaySchedule({
+              data: { clientId, dayId: cd._dbId, newDate: cd.scheduled_date || null },
+            });
+          } else {
+            await updateDay(cd._dbId, { scheduled_date: cd.scheduled_date || null });
+          }
+        }
       }
 
       // ROWS within this day
@@ -437,6 +449,98 @@ function BlockEditor() {
     lastPushTs.current = 0;
   };
 
+  // ── Canonical schedule status per day (editor ↔ calendar sync) ──
+  // The calendar treats pl_scheduled_workouts instances as the source of
+  // truth and pl_days.scheduled_date as a legacy fallback. These queries +
+  // the resolver tell the editor what the calendar ACTUALLY shows per day.
+  const editorDays = useMemo(() => {
+    const out: Array<{ id: string; scheduled_date: string | null }> = [];
+    for (const w of payload?.weeks_data ?? []) {
+      for (const d of w.days ?? []) {
+        if (d._dbId) out.push({ id: d._dbId, scheduled_date: d.scheduled_date ?? null });
+      }
+    }
+    return out;
+  }, [payload]);
+  const editorDayIds = useMemo(() => editorDays.map((d) => d.id), [editorDays]);
+  const { data: schedInstances = [] } = useQuery({
+    queryKey: ["block-schedule-instances", blockId],
+    enabled: !!clientIdFromTree && editorDayIds.length > 0,
+    queryFn: async () =>
+      ((
+        await supabase
+          .from("pl_scheduled_workouts")
+          .select("id, source_day_id, scheduled_date")
+          .eq("client_id", clientIdFromTree as string)
+          .in("source_day_id", editorDayIds)
+      ).data ?? []) as any[],
+    staleTime: 15_000,
+  });
+  const { data: dayCompletions = [] } = useQuery({
+    queryKey: ["block-day-completions", blockId],
+    enabled: editorDayIds.length > 0,
+    queryFn: async () =>
+      ((
+        await supabase
+          .from("pl_day_completions")
+          .select("day_id, scheduled_workout_id, completed_at")
+          .in("day_id", editorDayIds)
+      ).data ?? []) as any[],
+    staleTime: 15_000,
+  });
+  const dayStatusMap = useMemo(
+    () =>
+      buildProgramScheduleStatus({
+        days: editorDays,
+        instances: schedInstances,
+        completions: dayCompletions,
+      }),
+    [editorDays, schedInstances, dayCompletions],
+  );
+  const scheduleSummary = useMemo(
+    () => summarizeProgramSchedule(dayStatusMap.values()),
+    [dayStatusMap],
+  );
+
+  // One-click repair for a "Calendar Issue" badge: aligns the legacy mirror
+  // to the canonical instance date. Updates both the server snapshot and the
+  // local editor value so no phantom diff remains for the next save.
+  const fixCalendarIssue = async (dayId: string) => {
+    if (!clientIdFromTree) return;
+    try {
+      const res = await reconcileDayScheduleMirror({
+        data: { clientId: clientIdFromTree, dayId },
+      });
+      if (!res.ok) {
+        toast.error("No scheduled calendar entry found for this day.");
+        return;
+      }
+      toast.success(`Aligned to the calendar date (${res.date}).`);
+      setPayload((p: any) => {
+        if (!p) return p;
+        return {
+          ...p,
+          weeks_data: (p.weeks_data ?? []).map((w: any) => ({
+            ...w,
+            days: (w.days ?? []).map((d: any) =>
+              d._dbId === dayId ? { ...d, scheduled_date: res.date } : d,
+            ),
+          })),
+        };
+      });
+      if (originalTreeRef.current) {
+        for (const w of originalTreeRef.current.weeks ?? []) {
+          for (const d of w.days ?? []) {
+            if (d.id === dayId) d.scheduled_date = res.date;
+          }
+        }
+      }
+      invalidateScheduleQueries(qc, { clientId: clientIdFromTree, blockId });
+    } catch (e: any) {
+      toast.error(e?.message ?? "Couldn't fix this calendar issue.");
+    }
+  };
+
   const persist = async () => {
     if (!payload) return;
     // Update name first
@@ -448,7 +552,7 @@ function BlockEditor() {
     // need to swap the payload reference afterwards — keeping the same object
     // identity preserves scroll position, input focus, and prevents the editor
     // from re-rendering every cell after autosave.
-    await applyPayloadDiff(blockId, originalTreeRef.current, payload);
+    await applyPayloadDiff(blockId, originalTreeRef.current, payload, clientIdFromTree ?? null);
     // Refresh just the snapshot used for future diffs. Do NOT replace `payload`
     // here — that would re-render the entire builder mid-edit and bounce the
     // coach's scroll position / blur the active input.
@@ -458,6 +562,7 @@ function BlockEditor() {
     // overwrite our in-memory payload via the hydration effect on the next mount.
     qc.invalidateQueries({ queryKey: ["pl-block-summary", blockId] });
     qc.invalidateQueries({ queryKey: ["client-assigned-programs"] });
+    invalidateScheduleQueries(qc, { clientId: clientIdFromTree, blockId });
     setDirty(false);
   };
 
@@ -587,6 +692,29 @@ function BlockEditor() {
             </Badge>
           )}
         </span>
+        <span aria-hidden>·</span>
+        <span className="inline-flex items-center gap-1.5">
+          Scheduled:{" "}
+          <span
+            className={`font-semibold ${
+              scheduleSummary.missingCount > 0 || scheduleSummary.issueCount > 0
+                ? "text-amber-600 dark:text-amber-400"
+                : "text-foreground"
+            }`}
+          >
+            {scheduleSummary.scheduledCount}/{scheduleSummary.totalDays}
+          </span>
+          {scheduleSummary.missingCount > 0 && (
+            <Badge variant="outline" className="border-amber-500/40 bg-amber-500/10 text-[10px] text-amber-700 dark:text-amber-400">
+              {scheduleSummary.missingCount} missing date{scheduleSummary.missingCount === 1 ? "" : "s"}
+            </Badge>
+          )}
+          {scheduleSummary.issueCount > 0 && (
+            <Badge variant="outline" className="border-amber-500/40 bg-amber-500/10 text-[10px] text-amber-700 dark:text-amber-400">
+              {scheduleSummary.issueCount} calendar issue{scheduleSummary.issueCount === 1 ? "" : "s"}
+            </Badge>
+          )}
+        </span>
       </div>
       {editingNonActive && (
         <div className="rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-400">
@@ -670,6 +798,8 @@ function BlockEditor() {
         canRedo={canRedo}
         clientId={clientId}
         blockId={blockId}
+        dayScheduleStatus={dayStatusMap}
+        onFixCalendarIssue={fixCalendarIssue}
       />
 
       <AutoSchedulePanel blockId={blockId} />
