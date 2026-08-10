@@ -44,6 +44,16 @@ const EMPTY: CardForm = {
   is_active: true,
 };
 
+/** Merge a prefill over EMPTY, coalescing any null/undefined field back to the
+ * EMPTY default so controlled inputs and .trim() never see null. */
+const fromPrefill = (prefill?: Partial<CardForm> | null): CardForm => {
+  const merged = { ...EMPTY, ...(prefill ?? {}) } as CardForm;
+  (Object.keys(EMPTY) as Array<keyof CardForm>).forEach((k) => {
+    if (merged[k] == null) (merged as Record<string, unknown>)[k] = EMPTY[k];
+  });
+  return merged;
+};
+
 export function BookingCardDialog({
   open, onOpenChange, initial, prefill, nextSortOrder,
 }: {
@@ -79,7 +89,7 @@ export function BookingCardDialog({
         is_active: initial.is_active,
       });
     } else {
-      setForm({ ...EMPTY, ...(prefill ?? {}) });
+      setForm(fromPrefill(prefill));
     }
   }, [open, initial, prefill]);
 
@@ -93,12 +103,12 @@ export function BookingCardDialog({
     setSaving(true);
     try {
       const payload = {
-        name: form.name.trim(),
+        name: (form.name ?? "").trim(),
         session_type: form.session_type,
-        custom_type: form.session_type === "Custom Session" ? form.custom_type.trim() || null : null,
+        custom_type: form.session_type === "Custom Session" ? (form.custom_type ?? "").trim() || null : null,
         duration_minutes: form.duration_minutes,
-        location: form.location.trim() || null,
-        default_notes: form.default_notes.trim() || null,
+        location: (form.location ?? "").trim() || null,
+        default_notes: (form.default_notes ?? "").trim() || null,
         visible_to_client: form.visible_to_client,
         client_visible_notes: form.client_visible_notes,
         reminders_enabled: form.reminders_enabled,
