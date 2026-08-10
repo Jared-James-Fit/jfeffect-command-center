@@ -192,8 +192,8 @@ export function PtSessionDialog({ open, onOpenChange, clientId, clients = [], in
               <div className="flex items-center gap-2">
                 {overbook ? <AlertTriangle className="h-4 w-4 text-destructive" /> : <CalendarDays className="h-4 w-4" />}
                 <span>
-                  <strong>{remaining}</strong> credit{remaining === 1 ? "" : "s"} left
-                  {willReserve > 0 && <> · booking will use <strong>{willReserve}</strong></>}
+                  <strong>{remaining}</strong> credit{remaining === 1 ? "" : "s"} available
+                  {willReserve > 0 && <> · booking reserves <strong>{willReserve}</strong></>}
                 </span>
               </div>
               {overbook && (
@@ -205,7 +205,7 @@ export function PtSessionDialog({ open, onOpenChange, clientId, clients = [], in
             </div>
             {overbook && (
               <p className="mt-1 text-xs text-muted-foreground">
-                No session credits left. Top up credits from the Session Credits panel, or toggle Overbook to book anyway.
+                No session credits available. Add sessions from the Personal Training panel, or toggle Overbook to book anyway (tracked as a negative balance).
               </p>
             )}
           </div>
