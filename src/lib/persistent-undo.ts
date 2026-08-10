@@ -83,8 +83,9 @@ export type PersistentUndoStack = {
   canRedo: boolean;
   historySize: number;
   futureSize: number;
-  /** Record a snapshot of the payload *before* an edit, clearing redo. */
-  pushSnapshot: (snapshot: string) => void;
+  /** Record a snapshot of the payload *before* an edit, clearing redo.
+   *  `current` is the post-edit JSON used as the content fingerprint. */
+  pushSnapshot: (snapshot: string, current?: string) => void;
   /** Pop one history entry; caller must pass the *current* snapshot so it can be pushed onto redo. */
   undo: (currentSnapshot: string) => string | undefined;
   /** Pop one redo entry; caller must pass the *current* snapshot so it can be pushed onto history. */
