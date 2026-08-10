@@ -6,11 +6,26 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
+import { Badge } from "@/components/ui/badge";
+import { Separator } from "@/components/ui/separator";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { SESSION_TYPES, SESSION_STATUSES, COMMON_TIMEZONES } from "@/lib/pt-sessions";
-import { AlertTriangle, Repeat, CalendarDays } from "lucide-react";
+import { SESSION_TYPES, SESSION_STATUSES, COMMON_TIMEZONES, statusTone, fmtTimeRange } from "@/lib/pt-sessions";
+import {
+  AlertTriangle, Repeat, CalendarDays, ChevronDown, CheckCircle2, Ban, CircleOff, Undo2, Wallet, Trash2,
+} from "lucide-react";
+import { setPtSessionStatus } from "@/lib/pt-pack.functions";
+import { getPtSessionCreditEvents, revertPtSessionDeduction } from "@/lib/pt-session-manage.functions";
+import {
+  creditImpact, creditToneClasses, invalidatePtSessionCaches, type PtLedgerEvent,
+} from "@/lib/pt-session-manage";
+import { useAuth } from "@/lib/auth";
+import { PtSessionHistory } from "@/components/pt-session-history";
+import {
+  AdjustPtCreditDialog, CancelPtSessionDialog, DeletePtSessionDialog, NoShowPtDialog,
+} from "@/components/pt-session-manage-dialogs";
 
 type Props = {
   open: boolean;
@@ -51,13 +66,22 @@ function computeRecurringDates(startISO: string, weekdays: number[], weeks: numb
 
 export function PtSessionDialog({ open, onOpenChange, clientId, clients = [], initial }: Props) {
   const qc = useQueryClient();
+  const { role } = useAuth();
+  const isAdmin = role === "admin";
   const [form, setForm] = useState<any>(null);
   const [saving, setSaving] = useState(false);
   const [confirmOverbook, setConfirmOverbook] = useState(false);
+  const [showAdvanced, setShowAdvanced] = useState(false);
+  const [noShowOpen, setNoShowOpen] = useState(false);
+  const [cancelOpen, setCancelOpen] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [adjustOpen, setAdjustOpen] = useState(false);
 
   useEffect(() => {
     if (!open) return;
     setConfirmOverbook(false);
+    setShowAdvanced(false);
+    setNoShowOpen(false); setCancelOpen(false); setDeleteOpen(false); setAdjustOpen(false);
     if (initial) {
       setForm({ ...initial, _isRecurring: false, _weekdays: [], _weeks: 4, _includeStartDate: true });
       return;
@@ -104,6 +128,16 @@ export function PtSessionDialog({ open, onOpenChange, clientId, clients = [], in
   const remaining = (balanceRows ?? []).reduce((sum, r) => sum + Math.max(Number(r.remaining ?? 0), 0), 0);
   const hasCredits = (balanceRows ?? []).some((r) => Number(r.granted ?? 0) > 0);
 
+  // Credit history for the session being edited.
+  const { data: events = [], isLoading: eventsLoading } = useQuery<PtLedgerEvent[]>({
+    queryKey: ["pt-session-events", form?.id ?? null],
+    enabled: open && !!form?.id,
+    queryFn: async () => {
+      const res = await getPtSessionCreditEvents({ data: { sessionIds: [form.id] } });
+      return (res.events ?? []) as PtLedgerEvent[];
+    },
+  });
+
   const previewDates = useMemo(() => {
     if (!form || !form._isRecurring) return [form?.session_date].filter(Boolean) as string[];
     return computeRecurringDates(form.session_date, form._weekdays, form._weeks, form._includeStartDate);
@@ -122,6 +156,14 @@ export function PtSessionDialog({ open, onOpenChange, clientId, clients = [], in
   const bookingCount = isNewBooking ? previewDates.length : 0;
   const willReserve = (tracking || hasCredits) && isNewBooking && form.status === "Scheduled" ? bookingCount : 0;
   const overbook = willReserve > remaining;
+
+  const impact = form.id ? creditImpact(form.status, events) : null;
+  const clientName = selectedClient?.full_name ?? form.clients?.full_name ?? "";
+  const dateLabel = form.id
+    ? new Date(form.session_date + "T00:00:00").toLocaleDateString(undefined, {
+        weekday: "short", month: "short", day: "numeric",
+      })
+    : "";
 
   const save = async () => {
     if (!form.client_id) return toast.error("Pick a client first");
@@ -172,19 +214,62 @@ export function PtSessionDialog({ open, onOpenChange, clientId, clients = [], in
           ? `Booked ${previewDates.length} sessions`
           : "Session booked",
     );
-    qc.invalidateQueries({ queryKey: ["pt-sessions"] });
-    qc.invalidateQueries({ queryKey: ["pt-sessions", form.client_id] });
-    qc.invalidateQueries({ queryKey: ["pt-balance", form.client_id] });
-    qc.invalidateQueries({ queryKey: ["client", form.client_id] });
+    invalidatePtSessionCaches(qc, form.client_id);
     onOpenChange(false);
+  };
+
+  const applyStatus = async (status: string, okMsg: string) => {
+    try {
+      await setPtSessionStatus({ data: { sessionId: form.id, status: status as any } });
+      toast.success(okMsg);
+      set("status", status);
+      invalidatePtSessionCaches(qc, form.client_id);
+    } catch (e: any) {
+      toast.error(e?.message ?? "Update failed");
+    }
+  };
+
+  const undoNoShow = async () => {
+    try {
+      if (impact?.tone === "destructive") {
+        await revertPtSessionDeduction({ data: { sessionId: form.id } });
+      }
+      await setPtSessionStatus({ data: { sessionId: form.id, status: "Scheduled" } });
+      toast.success("No-show undone — session is scheduled again");
+      set("status", "Scheduled");
+      invalidatePtSessionCaches(qc, form.client_id);
+    } catch (e: any) {
+      toast.error(e?.message ?? "Undo failed");
+    }
   };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl max-h-[92vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>{form.id ? "Edit / Reschedule Session" : "Book Personal Training Session"}</DialogTitle>
+          <DialogTitle>{form.id ? "Manage Session" : "Book Personal Training Session"}</DialogTitle>
         </DialogHeader>
+
+        {/* Status summary header (edit mode) */}
+        {form.id && (
+          <div className="space-y-1.5 rounded-md border border-border bg-secondary/20 p-3">
+            <div className="flex flex-wrap items-center gap-2">
+              <Badge variant="outline" className={statusTone(form.status)}>
+                {form.status === "Missed" ? "No-show" : form.status}
+              </Badge>
+              <span className="text-sm font-bold break-words">{form.title}</span>
+              {impact && (
+                <Badge variant="outline" className={creditToneClasses(impact.tone)}>
+                  Credit: {impact.label}
+                </Badge>
+              )}
+            </div>
+            <div className="text-xs text-muted-foreground break-words">
+              {clientName}{clientName ? " · " : ""}{dateLabel} · {fmtTimeRange(form.start_time, form.end_time)}
+              {form.location ? ` · ${form.location}` : ""}
+            </div>
+          </div>
+        )}
 
         {(tracking || hasCredits) && isNewBooking && (
           <div className={`rounded-md border px-3 py-2 text-sm ${overbook ? "border-destructive/60 bg-destructive/10" : remaining <= 2 ? "border-amber-500/60 bg-amber-500/10" : "border-primary/40 bg-primary/10"}`}>
@@ -234,15 +319,8 @@ export function PtSessionDialog({ open, onOpenChange, clientId, clients = [], in
               <SelectContent>{SESSION_TYPES.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent>
             </Select>
           </div>
-          <div>
-            <Label>Status</Label>
-            <Select value={form.status} onValueChange={(v) => set("status", v)}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>{SESSION_STATUSES.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent>
-            </Select>
-          </div>
           {form.session_type === "Custom Session" && (
-            <div className="md:col-span-2">
+            <div>
               <Label>Custom type</Label>
               <Input value={form.custom_type ?? ""} onChange={(e) => set("custom_type", e.target.value)} />
             </div>
@@ -251,20 +329,15 @@ export function PtSessionDialog({ open, onOpenChange, clientId, clients = [], in
             <Label>{form._isRecurring ? "Start date" : "Date"}</Label>
             <Input type="date" value={form.session_date} onChange={(e) => set("session_date", e.target.value)} />
           </div>
-          <div>
-            <Label>Client time zone</Label>
-            <Select value={form.timezone} onValueChange={(v) => set("timezone", v)}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>{COMMON_TIMEZONES.map((t) => <SelectItem key={t} value={t}>{t}</SelectItem>)}</SelectContent>
-            </Select>
-          </div>
-          <div>
-            <Label>Start time</Label>
-            <Input type="time" value={form.start_time} onChange={(e) => set("start_time", e.target.value)} />
-          </div>
-          <div>
-            <Label>End time</Label>
-            <Input type="time" value={form.end_time} onChange={(e) => set("end_time", e.target.value)} />
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <Label>Start time</Label>
+              <Input type="time" value={form.start_time} onChange={(e) => set("start_time", e.target.value)} />
+            </div>
+            <div>
+              <Label>End time</Label>
+              <Input type="time" value={form.end_time} onChange={(e) => set("end_time", e.target.value)} />
+            </div>
           </div>
           <div className="md:col-span-2">
             <Label>Location</Label>
@@ -337,13 +410,99 @@ export function PtSessionDialog({ open, onOpenChange, clientId, clients = [], in
             <Label>Notes</Label>
             <Textarea rows={3} value={form.notes ?? ""} onChange={(e) => set("notes", e.target.value)} />
           </div>
-          <Toggle label="Show notes to client" checked={form.client_visible_notes} onChange={(v) => set("client_visible_notes", v)} />
-          <Toggle label="Show session in client calendar" checked={form.visible_to_client} onChange={(v) => set("visible_to_client", v)} />
-          <Toggle label="Send 24h + 1h reminder emails" checked={form.reminders_enabled} onChange={(v) => set("reminders_enabled", v)} />
-          <Toggle label="Send booking confirmation email" checked={form.send_confirmation_email} onChange={(v) => set("send_confirmation_email", v)} />
         </div>
-        <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
+
+        {/* Advanced: raw status override, timezone, client visibility & email toggles */}
+        <Collapsible open={showAdvanced} onOpenChange={setShowAdvanced}>
+          <CollapsibleTrigger asChild>
+            <Button type="button" variant="ghost" size="sm" className="w-full justify-between text-muted-foreground">
+              Advanced options
+              <ChevronDown className={`h-4 w-4 transition-transform ${showAdvanced ? "rotate-180" : ""}`} />
+            </Button>
+          </CollapsibleTrigger>
+          <CollapsibleContent className="space-y-3 rounded-md border border-border bg-secondary/20 p-3">
+            <div>
+              <Label>Status {form.id ? "(manual override)" : ""}</Label>
+              <Select value={form.status} onValueChange={(v) => set("status", v)}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>{SESSION_STATUSES.map((s) => <SelectItem key={s} value={s}>{s === "Missed" ? "No-show" : s}</SelectItem>)}</SelectContent>
+              </Select>
+              {form.id && (
+                <p className="mt-1 text-[11px] text-muted-foreground">
+                  Prefer the action buttons below — manual status changes skip the credit prompts.
+                </p>
+              )}
+            </div>
+            <div>
+              <Label>Client time zone</Label>
+              <Select value={form.timezone} onValueChange={(v) => set("timezone", v)}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>{COMMON_TIMEZONES.map((t) => <SelectItem key={t} value={t}>{t}</SelectItem>)}</SelectContent>
+              </Select>
+            </div>
+            <Toggle label="Show notes to client" checked={form.client_visible_notes} onChange={(v) => set("client_visible_notes", v)} />
+            <Toggle label="Show session in client calendar" checked={form.visible_to_client} onChange={(v) => set("visible_to_client", v)} />
+            <Toggle label="Send 24h + 1h reminder emails" checked={form.reminders_enabled} onChange={(v) => set("reminders_enabled", v)} />
+            <Toggle label="Send booking confirmation email" checked={form.send_confirmation_email} onChange={(v) => set("send_confirmation_email", v)} />
+          </CollapsibleContent>
+        </Collapsible>
+
+        {/* Status actions + credit history (edit mode) */}
+        {form.id && (
+          <>
+            <Separator />
+            <div className="flex flex-wrap gap-2">
+              {form.status === "Scheduled" && (
+                <>
+                  <Button
+                    size="sm" variant="outline"
+                    className="border-success/40 text-success hover:bg-success/10"
+                    onClick={() => applyStatus("Completed", "Marked completed — reserved credit converted to used")}
+                  >
+                    <CheckCircle2 className="mr-1.5 h-3.5 w-3.5" /> Complete
+                  </Button>
+                  <Button size="sm" variant="outline" onClick={() => setNoShowOpen(true)}>
+                    <Ban className="mr-1.5 h-3.5 w-3.5" /> No-show
+                  </Button>
+                  <Button size="sm" variant="outline" onClick={() => setCancelOpen(true)}>
+                    <CircleOff className="mr-1.5 h-3.5 w-3.5" /> Cancel
+                  </Button>
+                </>
+              )}
+              {form.status === "Completed" && (
+                <Button size="sm" variant="outline" onClick={() => applyStatus("Scheduled", "Completion undone — credit restored and reserved again")}>
+                  <Undo2 className="mr-1.5 h-3.5 w-3.5" /> Undo Completion
+                </Button>
+              )}
+              {form.status === "Missed" && (
+                <Button size="sm" variant="outline" onClick={undoNoShow}>
+                  <Undo2 className="mr-1.5 h-3.5 w-3.5" /> Undo No-show
+                </Button>
+              )}
+              {form.status === "Cancelled" && (
+                <Button size="sm" variant="outline" onClick={() => applyStatus("Scheduled", "Session restored — 1 credit reserved")}>
+                  <Undo2 className="mr-1.5 h-3.5 w-3.5" /> Restore Session
+                </Button>
+              )}
+              {isAdmin && (
+                <Button size="sm" variant="outline" onClick={() => setAdjustOpen(true)}>
+                  <Wallet className="mr-1.5 h-3.5 w-3.5" /> Adjust Credit
+                </Button>
+              )}
+              <Button
+                size="sm" variant="ghost"
+                className="text-destructive hover:text-destructive"
+                onClick={() => setDeleteOpen(true)}
+              >
+                <Trash2 className="mr-1.5 h-3.5 w-3.5" /> Delete
+              </Button>
+            </div>
+            <PtSessionHistory events={events} loading={eventsLoading} />
+          </>
+        )}
+
+        <DialogFooter className="flex flex-wrap gap-2">
+          <Button variant="outline" onClick={() => onOpenChange(false)}>Close</Button>
           <Button
             onClick={save}
             disabled={saving || (overbook && !confirmOverbook)}
@@ -352,13 +511,36 @@ export function PtSessionDialog({ open, onOpenChange, clientId, clients = [], in
             {saving
               ? "Saving…"
               : form.id
-                ? "Save Session"
+                ? "Save Changes"
                 : previewDates.length > 1
                   ? `Book ${previewDates.length} Sessions`
                   : "Book Session"}
           </Button>
         </DialogFooter>
       </DialogContent>
+
+      {form.id && (
+        <>
+          <NoShowPtDialog open={noShowOpen} onOpenChange={setNoShowOpen} session={form} onDone={() => set("status", "Missed")} />
+          <CancelPtSessionDialog
+            open={cancelOpen}
+            onOpenChange={setCancelOpen}
+            session={form}
+            hasReservation={impact?.tone === "primary"}
+            onDone={() => set("status", "Cancelled")}
+          />
+          <DeletePtSessionDialog
+            open={deleteOpen}
+            onOpenChange={setDeleteOpen}
+            session={form}
+            impactLabel={impact?.label}
+            onDone={() => onOpenChange(false)}
+          />
+          {isAdmin && (
+            <AdjustPtCreditDialog open={adjustOpen} onOpenChange={setAdjustOpen} clientId={form.client_id} session={form} />
+          )}
+        </>
+      )}
     </Dialog>
   );
 }
