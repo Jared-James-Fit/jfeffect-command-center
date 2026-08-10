@@ -118,12 +118,12 @@ export const setPtSessionStatus = createServerFn({ method: "POST" })
     // converted (released + used) before the status change tries to release it.
     if (data.status === "Missed" && data.deductOnMissed) {
       // Sessions booked from a "No credit" booking card never touch the wallet.
-      const { data: s } = await supabase
+      const { data: s } = await (supabase as any)
         .from("pt_sessions")
         .select("uses_credit")
         .eq("id", data.sessionId)
         .maybeSingle();
-      if (!s || (s as any).uses_credit !== false) {
+      if (!s || s.uses_credit !== false) {
         await supabase.rpc("consume_session_for_pt", { _pt_session_id: data.sessionId });
       }
     }
