@@ -113,19 +113,23 @@ export function PtSessionsPanel({ clientId, client }: { clientId: string; client
     },
   });
 
-  // Ad-hoc credits (quick grants / adjustments) have no purchase attached and
-  // are invisible to session_balance — add their net count to the balance.
-  const { data: adhocRemaining = 0 } = useQuery<number>({
+  // Ad-hoc credits (quick grants / adjustments / overbooked reservations) have
+  // no purchase attached and are invisible to session_balance — net them in.
+  const { data: adhocEvents = [] } = useQuery<any[]>({
     queryKey: ["pt-adhoc-credits", clientId],
     queryFn: async () => {
       const { data } = await supabase
         .from("session_ledger_events")
-        .select("session_count")
+        .select("session_count, event_type")
         .eq("client_id", clientId)
         .is("purchase_id", null);
-      return (data ?? []).reduce((s, e) => s + Number(e.session_count ?? 0), 0);
+      return data ?? [];
     },
   });
+  const adhocRemaining = adhocEvents.reduce((s, e) => s + Number(e.session_count ?? 0), 0);
+  const adhocGranted = adhocEvents
+    .filter((e) => ["granted", "transferred_in"].includes(e.event_type))
+    .reduce((s, e) => s + Number(e.session_count ?? 0), 0);
 
   // Merge: every session purchase gets a card (with or without ledger row),
   // plus any balance rows whose purchase no longer matches (defensive).
@@ -136,16 +140,32 @@ export function PtSessionsPanel({ clientId, client }: { clientId: string; client
       .map((b) => ({ key: b.purchase_id ?? b.offer_name, purchase: undefined as any, row: b })),
   ];
 
-  const totalPurchased = balance.reduce((s, r) => s + Number(r.granted ?? 0), 0);
+  const totalPurchased = balance.reduce((s, r) => s + Number(r.granted ?? 0), 0) + adhocGranted;
   const totalUsed = balance.reduce((s, r) => s + Number(r.used ?? 0), 0);
-  const totalRemaining = balance.reduce((s, r) => s + Number(r.remaining ?? 0), 0) + adhocRemaining;
+  const totalAvailable = balance.reduce((s, r) => s + Number(r.remaining ?? 0), 0) + adhocRemaining;
+
+  // Remaining dollar credit = available sessions × paid value per session.
+  let remainingCreditMinor = 0;
+  let creditCurrency = "CAD";
+  for (const b of balance) {
+    const p = sessionPurchases.find((x) => x.id === b.purchase_id);
+    if (!p) continue;
+    const n = Math.max(Number(p.sessions_purchased ?? 0), 1);
+    const paidUnit = Math.round(Number(p.amount_paid_cents ?? 0) / n);
+    remainingCreditMinor += Math.max(Number(b.remaining ?? 0), 0) * paidUnit;
+    creditCurrency = p.currency ?? "CAD";
+  }
 
   const today = todayISO();
-  const upcoming = sessions.filter((s) => s.status === "Scheduled" && s.session_date >= today)
+  const upcoming = sessions
+    .filter((s) => s.status === "Scheduled" && s.session_date >= today)
     .sort((a, b) => (a.session_date + a.start_time).localeCompare(b.session_date + b.start_time));
-  const past = sessions.filter((s) => !upcoming.includes(s));
-  const completedCount = sessions.filter((s) => s.status === "Completed").length;
-  const hasPacks = packRows.length > 0 || adhocRemaining > 0;
+  const needsReview = sessions
+    .filter((s) => s.status === "Scheduled" && s.session_date < today)
+    .sort((a, b) => (a.session_date + a.start_time).localeCompare(b.session_date + b.start_time));
+  const totalScheduled = upcoming.length + needsReview.length;
+  const past = sessions.filter((s) => !upcoming.includes(s) && !needsReview.includes(s));
+  const hasPacks = packRows.length > 0 || adhocRemaining !== 0 || adhocGranted > 0;
 
   const packStatus = (row: any, purchase: any) => {
     const expired =
