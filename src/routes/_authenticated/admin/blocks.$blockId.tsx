@@ -14,6 +14,16 @@ import {
   listClientBlocks,
 } from "@/lib/pl-programs";
 import { deriveBlockStatuses, blockStatusTone } from "@/lib/block-status";
+import {
+  buildProgramScheduleStatus,
+  summarizeProgramSchedule,
+} from "@/lib/program-schedule-status";
+import { invalidateScheduleQueries } from "@/lib/schedule-invalidate";
+import {
+  syncProgramDaySchedule,
+  reconcileDayScheduleMirror,
+} from "@/lib/scheduled-workouts.functions";
+import { toast } from "sonner";
 import { cloneBlocksForRowsFn } from "@/lib/exercise-blocks.functions";
 import type { ExerciseRef } from "@/components/program-builder";
 import {
