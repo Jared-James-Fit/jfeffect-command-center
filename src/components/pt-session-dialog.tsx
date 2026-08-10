@@ -182,7 +182,63 @@ export function PtSessionDialog({ open, onOpenChange, clientId, clients = [], in
     return computeRecurringDates(form.session_date, form._weekdays, form._weeks, form._includeStartDate);
   }, [form]);
 
-  if (!form) return null;
+  if (!form) {
+    // Card picker step (booking mode only).
+    const activeCards = allCards.filter((c) => c.is_active);
+    return (
+      <Dialog open={open} onOpenChange={onOpenChange}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>What are you booking?</DialogTitle>
+          </DialogHeader>
+          <p className="-mt-2 text-xs text-muted-foreground">
+            Pick a booking card to prefill everything, or start a custom one-off booking.
+          </p>
+          <div className="grid gap-2 sm:grid-cols-2">
+            {activeCards.map((card) => {
+              const accent = cardAccent(card.color);
+              return (
+                <button
+                  key={card.id}
+                  type="button"
+                  onClick={() => applyCard(card)}
+                  className="relative overflow-hidden rounded-lg border border-border bg-card p-3 pl-4 text-left transition-colors hover:border-primary/50 hover:bg-secondary/40"
+                >
+                  <span className={`absolute inset-y-0 left-0 w-1 ${accent.bar}`} />
+                  <p className="text-sm font-bold break-words">{card.name}</p>
+                  <p className="mt-0.5 text-xs text-muted-foreground break-words">
+                    {fmtDuration(card.duration_minutes)}{card.location ? ` · ${card.location}` : ""}
+                  </p>
+                  <div className="mt-1.5">
+                    <Badge
+                      variant="outline"
+                      className={card.uses_credit ? "border-primary/40 bg-primary/10 text-primary" : "border-border bg-secondary/40 text-muted-foreground"}
+                    >
+                      {card.uses_credit ? "Uses 1 credit" : "No credit"}
+                    </Badge>
+                  </div>
+                </button>
+              );
+            })}
+            <button
+              type="button"
+              onClick={() => applyCard(null)}
+              className="flex min-h-[96px] flex-col items-center justify-center gap-1 rounded-lg border border-dashed border-border p-3 text-center transition-colors hover:border-primary/50 hover:bg-secondary/40"
+            >
+              <Plus className="h-4 w-4 text-muted-foreground" />
+              <span className="text-sm font-semibold">Custom Booking</span>
+              <span className="text-[11px] text-muted-foreground">One-off session · full form</span>
+            </button>
+          </div>
+          {activeCards.length === 0 && (
+            <p className="text-center text-[11px] text-muted-foreground">
+              No booking cards yet — create them under PT Calendar → Booking Cards.
+            </p>
+          )}
+        </DialogContent>
+      </Dialog>
+    );
+  }
   const set = (k: string, v: any) => setForm({ ...form, [k]: v });
   const toggleWeekday = (d: number) => {
     const next = form._weekdays.includes(d)
@@ -198,6 +254,7 @@ export function PtSessionDialog({ open, onOpenChange, clientId, clients = [], in
 
   const impact = form.id ? creditImpact(form.status, events) : null;
   const clientName = selectedClient?.full_name ?? form.clients?.full_name ?? "";
+  const template = form.booking_card_id ? allCards.find((c) => c.id === form.booking_card_id) : undefined;
   const dateLabel = form.id
     ? new Date(form.session_date + "T00:00:00").toLocaleDateString(undefined, {
         weekday: "short", month: "short", day: "numeric",
@@ -208,7 +265,7 @@ export function PtSessionDialog({ open, onOpenChange, clientId, clients = [], in
     if (!form.client_id) return toast.error("Pick a client first");
     if (!form.title) return toast.error("Title is required");
     if (form._isRecurring && previewDates.length === 0) return toast.error("Pick at least one weekday");
-    if (overbook && !confirmOverbook) {
+    if (overbook && form.uses_credit !== false && !confirmOverbook) {
       toast.error(`Only ${remaining} credit${remaining === 1 ? "" : "s"} available — top up or confirm overbooking`);
       return;
     }
@@ -229,6 +286,8 @@ export function PtSessionDialog({ open, onOpenChange, clientId, clients = [], in
       visible_to_client: form.visible_to_client,
       reminders_enabled: form.reminders_enabled,
       send_confirmation_email: form.send_confirmation_email,
+      uses_credit: form.uses_credit !== false,
+      booking_card_id: form.booking_card_id ?? null,
     };
 
     let error: any = null;
@@ -286,8 +345,30 @@ export function PtSessionDialog({ open, onOpenChange, clientId, clients = [], in
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl max-h-[92vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>{form.id ? "Manage Session" : "Book Personal Training Session"}</DialogTitle>
+          <DialogTitle>
+            {form.id ? "Manage Session" : form._cardName ? `Book: ${form._cardName}` : "Book Personal Training Session"}
+          </DialogTitle>
         </DialogHeader>
+
+        {/* Template bar (booking mode) */}
+        {!form.id && (
+          <div className="flex items-center justify-between gap-2 rounded-md border border-primary/30 bg-primary/10 px-2.5 py-1.5">
+            <span className="flex min-w-0 items-center gap-1.5 text-xs font-semibold text-primary">
+              <LayoutTemplate className="h-3.5 w-3.5 shrink-0" />
+              <span className="truncate">{form._cardName ? `Template: ${form._cardName}` : "Custom booking (no template)"}</span>
+              {form.uses_credit === false && (
+                <Badge variant="outline" className="shrink-0 border-primary/40 text-primary">No credit</Badge>
+              )}
+            </span>
+            <Button
+              size="sm" variant="ghost"
+              className="h-7 shrink-0 text-[11px]"
+              onClick={() => { setForm(null); setStep("pick"); }}
+            >
+              <ChevronLeft className="mr-1 h-3 w-3" /> Change
+            </Button>
+          </div>
+        )}
 
         {/* Status summary header (edit mode) */}
         {form.id && (
@@ -307,10 +388,26 @@ export function PtSessionDialog({ open, onOpenChange, clientId, clients = [], in
               {clientName}{clientName ? " · " : ""}{dateLabel} · {fmtTimeRange(form.start_time, form.end_time)}
               {form.location ? ` · ${form.location}` : ""}
             </div>
+            {form.booking_card_id && (
+              <div className="flex flex-wrap items-center gap-2 pt-0.5">
+                <Badge variant="outline" className="gap-1 border-border bg-card text-muted-foreground">
+                  <LayoutTemplate className="h-3 w-3" /> Template: {template?.name ?? "Deleted template"}
+                </Badge>
+                {template && (
+                  <button
+                    type="button"
+                    onClick={() => setTemplateEditOpen(true)}
+                    className="text-[11px] font-semibold text-primary hover:underline"
+                  >
+                    Edit Template
+                  </button>
+                )}
+              </div>
+            )}
           </div>
         )}
 
-        {(tracking || hasCredits) && isNewBooking && (
+        {form.uses_credit !== false && (tracking || hasCredits) && isNewBooking && (
           <div className={`rounded-md border px-3 py-2 text-sm ${overbook ? "border-destructive/60 bg-destructive/10" : remaining <= 2 ? "border-amber-500/60 bg-amber-500/10" : "border-primary/40 bg-primary/10"}`}>
             <div className="flex items-center justify-between gap-3">
               <div className="flex items-center gap-2">
@@ -371,7 +468,14 @@ export function PtSessionDialog({ open, onOpenChange, clientId, clients = [], in
           <div className="grid grid-cols-2 gap-2">
             <div>
               <Label>Start time</Label>
-              <Input type="time" value={form.start_time} onChange={(e) => set("start_time", e.target.value)} />
+              <Input
+                type="time"
+                value={form.start_time}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  setForm({ ...form, start_time: v, ...(form._duration ? { end_time: addMinutesToTime(v, form._duration) } : {}) });
+                }}
+              />
             </div>
             <div>
               <Label>End time</Label>
@@ -544,7 +648,7 @@ export function PtSessionDialog({ open, onOpenChange, clientId, clients = [], in
           <Button variant="outline" onClick={() => onOpenChange(false)}>Close</Button>
           <Button
             onClick={save}
-            disabled={saving || (overbook && !confirmOverbook)}
+            disabled={saving || (form.uses_credit !== false && overbook && !confirmOverbook)}
             className="bg-gradient-primary font-bold uppercase"
           >
             {saving
@@ -579,6 +683,9 @@ export function PtSessionDialog({ open, onOpenChange, clientId, clients = [], in
             <AdjustPtCreditDialog open={adjustOpen} onOpenChange={setAdjustOpen} clientId={form.client_id} session={form} />
           )}
         </>
+      )}
+      {template && (
+        <BookingCardDialog open={templateEditOpen} onOpenChange={setTemplateEditOpen} initial={template} />
       )}
     </Dialog>
   );
