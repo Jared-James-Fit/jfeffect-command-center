@@ -413,12 +413,18 @@ function BlockEditor() {
   // but this effect saw hydratedRef.current === true and refused to
   // rehydrate, so the editor kept rendering the previously-opened block.
   const hydratedBlockIdRef = useRef<string | null>(null);
+  // JSON of the payload as first hydrated — the undo stack compares its
+  // persisted content fingerprint against this to detect stale history.
+  const initialPayloadJsonRef = useRef<string | null>(null);
 
   // Durable per-block undo/redo. Baseline = the block's server `updated_at`;
   // mismatches drop stale history without applying it. See persistent-undo.
   const undoStack = usePersistentUndoStack({
     scope: `block:${blockId}`,
     baseline: (tree?.block as any)?.updated_at ?? null,
+    // Client-program rows save individually, so pl_blocks.updated_at never
+    // moves — the content fingerprint is the real staleness guard here.
+    freshSnapshot: hydratedBlockIdRef.current === blockId ? initialPayloadJsonRef.current : null,
     enabled: hydratedBlockIdRef.current === blockId,
   });
   const lastPushTs = useRef(0);
@@ -441,7 +447,9 @@ function BlockEditor() {
     if (tree && hydratedBlockIdRef.current !== tree.block.id) {
       originalTreeRef.current = tree;
       setName(tree.block.name ?? "");
-      setPayload(treeToPayload(tree));
+      const nextPayload = treeToPayload(tree);
+      initialPayloadJsonRef.current = JSON.stringify(nextPayload);
+      setPayload(nextPayload);
       setDirty(false);
       hydratedBlockIdRef.current = tree.block.id;
     }
@@ -451,7 +459,7 @@ function BlockEditor() {
     if (!opts?.skipHistory && payload != null) {
       const now = Date.now();
       if (now - lastPushTs.current > 600) {
-        undoStack.pushSnapshot(JSON.stringify(payload));
+        undoStack.pushSnapshot(JSON.stringify(payload), JSON.stringify(next));
       }
       lastPushTs.current = now;
     }
@@ -584,6 +592,9 @@ function BlockEditor() {
     // coach's scroll position / blur the active input.
     const fresh = await getBlockTree(blockId);
     if (fresh) originalTreeRef.current = fresh;
+    // Server truth now equals the saved payload — advance the undo content
+    // fingerprint so a later reload doesn't flag our own history as stale.
+    undoStack.markClean(JSON.stringify(payload));
     // Invalidate sibling caches but skip the tree query — refetching it would
     // overwrite our in-memory payload via the hydration effect on the next mount.
     qc.invalidateQueries({ queryKey: ["pl-block-summary", blockId] });

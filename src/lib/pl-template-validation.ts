@@ -53,8 +53,10 @@ function rowProblems(row: any): RowProblem[] {
 /**
  * Validate a single day. Returns the list of human-readable missing items
  * for the day, e.g. ["Day has no exercises", "Row 2 — Squat: missing reps"].
+ * Pass `exerciseNames` (exercise_id → name) so linked rows are identified
+ * by exercise name instead of "Row N".
  */
-export function validateDay(day: any): string[] {
+export function validateDay(day: any, exerciseNames?: Map<string, string>): string[] {
   const missing: string[] = [];
   const rows: any[] = Array.isArray(day?.rows) ? day.rows : [];
   if (rows.length === 0) {
@@ -67,6 +69,7 @@ export function validateDay(day: any): string[] {
     const name =
       (typeof r?.exercise_name_override === "string" && r.exercise_name_override.trim()) ||
       r?.exercise_name ||
+      (r?.exercise_id ? exerciseNames?.get(r.exercise_id) : null) ||
       `Row ${i + 1}`;
     missing.push(`${name}: missing ${probs.map((p) => ROW_LABEL[p]).join(", ")}`);
   });

@@ -541,6 +541,9 @@ function TemplateEditor() {
   const [dirty, setDirty] = useState(false);
   const [saving, setSaving] = useState(false);
   const hydratedRef = useRef(false);
+  // JSON of the payload as first hydrated — the undo stack compares its
+  // persisted content fingerprint against this to detect stale history.
+  const initialPayloadJsonRef = useRef<string | null>(null);
 
   // ---- Undo / Redo history for payload ----
   const lastPushTs = useRef(0);
@@ -551,6 +554,7 @@ function TemplateEditor() {
   const undoStack = usePersistentUndoStack({
     scope: `tpl:${templateId}`,
     baseline: (tpl as any)?.updated_at ?? null,
+    freshSnapshot: hydratedRef.current ? initialPayloadJsonRef.current : null,
     enabled: hydratedRef.current,
   });
   const canUndo = undoStack.canUndo;
@@ -564,7 +568,9 @@ function TemplateEditor() {
         notes: tpl.notes ?? "", weeks: tpl.weeks ?? 0, days_per_week: tpl.days_per_week ?? 0,
         est_duration_min: tpl.est_duration_min ?? 0, tags: (tpl.tags ?? []).join(", "), status: tpl.status,
       });
-      setPayload(JSON.parse(JSON.stringify(tpl.payload || {})));
+      const freshPayload = JSON.parse(JSON.stringify(tpl.payload || {}));
+      initialPayloadJsonRef.current = JSON.stringify(freshPayload);
+      setPayload(freshPayload);
       hydratedRef.current = true;
     }
   }, [tpl]);
@@ -575,7 +581,7 @@ function TemplateEditor() {
       const now = Date.now();
       // Coalesce rapid edits (e.g. typing) within 600ms into a single history step.
       if (now - lastPushTs.current > 600) {
-        undoStack.pushSnapshot(JSON.stringify(payload));
+        undoStack.pushSnapshot(JSON.stringify(payload), JSON.stringify(next));
       }
       lastPushTs.current = now;
     }
@@ -881,6 +887,18 @@ export function StructureCanvas({ type, payload, setP, exercises, appendRowToFir
         return;
       }
       const k = e.key.toLowerCase();
+      // Never hijack Cmd/Ctrl+Z while the coach is typing in a field — the
+      // browser's native text undo must win, otherwise a single keypress
+      // silently rewinds the ENTIRE payload (an old snapshot can then be
+      // autosaved, wiping newer field values like RPE/RIR).
+      const t = e.target as HTMLElement | null;
+      const inEditable =
+        !!t &&
+        (t.tagName === "INPUT" ||
+          t.tagName === "TEXTAREA" ||
+          t.tagName === "SELECT" ||
+          t.isContentEditable);
+      if (inEditable) return;
       if (k === "z" && !e.shiftKey) { e.preventDefault(); undo(); }
       else if ((k === "z" && e.shiftKey) || k === "y") { e.preventDefault(); redo(); }
       else if (k === "." && e.shiftKey) { e.preventDefault(); setFullscreen((v) => !v); }
@@ -1908,7 +1926,14 @@ function DayEditor({ day, setDay, exercises, compact, dayKey }: { day: any; setD
   }, [rows, exercises]);
   // Hard requirements for assignment — surface live so the coach sees gaps
   // as they build (and we can also block assignment without confirmation).
-  const dayIssues = useMemo(() => validateDay(day), [day]);
+  const dayIssues = useMemo(
+    () =>
+      validateDay(
+        day,
+        new Map<string, string>((exercises as any[]).map((e) => [e.id, e.name])),
+      ),
+    [day, exercises],
+  );
   const [dragOver, setDragOver] = useState(false);
   const [dragRowIdx, setDragRowIdx] = useState<number | null>(null);
   const [dropTargetIdx, setDropTargetIdx] = useState<number | null>(null);
