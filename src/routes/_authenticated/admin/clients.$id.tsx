@@ -1116,7 +1116,9 @@ export function ClientProfileWorkspace({
 
         <TabsContent value="sessions" className="grid gap-6 md:grid-cols-3">
           <Suspense fallback={<TabFallback />}>
-          <PtSessionsPanel clientId={id} client={form} />
+          <div id="session-transactions" className="contents">
+            <PtSessionsPanel clientId={id} client={form} />
+          </div>
 
         <SessionCreditsPanel clientId={id} />
 

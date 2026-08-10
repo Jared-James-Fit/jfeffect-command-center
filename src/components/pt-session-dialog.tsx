@@ -90,8 +90,9 @@ export function PtSessionDialog({ open, onOpenChange, clientId, clients = [], in
 
   const selectedClient = form ? clients.find((c) => c.id === form.client_id) : undefined;
   const tracking = !!selectedClient?.package_tracking_enabled;
-  // Ledger-driven credit balance (grants minus completions). Booking itself
-  // never deducts — credits are consumed when a session is marked Completed.
+  // Ledger-driven credit balance. Booking reserves 1 credit per session
+  // (already netted out of `remaining`); completing converts reserved → used;
+  // cancelling releases the reservation back to available.
   const { data: balanceRows } = useQuery<any[]>({
     queryKey: ["pt-balance", form?.client_id ?? null],
     enabled: open && !!form?.client_id,
@@ -127,7 +128,7 @@ export function PtSessionDialog({ open, onOpenChange, clientId, clients = [], in
     if (!form.title) return toast.error("Title is required");
     if (form._isRecurring && previewDates.length === 0) return toast.error("Pick at least one weekday");
     if (overbook && !confirmOverbook) {
-      toast.error(`Only ${remaining} credit${remaining === 1 ? "" : "s"} left — top up or confirm overbooking`);
+      toast.error(`Only ${remaining} credit${remaining === 1 ? "" : "s"} available — top up or confirm overbooking`);
       return;
     }
     setSaving(true);
@@ -191,8 +192,8 @@ export function PtSessionDialog({ open, onOpenChange, clientId, clients = [], in
               <div className="flex items-center gap-2">
                 {overbook ? <AlertTriangle className="h-4 w-4 text-destructive" /> : <CalendarDays className="h-4 w-4" />}
                 <span>
-                  <strong>{remaining}</strong> credit{remaining === 1 ? "" : "s"} left
-                  {willReserve > 0 && <> · booking will use <strong>{willReserve}</strong></>}
+                  <strong>{remaining}</strong> credit{remaining === 1 ? "" : "s"} available
+                  {willReserve > 0 && <> · booking reserves <strong>{willReserve}</strong></>}
                 </span>
               </div>
               {overbook && (
@@ -204,7 +205,7 @@ export function PtSessionDialog({ open, onOpenChange, clientId, clients = [], in
             </div>
             {overbook && (
               <p className="mt-1 text-xs text-muted-foreground">
-                No session credits left. Top up credits from the Session Credits panel, or toggle Overbook to book anyway.
+                No session credits available. Add sessions from the Personal Training panel, or toggle Overbook to book anyway (tracked as a negative balance).
               </p>
             )}
           </div>

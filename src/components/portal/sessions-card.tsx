@@ -79,7 +79,9 @@ export function SessionsCard({ clientId, nextAppointmentAt }: Props) {
           <div className="min-w-0 flex-1">
             <div className="truncate text-sm font-bold">{active.offer_name || "Session package"}</div>
             <div className="text-xs text-muted-foreground">
-              {active.granted} purchased · {active.used} used · <strong className="text-foreground">{active.remaining} remaining</strong>
+              {active.granted} purchased
+              {Number(active.reserved ?? 0) > 0 ? <> · {active.reserved} scheduled</> : null}
+              {" · "}{active.used} used · <strong className="text-foreground">{active.remaining} available</strong>
               {purchase?.show_value_to_client && purchase.full_payable_amount
                 ? ` · ${(purchase.currency || "CAD")} ${Number(purchase.full_payable_amount).toLocaleString()}`
                 : ""}

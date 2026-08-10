@@ -18259,6 +18259,33 @@ export type Database = {
       }
     }
     Functions: {
+      _pt_outstanding_reservation: {
+        Args: { _pt_session_id: string }
+        Returns: {
+          appointment_id: string | null
+          client_id: string
+          created_at: string
+          created_by: string | null
+          currency: string | null
+          effective_date: string
+          event_type: string
+          expires_at: string | null
+          id: string
+          note: string | null
+          pt_session_id: string | null
+          purchase_id: string | null
+          related_event_id: string | null
+          session_count: number
+          source: string
+          unit_value_minor: number | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "session_ledger_events"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       accept_my_purchase: {
         Args: { p_purchase_id: string }
         Returns: {
@@ -19042,6 +19069,14 @@ export type Database = {
         Args: { _schedule_id: string; _validated?: boolean }
         Returns: undefined
       }
+      release_session_for_pt: {
+        Args: { _pt_session_id: string; _reason: string }
+        Returns: undefined
+      }
+      reserve_session_for_pt: {
+        Args: { _pt_session_id: string }
+        Returns: undefined
+      }
       retry_failed_schedule: {
         Args: { _actor: string; _schedule_id: string }
         Returns: {
@@ -19079,6 +19114,7 @@ export type Database = {
           offer_name: string
           purchase_id: string
           remaining: number
+          reserved: number
           transferred: number
           used: number
         }[]

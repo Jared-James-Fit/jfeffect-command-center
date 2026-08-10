@@ -2,6 +2,23 @@ import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { supabase } from "@/integrations/supabase/client";
+
+const LEDGER_EVENT_LABELS: Record<string, string> = {
+  granted: "Pack added / credit granted",
+  reserved: "Credit reserved (booked)",
+  released: "Reserved credit released (cancelled)",
+  used: "Session completed (credit used)",
+  consumed: "Session completed (credit used)",
+  expired: "Credit expired",
+  adjusted: "Manual adjustment",
+  voided: "Grant voided",
+  transferred_in: "Transferred in",
+  transferred_out: "Transferred out",
+};
+
+function ledgerEventLabel(eventType: string): string {
+  return LEDGER_EVENT_LABELS[eventType] ?? eventType;
+}
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -99,6 +116,7 @@ export function SessionCreditsPanel({ clientId }: { clientId: string }) {
     (s, b) => s + Number(b.remaining ?? b.balance ?? 0),
     0,
   );
+  const totalScheduled = balance.reduce((s, b) => s + Number(b.reserved ?? 0), 0);
   const events = (summaryQ.data?.events ?? []) as any[];
   const appointments = (summaryQ.data?.appointments ?? {}) as Record<string, any>;
   const granted = events
@@ -193,8 +211,9 @@ export function SessionCreditsPanel({ clientId }: { clientId: string }) {
       </div>
 
       {/* Summary tiles */}
-      <div className="grid gap-3 md:grid-cols-3">
-        <Tile label="Remaining" value={String(totalRemaining)} highlight={totalRemaining > 0} />
+      <div className="grid gap-3 md:grid-cols-4">
+        <Tile label="Available" value={String(totalRemaining)} highlight={totalRemaining > 0} />
+        <Tile label="Scheduled / Reserved" value={String(totalScheduled)} />
         <Tile label="Granted (lifetime)" value={String(granted)} />
         <Tile label="Used (lifetime)" value={String(used)} />
       </div>
@@ -415,7 +434,7 @@ function LedgerHistory({
                       </td>
                       <td className="p-2 text-xs">
                         <Badge variant="outline" className="font-normal">
-                          {e.event_type}
+                          {ledgerEventLabel(e.event_type)}
                         </Badge>
                         {e.source ? (
                           <div className="text-[10px] text-muted-foreground mt-0.5">
