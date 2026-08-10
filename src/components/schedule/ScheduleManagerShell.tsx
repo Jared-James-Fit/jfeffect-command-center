@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { Loader2, History as HistoryIcon, ListChecks, CalendarRange } from "lucide-react";
+import { Loader2, History as HistoryIcon, ListChecks, CalendarRange, CalendarDays, ListTodo } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Card, CardContent } from "@/components/ui/card";
@@ -9,6 +9,7 @@ import { getClientSchedule } from "@/lib/schedule-bulk.functions";
 import { reorderScheduledWorkouts } from "@/lib/scheduled-workouts.functions";
 import { toast } from "sonner";
 import { ScheduleCalendar } from "./ScheduleCalendar";
+import { ScheduleManagerList } from "./ScheduleManagerList";
 import { BulkMoveDialog } from "./BulkMoveDialog";
 import { MoveWorkoutSheet } from "./MoveWorkoutSheet";
 import { ScheduleHistoryDrawer } from "./ScheduleHistoryDrawer";
@@ -38,6 +39,9 @@ export function ScheduleManagerShell({ clientId, mode }: ScheduleManagerShellPro
   const [bulkAnchor, setBulkAnchor] = useState<string | null>(null);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [weeklyWeekId, setWeeklyWeekId] = useState<string | null>(null);
+  // Additive view toggle: the existing calendar stays the default; the
+  // Schedule Manager list is a faster overview layer over the same data.
+  const [view, setView] = useState<"calendar" | "list">("calendar");
 
   if (isLoading || !data) {
     return <div className="flex items-center gap-2 text-sm text-muted-foreground p-8"><Loader2 className="h-4 w-4 animate-spin" /> Loading schedule…</div>;
@@ -84,8 +88,30 @@ export function ScheduleManagerShell({ clientId, mode }: ScheduleManagerShellPro
       <Card>
         <CardContent className="p-3 sm:p-4">
           <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
-            <div className="text-sm text-muted-foreground">
-              Drag workouts to reschedule. Tap to pick a date.
+            <div className="flex flex-wrap items-center gap-3">
+              <div className="flex rounded-md border border-border p-0.5" role="tablist" aria-label="Schedule view">
+                <Button
+                  size="sm"
+                  variant={view === "calendar" ? "default" : "ghost"}
+                  className="h-7 px-2.5 text-xs"
+                  onClick={() => setView("calendar")}
+                >
+                  <CalendarDays className="h-3.5 w-3.5 mr-1" /> Calendar
+                </Button>
+                <Button
+                  size="sm"
+                  variant={view === "list" ? "default" : "ghost"}
+                  className="h-7 px-2.5 text-xs"
+                  onClick={() => setView("list")}
+                >
+                  <ListTodo className="h-3.5 w-3.5 mr-1" /> Schedule Manager
+                </Button>
+              </div>
+              <div className="text-sm text-muted-foreground">
+                {view === "calendar"
+                  ? "Drag workouts to reschedule. Tap to pick a date."
+                  : "Every workout in the program — schedule or change dates fast."}
+              </div>
             </div>
             <div className="flex gap-2">
               <Button size="sm" variant="outline" onClick={() => { setBulkAnchor(days[0]?.id ?? null); setBulkOpen(true); }} disabled={locked || days.length === 0}>
@@ -97,17 +123,29 @@ export function ScheduleManagerShell({ clientId, mode }: ScheduleManagerShellPro
             </div>
           </div>
 
-          <ScheduleCalendar
-            days={days}
-            weeks={weeks}
-            blocks={blocks}
-            completions={completions}
-            scheduledInstances={scheduledInstances ?? []}
-            canEdit={!locked}
-            onMoveDay={handleMove}
-            onSelectDay={handleSelectDay}
-            onReorder={handleReorder}
-          />
+          {view === "calendar" ? (
+            <ScheduleCalendar
+              days={days}
+              weeks={weeks}
+              blocks={blocks}
+              completions={completions}
+              scheduledInstances={scheduledInstances ?? []}
+              canEdit={!locked}
+              onMoveDay={handleMove}
+              onSelectDay={handleSelectDay}
+              onReorder={handleReorder}
+            />
+          ) : (
+            <ScheduleManagerList
+              days={days}
+              weeks={weeks}
+              blocks={blocks}
+              completions={completions}
+              scheduledInstances={scheduledInstances ?? []}
+              canEdit={!locked}
+              onSelectDay={handleSelectDay}
+            />
+          )}
         </CardContent>
       </Card>
 

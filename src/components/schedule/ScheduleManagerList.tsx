@@ -303,8 +303,8 @@ export function ScheduleManagerList({
           <div className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
             {g.block?.name ?? `Block ${gi + 1}`}
           </div>
-          {g.weeks.map((w) => (
-            <div key={w.week?.id ?? Math.random()} className="space-y-1.5">
+          {g.weeks.map((w, wi) => (
+            <div key={w.week?.id ?? `week-${wi}`} className="space-y-1.5">
               <div className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground/80 pl-1">
                 Week {w.week?.week_index ?? "—"}
               </div>
