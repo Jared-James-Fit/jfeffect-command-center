@@ -1034,7 +1034,7 @@ function AnalyticsEmptyPreview() {
     { icon: <Trophy className="h-4 w-4" />, label: "PRs · 30d", value: "—", color: ANALYTICS_COLORS.green },
     { icon: <Flame className="h-4 w-4" />, label: "Sets · 7d", value: "—", color: ANALYTICS_COLORS.red },
     { icon: <Calendar className="h-4 w-4" />, label: "Workouts", value: "—", color: ANALYTICS_COLORS.blue },
-    { icon: <TrendingUp className="h-4 w-4" />, label: "Top gain", value: "—", color: ANALYTICS_COLORS.purple },
+    { icon: <TrendingUp className="h-4 w-4" />, label: "Top e1RM gain", value: "—", color: ANALYTICS_COLORS.purple },
   ];
   const sections = [
     { icon: <Trophy className="h-5 w-5 text-primary" />, title: "Recent PRs", desc: "Every time you beat a previous best, the lift, weight, and gain land here automatically." },
