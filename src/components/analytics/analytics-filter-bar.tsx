@@ -52,12 +52,15 @@ function lifetimeBounds(blocks: AnalyticsBlock[]): { start: Date; end: Date } {
 
 function currentBlockFilter(b: AnalyticsBlock): AnalyticsFilter {
   const { start, end } = blockRange(b);
+  const name = (b.name ?? "").trim();
   return {
     preset: "current_block",
     blockId: b.id,
     start,
     end,
-    label: `Current Block · ${format(start, "MMM d")}–${format(end, "MMM d")}`,
+    label: name
+      ? `Current Block · ${name} · ${format(start, "MMM d")}–${format(end, "MMM d")}`
+      : `Current Block · ${format(start, "MMM d")}–${format(end, "MMM d")}`,
   };
 }
 
@@ -189,6 +192,7 @@ export function AnalyticsFilterBar({
       key: "current_block",
       label: "Current Block",
       disabled: !current,
+      disabledHint: current ? undefined : "No active block detected for this client.",
       onSelect: () => {
         if (!current) return;
         onChange(currentBlockFilter(current));

@@ -3,6 +3,7 @@ import { Moon, TrendingUp, TrendingDown, Minus } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { supabase } from "@/integrations/supabase/client";
 import { sleepBucketHours, type SleepBucket } from "@/lib/analytics/recovery-score";
+import { InfoTip } from "@/components/analytics/info-tip";
 
 interface Props {
   clientId: string;
@@ -144,6 +145,12 @@ export function SleepInsightsCard({ clientId, blockStart, blockEnd, blockLabel }
     <div className="mb-3 flex items-center gap-2">
       <Moon className="h-5 w-5 shrink-0 text-primary" />
       <h2 className="text-base font-black uppercase tracking-wider text-foreground">Sleep Insights</h2>
+      <InfoTip label="About sleep insights" title="Sleep Insights" align="start">
+        Sleep comes from the rating logged on workout reviews/check-ins — it is
+        only as reliable as how often entries are logged. Averages convert each
+        rating to hours. A trend needs at least 6 logged entries; more entries
+        make it more trustworthy.
+      </InfoTip>
     </div>
   );
 
@@ -199,7 +206,7 @@ export function SleepInsightsCard({ clientId, blockStart, blockEnd, blockLabel }
             </div>
           ) : (
             <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-              Building Trend
+              Not enough data for trend
             </div>
           )}
         </div>
@@ -218,7 +225,8 @@ export function SleepInsightsCard({ clientId, blockStart, blockEnd, blockLabel }
         )}
 
         <p className="mt-2 text-[10px] text-muted-foreground">
-          Based on {data.sampleCount} logged session{data.sampleCount === 1 ? "" : "s"}.
+          Based on {data.sampleCount} logged {data.sampleCount === 1 ? "entry" : "entries"}.
+          {data.sampleCount < 6 && " Trends unlock after 6 entries."}
         </p>
       </Card>
     </section>
