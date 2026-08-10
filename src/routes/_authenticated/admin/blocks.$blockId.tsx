@@ -598,6 +598,11 @@ function BlockEditor() {
     delay: 8000,
     enabled: hydratedBlockIdRef.current === blockId && dirty,
     onSave: async () => { await persist(); },
+    // Structural saves (e.g. "Copy Week → all weeks") write many rows
+    // sequentially — 20s+ of legit work. The default 8s hard timeout
+    // falsely reported "Save timed out" while the writes were landing
+    // fine. Give the full-block persist a generous window.
+    timeoutMs: 60_000,
   });
 
   // Save-state truth: only clear the editor's dirty flag once the autosave
