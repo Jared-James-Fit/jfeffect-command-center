@@ -16,7 +16,7 @@ export function invalidateScheduleQueries(
     void qc.invalidateQueries({ queryKey: ["block-schedule-instances", blockId] });
     void qc.invalidateQueries({ queryKey: ["block-day-completions", blockId] });
     void qc.invalidateQueries({ queryKey: ["pl-block-summary", blockId] });
-    void qc.invalidateQueries({ queryKey: ["hub-block-sched", blockId] });
+    void qc.invalidateQueries({ queryKey: ["hub-block-schedule"] });
   }
   if (clientId) {
     void qc.invalidateQueries({ queryKey: ["client-schedule", clientId] });
