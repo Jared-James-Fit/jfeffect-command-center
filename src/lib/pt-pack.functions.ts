@@ -9,8 +9,9 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
  * credits live in the append-only `session_ledger_events` ledger and are
  * granted automatically by the `purchase_records_grant_sessions` trigger
  * once the purchase is paid in full. Bookings are `pt_sessions` rows; the
- * `pt_session_status_change` trigger deducts one credit on completion and
- * restores it if the completion is undone.
+ * `pt_session_status_change` trigger drives the wallet state machine:
+ * booking reserves a credit, cancelling/deleting releases it, completing
+ * converts the reservation into a used credit, and undo restores it.
  */
 
 const SellInput = z.object({
@@ -19,7 +20,9 @@ const SellInput = z.object({
   sessionCount: z.number().int().min(1).max(500),
   totalPriceMinor: z.number().int().min(0).max(100_000_00),
   currency: z.string().length(3).default("CAD"),
-  paymentMode: z.enum(["paid", "pending"]),
+  paymentMode: z.enum(["paid", "partial", "pending"]),
+  amountPaidMinor: z.number().int().min(0).max(100_000_00).optional(),
+  paymentMethod: z.string().max(80).nullish(),
   expiryDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullish(),
   note: z.string().max(2000).nullish(),
   showValueToClient: z.boolean().default(true),
@@ -34,8 +37,13 @@ export const sellSessionPack = createServerFn({ method: "POST" })
       .from("user_roles").select("role").eq("user_id", userId).eq("role", "admin").maybeSingle();
     if (!roleRow) throw new Error("Only admins can sell session packs.");
 
-    const paid = data.paymentMode === "paid";
+    const total = data.totalPriceMinor;
+    const paidMinor =
+      data.paymentMode === "paid" ? total : data.paymentMode === "partial" ? Math.min(data.amountPaidMinor ?? 0, total) : 0;
+    const paidInFull = paidMinor >= total;
+    const paymentStatus = paidInFull ? "Paid" : paidMinor > 0 ? "Partial" : "Pending";
     const now = new Date().toISOString();
+    const notesParts = [data.note?.trim(), data.paymentMethod?.trim() ? `Payment method: ${data.paymentMethod.trim()}` : null].filter(Boolean);
     const { data: purchase, error } = await supabase
       .from("purchase_records")
       .insert({
@@ -43,16 +51,16 @@ export const sellSessionPack = createServerFn({ method: "POST" })
         offer_name: data.packageName,
         offer_type: "Personal Training Sessions",
         currency: data.currency,
-        full_payable_amount: data.totalPriceMinor / 100,
-        contract_value_cents: data.totalPriceMinor,
-        amount_paid_cents: paid ? data.totalPriceMinor : 0,
-        amount_outstanding_cents: paid ? 0 : data.totalPriceMinor,
-        payment_status: paid ? "Paid" : "Pending",
-        paid_at: paid ? now : null,
+        full_payable_amount: total / 100,
+        contract_value_cents: total,
+        amount_paid_cents: paidMinor,
+        amount_outstanding_cents: total - paidMinor,
+        payment_status: paymentStatus,
+        paid_at: paidInFull ? now : null,
         sessions_purchased: data.sessionCount,
         package_tracking_enabled: true,
         package_expiry_date: data.expiryDate ?? null,
-        admin_notes: data.note ?? null,
+        admin_notes: notesParts.length ? notesParts.join(" · ") : null,
         show_value_to_client: data.showValueToClient,
         purchased_at: now,
         assigned_at: now,
@@ -75,16 +83,18 @@ export const sellSessionPack = createServerFn({ method: "POST" })
         after_state: {
           package_name: data.packageName,
           session_count: data.sessionCount,
-          total_price_minor: data.totalPriceMinor,
+          total_price_minor: total,
+          amount_paid_minor: paidMinor,
           currency: data.currency,
-          payment_status: paid ? "Paid" : "Pending",
+          payment_status: paymentStatus,
+          payment_method: data.paymentMethod ?? null,
           source: "sell_sessions_dialog",
         },
         reason: data.note ?? null,
       } as any);
     } catch { /* audit is best-effort */ }
 
-    return { ok: true, purchaseId: purchase.id as string };
+    return { ok: true, purchaseId: purchase.id as string, paymentStatus, paidMinor };
   });
 
 const StatusInput = z.object({
