@@ -620,3 +620,132 @@ export const setClientSchedulingPermission = createServerFn({ method: "POST" })
     if (error) throw new Error(error.message);
     return { ok: true };
   });
+
+/**
+ * Editor → schedule write path (canonical fix for editor/calendar desync).
+ *
+ * The program editor's Training Date field must write to the SAME source of
+ * truth the calendar reads: `pl_scheduled_workouts` instances. This function:
+ *  - Refuses to move/clear COMPLETED days (history is immutable).
+ *  - When the day has instance(s): updates the earliest instance's date (or
+ *    deletes incomplete instances when clearing) AND mirrors
+ *    `pl_days.scheduled_date` so the legacy fallback can never drift again.
+ *  - When the day has no instance: updates only `pl_days.scheduled_date`
+ *    (legacy fallback path — the calendar picks it up as before).
+ */
+export const syncProgramDaySchedule = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator(
+    (d: { clientId: string; dayId: string; newDate: string | null }) =>
+      z
+        .object({
+          clientId: z.string().uuid(),
+          dayId: z.string().uuid(),
+          newDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable(),
+        })
+        .parse(d),
+  )
+  .handler(async ({ data, context }) => {
+    const { actor } = await resolveActor(context, data.clientId);
+    if (actor === "client") throw new Error("Not allowed.");
+
+    // History guard: completed days (legacy or instance-scoped) are immutable.
+    const [{ data: legacyCompleted }, { data: dayInstances }] = await Promise.all([
+      context.supabase
+        .from("pl_day_completions")
+        .select("id")
+        .eq("day_id", data.dayId)
+        .is("scheduled_workout_id", null)
+        .not("completed_at", "is", null)
+        .limit(1),
+      context.supabase
+        .from("pl_scheduled_workouts")
+        .select("id, scheduled_date")
+        .eq("client_id", data.clientId)
+        .eq("source_day_id", data.dayId)
+        .order("scheduled_date", { ascending: true }),
+    ]);
+    if ((legacyCompleted ?? []).length > 0) {
+      throw new Error("This workout is already completed — past history is locked.");
+    }
+
+    const instances = (dayInstances ?? []) as Array<{ id: string; scheduled_date: string }>;
+    if (instances.length > 0) {
+      const ids = instances.map((i) => i.id);
+      const { data: instCompleted } = await context.supabase
+        .from("pl_day_completions")
+        .select("id")
+        .in("scheduled_workout_id", ids)
+        .not("completed_at", "is", null)
+        .limit(1);
+      if ((instCompleted ?? []).length > 0) {
+        throw new Error("This workout is already completed — past history is locked.");
+      }
+
+      if (data.newDate) {
+        // Move the earliest (primary) instance; leave repeat sessions alone.
+        const { error } = await context.supabase
+          .from("pl_scheduled_workouts")
+          .update({ scheduled_date: data.newDate })
+          .eq("id", instances[0].id);
+        if (error) throw new Error(error.message);
+      } else {
+        // Clearing the date removes all incomplete instances so the day
+        // genuinely disappears from the calendar.
+        const { error } = await context.supabase
+          .from("pl_scheduled_workouts")
+          .delete()
+          .in("id", ids);
+        if (error) throw new Error(error.message);
+      }
+      // Mirror the legacy field so every surface agrees.
+      await context.supabase
+        .from("pl_days")
+        .update({ scheduled_date: data.newDate, schedule_source: "manual" })
+        .eq("id", data.dayId);
+      return { ok: true as const, mode: "instance" as const, date: data.newDate };
+    }
+
+    // Legacy fallback path: no instance exists, so pl_days is the source.
+    const { error } = await context.supabase
+      .from("pl_days")
+      .update({ scheduled_date: data.newDate, schedule_source: "manual" })
+      .eq("id", data.dayId);
+    if (error) throw new Error(error.message);
+    return { ok: true as const, mode: "legacy" as const, date: data.newDate };
+  });
+
+/**
+ * One-click "Fix" for a Calendar Issue badge: aligns the legacy
+ * `pl_days.scheduled_date` mirror to the canonical instance date. Never
+ * creates duplicates and never rewrites history.
+ */
+export const reconcileDayScheduleMirror = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { clientId: string; dayId: string }) =>
+    z
+      .object({ clientId: z.string().uuid(), dayId: z.string().uuid() })
+      .parse(d),
+  )
+  .handler(async ({ data, context }) => {
+    const { actor } = await resolveActor(context, data.clientId);
+    if (actor === "client") throw new Error("Not allowed.");
+
+    const { data: instances } = await context.supabase
+      .from("pl_scheduled_workouts")
+      .select("id, scheduled_date")
+      .eq("client_id", data.clientId)
+      .eq("source_day_id", data.dayId)
+      .order("scheduled_date", { ascending: true })
+      .limit(1);
+    const primary = (instances ?? [])[0] as { id: string; scheduled_date: string } | undefined;
+    if (!primary) {
+      return { ok: false as const, reason: "no-instance" as const };
+    }
+    const { error } = await context.supabase
+      .from("pl_days")
+      .update({ scheduled_date: primary.scheduled_date })
+      .eq("id", data.dayId);
+    if (error) throw new Error(error.message);
+    return { ok: true as const, date: primary.scheduled_date };
+  });

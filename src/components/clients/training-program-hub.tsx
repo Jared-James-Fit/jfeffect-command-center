@@ -13,6 +13,7 @@ import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { listClientBlocks, listClientPreps, getBlockSummary } from "@/lib/pl-programs";
 import { deriveBlockStatuses, blockStatusTone, todayISOLocal } from "@/lib/block-status";
+import { buildProgramScheduleStatus } from "@/lib/program-schedule-status";
 import { AssignProgramDialog } from "@/components/clients/assign-program-dialog";
 import { WorkoutArchiveDialog } from "@/components/clients/workout-archive-dialog";
 import { ScheduleWorkoutSheet } from "@/components/schedule/ScheduleWorkoutSheet";
@@ -87,14 +88,30 @@ export function TrainingProgramHub({ clientId, clientName }: { clientId: string;
       if (error) throw error;
       const days = (data ?? []) as any[];
       const currentWk = summary?.current_week_index ?? 1;
-      const scheduled = days.filter((d) => !!d.scheduled_date).length;
-      const missing = days.filter(
-        (d) => !d.scheduled_date && (d.pl_weeks?.week_index ?? 0) >= currentWk,
-      ).length;
-      const next = days
-        .filter((d) => d.scheduled_date && d.scheduled_date >= today)
-        .map((d) => d.scheduled_date as string)
-        .sort()[0] ?? null;
+      // Canonical schedule = pl_scheduled_workouts instances; the legacy
+      // pl_days.scheduled_date is only a fallback for days with no instance.
+      // Counting legacy dates alone would disagree with the calendar.
+      const dayIds = days.map((d) => d.id as string);
+      const instances = dayIds.length
+        ? (((await supabase
+            .from("pl_scheduled_workouts")
+            .select("id, source_day_id, scheduled_date")
+            .eq("client_id", clientId)
+            .in("source_day_id", dayIds)).data ?? []) as any[])
+        : [];
+      const statusMap = buildProgramScheduleStatus({ days, instances, completions: [] });
+      let scheduled = 0;
+      let missing = 0;
+      for (const d of days) {
+        const st = statusMap.get(d.id);
+        if (st?.canonicalDate) scheduled += 1;
+        else if ((d.pl_weeks?.week_index ?? 0) >= currentWk) missing += 1;
+      }
+      const next =
+        days
+          .map((d) => statusMap.get(d.id)?.canonicalDate)
+          .filter((dt): dt is string => !!dt && dt >= today)
+          .sort()[0] ?? null;
       return { total: days.length, scheduled, missing, next };
     },
   });

@@ -26,6 +26,10 @@ import { GripVertical } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { DayDateButton } from "@/components/workout-day/day-date-button";
 import { formatDayLabel, formatDaySubtitle } from "@/lib/workout-day-label";
+import {
+  PROGRAM_DAY_STATUS_META,
+  type ProgramDayScheduleStatus,
+} from "@/lib/program-schedule-status";
 import { useAutosave } from "@/hooks/use-autosave";
 import { SaveStatus } from "@/components/save-status";
 import { useConflictWatch } from "@/hooks/use-conflict-watch";
@@ -811,7 +815,7 @@ function EditorChrome({ meta, summary, typeLabel, autosave, save, dirty, statusT
   );
 }
 
-export function StructureCanvas({ type, payload, setP, exercises, appendRowToFirstDay, undo, redo, canUndo, canRedo, clientId, blockId, toolbarExtras, templateId }: {
+export function StructureCanvas({ type, payload, setP, exercises, appendRowToFirstDay, undo, redo, canUndo, canRedo, clientId, blockId, toolbarExtras, templateId, dayScheduleStatus, onFixCalendarIssue }: {
   type: string; payload: any; setP: (p: any, opts?: { skipHistory?: boolean }) => void; exercises: any[];
   appendRowToFirstDay: (payload: any, type: string, row: any) => void;
   undo: () => void; redo: () => void; canUndo: boolean; canRedo: boolean;
@@ -824,6 +828,12 @@ export function StructureCanvas({ type, payload, setP, exercises, appendRowToFir
   /** Optional — template id, used to give legacy blocks deterministic
    * temporary IDs (legacy:<templateId>:...). Stable across refreshes. */
   templateId?: string;
+  /** Optional — canonical per-day schedule status (live client block editor).
+   * When present, day cards show On Calendar / Missing Date / Calendar Issue /
+   * Completed / In Progress badges sourced from pl_scheduled_workouts. */
+  dayScheduleStatus?: Map<string, ProgramDayScheduleStatus>;
+  /** Optional — one-click repair for "Calendar Issue" day badges. */
+  onFixCalendarIssue?: (dayId: string) => void;
 }) {
   const [prefs, setPrefsState] = useState<EditorPrefs>(() => readPrefs());
   const setPrefs = (patch: Partial<EditorPrefs>) => {
@@ -991,7 +1001,7 @@ export function StructureCanvas({ type, payload, setP, exercises, appendRowToFir
             }}
             className="pl-1 pr-2 py-2"
           >
-            <StructureEditor type={type} payload={payload} setPayload={setP} exercises={exercises as any[]} compact={compact} templateId={templateId} />
+            <StructureEditor type={type} payload={payload} setPayload={setP} exercises={exercises as any[]} compact={compact} templateId={templateId} dayScheduleStatus={dayScheduleStatus} onFixCalendarIssue={onFixCalendarIssue} />
           </div>
         </div>
       </div>
@@ -1002,9 +1012,9 @@ export function StructureCanvas({ type, payload, setP, exercises, appendRowToFir
 
 // ---------- Structure editing for the JSON payload ----------
 
-function StructureEditor({ type, payload, setPayload, exercises, compact, templateId }: { type: string; payload: any; setPayload: (p: any) => void; exercises: any[]; compact?: boolean; templateId?: string }) {
+function StructureEditor({ type, payload, setPayload, exercises, compact, templateId, dayScheduleStatus, onFixCalendarIssue }: { type: string; payload: any; setPayload: (p: any) => void; exercises: any[]; compact?: boolean; templateId?: string; dayScheduleStatus?: Map<string, ProgramDayScheduleStatus>; onFixCalendarIssue?: (dayId: string) => void }) {
   if (type === "full_prep" || type === "block") {
-    return <MultiBlockStructureEditor type={type} payload={payload} setPayload={setPayload} exercises={exercises} compact={compact} templateId={templateId} />;
+    return <MultiBlockStructureEditor type={type} payload={payload} setPayload={setPayload} exercises={exercises} compact={compact} templateId={templateId} dayScheduleStatus={dayScheduleStatus} onFixCalendarIssue={onFixCalendarIssue} />;
   }
   if (type === "week") return <WeekEditor week={payload} setWeek={setPayload} exercises={exercises} compact={compact} />;
   if (type === "day") return <DayEditor day={payload} setDay={setPayload} exercises={exercises} compact={compact} dayKey="single" />;
@@ -1016,13 +1026,15 @@ function StructureEditor({ type, payload, setPayload, exercises, compact, templa
 }
 
 // ---------- Multi-block (v2 payload) structure editor -----------------------
-function MultiBlockStructureEditor({ type, payload, setPayload, exercises, compact, templateId }: {
+function MultiBlockStructureEditor({ type, payload, setPayload, exercises, compact, templateId, dayScheduleStatus, onFixCalendarIssue }: {
   type: "block" | "full_prep" | string;
   payload: any;
   setPayload: (p: any) => void;
   exercises: any[];
   compact?: boolean;
   templateId?: string;
+  dayScheduleStatus?: Map<string, ProgramDayScheduleStatus>;
+  onFixCalendarIssue?: (dayId: string) => void;
 }) {
   const navigate = useNavigate();
   // This component is also reused from `/admin/blocks/$blockId`, where the
@@ -1290,6 +1302,8 @@ function MultiBlockStructureEditor({ type, payload, setPayload, exercises, compa
             setWeeksData={setActiveBlockWeeks}
             exercises={exercises}
             compact={compact}
+            dayScheduleStatus={dayScheduleStatus}
+            onFixCalendarIssue={onFixCalendarIssue}
           />
         </div>
       ) : (
@@ -1301,7 +1315,7 @@ function MultiBlockStructureEditor({ type, payload, setPayload, exercises, compa
   );
 }
 
-export function BlockPayloadEditor({ weeksData, setWeeksData, exercises, compact }: { weeksData: any[]; setWeeksData: (wd: any[]) => void; exercises: any[]; compact?: boolean }) {
+export function BlockPayloadEditor({ weeksData, setWeeksData, exercises, compact, dayScheduleStatus, onFixCalendarIssue }: { weeksData: any[]; setWeeksData: (wd: any[]) => void; exercises: any[]; compact?: boolean; dayScheduleStatus?: Map<string, ProgramDayScheduleStatus>; onFixCalendarIssue?: (dayId: string) => void }) {
   // Persist the coach's editing position (active week + view mode) across
   // refreshes via localStorage so they return to exactly where they left off.
   const POS_KEY = "pb.block-editor.pos:v1";
@@ -1502,6 +1516,8 @@ export function BlockPayloadEditor({ weeksData, setWeeksData, exercises, compact
               blockStartDate={null}
               blockEndDate={null}
               onExtraDayAdded={() => { /* block-tree query invalidated inside AddExtraDayDialog */ }}
+              dayScheduleStatus={dayScheduleStatus}
+              onFixCalendarIssue={onFixCalendarIssue}
             />
           )}
         </>
@@ -1653,6 +1669,8 @@ export function BlockPayloadEditor({ weeksData, setWeeksData, exercises, compact
                         blockStartDate={null}
                         blockEndDate={null}
                         onExtraDayAdded={() => {}}
+                        dayScheduleStatus={dayScheduleStatus}
+                        onFixCalendarIssue={onFixCalendarIssue}
                       />
                     </div>
                   </Card>
@@ -1680,7 +1698,14 @@ export function BlockPayloadEditor({ weeksData, setWeeksData, exercises, compact
   );
 }
 
-function WeekEditor({ week, setWeek, exercises, onCopyDayToFuture, hideHeader, hideVolumeSummary, compact, dayKeyPrefix, blockId, blockStartDate, blockEndDate, onExtraDayAdded }: { week: any; setWeek: (w: any) => void; exercises: any[]; onCopyDayToFuture?: (dayIdx: number) => void; hideHeader?: boolean; hideVolumeSummary?: boolean; compact?: boolean; dayKeyPrefix?: string; blockId?: string | null; blockStartDate?: string | null; blockEndDate?: string | null; onExtraDayAdded?: () => void }) {
+const SCHEDULE_STATUS_BADGE_CLASS: Record<string, string> = {
+  emerald: "border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400",
+  amber: "border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-400",
+  blue: "border-sky-500/40 bg-sky-500/10 text-sky-700 dark:text-sky-400",
+  neutral: "",
+};
+
+function WeekEditor({ week, setWeek, exercises, onCopyDayToFuture, hideHeader, hideVolumeSummary, compact, dayKeyPrefix, blockId, blockStartDate, blockEndDate, onExtraDayAdded, dayScheduleStatus, onFixCalendarIssue }: { week: any; setWeek: (w: any) => void; exercises: any[]; onCopyDayToFuture?: (dayIdx: number) => void; hideHeader?: boolean; hideVolumeSummary?: boolean; compact?: boolean; dayKeyPrefix?: string; blockId?: string | null; blockStartDate?: string | null; blockEndDate?: string | null; onExtraDayAdded?: () => void; dayScheduleStatus?: Map<string, ProgramDayScheduleStatus>; onFixCalendarIssue?: (dayId: string) => void }) {
   const days = week.days || [];
   // Per-day "Day options" toggles: Focus input and copy-to-future-weeks live
   // behind these; a day with a saved Focus value keeps it visible.
@@ -1735,6 +1760,10 @@ function WeekEditor({ week, setWeek, exercises, onCopyDayToFuture, hideHeader, h
         const dKey = `${dayKeyPrefix ?? `wk${week.week_index ?? 0}`}:d${d.day_index ?? i}`;
         const positional = i + 1;
         const dayLabel = formatDayLabel(d, positional);
+        // Canonical schedule status for this day (live client block editor
+        // only). Reflects what the calendar ACTUALLY shows — instance dates
+        // win over the legacy pl_days.scheduled_date mirror.
+        const dayStatus = d._dbId ? dayScheduleStatus?.get(d._dbId) : undefined;
         return (
         <Card key={i} className={cn("border-l-[3px] border-l-primary/40", compact ? "p-2" : "p-3")}>
           <div className={cn("flex flex-col gap-2", compact ? "mb-1" : "mb-2")}>
@@ -1758,7 +1787,7 @@ function WeekEditor({ week, setWeek, exercises, onCopyDayToFuture, hideHeader, h
                 />
               </div>
               <DayDateButton
-                value={d.scheduled_date ?? null}
+                value={dayStatus?.canonicalDate ?? d.scheduled_date ?? null}
                 onChange={(iso) => {
                   const copy = [...days];
                   copy[i] = { ...d, scheduled_date: iso };
@@ -1766,7 +1795,35 @@ function WeekEditor({ week, setWeek, exercises, onCopyDayToFuture, hideHeader, h
                 }}
                 compact={compact}
               />
+              {dayStatus && (
+                <span className="flex items-center gap-1">
+                  <Badge
+                    variant="outline"
+                    className={cn("text-[10px]", SCHEDULE_STATUS_BADGE_CLASS[PROGRAM_DAY_STATUS_META[dayStatus.status].tone])}
+                    title={dayStatus.calendarIssue ? "The editor date and the calendar date disagree. The calendar is right — tap Fix to align." : undefined}
+                  >
+                    {PROGRAM_DAY_STATUS_META[dayStatus.status].label}
+                  </Badge>
+                  {dayStatus.calendarIssue && onFixCalendarIssue && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-6 border-amber-500/40 px-2 text-[10px] text-amber-700 hover:bg-amber-500/10 dark:text-amber-400"
+                      onClick={() => onFixCalendarIssue(dayStatus.dayId)}
+                      title="Align this day's editor date with the calendar (calendar wins; history is never changed)"
+                    >
+                      Fix
+                    </Button>
+                  )}
+                </span>
+              )}
             </div>
+            {dayStatus?.missingDate && (
+              <p className="flex items-center gap-1 text-[11px] text-amber-600 dark:text-amber-400">
+                <AlertTriangle className="h-3 w-3" />
+                Not on the calendar — set a Training Date so the client sees this workout.
+              </p>
+            )}
             <div className="flex items-center gap-2 flex-wrap">
               {(dayOpts[i] || d.focus?.trim()) && (
                 <Input
