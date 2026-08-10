@@ -197,7 +197,7 @@ export const updateSessionPack = createServerFn({ method: "POST" })
 
     const { data: updated, error } = await supabase
       .from("purchase_records")
-      .update(patch)
+      .update(patch as any)
       .eq("id", data.purchaseId)
       .select("id")
       .single();
