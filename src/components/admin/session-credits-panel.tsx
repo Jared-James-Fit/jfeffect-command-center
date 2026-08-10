@@ -2,6 +2,23 @@ import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { supabase } from "@/integrations/supabase/client";
+
+const LEDGER_EVENT_LABELS: Record<string, string> = {
+  granted: "Pack added / credit granted",
+  reserved: "Credit reserved (booked)",
+  released: "Reserved credit released (cancelled)",
+  used: "Session completed (credit used)",
+  consumed: "Session completed (credit used)",
+  expired: "Credit expired",
+  adjusted: "Manual adjustment",
+  voided: "Grant voided",
+  transferred_in: "Transferred in",
+  transferred_out: "Transferred out",
+};
+
+function ledgerEventLabel(eventType: string): string {
+  return LEDGER_EVENT_LABELS[eventType] ?? eventType;
+}
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
