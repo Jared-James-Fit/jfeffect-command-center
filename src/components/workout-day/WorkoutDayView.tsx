@@ -598,7 +598,7 @@ function WorkoutDay({
       const nameOnlyRows = (r as any[]).filter((row) => !row.exercise_id && row.exercise_name_override);
       if (nameOnlyRows.length > 0) {
         const names = [...new Set(nameOnlyRows.map((row: any) => row.exercise_name_override as string))];
-        const { data: exByName } = await sb.from("exercises").select("id,name,video_url,vimeo_embed_url,secondary_vimeo_embed_url,active_video_set,thumbnail_url,cues,common_mistakes,muscle_group,category,pl_lift_group,warmup_protocol_id,is_powerlifting,warmup_notes,default_load_unit,exercise_category,is_competition_lift,competition_lift_type,default_measurement_type,duration_seconds").in("name", names);
+        const { data: exByName } = await sb.from("exercises").select("id,name,video_url,vimeo_embed_url,secondary_vimeo_embed_url,active_video_set,thumbnail_url,cues,common_mistakes,muscle_group,category,pl_lift_group,warmup_protocol_id,is_powerlifting,warmup_notes,default_load_unit,exercise_category,is_competition_lift,competition_lift_type,default_measurement_type").in("name", names);
         if (exByName && exByName.length > 0) {
           const nameMap = new Map<string, any>(exByName.map((e: any) => [e.name, e]));
           for (const row of r as any[]) {
