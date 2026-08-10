@@ -7,9 +7,11 @@ import type { MuscleStat } from "@/lib/analytics/performance-insights";
 export function MuscleGroupGrid({
   stats,
   onShare,
+  fmtTon,
 }: {
   stats: MuscleStat[];
   onShare: (group: MuscleGroup, stat: MuscleStat) => void;
+  fmtTon: (lb: number) => string;
 }) {
   const active = stats.filter((s) => s.monthly_sets > 0 || s.weekly_sets > 0);
   const dormant = stats.filter((s) => !active.includes(s));
@@ -17,7 +19,7 @@ export function MuscleGroupGrid({
     <div className="space-y-3">
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
         {active.map((s) => (
-          <MuscleCard key={s.group} stat={s} onShare={() => onShare(s.group, s)} />
+          <MuscleCard key={s.group} stat={s} onShare={() => onShare(s.group, s)} fmtTon={fmtTon} />
         ))}
       </div>
       {dormant.length > 0 && (
@@ -29,7 +31,7 @@ export function MuscleGroupGrid({
   );
 }
 
-function MuscleCard({ stat, onShare }: { stat: MuscleStat; onShare: () => void }) {
+function MuscleCard({ stat, onShare, fmtTon }: { stat: MuscleStat; onShare: () => void; fmtTon: (lb: number) => string }) {
   const t = stat.trend_pct;
   const trendIcon =
     t == null ? <Minus className="h-3 w-3" /> :
@@ -60,7 +62,7 @@ function MuscleCard({ stat, onShare }: { stat: MuscleStat; onShare: () => void }
         <Stat label="Weekly sets" value={String(stat.weekly_sets)} />
         <Stat label="Monthly sets" value={String(stat.monthly_sets)} />
         <Stat label="Avg weekly" value={String(stat.avg_weekly_sets)} />
-        <Stat label="Tonnage (mo)" value={`${stat.monthly_tonnage.toLocaleString()} lb`} />
+        <Stat label="Tonnage (mo)" value={fmtTon(stat.monthly_tonnage)} />
       </div>
       <div className={`mt-3 inline-flex items-center gap-1 rounded-full bg-muted/60 px-2 py-1 text-xs font-semibold ${trendClass}`}>
         {trendIcon} <span>{trendLabel}</span>

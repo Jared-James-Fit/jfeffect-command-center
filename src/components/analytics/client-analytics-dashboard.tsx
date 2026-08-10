@@ -42,6 +42,7 @@ import { CardioSummaryCard } from "@/components/analytics/cardio-summary-card";
 import { RecoveryPatternsCard } from "@/components/analytics/recovery-patterns-card";
 import { PredictedWindowCard } from "@/components/analytics/predicted-window-card";
 import { getClientAnalyticsSettings } from "@/lib/analytics/settings";
+import { InfoTip } from "@/components/analytics/info-tip";
 import {
   ANALYTICS_COLORS,
   exerciseColor,
@@ -367,6 +368,15 @@ export function ClientAnalyticsDashboard({
     return [...merged.values()].sort((a, b) => b.sets - a.sets);
   }, [volume]);
 
+  const totalVolumeSets = useMemo(
+    () => volumeData.reduce((s, d) => s + d.sets, 0),
+    [volumeData],
+  );
+  const otherVolume = useMemo(
+    () => volumeData.find((d) => d.muscle === "Other") ?? null,
+    [volumeData],
+  );
+
   const summary = useMemo(() => {
     const prsInRange = prs.length;
     const setsInRange = filteredResults.length;
@@ -456,7 +466,7 @@ export function ClientAnalyticsDashboard({
           <AnalyticsEmptyPreview />
         ) : (
           <>
-            <PerformanceInsights clientId={clientId} />
+            <PerformanceInsights clientId={clientId} displayUnit={displayUnit} />
             {filteredResults.length === 0 && (
               <Card className="border-dashed border-border/70 bg-card/60 p-6 text-center text-sm text-muted-foreground">
                 No training data logged in this period ({filter.label}).
@@ -469,29 +479,59 @@ export function ClientAnalyticsDashboard({
                 label="PRs in range"
                 value={String(summary.prsInRange)}
                 color={ANALYTICS_COLORS.green}
+                tip={
+                  <InfoTip label="About PRs in range" title="PRs in range" align="start">
+                    New estimated 1RM personal bests logged in this range. A PR
+                    counts when a set's estimated 1RM beats every previous
+                    logged set for that exercise — first-time logs don't count,
+                    since there is no previous best to beat. Estimates use the
+                    Epley formula.
+                  </InfoTip>
+                }
               />
               <StatCard
                 icon={<Flame className="h-4 w-4" />}
                 label="Sets in range"
                 value={String(summary.setsInRange)}
                 color={ANALYTICS_COLORS.red}
+                tip={
+                  <InfoTip label="About sets in range" title="Sets in range" align="start">
+                    All sets logged with a weight in this range (warm-ups
+                    included if they were logged). Bodyweight sets with no
+                    external load are not counted here.
+                  </InfoTip>
+                }
               />
               <StatCard
                 icon={<Calendar className="h-4 w-4" />}
                 label="Workouts"
                 value={String(summary.workouts)}
                 color={ANALYTICS_COLORS.blue}
+                tip={
+                  <InfoTip label="About workouts count" title="Workouts" align="end">
+                    Distinct training days with at least one logged set in this
+                    range — workouts with real logged data, not scheduled
+                    sessions.
+                  </InfoTip>
+                }
               />
               <StatCard
                 icon={<TrendingUp className="h-4 w-4" />}
-                label="Top gain"
+                label="Top e1RM gain"
                 value={
                   summary.topLift
                     ? `+${fmtNum(summary.topLift.delta)} ${displayUnit}`
                     : "—"
                 }
-                sublabel={summary.topLift?.name}
+                sublabel={summary.topLift?.name ?? "No PRs in this range"}
                 color={ANALYTICS_COLORS.purple}
+                tip={
+                  <InfoTip label="About top e1RM gain" title="Top e1RM gain" align="end">
+                    The biggest estimated 1RM increase detected in this range —
+                    the PR with the largest jump over the client's previous best
+                    for that exercise.
+                  </InfoTip>
+                }
               />
             </section>
 
@@ -552,6 +592,11 @@ export function ClientAnalyticsDashboard({
                 <h2 className="flex min-w-0 items-center gap-2 truncate text-base font-black uppercase tracking-wider text-foreground">
                   <Trophy className="h-5 w-5 shrink-0 text-primary" />
                   <span className="truncate">Recent PRs</span>
+                  <InfoTip label="About recent PRs" title="Recent PRs" align="start">
+                    Every card is a new estimated 1RM personal best: the logged
+                    set, the previous best it beat, and the gain. Estimates use
+                    the Epley formula — weight × (1 + reps ÷ 30).
+                  </InfoTip>
                 </h2>
                 <div className="flex shrink-0 items-center gap-3">
                   <span className="text-xs font-semibold text-muted-foreground">{filter.label}</span>
@@ -581,6 +626,13 @@ export function ClientAnalyticsDashboard({
                 <h2 className="flex min-w-0 items-center gap-2 truncate text-base font-black uppercase tracking-wider text-foreground">
                   <TrendingUp className="h-5 w-5 shrink-0 text-primary" />
                   <span className="truncate">Exercise Progress</span>
+                  <InfoTip label="About exercise progress" title="Exercise Progress" align="start">
+                    Each point is a logged set for the selected exercise. Switch
+                    between Est 1RM (estimated one-rep max, Epley formula),
+                    Weight (load on the bar), and Effort (RPE or RIR on a 0–10
+                    scale). Tap a point for full set details — the green dot
+                    marks the current PR.
+                  </InfoTip>
                 </h2>
                 <ToggleGroup
                   type="single"
@@ -744,6 +796,18 @@ export function ClientAnalyticsDashboard({
                                           ? ` · ${d.rir} RIR`
                                           : "")}
                                     </div>
+                                    {chartMetric === "est" && activePr &&
+                                      d.est === Number(conv(activePr.est_1rm).toFixed(1)) && (
+                                      <div
+                                        className="mt-1 inline-flex items-center rounded-full px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider"
+                                        style={{
+                                          background: `color-mix(in oklab, ${ANALYTICS_COLORS.green} 18%, transparent)`,
+                                          color: ANALYTICS_COLORS.green,
+                                        }}
+                                      >
+                                        Current PR
+                                      </div>
+                                    )}
                                   </div>
                                 );
                               }}
@@ -804,6 +868,11 @@ export function ClientAnalyticsDashboard({
                 <h2 className="flex min-w-0 items-center gap-2 truncate text-base font-black uppercase tracking-wider text-foreground">
                   <Dumbbell className="h-5 w-5 shrink-0 text-primary" />
                   <span className="truncate">Volume by Muscle Group</span>
+                  <InfoTip label="About volume by muscle group" title="Volume by Muscle Group" align="start">
+                    Working sets per muscle group in this range, based on each
+                    exercise's muscle tag. Exercises without a tag land in
+                    Other — it is not a real muscle group.
+                  </InfoTip>
                 </h2>
                 <span className="shrink-0 text-xs font-semibold text-muted-foreground">{filter.label}</span>
               </div>
@@ -846,6 +915,9 @@ export function ClientAnalyticsDashboard({
                           content={({ active, payload }) => {
                             if (!active || !payload?.length) return null;
                             const d: any = payload[0].payload;
+                            const pct = totalVolumeSets > 0
+                              ? Math.round((d.sets / totalVolumeSets) * 100)
+                              : 0;
                             return (
                               <div className="max-w-[220px] rounded-lg border border-border bg-popover px-3 py-2 text-sm text-popover-foreground shadow-xl">
                                 <div className="flex items-center gap-2 font-extrabold text-foreground">
@@ -857,8 +929,13 @@ export function ClientAnalyticsDashboard({
                                   {d.muscle}
                                 </div>
                                 <div className="text-xs text-muted-foreground">
-                                  {d.sets} {d.sets === 1 ? "set" : "sets"}
+                                  {d.sets} {d.sets === 1 ? "set" : "sets"} · {pct}% of total
                                 </div>
+                                {d.muscle === "Other" && (
+                                  <div className="mt-1 text-[11px] text-muted-foreground">
+                                    Exercises without a mapped muscle group.
+                                  </div>
+                                )}
                               </div>
                             );
                           }}
@@ -871,6 +948,15 @@ export function ClientAnalyticsDashboard({
                       </BarChart>
                     </ResponsiveContainer>
                   </div>
+                  {otherVolume && (
+                    <p className="mt-3 text-[11px] text-muted-foreground">
+                      {otherVolume.sets} {otherVolume.sets === 1 ? "set" : "sets"}
+                      {totalVolumeSets > 0 &&
+                        ` (${Math.round((otherVolume.sets / totalVolumeSets) * 100)}%)`}{" "}
+                      in <span className="font-semibold">Other</span> — exercises without a
+                      muscle group tag. Tag exercises in the library to improve this chart.
+                    </p>
+                  )}
                 </Card>
               )}
             </section>
@@ -912,13 +998,14 @@ export function ClientAnalyticsDashboard({
 void LineChart;
 
 function StatCard({
-  icon, label, value, sublabel, color,
+  icon, label, value, sublabel, color, tip,
 }: {
   icon: React.ReactNode;
   label: string;
   value: string;
   sublabel?: string;
   color: string;
+  tip?: React.ReactNode;
 }) {
   return (
     <Card
@@ -928,6 +1015,7 @@ function StatCard({
       <div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
         <span style={{ color }}>{icon}</span>
         <span className="truncate">{label}</span>
+        {tip && <span className="ml-auto normal-case">{tip}</span>}
       </div>
       <div className="mt-1 truncate text-xl font-black tracking-tight text-foreground">
         {value}
@@ -946,7 +1034,7 @@ function AnalyticsEmptyPreview() {
     { icon: <Trophy className="h-4 w-4" />, label: "PRs · 30d", value: "—", color: ANALYTICS_COLORS.green },
     { icon: <Flame className="h-4 w-4" />, label: "Sets · 7d", value: "—", color: ANALYTICS_COLORS.red },
     { icon: <Calendar className="h-4 w-4" />, label: "Workouts", value: "—", color: ANALYTICS_COLORS.blue },
-    { icon: <TrendingUp className="h-4 w-4" />, label: "Top gain", value: "—", color: ANALYTICS_COLORS.purple },
+    { icon: <TrendingUp className="h-4 w-4" />, label: "Top e1RM gain", value: "—", color: ANALYTICS_COLORS.purple },
   ];
   const sections = [
     { icon: <Trophy className="h-5 w-5 text-primary" />, title: "Recent PRs", desc: "Every time you beat a previous best, the lift, weight, and gain land here automatically." },

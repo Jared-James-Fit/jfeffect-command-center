@@ -33,15 +33,20 @@ export function PRCard({ pr, displayUnit, conv, dense = false }: PRCardProps) {
         <div className="min-w-0 text-sm font-extrabold leading-tight text-foreground sm:text-base">
           <span className="truncate">{pr.exercise_name}</span>
         </div>
-        <Badge
-          className="shrink-0 border-transparent text-[11px] font-bold"
-          style={{
-            background: `color-mix(in oklab, ${ANALYTICS_COLORS.green} 18%, transparent)`,
-            color: ANALYTICS_COLORS.green,
-          }}
-        >
-          {fmtDelta(conv(pr.delta), displayUnit)}
-        </Badge>
+        <div className="flex shrink-0 flex-col items-end gap-1">
+          <Badge
+            className="border-transparent text-[11px] font-bold"
+            style={{
+              background: `color-mix(in oklab, ${ANALYTICS_COLORS.green} 18%, transparent)`,
+              color: ANALYTICS_COLORS.green,
+            }}
+          >
+            {fmtDelta(conv(pr.delta), displayUnit)}
+          </Badge>
+          <Badge variant="outline" className="text-[9px] font-bold uppercase tracking-wider text-muted-foreground">
+            est 1RM PR
+          </Badge>
+        </div>
       </div>
       <div className="mt-0.5 text-[11px] font-medium text-muted-foreground">
         {format(new Date(pr.date), "MMM d, yyyy")}

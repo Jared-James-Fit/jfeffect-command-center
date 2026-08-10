@@ -26,6 +26,8 @@ import { CoachExtrasCard } from "./coach-extras";
 import { ShareSheet } from "./share-sheet";
 import type { ShareCardData } from "./share-card";
 import { MUSCLE_EMOJI } from "@/lib/analytics/muscle-map";
+import { convFromLb, type DisplayUnit } from "@/lib/workout-units";
+import { InfoTip } from "@/components/analytics/info-tip";
 
 const LB_PER_KG = 2.2046226;
 
@@ -34,11 +36,13 @@ export function PerformanceInsights({
   clientName,
   clientFocus,
   variant = "client",
+  displayUnit = "lb",
 }: {
   clientId: string;
   clientName?: string | null;
   clientFocus?: string | null;
   variant?: "client" | "coach";
+  displayUnit?: DisplayUnit;
 }) {
   const [expanded, setExpanded] = useState(false);
   const [window, setWindow] = useState<TimeWindow>("month");
@@ -89,12 +93,23 @@ export function PerformanceInsights({
   });
 
   const range = useMemo(() => resolveWindow(window), [window]);
+  const conv = (lb: number) => Math.round(convFromLb(lb, displayUnit));
+  const fmtTon = (lb: number) => `${conv(lb).toLocaleString()} ${displayUnit}`;
+  // Sets inside the selected window — teaser + insights are window-scoped.
+  const windowSets = useMemo(() => {
+    if (!range) return sets;
+    return sets.filter((s) => {
+      const t = new Date(s.date).getTime();
+      return !Number.isNaN(t) && t >= range.start && t <= range.end;
+    });
+  }, [sets, range]);
   const stats = useMemo(() => muscleGroupStats(sets, range), [sets, range]);
   const top = useMemo(() => topMuscleGroups(stats, sets, range), [stats, sets, range]);
   const pl = useMemo(() => powerliftingStats(sets, range), [sets, range]);
   const insights = useMemo(
-    () => generateInsights(stats, top, pl, sets, range),
-    [stats, top, pl, sets, range],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    () => generateInsights(stats, top, pl, windowSets, range, fmtTon),
+    [stats, top, pl, windowSets, range, displayUnit],
   );
   const focus = useMemo(
     () => detectFocus(sets, { client_focus: clientFocus }),
@@ -119,15 +134,16 @@ export function PerformanceInsights({
   });
 
   const teaser = useMemo(() => {
-    const totalTonnage = sets.reduce((s, r) => s + r.load_lb * r.reps, 0);
+    const totalTonnage = windowSets.reduce((s, r) => s + r.load_lb * r.reps, 0);
     const topMuscle = top.most_trained?.group;
     const trend = top.biggest_growth?.trend_pct;
     return {
-      tonnage: Math.round(totalTonnage),
+      tonnage: conv(totalTonnage),
       topMuscle: topMuscle ?? "—",
       trend: trend != null ? `${trend > 0 ? "+" : ""}${trend}%` : "—",
     };
-  }, [sets, top]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [windowSets, top, displayUnit]);
 
   function openShareForInsight(i: PerformanceInsight) {
     setShareData({
@@ -144,7 +160,7 @@ export function PerformanceInsights({
     setShareData({
       eyebrow: `${group} training summary`,
       headline: `${Math.round(s.monthly_sets)} sets`,
-      subline: `${s.monthly_tonnage.toLocaleString()} lb moved over the last 30 days.`,
+      subline: `${fmtTon(s.monthly_tonnage)} moved over the last 30 days.`,
       stats: [
         { emoji: MUSCLE_EMOJI[group as keyof typeof MUSCLE_EMOJI] ?? "💪", label: "Weekly", value: String(s.weekly_sets) },
         { emoji: "📅", label: "Monthly", value: String(s.monthly_sets) },
@@ -158,11 +174,11 @@ export function PerformanceInsights({
   function openShareForLift(l: CompLiftStat) {
     setShareData({
       eyebrow: `${l.lift.toUpperCase()} SUMMARY`,
-      headline: l.top_set ? `${Math.round(l.top_set.load)} lb × ${l.top_set.reps}` : `${l.block_tonnage.toLocaleString()} lb`,
+      headline: l.top_set ? `${conv(l.top_set.load)} ${displayUnit} × ${l.top_set.reps}` : fmtTon(l.block_tonnage),
       subline: l.avg_intensity_pct != null ? `Averaging ${l.avg_intensity_pct}% of e1RM at RPE ${l.avg_rpe ?? "—"}.` : "Competition lift summary.",
       stats: [
-        { emoji: "🔥", label: "Weekly vol", value: `${l.weekly_volume.toLocaleString()}` },
-        { emoji: "💪", label: "Block ton", value: `${l.block_tonnage.toLocaleString()}` },
+        { emoji: "🔥", label: "Weekly vol", value: `${conv(l.weekly_volume).toLocaleString()}` },
+        { emoji: "💪", label: "Block ton", value: `${conv(l.block_tonnage).toLocaleString()}` },
         { emoji: "📊", label: "Sets/wk", value: String(l.weekly_sets) },
       ],
       athleteName: clientName ?? undefined,
@@ -173,7 +189,7 @@ export function PerformanceInsights({
   function openTotalShare() {
     setShareData({
       eyebrow: "Training summary",
-      headline: `${teaser.tonnage.toLocaleString()} lb`,
+      headline: `${teaser.tonnage.toLocaleString()} ${displayUnit}`,
       subline: `Total volume moved. Top muscle: ${teaser.topMuscle}.`,
       stats: [
         { emoji: "🏋️", label: "Tonnage", value: `${teaser.tonnage.toLocaleString()}` },
@@ -188,25 +204,37 @@ export function PerformanceInsights({
   return (
     <div className="space-y-3">
       <Card className="overflow-hidden rounded-3xl border-border/70 bg-gradient-to-br from-primary/10 via-transparent to-transparent">
-        <button
-          type="button"
-          onClick={() => setExpanded((v) => !v)}
-          className="flex w-full items-center gap-3 p-4 text-left"
-          aria-expanded={expanded}
-        >
-          <div className="grid h-10 w-10 place-items-center rounded-2xl bg-primary/15 text-primary">
-            <Sparkles className="h-5 w-5" />
-          </div>
-          <div className="min-w-0 flex-1">
-            <div className="text-sm font-black">Performance Insights</div>
-            <div className="mt-0.5 flex flex-wrap gap-x-3 gap-y-0.5 text-[11px] text-muted-foreground">
-              <span>{teaser.tonnage.toLocaleString()} lb moved</span>
-              <span>Top: {teaser.topMuscle}</span>
-              <span>Trend: {teaser.trend}</span>
+        <div className="flex items-center gap-2 p-4">
+          <button
+            type="button"
+            onClick={() => setExpanded((v) => !v)}
+            className="flex min-w-0 flex-1 items-center gap-3 text-left"
+            aria-expanded={expanded}
+          >
+            <div className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl bg-primary/15 text-primary">
+              <Sparkles className="h-5 w-5" />
             </div>
-          </div>
-          <ChevronDown className={`h-5 w-5 shrink-0 text-muted-foreground transition-transform ${expanded ? "rotate-180" : ""}`} />
-        </button>
+            <div className="min-w-0 flex-1">
+              <div className="text-sm font-black">Performance Insights</div>
+              <div className="mt-0.5 flex flex-wrap gap-x-3 gap-y-0.5 text-[11px] text-muted-foreground">
+                <span>{teaser.tonnage.toLocaleString()} {displayUnit} moved</span>
+                <span>Top: {teaser.topMuscle}</span>
+                <span>Trend: {teaser.trend}</span>
+              </div>
+            </div>
+            <ChevronDown className={`h-5 w-5 shrink-0 text-muted-foreground transition-transform ${expanded ? "rotate-180" : ""}`} />
+          </button>
+          <InfoTip label="About Performance Insights" title="Performance Insights" align="end">
+            What it means: your logged sets analysed per muscle group —
+            weekly/monthly sets, tonnage, trends, and competition-lift
+            summaries for the selected time window.
+            How to use it: pick a window, scan the smart insights, and tap
+            share on any card to send a summary.
+            Watch out: exercises without a muscle group tag are skipped, and
+            insights based on fewer than ~20 sets are a first snapshot, not a
+            stable pattern.
+          </InfoTip>
+        </div>
       </Card>
 
       {expanded && (
@@ -215,6 +243,12 @@ export function PerformanceInsights({
             <PerformanceTimeFilter value={window} onChange={setWindow} />
             <Button size="sm" variant="outline" onClick={openTotalShare}>Share summary</Button>
           </div>
+          <p className="text-[11px] text-muted-foreground">
+            Based on {windowSets.length} logged {windowSets.length === 1 ? "set" : "sets"} in this window
+            {windowSets.length > 0 && windowSets.length < 20
+              ? " — a small sample, insights may shift with more data"
+              : ""}.
+          </p>
 
           {isLoading ? (
             <Card className="p-6 text-sm text-muted-foreground">Loading…</Card>
@@ -227,18 +261,18 @@ export function PerformanceInsights({
               {(focus === "powerlifting" || focus === "hybrid") && pl.length > 0 && (
                 <section className="space-y-2">
                   <SectionHeader label="Powerlifting" />
-                  <PowerliftingPanel lifts={pl} onShare={openShareForLift} />
+                  <PowerliftingPanel lifts={pl} onShare={openShareForLift} fmtTon={fmtTon} conv={conv} displayUnit={displayUnit} />
                 </section>
               )}
 
               <section className="space-y-2">
                 <SectionHeader label="Top muscle groups" />
-                <TopMuscleGroupsCard top={top} />
+                <TopMuscleGroupsCard top={top} fmtTon={fmtTon} />
               </section>
 
               <section className="space-y-2">
                 <SectionHeader label="Muscle group volume" />
-                <MuscleGroupGrid stats={stats} onShare={openShareForMuscle} />
+                <MuscleGroupGrid stats={stats} onShare={openShareForMuscle} fmtTon={fmtTon} />
               </section>
 
               {insights.length > 0 && (

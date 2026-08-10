@@ -5,6 +5,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Dumbbell, History, CalendarDays, CalendarRange, Layers } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { format } from "date-fns";
+import { InfoTip } from "@/components/analytics/info-tip";
 
 type Unit = "lb" | "kg";
 const LB_PER_KG = 2.2046226;
@@ -38,6 +39,7 @@ type Summary = {
   month_lb: number;
   block_lb: number;
   block_name: string | null;
+  block_state: "ok" | "unscheduled" | "none";
   sessions: number;
   fallbackSessions: number;
   bodyweightSets: number;
@@ -221,20 +223,26 @@ export function WeightLiftedCard({
 
     let blockLb = 0;
     let blockName: string | null = null;
+    let blockState: "ok" | "unscheduled" | "none" = "none";
     // Prefer the scoped block (matches the block being viewed in the
     // analytics filter). Fall back to the client's active/planned prep
     // window for the legacy "no block scoped" case.
     const scope = scopedBlock ?? prep;
-    if (scope?.start_date) {
-      // Intersect the current block with the global range.
-      const blockStart = new Date(scope.start_date).getTime();
-      const blockEnd = scope.end_date ? new Date(scope.end_date + "T23:59:59").getTime() : now;
-      const start = Math.max(blockStart, rangeStartMs);
-      const end = Math.min(blockEnd, rangeEndMs);
-      blockLb = all
-        .filter((d) => d.date.getTime() >= start && d.date.getTime() <= end)
-        .reduce((s, x) => s + x.weight_lb, 0);
+    if (scope) {
       blockName = scope.name ?? scope.title ?? null;
+      if (scope.start_date) {
+        blockState = "ok";
+        // Intersect the current block with the global range.
+        const blockStart = new Date(scope.start_date).getTime();
+        const blockEnd = scope.end_date ? new Date(scope.end_date + "T23:59:59").getTime() : now;
+        const start = Math.max(blockStart, rangeStartMs);
+        const end = Math.min(blockEnd, rangeEndMs);
+        blockLb = all
+          .filter((d) => d.date.getTime() >= start && d.date.getTime() <= end)
+          .reduce((s, x) => s + x.weight_lb, 0);
+      } else {
+        blockState = "unscheduled";
+      }
     }
 
     const fallbackSessions = all.filter((d) => d.fromFallback).length;
@@ -247,6 +255,7 @@ export function WeightLiftedCard({
       month_lb: month,
       block_lb: blockLb,
       block_name: blockName,
+      block_state: blockState,
       sessions: all.length,
       fallbackSessions,
       bodyweightSets,
@@ -278,7 +287,7 @@ export function WeightLiftedCard({
   const tiles: { icon: typeof Dumbbell; label: string; value: string; sublabel?: string | null }[] = [
     {
       icon: Dumbbell,
-      label: rangeStart || rangeEnd ? "Selected range" : "Lifetime",
+      label: rangeStart || rangeEnd ? "Volume in range" : "Lifetime",
       value: formatBig(conv(summary.lifetime_lb), displayUnit),
       sublabel: summary.sessions > 0 ? `${summary.sessions} session${summary.sessions === 1 ? "" : "s"}` : null,
     },
@@ -303,8 +312,16 @@ export function WeightLiftedCard({
     {
       icon: Layers,
       label: "Current block",
-      value: formatBig(conv(summary.block_lb), displayUnit),
-      sublabel: summary.block_name ?? (summary.block_lb > 0 ? "active block" : "no active block"),
+      value:
+        summary.block_state === "ok"
+          ? formatBig(conv(summary.block_lb), displayUnit)
+          : "—",
+      sublabel:
+        summary.block_state === "ok"
+          ? (summary.block_name ?? "active block")
+          : summary.block_state === "unscheduled"
+            ? `${summary.block_name ?? "Block"} · not scheduled`
+            : "No active block found",
     },
   ];
 
@@ -313,6 +330,14 @@ export function WeightLiftedCard({
       <div className="mb-3 flex items-center gap-2">
         <Dumbbell className="h-5 w-5 text-primary" />
         <h2 className="text-base font-black uppercase tracking-wider">Weight Lifted</h2>
+        <InfoTip label="About weight lifted" title="Weight Lifted" align="start">
+          What it means: volume load — sets × reps × weight — from logged sets.
+          Quick-log sessions without set data use the session total instead.
+          How to use it: track workload trends across the range, last 7 days,
+          last 30 days, and current block.
+          Watch out: volume doesn't measure intensity or difficulty by itself,
+          and bodyweight sets with no external load are not included.
+        </InfoTip>
         {summary.fallbackSessions > 0 && (
           <span className="ml-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
             {summary.fallbackSessions} quick-log session{summary.fallbackSessions === 1 ? "" : "s"} included

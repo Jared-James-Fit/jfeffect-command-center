@@ -351,6 +351,9 @@ export function generateInsights(
   pl: CompLiftStat[],
   sets: InsightSet[],
   window: WindowRange,
+  /** Formats an LB tonnage value for display (unit-aware). Defaults to lb. */
+  formatTonnage: (lb: number) => string = (lb) =>
+    `${Math.round(lb).toLocaleString()} lb`,
 ): PerformanceInsight[] {
   const out: PerformanceInsight[] = [];
 
@@ -422,10 +425,10 @@ export function generateInsights(
     out.unshift({
       id: "total-tonnage",
       emoji: "🏋️",
-      headline: `${Math.round(totalTonnage).toLocaleString()} lb moved`,
+      headline: `${formatTonnage(totalTonnage)} moved`,
       subline: `Total tonnage across your logged sets.`,
       shareable: true,
-      metric: { label: "Total volume", value: `${Math.round(totalTonnage).toLocaleString()} lb` },
+      metric: { label: "Total volume", value: formatTonnage(totalTonnage) },
     });
   }
   return out.slice(0, 6);

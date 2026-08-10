@@ -4,6 +4,7 @@ import { Card } from "@/components/ui/card";
 import { Sparkles, TrendingUp, TrendingDown, Minus } from "lucide-react";
 import { format } from "date-fns";
 import { recoveryTrendLabel, fetchRecoveryScoreSeries } from "@/lib/analytics/recovery-score";
+import { InfoTip } from "@/components/analytics/info-tip";
 
 interface Props {
   clientId: string;
@@ -54,6 +55,11 @@ export function RecoverySummaryCard({ clientId, rangeStart, rangeEnd, rangeLabel
           <h2 className="flex min-w-0 items-center gap-2 truncate text-base font-black uppercase tracking-wider text-foreground">
             <Sparkles className="h-5 w-5 shrink-0 text-primary" />
             <span className="truncate">Recovery</span>
+            <InfoTip label="About recovery score" title="Recovery" align="start">
+              Average recovery score (20–100) from workout reviews completed in
+              this range. It only reflects sessions where a review was filled
+              out — if reviews get skipped, the score is based on less data.
+            </InfoTip>
           </h2>
           <span className="shrink-0 text-xs font-semibold text-muted-foreground">{rangeLabel}</span>
         </div>
@@ -80,6 +86,11 @@ export function RecoverySummaryCard({ clientId, rangeStart, rangeEnd, rangeLabel
         <h2 className="flex min-w-0 items-center gap-2 truncate text-base font-black uppercase tracking-wider text-foreground">
           <Sparkles className="h-5 w-5 shrink-0 text-primary" />
           <span className="truncate">Recovery</span>
+            <InfoTip label="About recovery score" title="Recovery" align="start">
+              Average recovery score (20–100) from workout reviews completed in
+              this range. It only reflects sessions where a review was filled
+              out — if reviews get skipped, the score is based on less data.
+            </InfoTip>
         </h2>
         <span className="shrink-0 text-xs font-semibold text-muted-foreground">{rangeLabel}</span>
       </div>
@@ -95,7 +106,9 @@ export function RecoverySummaryCard({ clientId, rangeStart, rangeEnd, rangeLabel
               <div className="h-full rounded-full bg-primary" style={{ width: `${barPct}%` }} />
             </div>
             <div className="mt-1 text-[11px] text-muted-foreground">
-              Across {data.n} {data.n === 1 ? "review" : "reviews"}
+              {data.n === 1
+                ? "Based on 1 review — a snapshot, not a trend"
+                : `Across ${data.n} reviews`}
             </div>
           </div>
           {data.prevAvg != null && (

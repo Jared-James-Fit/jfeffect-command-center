@@ -5,6 +5,7 @@ import { ChevronDown, Loader2, Target } from "lucide-react";
 import { useState } from "react";
 import { format } from "date-fns";
 import { getRecentPlannedVsActual } from "@/lib/analytics/planned-vs-actual";
+import { InfoTip } from "@/components/analytics/info-tip";
 
 function fmtDuration(secs: number): string {
   if (!secs || secs <= 0) return "—";
@@ -131,6 +132,13 @@ export function PlannedVsActualCard({
         <div className="flex items-center gap-2">
           <Target className="h-4 w-4 text-primary" />
           <h3 className="text-sm font-semibold">Planned vs Actual</h3>
+          <InfoTip label="About planned vs actual" title="Planned vs Actual" align="start">
+            Compares what was programmed against what was actually logged for
+            recent completed workouts. Sets % = completed sets ÷ planned sets.
+            Reps on target = how closely logged reps matched the plan. A 0%
+            sets row means the workout was marked complete but no sets were
+            logged for it.
+          </InfoTip>
           {isFetching && (
             <span className="ml-auto inline-flex items-center gap-1 rounded-full bg-primary/10 px-2 py-1 text-[11px] font-semibold text-primary">
               <Loader2 className="h-3 w-3 animate-spin" />
@@ -164,6 +172,7 @@ export function PlannedVsActualCard({
                   <div className="mt-0.5 text-[11px] text-muted-foreground">
                     {d.totals.actualSets}/{d.totals.plannedSets || "?"} sets
                     {d.totals.repsHitPct != null && ` · ${d.totals.repsHitPct}% reps on target`}
+                    {d.totals.actualSets === 0 && " · no sets logged"}
                   </div>
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
