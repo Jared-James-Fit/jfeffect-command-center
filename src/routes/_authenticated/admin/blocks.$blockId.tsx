@@ -573,7 +573,6 @@ function BlockEditor() {
     qc.invalidateQueries({ queryKey: ["pl-block-summary", blockId] });
     qc.invalidateQueries({ queryKey: ["client-assigned-programs"] });
     invalidateScheduleQueries(qc, { clientId: clientIdFromTree, blockId });
-    setDirty(false);
   };
 
   const autosaveValue = useMemo(() => ({ name, payload }), [name, payload]);
@@ -584,6 +583,16 @@ function BlockEditor() {
     enabled: hydratedBlockIdRef.current === blockId && dirty,
     onSave: async () => { await persist(); },
   });
+
+  // Save-state truth: only clear the editor's dirty flag once the autosave
+  // state machine confirms a successful write with nothing still pending.
+  // persist() itself must never flip this — a timed-out save whose request
+  // settles in the background would otherwise show "Saved to X's Program"
+  // while the status chip still reads "Save failed · retrying".
+  useEffect(() => {
+    if (autosave.state === "saved" && !autosave.hasPending()) setDirty(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autosave.state, autosaveValue]);
 
   const save = async () => {
     // Safety guard: never let a stale save land on a different block than
@@ -598,10 +607,13 @@ function BlockEditor() {
     // that would issue two full persist() flows and race the IDs returned
     // from the first insert against the second.
     if (autosave.hasPending()) {
+      // flush() REJECTS on failure — ActionButton surfaces the error
+      // instead of a false green "Saved to X's Program" toast.
       await autosave.flush();
     } else {
       await persist();
     }
+    setDirty(false);
   };
 
   // Restore the coach's vertical scroll for this block. Scoped per

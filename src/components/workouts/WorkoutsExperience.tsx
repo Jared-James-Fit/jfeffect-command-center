@@ -36,6 +36,8 @@ import { ClientBlockView } from "@/components/client-block-view";
 import { WorkoutStatusSheet } from "@/components/workout-status-sheet";
 import { CircleDot } from "lucide-react";
 import { InlineWorkoutPreview } from "@/components/workout/shared/inline-workout-preview";
+import { InlineWorkoutEditor } from "@/components/workout/shared/inline-workout-editor";
+import { useClientImpersonation } from "@/lib/client-impersonation";
 import { WorkoutProgressRing } from "@/components/workout/shared/workout-progress-ring";
 import { useWorkoutProgress } from "@/lib/workout-progress";
 import { TrainingScheduleCard } from "@/components/training-schedule-card";
@@ -514,6 +516,7 @@ export function WorkoutsExperience({
                   date={selectedDate}
                   readonly={mode === "coach"}
                   clientId={clientId}
+                  mode={mode}
                 />
               </>
             )}
@@ -825,12 +828,13 @@ function MonthGrid({
 /* ---------------------------------------------------------------------- */
 
 function SelectedDayList({
-  items, date, readonly, clientId,
+  items, date, readonly, clientId, mode,
 }: {
   items: WorkoutItem[];
   date: Date;
   readonly: boolean;
   clientId: string;
+  mode: Mode;
 }) {
   // Render one card per scheduled workout on this date so nothing is
   // dropped when a client stacks two workouts onto the same day (e.g.
@@ -842,6 +846,7 @@ function SelectedDayList({
         date={date}
         readonly={readonly}
         clientId={clientId}
+        mode={mode}
       />
     );
   }
@@ -854,6 +859,7 @@ function SelectedDayList({
           date={date}
           readonly={readonly}
           clientId={clientId}
+          mode={mode}
         />
       ))}
     </div>
@@ -861,15 +867,23 @@ function SelectedDayList({
 }
 
 function SelectedDayCard({
-  item, date, readonly, clientId,
+  item, date, readonly, clientId, mode,
 }: {
   item: WorkoutItem | null;
   date: Date;
   readonly: boolean;
   clientId: string;
+  mode: Mode;
 }) {
   const [previewOpen, setPreviewOpen] = useState(false);
   const [inlineOpen, setInlineOpen] = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
+  // Admin-only "Edit Workout": visible on the coach schedule surface
+  // (mode="coach") and inside client POV (admin impersonating a client in
+  // the portal, where mode stays "self"). Writes run under the admin's own
+  // session, so admin RLS applies.
+  const { isImpersonating } = useClientImpersonation();
+  const canEditWorkout = mode === "coach" || isImpersonating;
   const [moveOpen, setMoveOpen] = useState(false);
   const [statusOpen, setStatusOpen] = useState(false);
   const [resetOpen, setResetOpen] = useState(false);
@@ -1146,6 +1160,16 @@ function SelectedDayCard({
             <ChevronDown className={cn("mr-1 h-3.5 w-3.5 transition-transform", inlineOpen && "rotate-180")} />
             {inlineOpen ? "Hide Preview" : "Preview Workout"}
           </Button>
+          {canEditWorkout && item.day?.id && (
+            <Button
+              size="sm"
+              variant="ghost"
+              className="text-muted-foreground"
+              onClick={() => setEditOpen(true)}
+            >
+              <Pencil className="mr-1 h-3.5 w-3.5" /> Edit Workout
+            </Button>
+          )}
         </div>
         {inlineOpen && item.day?.id && (
           <div className="mt-3">
@@ -1182,6 +1206,19 @@ function SelectedDayCard({
         item={item}
         date={date}
       />
+
+      {canEditWorkout && item.day?.id && (
+        <InlineWorkoutEditor
+          open={editOpen}
+          onOpenChange={setEditOpen}
+          dayId={item.day.id}
+          clientId={clientId}
+          blockId={item.block?.id ?? null}
+          scheduledDate={date}
+          completed={isCompleted}
+          loggedSets={progress?.completedSets ?? 0}
+        />
+      )}
 
       {isCompleted && (
         <WorkoutReviewEditor

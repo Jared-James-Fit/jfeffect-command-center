@@ -611,7 +611,6 @@ function TemplateEditor() {
     });
     qc.invalidateQueries({ queryKey: ["pl-template", templateId] });
     qc.invalidateQueries({ queryKey: ["pl-templates"] });
-    setDirty(false);
   };
 
   const autosaveValue = useMemo(() => ({ meta, payload }), [meta, payload]);
@@ -641,6 +640,15 @@ function TemplateEditor() {
     },
   });
 
+  // Save-state truth: only clear the dirty flag once the autosave state
+  // machine confirms a successful write with nothing still pending — a
+  // background-settling timed-out request must never mark the editor clean
+  // while the status chip still shows a failure.
+  useEffect(() => {
+    if (autosave.state === "saved" && !autosave.hasPending()) setDirty(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autosave.state, autosaveValue]);
+
   // Cross-coach conflict watcher for the template meta fields.
   const remoteMeta = useMemo(() => tpl ? {
     name: tpl.name, training_style: tpl.training_style, training_focus: tpl.training_focus ?? "",
@@ -667,8 +675,17 @@ function TemplateEditor() {
     if (!meta || !payload) return;
     setSaving(true);
     try {
-      await autosave.flush();
-      await persist(meta, payload);
+      // Single write path: flush pending autosave changes, or persist
+      // directly when nothing is queued. Never both — the old
+      // flush()+persist() double-write raced the two saves, and flush()
+      // used to swallow failures so "Template saved" could appear after a
+      // failed save. flush() now rejects on failure.
+      if (autosave.hasPending()) {
+        await autosave.flush();
+      } else {
+        await persist(meta, payload);
+      }
+      setDirty(false);
     } finally { setSaving(false); }
   };
 

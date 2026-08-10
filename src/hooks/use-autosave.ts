@@ -65,6 +65,15 @@ export function useAutosave<T>({
   const onPermFailRef = useRef(onPermanentFailure);
   onPermFailRef.current = onPermanentFailure;
   const reportedFailRef = useRef(false);
+  // Waiters for flush(). flush() must only resolve after a CONFIRMED write
+  // and must reject on failure — otherwise a manual "Save now" click can
+  // show a green success state while the save actually failed (the
+  // "Saved to X's Program" + "Save failed · retrying" contradiction).
+  const flushWaiters = useRef<Array<{ resolve: () => void; reject: (e: unknown) => void }>>([]);
+  const settleFlush = useCallback((err?: unknown) => {
+    const ws = flushWaiters.current.splice(0);
+    for (const w of ws) { if (err) w.reject(err); else w.resolve(); }
+  }, []);
 
   // Auto-clear the "saved" indicator after a short window so the status
   // visibly resets to idle (Pencil/"Unsaved changes" hidden, green check
@@ -113,26 +122,37 @@ export function useAutosave<T>({
   }, []);
 
   const doSave = useCallback(async () => {
-    if (!enabledRef.current) return;
-    if (inflight.current) return;
+    if (!enabledRef.current) { settleFlush(); return; }
+    if (inflight.current) {
+      // A previous attempt is still in flight — most commonly a TIMED-OUT
+      // save whose underlying request is still running in the background.
+      // Never drop the save (data loss) and never start a parallel request
+      // that could race a stale write over newer data — queue behind it.
+      scheduleSave(1500);
+      return;
+    }
     const v = pendingValue.current;
     if (lastSavedSet.current && equals(lastSaved.current, v)) {
       setState((s) => (s === "saving" ? "saved" : s));
+      settleFlush();
       return;
     }
     if (!online) {
       setState("offline");
       writeDraft(v);
+      settleFlush(new Error("You're offline — the save will retry when you're back online."));
       return;
     }
     inflight.current = true;
     setState("saving");
+    let underlying: Promise<void> | null = null;
     try {
       // Hard timeout — a hung save (e.g. PostgREST stuck on an aborted
       // pooled transaction) must never spin forever. Race the user-provided
       // save against an 8s timeout; the loser still resolves in the
       // background but the UI moves on to the error/retry path.
       if (timeoutMs && timeoutMs > 0) {
+        underlying = Promise.resolve().then(() => onSaveRef.current(v));
         await new Promise<void>((resolve, reject) => {
           let done = false;
           const t = setTimeout(() => {
@@ -140,8 +160,7 @@ export function useAutosave<T>({
             done = true;
             reject(new Error("Save timed out — will retry"));
           }, timeoutMs);
-          Promise.resolve()
-            .then(() => onSaveRef.current(v))
+          underlying!
             .then(() => { if (done) return; done = true; clearTimeout(t); resolve(); })
             .catch((e) => { if (done) return; done = true; clearTimeout(t); reject(e); });
         });
@@ -160,6 +179,7 @@ export function useAutosave<T>({
       } else {
         setState("saved");
       }
+      settleFlush();
     } catch (err) {
       console.error("[useAutosave] save failed", err);
       setState("error");
@@ -171,10 +191,20 @@ export function useAutosave<T>({
       }
       const retryDelay = Math.min(30_000, 1000 * 2 ** retryAttempt.current);
       scheduleSave(retryDelay);
+      settleFlush(err);
     } finally {
-      inflight.current = false;
+      if (underlying) {
+        // Hold the inflight gate until the timed-out request ACTUALLY
+        // settles. Releasing it immediately would let the queued retry
+        // overlap the background write — the "older failed request
+        // overwrote a newer successful save" race. Calls that arrive
+        // while the gate is held reschedule instead of being dropped.
+        void underlying.catch(() => {}).finally(() => { inflight.current = false; });
+      } else {
+        inflight.current = false;
+      }
     }
-  }, [equals, online, writeDraft, clearDraft, permanentFailureAfter, timeoutMs, scheduleSave]);
+  }, [equals, online, writeDraft, clearDraft, permanentFailureAfter, timeoutMs, scheduleSave, settleFlush]);
 
   useEffect(() => {
     doSaveRef.current = doSave;
@@ -239,7 +269,14 @@ export function useAutosave<T>({
 
   const flush = useCallback(async () => {
     if (timer.current) { clearTimeout(timer.current); timer.current = null; }
-    await doSave();
+    // Resolve only after a confirmed write; reject when the save fails so
+    // callers (manual Save buttons, Finish Workout) surface the truth
+    // instead of a false success state.
+    const p = new Promise<void>((resolve, reject) => {
+      flushWaiters.current.push({ resolve, reject });
+    });
+    void doSave();
+    await p;
   }, [doSave]);
 
   // Stable read of "is there any unsaved change pending right now?". Used by
