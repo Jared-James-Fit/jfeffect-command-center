@@ -44,3 +44,25 @@ dialogs, or storage keys removed.
 - All hub actions reuse existing routes/dialogs (AssignProgramDialog,
   WorkoutArchiveDialog, ScheduleWorkoutSheet, download report util).
 - Status derivation is client-side only; no DB writes.
+
+## E. Editor ↔ schedule ↔ calendar sync fix
+Root cause: the calendar/Schedule Manager treat `pl_scheduled_workouts`
+instances as canonical (`pl_days.scheduled_date` is only a legacy fallback
+for days with no instance), but the program editor's Training Date wrote
+ONLY the legacy field — so editor edits were invisible on the calendar and
+calendar moves were invisible in the editor.
+
+- `src/lib/program-schedule-status.ts`: canonical per-day resolver
+  (On Calendar / Missing Date / Calendar Issue / Completed / In Progress).
+  Instance date always wins; "Calendar Issue" = legacy mirror disagrees with
+  the canonical instance date.
+- `syncProgramDaySchedule` server fn: the editor's Training Date write path.
+  Instance-first update (or delete-incomplete-instances when clearing) +
+  legacy mirror; refuses to touch COMPLETED days (history locked).
+- `reconcileDayScheduleMirror` server fn: one-click "Fix" on a Calendar
+  Issue badge — aligns the legacy mirror TO the calendar, never the reverse.
+- Editor day cards show the status badge + canonical date in the date
+  picker; Missing Date shows an inline amber hint.
+- `src/lib/schedule-invalidate.ts`: shared invalidation fan-out so editor,
+  Schedule Manager, calendar, portal, and hub converge without refresh.
+- Training hub "missing dates" count now uses the same canonical resolver.
