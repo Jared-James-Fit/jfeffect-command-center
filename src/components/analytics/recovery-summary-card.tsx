@@ -106,7 +106,9 @@ export function RecoverySummaryCard({ clientId, rangeStart, rangeEnd, rangeLabel
               <div className="h-full rounded-full bg-primary" style={{ width: `${barPct}%` }} />
             </div>
             <div className="mt-1 text-[11px] text-muted-foreground">
-              Across {data.n} {data.n === 1 ? "review" : "reviews"}
+              {data.n === 1
+                ? "Based on 1 review — a snapshot, not a trend"
+                : `Across ${data.n} reviews`}
             </div>
           </div>
           {data.prevAvg != null && (
