@@ -1585,34 +1585,55 @@ export function BlockPayloadEditor({ weeksData, setWeeksData, exercises, compact
                       <span className={cn("min-w-0 truncate text-muted-foreground max-sm:col-span-2", compact ? "text-[10px]" : "text-[11px]")}> 
                         {s.days} day{s.days === 1 ? "" : "s"} · {s.rows} row{s.rows === 1 ? "" : "s"} · Est {fmtDur(s.minutes)}
                       </span>
-                      <div className={cn("flex min-w-0 items-center gap-1 max-sm:col-span-2")}>
-                        <Select
-                          value={w.phase || "__none"}
-                          onValueChange={(v) => { const c = [...weeksData]; c[wi] = { ...w, phase: v === "__none" ? null : v }; setWeeksData(c); }}
-                        >
-                          <SelectTrigger className={cn("w-[130px] shrink-0 text-[11px]", compact ? "h-6" : "h-7")}>
-                            <SelectValue placeholder="Week label" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="__none">No label</SelectItem>
-                            {BLOCK_PHASE_OPTIONS.map((p) => <SelectItem key={p} value={p}>{p}</SelectItem>)}
-                          </SelectContent>
-                        </Select>
-                        <Input
-                          className={cn("min-w-0 border-0 bg-transparent text-xs focus-visible:ring-1", compact ? "h-6" : "h-7")}
-                          placeholder="Week notes"
-                          value={w.notes ?? ""}
-                          onChange={(e) => { const c = [...weeksData]; c[wi] = { ...w, notes: e.target.value }; setWeeksData(c); }}
-                        />
-                      </div>
+                      {/* Basic view: only the phase chip (when set). Label,
+                          notes and copy-to-future live under Advanced. */}
+                      {w.phase && !advWeeks[wi] && (
+                        <Badge variant="outline" className="shrink-0 text-[10px] max-sm:col-span-2">{w.phase}</Badge>
+                      )}
                       <div className="col-start-2 row-start-1 flex shrink-0 gap-1 sm:col-start-auto sm:row-start-auto">
-                        <Button size="sm" variant="ghost" className="h-7 text-[11px]" onClick={() => copyWeekToFuture(wi)} title="Copy week → all future weeks">
-                          <Copy className="mr-1 h-3 w-3" /> → future
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-7 px-2 text-[11px]"
+                          onClick={() => setAdvWeeks((prev) => ({ ...prev, [wi]: !prev[wi] }))}
+                          title="Advanced week options: label, notes, copy to future weeks"
+                          aria-expanded={!!advWeeks[wi]}
+                        >
+                          <Settings2 className="mr-1 h-3 w-3" /> Advanced
+                          {advWeeks[wi] ? <ChevronUp className="ml-1 h-3 w-3" /> : <ChevronDown className="ml-1 h-3 w-3" />}
                         </Button>
                         <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => dupWeek(wi)} title="Duplicate week"><Copy className="h-4 w-4" /></Button>
                         <Button size="icon" variant="ghost" className="h-7 w-7 text-destructive" onClick={() => delWeek(wi)}><Trash2 className="h-4 w-4" /></Button>
                       </div>
                     </div>
+                    {advWeeks[wi] && (
+                      <div className={cn(
+                        "grid items-center gap-2 border-b border-primary/20 bg-muted/20 sm:grid-cols-[auto_minmax(0,1fr)_auto]",
+                        compact ? "px-2 py-1.5" : "px-3 py-2",
+                      )}>
+                        <Select
+                          value={w.phase || "__none"}
+                          onValueChange={(v) => { const c = [...weeksData]; c[wi] = { ...w, phase: v === "__none" ? null : v }; setWeeksData(c); }}
+                        >
+                          <SelectTrigger className={cn("w-[160px] shrink-0 text-[11px]", compact ? "h-6" : "h-7")}>
+                            <SelectValue placeholder="Phase label" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="__none">No phase label</SelectItem>
+                            {BLOCK_PHASE_OPTIONS.map((p) => <SelectItem key={p} value={p}>{p}</SelectItem>)}
+                          </SelectContent>
+                        </Select>
+                        <Input
+                          className={cn("min-w-0 border-0 bg-transparent text-xs focus-visible:ring-1", compact ? "h-6" : "h-7")}
+                          placeholder="Week notes (optional) — coach reference only"
+                          value={w.notes ?? ""}
+                          onChange={(e) => { const c = [...weeksData]; c[wi] = { ...w, notes: e.target.value }; setWeeksData(c); }}
+                        />
+                        <Button size="sm" variant="ghost" className="h-7 text-[11px]" onClick={() => copyWeekToFuture(wi)} title="Copy week → all future weeks">
+                          <Copy className="mr-1 h-3 w-3" /> Copy to future weeks
+                        </Button>
+                      </div>
+                    )}
                     <div className={cn("bg-[color-mix(in_oklab,var(--primary)_2%,transparent)]", compact ? "p-2" : "p-3")}>
                       <WeekEditor
                         week={w}
@@ -1621,6 +1642,7 @@ export function BlockPayloadEditor({ weeksData, setWeeksData, exercises, compact
                         onCopyDayToFuture={(di) => copyDayToFuture(wi, di)}
                         compact={compact}
                         hideHeader
+                        hideVolumeSummary={!advWeeks[wi]}
                         dayKeyPrefix={`wk${w.week_index ?? wi}`}
                         blockId={ctxBlockId}
                         blockStartDate={null}
