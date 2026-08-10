@@ -2681,6 +2681,12 @@ function RowEditor({ row, setRow, onDelete, exercises, compact, onMoveUp, onMove
       onKeyDown={(e) => {
         // Quick key: Alt+R resets the currently focused card
         if (e.altKey && (e.key === "r" || e.key === "R")) {
+          // Keydown bubbles up from the card's inputs — on macOS Option+R
+          // types "®" while editing text, which would nuke the whole card
+          // mid-typing. Only treat it as a shortcut when focus is on the
+          // card container itself, not inside a field.
+          const t = e.target as HTMLElement | null;
+          if (t && t.closest("input, textarea, select, [contenteditable]")) return;
           e.preventDefault();
           e.stopPropagation();
           resetCard();
