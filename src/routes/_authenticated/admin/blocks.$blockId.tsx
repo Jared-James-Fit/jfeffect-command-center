@@ -11,7 +11,9 @@ import { ActionButton } from "@/components/action-button";
 import {
   getBlockTree, updateBlock, addWeek as addWeekFn, deleteWeek, addDay as addDayFn, updateDay,
   deleteDay, updateRow, deleteRow,
+  listClientBlocks,
 } from "@/lib/pl-programs";
+import { deriveBlockStatuses, blockStatusTone } from "@/lib/block-status";
 import { cloneBlocksForRowsFn } from "@/lib/exercise-blocks.functions";
 import type { ExerciseRef } from "@/components/program-builder";
 import {
@@ -24,6 +26,7 @@ import { usePersistentUndoStack } from "@/lib/persistent-undo";
 import { useScrollRestoration } from "@/lib/scroll-restore";
 import { ClientBuilderIdentityHeader, ClientBuilderStickyChip } from "@/components/builder-identity-header";
 import { BlockSwitcher } from "@/components/block-switcher";
+import { Badge } from "@/components/ui/badge";
 
 export const Route = createFileRoute("/_authenticated/admin/blocks/$blockId")({
   component: BlockEditor,
@@ -347,6 +350,20 @@ function BlockEditor() {
         .order("name")).data ?? []) as any,
     staleTime: 5 * 60_000,
   });
+  // Sibling blocks for this client — shared cache key with BlockSwitcher —
+  // used to derive the ONE canonical active block and per-block statuses so
+  // the header + pills never show a stale/conflicting "Active" badge.
+  const { data: siblingBlocks = [] } = useQuery({
+    queryKey: ["pl-blocks", clientIdFromTree],
+    queryFn: () => listClientBlocks(clientIdFromTree as string),
+    enabled: !!clientIdFromTree,
+    staleTime: 30_000,
+  });
+  const blockStatusMap = useMemo(() => deriveBlockStatuses(siblingBlocks as any[]), [siblingBlocks]);
+  const canonicalActiveBlock = useMemo(
+    () => (siblingBlocks as any[]).find((b) => blockStatusMap.get(b.id) === "Active") ?? null,
+    [siblingBlocks, blockStatusMap],
+  );
 
   const [name, setName] = useState<string>("");
   const [payload, setPayload] = useState<any>(null);
@@ -536,6 +553,9 @@ function BlockEditor() {
   const canRedo = undoStack.canRedo;
   const clientName = clientRow?.full_name ?? "Loading client…";
   const programName = prepRow?.title ?? null;
+  const editingStatus = blockStatusMap.get(blockId) ?? (tree.block as any).status ?? null;
+  const editingNonActive =
+    !!canonicalActiveBlock && canonicalActiveBlock.id !== blockId && !!editingStatus;
 
   return (
     <div className="space-y-2 p-2 md:p-3">
@@ -548,6 +568,33 @@ function BlockEditor() {
         totalWeeks={totalWeeks}
         unsaved={dirty}
       />
+      {/* Canonical status context: which block is active vs which is being
+          edited, so stale DB statuses can't confuse the coach. */}
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-md border border-border bg-card px-3 py-2 text-xs text-muted-foreground">
+        <span>
+          Current active block:{" "}
+          <span className="font-semibold text-foreground">
+            {canonicalActiveBlock?.name ?? "None active"}
+          </span>
+        </span>
+        <span aria-hidden>·</span>
+        <span className="inline-flex items-center gap-1.5">
+          Editing block:{" "}
+          <span className="font-semibold text-foreground">{name || tree.block.name || "Block"}</span>
+          {editingStatus && (
+            <Badge variant="outline" className={`text-[10px] ${blockStatusTone(editingStatus)}`}>
+              {editingStatus}
+            </Badge>
+          )}
+        </span>
+      </div>
+      {editingNonActive && (
+        <div className="rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-400">
+          You're editing a {String(editingStatus).toLowerCase()} block — this is not {clientName}'s active block yet.
+          The active block is "{canonicalActiveBlock!.name}". Nothing here changes what the client trains from until
+          this block is scheduled and becomes active. Editing is safe.
+        </div>
+      )}
       <div className="sticky top-0 z-30 -mx-2 flex flex-wrap items-center gap-2 border-b border-border bg-background/95 px-2 py-1.5 backdrop-blur md:-mx-3 md:px-3">
         <ClientNameLink clientId={clientId}
           className="inline-flex shrink-0 items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
@@ -592,6 +639,7 @@ function BlockEditor() {
       <BlockSwitcher
         clientId={clientId}
         currentBlockId={blockId}
+        statusMap={blockStatusMap}
         hasUnsavedChanges={dirty}
         currentBlockName={name || tree.block.name || "this block"}
         onBeforeNavigate={save}

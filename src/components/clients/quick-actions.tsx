@@ -114,7 +114,7 @@ export function QuickActionsMenu({ r }: { r: DirectoryRow }) {
         <TooltipContent side="top">Quick actions</TooltipContent>
       </Tooltip>
       <DropdownMenuContent align="end" className="w-60">
-        <DropdownMenuLabel className="text-xs">Training</DropdownMenuLabel>
+        <DropdownMenuLabel className="text-xs">Training Program</DropdownMenuLabel>
         {hasProgram ? (
           <>
             <DropdownMenuItem asChild>
@@ -145,6 +145,8 @@ export function QuickActionsMenu({ r }: { r: DirectoryRow }) {
             <CalendarDays className="h-4 w-4" /> View Schedule
           </ClientNameLink>
         </DropdownMenuItem>
+        <DropdownMenuSeparator />
+        <DropdownMenuLabel className="text-xs text-muted-foreground/70">Program Tools</DropdownMenuLabel>
         {hasProgram && (
           <DropdownMenuItem onSelect={(e) => { e.preventDefault(); setScheduleOpen(true); }}>
             <Plus className="mr-2 h-4 w-4" /> Schedule Workout
