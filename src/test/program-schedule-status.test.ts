@@ -105,6 +105,6 @@ describe("summarizeProgramSchedule", () => {
     expect(s.completedCount).toBe(1);
     expect(s.missingCount).toBe(1);
     expect(s.issueCount).toBe(1);
-    expect(s.scheduledCount).toBe(3); // completed day keeps its date
+    expect(s.scheduledCount).toBe(2); // completed day + issued day; "b" has no date
   });
 });
