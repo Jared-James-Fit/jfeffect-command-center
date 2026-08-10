@@ -1001,7 +1001,7 @@ export function StructureCanvas({ type, payload, setP, exercises, appendRowToFir
             }}
             className="pl-1 pr-2 py-2"
           >
-            <StructureEditor type={type} payload={payload} setPayload={setP} exercises={exercises as any[]} compact={compact} templateId={templateId} />
+            <StructureEditor type={type} payload={payload} setPayload={setP} exercises={exercises as any[]} compact={compact} templateId={templateId} dayScheduleStatus={dayScheduleStatus} onFixCalendarIssue={onFixCalendarIssue} />
           </div>
         </div>
       </div>
@@ -1012,7 +1012,7 @@ export function StructureCanvas({ type, payload, setP, exercises, appendRowToFir
 
 // ---------- Structure editing for the JSON payload ----------
 
-function StructureEditor({ type, payload, setPayload, exercises, compact, templateId }: { type: string; payload: any; setPayload: (p: any) => void; exercises: any[]; compact?: boolean; templateId?: string }) {
+function StructureEditor({ type, payload, setPayload, exercises, compact, templateId, dayScheduleStatus, onFixCalendarIssue }: { type: string; payload: any; setPayload: (p: any) => void; exercises: any[]; compact?: boolean; templateId?: string; dayScheduleStatus?: Map<string, ProgramDayScheduleStatus>; onFixCalendarIssue?: (dayId: string) => void }) {
   if (type === "full_prep" || type === "block") {
     return <MultiBlockStructureEditor type={type} payload={payload} setPayload={setPayload} exercises={exercises} compact={compact} templateId={templateId} />;
   }
