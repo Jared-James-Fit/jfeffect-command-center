@@ -99,6 +99,7 @@ export function SessionCreditsPanel({ clientId }: { clientId: string }) {
     (s, b) => s + Number(b.remaining ?? b.balance ?? 0),
     0,
   );
+  const totalScheduled = balance.reduce((s, b) => s + Number(b.reserved ?? 0), 0);
   const events = (summaryQ.data?.events ?? []) as any[];
   const appointments = (summaryQ.data?.appointments ?? {}) as Record<string, any>;
   const granted = events
@@ -193,8 +194,9 @@ export function SessionCreditsPanel({ clientId }: { clientId: string }) {
       </div>
 
       {/* Summary tiles */}
-      <div className="grid gap-3 md:grid-cols-3">
-        <Tile label="Remaining" value={String(totalRemaining)} highlight={totalRemaining > 0} />
+      <div className="grid gap-3 md:grid-cols-4">
+        <Tile label="Available" value={String(totalRemaining)} highlight={totalRemaining > 0} />
+        <Tile label="Scheduled / Reserved" value={String(totalScheduled)} />
         <Tile label="Granted (lifetime)" value={String(granted)} />
         <Tile label="Used (lifetime)" value={String(used)} />
       </div>
