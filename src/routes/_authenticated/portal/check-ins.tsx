@@ -200,7 +200,7 @@ function ClientCheckInsList() {
                             navigate({ to: "/portal/check-ins/$formId", params: { formId: f.id } });
                           }}
                         >
-                          {f.button_label || "Open Check-In Form"}
+                          {f.button_label || `Open ${f.title}`}
                           <ExternalLink className="ml-1 h-4 w-4" />
                         </a>
                       </Button>

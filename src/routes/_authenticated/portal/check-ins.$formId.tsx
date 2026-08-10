@@ -360,7 +360,10 @@ function ClientFormRenderer() {
                   className="bg-gradient-primary font-bold"
                   icon={<Send className="h-4 w-4" />}
                 >
-                  Submit Weekly Check-In
+                  {form.button_label ||
+                    (form.title?.toLowerCase().includes("check")
+                      ? "Submit Weekly Check-In"
+                      : `Submit ${form.title}`)}
                 </ActionButton>
               </div>
             </Card>
@@ -633,7 +636,7 @@ function ExternalFormView({
             <Button asChild className="mt-3 bg-gradient-primary font-bold">
               <a href={url} target="_blank" rel="noreferrer">
                 <ExternalLink className="mr-2 h-4 w-4" />
-                {form.button_label || "Open Check-In Form"}
+                {form.button_label || `Open ${form.title}`}
               </a>
             </Button>
           </Card>
@@ -657,7 +660,7 @@ function ExternalFormView({
               className="bg-gradient-primary font-bold"
               icon={<Check className="h-4 w-4" />}
             >
-              {submitted ? "Submitted" : "I submitted my check-in"}
+              {submitted ? "Submitted" : "Mark as submitted"}
             </ActionButton>
           </div>
         </Card>

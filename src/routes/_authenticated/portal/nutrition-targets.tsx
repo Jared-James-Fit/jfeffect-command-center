@@ -14,6 +14,7 @@ import { cn } from "@/lib/utils";
 import { SectionErrorBoundary } from "@/components/section-error-boundary";
 import { toast } from "sonner";
 import { NutritionDashboard, type NutritionTargets } from "@/components/nutrition/NutritionDashboard";
+import { NutritionReviewCard } from "@/components/nutrition/NutritionReviewCard";
 
 export const Route = createFileRoute("/_authenticated/portal/nutrition-targets")({
   component: PortalNutrition,
@@ -286,7 +287,12 @@ function PortalNutrition() {
           goals={ctxQ.data?.goals ?? []}
           targets={dashboardTargets}
           hasCoachApprovedTargets={!!plan}
-        />
+        >
+          {/* Nutrition Review form — one tap, above the recipes. */}
+          <SectionErrorBoundary label="Nutrition review">
+            <NutritionReviewCard />
+          </SectionErrorBoundary>
+        </NutritionDashboard>
       </SectionErrorBoundary>
     </>
   );

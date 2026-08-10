@@ -291,9 +291,13 @@ export function RecipeBrowser({ viewer, userId, goals = [], profile }: RecipeBro
         </Sheet>
       </div>
 
-      {/* Category chips — horizontal scroll on mobile, large tap targets */}
-      <div className="-mx-4 overflow-x-auto px-4">
-        <div className="flex gap-2">
+      {/* Category chips — horizontal scroll on mobile, large tap targets.
+          The inner flex is w-max with its own padding so the last chip keeps
+          its right-hand breathing room (padding on the scroll container
+          itself is clipped by mobile browsers), and py-1 stops focus rings
+          and chip shadows from being vertically clipped by overflow-x. */}
+      <div className="-mx-4 overflow-x-auto md:-mx-6">
+        <div className="flex w-max min-w-full gap-2 px-4 py-1 md:px-6">
           {VISIBLE_CATEGORIES.map((c) => (
             <Button
               key={c}
