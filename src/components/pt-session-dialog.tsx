@@ -15,6 +15,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { SESSION_TYPES, SESSION_STATUSES, COMMON_TIMEZONES, statusTone, fmtTimeRange } from "@/lib/pt-sessions";
 import {
   AlertTriangle, Repeat, CalendarDays, ChevronDown, CheckCircle2, Ban, CircleOff, Undo2, Wallet, Trash2,
+  ChevronLeft, LayoutTemplate, Plus,
 } from "lucide-react";
 import { setPtSessionStatus } from "@/lib/pt-pack.functions";
 import { getPtSessionCreditEvents, revertPtSessionDeduction } from "@/lib/pt-session-manage.functions";
@@ -26,6 +27,8 @@ import { PtSessionHistory } from "@/components/pt-session-history";
 import {
   AdjustPtCreditDialog, CancelPtSessionDialog, DeletePtSessionDialog, NoShowPtDialog,
 } from "@/components/pt-session-manage-dialogs";
+import { BookingCardDialog } from "@/components/booking-cards/booking-card-dialog";
+import { addMinutesToTime, cardAccent, fmtDuration, type BookingCard } from "@/lib/booking-cards";
 
 type Props = {
   open: boolean;
@@ -33,6 +36,7 @@ type Props = {
   clientId?: string;
   clients?: Array<{ id: string; full_name: string; timezone?: string | null; default_session_location?: string | null; package_tracking_enabled?: boolean | null; sessions_purchased?: number | null; sessions_used?: number | null }>;
   initial?: any;
+  initialCard?: BookingCard | null;
 };
 
 const DOW = [
@@ -64,7 +68,7 @@ function computeRecurringDates(startISO: string, weekdays: number[], weeks: numb
   return out;
 }
 
-export function PtSessionDialog({ open, onOpenChange, clientId, clients = [], initial }: Props) {
+export function PtSessionDialog({ open, onOpenChange, clientId, clients = [], initial, initialCard }: Props) {
   const qc = useQueryClient();
   const { role } = useAuth();
   const isAdmin = role === "admin";
@@ -76,41 +80,76 @@ export function PtSessionDialog({ open, onOpenChange, clientId, clients = [], in
   const [cancelOpen, setCancelOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [adjustOpen, setAdjustOpen] = useState(false);
+  const [, setStep] = useState<"pick" | "form">("form");
+  const [templateEditOpen, setTemplateEditOpen] = useState(false);
+
+  // Booking cards (templates) — used for the picker step and the edit-mode
+  // template badge.
+  const { data: allCards = [] } = useQuery<BookingCard[]>({
+    queryKey: ["booking-cards"],
+    enabled: open,
+    queryFn: async () => {
+      const { data, error } = await (supabase as any)
+        .from("booking_cards")
+        .select("*")
+        .order("sort_order", { ascending: true })
+        .order("created_at", { ascending: true });
+      if (error) throw error;
+      return (data ?? []) as BookingCard[];
+    },
+  });
+
+  const applyCard = (card: BookingCard | null) => {
+    const c = clients.find((x) => x.id === clientId);
+    const tomorrow = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+    const dow = new Date(tomorrow + "T00:00:00").getDay();
+    const duration = card?.duration_minutes ?? 60;
+    setForm({
+      client_id: clientId ?? "",
+      title: card?.name || "Personal Training Session",
+      session_type: card?.session_type || "Personal Training Session",
+      custom_type: card?.custom_type ?? "",
+      session_date: tomorrow,
+      start_time: "09:00",
+      end_time: addMinutesToTime("09:00", duration),
+      timezone: c?.timezone ?? "America/Winnipeg",
+      location: card?.location || c?.default_session_location || "Iron Image Gym",
+      notes: card?.default_notes ?? "",
+      client_visible_notes: card?.client_visible_notes ?? true,
+      status: "Scheduled",
+      visible_to_client: card?.visible_to_client ?? true,
+      reminders_enabled: card?.reminders_enabled ?? true,
+      send_confirmation_email: card?.send_confirmation_email ?? true,
+      uses_credit: card?.uses_credit ?? true,
+      booking_card_id: card?.id ?? null,
+      _duration: card ? duration : null,
+      _cardName: card?.name ?? null,
+      _isRecurring: false,
+      _weekdays: [dow],
+      _weeks: 4,
+      _includeStartDate: true,
+    });
+    setStep("form");
+  };
 
   useEffect(() => {
     if (!open) return;
     setConfirmOverbook(false);
     setShowAdvanced(false);
     setNoShowOpen(false); setCancelOpen(false); setDeleteOpen(false); setAdjustOpen(false);
+    setTemplateEditOpen(false);
     if (initial) {
       setForm({ ...initial, _isRecurring: false, _weekdays: [], _weeks: 4, _includeStartDate: true });
       return;
     }
-    const c = clients.find((x) => x.id === clientId);
-    const tomorrow = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
-    const dow = new Date(tomorrow + "T00:00:00").getDay();
-    setForm({
-      client_id: clientId ?? "",
-      title: "Personal Training Session",
-      session_type: "Personal Training Session",
-      custom_type: "",
-      session_date: tomorrow,
-      start_time: "09:00",
-      end_time: "10:00",
-      timezone: c?.timezone ?? "America/Winnipeg",
-      location: c?.default_session_location ?? "Iron Image Gym",
-      notes: "",
-      client_visible_notes: true,
-      status: "Scheduled",
-      visible_to_client: true,
-      reminders_enabled: true,
-      send_confirmation_email: true,
-      _isRecurring: false,
-      _weekdays: [dow],
-      _weeks: 4,
-      _includeStartDate: true,
-    });
-  }, [open, initial, clientId, clients]);
+    if (initialCard) {
+      applyCard(initialCard);
+    } else {
+      setForm(null);
+      setStep("pick");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, initial, clientId, clients, initialCard]);
 
   const selectedClient = form ? clients.find((c) => c.id === form.client_id) : undefined;
   const tracking = !!selectedClient?.package_tracking_enabled;
