@@ -417,7 +417,7 @@ function LedgerHistory({
                       </td>
                       <td className="p-2 text-xs">
                         <Badge variant="outline" className="font-normal">
-                          {e.event_type}
+                          {ledgerEventLabel(e.event_type)}
                         </Badge>
                         {e.source ? (
                           <div className="text-[10px] text-muted-foreground mt-0.5">
