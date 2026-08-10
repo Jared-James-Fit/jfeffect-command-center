@@ -11,11 +11,13 @@ export const getGoogleConnectionStatus = createServerFn({ method: "GET" })
     const isAdmin = (roles ?? []).some((r: any) => r.role === "admin");
     if (!coach && !isAdmin) return { connected: false, isCoach: false } as any;
     const workspaceConnected = !!(process.env.LOVABLE_API_KEY && process.env.GOOGLE_CALENDAR_API_KEY);
-    const { data: conn } = await supabase.from("google_calendar_connections").select("*").eq("coach_id", coach.id).maybeSingle();
+    const { data: conn } = coach?.id
+      ? await supabase.from("google_calendar_connections").select("*").eq("coach_id", coach.id).maybeSingle()
+      : { data: null as any };
     return {
       isCoach: true,
       mode: "workspace" as const,
-      coachId: coach.id,
+      coachId: coach?.id ?? null,
       connected: workspaceConnected,
       status: workspaceConnected ? "connected" : "not_configured",
       email: conn?.google_account_email ?? "Workspace Google account",
@@ -125,11 +127,9 @@ export const listMyCalendars = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
     const { gcalListCalendars } = await import("./google-cal.server");
-    try {
-      return await gcalListCalendars();
-    } catch {
-      return [];
-    }
+    // Let failures propagate so the UI can distinguish "list failed to load"
+    // from "saved calendar is genuinely missing from the account".
+    return await gcalListCalendars();
   });
 
 export const setSelectedCalendar = createServerFn({ method: "POST" })
@@ -138,8 +138,12 @@ export const setSelectedCalendar = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context as any;
     const { data: coach } = await supabase.from("coaches").select("id").eq("user_id", userId).maybeSingle();
-    if (!coach) throw new Error("Not a coach");
-    await supabase.from("google_calendar_connections").upsert({
+    if (!coach) throw new Error("No coach profile is linked to your account, so the calendar selection can't be saved.");
+    // Verified caller (own coach row). The table has UPDATE/SELECT/DELETE
+    // policies but no INSERT policy, so first-time selections can only be
+    // written with the service role; scope the write to the caller's own row.
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { error } = await supabaseAdmin.from("google_calendar_connections").upsert({
       coach_id: coach.id,
       user_id: userId,
       selected_calendar_id: data.calendar_id,
@@ -148,6 +152,7 @@ export const setSelectedCalendar = createServerFn({ method: "POST" })
       last_synced_at: new Date().toISOString(),
       last_error: null,
     }, { onConflict: "coach_id" });
+    if (error) throw error;
     return { ok: true };
   });
 
