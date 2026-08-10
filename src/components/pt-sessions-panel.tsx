@@ -189,7 +189,7 @@ export function PtSessionsPanel({ clientId, client }: { clientId: string; client
   };
 
   const markComplete = (s: any) => {
-    if (totalRemaining <= 0 && !confirm("No paid session credits remain for this client.\n\nComplete anyway (admin override)?")) return;
+    if (totalAvailable <= 0 && !confirm("No available session credits for this client.\n\nComplete anyway (admin override)?")) return;
     changeStatus(s, "Completed");
   };
 
@@ -245,7 +245,7 @@ export function PtSessionsPanel({ clientId, client }: { clientId: string; client
     <Card className="border-border bg-card p-6 md:col-span-3 space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h3 className="flex items-center gap-2 text-xs uppercase tracking-widest text-muted-foreground">
-          <CalendarDays className="h-4 w-4" /> Personal Training Sessions
+          <CalendarDays className="h-4 w-4" /> Personal Training Credits
         </h3>
         <div className="flex flex-wrap gap-2">
           {isAdmin && (
@@ -255,11 +255,19 @@ export function PtSessionsPanel({ clientId, client }: { clientId: string; client
           )}
           {isAdmin && (
             <Button size="sm" variant="outline" onClick={() => setSellOpen(true)}>
-              <Ticket className="mr-2 h-4 w-4" /> Sell Sessions
+              <Ticket className="mr-2 h-4 w-4" /> Add Sessions
+            </Button>
+          )}
+          {isAdmin && (
+            <Button size="sm" variant="outline" disabled={totalAvailable <= 0} title={totalAvailable <= 0 ? "No available sessions to convert" : "Convert available sessions into credit for a new package"} onClick={() => setUpgradeOpen(true)}>
+              <ArrowRightLeft className="mr-2 h-4 w-4" /> Apply Credit
             </Button>
           )}
           <Button size="sm" className="bg-gradient-primary font-bold uppercase" onClick={() => { setEditing(null); setBookOpen(true); }}>
             <Plus className="mr-2 h-4 w-4" /> Book Session
+          </Button>
+          <Button size="sm" variant="ghost" onClick={() => document.getElementById("session-transactions")?.scrollIntoView({ behavior: "smooth", block: "start" })}>
+            <ScrollText className="mr-2 h-4 w-4" /> Transactions
           </Button>
         </div>
       </div>
@@ -267,10 +275,10 @@ export function PtSessionsPanel({ clientId, client }: { clientId: string; client
       {hasPacks && (
         <div className="grid gap-2 sm:grid-cols-5 text-xs">
           <Stat label="Purchased" value={totalPurchased} />
+          <Stat label="Scheduled" value={totalScheduled} tone={needsReview.length > 0 ? "warning" : undefined} />
           <Stat label="Used" value={totalUsed} />
-          <Stat label="Remaining" value={totalRemaining} tone="primary" />
-          <Stat label="Upcoming" value={upcoming.length} />
-          <Stat label="Completed" value={completedCount} />
+          <Stat label="Available" value={totalAvailable} tone="primary" />
+          <Stat label="Credit" value={fmtMoney(remainingCreditMinor, creditCurrency) ?? "—"} tone={remainingCreditMinor > 0 ? "success" : undefined} />
         </div>
       )}
 
