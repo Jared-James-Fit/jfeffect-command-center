@@ -1041,6 +1041,69 @@ export type Database = {
         }
         Relationships: []
       }
+      booking_cards: {
+        Row: {
+          client_visible_notes: boolean
+          color: string | null
+          created_at: string
+          created_by: string | null
+          custom_type: string | null
+          default_notes: string | null
+          duration_minutes: number
+          id: string
+          is_active: boolean
+          location: string | null
+          name: string
+          reminders_enabled: boolean
+          send_confirmation_email: boolean
+          session_type: string
+          sort_order: number
+          updated_at: string
+          uses_credit: boolean
+          visible_to_client: boolean
+        }
+        Insert: {
+          client_visible_notes?: boolean
+          color?: string | null
+          created_at?: string
+          created_by?: string | null
+          custom_type?: string | null
+          default_notes?: string | null
+          duration_minutes?: number
+          id?: string
+          is_active?: boolean
+          location?: string | null
+          name: string
+          reminders_enabled?: boolean
+          send_confirmation_email?: boolean
+          session_type?: string
+          sort_order?: number
+          updated_at?: string
+          uses_credit?: boolean
+          visible_to_client?: boolean
+        }
+        Update: {
+          client_visible_notes?: boolean
+          color?: string | null
+          created_at?: string
+          created_by?: string | null
+          custom_type?: string | null
+          default_notes?: string | null
+          duration_minutes?: number
+          id?: string
+          is_active?: boolean
+          location?: string | null
+          name?: string
+          reminders_enabled?: boolean
+          send_confirmation_email?: boolean
+          session_type?: string
+          sort_order?: number
+          updated_at?: string
+          uses_credit?: boolean
+          visible_to_client?: boolean
+        }
+        Relationships: []
+      }
       booking_link_availability: {
         Row: {
           booking_link_id: string
@@ -15600,6 +15663,7 @@ export type Database = {
       }
       pt_sessions: {
         Row: {
+          booking_card_id: string | null
           client_id: string
           client_visible_notes: boolean
           confirmation_sent_at: string | null
@@ -15622,9 +15686,11 @@ export type Database = {
           timezone: string
           title: string
           updated_at: string
+          uses_credit: boolean
           visible_to_client: boolean
         }
         Insert: {
+          booking_card_id?: string | null
           client_id: string
           client_visible_notes?: boolean
           confirmation_sent_at?: string | null
@@ -15647,9 +15713,11 @@ export type Database = {
           timezone?: string
           title: string
           updated_at?: string
+          uses_credit?: boolean
           visible_to_client?: boolean
         }
         Update: {
+          booking_card_id?: string | null
           client_id?: string
           client_visible_notes?: boolean
           confirmation_sent_at?: string | null
@@ -15672,9 +15740,17 @@ export type Database = {
           timezone?: string
           title?: string
           updated_at?: string
+          uses_credit?: boolean
           visible_to_client?: boolean
         }
         Relationships: [
+          {
+            foreignKeyName: "pt_sessions_booking_card_id_fkey"
+            columns: ["booking_card_id"]
+            isOneToOne: false
+            referencedRelation: "booking_cards"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "pt_sessions_client_id_fkey"
             columns: ["client_id"]
