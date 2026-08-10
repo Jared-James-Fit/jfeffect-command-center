@@ -2334,7 +2334,7 @@ function ExerciseNotesBlock({ notes }: { notes: string }) {
  * but explicit ("Last time" label + date) so the client can't mistake it
  * for today's target.
  */
-function PreviousLiftChip({ data, displayUnit }: { data: PreviousLift | null; displayUnit: "kg" | "lb" }) {
+function PreviousLiftChip({ data, displayUnit, className }: { data: PreviousLift | null; displayUnit: "kg" | "lb"; className?: string }) {
   if (!data) return null;
   const loadStr = formatPreviousLiftLoad(data, displayUnit) ?? "";
   const repsStr = data.reps != null ? ` × ${data.reps}` : "";
@@ -2347,7 +2347,7 @@ function PreviousLiftChip({ data, displayUnit }: { data: PreviousLift | null; di
   }
   return (
     <div
-      className="mt-1 inline-flex max-w-full items-center gap-1 rounded-md border border-dashed border-muted-foreground/30 bg-muted/30 px-2 py-0.5 text-[11px] font-medium text-muted-foreground"
+      className={cn("mt-1 inline-flex max-w-full items-center gap-1 rounded-md border border-dashed border-muted-foreground/30 bg-muted/30 px-2 py-0.5 text-[11px] font-medium text-muted-foreground", className)}
       title="Your top set the last time you trained this exercise"
     >
       <span className="text-[9px] font-bold uppercase tracking-wider text-muted-foreground/70">Last time</span>
