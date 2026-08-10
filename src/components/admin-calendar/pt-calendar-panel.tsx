@@ -19,6 +19,8 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { PtSessionDialog } from "@/components/pt-session-dialog";
+import { BookingCardsPanel } from "@/components/booking-cards/booking-cards-panel";
+import type { BookingCard } from "@/lib/booking-cards";
 import {
   AdjustPtCreditDialog, CancelPtSessionDialog, DeletePtSessionDialog, NoShowPtDialog,
 } from "@/components/pt-session-manage-dialogs";
@@ -44,8 +46,10 @@ export function PtCalendarPanel() {
   const { role } = useAuth();
   const isAdmin = role === "admin";
   const [tab, setTab] = useState<TabKey>("upcoming");
+  const [section, setSection] = useState<"sessions" | "cards">("sessions");
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<any>(null);
+  const [cardFor, setCardFor] = useState<BookingCard | null>(null);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [filters, setFilters] = useState({ client: "all", type: "all", location: "", from: "", to: "" });
   const [noShowFor, setNoShowFor] = useState<any>(null);
@@ -279,71 +283,89 @@ export function PtCalendarPanel() {
   return (
     <>
       <PageHeader title="PT Calendar" subtitle="Manage personal training sessions, outcomes, and credits." actions={
-        <Button size="sm" className="bg-gradient-primary font-bold uppercase" onClick={() => { setEditing(null); setOpen(true); }}>
+        <Button size="sm" className="bg-gradient-primary font-bold uppercase" onClick={() => { setEditing(null); setCardFor(null); setOpen(true); }}>
           <Plus className="mr-2 h-4 w-4" /> Book Session
         </Button>
       } />
       <div className="p-3 sm:p-6 md:p-8 space-y-4">
-        <Tabs value={tab} onValueChange={(v) => setTab(v as TabKey)}>
+        <Tabs value={section} onValueChange={(v) => setSection(v as "sessions" | "cards")}>
           <TabsList className="flex w-full flex-wrap h-auto gap-1 sm:w-max">
-            <TabsTrigger value="upcoming">Upcoming ({groups.upcoming.length})</TabsTrigger>
-            <TabsTrigger value="review" className={groups.review.length > 0 ? "text-warning" : ""}>
-              Needs Review ({groups.review.length})
-            </TabsTrigger>
-            <TabsTrigger value="completed">Completed ({groups.completed.length})</TabsTrigger>
-            <TabsTrigger value="cancelled">Cancelled ({groups.cancelled.length})</TabsTrigger>
-            <TabsTrigger value="noshow">No-show ({groups.noshow.length})</TabsTrigger>
-            <TabsTrigger value="all">All ({groups.all.length})</TabsTrigger>
+            <TabsTrigger value="sessions">Sessions</TabsTrigger>
+            <TabsTrigger value="cards">Booking Cards</TabsTrigger>
           </TabsList>
         </Tabs>
 
-        <Collapsible open={filtersOpen} onOpenChange={setFiltersOpen}>
-          <CollapsibleTrigger asChild>
-            <Button size="sm" variant="outline">
-              <SlidersHorizontal className="mr-2 h-3.5 w-3.5" />
-              Filters{activeFilterCount > 0 ? ` (${activeFilterCount} active)` : ""}
-            </Button>
-          </CollapsibleTrigger>
-          <CollapsibleContent>
-            <Card className="mt-2 border-border bg-card p-3 sm:p-4 grid gap-3 grid-cols-1 sm:grid-cols-2 lg:grid-cols-5">
-              <Select value={filters.client} onValueChange={(v) => setFilters({ ...filters, client: v })}>
-                <SelectTrigger><SelectValue placeholder="Client" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All clients</SelectItem>
-                  {clients.map((c) => <SelectItem key={c.id} value={c.id}>{c.full_name}</SelectItem>)}
-                </SelectContent>
-              </Select>
-              <Select value={filters.type} onValueChange={(v) => setFilters({ ...filters, type: v })}>
-                <SelectTrigger><SelectValue placeholder="Type" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All types</SelectItem>
-                  {SESSION_TYPES.map((t) => <SelectItem key={t} value={t}>{t}</SelectItem>)}
-                </SelectContent>
-              </Select>
-              <Input placeholder="Location contains…" value={filters.location} onChange={(e) => setFilters({ ...filters, location: e.target.value })} />
-              <Input type="date" value={filters.from} onChange={(e) => setFilters({ ...filters, from: e.target.value })} />
-              <Input type="date" value={filters.to} onChange={(e) => setFilters({ ...filters, to: e.target.value })} />
-            </Card>
-          </CollapsibleContent>
-        </Collapsible>
+        {section === "cards" && (
+          <BookingCardsPanel
+            clients={clients}
+            onBook={(card) => { setCardFor(card); setEditing(null); setOpen(true); }}
+          />
+        )}
 
-        <Card className="border-border bg-card p-3 sm:p-4">
-          {visible.length === 0 ? (
-            <div className="rounded-md border border-dashed border-border p-10 text-center text-sm text-muted-foreground">
-              {tab === "upcoming" && "No upcoming sessions."}
-              {tab === "review" && "Nothing waiting for review."}
-              {tab === "completed" && "No completed sessions."}
-              {tab === "cancelled" && "No cancelled sessions."}
-              {tab === "noshow" && "No no-shows recorded."}
-              {tab === "all" && "No sessions match those filters."}
-            </div>
-          ) : (
-            <ul className="divide-y divide-border">{visible.map(sessionRow)}</ul>
-          )}
-        </Card>
+        {section === "sessions" && (
+          <>
+            <Tabs value={tab} onValueChange={(v) => setTab(v as TabKey)}>
+              <TabsList className="flex w-full flex-wrap h-auto gap-1 sm:w-max">
+                <TabsTrigger value="upcoming">Upcoming ({groups.upcoming.length})</TabsTrigger>
+                <TabsTrigger value="review" className={groups.review.length > 0 ? "text-warning" : ""}>
+                  Needs Review ({groups.review.length})
+                </TabsTrigger>
+                <TabsTrigger value="completed">Completed ({groups.completed.length})</TabsTrigger>
+                <TabsTrigger value="cancelled">Cancelled ({groups.cancelled.length})</TabsTrigger>
+                <TabsTrigger value="noshow">No-show ({groups.noshow.length})</TabsTrigger>
+                <TabsTrigger value="all">All ({groups.all.length})</TabsTrigger>
+              </TabsList>
+            </Tabs>
+
+            <Collapsible open={filtersOpen} onOpenChange={setFiltersOpen}>
+              <CollapsibleTrigger asChild>
+                <Button size="sm" variant="outline">
+                  <SlidersHorizontal className="mr-2 h-3.5 w-3.5" />
+                  Filters{activeFilterCount > 0 ? ` (${activeFilterCount} active)` : ""}
+                </Button>
+              </CollapsibleTrigger>
+              <CollapsibleContent>
+                <Card className="mt-2 border-border bg-card p-3 sm:p-4 grid gap-3 grid-cols-1 sm:grid-cols-2 lg:grid-cols-5">
+                  <Select value={filters.client} onValueChange={(v) => setFilters({ ...filters, client: v })}>
+                    <SelectTrigger><SelectValue placeholder="Client" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All clients</SelectItem>
+                      {clients.map((c) => <SelectItem key={c.id} value={c.id}>{c.full_name}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                  <Select value={filters.type} onValueChange={(v) => setFilters({ ...filters, type: v })}>
+                    <SelectTrigger><SelectValue placeholder="Type" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All types</SelectItem>
+                      {SESSION_TYPES.map((t) => <SelectItem key={t} value={t}>{t}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                  <Input placeholder="Location contains…" value={filters.location} onChange={(e) => setFilters({ ...filters, location: e.target.value })} />
+                  <Input type="date" value={filters.from} onChange={(e) => setFilters({ ...filters, from: e.target.value })} />
+                  <Input type="date" value={filters.to} onChange={(e) => setFilters({ ...filters, to: e.target.value })} />
+                </Card>
+              </CollapsibleContent>
+            </Collapsible>
+
+            <Card className="border-border bg-card p-3 sm:p-4">
+              {visible.length === 0 ? (
+                <div className="rounded-md border border-dashed border-border p-10 text-center text-sm text-muted-foreground">
+                  {tab === "upcoming" && "No upcoming sessions."}
+                  {tab === "review" && "Nothing waiting for review."}
+                  {tab === "completed" && "No completed sessions."}
+                  {tab === "cancelled" && "No cancelled sessions."}
+                  {tab === "noshow" && "No no-shows recorded."}
+                  {tab === "all" && "No sessions match those filters."}
+                </div>
+              ) : (
+                <ul className="divide-y divide-border">{visible.map(sessionRow)}</ul>
+              )}
+            </Card>
+          </>
+        )}
       </div>
 
-      <PtSessionDialog open={open} onOpenChange={setOpen} clients={clients} initial={editing ?? undefined} />
+      <PtSessionDialog open={open} onOpenChange={setOpen} clients={clients} initial={editing ?? undefined} initialCard={cardFor} />
       <NoShowPtDialog open={!!noShowFor} onOpenChange={(o) => { if (!o) setNoShowFor(null); }} session={noShowFor} />
       <CancelPtSessionDialog
         open={!!cancelFor}
