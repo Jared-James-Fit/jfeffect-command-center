@@ -76,8 +76,8 @@ export function buildProgramScheduleStatus(args: {
     arr.sort((a, b) => (a.scheduled_date < b.scheduled_date ? -1 : a.scheduled_date > b.scheduled_date ? 1 : 0));
   }
 
-  let hasCompleted = new Set<string>();
-  let hasInProgress = new Set<string>();
+  const hasCompleted = new Set<string>();
+  const hasInProgress = new Set<string>();
   for (const c of completions) {
     if (c.completed_at) hasCompleted.add(c.day_id);
     else hasInProgress.add(c.day_id);
@@ -119,9 +119,6 @@ export function buildProgramScheduleStatus(args: {
       status,
     });
   }
-  // Re-compute inProgress/completed sets are scoped; avoid leaking.
-  hasCompleted = new Set();
-  hasInProgress = new Set();
   return out;
 }
 
