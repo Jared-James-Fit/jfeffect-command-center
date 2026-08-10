@@ -368,6 +368,15 @@ export function ClientAnalyticsDashboard({
     return [...merged.values()].sort((a, b) => b.sets - a.sets);
   }, [volume]);
 
+  const totalVolumeSets = useMemo(
+    () => volumeData.reduce((s, d) => s + d.sets, 0),
+    [volumeData],
+  );
+  const otherVolume = useMemo(
+    () => volumeData.find((d) => d.muscle === "Other") ?? null,
+    [volumeData],
+  );
+
   const summary = useMemo(() => {
     const prsInRange = prs.length;
     const setsInRange = filteredResults.length;
@@ -787,6 +796,18 @@ export function ClientAnalyticsDashboard({
                                           ? ` · ${d.rir} RIR`
                                           : "")}
                                     </div>
+                                    {chartMetric === "est" && activePr &&
+                                      d.est === Number(conv(activePr.est_1rm).toFixed(1)) && (
+                                      <div
+                                        className="mt-1 inline-flex items-center rounded-full px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider"
+                                        style={{
+                                          background: `color-mix(in oklab, ${ANALYTICS_COLORS.green} 18%, transparent)`,
+                                          color: ANALYTICS_COLORS.green,
+                                        }}
+                                      >
+                                        Current PR
+                                      </div>
+                                    )}
                                   </div>
                                 );
                               }}
