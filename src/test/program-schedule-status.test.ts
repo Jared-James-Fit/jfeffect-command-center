@@ -10,9 +10,7 @@ const inst = (id: string, dayId: string, date: string) => ({
   source_day_id: dayId,
   scheduled_date: date,
 });
-const comp = (dayId: string, completed_at: string | null) => ({ day_id: day_id_fix(dayId), completed_at });
-// keep helper explicit to avoid accidental typos in tests
-function day_id_fix(v: string) { return v; }
+const comp = (dayId: string, completed_at: string | null) => ({ day_id: dayId, completed_at });
 
 describe("buildProgramScheduleStatus", () => {
   it("instance date is canonical over the legacy mirror", () => {
