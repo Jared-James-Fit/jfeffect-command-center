@@ -90,8 +90,9 @@ export function PtSessionDialog({ open, onOpenChange, clientId, clients = [], in
 
   const selectedClient = form ? clients.find((c) => c.id === form.client_id) : undefined;
   const tracking = !!selectedClient?.package_tracking_enabled;
-  // Ledger-driven credit balance (grants minus completions). Booking itself
-  // never deducts — credits are consumed when a session is marked Completed.
+  // Ledger-driven credit balance. Booking reserves 1 credit per session
+  // (already netted out of `remaining`); completing converts reserved → used;
+  // cancelling releases the reservation back to available.
   const { data: balanceRows } = useQuery<any[]>({
     queryKey: ["pt-balance", form?.client_id ?? null],
     enabled: open && !!form?.client_id,
@@ -127,7 +128,7 @@ export function PtSessionDialog({ open, onOpenChange, clientId, clients = [], in
     if (!form.title) return toast.error("Title is required");
     if (form._isRecurring && previewDates.length === 0) return toast.error("Pick at least one weekday");
     if (overbook && !confirmOverbook) {
-      toast.error(`Only ${remaining} credit${remaining === 1 ? "" : "s"} left — top up or confirm overbooking`);
+      toast.error(`Only ${remaining} credit${remaining === 1 ? "" : "s"} available — top up or confirm overbooking`);
       return;
     }
     setSaving(true);
