@@ -254,6 +254,18 @@ async function applyPayloadDiff(blockId: string, originalTree: any, current: any
         if (!keepRowIds.has(orr._dbId)) await deleteRow(orr._dbId);
       }
 
+      // Positional truth: legacy rows may carry 1-based or gapped sort_order
+      // values while their RELATIVE order is already correct. Comparing the
+      // stored value against the 0-based array index produced dozens of no-op
+      // PATCHes on every save (~35 sequential writes ≈ 20s), which tripped the
+      // autosave's 8s timeout and looped "Save timed out — will retry" even
+      // though nothing was wrong. Only renumber when the day's row SEQUENCE
+      // actually changed (reorder / insert / delete); that also converges
+      // legacy rows to 0-based the first time the day is truly restructured.
+      const sequenceChanged =
+        cdRows.length !== odRows.length ||
+        cdRows.some((cr, k) => (cr._dbId ?? null) !== (odRows[k]?._dbId ?? null));
+
       for (let k = 0; k < cdRows.length; k++) {
         const cr = cdRows[k];
         const desired: any = { sort_order: k };
@@ -264,6 +276,10 @@ async function applyPayloadDiff(blockId: string, originalTree: any, current: any
           const orr = odRows.find((o) => o._dbId === cr._dbId);
           const patch: any = {};
           for (const [k2, v] of Object.entries(desired)) {
+            // Skip pure renumbering when the row sequence is untouched —
+            // a stored 1-based/gapped order that matches the relative
+            // sequence is not a change worth writing.
+            if (k2 === "sort_order" && !sequenceChanged) continue;
             if ((orr as any)?.[k2] !== v) patch[k2] = v;
           }
           if (Object.keys(patch).length) await updateRow(cr._dbId, patch);
@@ -582,6 +598,11 @@ function BlockEditor() {
     delay: 8000,
     enabled: hydratedBlockIdRef.current === blockId && dirty,
     onSave: async () => { await persist(); },
+    // Structural saves (e.g. "Copy Week → all weeks") write many rows
+    // sequentially — 20s+ of legit work. The default 8s hard timeout
+    // falsely reported "Save timed out" while the writes were landing
+    // fine. Give the full-block persist a generous window.
+    timeoutMs: 60_000,
   });
 
   // Save-state truth: only clear the editor's dirty flag once the autosave
