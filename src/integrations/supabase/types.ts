@@ -19123,6 +19123,10 @@ export type Database = {
         Args: { _client_id: string; _week_id: string }
         Returns: number
       }
+      pl_week_day_offset: {
+        Args: { p_day_index: number; p_days_per_week: number }
+        Returns: number
+      }
       pl_week_required_workouts: { Args: { _week_id: string }; Returns: number }
       purge_old_client_media: { Args: never; Returns: undefined }
       read_email_batch: {
