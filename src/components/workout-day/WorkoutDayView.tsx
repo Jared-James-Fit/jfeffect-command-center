@@ -3350,7 +3350,7 @@ function SetRow({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [forceHydrateToken]);
 
-  const value = useMemo(() => ({ load, reps, rpe, unit }), [load, reps, rpe, unit]);
+  const value = useMemo(() => ({ load, reps, rpe, unit, bw }), [load, reps, rpe, unit, bw]);
   // Forward-ref to the autosave handle so effects defined above can call
   // markClean() without a TDZ error.
   const saveRef = useRef<ReturnType<typeof useAutosave<typeof value>> | null>(null);
@@ -3364,6 +3364,7 @@ function SetRow({
     // the saved value, so the set row is dirty only when load/reps/RPE change.
     equals: (a, b) => {
       if (a.reps !== b.reps || a.rpe !== b.rpe) return false;
+      if (a.bw !== b.bw) return false;
       return a.load === b.load;
     },
     // NOTE: hydrated is intentionally excluded from this condition.
@@ -3378,16 +3379,16 @@ function SetRow({
     // Autosave even while a field remains focused so mobile keyboards / sticky
     // focus cannot leave workout inputs unsaved. The server hydration effect
     // still refuses to overwrite the focused field, so active typing is safe.
-    enabled: !readonly && !!clientId && serverHydrated && (load.length > 0 || reps.length > 0 || rpe.length > 0 || !!existing),
+    enabled: !readonly && !!clientId && serverHydrated && (load.length > 0 || reps.length > 0 || rpe.length > 0 || bw || !!existing),
     onPermanentFailure: ({ value }) => {
       if (!clientId) return;
-      const loadNum = value.load ? Number(value.load) : null;
+      const loadNum = value.bw ? 0 : value.load ? Number(value.load) : null;
       const repsNum = value.reps ? parseInt(value.reps, 10) : null;
       const rpeNum = value.rpe ? Number(value.rpe) : null;
       const loadUnit = persistedUnitForValue(value.load, value.unit, existing);
       const completedAt = hideWeight
         ? (repsNum != null && Number.isFinite(repsNum) && repsNum > 0 ? new Date().toISOString() : null)
-        : (repsNum != null && Number.isFinite(repsNum) && repsNum > 0 && loadNum != null && Number.isFinite(loadNum) && loadNum > 0 ? new Date().toISOString() : null);
+        : (repsNum != null && Number.isFinite(repsNum) && repsNum > 0 && (value.bw || (loadNum != null && Number.isFinite(loadNum) && loadNum > 0)) ? new Date().toISOString() : null);
       enqueueOfflineWrite({
         id: `portal_set:${rowId}:${clientId}:${setIndex}`,
         label: `Saved set ${setIndex}`,
@@ -3403,6 +3404,7 @@ function SetRow({
             actual_load_unit: loadUnit,
             entered_value: loadNum,
             entered_unit: loadUnit,
+            is_bodyweight: value.bw,
             actual_reps: repsNum,
             actual_rpe: value.rpe || null,
             actual_rpe_num: rpeNum,
@@ -3411,14 +3413,14 @@ function SetRow({
         },
       });
     },
-    onSave: async ({ load, reps, rpe, unit }) => {
+    onSave: async ({ load, reps, rpe, unit, bw }) => {
       if (readonly) return;
       if (!clientId) return;
-      if (!load && !reps && !rpe && !existing) return;
+      if (!load && !reps && !rpe && !bw && !existing) return;
       // Auto-start the Workout Session clock on the first meaningful log.
       beginWorkoutSession(workoutId ?? null);
       // Validate numerics; silently skip persistence for invalid values (input stays).
-      const loadNum = load ? Number(load) : null;
+      const loadNum = bw ? 0 : load ? Number(load) : null;
       const repsNum = reps ? parseInt(reps, 10) : null;
       const rpeNum = rpe ? Number(rpe) : null;
       if (load && (loadNum == null || !isFinite(loadNum) || loadNum < 0)) throw new Error("Weight must be a number");
@@ -3427,7 +3429,7 @@ function SetRow({
       const loadUnit = persistedUnitForValue(load, unit, existing);
       const completedAt = hideWeight
         ? (repsNum != null && Number.isFinite(repsNum) && repsNum > 0 ? new Date().toISOString() : null)
-        : (repsNum != null && Number.isFinite(repsNum) && repsNum > 0 && loadNum != null && Number.isFinite(loadNum) && loadNum > 0 ? new Date().toISOString() : null);
+        : (repsNum != null && Number.isFinite(repsNum) && repsNum > 0 && (bw || (loadNum != null && Number.isFinite(loadNum) && loadNum > 0)) ? new Date().toISOString() : null);
       const payload = withMemberWorkoutIndexes({
         row_id: rowId,
         client_id: clientId,
@@ -3436,6 +3438,7 @@ function SetRow({
         actual_load_unit: loadUnit,
         entered_value: loadNum,
         entered_unit: loadUnit,
+        is_bodyweight: bw,
         actual_reps: repsNum,
         actual_rpe: rpe || null,
         actual_rpe_num: rpeNum,
