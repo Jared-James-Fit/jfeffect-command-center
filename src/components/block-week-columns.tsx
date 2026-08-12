@@ -129,8 +129,8 @@ export function BlockWeekColumns({
                 if (sel.week?.id) weekRefs.current[sel.week.id] = el;
               }}
               className={cn(
-                "w-[88vw] max-w-[400px] shrink-0 snap-start scroll-mt-24 space-y-2 rounded-md border p-3 md:w-[360px] lg:w-[390px]",
-                sel.now ? "border-primary/50 bg-primary/5" : "border-border bg-card/40",
+                "w-[88vw] max-w-[400px] shrink-0 snap-start scroll-mt-24 space-y-2 rounded-2xl p-3 md:w-[360px] lg:w-[390px]",
+                sel.now ? "border border-primary/50 bg-primary/5" : "workout-stack-surface",
                 sel.status === "Locked" && "opacity-80",
               )}
             >
@@ -186,7 +186,7 @@ export function BlockWeekColumns({
                   const inner = (
                     <Card
                       className={cn(
-                        "flex min-w-0 cursor-pointer flex-col gap-2 p-2.5 transition hover:bg-secondary/40 active:bg-secondary/60 sm:flex-row sm:items-center sm:justify-between",
+                        "workout-card-surface flex min-w-0 cursor-pointer flex-col gap-2 p-2.5 transition hover:bg-secondary/40 active:bg-secondary/60 sm:flex-row sm:items-center sm:justify-between",
                         isToday && !done && "border-primary ring-2 ring-primary/40",
                       )}
                     >
