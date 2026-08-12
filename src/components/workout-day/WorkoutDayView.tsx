@@ -4249,11 +4249,15 @@ function CompactWorkoutSummaryRow({
       : setsDone > 0
         ? "in_progress"
         : "not_started";
+  // Display correction: a workout with zero logged sets must never read as
+  // "Completed" in the summary strip, even if a completion row exists.
+  const showCompleted = !!completedAt && setsDone > 0;
+  const statusLabel = showCompleted ? "Completed" : setsDone > 0 ? "In Progress" : "Not Started";
   return (
-    <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-xs text-muted-foreground">
-      <div className="inline-flex items-center gap-1.5 rounded-md bg-secondary/60 px-2 py-1">
+    <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1.5 text-xs text-muted-foreground">
+      <div className="inline-flex items-center gap-1.5 rounded-md bg-secondary/60 px-2 py-0.5">
         <Clock className="h-3.5 w-3.5 text-primary" />
-        <span className="font-semibold uppercase tracking-wide text-[10px] text-muted-foreground">
+        <span className="hidden font-semibold uppercase tracking-wide text-[10px] text-muted-foreground sm:inline">
           Workout Session
         </span>
         <WorkoutTimer
@@ -4267,10 +4271,10 @@ function CompactWorkoutSummaryRow({
       <button
         type="button"
         onClick={scrollToFirstIncompleteExercise}
-        className="inline-flex items-center gap-2 rounded-md px-1 py-1 tabular-nums transition-colors hover:bg-secondary/60 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+        className="inline-flex items-center gap-2 rounded-md px-1 py-0.5 tabular-nums transition-colors hover:bg-secondary/60 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
         aria-label={`Workout progress ${pct}%, ${exercisesDone} of ${exercisesTotal} exercises. Scroll to first incomplete exercise.`}
       >
-        <WorkoutProgressRing pct={pct} status={status} size={28} strokeWidth={3} />
+        <WorkoutProgressRing pct={pct} status={status} size={26} strokeWidth={3} />
         <span className="font-bold text-foreground">
           {pct}% · {exercisesDone}/{exercisesTotal}
         </span>
@@ -4279,13 +4283,18 @@ function CompactWorkoutSummaryRow({
         <span aria-hidden className="opacity-40">•</span>
         {durationLabel}
       </span>
-      {loggingQuality && (
+      {!showCompleted && (
+        <span className="inline-flex items-center rounded-full border border-border bg-muted/40 px-2 py-0.5 text-[11px] font-bold uppercase tracking-wide text-muted-foreground">
+          {statusLabel}
+        </span>
+      )}
+      {loggingQuality && setsDone > 0 && (
         <LoggingQualityBadge
           quality={loggingQuality.quality}
           percentage={loggingQuality.percentage}
         />
       )}
-      {completedAt && (
+      {showCompleted && (
         <>
           <Badge
             variant="outline"
