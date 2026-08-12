@@ -72,9 +72,8 @@ export function ExercisesAdmin({ embedded = false }: { embedded?: boolean } = {}
     },
   });
 
-  const filtered = exercises.filter((e) => {
+  const preFiltered = exercises.filter((e) => {
     if (category !== "all" && e.category !== category) return false;
-    if (search && !e.name.toLowerCase().includes(search.toLowerCase())) return false;
     if (muscleFilter !== "all") {
       const mg = (e as any).primary_muscle_group ?? "Other";
       if (mg !== muscleFilter) return false;
@@ -98,6 +97,17 @@ export function ExercisesAdmin({ embedded = false }: { embedded?: boolean } = {}
     }
     return e.video_migration_status === migration;
   });
+
+  // Keyword search runs after the structured filters so filters + search
+  // always combine. Shared helper → same behaviour as the client library,
+  // the swap picker and the program builder.
+  const searched = useMemo(
+    () => searchExercises(preFiltered as any[], search),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [preFiltered.length, search, category, migration, muscleFilter, exercises],
+  );
+  const filtered = searched.results.map((r) => r.exercise) as typeof exercises;
+  const highlightTerms = searched.highlightTerms;
 
   const stillYouTubeCount = exercises.filter(
     (e) =>
