@@ -26,6 +26,8 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import { applySwap, getSwapImpact } from "@/lib/quick-swap.functions";
+import { searchExercises } from "@/lib/exercise-search";
+import { HighlightedExerciseName } from "@/components/exercise-search-highlight";
 import {
   applyMemberSwap,
   getMemberSwapImpact,
@@ -259,43 +261,10 @@ function useDebounced<T>(value: T, ms: number): T {
   return v;
 }
 
-/** Split a search query into whitespace-separated tokens (>=1 char). */
-function searchTokens(q: string): string[] {
-  return q
-    .toLowerCase()
-    .split(/\s+/)
-    .map((t) => t.trim())
-    .filter(Boolean);
-}
-
-/** Highlight every occurrence of any token (order-agnostic) in `text`. */
-function HighlightedName({ text, tokens }: { text: string; tokens: string[] }) {
+/** Highlight every matched keyword (order-agnostic, alias-aware). */
+function HighlightedName({ text, tokens }: { text: string; tokens: readonly string[] }) {
   if (tokens.length === 0) return <>{text}</>;
-  // Build one alternation regex, escaping each token, longest-first so
-  // "bench press" highlights the whole phrase before its parts.
-  const escaped = tokens
-    .slice()
-    .sort((a, b) => b.length - a.length)
-    .map((t) => t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
-  const re = new RegExp(`(${escaped.join("|")})`, "gi");
-  const parts = text.split(re).filter((p) => p !== "");
-  const tokenSet = new Set(tokens.map((t) => t.toLowerCase()));
-  return (
-    <>
-      {parts.map((p, i) =>
-        tokenSet.has(p.toLowerCase()) ? (
-          <mark
-            key={i}
-            className="rounded bg-primary/20 px-0.5 text-foreground"
-          >
-            {p}
-          </mark>
-        ) : (
-          <span key={i}>{p}</span>
-        ),
-      )}
-    </>
-  );
+  return <HighlightedExerciseName text={text} terms={tokens} />;
 }
 
 function youtubeEmbed(url: string | null | undefined): string | null {
@@ -320,7 +289,7 @@ function ExerciseRowCard({
   ex: ExerciseLite;
   reason?: string;
   onSelect: () => void;
-  highlightTokens?: string[];
+  highlightTokens?: readonly string[];
 }) {
   const [playing, setPlaying] = useState(false);
   const meta = [ex.muscle_group, ex.equipment].filter(Boolean).join(" · ");
@@ -439,7 +408,8 @@ export function QuickSwapButton({
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(0);
   const [chip, setChip] = useState<EquipmentChip>("Best Match");
-  const debouncedSearch = useDebounced(search.trim(), 300);
+  // Local ranking — a short debounce is enough to keep typing smooth.
+  const debouncedSearch = useDebounced(search.trim(), 120);
   const qc = useQueryClient();
   const isMember = swapContext?.kind === "member";
   const getImpactFnClient = useServerFn(getSwapImpact);
@@ -461,7 +431,7 @@ export function QuickSwapButton({
 
   useEffect(() => {
     setPage(0);
-  }, [debouncedSearch]);
+  }, [debouncedSearch, chip]);
 
   const {
     data: suggestions = [],
@@ -571,29 +541,39 @@ export function QuickSwapButton({
     [suggestions, chip],
   );
 
-  const { data: searchResults, isFetching: isSearching } = useQuery({
-    queryKey: ["quick-swap-search", debouncedSearch, page, exerciseId],
-    enabled: open && mode === "search" && searchTokens(debouncedSearch).length > 0 && debouncedSearch.length >= 2,
-    staleTime: 60_000,
+  // The searchable pool is fetched once per sheet session and cached, so
+  // keystrokes never hit the network — ranking happens locally and feels
+  // instant on mobile.
+  const { data: searchPool = [], isFetching: isPoolLoading } = useQuery({
+    queryKey: ["exercise-search-pool"],
+    enabled: open && mode === "search",
+    staleTime: 10 * 60_000,
+    gcTime: 30 * 60_000,
     queryFn: async () => {
-      const from = page * PAGE_SIZE;
-      const to = from + PAGE_SIZE - 1;
-      const tokens = searchTokens(debouncedSearch);
-      let q = supabase
+      const { data, error } = await supabase
         .from("exercises")
-        .select(SELECT_COLS, { count: "exact" })
+        .select(SELECT_COLS)
         .eq("archived", false)
         .order("name")
-        .range(from, to);
-      // Each token must appear in the name (order-agnostic). Chaining
-      // .ilike() is an AND at the PostgREST level.
-      for (const t of tokens) q = q.ilike("name", `%${t}%`);
-      if (exerciseId) q = q.neq("id", exerciseId);
-      const { data, error, count } = await q;
+        .limit(5000);
       if (error) throw error;
-      return { rows: (data ?? []) as ExerciseLite[], total: count ?? 0 };
+      return (data ?? []) as ExerciseLite[];
     },
   });
+
+  // Shared ranker: out-of-order tokens, aliases (DB/RDL/tri…), equipment,
+  // muscle, movement pattern and typo tolerance. Equipment chip is applied
+  // after scoring so filters and search combine.
+  const searchOutcome = useMemo(() => {
+    if (debouncedSearch.length < 2) return null;
+    const candidates = searchPool.filter((e) => e.id !== exerciseId);
+    return searchExercises(candidates, debouncedSearch, { limit: 300 });
+  }, [searchPool, debouncedSearch, exerciseId]);
+
+  const searchRows = searchOutcome?.results ?? [];
+  const searchTotal = searchRows.length;
+  const pagedRows = searchRows.slice(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE);
+  const isSearching = isPoolLoading && searchPool.length === 0;
 
   const startSelect = (ex: ExerciseLite) => {
     setPending(ex);
@@ -664,10 +644,7 @@ export function QuickSwapButton({
     },
   });
 
-  const totalPages = useMemo(() => {
-    if (!searchResults) return 1;
-    return Math.max(1, Math.ceil(searchResults.total / PAGE_SIZE));
-  }, [searchResults]);
+  const totalPages = Math.max(1, Math.ceil(searchTotal / PAGE_SIZE));
 
   return (
     <>
@@ -802,19 +779,25 @@ export function QuickSwapButton({
                   <Loader2 className="h-4 w-4 animate-spin" /> Searching…
                 </div>
               )}
-              {debouncedSearch.length >= 2 && !isSearching && (searchResults?.rows.length ?? 0) === 0 && (
+              {debouncedSearch.length >= 2 && !isSearching && searchTotal === 0 && (
                 <p className="text-sm text-muted-foreground">No matches.</p>
               )}
-              {(searchResults?.rows ?? []).map((ex) => (
+              {searchOutcome && !searchOutcome.hasExactMatches && searchTotal > 0 && (
+                <p className="px-1 text-xs text-muted-foreground">
+                  No exact matches. Showing closest results.
+                </p>
+              )}
+              {pagedRows.map(({ exercise: ex, reason }) => (
                 <ExerciseRowCard
                   key={ex.id}
                   ex={ex}
-                  highlightTokens={searchTokens(debouncedSearch)}
+                  reason={reason}
+                  highlightTokens={searchOutcome?.highlightTerms ?? []}
                   onSelect={() => startSelect(ex)}
                 />
               ))}
 
-              {searchResults && searchResults.total > PAGE_SIZE && (
+              {searchTotal > PAGE_SIZE && (
                 <div className="flex items-center justify-between pt-2">
                   <Button
                     size="sm"

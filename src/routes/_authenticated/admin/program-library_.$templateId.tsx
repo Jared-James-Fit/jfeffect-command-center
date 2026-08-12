@@ -17,6 +17,7 @@ import {
   estimateDayMinutes, durationRange, PERCENTAGE_BASES, type TrainingStyle,
 } from "@/lib/pl-programs";
 import { ExerciseLibraryPanel, type ExerciseRef, DND_EXERCISE, readDrop, exerciseAccent, EXERCISE_CARD_COLORS, HighlightedText, usePbDragging, beginPbDrag, endPbDrag } from "@/components/program-builder";
+import { searchExercises, type SearchableExercise } from "@/lib/exercise-search";
 import { derivePurposeLabels, defaultRestSeconds, effectiveRestSeconds, PURPOSE_LABEL_OPTIONS, resolveCategory, purposeLabelBadgeClass } from "@/lib/exercise-metadata";
 import { validateDay } from "@/lib/pl-template-validation";
 import { ProgramBuilderShortcutsButton } from "@/components/program-builder-shortcuts";
@@ -2252,20 +2253,12 @@ function InlineAddExerciseButton({
   const pbDragging = usePbDragging();
   const inputRef = useRef<HTMLInputElement | null>(null);
 
-  const filtered = useMemo(() => {
-    const term = q.trim().toLowerCase();
-    const list = exercises as any[];
-    if (!term) return list.slice(0, 100);
-    return list
-      .filter((e) => {
-        const hay = [e.name, e.muscle_group, e.category, ...(e.tags ?? [])]
-          .filter(Boolean)
-          .join(" ")
-          .toLowerCase();
-        return hay.includes(term);
-      })
-      .slice(0, 200);
-  }, [exercises, q]);
+  const searched = useMemo(
+    () => searchExercises(exercises as SearchableExercise[], q, { limit: q.trim() ? 200 : 100 }),
+    [exercises, q],
+  );
+  const filtered = searched.results.map((r) => r.exercise) as any[];
+  const terms = searched.highlightTerms;
 
   const pick = (exId: string) => {
     onPick(exId);
@@ -2353,6 +2346,11 @@ function InlineAddExerciseButton({
           className="mb-2 h-8 text-xs"
         />
         <div className="max-h-64 overflow-y-auto">
+          {q.trim() && !searched.hasExactMatches && filtered.length > 0 && (
+            <div className="px-2 pb-1 text-[10px] text-muted-foreground">
+              No exact matches. Showing closest results.
+            </div>
+          )}
           {filtered.length === 0 ? (
             <div className="px-2 py-3 text-center text-xs text-muted-foreground">
               No matches
@@ -2369,11 +2367,11 @@ function InlineAddExerciseButton({
                     className="rounded px-2 py-1 text-left hover:bg-muted"
                   >
                     <div className="text-xs">
-                      <HighlightedText text={ex.name} query={q} />
+                      <HighlightedText text={ex.name} terms={terms} />
                     </div>
                     {tagLine && (
                       <div className="text-[10px] text-muted-foreground">
-                        <HighlightedText text={tagLine} query={q} />
+                        <HighlightedText text={tagLine} terms={terms} />
                       </div>
                     )}
                   </button>
@@ -2390,20 +2388,12 @@ function InlineAddExerciseButton({
 function SwapExerciseButton({ row, setRow, exercises }: { row: any; setRow: (r: any) => void; exercises: any[] }) {
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState("");
-  const filtered = useMemo(() => {
-    const term = q.trim().toLowerCase();
-    const list = (exercises as any[]).filter((e) => e.id !== row.exercise_id);
-    if (!term) return list.slice(0, 100);
-    return list
-      .filter((e) => {
-        const hay = [e.name, e.muscle_group, e.category, ...(e.tags ?? [])]
-          .filter(Boolean)
-          .join(" ")
-          .toLowerCase();
-        return hay.includes(term);
-      })
-      .slice(0, 200);
+  const searched = useMemo(() => {
+    const list = (exercises as SearchableExercise[]).filter((e) => e.id !== row.exercise_id);
+    return searchExercises(list, q, { limit: q.trim() ? 200 : 100 });
   }, [exercises, q, row.exercise_id]);
+  const filtered = searched.results.map((r) => r.exercise) as any[];
+  const terms = searched.highlightTerms;
   const pick = (ex: any) => {
     // Preserve every existing input (sets/reps/rpe/rir/load/rest/tempo/notes…)
     // Replace only the exercise identity.
@@ -2429,6 +2419,11 @@ function SwapExerciseButton({ row, setRow, exercises }: { row: any; setRow: (r: 
           className="mb-2 h-8 text-xs"
         />
         <div className="max-h-64 overflow-y-auto">
+          {q.trim() && !searched.hasExactMatches && filtered.length > 0 && (
+            <div className="px-2 pb-1 text-[10px] text-muted-foreground">
+              No exact matches. Showing closest results.
+            </div>
+          )}
           {filtered.length === 0 ? (
             <div className="px-2 py-3 text-center text-xs text-muted-foreground">No matches</div>
           ) : (
@@ -2440,7 +2435,7 @@ function SwapExerciseButton({ row, setRow, exercises }: { row: any; setRow: (r: 
                   onClick={() => pick(ex)}
                   className="rounded px-2 py-1 text-left text-xs hover:bg-muted"
                 >
-                  <HighlightedText text={ex.name} query={q} />
+                  <HighlightedText text={ex.name} terms={terms} />
                 </button>
               ))}
             </div>

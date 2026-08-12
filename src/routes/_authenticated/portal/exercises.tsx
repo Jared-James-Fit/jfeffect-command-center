@@ -9,6 +9,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Search, Play } from "lucide-react";
 import { getExerciseVideoSource } from "@/lib/exercise-video";
 import { useExerciseVideoSetGlobal } from "@/hooks/use-exercise-video-set";
+import { searchExercises, type SearchableExercise } from "@/lib/exercise-search";
+import { HighlightedExerciseName } from "@/components/exercise-search-highlight";
 
 export const Route = createFileRoute("/_authenticated/portal/exercises")({
   component: ExerciseLibrary,
@@ -50,13 +52,17 @@ function ExerciseLibrary() {
     }
   }, [focusId, exercises]);
 
-  const filtered = useMemo(() => {
-    const q = search.toLowerCase();
-    return exercises.filter((e: any) =>
-      (category === "all" || e.category === category) &&
-      (!q || e.name.toLowerCase().includes(q))
-    );
+  // Category filter first, then the shared keyword ranker — so filters and
+  // search always combine, and the best keyword match sorts to the top.
+  const searched = useMemo(() => {
+    const scoped = exercises.filter(
+      (e: any) => category === "all" || e.category === category,
+    ) as unknown as SearchableExercise[];
+    return searchExercises(scoped, search, { limit: 5000 });
   }, [exercises, category, search]);
+  const filtered = searched.results.map((r) => r.exercise) as any[];
+  const highlightTerms = searched.highlightTerms;
+  const showingClosest = search.trim().length > 0 && !searched.hasExactMatches && filtered.length > 0;
 
   // Windowed rendering — only render a slice at a time. Load more on scroll
   // via IntersectionObserver. Keeps the 1700+ exercise library snappy.
@@ -112,6 +118,12 @@ function ExerciseLibrary() {
           </Card>
         )}
 
+        {showingClosest && (
+          <p className="text-xs text-muted-foreground">
+            No exact matches. Showing closest results.
+          </p>
+        )}
+
         <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
           {exercisesLoading
             ? Array.from({ length: 8 }).map((_, i) => (
@@ -131,7 +143,9 @@ function ExerciseLibrary() {
                 <div className="flex items-start gap-3">
                   <div className="grid h-10 w-10 place-items-center rounded-md bg-gradient-primary text-primary-foreground"><Play className="h-4 w-4" /></div>
                   <div className="min-w-0">
-                    <div className="truncate font-bold">{e.name}</div>
+                    <div className="truncate font-bold">
+                      <HighlightedExerciseName text={e.name} terms={highlightTerms} />
+                    </div>
                     <div className="text-xs text-muted-foreground">{e.category}</div>
                   </div>
                 </div>
@@ -139,7 +153,9 @@ function ExerciseLibrary() {
             </button>
           ))}
           {!exercisesLoading && filtered.length === 0 && (
-            <div className="col-span-full rounded-md border border-dashed border-border p-8 text-center text-sm text-muted-foreground">No exercises yet.</div>
+            <div className="col-span-full rounded-md border border-dashed border-border p-8 text-center text-sm text-muted-foreground">
+              {search.trim() ? `No exercises match “${search.trim()}”.` : "No exercises yet."}
+            </div>
           )}
         </div>
         {!exercisesLoading && visibleCount < filtered.length && (

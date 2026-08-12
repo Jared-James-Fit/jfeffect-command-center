@@ -17,6 +17,8 @@ import { updateDay, updateRow, deleteRow } from "@/lib/pl-programs";
 import { syncProgramDaySchedule } from "@/lib/scheduled-workouts.functions";
 import { invalidateScheduleQueries } from "@/lib/schedule-invalidate";
 import { toLocalISO } from "@/lib/today";
+import { searchExercises, type SearchableExercise } from "@/lib/exercise-search";
+import { HighlightedExerciseName } from "@/components/exercise-search-highlight";
 import { cn } from "@/lib/utils";
 
 /* ──────────────────────────────────────────────────────────────────────────
@@ -204,21 +206,33 @@ export function InlineWorkoutEditor({
 
   // ── Exercise search for adding a row ───────────────────────────────────
   const [search, setSearch] = useState("");
-  const { data: searchResults = [] } = useQuery({
-    queryKey: ["inline-workout-editor-ex-search", search],
-    enabled: open && search.trim().length >= 2,
-    staleTime: 30_000,
+  // Pool is loaded once and cached; ranking happens locally with the shared
+  // exercise search engine (aliases, out-of-order words, typo tolerance).
+  const { data: searchPool = [] } = useQuery({
+    queryKey: ["exercise-search-pool-lite"],
+    enabled: open,
+    staleTime: 10 * 60_000,
+    gcTime: 30 * 60_000,
     queryFn: async () => {
       const { data: ex, error } = await supabase
         .from("exercises")
-        .select("id, name")
-        .ilike("name", `%${search.trim()}%`)
+        .select("id, name, category, muscle_group, equipment, tags")
+        .eq("archived", false)
         .order("name", { ascending: true })
-        .limit(8);
+        .limit(5000);
       if (error) throw error;
-      return (ex ?? []) as Array<{ id: string; name: string }>;
+      return (ex ?? []) as SearchableExercise[];
     },
   });
+
+  const searchOutcome = useMemo(
+    () => searchExercises(searchPool, search, { limit: 8 }),
+    [searchPool, search],
+  );
+  const searchResults = searchOutcome.results.map((r) => r.exercise) as Array<{
+    id: string;
+    name: string;
+  }>;
 
   const addExercise = (ex: { id: string; name: string }) => {
     setRows((rs) => [
@@ -506,7 +520,12 @@ export function InlineWorkoutEditor({
                             )}
                           >
                             <Plus className="h-3.5 w-3.5 shrink-0 text-primary" />
-                            <span className="truncate">{ex.name}</span>
+                            <span className="truncate">
+                              <HighlightedExerciseName
+                                text={ex.name}
+                                terms={searchOutcome.highlightTerms}
+                              />
+                            </span>
                           </button>
                         ))
                       )}

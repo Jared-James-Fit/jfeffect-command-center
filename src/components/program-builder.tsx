@@ -9,6 +9,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Search, Star, GripVertical, Check, Loader2, AlertCircle, Circle, Plus, Link as LinkIcon, Unlink, CloudOff, AlertTriangle, ChevronDown } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { QuickAddExerciseDialog } from "@/components/quick-add-exercise-dialog";
+import { searchExercises } from "@/lib/exercise-search";
+import { HighlightedExerciseName } from "@/components/exercise-search-highlight";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 
@@ -603,20 +605,26 @@ export interface ExerciseRef {
 }
 
 /**
- * Splits a string on a search needle (case-insensitive) and wraps every match
- * in a <mark>. Used by the exercise picker / library search to make typed
- * keywords stand out in result rows.
+ * Wraps every matched keyword in a <mark>. Pass `terms` (from
+ * `searchExercises().highlightTerms`) to highlight out-of-order and
+ * alias-expanded matches; `query` remains supported for simple substring
+ * highlighting.
  */
 export function HighlightedText({
   text,
   query,
+  terms,
   className,
 }: {
   text: string;
-  query: string;
+  query?: string;
+  terms?: readonly string[];
   className?: string;
 }) {
-  const needle = query.trim();
+  if (terms && terms.length > 0) {
+    return <HighlightedExerciseName text={text} terms={terms} className={className} />;
+  }
+  const needle = (query ?? "").trim();
   if (!needle) return <span className={className}>{text}</span>;
   const escaped = needle.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   const parts = text.split(new RegExp(`(${escaped})`, "ig"));
@@ -754,19 +762,14 @@ export function ExerciseLibraryPanel({
     };
   }, [collapsed, onToggleCollapse]);
 
-  const filtered = useMemo(() => {
-    let list = exercises;
-    if (filter) list = list.filter((e) => exerciseMatchesFilter(e, filter));
-    if (q.trim()) {
-      const needle = q.toLowerCase();
-      list = list.filter((e) =>
-        e.name.toLowerCase().includes(needle) ||
-        (e.muscle_group ?? "").toLowerCase().includes(needle) ||
-        (e.tags ?? []).some((t) => t.toLowerCase().includes(needle))
-      );
-    }
-    return list.slice(0, 200);
+  // Quick-filter chip first, then the shared keyword ranker.
+  const searched = useMemo(() => {
+    const list = filter ? exercises.filter((e) => exerciseMatchesFilter(e, filter)) : exercises;
+    return searchExercises(list, q, { limit: 200 });
   }, [exercises, q, filter]);
+  const filtered = searched.results.map((r) => r.exercise);
+  const highlightTerms = searched.highlightTerms;
+  const showingClosest = q.trim().length > 0 && !searched.hasExactMatches && filtered.length > 0;
 
   const recent = useMemo(() => {
     const map = new Map(exercises.map((e) => [e.id, e]));
@@ -874,18 +877,23 @@ export function ExerciseLibraryPanel({
         {favList.length > 0 && !q && !filter && (
           <Section label="Favorites">
             {favList.map((e) => (
-              <ExerciseItem key={e.id} ex={e} fav onFav={toggleFav} onPick={onPick} query="" />
+              <ExerciseItem key={e.id} ex={e} fav onFav={toggleFav} onPick={onPick} />
             ))}
           </Section>
         )}
         {recent.length > 0 && !q && !filter && (
           <Section label="Recent">
             {recent.map((e) => (
-              <ExerciseItem key={e.id} ex={e} fav={favs.has(e.id)} onFav={toggleFav} onPick={onPick} query="" />
+              <ExerciseItem key={e.id} ex={e} fav={favs.has(e.id)} onFav={toggleFav} onPick={onPick} />
             ))}
           </Section>
         )}
         <Section label={q || filter ? "Results" : "Library"}>
+          {showingClosest && (
+            <div className="px-2 pb-1 text-[10px] text-muted-foreground">
+              No exact matches. Showing closest results.
+            </div>
+          )}
           {filtered.length === 0 ? (
             <div className="space-y-2 p-3 text-center text-[11px] text-muted-foreground">
               <div>No exercises{q ? <> matching “{q}”</> : null}.</div>
@@ -902,7 +910,7 @@ export function ExerciseLibraryPanel({
             </div>
           ) : (
             filtered.map((e) => (
-              <ExerciseItem key={e.id} ex={e} fav={favs.has(e.id)} onFav={toggleFav} onPick={onPick} onQuickAdd={onQuickAdd} query={q} />
+              <ExerciseItem key={e.id} ex={e} fav={favs.has(e.id)} onFav={toggleFav} onPick={onPick} onQuickAdd={onQuickAdd} terms={highlightTerms} />
             ))
           )}
         </Section>
@@ -942,6 +950,7 @@ function ExerciseItem({
   onPick,
   onQuickAdd,
   query = "",
+  terms,
 }: {
   ex: ExerciseRef;
   fav?: boolean;
@@ -949,6 +958,7 @@ function ExerciseItem({
   onPick?: (id: string) => void;
   onQuickAdd?: (id: string) => void;
   query?: string;
+  terms?: readonly string[];
 }) {
   const tagLine = [ex.muscle_group, ex.category].filter(Boolean).join(" · ");
   const [dragging, setDragging] = useState(false);
@@ -974,11 +984,11 @@ function ExerciseItem({
       <GripVertical className="h-3 w-3 shrink-0 text-muted-foreground/60" />
       <div className="min-w-0 flex-1">
         <div className="truncate text-xs">
-          <HighlightedText text={ex.name} query={query} />
+          <HighlightedText text={ex.name} query={query} terms={terms} />
         </div>
         {tagLine && (
           <div className="truncate text-[10px] text-muted-foreground">
-            <HighlightedText text={tagLine} query={query} />
+            <HighlightedText text={tagLine} query={query} terms={terms} />
           </div>
         )}
       </div>

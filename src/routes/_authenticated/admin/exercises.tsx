@@ -1,6 +1,8 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { searchExercises, type SearchableExercise } from "@/lib/exercise-search";
+import { HighlightedExerciseName } from "@/components/exercise-search-highlight";
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/app-shell";
 import { Card } from "@/components/ui/card";
@@ -72,9 +74,8 @@ export function ExercisesAdmin({ embedded = false }: { embedded?: boolean } = {}
     },
   });
 
-  const filtered = exercises.filter((e) => {
+  const preFiltered = exercises.filter((e) => {
     if (category !== "all" && e.category !== category) return false;
-    if (search && !e.name.toLowerCase().includes(search.toLowerCase())) return false;
     if (muscleFilter !== "all") {
       const mg = (e as any).primary_muscle_group ?? "Other";
       if (mg !== muscleFilter) return false;
@@ -98,6 +99,17 @@ export function ExercisesAdmin({ embedded = false }: { embedded?: boolean } = {}
     }
     return e.video_migration_status === migration;
   });
+
+  // Keyword search runs after the structured filters so filters + search
+  // always combine. Shared helper → same behaviour as the client library,
+  // the swap picker and the program builder.
+  const searched = useMemo(
+    () => searchExercises(preFiltered as unknown as SearchableExercise[], search, { limit: 5000 }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [preFiltered.length, search, category, migration, muscleFilter, exercises],
+  );
+  const filtered = searched.results.map((r) => r.exercise) as unknown as typeof exercises;
+  const highlightTerms = searched.highlightTerms;
 
   const stillYouTubeCount = exercises.filter(
     (e) =>
@@ -227,7 +239,9 @@ export function ExercisesAdmin({ embedded = false }: { embedded?: boolean } = {}
             <Card key={e.id} className="border-border bg-card p-4 space-y-2">
               <div className="flex items-start justify-between">
                 <div>
-                  <div className="font-bold">{e.name}</div>
+                  <div className="font-bold">
+                    <HighlightedExerciseName text={e.name} terms={highlightTerms} />
+                  </div>
                   <div className="text-xs text-muted-foreground">
                     {e.category} · <span className={(e as any).needs_muscle_review ? "text-amber-500 font-semibold" : "text-primary font-semibold"}>{(e as any).primary_muscle_group ?? "—"}</span>
                     {(e as any).needs_muscle_review && <span className="ml-1 text-amber-500">⚠ review</span>}
