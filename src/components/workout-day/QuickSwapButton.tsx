@@ -26,6 +26,7 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import { applySwap, getSwapImpact } from "@/lib/quick-swap.functions";
+import { searchExercises } from "@/lib/exercise-search";
 import {
   applyMemberSwap,
   getMemberSwapImpact,
@@ -676,10 +677,7 @@ export function QuickSwapButton({
     },
   });
 
-  const totalPages = useMemo(() => {
-    if (!searchResults) return 1;
-    return Math.max(1, Math.ceil(searchResults.total / PAGE_SIZE));
-  }, [searchResults]);
+  const totalPages = Math.max(1, Math.ceil(searchTotal / PAGE_SIZE));
 
   return (
     <>
