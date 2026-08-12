@@ -812,19 +812,29 @@ export function QuickSwapButton({
                   <Loader2 className="h-4 w-4 animate-spin" /> Searching…
                 </div>
               )}
-              {debouncedSearch.length >= 2 && !isSearching && (searchResults?.rows.length ?? 0) === 0 && (
-                <p className="text-sm text-muted-foreground">No matches.</p>
+              {debouncedSearch.length >= 2 && !isSearching && searchTotal === 0 && (
+                <p className="text-sm text-muted-foreground">
+                  {chip !== "Best Match"
+                    ? `No matches for "${debouncedSearch}" with the "${chip}" filter. Try another filter.`
+                    : "No matches."}
+                </p>
               )}
-              {(searchResults?.rows ?? []).map((ex) => (
+              {searchOutcome && !searchOutcome.hasExactMatches && searchTotal > 0 && (
+                <p className="px-1 text-xs text-muted-foreground">
+                  No exact matches. Showing closest results.
+                </p>
+              )}
+              {pagedRows.map(({ exercise: ex, reason }) => (
                 <ExerciseRowCard
                   key={ex.id}
                   ex={ex}
-                  highlightTokens={searchTokens(debouncedSearch)}
+                  reason={reason}
+                  highlightTokens={searchOutcome?.highlightTerms ?? []}
                   onSelect={() => startSelect(ex)}
                 />
               ))}
 
-              {searchResults && searchResults.total > PAGE_SIZE && (
+              {searchTotal > PAGE_SIZE && (
                 <div className="flex items-center justify-between pt-2">
                   <Button
                     size="sm"
