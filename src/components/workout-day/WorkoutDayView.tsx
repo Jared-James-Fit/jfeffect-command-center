@@ -3901,34 +3901,23 @@ function SetRow({
         />
       )}
       {!isTime && !hideWeight && (
-      <Input
-        className={cn(
-          focusMode ? "h-9 text-base px-2" : "h-8 text-sm px-2",
-          load === "" || load == null
-            ? "border-blue-500/40 bg-blue-500/10 text-foreground"
-            : "border-border/60 bg-muted/40 text-muted-foreground",
-        )}
-        inputMode="decimal"
-        type="text"
-        pattern="[0-9]*\.?[0-9]*"
-        placeholder={unit}
-        aria-label={`Set ${setIndex} weight in ${unit}`}
+      <WeightValueInput
         value={load}
-        onChange={(e) => setLoad(e.target.value.replace(/[^0-9.]/g, ""))}
-        onFocus={() => {
-          setFocusedField("load");
-          // Set guard on focus too — prevents window-focus refetches from
-          // overwriting the value while the user is actively typing weight.
+        isBodyweight={bw}
+        unit={unit}
+        ariaLabel={`Set ${setIndex} weight in ${unit}`}
+        disabled={readonly}
+        focusMode={focusMode}
+        onPick={({ load: nextLoad, bodyweight }) => {
+          // Guard against a window-focus refetch clobbering the pick.
           recentlySavedRef.current = true;
           if (recentlySavedTimerRef.current) clearTimeout(recentlySavedTimerRef.current);
           recentlySavedTimerRef.current = setTimeout(() => { recentlySavedRef.current = false; }, 8000);
-        }}
-        onKeyDown={onEnter}
-        onBlur={() => {
+          setBw(bodyweight);
+          setLoad(bodyweight ? "0" : nextLoad);
+          setFocusedField(null);
           flushSaveAfterEdit();
         }}
-        readOnly={readonly}
-        disabled={readonly}
       />
       )}
       <div className="flex items-center justify-end gap-1">
