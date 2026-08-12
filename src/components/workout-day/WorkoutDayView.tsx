@@ -3670,7 +3670,12 @@ function SetRow({
     reps,
     durationSeconds: (existing as any)?.completed_duration_seconds ?? null,
   });
-  const isConfirmed = (Boolean(existing?.completed_at) && hasLoggedValue) || (!readonly && liveComplete);
+  // Optimistic green: only while the row's own save for those values is still
+  // in flight. Once it lands, `existing.completed_at` carries the state — and a
+  // manual "mark incomplete" tap (no pending save) is never overridden.
+  const liveOptimistic =
+    !readonly && liveComplete && (save.hasPending() || save.state === "saving");
+  const isConfirmed = (Boolean(existing?.completed_at) && hasLoggedValue) || liveOptimistic;
   // hasAnyEntry only counts weight (the field the client must enter) and
   // manually-edited reps/RPE. Pre-filled prescription values do NOT count
   // as draft data — otherwise every unlogged set shows the amber border.
