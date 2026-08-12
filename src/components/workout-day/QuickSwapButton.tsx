@@ -27,6 +27,7 @@ import {
 } from "@/components/ui/sheet";
 import { applySwap, getSwapImpact } from "@/lib/quick-swap.functions";
 import { searchExercises } from "@/lib/exercise-search";
+import { HighlightedExerciseName } from "@/components/exercise-search-highlight";
 import {
   applyMemberSwap,
   getMemberSwapImpact,
@@ -429,7 +430,7 @@ export function QuickSwapButton({
 
   useEffect(() => {
     setPage(0);
-  }, [debouncedSearch]);
+  }, [debouncedSearch, chip]);
 
   const {
     data: suggestions = [],
