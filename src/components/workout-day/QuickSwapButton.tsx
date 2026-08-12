@@ -571,29 +571,41 @@ export function QuickSwapButton({
     [suggestions, chip],
   );
 
-  const { data: searchResults, isFetching: isSearching } = useQuery({
-    queryKey: ["quick-swap-search", debouncedSearch, page, exerciseId],
-    enabled: open && mode === "search" && searchTokens(debouncedSearch).length > 0 && debouncedSearch.length >= 2,
-    staleTime: 60_000,
+  // The searchable pool is fetched once per sheet session and cached, so
+  // keystrokes never hit the network — ranking happens locally and feels
+  // instant on mobile.
+  const { data: searchPool = [], isFetching: isPoolLoading } = useQuery({
+    queryKey: ["exercise-search-pool"],
+    enabled: open && mode === "search",
+    staleTime: 10 * 60_000,
+    gcTime: 30 * 60_000,
     queryFn: async () => {
-      const from = page * PAGE_SIZE;
-      const to = from + PAGE_SIZE - 1;
-      const tokens = searchTokens(debouncedSearch);
-      let q = supabase
+      const { data, error } = await supabase
         .from("exercises")
-        .select(SELECT_COLS, { count: "exact" })
+        .select(SELECT_COLS)
         .eq("archived", false)
         .order("name")
-        .range(from, to);
-      // Each token must appear in the name (order-agnostic). Chaining
-      // .ilike() is an AND at the PostgREST level.
-      for (const t of tokens) q = q.ilike("name", `%${t}%`);
-      if (exerciseId) q = q.neq("id", exerciseId);
-      const { data, error, count } = await q;
+        .limit(5000);
       if (error) throw error;
-      return { rows: (data ?? []) as ExerciseLite[], total: count ?? 0 };
+      return (data ?? []) as ExerciseLite[];
     },
   });
+
+  // Shared ranker: out-of-order tokens, aliases (DB/RDL/tri…), equipment,
+  // muscle, movement pattern and typo tolerance. Equipment chip is applied
+  // after scoring so filters and search combine.
+  const searchOutcome = useMemo(() => {
+    if (debouncedSearch.length < 2) return null;
+    const candidates = searchPool.filter((e) => e.id !== exerciseId);
+    const outcome = searchExercises(candidates, debouncedSearch, { limit: 300 });
+    const filteredResults = outcome.results.filter((r) => matchesChip(chip, r.exercise.equipment));
+    return { ...outcome, filteredResults };
+  }, [searchPool, debouncedSearch, exerciseId, chip]);
+
+  const searchRows = searchOutcome?.filteredResults ?? [];
+  const searchTotal = searchRows.length;
+  const pagedRows = searchRows.slice(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE);
+  const isSearching = isPoolLoading && searchPool.length === 0;
 
   const startSelect = (ex: ExerciseLite) => {
     setPending(ex);
