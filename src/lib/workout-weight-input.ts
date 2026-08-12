@@ -61,12 +61,12 @@ export type WeightValidation =
 /** Validate a typed weight. Rejects letters, negatives and absurd values. */
 export function validateTypedWeight(raw: string, unit: WUnit): WeightValidation {
   const trimmed = String(raw ?? "").trim();
-  if (!trimmed) return { ok: false, error: "Enter a valid weight or choose BW." };
-  if (!/^\d*\.?\d+$/.test(trimmed)) return { ok: false, error: "Enter a valid weight or choose BW." };
+  if (!trimmed) return { ok: false, error: "Enter a valid weight or choose Bodyweight." };
+  if (!/^\d*\.?\d+$/.test(trimmed)) return { ok: false, error: "Enter a valid weight or choose Bodyweight." };
   const value = Number(trimmed);
-  if (!Number.isFinite(value) || value < 0) return { ok: false, error: "Enter a valid weight or choose BW." };
+  if (!Number.isFinite(value) || value < 0) return { ok: false, error: "Enter a valid weight or choose Bodyweight." };
   // Hard absurdity guard — 10× the soft cap is never a real lift.
-  if (value > WEIGHT_CAP[unit] * 10) return { ok: false, error: "Enter a valid weight or choose BW." };
+  if (value > WEIGHT_CAP[unit] * 10) return { ok: false, error: "Enter a valid weight or choose Bodyweight." };
   return { ok: true, value, aboveCap: value > WEIGHT_CAP[unit] };
 }
 
@@ -92,6 +92,6 @@ export function saveWeightInputMode(mode: WeightInputMode): void {
  * column header, so an empty cell shows a placeholder rather than "kg"/"lb".
  */
 export function formatWeightDisplay(load: string, isBodyweight: boolean, _unit: WUnit): string {
-  if (isBodyweight) return "BW";
+  if (isBodyweight) return "Bodyweight";
   return load || "Select";
 }

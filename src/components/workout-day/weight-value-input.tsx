@@ -15,16 +15,14 @@ import {
   type WUnit,
 } from "@/lib/workout-weight-input";
 
-const ROW_H = 40; // px per wheel row
-const PAD_ROWS = 2; // rows of padding so the first/last item can centre
-
-type PickerItem = { key: string; label: string; bw: boolean; value: number | null };
+const ITEM_W = 72; // px per horizontal wheel cell
 
 /**
- * Compact iOS-style weight picker for the set logger. Tapping the cell opens a
- * scroll wheel (BW → 0 → unit jumps) with a highlighted centre band, plus a
- * Type mode for exact entry. Mobile renders it as a bottom sheet, desktop as a
- * compact popover. Layout of the workout card itself is untouched.
+ * Compact weight picker for the set logger. Tapping the cell opens a fast
+ * horizontal wheel (native momentum, JS snap once it settles) with a quick
+ * Bodyweight button above it, plus a Type mode for exact entry. Mobile renders
+ * it as a bottom sheet, desktop as a compact popover. Layout of the workout
+ * card itself is untouched.
  */
 export function WeightValueInput({
   value,
@@ -65,7 +63,7 @@ export function WeightValueInput({
   }, []);
 
   const numeric = value !== "" && Number.isFinite(Number(value)) ? Number(value) : null;
-  const shown = isBodyweight ? "BW" : (value || "Select");
+  const shown = isBodyweight ? "Bodyweight" : (value || "Select");
   const isEmpty = !isBodyweight && value === "";
 
   const startTarget = useMemo(
@@ -76,45 +74,52 @@ export function WeightValueInput({
     () => weightPickerValues(unit, Math.max(numeric ?? 0, referenceWeight ?? 0)),
     [unit, numeric, referenceWeight],
   );
-  const items = useMemo<PickerItem[]>(
-    () => [
-      { key: "bw", label: "BW", bw: true, value: null },
-      ...numbers.map((v) => ({ key: String(v), label: String(v), bw: false, value: v })),
-    ],
-    [numbers],
-  );
-  /** Index the wheel should land on when opened. */
+  /** Numeric index the wheel should land on when opened. */
   const initialIndex = useMemo(() => {
-    if (isBodyweight) return 0;
-    if (startTarget == null) return 1; // "0" row
-    return 1 + nearestWeightIndex(numbers, startTarget);
-  }, [isBodyweight, startTarget, numbers]);
+    if (startTarget == null) return nearestWeightIndex(numbers, numeric ?? 0);
+    return nearestWeightIndex(numbers, startTarget);
+  }, [startTarget, numbers, numeric]);
 
   const [activeIndex, setActiveIndex] = useState(initialIndex);
+  const [bwSelected, setBwSelected] = useState(isBodyweight);
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const settleRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const programmaticRef = useRef(false);
 
   const scrollToIndex = useCallback((idx: number, smooth = false) => {
     const el = scrollRef.current;
     if (!el) return;
-    el.scrollTo({ top: idx * ROW_H, behavior: smooth ? "smooth" : "auto" });
+    programmaticRef.current = true;
+    el.scrollTo({ left: idx * ITEM_W, behavior: smooth ? "smooth" : "auto" });
+    window.setTimeout(() => { programmaticRef.current = false; }, smooth ? 400 : 80);
   }, []);
 
-  // Position the wheel on the smart start row every time it opens.
+  // Position the wheel on the smart start value every time it opens.
   useLayoutEffect(() => {
     if (!open || mode !== "picker") return;
     setActiveIndex(initialIndex);
+    setBwSelected(isBodyweight);
     const id = requestAnimationFrame(() => scrollToIndex(initialIndex));
     return () => cancelAnimationFrame(id);
-  }, [open, mode, initialIndex, scrollToIndex]);
+  }, [open, mode, initialIndex, isBodyweight, scrollToIndex]);
 
+  /**
+   * Native momentum runs untouched (no CSS snap, no scrollIntoView mid-drag);
+   * we only read the index and snap once the scroll has settled.
+   */
   const onScroll = () => {
     const el = scrollRef.current;
     if (!el) return;
-    const idx = Math.max(0, Math.min(items.length - 1, Math.round(el.scrollTop / ROW_H)));
-    setActiveIndex(idx);
+    const idx = Math.max(0, Math.min(numbers.length - 1, Math.round(el.scrollLeft / ITEM_W)));
+    setActiveIndex((prev) => (prev === idx ? prev : idx));
+    if (!programmaticRef.current && bwSelected) setBwSelected(false);
     if (settleRef.current) clearTimeout(settleRef.current);
-    settleRef.current = setTimeout(() => setActiveIndex(idx), 60);
+    settleRef.current = setTimeout(() => {
+      if (programmaticRef.current) return;
+      const settled = Math.max(0, Math.min(numbers.length - 1, Math.round(el.scrollLeft / ITEM_W)));
+      setActiveIndex(settled);
+      if (Math.abs(el.scrollLeft - settled * ITEM_W) > 1) scrollToIndex(settled, true);
+    }, 140);
   };
 
   const reset = () => { setTyped(""); setError(null); setConfirmValue(null); };
@@ -126,9 +131,10 @@ export function WeightValueInput({
   };
 
   const confirmWheel = () => {
-    const item = items[activeIndex];
-    if (!item) { setOpen(false); return; }
-    commit(item.bw ? { load: "0", bodyweight: true } : { load: String(item.value), bodyweight: false });
+    if (bwSelected) { commit({ load: "0", bodyweight: true }); return; }
+    const v = numbers[activeIndex];
+    if (v == null) { setOpen(false); return; }
+    commit({ load: String(v), bodyweight: false });
   };
 
   const submitTyped = () => {
@@ -165,43 +171,56 @@ export function WeightValueInput({
 
       {mode === "picker" ? (
         <>
-          <div className="relative">
+          <button
+            type="button"
+            onClick={() => setBwSelected(true)}
+            aria-pressed={bwSelected}
+            className={cn(
+              "h-10 w-full rounded-lg border text-xs font-bold transition-colors",
+              bwSelected
+                ? "border-primary bg-primary text-primary-foreground"
+                : "border-border/60 text-foreground hover:bg-muted/60",
+            )}
+          >
+            Bodyweight
+          </button>
+
+          <div className={cn("relative", bwSelected && "opacity-45")}>
             {/* centre selection band */}
             <div
               aria-hidden
-              className="pointer-events-none absolute inset-x-1 top-1/2 z-10 -translate-y-1/2 rounded-lg border border-primary/60 bg-primary/5"
-              style={{ height: ROW_H }}
+              className="pointer-events-none absolute inset-y-1 left-1/2 z-10 -translate-x-1/2 rounded-lg border border-primary/60 bg-primary/5"
+              style={{ width: ITEM_W }}
             />
             <div
               ref={scrollRef}
               onScroll={onScroll}
               role="listbox"
               aria-label={`Weight in ${unit}`}
-              className="relative h-[200px] snap-y snap-mandatory overflow-y-auto overscroll-contain scroll-smooth [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+              className="relative flex h-[64px] items-center overflow-x-auto overflow-y-hidden overscroll-x-contain [-webkit-overflow-scrolling:touch] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
             >
-              <div style={{ height: ROW_H * PAD_ROWS }} />
-              {items.map((it, i) => {
-                const active = i === activeIndex;
+              <div className="shrink-0" style={{ width: `calc(50% - ${ITEM_W / 2}px)` }} />
+              {numbers.map((v, i) => {
+                const active = !bwSelected && i === activeIndex;
                 return (
-                  <button
-                    key={it.key}
-                    type="button"
+                  <div
+                    key={v}
                     role="option"
                     aria-selected={active}
-                    onClick={() => { setActiveIndex(i); scrollToIndex(i, true); }}
+                    onClick={() => { setBwSelected(false); setActiveIndex(i); scrollToIndex(i, true); }}
                     className={cn(
-                      "flex w-full snap-center items-center justify-center tabular-nums transition-all",
+                      "flex h-full shrink-0 cursor-pointer select-none items-center justify-center tabular-nums",
                       active
                         ? "text-lg font-bold text-foreground"
                         : "text-sm font-medium text-muted-foreground/70",
                     )}
-                    style={{ height: ROW_H }}
+                    style={{ width: ITEM_W }}
                   >
-                    {it.label}
-                  </button>
+                    {v}
+                  </div>
                 );
               })}
-              <div style={{ height: ROW_H * PAD_ROWS }} />
+              <div className="shrink-0" style={{ width: `calc(50% - ${ITEM_W / 2}px)` }} />
             </div>
           </div>
 
@@ -271,7 +290,7 @@ export function WeightValueInput({
             onClick={() => commit({ load: "0", bodyweight: true })}
             className="h-9 w-full rounded-lg border border-border/60 text-xs font-bold text-foreground hover:bg-muted/60"
           >
-            Use BW · Bodyweight
+            Bodyweight
           </button>
         </form>
       )}
@@ -298,6 +317,7 @@ export function WeightValueInput({
       className={cn(
         "flex w-full items-center justify-center whitespace-nowrap rounded-md border px-2 text-sm font-medium transition-colors",
         focusMode ? "h-9 text-base" : "h-8",
+        isBodyweight && "text-[10px] font-semibold uppercase tracking-tight",
         isEmpty
           ? "border-blue-500/40 bg-blue-500/10 text-muted-foreground"
           : "border-border/60 bg-muted/40 text-foreground",
