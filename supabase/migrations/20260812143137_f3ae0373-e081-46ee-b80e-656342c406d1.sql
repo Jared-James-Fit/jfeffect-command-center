@@ -1,0 +1,2 @@
+ALTER TABLE public.pl_row_results ADD COLUMN IF NOT EXISTS is_bodyweight boolean NOT NULL DEFAULT false;
+ALTER TABLE public.member_set_logs ADD COLUMN IF NOT EXISTS is_bodyweight boolean NOT NULL DEFAULT false;
