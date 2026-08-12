@@ -961,7 +961,43 @@ export function recentPRs(results: any[], days = 30) {
       prs.push({ ...r, prior_est: priorMax, delta: r.est_1rm - priorMax });
     }
   }
+  prs.push(...recentAssistedPRs(results, days));
   return prs.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+}
+
+/**
+ * Assisted-machine PRs. Direction is INVERTED: less assistance = better.
+ * A PR is a set with lower assistance than any prior set of the same exercise
+ * at the same or more reps. `delta` is the assistance REMOVED (positive lb).
+ */
+export function recentAssistedPRs(results: any[], days = 30) {
+  const cutoff = Date.now() - days * 86400000;
+  const assisted = results.filter((r) => r.load_type === "assisted" && (r.assist_lb ?? 0) > 0 && r.date);
+  const byEx = new Map<string, any[]>();
+  for (const r of assisted) {
+    const k = exerciseIdentityKey(r);
+    if (!byEx.has(k)) byEx.set(k, []);
+    byEx.get(k)!.push(r);
+  }
+  const prs: any[] = [];
+  for (const r of assisted) {
+    if (new Date(r.date).getTime() < cutoff) continue;
+    const history = (byEx.get(exerciseIdentityKey(r)) ?? []).filter(
+      (h) => new Date(h.date).getTime() < new Date(r.date).getTime() && (h.reps ?? 0) >= (r.reps ?? 0),
+    );
+    if (history.length === 0) continue;
+    const priorMin = history.reduce((m, h) => Math.min(m, h.assist_lb), Infinity);
+    if (!Number.isFinite(priorMin) || r.assist_lb >= priorMin) continue;
+    prs.push({
+      ...r,
+      assisted: true,
+      prior_assist: priorMin,
+      assist: r.assist_lb,
+      prior_est: priorMin,
+      delta: priorMin - r.assist_lb,
+    });
+  }
+  return prs;
 }
 
 /** Active prep for client (most recent Active, then Planned). */
