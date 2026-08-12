@@ -15,7 +15,6 @@ import { Route as AccountDeletionRouteImport } from './routes/account-deletion'
 import { Route as AppRouteImport } from './routes/app'
 import { Route as ApplyRouteImport } from './routes/apply'
 import { Route as AuthRouteImport } from './routes/auth'
-import { Route as BwVerifyRouteImport } from './routes/bw-verify'
 import { Route as DeleteAccountRouteImport } from './routes/delete-account'
 import { Route as InstallRouteImport } from './routes/install'
 import { Route as JoinRouteImport } from './routes/join'
@@ -316,11 +315,6 @@ const ApplyRoute = ApplyRouteImport.update({
 const AuthRoute = AuthRouteImport.update({
   id: '/auth',
   path: '/auth',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const BwVerifyRoute = BwVerifyRouteImport.update({
-  id: '/bw-verify',
-  path: '/bw-verify',
   getParentRoute: () => rootRouteImport,
 } as any)
 const DeleteAccountRoute = DeleteAccountRouteImport.update({
@@ -1904,7 +1898,6 @@ export interface FileRoutesByFullPath {
   '/app': typeof AppRoute
   '/apply': typeof ApplyRoute
   '/auth': typeof AuthRoute
-  '/bw-verify': typeof BwVerifyRoute
   '/delete-account': typeof DeleteAccountRoute
   '/install': typeof InstallRoute
   '/join': typeof JoinRoute
@@ -2184,7 +2177,6 @@ export interface FileRoutesByTo {
   '/app': typeof AppRoute
   '/apply': typeof ApplyRoute
   '/auth': typeof AuthRoute
-  '/bw-verify': typeof BwVerifyRoute
   '/delete-account': typeof DeleteAccountRoute
   '/install': typeof InstallRoute
   '/join': typeof JoinRoute
@@ -2461,7 +2453,6 @@ export interface FileRoutesById {
   '/app': typeof AppRoute
   '/apply': typeof ApplyRoute
   '/auth': typeof AuthRoute
-  '/bw-verify': typeof BwVerifyRoute
   '/delete-account': typeof DeleteAccountRoute
   '/install': typeof InstallRoute
   '/join': typeof JoinRoute
@@ -2743,7 +2734,6 @@ export interface FileRouteTypes {
     | '/app'
     | '/apply'
     | '/auth'
-    | '/bw-verify'
     | '/delete-account'
     | '/install'
     | '/join'
@@ -3023,7 +3013,6 @@ export interface FileRouteTypes {
     | '/app'
     | '/apply'
     | '/auth'
-    | '/bw-verify'
     | '/delete-account'
     | '/install'
     | '/join'
@@ -3299,7 +3288,6 @@ export interface FileRouteTypes {
     | '/app'
     | '/apply'
     | '/auth'
-    | '/bw-verify'
     | '/delete-account'
     | '/install'
     | '/join'
@@ -3581,7 +3569,6 @@ export interface RootRouteChildren {
   AppRoute: typeof AppRoute
   ApplyRoute: typeof ApplyRoute
   AuthRoute: typeof AuthRoute
-  BwVerifyRoute: typeof BwVerifyRoute
   DeleteAccountRoute: typeof DeleteAccountRoute
   InstallRoute: typeof InstallRoute
   JoinRoute: typeof JoinRoute
@@ -3674,13 +3661,6 @@ declare module '@tanstack/react-router' {
       path: '/auth'
       fullPath: '/auth'
       preLoaderRoute: typeof AuthRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/bw-verify': {
-      id: '/bw-verify'
-      path: '/bw-verify'
-      fullPath: '/bw-verify'
-      preLoaderRoute: typeof BwVerifyRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/delete-account': {
@@ -6351,7 +6331,6 @@ const rootRouteChildren: RootRouteChildren = {
   AppRoute: AppRoute,
   ApplyRoute: ApplyRoute,
   AuthRoute: AuthRoute,
-  BwVerifyRoute: BwVerifyRoute,
   DeleteAccountRoute: DeleteAccountRoute,
   InstallRoute: InstallRoute,
   JoinRoute: JoinRoute,
