@@ -71,6 +71,7 @@ import {
   type PreviousLiftLog,
 } from "@/lib/workout-previous-lift";
 import { computeRepMaxBests, detectSetPR } from "@/lib/workout-pr";
+import { WeightValueInput } from "@/components/workout-day/weight-value-input";
 import {
   parseRepQuickTarget,
   parseEffortQuickTarget,
@@ -2338,7 +2339,10 @@ function ExerciseNotesBlock({ notes }: { notes: string }) {
  */
 function PreviousLiftChip({ data, displayUnit, className }: { data: PreviousLift | null; displayUnit: "kg" | "lb"; className?: string }) {
   if (!data) return null;
-  const loadStr = formatPreviousLiftLoad(data, displayUnit) ?? "";
+  // A 0-load logged set is a bodyweight set — surface it as "BW × reps".
+  const loadStr =
+    formatPreviousLiftLoad(data, displayUnit) ??
+    (data.enteredValue === 0 || data.normalizedLb === 0 ? "BW" : "");
   const repsStr = data.reps != null ? ` × ${data.reps}` : "";
   if (!loadStr && !repsStr) return null;
   let when = "";
@@ -3908,7 +3912,7 @@ function SetRow({
         ariaLabel={`Set ${setIndex} weight in ${unit}`}
         disabled={readonly}
         focusMode={focusMode}
-        onPick={({ load: nextLoad, bodyweight }) => {
+        onPick={({ load: nextLoad, bodyweight }: { load: string; bodyweight: boolean }) => {
           // Guard against a window-focus refetch clobbering the pick.
           recentlySavedRef.current = true;
           if (recentlySavedTimerRef.current) clearTimeout(recentlySavedTimerRef.current);
@@ -3916,7 +3920,6 @@ function SetRow({
           setBw(bodyweight);
           setLoad(bodyweight ? "0" : nextLoad);
           setFocusedField(null);
-          flushSaveAfterEdit();
         }}
       />
       )}
