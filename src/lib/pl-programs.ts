@@ -818,7 +818,7 @@ export async function getClientResults(
   }
   const { data, error } = await sb
     .from("pl_row_results")
-    .select("id, set_index, actual_load, actual_load_unit, entered_value, entered_unit, normalized_lb, normalized_kg, actual_reps, actual_rpe, actual_rir, is_bodyweight, notes, completed_at, completed_duration_seconds, row_id, pl_exercise_rows(exercise_id, exercise_name_override, day_id, purpose_label, movement_family, exercises(name, muscle_group, primary_muscle_group, category))")
+    .select("id, set_index, actual_load, actual_load_unit, entered_value, entered_unit, normalized_lb, normalized_kg, actual_reps, actual_rpe, actual_rir, is_bodyweight, load_type, notes, completed_at, completed_duration_seconds, row_id, pl_exercise_rows(exercise_id, exercise_name_override, day_id, purpose_label, movement_family, exercises(name, muscle_group, primary_muscle_group, category))")
     .eq("client_id", clientId)
     .not("actual_reps", "is", null)
     .order("completed_at", { ascending: true });
@@ -846,19 +846,32 @@ export async function getClientResults(
         const n = Number(rawVal) || 0;
         loadLb = rawUnit === "kg" ? n * LB_PER_KG : n;
       }
-      const isBodyweight = r.is_bodyweight === true;
+      const loadType: "external" | "bodyweight" | "assisted" =
+        r.load_type === "assisted" || r.load_type === "bodyweight" || r.load_type === "external"
+          ? r.load_type
+          : r.is_bodyweight === true
+            ? "bodyweight"
+            : "external";
+      const isBodyweight = loadType === "bodyweight";
+      const isAssisted = loadType === "assisted";
       // A set carries external load only when a positive load was logged.
       // Bodyweight (and legacy zero-load) sets are still real, completed sets:
       // they must survive into set counts, reps, adherence and frequency, but
       // they must never produce a 0 lb "PR" or fake tonnage.
-      const hasLoad = loadLb > 0;
+      // Assisted sets carry a POSITIVE assistance number, not external load.
+      // They count as real sets/reps/volume-by-muscle, but must never inflate
+      // "Weight Lifted" tonnage or produce external-load PRs.
+      const hasLoad = loadLb > 0 && !isAssisted;
       return {
         id: r.id,
         set_index: r.set_index,
         // `load` is now ALWAYS in LB. Display code is responsible for
         // converting to the viewer's preferred unit before rendering.
-        load: loadLb,
+        load: isAssisted ? 0 : loadLb,
         is_bodyweight: isBodyweight,
+        load_type: loadType,
+        /** Assistance amount in LB (assisted sets only). Lower is better. */
+        assist_lb: isAssisted ? loadLb : null,
         counts_load: hasLoad,
         reps: Number(r.actual_reps) || 0,
         rpe: r.actual_rpe ?? null,
