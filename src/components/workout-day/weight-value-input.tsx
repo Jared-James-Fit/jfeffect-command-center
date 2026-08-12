@@ -15,16 +15,14 @@ import {
   type WUnit,
 } from "@/lib/workout-weight-input";
 
-const ROW_H = 40; // px per wheel row
-const PAD_ROWS = 2; // rows of padding so the first/last item can centre
-
-type PickerItem = { key: string; label: string; bw: boolean; value: number | null };
+const ITEM_W = 72; // px per horizontal wheel cell
 
 /**
- * Compact iOS-style weight picker for the set logger. Tapping the cell opens a
- * scroll wheel (BW → 0 → unit jumps) with a highlighted centre band, plus a
- * Type mode for exact entry. Mobile renders it as a bottom sheet, desktop as a
- * compact popover. Layout of the workout card itself is untouched.
+ * Compact weight picker for the set logger. Tapping the cell opens a fast
+ * horizontal wheel (native momentum, JS snap once it settles) with a quick
+ * Bodyweight button above it, plus a Type mode for exact entry. Mobile renders
+ * it as a bottom sheet, desktop as a compact popover. Layout of the workout
+ * card itself is untouched.
  */
 export function WeightValueInput({
   value,
