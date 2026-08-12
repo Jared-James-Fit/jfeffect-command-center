@@ -30,7 +30,6 @@ import { Route as SitemapRouteImport } from './routes/sitemap'
 import { Route as StaffSetupRouteImport } from './routes/staff-setup'
 import { Route as TermsRouteImport } from './routes/terms'
 import { Route as UnsubscribeRouteImport } from './routes/unsubscribe'
-import { Route as WpVerifyRouteImport } from './routes/wp-verify'
 import { Route as AuthenticatedAdminRouteRouteImport } from './routes/_authenticated/admin/route'
 import { Route as AuthenticatedCoachRouteRouteImport } from './routes/_authenticated/coach/route'
 import { Route as AuthenticatedMRouteRouteImport } from './routes/_authenticated/m/route'
@@ -391,11 +390,6 @@ const TermsRoute = TermsRouteImport.update({
 const UnsubscribeRoute = UnsubscribeRouteImport.update({
   id: '/unsubscribe',
   path: '/unsubscribe',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const WpVerifyRoute = WpVerifyRouteImport.update({
-  id: '/wp-verify',
-  path: '/wp-verify',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AuthenticatedAdminRouteRoute = AuthenticatedAdminRouteRouteImport.update({
@@ -1919,7 +1913,6 @@ export interface FileRoutesByFullPath {
   '/staff-setup': typeof StaffSetupRoute
   '/terms': typeof TermsRoute
   '/unsubscribe': typeof UnsubscribeRoute
-  '/wp-verify': typeof WpVerifyRoute
   '/admin': typeof AuthenticatedAdminRouteRouteWithChildren
   '/coach': typeof AuthenticatedCoachRouteRouteWithChildren
   '/m': typeof AuthenticatedMRouteRouteWithChildren
@@ -2199,7 +2192,6 @@ export interface FileRoutesByTo {
   '/staff-setup': typeof StaffSetupRoute
   '/terms': typeof TermsRoute
   '/unsubscribe': typeof UnsubscribeRoute
-  '/wp-verify': typeof WpVerifyRoute
   '/coach': typeof AuthenticatedCoachRouteRouteWithChildren
   '/book': typeof BookRoute
   '/notifications': typeof AuthenticatedNotificationsRoute
@@ -2476,7 +2468,6 @@ export interface FileRoutesById {
   '/staff-setup': typeof StaffSetupRoute
   '/terms': typeof TermsRoute
   '/unsubscribe': typeof UnsubscribeRoute
-  '/wp-verify': typeof WpVerifyRoute
   '/_authenticated/admin': typeof AuthenticatedAdminRouteRouteWithChildren
   '/_authenticated/coach': typeof AuthenticatedCoachRouteRouteWithChildren
   '/_authenticated/m': typeof AuthenticatedMRouteRouteWithChildren
@@ -2758,7 +2749,6 @@ export interface FileRouteTypes {
     | '/staff-setup'
     | '/terms'
     | '/unsubscribe'
-    | '/wp-verify'
     | '/admin'
     | '/coach'
     | '/m'
@@ -3038,7 +3028,6 @@ export interface FileRouteTypes {
     | '/staff-setup'
     | '/terms'
     | '/unsubscribe'
-    | '/wp-verify'
     | '/coach'
     | '/book'
     | '/notifications'
@@ -3314,7 +3303,6 @@ export interface FileRouteTypes {
     | '/staff-setup'
     | '/terms'
     | '/unsubscribe'
-    | '/wp-verify'
     | '/_authenticated/admin'
     | '/_authenticated/coach'
     | '/_authenticated/m'
@@ -3596,7 +3584,6 @@ export interface RootRouteChildren {
   StaffSetupRoute: typeof StaffSetupRoute
   TermsRoute: typeof TermsRoute
   UnsubscribeRoute: typeof UnsubscribeRoute
-  WpVerifyRoute: typeof WpVerifyRoute
   BookRoute: typeof BookRoute
   ApiDriveUploadRoute: typeof ApiDriveUploadRoute
   BookSlugRoute: typeof BookSlugRoute
@@ -3779,13 +3766,6 @@ declare module '@tanstack/react-router' {
       path: '/unsubscribe'
       fullPath: '/unsubscribe'
       preLoaderRoute: typeof UnsubscribeRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/wp-verify': {
-      id: '/wp-verify'
-      path: '/wp-verify'
-      fullPath: '/wp-verify'
-      preLoaderRoute: typeof WpVerifyRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/_authenticated/admin': {
@@ -6366,7 +6346,6 @@ const rootRouteChildren: RootRouteChildren = {
   StaffSetupRoute: StaffSetupRoute,
   TermsRoute: TermsRoute,
   UnsubscribeRoute: UnsubscribeRoute,
-  WpVerifyRoute: WpVerifyRoute,
   BookRoute: BookRoute,
   ApiDriveUploadRoute: ApiDriveUploadRoute,
   BookSlugRoute: BookSlugRoute,
