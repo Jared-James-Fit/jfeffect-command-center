@@ -1120,6 +1120,7 @@ export function memberLogToPlRowResult(args: {
     normalized_lb: l.normalized_lb ?? null,
     normalized_kg: l.normalized_kg ?? null,
     actual_load_unit: l.entered_unit ?? "lb",
+    is_bodyweight: l.is_bodyweight ?? false,
     rpe: l.rpe ?? null,
     rir: l.rir ?? null,
     is_working_set: l.is_working_set ?? null,
