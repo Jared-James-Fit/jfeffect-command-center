@@ -408,7 +408,8 @@ export function QuickSwapButton({
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(0);
   const [chip, setChip] = useState<EquipmentChip>("Best Match");
-  const debouncedSearch = useDebounced(search.trim(), 300);
+  // Local ranking — a short debounce is enough to keep typing smooth.
+  const debouncedSearch = useDebounced(search.trim(), 120);
   const qc = useQueryClient();
   const isMember = swapContext?.kind === "member";
   const getImpactFnClient = useServerFn(getSwapImpact);
@@ -566,12 +567,10 @@ export function QuickSwapButton({
   const searchOutcome = useMemo(() => {
     if (debouncedSearch.length < 2) return null;
     const candidates = searchPool.filter((e) => e.id !== exerciseId);
-    const outcome = searchExercises(candidates, debouncedSearch, { limit: 300 });
-    const filteredResults = outcome.results.filter((r) => matchesChip(chip, r.exercise.equipment));
-    return { ...outcome, filteredResults };
-  }, [searchPool, debouncedSearch, exerciseId, chip]);
+    return searchExercises(candidates, debouncedSearch, { limit: 300 });
+  }, [searchPool, debouncedSearch, exerciseId]);
 
-  const searchRows = searchOutcome?.filteredResults ?? [];
+  const searchRows = searchOutcome?.results ?? [];
   const searchTotal = searchRows.length;
   const pagedRows = searchRows.slice(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE);
   const isSearching = isPoolLoading && searchPool.length === 0;
@@ -781,11 +780,7 @@ export function QuickSwapButton({
                 </div>
               )}
               {debouncedSearch.length >= 2 && !isSearching && searchTotal === 0 && (
-                <p className="text-sm text-muted-foreground">
-                  {chip !== "Best Match"
-                    ? `No matches for "${debouncedSearch}" with the "${chip}" filter. Try another filter.`
-                    : "No matches."}
-                </p>
+                <p className="text-sm text-muted-foreground">No matches.</p>
               )}
               {searchOutcome && !searchOutcome.hasExactMatches && searchTotal > 0 && (
                 <p className="px-1 text-xs text-muted-foreground">
