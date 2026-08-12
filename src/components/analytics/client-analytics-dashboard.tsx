@@ -38,6 +38,7 @@ import { PRCard } from "@/components/analytics/pr-card";
 import { PerformanceInsights } from "@/components/analytics/performance-insights";
 import { RecoverySummaryCard } from "@/components/analytics/recovery-summary-card";
 import { SleepInsightsCard } from "@/components/analytics/sleep-insights-card";
+import { BodyweightTrendCard } from "@/components/analytics/bodyweight-trend-card";
 import { CardioSummaryCard } from "@/components/analytics/cardio-summary-card";
 import { RecoveryPatternsCard } from "@/components/analytics/recovery-patterns-card";
 import { PredictedWindowCard } from "@/components/analytics/predicted-window-card";
@@ -571,6 +572,14 @@ export function ClientAnalyticsDashboard({
               blockStart={filter.start}
               blockEnd={filter.end}
               blockLabel={filter.label}
+            />
+
+            <BodyweightTrendCard
+              clientId={clientId}
+              displayUnit={displayUnit}
+              rangeStart={filter.start}
+              rangeEnd={filter.end}
+              rangeLabel={filter.label}
             />
 
             <section aria-label="Planned vs Actual">
