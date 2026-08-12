@@ -2026,19 +2026,6 @@ function WorkoutDay({
           </Card>
         )}
 
-        {client?.id && (
-          <div className="flex flex-wrap gap-2">
-            <WarmupButton
-              dayId={dayId}
-              blockId={blockId}
-              clientId={client.id}
-              warmupMode={(day as any).warmup_mode}
-              dayProtocolId={(day as any).warmup_protocol_id}
-              exerciseRows={rows as any[]}
-            />
-          </div>
-        )}
-
         {!readonly && isOutsideScheduledDay && !completion?.completed_at && scheduledDate && (
           <Card className="flex items-start gap-2 border-amber-500/30 bg-amber-500/5 p-3 text-xs">
             <Info className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" />
