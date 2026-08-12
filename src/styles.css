@@ -556,3 +556,22 @@ mark.gh-mark.gh-flash { animation: ghFlashPulse 1.4s ease-out 2; }
 @utility shadow-workout-card {
   box-shadow: 0 3px 10px rgba(0, 0, 0, 0.06);
 }
+
+/* ------------------------------------------------------------------
+   Shared workout surface system.
+   One source of truth for the client logger, member logger, coach POV
+   and the program builder so card hierarchy reads the same everywhere:
+     page background -> workout-stack-surface -> workout-card-surface
+   ------------------------------------------------------------------ */
+@utility workout-stack-surface {
+  background-color: var(--builder-canvas);
+  border-radius: 1rem;
+  box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--builder-card-border) 60%, transparent);
+}
+
+@utility workout-card-surface {
+  background-color: var(--builder-card);
+  border: 1px solid var(--builder-card-border);
+  border-radius: 18px;
+  box-shadow: var(--shadow-builder-card);
+}
