@@ -3229,7 +3229,13 @@ function SetRow({
   const [load, setLoad] = useState(initialDisplayLoad);
   // Bodyweight (BW) sets store a 0 numeric load plus this flag, so BW counts
   // as a real logged set without polluting weight PRs / volume with fake 0s.
-  const [bw, setBw] = useState<boolean>(Boolean((existing as any)?.is_bodyweight));
+  // Load type: external | bodyweight | assisted. Assisted stores a positive
+  // assistance value (never a negative weight, never a fake bodyweight set).
+  const [loadType, setLoadType] = useState<LoadType>(
+    existing ? resolveLoadType((existing as any).load_type, (existing as any).is_bodyweight) : defaultLoadType,
+  );
+  const bw = loadType === "bodyweight";
+  const setBw = (next: boolean) => setLoadType(next ? "bodyweight" : "external");
   // Derive the prescribed reps/RPE for Quick Log auto-fill.
   const prescribedRepsStr = (() => {
     // Rep ranges pre-fill the TOP end (8-10 → 10): clients most often hit the
@@ -3330,7 +3336,11 @@ function SetRow({
     const display = existing?.actual_load != null ? fmtLoad(existing.actual_load) : "";
     if (focused !== "load") {
       setLoad(display);
-      setBw(Boolean((existing as any)?.is_bodyweight));
+      setLoadType(
+        existing
+          ? resolveLoadType((existing as any).load_type, (existing as any).is_bodyweight)
+          : defaultLoadType,
+      );
     }
     if (focused !== "reps") {
       // If the server has a stored reps value, hydrate from it. If the
@@ -3395,6 +3405,7 @@ function SetRow({
     if (forcedFill && setIndex !== 1 && !latest?.completed_at) {
       // forcedFill wins for uncompleted sets — it's the value just written to the DB
       setLoad(forcedFill.load);
+      if (forcedFill.loadType) setLoadType(forcedFill.loadType);
       if (forcedFill.reps) setReps(forcedFill.reps);
       if (forcedFill.rpe) setRpe(forcedFill.rpe);
     } else {
@@ -3408,7 +3419,7 @@ function SetRow({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [forceHydrateToken]);
 
-  const value = useMemo(() => ({ load, reps, rpe, unit, bw }), [load, reps, rpe, unit, bw]);
+  const value = useMemo(() => ({ load, reps, rpe, unit, bw, loadType }), [load, reps, rpe, unit, bw, loadType]);
   // Forward-ref to the autosave handle so effects defined above can call
   // markClean() without a TDZ error.
   const saveRef = useRef<ReturnType<typeof useAutosave<typeof value>> | null>(null);
@@ -3423,6 +3434,7 @@ function SetRow({
     equals: (a, b) => {
       if (a.reps !== b.reps || a.rpe !== b.rpe) return false;
       if (a.bw !== b.bw) return false;
+      if (a.loadType !== b.loadType) return false;
       return a.load === b.load;
     },
     // NOTE: hydrated is intentionally excluded from this condition.
@@ -3463,6 +3475,7 @@ function SetRow({
             entered_value: loadNum,
             entered_unit: loadUnit,
             is_bodyweight: value.bw,
+            load_type: value.loadType,
             actual_reps: repsNum,
             actual_rpe: value.rpe || null,
             actual_rpe_num: rpeNum,
@@ -3471,7 +3484,7 @@ function SetRow({
         },
       });
     },
-    onSave: async ({ load, reps, rpe, unit, bw }) => {
+    onSave: async ({ load, reps, rpe, unit, bw, loadType }) => {
       if (readonly) return;
       if (!clientId) return;
       if (!load && !reps && !rpe && !bw && !existing) return;
@@ -3490,6 +3503,7 @@ function SetRow({
         : (repsNum != null && Number.isFinite(repsNum) && repsNum > 0 && (bw || (loadNum != null && Number.isFinite(loadNum) && loadNum > 0)) ? new Date().toISOString() : null);
       const payload = withMemberWorkoutIndexes({
         row_id: rowId,
+        load_type: loadType,
         client_id: clientId,
         set_index: setIndex,
         actual_load: loadNum,
@@ -3681,6 +3695,7 @@ function SetRow({
     }
     if (nextCompletedAt) beginWorkoutSession(workoutId ?? null);
     let payload: Record<string, any> = {
+        load_type: loadType,
         row_id: rowId,
         client_id: clientId,
         set_index: setIndex,
@@ -3812,21 +3827,29 @@ function SetRow({
   // Compares the confirmed set against the historical best for the same
   // rep count (current session excluded upstream). Ties/lower → no badge.
   const prBadge = useMemo(() => {
-    if (!repMaxBests || !existing?.completed_at) return null;
+    if (!existing?.completed_at) return null;
+    const existingType = resolveLoadType((existing as any).load_type, (existing as any).is_bodyweight);
     // Bodyweight sets never produce weight PRs (a 0 lb "PR" is meaningless).
-    if ((existing as any).is_bodyweight) return null;
+    if (existingType === "bodyweight") return null;
+    const setInput = {
+      reps: existing.actual_reps != null ? Number(existing.actual_reps) : null,
+      load: existing.actual_load != null ? Number(existing.actual_load) : null,
+      loadUnit: (existing.actual_load_unit === "kg" || existing.actual_load_unit === "lb"
+        ? existing.actual_load_unit
+        : unit) as "kg" | "lb",
+    };
+    // Assisted: LESS assistance at the same reps is the PR.
+    if (existingType === "assisted") {
+      if (!assistedBests) return null;
+      return detectAssistedSetPR(setInput, assistedBests, unit);
+    }
+    if (!repMaxBests) return null;
     return detectSetPR(
-      {
-        reps: existing.actual_reps != null ? Number(existing.actual_reps) : null,
-        load: existing.actual_load != null ? Number(existing.actual_load) : null,
-        loadUnit: existing.actual_load_unit === "kg" || existing.actual_load_unit === "lb"
-          ? existing.actual_load_unit
-          : unit,
-      },
+      setInput,
       repMaxBests,
       unit,
     );
-  }, [repMaxBests, existing?.completed_at, existing?.actual_reps, existing?.actual_load, existing?.actual_load_unit, unit]);
+  }, [repMaxBests, assistedBests, (existing as any)?.load_type, (existing as any)?.is_bodyweight, existing?.completed_at, existing?.actual_reps, existing?.actual_load, existing?.actual_load_unit, unit]);
 
   // ── Time-based completion (per-set countdown timer + quick-confirm) ────
   const isTime = measurementType === "time";
@@ -3962,17 +3985,18 @@ function SetRow({
       <WeightValueInput
         value={load}
         isBodyweight={bw}
+        loadType={loadType}
         unit={unit}
-        ariaLabel={`Set ${setIndex} weight in ${unit}`}
+        ariaLabel={`Set ${setIndex} ${loadType === "assisted" ? "assistance" : "weight"} in ${unit}`}
         referenceWeight={suggestedWeight ?? lastTimeWeight ?? null}
         disabled={readonly}
         focusMode={focusMode}
-        onPick={({ load: nextLoad, bodyweight }: { load: string; bodyweight: boolean }) => {
+        onPick={({ load: nextLoad, bodyweight, loadType: nextType }: { load: string; bodyweight: boolean; loadType: LoadType }) => {
           // Guard against a window-focus refetch clobbering the pick.
           recentlySavedRef.current = true;
           if (recentlySavedTimerRef.current) clearTimeout(recentlySavedTimerRef.current);
           recentlySavedTimerRef.current = setTimeout(() => { recentlySavedRef.current = false; }, 8000);
-          setBw(bodyweight);
+          setLoadType(nextType);
           setLoad(bodyweight ? "0" : nextLoad);
           setFocusedField(null);
         }}
