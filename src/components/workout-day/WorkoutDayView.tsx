@@ -3720,11 +3720,14 @@ function SetRow({
     const repsNum = reps ? parseInt(reps, 10) : null;
     const rpeNum = rpe ? Number(rpe) : null;
     const loadUnit = persistedUnitForValue(load, unit, existing);
-    const currentHasRequiredValues = isTimeKind
-      ? Number.isFinite(existingDurNum) && existingDurNum > 0
-      : hideWeight
-        ? repsNum != null && Number.isFinite(repsNum) && repsNum > 0
-        : repsNum != null && Number.isFinite(repsNum) && repsNum > 0 && loadNum != null && Number.isFinite(loadNum) && loadNum >= 0;
+    const currentHasRequiredValues = isSetLogComplete({
+      measurementType,
+      hideWeight,
+      loadType,
+      load: bw ? 0 : load,
+      reps: repsNum,
+      durationSeconds: existingDurNum,
+    });
     if (nextCompletedAt && !currentHasRequiredValues) {
       toast.error(isTimeKind ? "Complete the timer first" : hideWeight ? "Enter reps before marking complete" : "Enter reps and weight before marking complete (use 0 for bodyweight)");
       return;
