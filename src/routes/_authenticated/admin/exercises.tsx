@@ -1,7 +1,7 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
-import { searchExercises } from "@/lib/exercise-search";
+import { searchExercises, type SearchableExercise } from "@/lib/exercise-search";
 import { HighlightedExerciseName } from "@/components/exercise-search-highlight";
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/app-shell";
@@ -104,7 +104,7 @@ export function ExercisesAdmin({ embedded = false }: { embedded?: boolean } = {}
   // always combine. Shared helper → same behaviour as the client library,
   // the swap picker and the program builder.
   const searched = useMemo(
-    () => searchExercises(preFiltered as SearchRow[], search, { limit: 5000 }),
+    () => searchExercises(preFiltered as unknown as SearchableExercise[], search, { limit: 5000 }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [preFiltered.length, search, category, migration, muscleFilter, exercises],
   );
