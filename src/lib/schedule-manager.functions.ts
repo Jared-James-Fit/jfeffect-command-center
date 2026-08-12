@@ -141,8 +141,9 @@ export const moveWorkout = createServerFn({ method: "POST" })
       .from("pl_day_completions")
       .select("id, completed_at")
       .eq("day_id", data.dayId)
-      .maybeSingle();
-    if (completion?.completed_at) {
+      .is("scheduled_workout_id", null)
+      .limit(1);
+    if ((completion ?? []).some((c: any) => c.completed_at)) {
       throw new Error(
         "This workout is already completed and its scheduled date is locked.",
       );
