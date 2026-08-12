@@ -260,43 +260,10 @@ function useDebounced<T>(value: T, ms: number): T {
   return v;
 }
 
-/** Split a search query into whitespace-separated tokens (>=1 char). */
-function searchTokens(q: string): string[] {
-  return q
-    .toLowerCase()
-    .split(/\s+/)
-    .map((t) => t.trim())
-    .filter(Boolean);
-}
-
-/** Highlight every occurrence of any token (order-agnostic) in `text`. */
-function HighlightedName({ text, tokens }: { text: string; tokens: string[] }) {
+/** Highlight every matched keyword (order-agnostic, alias-aware). */
+function HighlightedName({ text, tokens }: { text: string; tokens: readonly string[] }) {
   if (tokens.length === 0) return <>{text}</>;
-  // Build one alternation regex, escaping each token, longest-first so
-  // "bench press" highlights the whole phrase before its parts.
-  const escaped = tokens
-    .slice()
-    .sort((a, b) => b.length - a.length)
-    .map((t) => t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
-  const re = new RegExp(`(${escaped.join("|")})`, "gi");
-  const parts = text.split(re).filter((p) => p !== "");
-  const tokenSet = new Set(tokens.map((t) => t.toLowerCase()));
-  return (
-    <>
-      {parts.map((p, i) =>
-        tokenSet.has(p.toLowerCase()) ? (
-          <mark
-            key={i}
-            className="rounded bg-primary/20 px-0.5 text-foreground"
-          >
-            {p}
-          </mark>
-        ) : (
-          <span key={i}>{p}</span>
-        ),
-      )}
-    </>
-  );
+  return <HighlightedExerciseName text={text} terms={tokens} />;
 }
 
 function youtubeEmbed(url: string | null | undefined): string | null {
@@ -321,7 +288,7 @@ function ExerciseRowCard({
   ex: ExerciseLite;
   reason?: string;
   onSelect: () => void;
-  highlightTokens?: string[];
+  highlightTokens?: readonly string[];
 }) {
   const [playing, setPlaying] = useState(false);
   const meta = [ex.muscle_group, ex.equipment].filter(Boolean).join(" · ");
