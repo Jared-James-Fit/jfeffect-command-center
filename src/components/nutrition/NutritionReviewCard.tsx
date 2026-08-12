@@ -89,7 +89,7 @@ export function NutritionReviewCard() {
 
   const buttonLabel =
     badge.label === "Submitted"
-      ? "Submit New Update"
+      ? "Submit New Nutrition Review"
       : badge.label === "Started"
         ? "Continue Nutrition Review"
         : "Submit Nutrition Review";
