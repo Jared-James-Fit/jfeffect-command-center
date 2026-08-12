@@ -918,7 +918,9 @@ export function weeklyMuscleVolume(results: any[], days = 7) {
   const tally = new Map<string, number>();
   for (const r of results) {
     if (!r.date || new Date(r.date).getTime() < cutoff) continue;
-    const k = r.muscle_group || "Other";
+    // Normalize library free-text muscle values (e.g. "Lower Back",
+    // "Adductors") into the canonical analytics groups before tallying.
+    const k = normalizeMuscle(r.muscle_group) ?? "Other";
     tally.set(k, (tally.get(k) ?? 0) + 1);
   }
   return [...tally.entries()].map(([muscle, sets]) => ({ muscle, sets })).sort((a, b) => b.sets - a.sets);
