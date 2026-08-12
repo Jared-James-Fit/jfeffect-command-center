@@ -491,6 +491,7 @@ export const getMoveContext = createServerFn({ method: "GET" })
     // an old day-level completion row and lock an otherwise movable instance.
     let instance: any = null;
     let siblingInstances: any[] = [];
+    let dayInstanceCount = 0;
     if (data.scheduledWorkoutId) {
       const { data: inst } = await supabase
         .from("pl_scheduled_workouts")
@@ -500,6 +501,7 @@ export const getMoveContext = createServerFn({ method: "GET" })
         .eq("id", data.scheduledWorkoutId)
         .maybeSingle();
       instance = inst ?? null;
+      dayInstanceCount = instance ? 1 : 0;
     } else {
       const { data: insts } = await supabase
         .from("pl_scheduled_workouts")
@@ -509,9 +511,13 @@ export const getMoveContext = createServerFn({ method: "GET" })
         .eq("client_id", block.client_id)
         .eq("source_day_id", data.dayId)
         .order("scheduled_date", { ascending: true })
-        .order("order_index", { ascending: true })
-        .limit(2);
-      if ((insts ?? []).length === 1) instance = insts![0] ?? null;
+        .order("order_index", { ascending: true });
+      dayInstanceCount = (insts ?? []).length;
+      // Resolve to the earliest instance even when several exist. Leaving
+      // `instance` null here used to fall through to the legacy day-level
+      // completion row, which can be a stale record from a previous
+      // schedule and wrongly locked a movable workout.
+      if (dayInstanceCount > 0) instance = insts![0] ?? null;
     }
     if (instance?.client_id) {
       const { data: sibs } = await supabase
@@ -530,7 +536,9 @@ export const getMoveContext = createServerFn({ method: "GET" })
         .eq("scheduled_workout_id", scopedInstanceId)
         .maybeSingle();
       completion = c ?? null;
-    } else {
+    } else if (dayInstanceCount === 0) {
+      // Genuinely legacy day (no scheduled instances) — the day-level
+      // completion row is authoritative.
       const { data: c } = await supabase
         .from("pl_day_completions")
         .select("id, completed_at, in_progress_at")
