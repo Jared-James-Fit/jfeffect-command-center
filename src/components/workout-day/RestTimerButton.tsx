@@ -105,12 +105,15 @@ export function RestTimerButton({
         disabled={disabled}
         aria-label={`Start rest timer for ${label}`}
         className={cn(
-          "inline-flex h-8 items-center justify-center gap-1.5 rounded-full border border-primary/30 bg-primary/10 px-3 text-xs font-semibold tabular-nums text-foreground transition hover:bg-primary/15 active:scale-[0.97] disabled:opacity-50 disabled:active:scale-100",
+          "inline-flex h-8 items-center justify-center gap-1 rounded-full border border-primary/25 bg-primary/10 pl-1.5 pr-2.5 text-xs font-semibold tabular-nums text-foreground transition hover:bg-primary/15 active:scale-[0.97] disabled:opacity-50 disabled:active:scale-100",
           className,
         )}
       >
-        <Play className="h-3 w-3 fill-current" />
-        <span>Rest · {label}</span>
+        <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-primary/20 text-primary">
+          <Play className="h-2.5 w-2.5 fill-current" />
+        </span>
+        <span className="text-[11px] font-semibold text-muted-foreground">Rest</span>
+        <span>{label}</span>
       </button>
     );
   }
@@ -143,6 +146,7 @@ export function RestTimerButton({
         </button>
       )}
       <div className="px-1 text-sm font-bold tabular-nums text-foreground">
+        {!finished && <span className="mr-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Resting</span>}
         {display}
         {paused && <span className="ml-1 text-[10px] font-medium text-muted-foreground">Paused</span>}
         {finished && Date.now() - mine.endsAt > 5000 && (

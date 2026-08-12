@@ -1849,7 +1849,7 @@ function WorkoutDay({
           ) : undefined
         }
       />
-      <div className="p-4 md:p-8 space-y-4 pb-[calc(var(--bottom-nav-clearance,96px)+env(safe-area-inset-bottom)+24px)] md:pb-8">
+      <div className="px-3 pt-2.5 space-y-3 md:p-8 md:space-y-4 pb-[calc(var(--bottom-nav-clearance,96px)+env(safe-area-inset-bottom)+32px)] md:pb-8">
 
         <WorkoutSyncBanner
           clientId={client?.id ?? null}
@@ -1914,17 +1914,31 @@ function WorkoutDay({
             } catch { return null; }
           })()}
         />
-        {!readonly && (
-          <div>
-            <Button
-              size="sm"
-              variant="ghost"
-              onClick={() => setMoveOpen(true)}
-              className="h-8 gap-1 px-2 text-xs text-muted-foreground hover:text-foreground"
-              aria-label="Move workout to another date"
-            >
-              <Move className="h-3.5 w-3.5" /> Move
-            </Button>
+        {/* Compact action row — Warm-Up + Move sit together so they never
+            create a tall empty band above the first exercise card. */}
+        {(!readonly || !!client?.id) && (
+          <div className="flex flex-wrap items-center gap-2">
+            {client?.id && (
+              <WarmupButton
+                dayId={dayId}
+                blockId={blockId}
+                clientId={client.id}
+                warmupMode={(day as any).warmup_mode}
+                dayProtocolId={(day as any).warmup_protocol_id}
+                exerciseRows={rows as any[]}
+              />
+            )}
+            {!readonly && (
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => setMoveOpen(true)}
+                className="h-9 gap-1.5 rounded-full px-3 text-xs text-muted-foreground hover:text-foreground"
+                aria-label="Move workout to another date"
+              >
+                <Move className="h-3.5 w-3.5" /> Move
+              </Button>
+            )}
           </div>
         )}
 
@@ -2012,19 +2026,6 @@ function WorkoutDay({
           </Card>
         )}
 
-        {client?.id && (
-          <div className="flex flex-wrap gap-2">
-            <WarmupButton
-              dayId={dayId}
-              blockId={blockId}
-              clientId={client.id}
-              warmupMode={(day as any).warmup_mode}
-              dayProtocolId={(day as any).warmup_protocol_id}
-              exerciseRows={rows as any[]}
-            />
-          </div>
-        )}
-
         {!readonly && isOutsideScheduledDay && !completion?.completed_at && scheduledDate && (
           <Card className="flex items-start gap-2 border-amber-500/30 bg-amber-500/5 p-3 text-xs">
             <Info className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" />
@@ -2039,7 +2040,7 @@ function WorkoutDay({
 
         {!focusMode && (
         <WorkoutLoadBoundary clientId={client?.id ?? null} clientName={(client as any)?.full_name ?? null} dayId={dayId} route={`/portal/workouts/${dayId}`}>
-          <div className="grid grid-cols-1 gap-4 rounded-lg bg-builder-canvas p-3 sm:p-4 ring-1 ring-builder-card-border/40 lg:grid-cols-2 lg:items-start">
+          <div className="grid grid-cols-1 gap-3.5 rounded-2xl bg-builder-canvas/70 p-2 sm:p-4 ring-1 ring-builder-card-border/40 lg:grid-cols-2 lg:items-start">
             {rowsIsError ? (
               <WorkoutLoadFailureCard
                 clientId={client?.id ?? null}
@@ -2585,9 +2586,9 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
   };
 
   return (
-    <Card className="relative overflow-hidden border border-builder-card-border bg-card p-4 pl-5 shadow-builder-card transition-colors hover:border-builder-card-border-strong sm:p-5 sm:pl-6 rounded-[18px]">
+    <Card className="relative overflow-hidden border border-builder-card-border-strong/70 bg-card p-3.5 pl-4 shadow-[0_2px_10px_-4px_rgba(0,0,0,0.35)] transition-colors hover:border-builder-card-border-strong sm:p-5 sm:pl-6 rounded-[18px]">
       {/* Left stripe: inset top/bottom so it doesn't visually connect between cards */}
-      <div className={`absolute left-0 top-2 bottom-2 w-1.5 rounded-full ${accent}`} aria-hidden />
+      <div className={`absolute left-0 top-1.5 bottom-1.5 w-1.5 rounded-full opacity-90 ${accent}`} aria-hidden />
       {/* Row 1 — name + unit toggle */}
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0 flex-1 font-bold leading-snug break-words text-sm sm:text-base">{name}</div>
@@ -4248,11 +4249,15 @@ function CompactWorkoutSummaryRow({
       : setsDone > 0
         ? "in_progress"
         : "not_started";
+  // Display correction: a workout with zero logged sets must never read as
+  // "Completed" in the summary strip, even if a completion row exists.
+  const showCompleted = !!completedAt && setsDone > 0;
+  const statusLabel = showCompleted ? "Completed" : setsDone > 0 ? "In Progress" : "Not Started";
   return (
-    <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-xs text-muted-foreground">
-      <div className="inline-flex items-center gap-1.5 rounded-md bg-secondary/60 px-2 py-1">
+    <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1.5 text-xs text-muted-foreground">
+      <div className="inline-flex items-center gap-1.5 rounded-md bg-secondary/60 px-2 py-0.5">
         <Clock className="h-3.5 w-3.5 text-primary" />
-        <span className="font-semibold uppercase tracking-wide text-[10px] text-muted-foreground">
+        <span className="hidden font-semibold uppercase tracking-wide text-[10px] text-muted-foreground sm:inline">
           Workout Session
         </span>
         <WorkoutTimer
@@ -4266,10 +4271,10 @@ function CompactWorkoutSummaryRow({
       <button
         type="button"
         onClick={scrollToFirstIncompleteExercise}
-        className="inline-flex items-center gap-2 rounded-md px-1 py-1 tabular-nums transition-colors hover:bg-secondary/60 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+        className="inline-flex items-center gap-2 rounded-md px-1 py-0.5 tabular-nums transition-colors hover:bg-secondary/60 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
         aria-label={`Workout progress ${pct}%, ${exercisesDone} of ${exercisesTotal} exercises. Scroll to first incomplete exercise.`}
       >
-        <WorkoutProgressRing pct={pct} status={status} size={28} strokeWidth={3} />
+        <WorkoutProgressRing pct={pct} status={status} size={26} strokeWidth={3} />
         <span className="font-bold text-foreground">
           {pct}% · {exercisesDone}/{exercisesTotal}
         </span>
@@ -4278,13 +4283,18 @@ function CompactWorkoutSummaryRow({
         <span aria-hidden className="opacity-40">•</span>
         {durationLabel}
       </span>
-      {loggingQuality && (
+      {!showCompleted && (
+        <span className="inline-flex items-center rounded-full border border-border bg-muted/40 px-2 py-0.5 text-[11px] font-bold uppercase tracking-wide text-muted-foreground">
+          {statusLabel}
+        </span>
+      )}
+      {loggingQuality && setsDone > 0 && (
         <LoggingQualityBadge
           quality={loggingQuality.quality}
           percentage={loggingQuality.percentage}
         />
       )}
-      {completedAt && (
+      {showCompleted && (
         <>
           <Badge
             variant="outline"
