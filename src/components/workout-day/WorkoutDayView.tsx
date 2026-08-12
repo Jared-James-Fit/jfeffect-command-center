@@ -2586,9 +2586,9 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
   };
 
   return (
-    <Card className="relative overflow-hidden border border-builder-card-border bg-card p-4 pl-5 shadow-builder-card transition-colors hover:border-builder-card-border-strong sm:p-5 sm:pl-6 rounded-[18px]">
+    <Card className="relative overflow-hidden border border-builder-card-border-strong/70 bg-card p-3.5 pl-4 shadow-[0_2px_10px_-4px_rgba(0,0,0,0.35)] transition-colors hover:border-builder-card-border-strong sm:p-5 sm:pl-6 rounded-[18px]">
       {/* Left stripe: inset top/bottom so it doesn't visually connect between cards */}
-      <div className={`absolute left-0 top-2 bottom-2 w-1.5 rounded-full ${accent}`} aria-hidden />
+      <div className={`absolute left-0 top-1.5 bottom-1.5 w-1.5 rounded-full opacity-90 ${accent}`} aria-hidden />
       {/* Row 1 — name + unit toggle */}
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0 flex-1 font-bold leading-snug break-words text-sm sm:text-base">{name}</div>
