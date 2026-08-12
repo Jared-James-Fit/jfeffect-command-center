@@ -317,6 +317,7 @@ export function WeightValueInput({
       className={cn(
         "flex w-full items-center justify-center whitespace-nowrap rounded-md border px-2 text-sm font-medium transition-colors",
         focusMode ? "h-9 text-base" : "h-8",
+        isBodyweight && "text-[10px] font-semibold uppercase tracking-tight",
         isEmpty
           ? "border-blue-500/40 bg-blue-500/10 text-muted-foreground"
           : "border-border/60 bg-muted/40 text-foreground",
