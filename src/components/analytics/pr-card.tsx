@@ -22,6 +22,9 @@ export interface PRCardProps {
 
 export function PRCard({ pr, displayUnit, conv, dense = false }: PRCardProps) {
   const color = exerciseColor(pr.exercise_name, pr.muscle_group);
+  // Assisted machines invert the direction: the PR is assistance REMOVED, and
+  // there is no external-load e1RM to show.
+  const assisted = pr.assisted === true;
   return (
     <Card
       className={`relative overflow-hidden border-border/80 bg-card shadow-sm transition-colors hover:border-primary/40 ${
@@ -41,16 +44,35 @@ export function PRCard({ pr, displayUnit, conv, dense = false }: PRCardProps) {
               color: ANALYTICS_COLORS.green,
             }}
           >
-            {fmtDelta(conv(pr.delta), displayUnit)}
+            {assisted
+              ? `${fmtNum(conv(pr.delta))} ${displayUnit} less assistance`
+              : fmtDelta(conv(pr.delta), displayUnit)}
           </Badge>
           <Badge variant="outline" className="text-[9px] font-bold uppercase tracking-wider text-muted-foreground">
-            est 1RM PR
+            {assisted ? "assistance PR" : "est 1RM PR"}
           </Badge>
         </div>
       </div>
       <div className="mt-0.5 text-[11px] font-medium text-muted-foreground">
         {format(new Date(pr.date), "MMM d, yyyy")}
       </div>
+      {assisted ? (
+        <>
+          <div className={`mt-2 font-black tracking-tight text-foreground ${dense ? "text-2xl" : "text-3xl"}`}>
+            {fmtNum(conv(pr.assist))}{" "}
+            <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+              {displayUnit} · assistance
+            </span>
+          </div>
+          <div className="mt-1 text-xs font-medium text-foreground/80">
+            {pr.reps} reps at {fmtWeight(conv(pr.assist), displayUnit)} assistance
+          </div>
+          <div className="text-[11px] text-muted-foreground">
+            Previous best {fmtWeight(conv(pr.prior_assist), displayUnit)} assistance
+          </div>
+        </>
+      ) : (
+        <>
       <div className={`mt-2 font-black tracking-tight text-foreground ${dense ? "text-2xl" : "text-3xl"}`}>
         {fmtNum(conv(pr.est_1rm))}{" "}
         <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
@@ -63,6 +85,8 @@ export function PRCard({ pr, displayUnit, conv, dense = false }: PRCardProps) {
       <div className="text-[11px] text-muted-foreground">
         Previous best {fmtWeight(conv(pr.prior_est), displayUnit)}
       </div>
+        </>
+      )}
     </Card>
   );
 }
