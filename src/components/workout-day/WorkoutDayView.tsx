@@ -2643,6 +2643,8 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
           <RestTimerButton
             seconds={effectiveRest ?? null}
             label={restDisplay}
+            scopeKey={dayId}
+            timerId={String(row.id ?? exerciseId ?? name)}
             onStart={() => beginWorkoutSession(dayId)}
             className="ml-auto"
           />
