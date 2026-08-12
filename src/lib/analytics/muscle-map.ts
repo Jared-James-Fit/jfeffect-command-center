@@ -49,6 +49,10 @@ export function normalizeMuscle(input: string | null | undefined): MuscleGroup |
   if (s.includes("lat") && !s.includes("plat")) return "Lats";
   if (
     s.includes("upper back") || s.includes("mid back") ||
+    // "Lower Back" is a real production value in `exercises.primary_muscle_group`
+    // (16 rows). Erectors/spinal already map to Back, so lower back joins them
+    // instead of falling through to "Other".
+    s.includes("lower back") || s.includes("low back") ||
     s.includes("trap") || s.includes("rhomb") ||
     s === "back" || s.includes("erector") || s.includes("spinal")
   ) return "Back";
@@ -59,6 +63,9 @@ export function normalizeMuscle(input: string | null | undefined): MuscleGroup |
   if (s.includes("quad")) return "Quads";
   if (s.includes("hamstring") || s === "hams") return "Hamstrings";
   if (s.includes("glute")) return "Glutes";
+  // "Adductors" / "Abductors" are real production values (13 rows). They are
+  // hip/thigh work — grouped under Glutes rather than dropped into "Other".
+  if (s.includes("adductor") || s.includes("abductor") || s.includes("inner thigh") || s.includes("groin")) return "Glutes";
   if (s.includes("calf") || s.includes("calves")) return "Calves";
   if (s.includes("core") || s.includes("abs") || s.includes("oblique") || s.includes("abdom")) return "Core";
   return null;
