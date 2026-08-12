@@ -9,6 +9,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Search, Star, GripVertical, Check, Loader2, AlertCircle, Circle, Plus, Link as LinkIcon, Unlink, CloudOff, AlertTriangle, ChevronDown } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { QuickAddExerciseDialog } from "@/components/quick-add-exercise-dialog";
+import { searchExercises } from "@/lib/exercise-search";
+import { HighlightedExerciseName } from "@/components/exercise-search-highlight";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 
@@ -603,20 +605,26 @@ export interface ExerciseRef {
 }
 
 /**
- * Splits a string on a search needle (case-insensitive) and wraps every match
- * in a <mark>. Used by the exercise picker / library search to make typed
- * keywords stand out in result rows.
+ * Wraps every matched keyword in a <mark>. Pass `terms` (from
+ * `searchExercises().highlightTerms`) to highlight out-of-order and
+ * alias-expanded matches; `query` remains supported for simple substring
+ * highlighting.
  */
 export function HighlightedText({
   text,
   query,
+  terms,
   className,
 }: {
   text: string;
-  query: string;
+  query?: string;
+  terms?: readonly string[];
   className?: string;
 }) {
-  const needle = query.trim();
+  if (terms && terms.length > 0) {
+    return <HighlightedExerciseName text={text} terms={terms} className={className} />;
+  }
+  const needle = (query ?? "").trim();
   if (!needle) return <span className={className}>{text}</span>;
   const escaped = needle.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   const parts = text.split(new RegExp(`(${escaped})`, "ig"));
