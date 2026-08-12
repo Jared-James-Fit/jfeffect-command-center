@@ -754,19 +754,14 @@ export function ExerciseLibraryPanel({
     };
   }, [collapsed, onToggleCollapse]);
 
-  const filtered = useMemo(() => {
-    let list = exercises;
-    if (filter) list = list.filter((e) => exerciseMatchesFilter(e, filter));
-    if (q.trim()) {
-      const needle = q.toLowerCase();
-      list = list.filter((e) =>
-        e.name.toLowerCase().includes(needle) ||
-        (e.muscle_group ?? "").toLowerCase().includes(needle) ||
-        (e.tags ?? []).some((t) => t.toLowerCase().includes(needle))
-      );
-    }
-    return list.slice(0, 200);
+  // Quick-filter chip first, then the shared keyword ranker.
+  const searched = useMemo(() => {
+    const list = filter ? exercises.filter((e) => exerciseMatchesFilter(e, filter)) : exercises;
+    return searchExercises(list, q, { limit: 200 });
   }, [exercises, q, filter]);
+  const filtered = searched.results.map((r) => r.exercise);
+  const highlightTerms = searched.highlightTerms;
+  const showingClosest = q.trim().length > 0 && !searched.hasExactMatches && filtered.length > 0;
 
   const recent = useMemo(() => {
     const map = new Map(exercises.map((e) => [e.id, e]));
