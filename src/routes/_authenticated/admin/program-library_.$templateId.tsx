@@ -17,6 +17,7 @@ import {
   estimateDayMinutes, durationRange, PERCENTAGE_BASES, type TrainingStyle,
 } from "@/lib/pl-programs";
 import { ExerciseLibraryPanel, type ExerciseRef, DND_EXERCISE, readDrop, exerciseAccent, EXERCISE_CARD_COLORS, HighlightedText, usePbDragging, beginPbDrag, endPbDrag } from "@/components/program-builder";
+import { searchExercises, type SearchableExercise } from "@/lib/exercise-search";
 import { derivePurposeLabels, defaultRestSeconds, effectiveRestSeconds, PURPOSE_LABEL_OPTIONS, resolveCategory, purposeLabelBadgeClass } from "@/lib/exercise-metadata";
 import { validateDay } from "@/lib/pl-template-validation";
 import { ProgramBuilderShortcutsButton } from "@/components/program-builder-shortcuts";
