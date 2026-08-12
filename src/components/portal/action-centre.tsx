@@ -6,6 +6,9 @@ import { useServerFn } from "@tanstack/react-start";
 import { cn } from "@/lib/utils";
 import { listActionCentre, type ActionCentreItem } from "@/lib/action-centre.functions";
 import { ActionTaskSheet } from "./action-task-sheet";
+import { ClientFormSheet } from "@/components/forms/client-form-sheet";
+import { CoachFeedbackCard } from "@/components/forms/coach-feedback-card";
+import { listFormsForClient, pickWeeklyCheckInForm, pickNutritionUpdateForm } from "@/lib/native-forms";
 
 export type ActionTone = "warning" | "primary" | "success";
 
@@ -116,18 +119,36 @@ function occurrenceTarget(occ: ActionCentreItem): { to: string; params?: Record<
   }
 }
 
-function occurrenceToItem(occ: ActionCentreItem, onFallback: (occ: ActionCentreItem) => void): ActionItem {
+/** Canonical client-facing labels — used everywhere, no synonyms. */
+const TASK_LABELS: Record<string, string> = {
+  weekly_checkin: "Weekly Check-In",
+  nutrition_review: "Nutrition Review",
+};
+
+const FORM_TASK_TYPES = new Set(["weekly_checkin", "nutrition_review", "custom_form"]);
+
+function occurrenceToItem(
+  occ: ActionCentreItem,
+  onFallback: (occ: ActionCentreItem) => void,
+  onOpenForm?: (occ: ActionCentreItem) => void,
+): ActionItem {
   const chip = compactChip(occ.chip.label);
   const target = occurrenceTarget(occ);
   const base: ActionItem = {
     key: `occ-${occ.id}`,
     icon: TASK_ICONS[occ.task_type] ?? ClipboardCheck,
     tone: toneFromChip(occ.chip.tone),
-    title: occ.title,
+    title: TASK_LABELS[occ.task_type] ?? occ.title,
     message: occ.subtitle ?? undefined,
     chip,
     occurrence: occ,
   };
+  // Forms open directly in an on-screen sheet — never route the client to a
+  // generic "Check-ins & Forms" list where they'd pick the form again.
+  if (FORM_TASK_TYPES.has(occ.task_type) && onOpenForm) {
+    base.onClick = () => onOpenForm(occ);
+    return base;
+  }
   if (occ.task_type === "bodyweight") {
     base.onClick = () => {
       if (typeof window !== "undefined") {
@@ -167,7 +188,6 @@ export function ActionCentre({ items, clientId }: { items: ActionItem[]; clientI
   const [expanded, setExpanded] = useState<boolean>(() => readExpanded());
   const [justCompleted, setJustCompleted] = useState<string | null>(null);
   const navigate = useNavigate();
-  void navigate;
 
   const list = useServerFn(listActionCentre);
   const { data: occurrences = [] } = useQuery({
@@ -176,6 +196,35 @@ export function ActionCentre({ items, clientId }: { items: ActionItem[]; clientI
     staleTime: 30_000,
     queryFn: () => list({ data: { clientId: clientId! } }),
   });
+
+  const [formSheet, setFormSheet] = useState<{ id: string; title: string } | null>(null);
+
+  // Fallback form lookup when an occurrence has no metadata.form_id yet.
+  const { data: clientForms = [] } = useQuery({
+    queryKey: ["nf-forms-for-client", clientId],
+    enabled: !!clientId,
+    staleTime: 5 * 60_000,
+    queryFn: () => listFormsForClient(clientId!),
+  });
+
+  const openForm = (occ: ActionCentreItem) => {
+    const metaId = (occ.metadata as any)?.form_id as string | undefined;
+    const label = TASK_LABELS[occ.task_type] ?? occ.title;
+    let id = metaId ?? null;
+    if (!id) {
+      const forms = clientForms as any[];
+      const picked =
+        occ.task_type === "nutrition_review"
+          ? pickNutritionUpdateForm(forms)
+          : pickWeeklyCheckInForm(forms);
+      id = picked?.id ?? null;
+    }
+    if (!id) {
+      navigate({ to: "/portal/check-ins" });
+      return;
+    }
+    setFormSheet({ id, title: label });
+  };
 
   const openSheet = (occ: ActionCentreItem) => {
     setActiveOcc(occ);
@@ -189,7 +238,7 @@ export function ActionCentre({ items, clientId }: { items: ActionItem[]; clientI
       // form tasks. Other task types (progress photos, bodyweight, etc.)
       // live on their own dedicated home cards and would double up here.
       .filter((o) => o.task_type === "weekly_checkin" || o.task_type === "nutrition_review")
-      .map((o) => occurrenceToItem(o, openSheet));
+      .map((o) => occurrenceToItem(o, openSheet, openForm));
     const dedupKeys = new Set(occItems.map((i) => i.key));
     // Legacy items (billing, agreements, coach replies, etc.) are surfaced
     // elsewhere on the home screen. Keep this section strictly "Forms".
@@ -197,7 +246,7 @@ export function ActionCentre({ items, clientId }: { items: ActionItem[]; clientI
     void dedupKeys;
     return occItems;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [occurrences, items, locallyCompleted]);
+  }, [occurrences, items, locallyCompleted, clientForms]);
 
   const sorted = [...merged].sort((a, b) => toneOrder[a.tone] - toneOrder[b.tone]);
   const visible = expanded ? sorted : sorted.slice(0, COMPACT_LIMIT);
@@ -289,6 +338,13 @@ export function ActionCentre({ items, clientId }: { items: ActionItem[]; clientI
           )}
         </>
       )}
+      <CoachFeedbackCard clientId={clientId} />
+      <ClientFormSheet
+        formId={formSheet?.id ?? null}
+        title={formSheet?.title}
+        open={!!formSheet}
+        onOpenChange={(v) => { if (!v) setFormSheet(null); }}
+      />
       <ActionTaskSheet
         item={activeOcc}
         open={sheetOpen}
