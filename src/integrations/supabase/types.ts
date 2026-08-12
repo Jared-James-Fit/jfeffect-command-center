@@ -5035,6 +5035,7 @@ export type Database = {
           counts_toward_volume: boolean
           created_at: string
           cues: string | null
+          default_load_type: string | null
           default_load_unit: string | null
           default_measurement_type: string
           difficulty: string | null
@@ -5088,6 +5089,7 @@ export type Database = {
           counts_toward_volume?: boolean
           created_at?: string
           cues?: string | null
+          default_load_type?: string | null
           default_load_unit?: string | null
           default_measurement_type?: string
           difficulty?: string | null
@@ -5141,6 +5143,7 @@ export type Database = {
           counts_toward_volume?: boolean
           created_at?: string
           cues?: string | null
+          default_load_type?: string | null
           default_load_unit?: string | null
           default_measurement_type?: string
           difficulty?: string | null
@@ -9964,6 +9967,7 @@ export type Database = {
           is_working_set: boolean | null
           load_kg: number | null
           load_lb: number | null
+          load_type: string
           logged_at: string
           normalized_kg: number | null
           normalized_lb: number | null
@@ -9995,6 +9999,7 @@ export type Database = {
           is_working_set?: boolean | null
           load_kg?: number | null
           load_lb?: number | null
+          load_type?: string
           logged_at?: string
           normalized_kg?: number | null
           normalized_lb?: number | null
@@ -10026,6 +10031,7 @@ export type Database = {
           is_working_set?: boolean | null
           load_kg?: number | null
           load_lb?: number | null
+          load_type?: string
           logged_at?: string
           normalized_kg?: number | null
           normalized_lb?: number | null
@@ -14242,6 +14248,7 @@ export type Database = {
           id: string
           is_bodyweight: boolean
           is_working_set: boolean | null
+          load_type: string
           normalized_kg: number | null
           normalized_lb: number | null
           notes: string | null
@@ -14272,6 +14279,7 @@ export type Database = {
           id?: string
           is_bodyweight?: boolean
           is_working_set?: boolean | null
+          load_type?: string
           normalized_kg?: number | null
           normalized_lb?: number | null
           notes?: string | null
@@ -14302,6 +14310,7 @@ export type Database = {
           id?: string
           is_bodyweight?: boolean
           is_working_set?: boolean | null
+          load_type?: string
           normalized_kg?: number | null
           normalized_lb?: number | null
           notes?: string | null

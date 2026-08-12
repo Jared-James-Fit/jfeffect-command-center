@@ -14,6 +14,7 @@ import {
   type WeightInputMode,
   type WUnit,
 } from "@/lib/workout-weight-input";
+import { formatLoadDisplay, loadFieldLabel, type LoadType } from "@/lib/workout-load-type";
 
 const ITEM_W = 72; // px per horizontal wheel cell
 
@@ -27,6 +28,7 @@ const ITEM_W = 72; // px per horizontal wheel cell
 export function WeightValueInput({
   value,
   isBodyweight,
+  loadType = isBodyweight ? "bodyweight" : "external",
   unit,
   onPick,
   disabled = false,
@@ -36,9 +38,11 @@ export function WeightValueInput({
 }: {
   value: string;
   isBodyweight: boolean;
+  /** external | bodyweight | assisted — assisted means the number is assistance. */
+  loadType?: LoadType;
   unit: WUnit;
-  /** null load + bodyweight flag. `{ load: "", bodyweight: false }` clears. */
-  onPick: (next: { load: string; bodyweight: boolean }) => void;
+  /** `{ load: "", bodyweight: false, loadType: "external" }` clears. */
+  onPick: (next: { load: string; bodyweight: boolean; loadType: LoadType }) => void;
   disabled?: boolean;
   focusMode?: boolean;
   ariaLabel: string;
@@ -63,8 +67,8 @@ export function WeightValueInput({
   }, []);
 
   const numeric = value !== "" && Number.isFinite(Number(value)) ? Number(value) : null;
-  const shown = isBodyweight ? "Bodyweight" : (value || "Select");
-  const isEmpty = !isBodyweight && value === "";
+  const shown = formatLoadDisplay(value, loadType, unit, { compact: true });
+  const isEmpty = loadType !== "bodyweight" && value === "";
 
   const startTarget = useMemo(
     () => weightPickerStart([numeric, referenceWeight]),
@@ -81,7 +85,9 @@ export function WeightValueInput({
   }, [startTarget, numbers, numeric]);
 
   const [activeIndex, setActiveIndex] = useState(initialIndex);
-  const [bwSelected, setBwSelected] = useState(isBodyweight);
+  const [draftType, setDraftType] = useState<LoadType>(loadType);
+  const bwSelected = draftType === "bodyweight";
+  const setBwSelected = (next: boolean) => setDraftType(next ? "bodyweight" : draftType === "assisted" ? "assisted" : "external");
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const settleRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const programmaticRef = useRef(false);
@@ -98,10 +104,10 @@ export function WeightValueInput({
   useLayoutEffect(() => {
     if (!open || mode !== "picker") return;
     setActiveIndex(initialIndex);
-    setBwSelected(isBodyweight);
+    setDraftType(loadType);
     const id = requestAnimationFrame(() => scrollToIndex(initialIndex));
     return () => cancelAnimationFrame(id);
-  }, [open, mode, initialIndex, isBodyweight, scrollToIndex]);
+  }, [open, mode, initialIndex, loadType, scrollToIndex]);
 
   /**
    * Native momentum runs untouched (no CSS snap, no scrollIntoView mid-drag);
@@ -122,19 +128,19 @@ export function WeightValueInput({
     }, 140);
   };
 
-  const reset = () => { setTyped(""); setError(null); setConfirmValue(null); };
+  const reset = () => { setTyped(""); setError(null); setConfirmValue(null); setDraftType(loadType); };
 
-  const commit = (next: { load: string; bodyweight: boolean }) => {
+  const commit = (next: { load: string; bodyweight: boolean; loadType: LoadType }) => {
     onPick(next);
     setOpen(false);
     reset();
   };
 
   const confirmWheel = () => {
-    if (bwSelected) { commit({ load: "0", bodyweight: true }); return; }
+    if (bwSelected) { commit({ load: "0", bodyweight: true, loadType: "bodyweight" }); return; }
     const v = numbers[activeIndex];
     if (v == null) { setOpen(false); return; }
-    commit({ load: String(v), bodyweight: false });
+    commit({ load: String(v), bodyweight: false, loadType: draftType === "assisted" ? "assisted" : "external" });
   };
 
   const submitTyped = () => {
@@ -142,14 +148,14 @@ export function WeightValueInput({
     if (!res.ok) { setError(res.error); return; }
     setError(null);
     if (res.aboveCap) { setConfirmValue(res.value); return; }
-    commit({ load: String(res.value), bodyweight: false });
+    commit({ load: String(res.value), bodyweight: false, loadType: draftType === "assisted" ? "assisted" : "external" });
   };
 
   const body = (
     <div className="space-y-2.5">
       <div className="flex items-center justify-between gap-2">
         <div className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
-          Weight ({unit})
+          {loadFieldLabel(draftType, unit)}
         </div>
         <div className="inline-flex overflow-hidden rounded-md border border-border/60 text-[10px] font-bold uppercase">
           {(["picker", "type"] as const).map((m) => (
@@ -169,21 +175,41 @@ export function WeightValueInput({
         </div>
       </div>
 
+      <div className="grid grid-cols-2 gap-1.5">
+        <button
+          type="button"
+          onClick={() => {
+            if (draftType === "bodyweight") { setDraftType("external"); return; }
+            if (mode === "type") { commit({ load: "0", bodyweight: true, loadType: "bodyweight" }); return; }
+            setDraftType("bodyweight");
+          }}
+          aria-pressed={draftType === "bodyweight"}
+          className={cn(
+            "h-10 rounded-lg border text-xs font-bold transition-colors",
+            draftType === "bodyweight"
+              ? "border-primary bg-primary text-primary-foreground"
+              : "border-border/60 text-foreground hover:bg-muted/60",
+          )}
+        >
+          Bodyweight
+        </button>
+        <button
+          type="button"
+          onClick={() => setDraftType(draftType === "assisted" ? "external" : "assisted")}
+          aria-pressed={draftType === "assisted"}
+          className={cn(
+            "h-10 rounded-lg border text-xs font-bold transition-colors",
+            draftType === "assisted"
+              ? "border-primary bg-primary text-primary-foreground"
+              : "border-border/60 text-foreground hover:bg-muted/60",
+          )}
+        >
+          Assisted
+        </button>
+      </div>
+
       {mode === "picker" ? (
         <>
-          <button
-            type="button"
-            onClick={() => setBwSelected(true)}
-            aria-pressed={bwSelected}
-            className={cn(
-              "h-10 w-full rounded-lg border text-xs font-bold transition-colors",
-              bwSelected
-                ? "border-primary bg-primary text-primary-foreground"
-                : "border-border/60 text-foreground hover:bg-muted/60",
-            )}
-          >
-            Bodyweight
-          </button>
 
           <div className={cn("relative", bwSelected && "opacity-45")}>
             {/* centre selection band */}
@@ -196,7 +222,7 @@ export function WeightValueInput({
               ref={scrollRef}
               onScroll={onScroll}
               role="listbox"
-              aria-label={`Weight in ${unit}`}
+              aria-label={loadFieldLabel(draftType, unit)}
               className="relative flex h-[64px] items-center overflow-x-auto overflow-y-hidden overscroll-x-contain [-webkit-overflow-scrolling:touch] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
             >
               <div className="shrink-0" style={{ width: `calc(50% - ${ITEM_W / 2}px)` }} />
@@ -249,7 +275,7 @@ export function WeightValueInput({
           <div className="flex gap-1.5">
             <button
               type="button"
-              onClick={() => commit({ load: String(confirmValue), bodyweight: false })}
+              onClick={() => commit({ load: String(confirmValue), bodyweight: false, loadType: draftType === "assisted" ? "assisted" : "external" })}
               className="h-9 flex-1 rounded-md bg-primary text-xs font-bold text-primary-foreground hover:bg-primary/90"
             >
               Save anyway
@@ -272,7 +298,7 @@ export function WeightValueInput({
               type="text"
               value={typed}
               onChange={(e) => { setTyped(e.target.value.replace(/[^0-9.]/g, "")); setError(null); }}
-              placeholder={`Weight (${unit})`}
+              placeholder={loadFieldLabel(draftType, unit)}
               aria-label={`${ariaLabel} — exact value`}
               className="h-10 text-base px-2"
             />
@@ -285,20 +311,13 @@ export function WeightValueInput({
             </button>
           </div>
           {error && <div className="text-[11px] font-medium text-destructive">{error}</div>}
-          <button
-            type="button"
-            onClick={() => commit({ load: "0", bodyweight: true })}
-            className="h-9 w-full rounded-lg border border-border/60 text-xs font-bold text-foreground hover:bg-muted/60"
-          >
-            Bodyweight
-          </button>
         </form>
       )}
 
-      {(isBodyweight || value !== "") && (
+      {(loadType !== "external" || value !== "") && (
         <button
           type="button"
-          onClick={() => commit({ load: "", bodyweight: false })}
+          onClick={() => commit({ load: "", bodyweight: false, loadType: "external" })}
           aria-label="Clear weight"
           className="flex h-8 w-full items-center justify-center gap-1 rounded-md border border-border/60 text-[11px] font-semibold text-muted-foreground transition-colors hover:border-destructive/50 hover:text-destructive"
         >
@@ -317,7 +336,7 @@ export function WeightValueInput({
       className={cn(
         "flex w-full items-center justify-center whitespace-nowrap rounded-md border px-2 text-sm font-medium transition-colors",
         focusMode ? "h-9 text-base" : "h-8",
-        isBodyweight && "text-[10px] font-semibold uppercase tracking-tight",
+        loadType === "bodyweight" && "text-[10px] font-semibold uppercase tracking-tight",
         isEmpty
           ? "border-blue-500/40 bg-blue-500/10 text-muted-foreground"
           : "border-border/60 bg-muted/40 text-foreground",

@@ -70,8 +70,15 @@ import {
   type PreviousLiftIdentity,
   type PreviousLiftLog,
 } from "@/lib/workout-previous-lift";
-import { computeRepMaxBests, detectSetPR } from "@/lib/workout-pr";
+import { computeRepMaxBests, computeAssistedBests, detectAssistedSetPR, detectSetPR } from "@/lib/workout-pr";
 import { WeightValueInput } from "@/components/workout-day/weight-value-input";
+import {
+  formatLoadDisplay,
+  loadColumnLabel,
+  normalizeDefaultLoadType,
+  resolveLoadType,
+  type LoadType,
+} from "@/lib/workout-load-type";
 import {
   parseRepQuickTarget,
   parseEffortQuickTarget,
@@ -584,7 +591,7 @@ function WorkoutDay({
       } else {
         const { data, error } = await sb
           .from("pl_exercise_rows")
-          .select("*, exercises(id,name,video_url,vimeo_embed_url,secondary_vimeo_embed_url,active_video_set,thumbnail_url,cues,common_mistakes,muscle_group,category,pl_lift_group,warmup_protocol_id,is_powerlifting,warmup_notes,default_load_unit,exercise_category,is_competition_lift,competition_lift_type,default_measurement_type)")
+          .select("*, exercises(id,name,video_url,vimeo_embed_url,secondary_vimeo_embed_url,active_video_set,thumbnail_url,cues,common_mistakes,muscle_group,category,pl_lift_group,warmup_protocol_id,is_powerlifting,warmup_notes,default_load_unit,default_load_type,exercise_category,is_competition_lift,competition_lift_type,default_measurement_type)")
           .eq("day_id", dayId)
           .order("sort_order");
         // Surface RLS / network errors to react-query so the failure
@@ -599,7 +606,7 @@ function WorkoutDay({
       const nameOnlyRows = (r as any[]).filter((row) => !row.exercise_id && row.exercise_name_override);
       if (nameOnlyRows.length > 0) {
         const names = [...new Set(nameOnlyRows.map((row: any) => row.exercise_name_override as string))];
-        const { data: exByName } = await sb.from("exercises").select("id,name,video_url,vimeo_embed_url,secondary_vimeo_embed_url,active_video_set,thumbnail_url,cues,common_mistakes,muscle_group,category,pl_lift_group,warmup_protocol_id,is_powerlifting,warmup_notes,default_load_unit,exercise_category,is_competition_lift,competition_lift_type,default_measurement_type").in("name", names);
+        const { data: exByName } = await sb.from("exercises").select("id,name,video_url,vimeo_embed_url,secondary_vimeo_embed_url,active_video_set,thumbnail_url,cues,common_mistakes,muscle_group,category,pl_lift_group,warmup_protocol_id,is_powerlifting,warmup_notes,default_load_unit,default_load_type,exercise_category,is_competition_lift,competition_lift_type,default_measurement_type").in("name", names);
         if (exByName && exByName.length > 0) {
           const nameMap = new Map<string, any>(exByName.map((e: any) => [e.name, e]));
           for (const row of r as any[]) {
@@ -684,7 +691,7 @@ function WorkoutDay({
         if (!adapter.ref.enrollmentId) return [];
         const { data, error } = await (supabase as any)
           .from("member_set_logs")
-          .select("id, week_index, day_index, exercise_id, logged_at, updated_at, reps, rpe, rir, entered_value, entered_unit, normalized_kg, normalized_lb, load_kg, load_lb, is_working_set")
+          .select("id, week_index, day_index, exercise_id, logged_at, updated_at, reps, rpe, rir, entered_value, entered_unit, normalized_kg, normalized_lb, load_kg, load_lb, is_working_set, is_bodyweight, load_type")
           .eq("enrollment_id", adapter.ref.enrollmentId)
           .order("logged_at", { ascending: false })
           .limit(2000);
@@ -709,6 +716,7 @@ function WorkoutDay({
           normalizedKg: log.normalized_kg ?? log.load_kg ?? null,
           normalizedLb: log.normalized_lb ?? log.load_lb ?? null,
           isWorkingSet: log.is_working_set ?? null,
+          loadType: resolveLoadType(log.load_type, log.is_bodyweight),
         }));
       }
 
@@ -717,6 +725,7 @@ function WorkoutDay({
         .select(`id, row_id, scheduled_workout_id, completed_at, updated_at, created_at,
           actual_reps, actual_rpe, actual_rir, entered_value, entered_unit,
           normalized_kg, normalized_lb, actual_load, actual_load_unit, is_working_set,
+          is_bodyweight, load_type,
           pl_exercise_rows(exercise_id, exercise_name_override, day_id, exercises(name))`)
         .eq("client_id", historyOwnerId)
         .order("updated_at", { ascending: false })
@@ -745,6 +754,7 @@ function WorkoutDay({
           normalizedKg: log.normalized_kg ?? null,
           normalizedLb: log.normalized_lb ?? null,
           isWorkingSet: log.is_working_set ?? null,
+          loadType: resolveLoadType(log.load_type, log.is_bodyweight),
         };
       });
     },
@@ -761,6 +771,15 @@ function WorkoutDay({
     const map = new Map<string, Map<number, PreviousLiftLog>>();
     for (const identity of previousLiftIdentities) {
       const bests = computeRepMaxBests(identity, previousLiftLogs, currentHistorySessionKey);
+      if (bests.size > 0) map.set(identity.rowId, bests);
+    }
+    return map;
+  }, [previousLiftIdentities, previousLiftLogs, currentHistorySessionKey]);
+
+  const assistedBestsByRow = useMemo(() => {
+    const map = new Map<string, Map<number, PreviousLiftLog>>();
+    for (const identity of previousLiftIdentities) {
+      const bests = computeAssistedBests(identity, previousLiftLogs, currentHistorySessionKey);
       if (bests.size > 0) map.set(identity.rowId, bests);
     }
     return map;
@@ -1738,6 +1757,7 @@ function WorkoutDay({
                   clientId={client?.id}
                   previousLift={previousLiftByRow.get(r.id) ?? null}
                   repMaxBests={repMaxBestsByRow.get(r.id) ?? null}
+                  assistedBests={assistedBestsByRow.get(r.id) ?? null}
                   blockId={blockId}
                   existingResults={(results as any[]).filter((x) => x.row_id === r.id)}
                   existingNote={notesByRowId.get(r.id)}
@@ -2077,6 +2097,7 @@ function WorkoutDay({
                 clientId={client?.id}
                 previousLift={previousLiftByRow.get(r.id) ?? null}
                 repMaxBests={repMaxBestsByRow.get(r.id) ?? null}
+                  assistedBests={assistedBestsByRow.get(r.id) ?? null}
                 blockId={blockId}
                 existingResults={(results as any[]).filter((x) => x.row_id === r.id)}
                 existingNote={notesByRowId.get(r.id)}
@@ -2341,9 +2362,15 @@ function ExerciseNotesBlock({ notes }: { notes: string }) {
 function PreviousLiftChip({ data, displayUnit, className }: { data: PreviousLift | null; displayUnit: "kg" | "lb"; className?: string }) {
   if (!data) return null;
   // A 0-load logged set is a bodyweight set — surface it as "BW × reps".
+  // Assisted sets keep their load type so "50 lb" can never be mistaken for
+  // weight the athlete actually lifted.
+  const rawLoad = formatPreviousLiftLoad(data, displayUnit);
   const loadStr =
-    formatPreviousLiftLoad(data, displayUnit) ??
-    (data.enteredValue === 0 || data.normalizedLb === 0 ? "BW" : "");
+    data.loadType === "bodyweight"
+      ? "Bodyweight"
+      : data.loadType === "assisted"
+        ? (rawLoad ? `${rawLoad} assistance` : "")
+        : (rawLoad ?? (data.enteredValue === 0 || data.normalizedLb === 0 ? "BW" : ""));
   const repsStr = data.reps != null ? ` × ${data.reps}` : "";
   if (!loadStr && !repsStr) return null;
   let when = "";
@@ -2364,7 +2391,7 @@ function PreviousLiftChip({ data, displayUnit, className }: { data: PreviousLift
   );
 }
 
-function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, existingResults, previousLift = null, repMaxBests = null, existingNote, notesLoading = false, readonly = false, unit = "kg", onUnitChange, focusMode = false, onChange, onNoteChange, purposeLabel = null, swapContext = undefined }: { row: any; dayId: string; dayTitle: string; dayIndex?: number | null; clientId: string | undefined; blockId?: string | null; existingResults: any[]; previousLift?: PreviousLift | null; repMaxBests?: Map<number, PreviousLiftLog> | null; existingNote?: any; notesLoading?: boolean; readonly?: boolean; unit?: "kg" | "lb"; onUnitChange?: (u: "kg" | "lb") => void; focusMode?: boolean; onChange: () => void; onNoteChange: () => void; purposeLabel?: string | null; swapContext?: { kind: "client" } | { kind: "member"; enrollmentId: string; weekIndex: number; dayIndex: number; exerciseIndex: number } | undefined }) {
+function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, existingResults, previousLift = null, repMaxBests = null, assistedBests = null, existingNote, notesLoading = false, readonly = false, unit = "kg", onUnitChange, focusMode = false, onChange, onNoteChange, purposeLabel = null, swapContext = undefined }: { row: any; dayId: string; dayTitle: string; dayIndex?: number | null; clientId: string | undefined; blockId?: string | null; existingResults: any[]; previousLift?: PreviousLift | null; repMaxBests?: Map<number, PreviousLiftLog> | null; assistedBests?: Map<number, PreviousLiftLog> | null; existingNote?: any; notesLoading?: boolean; readonly?: boolean; unit?: "kg" | "lb"; onUnitChange?: (u: "kg" | "lb") => void; focusMode?: boolean; onChange: () => void; onNoteChange: () => void; purposeLabel?: string | null; swapContext?: { kind: "client" } | { kind: "member"; enrollmentId: string; weekIndex: number; dayIndex: number; exerciseIndex: number } | undefined }) {
   const adapter = useOptionalAdapter();
   const name = row.exercises?.name ?? row.exercise_name_override ?? "Exercise";
   const exercise = row.exercises ?? null;
@@ -2382,6 +2409,16 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
     setActiveUnit(u);
     onUnitChange?.(u);
   };
+  // Load type default: exercise library metadata (default_load_type) decides
+  // whether this exercise opens in Assisted mode. Never hardcode names here.
+  const defaultLoadType: LoadType = normalizeDefaultLoadType(exercise?.default_load_type) ?? "external";
+  // Header label follows whatever the client has actually logged for set 1,
+  // falling back to the exercise default.
+  const rowLoadType: LoadType = (() => {
+    const first = existingResults.find((x) => x.set_index === 1);
+    if (first) return resolveLoadType((first as any).load_type, (first as any).is_bodyweight);
+    return defaultLoadType;
+  })();
   const video = exercise?.video_url ?? exercise?.vimeo_embed_url ?? null;
   // Always show the How To button for every exercise.
   // Previously this was Boolean(exerciseId || video) which hid the button for
@@ -2539,11 +2576,13 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
     reps: string;
     rpe: string;
     unit: "kg" | "lb";
+    loadType: LoadType;
   } | null>(null);
 
-  const applyToRemaining = async (fromSetIndex: number, payload: { load: string; reps: string; rpe: string; unit: "kg" | "lb" }) => {
+  const applyToRemaining = async (fromSetIndex: number, payload: { load: string; reps: string; rpe: string; unit: "kg" | "lb"; loadType?: LoadType }) => {
     if (!clientId) return;
     beginWorkoutSession(dayId);
+    const fillLoadType: LoadType = payload.loadType ?? "external";
     const loadNum = payload.load ? Number(payload.load) : null;
     const repsNum = payload.reps ? parseInt(payload.reps, 10) : null;
     const rpeNum = payload.rpe ? Number(payload.rpe) : null;
@@ -2562,6 +2601,8 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
         actual_reps: repsNum,
         actual_rpe: payload.rpe || null,
         actual_rpe_num: rpeNum,
+        load_type: fillLoadType,
+        is_bodyweight: fillLoadType === "bodyweight",
         completed_at: null, // Draft only — must be confirmed per set
       }, adapter, dayId);
       if (adapter) {
@@ -2580,6 +2621,7 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
       reps: repsNum != null ? String(repsNum) : "",
       rpe: payload.rpe ?? "",
       unit: payload.unit,
+      loadType: fillLoadType,
     });
     setFillToken((t) => t + 1);
     toast.success(`Applied to ${tasks.length} remaining set${tasks.length === 1 ? "" : "s"} as draft`);
@@ -2727,6 +2769,8 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
         if (uncompletedAfterFirst === 0) return null;
         const firstUnit = (firstSet?.actual_load_unit as "kg" | "lb" | undefined) ?? activeUnit;
         const displayLoad = Number(Number(firstLoad ?? 0).toFixed(2));
+        const firstLoadType = resolveLoadType(firstSet?.load_type, firstSet?.is_bodyweight);
+        const fillLabel = formatLoadDisplay(displayLoad, firstLoadType, firstUnit);
         const onFill = async () => {
           // Refetch fresh results before reading Set 1 so the second fill always
           // uses the current Set 1 value, not a stale cached snapshot.
@@ -2746,6 +2790,7 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
           setQuickFillLoading(true);
           try {
             await applyToRemaining(1, {
+              loadType: resolveLoadType(freshFirstSet?.load_type, freshFirstSet?.is_bodyweight),
               load: String(freshFirstLoad),
               reps: freshFirstSet?.actual_reps != null ? String(freshFirstSet.actual_reps) : "",
               rpe: freshFirstSet?.actual_rpe_num != null
@@ -2766,12 +2811,12 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
               disabled={!hasFirstWeight || quickFillLoading}
               className="w-full h-9 text-xs font-bold border-primary/30 text-primary hover:bg-primary/10 disabled:opacity-50 gap-1.5"
               title={hasFirstWeight
-                ? `Copy ${displayLoad} ${firstUnit} from Set 1 into the remaining ${uncompletedAfterFirst} set${uncompletedAfterFirst !== 1 ? "s" : ""}`
+                ? `Copy ${fillLabel} from Set 1 into the remaining ${uncompletedAfterFirst} set${uncompletedAfterFirst !== 1 ? "s" : ""}`
                 : "Enter a weight in Set 1 first"}
             >
               <Zap className="h-3.5 w-3.5" />
               {hasFirstWeight
-                ? `Fill All Sets with ${displayLoad} ${firstUnit}`
+                ? `Fill All Sets with ${fillLabel}`
                 : "Fill All Sets (enter Set 1 weight first)"}
             </Button>
           </div>
@@ -2796,7 +2841,7 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
           <span>Set</span>
           <span>{effectiveMeasurementType === "time" ? "Time" : "Reps"}</span>
           {effectiveMeasurementType !== "time" && <span>{showRir ? "RIR" : "RPE"}</span>}
-          {effectiveMeasurementType !== "time" && !hideWeight && <span className="truncate">Wt ({activeUnit.toUpperCase()})</span>}
+          {effectiveMeasurementType !== "time" && !hideWeight && <span className="truncate">{loadColumnLabel(rowLoadType, activeUnit)}</span>}
           <span className="text-right">Status</span>
         </div>
         {Array.from({ length: setCount }).map((_, i) => {
@@ -2821,6 +2866,8 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
               existing={existing}
               prevExisting={prevExisting}
               repMaxBests={repMaxBests}
+              assistedBests={assistedBests}
+              defaultLoadType={defaultLoadType}
               targetReps={row.reps_text}
               targetRpe={row.rpe}
               targetRir={row.rir}
@@ -3116,6 +3163,8 @@ function SetRow({
   targetReps, targetRpe, targetRir, suggestedWeight, lastTimeWeight,
   repTarget, rpeTarget, rirTarget,
   repMaxBests = null,
+  assistedBests = null,
+  defaultLoadType = "external",
   hasUncompletedAfter, onApplyToRemaining, forceHydrateToken = 0,
   forcedFill = null,
   readonly = false, unit = "kg", hideWeight = false, focusMode = false, onChange, onSetCompleted,
@@ -3142,15 +3191,19 @@ function SetRow({
   rirTarget?: RangeTarget;
   /** Historical best set per exact rep count (1–12) for PR badge detection. */
   repMaxBests?: Map<number, PreviousLiftLog> | null;
+  /** Lowest historical assistance per rep count (assisted exercises only). */
+  assistedBests?: Map<number, PreviousLiftLog> | null;
+  /** Exercise-library default load type (assisted machines open in Assisted). */
+  defaultLoadType?: LoadType;
   hasUncompletedAfter?: boolean;
-  onApplyToRemaining?: (fromSetIndex: number, payload: { load: string; reps: string; rpe: string; unit: "kg" | "lb" }) => Promise<void> | void;
+  onApplyToRemaining?: (fromSetIndex: number, payload: { load: string; reps: string; rpe: string; unit: "kg" | "lb"; loadType?: LoadType }) => Promise<void> | void;
   /** Bumped by parent after a "Fill All Sets" write to force re-hydration
    *  from the freshly-saved `existing` even if the recent-save guard would
    *  otherwise block it. */
   forceHydrateToken?: number;
   /** Snapshot of values just written by Fill All Sets — used to bypass
    *  the cache race when force-hydrating. */
-  forcedFill?: { load: string; reps: string; rpe: string; unit: "kg" | "lb" } | null;
+  forcedFill?: { load: string; reps: string; rpe: string; unit: "kg" | "lb"; loadType?: LoadType } | null;
   readonly?: boolean;
   unit?: "kg" | "lb";
   hideWeight?: boolean;
@@ -3178,7 +3231,13 @@ function SetRow({
   const [load, setLoad] = useState(initialDisplayLoad);
   // Bodyweight (BW) sets store a 0 numeric load plus this flag, so BW counts
   // as a real logged set without polluting weight PRs / volume with fake 0s.
-  const [bw, setBw] = useState<boolean>(Boolean((existing as any)?.is_bodyweight));
+  // Load type: external | bodyweight | assisted. Assisted stores a positive
+  // assistance value (never a negative weight, never a fake bodyweight set).
+  const [loadType, setLoadType] = useState<LoadType>(
+    existing ? resolveLoadType((existing as any).load_type, (existing as any).is_bodyweight) : defaultLoadType,
+  );
+  const bw = loadType === "bodyweight";
+  const setBw = (next: boolean) => setLoadType(next ? "bodyweight" : "external");
   // Derive the prescribed reps/RPE for Quick Log auto-fill.
   const prescribedRepsStr = (() => {
     // Rep ranges pre-fill the TOP end (8-10 → 10): clients most often hit the
@@ -3279,7 +3338,11 @@ function SetRow({
     const display = existing?.actual_load != null ? fmtLoad(existing.actual_load) : "";
     if (focused !== "load") {
       setLoad(display);
-      setBw(Boolean((existing as any)?.is_bodyweight));
+      setLoadType(
+        existing
+          ? resolveLoadType((existing as any).load_type, (existing as any).is_bodyweight)
+          : defaultLoadType,
+      );
     }
     if (focused !== "reps") {
       // If the server has a stored reps value, hydrate from it. If the
@@ -3344,6 +3407,7 @@ function SetRow({
     if (forcedFill && setIndex !== 1 && !latest?.completed_at) {
       // forcedFill wins for uncompleted sets — it's the value just written to the DB
       setLoad(forcedFill.load);
+      if (forcedFill.loadType) setLoadType(forcedFill.loadType);
       if (forcedFill.reps) setReps(forcedFill.reps);
       if (forcedFill.rpe) setRpe(forcedFill.rpe);
     } else {
@@ -3357,7 +3421,7 @@ function SetRow({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [forceHydrateToken]);
 
-  const value = useMemo(() => ({ load, reps, rpe, unit, bw }), [load, reps, rpe, unit, bw]);
+  const value = useMemo(() => ({ load, reps, rpe, unit, bw, loadType }), [load, reps, rpe, unit, bw, loadType]);
   // Forward-ref to the autosave handle so effects defined above can call
   // markClean() without a TDZ error.
   const saveRef = useRef<ReturnType<typeof useAutosave<typeof value>> | null>(null);
@@ -3372,6 +3436,7 @@ function SetRow({
     equals: (a, b) => {
       if (a.reps !== b.reps || a.rpe !== b.rpe) return false;
       if (a.bw !== b.bw) return false;
+      if (a.loadType !== b.loadType) return false;
       return a.load === b.load;
     },
     // NOTE: hydrated is intentionally excluded from this condition.
@@ -3412,6 +3477,7 @@ function SetRow({
             entered_value: loadNum,
             entered_unit: loadUnit,
             is_bodyweight: value.bw,
+            load_type: value.loadType,
             actual_reps: repsNum,
             actual_rpe: value.rpe || null,
             actual_rpe_num: rpeNum,
@@ -3420,7 +3486,7 @@ function SetRow({
         },
       });
     },
-    onSave: async ({ load, reps, rpe, unit, bw }) => {
+    onSave: async ({ load, reps, rpe, unit, bw, loadType }) => {
       if (readonly) return;
       if (!clientId) return;
       if (!load && !reps && !rpe && !bw && !existing) return;
@@ -3439,6 +3505,7 @@ function SetRow({
         : (repsNum != null && Number.isFinite(repsNum) && repsNum > 0 && (bw || (loadNum != null && Number.isFinite(loadNum) && loadNum > 0)) ? new Date().toISOString() : null);
       const payload = withMemberWorkoutIndexes({
         row_id: rowId,
+        load_type: loadType,
         client_id: clientId,
         set_index: setIndex,
         actual_load: loadNum,
@@ -3630,6 +3697,7 @@ function SetRow({
     }
     if (nextCompletedAt) beginWorkoutSession(workoutId ?? null);
     let payload: Record<string, any> = {
+        load_type: loadType,
         row_id: rowId,
         client_id: clientId,
         set_index: setIndex,
@@ -3761,21 +3829,29 @@ function SetRow({
   // Compares the confirmed set against the historical best for the same
   // rep count (current session excluded upstream). Ties/lower → no badge.
   const prBadge = useMemo(() => {
-    if (!repMaxBests || !existing?.completed_at) return null;
+    if (!existing?.completed_at) return null;
+    const existingType = resolveLoadType((existing as any).load_type, (existing as any).is_bodyweight);
     // Bodyweight sets never produce weight PRs (a 0 lb "PR" is meaningless).
-    if ((existing as any).is_bodyweight) return null;
+    if (existingType === "bodyweight") return null;
+    const setInput = {
+      reps: existing.actual_reps != null ? Number(existing.actual_reps) : null,
+      load: existing.actual_load != null ? Number(existing.actual_load) : null,
+      loadUnit: (existing.actual_load_unit === "kg" || existing.actual_load_unit === "lb"
+        ? existing.actual_load_unit
+        : unit) as "kg" | "lb",
+    };
+    // Assisted: LESS assistance at the same reps is the PR.
+    if (existingType === "assisted") {
+      if (!assistedBests) return null;
+      return detectAssistedSetPR(setInput, assistedBests, unit);
+    }
+    if (!repMaxBests) return null;
     return detectSetPR(
-      {
-        reps: existing.actual_reps != null ? Number(existing.actual_reps) : null,
-        load: existing.actual_load != null ? Number(existing.actual_load) : null,
-        loadUnit: existing.actual_load_unit === "kg" || existing.actual_load_unit === "lb"
-          ? existing.actual_load_unit
-          : unit,
-      },
+      setInput,
       repMaxBests,
       unit,
     );
-  }, [repMaxBests, existing?.completed_at, existing?.actual_reps, existing?.actual_load, existing?.actual_load_unit, unit]);
+  }, [repMaxBests, assistedBests, (existing as any)?.load_type, (existing as any)?.is_bodyweight, existing?.completed_at, existing?.actual_reps, existing?.actual_load, existing?.actual_load_unit, unit]);
 
   // ── Time-based completion (per-set countdown timer + quick-confirm) ────
   const isTime = measurementType === "time";
@@ -3911,17 +3987,18 @@ function SetRow({
       <WeightValueInput
         value={load}
         isBodyweight={bw}
+        loadType={loadType}
         unit={unit}
-        ariaLabel={`Set ${setIndex} weight in ${unit}`}
+        ariaLabel={`Set ${setIndex} ${loadType === "assisted" ? "assistance" : "weight"} in ${unit}`}
         referenceWeight={suggestedWeight ?? lastTimeWeight ?? null}
         disabled={readonly}
         focusMode={focusMode}
-        onPick={({ load: nextLoad, bodyweight }: { load: string; bodyweight: boolean }) => {
+        onPick={({ load: nextLoad, bodyweight, loadType: nextType }: { load: string; bodyweight: boolean; loadType: LoadType }) => {
           // Guard against a window-focus refetch clobbering the pick.
           recentlySavedRef.current = true;
           if (recentlySavedTimerRef.current) clearTimeout(recentlySavedTimerRef.current);
           recentlySavedTimerRef.current = setTimeout(() => { recentlySavedRef.current = false; }, 8000);
-          setBw(bodyweight);
+          setLoadType(nextType);
           setLoad(bodyweight ? "0" : nextLoad);
           setFocusedField(null);
         }}
@@ -4030,7 +4107,7 @@ function SetRow({
           onClick={async () => {
             const ok = typeof window !== "undefined" ? window.confirm("Apply this result to the remaining sets as drafts?") : true;
             if (!ok) return;
-            await onApplyToRemaining(setIndex, { load, reps, rpe, unit });
+            await onApplyToRemaining(setIndex, { load, reps, rpe, unit, loadType });
           }}>
             Apply to remaining sets
         </Button>

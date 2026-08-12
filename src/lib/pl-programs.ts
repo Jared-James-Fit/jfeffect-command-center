@@ -818,7 +818,7 @@ export async function getClientResults(
   }
   const { data, error } = await sb
     .from("pl_row_results")
-    .select("id, set_index, actual_load, actual_load_unit, entered_value, entered_unit, normalized_lb, normalized_kg, actual_reps, actual_rpe, actual_rir, is_bodyweight, notes, completed_at, completed_duration_seconds, row_id, pl_exercise_rows(exercise_id, exercise_name_override, day_id, purpose_label, movement_family, exercises(name, muscle_group, primary_muscle_group, category))")
+    .select("id, set_index, actual_load, actual_load_unit, entered_value, entered_unit, normalized_lb, normalized_kg, actual_reps, actual_rpe, actual_rir, is_bodyweight, load_type, notes, completed_at, completed_duration_seconds, row_id, pl_exercise_rows(exercise_id, exercise_name_override, day_id, purpose_label, movement_family, exercises(name, muscle_group, primary_muscle_group, category))")
     .eq("client_id", clientId)
     .not("actual_reps", "is", null)
     .order("completed_at", { ascending: true });
@@ -846,19 +846,32 @@ export async function getClientResults(
         const n = Number(rawVal) || 0;
         loadLb = rawUnit === "kg" ? n * LB_PER_KG : n;
       }
-      const isBodyweight = r.is_bodyweight === true;
+      const loadType: "external" | "bodyweight" | "assisted" =
+        r.load_type === "assisted" || r.load_type === "bodyweight" || r.load_type === "external"
+          ? r.load_type
+          : r.is_bodyweight === true
+            ? "bodyweight"
+            : "external";
+      const isBodyweight = loadType === "bodyweight";
+      const isAssisted = loadType === "assisted";
       // A set carries external load only when a positive load was logged.
       // Bodyweight (and legacy zero-load) sets are still real, completed sets:
       // they must survive into set counts, reps, adherence and frequency, but
       // they must never produce a 0 lb "PR" or fake tonnage.
-      const hasLoad = loadLb > 0;
+      // Assisted sets carry a POSITIVE assistance number, not external load.
+      // They count as real sets/reps/volume-by-muscle, but must never inflate
+      // "Weight Lifted" tonnage or produce external-load PRs.
+      const hasLoad = loadLb > 0 && !isAssisted;
       return {
         id: r.id,
         set_index: r.set_index,
         // `load` is now ALWAYS in LB. Display code is responsible for
         // converting to the viewer's preferred unit before rendering.
-        load: loadLb,
+        load: isAssisted ? 0 : loadLb,
         is_bodyweight: isBodyweight,
+        load_type: loadType,
+        /** Assistance amount in LB (assisted sets only). Lower is better. */
+        assist_lb: isAssisted ? loadLb : null,
         counts_load: hasLoad,
         reps: Number(r.actual_reps) || 0,
         rpe: r.actual_rpe ?? null,
@@ -948,7 +961,43 @@ export function recentPRs(results: any[], days = 30) {
       prs.push({ ...r, prior_est: priorMax, delta: r.est_1rm - priorMax });
     }
   }
+  prs.push(...recentAssistedPRs(results, days));
   return prs.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+}
+
+/**
+ * Assisted-machine PRs. Direction is INVERTED: less assistance = better.
+ * A PR is a set with lower assistance than any prior set of the same exercise
+ * at the same or more reps. `delta` is the assistance REMOVED (positive lb).
+ */
+export function recentAssistedPRs(results: any[], days = 30) {
+  const cutoff = Date.now() - days * 86400000;
+  const assisted = results.filter((r) => r.load_type === "assisted" && (r.assist_lb ?? 0) > 0 && r.date);
+  const byEx = new Map<string, any[]>();
+  for (const r of assisted) {
+    const k = exerciseIdentityKey(r);
+    if (!byEx.has(k)) byEx.set(k, []);
+    byEx.get(k)!.push(r);
+  }
+  const prs: any[] = [];
+  for (const r of assisted) {
+    if (new Date(r.date).getTime() < cutoff) continue;
+    const history = (byEx.get(exerciseIdentityKey(r)) ?? []).filter(
+      (h) => new Date(h.date).getTime() < new Date(r.date).getTime() && (h.reps ?? 0) >= (r.reps ?? 0),
+    );
+    if (history.length === 0) continue;
+    const priorMin = history.reduce((m, h) => Math.min(m, h.assist_lb), Infinity);
+    if (!Number.isFinite(priorMin) || r.assist_lb >= priorMin) continue;
+    prs.push({
+      ...r,
+      assisted: true,
+      prior_assist: priorMin,
+      assist: r.assist_lb,
+      prior_est: priorMin,
+      delta: priorMin - r.assist_lb,
+    });
+  }
+  return prs;
 }
 
 /** Active prep for client (most recent Active, then Planned). */

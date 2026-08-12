@@ -73,7 +73,11 @@ export function computeRepMaxBests(
       ? logs.filter((log) => normalizeExerciseHistoryName(log.exerciseName) === normalizedName)
       : [];
   const valid = matches.filter(
-    (log) => log.sessionKey !== currentSessionKey && occurredAtMs(log) > 0 && log.isWorkingSet !== false,
+    (log) =>
+      log.sessionKey !== currentSessionKey &&
+      occurredAtMs(log) > 0 &&
+      log.isWorkingSet !== false &&
+      (log.loadType ?? "external") === "external",
   );
   for (const log of valid) {
     const reps = finitePositive(log.reps);
@@ -128,4 +132,83 @@ export function detectSetPR(
   const amount = roundDisplay(roundDisplay(newDisplay) - roundDisplay(oldDisplay));
   if (!(amount > 0)) return null;
   return { reps: repsInt, amount, unit: displayUnit };
+}
+
+/* ---------------------------------------------------------------------- */
+/* Assisted (counterweight machine) PRs — LOWER assistance is better.       */
+/* ---------------------------------------------------------------------- */
+
+/** Lowest historical assistance per exact rep count for an assisted exercise. */
+export function computeAssistedBests(
+  identity: PreviousLiftIdentity,
+  logs: PreviousLiftLog[],
+  currentSessionKey: string,
+): Map<number, PreviousLiftLog> {
+  const result = new Map<number, PreviousLiftLog>();
+  const normalizedName = normalizeExerciseHistoryName(identity.exerciseName);
+  const idMatches = identity.exerciseId
+    ? logs.filter((log) => log.exerciseId === identity.exerciseId)
+    : [];
+  const matches = idMatches.length > 0
+    ? idMatches
+    : normalizedName
+      ? logs.filter((log) => normalizeExerciseHistoryName(log.exerciseName) === normalizedName)
+      : [];
+  const valid = matches.filter(
+    (log) =>
+      log.sessionKey !== currentSessionKey &&
+      occurredAtMs(log) > 0 &&
+      log.isWorkingSet !== false &&
+      log.loadType === "assisted",
+  );
+  for (const log of valid) {
+    const reps = finitePositive(log.reps);
+    if (reps == null) continue;
+    const repsInt = Math.round(reps);
+    if (repsInt < 1 || repsInt > PR_MAX_REPS || Math.abs(reps - repsInt) > 0.001) continue;
+    const assist = logLoadLb(log);
+    if (assist == null) continue;
+    const prev = result.get(repsInt);
+    if (!prev || assist < (logLoadLb(prev) ?? Infinity)) result.set(repsInt, log);
+  }
+  return result;
+}
+
+export type AssistedPR = {
+  reps: number;
+  /** Assistance REMOVED vs the previous best, in `unit`. Always > 0. */
+  amount: number;
+  unit: "kg" | "lb";
+  assisted: true;
+};
+
+/**
+ * An assisted PR is the same reps at LESS assistance than the previous best.
+ * Higher assistance is never a PR.
+ */
+export function detectAssistedSetPR(
+  set: { reps: number | null; load: number | null; loadUnit: "kg" | "lb" | null },
+  bests: Map<number, PreviousLiftLog>,
+  displayUnit: "kg" | "lb",
+): AssistedPR | null {
+  const reps = finitePositive(set.reps);
+  const load = set.load != null && Number.isFinite(Number(set.load)) && Number(set.load) >= 0
+    ? Number(set.load)
+    : null;
+  if (reps == null || load == null) return null;
+  const repsInt = Math.round(reps);
+  if (repsInt < 1 || repsInt > PR_MAX_REPS || Math.abs(reps - repsInt) > 0.001) return null;
+  const best = bests.get(repsInt);
+  if (!best) return null;
+  const setUnit: "kg" | "lb" = set.loadUnit === "kg" || set.loadUnit === "lb" ? set.loadUnit : displayUnit;
+  const newLb = setUnit === "lb" ? load : load * LB_PER_KG;
+  const oldLb = logLoadLb(best);
+  if (oldLb == null) return null;
+  if (newLb >= oldLb - 0.001) return null; // same or more assistance is not a PR
+  const newDisplay = setUnit === displayUnit ? load : displayUnit === "kg" ? newLb / LB_PER_KG : newLb;
+  const oldDisplay = logLoadInUnit(best, displayUnit);
+  if (oldDisplay == null) return null;
+  const amount = roundDisplay(roundDisplay(oldDisplay) - roundDisplay(newDisplay));
+  if (!(amount > 0)) return null;
+  return { reps: repsInt, amount, unit: displayUnit, assisted: true };
 }
