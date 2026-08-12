@@ -6,6 +6,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { cn } from "@/lib/utils";
 import { listActionCentre, type ActionCentreItem } from "@/lib/action-centre.functions";
 import { ActionTaskSheet } from "./action-task-sheet";
+import { supabase } from "@/integrations/supabase/client";
 import { ClientFormSheet } from "@/components/forms/client-form-sheet";
 import { isExternalForm, useExternalFormOpener } from "@/lib/external-form-open";
 import { CoachFeedbackCard } from "@/components/forms/coach-feedback-card";
