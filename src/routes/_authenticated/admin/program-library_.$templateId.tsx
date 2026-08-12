@@ -2254,7 +2254,7 @@ function InlineAddExerciseButton({
   const inputRef = useRef<HTMLInputElement | null>(null);
 
   const searched = useMemo(
-    () => searchExercises(exercises as any[], q, { limit: q.trim() ? 200 : 100 }),
+    () => searchExercises(exercises as SearchableExercise[], q, { limit: q.trim() ? 200 : 100 }),
     [exercises, q],
   );
   const filtered = searched.results.map((r) => r.exercise) as any[];
