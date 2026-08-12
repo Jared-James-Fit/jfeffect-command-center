@@ -2040,7 +2040,7 @@ function WorkoutDay({
 
         {!focusMode && (
         <WorkoutLoadBoundary clientId={client?.id ?? null} clientName={(client as any)?.full_name ?? null} dayId={dayId} route={`/portal/workouts/${dayId}`}>
-          <div className="grid grid-cols-1 gap-4 rounded-lg bg-builder-canvas p-3 sm:p-4 ring-1 ring-builder-card-border/40 lg:grid-cols-2 lg:items-start">
+          <div className="grid grid-cols-1 gap-3.5 rounded-2xl bg-builder-canvas/70 p-2 sm:p-4 ring-1 ring-builder-card-border/40 lg:grid-cols-2 lg:items-start">
             {rowsIsError ? (
               <WorkoutLoadFailureCard
                 clientId={client?.id ?? null}
