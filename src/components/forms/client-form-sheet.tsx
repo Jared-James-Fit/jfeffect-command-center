@@ -21,7 +21,9 @@ export function ClientFormSheet({
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent
         side="bottom"
-        className="h-[95vh] overflow-y-auto rounded-t-2xl p-4 pt-16 md:p-6 md:pt-16"
+        safeTopClose
+        className="h-[95vh] overflow-y-auto rounded-t-2xl p-4 md:p-6"
+        style={{ paddingTop: "calc(max(env(safe-area-inset-top) - 5vh, 0px) + 4rem)" }}
       >
         <SheetHeader className="mb-3 text-left">
           <SheetTitle className="text-base font-black uppercase tracking-widest">
