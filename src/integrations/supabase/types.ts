@@ -19088,6 +19088,7 @@ export type Database = {
           sort_order: number
         }[]
       }
+      pl_norm_exercise_name: { Args: { _name: string }; Returns: string }
       pl_recompute_block_status: {
         Args: { _block_id: string }
         Returns: string
