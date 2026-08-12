@@ -71,6 +71,7 @@ import {
   type PreviousLiftLog,
 } from "@/lib/workout-previous-lift";
 import { computeRepMaxBests, detectSetPR } from "@/lib/workout-pr";
+import { WeightValueInput } from "@/components/workout-day/weight-value-input";
 import {
   parseRepQuickTarget,
   parseEffortQuickTarget,
@@ -2338,7 +2339,10 @@ function ExerciseNotesBlock({ notes }: { notes: string }) {
  */
 function PreviousLiftChip({ data, displayUnit, className }: { data: PreviousLift | null; displayUnit: "kg" | "lb"; className?: string }) {
   if (!data) return null;
-  const loadStr = formatPreviousLiftLoad(data, displayUnit) ?? "";
+  // A 0-load logged set is a bodyweight set — surface it as "BW × reps".
+  const loadStr =
+    formatPreviousLiftLoad(data, displayUnit) ??
+    (data.enteredValue === 0 || data.normalizedLb === 0 ? "BW" : "");
   const repsStr = data.reps != null ? ` × ${data.reps}` : "";
   if (!loadStr && !repsStr) return null;
   let when = "";
@@ -3169,8 +3173,14 @@ function SetRow({
     return existing.actual_load != null ? fmtLoad(existing.actual_load) : "";
   })();
   const [load, setLoad] = useState(initialDisplayLoad);
+  // Bodyweight (BW) sets store a 0 numeric load plus this flag, so BW counts
+  // as a real logged set without polluting weight PRs / volume with fake 0s.
+  const [bw, setBw] = useState<boolean>(Boolean((existing as any)?.is_bodyweight));
   // Derive the prescribed reps/RPE for Quick Log auto-fill.
   const prescribedRepsStr = (() => {
+    // Rep ranges pre-fill the TOP end (8-10 → 10): clients most often hit the
+    // top of the prescribed range, so that's the least-editing default.
+    if (repTarget?.max != null) return String(repTarget.max);
     if (repTarget?.exact != null) return String(repTarget.exact);
     if (repTarget?.min != null) return String(repTarget.min);
     // Extract only the FIRST number from the reps_text. Patterns like "12, 6, 12"
@@ -3264,7 +3274,10 @@ function SetRow({
     const focused = focusedFieldRef.current;
     if (recentlySavedRef.current) return;
     const display = existing?.actual_load != null ? fmtLoad(existing.actual_load) : "";
-    if (focused !== "load") setLoad(display);
+    if (focused !== "load") {
+      setLoad(display);
+      setBw(Boolean((existing as any)?.is_bodyweight));
+    }
     if (focused !== "reps") {
       // If the server has a stored reps value, hydrate from it. If the
       // server has null AND the user has explicitly edited (e.g. cleared
@@ -3341,7 +3354,7 @@ function SetRow({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [forceHydrateToken]);
 
-  const value = useMemo(() => ({ load, reps, rpe, unit }), [load, reps, rpe, unit]);
+  const value = useMemo(() => ({ load, reps, rpe, unit, bw }), [load, reps, rpe, unit, bw]);
   // Forward-ref to the autosave handle so effects defined above can call
   // markClean() without a TDZ error.
   const saveRef = useRef<ReturnType<typeof useAutosave<typeof value>> | null>(null);
@@ -3355,6 +3368,7 @@ function SetRow({
     // the saved value, so the set row is dirty only when load/reps/RPE change.
     equals: (a, b) => {
       if (a.reps !== b.reps || a.rpe !== b.rpe) return false;
+      if (a.bw !== b.bw) return false;
       return a.load === b.load;
     },
     // NOTE: hydrated is intentionally excluded from this condition.
@@ -3369,16 +3383,16 @@ function SetRow({
     // Autosave even while a field remains focused so mobile keyboards / sticky
     // focus cannot leave workout inputs unsaved. The server hydration effect
     // still refuses to overwrite the focused field, so active typing is safe.
-    enabled: !readonly && !!clientId && serverHydrated && (load.length > 0 || reps.length > 0 || rpe.length > 0 || !!existing),
+    enabled: !readonly && !!clientId && serverHydrated && (load.length > 0 || reps.length > 0 || rpe.length > 0 || bw || !!existing),
     onPermanentFailure: ({ value }) => {
       if (!clientId) return;
-      const loadNum = value.load ? Number(value.load) : null;
+      const loadNum = value.bw ? 0 : value.load ? Number(value.load) : null;
       const repsNum = value.reps ? parseInt(value.reps, 10) : null;
       const rpeNum = value.rpe ? Number(value.rpe) : null;
       const loadUnit = persistedUnitForValue(value.load, value.unit, existing);
       const completedAt = hideWeight
         ? (repsNum != null && Number.isFinite(repsNum) && repsNum > 0 ? new Date().toISOString() : null)
-        : (repsNum != null && Number.isFinite(repsNum) && repsNum > 0 && loadNum != null && Number.isFinite(loadNum) && loadNum > 0 ? new Date().toISOString() : null);
+        : (repsNum != null && Number.isFinite(repsNum) && repsNum > 0 && (value.bw || (loadNum != null && Number.isFinite(loadNum) && loadNum > 0)) ? new Date().toISOString() : null);
       enqueueOfflineWrite({
         id: `portal_set:${rowId}:${clientId}:${setIndex}`,
         label: `Saved set ${setIndex}`,
@@ -3394,6 +3408,7 @@ function SetRow({
             actual_load_unit: loadUnit,
             entered_value: loadNum,
             entered_unit: loadUnit,
+            is_bodyweight: value.bw,
             actual_reps: repsNum,
             actual_rpe: value.rpe || null,
             actual_rpe_num: rpeNum,
@@ -3402,14 +3417,14 @@ function SetRow({
         },
       });
     },
-    onSave: async ({ load, reps, rpe, unit }) => {
+    onSave: async ({ load, reps, rpe, unit, bw }) => {
       if (readonly) return;
       if (!clientId) return;
-      if (!load && !reps && !rpe && !existing) return;
+      if (!load && !reps && !rpe && !bw && !existing) return;
       // Auto-start the Workout Session clock on the first meaningful log.
       beginWorkoutSession(workoutId ?? null);
       // Validate numerics; silently skip persistence for invalid values (input stays).
-      const loadNum = load ? Number(load) : null;
+      const loadNum = bw ? 0 : load ? Number(load) : null;
       const repsNum = reps ? parseInt(reps, 10) : null;
       const rpeNum = rpe ? Number(rpe) : null;
       if (load && (loadNum == null || !isFinite(loadNum) || loadNum < 0)) throw new Error("Weight must be a number");
@@ -3418,7 +3433,7 @@ function SetRow({
       const loadUnit = persistedUnitForValue(load, unit, existing);
       const completedAt = hideWeight
         ? (repsNum != null && Number.isFinite(repsNum) && repsNum > 0 ? new Date().toISOString() : null)
-        : (repsNum != null && Number.isFinite(repsNum) && repsNum > 0 && loadNum != null && Number.isFinite(loadNum) && loadNum > 0 ? new Date().toISOString() : null);
+        : (repsNum != null && Number.isFinite(repsNum) && repsNum > 0 && (bw || (loadNum != null && Number.isFinite(loadNum) && loadNum > 0)) ? new Date().toISOString() : null);
       const payload = withMemberWorkoutIndexes({
         row_id: rowId,
         client_id: clientId,
@@ -3427,6 +3442,7 @@ function SetRow({
         actual_load_unit: loadUnit,
         entered_value: loadNum,
         entered_unit: loadUnit,
+        is_bodyweight: bw,
         actual_reps: repsNum,
         actual_rpe: rpe || null,
         actual_rpe_num: rpeNum,
@@ -3559,7 +3575,7 @@ function SetRow({
   // hasAnyEntry only counts weight (the field the client must enter) and
   // manually-edited reps/RPE. Pre-filled prescription values do NOT count
   // as draft data — otherwise every unlogged set shows the amber border.
-  const hasAnyEntry = load.length > 0 || repsEdited || rpeEdited;
+  const hasAnyEntry = load.length > 0 || bw || repsEdited || rpeEdited;
   const isDraft = !isConfirmed && (hasAnyEntry || (existing && !existing.completed_at));
 
   const isAbortError = (err: unknown) => {
@@ -3596,7 +3612,7 @@ function SetRow({
   const saveCompletionStatus = async () => {
     if (readonly || !clientId || statusSaving) return;
     const nextCompletedAt = isConfirmed ? null : new Date().toISOString();
-    const loadNum = load ? Number(load) : null;
+    const loadNum = bw ? 0 : load ? Number(load) : null;
     const repsNum = reps ? parseInt(reps, 10) : null;
     const rpeNum = rpe ? Number(rpe) : null;
     const loadUnit = persistedUnitForValue(load, unit, existing);
@@ -3618,6 +3634,7 @@ function SetRow({
         actual_load_unit: loadUnit,
         entered_value: loadNum,
         entered_unit: loadUnit,
+        is_bodyweight: bw,
         actual_reps: repsNum,
         actual_rpe: rpe || null,
         actual_rpe_num: rpeNum,
@@ -3742,6 +3759,8 @@ function SetRow({
   // rep count (current session excluded upstream). Ties/lower → no badge.
   const prBadge = useMemo(() => {
     if (!repMaxBests || !existing?.completed_at) return null;
+    // Bodyweight sets never produce weight PRs (a 0 lb "PR" is meaningless).
+    if ((existing as any).is_bodyweight) return null;
     return detectSetPR(
       {
         reps: existing.actual_reps != null ? Number(existing.actual_reps) : null,
@@ -3886,34 +3905,22 @@ function SetRow({
         />
       )}
       {!isTime && !hideWeight && (
-      <Input
-        className={cn(
-          focusMode ? "h-9 text-base px-2" : "h-8 text-sm px-2",
-          load === "" || load == null
-            ? "border-blue-500/40 bg-blue-500/10 text-foreground"
-            : "border-border/60 bg-muted/40 text-muted-foreground",
-        )}
-        inputMode="decimal"
-        type="text"
-        pattern="[0-9]*\.?[0-9]*"
-        placeholder={unit}
-        aria-label={`Set ${setIndex} weight in ${unit}`}
+      <WeightValueInput
         value={load}
-        onChange={(e) => setLoad(e.target.value.replace(/[^0-9.]/g, ""))}
-        onFocus={() => {
-          setFocusedField("load");
-          // Set guard on focus too — prevents window-focus refetches from
-          // overwriting the value while the user is actively typing weight.
+        isBodyweight={bw}
+        unit={unit}
+        ariaLabel={`Set ${setIndex} weight in ${unit}`}
+        disabled={readonly}
+        focusMode={focusMode}
+        onPick={({ load: nextLoad, bodyweight }: { load: string; bodyweight: boolean }) => {
+          // Guard against a window-focus refetch clobbering the pick.
           recentlySavedRef.current = true;
           if (recentlySavedTimerRef.current) clearTimeout(recentlySavedTimerRef.current);
           recentlySavedTimerRef.current = setTimeout(() => { recentlySavedRef.current = false; }, 8000);
+          setBw(bodyweight);
+          setLoad(bodyweight ? "0" : nextLoad);
+          setFocusedField(null);
         }}
-        onKeyDown={onEnter}
-        onBlur={() => {
-          flushSaveAfterEdit();
-        }}
-        readOnly={readonly}
-        disabled={readonly}
       />
       )}
       <div className="flex items-center justify-end gap-1">

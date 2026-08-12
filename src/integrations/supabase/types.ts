@@ -9960,6 +9960,7 @@ export type Database = {
           exercise_id: string | null
           exercise_index: number
           id: string
+          is_bodyweight: boolean
           is_working_set: boolean | null
           load_kg: number | null
           load_lb: number | null
@@ -9990,6 +9991,7 @@ export type Database = {
           exercise_id?: string | null
           exercise_index: number
           id?: string
+          is_bodyweight?: boolean
           is_working_set?: boolean | null
           load_kg?: number | null
           load_lb?: number | null
@@ -10020,6 +10022,7 @@ export type Database = {
           exercise_id?: string | null
           exercise_index?: number
           id?: string
+          is_bodyweight?: boolean
           is_working_set?: boolean | null
           load_kg?: number | null
           load_lb?: number | null
@@ -14237,6 +14240,7 @@ export type Database = {
           entered_unit: string | null
           entered_value: number | null
           id: string
+          is_bodyweight: boolean
           is_working_set: boolean | null
           normalized_kg: number | null
           normalized_lb: number | null
@@ -14266,6 +14270,7 @@ export type Database = {
           entered_unit?: string | null
           entered_value?: number | null
           id?: string
+          is_bodyweight?: boolean
           is_working_set?: boolean | null
           normalized_kg?: number | null
           normalized_lb?: number | null
@@ -14295,6 +14300,7 @@ export type Database = {
           entered_unit?: string | null
           entered_value?: number | null
           id?: string
+          is_bodyweight?: boolean
           is_working_set?: boolean | null
           normalized_kg?: number | null
           normalized_lb?: number | null
