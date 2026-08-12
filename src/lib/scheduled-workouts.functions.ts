@@ -665,11 +665,14 @@ export const syncProgramDaySchedule = createServerFn({ method: "POST" })
         .eq("source_day_id", data.dayId)
         .order("scheduled_date", { ascending: true }),
     ]);
-    if ((legacyCompleted ?? []).length > 0) {
+    const instances = (dayInstances ?? []) as Array<{ id: string; scheduled_date: string }>;
+    // The legacy day-level completion row only matters when the day has no
+    // scheduled instances. Once instances exist they are canonical, and an
+    // old day-level row is stale history that must not lock the move.
+    if (instances.length === 0 && (legacyCompleted ?? []).length > 0) {
       throw new Error("This workout is already completed — past history is locked.");
     }
 
-    const instances = (dayInstances ?? []) as Array<{ id: string; scheduled_date: string }>;
     if (instances.length > 0) {
       const ids = instances.map((i) => i.id);
       const { data: instCompleted } = await context.supabase
