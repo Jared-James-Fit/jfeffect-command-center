@@ -17,6 +17,8 @@ import { updateDay, updateRow, deleteRow } from "@/lib/pl-programs";
 import { syncProgramDaySchedule } from "@/lib/scheduled-workouts.functions";
 import { invalidateScheduleQueries } from "@/lib/schedule-invalidate";
 import { toLocalISO } from "@/lib/today";
+import { searchExercises, type SearchableExercise } from "@/lib/exercise-search";
+import { HighlightedExerciseName } from "@/components/exercise-search-highlight";
 import { cn } from "@/lib/utils";
 
 /* ──────────────────────────────────────────────────────────────────────────
