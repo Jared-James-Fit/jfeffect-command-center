@@ -136,12 +136,12 @@
   --shadow-analytics-blue: 0 0 40px -8px color-mix(in oklab, var(--analytics-blue) 35%, transparent);
 
   /* Workout builder surface stack — light mode tuned */
-  --builder-canvas: oklch(0.97 0.003 80);          /* matches page bg */
+  --builder-canvas: oklch(0.945 0.005 80);         /* warm neutral, one step under page bg */
   --builder-card: oklch(1 0 0);                    /* pure white card */
-  --builder-card-border: oklch(0.90 0.005 80);     /* #E5E7EB */
+  --builder-card-border: oklch(0.885 0.006 80);    /* card outline */
   --builder-card-border-strong: oklch(0.82 0.008 80); /* hover/focus border */
   --builder-inset: oklch(0.97 0.003 80);           /* inset surface */
-  --shadow-builder-card: 0 1px 3px 0 oklch(0 0 0 / 0.08), 0 1px 2px -1px oklch(0 0 0 / 0.06);
+  --shadow-builder-card: 0 1px 2px 0 oklch(0 0 0 / 0.05), 0 4px 12px -4px oklch(0 0 0 / 0.10);
 
   color-scheme: light;
 }
