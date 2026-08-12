@@ -3458,9 +3458,16 @@ function SetRow({
       const repsNum = value.reps ? parseInt(value.reps, 10) : null;
       const rpeNum = value.rpe ? Number(value.rpe) : null;
       const loadUnit = persistedUnitForValue(value.load, value.unit, existing);
-      const completedAt = hideWeight
-        ? (repsNum != null && Number.isFinite(repsNum) && repsNum > 0 ? new Date().toISOString() : null)
-        : (repsNum != null && Number.isFinite(repsNum) && repsNum > 0 && (value.bw || (loadNum != null && Number.isFinite(loadNum) && loadNum > 0)) ? new Date().toISOString() : null);
+      const completedAt = isSetLogComplete({
+        measurementType,
+        hideWeight,
+        loadType: value.loadType,
+        load: value.bw ? 0 : value.load,
+        reps: repsNum,
+        durationSeconds: (existing as any)?.completed_duration_seconds ?? null,
+      })
+        ? (existing?.completed_at ?? new Date().toISOString())
+        : null;
       enqueueOfflineWrite({
         id: `portal_set:${rowId}:${clientId}:${setIndex}`,
         label: `Saved set ${setIndex}`,
@@ -3500,9 +3507,16 @@ function SetRow({
       if (reps && (repsNum == null || !isFinite(repsNum) || repsNum < 0)) throw new Error("Reps must be a whole number");
       if (rpe && (rpeNum == null || !isFinite(rpeNum) || rpeNum < 0 || rpeNum > 10)) throw new Error("RPE must be 0–10");
       const loadUnit = persistedUnitForValue(load, unit, existing);
-      const completedAt = hideWeight
-        ? (repsNum != null && Number.isFinite(repsNum) && repsNum > 0 ? new Date().toISOString() : null)
-        : (repsNum != null && Number.isFinite(repsNum) && repsNum > 0 && (bw || (loadNum != null && Number.isFinite(loadNum) && loadNum > 0)) ? new Date().toISOString() : null);
+      const completedAt = isSetLogComplete({
+        measurementType,
+        hideWeight,
+        loadType,
+        load: bw ? 0 : load,
+        reps: repsNum,
+        durationSeconds: (existing as any)?.completed_duration_seconds ?? null,
+      })
+        ? (existing?.completed_at ?? new Date().toISOString())
+        : null;
       const payload = withMemberWorkoutIndexes({
         row_id: rowId,
         load_type: loadType,
