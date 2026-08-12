@@ -6,7 +6,9 @@ import { useServerFn } from "@tanstack/react-start";
 import { cn } from "@/lib/utils";
 import { listActionCentre, type ActionCentreItem } from "@/lib/action-centre.functions";
 import { ActionTaskSheet } from "./action-task-sheet";
+import { supabase } from "@/integrations/supabase/client";
 import { ClientFormSheet } from "@/components/forms/client-form-sheet";
+import { isExternalForm, useExternalFormOpener } from "@/lib/external-form-open";
 import { CoachFeedbackCard } from "@/components/forms/coach-feedback-card";
 import { listFormsForClient, pickWeeklyCheckInForm, pickNutritionUpdateForm } from "@/lib/native-forms";
 
@@ -198,6 +200,22 @@ export function ActionCentre({ items, clientId }: { items: ActionItem[]; clientI
   });
 
   const [formSheet, setFormSheet] = useState<{ id: string; title: string } | null>(null);
+  const { openExternalForm, fallbackDialog } = useExternalFormOpener();
+
+  // Identity fields needed to tag external (Fillout) form URLs.
+  const { data: clientIdentity } = useQuery({
+    queryKey: ["action-centre-client-identity", clientId],
+    enabled: !!clientId,
+    staleTime: 5 * 60_000,
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("clients")
+        .select("id, full_name, first_name, last_name, email")
+        .eq("id", clientId!)
+        .maybeSingle();
+      return data;
+    },
+  });
 
   // Fallback form lookup when an occurrence has no metadata.form_id yet.
   const { data: clientForms = [] } = useQuery({
@@ -221,6 +239,13 @@ export function ActionCentre({ items, clientId }: { items: ActionItem[]; clientI
     }
     if (!id) {
       navigate({ to: "/portal/check-ins" });
+      return;
+    }
+    // External (Fillout) forms open directly in a real browser tab — no
+    // embedded sheet, no generic Check-ins page in between.
+    const record = (clientForms as any[]).find((f) => f.id === id);
+    if (isExternalForm(record) && (clientIdentity ?? (clientId ? { id: clientId } : null))) {
+      openExternalForm(record, (clientIdentity as any) ?? { id: clientId as string }, label);
       return;
     }
     setFormSheet({ id, title: label });
@@ -339,6 +364,7 @@ export function ActionCentre({ items, clientId }: { items: ActionItem[]; clientI
         </>
       )}
       <CoachFeedbackCard clientId={clientId} />
+      {fallbackDialog}
       <ClientFormSheet
         formId={formSheet?.id ?? null}
         title={formSheet?.title}
