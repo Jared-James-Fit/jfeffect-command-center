@@ -3169,8 +3169,14 @@ function SetRow({
     return existing.actual_load != null ? fmtLoad(existing.actual_load) : "";
   })();
   const [load, setLoad] = useState(initialDisplayLoad);
+  // Bodyweight (BW) sets store a 0 numeric load plus this flag, so BW counts
+  // as a real logged set without polluting weight PRs / volume with fake 0s.
+  const [bw, setBw] = useState<boolean>(Boolean((existing as any)?.is_bodyweight));
   // Derive the prescribed reps/RPE for Quick Log auto-fill.
   const prescribedRepsStr = (() => {
+    // Rep ranges pre-fill the TOP end (8-10 → 10): clients most often hit the
+    // top of the prescribed range, so that's the least-editing default.
+    if (repTarget?.max != null) return String(repTarget.max);
     if (repTarget?.exact != null) return String(repTarget.exact);
     if (repTarget?.min != null) return String(repTarget.min);
     // Extract only the FIRST number from the reps_text. Patterns like "12, 6, 12"
@@ -3264,7 +3270,10 @@ function SetRow({
     const focused = focusedFieldRef.current;
     if (recentlySavedRef.current) return;
     const display = existing?.actual_load != null ? fmtLoad(existing.actual_load) : "";
-    if (focused !== "load") setLoad(display);
+    if (focused !== "load") {
+      setLoad(display);
+      setBw(Boolean((existing as any)?.is_bodyweight));
+    }
     if (focused !== "reps") {
       // If the server has a stored reps value, hydrate from it. If the
       // server has null AND the user has explicitly edited (e.g. cleared
