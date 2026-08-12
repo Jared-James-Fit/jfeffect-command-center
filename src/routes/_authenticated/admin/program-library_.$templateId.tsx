@@ -2252,20 +2252,12 @@ function InlineAddExerciseButton({
   const pbDragging = usePbDragging();
   const inputRef = useRef<HTMLInputElement | null>(null);
 
-  const filtered = useMemo(() => {
-    const term = q.trim().toLowerCase();
-    const list = exercises as any[];
-    if (!term) return list.slice(0, 100);
-    return list
-      .filter((e) => {
-        const hay = [e.name, e.muscle_group, e.category, ...(e.tags ?? [])]
-          .filter(Boolean)
-          .join(" ")
-          .toLowerCase();
-        return hay.includes(term);
-      })
-      .slice(0, 200);
-  }, [exercises, q]);
+  const searched = useMemo(
+    () => searchExercises(exercises as any[], q, { limit: q.trim() ? 200 : 100 }),
+    [exercises, q],
+  );
+  const filtered = searched.results.map((r) => r.exercise) as any[];
+  const terms = searched.highlightTerms;
 
   const pick = (exId: string) => {
     onPick(exId);
@@ -2353,6 +2345,11 @@ function InlineAddExerciseButton({
           className="mb-2 h-8 text-xs"
         />
         <div className="max-h-64 overflow-y-auto">
+          {q.trim() && !searched.hasExactMatches && filtered.length > 0 && (
+            <div className="px-2 pb-1 text-[10px] text-muted-foreground">
+              No exact matches. Showing closest results.
+            </div>
+          )}
           {filtered.length === 0 ? (
             <div className="px-2 py-3 text-center text-xs text-muted-foreground">
               No matches
@@ -2369,11 +2366,11 @@ function InlineAddExerciseButton({
                     className="rounded px-2 py-1 text-left hover:bg-muted"
                   >
                     <div className="text-xs">
-                      <HighlightedText text={ex.name} query={q} />
+                      <HighlightedText text={ex.name} terms={terms} />
                     </div>
                     {tagLine && (
                       <div className="text-[10px] text-muted-foreground">
-                        <HighlightedText text={tagLine} query={q} />
+                        <HighlightedText text={tagLine} terms={terms} />
                       </div>
                     )}
                   </button>
