@@ -2770,7 +2770,7 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
         const firstUnit = (firstSet?.actual_load_unit as "kg" | "lb" | undefined) ?? activeUnit;
         const displayLoad = Number(Number(firstLoad ?? 0).toFixed(2));
         const firstLoadType = resolveLoadType(firstSet?.load_type, firstSet?.is_bodyweight);
-        const fillLabel = formatLoadDisplay(displayLoad, firstUnit, firstLoadType);
+        const fillLabel = formatLoadDisplay(displayLoad, firstLoadType, firstUnit);
         const onFill = async () => {
           // Refetch fresh results before reading Set 1 so the second fill always
           // uses the current Set 1 value, not a stale cached snapshot.
