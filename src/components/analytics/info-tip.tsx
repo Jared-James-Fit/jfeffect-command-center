@@ -44,6 +44,14 @@ export function InfoTip({
           <button
             type="button"
             aria-label={label}
+            onPointerDown={(e) => {
+              // Touch/pen never hovers, and Radix closes the tooltip on
+              // pointerdown — toggle here so a tap reliably opens it.
+              if (e.pointerType === "mouse") return;
+              e.stopPropagation();
+              e.preventDefault();
+              setOpen((v) => !v);
+            }}
             onClick={(e) => {
               e.stopPropagation();
               e.preventDefault();
