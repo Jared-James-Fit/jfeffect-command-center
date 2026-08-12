@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { Link } from "@tanstack/react-router";
+import { useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -8,6 +8,7 @@ import { FileText, Send } from "lucide-react";
 import { listFormsForClient, pickNutritionUpdateForm } from "@/lib/native-forms";
 import { listActionCentre, type ActionCentreItem } from "@/lib/action-centre.functions";
 import { usePortalUserId } from "@/lib/client-impersonation";
+import { ClientFormSheet } from "@/components/forms/client-form-sheet";
 
 /**
  * "Nutrition Review" card for the client Nutrition tab — one tap opens the
@@ -20,6 +21,7 @@ import { usePortalUserId } from "@/lib/client-impersonation";
 export function NutritionReviewCard() {
   const portalUserId = usePortalUserId();
   const list = useServerFn(listActionCentre);
+  const [open, setOpen] = useState(false);
 
   const { data: client } = useQuery({
     queryKey: ["my-client", portalUserId],
@@ -114,13 +116,17 @@ export function NutritionReviewCard() {
             Send your coach a nutrition update.{dueLine}
           </p>
         </div>
-        <Button asChild className="w-full bg-gradient-primary font-bold sm:w-auto">
-          <Link to="/portal/check-ins/$formId" params={{ formId: nutritionForm.id }}>
-            <Send className="mr-1.5 h-4 w-4" />
-            {buttonLabel}
-          </Link>
+        <Button className="w-full bg-gradient-primary font-bold sm:w-auto" onClick={() => setOpen(true)}>
+          <Send className="mr-1.5 h-4 w-4" />
+          {buttonLabel}
         </Button>
       </div>
+      <ClientFormSheet
+        formId={nutritionForm.id}
+        title="Nutrition Review"
+        open={open}
+        onOpenChange={setOpen}
+      />
     </Card>
   );
 }
