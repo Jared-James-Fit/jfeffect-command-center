@@ -3571,7 +3571,7 @@ function SetRow({
   // hasAnyEntry only counts weight (the field the client must enter) and
   // manually-edited reps/RPE. Pre-filled prescription values do NOT count
   // as draft data — otherwise every unlogged set shows the amber border.
-  const hasAnyEntry = load.length > 0 || repsEdited || rpeEdited;
+  const hasAnyEntry = load.length > 0 || bw || repsEdited || rpeEdited;
   const isDraft = !isConfirmed && (hasAnyEntry || (existing && !existing.completed_at));
 
   const isAbortError = (err: unknown) => {
@@ -3608,7 +3608,7 @@ function SetRow({
   const saveCompletionStatus = async () => {
     if (readonly || !clientId || statusSaving) return;
     const nextCompletedAt = isConfirmed ? null : new Date().toISOString();
-    const loadNum = load ? Number(load) : null;
+    const loadNum = bw ? 0 : load ? Number(load) : null;
     const repsNum = reps ? parseInt(reps, 10) : null;
     const rpeNum = rpe ? Number(rpe) : null;
     const loadUnit = persistedUnitForValue(load, unit, existing);
@@ -3630,6 +3630,7 @@ function SetRow({
         actual_load_unit: loadUnit,
         entered_value: loadNum,
         entered_unit: loadUnit,
+        is_bodyweight: bw,
         actual_reps: repsNum,
         actual_rpe: rpe || null,
         actual_rpe_num: rpeNum,
@@ -3754,6 +3755,8 @@ function SetRow({
   // rep count (current session excluded upstream). Ties/lower → no badge.
   const prBadge = useMemo(() => {
     if (!repMaxBests || !existing?.completed_at) return null;
+    // Bodyweight sets never produce weight PRs (a 0 lb "PR" is meaningless).
+    if ((existing as any).is_bodyweight) return null;
     return detectSetPR(
       {
         reps: existing.actual_reps != null ? Number(existing.actual_reps) : null,
