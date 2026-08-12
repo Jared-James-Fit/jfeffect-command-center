@@ -131,9 +131,10 @@ export function WeightValueInput({
   };
 
   const confirmWheel = () => {
-    const item = items[activeIndex];
-    if (!item) { setOpen(false); return; }
-    commit(item.bw ? { load: "0", bodyweight: true } : { load: String(item.value), bodyweight: false });
+    if (bwSelected) { commit({ load: "0", bodyweight: true }); return; }
+    const v = numbers[activeIndex];
+    if (v == null) { setOpen(false); return; }
+    commit({ load: String(v), bodyweight: false });
   };
 
   const submitTyped = () => {
@@ -170,43 +171,56 @@ export function WeightValueInput({
 
       {mode === "picker" ? (
         <>
-          <div className="relative">
+          <button
+            type="button"
+            onClick={() => setBwSelected(true)}
+            aria-pressed={bwSelected}
+            className={cn(
+              "h-10 w-full rounded-lg border text-xs font-bold transition-colors",
+              bwSelected
+                ? "border-primary bg-primary text-primary-foreground"
+                : "border-border/60 text-foreground hover:bg-muted/60",
+            )}
+          >
+            Bodyweight
+          </button>
+
+          <div className={cn("relative", bwSelected && "opacity-45")}>
             {/* centre selection band */}
             <div
               aria-hidden
-              className="pointer-events-none absolute inset-x-1 top-1/2 z-10 -translate-y-1/2 rounded-lg border border-primary/60 bg-primary/5"
-              style={{ height: ROW_H }}
+              className="pointer-events-none absolute inset-y-1 left-1/2 z-10 -translate-x-1/2 rounded-lg border border-primary/60 bg-primary/5"
+              style={{ width: ITEM_W }}
             />
             <div
               ref={scrollRef}
               onScroll={onScroll}
               role="listbox"
               aria-label={`Weight in ${unit}`}
-              className="relative h-[200px] snap-y snap-mandatory overflow-y-auto overscroll-contain scroll-smooth [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+              className="relative flex h-[64px] items-center overflow-x-auto overflow-y-hidden overscroll-x-contain [-webkit-overflow-scrolling:touch] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
             >
-              <div style={{ height: ROW_H * PAD_ROWS }} />
-              {items.map((it, i) => {
-                const active = i === activeIndex;
+              <div className="shrink-0" style={{ width: `calc(50% - ${ITEM_W / 2}px)` }} />
+              {numbers.map((v, i) => {
+                const active = !bwSelected && i === activeIndex;
                 return (
-                  <button
-                    key={it.key}
-                    type="button"
+                  <div
+                    key={v}
                     role="option"
                     aria-selected={active}
-                    onClick={() => { setActiveIndex(i); scrollToIndex(i, true); }}
+                    onClick={() => { setBwSelected(false); setActiveIndex(i); scrollToIndex(i, true); }}
                     className={cn(
-                      "flex w-full snap-center items-center justify-center tabular-nums transition-all",
+                      "flex h-full shrink-0 cursor-pointer select-none items-center justify-center tabular-nums",
                       active
                         ? "text-lg font-bold text-foreground"
                         : "text-sm font-medium text-muted-foreground/70",
                     )}
-                    style={{ height: ROW_H }}
+                    style={{ width: ITEM_W }}
                   >
-                    {it.label}
-                  </button>
+                    {v}
+                  </div>
                 );
               })}
-              <div style={{ height: ROW_H * PAD_ROWS }} />
+              <div className="shrink-0" style={{ width: `calc(50% - ${ITEM_W / 2}px)` }} />
             </div>
           </div>
 
