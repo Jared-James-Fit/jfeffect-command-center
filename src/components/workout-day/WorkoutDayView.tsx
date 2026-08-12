@@ -1914,17 +1914,31 @@ function WorkoutDay({
             } catch { return null; }
           })()}
         />
-        {!readonly && (
-          <div>
-            <Button
-              size="sm"
-              variant="ghost"
-              onClick={() => setMoveOpen(true)}
-              className="h-8 gap-1 px-2 text-xs text-muted-foreground hover:text-foreground"
-              aria-label="Move workout to another date"
-            >
-              <Move className="h-3.5 w-3.5" /> Move
-            </Button>
+        {/* Compact action row — Warm-Up + Move sit together so they never
+            create a tall empty band above the first exercise card. */}
+        {(!readonly || !!client?.id) && (
+          <div className="flex flex-wrap items-center gap-2">
+            {client?.id && (
+              <WarmupButton
+                dayId={dayId}
+                blockId={blockId}
+                clientId={client.id}
+                warmupMode={(day as any).warmup_mode}
+                dayProtocolId={(day as any).warmup_protocol_id}
+                exerciseRows={rows as any[]}
+              />
+            )}
+            {!readonly && (
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => setMoveOpen(true)}
+                className="h-9 gap-1.5 rounded-full px-3 text-xs text-muted-foreground hover:text-foreground"
+                aria-label="Move workout to another date"
+              >
+                <Move className="h-3.5 w-3.5" /> Move
+              </Button>
+            )}
           </div>
         )}
 
