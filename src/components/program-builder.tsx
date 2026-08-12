@@ -877,18 +877,23 @@ export function ExerciseLibraryPanel({
         {favList.length > 0 && !q && !filter && (
           <Section label="Favorites">
             {favList.map((e) => (
-              <ExerciseItem key={e.id} ex={e} fav onFav={toggleFav} onPick={onPick} query="" />
+              <ExerciseItem key={e.id} ex={e} fav onFav={toggleFav} onPick={onPick} />
             ))}
           </Section>
         )}
         {recent.length > 0 && !q && !filter && (
           <Section label="Recent">
             {recent.map((e) => (
-              <ExerciseItem key={e.id} ex={e} fav={favs.has(e.id)} onFav={toggleFav} onPick={onPick} query="" />
+              <ExerciseItem key={e.id} ex={e} fav={favs.has(e.id)} onFav={toggleFav} onPick={onPick} />
             ))}
           </Section>
         )}
         <Section label={q || filter ? "Results" : "Library"}>
+          {showingClosest && (
+            <div className="px-2 pb-1 text-[10px] text-muted-foreground">
+              No exact matches. Showing closest results.
+            </div>
+          )}
           {filtered.length === 0 ? (
             <div className="space-y-2 p-3 text-center text-[11px] text-muted-foreground">
               <div>No exercises{q ? <> matching “{q}”</> : null}.</div>
@@ -905,7 +910,7 @@ export function ExerciseLibraryPanel({
             </div>
           ) : (
             filtered.map((e) => (
-              <ExerciseItem key={e.id} ex={e} fav={favs.has(e.id)} onFav={toggleFav} onPick={onPick} onQuickAdd={onQuickAdd} query={q} />
+              <ExerciseItem key={e.id} ex={e} fav={favs.has(e.id)} onFav={toggleFav} onPick={onPick} onQuickAdd={onQuickAdd} terms={highlightTerms} />
             ))
           )}
         </Section>
