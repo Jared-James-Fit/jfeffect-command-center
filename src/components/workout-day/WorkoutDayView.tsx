@@ -72,6 +72,7 @@ import {
 } from "@/lib/workout-previous-lift";
 import { computeRepMaxBests, computeAssistedBests, detectAssistedSetPR, detectSetPR } from "@/lib/workout-pr";
 import { WeightValueInput } from "@/components/workout-day/weight-value-input";
+import { isSetLogComplete } from "@/lib/set-completion";
 import {
   formatLoadDisplay,
   loadColumnLabel,
