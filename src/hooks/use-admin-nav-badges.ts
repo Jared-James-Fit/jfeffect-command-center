@@ -13,6 +13,15 @@ export function invalidateAdminNavBadges(qc: QueryClient) {
   return qc.invalidateQueries({ queryKey: ADMIN_NAV_BADGES_KEY });
 }
 
+/** Optimistically nudge one badge field, then reconcile with the server. */
+export function adjustAdminNavBadge(qc: QueryClient, field: keyof AdminBadgeCounts, delta: number) {
+  qc.setQueriesData({ queryKey: ADMIN_NAV_BADGES_KEY }, (prev: any) => {
+    if (!prev || typeof prev[field] !== "number") return prev;
+    return { ...prev, [field]: Math.max(0, prev[field] + delta) };
+  });
+  return invalidateAdminNavBadges(qc);
+}
+
 export type AdminBadgeCounts = {
   messages: number;
   liftReviews: number;

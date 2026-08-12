@@ -10,6 +10,7 @@ import { Switch } from "@/components/ui/switch";
 import { ExternalLink, MessageSquare, Heart, Eye, CheckCircle2, AlertTriangle, Send, Lock } from "lucide-react";
 import { format, parseISO } from "date-fns";
 import { toast } from "sonner";
+import { invalidateAdminNavBadges } from "@/hooks/use-admin-nav-badges";
 import { supabase } from "@/integrations/supabase/client";
 import {
   COMMENT_TYPES, MEDIA_STATUSES, addComment, fmtTimestamp, listMediaComments,
@@ -76,7 +77,7 @@ export function MediaItemCard({
 
   async function changeStatus(s: MediaStatus) {
     if (!userId) return;
-    try { await setMediaStatus(item.id, s, userId); onChanged?.(); } catch (e: any) { toast.error(e?.message); }
+    try { await setMediaStatus(item.id, s, userId); onChanged?.(); invalidateAdminNavBadges(qc); } catch (e: any) { toast.error(e?.message); }
   }
 
   return (

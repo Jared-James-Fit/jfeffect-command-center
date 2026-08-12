@@ -2,6 +2,7 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ClientNameLink } from "@/components/clients/client-name-link";
 import { useEffect, useMemo, useState } from "react";
+import { invalidateAdminNavBadges } from "@/hooks/use-admin-nav-badges";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
 import { PageHeader } from "@/components/app-shell";
@@ -137,9 +138,9 @@ export function AdminLiftVideos({ embedded = false, initialOpen }: { embedded?: 
     const ch = supabase
       .channel("admin-lift-videos")
       .on("postgres_changes", { event: "*", schema: "public", table: "lift_videos" },
-        () => qc.invalidateQueries({ queryKey: ["lift-videos-admin"] }))
+        () => { qc.invalidateQueries({ queryKey: ["lift-videos-admin"] }); invalidateAdminNavBadges(qc); })
       .on("postgres_changes", { event: "*", schema: "public", table: "lift_video_comments" },
-        () => qc.invalidateQueries({ queryKey: ["lift-videos-admin"] }))
+        () => { qc.invalidateQueries({ queryKey: ["lift-videos-admin"] }); invalidateAdminNavBadges(qc); })
       .subscribe();
     return () => { supabase.removeChannel(ch); };
   }, [qc]);
@@ -193,7 +194,10 @@ export function AdminLiftVideos({ embedded = false, initialOpen }: { embedded?: 
     if (activeClip) markAdminViewed(activeClip.id).catch(() => {});
   }, [activeClip?.id]);
 
-  const refresh = () => qc.invalidateQueries({ queryKey: ["lift-videos-admin"] });
+  const refresh = () => {
+    qc.invalidateQueries({ queryKey: ["lift-videos-admin"] });
+    invalidateAdminNavBadges(qc);
+  };
 
   // Bulk selection (manage mode)
   const toggleOne = (key: string) => setSelected((p) => {
