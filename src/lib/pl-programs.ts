@@ -845,12 +845,20 @@ export async function getClientResults(
         const n = Number(rawVal) || 0;
         loadLb = rawUnit === "kg" ? n * LB_PER_KG : n;
       }
+      const isBodyweight = r.is_bodyweight === true;
+      // A set carries external load only when a positive load was logged.
+      // Bodyweight (and legacy zero-load) sets are still real, completed sets:
+      // they must survive into set counts, reps, adherence and frequency, but
+      // they must never produce a 0 lb "PR" or fake tonnage.
+      const hasLoad = loadLb > 0;
       return {
         id: r.id,
         set_index: r.set_index,
         // `load` is now ALWAYS in LB. Display code is responsible for
         // converting to the viewer's preferred unit before rendering.
         load: loadLb,
+        is_bodyweight: isBodyweight,
+        counts_load: hasLoad,
         reps: Number(r.actual_reps) || 0,
         rpe: r.actual_rpe ?? null,
         rir: r.actual_rir ?? null,
@@ -861,7 +869,8 @@ export async function getClientResults(
         purpose_label: r.pl_exercise_rows?.purpose_label ?? null,
         movement_family: r.pl_exercise_rows?.movement_family ?? null,
         date: r.completed_at,
-        est_1rm: epley1RM(loadLb, Number(r.actual_reps) || 0),
+        est_1rm: hasLoad ? epley1RM(loadLb, Number(r.actual_reps) || 0) : 0,
+        exercise_id: r.pl_exercise_rows?.exercise_id ?? null,
         exercise_name: r.pl_exercise_rows?.exercises?.name ?? r.pl_exercise_rows?.exercise_name_override ?? "Unknown",
         muscle_group:
           r.pl_exercise_rows?.exercises?.primary_muscle_group ??
@@ -869,22 +878,36 @@ export async function getClientResults(
           "Other",
         category: r.pl_exercise_rows?.exercises?.category ?? null,
       };
-    })
-    .filter((r: any) => r.load > 0);
+    });
+}
+
+/**
+ * Identity key for grouping a set's history. Prefers the library exercise id
+ * so renamed / near-duplicate display names ("Spotto Press" vs "Spoto Press")
+ * stop fragmenting history. Falls back to the display name for rows that are
+ * genuinely custom (no library link).
+ */
+function exerciseIdentityKey(r: any): string {
+  return r.exercise_id ? `id:${r.exercise_id}` : `name:${(r.exercise_name ?? "Unknown").trim().toLowerCase()}`;
 }
 
 /** Group result history by exercise; return time-series est-1RM and current PR. */
 export function buildExerciseHistory(results: any[]) {
   const byEx = new Map<string, any[]>();
-  for (const r of results as any[]) {
-    if (!byEx.has(r.exercise_name)) byEx.set(r.exercise_name, []);
-    byEx.get(r.exercise_name)!.push(r);
+  // Strength history is a loaded-lift view: bodyweight/zero-load sets are kept
+  // in `results` for set counting but excluded from e1RM series and PRs.
+  for (const r of (results as any[]).filter((r) => (r.load ?? 0) > 0)) {
+    const k = exerciseIdentityKey(r);
+    if (!byEx.has(k)) byEx.set(k, []);
+    byEx.get(k)!.push(r);
   }
   const out: { name: string; pr: any; latest_est: number; points: any[] }[] = [];
-  for (const [name, pts] of byEx) {
+  for (const [, pts] of byEx) {
     const pr = pts.reduce((best, p) => (p.est_1rm > (best?.est_1rm ?? 0) ? p : best), null as any);
     const latest = pts[pts.length - 1];
-    out.push({ name, pr, latest_est: latest?.est_1rm ?? 0, points: pts });
+    // Display name follows the most recent record so historical renames show
+    // under the current name without splitting the series.
+    out.push({ name: latest?.exercise_name ?? pts[0]?.exercise_name ?? "Unknown", pr, latest_est: latest?.est_1rm ?? 0, points: pts });
   }
   return out.sort((a, b) => (b.pr?.est_1rm ?? 0) - (a.pr?.est_1rm ?? 0));
 }
@@ -904,16 +927,19 @@ export function weeklyMuscleVolume(results: any[], days = 7) {
 /** Newest est-1RM PR per exercise in last `days` days. */
 export function recentPRs(results: any[], days = 30) {
   const cutoff = Date.now() - days * 86400000;
-  const recent = results.filter((r) => r.date && new Date(r.date).getTime() >= cutoff);
-  const all = results;
+  // Loaded sets only — a bodyweight set can never be a 0 lb / 0 kg PR.
+  const loaded = results.filter((r) => (r.load ?? 0) > 0);
+  const recent = loaded.filter((r) => r.date && new Date(r.date).getTime() >= cutoff);
+  const all = loaded;
   const prs: any[] = [];
   const byEx = new Map<string, any[]>();
   for (const r of all) {
-    if (!byEx.has(r.exercise_name)) byEx.set(r.exercise_name, []);
-    byEx.get(r.exercise_name)!.push(r);
+    const k = exerciseIdentityKey(r);
+    if (!byEx.has(k)) byEx.set(k, []);
+    byEx.get(k)!.push(r);
   }
   for (const r of recent) {
-    const history = byEx.get(r.exercise_name) ?? [];
+    const history = byEx.get(exerciseIdentityKey(r)) ?? [];
     const priorMax = history.filter((h) => h.date && new Date(h.date).getTime() < new Date(r.date).getTime()).reduce((m, h) => Math.max(m, h.est_1rm), 0);
     if (r.est_1rm > priorMax && priorMax > 0) {
       prs.push({ ...r, prior_est: priorMax, delta: r.est_1rm - priorMax });
