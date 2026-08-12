@@ -72,6 +72,7 @@ import {
 } from "@/lib/workout-previous-lift";
 import { computeRepMaxBests, computeAssistedBests, detectAssistedSetPR, detectSetPR } from "@/lib/workout-pr";
 import { WeightValueInput } from "@/components/workout-day/weight-value-input";
+import { isSetLogComplete } from "@/lib/set-completion";
 import {
   formatLoadDisplay,
   loadColumnLabel,
@@ -3458,9 +3459,16 @@ function SetRow({
       const repsNum = value.reps ? parseInt(value.reps, 10) : null;
       const rpeNum = value.rpe ? Number(value.rpe) : null;
       const loadUnit = persistedUnitForValue(value.load, value.unit, existing);
-      const completedAt = hideWeight
-        ? (repsNum != null && Number.isFinite(repsNum) && repsNum > 0 ? new Date().toISOString() : null)
-        : (repsNum != null && Number.isFinite(repsNum) && repsNum > 0 && (value.bw || (loadNum != null && Number.isFinite(loadNum) && loadNum > 0)) ? new Date().toISOString() : null);
+      const completedAt = isSetLogComplete({
+        measurementType,
+        hideWeight,
+        loadType: value.loadType,
+        load: value.bw ? 0 : value.load,
+        reps: repsNum,
+        durationSeconds: (existing as any)?.completed_duration_seconds ?? null,
+      })
+        ? (existing?.completed_at ?? new Date().toISOString())
+        : null;
       enqueueOfflineWrite({
         id: `portal_set:${rowId}:${clientId}:${setIndex}`,
         label: `Saved set ${setIndex}`,
@@ -3500,9 +3508,16 @@ function SetRow({
       if (reps && (repsNum == null || !isFinite(repsNum) || repsNum < 0)) throw new Error("Reps must be a whole number");
       if (rpe && (rpeNum == null || !isFinite(rpeNum) || rpeNum < 0 || rpeNum > 10)) throw new Error("RPE must be 0–10");
       const loadUnit = persistedUnitForValue(load, unit, existing);
-      const completedAt = hideWeight
-        ? (repsNum != null && Number.isFinite(repsNum) && repsNum > 0 ? new Date().toISOString() : null)
-        : (repsNum != null && Number.isFinite(repsNum) && repsNum > 0 && (bw || (loadNum != null && Number.isFinite(loadNum) && loadNum > 0)) ? new Date().toISOString() : null);
+      const completedAt = isSetLogComplete({
+        measurementType,
+        hideWeight,
+        loadType,
+        load: bw ? 0 : load,
+        reps: repsNum,
+        durationSeconds: (existing as any)?.completed_duration_seconds ?? null,
+      })
+        ? (existing?.completed_at ?? new Date().toISOString())
+        : null;
       const payload = withMemberWorkoutIndexes({
         row_id: rowId,
         load_type: loadType,
@@ -3635,13 +3650,32 @@ function SetRow({
   const existingLoadNum = existing?.actual_load != null ? Number(existing.actual_load) : NaN;
   const existingDurNum = (existing as any)?.completed_duration_seconds != null ? Number((existing as any).completed_duration_seconds) : NaN;
   const existingRepsNum = existing?.actual_reps != null ? Number(existing.actual_reps) : NaN;
-  const hasLoggedValue = isTimeKind
-    ? Number.isFinite(existingDurNum) && existingDurNum > 0
-    : hideWeight
-      ? Number.isFinite(existingRepsNum) && existingRepsNum > 0
-      // Load of 0 is valid (bodyweight / unloaded). Reps still required.
-      : Number.isFinite(existingRepsNum) && existingRepsNum > 0 && Number.isFinite(existingLoadNum) && existingLoadNum >= 0;
-  const isConfirmed = Boolean(existing?.completed_at) && hasLoggedValue;
+  // Persisted-row completeness (green styling) uses the same shared validator
+  // as the autosave stamp so the circle can never disagree with the data.
+  const hasLoggedValue = isSetLogComplete({
+    measurementType,
+    hideWeight,
+    loadType: existing ? resolveLoadType((existing as any).load_type, (existing as any).is_bodyweight) : "external",
+    load: existing?.actual_load ?? null,
+    reps: existing?.actual_reps ?? null,
+    durationSeconds: (existing as any)?.completed_duration_seconds ?? null,
+  });
+  // Live (unsaved) completeness — lets the status circle flip the instant the
+  // last required field is entered, before the 1s autosave lands.
+  const liveComplete = isSetLogComplete({
+    measurementType,
+    hideWeight,
+    loadType,
+    load: bw ? 0 : load,
+    reps,
+    durationSeconds: (existing as any)?.completed_duration_seconds ?? null,
+  });
+  // Optimistic green: only while the row's own save for those values is still
+  // in flight. Once it lands, `existing.completed_at` carries the state — and a
+  // manual "mark incomplete" tap (no pending save) is never overridden.
+  const liveOptimistic =
+    !readonly && liveComplete && (save.hasPending() || save.state === "saving");
+  const isConfirmed = (Boolean(existing?.completed_at) && hasLoggedValue) || liveOptimistic;
   // hasAnyEntry only counts weight (the field the client must enter) and
   // manually-edited reps/RPE. Pre-filled prescription values do NOT count
   // as draft data — otherwise every unlogged set shows the amber border.
@@ -3686,11 +3720,14 @@ function SetRow({
     const repsNum = reps ? parseInt(reps, 10) : null;
     const rpeNum = rpe ? Number(rpe) : null;
     const loadUnit = persistedUnitForValue(load, unit, existing);
-    const currentHasRequiredValues = isTimeKind
-      ? Number.isFinite(existingDurNum) && existingDurNum > 0
-      : hideWeight
-        ? repsNum != null && Number.isFinite(repsNum) && repsNum > 0
-        : repsNum != null && Number.isFinite(repsNum) && repsNum > 0 && loadNum != null && Number.isFinite(loadNum) && loadNum >= 0;
+    const currentHasRequiredValues = isSetLogComplete({
+      measurementType,
+      hideWeight,
+      loadType,
+      load: bw ? 0 : load,
+      reps: repsNum,
+      durationSeconds: existingDurNum,
+    });
     if (nextCompletedAt && !currentHasRequiredValues) {
       toast.error(isTimeKind ? "Complete the timer first" : hideWeight ? "Enter reps before marking complete" : "Enter reps and weight before marking complete (use 0 for bodyweight)");
       return;
@@ -4001,6 +4038,9 @@ function SetRow({
           setLoadType(nextType);
           setLoad(bodyweight ? "0" : nextLoad);
           setFocusedField(null);
+          // Picker "Done" must persist + re-evaluate completion immediately —
+          // no waiting for the 1s autosave debounce, no extra tap.
+          setTimeout(() => { void save.flush().catch(() => {}); }, 0);
         }}
       />
       )}
