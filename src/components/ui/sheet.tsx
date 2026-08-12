@@ -54,17 +54,22 @@ interface SheetContentProps
     React.ComponentPropsWithoutRef<typeof SheetPrimitive.Content>,
     VariantProps<typeof sheetVariants> {
   hideCloseButton?: boolean;
+  /**
+   * Bottom sheets that render nearly full-height sit under the iOS status bar
+   * / Dynamic Island. Opt in to push the Back pill below the safe area.
+   */
+  safeTopClose?: boolean;
 }
 
 const SheetContent = React.forwardRef<
   React.ElementRef<typeof SheetPrimitive.Content>,
   SheetContentProps
->(({ side = "right", className, children, hideCloseButton, ...props }, ref) => {
+>(({ side = "right", className, children, hideCloseButton, safeTopClose, ...props }, ref) => {
   // Bottom sheets originate at the bottom of the viewport, so
   // `env(safe-area-inset-top)` would push the Back pill *down* into the
   // sheet's content. Only offset for sheets that actually touch the top
   // of the viewport (top / left / right).
-  const anchorsToViewportTop = side !== "bottom";
+  const anchorsToViewportTop = side !== "bottom" || !!safeTopClose;
   const closeStyle = anchorsToViewportTop
     ? { top: "calc(env(safe-area-inset-top) + 0.75rem)" }
     : undefined;
