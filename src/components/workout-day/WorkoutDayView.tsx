@@ -2824,6 +2824,7 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
               targetRpe={row.rpe}
               targetRir={row.rir}
               suggestedWeight={suggestedWeight}
+              lastTimeWeight={activeUnit === "kg" ? (previousLift?.normalizedKg ?? null) : (previousLift?.normalizedLb ?? null)}
               repTarget={repTarget}
               rpeTarget={rpeTarget}
               rirTarget={rirTarget}
@@ -3111,7 +3112,7 @@ function ExerciseNotesSheet({ open, onOpenChange, clientId, dayId, dayTitle, row
 
 function SetRow({
   rowId, workoutId, exerciseId, exerciseName, clientId, setIndex, existing, prevExisting,
-  targetReps, targetRpe, targetRir, suggestedWeight,
+  targetReps, targetRpe, targetRir, suggestedWeight, lastTimeWeight,
   repTarget, rpeTarget, rirTarget,
   repMaxBests = null,
   hasUncompletedAfter, onApplyToRemaining, forceHydrateToken = 0,
@@ -3134,6 +3135,7 @@ function SetRow({
   targetRpe?: string | null;
   targetRir?: string | null;
   suggestedWeight?: number | null;
+  lastTimeWeight?: number | null;
   repTarget?: RangeTarget;
   rpeTarget?: RangeTarget;
   rirTarget?: RangeTarget;
@@ -3910,6 +3912,7 @@ function SetRow({
         isBodyweight={bw}
         unit={unit}
         ariaLabel={`Set ${setIndex} weight in ${unit}`}
+        referenceWeight={suggestedWeight ?? lastTimeWeight ?? null}
         disabled={readonly}
         focusMode={focusMode}
         onPick={({ load: nextLoad, bodyweight }: { load: string; bodyweight: boolean }) => {
