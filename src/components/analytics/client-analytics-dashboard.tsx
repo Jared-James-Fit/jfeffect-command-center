@@ -463,11 +463,13 @@ export function ClientAnalyticsDashboard({
           <Card className="p-8 text-center text-sm text-muted-foreground">
             Loading training data…
           </Card>
-        ) : (results as any[]).length === 0 ? (
+        ) : (results as any[]).length === 0 && hasAnyResults === false ? (
           <AnalyticsEmptyPreview />
         ) : (
           <>
-            <PerformanceInsights clientId={clientId} displayUnit={displayUnit} />
+            <SectionErrorBoundary label="Performance Insights">
+              <PerformanceInsights clientId={clientId} displayUnit={displayUnit} />
+            </SectionErrorBoundary>
             {filteredResults.length === 0 && (
               <Card className="border-dashed border-border/70 bg-card/60 p-6 text-center text-sm text-muted-foreground">
                 No training data logged in this period ({filter.label}).
@@ -536,6 +538,7 @@ export function ClientAnalyticsDashboard({
               />
             </section>
 
+            <SectionErrorBoundary label="Weight lifted">
             <WeightLiftedCard
               clientId={clientId}
               displayUnit={displayUnit}
@@ -544,6 +547,7 @@ export function ClientAnalyticsDashboard({
               rangeLabel={filter.label}
               blockId={activeBlockId}
             />
+            </SectionErrorBoundary>
 
             <div
               id="recovery"
@@ -551,6 +555,7 @@ export function ClientAnalyticsDashboard({
                 recoveryHighlight ? "ring-2 ring-primary/70 ring-offset-2 ring-offset-background shadow-lg" : ""
               }`}
             >
+              <SectionErrorBoundary label="Recovery">
               <RecoverySummaryCard
                 clientId={clientId}
                 rangeStart={filter.start}
@@ -559,21 +564,27 @@ export function ClientAnalyticsDashboard({
                 prevStart={prevBlockStart}
                 prevEnd={prevBlockEnd}
               />
+              </SectionErrorBoundary>
+              <SectionErrorBoundary label="Cardio">
               <CardioSummaryCard
                 clientId={clientId}
                 rangeStart={filter.start}
                 rangeEnd={filter.end}
                 rangeLabel={filter.label}
               />
+              </SectionErrorBoundary>
             </div>
 
+            <SectionErrorBoundary label="Sleep">
             <SleepInsightsCard
               clientId={clientId}
               blockStart={filter.start}
               blockEnd={filter.end}
               blockLabel={filter.label}
             />
+            </SectionErrorBoundary>
 
+            <SectionErrorBoundary label="Bodyweight trend">
             <BodyweightTrendCard
               clientId={clientId}
               displayUnit={displayUnit}
@@ -581,6 +592,7 @@ export function ClientAnalyticsDashboard({
               rangeEnd={filter.end}
               rangeLabel={filter.label}
             />
+            </SectionErrorBoundary>
 
             <section aria-label="Planned vs Actual">
               <div className="mb-1 text-[11px] font-semibold text-muted-foreground">
@@ -970,6 +982,7 @@ export function ClientAnalyticsDashboard({
               )}
             </section>
 
+            <SectionErrorBoundary label="Powerlifting exposure">
             <PowerliftingExposureSection
               clientId={clientId}
               filter={filter}
@@ -977,17 +990,22 @@ export function ClientAnalyticsDashboard({
               displayUnit={displayUnit}
               blockId={activeBlockId}
             />
+            </SectionErrorBoundary>
 
+            <SectionErrorBoundary label="Recovery patterns">
             <RecoveryPatternsCard
               clientId={clientId}
               rangeStart={filter.start}
               rangeEnd={filter.end}
             />
+            </SectionErrorBoundary>
 
+            <SectionErrorBoundary label="Predicted window">
             <PredictedWindowCard
               clientId={clientId}
               currentBlockId={activeBlockId ?? resolvedCurrentBlockId}
             />
+            </SectionErrorBoundary>
           </>
         )}
       </div>
