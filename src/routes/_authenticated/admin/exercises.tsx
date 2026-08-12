@@ -239,7 +239,9 @@ export function ExercisesAdmin({ embedded = false }: { embedded?: boolean } = {}
             <Card key={e.id} className="border-border bg-card p-4 space-y-2">
               <div className="flex items-start justify-between">
                 <div>
-                  <div className="font-bold">{e.name}</div>
+                  <div className="font-bold">
+                    <HighlightedExerciseName text={e.name} terms={highlightTerms} />
+                  </div>
                   <div className="text-xs text-muted-foreground">
                     {e.category} · <span className={(e as any).needs_muscle_review ? "text-amber-500 font-semibold" : "text-primary font-semibold"}>{(e as any).primary_muscle_group ?? "—"}</span>
                     {(e as any).needs_muscle_review && <span className="ml-1 text-amber-500">⚠ review</span>}
