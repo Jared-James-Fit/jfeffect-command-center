@@ -696,6 +696,7 @@ export function createMemberAdapter(ref: WorkoutContextRef): WorkoutContextAdapt
               : Number((enteredValue / 2.2046226218).toFixed(2)),
         rpe: rpeNum,
         rir: payload.actual_rir ?? payload.rir ?? null,
+        is_bodyweight: payload.is_bodyweight ?? false,
         notes: payload.notes ?? null,
         is_working_set: payload.is_working_set ?? null,
         completed_duration_seconds: payload.completed_duration_seconds ?? null,
