@@ -1,5 +1,6 @@
 import { supabase } from "@/integrations/supabase/client";
 import { mergeScheduledInstances } from "@/lib/scheduled-instances-merge";
+import { normalizeMuscle } from "@/lib/analytics/muscle-map";
 
 // ---------- Types ----------
 export type PrepStatus = "Planned" | "Active" | "Completed" | "Archived";
