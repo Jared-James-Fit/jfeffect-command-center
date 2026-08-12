@@ -198,16 +198,24 @@ export function WorkoutTimer({
   // and re-read after refocus so a backgrounded tab shows the right value.
   useEffect(() => {
     if (completedAt) return;
-    const reread = () => sync(readWorkoutSession(dayId));
+    // Recompute from stored timestamps on every return path (app switch,
+    // phone unlock, PWA reopen, bfcache restore) so elapsed time includes
+    // time spent away.
+    const reread = () => {
+      setNow(Date.now());
+      sync(readWorkoutSession(dayId));
+    };
     const id = window.setInterval(() => {
       setNow(Date.now());
       reread();
     }, 1000);
     window.addEventListener("focus", reread);
+    window.addEventListener("pageshow", reread);
     document.addEventListener("visibilitychange", reread);
     return () => {
       window.clearInterval(id);
       window.removeEventListener("focus", reread);
+      window.removeEventListener("pageshow", reread);
       document.removeEventListener("visibilitychange", reread);
     };
   }, [dayId, completedAt, sync]);
