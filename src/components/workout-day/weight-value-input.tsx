@@ -63,7 +63,7 @@ export function WeightValueInput({
   }, []);
 
   const numeric = value !== "" && Number.isFinite(Number(value)) ? Number(value) : null;
-  const shown = isBodyweight ? "BW" : (value || "Select");
+  const shown = isBodyweight ? "Bodyweight" : (value || "Select");
   const isEmpty = !isBodyweight && value === "";
 
   const startTarget = useMemo(
@@ -74,45 +74,52 @@ export function WeightValueInput({
     () => weightPickerValues(unit, Math.max(numeric ?? 0, referenceWeight ?? 0)),
     [unit, numeric, referenceWeight],
   );
-  const items = useMemo<PickerItem[]>(
-    () => [
-      { key: "bw", label: "BW", bw: true, value: null },
-      ...numbers.map((v) => ({ key: String(v), label: String(v), bw: false, value: v })),
-    ],
-    [numbers],
-  );
-  /** Index the wheel should land on when opened. */
+  /** Numeric index the wheel should land on when opened. */
   const initialIndex = useMemo(() => {
-    if (isBodyweight) return 0;
-    if (startTarget == null) return 1; // "0" row
-    return 1 + nearestWeightIndex(numbers, startTarget);
-  }, [isBodyweight, startTarget, numbers]);
+    if (startTarget == null) return nearestWeightIndex(numbers, numeric ?? 0);
+    return nearestWeightIndex(numbers, startTarget);
+  }, [startTarget, numbers, numeric]);
 
   const [activeIndex, setActiveIndex] = useState(initialIndex);
+  const [bwSelected, setBwSelected] = useState(isBodyweight);
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const settleRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const programmaticRef = useRef(false);
 
   const scrollToIndex = useCallback((idx: number, smooth = false) => {
     const el = scrollRef.current;
     if (!el) return;
-    el.scrollTo({ top: idx * ROW_H, behavior: smooth ? "smooth" : "auto" });
+    programmaticRef.current = true;
+    el.scrollTo({ left: idx * ITEM_W, behavior: smooth ? "smooth" : "auto" });
+    window.setTimeout(() => { programmaticRef.current = false; }, smooth ? 400 : 80);
   }, []);
 
-  // Position the wheel on the smart start row every time it opens.
+  // Position the wheel on the smart start value every time it opens.
   useLayoutEffect(() => {
     if (!open || mode !== "picker") return;
     setActiveIndex(initialIndex);
+    setBwSelected(isBodyweight);
     const id = requestAnimationFrame(() => scrollToIndex(initialIndex));
     return () => cancelAnimationFrame(id);
-  }, [open, mode, initialIndex, scrollToIndex]);
+  }, [open, mode, initialIndex, isBodyweight, scrollToIndex]);
 
+  /**
+   * Native momentum runs untouched (no CSS snap, no scrollIntoView mid-drag);
+   * we only read the index and snap once the scroll has settled.
+   */
   const onScroll = () => {
     const el = scrollRef.current;
     if (!el) return;
-    const idx = Math.max(0, Math.min(items.length - 1, Math.round(el.scrollTop / ROW_H)));
-    setActiveIndex(idx);
+    const idx = Math.max(0, Math.min(numbers.length - 1, Math.round(el.scrollLeft / ITEM_W)));
+    setActiveIndex((prev) => (prev === idx ? prev : idx));
+    if (!programmaticRef.current && bwSelected) setBwSelected(false);
     if (settleRef.current) clearTimeout(settleRef.current);
-    settleRef.current = setTimeout(() => setActiveIndex(idx), 60);
+    settleRef.current = setTimeout(() => {
+      if (programmaticRef.current) return;
+      const settled = Math.max(0, Math.min(numbers.length - 1, Math.round(el.scrollLeft / ITEM_W)));
+      setActiveIndex(settled);
+      if (Math.abs(el.scrollLeft - settled * ITEM_W) > 1) scrollToIndex(settled, true);
+    }, 140);
   };
 
   const reset = () => { setTyped(""); setError(null); setConfirmValue(null); };
