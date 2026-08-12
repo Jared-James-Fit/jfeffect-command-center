@@ -691,7 +691,7 @@ function WorkoutDay({
         if (!adapter.ref.enrollmentId) return [];
         const { data, error } = await (supabase as any)
           .from("member_set_logs")
-          .select("id, week_index, day_index, exercise_id, logged_at, updated_at, reps, rpe, rir, entered_value, entered_unit, normalized_kg, normalized_lb, load_kg, load_lb, is_working_set")
+          .select("id, week_index, day_index, exercise_id, logged_at, updated_at, reps, rpe, rir, entered_value, entered_unit, normalized_kg, normalized_lb, load_kg, load_lb, is_working_set, is_bodyweight, load_type")
           .eq("enrollment_id", adapter.ref.enrollmentId)
           .order("logged_at", { ascending: false })
           .limit(2000);
