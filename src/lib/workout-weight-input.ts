@@ -92,6 +92,6 @@ export function saveWeightInputMode(mode: WeightInputMode): void {
  * column header, so an empty cell shows a placeholder rather than "kg"/"lb".
  */
 export function formatWeightDisplay(load: string, isBodyweight: boolean, _unit: WUnit): string {
-  if (isBodyweight) return "BW";
+  if (isBodyweight) return "Bodyweight";
   return load || "Select";
 }
