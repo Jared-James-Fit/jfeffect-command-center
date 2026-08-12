@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { Info } from "lucide-react";
 import {
   Tooltip,
@@ -34,14 +34,21 @@ export function InfoTip({
   align = "center",
   className,
 }: InfoTipProps) {
+  // Radix opens on hover/focus only; touch taps never produce a hover, so we
+  // control the open state and toggle it on click as well.
+  const [open, setOpen] = useState(false);
   return (
     <TooltipProvider delayDuration={150} skipDelayDuration={300}>
-      <Tooltip>
+      <Tooltip open={open} onOpenChange={setOpen}>
         <TooltipTrigger asChild>
           <button
             type="button"
             aria-label={label}
-            onClick={(e) => e.stopPropagation()}
+            onClick={(e) => {
+              e.stopPropagation();
+              e.preventDefault();
+              setOpen((v) => !v);
+            }}
             className={cn(
               "inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full",
               "text-muted-foreground/60 transition-colors hover:text-foreground",
