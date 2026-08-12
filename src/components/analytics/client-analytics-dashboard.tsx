@@ -157,6 +157,24 @@ export function ClientAnalyticsDashboard({
 
   const selectedBlockId = activeBlockId;
 
+  // Whether this client has EVER logged a set. The full-page "Analytics will
+  // appear here" preview is reserved for genuinely empty accounts — a filter
+  // range with no results (e.g. a brand-new block) must NOT hide the whole
+  // dashboard, since Recovery/Sleep/Bodyweight/Cardio have their own data.
+  const { data: hasAnyResults } = useQuery({
+    queryKey: ["pl-results-any", clientId],
+    enabled: !!clientId,
+    staleTime: 5 * 60_000,
+    queryFn: async () => {
+      const { count } = await supabase
+        .from("pl_row_results")
+        .select("id", { count: "exact", head: true })
+        .eq("client_id", clientId)
+        .not("actual_reps", "is", null);
+      return (count ?? 0) > 0;
+    },
+  });
+
   const { data: analyticsSettings } = useQuery({
     queryKey: ["client-analytics-settings", clientId],
     enabled: !!clientId,
