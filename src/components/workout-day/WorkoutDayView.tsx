@@ -70,7 +70,7 @@ import {
   type PreviousLiftIdentity,
   type PreviousLiftLog,
 } from "@/lib/workout-previous-lift";
-import { computeRepMaxBests, detectSetPR } from "@/lib/workout-pr";
+import { computeRepMaxBests, computeAssistedBests, detectAssistedSetPR, detectSetPR } from "@/lib/workout-pr";
 import { WeightValueInput } from "@/components/workout-day/weight-value-input";
 import {
   formatLoadDisplay,
@@ -771,6 +771,15 @@ function WorkoutDay({
     const map = new Map<string, Map<number, PreviousLiftLog>>();
     for (const identity of previousLiftIdentities) {
       const bests = computeRepMaxBests(identity, previousLiftLogs, currentHistorySessionKey);
+      if (bests.size > 0) map.set(identity.rowId, bests);
+    }
+    return map;
+  }, [previousLiftIdentities, previousLiftLogs, currentHistorySessionKey]);
+
+  const assistedBestsByRow = useMemo(() => {
+    const map = new Map<string, Map<number, PreviousLiftLog>>();
+    for (const identity of previousLiftIdentities) {
+      const bests = computeAssistedBests(identity, previousLiftLogs, currentHistorySessionKey);
       if (bests.size > 0) map.set(identity.rowId, bests);
     }
     return map;
@@ -1748,6 +1757,7 @@ function WorkoutDay({
                   clientId={client?.id}
                   previousLift={previousLiftByRow.get(r.id) ?? null}
                   repMaxBests={repMaxBestsByRow.get(r.id) ?? null}
+                  assistedBests={assistedBestsByRow.get(r.id) ?? null}
                   blockId={blockId}
                   existingResults={(results as any[]).filter((x) => x.row_id === r.id)}
                   existingNote={notesByRowId.get(r.id)}
@@ -2087,6 +2097,7 @@ function WorkoutDay({
                 clientId={client?.id}
                 previousLift={previousLiftByRow.get(r.id) ?? null}
                 repMaxBests={repMaxBestsByRow.get(r.id) ?? null}
+                  assistedBests={assistedBestsByRow.get(r.id) ?? null}
                 blockId={blockId}
                 existingResults={(results as any[]).filter((x) => x.row_id === r.id)}
                 existingNote={notesByRowId.get(r.id)}
@@ -2380,7 +2391,7 @@ function PreviousLiftChip({ data, displayUnit, className }: { data: PreviousLift
   );
 }
 
-function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, existingResults, previousLift = null, repMaxBests = null, existingNote, notesLoading = false, readonly = false, unit = "kg", onUnitChange, focusMode = false, onChange, onNoteChange, purposeLabel = null, swapContext = undefined }: { row: any; dayId: string; dayTitle: string; dayIndex?: number | null; clientId: string | undefined; blockId?: string | null; existingResults: any[]; previousLift?: PreviousLift | null; repMaxBests?: Map<number, PreviousLiftLog> | null; existingNote?: any; notesLoading?: boolean; readonly?: boolean; unit?: "kg" | "lb"; onUnitChange?: (u: "kg" | "lb") => void; focusMode?: boolean; onChange: () => void; onNoteChange: () => void; purposeLabel?: string | null; swapContext?: { kind: "client" } | { kind: "member"; enrollmentId: string; weekIndex: number; dayIndex: number; exerciseIndex: number } | undefined }) {
+function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, existingResults, previousLift = null, repMaxBests = null, assistedBests = null, existingNote, notesLoading = false, readonly = false, unit = "kg", onUnitChange, focusMode = false, onChange, onNoteChange, purposeLabel = null, swapContext = undefined }: { row: any; dayId: string; dayTitle: string; dayIndex?: number | null; clientId: string | undefined; blockId?: string | null; existingResults: any[]; previousLift?: PreviousLift | null; repMaxBests?: Map<number, PreviousLiftLog> | null; assistedBests?: Map<number, PreviousLiftLog> | null; existingNote?: any; notesLoading?: boolean; readonly?: boolean; unit?: "kg" | "lb"; onUnitChange?: (u: "kg" | "lb") => void; focusMode?: boolean; onChange: () => void; onNoteChange: () => void; purposeLabel?: string | null; swapContext?: { kind: "client" } | { kind: "member"; enrollmentId: string; weekIndex: number; dayIndex: number; exerciseIndex: number } | undefined }) {
   const adapter = useOptionalAdapter();
   const name = row.exercises?.name ?? row.exercise_name_override ?? "Exercise";
   const exercise = row.exercises ?? null;
@@ -2398,6 +2409,16 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
     setActiveUnit(u);
     onUnitChange?.(u);
   };
+  // Load type default: exercise library metadata (default_load_type) decides
+  // whether this exercise opens in Assisted mode. Never hardcode names here.
+  const defaultLoadType: LoadType = normalizeDefaultLoadType(exercise?.default_load_type) ?? "external";
+  // Header label follows whatever the client has actually logged for set 1,
+  // falling back to the exercise default.
+  const rowLoadType: LoadType = (() => {
+    const first = existingResults.find((x) => x.set_index === 1);
+    if (first) return resolveLoadType((first as any).load_type, (first as any).is_bodyweight);
+    return defaultLoadType;
+  })();
   const video = exercise?.video_url ?? exercise?.vimeo_embed_url ?? null;
   // Always show the How To button for every exercise.
   // Previously this was Boolean(exerciseId || video) which hid the button for
@@ -2555,11 +2576,13 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
     reps: string;
     rpe: string;
     unit: "kg" | "lb";
+    loadType: LoadType;
   } | null>(null);
 
-  const applyToRemaining = async (fromSetIndex: number, payload: { load: string; reps: string; rpe: string; unit: "kg" | "lb" }) => {
+  const applyToRemaining = async (fromSetIndex: number, payload: { load: string; reps: string; rpe: string; unit: "kg" | "lb"; loadType?: LoadType }) => {
     if (!clientId) return;
     beginWorkoutSession(dayId);
+    const fillLoadType: LoadType = payload.loadType ?? "external";
     const loadNum = payload.load ? Number(payload.load) : null;
     const repsNum = payload.reps ? parseInt(payload.reps, 10) : null;
     const rpeNum = payload.rpe ? Number(payload.rpe) : null;
@@ -2578,6 +2601,8 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
         actual_reps: repsNum,
         actual_rpe: payload.rpe || null,
         actual_rpe_num: rpeNum,
+        load_type: fillLoadType,
+        is_bodyweight: fillLoadType === "bodyweight",
         completed_at: null, // Draft only — must be confirmed per set
       }, adapter, dayId);
       if (adapter) {
@@ -2596,6 +2621,7 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
       reps: repsNum != null ? String(repsNum) : "",
       rpe: payload.rpe ?? "",
       unit: payload.unit,
+      loadType: fillLoadType,
     });
     setFillToken((t) => t + 1);
     toast.success(`Applied to ${tasks.length} remaining set${tasks.length === 1 ? "" : "s"} as draft`);
@@ -2762,6 +2788,7 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
           setQuickFillLoading(true);
           try {
             await applyToRemaining(1, {
+              loadType: resolveLoadType(freshFirstSet?.load_type, freshFirstSet?.is_bodyweight),
               load: String(freshFirstLoad),
               reps: freshFirstSet?.actual_reps != null ? String(freshFirstSet.actual_reps) : "",
               rpe: freshFirstSet?.actual_rpe_num != null
@@ -2812,7 +2839,7 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
           <span>Set</span>
           <span>{effectiveMeasurementType === "time" ? "Time" : "Reps"}</span>
           {effectiveMeasurementType !== "time" && <span>{showRir ? "RIR" : "RPE"}</span>}
-          {effectiveMeasurementType !== "time" && !hideWeight && <span className="truncate">Wt ({activeUnit.toUpperCase()})</span>}
+          {effectiveMeasurementType !== "time" && !hideWeight && <span className="truncate">{loadColumnLabel(rowLoadType, activeUnit)}</span>}
           <span className="text-right">Status</span>
         </div>
         {Array.from({ length: setCount }).map((_, i) => {
@@ -2837,6 +2864,8 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
               existing={existing}
               prevExisting={prevExisting}
               repMaxBests={repMaxBests}
+              assistedBests={assistedBests}
+              defaultLoadType={defaultLoadType}
               targetReps={row.reps_text}
               targetRpe={row.rpe}
               targetRir={row.rir}
@@ -3132,6 +3161,8 @@ function SetRow({
   targetReps, targetRpe, targetRir, suggestedWeight, lastTimeWeight,
   repTarget, rpeTarget, rirTarget,
   repMaxBests = null,
+  assistedBests = null,
+  defaultLoadType = "external",
   hasUncompletedAfter, onApplyToRemaining, forceHydrateToken = 0,
   forcedFill = null,
   readonly = false, unit = "kg", hideWeight = false, focusMode = false, onChange, onSetCompleted,
@@ -3158,15 +3189,19 @@ function SetRow({
   rirTarget?: RangeTarget;
   /** Historical best set per exact rep count (1–12) for PR badge detection. */
   repMaxBests?: Map<number, PreviousLiftLog> | null;
+  /** Lowest historical assistance per rep count (assisted exercises only). */
+  assistedBests?: Map<number, PreviousLiftLog> | null;
+  /** Exercise-library default load type (assisted machines open in Assisted). */
+  defaultLoadType?: LoadType;
   hasUncompletedAfter?: boolean;
-  onApplyToRemaining?: (fromSetIndex: number, payload: { load: string; reps: string; rpe: string; unit: "kg" | "lb" }) => Promise<void> | void;
+  onApplyToRemaining?: (fromSetIndex: number, payload: { load: string; reps: string; rpe: string; unit: "kg" | "lb"; loadType?: LoadType }) => Promise<void> | void;
   /** Bumped by parent after a "Fill All Sets" write to force re-hydration
    *  from the freshly-saved `existing` even if the recent-save guard would
    *  otherwise block it. */
   forceHydrateToken?: number;
   /** Snapshot of values just written by Fill All Sets — used to bypass
    *  the cache race when force-hydrating. */
-  forcedFill?: { load: string; reps: string; rpe: string; unit: "kg" | "lb" } | null;
+  forcedFill?: { load: string; reps: string; rpe: string; unit: "kg" | "lb"; loadType?: LoadType } | null;
   readonly?: boolean;
   unit?: "kg" | "lb";
   hideWeight?: boolean;
