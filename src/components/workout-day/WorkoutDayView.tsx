@@ -73,6 +73,13 @@ import {
 import { computeRepMaxBests, detectSetPR } from "@/lib/workout-pr";
 import { WeightValueInput } from "@/components/workout-day/weight-value-input";
 import {
+  formatLoadDisplay,
+  loadColumnLabel,
+  normalizeDefaultLoadType,
+  resolveLoadType,
+  type LoadType,
+} from "@/lib/workout-load-type";
+import {
   parseRepQuickTarget,
   parseEffortQuickTarget,
   repQuickOptions,
@@ -584,7 +591,7 @@ function WorkoutDay({
       } else {
         const { data, error } = await sb
           .from("pl_exercise_rows")
-          .select("*, exercises(id,name,video_url,vimeo_embed_url,secondary_vimeo_embed_url,active_video_set,thumbnail_url,cues,common_mistakes,muscle_group,category,pl_lift_group,warmup_protocol_id,is_powerlifting,warmup_notes,default_load_unit,exercise_category,is_competition_lift,competition_lift_type,default_measurement_type)")
+          .select("*, exercises(id,name,video_url,vimeo_embed_url,secondary_vimeo_embed_url,active_video_set,thumbnail_url,cues,common_mistakes,muscle_group,category,pl_lift_group,warmup_protocol_id,is_powerlifting,warmup_notes,default_load_unit,default_load_type,exercise_category,is_competition_lift,competition_lift_type,default_measurement_type)")
           .eq("day_id", dayId)
           .order("sort_order");
         // Surface RLS / network errors to react-query so the failure
@@ -599,7 +606,7 @@ function WorkoutDay({
       const nameOnlyRows = (r as any[]).filter((row) => !row.exercise_id && row.exercise_name_override);
       if (nameOnlyRows.length > 0) {
         const names = [...new Set(nameOnlyRows.map((row: any) => row.exercise_name_override as string))];
-        const { data: exByName } = await sb.from("exercises").select("id,name,video_url,vimeo_embed_url,secondary_vimeo_embed_url,active_video_set,thumbnail_url,cues,common_mistakes,muscle_group,category,pl_lift_group,warmup_protocol_id,is_powerlifting,warmup_notes,default_load_unit,exercise_category,is_competition_lift,competition_lift_type,default_measurement_type").in("name", names);
+        const { data: exByName } = await sb.from("exercises").select("id,name,video_url,vimeo_embed_url,secondary_vimeo_embed_url,active_video_set,thumbnail_url,cues,common_mistakes,muscle_group,category,pl_lift_group,warmup_protocol_id,is_powerlifting,warmup_notes,default_load_unit,default_load_type,exercise_category,is_competition_lift,competition_lift_type,default_measurement_type").in("name", names);
         if (exByName && exByName.length > 0) {
           const nameMap = new Map<string, any>(exByName.map((e: any) => [e.name, e]));
           for (const row of r as any[]) {
@@ -709,6 +716,7 @@ function WorkoutDay({
           normalizedKg: log.normalized_kg ?? log.load_kg ?? null,
           normalizedLb: log.normalized_lb ?? log.load_lb ?? null,
           isWorkingSet: log.is_working_set ?? null,
+          loadType: resolveLoadType(log.load_type, log.is_bodyweight),
         }));
       }
 
@@ -717,6 +725,7 @@ function WorkoutDay({
         .select(`id, row_id, scheduled_workout_id, completed_at, updated_at, created_at,
           actual_reps, actual_rpe, actual_rir, entered_value, entered_unit,
           normalized_kg, normalized_lb, actual_load, actual_load_unit, is_working_set,
+          is_bodyweight, load_type,
           pl_exercise_rows(exercise_id, exercise_name_override, day_id, exercises(name))`)
         .eq("client_id", historyOwnerId)
         .order("updated_at", { ascending: false })
@@ -745,6 +754,7 @@ function WorkoutDay({
           normalizedKg: log.normalized_kg ?? null,
           normalizedLb: log.normalized_lb ?? null,
           isWorkingSet: log.is_working_set ?? null,
+          loadType: resolveLoadType(log.load_type, log.is_bodyweight),
         };
       });
     },
@@ -2341,9 +2351,15 @@ function ExerciseNotesBlock({ notes }: { notes: string }) {
 function PreviousLiftChip({ data, displayUnit, className }: { data: PreviousLift | null; displayUnit: "kg" | "lb"; className?: string }) {
   if (!data) return null;
   // A 0-load logged set is a bodyweight set — surface it as "BW × reps".
+  // Assisted sets keep their load type so "50 lb" can never be mistaken for
+  // weight the athlete actually lifted.
+  const rawLoad = formatPreviousLiftLoad(data, displayUnit);
   const loadStr =
-    formatPreviousLiftLoad(data, displayUnit) ??
-    (data.enteredValue === 0 || data.normalizedLb === 0 ? "BW" : "");
+    data.loadType === "bodyweight"
+      ? "Bodyweight"
+      : data.loadType === "assisted"
+        ? (rawLoad ? `${rawLoad} assistance` : "")
+        : (rawLoad ?? (data.enteredValue === 0 || data.normalizedLb === 0 ? "BW" : ""));
   const repsStr = data.reps != null ? ` × ${data.reps}` : "";
   if (!loadStr && !repsStr) return null;
   let when = "";
