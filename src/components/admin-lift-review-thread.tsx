@@ -13,6 +13,8 @@ import {
   ExternalLink, AlertTriangle, MessageSquare,
 } from "lucide-react";
 import { toast } from "sonner";
+import { useQueryClient } from "@tanstack/react-query";
+import { invalidateAdminNavBadges } from "@/hooks/use-admin-nav-badges";
 import { UserAvatar } from "@/components/user-avatar";
 import { LiftVideoPlayer } from "@/components/lift-video-player";
 import {
@@ -92,8 +94,10 @@ export function AdminLiftReviewThread({ video, userId, clientName, clientAvatarP
     onChanged?.();
   };
 
+  const badgeQc = useQueryClient();
+
   const act = async (fn: () => Promise<void>, success: string) => {
-    try { await fn(); toast.success(success); onChanged?.(); }
+    try { await fn(); toast.success(success); onChanged?.(); invalidateAdminNavBadges(badgeQc); }
     catch (e: any) { toast.error(e?.message ?? "Failed"); }
   };
 

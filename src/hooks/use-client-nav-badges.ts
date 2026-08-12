@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
+import { useAdminNavBadgeCounts, adminBadgeMap } from "@/hooks/use-admin-nav-badges";
 
 export type NavBadge = { count?: number; dot?: boolean };
 
@@ -96,59 +97,11 @@ export function useClientNavBadges(): Record<string, NavBadge> {
     return () => { supabase.removeChannel(ch); };
   }, [enabled, user, qc]);
 
-  // Admin/coach nav badges
-  const { data: adminData } = useQuery({
-    queryKey: ["admin-nav-badges", user?.id],
-    enabled: adminEnabled,
-    refetchInterval: 300_000,
-    queryFn: async () => {
-      const [needsResp, liftPending, liftUrgent, mediaPending, supportAlerts] = await Promise.all([
-        (supabase.from("conversation_state") as any)
-          .select("client_id", { count: "exact", head: true })
-          .eq("status", "needs_response"),
-        (supabase.from("lift_videos") as any)
-          .select("id", { count: "exact", head: true })
-          .in("status", ["New Upload", "Awaiting Review"]),
-        (supabase.from("lift_videos") as any)
-          .select("id", { count: "exact", head: true })
-          .eq("is_urgent", true)
-          .neq("status", "Archived")
-          .neq("status", "Reviewed"),
-        (supabase.from("media_items") as any)
-          .select("id", { count: "exact", head: true })
-          .eq("media_type", "Check-In Videos")
-          .eq("status", "Pending Review"),
-        (supabase.from("support_alerts") as any).select("id", { count: "exact", head: true }).in("status", ["open", "in_progress"]),
-      ]);
-      return {
-        messages: needsResp.count ?? 0,
-        liftReviews: liftPending.count ?? 0,
-        liftUrgent: liftUrgent.count ?? 0,
-        checkIns: mediaPending.count ?? 0,
-        supportAlerts: supportAlerts.count ?? 0,
-      };
-    },
-  });
+  // Admin/coach nav badges — shared single source of truth
+  const { data: adminCounts } = useAdminNavBadgeCounts(adminEnabled);
 
-  useEffect(() => {
-    if (!adminEnabled || !user) return;
-    const ch = supabase.channel(`admin-nav-badges-${user.id}`)
-      .on("postgres_changes", { event: "*", schema: "public", table: "conversation_state" }, () => qc.invalidateQueries({ queryKey: ["admin-nav-badges", user.id] }))
-      .on("postgres_changes", { event: "*", schema: "public", table: "lift_videos" }, () => qc.invalidateQueries({ queryKey: ["admin-nav-badges", user.id] }))
-      .on("postgres_changes", { event: "*", schema: "public", table: "media_items" }, () => qc.invalidateQueries({ queryKey: ["admin-nav-badges", user.id] }))
-      .on("postgres_changes", { event: "*", schema: "public", table: "support_alerts" }, () => qc.invalidateQueries({ queryKey: ["admin-nav-badges", user.id] }))
-      .subscribe();
-    return () => { supabase.removeChannel(ch); };
-  }, [adminEnabled, user, qc]);
-
-  if (adminEnabled && adminData) {
-    const r: Record<string, NavBadge> = {};
-    if (adminData.messages > 0) r["/admin/messages"] = { count: adminData.messages };
-    if (adminData.liftReviews > 0) r["/admin/lift-videos"] = { count: adminData.liftReviews };
-    else if (adminData.liftUrgent > 0) r["/admin/lift-videos"] = { dot: true };
-    if (adminData.checkIns > 0) r["/admin/check-ins"] = { count: adminData.checkIns };
-    if (adminData.supportAlerts > 0) r["/admin/support-alerts"] = { count: adminData.supportAlerts };
-    return r;
+  if (adminEnabled) {
+    return adminBadgeMap(adminCounts);
   }
 
   if (!enabled || !data) return {};
