@@ -950,6 +950,7 @@ function ExerciseItem({
   onPick,
   onQuickAdd,
   query = "",
+  terms,
 }: {
   ex: ExerciseRef;
   fav?: boolean;
@@ -957,6 +958,7 @@ function ExerciseItem({
   onPick?: (id: string) => void;
   onQuickAdd?: (id: string) => void;
   query?: string;
+  terms?: readonly string[];
 }) {
   const tagLine = [ex.muscle_group, ex.category].filter(Boolean).join(" · ");
   const [dragging, setDragging] = useState(false);
@@ -982,11 +984,11 @@ function ExerciseItem({
       <GripVertical className="h-3 w-3 shrink-0 text-muted-foreground/60" />
       <div className="min-w-0 flex-1">
         <div className="truncate text-xs">
-          <HighlightedText text={ex.name} query={query} />
+          <HighlightedText text={ex.name} query={query} terms={terms} />
         </div>
         {tagLine && (
           <div className="truncate text-[10px] text-muted-foreground">
-            <HighlightedText text={tagLine} query={query} />
+            <HighlightedText text={tagLine} query={query} terms={terms} />
           </div>
         )}
       </div>
