@@ -1701,7 +1701,7 @@ function WorkoutDay({
           )}
           <div className="mx-auto max-w-3xl p-4 md:p-6">
             <WorkoutLoadBoundary clientId={client?.id ?? null} clientName={(client as any)?.full_name ?? null} dayId={dayId} route={`/portal/workouts/${dayId}`}>
-              <div className="space-y-4 rounded-lg bg-builder-canvas p-3 sm:p-4 ring-1 ring-builder-card-border/40 workout-snap-list">
+              <div className="workout-stack-surface space-y-4 p-3 sm:p-4 workout-snap-list">
               {rowsIsError ? (
                 <WorkoutLoadFailureCard
                   clientId={client?.id ?? null}
@@ -2040,7 +2040,7 @@ function WorkoutDay({
 
         {!focusMode && (
         <WorkoutLoadBoundary clientId={client?.id ?? null} clientName={(client as any)?.full_name ?? null} dayId={dayId} route={`/portal/workouts/${dayId}`}>
-          <div className="grid grid-cols-1 gap-3.5 rounded-2xl bg-builder-canvas/70 p-2 sm:p-4 ring-1 ring-builder-card-border/40 lg:grid-cols-2 lg:items-start">
+          <div className="workout-stack-surface grid grid-cols-1 gap-3.5 p-2 sm:p-4 lg:grid-cols-2 lg:items-start">
             {rowsIsError ? (
               <WorkoutLoadFailureCard
                 clientId={client?.id ?? null}
@@ -2586,7 +2586,7 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
   };
 
   return (
-    <Card className="relative overflow-hidden border border-builder-card-border-strong/70 bg-card p-3.5 pl-4 shadow-[0_2px_10px_-4px_rgba(0,0,0,0.35)] transition-colors hover:border-builder-card-border-strong sm:p-5 sm:pl-6 rounded-[18px]">
+    <Card className="workout-card-surface relative overflow-hidden p-3.5 pl-4 transition-colors hover:border-builder-card-border-strong sm:p-5 sm:pl-6">
       {/* Left stripe: inset top/bottom so it doesn't visually connect between cards */}
       <div className={`absolute left-0 top-1.5 bottom-1.5 w-1.5 rounded-full opacity-90 ${accent}`} aria-hidden />
       {/* Row 1 — name + unit toggle */}
