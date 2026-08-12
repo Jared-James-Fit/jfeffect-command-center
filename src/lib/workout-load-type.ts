@@ -52,7 +52,7 @@ export function formatLoadDisplay(
   const n = load === "" || load == null ? null : Number(load);
   if (n == null || !Number.isFinite(n)) return opts.empty ?? "Select";
   if (loadType === "assisted") {
-    return opts.compact ? `−${trimNum(n)} asst` : `${trimNum(n)} ${unit} assistance`;
+    return opts.compact ? `${trimNum(n)} asst` : `${trimNum(n)} ${unit} assistance`;
   }
   return opts.compact ? trimNum(n) : `${trimNum(n)} ${unit}`;
 }

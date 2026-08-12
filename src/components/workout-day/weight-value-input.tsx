@@ -178,7 +178,11 @@ export function WeightValueInput({
       <div className="grid grid-cols-2 gap-1.5">
         <button
           type="button"
-          onClick={() => setDraftType(draftType === "bodyweight" ? "external" : "bodyweight")}
+          onClick={() => {
+            if (draftType === "bodyweight") { setDraftType("external"); return; }
+            if (mode === "type") { commit({ load: "0", bodyweight: true, loadType: "bodyweight" }); return; }
+            setDraftType("bodyweight");
+          }}
           aria-pressed={draftType === "bodyweight"}
           className={cn(
             "h-10 rounded-lg border text-xs font-bold transition-colors",
