@@ -104,11 +104,11 @@ export function ExercisesAdmin({ embedded = false }: { embedded?: boolean } = {}
   // always combine. Shared helper → same behaviour as the client library,
   // the swap picker and the program builder.
   const searched = useMemo(
-    () => searchExercises(preFiltered as any[], search),
+    () => searchExercises(preFiltered as SearchRow[], search, { limit: 5000 }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [preFiltered.length, search, category, migration, muscleFilter, exercises],
   );
-  const filtered = searched.results.map((r) => r.exercise) as typeof exercises;
+  const filtered = searched.results.map((r) => r.exercise) as unknown as typeof exercises;
   const highlightTerms = searched.highlightTerms;
 
   const stillYouTubeCount = exercises.filter(
