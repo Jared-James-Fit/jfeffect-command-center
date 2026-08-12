@@ -52,7 +52,10 @@ export function InfoTip({
               e.stopPropagation();
               e.preventDefault();
               touchHandled.current = true;
-              setOpen((v) => !v);
+              // Radix's own pointerdown handler closes the tooltip right
+              // after ours, so apply the toggle on the next tick.
+              const next = !open;
+              setTimeout(() => setOpen(next), 0);
             }}
             onClick={(e) => {
               e.stopPropagation();
