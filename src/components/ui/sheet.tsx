@@ -69,10 +69,15 @@ const SheetContent = React.forwardRef<
   // `env(safe-area-inset-top)` would push the Back pill *down* into the
   // sheet's content. Only offset for sheets that actually touch the top
   // of the viewport (top / left / right).
-  const anchorsToViewportTop = side !== "bottom" || !!safeTopClose;
-  const closeStyle = anchorsToViewportTop
-    ? { top: "calc(env(safe-area-inset-top) + 0.75rem)" }
-    : undefined;
+  const bottomSafeTop = side === "bottom" && !!safeTopClose;
+  const anchorsToViewportTop = side !== "bottom" || bottomSafeTop;
+  const closeStyle = bottomSafeTop
+    ? // Tall bottom sheets start a few vh below the viewport top, so only the
+      // remainder of the inset (if any) still overlaps the status bar.
+      { top: "calc(max(env(safe-area-inset-top) - 5vh, 0px) + 0.75rem)" }
+    : anchorsToViewportTop
+      ? { top: "calc(env(safe-area-inset-top) + 0.75rem)" }
+      : undefined;
   return (
     <SheetPortal>
       <SheetOverlay />
