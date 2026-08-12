@@ -933,8 +933,8 @@ export function StructureCanvas({ type, payload, setP, exercises, appendRowToFir
     <MaxesContext.Provider value={maxesCtx}>
     <div
       className={cn(
-        "rounded-md border border-border bg-background",
-        fullscreen && "fixed inset-0 z-[60] rounded-none border-0",
+        "workout-card-surface overflow-hidden",
+        fullscreen && "fixed inset-0 z-[60] rounded-none border-0 shadow-none",
       )}
     >
       {/* Sticky compact toolbar */}
@@ -1580,7 +1580,7 @@ export function BlockPayloadEditor({ weeksData, setWeeksData, exercises, compact
                         document.getElementById(`tpl-week-${i}`)?.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "start" });
                       }}
                       className={cn(
-                        "grid shrink-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-2 rounded-md border border-border bg-card px-3 py-2 text-left shadow-sm hover:border-primary/60",
+                        "workout-card-surface grid shrink-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-2 px-3 py-2 text-left hover:border-primary/60",
                         weekColumnWidthClass,
                         activeIdx === i && "border-primary bg-primary/10",
                       )}
