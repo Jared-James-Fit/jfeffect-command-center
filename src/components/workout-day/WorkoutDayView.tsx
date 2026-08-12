@@ -2769,6 +2769,8 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
         if (uncompletedAfterFirst === 0) return null;
         const firstUnit = (firstSet?.actual_load_unit as "kg" | "lb" | undefined) ?? activeUnit;
         const displayLoad = Number(Number(firstLoad ?? 0).toFixed(2));
+        const firstLoadType = resolveLoadType(firstSet?.load_type, firstSet?.is_bodyweight);
+        const fillLabel = formatLoadDisplay(displayLoad, firstUnit, firstLoadType);
         const onFill = async () => {
           // Refetch fresh results before reading Set 1 so the second fill always
           // uses the current Set 1 value, not a stale cached snapshot.
@@ -2809,12 +2811,12 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
               disabled={!hasFirstWeight || quickFillLoading}
               className="w-full h-9 text-xs font-bold border-primary/30 text-primary hover:bg-primary/10 disabled:opacity-50 gap-1.5"
               title={hasFirstWeight
-                ? `Copy ${displayLoad} ${firstUnit} from Set 1 into the remaining ${uncompletedAfterFirst} set${uncompletedAfterFirst !== 1 ? "s" : ""}`
+                ? `Copy ${fillLabel} from Set 1 into the remaining ${uncompletedAfterFirst} set${uncompletedAfterFirst !== 1 ? "s" : ""}`
                 : "Enter a weight in Set 1 first"}
             >
               <Zap className="h-3.5 w-3.5" />
               {hasFirstWeight
-                ? `Fill All Sets with ${displayLoad} ${firstUnit}`
+                ? `Fill All Sets with ${fillLabel}`
                 : "Fill All Sets (enter Set 1 weight first)"}
             </Button>
           </div>
@@ -4105,7 +4107,7 @@ function SetRow({
           onClick={async () => {
             const ok = typeof window !== "undefined" ? window.confirm("Apply this result to the remaining sets as drafts?") : true;
             if (!ok) return;
-            await onApplyToRemaining(setIndex, { load, reps, rpe, unit });
+            await onApplyToRemaining(setIndex, { load, reps, rpe, unit, loadType });
           }}>
             Apply to remaining sets
         </Button>
