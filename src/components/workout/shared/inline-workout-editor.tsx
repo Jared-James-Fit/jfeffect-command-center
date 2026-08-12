@@ -520,7 +520,12 @@ export function InlineWorkoutEditor({
                             )}
                           >
                             <Plus className="h-3.5 w-3.5 shrink-0 text-primary" />
-                            <span className="truncate">{ex.name}</span>
+                            <span className="truncate">
+                              <HighlightedExerciseName
+                                text={ex.name}
+                                terms={searchOutcome.highlightTerms}
+                              />
+                            </span>
                           </button>
                         ))
                       )}
