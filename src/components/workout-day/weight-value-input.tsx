@@ -290,7 +290,7 @@ export function WeightValueInput({
             onClick={() => commit({ load: "0", bodyweight: true })}
             className="h-9 w-full rounded-lg border border-border/60 text-xs font-bold text-foreground hover:bg-muted/60"
           >
-            Use BW · Bodyweight
+            Bodyweight
           </button>
         </form>
       )}
