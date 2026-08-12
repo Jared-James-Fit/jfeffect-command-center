@@ -9,6 +9,7 @@ import { listFormsForClient, pickNutritionUpdateForm } from "@/lib/native-forms"
 import { listActionCentre, type ActionCentreItem } from "@/lib/action-centre.functions";
 import { usePortalUserId } from "@/lib/client-impersonation";
 import { ClientFormSheet } from "@/components/forms/client-form-sheet";
+import { isExternalForm, useExternalFormOpener } from "@/lib/external-form-open";
 
 /**
  * "Nutrition Review" card for the client Nutrition tab — one tap opens the
@@ -22,6 +23,7 @@ export function NutritionReviewCard() {
   const portalUserId = usePortalUserId();
   const list = useServerFn(listActionCentre);
   const [open, setOpen] = useState(false);
+  const { openExternalForm, fallbackDialog } = useExternalFormOpener();
 
   const { data: client } = useQuery({
     queryKey: ["my-client", portalUserId],
@@ -29,7 +31,7 @@ export function NutritionReviewCard() {
     queryFn: async () => {
       const { data } = await supabase
         .from("clients")
-        .select("id")
+        .select("id, full_name, first_name, last_name, email")
         .eq("user_id", portalUserId!)
         .maybeSingle();
       return data;
@@ -116,11 +118,23 @@ export function NutritionReviewCard() {
             Send your coach a nutrition update.{dueLine}
           </p>
         </div>
-        <Button className="w-full bg-gradient-primary font-bold sm:w-auto" onClick={() => setOpen(true)}>
+        <Button
+          className="w-full bg-gradient-primary font-bold sm:w-auto"
+          onClick={() => {
+            // External (Fillout) forms open in a real browser tab; native
+            // forms still open in the in-app sheet.
+            if (isExternalForm(nutritionForm as any) && client) {
+              openExternalForm(nutritionForm as any, client as any, "Nutrition Review");
+              return;
+            }
+            setOpen(true);
+          }}
+        >
           <Send className="mr-1.5 h-4 w-4" />
           {buttonLabel}
         </Button>
       </div>
+      {fallbackDialog}
       <ClientFormSheet
         formId={nutritionForm.id}
         title="Nutrition Review"
