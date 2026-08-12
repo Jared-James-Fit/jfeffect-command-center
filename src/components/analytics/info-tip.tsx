@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from "react";
+import { useRef, useState, type ReactNode } from "react";
 import { Info } from "lucide-react";
 import {
   Tooltip,
@@ -37,6 +37,7 @@ export function InfoTip({
   // Radix opens on hover/focus only; touch taps never produce a hover, so we
   // control the open state and toggle it on click as well.
   const [open, setOpen] = useState(false);
+  const touchHandled = useRef(false);
   return (
     <TooltipProvider delayDuration={150} skipDelayDuration={300}>
       <Tooltip open={open} onOpenChange={setOpen}>
@@ -50,11 +51,16 @@ export function InfoTip({
               if (e.pointerType === "mouse") return;
               e.stopPropagation();
               e.preventDefault();
+              touchHandled.current = true;
               setOpen((v) => !v);
             }}
             onClick={(e) => {
               e.stopPropagation();
               e.preventDefault();
+              if (touchHandled.current) {
+                touchHandled.current = false;
+                return; // already toggled on the touch pointerdown
+              }
               setOpen((v) => !v);
             }}
             className={cn(
