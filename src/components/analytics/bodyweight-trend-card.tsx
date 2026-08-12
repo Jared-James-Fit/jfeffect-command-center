@@ -5,6 +5,7 @@ import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianG
 import { supabase } from "@/integrations/supabase/client";
 import { Card } from "@/components/ui/card";
 import { InfoTip } from "@/components/analytics/info-tip";
+import { ANALYTICS_COLORS } from "@/lib/analytics-format";
 import { getCombinedBodyweightSeries, toKg, toLb } from "@/lib/bodyweight";
 
 type Unit = "lb" | "kg";
@@ -160,21 +161,21 @@ export function BodyweightTrendCard({ clientId, displayUnit, rangeStart, rangeEn
           <div className="mt-4 h-32 w-full">
             <ResponsiveContainer width="100%" height="100%">
               <LineChart data={points} margin={{ top: 4, right: 8, bottom: 0, left: -18 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" opacity={0.4} />
+                <CartesianGrid strokeDasharray="3 3" stroke="color-mix(in oklab, var(--border) 60%, transparent)" />
                 <XAxis
                   dataKey="date"
                   tick={{ fontSize: 10 }}
                   tickFormatter={(v: string) => format(new Date(v + "T00:00:00"), "MMM d")}
-                  stroke="hsl(var(--muted-foreground))"
+                  stroke="var(--muted-foreground)"
                   minTickGap={24}
                 />
-                <YAxis tick={{ fontSize: 10 }} stroke="hsl(var(--muted-foreground))" domain={["auto", "auto"]} width={44} />
+                <YAxis tick={{ fontSize: 10 }} stroke="var(--muted-foreground)" domain={["auto", "auto"]} width={44} />
                 <Tooltip
                   contentStyle={{ fontSize: 12 }}
                   labelFormatter={(v) => format(new Date(String(v) + "T00:00:00"), "MMM d, yyyy")}
                   formatter={(v: any) => [`${fmt1(Number(v))} ${displayUnit}`, "Bodyweight"]}
                 />
-                <Line type="monotone" dataKey="value" stroke="hsl(var(--primary))" strokeWidth={2} dot={{ r: 2 }} />
+                <Line type="monotone" dataKey="value" stroke={ANALYTICS_COLORS.red} strokeWidth={2} dot={{ r: 2, fill: ANALYTICS_COLORS.red }} />
               </LineChart>
             </ResponsiveContainer>
           </div>

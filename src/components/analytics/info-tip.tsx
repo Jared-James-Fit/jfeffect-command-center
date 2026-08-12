@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { useRef, useState, type ReactNode } from "react";
 import { Info } from "lucide-react";
 import {
   Tooltip,
@@ -34,14 +34,38 @@ export function InfoTip({
   align = "center",
   className,
 }: InfoTipProps) {
+  // Radix opens on hover/focus only; touch taps never produce a hover, so we
+  // control the open state and toggle it on click as well.
+  const [open, setOpen] = useState(false);
+  const touchHandled = useRef(false);
   return (
     <TooltipProvider delayDuration={150} skipDelayDuration={300}>
-      <Tooltip>
+      <Tooltip open={open} onOpenChange={setOpen}>
         <TooltipTrigger asChild>
           <button
             type="button"
             aria-label={label}
-            onClick={(e) => e.stopPropagation()}
+            onPointerDown={(e) => {
+              // Touch/pen never hovers, and Radix closes the tooltip on
+              // pointerdown — toggle here so a tap reliably opens it.
+              if (e.pointerType === "mouse") return;
+              e.stopPropagation();
+              e.preventDefault();
+              touchHandled.current = true;
+              // Radix's own pointerdown handler closes the tooltip right
+              // after ours, so apply the toggle on the next tick.
+              const next = !open;
+              setTimeout(() => setOpen(next), 0);
+            }}
+            onClick={(e) => {
+              e.stopPropagation();
+              e.preventDefault();
+              if (touchHandled.current) {
+                touchHandled.current = false;
+                return; // already toggled on the touch pointerdown
+              }
+              setOpen((v) => !v);
+            }}
             className={cn(
               "inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full",
               "text-muted-foreground/60 transition-colors hover:text-foreground",
