@@ -3650,13 +3650,27 @@ function SetRow({
   const existingLoadNum = existing?.actual_load != null ? Number(existing.actual_load) : NaN;
   const existingDurNum = (existing as any)?.completed_duration_seconds != null ? Number((existing as any).completed_duration_seconds) : NaN;
   const existingRepsNum = existing?.actual_reps != null ? Number(existing.actual_reps) : NaN;
-  const hasLoggedValue = isTimeKind
-    ? Number.isFinite(existingDurNum) && existingDurNum > 0
-    : hideWeight
-      ? Number.isFinite(existingRepsNum) && existingRepsNum > 0
-      // Load of 0 is valid (bodyweight / unloaded). Reps still required.
-      : Number.isFinite(existingRepsNum) && existingRepsNum > 0 && Number.isFinite(existingLoadNum) && existingLoadNum >= 0;
-  const isConfirmed = Boolean(existing?.completed_at) && hasLoggedValue;
+  // Persisted-row completeness (green styling) uses the same shared validator
+  // as the autosave stamp so the circle can never disagree with the data.
+  const hasLoggedValue = isSetLogComplete({
+    measurementType,
+    hideWeight,
+    loadType: existing ? resolveLoadType((existing as any).load_type, (existing as any).is_bodyweight) : "external",
+    load: existing?.actual_load ?? null,
+    reps: existing?.actual_reps ?? null,
+    durationSeconds: (existing as any)?.completed_duration_seconds ?? null,
+  });
+  // Live (unsaved) completeness — lets the status circle flip the instant the
+  // last required field is entered, before the 1s autosave lands.
+  const liveComplete = isSetLogComplete({
+    measurementType,
+    hideWeight,
+    loadType,
+    load: bw ? 0 : load,
+    reps,
+    durationSeconds: (existing as any)?.completed_duration_seconds ?? null,
+  });
+  const isConfirmed = (Boolean(existing?.completed_at) && hasLoggedValue) || (!readonly && liveComplete);
   // hasAnyEntry only counts weight (the field the client must enter) and
   // manually-edited reps/RPE. Pre-filled prescription values do NOT count
   // as draft data — otherwise every unlogged set shows the amber border.
