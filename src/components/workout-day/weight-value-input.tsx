@@ -329,8 +329,8 @@ export function WeightValueInput({
             {shown}
           </button>
         )}
-        {/* Small secondary control — Bodyweight / Assisted / +− live here so
-            they never interfere with tapping the main numeric area. */}
+        {/* Small secondary control — LOAD TYPE only (Weight / Bodyweight /
+            Assisted) so it never interferes with tapping the numeric area. */}
         {!disabled && (
           <button
             type="button"
