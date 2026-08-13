@@ -4184,9 +4184,18 @@ function SetRow({
           setLoadType(nextType);
           setLoad(bodyweight ? "0" : nextLoad);
           setFocusedField(null);
+          setOptimisticComplete(false);
           // Picker "Done" must persist + re-evaluate completion immediately —
           // no waiting for the 1s autosave debounce, no extra tap.
           setTimeout(() => { void save.flush().catch(() => {}); }, 0);
+          // Manual change → cascade downward into eligible sets below.
+          void onCascadeFromSet?.(setIndex, {
+            load: bodyweight ? "0" : nextLoad,
+            loadType: nextType,
+            unit,
+            reps,
+            rpe,
+          });
         }}
       />
       )}
