@@ -73,6 +73,7 @@ import {
 import { computeRepMaxBests, computeAssistedBests, detectAssistedSetPR, detectSetPR } from "@/lib/workout-pr";
 import { WeightValueInput } from "@/components/workout-day/weight-value-input";
 import { isSetLogComplete } from "@/lib/set-completion";
+import { planCascade, type CascadeOrigin, type CascadeSetState } from "@/lib/set-cascade";
 import {
   formatLoadDisplay,
   loadColumnLabel,
