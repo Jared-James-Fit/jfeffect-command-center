@@ -18755,6 +18755,7 @@ export type Database = {
         Args: { _target_id: string }
         Returns: string
       }
+      fn_next_semi_monthly: { Args: { _from: string }; Returns: string }
       fn_recompute_nutrition_status: {
         Args: { _target_id: string }
         Returns: string
