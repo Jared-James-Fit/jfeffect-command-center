@@ -54,7 +54,7 @@ export function WeightValueInput({
   disabled?: boolean;
   focusMode?: boolean;
   ariaLabel: string;
-  /** Prescribed / Last Time / previous best reference for the +/− start value. */
+  /** Prescribed / Last Time / previous best reference value (display only). */
   referenceWeight?: number | null;
 }) {
   /** Inline editing of the actual cell. */
