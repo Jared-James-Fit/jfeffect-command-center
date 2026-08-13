@@ -834,7 +834,7 @@ function FactorSheet({ factor }: { factor: FactorDetail }) {
           </div>
           <div className={cn("mt-1 flex items-center gap-2 text-xs font-semibold", colors.text)}>
             <span className={cn("h-1.5 w-1.5 rounded-full", colors.dot)} />
-            {factor.status === "good" ? "In a great range" : factor.status === "watch" ? "Watch this" : "Needs attention"}
+            {factor.isBuilding ? "Need more history" : factor.status === "good" ? "In a great range" : factor.status === "watch" ? "Watch this" : "Needs attention"}
           </div>
         </div>
       </div>
