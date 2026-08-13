@@ -265,11 +265,18 @@ function buildLoad(input: LoadInput): FactorDetail {
       )
     : null;
 
+  const fmtRange = (iso: string) => {
+    const d = new Date(`${iso}T00:00:00`);
+    return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+  };
   const rangeLabel = validWeeks.length
-    ? `${validWeeks[validWeeks.length - 1].from} → ${validWeeks[0].to}`
+    ? `${fmtRange(validWeeks[validWeeks.length - 1].from)} → ${fmtRange(validWeeks[0].to)}`
     : "—";
 
   // ── Insufficient history: never produce a confident extreme warning ──
+  // The baseline is still building, so we do not show a numeric score, a
+  // "Watch this" caution, or amber/red warning styling. The ring renders
+  // as a neutral "—" and the status line reads "Need more history".
   if (!hasBaseline || current7.sets === 0) {
     return {
       key: "load",
@@ -292,10 +299,12 @@ function buildLoad(input: LoadInput): FactorDetail {
         },
       ],
       trend: "Building",
+      trendLabel: "Building",
       impact: "Neutral",
       recommendation:
         "Not enough consistent training history to judge workload yet. Keep logging your sessions and train as planned.",
       tooltip: TOOLTIPS.load,
+      isBuilding: true,
     };
   }
 
