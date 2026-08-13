@@ -721,8 +721,15 @@ function FactorRing({ factor, onClick }: { factor: FactorDetail; onClick: () => 
   const c = 2 * Math.PI * r;
   const pct = Math.max(0, Math.min(100, factor.score));
   const dash = (pct / 100) * c;
-  const colors = statusColor[factor.status];
-  const dim = factor.isMissing;
+  const colors = factor.isBuilding
+    ? {
+        ring: "text-muted-foreground/55",
+        soft: "text-muted-foreground/15",
+        text: "text-muted-foreground",
+        dot: "bg-muted-foreground/40",
+      }
+    : statusColor[factor.status];
+  const dim = factor.isMissing || factor.isBuilding;
   return (
     <button
       type="button"
