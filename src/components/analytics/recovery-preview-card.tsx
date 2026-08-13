@@ -302,7 +302,7 @@ export function RecoveryPreviewCard({ clientId }: Props) {
       const { data: setRows } = await (supabase as any)
         .from("pl_row_results")
         .select(
-          "completed_at, actual_reps, actual_rpe, actual_load, actual_load_unit, entered_value, entered_unit, normalized_lb, normalized_kg",
+          "completed_at, actual_reps, actual_rpe, actual_load, actual_load_unit, entered_value, entered_unit, normalized_lb, normalized_kg, is_bodyweight, load_type",
         )
         .eq("client_id", clientId)
         .not("actual_reps", "is", null)
@@ -316,6 +316,11 @@ export function RecoveryPreviewCard({ clientId }: Props) {
           const unit = (r.entered_unit ?? r.actual_load_unit ?? "lb") as string;
           load_lb = unit === "kg" ? raw * LB_PER_KG : raw;
         }
+        // Bodyweight and assisted sets carry no external tonnage: assistance
+        // is a *reduction* in load, and bodyweight load isn't measured here.
+        // They still count as working sets and still feed average RPE.
+        const loadType = (r.load_type ?? (r.is_bodyweight ? "bodyweight" : "external")) as string;
+        if (loadType === "bodyweight" || loadType === "assisted") load_lb = 0;
         return {
           t: new Date(r.completed_at).getTime(),
           reps: Number(r.actual_reps) || 0,
@@ -335,7 +340,17 @@ export function RecoveryPreviewCard({ clientId }: Props) {
         return { sets, tonnage, avgRpe, days };
       };
       const current7 = buildWindow(since7.getTime(), now.getTime() + 1);
-      const baseline28 = buildWindow(now.getTime() - 28 * 86_400_000, since7.getTime());
+      // Baseline = the 4 COMPLETE weeks that end before the current window
+      // starts (days -35 → -8). It never overlaps the period being judged.
+      const priorWeeks = [1, 2, 3, 4].map((i) => {
+        const to = since7.getTime() - (i - 1) * 7 * 86_400_000;
+        const from = since7.getTime() - i * 7 * 86_400_000;
+        return {
+          ...buildWindow(from, to),
+          from: new Date(from).toISOString().slice(0, 10),
+          to: new Date(to).toISOString().slice(0, 10),
+        };
+      });
 
       // Kept for legacy insight builder (30-day adherence sentence).
       const scheduled30dInsight = scheduledRows.filter(
@@ -400,7 +415,7 @@ export function RecoveryPreviewCard({ clientId }: Props) {
       const breakdown = buildReadinessBreakdown({
         sleepSamples,
         recoverySamples,
-        load: { current7, baseline28 },
+        load: { current7, priorWeeks },
         consistency: {
           weekDueSoFar,
           weekCompleted,
