@@ -3535,6 +3535,34 @@ function SetRow({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [forceHydrateToken]);
 
+  // Cascade from a set above: adopt the load/type instantly (the parent has
+  // already fired the batch write) and show the row as complete immediately
+  // instead of waiting for the refetch.
+  const [optimisticComplete, setOptimisticComplete] = useState(false);
+  useEffect(() => {
+    if (!cascade || !cascade.targets.includes(setIndex)) return;
+    recentlySavedRef.current = true;
+    if (recentlySavedTimerRef.current) clearTimeout(recentlySavedTimerRef.current);
+    recentlySavedTimerRef.current = setTimeout(() => { recentlySavedRef.current = false; }, 8000);
+    setFocusedField(null);
+    setLoadType(cascade.loadType);
+    setLoad(cascade.loadType === "bodyweight" ? "0" : cascade.load);
+    if (!repsEdited && existing?.actual_reps == null && cascade.reps) setReps(cascade.reps);
+    if (!rpeEdited && existing?.actual_rpe_num == null && existing?.actual_rpe == null && cascade.rpe) setRpe(cascade.rpe);
+    setOptimisticComplete(
+      isSetLogComplete({
+        measurementType,
+        hideWeight,
+        loadType: cascade.loadType,
+        load: cascade.loadType === "bodyweight" ? 0 : cascade.load,
+        reps: existing?.actual_reps ?? cascade.reps,
+        durationSeconds: (existing as any)?.completed_duration_seconds ?? null,
+      }),
+    );
+    queueMicrotask(() => { saveRef.current?.markClean(); });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cascade?.token]);
+
   const value = useMemo(() => ({ load, reps, rpe, unit, bw, loadType }), [load, reps, rpe, unit, bw, loadType]);
   // Forward-ref to the autosave handle so effects defined above can call
   // markClean() without a TDZ error.
