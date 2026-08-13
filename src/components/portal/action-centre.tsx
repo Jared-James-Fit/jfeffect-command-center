@@ -134,12 +134,14 @@ function occurrenceToItem(
   onFallback: (occ: ActionCentreItem) => void,
   onOpenForm?: (occ: ActionCentreItem) => void,
 ): ActionItem {
-  const chip = compactChip(occ.chip.label);
+  const isForm = FORM_TASK_TYPES.has(occ.task_type);
+  // Forms intentionally show no status chip (no "Overdue"/"Today" labels).
+  const chip = isForm ? undefined : compactChip(occ.chip.label);
   const target = occurrenceTarget(occ);
   const base: ActionItem = {
     key: `occ-${occ.id}`,
     icon: TASK_ICONS[occ.task_type] ?? ClipboardCheck,
-    tone: toneFromChip(occ.chip.tone),
+    tone: isForm ? "primary" : toneFromChip(occ.chip.tone),
     title: TASK_LABELS[occ.task_type] ?? occ.title,
     message: occ.subtitle ?? undefined,
     chip,
@@ -147,7 +149,7 @@ function occurrenceToItem(
   };
   // Forms open directly in an on-screen sheet — never route the client to a
   // generic "Check-ins & Forms" list where they'd pick the form again.
-  if (FORM_TASK_TYPES.has(occ.task_type) && onOpenForm) {
+  if (isForm && onOpenForm) {
     base.onClick = () => onOpenForm(occ);
     return base;
   }
