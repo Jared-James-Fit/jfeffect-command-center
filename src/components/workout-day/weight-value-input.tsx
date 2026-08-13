@@ -54,7 +54,7 @@ export function WeightValueInput({
   disabled?: boolean;
   focusMode?: boolean;
   ariaLabel: string;
-  /** Prescribed / Last Time / previous best reference for the +/− start value. */
+  /** Prescribed / Last Time / previous best reference value (display only). */
   referenceWeight?: number | null;
 }) {
   /** Inline editing of the actual cell. */
@@ -63,7 +63,7 @@ export function WeightValueInput({
   const [typed, setTyped] = useState("");
   const [draftType, setDraftType] = useState<LoadType>("external");
   const [error, setError] = useState<string | null>(null);
-  /** Secondary sheet — options / bodyweight / +− / above-cap confirm only. */
+  /** Secondary sheet — load-type options / above-cap confirm only. */
   const [sheet, setSheet] = useState<SheetMode | null>(null);
   const [confirmValue, setConfirmValue] = useState<number | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
@@ -136,7 +136,7 @@ export function WeightValueInput({
 
   /**
    * THE canonical commit. Every successful confirmation — keyboard Done,
-   * +/− Done, Bodyweight, Clear, above-cap confirm — funnels through here.
+   * Bodyweight, Clear, above-cap confirm — funnels through here.
    * Optimistic by construction: onPick updates local row state immediately and
    * the existing autosave/cascade/auto-complete run downstream of it.
    */
@@ -329,8 +329,8 @@ export function WeightValueInput({
             {shown}
           </button>
         )}
-        {/* Small secondary control — Bodyweight / Assisted / +− live here so
-            they never interfere with tapping the main numeric area. */}
+        {/* Small secondary control — LOAD TYPE only (Weight / Bodyweight /
+            Assisted) so it never interferes with tapping the numeric area. */}
         {!disabled && (
           <button
             type="button"
