@@ -344,7 +344,6 @@ function buildLoad(input: LoadInput): FactorDetail {
   const trendLabel =
     trend === "Rising" ? "Higher than recent"
       : trend === "Falling" ? "Lower than recent"
-      : trend === "Stable" ? "Steady"
       : trend;
   const impact: FactorDetail["impact"] =
     score >= 80 ? "Positive" : score >= 60 ? "Neutral" : "Limiting";
