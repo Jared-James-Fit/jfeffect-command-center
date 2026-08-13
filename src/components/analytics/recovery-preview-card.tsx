@@ -10,6 +10,7 @@ import {
   SheetDescription,
 } from "@/components/ui/sheet";
 import { supabase } from "@/integrations/supabase/client";
+import { InfoTip } from "@/components/analytics/info-tip";
 import { fetchRecoveryScoreSeries, type SleepBucket } from "@/lib/analytics/recovery-score";
 import {
   buildReadinessBreakdown,
