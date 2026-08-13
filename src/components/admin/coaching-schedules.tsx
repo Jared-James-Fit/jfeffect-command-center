@@ -21,8 +21,10 @@ import {
   type TaskOverride,
 } from "@/lib/action-centre.functions";
 
+import { SEMI_MONTHLY_LABEL } from "@/lib/task-cadence";
+
 const DOW = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-const FREQ = ["weekly", "biweekly", "monthly", "custom_days", "daily", "manual"] as const;
+const FREQ = ["weekly", "biweekly", "semi_monthly", "monthly", "custom_days", "daily", "manual"] as const;
 
 type SchedShape = {
   enabled: boolean;
@@ -89,7 +91,11 @@ function ScheduleForm({
         <Select value={value.frequency} onValueChange={(v) => set("frequency", v as any)} disabled={disabled}>
           <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
           <SelectContent>
-            {FREQ.map((f) => <SelectItem key={f} value={f}>{f}</SelectItem>)}
+            {FREQ.map((f) => (
+              <SelectItem key={f} value={f}>
+                {f === "semi_monthly" ? SEMI_MONTHLY_LABEL : f}
+              </SelectItem>
+            ))}
           </SelectContent>
         </Select>
       </div>
