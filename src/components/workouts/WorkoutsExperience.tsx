@@ -36,6 +36,7 @@ import { ClientBlockView } from "@/components/client-block-view";
 import { WorkoutStatusSheet } from "@/components/workout-status-sheet";
 import { CircleDot } from "lucide-react";
 import { InlineWorkoutPreview } from "@/components/workout/shared/inline-workout-preview";
+import { usePreviewOpen } from "@/lib/preview-open-store";
 import { InlineWorkoutEditor } from "@/components/workout/shared/inline-workout-editor";
 import { useClientImpersonation } from "@/lib/client-impersonation";
 import { WorkoutProgressRing } from "@/components/workout/shared/workout-progress-ring";
@@ -854,7 +855,10 @@ function SelectedDayList({
     <div className="space-y-3">
       {items.map((it) => (
         <SelectedDayCard
-          key={it.day?.id ?? Math.random()}
+          // Stable identity: prefer the scheduled-instance id so two stacked
+          // instances of the same source day don't collide on one key
+          // (duplicate keys used to remount cards and reset preview state).
+          key={`${it.scheduledWorkoutId ?? "legacy"}:${it.day?.id ?? `idx-${items.indexOf(it)}`}`}
           item={it}
           date={date}
           readonly={readonly}
@@ -876,7 +880,12 @@ function SelectedDayCard({
   mode: Mode;
 }) {
   const [previewOpen, setPreviewOpen] = useState(false);
-  const [inlineOpen, setInlineOpen] = useState(false);
+  // Preview open state is keyed by stable workout identity and lives outside
+  // this component so refetches / remounts / navigation can't collapse it.
+  const [inlineOpen, , toggleInlineOpen] = usePreviewOpen(
+    item?.day?.id,
+    item?.scheduledWorkoutId ?? null,
+  );
   const [editOpen, setEditOpen] = useState(false);
   // Admin-only "Edit Workout": visible on the coach schedule surface
   // (mode="coach") and inside client POV (admin impersonating a client in
@@ -1154,7 +1163,7 @@ function SelectedDayCard({
             size="sm"
             variant="ghost"
             className="text-muted-foreground"
-            onClick={() => setInlineOpen((v) => !v)}
+            onClick={() => toggleInlineOpen()}
             aria-expanded={inlineOpen}
           >
             <ChevronDown className={cn("mr-1 h-3.5 w-3.5 transition-transform", inlineOpen && "rotate-180")} />

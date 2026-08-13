@@ -11,6 +11,7 @@ import { MoveWorkoutSheet } from "@/components/schedule/MoveWorkoutSheet";
 import { InlineWorkoutPreview } from "@/components/workout/shared/inline-workout-preview";
 import { WorkoutProgressRing } from "@/components/workout/shared/workout-progress-ring";
 import { useWorkoutProgress } from "@/lib/workout-progress";
+import { usePreviewOpen } from "@/lib/preview-open-store";
 import { cn } from "@/lib/utils";
 
 export function WorkoutListCard({
@@ -30,7 +31,9 @@ export function WorkoutListCard({
   const isCompleted = !!item.completion?.completed_at;
   const hasReview = !!item.completion?.has_feedback;
   const [moveOpen, setMoveOpen] = useState(false);
-  const [expanded, setExpanded] = useState(false);
+  // Open state is stored by stable workout identity so remounts (list
+  // refetch, progress updates, returning from the logger) never collapse it.
+  const [expanded, , toggleExpanded] = usePreviewOpen(item.day?.id, item.scheduledWorkoutId ?? null);
   const previewClientId = clientId ?? item.completion?.client_id ?? null;
   const { data: progress } = useWorkoutProgress(item.day?.id, previewClientId);
   return (
@@ -81,7 +84,7 @@ export function WorkoutListCard({
       {previewClientId && (
         <button
           type="button"
-          onClick={(e) => { e.stopPropagation(); setExpanded((v) => !v); }}
+          onClick={(e) => { e.stopPropagation(); e.preventDefault(); toggleExpanded(); }}
           aria-expanded={expanded}
           className="inline-flex items-center gap-1 rounded-full border border-border bg-background px-2.5 py-1 text-[11px] font-semibold text-muted-foreground hover:bg-secondary hover:text-foreground"
         >

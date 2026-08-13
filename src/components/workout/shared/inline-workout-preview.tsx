@@ -99,16 +99,16 @@ export function InlineWorkoutPreview({
   clientId: string;
   enabled?: boolean;
 }) {
-  const { data, isLoading, isError, error, refetch, isFetching } = useQuery({
-    queryKey: ["inline-workout-preview", dayId, clientId],
-    enabled: enabled && !!dayId && !!clientId,
-    staleTime: 15_000,
+  // CANONICAL structure query. The exercise list renders from this alone —
+  // logged sets are an optional overlay so a results failure can never keep
+  // the preview from opening.
+  const rowsQuery = useQuery({
+    queryKey: ["inline-workout-preview-rows", dayId],
+    enabled: enabled && !!dayId,
+    staleTime: 60_000,
     retry: 1,
+    placeholderData: (prev) => prev,
     queryFn: async () => {
-      // Fetch rows first, then scope results by row ids. Filtering
-      // `pl_row_results` through an `!inner` embedded relation can
-      // silently return 0 rows (or a 400) on some PostgREST configs,
-      // which used to leave the preview stuck in a loading/empty state.
       const rowsRes = await supabase
         .from("pl_exercise_rows")
         .select(
@@ -117,40 +117,61 @@ export function InlineWorkoutPreview({
         .eq("day_id", dayId)
         .order("sort_order", { ascending: true });
       if (rowsRes.error) throw rowsRes.error;
-      const rows = ((rowsRes.data ?? []) as unknown) as Row[];
-      const rowIds = rows.map((r) => r.id);
-      let results: Result[] = [];
-      if (rowIds.length > 0) {
-        const resultsRes = await supabase
-          .from("pl_row_results")
-          .select(
-            "row_id, set_index, actual_load, actual_load_unit, actual_reps, actual_rpe, actual_rir, completed_duration_seconds",
-          )
-          .eq("client_id", clientId)
-          .in("row_id", rowIds)
-          .order("set_index", { ascending: true });
-        if (resultsRes.error) throw resultsRes.error;
-        results = ((resultsRes.data ?? []) as unknown) as Result[];
-      }
-      const resultsByRow = new Map<string, Result[]>();
-      for (const r of results) {
-        const list = resultsByRow.get(r.row_id) ?? [];
-        list.push(r);
-        resultsByRow.set(r.row_id, list);
-      }
-      return { rows, resultsByRow };
+      return ((rowsRes.data ?? []) as unknown) as Row[];
     },
   });
 
+  const rowIds = (rowsQuery.data ?? []).map((r) => r.id);
+  const rowIdsKey = rowIds.join(",");
+
+  // OPTIONAL overlay: the client's logged sets. Keeps previous data while
+  // refetching (logging a set invalidates it) so the list never blanks out.
+  const resultsQuery = useQuery({
+    queryKey: ["inline-workout-preview-results", dayId, clientId, rowIdsKey],
+    enabled: enabled && !!clientId && rowIds.length > 0,
+    staleTime: 10_000,
+    retry: 1,
+    placeholderData: (prev) => prev,
+    queryFn: async () => {
+      const resultsRes = await supabase
+        .from("pl_row_results")
+        .select(
+          "row_id, set_index, actual_load, actual_load_unit, actual_reps, actual_rpe, actual_rir, completed_duration_seconds",
+        )
+        .eq("client_id", clientId)
+        .in("row_id", rowIds)
+        .order("set_index", { ascending: true });
+      if (resultsRes.error) throw resultsRes.error;
+      return ((resultsRes.data ?? []) as unknown) as Result[];
+    },
+  });
+
+  const resultsByRow = new Map<string, Result[]>();
+  for (const r of resultsQuery.data ?? []) {
+    const list = resultsByRow.get(r.row_id) ?? [];
+    list.push(r);
+    resultsByRow.set(r.row_id, list);
+  }
+  const resultsFailed = resultsQuery.isError;
+
   if (!enabled) return null;
-  if (isLoading || (isFetching && !data)) {
+  // Only a true first load (no cached structure at all) shows the skeleton.
+  if (!rowsQuery.data && rowsQuery.isPending) {
     return (
-      <div className="rounded-lg border border-border/60 bg-muted/20 p-3 text-xs text-muted-foreground">
-        Loading exercises…
+      <div className="space-y-2 rounded-lg border border-border/60 bg-background/60 p-2.5">
+        <div className="h-8 w-40 animate-pulse rounded bg-muted" />
+        {[0, 1, 2].map((i) => (
+          <div key={i} className="space-y-1.5 px-1.5 py-1.5">
+            <div className="h-3.5 w-2/3 animate-pulse rounded bg-muted" />
+            <div className="h-3 w-1/3 animate-pulse rounded bg-muted/70" />
+          </div>
+        ))}
+        <span className="sr-only">Loading exercises…</span>
       </div>
     );
   }
-  if (isError) {
+  if (!rowsQuery.data && rowsQuery.isError) {
+    const error = rowsQuery.error;
     return (
       <div className="flex items-center justify-between gap-2 rounded-lg border border-destructive/40 bg-destructive/5 p-3 text-xs text-destructive">
         <span className="truncate">
@@ -158,7 +179,7 @@ export function InlineWorkoutPreview({
         </span>
         <button
           type="button"
-          onClick={() => refetch()}
+          onClick={() => rowsQuery.refetch()}
           className="inline-flex items-center gap-1 rounded-md border border-destructive/40 px-2 py-1 font-semibold hover:bg-destructive/10"
         >
           <RefreshCw className="h-3 w-3" /> Retry
@@ -166,7 +187,7 @@ export function InlineWorkoutPreview({
       </div>
     );
   }
-  const rows = data?.rows ?? [];
+  const rows = rowsQuery.data ?? [];
   if (rows.length === 0) {
     return (
       <div className="rounded-lg border border-border/60 bg-muted/20 p-3 text-xs text-muted-foreground">
@@ -176,7 +197,7 @@ export function InlineWorkoutPreview({
   }
 
   const allResults: Result[] = [];
-  data?.resultsByRow.forEach((list) => list.forEach((r) => allResults.push(r)));
+  resultsByRow.forEach((list) => list.forEach((r) => allResults.push(r)));
   const progress = computeWorkoutProgress(
     rows.map((r) => ({ id: r.id, sets: r.sets })),
     allResults.map((r) => ({
@@ -197,12 +218,14 @@ export function InlineWorkoutPreview({
             Workout Progress
           </div>
           <div className="text-[12px] font-semibold tabular-nums text-foreground">
-            {progress.completedSets} of {progress.prescribedSets} Sets Completed
+            {resultsFailed
+              ? "Progress unavailable"
+              : `${progress.completedSets} of ${progress.prescribedSets} Sets Completed`}
           </div>
         </div>
       </div>
       {rows.map((row, i) => {
-        const results = (data?.resultsByRow.get(row.id) ?? []).filter(
+        const results = (resultsByRow.get(row.id) ?? []).filter(
           (r) =>
             (r.actual_reps != null && Number(r.actual_reps) > 0) ||
             (r.actual_load != null && Number(r.actual_load) > 0) ||
