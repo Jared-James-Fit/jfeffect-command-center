@@ -73,7 +73,11 @@ export function WeightValueInput({
   const step = WEIGHT_STEP[unit];
   const cap = WEIGHT_CAP[unit];
   const numeric = value !== "" && Number.isFinite(Number(value)) ? Number(value) : null;
-  const shown = formatLoadDisplay(value, loadType, unit, { compact: true });
+  // Assisted keeps the cell numeric — the "Assisted" caption below carries the meaning.
+  const shown =
+    loadType === "assisted" && numeric != null
+      ? formatLoadDisplay(value, "external", unit, { compact: true })
+      : formatLoadDisplay(value, loadType, unit, { compact: true });
   const isEmpty = loadType !== "bodyweight" && value === "";
 
   // Remembered values per load type — external weight and assistance never
