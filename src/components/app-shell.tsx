@@ -1655,10 +1655,10 @@ export function PageHeader({
   };
   const showBack = !!backTo;
   return (
-    <div className="flex flex-col gap-2 border-b border-border bg-gradient-to-b from-card to-background px-4 py-2.5 md:flex-row md:flex-wrap md:items-center md:justify-between md:gap-3 md:px-5 md:py-2 xl:px-6 xl:py-3">
+    <div className="flex flex-col gap-1.5 border-b border-border bg-gradient-to-b from-card to-background px-4 py-2 md:flex-row md:flex-wrap md:items-center md:justify-between md:gap-3 md:px-5 md:py-2 xl:px-6 xl:py-3">
       <div className="order-2 min-w-0 w-full md:order-1 md:flex-1">
         {showBack && (
-          <div className="mb-1 flex items-center gap-2">
+          <div className="mb-1 hidden items-center gap-2 md:flex">
             <Button
               type="button"
               variant="ghost"
@@ -1689,9 +1689,24 @@ export function PageHeader({
         <h1 className="flex flex-wrap items-center gap-x-3 gap-y-1 text-lg font-black leading-tight tracking-tight md:text-xl xl:text-2xl break-words">{title}</h1>
         {subtitle ? <p className="mt-0.5 text-xs text-muted-foreground xl:text-sm break-words">{subtitle}</p> : null}
       </div>
-      <div className="order-1 flex flex-wrap items-center justify-end gap-2 md:order-2 md:w-auto">
-        {actions}
-        <NotificationBell />
+      {/* Mobile: back button and the bell/actions share ONE compact nav row so
+          the bell never floats alone in an empty band above the title. */}
+      <div className="order-1 flex items-center justify-between gap-2 md:order-2 md:w-auto md:justify-end">
+        {showBack ? (
+          <button
+            type="button"
+            onClick={handleBack}
+            aria-label={backLabel || "Back"}
+            className="inline-flex h-10 min-w-[44px] shrink-0 items-center gap-1.5 rounded-full border border-border bg-muted/50 px-3 text-sm font-semibold text-foreground transition hover:bg-muted active:scale-[0.98] md:hidden"
+          >
+            <ArrowLeft className="h-4 w-4" />
+            <span>{backLabel || "Back"}</span>
+          </button>
+        ) : <span className="md:hidden" />}
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          {actions}
+          <NotificationBell />
+        </div>
       </div>
     </div>
   );
