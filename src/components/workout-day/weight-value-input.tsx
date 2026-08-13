@@ -1,7 +1,5 @@
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { Check, ChevronDown, Eraser, Minus, Plus } from "lucide-react";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Input } from "@/components/ui/input";
+import { useEffect, useRef, useState } from "react";
+import { ChevronDown, Eraser, Minus, Plus } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   WEIGHT_CAP,
@@ -12,25 +10,27 @@ import {
 import { formatLoadDisplay, type LoadType } from "@/lib/workout-load-type";
 
 /**
- * Weight entry for the set logger — TAP → TYPE → keyboard Done → saved+closed.
+ * Weight entry for the set logger — the WT cell IS the input.
  *
- * RELIABILITY RULES (do not reintroduce the old multi-draft design):
- *  - exactly ONE draft state for the number (`typed`)
- *  - exactly ONE commit path (`commitWeight`)
- *  - no effect ever writes to `typed`; it is seeded once, in the open handler,
- *    inside the tap gesture. Prop changes (cascade, autosave, refetch) can
- *    therefore never clobber what the user is typing.
- *  - nothing persists until commit: no per-keystroke autosave, no cascade
- *  - Cancel closes without writing, so the stored value survives
+ * RELIABILITY RULES (do not reintroduce the old detached-sheet design):
+ *  - normal numeric weight is typed DIRECTLY into the set-table cell. There is
+ *    never a second numeric field visible at the same time.
+ *  - exactly ONE draft state for the number (`typed`), seeded synchronously in
+ *    the tap gesture. No effect ever writes to it, so cascade / autosave /
+ *    refetch can't clobber what the user is typing.
+ *  - exactly ONE commit path (`commitWeight`). Nothing persists until commit:
+ *    no per-keystroke autosave, no per-keystroke cascade or completion.
+ *  - keyboard Done (form submit) commits, blurs and closes in one step.
+ *  - blurring/aborting without submitting restores the stored value.
  *
- * Bodyweight / Assisted / +/− live behind a small "Options" disclosure and
- * never gate the plain numeric path.
+ * Bodyweight / Assisted / +/− live behind the small chevron control on the
+ * right edge of the cell and never gate the plain numeric path.
  *
  * UNIT: read-only, from the workout card's KG/LB toggle. No local unit state,
  * no conversion here.
  */
 
-type SheetMode = "type" | "adjust" | "bodyweight";
+type SheetMode = "options" | "adjust" | "bodyweight" | "confirm";
 
 export function WeightValueInput({
   value,
@@ -56,26 +56,19 @@ export function WeightValueInput({
   /** Prescribed / Last Time / previous best reference for the +/− start value. */
   referenceWeight?: number | null;
 }) {
-  const [open, setOpen] = useState(false);
-  const [mode, setMode] = useState<SheetMode>("type");
-  const [optionsOpen, setOptionsOpen] = useState(false);
+  /** Inline editing of the actual cell. */
+  const [editing, setEditing] = useState(false);
   /** THE single numeric draft. Only user input and the open handler write it. */
   const [typed, setTyped] = useState("");
   const [draftType, setDraftType] = useState<LoadType>("external");
-  const [stepValue, setStepValue] = useState(0);
   const [error, setError] = useState<string | null>(null);
+  /** Secondary sheet — options / bodyweight / +− / above-cap confirm only. */
+  const [sheet, setSheet] = useState<SheetMode | null>(null);
+  const [stepValue, setStepValue] = useState(0);
   const [confirmValue, setConfirmValue] = useState<number | null>(null);
-  const [isDesktop, setIsDesktop] = useState(false);
   const inputRef = useRef<HTMLInputElement | null>(null);
-
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    const mq = window.matchMedia("(min-width: 640px) and (pointer: fine)");
-    const sync = () => setIsDesktop(mq.matches);
-    sync();
-    mq.addEventListener("change", sync);
-    return () => mq.removeEventListener("change", sync);
-  }, []);
+  /** Set while committing so the resulting blur doesn't fire the cancel path. */
+  const committingRef = useRef(false);
 
   const step = WEIGHT_STEP[unit];
   const cap = WEIGHT_CAP[unit];
@@ -105,44 +98,37 @@ export function WeightValueInput({
     return 0;
   };
 
-  /** Seed everything synchronously in the tap gesture — no open-effect. */
-  const openSheet = () => {
+  /**
+   * Tap the cell → the same cell becomes editable. Seeded synchronously inside
+   * the tap gesture so iOS/PWA raises the keyboard on the first tap, and the
+   * draft starts blank for instant replacement of an existing value.
+   */
+  const startEditing = (type?: LoadType) => {
     if (disabled) return;
+    committingRef.current = false;
     setTyped("");
     setError(null);
     setConfirmValue(null);
-    setOptionsOpen(false);
-    setDraftType(loadType === "assisted" ? "assisted" : "external");
-    setStepValue(stepperStart());
-    setMode(loadType === "bodyweight" ? "bodyweight" : "type");
-    setOpen(true);
+    setSheet(null);
+    setDraftType(type ?? (loadType === "assisted" ? "assisted" : "external"));
+    setEditing(true);
   };
 
-  const closeSheet = () => {
-    inputRef.current?.blur();
-    setOpen(false);
-    setOptionsOpen(false);
-    setConfirmValue(null);
+  /** Abort without writing: the stored value survives. */
+  const cancelEditing = () => {
+    setEditing(false);
+    setTyped("");
     setError(null);
   };
 
-  // iOS/PWA: focus in the same commit the field mounts, inside the tap gesture,
-  // or Safari refuses to raise the keyboard.
-  const wantsInput = open && mode === "type" && confirmValue == null;
-  useLayoutEffect(() => {
-    if (!wantsInput) return;
-    const el = inputRef.current;
-    if (!el) return;
-    el.focus({ preventScroll: true });
-    const raf = requestAnimationFrame(() => {
-      if (document.activeElement !== el) el.focus({ preventScroll: true });
-    });
-    return () => cancelAnimationFrame(raf);
-  }, [wantsInput]);
+  const closeSheet = () => {
+    setSheet(null);
+    setConfirmValue(null);
+  };
 
   /**
    * THE canonical commit. Every successful confirmation — keyboard Done,
-   * desktop ✓, +/− Done, Bodyweight, Clear — funnels through here.
+   * +/− Done, Bodyweight, Clear, above-cap confirm — funnels through here.
    * Optimistic by construction: onPick updates local row state immediately and
    * the existing autosave/cascade/auto-complete run downstream of it.
    */
@@ -152,9 +138,11 @@ export function WeightValueInput({
       if (next.loadType === "assisted") memoAssist.current = n;
       else if (next.loadType === "external") memoExternal.current = n;
     }
+    committingRef.current = true;
     inputRef.current?.blur();
-    setOpen(false);
-    setOptionsOpen(false);
+    setEditing(false);
+    setTyped("");
+    setSheet(null);
     setConfirmValue(null);
     setError(null);
     onPick(next);
@@ -162,10 +150,19 @@ export function WeightValueInput({
 
   const numericType: LoadType = draftType === "assisted" ? "assisted" : "external";
 
+  /** Keyboard Done / form submit. */
   const submitTyped = () => {
+    if (typed.trim() === "") { cancelEditing(); return; }
     const res = validateTypedWeight(typed, unit);
     if (!res.ok) { setError(res.error); return; }
-    if (res.aboveCap) { setError(null); setConfirmValue(res.value); return; }
+    if (res.aboveCap) {
+      committingRef.current = true;
+      inputRef.current?.blur();
+      setEditing(false);
+      setConfirmValue(res.value);
+      setSheet("confirm");
+      return;
+    }
     commitWeight({ load: String(res.value), bodyweight: false, loadType: numericType });
   };
 
@@ -176,45 +173,51 @@ export function WeightValueInput({
     });
   };
 
-  const chooseBodyweight = () => {
-    setOptionsOpen(false);
-    setError(null);
-    setDraftType("bodyweight");
-    setMode("bodyweight");
+  const openOptions = () => {
+    if (disabled) return;
+    committingRef.current = true; // suppress the blur-cancel from leaving the input
     inputRef.current?.blur();
+    setEditing(false);
+    setDraftType(loadType === "assisted" ? "assisted" : "external");
+    setSheet("options");
   };
 
-  const chooseAssisted = () => {
-    setOptionsOpen(false);
-    setError(null);
-    setTyped("");
-    setDraftType("assisted");
-    setMode("type");
-  };
-
-  const chooseExternalTyping = () => {
-    setOptionsOpen(false);
-    setError(null);
-    setTyped("");
-    setDraftType("external");
-    setMode("type");
-  };
-
+  const chooseBodyweight = () => { setError(null); setDraftType("bodyweight"); setSheet("bodyweight"); };
+  const chooseAssisted = () => { setSheet(null); startEditing("assisted"); };
+  const chooseExternalTyping = () => { setSheet(null); startEditing("external"); };
   const chooseStepper = () => {
-    setOptionsOpen(false);
     setError(null);
     setDraftType((t) => (t === "assisted" ? "assisted" : "external"));
-    setStepValue((v) => (v > 0 ? v : stepperStart()));
-    setMode("adjust");
+    setStepValue(stepperStart());
+    setSheet("adjust");
   };
 
-  const fieldLabel =
-    draftType === "assisted"
-      ? `Assistance · ${unit.toUpperCase()}`
-      : `Weight · ${unit.toUpperCase()}`;
+  const optionsList = (
+    // LOAD TYPE / INPUT METHOD only. Never KG/LB.
+    <div className="space-y-1">
+      {draftType !== "bodyweight" && (
+        <button type="button" onClick={chooseBodyweight} className={optionItem}>Bodyweight</button>
+      )}
+      {draftType !== "assisted" && (
+        <button type="button" onClick={chooseAssisted} className={optionItem}>Assisted</button>
+      )}
+      {draftType === "assisted" && (
+        <button type="button" onClick={chooseExternalTyping} className={optionItem}>External weight</button>
+      )}
+      <button type="button" onClick={chooseStepper} className={optionItem}>Use +/−</button>
+      {(loadType !== "external" || value !== "") && (
+        <button
+          type="button"
+          onClick={() => commitWeight({ load: "", bodyweight: false, loadType: "external" })}
+          className={cn(optionItem, "text-muted-foreground hover:text-destructive")}
+        >
+          <span className="inline-flex items-center gap-1"><Eraser className="h-3 w-3" /> Clear weight</span>
+        </button>
+      )}
+    </div>
+  );
 
   const cancelBtn = (
-    // Cancel never writes: the stored value survives an aborted edit.
     <button
       type="button"
       onClick={closeSheet}
@@ -224,60 +227,13 @@ export function WeightValueInput({
     </button>
   );
 
-  const optionsMenu = (
-    // LOAD TYPE / INPUT METHOD only. Never KG/LB.
-    <div>
-      <button
-        type="button"
-        onClick={() => setOptionsOpen((v) => !v)}
-        aria-expanded={optionsOpen}
-        className="flex h-7 w-full items-center justify-center gap-1 text-[11px] font-semibold text-muted-foreground hover:text-foreground"
-      >
-        Options <ChevronDown className={cn("h-3 w-3 transition-transform", optionsOpen && "rotate-180")} />
-      </button>
-      {optionsOpen && (
-        <div className="mt-1 space-y-1 rounded-lg border border-border/60 p-1">
-          {draftType !== "bodyweight" && (
-            <button type="button" onClick={chooseBodyweight} className={optionItem}>
-              Bodyweight
-            </button>
-          )}
-          {draftType !== "assisted" && (
-            <button type="button" onClick={chooseAssisted} className={optionItem}>
-              Assisted
-            </button>
-          )}
-          {draftType === "assisted" && (
-            <button type="button" onClick={chooseExternalTyping} className={optionItem}>
-              External weight
-            </button>
-          )}
-          {mode !== "adjust" && (
-            <button type="button" onClick={chooseStepper} className={optionItem}>
-              Use +/−
-            </button>
-          )}
-          {(loadType !== "external" || value !== "") && (
-            <button
-              type="button"
-              onClick={() => commitWeight({ load: "", bodyweight: false, loadType: "external" })}
-              className={cn(optionItem, "text-muted-foreground hover:text-destructive")}
-            >
-              <span className="inline-flex items-center gap-1"><Eraser className="h-3 w-3" /> Clear weight</span>
-            </button>
-          )}
-        </div>
-      )}
-    </div>
-  );
-
-  const body = (
+  const sheetBody = (
     <div className="space-y-2">
       <div className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
-        {mode === "bodyweight" ? "Load type" : fieldLabel}
+        {sheet === "confirm" ? "Confirm weight" : sheet === "bodyweight" ? "Load type" : sheet === "adjust" ? `${draftType === "assisted" ? "Assistance" : "Weight"} · ${unit.toUpperCase()}` : "Load options"}
       </div>
 
-      {confirmValue != null ? (
+      {sheet === "confirm" && confirmValue != null ? (
         <div className="space-y-2 rounded-md border border-amber-500/40 bg-amber-500/10 p-2">
           <div className="text-[12px] font-medium text-foreground">
             This is above the normal weight cap ({cap} {unit}). Save anyway?
@@ -292,19 +248,17 @@ export function WeightValueInput({
             </button>
             <button
               type="button"
-              onClick={() => { setConfirmValue(null); setTyped(""); setMode("type"); }}
+              onClick={() => { setConfirmValue(null); setSheet(null); startEditing(numericType); }}
               className="h-9 flex-1 rounded-md border border-border/60 text-xs font-bold text-muted-foreground hover:text-foreground"
             >
               Edit weight
             </button>
           </div>
         </div>
-      ) : mode === "bodyweight" ? (
+      ) : sheet === "bodyweight" ? (
         <>
           <div className="w-full rounded-xl border border-primary/40 bg-primary/10 py-3 text-center">
-            <div className="text-base font-black uppercase leading-none tracking-wide text-primary">
-              Bodyweight
-            </div>
+            <div className="text-base font-black uppercase leading-none tracking-wide text-primary">Bodyweight</div>
           </div>
           <button
             type="button"
@@ -320,16 +274,13 @@ export function WeightValueInput({
           >
             Enter a weight instead
           </button>
-          {optionsMenu}
           {cancelBtn}
         </>
-      ) : mode === "adjust" ? (
+      ) : sheet === "adjust" ? (
         <>
           <div className="w-full rounded-xl border border-border/60 bg-muted/30 py-2 text-center">
             <div className="text-3xl font-black leading-none tabular-nums text-foreground">{stepValue}</div>
-            <div className="mt-0.5 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
-              {unit}
-            </div>
+            <div className="mt-0.5 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">{unit}</div>
           </div>
           <div className="grid grid-cols-2 gap-1.5">
             <button
@@ -363,102 +314,102 @@ export function WeightValueInput({
           >
             Type exact weight
           </button>
-          {optionsMenu}
           {cancelBtn}
         </>
       ) : (
-        <form onSubmit={(e) => { e.preventDefault(); submitTyped(); }} className="space-y-1.5">
-          <div className="flex items-center gap-1.5">
-            <div className="relative flex-1">
-              <Input
-                ref={inputRef}
-                autoFocus
-                inputMode="decimal"
-                type="text"
-                enterKeyHint="done"
-                value={typed}
-                onChange={(e) => { setTyped(e.target.value.replace(/[^0-9.]/g, "")); setError(null); }}
-                placeholder=""
-                aria-label={`${ariaLabel} — ${draftType === "assisted" ? "assistance" : "weight"} in ${unit}`}
-                className="h-12 px-2 pr-10 text-lg font-bold tabular-nums"
-              />
-              <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
-                {unit}
-              </span>
-            </div>
-            {/* Desktop only — there is no keyboard Done key with a mouse. */}
-            {isDesktop && (
-              <button
-                type="submit"
-                aria-label="Save weight"
-                className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground hover:bg-primary/90"
-              >
-                <Check className="h-4 w-4" />
-              </button>
-            )}
-          </div>
-          {error && <div className="text-[11px] font-medium text-destructive">{error}</div>}
-          {optionsMenu}
+        <>
+          {optionsList}
           {cancelBtn}
-        </form>
+        </>
       )}
     </div>
   );
 
-  const trigger = (
-    <button
-      type="button"
-      disabled={disabled}
-      aria-label={ariaLabel}
-      onClick={openSheet}
-      className={cn(
-        "flex w-full items-center justify-center whitespace-nowrap rounded-md border px-2 text-sm font-medium transition-colors",
-        focusMode ? "h-9 text-base" : "h-8",
-        loadType === "bodyweight" && "text-[10px] font-semibold uppercase tracking-tight",
-        isEmpty
-          ? "border-blue-500/40 bg-blue-500/10 text-muted-foreground"
-          : "border-border/60 bg-muted/40 text-foreground",
-        !disabled && "cursor-pointer hover:bg-muted/60",
-      )}
-    >
-      {shown}
-    </button>
-  );
-
-  if (isDesktop) {
-    return (
-      <Popover open={open} onOpenChange={(next) => (next ? openSheet() : closeSheet())}>
-        <PopoverTrigger asChild>{trigger}</PopoverTrigger>
-        <PopoverContent
-          align="center"
-          side="bottom"
-          collisionPadding={12}
-          className="w-[13rem] max-w-[calc(100vw-2rem)] p-2.5"
-        >
-          {body}
-        </PopoverContent>
-      </Popover>
-    );
-  }
+  const cellHeight = focusMode ? "h-9" : "h-8";
 
   return (
     <>
-      {trigger}
-      {open && (
-        <div className="fixed inset-0 z-[70] sm:hidden" role="dialog" aria-modal="true" aria-label={ariaLabel}>
+      <div className="relative w-full">
+        {editing ? (
+          // The SAME cell, now editable. Identical box dimensions — the row
+          // never grows or shifts while typing.
+          <form
+            onSubmit={(e) => { e.preventDefault(); submitTyped(); }}
+            className="w-full"
+          >
+            <input
+              ref={inputRef}
+              autoFocus
+              inputMode="decimal"
+              type="text"
+              enterKeyHint="done"
+              value={typed}
+              onChange={(e) => { setTyped(e.target.value.replace(/[^0-9.]/g, "")); setError(null); }}
+              onBlur={() => { if (!committingRef.current) cancelEditing(); }}
+              placeholder={draftType === "assisted" ? "assist" : ""}
+              aria-label={`${ariaLabel} — ${draftType === "assisted" ? "assistance" : "weight"} in ${unit}`}
+              className={cn(
+                "w-full rounded-md border border-primary bg-background px-2 text-center text-sm font-semibold tabular-nums text-foreground outline-none ring-2 ring-primary/30",
+                cellHeight,
+                focusMode && "text-base",
+                error && "border-destructive ring-destructive/30",
+              )}
+            />
+          </form>
+        ) : (
           <button
             type="button"
-            aria-label="Close weight picker"
+            disabled={disabled}
+            aria-label={ariaLabel}
+            onClick={() => startEditing()}
+            className={cn(
+              "flex w-full items-center justify-center whitespace-nowrap rounded-md border pl-2 pr-5 text-sm font-medium transition-colors",
+              cellHeight,
+              focusMode && "text-base",
+              loadType === "bodyweight" && "text-[10px] font-semibold uppercase tracking-tight",
+              loadType === "assisted" && "border-amber-500/50 bg-amber-500/10",
+              isEmpty
+                ? "border-blue-500/40 bg-blue-500/10 text-muted-foreground"
+                : "border-border/60 bg-muted/40 text-foreground",
+              !disabled && "cursor-pointer hover:bg-muted/60",
+            )}
+          >
+            {shown}
+          </button>
+        )}
+        {/* Small secondary control — Bodyweight / Assisted / +− live here so
+            they never interfere with tapping the main numeric area. */}
+        {!disabled && (
+          <button
+            type="button"
+            aria-label={`${ariaLabel} — load options`}
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={openOptions}
+            className="absolute right-0 top-0 flex h-full w-5 items-center justify-center rounded-r-md text-muted-foreground hover:text-foreground"
+          >
+            <ChevronDown className="h-3 w-3" />
+          </button>
+        )}
+      </div>
+      {error && editing && (
+        <div className="mt-0.5 text-[10px] font-medium text-destructive">{error}</div>
+      )}
+
+      {sheet && (
+        <div className="fixed inset-0 z-[70]" role="dialog" aria-modal="true" aria-label={ariaLabel}>
+          <button
+            type="button"
+            aria-label="Close load options"
             tabIndex={-1}
             className="absolute inset-0 bg-black/50"
             onClick={closeSheet}
           />
           <div
-            className="absolute inset-x-0 bottom-0 rounded-t-2xl border-t border-border bg-background p-2.5 shadow-2xl"
+            className="absolute inset-x-0 bottom-0 rounded-t-2xl border-t border-border bg-background p-2.5 shadow-2xl sm:inset-x-auto sm:left-1/2 sm:bottom-auto sm:top-1/2 sm:w-[15rem] sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-2xl sm:border"
             style={{ paddingBottom: "calc(0.5rem + env(safe-area-inset-bottom))" }}
           >
-            <div className="mx-auto mb-1.5 h-1 w-10 rounded-full bg-muted-foreground/30" />
-            {body}
+            <div className="mx-auto mb-1.5 h-1 w-10 rounded-full bg-muted-foreground/30 sm:hidden" />
+            {sheetBody}
           </div>
         </div>
       )}
