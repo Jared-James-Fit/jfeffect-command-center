@@ -585,7 +585,7 @@ function buildPain(painDays7d: number): FactorDetail {
 export interface BreakdownInput {
   sleepSamples: SleepSample[];
   recoverySamples: Array<{ ts: string; rating: number }>;
-  load: { current7: LoadWindow; baseline28: LoadWindow };
+  load: LoadInput;
   consistency: ConsistencyInput;
   scores: number[];
   painDays7d: number;
@@ -595,7 +595,7 @@ export function buildReadinessBreakdown(inp: BreakdownInput): ReadinessBreakdown
   const factors: Record<FactorKey, FactorDetail> = {
     sleep: buildSleep(inp.sleepSamples),
     recovery: buildRecoveryFeel(inp.recoverySamples),
-    load: buildLoad(inp.load.current7, inp.load.baseline28),
+    load: buildLoad(inp.load),
     consistency: buildConsistency(inp.consistency),
     performance: buildPerformance(inp.scores),
     pain: buildPain(inp.painDays7d),
