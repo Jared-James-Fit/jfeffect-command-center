@@ -2973,6 +2973,8 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
               rirTarget={rirTarget}
               hasUncompletedAfter={hasUncompletedAfter}
               onApplyToRemaining={applyToRemaining}
+              cascade={cascade}
+              onCascadeFromSet={cascadeFromSet}
               forceHydrateToken={fillToken}
               forcedFill={fillSnapshot}
               readonly={readonly}
