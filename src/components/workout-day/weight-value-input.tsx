@@ -187,16 +187,23 @@ export function WeightValueInput({
       ) : typing ? (
         <form className="space-y-1.5" onSubmit={(e) => { e.preventDefault(); submitTyped(); }}>
           <div className="flex items-center gap-1.5">
-            <Input
-              autoFocus
-              inputMode="decimal"
-              type="text"
-              value={typed}
-              onChange={(e) => { setTyped(e.target.value.replace(/[^0-9.]/g, "")); setError(null); }}
-              placeholder={loadFieldLabel(draftType, unit)}
-              aria-label={`${ariaLabel} — exact value`}
-              className="h-11 text-base px-2"
-            />
+            <div className="relative flex-1">
+              <Input
+                autoFocus
+                inputMode="decimal"
+                type="text"
+                enterKeyHint="done"
+                value={typed}
+                onChange={(e) => { setTyped(e.target.value.replace(/[^0-9.]/g, "")); setError(null); }}
+                placeholder=""
+                aria-label={`${ariaLabel} — exact value`}
+                className="h-11 pr-10 text-base px-2 font-bold tabular-nums"
+              />
+              {/* The unit is never hidden, even while typing. */}
+              <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                {unit}
+              </span>
+            </div>
             <button
               type="submit"
               aria-label="Apply weight"
@@ -206,59 +213,88 @@ export function WeightValueInput({
             </button>
           </div>
           {error && <div className="text-[11px] font-medium text-destructive">{error}</div>}
-          <button
-            type="button"
-            onClick={() => { setTyping(false); setError(null); }}
-            className="h-8 w-full rounded-md border border-border/60 text-[11px] font-semibold text-muted-foreground hover:text-foreground"
-          >
-            Use +/− instead
-          </button>
+          <div className="flex gap-1.5">
+            {/* Cancel never writes: the stored value survives an aborted edit. */}
+            <button
+              type="button"
+              onClick={() => { setOpen(false); reset(); }}
+              className="h-8 flex-1 rounded-md border border-border/60 text-[11px] font-semibold text-muted-foreground hover:text-foreground"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={() => { setTyping(false); setError(null); }}
+              className="h-8 flex-1 rounded-md border border-border/60 text-[11px] font-semibold text-muted-foreground hover:text-foreground"
+            >
+              Use +/−
+            </button>
+          </div>
         </form>
       ) : (
         <>
-          <button
-            type="button"
-            onClick={() => { setTyped(""); setTyping(true); setDraftType(draftType === "bodyweight" ? "external" : draftType); }}
-            aria-label={`${ariaLabel} — tap to type an exact value`}
-            className={cn(
-              "w-full rounded-xl border border-border/60 bg-muted/30 py-2 text-center transition-colors hover:bg-muted/50",
-              draftType === "bodyweight" && "opacity-45",
-            )}
-          >
-            <div className="text-3xl font-black leading-none tabular-nums text-foreground">
-              {draftType === "bodyweight" ? "BW" : draftValue}
+          {draftType === "bodyweight" ? (
+            <div className="w-full rounded-xl border border-primary/40 bg-primary/10 py-3 text-center">
+              <div className="text-base font-black uppercase leading-none tracking-wide text-primary">
+                Bodyweight
+              </div>
             </div>
-            <div className="mt-0.5 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
-              {draftType === "bodyweight" ? "Bodyweight" : unit}
-            </div>
-          </button>
-
-          <div className="grid grid-cols-2 gap-1.5">
+          ) : (
             <button
               type="button"
-              onClick={() => bump(-step)}
-              aria-label={`Decrease by ${step} ${unit}`}
-              className="flex h-11 items-center justify-center gap-1 rounded-lg border border-border/60 text-sm font-bold text-foreground hover:bg-muted/60"
+              // Tapping the value goes straight to a BLANK numeric field.
+              onClick={() => { setTyped(""); setTyping(true); }}
+              aria-label={`${ariaLabel} — tap to type an exact value`}
+              className="w-full rounded-xl border border-border/60 bg-muted/30 py-2 text-center transition-colors hover:bg-muted/50"
             >
-              <Minus className="h-3.5 w-3.5" /> {step}
+              <div className="text-3xl font-black leading-none tabular-nums text-foreground">
+                {draftValue}
+              </div>
+              <div className="mt-0.5 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                {unit}
+              </div>
             </button>
+          )}
+
+          {draftType === "bodyweight" ? (
+            // Numeric controls are meaningless for Bodyweight — offer the way back instead.
             <button
               type="button"
-              onClick={() => bump(step)}
-              aria-label={`Increase by ${step} ${unit}`}
-              className="flex h-11 items-center justify-center gap-1 rounded-lg border border-border/60 text-sm font-bold text-foreground hover:bg-muted/60"
+              onClick={() => chooseType("external")}
+              className="h-9 w-full rounded-lg border border-border/60 text-[11px] font-semibold text-muted-foreground hover:text-foreground"
             >
-              <Plus className="h-3.5 w-3.5" /> {step}
+              Use external weight
             </button>
-          </div>
+          ) : (
+            <>
+              <div className="grid grid-cols-2 gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => bump(-step)}
+                  aria-label={`Decrease by ${step} ${unit}`}
+                  className="flex h-11 items-center justify-center gap-1 rounded-lg border border-border/60 text-sm font-bold text-foreground hover:bg-muted/60"
+                >
+                  <Minus className="h-3.5 w-3.5" /> {step}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => bump(step)}
+                  aria-label={`Increase by ${step} ${unit}`}
+                  className="flex h-11 items-center justify-center gap-1 rounded-lg border border-border/60 text-sm font-bold text-foreground hover:bg-muted/60"
+                >
+                  <Plus className="h-3.5 w-3.5" /> {step}
+                </button>
+              </div>
 
-          <button
-            type="button"
-            onClick={() => { setTyped(""); setTyping(true); setDraftType(draftType === "bodyweight" ? "external" : draftType); }}
-            className="h-7 w-full text-[11px] font-semibold text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
-          >
-            Tap to type
-          </button>
+              <button
+                type="button"
+                onClick={() => { setTyped(""); setTyping(true); }}
+                className="h-7 w-full text-[11px] font-semibold text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
+              >
+                Tap to type
+              </button>
+            </>
+          )}
 
           <div className="space-y-1.5">
             <div className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
