@@ -759,6 +759,7 @@ function FactorSheet({ factor }: { factor: FactorDetail }) {
   const trendClass =
     factor.trend === "Improving" ? "text-emerald-600 dark:text-emerald-400"
       : factor.trend === "Dropping" ? "text-rose-600 dark:text-rose-400"
+      : factor.trend === "Rising" ? "text-amber-600 dark:text-amber-400"
       : "text-muted-foreground";
   const impactClass =
     factor.impact === "Positive" ? "text-emerald-600 dark:text-emerald-400"
