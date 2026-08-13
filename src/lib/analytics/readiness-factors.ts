@@ -29,7 +29,12 @@ export interface FactorDetail {
   currentValue: string;
   subtitle?: string;
   metrics: Array<{ label: string; value: string }>;
-  trend: "Improving" | "Stable" | "Dropping" | "Building" | "—";
+  /**
+   * "Improving"/"Dropping" are outcome words (higher = better).
+   * Training Load uses the neutral direction words "Rising"/"Falling"
+   * because more workload is not inherently good or bad.
+   */
+  trend: "Improving" | "Stable" | "Dropping" | "Building" | "Rising" | "Falling" | "—";
   impact: "Positive" | "Neutral" | "Limiting";
   recommendation: string;
   /** One-sentence dummy-proof explanation of the metric. */
@@ -40,7 +45,8 @@ export interface FactorDetail {
 const TOOLTIPS: Record<FactorKey, string> = {
   sleep: "Sleep before your recent training sessions.",
   recovery: "Your reported recovery from recent workout reviews.",
-  load: "Your recent training stress compared with your normal workload.",
+  load:
+    "Compares your recent completed training with your previous normal workload using working sets, load and effort. Large increases can mean more fatigue, but the comparison needs enough prior training history to be meaningful.",
   consistency: "How consistently you've completed your scheduled workouts.",
   performance: "How your lifting performance has changed over recent workouts.",
   pain: "Reported pain or injury affecting training.",
