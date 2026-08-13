@@ -401,6 +401,7 @@ function buildLoad(input: LoadInput): FactorDetail {
       },
     ],
     trend,
+    trendLabel,
     impact,
     recommendation: rec,
     tooltip: TOOLTIPS.load,
