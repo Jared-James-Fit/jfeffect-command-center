@@ -2631,8 +2631,9 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
     for (const idx of targets) {
       const ex = existingResults.find((x: any) => x.set_index === idx) as any;
       const repsNum = ex?.actual_reps != null ? Number(ex.actual_reps) : srcReps;
+      // Keep whatever RPE/RIR the set already has; the cascade never sets it.
       const rpeStr =
-        ex?.actual_rpe_num != null ? String(ex.actual_rpe_num) : (ex?.actual_rpe ?? srcRpe) || null;
+        ex?.actual_rpe_num != null ? String(ex.actual_rpe_num) : (ex?.actual_rpe ?? null);
       const rpeNum = rpeStr ? Number(rpeStr) : null;
       const complete = isSetLogComplete({
         measurementType: effectiveMeasurementType,
@@ -3548,7 +3549,7 @@ function SetRow({
     setLoadType(cascade.loadType);
     setLoad(cascade.loadType === "bodyweight" ? "0" : cascade.load);
     if (!repsEdited && existing?.actual_reps == null && cascade.reps) setReps(cascade.reps);
-    if (!rpeEdited && existing?.actual_rpe_num == null && existing?.actual_rpe == null && cascade.rpe) setRpe(cascade.rpe);
+    // RPE/RIR is deliberately NOT cascaded — that system is untouched.
     setOptimisticComplete(
       isSetLogComplete({
         measurementType,
