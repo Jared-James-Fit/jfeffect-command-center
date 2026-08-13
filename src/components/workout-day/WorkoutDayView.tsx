@@ -2383,12 +2383,12 @@ function PreviousLiftChip({ data, displayUnit, className }: { data: PreviousLift
   }
   return (
     <div
-      className={cn("mt-1 inline-flex max-w-full items-center gap-1 rounded-md border border-dashed border-muted-foreground/30 bg-muted/30 px-2 py-0.5 text-[11px] font-medium text-muted-foreground", className)}
+      className={cn("inline-flex max-w-full items-center gap-1 rounded-md border border-sky-500/30 bg-sky-500/10 px-2 py-1 text-[11px] font-medium text-sky-900 dark:text-sky-100", className)}
       title="Your top set the last time you trained this exercise"
     >
-      <span className="text-[9px] font-bold uppercase tracking-wider text-muted-foreground/70">Last time</span>
-      <span className="font-semibold tabular-nums text-foreground/80">{loadStr}{repsStr}</span>
-      {when && <span className="text-[10px] text-muted-foreground/70">· {when}</span>}
+      <span className="text-[9px] font-bold uppercase tracking-wider text-sky-700/80 dark:text-sky-300/80">Last time</span>
+      <span className="font-semibold tabular-nums text-foreground">{loadStr}{repsStr}</span>
+      {when && <span className="text-[10px] text-sky-700/70 dark:text-sky-300/70">· {when}</span>}
     </div>
   );
 }
