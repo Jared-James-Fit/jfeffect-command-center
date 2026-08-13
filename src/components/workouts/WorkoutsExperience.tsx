@@ -36,6 +36,7 @@ import { ClientBlockView } from "@/components/client-block-view";
 import { WorkoutStatusSheet } from "@/components/workout-status-sheet";
 import { CircleDot } from "lucide-react";
 import { InlineWorkoutPreview } from "@/components/workout/shared/inline-workout-preview";
+import { usePreviewOpen } from "@/lib/preview-open-store";
 import { InlineWorkoutEditor } from "@/components/workout/shared/inline-workout-editor";
 import { useClientImpersonation } from "@/lib/client-impersonation";
 import { WorkoutProgressRing } from "@/components/workout/shared/workout-progress-ring";
