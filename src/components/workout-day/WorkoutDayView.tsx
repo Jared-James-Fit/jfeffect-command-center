@@ -1847,7 +1847,7 @@ function WorkoutDay({
       )}
       <PageHeader
         backTo={navigation.backTo}
-        backLabel="Back to Workouts"
+        backLabel="Workouts"
         title={formatDayLabel(day)}
         subtitle={(() => {
           // Three information layers, in order of importance:
@@ -1871,7 +1871,7 @@ function WorkoutDay({
           ) : undefined
         }
       />
-      <div className="px-3 pt-2.5 space-y-3 md:p-8 md:space-y-4 pb-[calc(var(--bottom-nav-clearance,96px)+env(safe-area-inset-bottom)+32px)] md:pb-8">
+      <div className="px-3 pt-2 space-y-2.5 md:p-8 md:space-y-4 pb-[calc(var(--bottom-nav-clearance,96px)+env(safe-area-inset-bottom)+32px)] md:pb-8">
 
         <WorkoutSyncBanner
           clientId={client?.id ?? null}
