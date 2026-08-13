@@ -2764,10 +2764,10 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
         })}
         {row.tempo && <span className="ml-2 text-xs font-normal text-muted-foreground">tempo {row.tempo}</span>}
       </div>
-      {/* Utility row: Last Time reference, compact History pill, and the compact
-      {/* Suggested load badges */}
+      {/* Reference row: Last Time and History stay directly connected — History
+          simply expands on the previous-performance information. */}
       {(exerciseId || name) && (
-        <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+        <div className="mt-1.5 flex flex-wrap items-center gap-1">
           <PreviousLiftChip
             data={previousLift}
             displayUnit={activeUnit}
@@ -2783,14 +2783,6 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
               className="w-auto h-7 rounded-full px-2.5 text-xs"
             />
           )}
-          <RestTimerButton
-            seconds={effectiveRest ?? null}
-            label={restDisplay}
-            scopeKey={dayId}
-            timerId={String(row.id ?? exerciseId ?? name)}
-            onStart={() => beginWorkoutSession(dayId)}
-            className="ml-auto"
-          />
         </div>
       )}
       {row.manual_override && (row.load_kg || row.load_lb) && (
