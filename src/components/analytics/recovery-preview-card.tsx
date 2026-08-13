@@ -10,6 +10,7 @@ import {
   SheetDescription,
 } from "@/components/ui/sheet";
 import { supabase } from "@/integrations/supabase/client";
+import { InfoTip } from "@/components/analytics/info-tip";
 import { fetchRecoveryScoreSeries, type SleepBucket } from "@/lib/analytics/recovery-score";
 import {
   buildReadinessBreakdown,
@@ -720,8 +721,15 @@ function FactorRing({ factor, onClick }: { factor: FactorDetail; onClick: () => 
   const c = 2 * Math.PI * r;
   const pct = Math.max(0, Math.min(100, factor.score));
   const dash = (pct / 100) * c;
-  const colors = statusColor[factor.status];
-  const dim = factor.isMissing;
+  const colors = factor.isBuilding
+    ? {
+        ring: "text-muted-foreground/55",
+        soft: "text-muted-foreground/15",
+        text: "text-muted-foreground",
+        dot: "bg-muted-foreground/40",
+      }
+    : statusColor[factor.status];
+  const dim = factor.isMissing || factor.isBuilding;
   return (
     <button
       type="button"
@@ -755,7 +763,14 @@ function FactorRing({ factor, onClick }: { factor: FactorDetail; onClick: () => 
 }
 
 function FactorSheet({ factor }: { factor: FactorDetail }) {
-  const colors = statusColor[factor.status];
+  const colors = factor.isBuilding
+    ? {
+        ring: "text-muted-foreground/55",
+        soft: "text-muted-foreground/15",
+        text: "text-muted-foreground",
+        dot: "bg-muted-foreground/40",
+      }
+    : statusColor[factor.status];
   const trendClass =
     factor.trend === "Improving" ? "text-emerald-600 dark:text-emerald-400"
       : factor.trend === "Dropping" ? "text-rose-600 dark:text-rose-400"
@@ -803,7 +818,7 @@ function FactorSheet({ factor }: { factor: FactorDetail }) {
                 </svg>
                 <div className="absolute inset-0 flex items-center justify-center">
                   <span className="text-base font-black tabular-nums text-foreground">
-                    {factor.isMissing ? "—" : `${pct}`}
+                    {factor.isMissing || factor.isBuilding ? "—" : `${pct}`}
                   </span>
                 </div>
               </>
@@ -819,7 +834,7 @@ function FactorSheet({ factor }: { factor: FactorDetail }) {
           </div>
           <div className={cn("mt-1 flex items-center gap-2 text-xs font-semibold", colors.text)}>
             <span className={cn("h-1.5 w-1.5 rounded-full", colors.dot)} />
-            {factor.status === "good" ? "In a great range" : factor.status === "watch" ? "Watch this" : "Needs attention"}
+            {factor.isBuilding ? "Need more history" : factor.status === "good" ? "In a great range" : factor.status === "watch" ? "Watch this" : "Needs attention"}
           </div>
         </div>
       </div>
@@ -838,13 +853,23 @@ function FactorSheet({ factor }: { factor: FactorDetail }) {
           ))}
           <div className="rounded-xl border border-border/50 bg-card px-3 py-2.5">
             <div className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
-              Trend
+              {factor.key === "load" ? "Load Trend" : "Trend"}
             </div>
-            <div className={cn("mt-0.5 text-sm font-bold", trendClass)}>{factor.trend}</div>
+            <div className={cn("mt-0.5 text-sm font-bold", trendClass)}>
+              {factor.trendLabel ?? factor.trend}
+            </div>
           </div>
           <div className="rounded-xl border border-border/50 bg-card px-3 py-2.5">
-            <div className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
-              Impact
+            <div className="flex items-center gap-1">
+              <div className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+                Impact
+              </div>
+              {factor.key === "load" && (
+                <InfoTip label="What Impact means" side="top" align="start">
+                  Impact shows whether your current training load is supporting,
+                  neutral to, or limiting today's readiness.
+                </InfoTip>
+              )}
             </div>
             <div className={cn("mt-0.5 text-sm font-bold", impactClass)}>{factor.impact}</div>
           </div>

@@ -35,11 +35,25 @@ export interface FactorDetail {
    * because more workload is not inherently good or bad.
    */
   trend: "Improving" | "Stable" | "Dropping" | "Building" | "Rising" | "Falling" | "—";
+  /**
+   * Optional human-readable trend override. The semantic `trend` value
+   * still drives color/impact logic; this only changes what is shown.
+   * Training Load uses it to swap the outcome-worded "Rising"/"Falling"
+   * for neutral workload-direction words.
+   */
+  trendLabel?: string;
   impact: "Positive" | "Neutral" | "Limiting";
   recommendation: string;
   /** One-sentence dummy-proof explanation of the metric. */
   tooltip: string;
   isMissing?: boolean;
+  /**
+   * True while the baseline is still building — the score is not yet
+   * confident enough to display as a normal workload judgment. Renders
+   * as a neutral "—" ring instead of a numeric score and drops the
+   * "Watch this" caution language.
+   */
+  isBuilding?: boolean;
 }
 
 const TOOLTIPS: Record<FactorKey, string> = {
@@ -251,11 +265,18 @@ function buildLoad(input: LoadInput): FactorDetail {
       )
     : null;
 
+  const fmtRange = (iso: string) => {
+    const d = new Date(`${iso}T00:00:00`);
+    return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+  };
   const rangeLabel = validWeeks.length
-    ? `${validWeeks[validWeeks.length - 1].from} → ${validWeeks[0].to}`
+    ? `${fmtRange(validWeeks[validWeeks.length - 1].from)} → ${fmtRange(validWeeks[0].to)}`
     : "—";
 
   // ── Insufficient history: never produce a confident extreme warning ──
+  // The baseline is still building, so we do not show a numeric score, a
+  // "Watch this" caution, or amber/red warning styling. The ring renders
+  // as a neutral "—" and the status line reads "Need more history".
   if (!hasBaseline || current7.sets === 0) {
     return {
       key: "load",
@@ -278,10 +299,12 @@ function buildLoad(input: LoadInput): FactorDetail {
         },
       ],
       trend: "Building",
+      trendLabel: "Building",
       impact: "Neutral",
       recommendation:
         "Not enough consistent training history to judge workload yet. Keep logging your sessions and train as planned.",
       tooltip: TOOLTIPS.load,
+      isBuilding: true,
     };
   }
 
@@ -316,6 +339,12 @@ function buildLoad(input: LoadInput): FactorDetail {
   // Neutral direction words — rising workload is not an "improvement".
   const trend: FactorDetail["trend"] =
     Math.abs(deltaPct) < 8 ? "Stable" : deltaPct > 0 ? "Rising" : "Falling";
+  // Display-only workload-direction words so the label never reads like a
+  // performance judgment (improving/declining).
+  const trendLabel =
+    trend === "Rising" ? "Higher than recent"
+      : trend === "Falling" ? "Lower than recent"
+      : trend;
   const impact: FactorDetail["impact"] =
     score >= 80 ? "Positive" : score >= 60 ? "Neutral" : "Limiting";
 
@@ -371,6 +400,7 @@ function buildLoad(input: LoadInput): FactorDetail {
       },
     ],
     trend,
+    trendLabel,
     impact,
     recommendation: rec,
     tooltip: TOOLTIPS.load,
