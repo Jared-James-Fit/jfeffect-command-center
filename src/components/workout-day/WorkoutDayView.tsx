@@ -2581,6 +2581,99 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
     loadType: LoadType;
   } | null>(null);
 
+  // ── Smart downward cascade ────────────────────────────────────────────
+  // Entering/changing a load on one set flows it into the eligible sets
+  // below (blank or previously auto-derived), stops at a manual override,
+  // never propagates upward, stamps completion for every valid set and
+  // persists them in one batch. See src/lib/set-cascade.ts for the rule.
+  const cascadeOriginRef = useRef<Map<number, CascadeOrigin>>(new Map());
+  const cascadeTokenRef = useRef(0);
+  const [cascade, setCascade] = useState<{
+    token: number;
+    targets: number[];
+    load: string;
+    loadType: LoadType;
+    unit: "kg" | "lb";
+    reps: string;
+    rpe: string;
+  } | null>(null);
+
+  const cascadeFromSet = async (
+    fromSetIndex: number,
+    payload: { load: string; loadType: LoadType; unit: "kg" | "lb"; reps: string; rpe: string },
+  ) => {
+    if (!clientId || readonly) return;
+    // The edited set is always a manual source from now on.
+    cascadeOriginRef.current.set(fromSetIndex, "manual");
+    const bodyweight = payload.loadType === "bodyweight";
+    // Clearing a set clears only that set — never the rest of the workout.
+    if (!bodyweight && payload.load === "") return;
+    const states: CascadeSetState[] = Array.from({ length: setCount }, (_, i) => {
+      const idx = i + 1;
+      const ex = existingResults.find((x: any) => x.set_index === idx) as any;
+      const origin = cascadeOriginRef.current.get(idx);
+      const exType = ex ? resolveLoadType(ex.load_type, ex.is_bodyweight) : "external";
+      const hasValue = !!ex && (ex.actual_load != null || exType === "bodyweight");
+      return { index: idx, origin, hasValue, locked: !!ex?.completed_at && origin !== "auto" };
+    });
+    const targets = planCascade(fromSetIndex, states);
+    if (!targets.length) return;
+    for (const t of targets) cascadeOriginRef.current.set(t, "auto");
+    // 1) Optimistic local state — every affected row updates in one pass.
+    const token = ++cascadeTokenRef.current;
+    setCascade({ token, targets, ...payload });
+    // 2) Batch persistence through the canonical row-results path.
+    beginWorkoutSession(dayId);
+    const loadNum = bodyweight ? 0 : Number(payload.load);
+    const srcReps = payload.reps ? parseInt(payload.reps, 10) : null;
+    const srcRpe = payload.rpe || null;
+    const tasks: Array<Promise<any>> = [];
+    for (const idx of targets) {
+      const ex = existingResults.find((x: any) => x.set_index === idx) as any;
+      const repsNum = ex?.actual_reps != null ? Number(ex.actual_reps) : srcReps;
+      const rpeStr =
+        ex?.actual_rpe_num != null ? String(ex.actual_rpe_num) : (ex?.actual_rpe ?? srcRpe) || null;
+      const rpeNum = rpeStr ? Number(rpeStr) : null;
+      const complete = isSetLogComplete({
+        measurementType: effectiveMeasurementType,
+        hideWeight,
+        loadType: payload.loadType,
+        load: loadNum,
+        reps: repsNum,
+        durationSeconds: ex?.completed_duration_seconds ?? null,
+      });
+      const body: Record<string, any> = withMemberWorkoutIndexes({
+        row_id: row.id,
+        client_id: clientId,
+        set_index: idx,
+        actual_load: loadNum,
+        actual_load_unit: payload.unit,
+        entered_value: loadNum,
+        entered_unit: payload.unit,
+        actual_reps: repsNum,
+        actual_rpe: rpeStr,
+        actual_rpe_num: Number.isFinite(rpeNum as number) ? rpeNum : null,
+        load_type: payload.loadType,
+        is_bodyweight: bodyweight,
+        completed_at: complete ? (ex?.completed_at ?? new Date().toISOString()) : null,
+      }, adapter, dayId);
+      if (adapter) {
+        tasks.push(adapter.upsertPlRowResultRaw(body, ex?.id ?? null));
+      } else if (ex?.id) {
+        tasks.push(sb.from("pl_row_results").update(body).eq("id", ex.id).then(({ error }: any) => { if (error) throw error; }));
+      } else {
+        tasks.push(sb.from("pl_row_results").upsert(body, { onConflict: "client_id,row_id,set_index" }).then(({ error }: any) => { if (error) throw error; }));
+      }
+    }
+    try {
+      await Promise.all(tasks);
+      onChange();
+      await qc.refetchQueries({ queryKey: ["pl-day-results", dayId] });
+    } catch {
+      toast.error("Some sets didn’t save — check your connection");
+    }
+  };
+
   const applyToRemaining = async (fromSetIndex: number, payload: { load: string; reps: string; rpe: string; unit: "kg" | "lb"; loadType?: LoadType }) => {
     if (!clientId) return;
     beginWorkoutSession(dayId);
