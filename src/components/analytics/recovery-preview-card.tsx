@@ -853,9 +853,11 @@ function FactorSheet({ factor }: { factor: FactorDetail }) {
           ))}
           <div className="rounded-xl border border-border/50 bg-card px-3 py-2.5">
             <div className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
-              Trend
+              {factor.key === "load" ? "Load Trend" : "Trend"}
             </div>
-            <div className={cn("mt-0.5 text-sm font-bold", trendClass)}>{factor.trend}</div>
+            <div className={cn("mt-0.5 text-sm font-bold", trendClass)}>
+              {factor.trendLabel ?? factor.trend}
+            </div>
           </div>
           <div className="rounded-xl border border-border/50 bg-card px-3 py-2.5">
             <div className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
