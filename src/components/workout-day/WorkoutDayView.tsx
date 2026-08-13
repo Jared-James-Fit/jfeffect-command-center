@@ -4173,7 +4173,13 @@ function SetRow({
         loadType={loadType}
         unit={unit}
         ariaLabel={`Set ${setIndex} ${loadType === "assisted" ? "assistance" : "weight"} in ${unit}`}
-        referenceWeight={suggestedWeight ?? lastTimeWeight ?? null}
+        referenceWeight={
+          // Prefill priority: current value (handled inside the input) →
+          // previous set in this exercise → Last Time → prescribed load.
+          (prevExisting?.actual_load != null && Number(prevExisting.actual_load) > 0
+            ? Number(prevExisting.actual_load)
+            : null) ?? lastTimeWeight ?? suggestedWeight ?? null
+        }
         disabled={readonly}
         focusMode={focusMode}
         onPick={({ load: nextLoad, bodyweight, loadType: nextType }: { load: string; bodyweight: boolean; loadType: LoadType }) => {
