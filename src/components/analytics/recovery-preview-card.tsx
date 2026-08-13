@@ -860,8 +860,16 @@ function FactorSheet({ factor }: { factor: FactorDetail }) {
             </div>
           </div>
           <div className="rounded-xl border border-border/50 bg-card px-3 py-2.5">
-            <div className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
-              Impact
+            <div className="flex items-center gap-1">
+              <div className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+                Impact
+              </div>
+              {factor.key === "load" && (
+                <InfoTip label="What Impact means" side="top" align="start">
+                  Impact shows whether your current training load is supporting,
+                  neutral to, or limiting today's readiness.
+                </InfoTip>
+              )}
             </div>
             <div className={cn("mt-0.5 text-sm font-bold", impactClass)}>{factor.impact}</div>
           </div>
