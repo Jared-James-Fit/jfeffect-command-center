@@ -3816,7 +3816,12 @@ function SetRow({
   // manual "mark incomplete" tap (no pending save) is never overridden.
   const liveOptimistic =
     !readonly && liveComplete && (save.hasPending() || save.state === "saving");
-  const isConfirmed = (Boolean(existing?.completed_at) && hasLoggedValue) || liveOptimistic;
+  // A cascaded row is green the moment the value lands locally; the parent's
+  // batch write carries the real `completed_at` a beat later.
+  const isConfirmed =
+    (Boolean(existing?.completed_at) && hasLoggedValue) ||
+    liveOptimistic ||
+    (optimisticComplete && liveComplete);
   // hasAnyEntry only counts weight (the field the client must enter) and
   // manually-edited reps/RPE. Pre-filled prescription values do NOT count
   // as draft data — otherwise every unlogged set shows the amber border.
