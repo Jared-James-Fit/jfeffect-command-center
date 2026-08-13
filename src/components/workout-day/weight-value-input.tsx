@@ -233,22 +233,28 @@ export function WeightValueInput({
         </form>
       ) : (
         <>
-          <button
-            type="button"
-            onClick={() => { setTyped(""); setTyping(true); setDraftType(draftType === "bodyweight" ? "external" : draftType); }}
-            aria-label={`${ariaLabel} — tap to type an exact value`}
-            className={cn(
-              "w-full rounded-xl border border-border/60 bg-muted/30 py-2 text-center transition-colors hover:bg-muted/50",
-              draftType === "bodyweight" && "opacity-45",
-            )}
-          >
-            <div className="text-3xl font-black leading-none tabular-nums text-foreground">
-              {draftType === "bodyweight" ? "BW" : draftValue}
+          {draftType === "bodyweight" ? (
+            <div className="w-full rounded-xl border border-primary/40 bg-primary/10 py-3 text-center">
+              <div className="text-base font-black uppercase leading-none tracking-wide text-primary">
+                Bodyweight
+              </div>
             </div>
-            <div className="mt-0.5 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
-              {draftType === "bodyweight" ? "Bodyweight" : unit}
-            </div>
-          </button>
+          ) : (
+            <button
+              type="button"
+              // Tapping the value goes straight to a BLANK numeric field.
+              onClick={() => { setTyped(""); setTyping(true); }}
+              aria-label={`${ariaLabel} — tap to type an exact value`}
+              className="w-full rounded-xl border border-border/60 bg-muted/30 py-2 text-center transition-colors hover:bg-muted/50"
+            >
+              <div className="text-3xl font-black leading-none tabular-nums text-foreground">
+                {draftValue}
+              </div>
+              <div className="mt-0.5 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                {unit}
+              </div>
+            </button>
+          )}
 
           {draftType === "bodyweight" ? (
             // Numeric controls are meaningless for Bodyweight — offer the way back instead.
