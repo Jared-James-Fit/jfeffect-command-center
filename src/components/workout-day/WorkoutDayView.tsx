@@ -1847,7 +1847,7 @@ function WorkoutDay({
       )}
       <PageHeader
         backTo={navigation.backTo}
-        backLabel="Back to Workouts"
+        backLabel="Workouts"
         title={formatDayLabel(day)}
         subtitle={(() => {
           // Three information layers, in order of importance:
@@ -1871,7 +1871,7 @@ function WorkoutDay({
           ) : undefined
         }
       />
-      <div className="px-3 pt-2.5 space-y-3 md:p-8 md:space-y-4 pb-[calc(var(--bottom-nav-clearance,96px)+env(safe-area-inset-bottom)+32px)] md:pb-8">
+      <div className="px-3 pt-2 space-y-2.5 md:p-8 md:space-y-4 pb-[calc(var(--bottom-nav-clearance,96px)+env(safe-area-inset-bottom)+32px)] md:pb-8">
 
         <WorkoutSyncBanner
           clientId={client?.id ?? null}
@@ -2383,12 +2383,12 @@ function PreviousLiftChip({ data, displayUnit, className }: { data: PreviousLift
   }
   return (
     <div
-      className={cn("mt-1 inline-flex max-w-full items-center gap-1 rounded-md border border-dashed border-muted-foreground/30 bg-muted/30 px-2 py-0.5 text-[11px] font-medium text-muted-foreground", className)}
+      className={cn("inline-flex max-w-full items-center gap-1 rounded-md border border-sky-500/30 bg-sky-500/10 px-2 py-1 text-[11px] font-medium text-sky-900 dark:text-sky-100", className)}
       title="Your top set the last time you trained this exercise"
     >
-      <span className="text-[9px] font-bold uppercase tracking-wider text-muted-foreground/70">Last time</span>
-      <span className="font-semibold tabular-nums text-foreground/80">{loadStr}{repsStr}</span>
-      {when && <span className="text-[10px] text-muted-foreground/70">· {when}</span>}
+      <span className="text-[9px] font-bold uppercase tracking-wider text-sky-700/80 dark:text-sky-300/80">Last time</span>
+      <span className="font-semibold tabular-nums text-foreground">{loadStr}{repsStr}</span>
+      {when && <span className="text-[10px] text-sky-700/70 dark:text-sky-300/70">· {when}</span>}
     </div>
   );
 }
@@ -2764,10 +2764,10 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
         })}
         {row.tempo && <span className="ml-2 text-xs font-normal text-muted-foreground">tempo {row.tempo}</span>}
       </div>
-      {/* Utility row: Last Time reference, compact History pill, and the compact
-      {/* Suggested load badges */}
+      {/* Reference row: Last Time and History stay directly connected — History
+          simply expands on the previous-performance information. */}
       {(exerciseId || name) && (
-        <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+        <div className="mt-1.5 flex flex-wrap items-center gap-1">
           <PreviousLiftChip
             data={previousLift}
             displayUnit={activeUnit}
@@ -2783,14 +2783,6 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
               className="w-auto h-7 rounded-full px-2.5 text-xs"
             />
           )}
-          <RestTimerButton
-            seconds={effectiveRest ?? null}
-            label={restDisplay}
-            scopeKey={dayId}
-            timerId={String(row.id ?? exerciseId ?? name)}
-            onStart={() => beginWorkoutSession(dayId)}
-            className="ml-auto"
-          />
         </div>
       )}
       {row.manual_override && (row.load_kg || row.load_lb) && (
@@ -2841,20 +2833,30 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
         />
       </div>
 
-      {/* Utility row — cues on the left, help on the right; light so it never
-      {/* Quick-fill weight button — only show when not readonly and there are uncompleted sets */}
-      <div className="mt-1 flex items-center">
+      {/* Utility row — cues + help grouped on the left, Rest takes the premium
+          right-side slot immediately above the set table (repeated loop). */}
+      <div className="mt-1.5 flex items-center gap-1">
         {cues && (
           <button
             type="button"
             onClick={() => setCuesOpen((v) => !v)}
-            className="inline-flex h-6 items-center gap-1 px-1 text-[11px] font-medium text-muted-foreground transition hover:text-foreground"
+            className="inline-flex h-8 items-center gap-1 px-1 text-[11px] font-medium text-muted-foreground transition hover:text-foreground"
           >
             {cuesOpen ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
             {cuesOpen ? "Hide cues" : "Show cues"}
           </button>
         )}
-        <TrainingHelpButton size="sm" variant="ghost" className="ml-auto h-6 px-1 text-[11px] text-muted-foreground hover:text-foreground" />
+        <TrainingHelpButton size="sm" variant="ghost" className="h-8 px-1.5 text-[11px] text-muted-foreground hover:text-foreground" />
+        {(exerciseId || name) && (
+          <RestTimerButton
+            seconds={effectiveRest ?? null}
+            label={restDisplay}
+            scopeKey={dayId}
+            timerId={String(row.id ?? exerciseId ?? name)}
+            onStart={() => beginWorkoutSession(dayId)}
+            className="ml-auto shrink-0"
+          />
+        )}
       </div>
       {!readonly && !trackingType.includes("time") && clientId && (() => {
         const firstSet = existingResults.find((x: any) => x.set_index === 1);
