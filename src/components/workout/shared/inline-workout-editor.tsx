@@ -328,7 +328,8 @@ export function InlineWorkoutEditor({
     }
 
     // 4) Converge every surface that renders this workout
-    qc.invalidateQueries({ queryKey: ["inline-workout-preview", dayId] });
+    qc.invalidateQueries({ queryKey: ["inline-workout-preview-rows", dayId] });
+    qc.invalidateQueries({ queryKey: ["inline-workout-preview-results", dayId] });
     qc.invalidateQueries({ queryKey: ["inline-workout-editor", dayId] });
     qc.invalidateQueries({ queryKey: ["my-workouts", clientId] });
     qc.invalidateQueries({ queryKey: ["workouts-experience-client", clientId] });
