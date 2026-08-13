@@ -879,7 +879,12 @@ function SelectedDayCard({
   mode: Mode;
 }) {
   const [previewOpen, setPreviewOpen] = useState(false);
-  const [inlineOpen, setInlineOpen] = useState(false);
+  // Preview open state is keyed by stable workout identity and lives outside
+  // this component so refetches / remounts / navigation can't collapse it.
+  const [inlineOpen, , toggleInlineOpen] = usePreviewOpen(
+    item?.day?.id,
+    item?.scheduledWorkoutId ?? null,
+  );
   const [editOpen, setEditOpen] = useState(false);
   // Admin-only "Edit Workout": visible on the coach schedule surface
   // (mode="coach") and inside client POV (admin impersonating a client in
@@ -1157,7 +1162,7 @@ function SelectedDayCard({
             size="sm"
             variant="ghost"
             className="text-muted-foreground"
-            onClick={() => setInlineOpen((v) => !v)}
+            onClick={() => toggleInlineOpen()}
             aria-expanded={inlineOpen}
           >
             <ChevronDown className={cn("mr-1 h-3.5 w-3.5 transition-transform", inlineOpen && "rotate-180")} />
