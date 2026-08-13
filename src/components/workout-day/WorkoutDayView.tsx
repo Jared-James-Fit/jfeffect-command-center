@@ -2833,20 +2833,30 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
         />
       </div>
 
-      {/* Utility row — cues on the left, help on the right; light so it never
-      {/* Quick-fill weight button — only show when not readonly and there are uncompleted sets */}
-      <div className="mt-1 flex items-center">
+      {/* Utility row — cues + help grouped on the left, Rest takes the premium
+          right-side slot immediately above the set table (repeated loop). */}
+      <div className="mt-1.5 flex items-center gap-1">
         {cues && (
           <button
             type="button"
             onClick={() => setCuesOpen((v) => !v)}
-            className="inline-flex h-6 items-center gap-1 px-1 text-[11px] font-medium text-muted-foreground transition hover:text-foreground"
+            className="inline-flex h-8 items-center gap-1 px-1 text-[11px] font-medium text-muted-foreground transition hover:text-foreground"
           >
             {cuesOpen ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
             {cuesOpen ? "Hide cues" : "Show cues"}
           </button>
         )}
-        <TrainingHelpButton size="sm" variant="ghost" className="ml-auto h-6 px-1 text-[11px] text-muted-foreground hover:text-foreground" />
+        <TrainingHelpButton size="sm" variant="ghost" className="h-8 px-1.5 text-[11px] text-muted-foreground hover:text-foreground" />
+        {(exerciseId || name) && (
+          <RestTimerButton
+            seconds={effectiveRest ?? null}
+            label={restDisplay}
+            scopeKey={dayId}
+            timerId={String(row.id ?? exerciseId ?? name)}
+            onStart={() => beginWorkoutSession(dayId)}
+            className="ml-auto shrink-0"
+          />
+        )}
       </div>
       {!readonly && !trackingType.includes("time") && clientId && (() => {
         const firstSet = existingResults.find((x: any) => x.set_index === 1);
