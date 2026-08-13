@@ -16,6 +16,7 @@ import { Route as AppRouteImport } from './routes/app'
 import { Route as ApplyRouteImport } from './routes/apply'
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as DeleteAccountRouteImport } from './routes/delete-account'
+import { Route as DevcheckLoadMenuRouteImport } from './routes/devcheck-load-menu'
 import { Route as InstallRouteImport } from './routes/install'
 import { Route as JoinRouteImport } from './routes/join'
 import { Route as MemberSetupRouteImport } from './routes/member-setup'
@@ -320,6 +321,11 @@ const AuthRoute = AuthRouteImport.update({
 const DeleteAccountRoute = DeleteAccountRouteImport.update({
   id: '/delete-account',
   path: '/delete-account',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DevcheckLoadMenuRoute = DevcheckLoadMenuRouteImport.update({
+  id: '/devcheck-load-menu',
+  path: '/devcheck-load-menu',
   getParentRoute: () => rootRouteImport,
 } as any)
 const InstallRoute = InstallRouteImport.update({
@@ -1899,6 +1905,7 @@ export interface FileRoutesByFullPath {
   '/apply': typeof ApplyRoute
   '/auth': typeof AuthRoute
   '/delete-account': typeof DeleteAccountRoute
+  '/devcheck-load-menu': typeof DevcheckLoadMenuRoute
   '/install': typeof InstallRoute
   '/join': typeof JoinRoute
   '/member-setup': typeof MemberSetupRoute
@@ -2178,6 +2185,7 @@ export interface FileRoutesByTo {
   '/apply': typeof ApplyRoute
   '/auth': typeof AuthRoute
   '/delete-account': typeof DeleteAccountRoute
+  '/devcheck-load-menu': typeof DevcheckLoadMenuRoute
   '/install': typeof InstallRoute
   '/join': typeof JoinRoute
   '/member-setup': typeof MemberSetupRoute
@@ -2454,6 +2462,7 @@ export interface FileRoutesById {
   '/apply': typeof ApplyRoute
   '/auth': typeof AuthRoute
   '/delete-account': typeof DeleteAccountRoute
+  '/devcheck-load-menu': typeof DevcheckLoadMenuRoute
   '/install': typeof InstallRoute
   '/join': typeof JoinRoute
   '/member-setup': typeof MemberSetupRoute
@@ -2735,6 +2744,7 @@ export interface FileRouteTypes {
     | '/apply'
     | '/auth'
     | '/delete-account'
+    | '/devcheck-load-menu'
     | '/install'
     | '/join'
     | '/member-setup'
@@ -3014,6 +3024,7 @@ export interface FileRouteTypes {
     | '/apply'
     | '/auth'
     | '/delete-account'
+    | '/devcheck-load-menu'
     | '/install'
     | '/join'
     | '/member-setup'
@@ -3289,6 +3300,7 @@ export interface FileRouteTypes {
     | '/apply'
     | '/auth'
     | '/delete-account'
+    | '/devcheck-load-menu'
     | '/install'
     | '/join'
     | '/member-setup'
@@ -3570,6 +3582,7 @@ export interface RootRouteChildren {
   ApplyRoute: typeof ApplyRoute
   AuthRoute: typeof AuthRoute
   DeleteAccountRoute: typeof DeleteAccountRoute
+  DevcheckLoadMenuRoute: typeof DevcheckLoadMenuRoute
   InstallRoute: typeof InstallRoute
   JoinRoute: typeof JoinRoute
   MemberSetupRoute: typeof MemberSetupRoute
@@ -3668,6 +3681,13 @@ declare module '@tanstack/react-router' {
       path: '/delete-account'
       fullPath: '/delete-account'
       preLoaderRoute: typeof DeleteAccountRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/devcheck-load-menu': {
+      id: '/devcheck-load-menu'
+      path: '/devcheck-load-menu'
+      fullPath: '/devcheck-load-menu'
+      preLoaderRoute: typeof DevcheckLoadMenuRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/install': {
@@ -6332,6 +6352,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApplyRoute: ApplyRoute,
   AuthRoute: AuthRoute,
   DeleteAccountRoute: DeleteAccountRoute,
+  DevcheckLoadMenuRoute: DevcheckLoadMenuRoute,
   InstallRoute: InstallRoute,
   JoinRoute: JoinRoute,
   MemberSetupRoute: MemberSetupRoute,
