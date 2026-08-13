@@ -121,6 +121,22 @@ export function WeightValueInput({
     setError(null);
   };
 
+  /**
+   * Deterministic blur behaviour (iOS can dismiss the keyboard without a
+   * form submit): a VALID draft commits through the same canonical path,
+   * a blank or invalid draft restores the stored value. The cell is never
+   * left in a half-edited state, and a blank draft never destroys the
+   * saved weight — clearing is an explicit action in the options menu.
+   */
+  const handleBlur = () => {
+    if (committingRef.current) return;
+    const draft = typed.trim();
+    if (draft === "") { cancelEditing(); return; }
+    const res = validateTypedWeight(draft, unit);
+    if (!res.ok || res.aboveCap) { cancelEditing(); return; }
+    commitWeight({ load: String(res.value), bodyweight: false, loadType: numericType });
+  };
+
   const closeSheet = () => {
     setSheet(null);
     setConfirmValue(null);
@@ -345,7 +361,7 @@ export function WeightValueInput({
               enterKeyHint="done"
               value={typed}
               onChange={(e) => { setTyped(e.target.value.replace(/[^0-9.]/g, "")); setError(null); }}
-              onBlur={() => { if (!committingRef.current) cancelEditing(); }}
+              onBlur={handleBlur}
               placeholder={draftType === "assisted" ? "assist" : ""}
               aria-label={`${ariaLabel} — ${draftType === "assisted" ? "assistance" : "weight"} in ${unit}`}
               className={cn(
