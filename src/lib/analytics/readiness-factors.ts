@@ -29,7 +29,12 @@ export interface FactorDetail {
   currentValue: string;
   subtitle?: string;
   metrics: Array<{ label: string; value: string }>;
-  trend: "Improving" | "Stable" | "Dropping" | "Building" | "—";
+  /**
+   * "Improving"/"Dropping" are outcome words (higher = better).
+   * Training Load uses the neutral direction words "Rising"/"Falling"
+   * because more workload is not inherently good or bad.
+   */
+  trend: "Improving" | "Stable" | "Dropping" | "Building" | "Rising" | "Falling" | "—";
   impact: "Positive" | "Neutral" | "Limiting";
   recommendation: string;
   /** One-sentence dummy-proof explanation of the metric. */
@@ -40,7 +45,8 @@ export interface FactorDetail {
 const TOOLTIPS: Record<FactorKey, string> = {
   sleep: "Sleep before your recent training sessions.",
   recovery: "Your reported recovery from recent workout reviews.",
-  load: "Your recent training stress compared with your normal workload.",
+  load:
+    "Compares your recent completed training with your previous normal workload using working sets, load and effort. Large increases can mean more fatigue, but the comparison needs enough prior training history to be meaningful.",
   consistency: "How consistently you've completed your scheduled workouts.",
   performance: "How your lifting performance has changed over recent workouts.",
   pain: "Reported pain or injury affecting training.",
@@ -195,20 +201,103 @@ export interface LoadWindow {
   days: number;
 }
 
-function buildLoad(current7: LoadWindow, baseline28: LoadWindow): FactorDetail {
-  const hasBaseline = baseline28.sets > 0 || baseline28.tonnage > 0;
-  // Normalize baseline to a 7-day rate for a fair compare.
-  const baseWeeklySets = hasBaseline ? baseline28.sets / 4 : 0;
-  const baseWeeklyTon = hasBaseline ? baseline28.tonnage / 4 : 0;
-  const setsDelta = current7.sets - baseWeeklySets;
-  const tonDeltaPct =
-    baseWeeklyTon > 0 ? Math.round(((current7.tonnage - baseWeeklyTon) / baseWeeklyTon) * 100) : 0;
+/** A single prior calendar-style week of training, most recent first. */
+export interface LoadWeek extends LoadWindow {
+  /** Inclusive ISO start date of the week (yyyy-mm-dd). */
+  from: string;
+  /** Exclusive ISO end date of the week (yyyy-mm-dd). */
+  to: string;
+}
+
+export interface LoadInput {
+  /** Most recent 7 days (the period being judged). */
+  current7: LoadWindow;
+  /**
+   * Prior COMPLETE weeks that end before the current 7-day window starts.
+   * Must not overlap `current7` — the baseline can never contain the
+   * period it is being compared against.
+   */
+  priorWeeks: LoadWeek[];
+}
+
+/** A prior week only counts toward the baseline when it holds real training. */
+export const MIN_WEEK_SETS = 5;
+export const MIN_WEEK_DAYS = 1;
+/** Confident comparisons need this many representative prior weeks. */
+export const MIN_BASELINE_WEEKS = 3;
+
+export function isValidBaselineWeek(w: LoadWindow): boolean {
+  return w.sets >= MIN_WEEK_SETS && w.days >= MIN_WEEK_DAYS;
+}
+
+function buildLoad(input: LoadInput): FactorDetail {
+  const { current7, priorWeeks } = input;
+  const validWeeks = priorWeeks.filter(isValidBaselineWeek);
+  const hasBaseline = validWeeks.length >= MIN_BASELINE_WEEKS;
+
+  const baseWeeklySets = validWeeks.length
+    ? validWeeks.reduce((s, w) => s + w.sets, 0) / validWeeks.length
+    : 0;
+  const baseWeeklyTon = validWeeks.length
+    ? validWeeks.reduce((s, w) => s + w.tonnage, 0) / validWeeks.length
+    : 0;
+  const rpeWeeks = validWeeks.filter((w) => w.avgRpe != null);
+  const baseRpe = rpeWeeks.length
+    ? Number(
+        (
+          rpeWeeks.reduce((s, w) => s + w.avgRpe! * w.sets, 0) /
+          rpeWeeks.reduce((s, w) => s + w.sets, 0)
+        ).toFixed(2),
+      )
+    : null;
+
+  const rangeLabel = validWeeks.length
+    ? `${validWeeks[validWeeks.length - 1].from} → ${validWeeks[0].to}`
+    : "—";
+
+  // ── Insufficient history: never produce a confident extreme warning ──
+  if (!hasBaseline || current7.sets === 0) {
+    return {
+      key: "load",
+      label: "Training Load",
+      emoji: "📈",
+      score: 75,
+      status: "watch",
+      currentValue: "Building baseline",
+      subtitle: `${validWeeks.length} of ${MIN_BASELINE_WEEKS} prior training weeks recorded`,
+      metrics: [
+        {
+          label: "Last 7 Days",
+          value: `${current7.sets} sets · ${Math.round(current7.tonnage).toLocaleString()} lb`,
+        },
+        { label: "Valid prior weeks", value: `${validWeeks.length} of ${priorWeeks.length}` },
+        { label: "Baseline range", value: rangeLabel },
+        {
+          label: "Avg RPE",
+          value: current7.avgRpe != null ? current7.avgRpe.toFixed(1) : "—",
+        },
+      ],
+      trend: "Building",
+      impact: "Neutral",
+      recommendation:
+        "Not enough consistent training history to judge workload yet. Keep logging your sessions and train as planned.",
+      tooltip: TOOLTIPS.load,
+    };
+  }
+
+  // ── Single blended load ratio ───────────────────────────────────────
+  // Sets and tonnage move together, so scoring them separately would
+  // double-count one volume jump. They are averaged into ONE ratio and
+  // only that ratio drives the score. RPE is reported, never scored.
+  const setsRatio = baseWeeklySets > 0 ? current7.sets / baseWeeklySets : 1;
+  const tonRatio = baseWeeklyTon > 0 ? current7.tonnage / baseWeeklyTon : setsRatio;
+  const loadRatio = (setsRatio + tonRatio) / 2;
+  const deltaPct = Math.round((loadRatio - 1) * 100);
   const rpeDelta =
-    baseline28.avgRpe != null && current7.avgRpe != null
-      ? Number((current7.avgRpe - baseline28.avgRpe).toFixed(1))
+    baseRpe != null && current7.avgRpe != null
+      ? Number((current7.avgRpe - baseRpe).toFixed(1))
       : null;
 
-  // Bucket relative to baseline tonnage.
   let label:
     | "Much Lower"
     | "Lower"
@@ -217,54 +306,38 @@ function buildLoad(current7: LoadWindow, baseline28: LoadWindow): FactorDetail {
     | "High"
     | "Very High";
   let score: number;
-  if (!hasBaseline || current7.sets === 0) {
-    label = "Normal"; score = 75;
-  } else if (tonDeltaPct <= -40) { label = "Much Lower"; score = 70; }
-  else if (tonDeltaPct <= -15) { label = "Lower"; score = 82; }
-  else if (tonDeltaPct < 10) { label = "Normal"; score = 92; }
-  else if (tonDeltaPct < 25) { label = "Slightly Elevated"; score = 80; }
-  else if (tonDeltaPct < 45) { label = "High"; score = 62; }
+  if (loadRatio < 0.6) { label = "Much Lower"; score = 70; }
+  else if (loadRatio < 0.85) { label = "Lower"; score = 82; }
+  else if (loadRatio < 1.1) { label = "Normal"; score = 92; }
+  else if (loadRatio < 1.25) { label = "Slightly Elevated"; score = 80; }
+  else if (loadRatio < 1.45) { label = "High"; score = 62; }
   else { label = "Very High"; score = 45; }
 
-  const trend: FactorDetail["trend"] = !hasBaseline
-    ? "Building"
-    : Math.abs(tonDeltaPct) < 8
-      ? "Stable"
-      : tonDeltaPct > 0
-        ? "Improving"
-        : "Dropping";
+  // Neutral direction words — rising workload is not an "improvement".
+  const trend: FactorDetail["trend"] =
+    Math.abs(deltaPct) < 8 ? "Stable" : deltaPct > 0 ? "Rising" : "Falling";
   const impact: FactorDetail["impact"] =
     score >= 80 ? "Positive" : score >= 60 ? "Neutral" : "Limiting";
 
-  const contribParts: string[] = [];
-  if (hasBaseline) {
-    if (Math.abs(setsDelta) >= 3) {
-      contribParts.push(`${setsDelta > 0 ? "+" : ""}${Math.round(setsDelta)} working sets`);
-    }
-    if (Math.abs(tonDeltaPct) >= 5) {
-      contribParts.push(`${tonDeltaPct > 0 ? "+" : ""}${tonDeltaPct}% tonnage`);
-    }
-    if (rpeDelta != null && Math.abs(rpeDelta) >= 0.3) {
-      contribParts.push(
-        `avg RPE ${baseline28.avgRpe!.toFixed(1)} → ${current7.avgRpe!.toFixed(1)}`,
-      );
-    }
-  }
-  const contribLine = contribParts.length ? `Main contributors: ${contribParts.join(", ")}.` : "";
+  const multiple = loadRatio >= 1.6 || loadRatio <= 0.6;
+  const headline = multiple
+    ? `This week is about ${loadRatio.toFixed(1)}× your recent weekly training load.`
+    : `This week is about ${Math.abs(deltaPct)}% ${deltaPct >= 0 ? "above" : "below"} your recent weekly training load.`;
+  const driver = `Main driver: ${current7.sets} working sets vs a recent average of ${Math.round(baseWeeklySets)}.`;
 
   let rec: string;
-  if (!hasBaseline) {
-    rec = "Building a baseline of your normal workload. Train as planned.";
-  } else if (label === "Very High" || label === "High") {
-    rec = `Your workload is ${Math.abs(tonDeltaPct)}% above your normal training volume. Stay within today's prescribed RPE and avoid adding extra back-off sets.`;
+  if (label === "Very High" || label === "High") {
+    rec = `${headline} ${driver} Stay within today's prescribed RPE and avoid adding extra back-off sets.`;
   } else if (label === "Slightly Elevated") {
-    rec = `Workload is slightly above baseline (+${tonDeltaPct}%). Execute prescribed work — skip optional finishers.`;
+    rec = `${headline} ${driver} Execute prescribed work — skip optional finishers.`;
   } else if (label === "Much Lower" || label === "Lower") {
-    rec = `Your workload is ${Math.abs(tonDeltaPct)}% below your baseline. You appear well recovered — a good day to push prescribed top sets if they move well.`;
+    rec = `${headline} You appear well recovered — a good day to push prescribed top sets if they move well.`;
   } else {
     rec = "Workload is in your normal range. Train as planned.";
   }
-  if (contribLine) rec = `${rec} ${contribLine}`.trim();
+  if (rpeDelta != null && Math.abs(rpeDelta) >= 0.3) {
+    rec = `${rec} Average effort ${baseRpe!.toFixed(1)} → ${current7.avgRpe!.toFixed(1)} RPE.`;
+  }
 
   return {
     key: "load",
@@ -273,27 +346,28 @@ function buildLoad(current7: LoadWindow, baseline28: LoadWindow): FactorDetail {
     score,
     status: statusFor(score),
     currentValue: label,
-    subtitle: hasBaseline
-      ? `${tonDeltaPct >= 0 ? "+" : ""}${tonDeltaPct}% vs your normal`
-      : undefined,
+    subtitle: multiple
+      ? `${loadRatio.toFixed(1)}× your recent weekly load`
+      : `${deltaPct >= 0 ? "+" : ""}${deltaPct}% vs your normal`,
     metrics: [
-      { label: "Last 7 Days", value: `${current7.sets} sets · ${Math.round(current7.tonnage).toLocaleString()} lb` },
       {
-        label: "Baseline (28d)",
-        value: hasBaseline
-          ? `${Math.round(baseWeeklySets)} sets · ${Math.round(baseWeeklyTon).toLocaleString()} lb / wk`
-          : "—",
+        label: "Last 7 Days",
+        value: `${current7.sets} sets · ${Math.round(current7.tonnage).toLocaleString()} lb`,
+      },
+      {
+        label: `Baseline (${validWeeks.length} wk)`,
+        value: `${Math.round(baseWeeklySets)} sets · ${Math.round(baseWeeklyTon).toLocaleString()} lb / wk`,
       },
       {
         label: "Avg RPE",
         value:
           current7.avgRpe != null
-            ? `${current7.avgRpe.toFixed(1)}${baseline28.avgRpe != null ? ` (base ${baseline28.avgRpe.toFixed(1)})` : ""}`
+            ? `${current7.avgRpe.toFixed(1)}${baseRpe != null ? ` (base ${baseRpe.toFixed(1)})` : ""}`
             : "—",
       },
       {
         label: "vs Normal",
-        value: hasBaseline ? `${tonDeltaPct >= 0 ? "+" : ""}${tonDeltaPct}%` : "—",
+        value: multiple ? `${loadRatio.toFixed(1)}×` : `${deltaPct >= 0 ? "+" : ""}${deltaPct}%`,
       },
     ],
     trend,
@@ -511,7 +585,7 @@ function buildPain(painDays7d: number): FactorDetail {
 export interface BreakdownInput {
   sleepSamples: SleepSample[];
   recoverySamples: Array<{ ts: string; rating: number }>;
-  load: { current7: LoadWindow; baseline28: LoadWindow };
+  load: LoadInput;
   consistency: ConsistencyInput;
   scores: number[];
   painDays7d: number;
@@ -521,7 +595,7 @@ export function buildReadinessBreakdown(inp: BreakdownInput): ReadinessBreakdown
   const factors: Record<FactorKey, FactorDetail> = {
     sleep: buildSleep(inp.sleepSamples),
     recovery: buildRecoveryFeel(inp.recoverySamples),
-    load: buildLoad(inp.load.current7, inp.load.baseline28),
+    load: buildLoad(inp.load),
     consistency: buildConsistency(inp.consistency),
     performance: buildPerformance(inp.scores),
     pain: buildPain(inp.painDays7d),
