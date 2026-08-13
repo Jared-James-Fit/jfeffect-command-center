@@ -187,16 +187,23 @@ export function WeightValueInput({
       ) : typing ? (
         <form className="space-y-1.5" onSubmit={(e) => { e.preventDefault(); submitTyped(); }}>
           <div className="flex items-center gap-1.5">
-            <Input
-              autoFocus
-              inputMode="decimal"
-              type="text"
-              value={typed}
-              onChange={(e) => { setTyped(e.target.value.replace(/[^0-9.]/g, "")); setError(null); }}
-              placeholder={loadFieldLabel(draftType, unit)}
-              aria-label={`${ariaLabel} — exact value`}
-              className="h-11 text-base px-2"
-            />
+            <div className="relative flex-1">
+              <Input
+                autoFocus
+                inputMode="decimal"
+                type="text"
+                enterKeyHint="done"
+                value={typed}
+                onChange={(e) => { setTyped(e.target.value.replace(/[^0-9.]/g, "")); setError(null); }}
+                placeholder=""
+                aria-label={`${ariaLabel} — exact value`}
+                className="h-11 pr-10 text-base px-2 font-bold tabular-nums"
+              />
+              {/* The unit is never hidden, even while typing. */}
+              <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                {unit}
+              </span>
+            </div>
             <button
               type="submit"
               aria-label="Apply weight"
@@ -206,13 +213,23 @@ export function WeightValueInput({
             </button>
           </div>
           {error && <div className="text-[11px] font-medium text-destructive">{error}</div>}
-          <button
-            type="button"
-            onClick={() => { setTyping(false); setError(null); }}
-            className="h-8 w-full rounded-md border border-border/60 text-[11px] font-semibold text-muted-foreground hover:text-foreground"
-          >
-            Use +/− instead
-          </button>
+          <div className="flex gap-1.5">
+            {/* Cancel never writes: the stored value survives an aborted edit. */}
+            <button
+              type="button"
+              onClick={() => { setOpen(false); reset(); }}
+              className="h-8 flex-1 rounded-md border border-border/60 text-[11px] font-semibold text-muted-foreground hover:text-foreground"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={() => { setTyping(false); setError(null); }}
+              className="h-8 flex-1 rounded-md border border-border/60 text-[11px] font-semibold text-muted-foreground hover:text-foreground"
+            >
+              Use +/−
+            </button>
+          </div>
         </form>
       ) : (
         <>
