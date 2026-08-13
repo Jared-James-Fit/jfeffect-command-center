@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Check, ChevronDown, Eraser, Minus, Plus } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Input } from "@/components/ui/input";
@@ -12,20 +12,22 @@ import {
 import { formatLoadDisplay, type LoadType } from "@/lib/workout-load-type";
 
 /**
- * Fast weight entry for the set logger — ONE TAP → TYPE → DONE.
+ * Weight entry for the set logger — TAP → TYPE → keyboard Done → saved+closed.
  *
- * Tapping the cell opens a minimal sheet whose numeric field is already
- * focused with the keyboard up, starting BLANK so an existing value is
- * replaced by typing (never backspaced). Keyboard Done and the ✓ button both
- * commit. Cancel never writes, so the saved value survives an aborted edit.
+ * RELIABILITY RULES (do not reintroduce the old multi-draft design):
+ *  - exactly ONE draft state for the number (`typed`)
+ *  - exactly ONE commit path (`commitWeight`)
+ *  - no effect ever writes to `typed`; it is seeded once, in the open handler,
+ *    inside the tap gesture. Prop changes (cascade, autosave, refetch) can
+ *    therefore never clobber what the user is typing.
+ *  - nothing persists until commit: no per-keystroke autosave, no cascade
+ *  - Cancel closes without writing, so the stored value survives
  *
- * Everything else — Bodyweight, Assisted, +/− stepper, Clear — lives behind a
- * single small "Options" disclosure so the normal numeric path stays clean.
+ * Bodyweight / Assisted / +/− live behind a small "Options" disclosure and
+ * never gate the plain numeric path.
  *
- * UNIT: read-only. `unit` comes from the workout card's existing KG/LB toggle.
- * This component holds NO unit state and performs NO conversion.
- *
- * Layout of the workout card itself is untouched.
+ * UNIT: read-only, from the workout card's KG/LB toggle. No local unit state,
+ * no conversion here.
  */
 
 type SheetMode = "type" | "adjust" | "bodyweight";
@@ -57,7 +59,10 @@ export function WeightValueInput({
   const [open, setOpen] = useState(false);
   const [mode, setMode] = useState<SheetMode>("type");
   const [optionsOpen, setOptionsOpen] = useState(false);
+  /** THE single numeric draft. Only user input and the open handler write it. */
   const [typed, setTyped] = useState("");
+  const [draftType, setDraftType] = useState<LoadType>("external");
+  const [stepValue, setStepValue] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [confirmValue, setConfirmValue] = useState<number | null>(null);
   const [isDesktop, setIsDesktop] = useState(false);
@@ -79,7 +84,7 @@ export function WeightValueInput({
   const isEmpty = loadType !== "bodyweight" && value === "";
 
   // Remembered values per load type — external weight and assistance never
-  // borrow each other's number, and Bodyweight destroys neither.
+  // borrow each other's number.
   const memoExternal = useRef<number | null>(null);
   const memoAssist = useRef<number | null>(null);
   useEffect(() => {
@@ -88,12 +93,9 @@ export function WeightValueInput({
     else if (loadType === "external") memoExternal.current = numeric;
   }, [numeric, loadType]);
 
-  const [draftType, setDraftType] = useState<LoadType>(loadType);
-  const [draftValue, setDraftValue] = useState<number>(0);
-
   const roundToStep = (v: number) => Math.round(v / step) * step;
   /** Start value for the +/− view only. Typing always starts blank. */
-  const startValue = useMemo(() => {
+  const stepperStart = () => {
     if (numeric != null && loadType !== "bodyweight") return numeric;
     const remembered = loadType === "assisted" ? memoAssist.current : memoExternal.current;
     if (remembered != null) return remembered;
@@ -101,25 +103,31 @@ export function WeightValueInput({
       return roundToStep(referenceWeight);
     }
     return 0;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [numeric, loadType, referenceWeight, step]);
+  };
 
-  // Fresh state each time the sheet/popover opens. Default = direct typing.
-  useEffect(() => {
-    if (!open) return;
-    setDraftType(loadType === "assisted" ? "assisted" : loadType === "bodyweight" ? "bodyweight" : "external");
-    setDraftValue(startValue);
-    setMode(loadType === "bodyweight" ? "bodyweight" : "type");
-    setOptionsOpen(false);
+  /** Seed everything synchronously in the tap gesture — no open-effect. */
+  const openSheet = () => {
+    if (disabled) return;
     setTyped("");
     setError(null);
     setConfirmValue(null);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open]);
+    setOptionsOpen(false);
+    setDraftType(loadType === "assisted" ? "assisted" : "external");
+    setStepValue(stepperStart());
+    setMode(loadType === "bodyweight" ? "bodyweight" : "type");
+    setOpen(true);
+  };
 
-  // iOS/PWA: focus must happen in the same commit the field mounts, inside the
-  // tap gesture, or Safari refuses to raise the keyboard. useLayoutEffect fires
-  // synchronously before paint; the rAF retry covers the sheet's mount frame.
+  const closeSheet = () => {
+    inputRef.current?.blur();
+    setOpen(false);
+    setOptionsOpen(false);
+    setConfirmValue(null);
+    setError(null);
+  };
+
+  // iOS/PWA: focus in the same commit the field mounts, inside the tap gesture,
+  // or Safari refuses to raise the keyboard.
   const wantsInput = open && mode === "type" && confirmValue == null;
   useLayoutEffect(() => {
     if (!wantsInput) return;
@@ -132,50 +140,42 @@ export function WeightValueInput({
     return () => cancelAnimationFrame(raf);
   }, [wantsInput]);
 
-  const bump = (delta: number) => {
-    setDraftValue((v) => {
-      const next = Math.min(cap, Math.max(0, roundToStep(v + delta)));
-      return Math.round(next * 100) / 100;
-    });
-  };
-
-  const reset = () => {
-    setTyped("");
-    setError(null);
-    setConfirmValue(null);
-    setOptionsOpen(false);
-    setMode("type");
-    setDraftType(loadType);
-  };
-
-  const commit = (next: { load: string; bodyweight: boolean; loadType: LoadType }) => {
+  /**
+   * THE canonical commit. Every successful confirmation — keyboard Done,
+   * desktop ✓, +/− Done, Bodyweight, Clear — funnels through here.
+   * Optimistic by construction: onPick updates local row state immediately and
+   * the existing autosave/cascade/auto-complete run downstream of it.
+   */
+  const commitWeight = (next: { load: string; bodyweight: boolean; loadType: LoadType }) => {
     const n = next.load === "" ? null : Number(next.load);
     if (n != null && Number.isFinite(n)) {
       if (next.loadType === "assisted") memoAssist.current = n;
       else if (next.loadType === "external") memoExternal.current = n;
     }
-    // Dismiss the keyboard first so the sheet unmounts without an iOS
-    // focus/scroll bounce, then hand off to the existing autosave path.
     inputRef.current?.blur();
-    onPick(next);
     setOpen(false);
-    reset();
+    setOptionsOpen(false);
+    setConfirmValue(null);
+    setError(null);
+    onPick(next);
   };
 
   const numericType: LoadType = draftType === "assisted" ? "assisted" : "external";
 
-  const commitStepper = () =>
-    commit({ load: String(draftValue), bodyweight: false, loadType: numericType });
-
   const submitTyped = () => {
     const res = validateTypedWeight(typed, unit);
     if (!res.ok) { setError(res.error); return; }
-    setError(null);
-    if (res.aboveCap) { setConfirmValue(res.value); return; }
-    commit({ load: String(res.value), bodyweight: false, loadType: numericType });
+    if (res.aboveCap) { setError(null); setConfirmValue(res.value); return; }
+    commitWeight({ load: String(res.value), bodyweight: false, loadType: numericType });
   };
 
-  /** Options → Bodyweight: a load type, never "BW" and never "0 kg". */
+  const bump = (delta: number) => {
+    setStepValue((v) => {
+      const nextV = Math.min(cap, Math.max(0, roundToStep(v + delta)));
+      return Math.round(nextV * 100) / 100;
+    });
+  };
+
   const chooseBodyweight = () => {
     setOptionsOpen(false);
     setError(null);
@@ -184,13 +184,11 @@ export function WeightValueInput({
     inputRef.current?.blur();
   };
 
-  /** Options → Assisted: assistance context, never the external weight. */
   const chooseAssisted = () => {
     setOptionsOpen(false);
     setError(null);
     setTyped("");
     setDraftType("assisted");
-    setDraftValue(memoAssist.current ?? 0);
     setMode("type");
   };
 
@@ -205,8 +203,8 @@ export function WeightValueInput({
   const chooseStepper = () => {
     setOptionsOpen(false);
     setError(null);
-    setDraftType((t) => (t === "bodyweight" ? "external" : t));
-    setDraftValue((v) => (v > 0 ? v : startValue));
+    setDraftType((t) => (t === "assisted" ? "assisted" : "external"));
+    setStepValue((v) => (v > 0 ? v : stepperStart()));
     setMode("adjust");
   };
 
@@ -219,27 +217,26 @@ export function WeightValueInput({
     // Cancel never writes: the stored value survives an aborted edit.
     <button
       type="button"
-      onClick={() => { setOpen(false); reset(); }}
-      className="h-9 w-full rounded-md border border-border/60 text-[11px] font-semibold text-muted-foreground hover:text-foreground"
+      onClick={closeSheet}
+      className="h-9 w-full rounded-md text-[11px] font-semibold text-muted-foreground hover:text-foreground"
     >
       Cancel
     </button>
   );
 
   const optionsMenu = (
-    // LOAD TYPE / INPUT METHOD only. Never KG/LB — the workout card's existing
-    // unit toggle is the single source of unit truth.
-    <div className="space-y-1.5">
+    // LOAD TYPE / INPUT METHOD only. Never KG/LB.
+    <div>
       <button
         type="button"
         onClick={() => setOptionsOpen((v) => !v)}
         aria-expanded={optionsOpen}
-        className="flex h-8 w-full items-center justify-center gap-1 text-[11px] font-semibold text-muted-foreground hover:text-foreground"
+        className="flex h-7 w-full items-center justify-center gap-1 text-[11px] font-semibold text-muted-foreground hover:text-foreground"
       >
         Options <ChevronDown className={cn("h-3 w-3 transition-transform", optionsOpen && "rotate-180")} />
       </button>
       {optionsOpen && (
-        <div className="space-y-1 rounded-lg border border-border/60 p-1">
+        <div className="mt-1 space-y-1 rounded-lg border border-border/60 p-1">
           {draftType !== "bodyweight" && (
             <button type="button" onClick={chooseBodyweight} className={optionItem}>
               Bodyweight
@@ -263,7 +260,7 @@ export function WeightValueInput({
           {(loadType !== "external" || value !== "") && (
             <button
               type="button"
-              onClick={() => commit({ load: "", bodyweight: false, loadType: "external" })}
+              onClick={() => commitWeight({ load: "", bodyweight: false, loadType: "external" })}
               className={cn(optionItem, "text-muted-foreground hover:text-destructive")}
             >
               <span className="inline-flex items-center gap-1"><Eraser className="h-3 w-3" /> Clear weight</span>
@@ -288,7 +285,7 @@ export function WeightValueInput({
           <div className="flex gap-1.5">
             <button
               type="button"
-              onClick={() => commit({ load: String(confirmValue), bodyweight: false, loadType: numericType })}
+              onClick={() => commitWeight({ load: String(confirmValue), bodyweight: false, loadType: numericType })}
               className="h-9 flex-1 rounded-md bg-primary text-xs font-bold text-primary-foreground hover:bg-primary/90"
             >
               Save anyway
@@ -311,7 +308,7 @@ export function WeightValueInput({
           </div>
           <button
             type="button"
-            onClick={() => commit({ load: "0", bodyweight: true, loadType: "bodyweight" })}
+            onClick={() => commitWeight({ load: "0", bodyweight: true, loadType: "bodyweight" })}
             className="h-10 w-full rounded-lg bg-primary text-xs font-bold text-primary-foreground hover:bg-primary/90"
           >
             Save bodyweight
@@ -323,12 +320,13 @@ export function WeightValueInput({
           >
             Enter a weight instead
           </button>
+          {optionsMenu}
           {cancelBtn}
         </>
       ) : mode === "adjust" ? (
         <>
           <div className="w-full rounded-xl border border-border/60 bg-muted/30 py-2 text-center">
-            <div className="text-3xl font-black leading-none tabular-nums text-foreground">{draftValue}</div>
+            <div className="text-3xl font-black leading-none tabular-nums text-foreground">{stepValue}</div>
             <div className="mt-0.5 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
               {unit}
             </div>
@@ -353,7 +351,7 @@ export function WeightValueInput({
           </div>
           <button
             type="button"
-            onClick={commitStepper}
+            onClick={() => commitWeight({ load: String(stepValue), bodyweight: false, loadType: numericType })}
             className="h-10 w-full rounded-lg bg-primary text-xs font-bold text-primary-foreground hover:bg-primary/90"
           >
             Done
@@ -365,10 +363,11 @@ export function WeightValueInput({
           >
             Type exact weight
           </button>
+          {optionsMenu}
           {cancelBtn}
         </>
       ) : (
-        <form onSubmit={(e) => { e.preventDefault(); submitTyped(); }} className="space-y-2">
+        <form onSubmit={(e) => { e.preventDefault(); submitTyped(); }} className="space-y-1.5">
           <div className="flex items-center gap-1.5">
             <div className="relative flex-1">
               <Input
@@ -383,13 +382,11 @@ export function WeightValueInput({
                 aria-label={`${ariaLabel} — ${draftType === "assisted" ? "assistance" : "weight"} in ${unit}`}
                 className="h-12 px-2 pr-10 text-lg font-bold tabular-nums"
               />
-              {/* The unit is never hidden, and never editable here. */}
               <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
                 {unit}
               </span>
             </div>
-            {/* Desktop only: no keyboard "Done" key there. On mobile the
-                keyboard Done/Return is the single primary save action. */}
+            {/* Desktop only — there is no keyboard Done key with a mouse. */}
             {isDesktop && (
               <button
                 type="submit"
@@ -405,8 +402,6 @@ export function WeightValueInput({
           {cancelBtn}
         </form>
       )}
-
-      {mode !== "type" && confirmValue == null && optionsMenu}
     </div>
   );
 
@@ -415,7 +410,7 @@ export function WeightValueInput({
       type="button"
       disabled={disabled}
       aria-label={ariaLabel}
-      onClick={() => { if (!disabled) setOpen(true); }}
+      onClick={openSheet}
       className={cn(
         "flex w-full items-center justify-center whitespace-nowrap rounded-md border px-2 text-sm font-medium transition-colors",
         focusMode ? "h-9 text-base" : "h-8",
@@ -430,15 +425,9 @@ export function WeightValueInput({
     </button>
   );
 
-  const handleOpenChange = (next: boolean) => {
-    if (disabled) return;
-    setOpen(next);
-    if (!next) reset();
-  };
-
   if (isDesktop) {
     return (
-      <Popover open={open} onOpenChange={handleOpenChange}>
+      <Popover open={open} onOpenChange={(next) => (next ? openSheet() : closeSheet())}>
         <PopoverTrigger asChild>{trigger}</PopoverTrigger>
         <PopoverContent
           align="center"
@@ -462,13 +451,13 @@ export function WeightValueInput({
             aria-label="Close weight picker"
             tabIndex={-1}
             className="absolute inset-0 bg-black/50"
-            onClick={() => handleOpenChange(false)}
+            onClick={closeSheet}
           />
           <div
-            className="absolute inset-x-0 bottom-0 rounded-t-2xl border-t border-border bg-background p-3 shadow-2xl"
-            style={{ paddingBottom: "calc(0.75rem + env(safe-area-inset-bottom))" }}
+            className="absolute inset-x-0 bottom-0 rounded-t-2xl border-t border-border bg-background p-2.5 shadow-2xl"
+            style={{ paddingBottom: "calc(0.5rem + env(safe-area-inset-bottom))" }}
           >
-            <div className="mx-auto mb-2 h-1 w-10 rounded-full bg-muted-foreground/30" />
+            <div className="mx-auto mb-1.5 h-1 w-10 rounded-full bg-muted-foreground/30" />
             {body}
           </div>
         </div>
