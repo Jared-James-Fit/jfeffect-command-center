@@ -339,6 +339,13 @@ function buildLoad(input: LoadInput): FactorDetail {
   // Neutral direction words — rising workload is not an "improvement".
   const trend: FactorDetail["trend"] =
     Math.abs(deltaPct) < 8 ? "Stable" : deltaPct > 0 ? "Rising" : "Falling";
+  // Display-only workload-direction words so the label never reads like a
+  // performance judgment (improving/declining).
+  const trendLabel =
+    trend === "Rising" ? "Higher than recent"
+      : trend === "Falling" ? "Lower than recent"
+      : trend === "Stable" ? "Steady"
+      : trend;
   const impact: FactorDetail["impact"] =
     score >= 80 ? "Positive" : score >= 60 ? "Neutral" : "Limiting";
 
