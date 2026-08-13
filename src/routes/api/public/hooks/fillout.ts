@@ -7,8 +7,10 @@ import { createFileRoute } from "@tanstack/react-router";
  * webhook deliveries upsert the same `nf_submissions` row instead of
  * creating a second submission.
  *
- * Configure each Fillout form's webhook to POST here with header:
+ * Configure each Fillout form's webhook to POST here with either:
  *   x-fillout-secret: <FILLOUT_WEBHOOK_SECRET>
+ * or a URL query fallback:
+ *   ?token=<FILLOUT_WEBHOOK_SECRET>
  *
  * We look in urlParameters / hiddenFields / questions for:
  *   assignment_id, client_id, form_id, period_start
@@ -21,7 +23,13 @@ export const Route = createFileRoute("/api/public/hooks/fillout")({
   server: {
     handlers: {
       POST: async ({ request }) => {
-        const provided = request.headers.get("x-fillout-secret") ?? "";
+        // Prefer the header. The query fallback keeps authenticated delivery
+        // compatible with Fillout configurations that cannot store a literal
+        // custom-header value. Both are checked against the same secret.
+        const provided =
+          request.headers.get("x-fillout-secret") ||
+          new URL(request.url).searchParams.get("token") ||
+          "";
         const expected = process.env.FILLOUT_WEBHOOK_SECRET ?? "";
         if (!expected || !timingSafeEqualStr(provided, expected)) {
           return new Response("Unauthorized", { status: 401 });
