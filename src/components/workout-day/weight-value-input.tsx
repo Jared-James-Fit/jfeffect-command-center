@@ -154,6 +154,9 @@ export function WeightValueInput({
       if (next.loadType === "assisted") memoAssist.current = n;
       else if (next.loadType === "external") memoExternal.current = n;
     }
+    // Dismiss the keyboard first so the sheet unmounts without an iOS
+    // focus/scroll bounce, then hand off to the existing autosave path.
+    inputRef.current?.blur();
     onPick(next);
     setOpen(false);
     reset();
@@ -385,13 +388,17 @@ export function WeightValueInput({
                 {unit}
               </span>
             </div>
-            <button
-              type="submit"
-              aria-label="Save weight"
-              className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground hover:bg-primary/90"
-            >
-              <Check className="h-4 w-4" />
-            </button>
+            {/* Desktop only: no keyboard "Done" key there. On mobile the
+                keyboard Done/Return is the single primary save action. */}
+            {isDesktop && (
+              <button
+                type="submit"
+                aria-label="Save weight"
+                className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground hover:bg-primary/90"
+              >
+                <Check className="h-4 w-4" />
+              </button>
+            )}
           </div>
           {error && <div className="text-[11px] font-medium text-destructive">{error}</div>}
           {optionsMenu}
