@@ -854,7 +854,10 @@ function SelectedDayList({
     <div className="space-y-3">
       {items.map((it) => (
         <SelectedDayCard
-          key={it.day?.id ?? Math.random()}
+          // Stable identity: prefer the scheduled-instance id so two stacked
+          // instances of the same source day don't collide on one key
+          // (duplicate keys used to remount cards and reset preview state).
+          key={`${it.scheduledWorkoutId ?? "legacy"}:${it.day?.id ?? `idx-${items.indexOf(it)}`}`}
           item={it}
           date={date}
           readonly={readonly}
