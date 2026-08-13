@@ -250,32 +250,45 @@ export function WeightValueInput({
             </div>
           </button>
 
-          <div className="grid grid-cols-2 gap-1.5">
+          {draftType === "bodyweight" ? (
+            // Numeric controls are meaningless for Bodyweight — offer the way back instead.
             <button
               type="button"
-              onClick={() => bump(-step)}
-              aria-label={`Decrease by ${step} ${unit}`}
-              className="flex h-11 items-center justify-center gap-1 rounded-lg border border-border/60 text-sm font-bold text-foreground hover:bg-muted/60"
+              onClick={() => chooseType("external")}
+              className="h-9 w-full rounded-lg border border-border/60 text-[11px] font-semibold text-muted-foreground hover:text-foreground"
             >
-              <Minus className="h-3.5 w-3.5" /> {step}
+              Use external weight
             </button>
-            <button
-              type="button"
-              onClick={() => bump(step)}
-              aria-label={`Increase by ${step} ${unit}`}
-              className="flex h-11 items-center justify-center gap-1 rounded-lg border border-border/60 text-sm font-bold text-foreground hover:bg-muted/60"
-            >
-              <Plus className="h-3.5 w-3.5" /> {step}
-            </button>
-          </div>
+          ) : (
+            <>
+              <div className="grid grid-cols-2 gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => bump(-step)}
+                  aria-label={`Decrease by ${step} ${unit}`}
+                  className="flex h-11 items-center justify-center gap-1 rounded-lg border border-border/60 text-sm font-bold text-foreground hover:bg-muted/60"
+                >
+                  <Minus className="h-3.5 w-3.5" /> {step}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => bump(step)}
+                  aria-label={`Increase by ${step} ${unit}`}
+                  className="flex h-11 items-center justify-center gap-1 rounded-lg border border-border/60 text-sm font-bold text-foreground hover:bg-muted/60"
+                >
+                  <Plus className="h-3.5 w-3.5" /> {step}
+                </button>
+              </div>
 
-          <button
-            type="button"
-            onClick={() => { setTyped(""); setTyping(true); setDraftType(draftType === "bodyweight" ? "external" : draftType); }}
-            className="h-7 w-full text-[11px] font-semibold text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
-          >
-            Tap to type
-          </button>
+              <button
+                type="button"
+                onClick={() => { setTyped(""); setTyping(true); }}
+                className="h-7 w-full text-[11px] font-semibold text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
+              >
+                Tap to type
+              </button>
+            </>
+          )}
 
           <div className="space-y-1.5">
             <div className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
