@@ -3767,6 +3767,22 @@ function SetRow({
   // unit-toggle effect above can call markClean() / retry() safely.
   saveRef.current = save;
 
+  // Canonical "commit now" signal for the inline weight cell.
+  //
+  // RACE FIX: onPick used to call `setTimeout(() => save.flush())`. React's
+  // passive effects (including useAutosave's own value effect, which copies
+  // the new value into its pendingValue ref) can run AFTER a macrotask on
+  // mobile, so that flush could persist the PREVIOUS weight and leave the
+  // freshly typed value unsaved until another edit. Bumping a token in the
+  // same state update guarantees this effect runs after the autosave hook's
+  // value effect in the same commit, so flush() always writes the new value.
+  const [commitFlushToken, setCommitFlushToken] = useState(0);
+  useEffect(() => {
+    if (!commitFlushToken) return;
+    void save.flush().catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [commitFlushToken]);
+
   const flushSaveAfterEdit = () => {
     clearEditGuard();
     // flush() rejects on failure; the autosave status chip shows the error
@@ -4194,9 +4210,9 @@ function SetRow({
           setLoad(bodyweight ? "0" : nextLoad);
           setFocusedField(null);
           setOptimisticComplete(false);
-          // Picker "Done" must persist + re-evaluate completion immediately —
-          // no waiting for the 1s autosave debounce, no extra tap.
-          setTimeout(() => { void save.flush().catch(() => {}); }, 0);
+          // Commit → persist + re-evaluate completion immediately, after the
+          // autosave hook has seen the new value (see commitFlushToken).
+          setCommitFlushToken((t) => t + 1);
           // Manual change → cascade downward into eligible sets below.
           void onCascadeFromSet?.(setIndex, {
             load: bodyweight ? "0" : nextLoad,
