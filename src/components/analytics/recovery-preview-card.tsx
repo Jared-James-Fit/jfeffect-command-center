@@ -763,7 +763,14 @@ function FactorRing({ factor, onClick }: { factor: FactorDetail; onClick: () => 
 }
 
 function FactorSheet({ factor }: { factor: FactorDetail }) {
-  const colors = statusColor[factor.status];
+  const colors = factor.isBuilding
+    ? {
+        ring: "text-muted-foreground/55",
+        soft: "text-muted-foreground/15",
+        text: "text-muted-foreground",
+        dot: "bg-muted-foreground/40",
+      }
+    : statusColor[factor.status];
   const trendClass =
     factor.trend === "Improving" ? "text-emerald-600 dark:text-emerald-400"
       : factor.trend === "Dropping" ? "text-rose-600 dark:text-rose-400"
