@@ -35,11 +35,25 @@ export interface FactorDetail {
    * because more workload is not inherently good or bad.
    */
   trend: "Improving" | "Stable" | "Dropping" | "Building" | "Rising" | "Falling" | "—";
+  /**
+   * Optional human-readable trend override. The semantic `trend` value
+   * still drives color/impact logic; this only changes what is shown.
+   * Training Load uses it to swap the outcome-worded "Rising"/"Falling"
+   * for neutral workload-direction words.
+   */
+  trendLabel?: string;
   impact: "Positive" | "Neutral" | "Limiting";
   recommendation: string;
   /** One-sentence dummy-proof explanation of the metric. */
   tooltip: string;
   isMissing?: boolean;
+  /**
+   * True while the baseline is still building — the score is not yet
+   * confident enough to display as a normal workload judgment. Renders
+   * as a neutral "—" ring instead of a numeric score and drops the
+   * "Watch this" caution language.
+   */
+  isBuilding?: boolean;
 }
 
 const TOOLTIPS: Record<FactorKey, string> = {
