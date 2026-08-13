@@ -3264,6 +3264,8 @@ function SetRow({
   defaultLoadType = "external",
   hasUncompletedAfter, onApplyToRemaining, forceHydrateToken = 0,
   forcedFill = null,
+  cascade = null,
+  onCascadeFromSet,
   readonly = false, unit = "kg", hideWeight = false, focusMode = false, onChange, onSetCompleted,
   setCount, measurementType = "reps", prescribedDurationSeconds = null,
 }: {
@@ -3301,6 +3303,21 @@ function SetRow({
   /** Snapshot of values just written by Fill All Sets — used to bypass
    *  the cache race when force-hydrating. */
   forcedFill?: { load: string; reps: string; rpe: string; unit: "kg" | "lb"; loadType?: LoadType } | null;
+  /** Broadcast of a cascade the parent just applied + persisted. */
+  cascade?: {
+    token: number;
+    targets: number[];
+    load: string;
+    loadType: LoadType;
+    unit: "kg" | "lb";
+    reps: string;
+    rpe: string;
+  } | null;
+  /** Called when this set's load is manually changed — starts the cascade. */
+  onCascadeFromSet?: (
+    fromSetIndex: number,
+    payload: { load: string; loadType: LoadType; unit: "kg" | "lb"; reps: string; rpe: string },
+  ) => void | Promise<void>;
   readonly?: boolean;
   unit?: "kg" | "lb";
   hideWeight?: boolean;
