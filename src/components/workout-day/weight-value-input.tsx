@@ -330,7 +330,7 @@ export function WeightValueInput({
         {!disabled && (
           <button
             type="button"
-            aria-label={`${ariaLabel} — load options`}
+            aria-label={`${ariaLabel} — change load type`}
             onMouseDown={(e) => e.preventDefault()}
             onClick={openOptions}
             className="absolute right-0 top-0 flex h-full w-5 items-center justify-center rounded-r-md text-muted-foreground hover:text-foreground"
@@ -339,6 +339,11 @@ export function WeightValueInput({
           </button>
         )}
       </div>
+      {loadType === "assisted" && !editing && (
+        <div className="mt-0.5 text-center text-[9px] font-semibold uppercase tracking-wide text-amber-600">
+          Assisted
+        </div>
+      )}
       {error && editing && (
         <div className="mt-0.5 text-[10px] font-medium text-destructive">{error}</div>
       )}
