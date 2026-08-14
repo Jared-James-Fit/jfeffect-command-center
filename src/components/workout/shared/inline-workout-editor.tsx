@@ -254,6 +254,8 @@ export function InlineWorkoutEditor({
         load_kg: "",
         rest_seconds: "",
         notes: "",
+        measurement_type: "reps",
+        duration_seconds: "",
       },
     ]);
     setSearch("");
