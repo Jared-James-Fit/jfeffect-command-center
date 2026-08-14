@@ -4158,6 +4158,7 @@ function SetRow({
           completedSeconds={completedSec}
           readonly={readonly}
           focusMode={focusMode}
+          onTargetChange={onTimerTargetChange}
           onComplete={(secs, method) => void saveTimeCompletion(secs, { method })}
         />
       ) : (
