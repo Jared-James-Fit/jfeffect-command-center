@@ -1,26 +1,16 @@
 /**
- * DurationTimerInCard — lightweight in-card timer for time-based exercises.
+ * DurationTimerInCard — flexible, compact time logging for one set.
  *
- * Requirements:
- * - Lives entirely inside the exercise card (no overlay, no floating bar)
- * - Start / Pause / Stop / Reset controls
- * - "Use Prescribed Time" one-tap autofill
- * - Calls onComplete when the timer finishes or user taps "Complete Set"
- * - Extremely lightweight: no global state, no re-renders outside this component
- * - No background tracking, no persistent overlays
- *
- * Usage:
- *   <DurationTimerInCard
- *     prescribedSeconds={30}
- *     isConfirmed={false}
- *     completedSeconds={null}
- *     readonly={false}
- *     onComplete={(secs) => saveTimeCompletion(secs, { method: "countdown_timer" })}
- *   />
+ * Principles (dummy-proof, no forced timer):
+ * - The timer is OPTIONAL. Typing a time and tapping Log is always allowed.
+ * - The target is adjustable inline (tap the time chip, type "45" or "1:30").
+ * - One compact row: [ target/remaining ] [ start/pause ] [ log ]
+ * - A logged set stays editable — tap the value to correct it.
  */
 
 import { useEffect, useRef, useState, useCallback } from "react";
-import { Play, Pause, RotateCcw, X, CheckCircle2, Clock } from "lucide-react";
+import { Play, Pause, RotateCcw, Check, Clock, Pencil } from "lucide-react";
+import { parseDurationInput } from "@/lib/duration";
 import { cn } from "@/lib/utils";
 
 function fmtSecs(s: number): string {
@@ -35,7 +25,12 @@ type Props = {
   completedSeconds?: number | null;
   readonly?: boolean;
   focusMode?: boolean;
-  onComplete: (seconds: number, method: "countdown_timer" | "prescribed_quick_confirm" | "manual_entry") => void;
+  /** Persist an adjusted timer target for this row (device-local). */
+  onTargetChange?: (seconds: number | null) => void;
+  onComplete: (
+    seconds: number,
+    method: "countdown_timer" | "prescribed_quick_confirm" | "manual_entry",
+  ) => void;
 };
 
 export function DurationTimerInCard({
@@ -44,15 +39,15 @@ export function DurationTimerInCard({
   completedSeconds,
   readonly = false,
   focusMode = false,
+  onTargetChange,
   onComplete,
 }: Props) {
   const [remaining, setRemaining] = useState<number | null>(null);
   const [paused, setPaused] = useState(false);
-  const [elapsed, setElapsed] = useState(0);
-  const [manualSecs, setManualSecs] = useState("");
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState("");
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const elapsedRef = useRef(0);
-  const startedAtRef = useRef<number | null>(null);
 
   const clearTick = useCallback(() => {
     if (intervalRef.current) {
@@ -63,21 +58,15 @@ export function DurationTimerInCard({
 
   useEffect(() => () => clearTick(), [clearTick]);
 
-  const startCountdown = useCallback((fromSecs: number) => {
+  const tick = useCallback(() => {
     clearTick();
-    setRemaining(fromSecs);
-    setPaused(false);
-    elapsedRef.current = 0;
-    startedAtRef.current = Date.now();
     intervalRef.current = setInterval(() => {
       setRemaining((r) => {
         if (r == null) return null;
         elapsedRef.current += 1;
-        setElapsed(elapsedRef.current);
         if (r <= 1) {
           clearTick();
-          // Vibrate on completion
-          try { if (navigator.vibrate) navigator.vibrate([200, 100, 200]); } catch {}
+          try { if (navigator.vibrate) navigator.vibrate([200, 100, 200]); } catch { /* no haptics */ }
           return 0;
         }
         return r - 1;
@@ -85,207 +74,176 @@ export function DurationTimerInCard({
     }, 1000);
   }, [clearTick]);
 
-  const handleStart = () => {
-    if (!prescribedSeconds || prescribedSeconds <= 0) return;
-    startCountdown(prescribedSeconds);
-  };
-
-  const handlePause = () => {
-    clearTick();
-    setPaused(true);
-  };
-
-  const handleResume = () => {
-    if (remaining == null) return;
+  const start = () => {
+    if (!prescribedSeconds || prescribedSeconds <= 0) {
+      setEditing(true);
+      setDraft("");
+      return;
+    }
+    elapsedRef.current = 0;
+    setRemaining(prescribedSeconds);
     setPaused(false);
-    intervalRef.current = setInterval(() => {
-      setRemaining((r) => {
-        if (r == null) return null;
-        elapsedRef.current += 1;
-        setElapsed(elapsedRef.current);
-        if (r <= 1) {
-          clearTick();
-          try { if (navigator.vibrate) navigator.vibrate([200, 100, 200]); } catch {}
-          return 0;
-        }
-        return r - 1;
-      });
-    }, 1000);
+    tick();
   };
 
-  const handleReset = () => {
+  const pause = () => { clearTick(); setPaused(true); };
+  const resume = () => { setPaused(false); tick(); };
+  const reset = () => {
     clearTick();
     setRemaining(null);
     setPaused(false);
     elapsedRef.current = 0;
-    setElapsed(0);
   };
 
-  const handleCompleteSet = () => {
-    const secs = remaining === 0
-      ? (prescribedSeconds ?? elapsedRef.current)
-      : elapsedRef.current > 0
-        ? elapsedRef.current
-        : prescribedSeconds ?? 0;
-    clearTick();
-    setRemaining(null);
-    setPaused(false);
-    elapsedRef.current = 0;
-    setElapsed(0);
-    onComplete(secs, "countdown_timer");
+  /** Log whatever is on screen: elapsed time if the timer ran, else the target. */
+  const log = () => {
+    const running = remaining != null;
+    const secs = running
+      ? (remaining === 0 ? (prescribedSeconds ?? elapsedRef.current) : elapsedRef.current)
+      : (prescribedSeconds ?? 0);
+    if (!secs || secs <= 0) { setEditing(true); return; }
+    reset();
+    onComplete(secs, running ? "countdown_timer" : "prescribed_quick_confirm");
   };
 
-  const handleUsePrescribed = () => {
-    if (!prescribedSeconds) return;
-    onComplete(prescribedSeconds, "prescribed_quick_confirm");
+  const commitDraft = (thenLog: boolean) => {
+    const parsed = parseDurationInput(draft);
+    setEditing(false);
+    setDraft("");
+    if (parsed == null) return;
+    onTargetChange?.(parsed);
+    if (thenLog) onComplete(parsed, "manual_entry");
   };
 
-  const handleManualEntry = () => {
-    const n = parseInt(manualSecs, 10);
-    if (!n || n <= 0) return;
-    onComplete(n, "manual_entry");
-    setManualSecs("");
-  };
-
-  const isRunning = remaining != null && !paused;
-  const isDone = remaining === 0;
-  const hasStarted = remaining != null;
-
-  // Confirmed state: show completed time
-  if (isConfirmed && completedSeconds != null) {
-    return (
-      <div className={cn(
-        "flex items-center gap-2 rounded-lg border border-emerald-500/40 bg-emerald-500/10 px-3",
-        focusMode ? "h-9" : "h-8",
-      )}>
-        <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
-        <span className={cn("font-bold tabular-nums text-emerald-700", focusMode ? "text-sm" : "text-xs")}>
-          {fmtSecs(completedSeconds)}
-        </span>
-        <span className={cn("text-emerald-600/70", focusMode ? "text-xs" : "text-[10px]")}>done</span>
-      </div>
-    );
-  }
+  const height = focusMode ? "h-10" : "h-9";
+  const running = remaining != null && !paused;
+  const started = remaining != null;
+  const done = remaining === 0;
 
   if (readonly) {
     return (
-      <div className={cn(
-        "flex items-center gap-1.5 rounded-lg border border-border bg-muted/30 px-3",
-        focusMode ? "h-9" : "h-8",
-      )}>
-        <Clock className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-        <span className={cn("font-bold tabular-nums text-muted-foreground", focusMode ? "text-sm" : "text-xs")}>
-          {prescribedSeconds ? fmtSecs(prescribedSeconds) : "—"}
+      <div className={cn("flex items-center gap-1.5 rounded-lg border border-border bg-muted/30 px-3", height)}>
+        <Clock className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+        <span className="text-xs font-bold tabular-nums text-muted-foreground">
+          {isConfirmed && completedSeconds ? fmtSecs(completedSeconds) : prescribedSeconds ? fmtSecs(prescribedSeconds) : "—"}
         </span>
       </div>
     );
   }
 
-  // Timer running or paused
-  if (hasStarted) {
+  // Inline manual entry (also used to set / adjust the target).
+  if (editing) {
     return (
-      <div className="space-y-1.5">
-        {/* Timer display + controls */}
-        <div className={cn(
-          "flex items-center gap-1.5 rounded-lg border px-2",
-          focusMode ? "h-10" : "h-9",
-          isDone
-            ? "border-emerald-500/40 bg-emerald-500/10"
-            : paused
-              ? "border-amber-500/40 bg-amber-500/10"
-              : "border-primary bg-primary/10",
-        )}>
-          {/* Pause/Resume */}
-          <button
-            type="button"
-            onClick={paused ? handleResume : handlePause}
-            disabled={isDone}
-            aria-label={paused ? "Resume timer" : "Pause timer"}
-            className={cn(
-              "inline-flex shrink-0 items-center justify-center rounded-md transition active:scale-95",
-              focusMode ? "h-7 w-7" : "h-6 w-6",
-              isDone ? "opacity-40 cursor-not-allowed" : "hover:bg-black/10",
-            )}
-          >
-            {paused ? <Play className="h-4 w-4" /> : <Pause className="h-4 w-4" />}
-          </button>
-
-          {/* Time display */}
-          <div className={cn(
-            "flex-1 text-center font-black tabular-nums",
-            focusMode ? "text-base" : "text-sm",
-            isDone ? "text-emerald-700" : paused ? "text-amber-700" : "text-primary",
-          )}>
-            {isDone ? "Done!" : fmtSecs(remaining ?? 0)}
-            {paused && !isDone && <span className="ml-1 text-[10px] font-medium opacity-70">paused</span>}
-          </div>
-
-          {/* Reset */}
-          <button
-            type="button"
-            onClick={handleReset}
-            aria-label="Reset timer"
-            className={cn(
-              "inline-flex shrink-0 items-center justify-center rounded-md transition hover:bg-black/10 active:scale-95",
-              focusMode ? "h-7 w-7" : "h-6 w-6",
-            )}
-          >
-            <RotateCcw className="h-3.5 w-3.5" />
-          </button>
-        </div>
-
-        {/* Complete Set button */}
+      <form
+        className={cn("flex items-center gap-1 rounded-lg border border-primary bg-primary/5 px-1.5", height)}
+        onSubmit={(e) => { e.preventDefault(); commitDraft(true); }}
+      >
+        <input
+          autoFocus
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          onBlur={() => commitDraft(false)}
+          inputMode="numeric"
+          placeholder="45 or 1:30"
+          aria-label="Enter time"
+          className="min-w-0 flex-1 bg-transparent text-sm font-bold tabular-nums outline-none placeholder:font-normal placeholder:text-muted-foreground"
+        />
         <button
-          type="button"
-          onClick={handleCompleteSet}
-          className={cn(
-            "w-full rounded-lg border font-bold transition active:scale-[0.98]",
-            focusMode ? "h-9 text-sm" : "h-8 text-xs",
-            isDone
-              ? "border-emerald-500 bg-emerald-500 text-white hover:bg-emerald-600"
-              : "border-primary/40 bg-primary/10 text-primary hover:bg-primary/20",
-          )}
+          type="submit"
+          aria-label="Save time"
+          onMouseDown={(e) => e.preventDefault()}
+          className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-primary text-primary-foreground"
         >
-          <CheckCircle2 className="mr-1.5 inline h-3.5 w-3.5" />
-          {isDone ? "Complete Set" : "Complete Early"}
+          <Check className="h-4 w-4" />
         </button>
-      </div>
+      </form>
     );
   }
 
-  // Idle state: show Start + Use Prescribed Time + manual entry
-  return (
-    <div className="space-y-1.5">
-      {/* Start button */}
+  // Logged — still editable.
+  if (isConfirmed && completedSeconds != null && !started) {
+    return (
       <button
         type="button"
-        onClick={handleStart}
-        disabled={!prescribedSeconds}
-        aria-label={prescribedSeconds ? `Start ${fmtSecs(prescribedSeconds)} timer` : "No duration set"}
+        onClick={() => { setDraft(String(completedSeconds)); setEditing(true); }}
+        aria-label="Edit logged time"
         className={cn(
-          "inline-flex w-full items-center justify-center gap-1.5 rounded-lg border font-bold transition active:scale-[0.98] disabled:opacity-50",
-          focusMode ? "h-9 text-sm" : "h-8 text-xs",
-          "border-primary/40 bg-primary/10 text-primary hover:bg-primary/20",
+          "flex w-full items-center gap-1.5 rounded-lg border border-emerald-500/40 bg-emerald-500/10 px-3 text-left",
+          height,
         )}
       >
-        <Play className="h-3.5 w-3.5" />
-        {prescribedSeconds ? `Start ${fmtSecs(prescribedSeconds)}` : "No duration set"}
+        <Check className="h-3.5 w-3.5 shrink-0 text-emerald-600" />
+        <span className="flex-1 text-sm font-bold tabular-nums text-emerald-700">{fmtSecs(completedSeconds)}</span>
+        <Pencil className="h-3 w-3 shrink-0 text-emerald-600/60" />
+      </button>
+    );
+  }
+
+  return (
+    <div
+      className={cn(
+        "flex items-center gap-1 rounded-lg border px-1.5",
+        height,
+        done ? "border-emerald-500/50 bg-emerald-500/10"
+          : started ? (paused ? "border-amber-500/50 bg-amber-500/10" : "border-primary bg-primary/10")
+            : "border-border bg-muted/30",
+      )}
+    >
+      {/* Time value — tap to type/adjust */}
+      <button
+        type="button"
+        onClick={() => {
+          if (started) return;
+          setDraft(prescribedSeconds ? String(prescribedSeconds) : "");
+          setEditing(true);
+        }}
+        aria-label={started ? "Time remaining" : "Set time"}
+        className={cn(
+          "min-w-0 flex-1 text-left text-sm font-black tabular-nums",
+          done ? "text-emerald-700" : paused ? "text-amber-700" : started ? "text-primary" : "text-foreground",
+        )}
+      >
+        {started
+          ? (done ? "Done" : fmtSecs(remaining ?? 0))
+          : prescribedSeconds ? fmtSecs(prescribedSeconds) : "Set time"}
       </button>
 
-      {/* One-tap autofill */}
-      {prescribedSeconds && (
+      {/* Start / pause / resume */}
+      {!done && (
         <button
           type="button"
-          onClick={handleUsePrescribed}
-          className={cn(
-            "inline-flex w-full items-center justify-center gap-1.5 rounded-lg border border-border bg-muted/40 font-semibold text-muted-foreground transition hover:bg-muted/60 active:scale-[0.98]",
-            focusMode ? "h-8 text-xs" : "h-7 text-[10px]",
-          )}
+          onClick={started ? (paused ? resume : pause) : start}
+          aria-label={started ? (paused ? "Resume timer" : "Pause timer") : "Start timer"}
+          className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md hover:bg-black/10 active:scale-95"
         >
-          <CheckCircle2 className="h-3 w-3" />
-          Use Prescribed Time ({fmtSecs(prescribedSeconds)})
+          {running ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
         </button>
       )}
+
+      {started && (
+        <button
+          type="button"
+          onClick={reset}
+          aria-label="Reset timer"
+          className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md hover:bg-black/10 active:scale-95"
+        >
+          <RotateCcw className="h-3.5 w-3.5" />
+        </button>
+      )}
+
+      {/* Log — always available, never requires the timer */}
+      <button
+        type="button"
+        onClick={log}
+        aria-label="Log this set"
+        className={cn(
+          "inline-flex h-7 shrink-0 items-center gap-1 rounded-md px-2 text-[11px] font-bold",
+          done ? "bg-emerald-500 text-white" : "bg-primary text-primary-foreground",
+        )}
+      >
+        <Check className="h-3.5 w-3.5" />
+        Log
+      </button>
     </div>
   );
 }
