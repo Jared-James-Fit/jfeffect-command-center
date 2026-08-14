@@ -4245,6 +4245,10 @@ function SetRow({
           recentlySavedRef.current = true;
           if (recentlySavedTimerRef.current) clearTimeout(recentlySavedTimerRef.current);
           recentlySavedTimerRef.current = setTimeout(() => { recentlySavedRef.current = false; }, 8000);
+          // Canonical overwrite marker: hold this value on screen until the
+          // server reports it back (works for create, update, bodyweight,
+          // assisted and explicit clear alike).
+          committedLoadRef.current = { load: bodyweight ? "0" : nextLoad, loadType: nextType };
           setLoadType(nextType);
           setLoad(bodyweight ? "0" : nextLoad);
           setFocusedField(null);
