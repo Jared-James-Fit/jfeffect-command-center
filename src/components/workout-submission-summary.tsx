@@ -1,9 +1,15 @@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Trophy, Dumbbell, Activity, CheckCircle2, XCircle, Flame, Clock, Star, Calendar, ChevronLeft } from "lucide-react";
+import { Trophy, Dumbbell, Activity, CheckCircle2, XCircle, Flame, Clock, Star, Calendar, ChevronLeft, Heart } from "lucide-react";
 import type { WorkoutSummary } from "@/lib/workout-summary";
 import { format } from "date-fns";
 import { computeRecoveryScore } from "@/lib/analytics/recovery-score";
+import {
+  buildWorkoutTakeaways,
+  formatPR,
+  type CardioTakeawayInput,
+  type SessionPR,
+} from "@/lib/workout-takeaways";
 
 type Props = {
   open: boolean;
@@ -17,12 +23,18 @@ type Props = {
   sessionRpe?: number | null;
   /** Client-reported pain flag. Optional. */
   pain?: boolean | null;
+  /** PRs hit during this session (already de-duplicated per exercise). */
+  prs?: SessionPR[];
+  /** Prescribed cardio status for the same day, when there is one. */
+  cardio?: CardioTakeawayInput;
   onClose?: () => void;
 };
 
-export function WorkoutSubmissionSummary({ open, onOpenChange, summary, workoutTitle, durationMin, workoutDate, sessionRating, sessionRpe, pain, onClose }: Props) {
+export function WorkoutSubmissionSummary({ open, onOpenChange, summary, workoutTitle, durationMin, workoutDate, sessionRating, sessionRpe, pain, prs, cardio, onClose }: Props) {
+  const prList = prs ?? [];
   const headline =
-    summary.score >= 90 ? "Crushed it!"
+    prList.length > 0 ? "New PR!"
+    : summary.score >= 90 ? "Crushed it!"
     : summary.score >= 75 ? "Great work!"
     : summary.score >= 50 ? "Solid effort"
     : "Logged — keep going";
@@ -31,6 +43,7 @@ export function WorkoutSubmissionSummary({ open, onOpenChange, summary, workoutT
     : summary.score >= 75 ? "Strong work today. Consistency stacks results."
     : summary.score >= 50 ? "Reps in the bank. Show up again tomorrow."
     : "Logged is better than skipped. Back at it next session.";
+  const takeaways = buildWorkoutTakeaways(summary, prList, cardio ?? null);
   // The star rating on the celebration screen represents session quality.
   // Historically it only showed the client's self-reported `overall_rating`,
   // which caused confusing screens like "100/100" alongside "3/5 stars" when
@@ -90,6 +103,46 @@ export function WorkoutSubmissionSummary({ open, onOpenChange, summary, workoutT
           <div className="rounded-2xl border border-primary/20 bg-primary/5 px-3 py-3 text-center text-sm font-bold leading-snug text-foreground sm:px-4">
             {motivational}
           </div>
+
+          {/* PRs */}
+          {prList.length > 0 && (
+            <div className="rounded-2xl border border-amber-500/30 bg-amber-500/5 px-3 py-3">
+              <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-amber-700 dark:text-amber-300">
+                <Trophy className="h-3.5 w-3.5" /> Personal records
+              </div>
+              <ul className="mt-1.5 space-y-1">
+                {prList.slice(0, 5).map((pr) => (
+                  <li key={`${pr.exerciseName}-${pr.reps}`} className="text-sm font-bold leading-snug">
+                    {formatPR(pr)}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {/* Positive takeaways */}
+          <div className="rounded-2xl border border-border bg-card px-3 py-3">
+            <div className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+              Today's takeaways
+            </div>
+            <ul className="mt-1.5 space-y-1">
+              {takeaways.map((t) => (
+                <li key={t} className="text-sm leading-snug text-foreground">{t}</li>
+              ))}
+            </ul>
+          </div>
+
+          {cardio && (
+            <div className="flex items-center gap-2 rounded-2xl border border-border bg-card px-3 py-2.5 text-sm">
+              <Heart className="h-4 w-4 shrink-0 text-primary" />
+              <span className="font-bold">Cardio</span>
+              <span className="ml-auto font-semibold text-muted-foreground">
+                {cardio.status === "logged"
+                  ? cardio.minutes && cardio.minutes > 0 ? `Logged · ${cardio.minutes} min` : "Logged"
+                  : cardio.status === "skipped" ? "Skipped" : "Not logged yet"}
+              </span>
+            </div>
+          )}
 
           {/* Score + Recovery */}
           <div className="grid grid-cols-2 gap-2">
