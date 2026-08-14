@@ -2376,7 +2376,16 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
             : /\b(sec(onds?)?|min(utes?)?)\b/i.test(String((row as any).reps_text ?? ""))
               ? "time"
               : "reps_weight";
-  const effectiveMeasurementType: "reps" | "time" = trackingType === "time" ? "time" : "reps";
+  // Client-side "Log As" override — the coach's prescription is untouched; the
+  // client just chooses how they want to log this row on their device.
+  const prescribedMeasurementType: "reps" | "time" = trackingType === "time" ? "time" : "reps";
+  const [logAsOverride, setLogAsOverrideState] = useState<LogAsMode | null>(() => getLogAsMode(row.id));
+  const effectiveMeasurementType: "reps" | "time" = logAsOverride ?? prescribedMeasurementType;
+  const pickLogAs = (mode: LogAsMode) => {
+    const next = mode === prescribedMeasurementType ? null : mode;
+    setLogAsOverrideState(next);
+    setLogAsMode(row.id, next);
+  };
   // When the row is time-based but duration_seconds is null (coach typed
   // "30 seconds" in reps_text instead of using the duration field), parse
   // the numeric value from reps_text as the prescribed seconds.
@@ -2388,10 +2397,17 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
     const n = Number(m[1]);
     return /min/i.test(m[2]) ? Math.round(n * 60) : Math.round(n);
   })();
+  const [timerTargetOverride, setTimerTargetOverrideState] = useState<number | null>(() => getTimerTarget(row.id));
   const effectivePrescribedDurationSec: number | null =
-    trackingType === "time" ? ((row as any).duration_seconds ?? repsTextParsedSec ?? null) : null;
+    effectiveMeasurementType === "time"
+      ? (timerTargetOverride ?? (row as any).duration_seconds ?? repsTextParsedSec ?? null)
+      : null;
+  const pickTimerTarget = (secs: number | null) => {
+    setTimerTargetOverrideState(secs);
+    setTimerTarget(row.id, secs);
+  };
   // Hide the weight column for reps-only and time-only prescriptions.
-  const hideWeight = trackingType !== "reps_weight";
+  const hideWeight = trackingType !== "reps_weight" || effectiveMeasurementType === "time";
   const exMeta: ExerciseMeta | null = exercise
     ? {
         exercise_category: exercise.exercise_category ?? null,
