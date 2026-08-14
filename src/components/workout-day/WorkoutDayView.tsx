@@ -1882,9 +1882,9 @@ function WorkoutDay({
           completedAt={completion?.completed_at ?? null}
           onViewScore={completion?.completed_at ? openRecapSummary : undefined}
         />
-        {/* Compact action row — Warm-Up + Move sit together so they never
-            create a tall empty band above the first exercise card. */}
-        {(!readonly || !!client?.id) && (
+        {/* Compact action row — Warm-Up launcher. Rescheduling lives on the
+            outside workout card / Schedule Manager, not inside the logger. */}
+        {(!readonly || !!client?.id) && client?.id && (
           <div className="flex flex-wrap items-center gap-2">
             {client?.id && (
               <WarmupButton
