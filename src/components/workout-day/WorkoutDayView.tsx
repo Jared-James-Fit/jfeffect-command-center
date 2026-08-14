@@ -1896,17 +1896,6 @@ function WorkoutDay({
                 exerciseRows={rows as any[]}
               />
             )}
-            {!readonly && (
-              <Button
-                size="sm"
-                variant="ghost"
-                onClick={() => setMoveOpen(true)}
-                className="h-9 gap-1.5 rounded-full px-3 text-xs text-muted-foreground hover:text-foreground"
-                aria-label="Move workout to another date"
-              >
-                <Move className="h-3.5 w-3.5" /> Move
-              </Button>
-            )}
           </div>
         )}
 
