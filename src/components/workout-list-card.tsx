@@ -60,13 +60,11 @@ export function WorkoutListCard({
           </div>
           <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-muted-foreground">
             {weekLabel && <span>{weekLabel}</span>}
-            {item.day.focus && <span>· {item.day.focus}</span>}
             {status.scheduled && (
               <span className="inline-flex items-center gap-1">
                 <CalendarIcon className="h-3 w-3" /> {format(status.scheduled, "EEE MMM d")}
               </span>
             )}
-            {dur && <span>· {durationRange(dur)}</span>}
           </div>
         </div>
         {progress && progress.prescribedSets > 0 && (
