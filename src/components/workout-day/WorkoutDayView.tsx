@@ -3902,7 +3902,13 @@ function SetRow({
       durationSeconds: existingDurNum,
     });
     if (nextCompletedAt && !currentHasRequiredValues) {
-      toast.error(isTimeKind ? "Complete the timer first" : hideWeight ? "Enter reps before marking complete" : "Enter reps and weight before marking complete (use 0 for bodyweight)");
+      // Timed rows never require the timer: tapping the status circle logs the
+      // prescribed / adjusted target directly.
+      if (isTimeKind && prescribedDurationSeconds && prescribedDurationSeconds > 0) {
+        await saveTimeCompletion(prescribedDurationSeconds, { method: "prescribed_quick_confirm" });
+        return;
+      }
+      toast.error(isTimeKind ? "Enter a time first" : hideWeight ? "Enter reps before marking complete" : "Enter reps and weight before marking complete (use 0 for bodyweight)");
       return;
     }
     if (nextCompletedAt) beginWorkoutSession(workoutId ?? null);
