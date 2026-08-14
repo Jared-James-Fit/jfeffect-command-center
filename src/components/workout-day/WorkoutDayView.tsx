@@ -3440,6 +3440,14 @@ function SetRow({
   // server response can never overwrite what the user is still typing.
   const recentlySavedRef = useRef(false);
   const recentlySavedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // OVERWRITE FIX (2026-08-14): the last weight this row committed, kept until
+  // the server actually reports it back. `recentlySavedRef` is time-based (8 s)
+  // and therefore cannot protect an edit whose write is slow, retried, or whose
+  // refetch was already in flight with the OLD value — that stale response was
+  // what resurrected the previous weight (50) after typing a new one (500).
+  // While a commit is unconfirmed, server hydration for the load field is
+  // refused unless the server value matches what we committed.
+  const committedLoadRef = useRef<{ load: string; loadType: LoadType } | null>(null);
   // Keep a live reference to the latest server result so the force-hydrate
   // effect can never read a stale closure when parent bumps fillToken.
   const latestExistingRef = useRef(existing);
@@ -3451,15 +3459,25 @@ function SetRow({
     // and window-focus refetches from clobbering typed values on mobile).
     // 8s covers: save latency + Realtime invalidation + window-focus refetch.
     const focused = focusedFieldRef.current;
+    const display0 = existing?.actual_load != null ? fmtLoad(existing.actual_load) : "";
+    const serverType0 = existing
+      ? resolveLoadType((existing as any).load_type, (existing as any).is_bodyweight)
+      : defaultLoadType;
+    const pendingCommit = committedLoadRef.current;
+    let loadLocked = false;
+    if (pendingCommit) {
+      const matches = display0 === pendingCommit.load && serverType0 === pendingCommit.loadType;
+      // Server hasn't caught up yet (or returned a stale snapshot): keep the
+      // committed value on screen instead of reverting to the old one. Only
+      // the LOAD field is locked — reps/RPE hydrate normally.
+      if (matches) committedLoadRef.current = null;
+      else loadLocked = true;
+    }
     if (recentlySavedRef.current) return;
-    const display = existing?.actual_load != null ? fmtLoad(existing.actual_load) : "";
-    if (focused !== "load") {
+    const display = display0;
+    if (focused !== "load" && !loadLocked) {
       setLoad(display);
-      setLoadType(
-        existing
-          ? resolveLoadType((existing as any).load_type, (existing as any).is_bodyweight)
-          : defaultLoadType,
-      );
+      setLoadType(serverType0);
     }
     if (focused !== "reps") {
       // If the server has a stored reps value, hydrate from it. If the
@@ -3510,6 +3528,8 @@ function SetRow({
     // values we're about to display.
     recentlySavedRef.current = false;
     setFocusedField(null);
+    // Explicit user action: it supersedes any unconfirmed inline commit.
+    committedLoadRef.current = null;
     // Prefer the freshly-written snapshot from the parent: it bypasses the
     // React Query cache race (refetch may not have landed by the time this
     // effect runs, so `latest` can still hold a stale value like 90 lb from
@@ -3550,6 +3570,12 @@ function SetRow({
     setFocusedField(null);
     setLoadType(cascade.loadType);
     setLoad(cascade.loadType === "bodyweight" ? "0" : cascade.load);
+    // The parent's batch write carries this value — treat it as our commit so
+    // a stale refetch can't restore the pre-cascade weight either.
+    committedLoadRef.current = {
+      load: cascade.loadType === "bodyweight" ? "0" : cascade.load,
+      loadType: cascade.loadType,
+    };
     if (!repsEdited && existing?.actual_reps == null && cascade.reps) setReps(cascade.reps);
     // RPE/RIR is deliberately NOT cascaded — that system is untouched.
     setOptimisticComplete(
@@ -3712,8 +3738,23 @@ function SetRow({
           await writeWithAbortRetry(() => adapter.upsertPlRowResultRaw(payload, existing.id));
         } else {
           await writeWithAbortRetry(async () => {
-            const { error } = await sb.from("pl_row_results").update(payload).eq("id", existing.id);
+            // OVERWRITE FIX: an update matching zero rows is NOT an error in
+            // PostgREST. Read the affected row back; if the canonical result
+            // no longer exists under that id, upsert on the natural key so the
+            // edit still lands instead of being silently dropped.
+            const { data, error } = await sb
+              .from("pl_row_results")
+              .update(payload)
+              .eq("id", existing.id)
+              .select("id")
+              .maybeSingle();
             if (error) throw error;
+            if (!data?.id) {
+              const { error: upErr } = await sb
+                .from("pl_row_results")
+                .upsert(payload, { onConflict: "client_id,row_id,set_index" });
+              if (upErr) throw upErr;
+            }
           });
         }
       } else {
@@ -4206,6 +4247,10 @@ function SetRow({
           recentlySavedRef.current = true;
           if (recentlySavedTimerRef.current) clearTimeout(recentlySavedTimerRef.current);
           recentlySavedTimerRef.current = setTimeout(() => { recentlySavedRef.current = false; }, 8000);
+          // Canonical overwrite marker: hold this value on screen until the
+          // server reports it back (works for create, update, bodyweight,
+          // assisted and explicit clear alike).
+          committedLoadRef.current = { load: bodyweight ? "0" : nextLoad, loadType: nextType };
           setLoadType(nextType);
           setLoad(bodyweight ? "0" : nextLoad);
           setFocusedField(null);
