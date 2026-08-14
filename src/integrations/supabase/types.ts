@@ -1379,6 +1379,9 @@ export type Database = {
       }
       cardio_completions: {
         Row: {
+          avg_heart_rate: number | null
+          avg_speed: number | null
+          calories: number | null
           cardio_target_id: string | null
           cardio_type: string | null
           client_id: string
@@ -1386,13 +1389,20 @@ export type Database = {
           completed_date: string
           created_at: string
           day_type: string | null
+          distance: number | null
+          distance_unit: string | null
           duration_minutes: number | null
           id: string
+          incline: number | null
           notes: string | null
           rpe: number | null
+          skipped: boolean
           updated_at: string
         }
         Insert: {
+          avg_heart_rate?: number | null
+          avg_speed?: number | null
+          calories?: number | null
           cardio_target_id?: string | null
           cardio_type?: string | null
           client_id: string
@@ -1400,13 +1410,20 @@ export type Database = {
           completed_date?: string
           created_at?: string
           day_type?: string | null
+          distance?: number | null
+          distance_unit?: string | null
           duration_minutes?: number | null
           id?: string
+          incline?: number | null
           notes?: string | null
           rpe?: number | null
+          skipped?: boolean
           updated_at?: string
         }
         Update: {
+          avg_heart_rate?: number | null
+          avg_speed?: number | null
+          calories?: number | null
           cardio_target_id?: string | null
           cardio_type?: string | null
           client_id?: string
@@ -1414,10 +1431,14 @@ export type Database = {
           completed_date?: string
           created_at?: string
           day_type?: string | null
+          distance?: number | null
+          distance_unit?: string | null
           duration_minutes?: number | null
           id?: string
+          incline?: number | null
           notes?: string | null
           rpe?: number | null
+          skipped?: boolean
           updated_at?: string
         }
         Relationships: [
