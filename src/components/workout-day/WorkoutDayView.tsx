@@ -3464,16 +3464,18 @@ function SetRow({
       ? resolveLoadType((existing as any).load_type, (existing as any).is_bodyweight)
       : defaultLoadType;
     const pendingCommit = committedLoadRef.current;
+    let loadLocked = false;
     if (pendingCommit) {
       const matches = display0 === pendingCommit.load && serverType0 === pendingCommit.loadType;
       // Server hasn't caught up yet (or returned a stale snapshot): keep the
-      // committed value on screen instead of reverting to the old one.
-      if (!matches) return;
-      committedLoadRef.current = null;
+      // committed value on screen instead of reverting to the old one. Only
+      // the LOAD field is locked — reps/RPE hydrate normally.
+      if (matches) committedLoadRef.current = null;
+      else loadLocked = true;
     }
     if (recentlySavedRef.current) return;
     const display = display0;
-    if (focused !== "load") {
+    if (focused !== "load" && !loadLocked) {
       setLoad(display);
       setLoadType(serverType0);
     }
