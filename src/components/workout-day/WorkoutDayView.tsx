@@ -96,6 +96,9 @@ import { WorkoutSubmissionSummary } from "@/components/workout-submission-summar
 import { computeWorkoutSummary, type WorkoutSummary } from "@/lib/workout-summary";
 import { WorkoutTimerSheet, QuickConfirmDuration, type TimerCompletionPayload } from "@/components/workout-timer-sheet";
 import { formatDuration } from "@/lib/duration";
+import {
+  getLogAsMode, setLogAsMode, getTimerTarget, setTimerTarget, type LogAsMode,
+} from "@/lib/log-as-override";
 import { Timer } from "lucide-react";
 import type { WorkoutContextAdapter } from "@/lib/workout-context";
 import {
@@ -2376,7 +2379,16 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
             : /\b(sec(onds?)?|min(utes?)?)\b/i.test(String((row as any).reps_text ?? ""))
               ? "time"
               : "reps_weight";
-  const effectiveMeasurementType: "reps" | "time" = trackingType === "time" ? "time" : "reps";
+  // Client-side "Log As" override — the coach's prescription is untouched; the
+  // client just chooses how they want to log this row on their device.
+  const prescribedMeasurementType: "reps" | "time" = trackingType === "time" ? "time" : "reps";
+  const [logAsOverride, setLogAsOverrideState] = useState<LogAsMode | null>(() => getLogAsMode(row.id));
+  const effectiveMeasurementType: "reps" | "time" = logAsOverride ?? prescribedMeasurementType;
+  const pickLogAs = (mode: LogAsMode) => {
+    const next = mode === prescribedMeasurementType ? null : mode;
+    setLogAsOverrideState(next);
+    setLogAsMode(row.id, next);
+  };
   // When the row is time-based but duration_seconds is null (coach typed
   // "30 seconds" in reps_text instead of using the duration field), parse
   // the numeric value from reps_text as the prescribed seconds.
@@ -2388,10 +2400,17 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
     const n = Number(m[1]);
     return /min/i.test(m[2]) ? Math.round(n * 60) : Math.round(n);
   })();
+  const [timerTargetOverride, setTimerTargetOverrideState] = useState<number | null>(() => getTimerTarget(row.id));
   const effectivePrescribedDurationSec: number | null =
-    trackingType === "time" ? ((row as any).duration_seconds ?? repsTextParsedSec ?? null) : null;
+    effectiveMeasurementType === "time"
+      ? (timerTargetOverride ?? (row as any).duration_seconds ?? repsTextParsedSec ?? null)
+      : null;
+  const pickTimerTarget = (secs: number | null) => {
+    setTimerTargetOverrideState(secs);
+    setTimerTarget(row.id, secs);
+  };
   // Hide the weight column for reps-only and time-only prescriptions.
-  const hideWeight = trackingType !== "reps_weight";
+  const hideWeight = trackingType !== "reps_weight" || effectiveMeasurementType === "time";
   const exMeta: ExerciseMeta | null = exercise
     ? {
         exercise_category: exercise.exercise_category ?? null,
@@ -2848,6 +2867,30 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
         </p>
       )}
 
+      {/* Log As — flexible logging for timed prescriptions (device-only choice) */}
+      {!readonly && (prescribedMeasurementType === "time" || logAsOverride) && (
+        <div className="mt-2 flex items-center gap-1.5">
+          <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Log as</span>
+          <div className="inline-flex overflow-hidden rounded-md border border-border">
+            {(["time", "reps"] as const).map((m) => (
+              <button
+                key={m}
+                type="button"
+                onClick={() => pickLogAs(m)}
+                className={cn(
+                  "h-6 px-2 text-[11px] font-bold capitalize transition-colors",
+                  effectiveMeasurementType === m
+                    ? "bg-primary text-primary-foreground"
+                    : "bg-transparent text-muted-foreground hover:bg-secondary",
+                )}
+              >
+                {m}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
       <div className={cn("mt-3 overflow-hidden rounded-md border border-builder-card-border bg-builder-inset", focusMode && "text-base")}>
         <div className={cn(
           "grid items-center gap-1.5 border-b border-builder-card-border bg-builder-card/60 px-2.5 py-1.5 text-[10px] font-bold uppercase tracking-wider text-muted-foreground",
@@ -2882,6 +2925,7 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
               setCount={setCount}
               measurementType={effectiveMeasurementType}
               prescribedDurationSeconds={effectivePrescribedDurationSec}
+              onTimerTargetChange={pickTimerTarget}
               existing={existing}
               prevExisting={prevExisting}
               repMaxBests={repMaxBests}
@@ -3192,6 +3236,7 @@ function SetRow({
   onCascadeFromSet,
   readonly = false, unit = "kg", hideWeight = false, focusMode = false, onChange, onSetCompleted,
   setCount, measurementType = "reps", prescribedDurationSeconds = null,
+  onTimerTargetChange,
 }: {
   rowId: string;
   workoutId?: string | null;
@@ -3202,6 +3247,7 @@ function SetRow({
   setCount?: number;
   measurementType?: "reps" | "time";
   prescribedDurationSeconds?: number | null;
+  onTimerTargetChange?: (seconds: number | null) => void;
   existing?: any;
   prevExisting?: any;
   targetReps?: string | null;
@@ -3856,7 +3902,13 @@ function SetRow({
       durationSeconds: existingDurNum,
     });
     if (nextCompletedAt && !currentHasRequiredValues) {
-      toast.error(isTimeKind ? "Complete the timer first" : hideWeight ? "Enter reps before marking complete" : "Enter reps and weight before marking complete (use 0 for bodyweight)");
+      // Timed rows never require the timer: tapping the status circle logs the
+      // prescribed / adjusted target directly.
+      if (isTimeKind && prescribedDurationSeconds && prescribedDurationSeconds > 0) {
+        await saveTimeCompletion(prescribedDurationSeconds, { method: "prescribed_quick_confirm" });
+        return;
+      }
+      toast.error(isTimeKind ? "Enter a time first" : hideWeight ? "Enter reps before marking complete" : "Enter reps and weight before marking complete (use 0 for bodyweight)");
       return;
     }
     if (nextCompletedAt) beginWorkoutSession(workoutId ?? null);
@@ -4112,6 +4164,7 @@ function SetRow({
           completedSeconds={completedSec}
           readonly={readonly}
           focusMode={focusMode}
+          onTargetChange={onTimerTargetChange}
           onComplete={(secs, method) => void saveTimeCompletion(secs, { method })}
         />
       ) : (
