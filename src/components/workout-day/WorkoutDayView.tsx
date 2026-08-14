@@ -3736,8 +3736,23 @@ function SetRow({
           await writeWithAbortRetry(() => adapter.upsertPlRowResultRaw(payload, existing.id));
         } else {
           await writeWithAbortRetry(async () => {
-            const { error } = await sb.from("pl_row_results").update(payload).eq("id", existing.id);
+            // OVERWRITE FIX: an update matching zero rows is NOT an error in
+            // PostgREST. Read the affected row back; if the canonical result
+            // no longer exists under that id, upsert on the natural key so the
+            // edit still lands instead of being silently dropped.
+            const { data, error } = await sb
+              .from("pl_row_results")
+              .update(payload)
+              .eq("id", existing.id)
+              .select("id")
+              .maybeSingle();
             if (error) throw error;
+            if (!data?.id) {
+              const { error: upErr } = await sb
+                .from("pl_row_results")
+                .upsert(payload, { onConflict: "client_id,row_id,set_index" });
+              if (upErr) throw upErr;
+            }
           });
         }
       } else {
