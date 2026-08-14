@@ -1850,20 +1850,16 @@ function WorkoutDay({
         backLabel="Workouts"
         title={formatDayLabel(day)}
         subtitle={(() => {
-          // Three information layers, in order of importance:
-          //   1. Coach-typed workout subtitle (e.g. "Final Heavy")
-          //   2. Full weekday + readable date (never an ISO string)
-          //   3. Block / week / focus context
+          // Inside the logger the athlete only needs to know WHICH workout
+          // this is: the coach subtitle plus short block/week context. The
+          // full date lives on the outside card and (when it matters) in the
+          // schedule notice below, so it is not repeated here.
           const sub = formatDaySubtitle(day);
-          const dateParts = formatTrainingDate(day.scheduled_date ?? null);
-          const dateLabel = dateParts ? `${dateParts.weekday}, ${dateParts.medium}` : null;
           const context = [
             block?.name,
             week?.week_index != null ? `Week ${week.week_index}` : null,
-            (week as any)?.phase || null,
-            day.focus || null,
           ].filter(Boolean).join(" · ");
-          return [sub, dateLabel, context].filter(Boolean).join(" · ");
+          return [sub, context].filter(Boolean).join(" · ");
         })()}
         actions={
           !readonly ? (
