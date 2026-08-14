@@ -2867,6 +2867,30 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
         </p>
       )}
 
+      {/* Log As — flexible logging for timed prescriptions (device-only choice) */}
+      {!readonly && (prescribedMeasurementType === "time" || logAsOverride) && (
+        <div className="mt-2 flex items-center gap-1.5">
+          <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Log as</span>
+          <div className="inline-flex overflow-hidden rounded-md border border-border">
+            {(["time", "reps"] as const).map((m) => (
+              <button
+                key={m}
+                type="button"
+                onClick={() => pickLogAs(m)}
+                className={cn(
+                  "h-6 px-2 text-[11px] font-bold capitalize transition-colors",
+                  effectiveMeasurementType === m
+                    ? "bg-primary text-primary-foreground"
+                    : "bg-transparent text-muted-foreground hover:bg-secondary",
+                )}
+              >
+                {m}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
       <div className={cn("mt-3 overflow-hidden rounded-md border border-builder-card-border bg-builder-inset", focusMode && "text-base")}>
         <div className={cn(
           "grid items-center gap-1.5 border-b border-builder-card-border bg-builder-card/60 px-2.5 py-1.5 text-[10px] font-bold uppercase tracking-wider text-muted-foreground",
@@ -2901,6 +2925,7 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
               setCount={setCount}
               measurementType={effectiveMeasurementType}
               prescribedDurationSeconds={effectivePrescribedDurationSec}
+              onTimerTargetChange={pickTimerTarget}
               existing={existing}
               prevExisting={prevExisting}
               repMaxBests={repMaxBests}
