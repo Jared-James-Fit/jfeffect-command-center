@@ -94,6 +94,9 @@ import { QuickValueSelect } from "@/components/workout-day/quick-value-select";
 import { SetTimerInput } from "@/components/workout-day/set-timer-input";
 import { WorkoutSubmissionSummary } from "@/components/workout-submission-summary";
 import { computeWorkoutSummary, type WorkoutSummary } from "@/lib/workout-summary";
+import { collectSessionPRs } from "@/lib/workout-takeaways";
+import { cardioStatus } from "@/lib/cardio-plan";
+import { toLocalISO, todayLocalISO } from "@/lib/today";
 import { WorkoutTimerSheet, QuickConfirmDuration, type TimerCompletionPayload } from "@/components/workout-timer-sheet";
 import { formatDuration } from "@/lib/duration";
 import {
