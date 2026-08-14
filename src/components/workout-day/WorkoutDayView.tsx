@@ -4556,7 +4556,6 @@ function scrollToFirstIncompleteExercise() {
 }
 
 function CompactWorkoutSummaryRow({
-  durationLabel,
   setsDone,
   setsTotal,
   exercisesDone,
@@ -4566,9 +4565,7 @@ function CompactWorkoutSummaryRow({
   savedDurationMin,
   completedAt,
   onViewScore,
-  loggingQuality,
 }: {
-  durationLabel: string;
   setsDone: number;
   setsTotal: number;
   exercisesDone: number;
@@ -4578,7 +4575,6 @@ function CompactWorkoutSummaryRow({
   savedDurationMin?: number | null;
   completedAt: string | null;
   onViewScore?: () => void;
-  loggingQuality: { quality: any; percentage: number } | null;
 }) {
   const pct = setsTotal > 0 ? Math.min(100, Math.round((setsDone / setsTotal) * 100)) : 0;
   const status: import("@/lib/workout-progress").WorkoutProgressStatus =
@@ -4590,26 +4586,26 @@ function CompactWorkoutSummaryRow({
   // Display correction: a workout with zero logged sets must never read as
   // "Completed" in the summary strip, even if a completion row exists.
   const showCompleted = !!completedAt && setsDone > 0;
-  const statusLabel = showCompleted ? "Completed" : setsDone > 0 ? "In Progress" : "Not Started";
+  // "Not Started" is the only status the timer + ring can't already convey at
+  // a glance; "In Progress" duplicated the running timer and the progress
+  // ring, and the logging-quality badge duplicated the percentage, so both
+  // were removed from this row.
   return (
-    <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1.5 text-xs text-muted-foreground">
+    <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5 text-xs text-muted-foreground">
       <div className="inline-flex items-center gap-1.5 rounded-md bg-secondary/60 px-2 py-0.5">
         <Clock className="h-3.5 w-3.5 text-primary" />
-        <span className="hidden font-semibold uppercase tracking-wide text-[10px] text-muted-foreground sm:inline">
-          Workout Session
-        </span>
         <WorkoutTimer
           dayId={dayId}
           completedAt={completedAt}
           savedDurationMin={savedDurationMin ?? null}
           readonly={readonly}
-          className="ml-0.5"
+          className=""
         />
       </div>
       <button
         type="button"
         onClick={scrollToFirstIncompleteExercise}
-        className="inline-flex items-center gap-2 rounded-md px-1 py-0.5 tabular-nums transition-colors hover:bg-secondary/60 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+        className="ml-auto inline-flex items-center gap-2 rounded-md px-1 py-0.5 tabular-nums transition-colors hover:bg-secondary/60 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
         aria-label={`Workout progress ${pct}%, ${exercisesDone} of ${exercisesTotal} exercises. Scroll to first incomplete exercise.`}
       >
         <WorkoutProgressRing pct={pct} status={status} size={26} strokeWidth={3} />
@@ -4617,21 +4613,6 @@ function CompactWorkoutSummaryRow({
           {pct}% · {exercisesDone}/{exercisesTotal}
         </span>
       </button>
-      <span className="inline-flex items-center gap-1 text-muted-foreground">
-        <span aria-hidden className="opacity-40">•</span>
-        {durationLabel}
-      </span>
-      {!showCompleted && (
-        <span className="inline-flex items-center rounded-full border border-border bg-muted/40 px-2 py-0.5 text-[11px] font-bold uppercase tracking-wide text-muted-foreground">
-          {statusLabel}
-        </span>
-      )}
-      {loggingQuality && setsDone > 0 && (
-        <LoggingQualityBadge
-          quality={loggingQuality.quality}
-          percentage={loggingQuality.percentage}
-        />
-      )}
       {showCompleted && (
         <>
           <Badge
