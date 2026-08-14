@@ -305,6 +305,9 @@ export function InlineWorkoutEditor({
         load_kg: numOrNull(r.load_kg),
         rest_seconds: numOrNull(r.rest_seconds),
         notes: strOrNull(r.notes),
+        measurement_type: r.measurement_type,
+        tracking_type: r.measurement_type === "time" ? "time" : null,
+        duration_seconds: r.measurement_type === "time" ? numOrNull(r.duration_seconds) : null,
       };
       if (r._dbId) {
         const o = origRows.find((x) => x.id === r._dbId);
@@ -318,6 +321,11 @@ export function InlineWorkoutEditor({
           if ((o.load_kg ?? null) !== desired.load_kg) patch.load_kg = desired.load_kg;
           if ((o.rest_seconds ?? null) !== desired.rest_seconds) patch.rest_seconds = desired.rest_seconds;
           if ((o.notes ?? null) !== desired.notes) patch.notes = desired.notes;
+          if ((o.measurement_type === "time" ? "time" : "reps") !== desired.measurement_type) {
+            patch.measurement_type = desired.measurement_type;
+            patch.tracking_type = desired.tracking_type;
+          }
+          if ((o.duration_seconds ?? null) !== desired.duration_seconds) patch.duration_seconds = desired.duration_seconds;
         }
         if (Object.keys(patch).length) await updateRow(r._dbId, patch);
       } else {
@@ -333,35 +341,55 @@ export function InlineWorkoutEditor({
           .select("id")
           .single();
         if (error) throw error;
+        if (!ins?.id) throw new Error(`"${r.name}" could not be added — please try again.`);
         r._dbId = ins.id;
       }
     }
 
-    // 4) Converge every surface that renders this workout
+    // 4) VERIFY against the database before reporting success. Reading the
+    //    canonical rows back is the only way to know an insert actually
+    //    landed (an RLS/trigger rejection or a silently dropped row would
+    //    otherwise show "Saved" while the exercise never appears).
+    const verify = await supabase
+      .from("pl_exercise_rows")
+      .select(
+        "id, exercise_id, exercise_name_override, sets, reps_text, rpe, load_lb, load_kg, rest_seconds, notes, sort_order, measurement_type, duration_seconds, exercises(name)",
+      )
+      .eq("day_id", dayId)
+      .order("sort_order", { ascending: true });
+    if (verify.error) throw verify.error;
+    const serverRows = ((verify.data ?? []) as unknown) as RowData[];
+    const serverIds = new Set(serverRows.map((sr) => sr.id));
+    const missing = rows.filter((r) => !r._dbId || !serverIds.has(r._dbId));
+    if (missing.length || serverRows.length !== rows.length) {
+      throw new Error(
+        missing.length
+          ? `Save incomplete — ${missing.map((m) => m.name).join(", ")} did not save. Nothing was lost; please try again.`
+          : "Save incomplete — the workout on the server doesn't match. Please reopen and try again.",
+      );
+    }
+
+    // 5) Adopt server truth locally so the list shows exactly what persisted,
+    //    with real database ids attached to every row.
+    setRows(serverRows.map(toEditable));
+    origRowsRef.current = serverRows;
+    origDayRef.current = { ...orig, title, subtitle, notes: dayNotes, scheduled_date: dateStr || null };
+
+    // 6) Converge every surface that renders this workout
     qc.invalidateQueries({ queryKey: ["inline-workout-preview-rows", dayId] });
     qc.invalidateQueries({ queryKey: ["inline-workout-preview-results", dayId] });
     qc.invalidateQueries({ queryKey: ["inline-workout-editor", dayId] });
     qc.invalidateQueries({ queryKey: ["my-workouts", clientId] });
     qc.invalidateQueries({ queryKey: ["workouts-experience-client", clientId] });
     qc.invalidateQueries({ queryKey: ["pl-block-tree"] });
+    // Catch-all: any cached query keyed by this day, client, or block.
+    qc.invalidateQueries({
+      predicate: (q) =>
+        q.queryKey.some(
+          (k) => typeof k === "string" && (k === dayId || k === clientId || (blockId ? k === blockId : false)),
+        ),
+    });
     invalidateScheduleQueries(qc, { clientId, blockId });
-
-    // 5) Refresh the local diff baseline so a second save only sends changes
-    origDayRef.current = { ...orig, title, subtitle, notes: dayNotes, scheduled_date: dateStr || null };
-    origRowsRef.current = rows.map((r, i) => ({
-      id: r._dbId as string,
-      exercise_id: r.exercise_id,
-      exercise_name_override: null,
-      sets: numOrNull(r.sets),
-      reps_text: strOrNull(r.reps_text),
-      rpe: strOrNull(r.rpe),
-      load_lb: numOrNull(r.load_lb),
-      load_kg: numOrNull(r.load_kg),
-      rest_seconds: numOrNull(r.rest_seconds),
-      notes: strOrNull(r.notes),
-      sort_order: i,
-      exercises: { name: r.name },
-    }));
   };
 
   return (
