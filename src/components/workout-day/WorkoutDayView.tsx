@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, Clock, CheckCircle2, Circle, Play, StickyNote, NotebookPen, Info, Maximize2, Minimize2, AlertTriangle, RefreshCw, Send, MessageCircle, ChevronDown, ChevronUp, Zap, Trophy, MoreHorizontal, Undo2, HelpCircle } from "lucide-react";
+import { ArrowLeft, Check, Clock, CheckCircle2, Circle, Play, StickyNote, NotebookPen, Info, Maximize2, Minimize2, AlertTriangle, RefreshCw, Send, MessageCircle, ChevronDown, ChevronUp, Zap, Trophy, MoreHorizontal, Undo2, HelpCircle } from "lucide-react";
 
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
@@ -91,13 +91,13 @@ import {
   RIR_FULL_OPTIONS,
 } from "@/lib/workout-quick-select";
 import { QuickValueSelect } from "@/components/workout-day/quick-value-select";
-import { DurationTimerInCard } from "@/components/workout-day/DurationTimerInCard";
+import { SetTimerInput } from "@/components/workout-day/set-timer-input";
 import { WorkoutSubmissionSummary } from "@/components/workout-submission-summary";
 import { computeWorkoutSummary, type WorkoutSummary } from "@/lib/workout-summary";
 import { WorkoutTimerSheet, QuickConfirmDuration, type TimerCompletionPayload } from "@/components/workout-timer-sheet";
 import { formatDuration } from "@/lib/duration";
 import {
-  getLogAsMode, setLogAsMode, getTimerTarget, setTimerTarget, type LogAsMode,
+  getTimerTarget, setTimerTarget, getRowInputs, setRowInputs, type RowInputOverrides,
 } from "@/lib/log-as-override";
 import { Timer } from "lucide-react";
 import type { WorkoutContextAdapter } from "@/lib/workout-context";
@@ -2382,27 +2382,42 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
   // Client-side "Log As" override — the coach's prescription is untouched; the
   // client just chooses how they want to log this row on their device.
   const prescribedMeasurementType: "reps" | "time" = trackingType === "time" ? "time" : "reps";
-  const [logAsOverride, setLogAsOverrideState] = useState<LogAsMode | null>(() => getLogAsMode(row.id));
-  const effectiveMeasurementType: "reps" | "time" = logAsOverride ?? prescribedMeasurementType;
-  const pickLogAs = (mode: LogAsMode) => {
-    const next = mode === prescribedMeasurementType ? null : mode;
-    setLogAsOverrideState(next);
-    setLogAsMode(row.id, next);
+  // Timer is simply another available set input. Reps / Weight / Timer can all
+  // coexist; the prescription decides the defaults and the input-type dropdown
+  // lets the client add or remove a column on their device only.
+  const prescribedInputs = {
+    reps: trackingType !== "time",
+    weight: trackingType === "reps_weight",
+    timer: trackingType === "time",
+  };
+  const [inputOverrides, setInputOverridesState] = useState<RowInputOverrides>(() => getRowInputs(row.id));
+  const showReps = inputOverrides.reps ?? prescribedInputs.reps;
+  const showTimer = inputOverrides.timer ?? prescribedInputs.timer;
+  const showWeight = inputOverrides.weight ?? prescribedInputs.weight;
+  const toggleInput = (field: keyof RowInputOverrides) => {
+    const current = { reps: showReps, weight: showWeight, timer: showTimer }[field];
+    const next: RowInputOverrides = { ...inputOverrides, [field]: !current };
+    // Never allow a row with no logging input at all.
+    const resolved = { reps: showReps, weight: showWeight, timer: showTimer, [field]: !current } as Record<string, boolean>;
+    if (!resolved.reps && !resolved.weight && !resolved.timer) return;
+    setInputOverridesState(next);
+    setRowInputs(row.id, next);
   };
   // When the row is time-based but duration_seconds is null (coach typed
   // "30 seconds" in reps_text instead of using the duration field), parse
-  // the numeric value from reps_text as the prescribed seconds.
+  // the numeric value from reps_text as the prescribed seconds. Ranges
+  // ("30–60 sec") default to the TOP end, matching the rep-range philosophy.
   const repsTextParsedSec: number | null = (() => {
-    if (trackingType !== "time") return null;
     const rt = String((row as any).reps_text ?? "");
-    const m = rt.match(/(\d+(?:\.\d+)?)\s*(min(utes?)?|sec(onds?)?)/);
+    const m = rt.match(/(\d+(?:\.\d+)?)(?:\s*[–—-]\s*(\d+(?:\.\d+)?))?\s*(min(utes?)?|sec(onds?)?)/i);
     if (!m) return null;
-    const n = Number(m[1]);
-    return /min/i.test(m[2]) ? Math.round(n * 60) : Math.round(n);
+    const n = Number(m[2] ?? m[1]);
+    if (!Number.isFinite(n) || n <= 0) return null;
+    return /min/i.test(m[3]) ? Math.round(n * 60) : Math.round(n);
   })();
   const [timerTargetOverride, setTimerTargetOverrideState] = useState<number | null>(() => getTimerTarget(row.id));
   const effectivePrescribedDurationSec: number | null =
-    effectiveMeasurementType === "time"
+    showTimer
       ? (timerTargetOverride ?? (row as any).duration_seconds ?? repsTextParsedSec ?? null)
       : null;
   const pickTimerTarget = (secs: number | null) => {
@@ -2410,7 +2425,17 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
     setTimerTarget(row.id, secs);
   };
   // Hide the weight column for reps-only and time-only prescriptions.
-  const hideWeight = trackingType !== "reps_weight" || effectiveMeasurementType === "time";
+  const hideWeight = !showWeight;
+  // Single shared column template so the header and every set row line up
+  // no matter which inputs are active.
+  const gridTemplate = [
+    focusMode ? "36px" : "28px",
+    showReps ? "1fr" : null,
+    showTimer ? "1fr" : null,
+    "1fr",
+    !hideWeight ? "1.3fr" : null,
+    focusMode ? "52px" : "44px",
+  ].filter(Boolean).join(" ");
   const exMeta: ExerciseMeta | null = exercise
     ? {
         exercise_category: exercise.exercise_category ?? null,
@@ -2538,6 +2563,48 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
     rpe: string;
   } | null>(null);
 
+  // Timer results follow the same controlled downward cascade as weight:
+  // blank / auto-derived sets below adopt the value, manual ones are protected.
+  const durationOriginRef = useRef<Map<number, "manual" | "auto">>(new Map());
+  const cascadeTimerFromSet = async (fromSetIndex: number, seconds: number) => {
+    if (!clientId || readonly || !seconds || seconds <= 0) return;
+    durationOriginRef.current.set(fromSetIndex, "manual");
+    const states: CascadeSetState[] = Array.from({ length: setCount }, (_, i) => {
+      const idx = i + 1;
+      const ex = existingResults.find((x: any) => x.set_index === idx) as any;
+      const origin = durationOriginRef.current.get(idx);
+      const hasValue = !!ex && ex.completed_duration_seconds != null;
+      return { index: idx, origin, hasValue, locked: !!ex?.completed_at && origin !== "auto" };
+    });
+    const targets = planCascade(fromSetIndex, states);
+    if (!targets.length) return;
+    for (const t of targets) durationOriginRef.current.set(t, "auto");
+    const tasks: Array<Promise<any>> = [];
+    for (const idx of targets) {
+      const ex = existingResults.find((x: any) => x.set_index === idx) as any;
+      const body: Record<string, any> = withMemberWorkoutIndexes({
+        row_id: row.id,
+        client_id: clientId,
+        set_index: idx,
+        completed_duration_seconds: seconds,
+      }, adapter, dayId);
+      if (adapter) {
+        tasks.push(adapter.upsertPlRowResultRaw(body, ex?.id ?? null));
+      } else if (ex?.id) {
+        tasks.push(sb.from("pl_row_results").update(body).eq("id", ex.id).then(({ error }: any) => { if (error) throw error; }));
+      } else {
+        tasks.push(sb.from("pl_row_results").upsert(body, { onConflict: "client_id,row_id,set_index" }).then(({ error }: any) => { if (error) throw error; }));
+      }
+    }
+    try {
+      await Promise.all(tasks);
+      onChange();
+      await qc.refetchQueries({ queryKey: ["pl-day-results", dayId] });
+    } catch {
+      /* the source set is already saved; a failed fill is non-fatal */
+    }
+  };
+
   const cascadeFromSet = async (
     fromSetIndex: number,
     payload: { load: string; loadType: LoadType; unit: "kg" | "lb"; reps: string; rpe: string },
@@ -2576,7 +2643,8 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
         ex?.actual_rpe_num != null ? String(ex.actual_rpe_num) : (ex?.actual_rpe ?? null);
       const rpeNum = rpeStr ? Number(rpeStr) : null;
       const complete = isSetLogComplete({
-        measurementType: effectiveMeasurementType,
+        requireReps: showReps,
+        requireTime: showTimer,
         hideWeight,
         loadType: payload.loadType,
         load: loadNum,
@@ -2699,7 +2767,7 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
           manualOverride: row.manual_override,
           rpe: row.rpe,
           rir: row.rir,
-          measurementType: effectiveMeasurementType,
+          measurementType: showTimer && !showReps ? "time" : "reps",
           durationSeconds: effectivePrescribedDurationSec,
         })}
         {row.tempo && <span className="ml-2 text-xs font-normal text-muted-foreground">tempo {row.tempo}</span>}
@@ -2867,43 +2935,55 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
         </p>
       )}
 
-      {/* Log As — flexible logging for timed prescriptions (device-only choice) */}
-      {!readonly && (prescribedMeasurementType === "time" || logAsOverride) && (
+      {/* Input type — Reps / Weight / Timer are all optional columns.
+          Device-only choice; the coach's prescription is never modified. */}
+      {!readonly && (
         <div className="mt-2 flex items-center gap-1.5">
-          <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Log as</span>
-          <div className="inline-flex overflow-hidden rounded-md border border-border">
-            {(["time", "reps"] as const).map((m) => (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
               <button
-                key={m}
                 type="button"
-                onClick={() => pickLogAs(m)}
-                className={cn(
-                  "h-6 px-2 text-[11px] font-bold capitalize transition-colors",
-                  effectiveMeasurementType === m
-                    ? "bg-primary text-primary-foreground"
-                    : "bg-transparent text-muted-foreground hover:bg-secondary",
-                )}
+                className="inline-flex h-6 items-center gap-1 rounded-md border border-border px-2 text-[11px] font-bold text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors"
               >
-                {m}
+                Inputs
+                <ChevronDown className="h-3 w-3" />
               </button>
-            ))}
-          </div>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="w-40">
+              {([
+                ["reps", "Reps", showReps],
+                ["weight", "Weight", showWeight],
+                ["timer", "Timer", showTimer],
+              ] as const).map(([field, label, on]) => (
+                <DropdownMenuItem
+                  key={field}
+                  onSelect={(e) => { e.preventDefault(); toggleInput(field); }}
+                  className="text-xs font-semibold"
+                >
+                  <span className={cn("mr-2 inline-flex h-3.5 w-3.5 items-center justify-center", !on && "opacity-0")}>
+                    <Check className="h-3.5 w-3.5" />
+                  </span>
+                  {label}
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       )}
 
       <div className={cn("mt-3 overflow-hidden rounded-md border border-builder-card-border bg-builder-inset", focusMode && "text-base")}>
-        <div className={cn(
-          "grid items-center gap-1.5 border-b border-builder-card-border bg-builder-card/60 px-2.5 py-1.5 text-[10px] font-bold uppercase tracking-wider text-muted-foreground",
-          effectiveMeasurementType === "time"
-            ? (focusMode ? "grid-cols-[36px_1fr_44px] text-xs" : "grid-cols-[28px_1fr_36px]")
-            : hideWeight
-              ? (focusMode ? "grid-cols-[36px_1.6fr_1fr_52px] text-xs" : "grid-cols-[28px_1.6fr_1fr_44px]")
-              : (focusMode ? "grid-cols-[36px_1fr_1fr_1.3fr_52px] text-xs" : "grid-cols-[28px_1fr_1fr_1.3fr_44px]"),
-        )}>
+        <div
+          className={cn(
+            "grid items-center gap-1.5 border-b border-builder-card-border bg-builder-card/60 px-2.5 py-1.5 text-[10px] font-bold uppercase tracking-wider text-muted-foreground",
+            focusMode && "text-xs",
+          )}
+          style={{ gridTemplateColumns: gridTemplate }}
+        >
           <span>Set</span>
-          <span>{effectiveMeasurementType === "time" ? "Time" : "Reps"}</span>
-          {effectiveMeasurementType !== "time" && <span>{showRir ? "RIR" : "RPE"}</span>}
-          {effectiveMeasurementType !== "time" && !hideWeight && <span className="truncate">{loadColumnLabel(rowLoadType, activeUnit)}</span>}
+          {showReps && <span>Reps</span>}
+          {showTimer && <span>Time</span>}
+          <span>{showRir ? "RIR" : "RPE"}</span>
+          {!hideWeight && <span className="truncate">{loadColumnLabel(rowLoadType, activeUnit)}</span>}
           <span className="text-right">Status</span>
         </div>
         {Array.from({ length: setCount }).map((_, i) => {
@@ -2923,9 +3003,12 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
               clientId={clientId}
               setIndex={i + 1}
               setCount={setCount}
-              measurementType={effectiveMeasurementType}
+              gridTemplate={gridTemplate}
+              showReps={showReps}
+              showTimer={showTimer}
               prescribedDurationSeconds={effectivePrescribedDurationSec}
               onTimerTargetChange={pickTimerTarget}
+              onTimerCascade={cascadeTimerFromSet}
               existing={existing}
               prevExisting={prevExisting}
               repMaxBests={repMaxBests}
@@ -3235,8 +3318,9 @@ function SetRow({
   cascade = null,
   onCascadeFromSet,
   readonly = false, unit = "kg", hideWeight = false, focusMode = false, onChange, onSetCompleted,
-  setCount, measurementType = "reps", prescribedDurationSeconds = null,
+  setCount, showReps = true, showTimer = false, gridTemplate, prescribedDurationSeconds = null,
   onTimerTargetChange,
+  onTimerCascade,
 }: {
   rowId: string;
   workoutId?: string | null;
@@ -3245,9 +3329,15 @@ function SetRow({
   clientId: string | undefined;
   setIndex: number;
   setCount?: number;
-  measurementType?: "reps" | "time";
+  /** Which inputs this row shows — Timer is just another optional column. */
+  showReps?: boolean;
+  showTimer?: boolean;
+  /** Shared grid-template-columns string from the exercise card header. */
+  gridTemplate?: string;
   prescribedDurationSeconds?: number | null;
   onTimerTargetChange?: (seconds: number | null) => void;
+  /** Fill eligible sets below with this timer result. */
+  onTimerCascade?: (fromSetIndex: number, seconds: number) => void | Promise<void>;
   existing?: any;
   prevExisting?: any;
   targetReps?: string | null;
@@ -3313,6 +3403,16 @@ function SetRow({
     return existing.actual_load != null ? fmtLoad(existing.actual_load) : "";
   })();
   const [load, setLoad] = useState(initialDisplayLoad);
+  // Timer result for this set (seconds actually performed). Local state keeps
+  // the cell responsive; the server value re-hydrates it whenever it changes.
+  const serverDuration =
+    (existing as any)?.completed_duration_seconds != null
+      ? Number((existing as any).completed_duration_seconds)
+      : null;
+  const [durationSec, setDurationSec] = useState<number | null>(serverDuration);
+  useEffect(() => {
+    setDurationSec(serverDuration);
+  }, [serverDuration]);
   // Bodyweight (BW) sets store a 0 numeric load plus this flag, so BW counts
   // as a real logged set without polluting weight PRs / volume with fake 0s.
   // Load type: external | bodyweight | assisted. Assisted stores a positive
@@ -3547,12 +3647,13 @@ function SetRow({
     // RPE/RIR is deliberately NOT cascaded — that system is untouched.
     setOptimisticComplete(
       isSetLogComplete({
-        measurementType,
+        requireReps: showReps,
+        requireTime: showTimer,
         hideWeight,
         loadType: cascade.loadType,
         load: cascade.loadType === "bodyweight" ? 0 : cascade.load,
         reps: existing?.actual_reps ?? cascade.reps,
-        durationSeconds: (existing as any)?.completed_duration_seconds ?? null,
+        durationSeconds: durationSec,
       }),
     );
     queueMicrotask(() => { saveRef.current?.markClean(); });
@@ -3597,12 +3698,13 @@ function SetRow({
       const rpeNum = value.rpe ? Number(value.rpe) : null;
       const loadUnit = persistedUnitForValue(value.load, value.unit, existing);
       const completedAt = isSetLogComplete({
-        measurementType,
+        requireReps: showReps,
+        requireTime: showTimer,
         hideWeight,
         loadType: value.loadType,
         load: value.bw ? 0 : value.load,
         reps: repsNum,
-        durationSeconds: (existing as any)?.completed_duration_seconds ?? null,
+        durationSeconds: durationSec,
       })
         ? (existing?.completed_at ?? new Date().toISOString())
         : null;
@@ -3646,12 +3748,13 @@ function SetRow({
       if (rpe && (rpeNum == null || !isFinite(rpeNum) || rpeNum < 0 || rpeNum > 10)) throw new Error("RPE must be 0–10");
       const loadUnit = persistedUnitForValue(load, unit, existing);
       const completedAt = isSetLogComplete({
-        measurementType,
+        requireReps: showReps,
+        requireTime: showTimer,
         hideWeight,
         loadType,
         load: bw ? 0 : load,
         reps: repsNum,
-        durationSeconds: (existing as any)?.completed_duration_seconds ?? null,
+        durationSeconds: durationSec,
       })
         ? (existing?.completed_at ?? new Date().toISOString())
         : null;
@@ -3814,29 +3917,31 @@ function SetRow({
   // were marked complete with no weight (legacy data, fat-finger taps, or
   // status-only saves) render as fully logged green rows even though the WT
   // column is blank. Applies app-wide for every client.
-  const isTimeKind = measurementType === "time";
+  const isTimeKind = showTimer;
   const existingLoadNum = existing?.actual_load != null ? Number(existing.actual_load) : NaN;
   const existingDurNum = (existing as any)?.completed_duration_seconds != null ? Number((existing as any).completed_duration_seconds) : NaN;
   const existingRepsNum = existing?.actual_reps != null ? Number(existing.actual_reps) : NaN;
   // Persisted-row completeness (green styling) uses the same shared validator
   // as the autosave stamp so the circle can never disagree with the data.
   const hasLoggedValue = isSetLogComplete({
-    measurementType,
+    requireReps: showReps,
+    requireTime: showTimer,
     hideWeight,
     loadType: existing ? resolveLoadType((existing as any).load_type, (existing as any).is_bodyweight) : "external",
     load: existing?.actual_load ?? null,
     reps: existing?.actual_reps ?? null,
-    durationSeconds: (existing as any)?.completed_duration_seconds ?? null,
+    durationSeconds: durationSec,
   });
   // Live (unsaved) completeness — lets the status circle flip the instant the
   // last required field is entered, before the 1s autosave lands.
   const liveComplete = isSetLogComplete({
-    measurementType,
+    requireReps: showReps,
+    requireTime: showTimer,
     hideWeight,
     loadType,
     load: bw ? 0 : load,
     reps,
-    durationSeconds: (existing as any)?.completed_duration_seconds ?? null,
+    durationSeconds: durationSec,
   });
   // Optimistic green: only while the row's own save for those values is still
   // in flight. Once it lands, `existing.completed_at` carries the state — and a
@@ -3894,12 +3999,13 @@ function SetRow({
     const rpeNum = rpe ? Number(rpe) : null;
     const loadUnit = persistedUnitForValue(load, unit, existing);
     const currentHasRequiredValues = isSetLogComplete({
-      measurementType,
+      requireReps: showReps,
+      requireTime: showTimer,
       hideWeight,
       loadType,
       load: bw ? 0 : load,
       reps: repsNum,
-      durationSeconds: existingDurNum,
+      durationSeconds: durationSec,
     });
     if (nextCompletedAt && !currentHasRequiredValues) {
       // Timed rows never require the timer: tapping the status circle logs the
@@ -4070,7 +4176,7 @@ function SetRow({
   }, [repMaxBests, assistedBests, (existing as any)?.load_type, (existing as any)?.is_bodyweight, existing?.completed_at, existing?.actual_reps, existing?.actual_load, existing?.actual_load_unit, unit]);
 
   // ── Time-based completion (per-set countdown timer + quick-confirm) ────
-  const isTime = measurementType === "time";
+  const isTime = showTimer;
   const prescribedSec = prescribedDurationSeconds ?? null;
   const completedSec = (existing as any)?.completed_duration_seconds as number | null | undefined;
   const [timerOpen, setTimerOpen] = useState(false);
@@ -4086,6 +4192,22 @@ function SetRow({
     if (readonly || !clientId) return;
     beginWorkoutSession(workoutId ?? null);
     const nowIso = opts.completedAt ?? new Date().toISOString();
+    setDurationSec(completedSeconds);
+    const loadNumNow = bw ? 0 : load ? Number(load) : null;
+    const repsNumNow = reps ? parseInt(reps, 10) : null;
+    const rpeNumNow = rpe ? Number(rpe) : null;
+    const loadUnitNow = persistedUnitForValue(load, unit, existing);
+    // Timer is one of several inputs — the set only turns green when every
+    // required input for this row has a value.
+    const completeNow = isSetLogComplete({
+      requireReps: showReps,
+      requireTime: showTimer,
+      hideWeight,
+      loadType,
+      load: bw ? 0 : load,
+      reps: repsNumNow,
+      durationSeconds: completedSeconds,
+    });
       const payload: Record<string, any> = withMemberWorkoutIndexes({
       row_id: rowId,
       client_id: clientId,
@@ -4094,7 +4216,16 @@ function SetRow({
       timer_started_at: opts.startedAt ?? null,
       timer_completed_at: nowIso,
       completion_method: opts.method,
-      completed_at: nowIso,
+      load_type: loadType,
+      actual_load: loadNumNow,
+      actual_load_unit: loadUnitNow,
+      entered_value: loadNumNow,
+      entered_unit: loadUnitNow,
+      is_bodyweight: bw,
+      actual_reps: repsNumNow,
+      actual_rpe: rpe || null,
+      actual_rpe_num: rpeNumNow,
+      completed_at: completeNow ? (existing?.completed_at ?? nowIso) : null,
       }, adapter, workoutId);
     try {
       if (existing?.id) {
@@ -4148,27 +4279,13 @@ function SetRow({
       isDraft && "bg-amber-500/[0.07] border-l-2 border-l-amber-500/60",
       statusError && "bg-destructive/10 border-l-2 border-l-destructive ring-1 ring-destructive/40",
     )}>
-    <div className={cn(
-      "grid items-start gap-1.5 px-2.5 py-1.5",
-      isTime
-        ? (focusMode ? "grid-cols-[36px_1fr_44px]" : "grid-cols-[28px_1fr_36px]")
-        : hideWeight
-          ? (focusMode ? "grid-cols-[36px_1.6fr_1fr_52px]" : "grid-cols-[28px_1.6fr_1fr_44px]")
-          : (focusMode ? "grid-cols-[36px_1fr_1fr_1.3fr_52px]" : "grid-cols-[28px_1fr_1fr_1.3fr_44px]"),
-    )}>
+    <div
+      className="grid items-start gap-1.5 px-2.5 py-1.5"
+      style={{ gridTemplateColumns: gridTemplate }}
+    >
       <span className={cn("font-mono text-muted-foreground pt-1.5", focusMode ? "text-sm" : "text-xs")}>{setIndex}</span>
-      {isTime ? (
-        <DurationTimerInCard
-          prescribedSeconds={prescribedSec}
-          isConfirmed={isConfirmed}
-          completedSeconds={completedSec}
-          readonly={readonly}
-          focusMode={focusMode}
-          onTargetChange={onTimerTargetChange}
-          onComplete={(secs, method) => void saveTimeCompletion(secs, { method })}
-        />
-      ) : (
-      /* Fast tap reps selector — smart chips from the prescription, custom entry inside */
+      {/* Fast tap reps selector — smart chips from the prescription, custom entry inside */}
+      {showReps && (
       <QuickValueSelect
         value={reps}
         onPick={pickReps}
@@ -4183,10 +4300,25 @@ function SetRow({
         customPlaceholder="Reps"
       />
       )}
-      {/* Quick Log RPE chip — tap to edit (hidden for time rows: timer handles the full middle column) */}
+      {/* Timer — just another set input, same size/aesthetic as the others */}
+      {showTimer && (
+        <SetTimerInput
+          timerKey={`${rowId}:${setIndex}`}
+          prescribedSeconds={prescribedSec}
+          completedSeconds={durationSec}
+          isConfirmed={isConfirmed}
+          disabled={readonly}
+          focusMode={focusMode}
+          ariaLabel={`Set ${setIndex} timer`}
+          onTargetChange={onTimerTargetChange}
+          onCommit={(secs, method) => {
+            void saveTimeCompletion(secs, { method });
+            void onTimerCascade?.(setIndex, secs);
+          }}
+        />
+      )}
       {/* Fast tap RPE/RIR selector — half-step smart chips from the prescription */}
-      {!isTime && (
-        <QuickValueSelect
+      <QuickValueSelect
           value={effortSelectValue}
           onPick={pickEffort}
           options={effortSelectOptions}
@@ -4198,9 +4330,8 @@ function SetRow({
           disabled={readonly}
           focusMode={focusMode}
           customPlaceholder={showRir ? "RIR" : "RPE"}
-        />
-      )}
-      {!isTime && !hideWeight && (
+      />
+      {!hideWeight && (
       <WeightValueInput
         value={load}
         isBodyweight={bw}
