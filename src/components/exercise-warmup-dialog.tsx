@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { invalidateExerciseLibrary } from "@/lib/exercise-library-cache";
 import { useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
@@ -59,8 +60,7 @@ export function ExerciseWarmupDialog({
     if (error) toast.error(error.message);
     else {
       toast.success("Saved");
-      qc.invalidateQueries({ queryKey: ["exercises"] });
-      qc.invalidateQueries({ queryKey: ["exercises-min"] });
+      void invalidateExerciseLibrary(qc);
       onClose();
     }
   };

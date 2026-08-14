@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { invalidateExerciseLibrary } from "@/lib/exercise-library-cache";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -90,18 +91,17 @@ export function QuickAddExerciseDialog({
     setBusy(true);
     const { data, error } = await supabase
       .from("exercises")
-      .insert(form)
+      .insert({ ...form, archived: false })
       .select("id, name")
       .single();
     setBusy(false);
-    if (error) {
-      toast.error(error.message);
+    if (error || !data) {
+      toast.error(error?.message ?? "Could not save exercise");
       return;
     }
     toast.success(`Added "${data.name}" to library`);
     // Refresh both the admin list and the builder's minimal projection.
-    qc.invalidateQueries({ queryKey: ["exercises"] });
-    qc.invalidateQueries({ queryKey: ["exercises-min"] });
+    await invalidateExerciseLibrary(qc);
     onCreated?.(data.id, data.name);
     onOpenChange(false);
   };
