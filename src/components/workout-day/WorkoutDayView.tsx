@@ -9,8 +9,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, Clock, CheckCircle2, Circle, Play, StickyNote, NotebookPen, Info, Maximize2, Minimize2, AlertTriangle, RefreshCw, Send, MessageCircle, ChevronDown, ChevronUp, Move, Zap, Trophy, MoreHorizontal, Undo2, HelpCircle } from "lucide-react";
-import { MoveWorkoutSheet } from "@/components/schedule/MoveWorkoutSheet";
+import { ArrowLeft, Clock, CheckCircle2, Circle, Play, StickyNote, NotebookPen, Info, Maximize2, Minimize2, AlertTriangle, RefreshCw, Send, MessageCircle, ChevronDown, ChevronUp, Zap, Trophy, MoreHorizontal, Undo2, HelpCircle } from "lucide-react";
+
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
@@ -1213,7 +1213,7 @@ function WorkoutDay({
 
   // Focus / full-screen logging mode.
   const [focusMode, setFocusMode] = useState(false);
-  const [moveOpen, setMoveOpen] = useState(false);
+  
   useEffect(() => {
     if (!focusMode) return;
     const prev = document.body.style.overflow;
@@ -1882,9 +1882,9 @@ function WorkoutDay({
           completedAt={completion?.completed_at ?? null}
           onViewScore={completion?.completed_at ? openRecapSummary : undefined}
         />
-        {/* Compact action row — Warm-Up + Move sit together so they never
-            create a tall empty band above the first exercise card. */}
-        {(!readonly || !!client?.id) && (
+        {/* Compact action row — Warm-Up launcher. Rescheduling lives on the
+            outside workout card / Schedule Manager, not inside the logger. */}
+        {(!readonly || !!client?.id) && client?.id && (
           <div className="flex flex-wrap items-center gap-2">
             {client?.id && (
               <WarmupButton
@@ -1895,17 +1895,6 @@ function WorkoutDay({
                 dayProtocolId={(day as any).warmup_protocol_id}
                 exerciseRows={rows as any[]}
               />
-            )}
-            {!readonly && (
-              <Button
-                size="sm"
-                variant="ghost"
-                onClick={() => setMoveOpen(true)}
-                className="h-9 gap-1.5 rounded-full px-3 text-xs text-muted-foreground hover:text-foreground"
-                aria-label="Move workout to another date"
-              >
-                <Move className="h-3.5 w-3.5" /> Move
-              </Button>
             )}
           </div>
         )}
@@ -2161,20 +2150,6 @@ function WorkoutDay({
           }}
         />
       )}
-      <MoveWorkoutSheet
-        dayId={dayId}
-        open={moveOpen}
-        onOpenChange={setMoveOpen}
-        currentScheduledDate={scheduledDate}
-        // Prefer the resolved scheduledWorkoutId (adapter/URL) so the sheet
-        // routes through moveScheduledWorkout when a pl_scheduled_workouts
-        // instance exists. Falling back to URL-only left the sheet in the
-        // legacy pl_days path and the server rejected the move with
-        // "This workout uses the new scheduling system." whenever the
-        // day was opened via a link that didn't carry ?instance= (e.g.
-        // home tiles, notifications, older bookmarks).
-        scheduledWorkoutId={scheduledWorkoutId}
-      />
     </>
   );
 }
