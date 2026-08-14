@@ -3440,6 +3440,14 @@ function SetRow({
   // server response can never overwrite what the user is still typing.
   const recentlySavedRef = useRef(false);
   const recentlySavedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // OVERWRITE FIX (2026-08-14): the last weight this row committed, kept until
+  // the server actually reports it back. `recentlySavedRef` is time-based (8 s)
+  // and therefore cannot protect an edit whose write is slow, retried, or whose
+  // refetch was already in flight with the OLD value — that stale response was
+  // what resurrected the previous weight (50) after typing a new one (500).
+  // While a commit is unconfirmed, server hydration for the load field is
+  // refused unless the server value matches what we committed.
+  const committedLoadRef = useRef<{ load: string; loadType: LoadType } | null>(null);
   // Keep a live reference to the latest server result so the force-hydrate
   // effect can never read a stale closure when parent bumps fillToken.
   const latestExistingRef = useRef(existing);
@@ -3451,15 +3459,23 @@ function SetRow({
     // and window-focus refetches from clobbering typed values on mobile).
     // 8s covers: save latency + Realtime invalidation + window-focus refetch.
     const focused = focusedFieldRef.current;
+    const display0 = existing?.actual_load != null ? fmtLoad(existing.actual_load) : "";
+    const serverType0 = existing
+      ? resolveLoadType((existing as any).load_type, (existing as any).is_bodyweight)
+      : defaultLoadType;
+    const pendingCommit = committedLoadRef.current;
+    if (pendingCommit) {
+      const matches = display0 === pendingCommit.load && serverType0 === pendingCommit.loadType;
+      // Server hasn't caught up yet (or returned a stale snapshot): keep the
+      // committed value on screen instead of reverting to the old one.
+      if (!matches) return;
+      committedLoadRef.current = null;
+    }
     if (recentlySavedRef.current) return;
-    const display = existing?.actual_load != null ? fmtLoad(existing.actual_load) : "";
+    const display = display0;
     if (focused !== "load") {
       setLoad(display);
-      setLoadType(
-        existing
-          ? resolveLoadType((existing as any).load_type, (existing as any).is_bodyweight)
-          : defaultLoadType,
-      );
+      setLoadType(serverType0);
     }
     if (focused !== "reps") {
       // If the server has a stored reps value, hydrate from it. If the
