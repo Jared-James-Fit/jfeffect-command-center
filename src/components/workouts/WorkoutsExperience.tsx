@@ -24,7 +24,7 @@ import {
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
-import { getClientWorkouts, durationRange, getBlockTree } from "@/lib/pl-programs";
+import { getClientWorkouts, getBlockTree } from "@/lib/pl-programs";
 import { cleanDayTitle, type WorkoutItem, dayScheduledDate } from "@/lib/workout-today";
 import { getWorkoutStatus, type WorkoutStatus } from "@/lib/workout-status";
 import { localStartOfToday, toLocalISO } from "@/lib/today";
@@ -1043,7 +1043,6 @@ function SelectedDayCard({
 
   const status = getWorkoutStatus(item);
   const title = cleanDayTitle(item.day?.title, item.day?.day_index);
-  const dur = item.day?.duration_override_min ?? item.day?.duration_estimate_min ?? null;
   const cta = primaryCtaFor(item, status.status);
 
   return (
