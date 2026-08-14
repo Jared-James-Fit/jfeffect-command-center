@@ -1066,9 +1066,7 @@ function SelectedDayCard({
               {[
                 item.block?.name,
                 item.week?.week_index ? `Week ${item.week.week_index}` : null,
-                `Day ${item.day?.day_index ?? "?"}`,
                 format(date, "EEE MMM d"),
-                dur ? durationRange(dur) : null,
               ].filter(Boolean).join(" · ")}
             </div>
           </div>
@@ -1154,6 +1152,7 @@ function SelectedDayCard({
           {!readonly && status.status !== "completed_today"
             && status.status !== "completed_on_scheduled"
             && status.status !== "completed_different_day"
+            && cta.secondary?.label !== "Reschedule"
             && (
               <Button size="sm" variant="ghost" className="text-muted-foreground" onClick={() => setMoveOpen(true)}>
                 <Move className="mr-1 h-3.5 w-3.5" /> Reschedule
