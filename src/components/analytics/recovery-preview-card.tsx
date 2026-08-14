@@ -21,6 +21,13 @@ import {
   type SleepSample,
 } from "@/lib/analytics/readiness-factors";
 import { pickCurrentBlock } from "@/lib/block-dates";
+import {
+  prescribedFor,
+  isCompletedCardio,
+  isSkippedCardio,
+  type CardioCompletionRow,
+  type CardioTargetRow,
+} from "@/lib/analytics/cardio-adherence";
 import { cn } from "@/lib/utils";
 
 interface Props {
