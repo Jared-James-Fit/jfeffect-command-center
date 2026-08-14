@@ -1,15 +1,14 @@
 /**
- * CardioCompletionCard — shows a single cardio target with completion logging.
+ * CardioCompletionCard — a single prescribed cardio session with real logging.
  *
- * Features:
- * - Shows cardio type, day type, duration target, intensity
- * - One-tap "Mark Complete" / "Mark Incomplete" toggle
- * - Expandable log form: actual duration, cardio type override, RPE, notes
- * - Saves to cardio_completions table
- * - Fast and simple — no bloated forms
+ * Status is always explicit: Not started · Logged · Skipped.
+ * Logging captures duration, type, distance, speed/incline, calories, avg HR,
+ * RPE and notes — every field optional except duration. Logged sessions stay
+ * editable, and Zone 2 / LISS targets offer a suggested default setup that
+ * only fills gaps the coach left blank.
  */
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card } from "@/components/ui/card";
@@ -18,10 +17,16 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
-import { CheckCircle2, Circle, ChevronDown, ChevronUp, Heart, Loader2 } from "lucide-react";
+import { CheckCircle2, Circle, ChevronDown, ChevronUp, Loader2, SkipForward, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 import { dayTypeLabel, dayTypeTone } from "@/lib/training-schedule";
 import { format } from "date-fns";
+import {
+  cardioStatus,
+  cardioStatusLabel,
+  formatCardioLogLine,
+  suggestedCardioSetup,
+} from "@/lib/cardio-plan";
 
 type CardioTarget = {
   id: string;
@@ -63,6 +68,12 @@ export function CardioCompletionCard({ target, clientId, date, readonly = false 
   const [actualType, setActualType] = useState("");
   const [rpe, setRpe] = useState("");
   const [notes, setNotes] = useState("");
+  const [distance, setDistance] = useState("");
+  const [distanceUnit, setDistanceUnit] = useState("km");
+  const [avgSpeed, setAvgSpeed] = useState("");
+  const [incline, setIncline] = useState("");
+  const [calories, setCalories] = useState("");
+  const [avgHr, setAvgHr] = useState("");
 
   const { data: completion, isLoading } = useQuery({
     queryKey: ["cardio-completion", clientId, target.id, dateStr],
@@ -79,7 +90,26 @@ export function CardioCompletionCard({ target, clientId, date, readonly = false 
     staleTime: 30_000,
   });
 
-  const isCompleted = completion?.completed === true;
+  const status = cardioStatus(completion as any);
+  const isCompleted = status === "logged";
+  const isSkipped = status === "skipped";
+  const suggestion = suggestedCardioSetup(target);
+
+  // Hydrate the form from the saved log so editing never starts blank.
+  useEffect(() => {
+    if (!expanded) return;
+    const c: any = completion;
+    setActualDuration(c?.duration_minutes != null ? String(c.duration_minutes) : "");
+    setActualType(c?.cardio_type ?? "");
+    setRpe(c?.rpe != null ? String(c.rpe) : "");
+    setNotes(c?.notes ?? "");
+    setDistance(c?.distance != null ? String(c.distance) : "");
+    setDistanceUnit(c?.distance_unit ?? "km");
+    setAvgSpeed(c?.avg_speed != null ? String(c.avg_speed) : "");
+    setIncline(c?.incline != null ? String(c.incline) : "");
+    setCalories(c?.calories != null ? String(c.calories) : "");
+    setAvgHr(c?.avg_heart_rate != null ? String(c.avg_heart_rate) : "");
+  }, [expanded, completion]);
 
   const typeName = target.cardio_type === "Custom"
     ? target.custom_type || "Custom"
@@ -87,8 +117,10 @@ export function CardioCompletionCard({ target, clientId, date, readonly = false 
 
   const metaParts: string[] = [];
   if (target.duration_minutes) metaParts.push(`${target.duration_minutes} min`);
+  else if (suggestion) metaParts.push(`${suggestion.durationMinutes} min (suggested)`);
   if (target.intensity) metaParts.push(target.intensity);
   if (target.heart_rate_zone) metaParts.push(target.heart_rate_zone);
+  else if (suggestion) metaParts.push(suggestion.heartRateZone);
   if (target.machine_preference) metaParts.push(target.machine_preference);
   if (target.step_target) metaParts.push(`${target.step_target.toLocaleString()} steps`);
 
@@ -102,7 +134,7 @@ export function CardioCompletionCard({ target, clientId, date, readonly = false 
     if (readonly || saving) return;
     setSaving(true);
     try {
-      if (isCompleted) {
+      if (isCompleted || isSkipped) {
         // Mark incomplete — delete the completion
         await (supabase as any)
           .from("cardio_completions")
@@ -110,7 +142,7 @@ export function CardioCompletionCard({ target, clientId, date, readonly = false 
           .eq("client_id", clientId)
           .eq("cardio_target_id", target.id)
           .eq("completed_date", dateStr);
-        toast.success("Cardio marked incomplete");
+        toast.success("Cardio reset to not started");
       } else {
         // Mark complete with defaults
         await (supabase as any)
@@ -120,13 +152,15 @@ export function CardioCompletionCard({ target, clientId, date, readonly = false 
             cardio_target_id: target.id,
             completed_date: dateStr,
             completed: true,
-            duration_minutes: target.duration_minutes,
+            skipped: false,
+            duration_minutes: target.duration_minutes ?? suggestion?.durationMinutes ?? null,
             cardio_type: typeName,
             day_type: target.day_type,
           }, { onConflict: "client_id,cardio_target_id,completed_date" });
         toast.success("Cardio logged!");
       }
       qc.invalidateQueries({ queryKey: ["cardio-completion", clientId, target.id, dateStr] });
+      qc.invalidateQueries({ queryKey: ["cardio-summary"] });
     } catch (e: any) {
       toast.error(e?.message ?? "Could not save");
     } finally {
@@ -134,7 +168,7 @@ export function CardioCompletionCard({ target, clientId, date, readonly = false 
     }
   }
 
-  async function saveDetails() {
+  async function markSkipped() {
     if (readonly || saving) return;
     setSaving(true);
     try {
@@ -144,16 +178,65 @@ export function CardioCompletionCard({ target, clientId, date, readonly = false 
           client_id: clientId,
           cardio_target_id: target.id,
           completed_date: dateStr,
+          completed: false,
+          skipped: true,
+          cardio_type: typeName,
+          day_type: target.day_type,
+        }, { onConflict: "client_id,cardio_target_id,completed_date" });
+      toast.success("Cardio marked as skipped");
+      qc.invalidateQueries({ queryKey: ["cardio-completion", clientId, target.id, dateStr] });
+      qc.invalidateQueries({ queryKey: ["cardio-summary"] });
+    } catch (e: any) {
+      toast.error(e?.message ?? "Could not save");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  function applySuggestion() {
+    if (!suggestion) return;
+    setActualDuration(String(suggestion.durationMinutes));
+    if (!actualType) setActualType(typeName);
+    if (!rpe) setRpe("3.5");
+    if (!incline) setIncline("8");
+    if (!avgSpeed) setAvgSpeed("3.2");
+    toast.success("Suggested Zone 2 setup applied");
+  }
+
+  async function saveDetails() {
+    if (readonly || saving) return;
+    const num = (v: string) => {
+      const n = Number(v);
+      return v.trim() !== "" && Number.isFinite(n) ? n : null;
+    };
+    setSaving(true);
+    try {
+      await (supabase as any)
+        .from("cardio_completions")
+        .upsert({
+          client_id: clientId,
+          cardio_target_id: target.id,
+          completed_date: dateStr,
           completed: true,
-          duration_minutes: actualDuration ? parseInt(actualDuration, 10) : target.duration_minutes,
+          skipped: false,
+          duration_minutes: actualDuration
+            ? parseInt(actualDuration, 10)
+            : target.duration_minutes ?? suggestion?.durationMinutes ?? null,
           cardio_type: actualType || typeName,
-          rpe: rpe ? parseFloat(rpe) : null,
+          rpe: num(rpe),
+          distance: num(distance),
+          distance_unit: num(distance) != null ? distanceUnit : null,
+          avg_speed: num(avgSpeed),
+          incline: num(incline),
+          calories: num(calories),
+          avg_heart_rate: num(avgHr),
           notes: notes.trim() || null,
           day_type: target.day_type,
         }, { onConflict: "client_id,cardio_target_id,completed_date" });
       toast.success("Cardio logged!");
       setExpanded(false);
       qc.invalidateQueries({ queryKey: ["cardio-completion", clientId, target.id, dateStr] });
+      qc.invalidateQueries({ queryKey: ["cardio-summary"] });
     } catch (e: any) {
       toast.error(e?.message ?? "Could not save");
     } finally {
@@ -162,7 +245,11 @@ export function CardioCompletionCard({ target, clientId, date, readonly = false 
   }
 
   return (
-    <Card className={`overflow-hidden transition-colors ${isCompleted ? "border-emerald-500/30 bg-emerald-500/5" : "border-border"}`}>
+    <Card className={`overflow-hidden transition-colors ${
+      isCompleted ? "border-emerald-500/30 bg-emerald-500/5"
+      : isSkipped ? "border-amber-500/30 bg-amber-500/5"
+      : "border-border"
+    }`}>
       <div className="p-3">
         {/* Header row */}
         <div className="flex items-start gap-2">
@@ -179,7 +266,9 @@ export function CardioCompletionCard({ target, clientId, date, readonly = false 
                 ? <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
                 : isCompleted
                   ? <CheckCircle2 className="h-5 w-5 text-emerald-500" />
-                  : <Circle className="h-5 w-5 text-muted-foreground hover:text-primary" />}
+                  : isSkipped
+                    ? <SkipForward className="h-5 w-5 text-amber-500" />
+                    : <Circle className="h-5 w-5 text-muted-foreground hover:text-primary" />}
             </button>
           )}
 
@@ -191,16 +280,37 @@ export function CardioCompletionCard({ target, clientId, date, readonly = false 
               <span className={`font-semibold text-sm ${isCompleted ? "line-through text-muted-foreground" : ""}`}>
                 {typeName}
               </span>
+              <Badge
+                variant="outline"
+                className={`text-[10px] ${
+                  isCompleted ? "border-emerald-500/30 text-emerald-600"
+                  : isSkipped ? "border-amber-500/30 text-amber-600"
+                  : "text-muted-foreground"
+                }`}
+              >
+                {cardioStatusLabel(status)}
+              </Badge>
               {cal && <Badge variant="outline" className="text-[10px]">{cal}</Badge>}
-              {isCompleted && completion?.duration_minutes && (
-                <Badge variant="outline" className="border-emerald-500/30 text-emerald-600 text-[10px]">
-                  {completion.duration_minutes} min done
-                </Badge>
-              )}
             </div>
 
             {metaParts.length > 0 && (
               <div className="text-xs text-muted-foreground">{metaParts.join(" · ")}</div>
+            )}
+
+            {suggestion && !isCompleted && (
+              <div className="mt-1 flex items-start gap-1.5 text-[11px] text-muted-foreground">
+                <Sparkles className="mt-0.5 h-3 w-3 shrink-0 text-primary" />
+                <span>
+                  Suggested: {suggestion.durationMinutes} min · {suggestion.speedHint} at{" "}
+                  {suggestion.inclineHint} incline · {suggestion.rpeHint}
+                </span>
+              </div>
+            )}
+
+            {isCompleted && formatCardioLogLine(completion as any) && (
+              <div className="mt-1 text-xs font-semibold text-emerald-700 dark:text-emerald-300">
+                {formatCardioLogLine(completion as any)}
+              </div>
             )}
 
             {target.goal && (
@@ -221,11 +331,11 @@ export function CardioCompletionCard({ target, clientId, date, readonly = false 
           </div>
 
           {/* Log details toggle */}
-          {!readonly && !isCompleted && (
+          {!readonly && (
             <button
               type="button"
               onClick={() => setExpanded((v) => !v)}
-              aria-label={expanded ? "Hide log form" : "Log details"}
+              aria-label={expanded ? "Hide log form" : isCompleted ? "Edit cardio log" : "Log details"}
               className="shrink-0 text-muted-foreground hover:text-foreground transition"
             >
               {expanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
@@ -233,12 +343,28 @@ export function CardioCompletionCard({ target, clientId, date, readonly = false 
           )}
         </div>
 
+        {!readonly && !expanded && !isCompleted && !isSkipped && (
+          <div className="mt-2 flex gap-2">
+            <Button size="sm" className="flex-1" onClick={() => setExpanded(true)}>
+              Log cardio
+            </Button>
+            <Button size="sm" variant="outline" onClick={markSkipped} disabled={saving}>
+              <SkipForward className="mr-1.5 h-3.5 w-3.5" /> Skip
+            </Button>
+          </div>
+        )}
+
         {/* Expandable log form */}
-        {expanded && !readonly && !isCompleted && (
+        {expanded && !readonly && (
           <div className="mt-3 space-y-3 border-t border-border pt-3">
+            {suggestion && (
+              <Button size="sm" variant="outline" className="w-full" onClick={applySuggestion}>
+                <Sparkles className="mr-1.5 h-3.5 w-3.5" /> Use suggested Zone 2 setup
+              </Button>
+            )}
             <div className="grid grid-cols-2 gap-2">
               <div>
-                <Label className="text-xs">Actual Duration (min)</Label>
+                <Label className="text-xs">Duration (min)</Label>
                 <Input
                   type="number"
                   inputMode="numeric"
@@ -259,6 +385,77 @@ export function CardioCompletionCard({ target, clientId, date, readonly = false 
                   placeholder="—"
                   value={rpe}
                   onChange={(e) => setRpe(e.target.value)}
+                  className="h-8 text-sm"
+                />
+              </div>
+            </div>
+            <div className="grid grid-cols-3 gap-2">
+              <div>
+                <Label className="text-xs">Distance</Label>
+                <Input
+                  type="number"
+                  inputMode="decimal"
+                  placeholder="—"
+                  value={distance}
+                  onChange={(e) => setDistance(e.target.value)}
+                  className="h-8 text-sm"
+                />
+              </div>
+              <div>
+                <Label className="text-xs">Unit</Label>
+                <select
+                  value={distanceUnit}
+                  onChange={(e) => setDistanceUnit(e.target.value)}
+                  className="h-8 w-full rounded-md border border-input bg-background px-2 text-sm"
+                >
+                  <option value="km">km</option>
+                  <option value="mi">mi</option>
+                  <option value="m">m</option>
+                </select>
+              </div>
+              <div>
+                <Label className="text-xs">Calories</Label>
+                <Input
+                  type="number"
+                  inputMode="numeric"
+                  placeholder="—"
+                  value={calories}
+                  onChange={(e) => setCalories(e.target.value)}
+                  className="h-8 text-sm"
+                />
+              </div>
+            </div>
+            <div className="grid grid-cols-3 gap-2">
+              <div>
+                <Label className="text-xs">Speed</Label>
+                <Input
+                  type="number"
+                  inputMode="decimal"
+                  placeholder={suggestion ? "3.2" : "—"}
+                  value={avgSpeed}
+                  onChange={(e) => setAvgSpeed(e.target.value)}
+                  className="h-8 text-sm"
+                />
+              </div>
+              <div>
+                <Label className="text-xs">Incline %</Label>
+                <Input
+                  type="number"
+                  inputMode="decimal"
+                  placeholder={suggestion ? "8" : "—"}
+                  value={incline}
+                  onChange={(e) => setIncline(e.target.value)}
+                  className="h-8 text-sm"
+                />
+              </div>
+              <div>
+                <Label className="text-xs">Avg HR</Label>
+                <Input
+                  type="number"
+                  inputMode="numeric"
+                  placeholder="—"
+                  value={avgHr}
+                  onChange={(e) => setAvgHr(e.target.value)}
                   className="h-8 text-sm"
                 />
               </div>
@@ -289,7 +486,7 @@ export function CardioCompletionCard({ target, clientId, date, readonly = false 
             <div className="flex gap-2">
               <Button size="sm" className="flex-1" onClick={saveDetails} disabled={saving}>
                 {saving ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="mr-1.5 h-3.5 w-3.5" />}
-                Log Cardio
+                {isCompleted ? "Save changes" : "Log Cardio"}
               </Button>
               <Button size="sm" variant="ghost" onClick={() => setExpanded(false)}>Cancel</Button>
             </div>

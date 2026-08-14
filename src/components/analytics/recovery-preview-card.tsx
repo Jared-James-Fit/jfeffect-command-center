@@ -230,6 +230,45 @@ export function RecoveryPreviewCard({ clientId }: Props) {
       const weekMissed = Math.max(0, weekDueSoFar - Math.min(weekCompleted, weekDueSoFar));
       const weekRemaining = Math.max(0, weekTotalScheduled - weekDueSoFar);
 
+      // ── Cardio adherence for the current week (supporting signal) ──────
+      let cardioWeek: { weekPrescribed: number; weekCompleted: number; weekSkipped: number } | null = null;
+      try {
+        const [cardioCompRes, cardioTargetRes] = await Promise.all([
+          (supabase as any)
+            .from("cardio_completions")
+            .select("completed, skipped, completed_date")
+            .eq("client_id", clientId)
+            .gte("completed_date", weekStartISO)
+            .lt("completed_date", weekEndISO),
+          (supabase as any)
+            .from("cardio_targets")
+            .select("frequency_per_week, status, enabled, start_date, end_date")
+            .eq("client_id", clientId)
+            .neq("status", "Archived"),
+        ]);
+        const cRows = (cardioCompRes?.data ?? []) as any[];
+        const activeTargets = ((cardioTargetRes?.data ?? []) as any[])
+          .filter((t) => (t.enabled ?? true) && t.status !== "Archived")
+          .filter(
+            (t) =>
+              (!t.start_date || t.start_date < weekEndISO) &&
+              (!t.end_date || t.end_date >= weekStartISO),
+          );
+        const prescribed = activeTargets.reduce(
+          (s, t) => s + (Number(t.frequency_per_week) || 0),
+          0,
+        );
+        const doneCount = cRows.filter((c) => c.completed !== false && !c.skipped).length;
+        const skippedCount = cRows.filter((c) => !!c.skipped).length;
+        if (prescribed > 0 || doneCount > 0 || skippedCount > 0) {
+          cardioWeek = {
+            weekPrescribed: prescribed,
+            weekCompleted: doneCount,
+            weekSkipped: skippedCount,
+          };
+        }
+      } catch { cardioWeek = null; }
+
       // Last 4 completed weeks (weeks strictly before the current week).
       const priorWeekStart = new Date(weekStart); priorWeekStart.setDate(weekStart.getDate() - 4 * 7);
       const priorWeekEnd = new Date(weekStart);
@@ -427,6 +466,7 @@ export function RecoveryPreviewCard({ clientId }: Props) {
           block,
           streak: scheduledStreak,
           trend: consistencyTrend,
+          cardio: cardioWeek,
         },
         scores: allScores,
         painDays7d,

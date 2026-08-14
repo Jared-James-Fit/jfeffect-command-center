@@ -94,6 +94,9 @@ import { QuickValueSelect } from "@/components/workout-day/quick-value-select";
 import { SetTimerInput } from "@/components/workout-day/set-timer-input";
 import { WorkoutSubmissionSummary } from "@/components/workout-submission-summary";
 import { computeWorkoutSummary, type WorkoutSummary } from "@/lib/workout-summary";
+import { collectSessionPRs } from "@/lib/workout-takeaways";
+import { cardioStatus } from "@/lib/cardio-plan";
+import { toLocalISO, todayLocalISO } from "@/lib/today";
 import { WorkoutTimerSheet, QuickConfirmDuration, type TimerCompletionPayload } from "@/components/workout-timer-sheet";
 import { formatDuration } from "@/lib/duration";
 import {
@@ -1340,6 +1343,42 @@ function WorkoutDay({
   const [summaryOpen, setSummaryOpen] = useState(false);
   const [lastSummary, setLastSummary] = useState<WorkoutSummary | null>(null);
   const [lastSessionRating, setLastSessionRating] = useState<number | null>(null);
+
+  // ── Celebration screen inputs: session PRs + prescribed-cardio status ────
+  const summaryDisplayUnit: "kg" | "lb" =
+    ((client as any)?.preferred_weight_unit === "kg" ? "kg" : "lb");
+  const sessionPRs = useMemo(
+    () =>
+      collectSessionPRs(
+        rows as any[],
+        results as any[],
+        repMaxBestsByRow,
+        assistedBestsByRow,
+        summaryDisplayUnit,
+      ),
+    [rows, results, repMaxBestsByRow, assistedBestsByRow, summaryDisplayUnit],
+  );
+  const cardioDateStr = scheduledDate ? toLocalISO(scheduledDate) : todayLocalISO();
+  const { data: cardioDayLog } = useQuery({
+    queryKey: ["workout-cardio-status", client?.id, cardioDateStr],
+    enabled: !!client?.id,
+    staleTime: 30_000,
+    queryFn: async () => {
+      const { data } = await (supabase as any)
+        .from("cardio_completions")
+        .select("completed, skipped, duration_minutes")
+        .eq("client_id", client!.id)
+        .eq("completed_date", cardioDateStr)
+        .limit(1);
+      return ((data ?? []) as any[])[0] ?? null;
+    },
+  });
+  const cardioTakeaway = cardioDayLog
+    ? {
+        status: cardioStatus(cardioDayLog as any),
+        minutes: cardioDayLog?.duration_minutes ?? null,
+      }
+    : null;
   // After a successful completion via the Finish Workout flow, hand the
   // athlete directly into the shared WorkoutReviewEditor (rendered inside
   // <CompletedWorkoutActions/>) so the first review and Edit Review use the
@@ -2136,6 +2175,8 @@ function WorkoutDay({
             completion?.actual_duration_min ?? sessionDurationMin(dayId) ?? null
           }
           workoutDate={completion?.completed_at ?? scheduledDate ?? null}
+          prs={sessionPRs}
+          cardio={cardioTakeaway}
           sessionRating={
             lastSessionRating ??
             (completion as any)?.session_rating ??

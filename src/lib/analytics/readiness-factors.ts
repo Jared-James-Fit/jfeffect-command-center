@@ -426,6 +426,12 @@ export interface ConsistencyInput {
   streak: number;
   /** Rolling 4-vs-4 completed-week comparison. */
   trend: FactorDetail["trend"];
+  /**
+   * Optional prescribed-cardio adherence for the current week. Cardio is a
+   * *supporting* signal: it adds context and a light adjustment to the
+   * consistency ring, but strength adherence still leads the score.
+   */
+  cardio?: { weekPrescribed: number; weekCompleted: number; weekSkipped: number } | null;
 }
 
 function buildConsistency(inp: ConsistencyInput): FactorDetail {
@@ -439,6 +445,7 @@ function buildConsistency(inp: ConsistencyInput): FactorDetail {
     block,
     streak,
     trend,
+    cardio,
   } = inp;
 
   // ── Live weekly score ───────────────────────────────────────────────
@@ -461,7 +468,15 @@ function buildConsistency(inp: ConsistencyInput): FactorDetail {
     ? Math.round((block.completed / block.scheduled) * 100)
     : null;
 
-  const score = weeklyPct ?? last4Pct ?? 100;
+  const cardioPct = cardio && cardio.weekPrescribed > 0
+    ? Math.min(100, Math.round((cardio.weekCompleted / cardio.weekPrescribed) * 100))
+    : null;
+
+  const baseScore = weeklyPct ?? last4Pct ?? 100;
+  // 80/20 blend — cardio nudges the ring without ever dominating it.
+  const score = cardioPct != null
+    ? Math.round(baseScore * 0.8 + cardioPct * 0.2)
+    : baseScore;
 
   // ── Label thresholds (spec) ─────────────────────────────────────────
   const weeklyLabel = (() => {
@@ -493,6 +508,9 @@ function buildConsistency(inp: ConsistencyInput): FactorDetail {
   } else {
     rec = "Stay on plan this week.";
   }
+  if (cardioPct != null && cardioPct < 60 && (weeklyPct == null || weeklyPct >= 80)) {
+    rec += " Prescribed cardio is behind this week — get the easy steady-state sessions in.";
+  }
 
   // ── Metrics grid: This Week + supporting context ────────────────────
   const weekValue = hasDueThisWeek
@@ -518,6 +536,14 @@ function buildConsistency(inp: ConsistencyInput): FactorDetail {
     { label: "Current Streak", value: `${streak} scheduled workout${streak === 1 ? "" : "s"}` },
     { label: "Missed This Week", value: `${weekMissed}` },
   ];
+  if (cardio && (cardio.weekPrescribed > 0 || cardio.weekCompleted > 0)) {
+    metrics.push({
+      label: "Cardio This Week",
+      value: cardio.weekPrescribed > 0
+        ? `${cardio.weekCompleted} of ${cardio.weekPrescribed} · ${cardioPct}%${cardio.weekSkipped > 0 ? ` · ${cardio.weekSkipped} skipped` : ""}`
+        : `${cardio.weekCompleted} logged`,
+    });
+  }
 
   return {
     key: "consistency",
