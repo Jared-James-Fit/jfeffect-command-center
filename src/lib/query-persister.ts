@@ -33,6 +33,11 @@ const DO_NOT_PERSIST_PREFIXES = [
   // "Couldn't open this block". Keep it out of disk cache; the in-hook
   // localStorage fallback (writeFavCache) already provides instant load.
   "pl-exercise-favorites",
+  // Exercise library pools must never be rehydrated from disk on a new
+  // session: a stale snapshot can hide an exercise created on another
+  // device/tab until the pool refetches. They're cheap to refetch.
+  "exercise-search-pool",
+  "quick-swap-suggestions",
 ];
 
 export function shouldPersistQueryKey(queryKey: readonly unknown[]): boolean {
