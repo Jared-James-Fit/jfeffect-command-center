@@ -45,6 +45,8 @@ type RowData = {
   rest_seconds: number | null;
   notes: string | null;
   sort_order: number | null;
+  measurement_type: string | null;
+  duration_seconds: number | null;
   exercises: { name: string | null } | null;
 };
 
@@ -59,6 +61,8 @@ type EditableRow = {
   load_kg: string;
   rest_seconds: string;
   notes: string;
+  measurement_type: "reps" | "time";
+  duration_seconds: string;
 };
 
 function toEditable(r: RowData): EditableRow {
@@ -73,6 +77,8 @@ function toEditable(r: RowData): EditableRow {
     load_kg: r.load_kg != null ? String(r.load_kg) : "",
     rest_seconds: r.rest_seconds != null ? String(r.rest_seconds) : "",
     notes: r.notes ?? "",
+    measurement_type: r.measurement_type === "time" ? "time" : "reps",
+    duration_seconds: r.duration_seconds != null ? String(r.duration_seconds) : "",
   };
 }
 
