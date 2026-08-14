@@ -17,7 +17,6 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { getExerciseVideoSource } from "@/lib/exercise-video";
 import { useExerciseVideoSetGlobal } from "@/hooks/use-exercise-video-set";
 import { toast } from "sonner";
-import { durationRange } from "@/lib/pl-programs";
 import { exerciseAccent } from "@/components/program-builder";
 import {
   derivePurposeLabels,
@@ -35,7 +34,7 @@ import { ActionButton } from "@/components/action-button";
 import { TrainingHelpButton, TrainingHelpSheet } from "@/components/training-help-sheet";
 import { WarmupButton } from "@/components/warmup-sheet";
 import { dayScheduledDate, cleanDayTitle } from "@/lib/workout-today";
-import { formatDayLabel, formatDaySubtitle, formatTrainingDate } from "@/lib/workout-day-label";
+import { formatDayLabel, formatDaySubtitle } from "@/lib/workout-day-label";
 import { format, startOfDay } from "date-fns";
 import { useServerFn } from "@tanstack/react-start";
 import { notifyCoachOfWorkoutFailure } from "@/lib/support-alerts.functions";
@@ -101,15 +100,12 @@ import { Timer } from "lucide-react";
 import type { WorkoutContextAdapter } from "@/lib/workout-context";
 import {
   summarizeCompleteness,
-  estimatedDurationLabel,
   type RequiredRowSpec,
   type LoggedSetSpec,
   type RowMetricKind,
-  type EstimatedDurationRow,
 } from "@/lib/workout-completeness";
 import { useWorkoutHeartbeat, readHeartbeatTimestamps, clearHeartbeatTimestamps } from "@/hooks/use-workout-heartbeat";
 import { computeActiveSeconds } from "@/lib/workout-duration";
-import { LoggingQualityBadge } from "@/components/workout/shared/logging-quality-badge";
 import { WorkoutProgressRing } from "@/components/workout/shared/workout-progress-ring";
 import { CompletedWorkoutActions } from "@/components/workout/shared/completed-workout-actions";
 import { WorkoutStatusBar } from "@/components/workout-day/WorkoutStatusBar";
