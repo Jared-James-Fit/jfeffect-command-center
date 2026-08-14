@@ -96,6 +96,9 @@ import { WorkoutSubmissionSummary } from "@/components/workout-submission-summar
 import { computeWorkoutSummary, type WorkoutSummary } from "@/lib/workout-summary";
 import { WorkoutTimerSheet, QuickConfirmDuration, type TimerCompletionPayload } from "@/components/workout-timer-sheet";
 import { formatDuration } from "@/lib/duration";
+import {
+  getLogAsMode, setLogAsMode, getTimerTarget, setTimerTarget, type LogAsMode,
+} from "@/lib/log-as-override";
 import { Timer } from "lucide-react";
 import type { WorkoutContextAdapter } from "@/lib/workout-context";
 import {
