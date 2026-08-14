@@ -13,6 +13,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Plus, Search, Trash2, Youtube, Pencil, CheckCircle2, AlertTriangle, Flame, BarChart3 } from "lucide-react";
+import { invalidateExerciseLibrary } from "@/lib/exercise-library-cache";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
@@ -123,7 +124,7 @@ export function ExercisesAdmin({ embedded = false }: { embedded?: boolean } = {}
   const del = async (id: string) => {
     if (!confirm("Delete exercise?")) return;
     await supabase.from("exercises").delete().eq("id", id);
-    qc.invalidateQueries({ queryKey: ["exercises"] });
+    void invalidateExerciseLibrary(qc);
   };
 
   const [warmupTarget, setWarmupTarget] = useState<any | null>(null);
@@ -136,7 +137,7 @@ export function ExercisesAdmin({ embedded = false }: { embedded?: boolean } = {}
       .eq("id", id);
     if (error) return toast.error(error.message);
     toast.success("Muscle group updated");
-    qc.invalidateQueries({ queryKey: ["exercises"] });
+    void invalidateExerciseLibrary(qc);
   };
 
   const needsTagsCount = exercises.filter(
@@ -169,7 +170,7 @@ export function ExercisesAdmin({ embedded = false }: { embedded?: boolean } = {}
                 <Plus className="mr-2 h-4 w-4" /> Add exercise
               </Button>
             </DialogTrigger>
-            <NewExerciseDialog onClose={() => setOpen(false)} onCreated={() => qc.invalidateQueries({ queryKey: ["exercises"] })} />
+            <NewExerciseDialog onClose={() => setOpen(false)} onCreated={() => void invalidateExerciseLibrary(qc)} />
           </Dialog>
         }
       />}
@@ -181,7 +182,7 @@ export function ExercisesAdmin({ embedded = false }: { embedded?: boolean } = {}
                 <Plus className="mr-2 h-4 w-4" /> Add exercise
               </Button>
             </DialogTrigger>
-            <NewExerciseDialog onClose={() => setOpen(false)} onCreated={() => qc.invalidateQueries({ queryKey: ["exercises"] })} />
+            <NewExerciseDialog onClose={() => setOpen(false)} onCreated={() => void invalidateExerciseLibrary(qc)} />
           </Dialog>
         </div>
       )}
@@ -335,7 +336,7 @@ export function ExercisesAdmin({ embedded = false }: { embedded?: boolean } = {}
           <EditExerciseDialog
             exercise={editing}
             onClose={() => setEditing(null)}
-            onSaved={() => qc.invalidateQueries({ queryKey: ["exercises"] })}
+            onSaved={() => void invalidateExerciseLibrary(qc)}
           />
         )}
       </Dialog>
@@ -349,7 +350,7 @@ export function ExercisesAdmin({ embedded = false }: { embedded?: boolean } = {}
           <ExerciseVolumeTagsDialog
             exercise={volumeTarget}
             onClose={() => setVolumeTarget(null)}
-            onSaved={() => qc.invalidateQueries({ queryKey: ["exercises"] })}
+            onSaved={() => void invalidateExerciseLibrary(qc)}
           />
         )}
       </Dialog>
@@ -568,10 +569,14 @@ function NewExerciseDialog({ onClose, onCreated }: { onClose: () => void; onCrea
     e.preventDefault();
     if (!form.primary_muscle_group) return toast.error("Primary muscle group is required");
     setBusy(true);
-    const { error } = await supabase.from("exercises").insert(form);
+    const { data: created, error } = await supabase
+      .from("exercises")
+      .insert({ ...form, archived: false })
+      .select("id, name")
+      .single();
     setBusy(false);
-    if (error) return toast.error(error.message);
-    toast.success("Added");
+    if (error || !created) return toast.error(error?.message ?? "Could not save exercise");
+    toast.success(`Added "${created.name}" to library`);
     onCreated();
     onClose();
   };

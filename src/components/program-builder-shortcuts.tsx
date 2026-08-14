@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { invalidateExerciseLibrary } from "@/lib/exercise-library-cache";
 import { Keyboard, X } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -126,8 +127,7 @@ export function ProgramBuilderShortcutsButton({ className }: { className?: strin
   const refreshExercises = useCallback(async () => {
     const tid = toast.loading("Refreshing exercises...");
     try {
-      await qc.invalidateQueries({ queryKey: ["exercises-min"] });
-      await qc.refetchQueries({ queryKey: ["exercises-min"] });
+      await invalidateExerciseLibrary(qc);
       toast.success("Exercise library refreshed", { id: tid });
     } catch {
       toast.error("Couldn't refresh exercises", {
