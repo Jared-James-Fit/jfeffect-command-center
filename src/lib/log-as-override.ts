@@ -11,6 +11,7 @@ export type LogAsMode = "reps" | "time";
 
 const MODE_KEY = (rowId: string) => `jf.logas.mode.${rowId}`;
 const TARGET_KEY = (rowId: string) => `jf.logas.target.${rowId}`;
+const INPUTS_KEY = (rowId: string) => `jf.logas.inputs.${rowId}`;
 
 function safeGet(key: string): string | null {
   try {
@@ -49,4 +50,30 @@ export function getTimerTarget(rowId: string): number | null {
 
 export function setTimerTarget(rowId: string, seconds: number | null) {
   safeSet(TARGET_KEY(rowId), seconds && seconds > 0 ? String(Math.round(seconds)) : null);
+}
+
+/**
+ * Which set inputs are shown for this exercise row. Undefined entries fall
+ * back to the coach's prescription — this only records explicit client
+ * choices made through the input-type dropdown.
+ */
+export type RowInputOverrides = { reps?: boolean; weight?: boolean; timer?: boolean };
+
+export function getRowInputs(rowId: string): RowInputOverrides {
+  const raw = safeGet(INPUTS_KEY(rowId));
+  if (!raw) return {};
+  try {
+    const p = JSON.parse(raw) as RowInputOverrides;
+    return p && typeof p === "object" ? p : {};
+  } catch {
+    return {};
+  }
+}
+
+export function setRowInputs(rowId: string, inputs: RowInputOverrides) {
+  const clean: RowInputOverrides = {};
+  if (typeof inputs.reps === "boolean") clean.reps = inputs.reps;
+  if (typeof inputs.weight === "boolean") clean.weight = inputs.weight;
+  if (typeof inputs.timer === "boolean") clean.timer = inputs.timer;
+  safeSet(INPUTS_KEY(rowId), Object.keys(clean).length ? JSON.stringify(clean) : null);
 }
