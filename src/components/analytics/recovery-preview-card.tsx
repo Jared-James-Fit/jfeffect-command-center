@@ -21,6 +21,13 @@ import {
   type SleepSample,
 } from "@/lib/analytics/readiness-factors";
 import { pickCurrentBlock } from "@/lib/block-dates";
+import {
+  prescribedFor,
+  isCompletedCardio,
+  isSkippedCardio,
+  type CardioCompletionRow,
+  type CardioTargetRow,
+} from "@/lib/analytics/cardio-adherence";
 import { cn } from "@/lib/utils";
 
 interface Props {
@@ -246,20 +253,15 @@ export function RecoveryPreviewCard({ clientId }: Props) {
             .eq("client_id", clientId)
             .neq("status", "Archived"),
         ]);
-        const cRows = (cardioCompRes?.data ?? []) as any[];
-        const activeTargets = ((cardioTargetRes?.data ?? []) as any[])
-          .filter((t) => (t.enabled ?? true) && t.status !== "Archived")
-          .filter(
-            (t) =>
-              (!t.start_date || t.start_date < weekEndISO) &&
-              (!t.end_date || t.end_date >= weekStartISO),
-          );
-        const prescribed = activeTargets.reduce(
-          (s, t) => s + (Number(t.frequency_per_week) || 0),
-          0,
-        );
-        const doneCount = cRows.filter((c) => c.completed !== false && !c.skipped).length;
-        const skippedCount = cRows.filter((c) => !!c.skipped).length;
+        // Canonical cardio math — shared with the Cardio Analytics section so
+        // readiness and analytics can never report different adherence.
+        const cRows = (cardioCompRes?.data ?? []) as CardioCompletionRow[];
+        const targets = (cardioTargetRes?.data ?? []) as CardioTargetRow[];
+        const weekEndInclusiveDate = new Date(weekEnd.getTime() - 86_400_000);
+        const weekEndInclusive = ymd(weekEndInclusiveDate);
+        const prescribed = prescribedFor(targets, weekStartISO, weekEndInclusive).sessions;
+        const doneCount = cRows.filter(isCompletedCardio).length;
+        const skippedCount = cRows.filter(isSkippedCardio).length;
         if (prescribed > 0 || doneCount > 0 || skippedCount > 0) {
           cardioWeek = {
             weekPrescribed: prescribed,

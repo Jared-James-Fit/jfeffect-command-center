@@ -40,7 +40,7 @@ import { PerformanceInsights } from "@/components/analytics/performance-insights
 import { RecoverySummaryCard } from "@/components/analytics/recovery-summary-card";
 import { SleepInsightsCard } from "@/components/analytics/sleep-insights-card";
 import { BodyweightTrendCard } from "@/components/analytics/bodyweight-trend-card";
-import { CardioSummaryCard } from "@/components/analytics/cardio-summary-card";
+import { CardioAnalyticsSection } from "@/components/analytics/cardio-analytics-section";
 import { RecoveryPatternsCard } from "@/components/analytics/recovery-patterns-card";
 import { PredictedWindowCard } from "@/components/analytics/predicted-window-card";
 import { getClientAnalyticsSettings } from "@/lib/analytics/settings";
@@ -570,7 +570,7 @@ export function ClientAnalyticsDashboard({
 
             <div
               id="recovery"
-              className={`grid gap-4 scroll-mt-24 rounded-xl transition-shadow duration-500 md:grid-cols-2 ${
+              className={`grid gap-4 scroll-mt-24 rounded-xl transition-shadow duration-500 ${
                 recoveryHighlight ? "ring-2 ring-primary/70 ring-offset-2 ring-offset-background shadow-lg" : ""
               }`}
             >
@@ -582,14 +582,6 @@ export function ClientAnalyticsDashboard({
                 rangeLabel={filter.label}
                 prevStart={prevBlockStart}
                 prevEnd={prevBlockEnd}
-              />
-              </SectionErrorBoundary>
-              <SectionErrorBoundary label="Cardio">
-              <CardioSummaryCard
-                clientId={clientId}
-                rangeStart={filter.start}
-                rangeEnd={filter.end}
-                rangeLabel={filter.label}
               />
               </SectionErrorBoundary>
             </div>
@@ -607,6 +599,15 @@ export function ClientAnalyticsDashboard({
             <BodyweightTrendCard
               clientId={clientId}
               displayUnit={displayUnit}
+              rangeStart={filter.start}
+              rangeEnd={filter.end}
+              rangeLabel={filter.label}
+            />
+            </SectionErrorBoundary>
+
+            <SectionErrorBoundary label="Cardio">
+            <CardioAnalyticsSection
+              clientId={clientId}
               rangeStart={filter.start}
               rangeEnd={filter.end}
               rangeLabel={filter.label}
