@@ -508,6 +508,9 @@ function buildConsistency(inp: ConsistencyInput): FactorDetail {
   } else {
     rec = "Stay on plan this week.";
   }
+  if (cardioPct != null && cardioPct < 60 && (weeklyPct == null || weeklyPct >= 80)) {
+    rec += " Prescribed cardio is behind this week — get the easy steady-state sessions in.";
+  }
 
   // ── Metrics grid: This Week + supporting context ────────────────────
   const weekValue = hasDueThisWeek
