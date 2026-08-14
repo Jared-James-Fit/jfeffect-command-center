@@ -17,7 +17,7 @@ import { Calendar } from "@/components/ui/calendar";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { CalendarIcon, AlertTriangle, ArrowRight, Loader2, RotateCcw, Replace, Eye, Trash2, Clock } from "lucide-react";
+import { CalendarIcon, AlertTriangle, ArrowRight, Loader2, RotateCcw, Replace, Eye, Trash2, Clock, CheckCircle2 } from "lucide-react";
 import {
   moveWorkout,
   swapWorkouts,
@@ -172,6 +172,9 @@ export function MoveWorkoutSheet({
   // Instance mode: same-day is a valid "add to date" (append), NOT a swap.
   const showSwapButton = !isInstanceMode;
   const isCompleted = !!ctx?.completion?.completed_at;
+  const completedOnLabel = ctx?.completion?.completed_at
+    ? format(new Date(ctx.completion.completed_at), "EEE, MMM d, yyyy")
+    : null;
   const inProgress = !isCompleted && !!ctx?.completion?.in_progress_at;
 
   const canViewLogged =
@@ -477,19 +480,21 @@ export function MoveWorkoutSheet({
             </div>
           )}
 
-          {/* Slice 2d: completed workouts are permanently locked from moves,
-             time changes, and removal. Coaches who want the workout on a
-             new date must schedule a fresh copy — the completion stays as
-             the historical record. */}
+          {/* Completed workouts can be re-placed on the calendar. Only the
+             scheduled date/time/order changes — completion history and
+             logged results are untouched. */}
           {isCompleted && (
             <div className="rounded-md border border-emerald-500/40 bg-emerald-500/10 p-3 text-xs text-emerald-900 dark:text-emerald-200">
               <div className="flex items-start gap-2">
-                <AlertTriangle className="mt-0.5 h-4 w-4" />
+                <CheckCircle2 className="mt-0.5 h-4 w-4" />
                 <div>
-                  This workout is already completed. Its scheduled date, time,
-                  and order are locked to keep historical reporting accurate.
-                  To have it happen on a new date, schedule a fresh copy from
-                  the calendar instead.
+                  <div className="font-semibold">Completed workout</div>
+                  <div>
+                    This changes where the workout appears on the schedule.
+                    The completed workout history and logged results stay
+                    unchanged
+                    {completedOnLabel ? ` (completed ${completedOnLabel})` : ""}.
+                  </div>
                 </div>
               </div>
             </div>
@@ -551,7 +556,7 @@ export function MoveWorkoutSheet({
             </div>
           )}
 
-          {effectiveTarget && ctx && !isCompleted && (
+          {effectiveTarget && ctx && (
             <div className="rounded-md bg-secondary/40 p-3 text-xs">
               <span className="text-muted-foreground">{currentDateLabel}</span>
               <ArrowRight className="mx-2 inline h-3.5 w-3.5" />
@@ -561,7 +566,7 @@ export function MoveWorkoutSheet({
           )}
 
           {/* Coach-only instance controls (change time / remove). */}
-          {isInstanceMode && coachControls && ctx?.instance && !isCompleted && (
+          {isInstanceMode && coachControls && ctx?.instance && (
             <div className="rounded-md border border-border p-3 space-y-2">
               <div className="text-xs font-semibold uppercase text-muted-foreground">
                 Instance actions
@@ -593,29 +598,30 @@ export function MoveWorkoutSheet({
                   </Button>
                 )}
               </div>
-              <Button
-                size="sm"
-                variant="destructive"
-                className="w-full"
-                disabled={removeMutation.isPending}
-                onClick={() => {
-                  if (confirm("Remove this scheduled workout? Program structure and past logs are preserved.")) {
-                    removeMutation.mutate();
-                  }
-                }}
-              >
-                <Trash2 className="mr-1 h-3.5 w-3.5" /> Remove future workout
-              </Button>
+              {!isCompleted && (
+                <Button
+                  size="sm"
+                  variant="destructive"
+                  className="w-full"
+                  disabled={removeMutation.isPending}
+                  onClick={() => {
+                    if (confirm("Remove this scheduled workout? Program structure and past logs are preserved.")) {
+                      removeMutation.mutate();
+                    }
+                  }}
+                >
+                  <Trash2 className="mr-1 h-3.5 w-3.5" /> Remove future workout
+                </Button>
+              )}
             </div>
           )}
         </div>
 
         <DrawerFooter className="flex flex-row gap-2 pt-2">
           <Button variant="outline" className="flex-1" onClick={() => onOpenChange(false)}>
-            <RotateCcw className="mr-1 h-4 w-4" /> {isCompleted ? "Close" : "Cancel"}
+            <RotateCcw className="mr-1 h-4 w-4" /> Cancel
           </Button>
-          {!isCompleted && (
-            <Button
+          <Button
               className="flex-1"
               disabled={
                 !effectiveTarget ||
@@ -632,7 +638,6 @@ export function MoveWorkoutSheet({
               )}
               Move workout
             </Button>
-          )}
         </DrawerFooter>
       </DrawerContent>
     </Drawer>

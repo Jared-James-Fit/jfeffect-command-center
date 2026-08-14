@@ -134,20 +134,10 @@ export const moveWorkout = createServerFn({ method: "POST" })
       );
     }
 
-    // Slice 2d: completed workouts are immutable for every actor. A move
-    // on a completed day would rewrite the historical scheduled date and
-    // desync reporting from logged completions.
-    const { data: completion } = await supabase
-      .from("pl_day_completions")
-      .select("id, completed_at")
-      .eq("day_id", data.dayId)
-      .is("scheduled_workout_id", null)
-      .limit(1);
-    if ((completion ?? []).some((c: any) => c.completed_at)) {
-      throw new Error(
-        "This workout is already completed and its scheduled date is locked.",
-      );
-    }
+    // Completed workouts MAY be moved: this path writes pl_days.scheduled_date
+    // (calendar placement) only. pl_day_completions.completed_at and all
+    // logged set history remain untouched, so performance analytics stay
+    // attributed to the real completion date.
 
     if (day.scheduled_date === data.newDate) {
       return { ok: true as const, applied: 0, batchId: null, noop: true };
@@ -247,17 +237,9 @@ export const swapWorkouts = createServerFn({ method: "POST" })
       );
     }
 
-    // Reject completed workouts on either side — completed history is
-    // locked. See moveWorkout above for the same rule.
-    const { data: completions } = await supabase
-      .from("pl_day_completions")
-      .select("day_id, completed_at")
-      .in("day_id", [data.dayIdA, data.dayIdB]);
-    if ((completions ?? []).some((c: any) => c.completed_at)) {
-      throw new Error(
-        "One of these workouts is already completed and cannot be swapped.",
-      );
-    }
+    // A swap only exchanges calendar placement (pl_days.scheduled_date);
+    // completion records and logged sets are never rewritten, so completed
+    // workouts are allowed on either side.
 
     const batchId = crypto.randomUUID();
     const aPrev = a.day.scheduled_date;

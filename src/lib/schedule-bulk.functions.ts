@@ -182,19 +182,9 @@ export const applyBulkScheduleChange = createServerFn({ method: "POST" })
       );
     }
 
-    // Slice 2d: completed workouts are immutable for every actor. No
-    // confirmation flag bypasses this — a completed row rewritten via
-    // this legacy path would desync from pl_day_completions.
-    const { data: completedRows } = await supabase
-      .from("pl_day_completions")
-      .select("day_id, completed_at")
-      .in("day_id", dayIds);
-    const anyCompleted = (completedRows ?? []).some((c: any) => c.completed_at);
-    if (anyCompleted) {
-      throw new Error(
-        "One or more of these workouts is already completed. Their scheduled dates are locked.",
-      );
-    }
+    // Completed workouts may be re-placed on the calendar: this path only
+    // writes pl_days.scheduled_date. Completion rows and logged sets are
+    // never modified, so history and analytics stay on the real dates.
 
     const dayById = new Map<string, any>(dayRows.map((d: any) => [d.id, d]));
     const batchId = crypto.randomUUID();

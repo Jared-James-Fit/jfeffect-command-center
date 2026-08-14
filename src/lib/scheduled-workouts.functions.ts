@@ -1,11 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
-import {
-  assertInstanceNotCompleted,
-  completedInstanceIds,
-  validateReorderPayload,
-} from "@/lib/schedule-mutation-guards";
+import { validateReorderPayload } from "@/lib/schedule-mutation-guards";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Manual Workout Scheduling — server functions for pl_scheduled_workouts.
@@ -285,17 +281,17 @@ export const moveScheduledWorkout = createServerFn({ method: "POST" })
         throw new Error("Schedule editing is disabled for your account.");
     }
 
-    // Slice 2d: completed scheduled instances are immutable across every
-    // actor tier. Moving a completed instance would rewrite the historical
-    // date attached to logged sets and corrupt reporting. Coaches who
-    // genuinely want the workout to happen on a new date should schedule a
-    // new future copy of the source day instead.
+    // Calendar placement is separate from completion history. A completed
+    // instance MAY be moved: we only write scheduled_date/time/order on
+    // pl_scheduled_workouts. pl_day_completions.completed_at, logged sets,
+    // and their timestamps are never touched, so analytics keep attributing
+    // performance to the real completion date.
     const { data: comp } = await context.supabase
       .from("pl_day_completions")
       .select("completed_at")
       .eq("scheduled_workout_id", data.instanceId)
       .maybeSingle();
-    assertInstanceNotCompleted(comp ?? null);
+    const wasCompleted = !!comp?.completed_at;
 
     // Compute next order_index if not provided → append.
     let orderIndex = data.orderIndex;
@@ -329,6 +325,7 @@ export const moveScheduledWorkout = createServerFn({ method: "POST" })
     if (error) throw new Error(error.message);
     return {
       ok: true as const,
+      wasCompleted,
       previous: {
         scheduledDate: instance.scheduled_date as string,
         scheduledTime: (instance.scheduled_time as string | null) ?? null,
@@ -410,14 +407,12 @@ export const reorderScheduledWorkouts = createServerFn({ method: "POST" })
       .eq("client_id", data.clientId)
       .eq("scheduled_date", data.date);
     if (exErr) throw new Error(exErr.message);
-    const { data: comps } = await context.supabase
-      .from("pl_day_completions")
-      .select("scheduled_workout_id, completed_at")
-      .in("scheduled_workout_id", data.orderedInstanceIds);
     const plan = validateReorderPayload({
       existingIds: (existing ?? []).map((r: any) => r.id),
       requestedIds: data.orderedInstanceIds,
-      completed: completedInstanceIds(comps ?? []),
+      // Order is calendar placement, not history: completed instances may be
+      // reordered on their date without touching completion records.
+      completed: new Set<string>(),
     });
 
     // Normalize order_index to 0..N-1 in a single pass — no duplicates,
@@ -465,14 +460,8 @@ export const updateScheduledWorkoutTime = createServerFn({ method: "POST" })
         throw new Error("Schedule editing is disabled for your account.");
     }
 
-    // Slice 2d: completed instances are immutable — time is part of the
-    // historical record once logged sets are attached.
-    const { data: timeComp } = await context.supabase
-      .from("pl_day_completions")
-      .select("completed_at")
-      .eq("scheduled_workout_id", data.instanceId)
-      .maybeSingle();
-    assertInstanceNotCompleted(timeComp ?? null);
+    // Scheduled time is calendar placement only — completed instances may
+    // have their time changed; completed_at and logged sets stay untouched.
 
     const { error } = await context.supabase
       .from("pl_scheduled_workouts")
@@ -649,15 +638,8 @@ export const syncProgramDaySchedule = createServerFn({ method: "POST" })
     const { actor } = await resolveActor(context, data.clientId);
     if (actor === "client") throw new Error("Not allowed.");
 
-    // History guard: completed days (legacy or instance-scoped) are immutable.
-    const [{ data: legacyCompleted }, { data: dayInstances }] = await Promise.all([
-      context.supabase
-        .from("pl_day_completions")
-        .select("id")
-        .eq("day_id", data.dayId)
-        .is("scheduled_workout_id", null)
-        .not("completed_at", "is", null)
-        .limit(1),
+    // Completed days are movable: only scheduled placement is written here.
+    const [{ data: dayInstances }] = await Promise.all([
       context.supabase
         .from("pl_scheduled_workouts")
         .select("id, scheduled_date")
@@ -666,25 +648,9 @@ export const syncProgramDaySchedule = createServerFn({ method: "POST" })
         .order("scheduled_date", { ascending: true }),
     ]);
     const instances = (dayInstances ?? []) as Array<{ id: string; scheduled_date: string }>;
-    // The legacy day-level completion row only matters when the day has no
-    // scheduled instances. Once instances exist they are canonical, and an
-    // old day-level row is stale history that must not lock the move.
-    if (instances.length === 0 && (legacyCompleted ?? []).length > 0) {
-      throw new Error("This workout is already completed — past history is locked.");
-    }
 
     if (instances.length > 0) {
       const ids = instances.map((i) => i.id);
-      const { data: instCompleted } = await context.supabase
-        .from("pl_day_completions")
-        .select("id")
-        .in("scheduled_workout_id", ids)
-        .not("completed_at", "is", null)
-        .limit(1);
-      if ((instCompleted ?? []).length > 0) {
-        throw new Error("This workout is already completed — past history is locked.");
-      }
-
       if (data.newDate) {
         // Move the earliest (primary) instance; leave repeat sessions alone.
         const { error } = await context.supabase
@@ -693,13 +659,22 @@ export const syncProgramDaySchedule = createServerFn({ method: "POST" })
           .eq("id", instances[0].id);
         if (error) throw new Error(error.message);
       } else {
-        // Clearing the date removes all incomplete instances so the day
-        // genuinely disappears from the calendar.
-        const { error } = await context.supabase
-          .from("pl_scheduled_workouts")
-          .delete()
-          .in("id", ids);
-        if (error) throw new Error(error.message);
+        // Clearing the date removes only INCOMPLETE instances so the day
+        // disappears from the calendar without destroying logged history.
+        const { data: doneRows } = await context.supabase
+          .from("pl_day_completions")
+          .select("scheduled_workout_id")
+          .in("scheduled_workout_id", ids)
+          .not("completed_at", "is", null);
+        const done = new Set((doneRows ?? []).map((r: any) => r.scheduled_workout_id));
+        const removable = ids.filter((id) => !done.has(id));
+        if (removable.length > 0) {
+          const { error } = await context.supabase
+            .from("pl_scheduled_workouts")
+            .delete()
+            .in("id", removable);
+          if (error) throw new Error(error.message);
+        }
       }
       // Mirror the legacy field so every surface agrees.
       await context.supabase
