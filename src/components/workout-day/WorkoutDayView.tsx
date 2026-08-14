@@ -3236,6 +3236,7 @@ function SetRow({
   onCascadeFromSet,
   readonly = false, unit = "kg", hideWeight = false, focusMode = false, onChange, onSetCompleted,
   setCount, measurementType = "reps", prescribedDurationSeconds = null,
+  onTimerTargetChange,
 }: {
   rowId: string;
   workoutId?: string | null;
@@ -3246,6 +3247,7 @@ function SetRow({
   setCount?: number;
   measurementType?: "reps" | "time";
   prescribedDurationSeconds?: number | null;
+  onTimerTargetChange?: (seconds: number | null) => void;
   existing?: any;
   prevExisting?: any;
   targetReps?: string | null;
