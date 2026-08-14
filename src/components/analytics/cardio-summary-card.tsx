@@ -29,19 +29,20 @@ export function CardioSummaryCard({ clientId, rangeStart, rangeEnd, rangeLabel }
       const [completionsRes, targetsRes] = await Promise.all([
         (supabase as any)
           .from("cardio_completions")
-          .select("completed, duration_minutes, completed_date")
+          .select("completed, skipped, duration_minutes, completed_date")
           .eq("client_id", clientId)
           .gte("completed_date", startStr)
           .lte("completed_date", endStr),
         (supabase as any)
           .from("cardio_targets")
-          .select("frequency_per_week, status, enabled, start_date, end_date")
+          .select("frequency_per_week, duration_minutes, status, enabled, start_date, end_date")
           .eq("client_id", clientId)
           .neq("status", "Archived"),
       ]);
 
       const completions = (completionsRes.data ?? []) as any[];
-      const done = completions.filter((c) => c.completed !== false);
+      const done = completions.filter((c) => c.completed !== false && !c.skipped);
+      const skipped = completions.filter((c) => !!c.skipped).length;
       const totalMin = done.reduce((s, c) => s + (Number(c.duration_minutes) || 0), 0);
 
       // Prescribed = sum of active targets' frequency_per_week * weeks in range
@@ -60,18 +61,25 @@ export function CardioSummaryCard({ clientId, rangeStart, rangeEnd, rangeLabel }
         (s, t) => s + (Number(t.frequency_per_week) || 0) * weeks,
         0,
       );
+      const prescribedMin = activeTargets.reduce(
+        (s, t) =>
+          s + (Number(t.frequency_per_week) || 0) * weeks * (Number(t.duration_minutes) || 0),
+        0,
+      );
 
       return {
         completed: done.length,
+        skipped,
         prescribed,
         totalMin: Math.round(totalMin),
+        prescribedMin: Math.round(prescribedMin),
         hasTargets: activeTargets.length > 0,
       };
     },
   });
 
   if (!data) return null;
-  if (!data.hasTargets && data.completed === 0) return null;
+  if (!data.hasTargets && data.completed === 0 && data.skipped === 0) return null;
 
   const adherence = data.prescribed > 0
     ? Math.min(100, Math.round((data.completed / data.prescribed) * 100))
@@ -104,10 +112,17 @@ export function CardioSummaryCard({ clientId, rangeStart, rangeEnd, rangeLabel }
             sublabel={
               data.totalMin === 0 && data.completed > 0
                 ? "No completed cardio minutes logged"
-                : undefined
+                : data.prescribedMin > 0
+                  ? `of ${data.prescribedMin} min prescribed`
+                  : undefined
             }
           />
         </div>
+        {data.skipped > 0 && (
+          <div className="mt-3 rounded-lg border border-amber-500/30 bg-amber-500/5 px-3 py-2 text-xs font-semibold text-amber-700 dark:text-amber-300">
+            {data.skipped} cardio session{data.skipped === 1 ? "" : "s"} marked as skipped in this range.
+          </div>
+        )}
       </Card>
     </section>
   );
