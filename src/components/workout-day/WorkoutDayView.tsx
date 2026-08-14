@@ -17,7 +17,6 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { getExerciseVideoSource } from "@/lib/exercise-video";
 import { useExerciseVideoSetGlobal } from "@/hooks/use-exercise-video-set";
 import { toast } from "sonner";
-import { durationRange } from "@/lib/pl-programs";
 import { exerciseAccent } from "@/components/program-builder";
 import {
   derivePurposeLabels,
@@ -35,7 +34,7 @@ import { ActionButton } from "@/components/action-button";
 import { TrainingHelpButton, TrainingHelpSheet } from "@/components/training-help-sheet";
 import { WarmupButton } from "@/components/warmup-sheet";
 import { dayScheduledDate, cleanDayTitle } from "@/lib/workout-today";
-import { formatDayLabel, formatDaySubtitle, formatTrainingDate } from "@/lib/workout-day-label";
+import { formatDayLabel, formatDaySubtitle } from "@/lib/workout-day-label";
 import { format, startOfDay } from "date-fns";
 import { useServerFn } from "@tanstack/react-start";
 import { notifyCoachOfWorkoutFailure } from "@/lib/support-alerts.functions";
@@ -101,15 +100,12 @@ import { Timer } from "lucide-react";
 import type { WorkoutContextAdapter } from "@/lib/workout-context";
 import {
   summarizeCompleteness,
-  estimatedDurationLabel,
   type RequiredRowSpec,
   type LoggedSetSpec,
   type RowMetricKind,
-  type EstimatedDurationRow,
 } from "@/lib/workout-completeness";
 import { useWorkoutHeartbeat, readHeartbeatTimestamps, clearHeartbeatTimestamps } from "@/hooks/use-workout-heartbeat";
 import { computeActiveSeconds } from "@/lib/workout-duration";
-import { LoggingQualityBadge } from "@/components/workout/shared/logging-quality-badge";
 import { WorkoutProgressRing } from "@/components/workout/shared/workout-progress-ring";
 import { CompletedWorkoutActions } from "@/components/workout/shared/completed-workout-actions";
 import { WorkoutStatusBar } from "@/components/workout-day/WorkoutStatusBar";
@@ -1850,20 +1846,16 @@ function WorkoutDay({
         backLabel="Workouts"
         title={formatDayLabel(day)}
         subtitle={(() => {
-          // Three information layers, in order of importance:
-          //   1. Coach-typed workout subtitle (e.g. "Final Heavy")
-          //   2. Full weekday + readable date (never an ISO string)
-          //   3. Block / week / focus context
+          // Inside the logger the athlete only needs to know WHICH workout
+          // this is: the coach subtitle plus short block/week context. The
+          // full date lives on the outside card and (when it matters) in the
+          // schedule notice below, so it is not repeated here.
           const sub = formatDaySubtitle(day);
-          const dateParts = formatTrainingDate(day.scheduled_date ?? null);
-          const dateLabel = dateParts ? `${dateParts.weekday}, ${dateParts.medium}` : null;
           const context = [
             block?.name,
             week?.week_index != null ? `Week ${week.week_index}` : null,
-            (week as any)?.phase || null,
-            day.focus || null,
           ].filter(Boolean).join(" · ");
-          return [sub, dateLabel, context].filter(Boolean).join(" · ");
+          return [sub, context].filter(Boolean).join(" · ");
         })()}
         actions={
           !readonly ? (
@@ -1880,24 +1872,6 @@ function WorkoutDay({
         />
 
         <CompactWorkoutSummaryRow
-          durationLabel={(() => {
-            try {
-              if (day.duration_override_min) return durationRange(day.duration_override_min);
-              const safeRows = Array.isArray(rows) ? (rows as any[]) : [];
-              const estRows: EstimatedDurationRow[] = safeRows.map((r: any) => ({
-                prescribedSets: Number(r?.sets) || 1,
-                restSeconds: r?.rest_seconds ?? null,
-                category: r?.exercises?.category ?? r?.category ?? null,
-                skipped: !!r?.skipped,
-              }));
-              const derived = estimatedDurationLabel(estRows);
-              if (derived) return derived;
-            } catch (e) {
-              // eslint-disable-next-line no-console
-              console.warn("[WorkoutDayView] duration pill fallback:", e);
-            }
-            return durationRange(day.duration_estimate_min ?? 60);
-          })()}
           setsDone={statusSummary.setsDone}
           setsTotal={statusSummary.setsTotal}
           exercisesDone={statusSummary.exercisesDone}
@@ -1907,34 +1881,6 @@ function WorkoutDay({
           savedDurationMin={completion?.actual_duration_min ?? null}
           completedAt={completion?.completed_at ?? null}
           onViewScore={completion?.completed_at ? openRecapSummary : undefined}
-          loggingQuality={(() => {
-            try {
-              const required: RequiredRowSpec[] = (rows as any[]).map((r: any) => ({
-                rowId: String(r.id),
-                prescribedSets: Math.max(1, Number(r.sets) || 1),
-                skipped: !!r.skipped,
-                metricKind: ((
-                  r?.tracking_type === "time" ||
-                  r?.measurement_type === "time" ||
-                  (r as any)?.exercises?.default_measurement_type === "time" ||
-                  (r?.duration_seconds != null && Number(r.duration_seconds) > 0) ||
-                  /\b(sec(onds?)?|min(utes?)?)\b/i.test(String(r?.reps_text ?? ""))
-                ) ? "timed" : "load_reps") as RowMetricKind,
-              }));
-              const logged: LoggedSetSpec[] = (results as any[]).map((x: any) => ({
-                rowId: String(x.row_id),
-                setIndex: x.set_index ?? 0,
-                reps: x.actual_reps,
-                loadLb: x.actual_load_unit === "kg" ? null : x.actual_load,
-                loadKg: x.actual_load_unit === "kg" ? x.actual_load : null,
-                rpe: x.actual_rpe_num ?? x.actual_rpe,
-                completedDurationSeconds: x.completed_duration_seconds ?? null,
-              }));
-              if (required.length === 0) return null;
-              const sum = summarizeCompleteness(required, logged);
-              return { quality: sum.loggingQuality, percentage: sum.loggingPercentage };
-            } catch { return null; }
-          })()}
         />
         {/* Compact action row — Warm-Up + Move sit together so they never
             create a tall empty band above the first exercise card. */}
@@ -4560,7 +4506,6 @@ function scrollToFirstIncompleteExercise() {
 }
 
 function CompactWorkoutSummaryRow({
-  durationLabel,
   setsDone,
   setsTotal,
   exercisesDone,
@@ -4570,9 +4515,7 @@ function CompactWorkoutSummaryRow({
   savedDurationMin,
   completedAt,
   onViewScore,
-  loggingQuality,
 }: {
-  durationLabel: string;
   setsDone: number;
   setsTotal: number;
   exercisesDone: number;
@@ -4582,7 +4525,6 @@ function CompactWorkoutSummaryRow({
   savedDurationMin?: number | null;
   completedAt: string | null;
   onViewScore?: () => void;
-  loggingQuality: { quality: any; percentage: number } | null;
 }) {
   const pct = setsTotal > 0 ? Math.min(100, Math.round((setsDone / setsTotal) * 100)) : 0;
   const status: import("@/lib/workout-progress").WorkoutProgressStatus =
@@ -4594,26 +4536,26 @@ function CompactWorkoutSummaryRow({
   // Display correction: a workout with zero logged sets must never read as
   // "Completed" in the summary strip, even if a completion row exists.
   const showCompleted = !!completedAt && setsDone > 0;
-  const statusLabel = showCompleted ? "Completed" : setsDone > 0 ? "In Progress" : "Not Started";
+  // "Not Started" is the only status the timer + ring can't already convey at
+  // a glance; "In Progress" duplicated the running timer and the progress
+  // ring, and the logging-quality badge duplicated the percentage, so both
+  // were removed from this row.
   return (
-    <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1.5 text-xs text-muted-foreground">
+    <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5 text-xs text-muted-foreground">
       <div className="inline-flex items-center gap-1.5 rounded-md bg-secondary/60 px-2 py-0.5">
         <Clock className="h-3.5 w-3.5 text-primary" />
-        <span className="hidden font-semibold uppercase tracking-wide text-[10px] text-muted-foreground sm:inline">
-          Workout Session
-        </span>
         <WorkoutTimer
           dayId={dayId}
           completedAt={completedAt}
           savedDurationMin={savedDurationMin ?? null}
           readonly={readonly}
-          className="ml-0.5"
+          className=""
         />
       </div>
       <button
         type="button"
         onClick={scrollToFirstIncompleteExercise}
-        className="inline-flex items-center gap-2 rounded-md px-1 py-0.5 tabular-nums transition-colors hover:bg-secondary/60 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+        className="ml-auto inline-flex items-center gap-2 rounded-md px-1 py-0.5 tabular-nums transition-colors hover:bg-secondary/60 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
         aria-label={`Workout progress ${pct}%, ${exercisesDone} of ${exercisesTotal} exercises. Scroll to first incomplete exercise.`}
       >
         <WorkoutProgressRing pct={pct} status={status} size={26} strokeWidth={3} />
@@ -4621,21 +4563,6 @@ function CompactWorkoutSummaryRow({
           {pct}% · {exercisesDone}/{exercisesTotal}
         </span>
       </button>
-      <span className="inline-flex items-center gap-1 text-muted-foreground">
-        <span aria-hidden className="opacity-40">•</span>
-        {durationLabel}
-      </span>
-      {!showCompleted && (
-        <span className="inline-flex items-center rounded-full border border-border bg-muted/40 px-2 py-0.5 text-[11px] font-bold uppercase tracking-wide text-muted-foreground">
-          {statusLabel}
-        </span>
-      )}
-      {loggingQuality && setsDone > 0 && (
-        <LoggingQualityBadge
-          quality={loggingQuality.quality}
-          percentage={loggingQuality.percentage}
-        />
-      )}
       {showCompleted && (
         <>
           <Badge

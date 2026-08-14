@@ -24,7 +24,7 @@ import {
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
-import { getClientWorkouts, durationRange, getBlockTree } from "@/lib/pl-programs";
+import { getClientWorkouts, getBlockTree } from "@/lib/pl-programs";
 import { cleanDayTitle, type WorkoutItem, dayScheduledDate } from "@/lib/workout-today";
 import { getWorkoutStatus, type WorkoutStatus } from "@/lib/workout-status";
 import { localStartOfToday, toLocalISO } from "@/lib/today";
@@ -1043,7 +1043,6 @@ function SelectedDayCard({
 
   const status = getWorkoutStatus(item);
   const title = cleanDayTitle(item.day?.title, item.day?.day_index);
-  const dur = item.day?.duration_override_min ?? item.day?.duration_estimate_min ?? null;
   const cta = primaryCtaFor(item, status.status);
 
   return (
@@ -1066,9 +1065,7 @@ function SelectedDayCard({
               {[
                 item.block?.name,
                 item.week?.week_index ? `Week ${item.week.week_index}` : null,
-                `Day ${item.day?.day_index ?? "?"}`,
                 format(date, "EEE MMM d"),
-                dur ? durationRange(dur) : null,
               ].filter(Boolean).join(" · ")}
             </div>
           </div>
@@ -1154,6 +1151,7 @@ function SelectedDayCard({
           {!readonly && status.status !== "completed_today"
             && status.status !== "completed_on_scheduled"
             && status.status !== "completed_different_day"
+            && cta.secondary?.label !== "Reschedule"
             && (
               <Button size="sm" variant="ghost" className="text-muted-foreground" onClick={() => setMoveOpen(true)}>
                 <Move className="mr-1 h-3.5 w-3.5" /> Reschedule

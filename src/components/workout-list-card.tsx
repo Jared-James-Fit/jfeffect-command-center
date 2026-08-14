@@ -5,7 +5,6 @@ import { Badge } from "@/components/ui/badge";
 import { Dumbbell, ChevronRight, Calendar as CalendarIcon, Pencil, MessageSquare, Move, ChevronDown } from "lucide-react";
 import { format } from "date-fns";
 import { getWorkoutStatus } from "@/lib/workout-status";
-import { durationRange } from "@/lib/pl-programs";
 import { cleanDayTitle, dayScheduledDate } from "@/lib/workout-today";
 import { MoveWorkoutSheet } from "@/components/schedule/MoveWorkoutSheet";
 import { InlineWorkoutPreview } from "@/components/workout/shared/inline-workout-preview";
@@ -26,7 +25,6 @@ export function WorkoutListCard({
   if (!item.day?.id) return null;
   const status = getWorkoutStatus(item);
   const title = cleanDayTitle(item.day.title, item.day.day_index);
-  const dur = item.day.duration_override_min ?? item.day.duration_estimate_min ?? null;
   const weekLabel = item.week?.week_index ? `Week ${item.week.week_index}` : "";
   const isCompleted = !!item.completion?.completed_at;
   const hasReview = !!item.completion?.has_feedback;
@@ -60,13 +58,11 @@ export function WorkoutListCard({
           </div>
           <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-muted-foreground">
             {weekLabel && <span>{weekLabel}</span>}
-            {item.day.focus && <span>· {item.day.focus}</span>}
             {status.scheduled && (
               <span className="inline-flex items-center gap-1">
                 <CalendarIcon className="h-3 w-3" /> {format(status.scheduled, "EEE MMM d")}
               </span>
             )}
-            {dur && <span>· {durationRange(dur)}</span>}
           </div>
         </div>
         {progress && progress.prescribedSets > 0 && (
