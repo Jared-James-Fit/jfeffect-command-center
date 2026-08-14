@@ -2175,6 +2175,8 @@ function WorkoutDay({
             completion?.actual_duration_min ?? sessionDurationMin(dayId) ?? null
           }
           workoutDate={completion?.completed_at ?? scheduledDate ?? null}
+          prs={sessionPRs}
+          cardio={cardioTakeaway}
           sessionRating={
             lastSessionRating ??
             (completion as any)?.session_rating ??
