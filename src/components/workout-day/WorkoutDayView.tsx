@@ -3526,6 +3526,8 @@ function SetRow({
     // values we're about to display.
     recentlySavedRef.current = false;
     setFocusedField(null);
+    // Explicit user action: it supersedes any unconfirmed inline commit.
+    committedLoadRef.current = null;
     // Prefer the freshly-written snapshot from the parent: it bypasses the
     // React Query cache race (refetch may not have landed by the time this
     // effect runs, so `latest` can still hold a stale value like 90 lb from
@@ -3566,6 +3568,12 @@ function SetRow({
     setFocusedField(null);
     setLoadType(cascade.loadType);
     setLoad(cascade.loadType === "bodyweight" ? "0" : cascade.load);
+    // The parent's batch write carries this value — treat it as our commit so
+    // a stale refetch can't restore the pre-cascade weight either.
+    committedLoadRef.current = {
+      load: cascade.loadType === "bodyweight" ? "0" : cascade.load,
+      loadType: cascade.loadType,
+    };
     if (!repsEdited && existing?.actual_reps == null && cascade.reps) setReps(cascade.reps);
     // RPE/RIR is deliberately NOT cascaded — that system is untouched.
     setOptimisticComplete(
