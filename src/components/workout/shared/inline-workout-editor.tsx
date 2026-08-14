@@ -497,8 +497,17 @@ export function InlineWorkoutEditor({
                       <Input inputMode="numeric" value={r.sets} onChange={(e) => patchRow(i, { sets: e.target.value })} />
                     </div>
                     <div>
-                      <Label className="text-[10px]">Reps</Label>
-                      <Input value={r.reps_text} onChange={(e) => patchRow(i, { reps_text: e.target.value })} placeholder="8-10" />
+                      <Label className="text-[10px]">{r.measurement_type === "time" ? "Time (s)" : "Reps"}</Label>
+                      {r.measurement_type === "time" ? (
+                        <Input
+                          inputMode="numeric"
+                          value={r.duration_seconds}
+                          onChange={(e) => patchRow(i, { duration_seconds: e.target.value })}
+                          placeholder="45"
+                        />
+                      ) : (
+                        <Input value={r.reps_text} onChange={(e) => patchRow(i, { reps_text: e.target.value })} placeholder="8-10" />
+                      )}
                     </div>
                     <div>
                       <Label className="text-[10px]">RPE</Label>
@@ -507,6 +516,27 @@ export function InlineWorkoutEditor({
                     <div>
                       <Label className="text-[10px]">Rest (s)</Label>
                       <Input inputMode="numeric" value={r.rest_seconds} onChange={(e) => patchRow(i, { rest_seconds: e.target.value })} />
+                    </div>
+                  </div>
+                  {/* Measurement: how the client logs this exercise */}
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Measure</span>
+                    <div className="inline-flex overflow-hidden rounded-md border border-border">
+                      {(["reps", "time"] as const).map((m) => (
+                        <button
+                          key={m}
+                          type="button"
+                          onClick={() => patchRow(i, { measurement_type: m })}
+                          className={cn(
+                            "h-6 px-2 text-[11px] font-bold capitalize transition-colors",
+                            r.measurement_type === m
+                              ? "bg-primary text-primary-foreground"
+                              : "bg-transparent text-muted-foreground hover:bg-secondary",
+                          )}
+                        >
+                          {m}
+                        </button>
+                      ))}
                     </div>
                   </div>
                   <div className="grid grid-cols-2 gap-2">
