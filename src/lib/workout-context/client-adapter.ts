@@ -671,9 +671,19 @@ export function createClientAdapter(ref: WorkoutContextRef): WorkoutContextAdapt
      */
     async upsertPlRowResultRaw(payload, id) {
       if (id) {
-        const { error } = await sb.from("pl_row_results").update(payload).eq("id", id);
+        // OVERWRITE FIX: a PostgREST update that matches ZERO rows returns no
+        // error, so a stale/replaced row id used to make an edit silently
+        // vanish (the UI then snapped back to the previously saved weight on
+        // the next refetch). Ask for the affected row back; when nothing was
+        // updated, fall through to the natural-key resolve/insert path below.
+        const { data, error } = await sb
+          .from("pl_row_results")
+          .update(payload)
+          .eq("id", id)
+          .select("id")
+          .maybeSingle();
         if (error) throw new Error(error.message);
-        return { id };
+        if (data?.id) return { id: data.id as string };
       }
       // Slice 2c: same partial-unique split as upsertRowResult. Also
       // ensure the instance id gets stamped on inserts when the adapter
