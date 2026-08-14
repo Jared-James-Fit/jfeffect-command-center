@@ -1876,24 +1876,6 @@ function WorkoutDay({
         />
 
         <CompactWorkoutSummaryRow
-          durationLabel={(() => {
-            try {
-              if (day.duration_override_min) return durationRange(day.duration_override_min);
-              const safeRows = Array.isArray(rows) ? (rows as any[]) : [];
-              const estRows: EstimatedDurationRow[] = safeRows.map((r: any) => ({
-                prescribedSets: Number(r?.sets) || 1,
-                restSeconds: r?.rest_seconds ?? null,
-                category: r?.exercises?.category ?? r?.category ?? null,
-                skipped: !!r?.skipped,
-              }));
-              const derived = estimatedDurationLabel(estRows);
-              if (derived) return derived;
-            } catch (e) {
-              // eslint-disable-next-line no-console
-              console.warn("[WorkoutDayView] duration pill fallback:", e);
-            }
-            return durationRange(day.duration_estimate_min ?? 60);
-          })()}
           setsDone={statusSummary.setsDone}
           setsTotal={statusSummary.setsTotal}
           exercisesDone={statusSummary.exercisesDone}
@@ -1903,34 +1885,6 @@ function WorkoutDay({
           savedDurationMin={completion?.actual_duration_min ?? null}
           completedAt={completion?.completed_at ?? null}
           onViewScore={completion?.completed_at ? openRecapSummary : undefined}
-          loggingQuality={(() => {
-            try {
-              const required: RequiredRowSpec[] = (rows as any[]).map((r: any) => ({
-                rowId: String(r.id),
-                prescribedSets: Math.max(1, Number(r.sets) || 1),
-                skipped: !!r.skipped,
-                metricKind: ((
-                  r?.tracking_type === "time" ||
-                  r?.measurement_type === "time" ||
-                  (r as any)?.exercises?.default_measurement_type === "time" ||
-                  (r?.duration_seconds != null && Number(r.duration_seconds) > 0) ||
-                  /\b(sec(onds?)?|min(utes?)?)\b/i.test(String(r?.reps_text ?? ""))
-                ) ? "timed" : "load_reps") as RowMetricKind,
-              }));
-              const logged: LoggedSetSpec[] = (results as any[]).map((x: any) => ({
-                rowId: String(x.row_id),
-                setIndex: x.set_index ?? 0,
-                reps: x.actual_reps,
-                loadLb: x.actual_load_unit === "kg" ? null : x.actual_load,
-                loadKg: x.actual_load_unit === "kg" ? x.actual_load : null,
-                rpe: x.actual_rpe_num ?? x.actual_rpe,
-                completedDurationSeconds: x.completed_duration_seconds ?? null,
-              }));
-              if (required.length === 0) return null;
-              const sum = summarizeCompleteness(required, logged);
-              return { quality: sum.loggingQuality, percentage: sum.loggingPercentage };
-            } catch { return null; }
-          })()}
         />
         {/* Compact action row — Warm-Up + Move sit together so they never
             create a tall empty band above the first exercise card. */}
