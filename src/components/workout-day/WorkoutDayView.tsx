@@ -3919,7 +3919,6 @@ function SetRow({
   // column is blank. Applies app-wide for every client.
   const isTimeKind = showTimer;
   const existingLoadNum = existing?.actual_load != null ? Number(existing.actual_load) : NaN;
-  const existingDurNum = (existing as any)?.completed_duration_seconds != null ? Number((existing as any).completed_duration_seconds) : NaN;
   const existingRepsNum = existing?.actual_reps != null ? Number(existing.actual_reps) : NaN;
   // Persisted-row completeness (green styling) uses the same shared validator
   // as the autosave stamp so the circle can never disagree with the data.
@@ -4176,11 +4175,7 @@ function SetRow({
   }, [repMaxBests, assistedBests, (existing as any)?.load_type, (existing as any)?.is_bodyweight, existing?.completed_at, existing?.actual_reps, existing?.actual_load, existing?.actual_load_unit, unit]);
 
   // ── Time-based completion (per-set countdown timer + quick-confirm) ────
-  const isTime = showTimer;
   const prescribedSec = prescribedDurationSeconds ?? null;
-  const completedSec = (existing as any)?.completed_duration_seconds as number | null | undefined;
-  const [timerOpen, setTimerOpen] = useState(false);
-  const [quickOpen, setQuickOpen] = useState(false);
 
   const saveTimeCompletion = async (completedSeconds: number, opts: {
     method: "countdown_timer" | "stopwatch" | "prescribed_quick_confirm" | "manual_entry";
