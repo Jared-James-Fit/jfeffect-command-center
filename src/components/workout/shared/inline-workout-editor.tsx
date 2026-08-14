@@ -133,7 +133,7 @@ export function InlineWorkoutEditor({
       const rowsRes = await supabase
         .from("pl_exercise_rows")
         .select(
-          "id, exercise_id, exercise_name_override, sets, reps_text, rpe, load_lb, load_kg, rest_seconds, notes, sort_order, exercises(name)",
+          "id, exercise_id, exercise_name_override, sets, reps_text, rpe, load_lb, load_kg, rest_seconds, notes, sort_order, measurement_type, duration_seconds, exercises(name)",
         )
         .eq("day_id", dayId)
         .order("sort_order", { ascending: true });
@@ -192,6 +192,8 @@ export function InlineWorkoutEditor({
       if (strOrNull(r.load_kg) !== (o.load_kg != null ? String(o.load_kg) : null)) return true;
       if (strOrNull(r.rest_seconds) !== (o.rest_seconds != null ? String(o.rest_seconds) : null)) return true;
       if (strOrNull(r.notes) !== (o.notes ?? null)) return true;
+      if (r.measurement_type !== (o.measurement_type === "time" ? "time" : "reps")) return true;
+      if (strOrNull(r.duration_seconds) !== (o.duration_seconds != null ? String(o.duration_seconds) : null)) return true;
     }
     return false;
   }, [hydrated, title, subtitle, dayNotes, dateStr, rows, scheduledDate]);
