@@ -37,15 +37,9 @@ function ExercisesRedirect() {
   return null;
 }
 
-const CATEGORIES: readonly string[] = EXERCISE_CATEGORIES; // eslint-disable-line
-const _LEGACY_CATEGORIES = ["Squat", "Bench", "Deadlift", "Upper Body", "Lower Body", "Back", "Chest", "Shoulders", "Arms", "Glutes", "Core", "Mobility", "Warm-Ups", "Powerlifting", "Bodybuilding", "Cardio"];
+const CATEGORIES: readonly string[] = EXERCISE_CATEGORIES;
 
 const PRIMARY_MUSCLE_GROUPS: readonly string[] = SHARED_PRIMARY_MUSCLE_GROUPS;
-const _LEGACY_PRIMARY_MUSCLE_GROUPS = [
-  "Chest","Lats","Upper Back","Traps","Front Delts","Side Delts","Rear Delts",
-  "Biceps","Triceps","Forearms","Quads","Hamstrings","Glutes","Adductors",
-  "Calves","Abs/Core","Lower Back","Other",
-] as const;
 
 const MIGRATION_FILTERS: { value: string; label: string }[] = [
   { value: "all", label: "All exercises" },
