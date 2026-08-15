@@ -1,39 +1,15 @@
-import { useState } from "react";
-import { useQueryClient } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
-import { toast } from "sonner";
-import { invalidateExerciseLibrary, upsertExerciseInLibraryCaches } from "@/lib/exercise-library-cache";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import {
   Dialog,
   DialogContent,
-  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { ExerciseQuickCreateForm } from "@/components/exercises/exercise-quick-create-form";
 
-const CATEGORIES = [
-  "Squat", "Bench", "Deadlift", "Upper Body", "Lower Body", "Back",
-  "Chest", "Shoulders", "Arms", "Glutes", "Core", "Mobility",
-  "Warm-Ups", "Powerlifting", "Bodybuilding", "Cardio",
-];
-
-const PRIMARY_MUSCLE_GROUPS = [
-  "Chest","Lats","Upper Back","Traps","Front Delts","Side Delts","Rear Delts",
-  "Biceps","Triceps","Forearms","Quads","Hamstrings","Glutes","Adductors",
-  "Calves","Abs/Core","Lower Back","Other",
-] as const;
-
+/**
+ * Quick add from search surfaces (Quick Swap, inline editor, builder).
+ * Only the name is required — see ExerciseQuickCreateForm.
+ */
 export function QuickAddExerciseDialog({
   open,
   onOpenChange,
@@ -47,182 +23,23 @@ export function QuickAddExerciseDialog({
   /** Called with the new exercise id after a successful insert. */
   onCreated?: (id: string, name: string) => void;
 }) {
-  const qc = useQueryClient();
-  const [busy, setBusy] = useState(false);
-  const [form, setForm] = useState({
-    name: defaultName ?? "",
-    category: CATEGORIES[0],
-    primary_muscle_group: "",
-    muscle_group: "",
-    equipment: "",
-    youtube_url: "",
-    cues: "",
-    common_mistakes: "",
-    difficulty: "Intermediate",
-    default_load_unit: "lb" as "kg" | "lb",
-  });
-
-  // Reset / prefill whenever the dialog opens.
-  const handleOpenChange = (next: boolean) => {
-    if (next) {
-      setForm({
-        name: defaultName ?? "",
-        category: CATEGORIES[0],
-        primary_muscle_group: "",
-        muscle_group: "",
-        equipment: "",
-        youtube_url: "",
-        cues: "",
-        common_mistakes: "",
-        difficulty: "Intermediate",
-        default_load_unit: "lb",
-      });
-    }
-    onOpenChange(next);
-  };
-
-  const submit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!form.name.trim()) return;
-    if (!form.primary_muscle_group) {
-      toast.error("Primary muscle group is required");
-      return;
-    }
-    setBusy(true);
-    const { data, error } = await supabase
-      .from("exercises")
-      .insert({ ...form, archived: false })
-      .select("*")
-      .single();
-    setBusy(false);
-    if (error || !data) {
-      toast.error(error?.message ?? "Could not save exercise");
-      return;
-    }
-    upsertExerciseInLibraryCaches(qc, data);
-    toast.success(`Added "${data.name}" to library`);
-    // Refresh both the admin list and the builder's minimal projection.
-    await invalidateExerciseLibrary(qc);
-    onCreated?.(data.id, data.name);
-    onOpenChange(false);
-  };
-
   return (
-    <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="max-w-lg">
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Quick add exercise</DialogTitle>
+          <DialogTitle>New exercise</DialogTitle>
         </DialogHeader>
-        <form onSubmit={submit} className="space-y-3">
-          <div>
-            <Label>Name *</Label>
-            <Input
-              autoFocus
-              required
-              value={form.name}
-              onChange={(e) => setForm({ ...form, name: e.target.value })}
-            />
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <Label>Category</Label>
-              <Select
-                value={form.category}
-                onValueChange={(v) => setForm({ ...form, category: v })}
-              >
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {CATEGORIES.map((c) => (
-                    <SelectItem key={c} value={c}>{c}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label>Muscle group</Label>
-              <Input
-                value={form.muscle_group}
-                onChange={(e) => setForm({ ...form, muscle_group: e.target.value })}
-              />
-            </div>
-            <div className="col-span-2">
-              <Label>Primary muscle group *</Label>
-              <Select
-                value={form.primary_muscle_group}
-                onValueChange={(v) => setForm({ ...form, primary_muscle_group: v })}
-              >
-                <SelectTrigger><SelectValue placeholder="Select primary muscle…" /></SelectTrigger>
-                <SelectContent>
-                  {PRIMARY_MUSCLE_GROUPS.map((m) => (
-                    <SelectItem key={m} value={m}>{m}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label>Equipment</Label>
-              <Input
-                value={form.equipment}
-                onChange={(e) => setForm({ ...form, equipment: e.target.value })}
-              />
-            </div>
-            <div>
-              <Label>Difficulty</Label>
-              <Input
-                value={form.difficulty}
-                onChange={(e) => setForm({ ...form, difficulty: e.target.value })}
-              />
-            </div>
-            <div className="col-span-2">
-              <Label>Default unit</Label>
-              <Select
-                value={form.default_load_unit}
-                onValueChange={(v) => setForm({ ...form, default_load_unit: v as "kg" | "lb" })}
-              >
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="lb">lb (pounds)</SelectItem>
-                  <SelectItem value="kg">kg (kilograms)</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-          <div>
-            <Label>YouTube URL</Label>
-            <Input
-              value={form.youtube_url}
-              onChange={(e) => setForm({ ...form, youtube_url: e.target.value })}
-            />
-          </div>
-          <div>
-            <Label>Coaching cues</Label>
-            <Textarea
-              rows={2}
-              value={form.cues}
-              onChange={(e) => setForm({ ...form, cues: e.target.value })}
-            />
-          </div>
-          <div>
-            <Label>Common mistakes</Label>
-            <Textarea
-              rows={2}
-              value={form.common_mistakes}
-              onChange={(e) => setForm({ ...form, common_mistakes: e.target.value })}
-            />
-          </div>
-          <DialogFooter>
-            <Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>
-              Cancel
-            </Button>
-            <Button
-              type="submit"
-              disabled={busy || !form.name.trim()}
-              className="bg-gradient-primary font-bold uppercase"
-            >
-              {busy ? "Saving…" : "Add to library"}
-            </Button>
-          </DialogFooter>
-        </form>
+        {open ? (
+          <ExerciseQuickCreateForm
+            defaultName={defaultName}
+            onCancel={() => onOpenChange(false)}
+            onCreated={(id, name) => {
+              onCreated?.(id, name);
+              onOpenChange(false);
+            }}
+            submitLabel="Add"
+          />
+        ) : null}
       </DialogContent>
     </Dialog>
   );
