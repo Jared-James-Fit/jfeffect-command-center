@@ -17843,6 +17843,7 @@ export type Database = {
           quadrant: Database["public"]["Enums"]["task_quadrant"]
           recurring_rule: Json | null
           scope: string
+          source_key: string | null
           status: Database["public"]["Enums"]["task_status"]
           status_label: string | null
           title: string
@@ -17871,6 +17872,7 @@ export type Database = {
           quadrant?: Database["public"]["Enums"]["task_quadrant"]
           recurring_rule?: Json | null
           scope?: string
+          source_key?: string | null
           status?: Database["public"]["Enums"]["task_status"]
           status_label?: string | null
           title: string
@@ -17899,6 +17901,7 @@ export type Database = {
           quadrant?: Database["public"]["Enums"]["task_quadrant"]
           recurring_rule?: Json | null
           scope?: string
+          source_key?: string | null
           status?: Database["public"]["Enums"]["task_status"]
           status_label?: string | null
           title?: string
