@@ -66,6 +66,13 @@ export function ExercisesAdmin({ embedded = false }: { embedded?: boolean } = {}
 
   const { data: exercises = [] } = useQuery({
     queryKey: ["exercises"],
+    // This library is an operational authoring surface. A new exercise must
+    // become searchable after a reload, a tab switch, or a reconnect; never
+    // let a hydrated snapshot mask a database row that was successfully saved.
+    staleTime: 0,
+    refetchOnMount: "always",
+    refetchOnWindowFocus: true,
+    refetchOnReconnect: "always",
     queryFn: async () => {
       const { data, error } = await supabase.from("exercises").select("*").order("name").limit(5000);
       if (error) throw error;

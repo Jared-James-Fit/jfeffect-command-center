@@ -4,15 +4,22 @@ import type { Persister } from "@tanstack/react-query-persist-client";
 // Bumping the buster invalidates all previously persisted caches across
 // every browser/PWA. Bump when the persisted query shapes change in a
 // breaking way.
-// Bumped to v3 to evict pre-existing broken caches where a Set-valued
-// query (pl-exercise-favorites) had been JSON.stringify'd into `{}`.
-export const QUERY_PERSIST_BUSTER = "v3";
+// Bumped to v4 to evict existing persisted exercise-library lists. Exercise
+// data is mutable operational data; rehydrating a disk snapshot can hide a
+// newly created exercise until the stale snapshot expires.
+export const QUERY_PERSIST_BUSTER = "v4";
 export const QUERY_PERSIST_KEY = "jfeffect-rq-cache";
 export const QUERY_PERSIST_MAX_AGE = 24 * 60 * 60 * 1000; // 24h
 
 // Query keys we never want to persist to disk. These are either large,
 // sensitive, or change too often for a cached copy to be useful.
 const DO_NOT_PERSIST_PREFIXES = [
+  // The full exercise lists are mutable operational data. Rehydrating a disk
+  // snapshot can hide exercises created in another tab or device, including
+  // immediately after a successful save. Always obtain these lists fresh.
+  "exercises",
+  "exercises-min",
+  "exercise-search-pool-lite",
   "messages",
   "thread",
   "conversation",
