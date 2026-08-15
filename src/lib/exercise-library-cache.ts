@@ -28,6 +28,43 @@ export function isExerciseLibraryQueryKey(queryKey: readonly unknown[]): boolean
   );
 }
 
+const RAW_EXERCISE_LIST_PREFIXES = new Set([
+  "exercises",
+  "exercises-min",
+  "exercise-search-pool",
+  "exercise-search-pool-lite",
+]);
+
+type CachedExercise = { id: string; name?: string | null; archived?: boolean | null } & Record<string, unknown>;
+
+/**
+ * Put a newly-created exercise into every raw list immediately. Invalidating
+ * alone leaves a visible delay on mobile (and can be superseded by a hydrated
+ * cache), so the success toast must only appear after the current cache
+ * already contains the returned database row.
+ */
+export function upsertExerciseInLibraryCaches(
+  qc: QueryClient,
+  exercise: CachedExercise,
+): void {
+  qc.setQueriesData<CachedExercise[]>(
+    {
+      predicate: (query) => {
+        const first = query.queryKey[0];
+        return typeof first === "string" && RAW_EXERCISE_LIST_PREFIXES.has(first);
+      },
+    },
+    (current) => {
+      if (!Array.isArray(current)) return current;
+      const existing = current.find((row) => row?.id === exercise.id);
+      const next = existing
+        ? current.map((row) => row?.id === exercise.id ? { ...row, ...exercise } : row)
+        : [...current, exercise];
+      return next.sort((a, b) => String(a.name ?? "").localeCompare(String(b.name ?? "")));
+    },
+  );
+}
+
 /**
  * Invalidate + refetch every exercise-library consumer, including the
  * ones that are currently unmounted (`refetchType: "all"`), so reopening

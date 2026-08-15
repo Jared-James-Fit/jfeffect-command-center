@@ -13,7 +13,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Plus, Search, Trash2, Youtube, Pencil, CheckCircle2, AlertTriangle, Flame, BarChart3 } from "lucide-react";
-import { invalidateExerciseLibrary } from "@/lib/exercise-library-cache";
+import { invalidateExerciseLibrary, upsertExerciseInLibraryCaches } from "@/lib/exercise-library-cache";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
@@ -558,6 +558,7 @@ function EditExerciseDialog({
 }
 
 function NewExerciseDialog({ onClose, onCreated }: { onClose: () => void; onCreated: () => void }) {
+  const qc = useQueryClient();
   const [form, setForm] = useState({
     name: "", category: CATEGORIES[0], primary_muscle_group: "", muscle_group: "", equipment: "",
     youtube_url: "", cues: "", common_mistakes: "", difficulty: "Intermediate",
@@ -572,10 +573,11 @@ function NewExerciseDialog({ onClose, onCreated }: { onClose: () => void; onCrea
     const { data: created, error } = await supabase
       .from("exercises")
       .insert({ ...form, archived: false })
-      .select("id, name")
+      .select("*")
       .single();
     setBusy(false);
     if (error || !created) return toast.error(error?.message ?? "Could not save exercise");
+    upsertExerciseInLibraryCaches(qc, created);
     toast.success(`Added "${created.name}" to library`);
     onCreated();
     onClose();
