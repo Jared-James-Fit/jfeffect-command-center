@@ -92,13 +92,13 @@ export function AdminTopBar({ showDashboardMode = true }: { showDashboardMode?: 
   return (
     <div
       className={cn(
-        "sticky top-0 z-40 flex flex-wrap items-center justify-between gap-2 border-b px-3 py-1.5 backdrop-blur supports-[backdrop-filter]:bg-background/80 md:px-6",
+        "sticky top-0 z-40 flex items-center justify-between gap-2 overflow-x-auto border-b px-3 py-1.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden backdrop-blur supports-[backdrop-filter]:bg-background/80 md:px-6",
         isMemberView ? "border-emerald-500/30 bg-emerald-500/10" : "border-border bg-background/90",
       )}
     >
-      <div className="flex min-w-0 flex-wrap items-center gap-2">
+      <div className="flex min-w-0 items-center gap-1.5">
         {showDashboardMode && (
-          <div className="inline-flex items-center gap-0.5 rounded-md border border-border bg-card p-0.5 text-xs">
+          <div className="inline-flex shrink-0 items-center gap-0.5 rounded-md border border-border bg-card p-0.5 text-xs">
             <ModeTab active={mode === "coaching"} onClick={() => selectMode("coaching")} icon={<Briefcase className="h-3.5 w-3.5" />} label="Coaching" />
             <ModeTab active={mode === "membership"} onClick={() => selectMode("membership")} icon={<Sparkles className="h-3.5 w-3.5" />} label="Membership" />
             <ModeTab active={mode === "media"} onClick={() => selectMode("media")} icon={<Film className="h-3.5 w-3.5" />} label="Media" />
@@ -131,7 +131,7 @@ export function AdminTopBar({ showDashboardMode = true }: { showDashboardMode?: 
           </span>
         </div>
       </div>
-      <div className="inline-flex items-center gap-0.5 rounded-md border border-border bg-card p-0.5">
+      <div className="inline-flex shrink-0 items-center gap-0.5 rounded-md border border-border bg-card p-0.5">
         <PovBtn active={!isMemberView} onClick={goAdmin} disabled={busy || !isMemberView} icon={<Shield className="h-3.5 w-3.5" />} label="Admin" />
         <PovBtn active={isMemberView} onClick={goMember} disabled={busy || isMemberView} icon={<User className="h-3.5 w-3.5" />} label="Member" tint="emerald" />
         {canClientPov && (
@@ -173,12 +173,14 @@ function ModeTab({ active, onClick, icon, label }: { active: boolean; onClick: (
       type="button"
       onClick={onClick}
       className={cn(
-        "flex items-center gap-1.5 rounded px-2.5 py-1 text-xs font-semibold transition-colors",
+        "flex items-center gap-1.5 rounded px-2 py-1 text-xs font-semibold transition-colors sm:px-2.5",
         active ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted hover:text-foreground",
       )}
+      aria-label={label}
+      title={label}
     >
       {icon}
-      {label}
+      <span className="hidden sm:inline">{label}</span>
     </button>
   );
 }
@@ -192,16 +194,18 @@ function PovBtn({
       onClick={onClick}
       disabled={disabled}
       className={cn(
-        "flex items-center gap-1.5 rounded px-2.5 py-1 text-xs font-semibold transition-colors disabled:cursor-default",
+        "flex items-center gap-1.5 rounded px-2 py-1 text-xs font-semibold transition-colors disabled:cursor-default sm:px-2.5",
         active
           ? tint === "emerald"
             ? "bg-emerald-600 text-white"
             : "bg-primary text-primary-foreground"
           : "text-muted-foreground hover:bg-muted hover:text-foreground",
       )}
+      aria-label={label}
+      title={label}
     >
       {icon}
-      {label}
+      <span className="hidden sm:inline">{label}</span>
     </button>
   );
 }

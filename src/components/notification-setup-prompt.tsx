@@ -13,7 +13,7 @@ import {
 
 type PromptStatus = "loading" | "active" | "inactive" | "blocked" | "unsupported";
 
-export function NotificationSetupPrompt({ className }: { className?: string }) {
+export function NotificationSetupPrompt({ className, problemsOnly }: { className?: string; problemsOnly?: boolean }) {
   const [status, setStatus] = useState<PromptStatus>("loading");
   const [support, setSupport] = useState<PushSupport | null>(null);
   const [busy, setBusy] = useState(false);
@@ -54,6 +54,8 @@ export function NotificationSetupPrompt({ className }: { className?: string }) {
   }
 
   if (status === "loading") return null;
+  // Dashboard usage: only take up space when something is actually wrong.
+  if (problemsOnly && (status === "active" || status === "unsupported")) return null;
 
   const active = status === "active";
   const blocked = status === "blocked";
