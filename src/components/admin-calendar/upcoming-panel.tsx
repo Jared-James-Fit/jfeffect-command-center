@@ -352,45 +352,45 @@ function UpcomingRow({ row, onChanged }: { row: UnifiedRow; onChanged: () => voi
         <div className="flex flex-wrap items-center gap-1.5">
           {row.client_id && (
             <Link to="/admin/crm/contacts/$id" params={{ id: row.client_id }}>
-              <Button size="sm" variant="outline" className="h-7 text-xs"><LinkIcon className="mr-1 h-3 w-3" /> CRM</Button>
+              <Button size="sm" variant="outline" className="h-11 text-xs md:h-7"><LinkIcon className="mr-1 h-3 w-3" /> CRM</Button>
             </Link>
           )}
           {row.client_id && row.client_is_active && (
             <ClientNameLink clientId={row.client_id}>
-              <Button size="sm" variant="outline" className="h-7 text-xs">Client</Button>
+              <Button size="sm" variant="outline" className="h-11 text-xs md:h-7">Client</Button>
             </ClientNameLink>
           )}
           {row.meet_link && (
             <a href={row.meet_link} target="_blank" rel="noreferrer">
-              <Button size="sm" variant="outline" className="h-7 text-xs"><Video className="mr-1 h-3 w-3" /> Join</Button>
+              <Button size="sm" variant="outline" className="h-11 text-xs md:h-7"><Video className="mr-1 h-3 w-3" /> Join</Button>
             </a>
           )}
           {row.meet_link && (
-            <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={copyMeet}><Copy className="mr-1 h-3 w-3" /> Copy</Button>
+            <Button size="sm" variant="ghost" className="h-11 text-xs md:h-7" onClick={copyMeet}><Copy className="mr-1 h-3 w-3" /> Copy</Button>
           )}
           {row.google_html_link && (
             <a href={row.google_html_link} target="_blank" rel="noreferrer">
-              <Button size="sm" variant="ghost" className="h-7 text-xs"><ExternalLink className="mr-1 h-3 w-3" /> Google</Button>
+              <Button size="sm" variant="ghost" className="h-11 text-xs md:h-7"><ExternalLink className="mr-1 h-3 w-3" /> Google</Button>
             </a>
           )}
           {isAppt && row.status === "Scheduled" && (
             <>
-              <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => setReOpen(true)} disabled={busy}>
+              <Button size="sm" variant="outline" className="h-11 text-xs md:h-7" onClick={() => setReOpen(true)} disabled={busy}>
                 <CalendarClock className="mr-1 h-3 w-3" /> Reschedule
               </Button>
-              <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => markStatus("Completed")} disabled={busy}>
+              <Button size="sm" variant="outline" className="h-11 text-xs md:h-7" onClick={() => markStatus("Completed")} disabled={busy}>
                 <CheckCircle2 className="mr-1 h-3 w-3" /> Complete
               </Button>
-              <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => markStatus("NoShow")} disabled={busy}>
+              <Button size="sm" variant="outline" className="h-11 text-xs md:h-7" onClick={() => markStatus("NoShow")} disabled={busy}>
                 <AlertTriangle className="mr-1 h-3 w-3" /> No-show
               </Button>
-              <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => setCancelOpen(true)} disabled={busy}>
+              <Button size="sm" variant="ghost" className="h-11 text-xs md:h-7" onClick={() => setCancelOpen(true)} disabled={busy}>
                 <X className="mr-1 h-3 w-3" /> Cancel
               </Button>
             </>
           )}
           {isGoogleOnly && !row.client_id && (
-            <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => setAssignOpen(true)}>
+            <Button size="sm" variant="outline" className="h-11 text-xs md:h-7" onClick={() => setAssignOpen(true)}>
               <UserPlus className="mr-1 h-3 w-3" /> Assign Client
             </Button>
           )}

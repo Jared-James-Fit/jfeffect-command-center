@@ -88,9 +88,9 @@ export function AppointmentCalendarGrid({ onPickDate }: { onPickDate?: (d: Date)
     <Card className="border-border bg-card p-3 md:p-4">
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-1">
-          <Button size="icon" variant="ghost" onClick={() => shift(-1)} className="h-8 w-8"><ChevronLeft className="h-4 w-4" /></Button>
-          <Button size="sm" variant="outline" onClick={() => setAnchor(new Date())} className="h-8">Today</Button>
-          <Button size="icon" variant="ghost" onClick={() => shift(1)} className="h-8 w-8"><ChevronRight className="h-4 w-4" /></Button>
+          <Button size="icon" variant="ghost" onClick={() => shift(-1)} className="h-11 w-11 md:h-8 md:w-8"><ChevronLeft className="h-4 w-4" /></Button>
+          <Button size="sm" variant="outline" onClick={() => setAnchor(new Date())} className="h-11 md:h-8">Today</Button>
+          <Button size="icon" variant="ghost" onClick={() => shift(1)} className="h-11 w-11 md:h-8 md:w-8"><ChevronRight className="h-4 w-4" /></Button>
           <span className="ml-2 text-sm font-semibold">{title}</span>
         </div>
         <div className="flex gap-1">
@@ -98,13 +98,13 @@ export function AppointmentCalendarGrid({ onPickDate }: { onPickDate?: (d: Date)
             size="sm"
             variant={showGoogle ? "default" : "outline"}
             onClick={() => setShowGoogle((v) => !v)}
-            className="h-8"
+            className="h-11 md:h-8"
             title="Toggle Google Calendar overlay"
           >
             <GCalIcon className="mr-1 h-3.5 w-3.5" /> Google
           </Button>
-          <Button size="sm" variant={mode === "week" ? "default" : "outline"} onClick={() => setMode("week")} className="h-8">Week</Button>
-          <Button size="sm" variant={mode === "month" ? "default" : "outline"} onClick={() => setMode("month")} className="h-8">Month</Button>
+          <Button size="sm" variant={mode === "week" ? "default" : "outline"} onClick={() => setMode("week")} className="h-11 md:h-8">Week</Button>
+          <Button size="sm" variant={mode === "month" ? "default" : "outline"} onClick={() => setMode("month")} className="h-11 md:h-8">Month</Button>
         </div>
       </div>
       <div className={`grid gap-1 ${mode === "week" ? "grid-cols-1 md:grid-cols-7" : "grid-cols-7"}`}>
