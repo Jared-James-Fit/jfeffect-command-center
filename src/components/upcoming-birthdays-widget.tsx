@@ -57,7 +57,7 @@ function computeBirthdayInfo(dob: string, ref: Date = new Date()) {
 
 const UPCOMING_DAYS_DEFAULT = 30;
 
-export function UpcomingBirthdaysWidget() {
+export function UpcomingBirthdaysWidget({ windowDays = UPCOMING_DAYS_DEFAULT }: { windowDays?: number } = {}) {
   const qc = useQueryClient();
   const navigate = useNavigate();
   const [editorClientId, setEditorClientId] = useState<string | null>(null);
@@ -193,7 +193,7 @@ export function UpcomingBirthdaysWidget() {
       // Always show overdue/today (until wished). Show upcoming within window. Hide already wished.
       if (r.status === "wished") return false;
       if (r.status === "overdue" || r.status === "today") return true;
-      return r.delta <= UPCOMING_DAYS_DEFAULT;
+      return r.delta <= windowDays;
     })
     .sort((a, b) => {
       // Order: overdue first (most overdue first), today, then upcoming ascending
@@ -232,12 +232,12 @@ export function UpcomingBirthdaysWidget() {
           <Cake className="h-4 w-4" /> Upcoming Birthdays
         </h2>
         <span className="text-xs text-muted-foreground">
-          Next {UPCOMING_DAYS_DEFAULT} days
+          Next {windowDays} days
         </span>
       </div>
       {rows.length === 0 ? (
         <div className="rounded-md border border-dashed border-border p-8 text-center text-sm text-muted-foreground">
-          No upcoming birthdays in the next {UPCOMING_DAYS_DEFAULT} days.
+          No upcoming birthdays in the next {windowDays} days.
         </div>
       ) : (
         <ul className="space-y-2.5">
