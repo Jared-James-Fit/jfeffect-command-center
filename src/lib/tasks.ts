@@ -81,6 +81,39 @@ export async function deleteTask(id: string): Promise<void> {
   if (error) throw error;
 }
 
+/** Bulk: complete/reopen many tasks in one statement. */
+export async function bulkSetTaskStatus(ids: string[], done: boolean): Promise<void> {
+  if (!ids.length) return;
+  const me = await getMyCoachId();
+  const { error } = await (supabase.from("tasks") as any).update({
+    status: done ? "done" : "open",
+    completed_at: done ? new Date().toISOString() : null,
+    completed_by: done ? me : null,
+  }).in("id", ids);
+  if (error) throw error;
+}
+
+/** Bulk: move many tasks to a quadrant in one statement. */
+export async function bulkMoveTasks(ids: string[], quadrant: TaskQuadrant): Promise<void> {
+  if (!ids.length) return;
+  const { error } = await (supabase.from("tasks") as any).update({ quadrant }).in("id", ids);
+  if (error) throw error;
+}
+
+/** Bulk: assign many tasks in one statement. */
+export async function bulkAssignTasks(ids: string[], assignee_name: string | null): Promise<void> {
+  if (!ids.length) return;
+  const { error } = await (supabase.from("tasks") as any).update({ assignee_name }).in("id", ids);
+  if (error) throw error;
+}
+
+/** Bulk: delete many tasks in one statement. */
+export async function bulkDeleteTasksByIds(ids: string[]): Promise<void> {
+  if (!ids.length) return;
+  const { error } = await (supabase.from("tasks") as any).delete().in("id", ids);
+  if (error) throw error;
+}
+
 export async function fetchCoachesLite(): Promise<{ id: string; full_name: string | null }[]> {
   const { data } = await supabase.from("coaches").select("id, full_name").eq("archived", false).order("full_name");
   return (data ?? []) as any;
