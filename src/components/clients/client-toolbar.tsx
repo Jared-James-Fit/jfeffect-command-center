@@ -26,10 +26,11 @@ type Props = {
   coaches: { id: string; full_name: string | null }[];
   sort: string;
   isAdmin: boolean;
-  totalLabel: string;
+  /** Compact result count — only rendered when search/filters are active. */
+  resultLabel?: string | null;
 };
 
-export function ClientToolbar({ search, coachingType, coachId, coaches, sort, isAdmin, totalLabel }: Props) {
+export function ClientToolbar({ search, coachingType, coachId, coaches, sort, isAdmin, resultLabel }: Props) {
   const navigate = useNavigate({ from: "/admin/clients/" });
   const [local, setLocal] = useState(search);
 
@@ -161,7 +162,9 @@ export function ClientToolbar({ search, coachingType, coachId, coaches, sort, is
             </Button>
           )}
 
-          <div className="ml-auto whitespace-nowrap text-xs text-muted-foreground">{totalLabel}</div>
+          {resultLabel && (
+            <div className="ml-auto whitespace-nowrap text-xs text-muted-foreground">{resultLabel}</div>
+          )}
         </div>
       </div>
     </div>

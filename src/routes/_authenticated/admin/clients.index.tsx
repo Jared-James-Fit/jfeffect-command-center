@@ -3,7 +3,7 @@ import { zodValidator, fallback } from "@tanstack/zod-adapter";
 import { z } from "zod";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/app-shell";
@@ -19,17 +19,14 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { UserPlus, Users, ShieldAlert, ChevronDown, ChevronUp, BarChart3 } from "lucide-react";
+import { UserPlus, Users, ShieldAlert } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import { listClientsDirectoryFn } from "@/lib/clients-directory.functions";
 import { archiveClient } from "@/lib/clients.functions";
 import type { DirectoryRow } from "@/lib/clients-directory.functions";
-import { SummaryCards } from "@/components/clients/summary-cards";
-import { useIsMobile } from "@/hooks/use-mobile";
 import { ClientToolbar } from "@/components/clients/client-toolbar";
 import { ClientRow, ClientRowSkeleton } from "@/components/clients/client-row";
 import { Pager } from "@/components/clients/pager";
-import type { StatusKey } from "@/components/clients/clients-status";
 import { AddClientDialog } from "@/components/clients/add-client-dialog";
 import { ComplianceDashboard } from "@/components/clients/compliance-dashboard";
 import { cn } from "@/lib/utils";
@@ -117,27 +114,6 @@ function ClientsDirectoryPage() {
   const archiveFn = useServerFn(archiveClient);
   const [archiveTarget, setArchiveTarget] = useState<DirectoryRow | null>(null);
   const [addOpen, setAddOpen] = useState(false);
-  const isMobile = useIsMobile();
-  // Persist per-coach preference for the mobile overview collapse state.
-  // Default: collapsed on phones, expanded on tablets/desktop.
-  const OVERVIEW_KEY = "clients-overview-collapsed-v1";
-  const [overviewOpen, setOverviewOpen] = useState<boolean | null>(null);
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    const stored = window.localStorage.getItem(OVERVIEW_KEY);
-    if (stored === "true") setOverviewOpen(false);
-    else if (stored === "false") setOverviewOpen(true);
-    else setOverviewOpen(!isMobile); // default: collapsed on mobile
-  }, [isMobile]);
-  const toggleOverview = () => {
-    setOverviewOpen((prev) => {
-      const next = !prev;
-      if (typeof window !== "undefined") {
-        window.localStorage.setItem(OVERVIEW_KEY, next ? "false" : "true");
-      }
-      return next;
-    });
-  };
 
   const activeView = search.view ?? "clients";
   const lifecycle = search.lifecycle ?? "active";
@@ -173,11 +149,21 @@ function ClientsDirectoryPage() {
   const total = data?.total ?? 0;
   const rows = data?.rows ?? [];
 
-  const totalLabel = isFetching && !data
-    ? "Loading…"
-    : total === 0
-      ? "No clients match"
-      : `${total} client${total === 1 ? "" : "s"}`;
+  // Only surface a count next to the controls when the result set is
+  // narrowed — the page heading already shows the active-client total.
+  const hasActiveFilters = !!(
+    search.search ||
+    search.status !== "all" ||
+    search.coachingType !== "all" ||
+    search.coachId
+  );
+  const resultLabel = !hasActiveFilters
+    ? null
+    : isFetching && !data
+      ? "Loading…"
+      : total === 0
+        ? "No matches"
+        : `${total} result${total === 1 ? "" : "s"}`;
 
   const TABS = [
     { key: "clients" as const, label: "Clients", icon: Users },
@@ -188,20 +174,19 @@ function ClientsDirectoryPage() {
     <>
       <PageHeader
         title="Clients"
-        subtitle={
-          counts ? `${counts.all} active client${counts.all === 1 ? "" : "s"}` : undefined
-        }
+        subtitle={counts ? `${counts.all} active` : undefined}
         actions={
           isAdmin && activeView === "clients" && (
-            <Button className="h-10" onClick={() => setAddOpen(true)}>
-              <UserPlus className="mr-2 h-4 w-4" />
-              Add Client
+            <Button size="sm" className="h-9" onClick={() => setAddOpen(true)}>
+              <UserPlus className="mr-1.5 h-4 w-4" />
+              <span className="hidden sm:inline">Add Client</span>
+              <span className="sm:hidden">Add</span>
             </Button>
           )
         }
       />
 
-      <div className="space-y-4 p-3 sm:p-4 md:p-6">
+      <div className="space-y-3 p-3 sm:p-4 md:p-6">
         {/* Tab switcher */}
         <div className="flex gap-1 rounded-xl border border-border bg-card/60 p-1 w-fit">
           {TABS.map((tab) => {
@@ -212,7 +197,7 @@ function ClientsDirectoryPage() {
                 type="button"
                 onClick={() => navigate({ search: (prev: Record<string, unknown>) => ({ ...prev, view: tab.key }), resetScroll: false })}
                 className={cn(
-                  "flex items-center gap-1.5 rounded-lg px-4 py-1.5 text-sm font-semibold transition-colors",
+                  "flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-semibold transition-colors",
                   activeView === tab.key
                     ? "bg-primary text-primary-foreground"
                     : "text-muted-foreground hover:text-foreground hover:bg-secondary/40",
@@ -241,40 +226,8 @@ function ClientsDirectoryPage() {
               coaches={coaches as { id: string; full_name: string | null }[]}
               sort={search.sort}
               isAdmin={isAdmin}
-              totalLabel={totalLabel}
+              resultLabel={resultLabel}
             />
-
-            {isActiveLifecycle && (
-              <div className="rounded-xl border border-border bg-card/40">
-                <button
-                  type="button"
-                  onClick={toggleOverview}
-                  className="flex w-full items-center justify-between gap-2 px-3 py-2.5 text-left"
-                  aria-expanded={!!overviewOpen}
-                  aria-controls="clients-overview-panel"
-                >
-                  <span className="flex items-center gap-2 text-sm font-semibold">
-                    <BarChart3 className="h-4 w-4 text-primary" aria-hidden />
-                    Client Overview
-                    {counts && (
-                      <span className="text-xs font-normal text-muted-foreground">
-                        · {counts.all} active
-                      </span>
-                    )}
-                  </span>
-                  {overviewOpen ? (
-                    <ChevronUp className="h-4 w-4 text-muted-foreground" />
-                  ) : (
-                    <ChevronDown className="h-4 w-4 text-muted-foreground" />
-                  )}
-                </button>
-                {overviewOpen && (
-                  <div id="clients-overview-panel" className="border-t border-border/60 p-3">
-                    <SummaryCards counts={counts} active={search.status as StatusKey} loading={!data && isFetching} />
-                  </div>
-                )}
-              </div>
-            )}
 
             {isError ? (
               <Card className="p-8 text-center">
@@ -286,7 +239,7 @@ function ClientsDirectoryPage() {
                 {Array.from({ length: 6 }).map((_, i) => <ClientRowSkeleton key={i} />)}
               </ul>
             ) : rows.length === 0 ? (
-              <EmptyState hasFilters={!!(search.search || search.status !== "all" || search.coachingType !== "all" || search.coachId)} onClear={() => navigate({ search: () => ({}), resetScroll: false })} />
+              <EmptyState hasFilters={hasActiveFilters} lifecycle={lifecycle} onClear={() => navigate({ search: () => ({}), resetScroll: false })} />
             ) : (
               <ul className="space-y-2">
                 {rows.map((r) => (
@@ -340,18 +293,28 @@ function ClientsDirectoryPage() {
   );
 }
 
-function EmptyState({ hasFilters, onClear }: { hasFilters: boolean; onClear: () => void }) {
+function EmptyState({ hasFilters, lifecycle, onClear }: { hasFilters: boolean; lifecycle: string; onClear: () => void }) {
+  const emptyTitle =
+    lifecycle === "archived"
+      ? "No archived clients"
+      : lifecycle === "deactivated"
+        ? "No deactivated clients"
+        : "No clients yet";
   return (
-    <Card className="flex flex-col items-center justify-center gap-3 p-10 text-center">
+    <Card className="flex flex-col items-center justify-center gap-3 p-8 text-center">
       <div className="flex h-12 w-12 items-center justify-center rounded-full bg-muted text-muted-foreground">
         <Users className="h-6 w-6" />
       </div>
       <div>
         <div className="text-base font-semibold">
-          {hasFilters ? "No clients match these filters" : "No clients yet"}
+          {hasFilters ? "No clients match these filters" : emptyTitle}
         </div>
         <div className="mt-1 text-sm text-muted-foreground">
-          {hasFilters ? "Try clearing filters or adjusting your search." : "Add your first client to get started."}
+          {hasFilters
+            ? "Try clearing filters or adjusting your search."
+            : lifecycle === "active"
+              ? "Add your first client to get started."
+              : "Nothing here right now."}
         </div>
       </div>
       {hasFilters ? (
