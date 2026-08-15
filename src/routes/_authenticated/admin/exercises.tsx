@@ -15,9 +15,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Plus, Search, Trash2, Youtube, Pencil, CheckCircle2, AlertTriangle, Flame, BarChart3 } from "lucide-react";
 import { invalidateExerciseLibrary, upsertExerciseInLibraryCaches } from "@/lib/exercise-library-cache";
 import { toast } from "sonner";
+import { EXERCISE_CATEGORIES, PRIMARY_MUSCLE_GROUPS as SHARED_PRIMARY_MUSCLE_GROUPS } from "@/lib/exercise-taxonomy";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { buildCleanVimeoEmbedUrl, vimeoUrlFromId, MIGRATION_STATUSES } from "@/lib/exercise-video";
+import { ExerciseQuickCreateForm } from "@/components/exercises/exercise-quick-create-form";
 import { ExerciseWarmupDialog } from "@/components/exercise-warmup-dialog";
 import { ExerciseVolumeTagsDialog } from "@/components/volume/exercise-volume-tags-dialog";
 import { MOVEMENT_PATTERN_LABELS, VARIATION_LABELS } from "@/lib/volume";
@@ -35,9 +37,11 @@ function ExercisesRedirect() {
   return null;
 }
 
-const CATEGORIES = ["Squat", "Bench", "Deadlift", "Upper Body", "Lower Body", "Back", "Chest", "Shoulders", "Arms", "Glutes", "Core", "Mobility", "Warm-Ups", "Powerlifting", "Bodybuilding", "Cardio"];
+const CATEGORIES: readonly string[] = EXERCISE_CATEGORIES; // eslint-disable-line
+const _LEGACY_CATEGORIES = ["Squat", "Bench", "Deadlift", "Upper Body", "Lower Body", "Back", "Chest", "Shoulders", "Arms", "Glutes", "Core", "Mobility", "Warm-Ups", "Powerlifting", "Bodybuilding", "Cardio"];
 
-const PRIMARY_MUSCLE_GROUPS = [
+const PRIMARY_MUSCLE_GROUPS: readonly string[] = SHARED_PRIMARY_MUSCLE_GROUPS;
+const _LEGACY_PRIMARY_MUSCLE_GROUPS = [
   "Chest","Lats","Upper Back","Traps","Front Delts","Side Delts","Rear Delts",
   "Biceps","Triceps","Forearms","Quads","Hamstrings","Glutes","Adductors",
   "Calves","Abs/Core","Lower Back","Other",
@@ -558,75 +562,13 @@ function EditExerciseDialog({
 }
 
 function NewExerciseDialog({ onClose, onCreated }: { onClose: () => void; onCreated: () => void }) {
-  const qc = useQueryClient();
-  const [form, setForm] = useState({
-    name: "", category: CATEGORIES[0], primary_muscle_group: "", muscle_group: "", equipment: "",
-    youtube_url: "", cues: "", common_mistakes: "", difficulty: "Intermediate",
-    default_load_unit: "lb" as "kg" | "lb",
-  });
-  const [busy, setBusy] = useState(false);
-
-  const submit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!form.primary_muscle_group) return toast.error("Primary muscle group is required");
-    setBusy(true);
-    const { data: created, error } = await supabase
-      .from("exercises")
-      .insert({ ...form, archived: false })
-      .select("*")
-      .single();
-    setBusy(false);
-    if (error || !created) return toast.error(error?.message ?? "Could not save exercise");
-    upsertExerciseInLibraryCaches(qc, created);
-    toast.success(`Added "${created.name}" to library`);
-    onCreated();
-    onClose();
-  };
-
   return (
-    <DialogContent className="max-w-lg">
+    <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
       <DialogHeader><DialogTitle>New exercise</DialogTitle></DialogHeader>
-      <form onSubmit={submit} className="space-y-3">
-        <div><Label>Name *</Label><Input required value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} /></div>
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <Label>Category</Label>
-            <Select value={form.category} onValueChange={(v) => setForm({ ...form, category: v })}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>{CATEGORIES.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent>
-            </Select>
-          </div>
-          <div><Label>Muscle group</Label><Input value={form.muscle_group} onChange={(e) => setForm({ ...form, muscle_group: e.target.value })} /></div>
-          <div className="col-span-2">
-            <Label>Primary muscle group *</Label>
-            <Select value={form.primary_muscle_group} onValueChange={(v) => setForm({ ...form, primary_muscle_group: v })}>
-              <SelectTrigger><SelectValue placeholder="Select primary muscle…" /></SelectTrigger>
-              <SelectContent>
-                {PRIMARY_MUSCLE_GROUPS.map((m) => <SelectItem key={m} value={m}>{m}</SelectItem>)}
-              </SelectContent>
-            </Select>
-          </div>
-          <div><Label>Equipment</Label><Input value={form.equipment} onChange={(e) => setForm({ ...form, equipment: e.target.value })} /></div>
-          <div><Label>Difficulty</Label><Input value={form.difficulty} onChange={(e) => setForm({ ...form, difficulty: e.target.value })} /></div>
-          <div>
-            <Label>Default unit</Label>
-            <Select value={form.default_load_unit} onValueChange={(v) => setForm({ ...form, default_load_unit: v as "kg" | "lb" })}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="lb">lb (pounds)</SelectItem>
-                <SelectItem value="kg">kg (kilograms)</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-        </div>
-        <div><Label>YouTube URL</Label><Input value={form.youtube_url} onChange={(e) => setForm({ ...form, youtube_url: e.target.value })} /></div>
-        <div><Label>Coaching cues</Label><Textarea rows={2} value={form.cues} onChange={(e) => setForm({ ...form, cues: e.target.value })} /></div>
-        <div><Label>Common mistakes</Label><Textarea rows={2} value={form.common_mistakes} onChange={(e) => setForm({ ...form, common_mistakes: e.target.value })} /></div>
-        <DialogFooter>
-          <Button type="button" variant="ghost" onClick={onClose}>Cancel</Button>
-          <Button type="submit" disabled={busy} className="bg-gradient-primary font-bold uppercase">{busy ? "Saving…" : "Add"}</Button>
-        </DialogFooter>
-      </form>
+      <ExerciseQuickCreateForm
+        onCancel={onClose}
+        onCreated={() => { onCreated(); onClose(); }}
+      />
     </DialogContent>
   );
 }
