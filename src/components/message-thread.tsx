@@ -54,6 +54,7 @@ import { format, parseISO, isToday, isYesterday } from "date-fns";
 import { runJob } from "@/lib/progress-jobs";
 import { toast } from "sonner";
 import { useUnsavedWarning } from "@/hooks/use-unsaved-warning";
+import { uploadLiftFileToStorage } from "@/lib/lift-video-storage-upload";
 
 function attachIcon(t: MessageAttachment["type"]) {
   if (t === "image") return ImageIcon;
@@ -96,15 +97,22 @@ function fileToAttachmentType(file: File): MessageAttachment["type"] {
   return "file";
 }
 
-async function uploadAttachment(clientId: string, file: File): Promise<MessageAttachment> {
+async function uploadAttachment(
+  clientId: string,
+  file: File,
+  onProgress?: (pct: number) => void,
+  signal?: AbortSignal,
+): Promise<MessageAttachment> {
   const ext = file.name.includes(".") ? file.name.split(".").pop() : "";
   const path = `${clientId}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}${ext ? "." + ext : ""}`;
-  const { error } = await supabase.storage.from("message-attachments").upload(path, file, {
-    cacheControl: "3600",
-    upsert: false,
-    contentType: file.type || undefined,
+  await uploadLiftFileToStorage({
+    file,
+    userId: clientId,
+    bucket: "message-attachments",
+    path,
+    onProgress,
+    signal,
   });
-  if (error) throw error;
   return {
     type: fileToAttachmentType(file),
     url: "",
@@ -597,6 +605,8 @@ export function MessageThread({
   const [body, setBody] = useState("");
   const [attachments, setAttachments] = useState<MessageAttachment[]>([]);
   const [uploading, setUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState<{ name: string; pct: number } | null>(null);
+  const uploadAbortRef = useRef<AbortController | null>(null);
   const [sending, setSending] = useState(false);
   const [messageType, setMessageType] = useState("General");
   const [internalNote, setInternalNote] = useState(false);
@@ -1120,12 +1130,17 @@ export function MessageThread({
       const uploaded: MessageAttachment[] = [];
       for (const f of Array.from(files)) {
         if (f.size > 50 * 1024 * 1024) { toast.error(`${f.name} is over 50MB`); continue; }
-        uploaded.push(await uploadAttachment(clientId, f));
+        const controller = new AbortController();
+        uploadAbortRef.current = controller;
+        setUploadProgress({ name: f.name, pct: 0 });
+        uploaded.push(await uploadAttachment(clientId, f, (pct) => setUploadProgress({ name: f.name, pct }), controller.signal));
       }
       setAttachments((prev) => [...prev, ...uploaded]);
     } catch (e: any) {
       toast.error(e?.message ?? "Upload failed");
     } finally {
+      uploadAbortRef.current = null;
+      setUploadProgress(null);
       setUploading(false);
     }
   };
@@ -1150,7 +1165,10 @@ export function MessageThread({
     try {
       const ext = preview.blob.type.includes("mp4") ? "m4a" : "webm";
       const file = new File([preview.blob], `voice-${Date.now()}.${ext}`, { type: preview.blob.type });
-      const att = await uploadAttachment(clientId, file);
+      const controller = new AbortController();
+      uploadAbortRef.current = controller;
+      setUploadProgress({ name: "Voice message", pct: 0 });
+      const att = await uploadAttachment(clientId, file, (pct) => setUploadProgress({ name: "Voice message", pct }), controller.signal);
       att.type = "audio";
       att.duration = preview.duration;
       att.peaks = preview.peaks;
@@ -1167,6 +1185,8 @@ export function MessageThread({
     } catch (e: any) {
       toast.error(e?.message ?? "Failed to send voice message");
     } finally {
+      uploadAbortRef.current = null;
+      setUploadProgress(null);
       setUploading(false);
     }
   };
@@ -1701,6 +1721,29 @@ export function MessageThread({
         )}
       >
         {/* Quick replies removed — keeping the composer minimal. */}
+
+        {uploadProgress && (
+          <div className="flex items-center gap-2 rounded-xl border border-primary/20 bg-primary/5 px-3 py-2 text-xs">
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center justify-between gap-2">
+                <span className="truncate font-medium">Uploading {uploadProgress.name}</span>
+                <span className="shrink-0 tabular-nums text-muted-foreground">{uploadProgress.pct}%</span>
+              </div>
+              <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-primary/15">
+                <div className="h-full rounded-full bg-primary transition-[width] duration-150" style={{ width: `${uploadProgress.pct}%` }} />
+              </div>
+            </div>
+            <Button
+              type="button"
+              size="sm"
+              variant="ghost"
+              className="h-9 shrink-0 px-2"
+              onClick={() => uploadAbortRef.current?.abort()}
+            >
+              Cancel
+            </Button>
+          </div>
+        )}
 
         {attachments.length > 0 && (
           <div className="flex flex-wrap gap-1.5 px-1">

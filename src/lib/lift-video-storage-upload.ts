@@ -24,6 +24,10 @@ export type LiftStorageUploadResult = {
 export type LiftStorageUploadArgs = {
   file: File;
   userId: string;
+  /** Defaults to the existing lift-videos bucket; message attachments opt in explicitly. */
+  bucket?: "lift-videos" | "message-attachments";
+  /** Preserve callers' established storage paths when they already own path generation. */
+  path?: string;
   onProgress?: (pct: number) => void;
   signal?: AbortSignal;
 };
@@ -44,7 +48,8 @@ export async function uploadLiftFileToStorage(
   if (!token) throw new Error("Your session expired. Please sign in again.");
 
   const ext = (args.file.name.split(".").pop() || "mp4").toLowerCase();
-  const path = `${args.userId}/${Date.now()}-${crypto.randomUUID()}.${ext}`;
+  const path = args.path ?? `${args.userId}/${Date.now()}-${crypto.randomUUID()}.${ext}`;
+  const bucket = args.bucket ?? "lift-videos";
   const contentType = args.file.type || guessContentType(ext);
 
   await new Promise<void>((resolve, reject) => {
@@ -60,7 +65,7 @@ export async function uploadLiftFileToStorage(
       removeFingerprintOnSuccess: true,
       chunkSize: 6 * 1024 * 1024,
       metadata: {
-        bucketName: "lift-videos",
+        bucketName: bucket,
         objectName: path,
         contentType,
         cacheControl: "3600",
