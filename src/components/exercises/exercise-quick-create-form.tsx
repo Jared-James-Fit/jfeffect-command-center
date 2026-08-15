@@ -28,11 +28,6 @@ import {
 const AUTO = "__auto__";
 const NONE = "__none__";
 
-const blankForm = (name: string) => ({
-  name,
-  category: "Assistance-safe" as string,
-});
-
 /**
  * Fast exercise creation.
  *
