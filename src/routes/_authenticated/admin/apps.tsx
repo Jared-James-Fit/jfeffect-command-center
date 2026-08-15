@@ -17,6 +17,15 @@ export const Route = createFileRoute("/_authenticated/admin/apps")({
   component: AppsHub,
 });
 
+const EXTERNAL_TOOLS: { name: string; url: string }[] = [
+  { name: "Stripe", url: "https://dashboard.stripe.com" },
+  { name: "Google Drive", url: "https://drive.google.com" },
+  { name: "Google Sheets", url: "https://sheets.google.com" },
+  { name: "Google Calendar", url: "https://calendar.google.com" },
+  { name: "Fillout", url: "https://fillout.com" },
+  { name: "SignNow", url: "https://signnow.com" },
+];
+
 function AppsHub() {
   const qc = useQueryClient();
   const [open, setOpen] = useState(false);
@@ -97,10 +106,6 @@ function AppsHub() {
 }
 
 function NewShortcut({ onClose, onCreated }: { onClose: () => void; onCreated: () => void }) {
-  return <NewShortcutForm onClose={onClose} onCreated={onCreated} />;
-}
-
-function NewShortcutForm({ onClose, onCreated }: { onClose: () => void; onCreated: () => void }) {
   const [form, setForm] = useState({ name: "", url: "", description: "", notes: "" });
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
