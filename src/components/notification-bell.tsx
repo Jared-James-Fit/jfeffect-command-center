@@ -159,6 +159,7 @@ async function fetchUnreadGroupItems(userId: string): Promise<Omit<BellItem, "is
 // per user. Prevents duplicate invalidations when both the bell and the
 // full /notifications page are mounted at once.
 type QC = ReturnType<typeof useQueryClient>;
+const NOTIFICATION_REALTIME_DEBOUNCE_MS = 350;
 const _notifChannels = new Map<string, { ch: ReturnType<typeof supabase.channel>; timer: ReturnType<typeof setTimeout> | null; refs: number }>();
 
 function acquireNotificationsChannel(userId: string, qc: QC): () => void {
@@ -178,7 +179,7 @@ function acquireNotificationsChannel(userId: string, qc: QC): () => void {
         qc.invalidateQueries({ queryKey: ["client-nav-badges"] });
         qc.invalidateQueries({ queryKey: ["admin-nav-badges"] });
         qc.invalidateQueries({ queryKey: ["media-nav-badges"] });
-      }, 80);
+      }, NOTIFICATION_REALTIME_DEBOUNCE_MS);
     };
     entry.ch = supabase
       .channel(`notifications-${userId}`)
