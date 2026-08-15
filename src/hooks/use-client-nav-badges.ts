@@ -8,6 +8,7 @@ export type NavBadge = { count?: number; dot?: boolean };
 
 const LS_PREFIX = "jf-nav-seen";
 const SEEN_EVENT = "jf-nav-seen";
+const NAV_BADGE_REALTIME_DEBOUNCE_MS = 750;
 
 function seenKey(userId: string, route: string) {
   return `${LS_PREFIX}:${userId}:${route}`;
@@ -84,18 +85,31 @@ export function useClientNavBadges(): Record<string, NavBadge> {
   });
 
   useEffect(() => {
-    if (!enabled || !user) return;
-    const ch = supabase.channel(`nav-badges-${user.id}`)
-      .on("postgres_changes", { event: "*", schema: "public", table: "messages" }, () => qc.invalidateQueries({ queryKey: ["client-nav-badges", user.id] }))
-      .on("postgres_changes", { event: "*", schema: "public", table: "conversation_state" }, () => qc.invalidateQueries({ queryKey: ["client-nav-badges", user.id] }))
-      .on("postgres_changes", { event: "*", schema: "public", table: "lift_videos" }, () => qc.invalidateQueries({ queryKey: ["client-nav-badges", user.id] }))
-      .on("postgres_changes", { event: "*", schema: "public", table: "lift_video_comments" }, () => qc.invalidateQueries({ queryKey: ["client-nav-badges", user.id] }))
-      .on("postgres_changes", { event: "*", schema: "public", table: "media_comments" }, () => qc.invalidateQueries({ queryKey: ["client-nav-badges", user.id] }))
-      .on("postgres_changes", { event: "*", schema: "public", table: "nutrition_targets" }, () => qc.invalidateQueries({ queryKey: ["client-nav-badges", user.id] }))
-      .on("postgres_changes", { event: "*", schema: "public", table: "training_phases" }, () => qc.invalidateQueries({ queryKey: ["client-nav-badges", user.id] }))
+    const clientId = data?.client?.id;
+    if (!enabled || !user || !clientId) return;
+
+    let invalidationTimer: ReturnType<typeof setTimeout> | undefined;
+    const invalidateBadges = () => {
+      if (invalidationTimer) clearTimeout(invalidationTimer);
+      invalidationTimer = setTimeout(() => {
+        qc.invalidateQueries({ queryKey: ["client-nav-badges", user.id] });
+      }, NAV_BADGE_REALTIME_DEBOUNCE_MS);
+    };
+    const scoped = { event: "*" as const, schema: "public", filter: `client_id=eq.${clientId}` };
+    const ch = supabase.channel(`nav-badges-${user.id}-${clientId}`)
+      .on("postgres_changes", { ...scoped, table: "messages" }, invalidateBadges)
+      .on("postgres_changes", { ...scoped, table: "conversation_state" }, invalidateBadges)
+      .on("postgres_changes", { ...scoped, table: "lift_videos" }, invalidateBadges)
+      .on("postgres_changes", { ...scoped, table: "lift_video_comments" }, invalidateBadges)
+      .on("postgres_changes", { ...scoped, table: "media_comments" }, invalidateBadges)
+      .on("postgres_changes", { ...scoped, table: "nutrition_targets" }, invalidateBadges)
+      .on("postgres_changes", { ...scoped, table: "training_phases" }, invalidateBadges)
       .subscribe();
-    return () => { supabase.removeChannel(ch); };
-  }, [enabled, user, qc]);
+    return () => {
+      if (invalidationTimer) clearTimeout(invalidationTimer);
+      supabase.removeChannel(ch);
+    };
+  }, [data?.client?.id, enabled, user, qc]);
 
   // Admin/coach nav badges — shared single source of truth
   const { data: adminCounts } = useAdminNavBadgeCounts(adminEnabled);
