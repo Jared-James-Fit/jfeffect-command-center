@@ -55,6 +55,28 @@ const MIGRATION_FILTERS: { value: string; label: string }[] = [
   { value: "still_youtube_client", label: "Still YouTube client-facing" },
 ];
 
+const EXERCISE_LIBRARY_PAGE_SIZE = 1000;
+
+/**
+ * Supabase caps REST responses at 1,000 rows even when a larger limit is
+ * requested. Page through the full accessible library so later-alphabetic
+ * exercises remain discoverable in the admin search.
+ */
+async function fetchExerciseLibrary() {
+  const rows: any[] = [];
+  for (let from = 0; ; from += EXERCISE_LIBRARY_PAGE_SIZE) {
+    const { data, error } = await supabase
+      .from("exercises")
+      .select("*")
+      .order("name")
+      .range(from, from + EXERCISE_LIBRARY_PAGE_SIZE - 1);
+    if (error) throw error;
+    const page = data ?? [];
+    rows.push(...page);
+    if (page.length < EXERCISE_LIBRARY_PAGE_SIZE) return rows;
+  }
+}
+
 export function ExercisesAdmin({ embedded = false }: { embedded?: boolean } = {}) {
   const qc = useQueryClient();
   const [open, setOpen] = useState(false);
@@ -73,11 +95,7 @@ export function ExercisesAdmin({ embedded = false }: { embedded?: boolean } = {}
     refetchOnMount: "always",
     refetchOnWindowFocus: true,
     refetchOnReconnect: "always",
-    queryFn: async () => {
-      const { data, error } = await supabase.from("exercises").select("*").order("name").limit(5000);
-      if (error) throw error;
-      return data;
-    },
+    queryFn: fetchExerciseLibrary,
   });
 
   const preFiltered = exercises.filter((e) => {
