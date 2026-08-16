@@ -31,6 +31,7 @@ import {
   writeCheckedIdentities,
 } from "@/lib/grocery-shopping-state";
 import { cn } from "@/lib/utils";
+import { groceryListKey } from "@/lib/grocery-query-keys";
 
 function mondayOf(dateISO: string): string {
   const d = parseLocalDate(dateISO) ?? new Date();
@@ -64,7 +65,7 @@ export function GroceryListSheet({
   const q = useQuery({
     // Lazy: only fetches once the sheet is opened.
     enabled: !!open && !!clientId,
-    queryKey: ["grocery-list", clientId, weekStart, viewAsUserId ?? null],
+    queryKey: [...groceryListKey(clientId, weekStart), viewAsUserId ?? null],
     staleTime: 0,
     refetchOnMount: "always",
     queryFn: async () => {
@@ -95,7 +96,11 @@ export function GroceryListSheet({
         fullCardioRestDays: client?.full_cardio_rest_days ?? null,
       });
       const configuredHighDay = (client?.preferred_high_days ?? [])[0] ?? null;
-      return { plan: plan as any, days, configuredHighDay };
+      // Schedule accuracy signal: program days that carry no resolvable date
+      // cannot be counted, so day-type totals may under-report.
+      const schedulable = (workouts as any[]).filter((i) => i?.day?.id && i?.week?.id).length;
+      const unscheduledCount = Math.max(0, schedulable - workoutDates.length);
+      return { plan: plan as any, days, configuredHighDay, unscheduledCount };
     },
   });
 
