@@ -99,21 +99,27 @@ export function pickCardioTargetForDay(
   const active = (targets ?? []).filter((target) => targetIsActiveForDate(target, dateISO));
   // A saved weekday schedule is canonical. Legacy targets with no saved weekdays
   // continue through the older day-type fallback so existing prescriptions remain visible.
+  const weekday = weekdayNameForISO(dateISO);
   const explicitlyScheduled = active.filter((target) => Array.isArray(target.scheduled_weekdays) && target.scheduled_weekdays.length > 0);
-  if (explicitlyScheduled.length > 0) {
-    const weekday = weekdayNameForISO(dateISO);
-    return explicitlyScheduled.find((target) => target.scheduled_weekdays!.some((day) => String(day).toLowerCase() === weekday.toLowerCase())) ?? null;
-  }
-  const exact = active.find((target) => canonicalCardioDayType(target.day_type) === dayType);
+  const explicitlyScheduledForDay = explicitlyScheduled.find((target) =>
+    target.scheduled_weekdays!.some((day) => String(day).toLowerCase() === weekday.toLowerCase()),
+  );
+  if (explicitlyScheduledForDay) return explicitlyScheduledForDay;
+
+  // During the additive migration, edited targets use canonical weekdays while
+  // untouched targets retain their legacy day-type rule. A saved weekday on one
+  // target must not suppress a valid legacy target for a different weekday.
+  const legacyActive = active.filter((target) => !Array.isArray(target.scheduled_weekdays) || target.scheduled_weekdays.length === 0);
+  const exact = legacyActive.find((target) => canonicalCardioDayType(target.day_type) === dayType);
   if (exact) return exact;
   if (dayType === "non_training") {
-    const customNonTraining = active.find((target) => {
+    const customNonTraining = legacyActive.find((target) => {
       const label = `${target.day_type ?? ""} ${target.custom_day_type ?? ""}`.toLowerCase();
       return label.includes("non") && label.includes("training");
     });
     if (customNonTraining) return customNonTraining;
   }
-  return active.find((target) => canonicalCardioDayType(target.day_type) === "general") ?? null;
+  return legacyActive.find((target) => canonicalCardioDayType(target.day_type) === "general") ?? null;
 }
 
 export function resolveWorkoutDatesFromSchedule(

@@ -158,6 +158,30 @@ describe("canonical cardio weekday schedules", () => {
     const assigned = days.filter((day) => day.cardioTargetId === "mwf-cardio").map((day) => day.date);
     expect(assigned).toEqual(["2026-07-06", "2026-07-08", "2026-07-10"]);
   });
+
+  it("falls back to a legacy target when no canonical target is scheduled for that weekday", () => {
+    const canonicalTarget: CardioTargetLike = {
+      id: "mwf-cardio",
+      day_type: "General",
+      start_date: "2026-07-01",
+      scheduled_weekdays: ["Monday", "Wednesday", "Friday"],
+    };
+    const legacyNonTraining: CardioTargetLike = {
+      id: "legacy-non-training",
+      day_type: "Non-Training Day",
+      start_date: "2026-07-01",
+    };
+    const days = resolveClientWeekDays({
+      clientId,
+      weekDates: week,
+      workouts: workouts(["2026-07-06", "2026-07-08", "2026-07-10"]),
+      recurringHighDays: ["Sunday"],
+      cardioTargets: [canonicalTarget, legacyNonTraining],
+      defaultFullRestDay: false,
+    });
+    expect(days.find((day) => day.date === "2026-07-06")!.cardioTargetId).toBe("mwf-cardio");
+    expect(days.find((day) => day.date === "2026-07-07")!.cardioTargetId).toBe("legacy-non-training");
+  });
 });
 
 function daysOf(days: ReturnType<typeof resolveClientWeekDays>, type: "training" | "high" | "non_training" | "rest") {
