@@ -240,10 +240,7 @@ function PortalNutrition() {
 
         {/* 1b. Grocery List entry — sits next to the Meal Plan section */}
         <SectionErrorBoundary label="Grocery list">
-          <GroceryListEntryCard
-            clientId={ctxQ.data?.clientId ?? null}
-            viewAsUserId={impersonatedClient?.user_id ?? null}
-          />
+          <GroceryListEntryCard clientId={ctxQ.data?.clientId ?? null} />
         </SectionErrorBoundary>
 
         {/* 2. Meal Plan section */}
