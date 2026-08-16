@@ -1,6 +1,16 @@
+import { useState } from "react";
+import { ChevronDown } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-type Props = { text?: string | null; className?: string };
+type Props = {
+  text?: string | null;
+  className?: string;
+  /**
+   * Client-facing scanability option: keep Meal 1 expanded and collapse the
+   * later meals. Purely presentational — the coach-authored text is unchanged.
+   */
+  collapsibleMeals?: boolean;
+};
 
 // Parses pasted meal plan text into structured sections so each meal renders
 // as ONE compact card with its ingredients and an inline "Approx" macro row,
@@ -151,16 +161,19 @@ function formatMacroValue(line: string) {
   return line.replace(/\s+/g, " ").trim();
 }
 
-export function MealPlanDisplay({ text, className }: Props) {
+export function MealPlanDisplay({ text, className, collapsibleMeals = false }: Props) {
   if (!text || !text.trim()) return null;
   const sections = parse(text);
   if (!sections.length) return null;
+
+  let mealIndex = -1;
 
   return (
     <div className={cn("space-y-3 text-sm leading-relaxed", className)}>
       {sections.map((s, i) => {
         if (s.kind === "meal") {
-          return (
+          mealIndex += 1;
+          const body = (
             <div key={i} className="rounded-md border border-border bg-secondary/20 px-3 py-2.5">
               <div className="flex flex-wrap items-baseline gap-x-2">
                 <div className="text-[11px] font-black uppercase tracking-widest text-primary">{titleCase(s.title)}</div>
@@ -193,6 +206,17 @@ export function MealPlanDisplay({ text, className }: Props) {
                 </div>
               )}
             </div>
+          );
+          if (!collapsibleMeals) return body;
+          return (
+            <CollapsibleMeal
+              key={i}
+              title={titleCase(s.title)}
+              subtitle={s.subtitle}
+              defaultOpen={mealIndex === 0}
+            >
+              {body}
+            </CollapsibleMeal>
           );
         }
         if (s.kind === "total") {
@@ -237,5 +261,53 @@ export function MealPlanDisplay({ text, className }: Props) {
         );
       })}
     </div>
+  );
+}
+
+function CollapsibleMeal({
+  title,
+  subtitle,
+  defaultOpen,
+  children,
+}: {
+  title: string;
+  subtitle?: string;
+  defaultOpen?: boolean;
+  children: React.ReactNode;
+}) {
+  const [open, setOpen] = useState(!!defaultOpen);
+  if (open) {
+    return (
+      <div>
+        <button
+          type="button"
+          onClick={() => setOpen(false)}
+          aria-expanded
+          className="mb-1 flex w-full items-center justify-between text-left text-[10px] font-bold uppercase tracking-widest text-muted-foreground"
+        >
+          <span>Hide {title}</span>
+          <ChevronDown className="h-3.5 w-3.5 rotate-180" />
+        </button>
+        {children}
+      </div>
+    );
+  }
+  return (
+    <button
+      type="button"
+      onClick={() => setOpen(true)}
+      aria-expanded={false}
+      className="flex w-full items-center justify-between rounded-md border border-border bg-secondary/20 px-3 py-2.5 text-left transition hover:border-primary/40"
+    >
+      <span className="min-w-0">
+        <span className="block text-[11px] font-black uppercase tracking-widest text-primary">{title}</span>
+        {subtitle && (
+          <span className="block text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+            {subtitle}
+          </span>
+        )}
+      </span>
+      <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" />
+    </button>
   );
 }
