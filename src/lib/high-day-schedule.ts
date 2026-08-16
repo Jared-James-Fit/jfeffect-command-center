@@ -1,5 +1,6 @@
 import { supabase } from "@/integrations/supabase/client";
 import { WEEK_DAYS, type WeekDay } from "@/lib/training-schedule";
+import { DEFAULT_HIGH_WEEKDAY } from "@/lib/client-nutrition-day";
 
 /**
  * Shared High Day scheduling helpers.
@@ -11,10 +12,11 @@ import { WEEK_DAYS, type WeekDay } from "@/lib/training-schedule";
  * Priority when resolving a High Day for a given date:
  *   1) An override row for that exact date
  *   2) `preferred_high_days` weekday match
- *   3) Sunday fallback (only used when caller opts in with `sundayFallback`)
+ *   3) The centralized no-selection fallback (`DEFAULT_HIGH_WEEKDAY`, Saturday)
  */
 
-export const SUNDAY: WeekDay = "Sunday";
+/** Re-exported so every consumer shares one fallback weekday. */
+export { DEFAULT_HIGH_WEEKDAY };
 
 export type NutritionDayOverride = {
   id: string;
@@ -24,13 +26,13 @@ export type NutritionDayOverride = {
   notes?: string | null;
 };
 
-/** Sunday-default helper: given the recurring weekdays, return them or ["Sunday"]. */
-export function withSundayFallback(days: string[] | null | undefined): WeekDay[] {
+/** Given the recurring weekdays, return them or the centralized fallback. */
+export function withHighDayFallback(days: string[] | null | undefined): WeekDay[] {
   const valid = (days ?? [])
     .map((d) => (d ?? "").trim())
     .filter((d): d is WeekDay => (WEEK_DAYS as readonly string[]).includes(d));
   if (valid.length > 0) return valid;
-  return [SUNDAY];
+  return [DEFAULT_HIGH_WEEKDAY];
 }
 
 /** Format a JS Date as local YYYY-MM-DD. */
@@ -91,12 +93,12 @@ export async function setRecurringHighDays(clientId: string, weekdays: WeekDay[]
 
 /**
  * Ensure `preferred_high_days` has at least one weekday. If empty, set the
- * Sunday fallback. Never overwrites an existing coach selection.
+ * centralized fallback. Never overwrites an existing coach selection.
  */
 export async function ensureHighDayWeekday(
   clientId: string,
   current: string[] | null | undefined,
-  fallback: WeekDay = SUNDAY,
+  fallback: WeekDay = DEFAULT_HIGH_WEEKDAY,
 ) {
   if ((current ?? []).length > 0) return;
   await setRecurringHighDays(clientId, [fallback]);
