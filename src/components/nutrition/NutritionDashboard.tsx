@@ -2,9 +2,9 @@ import { type ReactNode } from "react";
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Card } from "@/components/ui/card";
-import { Flame, Beef, Wheat, Cookie, Droplets, Moon, ChefHat, HelpCircle, Calculator, Sparkles } from "lucide-react";
-import { RecipeBrowser } from "./RecipeBrowser";
+import { Flame, Beef, Wheat, Cookie, Droplets, Moon, HelpCircle, Calculator } from "lucide-react";
 import type { RecipeProfile } from "./RecipeBrowser";
+import { CookbookEntryCard } from "./CookbookSheet";
 import { ensureWaterTarget, formatWater } from "@/lib/water";
 import { WaterTargetDialog } from "@/components/progress/water-target-dialog";
 import { useAuth } from "@/lib/auth";
@@ -77,24 +77,15 @@ export function NutritionDashboard({
           <RecentAdherenceWidget />
         </SectionErrorBoundary>
       )}
-      <QuickActions viewer={viewer} recipesAnchorId={recipesAnchorId} hasCoachApprovedTargets={hasCoachApprovedTargets} />
+      <QuickActions viewer={viewer} hasCoachApprovedTargets={hasCoachApprovedTargets} />
       {children}
       <SectionErrorBoundary label="Daily nutrition">
         <DailyNutritionPanel />
       </SectionErrorBoundary>
       <div id={recipesAnchorId} className="scroll-mt-20">
-        <SectionErrorBoundary label="Recipes">
-          <RecipeBrowser
-            viewer={viewer}
-            userId={userId}
-            goals={goals}
-            profile={profile ?? {
-              goals,
-              // Build a basic profile from targets when no explicit profile is passed
-              proteinTarget: targets?.protein != null ? Number(targets.protein) : null,
-              calorieTarget: targets?.calories != null ? Number(targets.calories) : null,
-            }}
-          />
+        <SectionErrorBoundary label="Cookbook">
+          {/* Recipes now load lazily behind the Cookbook entry card. */}
+          <CookbookEntryCard viewer={viewer} />
         </SectionErrorBoundary>
       </div>
     </div>
