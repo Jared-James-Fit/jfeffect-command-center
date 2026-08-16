@@ -164,3 +164,88 @@ export function statusTone(s: RecipeStatus) {
   if (s === "Archived") return "bg-muted text-muted-foreground border-border";
   return "bg-amber-500/15 text-amber-300 border-amber-500/30";
 }
+/* ------------------------------------------------------------------ *
+ * Cookbook (client-facing, lazily loaded, batched)
+ * ------------------------------------------------------------------ */
+
+export const COOKBOOK_PAGE_SIZE = 12;
+
+export const COOKBOOK_CATEGORIES = ["Recommended", "Breakfast", "Lunch", "Dinner", "Snacks"] as const;
+export type CookbookCategory = (typeof COOKBOOK_CATEGORIES)[number];
+
+export const COOKBOOK_FILTERS = [
+  { value: "high-protein", label: "High Protein", tags: ["high-protein"] },
+  { value: "lower-calorie", label: "Lower Calorie", tags: ["low-calorie", "fat-loss", "lower-calorie"] },
+  { value: "vegetarian", label: "Vegetarian", tags: ["vegetarian"] },
+  { value: "vegan", label: "Vegan", tags: ["vegan"] },
+  { value: "quick", label: "Prep Time · Under 20 min", tags: [], maxPrepMinutes: 20 },
+] as const;
+
+export type CookbookQuerySpec = {
+  /** Recipe `category` column value, or null for "no category filter". */
+  category: string | null;
+  /** Each group is OR-within, AND-across (tag overlap). */
+  tagGroups: string[][];
+  maxPrepMinutes: number | null;
+  search: string | null;
+  from: number;
+  to: number;
+};
+
+/** Pure: translate cookbook UI state into a single batched query spec. */
+export function buildCookbookQuerySpec(input: {
+  category?: CookbookCategory;
+  filters?: string[];
+  search?: string;
+  page?: number;
+  pageSize?: number;
+}): CookbookQuerySpec {
+  const pageSize = input.pageSize ?? COOKBOOK_PAGE_SIZE;
+  const page = Math.max(0, input.page ?? 0);
+  const category = !input.category || input.category === "Recommended"
+    ? null
+    : input.category === "Snacks"
+      ? "Snack"
+      : input.category;
+
+  const tagGroups: string[][] = [];
+  let maxPrepMinutes: number | null = null;
+  for (const value of input.filters ?? []) {
+    const def = COOKBOOK_FILTERS.find((f) => f.value === value);
+    if (!def) continue;
+    if (def.tags.length) tagGroups.push([...def.tags]);
+    if ("maxPrepMinutes" in def && def.maxPrepMinutes) {
+      maxPrepMinutes = maxPrepMinutes == null ? def.maxPrepMinutes : Math.min(maxPrepMinutes, def.maxPrepMinutes);
+    }
+  }
+
+  const search = (input.search ?? "").trim();
+
+  return {
+    category,
+    tagGroups,
+    maxPrepMinutes,
+    search: search ? search : null,
+    from: page * pageSize,
+    to: page * pageSize + pageSize - 1,
+  };
+}
+
+/**
+ * One batched page of published recipes visible to the current viewer.
+ * RLS still governs visibility; we additionally enforce Published.
+ */
+export async function listCookbookPage(spec: CookbookQuerySpec): Promise<{ rows: Recipe[]; hasMore: boolean }> {
+  let query = db.from("recipes").select("*").eq("status", "Published");
+  if (spec.category) query = query.eq("category", spec.category);
+  for (const group of spec.tagGroups) query = query.overlaps("tags", group);
+  if (spec.maxPrepMinutes != null) query = query.lte("prep_time_minutes", spec.maxPrepMinutes);
+  if (spec.search) query = query.ilike("title", `%${spec.search}%`);
+  const { data, error } = await query
+    .order("published_at", { ascending: false })
+    .range(spec.from, spec.to + 1);
+  if (error) throw error;
+  const rows = (data ?? []) as Recipe[];
+  const pageSize = spec.to - spec.from + 1;
+  return { rows: rows.slice(0, pageSize), hasMore: rows.length > pageSize };
+}
