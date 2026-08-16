@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Calendar, Pencil, Save, X, AlertCircle } from "lucide-react";
+import { invalidateGroceryList } from "@/lib/grocery-query-keys";
 import { toast } from "sonner";
 import { WEEK_DAYS, SHORT_DAY, formatDays, type WeekDay } from "@/lib/training-schedule";
 import { format, parseISO } from "date-fns";
@@ -120,6 +121,7 @@ export function TrainingScheduleCard({ client, editable = true, compact = false,
     qc.invalidateQueries({ queryKey: ["client-schedule", client.id] });
     qc.invalidateQueries({ queryKey: ["pl-days"] });
     qc.invalidateQueries({ queryKey: ["workout-today"] });
+    void invalidateGroceryList(qc, client.id);
     setEditing(false);
   };
 

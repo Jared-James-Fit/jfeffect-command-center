@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Apple, Plus, Pencil, Trash2, Copy, Droplet, ShoppingCart } from "lucide-react";
 import { Download } from "lucide-react";
+import { invalidateGroceryList } from "@/lib/grocery-query-keys";
 import { toast } from "sonner";
 import { NutritionTargetDialog } from "./nutrition-target-dialog";
 import { deriveTarget } from "@/lib/nutrition-cardio";
@@ -64,6 +65,7 @@ export function NutritionTargetsPanel({ clientId }: { clientId: string }) {
     const { error } = await supabase.from("nutrition_targets").delete().eq("id", t.id);
     if (error) return toast.error(error.message);
     qc.invalidateQueries({ queryKey: ["nutrition-targets", clientId] });
+    void invalidateGroceryList(qc, clientId);
     toast.success("Deleted");
   };
 
@@ -76,6 +78,7 @@ export function NutritionTargetsPanel({ clientId }: { clientId: string }) {
       await supabase.from("nutrition_target_days").insert(rows);
     }
     qc.invalidateQueries({ queryKey: ["nutrition-targets", clientId] });
+    void invalidateGroceryList(qc, clientId);
     toast.success("Duplicated");
   };
 

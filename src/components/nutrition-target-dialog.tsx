@@ -10,6 +10,7 @@ import {
   DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem,
 } from "@/components/ui/dropdown-menu";
 import { supabase } from "@/integrations/supabase/client";
+import { invalidateGroceryList } from "@/lib/grocery-query-keys";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
 import { NUTRITION_PHASES, NUTRITION_GOALS, NUTRITION_STRUCTURES, dayLabelsForStructure, TARGET_STATUSES } from "@/lib/nutrition-cardio";
@@ -168,6 +169,7 @@ export function NutritionTargetDialog({ open, onOpenChange, clientId, clients = 
     toast.success(form.id ? "Updated" : "Created");
     qc.invalidateQueries({ queryKey: ["nutrition-targets"] });
     qc.invalidateQueries({ queryKey: ["nutrition-targets", form.client_id] });
+    void invalidateGroceryList(qc, form.client_id);
     onOpenChange(false);
   };
 
