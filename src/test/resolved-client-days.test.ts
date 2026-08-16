@@ -139,6 +139,27 @@ describe("resolveClientWeekDays", () => {
   });
 });
 
+describe("canonical cardio weekday schedules", () => {
+  it("uses saved weekdays consistently instead of derived training or nutrition day types", () => {
+    const scheduledTarget: CardioTargetLike = {
+      id: "mwf-cardio",
+      day_type: "General",
+      start_date: "2026-07-01",
+      scheduled_weekdays: ["Monday", "Wednesday", "Friday"],
+    };
+    const days = resolveClientWeekDays({
+      clientId,
+      weekDates: week,
+      workouts: workouts(["2026-07-07", "2026-07-09"]),
+      recurringHighDays: ["Sunday"],
+      cardioTargets: [scheduledTarget],
+      defaultFullRestDay: false,
+    });
+    const assigned = days.filter((day) => day.cardioTargetId === "mwf-cardio").map((day) => day.date);
+    expect(assigned).toEqual(["2026-07-06", "2026-07-08", "2026-07-10"]);
+  });
+});
+
 function daysOf(days: ReturnType<typeof resolveClientWeekDays>, type: "training" | "high" | "non_training" | "rest") {
   return days.filter((d) => d.cardioDayType === type).map((d) => d.date);
 }

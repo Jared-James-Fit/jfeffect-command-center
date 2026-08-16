@@ -35,6 +35,7 @@ export type CardioTargetLike = {
   status?: string | null;
   enabled?: boolean | null;
   visible_to_client?: boolean | null;
+  scheduled_weekdays?: string[] | null;
 };
 
 export type DayOverrideLike = {
@@ -96,6 +97,13 @@ export function pickCardioTargetForDay(
 ): CardioTargetLike | null {
   if (dayType === "rest") return null;
   const active = (targets ?? []).filter((target) => targetIsActiveForDate(target, dateISO));
+  // A saved weekday schedule is canonical. Legacy targets with no saved weekdays
+  // continue through the older day-type fallback so existing prescriptions remain visible.
+  const explicitlyScheduled = active.filter((target) => Array.isArray(target.scheduled_weekdays) && target.scheduled_weekdays.length > 0);
+  if (explicitlyScheduled.length > 0) {
+    const weekday = weekdayNameForISO(dateISO);
+    return explicitlyScheduled.find((target) => target.scheduled_weekdays!.some((day) => String(day).toLowerCase() === weekday.toLowerCase())) ?? null;
+  }
   const exact = active.find((target) => canonicalCardioDayType(target.day_type) === dayType);
   if (exact) return exact;
   if (dayType === "non_training") {

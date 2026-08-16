@@ -70,12 +70,12 @@ export type CardioSuggestion = {
 
 /**
  * Default Zone 2 / LISS setup. Conservative, conversational-pace work that
- * suits most clients: 30 minutes, HR zone 2, RPE 3–4.
+ * suits most clients: 15 minutes, HR zone 2, RPE 3–4.
  */
 export function suggestSteadyStateSetup(target: CardioTargetLike): CardioSuggestion {
   const durationMinutes = Number(target.duration_minutes) > 0
     ? Number(target.duration_minutes)
-    : 30;
+    : 15;
   const intensity = target.intensity?.trim() || "Low (conversational pace)";
   const heartRateZone = target.heart_rate_zone?.trim() || "Zone 2 (60–70% max HR)";
   const machine = target.machine_preference?.trim() || "Treadmill (incline walk)";
@@ -84,8 +84,8 @@ export function suggestSteadyStateSetup(target: CardioTargetLike): CardioSuggest
     intensity,
     heartRateZone,
     machine,
-    speedHint: "3.0–3.5 mph / 5.0–5.6 kph",
-    inclineHint: "6–10%",
+    speedHint: "2–3 mph / 3.2–4.8 kph",
+    inclineHint: "5%",
     rpeHint: "RPE 3–4",
     summary: `${durationMinutes} min · ${heartRateZone} · ${"RPE 3–4"}`,
   };

@@ -1397,6 +1397,8 @@ export type Database = {
           notes: string | null
           rpe: number | null
           skipped: boolean
+          steps: number | null
+          completion_target: string | null
           updated_at: string
         }
         Insert: {
@@ -1418,6 +1420,8 @@ export type Database = {
           notes?: string | null
           rpe?: number | null
           skipped?: boolean
+          steps?: number | null
+          completion_target?: string | null
           updated_at?: string
         }
         Update: {
@@ -1439,6 +1443,8 @@ export type Database = {
           notes?: string | null
           rpe?: number | null
           skipped?: boolean
+          steps?: number | null
+          completion_target?: string | null
           updated_at?: string
         }
         Relationships: [
@@ -1526,6 +1532,13 @@ export type Database = {
           start_date: string
           status: string
           step_target: number | null
+          step_target_mode: string
+          calorie_target_mode: string
+          scheduled_weekdays: string[]
+          incline: number | null
+          speed_min_mph: number | null
+          speed_max_mph: number | null
+          completion_rule: string
           updated_at: string
           visible_to_client: boolean
         }
@@ -1557,6 +1570,13 @@ export type Database = {
           start_date: string
           status?: string
           step_target?: number | null
+          step_target_mode?: string
+          calorie_target_mode?: string
+          scheduled_weekdays?: string[]
+          incline?: number | null
+          speed_min_mph?: number | null
+          speed_max_mph?: number | null
+          completion_rule?: string
           updated_at?: string
           visible_to_client?: boolean
         }
@@ -1588,6 +1608,13 @@ export type Database = {
           start_date?: string
           status?: string
           step_target?: number | null
+          step_target_mode?: string
+          calorie_target_mode?: string
+          scheduled_weekdays?: string[]
+          incline?: number | null
+          speed_min_mph?: number | null
+          speed_max_mph?: number | null
+          completion_rule?: string
           updated_at?: string
           visible_to_client?: boolean
         }

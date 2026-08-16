@@ -46,7 +46,7 @@ export function ClientCardioSection({
         supabase
           .from("cardio_targets")
           .select(
-            "id,cardio_type,custom_type,day_type,custom_day_type,frequency_per_week,duration_minutes,intensity,heart_rate_zone,machine_preference,goal,step_target,calorie_target_min,calorie_target_max,show_calories_to_client,client_notes,program_name,start_date,end_date,status,enabled,visible_to_client",
+            "id,cardio_type,custom_type,day_type,custom_day_type,scheduled_weekdays,frequency_per_week,duration_minutes,intensity,heart_rate_zone,machine_preference,goal,step_target,step_target_mode,calorie_target_min,calorie_target_max,calorie_target_mode,show_calories_to_client,incline,speed_min_mph,speed_max_mph,completion_rule,client_notes,program_name,start_date,end_date,status,enabled,visible_to_client",
           )
           .eq("client_id", clientId)
           .eq("visible_to_client", true)

@@ -45,28 +45,28 @@ const DEFAULT_CONFIG: Record<string, {
   client_notes: string;
 }> = {
   "Training Day": {
-    cardio_type: "Incline Walking",
-    duration_minutes: 25,
+    cardio_type: "Incline Treadmill Walk",
+    duration_minutes: 15,
     intensity: "Zone 2",
-    calorie_target_min: 150,
-    calorie_target_max: 200,
-    client_notes: "Steady incline walk after lifting. Keep heart rate in Zone 2.",
+    calorie_target_min: null,
+    calorie_target_max: null,
+    client_notes: "Incline 5 · speed 2–3 mph. Complete the session when ANY ONE target is reached; stop when whichever target comes first.",
   },
   "Rest Day": {
-    cardio_type: "Outdoor Walking",
-    duration_minutes: 25,
-    intensity: "Low Intensity",
+    cardio_type: "Incline Treadmill Walk",
+    duration_minutes: 15,
+    intensity: "Zone 2",
     calorie_target_min: null,
     calorie_target_max: null,
-    client_notes: "Easy outdoor walk. Aim for daily steps, low fatigue.",
+    client_notes: "Incline 5 · speed 2–3 mph. Complete the session when ANY ONE target is reached; stop when whichever target comes first.",
   },
   "High Day": {
-    cardio_type: "Outdoor Walking",
-    duration_minutes: 20,
-    intensity: "Low Intensity",
+    cardio_type: "Incline Treadmill Walk",
+    duration_minutes: 15,
+    intensity: "Zone 2",
     calorie_target_min: null,
     calorie_target_max: null,
-    client_notes: "Optional light walk. Keep fatigue low.",
+    client_notes: "Incline 5 · speed 2–3 mph. Complete the session when ANY ONE target is reached; stop when whichever target comes first.",
   },
   "Low Day": {
     cardio_type: "Outdoor Walking",
@@ -304,6 +304,16 @@ export function CardioApplyDefaultsDialog({
     });
   };
 
+  const scheduledWeekdaysFor = (dayType: string): string[] => {
+    const training = new Set<string>(clientPrefs?.preferred_training_days ?? []);
+    if (dayType === "Training Day") return Array.from(training);
+    if (dayType === "High Day") return [highDayWeekday];
+    if (dayType === "Rest Day" || dayType === "Non-Training Day") {
+      return (WEEK_DAYS as readonly WeekDay[]).filter((day) => !training.has(day) && day !== highDayWeekday && (!fullRestEnabled || day !== fullRestWeekday));
+    }
+    return [];
+  };
+
   const apply = async () => {
     if (!isValid) {
       toast.error(`Frequencies must add up to exactly 7 days/week. Currently: ${totalDays}`);
@@ -340,6 +350,9 @@ export function CardioApplyDefaultsDialog({
         custom_type: null,
         intensity: row.intensity,
         frequency_per_week: freq,
+        // Once known, weekdays become the one schedule consumed by calendar, client logging and analytics.
+        // Empty only preserves the older resolver when a legacy client has no committed weekday data yet.
+        scheduled_weekdays: scheduledWeekdaysFor(row.day_type),
         duration_minutes: row.duration_minutes,
         calorie_target_min: cfg.calorie_target_min,
         calorie_target_max: cfg.calorie_target_max,

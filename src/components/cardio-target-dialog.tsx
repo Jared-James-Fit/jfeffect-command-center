@@ -9,10 +9,11 @@ import { Switch } from "@/components/ui/switch";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
-import { TARGET_STATUSES, estimateCalorieRange, formatCalorieTarget } from "@/lib/nutrition-cardio";
-import { Calculator, X, ChevronDown, ChevronUp } from "lucide-react";
+import { TARGET_STATUSES } from "@/lib/nutrition-cardio";
+import { ChevronDown, ChevronUp } from "lucide-react";
 import { todayLocalISO } from "@/lib/today";
 import { cn } from "@/lib/utils";
+import { CARDIO_WEEKDAYS, INCLINE_TREADMILL_DEFAULT, normalizeCardioWeekdays, resolveCardioTargets } from "@/lib/cardio-prescription";
 
 type Props = {
   open: boolean;
@@ -30,6 +31,7 @@ const DAY_TYPE_OPTIONS = [
 ];
 
 const CARDIO_TYPE_OPTIONS = [
+  { label: "Incline Treadmill Walk", value: "Incline Treadmill Walk" },
   { label: "Incline Walking", value: "Incline Walking" },
   { label: "Bike", value: "Bike" },
   { label: "Stairs", value: "Stairmaster" },
@@ -99,14 +101,21 @@ export function CardioTargetDialog({ open, onOpenChange, clientId, clients = [],
         : {
             client_id: clientId ?? "",
             goal: "",
-            cardio_type: "Incline Walking",
+            cardio_type: INCLINE_TREADMILL_DEFAULT.cardio_type,
             custom_type: "",
             day_type: defaultDayType ?? "General",
+            scheduled_weekdays: ["Monday", "Wednesday", "Friday"],
             custom_day_type: "",
             enabled: true,
             frequency_per_week: 3,
-            duration_minutes: 30,
-            intensity: "Zone 2",
+            duration_minutes: INCLINE_TREADMILL_DEFAULT.duration_minutes,
+            intensity: INCLINE_TREADMILL_DEFAULT.intensity,
+            incline: INCLINE_TREADMILL_DEFAULT.incline,
+            speed_min_mph: INCLINE_TREADMILL_DEFAULT.speed_min_mph,
+            speed_max_mph: INCLINE_TREADMILL_DEFAULT.speed_max_mph,
+            step_target_mode: "auto",
+            calorie_target_mode: "auto",
+            completion_rule: "any_target",
             heart_rate_zone: "",
             step_target: null,
             machine_preference: "",
@@ -128,6 +137,7 @@ export function CardioTargetDialog({ open, onOpenChange, clientId, clients = [],
 
   if (!form) return null;
   const set = (k: string, v: any) => setForm({ ...form, [k]: v });
+  const calculatedTargets = resolveCardioTargets(form);
 
   const save = async () => {
     if (!form.client_id) return toast.error("Pick a client first");
@@ -144,7 +154,9 @@ export function CardioTargetDialog({ open, onOpenChange, clientId, clients = [],
       duration_minutes: form.duration_minutes ? Number(form.duration_minutes) : null,
       intensity: form.intensity || null,
       heart_rate_zone: form.heart_rate_zone || null,
-      step_target: form.step_target ? Number(form.step_target) : null,
+      scheduled_weekdays: normalizeCardioWeekdays(form.scheduled_weekdays),
+      step_target_mode: form.step_target_mode === "custom" ? "custom" : "auto",
+      step_target: form.step_target_mode === "custom" && form.step_target ? Number(form.step_target) : null,
       machine_preference: form.machine_preference || null,
       start_date: form.start_date,
       end_date: form.end_date || null,
@@ -153,8 +165,13 @@ export function CardioTargetDialog({ open, onOpenChange, clientId, clients = [],
       client_notes: form.client_notes,
       admin_notes: form.admin_notes,
       visible_to_client: form.visible_to_client,
-      calorie_target_min: form.calorie_target_min ? Number(form.calorie_target_min) : null,
-      calorie_target_max: form.calorie_target_max ? Number(form.calorie_target_max) : null,
+      calorie_target_mode: form.calorie_target_mode === "custom" ? "custom" : "auto",
+      calorie_target_min: form.calorie_target_mode === "custom" && form.calorie_target_min ? Number(form.calorie_target_min) : null,
+      calorie_target_max: form.calorie_target_mode === "custom" && form.calorie_target_max ? Number(form.calorie_target_max) : null,
+      incline: form.incline ? Number(form.incline) : null,
+      speed_min_mph: form.speed_min_mph ? Number(form.speed_min_mph) : null,
+      speed_max_mph: form.speed_max_mph ? Number(form.speed_max_mph) : null,
+      completion_rule: "any_target",
       show_calories_to_client: form.show_calories_to_client !== false,
       last_updated_at: new Date().toISOString(),
     };
@@ -207,6 +224,24 @@ export function CardioTargetDialog({ open, onOpenChange, clientId, clients = [],
               onChange={(v) => set("day_type", v)}
             />
           </div>
+          <div className="md:col-span-2 rounded-md border border-border bg-secondary/20 p-3">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <Label>Cardio days</Label>
+              <div className="flex flex-wrap gap-1 text-[10px]">
+                {[["3 days/week", ["Monday", "Wednesday", "Friday"]], ["4 days/week", ["Monday", "Tuesday", "Thursday", "Saturday"]], ["5 days/week", ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"]], ["Daily", CARDIO_WEEKDAYS]].map(([label, days]: any) => (
+                  <button key={label} type="button" onClick={() => setForm({ ...form, scheduled_weekdays: days, frequency_per_week: days.length })} className="rounded border border-border bg-background px-2 py-1 font-medium text-muted-foreground hover:text-foreground">{label}</button>
+                ))}
+              </div>
+            </div>
+            <div className="mt-2 grid grid-cols-7 gap-1">
+              {CARDIO_WEEKDAYS.map((day) => {
+                const selected = normalizeCardioWeekdays(form.scheduled_weekdays).includes(day);
+                const nextDays = selected ? normalizeCardioWeekdays(form.scheduled_weekdays).filter((d) => d !== day) : [...normalizeCardioWeekdays(form.scheduled_weekdays), day];
+                return <button key={day} type="button" onClick={() => setForm({ ...form, scheduled_weekdays: nextDays, frequency_per_week: nextDays.length })} className={cn("min-h-10 rounded border text-xs font-bold", selected ? "border-primary bg-primary text-primary-foreground" : "border-border bg-background text-muted-foreground hover:bg-secondary")}>{day.slice(0, 3)}</button>;
+              })}
+            </div>
+            <p className="mt-2 text-xs text-muted-foreground">These saved weekdays are the single schedule used by the client card, calendar, logging, and analytics.</p>
+          </div>
           <div className="md:col-span-2">
             <TapGroup
               label="Cardio type"
@@ -244,6 +279,22 @@ export function CardioTargetDialog({ open, onOpenChange, clientId, clients = [],
               value={form.duration_minutes ?? ""}
               onChange={(e) => set("duration_minutes", e.target.value)}
             />
+          </div>
+          <div>
+            <Label>Incline</Label>
+            <Input type="number" inputMode="decimal" value={form.incline ?? ""} onChange={(e) => set("incline", e.target.value)} />
+          </div>
+          <div>
+            <Label>Speed min (mph)</Label>
+            <Input type="number" inputMode="decimal" value={form.speed_min_mph ?? ""} onChange={(e) => set("speed_min_mph", e.target.value)} />
+          </div>
+          <div>
+            <Label>Speed max (mph)</Label>
+            <Input type="number" inputMode="decimal" value={form.speed_max_mph ?? ""} onChange={(e) => set("speed_max_mph", e.target.value)} />
+          </div>
+          <div className="md:col-span-2 grid gap-2 sm:grid-cols-2">
+            <div className="rounded-md border border-border bg-secondary/20 p-3 text-sm"><p className="font-semibold">Steps: {calculatedTargets.steps?.toLocaleString() ?? "Not set"} · {calculatedTargets.stepMode === "auto" ? "Auto" : "Custom"}</p><p className="text-xs text-muted-foreground">Recalculates with duration while Auto is selected.</p></div>
+            <div className="rounded-md border border-border bg-secondary/20 p-3 text-sm"><p className="font-semibold">Estimated calories: ~{calculatedTargets.calories ?? "Not set"} kcal · {calculatedTargets.calorieMode === "auto" ? "Auto" : "Custom"}</p><p className="text-xs text-muted-foreground">Estimate only; machines and individuals vary.</p></div>
           </div>
           <div className="md:col-span-2">
             <TapGroup
@@ -323,9 +374,9 @@ export function CardioTargetDialog({ open, onOpenChange, clientId, clients = [],
                 <Label>Heart rate zone</Label>
                 <Input value={form.heart_rate_zone ?? ""} onChange={(e) => set("heart_rate_zone", e.target.value)} />
               </div>
-              <div>
-                <Label>Step target</Label>
-                <Input type="number" value={form.step_target ?? ""} onChange={(e) => set("step_target", e.target.value)} />
+              <div className="md:col-span-2 rounded-md border border-border bg-secondary/20 p-3">
+                <TapGroup label="Step target" options={[{ label: "Auto", value: "auto" }, { label: "Custom", value: "custom" }]} value={form.step_target_mode ?? "auto"} onChange={(v) => set("step_target_mode", v)} />
+                {form.step_target_mode === "custom" ? <Input className="mt-2" type="number" value={form.step_target ?? ""} onChange={(e) => set("step_target", e.target.value)} placeholder="Custom steps" /> : <p className="mt-2 text-xs text-muted-foreground">Auto: {calculatedTargets.steps?.toLocaleString() ?? "Not set"} steps from duration.</p>}
               </div>
               <div>
                 <Label>Start date</Label>
@@ -335,45 +386,9 @@ export function CardioTargetDialog({ open, onOpenChange, clientId, clients = [],
                 <Label>End date</Label>
                 <Input type="date" value={form.end_date ?? ""} onChange={(e) => set("end_date", e.target.value)} />
               </div>
-              <div>
-                <Label>Calories min</Label>
-                <Input type="number" value={form.calorie_target_min ?? ""} onChange={(e) => set("calorie_target_min", e.target.value)} />
-              </div>
-              <div>
-                <Label>Calories max</Label>
-                <Input type="number" value={form.calorie_target_max ?? ""} onChange={(e) => set("calorie_target_max", e.target.value)} />
-              </div>
-              <div className="md:col-span-2 flex flex-wrap items-center justify-between gap-2 rounded-md border border-dashed border-border bg-secondary/20 px-3 py-2">
-                <span className="text-xs text-muted-foreground">
-                  {formatCalorieTarget(
-                    form.calorie_target_min ? Number(form.calorie_target_min) : null,
-                    form.calorie_target_max ? Number(form.calorie_target_max) : null,
-                  ) ?? "Optional calorie target"}
-                </span>
-                <div className="flex gap-1">
-                  <ActionButton
-                    type="button"
-                    size="sm"
-                    variant="outline"
-                    onClick={() => {
-                      const est = estimateCalorieRange(Number(form.duration_minutes), form.intensity);
-                      if (!est) return toast.error("Add duration + intensity first");
-                      setForm({ ...form, calorie_target_min: est.min, calorie_target_max: est.max, show_calories_to_client: true });
-                    }}
-                  >
-                    <Calculator className="mr-1 h-4 w-4" /> Estimate
-                  </ActionButton>
-                  {(form.calorie_target_min || form.calorie_target_max) && (
-                    <ActionButton
-                      type="button"
-                      size="sm"
-                      variant="ghost"
-                      onClick={() => setForm({ ...form, calorie_target_min: null, calorie_target_max: null, show_calories_to_client: false })}
-                    >
-                      <X className="h-4 w-4" />
-                    </ActionButton>
-                  )}
-                </div>
+              <div className="md:col-span-2 rounded-md border border-border bg-secondary/20 p-3">
+                <TapGroup label="Estimated calorie target" options={[{ label: "Auto", value: "auto" }, { label: "Custom", value: "custom" }]} value={form.calorie_target_mode ?? "auto"} onChange={(v) => set("calorie_target_mode", v)} />
+                {form.calorie_target_mode === "custom" ? <Input className="mt-2" type="number" value={form.calorie_target_min ?? ""} onChange={(e) => setForm({ ...form, calorie_target_min: e.target.value, calorie_target_max: e.target.value, show_calories_to_client: true })} placeholder="Custom estimated kcal" /> : <p className="mt-2 text-xs text-muted-foreground">Auto: ~{calculatedTargets.calories ?? "Not set"} kcal from duration. Estimates vary by person and machine.</p>}
               </div>
               <div className="md:col-span-2 flex items-center justify-between rounded-md border border-border bg-secondary/30 px-3 py-2">
                 <Label className="text-xs">Show calorie target to client</Label>

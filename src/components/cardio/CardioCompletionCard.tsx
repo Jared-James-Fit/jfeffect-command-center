@@ -27,6 +27,7 @@ import {
   formatCardioLogLine,
   suggestedCardioSetup,
 } from "@/lib/cardio-plan";
+import { cardioCompletionRuleLabel, resolveCardioTargets, resolveCompletionTarget } from "@/lib/cardio-prescription";
 
 type CardioTarget = {
   id: string;
@@ -40,7 +41,12 @@ type CardioTarget = {
   machine_preference: string | null;
   goal: string | null;
   step_target: number | null;
+  step_target_mode?: "auto" | "custom" | null;
   calorie_target_min: number | null;
+  calorie_target_mode?: "auto" | "custom" | null;
+  incline?: number | null;
+  speed_min_mph?: number | null;
+  speed_max_mph?: number | null;
   calorie_target_max: number | null;
   show_calories_to_client: boolean;
   client_notes: string | null;
@@ -73,6 +79,7 @@ export function CardioCompletionCard({ target, clientId, date, readonly = false 
   const [avgSpeed, setAvgSpeed] = useState("");
   const [incline, setIncline] = useState("");
   const [calories, setCalories] = useState("");
+  const [steps, setSteps] = useState("");
   const [avgHr, setAvgHr] = useState("");
 
   const { data: completion, isLoading } = useQuery({
@@ -94,6 +101,7 @@ export function CardioCompletionCard({ target, clientId, date, readonly = false 
   const isCompleted = status === "logged";
   const isSkipped = status === "skipped";
   const suggestion = suggestedCardioSetup(target);
+  const smartTargets = resolveCardioTargets(target);
 
   // Hydrate the form from the saved log so editing never starts blank.
   useEffect(() => {
@@ -108,6 +116,7 @@ export function CardioCompletionCard({ target, clientId, date, readonly = false 
     setAvgSpeed(c?.avg_speed != null ? String(c.avg_speed) : "");
     setIncline(c?.incline != null ? String(c.incline) : "");
     setCalories(c?.calories != null ? String(c.calories) : "");
+    setSteps(c?.steps != null ? String(c.steps) : "");
     setAvgHr(c?.avg_heart_rate != null ? String(c.avg_heart_rate) : "");
   }, [expanded, completion]);
 
@@ -122,12 +131,10 @@ export function CardioCompletionCard({ target, clientId, date, readonly = false 
   if (target.heart_rate_zone) metaParts.push(target.heart_rate_zone);
   else if (suggestion) metaParts.push(suggestion.heartRateZone);
   if (target.machine_preference) metaParts.push(target.machine_preference);
-  if (target.step_target) metaParts.push(`${target.step_target.toLocaleString()} steps`);
+  if (smartTargets.steps) metaParts.push(`${smartTargets.steps.toLocaleString()} steps`);
 
-  const cal = target.show_calories_to_client && (target.calorie_target_min || target.calorie_target_max)
-    ? target.calorie_target_min && target.calorie_target_max
-      ? `${target.calorie_target_min}–${target.calorie_target_max} cal`
-      : `${target.calorie_target_min ?? target.calorie_target_max} cal`
+  const cal = target.show_calories_to_client && smartTargets.calories
+    ? `~${smartTargets.calories} kcal`
     : null;
 
   async function toggleComplete() {
@@ -156,6 +163,7 @@ export function CardioCompletionCard({ target, clientId, date, readonly = false 
             duration_minutes: target.duration_minutes ?? suggestion?.durationMinutes ?? null,
             cardio_type: typeName,
             day_type: target.day_type,
+            completion_target: "manual",
           }, { onConflict: "client_id,cardio_target_id,completed_date" });
         toast.success("Cardio logged!");
       }
@@ -211,6 +219,14 @@ export function CardioCompletionCard({ target, clientId, date, readonly = false 
     };
     setSaving(true);
     try {
+      const completedBy = resolveCompletionTarget({
+        duration_minutes: target.duration_minutes,
+        step_target: smartTargets.steps,
+        calorie_target_min: smartTargets.calories,
+        logged_duration_minutes: num(actualDuration),
+        logged_steps: num(steps),
+        logged_calories: num(calories),
+      });
       await (supabase as any)
         .from("cardio_completions")
         .upsert({
@@ -229,6 +245,8 @@ export function CardioCompletionCard({ target, clientId, date, readonly = false 
           avg_speed: num(avgSpeed),
           incline: num(incline),
           calories: num(calories),
+          steps: num(steps),
+          completion_target: completedBy ?? "manual",
           avg_heart_rate: num(avgHr),
           notes: notes.trim() || null,
           day_type: target.day_type,
@@ -295,6 +313,16 @@ export function CardioCompletionCard({ target, clientId, date, readonly = false 
 
             {metaParts.length > 0 && (
               <div className="text-xs text-muted-foreground">{metaParts.join(" · ")}</div>
+            )}
+
+            {!isCompleted && (
+              <div className="mt-2 rounded-md border border-primary/25 bg-primary/5 px-2 py-1.5 text-[11px] text-foreground">
+                <p className="font-semibold">Finish when ONE target is reached</p>
+                <p className="mt-0.5 text-muted-foreground">
+                  {[target.duration_minutes ? `${target.duration_minutes} min` : null, smartTargets.steps ? `${smartTargets.steps.toLocaleString()} steps` : null, smartTargets.calories ? `~${smartTargets.calories} kcal` : null].filter(Boolean).join("  OR  ")}
+                </p>
+                <p className="mt-0.5 text-muted-foreground">{cardioCompletionRuleLabel()}</p>
+              </div>
             )}
 
             {suggestion && !isCompleted && (
@@ -389,7 +417,7 @@ export function CardioCompletionCard({ target, clientId, date, readonly = false 
                 />
               </div>
             </div>
-            <div className="grid grid-cols-3 gap-2">
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
               <div>
                 <Label className="text-xs">Distance</Label>
                 <Input
@@ -414,11 +442,22 @@ export function CardioCompletionCard({ target, clientId, date, readonly = false 
                 </select>
               </div>
               <div>
+                <Label className="text-xs">Steps</Label>
+                <Input
+                  type="number"
+                  inputMode="numeric"
+                  placeholder={smartTargets.steps ? String(smartTargets.steps) : "—"}
+                  value={steps}
+                  onChange={(e) => setSteps(e.target.value)}
+                  className="h-8 text-sm"
+                />
+              </div>
+              <div>
                 <Label className="text-xs">Calories</Label>
                 <Input
                   type="number"
                   inputMode="numeric"
-                  placeholder="—"
+                  placeholder={smartTargets.calories ? String(smartTargets.calories) : "—"}
                   value={calories}
                   onChange={(e) => setCalories(e.target.value)}
                   className="h-8 text-sm"
