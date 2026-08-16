@@ -137,7 +137,23 @@ export const Route = createFileRoute("/api/public/hooks/fillout")({
         let matchedClientId: string | null = null;
         let unmatchReason: string | null = null;
         if (!clientIdParam) {
-          unmatchReason = "missing_client_id";
+          const firstName = getParam("first_name")?.trim();
+          const lastName = getParam("last_name")?.trim();
+          const fullName = [firstName, lastName].filter(Boolean).join(" ");
+          if (fullName) {
+            const { data: matches } = await supabaseAdmin
+              .from("clients")
+              .select("id")
+              .ilike("full_name", fullName)
+              .limit(2);
+            if ((matches ?? []).length === 1) {
+              matchedClientId = matches![0].id;
+            } else {
+              unmatchReason = matches?.length ? "ambiguous_client_name" : "client_name_not_found";
+            }
+          } else {
+            unmatchReason = "missing_client_id";
+          }
         } else {
           const { data: client } = await supabaseAdmin
             .from("clients")
