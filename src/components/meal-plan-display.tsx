@@ -263,3 +263,51 @@ export function MealPlanDisplay({ text, className, collapsibleMeals = false }: P
     </div>
   );
 }
+
+function CollapsibleMeal({
+  title,
+  subtitle,
+  defaultOpen,
+  children,
+}: {
+  title: string;
+  subtitle?: string;
+  defaultOpen?: boolean;
+  children: React.ReactNode;
+}) {
+  const [open, setOpen] = useState(!!defaultOpen);
+  if (open) {
+    return (
+      <div>
+        <button
+          type="button"
+          onClick={() => setOpen(false)}
+          aria-expanded
+          className="mb-1 flex w-full items-center justify-between text-left text-[10px] font-bold uppercase tracking-widest text-muted-foreground"
+        >
+          <span>Hide {title}</span>
+          <ChevronDown className="h-3.5 w-3.5 rotate-180" />
+        </button>
+        {children}
+      </div>
+    );
+  }
+  return (
+    <button
+      type="button"
+      onClick={() => setOpen(true)}
+      aria-expanded={false}
+      className="flex w-full items-center justify-between rounded-md border border-border bg-secondary/20 px-3 py-2.5 text-left transition hover:border-primary/40"
+    >
+      <span className="min-w-0">
+        <span className="block text-[11px] font-black uppercase tracking-widest text-primary">{title}</span>
+        {subtitle && (
+          <span className="block text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+            {subtitle}
+          </span>
+        )}
+      </span>
+      <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" />
+    </button>
+  );
+}
