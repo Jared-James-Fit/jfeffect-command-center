@@ -10,6 +10,7 @@ export const LEAD_SCORE_DISCLAIMER =
   "Lead Score is a prioritization aid, not a judgment of the applicant.";
 
 export function toLeadScore5(score: unknown): number | null {
+  if (score === null || score === undefined || score === "") return null;
   const n = typeof score === "number" ? score : Number(score);
   if (!Number.isFinite(n)) return null;
   const clamped = Math.max(0, Math.min(100, n));
