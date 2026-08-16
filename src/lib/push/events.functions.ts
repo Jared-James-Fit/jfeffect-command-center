@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { buildNotificationPayload } from "@/lib/push/notification-payload";
 
 /**
  * Fire a push notification for a newly inserted message. The middleware
@@ -23,22 +24,26 @@ export const notifyNewMessage = createServerFn({ method: "POST" })
     if (!msg || msg.is_internal_note) return { skipped: "no_msg_or_internal" };
     if (msg.sender_id !== userId) return { skipped: "not_sender" };
 
-    // Lock notification copy to a generic line — never leak message body to lockscreen.
-    const payloadFor = (url: string, who: "client" | "staff") => ({
-      title: who === "client" ? "New Coach Message" : "New Client Message",
-      body: who === "client" ? "You have a new message in JF Effect." : "A client sent you a new message.",
-      url,
-      tag: `msg:${msg.client_id}`,
-      data: { messageId: msg.id, clientId: msg.client_id },
-    });
+    // Copy/identity/deep-link all come from the one shared normalizer, which
+    // guarantees no message body ever reaches a lockscreen.
+    const normalized = (recipientUserId: string, role: "client" | "admin") =>
+      buildNotificationPayload({
+        kind: "message",
+        role,
+        recipientUserId,
+        sourceId: msg.id,
+        ids: { clientId: msg.client_id },
+      });
 
     let results: any[] = [];
     if (msg.sender_role === "admin" || msg.sender_role === "coach") {
       // Notify the client user
       const { data: c } = await supabaseAdmin.from("clients").select("user_id").eq("id", msg.client_id).maybeSingle();
       if (c?.user_id) {
-        const r = await sendWebPushToUser(supabaseAdmin, c.user_id, payloadFor("/portal/messages", "client"),
-          { category: "messages", eventKey: `msg:${msg.id}:client` });
+        const n = normalized(c.user_id, "client");
+        const r = await sendWebPushToUser(supabaseAdmin, c.user_id,
+          { title: n.title, body: n.body, url: n.url, tag: n.tag, data: n.data },
+          { category: n.category, eventKey: n.eventKey });
         results.push({ recipient: "client", ...r });
       }
     } else {
@@ -54,9 +59,10 @@ export const notifyNewMessage = createServerFn({ method: "POST" })
       const { data: admins } = await supabaseAdmin.from("user_roles").select("user_id").eq("role", "admin");
       (admins ?? []).forEach((a: any) => a.user_id && recipients.add(a.user_id));
       for (const uid of recipients) {
+        const n = normalized(uid, "admin");
         const r = await sendWebPushToUser(supabaseAdmin, uid,
-          payloadFor(`/admin/messages?client=${msg.client_id}`, "staff"),
-          { category: "messages", eventKey: `msg:${msg.id}:${uid}` });
+          { title: n.title, body: n.body, url: n.url, tag: n.tag, data: n.data },
+          { category: n.category, eventKey: n.eventKey });
         results.push({ recipient: uid, ...r });
       }
     }
