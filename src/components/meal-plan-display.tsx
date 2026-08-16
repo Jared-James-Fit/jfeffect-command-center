@@ -1,6 +1,16 @@
+import { useState } from "react";
+import { ChevronDown } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-type Props = { text?: string | null; className?: string };
+type Props = {
+  text?: string | null;
+  className?: string;
+  /**
+   * Client-facing scanability option: keep Meal 1 expanded and collapse the
+   * later meals. Purely presentational — the coach-authored text is unchanged.
+   */
+  collapsibleMeals?: boolean;
+};
 
 // Parses pasted meal plan text into structured sections so each meal renders
 // as ONE compact card with its ingredients and an inline "Approx" macro row,
@@ -151,16 +161,19 @@ function formatMacroValue(line: string) {
   return line.replace(/\s+/g, " ").trim();
 }
 
-export function MealPlanDisplay({ text, className }: Props) {
+export function MealPlanDisplay({ text, className, collapsibleMeals = false }: Props) {
   if (!text || !text.trim()) return null;
   const sections = parse(text);
   if (!sections.length) return null;
+
+  let mealIndex = -1;
 
   return (
     <div className={cn("space-y-3 text-sm leading-relaxed", className)}>
       {sections.map((s, i) => {
         if (s.kind === "meal") {
-          return (
+          mealIndex += 1;
+          const body = (
             <div key={i} className="rounded-md border border-border bg-secondary/20 px-3 py-2.5">
               <div className="flex flex-wrap items-baseline gap-x-2">
                 <div className="text-[11px] font-black uppercase tracking-widest text-primary">{titleCase(s.title)}</div>
@@ -193,6 +206,17 @@ export function MealPlanDisplay({ text, className }: Props) {
                 </div>
               )}
             </div>
+          );
+          if (!collapsibleMeals) return body;
+          return (
+            <CollapsibleMeal
+              key={i}
+              title={titleCase(s.title)}
+              subtitle={s.subtitle}
+              defaultOpen={mealIndex === 0}
+            >
+              {body}
+            </CollapsibleMeal>
           );
         }
         if (s.kind === "total") {
