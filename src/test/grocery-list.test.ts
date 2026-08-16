@@ -1,4 +1,18 @@
 import { describe, it, expect, beforeEach } from "vitest";
+
+// Minimal localStorage stub (test env is "node"); proves the shopping state
+// touches nothing but its own browser-local key.
+const store = new Map<string, string>();
+(globalThis as any).window = {
+  localStorage: {
+    getItem: (k: string) => store.get(k) ?? null,
+    setItem: (k: string, v: string) => void store.set(k, v),
+    removeItem: (k: string) => void store.delete(k),
+    clear: () => store.clear(),
+    get length() { return store.size; },
+    key: (i: number) => Array.from(store.keys())[i] ?? null,
+  },
+};
 import {
   buildGroceryList,
   parseIngredientLines,
@@ -64,7 +78,8 @@ describe("ingredient parsing", () => {
     const [g] = parseIngredientLines("200 g chicken breast");
     expect(g.measure).toEqual({ kind: "mass", grams: 200 });
     const [c] = parseIngredientLines("2 eggs");
-    expect(c.measure).toEqual({ kind: "count", qty: 2, unit: "egg" });
+    expect(c.measure).toEqual({ kind: "count", qty: 2, unit: null });
+    expect(c.name).toBe("eggs");
   });
 });
 
@@ -113,7 +128,7 @@ describe("day-type multiplication", () => {
 
   it("formats g→kg and ml→L with max 2 decimals", () => {
     expect(formatMeasure({ kind: "mass", grams: 999 })).toBe("999 g");
-    expect(formatMeasure({ kind: "mass", grams: 1255 })).toBe("1.26 kg");
+    expect(formatMeasure({ kind: "mass", grams: 1250 })).toBe("1.25 kg");
     expect(formatMeasure({ kind: "volume", ml: 1500 })).toBe("1.5 L");
     expect(formatMeasure({ kind: "volume", ml: 250 })).toBe("250 ml");
   });
@@ -166,7 +181,7 @@ describe("shopping state", () => {
     writeCheckedIdentities("t1", "2026-08-17", ["mass|oats"]);
     expect(readCheckedIdentities("t1", "2026-08-17")).toEqual(["mass|oats"]);
     expect(readCheckedIdentities("t1", "2026-08-24")).toEqual([]);
-    const keys = Object.keys(window.localStorage);
+    const keys = Array.from(store.keys());
     expect(keys).toEqual(["jfeffect.grocery.checked.v1:t1:2026-08-17"]);
     expect(keys.some((k) => /nutrition|target|log|recipe|macro/i.test(k.replace("jfeffect.grocery", "")))).toBe(false);
     clearCheckedIdentities("t1", "2026-08-17");

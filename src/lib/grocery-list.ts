@@ -143,7 +143,13 @@ export function parseIngredientLine(rawLine: string): ParsedIngredient | null {
   } else if (unitRaw === "l" || unitRaw === "litre" || unitRaw === "litres" || unitRaw === "liter" || unitRaw === "liters") {
     measure = { kind: "volume", ml: qty * 1000 };
   } else if (unitRaw && COUNT_UNITS.has(unitRaw)) {
-    measure = { kind: "count", qty, unit: COUNT_UNIT_SINGULAR[unitRaw] ?? unitRaw };
+    if (!rest) {
+      // "2 eggs" — the count word IS the food.
+      rest = String(m[2]);
+      measure = { kind: "count", qty, unit: null };
+    } else {
+      measure = { kind: "count", qty, unit: COUNT_UNIT_SINGULAR[unitRaw] ?? unitRaw };
+    }
   } else if (unitRaw) {
     // Unknown trailing word — treat it as part of the food name (count item).
     rest = normalizeWhitespace(`${m[2]} ${rest}`);
