@@ -11,7 +11,7 @@ import { toast } from "sonner";
 import { findDefaultFor, CARDIO_INTENSITIES } from "@/lib/nutrition-cardio";
 import { Lock } from "lucide-react";
 import { WEEK_DAYS, SHORT_DAY, type WeekDay } from "@/lib/training-schedule";
-import { setRecurringHighDays, setFullCardioRestDays, SUNDAY } from "@/lib/high-day-schedule";
+import { setRecurringHighDays, setFullCardioRestDays, DEFAULT_HIGH_WEEKDAY } from "@/lib/high-day-schedule";
 import { todayLocalISO } from "@/lib/today";
 
 type Props = {
@@ -182,15 +182,15 @@ export function CardioApplyDefaultsDialog({
   }, [labelCounts, clientPrefs]);
 
   // ── Weekday assignment for High Day ─────────────────────────────────
-  // Source of truth: clients.preferred_high_days. Falls back to Sunday
+  // Source of truth: clients.preferred_high_days. Falls back to the centralized default
   // when the client has one High Day per week but no assigned weekday.
-  const [highDayWeekday, setHighDayWeekday] = useState<WeekDay>(SUNDAY);
+  const [highDayWeekday, setHighDayWeekday] = useState<WeekDay>(DEFAULT_HIGH_WEEKDAY);
   useEffect(() => {
     if (!open) return;
     const existing = (clientPrefs?.preferred_high_days ?? []).find(
       (d: string) => (WEEK_DAYS as readonly string[]).includes(d),
     ) as WeekDay | undefined;
-    setHighDayWeekday(existing ?? SUNDAY);
+    setHighDayWeekday(existing ?? DEFAULT_HIGH_WEEKDAY);
   }, [open, clientPrefs?.preferred_high_days]);
 
   // ── Full Cardio Rest weekday (defaults to a non-training, non-high day) ─
