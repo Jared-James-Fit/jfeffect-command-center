@@ -110,8 +110,8 @@ export const sendTestPushNotification = createServerFn({ method: "POST" })
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { sendWebPushToUser } = await import("@/lib/push/push.server");
     const result = await sendWebPushToUser(supabaseAdmin, userId, {
-      title: "JF Effect",
-      body: "Notifications are working on this device.",
+      title: "Test · JF Effect",
+      body: "This is a test notification you requested. Notifications are working on this device.",
       url: "/",
       tag: "jf-test",
     }, { skipPreferences: true });

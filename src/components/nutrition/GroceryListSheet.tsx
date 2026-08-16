@@ -9,6 +9,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { Link } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { addDays, format } from "date-fns";
 import { Loader2, ShoppingCart } from "lucide-react";
@@ -31,6 +32,7 @@ import {
   writeCheckedIdentities,
 } from "@/lib/grocery-shopping-state";
 import { cn } from "@/lib/utils";
+import { groceryListKey } from "@/lib/grocery-query-keys";
 
 function mondayOf(dateISO: string): string {
   const d = parseLocalDate(dateISO) ?? new Date();
@@ -64,7 +66,7 @@ export function GroceryListSheet({
   const q = useQuery({
     // Lazy: only fetches once the sheet is opened.
     enabled: !!open && !!clientId,
-    queryKey: ["grocery-list", clientId, weekStart, viewAsUserId ?? null],
+    queryKey: [...groceryListKey(clientId, weekStart), viewAsUserId ?? null],
     staleTime: 0,
     refetchOnMount: "always",
     queryFn: async () => {
@@ -95,7 +97,11 @@ export function GroceryListSheet({
         fullCardioRestDays: client?.full_cardio_rest_days ?? null,
       });
       const configuredHighDay = (client?.preferred_high_days ?? [])[0] ?? null;
-      return { plan: plan as any, days, configuredHighDay };
+      // Schedule accuracy signal: program days that carry no resolvable date
+      // cannot be counted, so day-type totals may under-report.
+      const schedulable = (workouts as any[]).filter((i) => i?.day?.id && i?.week?.id).length;
+      const unscheduledCount = Math.max(0, schedulable - workoutDates.length);
+      return { plan: plan as any, days, configuredHighDay, unscheduledCount };
     },
   });
 
@@ -193,6 +199,24 @@ export function GroceryListSheet({
                   </div>
                 )}
               </div>
+
+              {(q.data?.unscheduledCount ?? 0) > 0 && (
+                <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2">
+                  <div className="text-xs font-semibold">Schedule incomplete</div>
+                  <div className="mt-0.5 text-[11px] text-muted-foreground">
+                    {q.data!.unscheduledCount} workout{q.data!.unscheduledCount === 1 ? "" : "s"} have no date yet, so
+                    Training Day counts may be low.{" "}
+                    <Link
+                      to={coachPreview ? "/admin/clients/$id/schedule" : "/portal/schedule"}
+                      params={coachPreview ? ({ id: clientId! } as any) : (undefined as any)}
+                      className="font-semibold underline"
+                      onClick={() => onOpenChange(false)}
+                    >
+                      Open Schedule Manager
+                    </Link>
+                  </div>
+                </div>
+              )}
 
               <div className="flex flex-wrap items-center gap-2">
                 <Button size="sm" variant="outline" onClick={clearChecked} disabled={checked.length === 0}>
