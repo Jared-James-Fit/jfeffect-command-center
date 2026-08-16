@@ -106,10 +106,6 @@ export const notifyNewGroupMessage = createServerFn({ method: "POST" })
     senderName = (prof?.full_name || coach?.full_name || client?.full_name || senderName) as string;
 
     const groupName = group?.name || "Group Chat";
-    const rawBody = typeof msg.body === "string" ? msg.body.trim() : "";
-    const preview = rawBody
-      ? (rawBody.length > 90 ? rawBody.slice(0, 87) + "…" : rawBody)
-      : (Array.isArray(msg.attachments) && msg.attachments.length ? "📎 Attachment" : "New message");
 
     // Deep-link per role. Clients land on their messages page; staff on the
     // admin communication workspace's groups tab. Hash carries group id so
@@ -122,19 +118,18 @@ export const notifyNewGroupMessage = createServerFn({ method: "POST" })
         const { data: roleRow } = await supabaseAdmin
           .from("user_roles").select("role").eq("user_id", uid).maybeSingle();
         const isStaff = roleRow?.role === "admin" || roleRow?.role === "coach";
-        const url = isStaff
-          ? `/admin/communication?tab=groups#group=${msg.group_id}`
-          : `/portal/messages?tab=groups#group=${msg.group_id}`;
-        const r = await sendWebPushToUser(supabaseAdmin, uid, {
-          title: `${senderName} · ${groupName}`,
-          body: preview,
-          url,
-          tag: `group:${msg.group_id}`,
-          data: { groupId: msg.group_id, messageId: msg.id, kind: "group" },
-        }, {
-          category: "messages",
-          eventKey: `gmsg:${msg.id}:${uid}`,
+        const n = buildNotificationPayload({
+          kind: "group_message",
+          role: isStaff ? "admin" : "client",
+          recipientUserId: uid,
+          sourceId: msg.id,
+          displayName: senderName,
+          contextLabel: groupName,
+          ids: { groupId: msg.group_id },
         });
+        const r = await sendWebPushToUser(supabaseAdmin, uid,
+          { title: n.title, body: n.body, url: n.url, tag: n.tag, data: n.data },
+          { category: n.category, eventKey: n.eventKey });
         results.push({ recipient: uid, ...r });
       }));
 
