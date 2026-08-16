@@ -41,6 +41,7 @@ export const Route = createFileRoute("/api/public/hooks/fillout")({
         const recoveryFirstName = requestUrl.searchParams.get("recover_first_name")?.trim();
         const recoveryLastName = requestUrl.searchParams.get("recover_last_name")?.trim();
         const recoveryAfter = requestUrl.searchParams.get("recover_after")?.trim();
+        const recoveryLatest = requestUrl.searchParams.get("recover_latest") === "true";
         const recoveryRequested = Boolean(
           recoverySubmissionId || recoveryFirstName || recoveryLastName,
         );
@@ -118,7 +119,10 @@ export const Route = createFileRoute("/api/public/hooks/fillout")({
                 String(answer(candidate, "last_name") ?? "").trim().toLowerCase() ===
                   recoveryLastName!.toLowerCase(),
             );
-            if (matches.length !== 1) {
+            if (matches.length === 0) {
+              return new Response("Recovery name did not match a submission", { status: 404 });
+            }
+            if (matches.length !== 1 && !recoveryLatest) {
               return new Response("Recovery name did not resolve uniquely", { status: 409 });
             }
             recoveredSubmission = matches[0];
