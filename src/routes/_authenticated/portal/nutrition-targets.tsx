@@ -15,6 +15,7 @@ import { SectionErrorBoundary } from "@/components/section-error-boundary";
 import { toast } from "sonner";
 import { NutritionDashboard, type NutritionTargets } from "@/components/nutrition/NutritionDashboard";
 import { NutritionReviewCard } from "@/components/nutrition/NutritionReviewCard";
+import { GroceryListEntryCard } from "@/components/nutrition/GroceryListSheet";
 
 export const Route = createFileRoute("/_authenticated/portal/nutrition-targets")({
   component: PortalNutrition,
@@ -32,14 +33,14 @@ function PortalNutrition() {
       try {
         const { data } = await (supabase as any)
           .from("clients")
-          .select("goals")
+          .select("id, goals")
           .eq("user_id", portalUserId!)
           .maybeSingle();
         const goals = data?.goals ? [String(data.goals)] : [];
-        return { goals };
+        return { goals, clientId: (data?.id as string | undefined) ?? null };
       } catch (e) {
         console.error("[portal-nutrition] ctx query failed", e);
-        return { goals: [] as string[] };
+        return { goals: [] as string[], clientId: null as string | null };
       }
     },
     retry: false,
@@ -235,6 +236,14 @@ function PortalNutrition() {
             )}
           </Card>
         )}
+        </SectionErrorBoundary>
+
+        {/* 1b. Grocery List entry — sits next to the Meal Plan section */}
+        <SectionErrorBoundary label="Grocery list">
+          <GroceryListEntryCard
+            clientId={ctxQ.data?.clientId ?? null}
+            viewAsUserId={impersonatedClient?.user_id ?? null}
+          />
         </SectionErrorBoundary>
 
         {/* 2. Meal Plan section */}
