@@ -165,6 +165,9 @@ function SelkirkApply() {
       honeypot: form.honeypot,
       source_page: "selkirk",
       page_url: typeof window !== "undefined" ? window.location.href : undefined,
+      referrer: typeof document !== "undefined" ? document.referrer || undefined : undefined,
+      form_name: "Quick Apply — Selkirk Personal Training",
+      is_test: typeof window !== "undefined" && new URLSearchParams(window.location.search).get("test") === "1",
     } as any }),
     onSuccess: () => {
       setDone(true);
@@ -405,9 +408,10 @@ function buildSteps(f: FormState, set: <K extends keyof FormState>(k: K, v: Form
             value={f.email} onChange={(e) => set("email", e.target.value)} />
         </div>
         <div className="space-y-2">
-          <Label htmlFor="instagram">Instagram (optional)</Label>
-          <Input id="instagram" placeholder="@yourhandle"
+          <Label htmlFor="instagram">Instagram handle</Label>
+          <Input id="instagram" placeholder="@username"
             value={f.instagram} onChange={(e) => set("instagram", e.target.value)} />
+          <p className="text-xs text-muted-foreground">Optional if you don't use Instagram.</p>
         </div>
 
         <SubSection label="Best way to reach you?">

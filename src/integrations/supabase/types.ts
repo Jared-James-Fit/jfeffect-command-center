@@ -1387,6 +1387,7 @@ export type Database = {
           client_id: string
           completed: boolean
           completed_date: string
+          completion_target: string | null
           created_at: string
           day_type: string | null
           distance: number | null
@@ -1398,7 +1399,6 @@ export type Database = {
           rpe: number | null
           skipped: boolean
           steps: number | null
-          completion_target: string | null
           updated_at: string
         }
         Insert: {
@@ -1410,6 +1410,7 @@ export type Database = {
           client_id: string
           completed?: boolean
           completed_date?: string
+          completion_target?: string | null
           created_at?: string
           day_type?: string | null
           distance?: number | null
@@ -1421,7 +1422,6 @@ export type Database = {
           rpe?: number | null
           skipped?: boolean
           steps?: number | null
-          completion_target?: string | null
           updated_at?: string
         }
         Update: {
@@ -1433,6 +1433,7 @@ export type Database = {
           client_id?: string
           completed?: boolean
           completed_date?: string
+          completion_target?: string | null
           created_at?: string
           day_type?: string | null
           distance?: number | null
@@ -1444,7 +1445,6 @@ export type Database = {
           rpe?: number | null
           skipped?: boolean
           steps?: number | null
-          completion_target?: string | null
           updated_at?: string
         }
         Relationships: [
@@ -1508,9 +1508,11 @@ export type Database = {
           admin_notes: string | null
           calorie_target_max: number | null
           calorie_target_min: number | null
+          calorie_target_mode: string
           cardio_type: string
           client_id: string
           client_notes: string | null
+          completion_rule: string
           created_at: string
           custom_day_type: string | null
           custom_type: string | null
@@ -1523,22 +1525,20 @@ export type Database = {
           goal: string | null
           heart_rate_zone: string | null
           id: string
+          incline: number | null
           intensity: string | null
           last_updated_at: string
           machine_preference: string | null
           phase_id: string | null
           program_name: string | null
+          scheduled_weekdays: string[]
           show_calories_to_client: boolean
+          speed_max_mph: number | null
+          speed_min_mph: number | null
           start_date: string
           status: string
           step_target: number | null
           step_target_mode: string
-          calorie_target_mode: string
-          scheduled_weekdays: string[]
-          incline: number | null
-          speed_min_mph: number | null
-          speed_max_mph: number | null
-          completion_rule: string
           updated_at: string
           visible_to_client: boolean
         }
@@ -1546,9 +1546,11 @@ export type Database = {
           admin_notes?: string | null
           calorie_target_max?: number | null
           calorie_target_min?: number | null
+          calorie_target_mode?: string
           cardio_type?: string
           client_id: string
           client_notes?: string | null
+          completion_rule?: string
           created_at?: string
           custom_day_type?: string | null
           custom_type?: string | null
@@ -1561,22 +1563,20 @@ export type Database = {
           goal?: string | null
           heart_rate_zone?: string | null
           id?: string
+          incline?: number | null
           intensity?: string | null
           last_updated_at?: string
           machine_preference?: string | null
           phase_id?: string | null
           program_name?: string | null
+          scheduled_weekdays?: string[]
           show_calories_to_client?: boolean
+          speed_max_mph?: number | null
+          speed_min_mph?: number | null
           start_date: string
           status?: string
           step_target?: number | null
           step_target_mode?: string
-          calorie_target_mode?: string
-          scheduled_weekdays?: string[]
-          incline?: number | null
-          speed_min_mph?: number | null
-          speed_max_mph?: number | null
-          completion_rule?: string
           updated_at?: string
           visible_to_client?: boolean
         }
@@ -1584,9 +1584,11 @@ export type Database = {
           admin_notes?: string | null
           calorie_target_max?: number | null
           calorie_target_min?: number | null
+          calorie_target_mode?: string
           cardio_type?: string
           client_id?: string
           client_notes?: string | null
+          completion_rule?: string
           created_at?: string
           custom_day_type?: string | null
           custom_type?: string | null
@@ -1599,22 +1601,20 @@ export type Database = {
           goal?: string | null
           heart_rate_zone?: string | null
           id?: string
+          incline?: number | null
           intensity?: string | null
           last_updated_at?: string
           machine_preference?: string | null
           phase_id?: string | null
           program_name?: string | null
+          scheduled_weekdays?: string[]
           show_calories_to_client?: boolean
+          speed_max_mph?: number | null
+          speed_min_mph?: number | null
           start_date?: string
           status?: string
           step_target?: number | null
           step_target_mode?: string
-          calorie_target_mode?: string
-          scheduled_weekdays?: string[]
-          incline?: number | null
-          speed_min_mph?: number | null
-          speed_max_mph?: number | null
-          completion_rule?: string
           updated_at?: string
           visible_to_client?: boolean
         }
@@ -3950,6 +3950,7 @@ export type Database = {
           email: string
           first_name: string | null
           follow_up_at: string | null
+          form_name: string | null
           full_name: string
           goals: string | null
           gym_access: string | null
@@ -3957,6 +3958,7 @@ export type Database = {
           injuries: string | null
           instagram: string | null
           investment_readiness: string | null
+          is_test: boolean
           last_name: string | null
           lead_score: number | null
           lead_temperature: string | null
@@ -3966,16 +3968,20 @@ export type Database = {
           notes_admin: string | null
           obstacle: string | null
           obstacle_other: string | null
+          page_path: string | null
+          page_url: string | null
           phone: string | null
           preferred_contact: string | null
           qualification_label: string | null
           readiness: string | null
           ready_to_invest: boolean | null
           recommended_offer: string | null
+          referrer: string | null
           schedule: string | null
           scoring: Json | null
           seriousness: number | null
           source: string
+          source_label: string | null
           status: string
           submitted_at: string | null
           summary: string | null
@@ -3986,6 +3992,9 @@ export type Database = {
           training_location: string | null
           tried_before: string | null
           updated_at: string
+          utm_campaign: string | null
+          utm_medium: string | null
+          utm_source: string | null
           why_now: string | null
           why_now_tags: string[] | null
           win_90_days: string | null
@@ -4010,6 +4019,7 @@ export type Database = {
           email: string
           first_name?: string | null
           follow_up_at?: string | null
+          form_name?: string | null
           full_name: string
           goals?: string | null
           gym_access?: string | null
@@ -4017,6 +4027,7 @@ export type Database = {
           injuries?: string | null
           instagram?: string | null
           investment_readiness?: string | null
+          is_test?: boolean
           last_name?: string | null
           lead_score?: number | null
           lead_temperature?: string | null
@@ -4026,16 +4037,20 @@ export type Database = {
           notes_admin?: string | null
           obstacle?: string | null
           obstacle_other?: string | null
+          page_path?: string | null
+          page_url?: string | null
           phone?: string | null
           preferred_contact?: string | null
           qualification_label?: string | null
           readiness?: string | null
           ready_to_invest?: boolean | null
           recommended_offer?: string | null
+          referrer?: string | null
           schedule?: string | null
           scoring?: Json | null
           seriousness?: number | null
           source?: string
+          source_label?: string | null
           status?: string
           submitted_at?: string | null
           summary?: string | null
@@ -4046,6 +4061,9 @@ export type Database = {
           training_location?: string | null
           tried_before?: string | null
           updated_at?: string
+          utm_campaign?: string | null
+          utm_medium?: string | null
+          utm_source?: string | null
           why_now?: string | null
           why_now_tags?: string[] | null
           win_90_days?: string | null
@@ -4070,6 +4088,7 @@ export type Database = {
           email?: string
           first_name?: string | null
           follow_up_at?: string | null
+          form_name?: string | null
           full_name?: string
           goals?: string | null
           gym_access?: string | null
@@ -4077,6 +4096,7 @@ export type Database = {
           injuries?: string | null
           instagram?: string | null
           investment_readiness?: string | null
+          is_test?: boolean
           last_name?: string | null
           lead_score?: number | null
           lead_temperature?: string | null
@@ -4086,16 +4106,20 @@ export type Database = {
           notes_admin?: string | null
           obstacle?: string | null
           obstacle_other?: string | null
+          page_path?: string | null
+          page_url?: string | null
           phone?: string | null
           preferred_contact?: string | null
           qualification_label?: string | null
           readiness?: string | null
           ready_to_invest?: boolean | null
           recommended_offer?: string | null
+          referrer?: string | null
           schedule?: string | null
           scoring?: Json | null
           seriousness?: number | null
           source?: string
+          source_label?: string | null
           status?: string
           submitted_at?: string | null
           summary?: string | null
@@ -4106,6 +4130,9 @@ export type Database = {
           training_location?: string | null
           tried_before?: string | null
           updated_at?: string
+          utm_campaign?: string | null
+          utm_medium?: string | null
+          utm_source?: string | null
           why_now?: string | null
           why_now_tags?: string[] | null
           win_90_days?: string | null
@@ -5544,10 +5571,12 @@ export type Database = {
           description: string | null
           form_type: string
           id: string
+          is_test: boolean
           notes_admin: string | null
           title: string
           updated_at: string
           url: string
+          used_on_path: string | null
           visible_to_client: boolean
         }
         Insert: {
@@ -5561,10 +5590,12 @@ export type Database = {
           description?: string | null
           form_type?: string
           id?: string
+          is_test?: boolean
           notes_admin?: string | null
           title: string
           updated_at?: string
           url: string
+          used_on_path?: string | null
           visible_to_client?: boolean
         }
         Update: {
@@ -5578,10 +5609,12 @@ export type Database = {
           description?: string | null
           form_type?: string
           id?: string
+          is_test?: boolean
           notes_admin?: string | null
           title?: string
           updated_at?: string
           url?: string
+          used_on_path?: string | null
           visible_to_client?: boolean
         }
         Relationships: []

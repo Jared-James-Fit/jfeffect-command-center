@@ -2,6 +2,8 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { upsertApplicantClient, normalizeEmail, normalizePhone } from "./crm.functions";
+import { resolveAttribution, DEFAULT_QUICK_APPLY_SOURCE } from "./application-attribution";
+import { toLeadScore5 } from "./lead-score-display";
 
 /* ─────────── Quick-Apply Quiz schema (v2) ─────────── */
 
@@ -47,6 +49,9 @@ const submitSchema = z.object({
   // Marketing attribution
   source_page: z.string().trim().max(80).optional().default(""),
   page_url: z.string().trim().max(500).optional().default(""),
+  referrer: z.string().trim().max(500).optional().default(""),
+  form_name: z.string().trim().max(120).optional().default(""),
+  is_test: z.boolean().optional().default(false),
 
   // Legacy fields still accepted for back-compat but ignored
   last_name: z.string().trim().max(60).optional().default(""),
@@ -171,6 +176,13 @@ export const submitCoachingApplication = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const scored = scoreApplication(data);
+    const attribution = resolveAttribution({
+      from: data.source_page || null,
+      page_url: data.page_url || null,
+      referrer: data.referrer || null,
+      form_name: data.form_name || "Quick Apply",
+      default_source_label: DEFAULT_QUICK_APPLY_SOURCE,
+    });
     const full_name = data.first_name + (data.last_name ? " " + data.last_name : "");
 
     // Booking link configured by admin?
@@ -223,6 +235,16 @@ export const submitCoachingApplication = createServerFn({ method: "POST" })
         why_now_tags: data.why_now_tags?.length ? data.why_now_tags : null,
         consent_contact_at: new Date().toISOString(),
         application_source: "quick_apply_v1",
+        // Attribution (additive — legacy rows stay null and display as Unknown)
+        source_label: attribution.source_label,
+        form_name: attribution.form_name,
+        page_path: attribution.page_path,
+        page_url: attribution.page_url,
+        referrer: attribution.referrer,
+        utm_source: attribution.utm_source,
+        utm_medium: attribution.utm_medium,
+        utm_campaign: attribution.utm_campaign,
+        is_test: data.is_test === true,
         // Scoring
         lead_score: scored.score,
         lead_temperature: scored.temperature,
@@ -270,69 +292,81 @@ export const submitCoachingApplication = createServerFn({ method: "POST" })
       { onConflict: "client_id,dedupe_key", ignoreDuplicates: true } as any,
     );
 
-    // Fire admin notifications (best-effort — never throws out)
+    // Admin alert for NEW applications — fixed allowlist recipients only.
+    // Best-effort: failures are logged and never roll back the saved
+    // application or the CRM records written above.
     try {
-      const { notifyCoachingAppRecipients } = await import("./coaching-app-notify.server");
-      const isPriority = scored.qualification_label === "Priority Lead";
-      const reviewLink = `https://jfeffect.com/admin/forms?tab=coaching-applications`;
+      const { notifyNewApplicationFixedRecipients } = await import("./coaching-app-notify.server");
+      const adminLink = `https://jfeffect.com/admin/forms?tab=applications`;
+      const crmLink = `https://jfeffect.com/admin/clients/${upsert.client_id}`;
       const startLabel = (data.timeline || "no timeline").replace(/_/g, " ");
-      const submittedAt = new Date();
-      const submittedAtStr = submittedAt.toLocaleString("en-CA", {
+      const submittedAtStr = new Date().toLocaleString("en-CA", {
         timeZone: "America/Winnipeg", dateStyle: "medium", timeStyle: "short",
       }) + " CT";
-      const sourceLabel = data.source_page
-        ? data.source_page.replace(/_/g, " ")
-        : "coaching apply";
-      const pageRef = data.page_url || `/${data.source_page || "coaching/apply"}`;
+      const sourceLabel = attribution.source_label ?? "Unknown";
+      const serviceLabel = (data.coaching_interest || data.main_goal || "—").replace(/_/g, " ");
+      const score5 = toLeadScore5(scored.score);
+
       const smsBody =
-        `New JF Effect application (${sourceLabel}): ${data.first_name} — ${scored.qualification_label}, score ${scored.score}. ` +
-        `Goal: ${data.main_goal}. Start: ${startLabel}. Phone: ${data.phone}. Submitted: ${submittedAtStr}. Review: ${reviewLink}`;
+        `New JF Effect application: ${full_name}. ` +
+        `Goal/service: ${serviceLabel}. Source: ${sourceLabel}. ` +
+        `Phone: ${data.phone}. IG: ${data.instagram || "—"}. ` +
+        `Lead Score ${score5 ?? "?"}/5. ${adminLink}`;
+
+      const answers: Array<[string, unknown]> = [
+        ["Name", full_name],
+        ["Email", data.email],
+        ["Phone", data.phone],
+        ["Instagram handle", data.instagram],
+        ["Location / timezone", data.location_timezone],
+        ["Main goal", data.main_goal],
+        ["Target outcome", data.target_outcome],
+        ["Biggest obstacle", data.obstacle],
+        ["Obstacle (other)", data.obstacle_other],
+        ["Training location", data.training_location],
+        ["Days per week", data.days_per_week],
+        ["Timeline to start", startLabel],
+        ["Coaching interest", data.coaching_interest],
+        ["Readiness", data.readiness],
+        ["Tracking willingness", data.tracking_willingness],
+        ["Investment readiness", data.investment_readiness],
+        ["Why now", data.why_now],
+        ["Why-now tags", (data.why_now_tags || []).join(", ")],
+        ["Preferred contact", data.preferred_contact],
+        ["Best time to reach", data.best_time],
+        ["Consent to contact", "Yes"],
+      ];
+
       const emailBody = [
         `New coaching application received.`,
         ``,
         `Submitted: ${submittedAtStr}`,
-        `Source page: ${sourceLabel}`,
-        `Page URL: ${pageRef}`,
+        `Source: ${sourceLabel}`,
+        `Form: ${attribution.form_name ?? "Unknown"}`,
+        `Page: ${attribution.page_path ?? attribution.page_url ?? "Unknown"}`,
+        `Referrer: ${attribution.referrer ?? "Unknown"}`,
+        `Campaign: ${[attribution.utm_source, attribution.utm_medium, attribution.utm_campaign].filter(Boolean).join(" / ") || "Unknown"}`,
         ``,
-        `── Lead ──`,
-        `Name: ${full_name}`,
-        `Email: ${data.email}`,
-        `Phone: ${data.phone}`,
-        `Instagram: ${data.instagram || "—"}`,
-        `Preferred contact: ${data.preferred_contact || "not specified"}`,
-        `Best time: ${data.best_time || "not specified"}`,
+        `── Answers ──`,
+        ...answers.map(([q, a]) => `${q}: ${a === null || a === undefined || a === "" ? "—" : String(a)}`),
         ``,
-        `── Application ──`,
-        `Main goal: ${data.main_goal}`,
-        `Target outcome: ${data.target_outcome || "—"}`,
-        `Obstacle: ${data.obstacle || "—"}${data.obstacle_other ? ` (${data.obstacle_other})` : ""}`,
-        `Training location: ${data.training_location || "—"}`,
-        `Days/week: ${data.days_per_week ?? "—"}`,
-        `Start: ${startLabel}`,
-        `Coaching interest: ${data.coaching_interest || "—"}`,
-        `Readiness: ${data.readiness || "—"}`,
-        `Tracking willingness: ${data.tracking_willingness || "—"}`,
-        `Investment readiness: ${data.investment_readiness || "—"}`,
-        `Why now: ${data.why_now || "—"}`,
-        `Why-now tags: ${(data.why_now_tags || []).join(", ") || "—"}`,
-        ``,
-        `── Scoring ──`,
-        `Score: ${scored.score} (${scored.qualification_label})`,
-        `Temperature: ${scored.temperature}`,
+        `── Lead Score ──`,
+        `Lead Score: ${score5 ?? "—"}/5 (internal score ${scored.score}/100 — ${scored.qualification_label})`,
+        `Lead Score is a prioritization aid, not a judgment of the applicant.`,
         `Recommended offer: ${scored.recommended_offer}`,
         ``,
-        `Review: ${reviewLink}`,
+        `Review application: ${adminLink}`,
+        `CRM client record: ${crmLink}`,
       ].join("\n");
-      await notifyCoachingAppRecipients(supabaseAdmin, {
-        kind: "coaching_app_submit",
+
+      await notifyNewApplicationFixedRecipients(supabaseAdmin, {
         event_key: inserted.id,
-        priority: isPriority,
         smsBody,
-        emailSubject: `New Coaching Application (${sourceLabel}) — ${data.first_name} — ${scored.qualification_label}`,
+        emailSubject: `New Coaching Application — ${full_name} — Lead Score ${score5 ?? "?"}/5`,
         emailBody,
       });
     } catch (e) {
-      console.warn("[coaching-app] notify failed", e);
+      console.warn("[coaching-app] admin alert failed", e);
     }
 
     // Send confirmation email to applicant (best-effort)
@@ -398,6 +432,7 @@ export const getCoachingApplicationsMetrics = createServerFn({ method: "GET" })
     const { data, error } = await supabaseAdmin
       .from("coaching_applications")
       .select("id,created_at,status,call_status,lead_score,qualification_label")
+      .eq("is_test", false)
       .gte("created_at", since);
     if (error) throw new Error(error.message);
     const rows = data ?? [];
@@ -417,6 +452,7 @@ export const updateCoachingApplication = createServerFn({ method: "POST" })
       status: z.enum(["New","Contacted","Approved","Rejected","Needs Review"]).optional(),
       call_status: z.enum(["not_offered","booking_available","not_booked","booked","completed","rescheduled","cancelled","no_show"]).optional(),
       notes_admin: z.string().max(4000).optional(),
+      is_test: z.boolean().optional(),
       follow_up_at: z.string().optional().nullable(),
     }).parse(i),
   )
@@ -454,4 +490,32 @@ export const exportCoachingApplicationsCsv = createServerFn({ method: "GET" })
     const header = columns.join(",");
     const rows = (data ?? []).map((r: any) => columns.map((c) => esc(r[c])).join(","));
     return { csv: [header, ...rows].join("\n"), count: rows.length };
+  });
+
+/**
+ * Website form stats for the admin Forms workspace: submission count and
+ * last submission per public form. Test submissions are counted separately
+ * so they never inflate lead metrics.
+ */
+export const getWebsiteFormStats = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    await assertAdmin(context);
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { data, error } = await supabaseAdmin
+      .from("coaching_applications")
+      .select("form_name,page_path,created_at,is_test")
+      .order("created_at", { ascending: false })
+      .limit(5000);
+    if (error) throw new Error(error.message);
+    const stats: Record<string, { count: number; test_count: number; last_at: string | null; paths: string[] }> = {};
+    for (const r of data ?? []) {
+      const key = (r as any).form_name || "Unknown";
+      const s = (stats[key] ||= { count: 0, test_count: 0, last_at: null, paths: [] });
+      if ((r as any).is_test) s.test_count++; else s.count++;
+      if (!s.last_at) s.last_at = (r as any).created_at;
+      const p = (r as any).page_path;
+      if (p && !s.paths.includes(p)) s.paths.push(p);
+    }
+    return { stats };
   });
