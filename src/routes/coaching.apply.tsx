@@ -219,6 +219,9 @@ function QuickApply() {
       best_time: form.best_time || undefined,
       source_page: form.source_page || undefined,
       page_url: typeof window !== "undefined" ? window.location.href : undefined,
+      referrer: typeof document !== "undefined" ? document.referrer || undefined : undefined,
+      form_name: "Quick Apply — Online Coaching",
+      is_test: typeof window !== "undefined" && new URLSearchParams(window.location.search).get("test") === "1",
     } as any }),
     onSuccess: (r) => {
       setResult(r);
@@ -509,11 +512,12 @@ function buildSteps(f: FormState, set: <K extends keyof FormState>(k: K, v: Form
           />
         </div>
         <div className="space-y-2">
-          <Label htmlFor="instagram">Instagram (optional)</Label>
+          <Label htmlFor="instagram">Instagram handle</Label>
           <Input
-            id="instagram" placeholder="@yourhandle"
+            id="instagram" placeholder="@username"
             value={f.instagram} onChange={(e) => set("instagram", e.target.value)}
           />
+          <p className="text-xs text-muted-foreground">Optional if you don't use Instagram.</p>
         </div>
 
         <SubSection label="Best way to contact you?">

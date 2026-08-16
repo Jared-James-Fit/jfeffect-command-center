@@ -223,3 +223,96 @@ export async function sendApplicantConfirmationEmail(
     throw e;
   }
 }
+
+/* ─────────────────────────────────────────────────────────────
+ * NEW COACHING APPLICATIONS ONLY — fixed recipient allowlist.
+ *
+ * Recipients come from src/lib/application-recipients.ts and are never
+ * derived from users, admins, coaches, client phone numbers, or the
+ * configurable recipient table. Booking alerts are untouched and keep
+ * using notifyCoachingAppRecipients above.
+ *
+ * Every send is idempotent (sms_log.automation_trigger /
+ * communication_log.source dedupe keys) and every failure is logged
+ * instead of thrown, so a notification problem can never roll back a
+ * saved application or CRM record.
+ * ───────────────────────────────────────────────────────────── */
+export async function notifyNewApplicationFixedRecipients(
+  supabaseAdmin: any,
+  ctx: { event_key: string; smsBody: string; emailSubject: string; emailBody: string },
+) {
+  const { applicationAlertRecipients } = await import("./application-recipients");
+  const { emails, sms } = applicationAlertRecipients();
+  const result = { sms_sent: 0, sms_skipped: 0, sms_failed: 0, email_sent: 0, email_skipped: 0, email_failed: 0 };
+
+  let fromPhone: string | null = null;
+  try {
+    const { data: smsSettings } = await supabaseAdmin
+      .from("sms_settings").select("enabled, from_phone").eq("singleton", true).maybeSingle();
+    if (smsSettings?.enabled) fromPhone = smsSettings.from_phone ?? null;
+  } catch (e) {
+    console.warn("[application-alert] sms settings read failed", e);
+  }
+
+  for (const to of sms) {
+    const dedupeKey = `application_alert:${ctx.event_key}:sms:${to}`;
+    try {
+      const { data: existing } = await supabaseAdmin
+        .from("sms_log").select("id").eq("automation_trigger", dedupeKey).limit(1).maybeSingle();
+      if (existing) { result.sms_skipped++; continue; }
+      if (!fromPhone) {
+        result.sms_skipped++;
+        try {
+          await supabaseAdmin.from("sms_log").insert({
+            to_phone: to, body: ctx.smsBody, kind: "admin_alert",
+            automation_trigger: dedupeKey, status: "failed", error: "SMS disabled or no from_phone",
+          });
+        } catch { /* logging is best-effort */ }
+        continue;
+      }
+      const { sid } = await sendTwilioSms(to, fromPhone, ctx.smsBody);
+      await supabaseAdmin.from("sms_log").insert({
+        to_phone: to, body: ctx.smsBody, kind: "admin_alert",
+        automation_trigger: dedupeKey, status: "sent", twilio_sid: sid,
+      });
+      result.sms_sent++;
+    } catch (e: any) {
+      result.sms_failed++;
+      console.warn("[application-alert] sms failed", to, e?.message ?? e);
+      try {
+        await supabaseAdmin.from("sms_log").insert({
+          to_phone: to, body: ctx.smsBody, kind: "admin_alert",
+          automation_trigger: dedupeKey, status: "failed", error: e?.message ?? String(e),
+        });
+      } catch { /* logging is best-effort */ }
+    }
+  }
+
+  for (const to of emails) {
+    const dedupeKey = `application_alert:${ctx.event_key}:email:${to}`;
+    try {
+      const { data: existing } = await supabaseAdmin
+        .from("communication_log").select("id").eq("source", dedupeKey).limit(1).maybeSingle();
+      if (existing) { result.email_skipped++; continue; }
+      await sendEmailViaProvider(supabaseAdmin, to, ctx.emailSubject, ctx.emailBody);
+      result.email_sent++;
+      try {
+        await supabaseAdmin.from("communication_log").insert({
+          channel: "email", recipient: to, subject: ctx.emailSubject,
+          body: ctx.emailBody, status: "sent", source: dedupeKey,
+        });
+      } catch { /* schema variance */ }
+    } catch (e: any) {
+      result.email_failed++;
+      console.warn("[application-alert] email failed", to, e?.message ?? e);
+      try {
+        await supabaseAdmin.from("communication_log").insert({
+          channel: "email", recipient: to, subject: ctx.emailSubject,
+          body: ctx.emailBody, status: "failed", source: dedupeKey,
+        });
+      } catch { /* schema variance */ }
+    }
+  }
+
+  return result;
+}

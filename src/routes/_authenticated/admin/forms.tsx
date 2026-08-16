@@ -23,12 +23,17 @@ import { FormLinkDialog } from "@/components/form-link-dialog";
 import { DoubleConfirmDeleteDialog } from "@/components/double-confirm-delete-dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ActionButton } from "@/components/action-button";
+import { WEBSITE_FORMS, websiteFormUrl } from "@/lib/website-forms";
+import { getWebsiteFormStats } from "@/lib/coaching-applications.functions";
+import { useServerFn } from "@tanstack/react-start";
 
 const TABS = [
+  // Promoted: the three surfaces used daily.
+  { value: "website-forms",          label: "Website Forms" },
+  { value: "applications",           label: "Applications" },
+  { value: "submissions",            label: "Submissions" },
   { value: "reviews",                label: "Reviews" },
   { value: "builder",                label: "Builder" },
-  { value: "submissions",            label: "Submissions" },
-  { value: "applications",           label: "Applications" },
   { value: "agreements",             label: "Agreements" },
   { value: "integrations",           label: "Integrations" },
   { value: "scheduler",              label: "Scheduler" },
@@ -123,6 +128,7 @@ function FormsWorkspacePage() {
         </div>
       </div>
       <div>
+        {tab === "website-forms" && <WebsiteFormsPanel />}
         {tab === "reviews" && <ReviewsTab />}
         {tab === "builder" && <BuilderRouter sub={sub} />}
         {tab === "submissions" && <SubmissionsRouter sub={sub} />}
@@ -401,5 +407,75 @@ function AssignFormDialog({ form, onClose }: { form: FormLink | null; onClose: (
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  );
+}
+/**
+ * Website Forms — the live public forms that feed the coaching application
+ * pipeline. This extends the existing forms workspace; it is not a new form
+ * system. Test opens append `?test=1`, which marks the resulting submission
+ * as a test so it stays out of lead metrics.
+ */
+function WebsiteFormsPanel() {
+  const statsFn = useServerFn(getWebsiteFormStats);
+  const { data } = useQuery({ queryKey: ["website-form-stats"], queryFn: () => statsFn() });
+  const stats = (data?.stats ?? {}) as Record<string, { count: number; test_count: number; last_at: string | null; paths: string[] }>;
+
+  return (
+    <div className="space-y-3 p-4 md:p-6">
+      <p className="text-xs text-muted-foreground">
+        Live public forms on the website. Submissions land in <strong>Applications</strong> and the CRM.
+      </p>
+      <div className="grid gap-3">
+        {WEBSITE_FORMS.map((f) => {
+          const s = stats[f.name];
+          const usedOn = s?.paths?.length ? s.paths.join(", ") : f.path;
+          return (
+            <Card key={f.id} className="border-border bg-card p-4">
+              <div className="flex flex-wrap items-start gap-3">
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <div className="truncate font-bold">{f.name}</div>
+                    <Badge
+                      variant="outline"
+                      className={cn(
+                        "text-xs",
+                        f.active
+                          ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-300"
+                          : "border-amber-500/40 bg-amber-500/10 text-amber-300",
+                      )}
+                    >
+                      {f.active ? "Active" : "Inactive"}
+                    </Badge>
+                  </div>
+                  <p className="mt-1 text-sm text-muted-foreground">{f.description}</p>
+                  <div className="mt-1 text-xs text-muted-foreground">
+                    Used on: <code className="rounded bg-muted px-1 py-0.5">{usedOn}</code>
+                  </div>
+                  <div className="mt-1 text-xs text-muted-foreground">
+                    {s ? `${s.count} submission${s.count === 1 ? "" : "s"}` : "0 submissions"}
+                    {s?.test_count ? ` · ${s.test_count} test` : ""}
+                    {s?.last_at ? ` · last ${new Date(s.last_at).toLocaleString()}` : " · no submissions yet"}
+                  </div>
+                </div>
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <Button size="sm" variant="outline" onClick={() => {
+                    navigator.clipboard.writeText(`${window.location.origin}${websiteFormUrl(f)}`)
+                      .then(() => toast.success("Link copied"));
+                  }}>
+                    <Copy className="h-3.5 w-3.5" />
+                  </Button>
+                  <a href={websiteFormUrl(f, { test: true })} target="_blank" rel="noreferrer">
+                    <Button size="sm" variant="outline">Test</Button>
+                  </a>
+                  <a href={websiteFormUrl(f)} target="_blank" rel="noreferrer">
+                    <Button size="sm"><ExternalLink className="mr-1 h-3.5 w-3.5" />Open live page</Button>
+                  </a>
+                </div>
+              </div>
+            </Card>
+          );
+        })}
+      </div>
+    </div>
   );
 }

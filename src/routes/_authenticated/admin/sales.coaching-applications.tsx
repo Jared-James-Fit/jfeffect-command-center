@@ -10,7 +10,9 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
-import { Mail, Phone, ChevronDown, ChevronUp, Flame, Sparkles, Snowflake, CalendarCheck2 } from "lucide-react";
+import { Mail, Phone, ChevronDown, ChevronUp, CalendarCheck2, MessageSquare, Instagram, UserRound, Star, FlaskConical } from "lucide-react";
+import { displaySource } from "@/lib/application-attribution";
+import { toLeadScore5, leadScoreReason, LEAD_SCORE_DISCLAIMER } from "@/lib/lead-score-display";
 
 export const Route = createFileRoute("/_authenticated/admin/sales/coaching-applications")({
   component: CoachingApplicationsRedirect,
@@ -66,53 +68,79 @@ export function ApplicationsInbox({ embedded = false }: { embedded?: boolean } =
         {apps.length === 0 && <div className="p-6 text-sm text-muted-foreground">No applications yet.</div>}
         {apps.map((a: any) => {
           const open = openId === a.id;
-          const qual = a.qualification_label as string | undefined;
-          const temp = a.lead_temperature as "hot" | "warm" | "cold" | undefined;
-          const TempIcon = temp === "hot" ? Flame : temp === "cold" ? Snowflake : Sparkles;
-          const tempColor =
-            temp === "hot" ? "text-orange-400" :
-            temp === "cold" ? "text-sky-400" : "text-amber-400";
           const callStatus = (a.call_status as string | null) || "not_booked";
+          const score5 = toLeadScore5(a.lead_score);
+          const source = displaySource(a);
+          const service = a.coaching_interest || a.main_goal || null;
+          const igHandle = a.instagram ? String(a.instagram).replace(/^@/, "") : null;
+          const submitted = new Date(a.created_at).toLocaleString(undefined, {
+            dateStyle: "medium", timeStyle: "short",
+          });
           return (
             <div key={a.id} className="p-4">
-              <button type="button" onClick={() => setOpenId(open ? null : a.id)} className="flex w-full items-center justify-between gap-3 text-left">
-                <div className="min-w-0">
-                  <div className="flex items-center gap-2">
+              <button type="button" onClick={() => setOpenId(open ? null : a.id)} className="flex w-full items-start justify-between gap-3 text-left">
+                <div className="min-w-0 space-y-1">
+                  <div className="flex flex-wrap items-center gap-2">
                     <span className="truncate font-semibold">{a.full_name}</span>
                     <Badge variant="outline">{a.status}</Badge>
-                    {qual && <Badge className="text-[10px]">{qual}</Badge>}
+                    {a.is_test && (
+                      <Badge variant="secondary" className="text-[10px]">
+                        <FlaskConical className="mr-1 h-2.5 w-2.5" /> Test
+                      </Badge>
+                    )}
                     {callStatus === "booked" && (
                       <Badge variant="outline" className="text-[10px] text-emerald-400">
                         <CalendarCheck2 className="mr-1 h-2.5 w-2.5" /> Booked
                       </Badge>
                     )}
                   </div>
-                  <div className="mt-0.5 truncate text-xs text-muted-foreground">
-                    {a.email}{a.phone ? ` · ${a.phone}` : ""}
-                    {a.main_goal ? ` · ${a.main_goal}` : ""}
-                    {a.timeline ? ` · start ${String(a.timeline).replace(/_/g, " ")}` : ""}
+                  <div className="truncate text-xs text-muted-foreground">
+                    {a.email}{a.phone ? ` · ${a.phone}` : ""}{igHandle ? ` · @${igHandle}` : ""}
+                  </div>
+                  <div className="truncate text-xs text-muted-foreground">
+                    Source: <span className="text-foreground/80">{source}</span> · {submitted}
+                    {service ? ` · ${humanize(service)}` : ""}
                   </div>
                 </div>
-                <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                  {typeof a.lead_score === "number" && (
-                    <span className={`inline-flex items-center gap-1 font-bold ${tempColor}`}>
-                      <TempIcon className="h-3 w-3" /> {a.lead_score}
+                <div className="flex shrink-0 items-center gap-2 text-xs text-muted-foreground">
+                  {score5 !== null && (
+                    <span className="inline-flex items-center gap-1 font-bold text-amber-400" title={LEAD_SCORE_DISCLAIMER}>
+                      <Star className="h-3 w-3" /> {score5}/5
                     </span>
                   )}
-                  {new Date(a.created_at).toLocaleDateString()}
                   {open ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
                 </div>
               </button>
               {open && (
                 <div className="mt-3 grid gap-3 md:grid-cols-2">
                   <div className="space-y-4 text-sm">
+                    <Section title="Submission">
+                      <Field label="Source" value={source} />
+                      <Field label="Form" value={a.form_name || "Unknown"} />
+                      <Field label="Page" value={a.page_path || a.page_url || "Unknown"} />
+                      <Field label="Referrer" value={a.referrer || "Unknown"} />
+                      <Field label="Campaign" value={[a.utm_source, a.utm_medium, a.utm_campaign].filter(Boolean).join(" / ") || "Unknown"} />
+                      <Field label="Submitted" value={submitted} />
+                    </Section>
                     <ApplicationSections app={a} />
+                    <LeadScoreCard score={a.lead_score} scoring={a.scoring} />
                     {a.scoring && <ScoreBreakdown scoring={a.scoring} />}
                   </div>
                   <div className="space-y-2">
                     <div className="flex flex-wrap gap-2">
                       <a href={`mailto:${a.email}`}><Button size="sm" variant="outline"><Mail className="mr-1 h-3 w-3" />Email</Button></a>
-                      {a.phone && <a href={`sms:${a.phone}`}><Button size="sm" variant="outline"><Phone className="mr-1 h-3 w-3" />SMS</Button></a>}
+                      {a.phone && <a href={`tel:${a.phone}`}><Button size="sm" variant="outline"><Phone className="mr-1 h-3 w-3" />Call</Button></a>}
+                      {a.phone && <a href={`sms:${a.phone}`}><Button size="sm" variant="outline"><MessageSquare className="mr-1 h-3 w-3" />Message</Button></a>}
+                      {igHandle && (
+                        <a href={`https://instagram.com/${encodeURIComponent(igHandle)}`} target="_blank" rel="noreferrer noopener">
+                          <Button size="sm" variant="outline"><Instagram className="mr-1 h-3 w-3" />Instagram</Button>
+                        </a>
+                      )}
+                      {a.client_id && (
+                        <a href={`/admin/clients/${a.client_id}`}>
+                          <Button size="sm" variant="outline"><UserRound className="mr-1 h-3 w-3" />CRM record</Button>
+                        </a>
+                      )}
                       {a.booking_link_slug && (
                         <a href={`/book/${a.booking_link_slug}?name=${encodeURIComponent(a.first_name ?? "")}&email=${encodeURIComponent(a.email)}&phone=${encodeURIComponent(a.phone ?? "")}&application_id=${a.id}`} target="_blank" rel="noreferrer">
                           <Button size="sm" variant="outline"><CalendarCheck2 className="mr-1 h-3 w-3" />Book for lead</Button>
@@ -154,6 +182,19 @@ export function ApplicationsInbox({ embedded = false }: { embedded?: boolean } =
                         </SelectContent>
                       </Select>
                     </div>
+                    <Button
+                      size="sm" variant={a.is_test ? "secondary" : "ghost"}
+                      onClick={async () => {
+                        try {
+                          await updateApp({ data: { id: a.id, is_test: !a.is_test } as any });
+                          toast.success(a.is_test ? "Unmarked as test" : "Marked as test — excluded from lead metrics");
+                          refetch();
+                        } catch (e: any) { toast.error(e?.message ?? "Failed"); }
+                      }}
+                    >
+                      <FlaskConical className="mr-1 h-3 w-3" />
+                      {a.is_test ? "Unmark test" : "Mark as test"}
+                    </Button>
                     <div>
                       <div className="mb-1 text-xs font-bold uppercase tracking-widest text-muted-foreground">Admin notes</div>
                       <Textarea
@@ -292,6 +333,22 @@ function ScoreBreakdown({ scoring }: { scoring: any }) {
           </li>
         ))}
       </ul>
+    </div>
+  );
+}
+function LeadScoreCard({ score, scoring }: { score: unknown; scoring: unknown }) {
+  const score5 = toLeadScore5(score);
+  if (score5 === null) return null;
+  return (
+    <div className="rounded-md border border-border/60 bg-muted/20 p-3 text-xs">
+      <div className="mb-1 flex items-center gap-2">
+        <span className="text-[11px] font-bold uppercase tracking-[0.18em] text-muted-foreground">Lead Score</span>
+        <span className="inline-flex items-center gap-1 font-bold text-amber-400">
+          <Star className="h-3 w-3" /> {score5}/5
+        </span>
+      </div>
+      <div className="text-foreground/80">{leadScoreReason(scoring)}</div>
+      <div className="mt-1 italic text-muted-foreground">{LEAD_SCORE_DISCLAIMER}</div>
     </div>
   );
 }
