@@ -199,6 +199,24 @@ export function GroceryListSheet({
                 )}
               </div>
 
+              {(q.data?.unscheduledCount ?? 0) > 0 && (
+                <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2">
+                  <div className="text-xs font-semibold">Schedule incomplete</div>
+                  <div className="mt-0.5 text-[11px] text-muted-foreground">
+                    {q.data!.unscheduledCount} workout{q.data!.unscheduledCount === 1 ? "" : "s"} have no date yet, so
+                    Training Day counts may be low.{" "}
+                    <Link
+                      to={coachPreview ? "/admin/clients/$id/schedule" : "/portal/schedule"}
+                      params={coachPreview ? ({ id: clientId! } as any) : (undefined as any)}
+                      className="font-semibold underline"
+                      onClick={() => onOpenChange(false)}
+                    >
+                      Open Schedule Manager
+                    </Link>
+                  </div>
+                </div>
+              )}
+
               <div className="flex flex-wrap items-center gap-2">
                 <Button size="sm" variant="outline" onClick={clearChecked} disabled={checked.length === 0}>
                   Clear Checked
