@@ -2,6 +2,7 @@ import { addDays } from "date-fns";
 import { WEEK_DAYS, type WeekDay } from "@/lib/training-schedule";
 import { toLocalISO, parseLocalDate } from "@/lib/today";
 import { resolveWeekDayDates } from "@/lib/workout-today";
+import { DEFAULT_HIGH_WEEKDAY } from "@/lib/client-nutrition-day";
 
 export type NutritionDayType = "training" | "high" | "non_training";
 export type CardioDayType = NutritionDayType | "rest";
@@ -256,7 +257,7 @@ export function resolveClientWeekDays({
   }
 
   const overrideHighDate = weekDates.find((dateISO) => overrideByDate.get(dateISO) === "High Day") ?? null;
-  const recurringHighWeekdays = new Set((recurringHighDays?.length ? recurringHighDays : ["Sunday"]).map(normalizeWeekday).filter(Boolean));
+  const recurringHighWeekdays = new Set((recurringHighDays?.length ? recurringHighDays : [DEFAULT_HIGH_WEEKDAY]).map(normalizeWeekday).filter(Boolean));
   const recurringHighDate = overrideHighDate
     ? null
     : weekDates.find((dateISO) => !overrideByDate.has(dateISO) && recurringHighWeekdays.has(weekdayNameForISO(dateISO))) ?? null;
