@@ -4,7 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Apple, Plus, Pencil, Trash2, Copy, Droplet } from "lucide-react";
+import { Apple, Plus, Pencil, Trash2, Copy, Droplet, ShoppingCart } from "lucide-react";
 import { Download } from "lucide-react";
 import { toast } from "sonner";
 import { NutritionTargetDialog } from "./nutrition-target-dialog";
@@ -13,12 +13,14 @@ import { WaterTargetDialog } from "@/components/progress/water-target-dialog";
 import { ensureWaterTarget, formatWater } from "@/lib/water";
 import { useAuth } from "@/lib/auth";
 import { downloadNutritionTargetsPdf } from "@/lib/nutrition-targets-pdf";
+import { GroceryListSheet } from "@/components/nutrition/GroceryListSheet";
 
 export function NutritionTargetsPanel({ clientId }: { clientId: string }) {
   const qc = useQueryClient();
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<any>(null);
   const [waterOpen, setWaterOpen] = useState(false);
+  const [groceryOpen, setGroceryOpen] = useState(false);
   const { user, role } = useAuth();
 
   // Resolve the client's auth user_id (progress_water_targets is keyed on
@@ -110,9 +112,29 @@ export function NutritionTargetsPanel({ clientId }: { clientId: string }) {
         <h3 className="flex items-center gap-2 text-xs uppercase tracking-widest text-muted-foreground">
           <Apple className="h-4 w-4" /> Nutrition Targets
         </h3>
-        <Button size="sm" className="bg-gradient-primary font-bold uppercase" onClick={() => { setEditing(null); setOpen(true); }}>
-          <Plus className="mr-2 h-4 w-4" /> Add Targets
-        </Button>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            size="sm"
+            variant="outline"
+            className="font-bold uppercase"
+            onClick={() => setGroceryOpen(true)}
+            disabled={!clientUserId}
+          >
+            <ShoppingCart className="mr-2 h-4 w-4" /> Preview Grocery List
+          </Button>
+          <Button size="sm" className="bg-gradient-primary font-bold uppercase" onClick={() => { setEditing(null); setOpen(true); }}>
+            <Plus className="mr-2 h-4 w-4" /> Add Targets
+          </Button>
+        </div>
+      {groceryOpen && (
+        <GroceryListSheet
+          open={groceryOpen}
+          onOpenChange={setGroceryOpen}
+          clientId={clientId}
+          viewAsUserId={clientUserId}
+          coachPreview
+        />
+      )}
       </div>
       {clientUserId && (
         <div className="flex items-center justify-between rounded-md border border-border bg-secondary/20 p-3">
