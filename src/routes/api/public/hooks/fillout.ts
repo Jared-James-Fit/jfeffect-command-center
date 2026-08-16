@@ -35,11 +35,49 @@ export const Route = createFileRoute("/api/public/hooks/fillout")({
           return new Response("Unauthorized", { status: 401 });
         }
 
+        const requestUrl = new URL(request.url);
+        const recoverySubmissionId = requestUrl.searchParams.get("recover_submission_id");
+        const recoveryFormId = requestUrl.searchParams.get("recover_form_id");
+
         let payload: any;
-        try {
-          payload = await request.json();
-        } catch {
-          return new Response("Invalid JSON", { status: 400 });
+        if (recoverySubmissionId) {
+          if (!recoveryFormId) {
+            return new Response("recover_form_id is required", { status: 400 });
+          }
+          if (!/^[a-zA-Z0-9_-]{6,120}$/.test(recoveryFormId) || !/^[a-f0-9-]{36}$/i.test(recoverySubmissionId)) {
+            return new Response("Invalid recovery identifiers", { status: 400 });
+          }
+
+          const filloutApiKey = process.env.FILLOUT_API_KEY ?? "";
+          if (!filloutApiKey) {
+            console.error("[fillout-webhook] FILLOUT_API_KEY is not configured for recovery");
+            return new Response("Fillout recovery is not configured", { status: 503 });
+          }
+
+          const upstream = await fetch(
+            `https://api.fillout.com/v1/api/forms/${encodeURIComponent(recoveryFormId)}/submissions/${encodeURIComponent(recoverySubmissionId)}`,
+            { headers: { Authorization: `Bearer ${filloutApiKey}` } },
+          );
+          if (!upstream.ok) {
+            console.error("[fillout-webhook] recovery fetch failed", upstream.status);
+            return new Response("Unable to retrieve Fillout submission", { status: 502 });
+          }
+
+          const recovered = await upstream.json();
+          if (!recovered?.submission?.submissionId) {
+            return new Response("Invalid Fillout recovery response", { status: 502 });
+          }
+          payload = {
+            formId: recoveryFormId,
+            formName: "Recovered Fillout submission",
+            submission: recovered.submission,
+          };
+        } else {
+          try {
+            payload = await request.json();
+          } catch {
+            return new Response("Invalid JSON", { status: 400 });
+          }
         }
 
         const submission = payload?.submission ?? payload ?? {};
