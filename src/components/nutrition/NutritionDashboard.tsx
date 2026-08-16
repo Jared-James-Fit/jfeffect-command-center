@@ -181,27 +181,15 @@ function TargetsStrip({ targets, userId }: { targets?: NutritionTargets; userId?
 
 function QuickActions({
   viewer,
-  recipesAnchorId,
   hasCoachApprovedTargets,
 }: {
   viewer: "member" | "client";
-  recipesAnchorId: string;
   hasCoachApprovedTargets?: boolean;
 }) {
   const [calcOpen, setCalcOpen] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
   return (
-    <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-      <a
-        href={`#${recipesAnchorId}`}
-        className="flex items-center gap-3 rounded-xl border border-primary/30 bg-gradient-to-br from-primary/10 to-card p-4 transition hover:border-primary active:scale-[0.98]"
-      >
-        <ChefHat className="h-6 w-6 text-primary" />
-        <div>
-          <div className="text-sm font-bold leading-tight">Browse Recipes</div>
-          <div className="text-[11px] text-muted-foreground">Jump to the recipe library</div>
-        </div>
-      </a>
+    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
       <button
         type="button"
         onClick={() => setHelpOpen(true)}
@@ -224,7 +212,6 @@ function QuickActions({
           <div className="text-[11px] text-muted-foreground">Calculate your targets</div>
         </div>
       </button>
-      <ComingSoonTile icon={Sparkles} title="Meal Builder" />
       <MacroCalculatorDialog
         open={calcOpen}
         onOpenChange={setCalcOpen}
@@ -232,21 +219,6 @@ function QuickActions({
         hasCoachApprovedTargets={hasCoachApprovedTargets}
       />
       <NutritionHelpSheet open={helpOpen} onOpenChange={setHelpOpen} viewer={viewer} />
-    </div>
-  );
-}
-
-function ComingSoonTile({ icon: Icon, title }: { icon: any; title: string }) {
-  return (
-    <div
-      className="relative flex items-center gap-3 rounded-xl border border-dashed border-border bg-secondary/20 p-4 opacity-80"
-      aria-disabled="true"
-    >
-      <Icon className="h-6 w-6 text-muted-foreground" />
-      <div>
-        <div className="text-sm font-bold leading-tight text-foreground/80">{title}</div>
-        <div className="text-[11px] uppercase tracking-widest text-muted-foreground">Coming soon</div>
-      </div>
     </div>
   );
 }
