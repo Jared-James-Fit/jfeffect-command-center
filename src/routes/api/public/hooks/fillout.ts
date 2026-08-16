@@ -38,14 +38,34 @@ export const Route = createFileRoute("/api/public/hooks/fillout")({
         const requestUrl = new URL(request.url);
         const recoverySubmissionId = requestUrl.searchParams.get("recover_submission_id");
         const recoveryFormId = requestUrl.searchParams.get("recover_form_id");
+        const recoveryFirstName = requestUrl.searchParams.get("recover_first_name")?.trim();
+        const recoveryLastName = requestUrl.searchParams.get("recover_last_name")?.trim();
+        const recoveryRequested = Boolean(
+          recoverySubmissionId || recoveryFirstName || recoveryLastName,
+        );
 
         let payload: any;
-        if (recoverySubmissionId) {
+        if (recoveryRequested) {
           if (!recoveryFormId) {
             return new Response("recover_form_id is required", { status: 400 });
           }
-          if (!/^[a-zA-Z0-9_-]{6,120}$/.test(recoveryFormId) || !/^[a-f0-9-]{36}$/i.test(recoverySubmissionId)) {
-            return new Response("Invalid recovery identifiers", { status: 400 });
+          if (!/^[a-zA-Z0-9_-]{6,120}$/.test(recoveryFormId)) {
+            return new Response("Invalid recovery form identifier", { status: 400 });
+          }
+          if (
+            recoverySubmissionId &&
+            !/^[a-f0-9-]{36}$/i.test(recoverySubmissionId)
+          ) {
+            return new Response("Invalid recovery submission identifier", { status: 400 });
+          }
+          if (
+            !recoverySubmissionId &&
+            (!recoveryFirstName ||
+              !recoveryLastName ||
+              !/^[\p{L} .'-]{1,80}$/u.test(recoveryFirstName) ||
+              !/^[\p{L} .'-]{1,80}$/u.test(recoveryLastName))
+          ) {
+            return new Response("Exact recovery name is required", { status: 400 });
           }
 
           const filloutApiKey = process.env.FILLOUT_API_KEY ?? "";
@@ -54,23 +74,58 @@ export const Route = createFileRoute("/api/public/hooks/fillout")({
             return new Response("Fillout recovery is not configured", { status: 503 });
           }
 
-          const upstream = await fetch(
-            `https://api.fillout.com/v1/api/forms/${encodeURIComponent(recoveryFormId)}/submissions/${encodeURIComponent(recoverySubmissionId)}`,
-            { headers: { Authorization: `Bearer ${filloutApiKey}` } },
-          );
-          if (!upstream.ok) {
-            console.error("[fillout-webhook] recovery fetch failed", upstream.status);
-            return new Response("Unable to retrieve Fillout submission", { status: 502 });
+          const headers = { Authorization: `Bearer ${filloutApiKey}` };
+          let recoveredSubmission: any = null;
+          if (recoverySubmissionId) {
+            const upstream = await fetch(
+              `https://api.fillout.com/v1/api/forms/${encodeURIComponent(recoveryFormId)}/submissions/${encodeURIComponent(recoverySubmissionId)}`,
+              { headers },
+            );
+            if (!upstream.ok) {
+              console.error("[fillout-webhook] recovery fetch failed", upstream.status);
+              return new Response("Unable to retrieve Fillout submission", { status: 502 });
+            }
+            recoveredSubmission = (await upstream.json())?.submission ?? null;
+          } else {
+            const params = new URLSearchParams({
+              limit: "25",
+              sort: "desc",
+              search: recoveryFirstName!,
+            });
+            const upstream = await fetch(
+              `https://api.fillout.com/v1/api/forms/${encodeURIComponent(recoveryFormId)}/submissions?${params}`,
+              { headers },
+            );
+            if (!upstream.ok) {
+              console.error("[fillout-webhook] recovery search failed", upstream.status);
+              return new Response("Unable to search Fillout submissions", { status: 502 });
+            }
+            const results = await upstream.json();
+            const answer = (candidate: any, key: string) =>
+              [
+                ...(Array.isArray(candidate?.urlParameters) ? candidate.urlParameters : []),
+                ...(Array.isArray(candidate?.questions) ? candidate.questions : []),
+              ].find((item: any) => String(item?.name ?? "").toLowerCase() === key)?.value;
+            const matches = (results?.responses ?? []).filter(
+              (candidate: any) =>
+                String(answer(candidate, "first_name") ?? "").trim().toLowerCase() ===
+                  recoveryFirstName!.toLowerCase() &&
+                String(answer(candidate, "last_name") ?? "").trim().toLowerCase() ===
+                  recoveryLastName!.toLowerCase(),
+            );
+            if (matches.length !== 1) {
+              return new Response("Recovery name did not resolve uniquely", { status: 409 });
+            }
+            recoveredSubmission = matches[0];
           }
 
-          const recovered = await upstream.json();
-          if (!recovered?.submission?.submissionId) {
+          if (!recoveredSubmission?.submissionId) {
             return new Response("Invalid Fillout recovery response", { status: 502 });
           }
           payload = {
             formId: recoveryFormId,
             formName: "Recovered Fillout submission",
-            submission: recovered.submission,
+            submission: recoveredSubmission,
           };
         } else {
           try {
