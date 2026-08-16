@@ -40,6 +40,7 @@ export const Route = createFileRoute("/api/public/hooks/fillout")({
         const recoveryFormId = requestUrl.searchParams.get("recover_form_id");
         const recoveryFirstName = requestUrl.searchParams.get("recover_first_name")?.trim();
         const recoveryLastName = requestUrl.searchParams.get("recover_last_name")?.trim();
+        const recoveryAfter = requestUrl.searchParams.get("recover_after")?.trim();
         const recoveryRequested = Boolean(
           recoverySubmissionId || recoveryFirstName || recoveryLastName,
         );
@@ -67,6 +68,9 @@ export const Route = createFileRoute("/api/public/hooks/fillout")({
           ) {
             return new Response("Exact recovery name is required", { status: 400 });
           }
+          if (recoveryAfter && Number.isNaN(Date.parse(recoveryAfter))) {
+            return new Response("Invalid recovery cutoff", { status: 400 });
+          }
 
           const filloutApiKey = process.env.FILLOUT_API_KEY ?? "";
           if (!filloutApiKey) {
@@ -91,6 +95,7 @@ export const Route = createFileRoute("/api/public/hooks/fillout")({
               limit: "25",
               sort: "desc",
               search: recoveryFirstName!,
+              ...(recoveryAfter ? { afterDate: recoveryAfter } : {}),
             });
             const upstream = await fetch(
               `https://api.fillout.com/v1/api/forms/${encodeURIComponent(recoveryFormId)}/submissions?${params}`,
