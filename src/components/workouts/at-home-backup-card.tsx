@@ -19,7 +19,14 @@ import {
   listAtHomeBackupDefinitions,
   startAtHomeBackupSession,
 } from "@/lib/at-home-backup.functions";
-import { AT_HOME_BACKUP_BADGE } from "@/lib/at-home-backup";
+import {
+  AT_HOME_BACKUP_BADGE,
+  AT_HOME_BACKUP_CONFIRM_ACCEPT,
+  AT_HOME_BACKUP_CONFIRM_BODY,
+  AT_HOME_BACKUP_CONFIRM_CANCEL,
+  AT_HOME_BACKUP_CONFIRM_TITLE,
+  shouldConfirmBackupStart,
+} from "@/lib/at-home-backup";
 
 /**
  * Client-facing entry point for the At-Home Backup workouts.
@@ -69,7 +76,7 @@ export function AtHomeBackupCard({
   });
 
   const requestStart = (definitionDayId: string) => {
-    if (hasPrimaryWorkoutToday) {
+    if (shouldConfirmBackupStart(hasPrimaryWorkoutToday)) {
       setPendingDefinitionId(definitionDayId);
       return;
     }
@@ -152,11 +159,13 @@ export function AtHomeBackupCard({
       <AlertDialog open={pendingDefinitionId !== null} onOpenChange={(next) => !next && setPendingDefinitionId(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Use this as today's backup?</AlertDialogTitle>
-            <AlertDialogDescription>Your scheduled gym workout will stay on your program.</AlertDialogDescription>
+            <AlertDialogTitle>{AT_HOME_BACKUP_CONFIRM_TITLE}</AlertDialogTitle>
+            <AlertDialogDescription>{AT_HOME_BACKUP_CONFIRM_BODY}</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel disabled={start.isPending}>Cancel</AlertDialogCancel>
+            <AlertDialogCancel disabled={start.isPending}>
+              {AT_HOME_BACKUP_CONFIRM_CANCEL}
+            </AlertDialogCancel>
             <AlertDialogAction
               disabled={start.isPending || !pendingDefinitionId}
               onClick={(event) => {
@@ -165,7 +174,7 @@ export function AtHomeBackupCard({
                 setPendingDefinitionId(null);
               }}
             >
-              Use Backup
+              {AT_HOME_BACKUP_CONFIRM_ACCEPT}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
