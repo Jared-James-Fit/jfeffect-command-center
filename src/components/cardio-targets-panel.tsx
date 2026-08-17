@@ -14,13 +14,13 @@ import { CardioSyncRenameDialog } from "./cardio-sync-rename-dialog";
 import { deriveTarget, formatCalorieTarget, nutritionLabelsFromTargets, findOrphanedCardio, findDefaultFor, DEFAULT_CARDIO_PRESETS, presetToRow } from "@/lib/nutrition-cardio";
 import { dayTypeLabel, dayTypeTone } from "@/lib/training-schedule";
 import {
-import { cardioActivityLabel } from "@/lib/cardio-activity";
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { cardioActivityLabel } from "@/lib/cardio-activity";
 
 export function CardioTargetsPanel({ clientId }: { clientId: string }) {
   const qc = useQueryClient();
