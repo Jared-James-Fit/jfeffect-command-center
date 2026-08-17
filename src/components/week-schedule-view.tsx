@@ -23,6 +23,7 @@ import {
   type CardioDayType,
 } from "@/lib/resolved-client-days";
 import { cn } from "@/lib/utils";
+import { cardioActivityLabel } from "@/lib/cardio-activity";
 
 const sb = supabase as any;
 
@@ -130,7 +131,7 @@ function buildCells(
     const workoutDate = workoutsByDate.get(dateISO) ?? null;
     const workout = workoutDate?.workout ?? null;
     const target = resolved?.cardioTargetId ? cardioById.get(resolved.cardioTargetId) : null;
-    const label = target ? (target.cardio_type === "Custom" ? target.custom_type ?? "Cardio" : target.cardio_type ?? "Cardio") : null;
+    const label = target ? cardioActivityLabel(target as any) : null;
     const dayType: DayCell["dayType"] = resolved?.nutritionDayType === "high"
       ? "High"
       : workout

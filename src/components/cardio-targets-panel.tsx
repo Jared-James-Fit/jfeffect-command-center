@@ -14,6 +14,7 @@ import { CardioSyncRenameDialog } from "./cardio-sync-rename-dialog";
 import { deriveTarget, formatCalorieTarget, nutritionLabelsFromTargets, findOrphanedCardio, findDefaultFor, DEFAULT_CARDIO_PRESETS, presetToRow } from "@/lib/nutrition-cardio";
 import { dayTypeLabel, dayTypeTone } from "@/lib/training-schedule";
 import {
+import { cardioActivityLabel } from "@/lib/cardio-activity";
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
@@ -201,7 +202,7 @@ export function CardioTargetsPanel({ clientId }: { clientId: string }) {
                       <div className="flex min-w-0 flex-wrap items-center gap-1.5 text-sm sm:gap-2">
                         <Badge variant="outline" className={dayTypeTone(t.day_type)}>{dayTypeLabel(t)}</Badge>
                         <Badge variant="outline" className={d.tone}>{d.label}</Badge>
-                        <span className="truncate font-semibold">{t.cardio_type === "Custom" ? t.custom_type : t.cardio_type}</span>
+                        <span className="truncate font-semibold">{cardioActivityLabel(t as any)}</span>
                         <span className="w-full text-xs text-muted-foreground sm:w-auto">
                           {t.frequency_per_week ? `${t.frequency_per_week}x/wk` : ""} {t.duration_minutes ? `· ${t.duration_minutes} min` : ""} {t.intensity ? `· ${t.intensity}` : ""}
                         </span>

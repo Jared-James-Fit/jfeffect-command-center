@@ -6,6 +6,7 @@ import { resolveWeekDayDates } from "@/lib/workout-today";
 import { listGoogleEventsRange, getGoogleConnectionStatus } from "@/lib/google-cal.functions";
 import { resolveClientWeekDays, type ResolvedWorkoutDate } from "@/lib/resolved-client-days";
 import { toLocalISO } from "@/lib/today";
+import { cardioActivityLabel } from "@/lib/cardio-activity";
 
 /**
  * Phase 1 calendar item — a single chip rendered on the calendar grid.
@@ -409,7 +410,7 @@ export function useClientCalendarSources(clientId: string | null | undefined) {
       }
 
       function emit(target: any, dateStr: string) {
-        const cardioName = target.cardio_type === "Custom" ? (target.custom_type || "Cardio") : (target.cardio_type || "Cardio");
+        const cardioName = cardioActivityLabel(target as any);
         const subtitle = [target.duration_minutes ? `${target.duration_minutes} min` : null, target.intensity].filter(Boolean).join(" · ");
         out.push({
           id: `cardio:${target.id}:${dateStr}`,
