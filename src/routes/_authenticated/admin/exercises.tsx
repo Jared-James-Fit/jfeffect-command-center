@@ -20,6 +20,7 @@ import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { buildCleanVimeoEmbedUrl, vimeoUrlFromId, MIGRATION_STATUSES } from "@/lib/exercise-video";
 import { ExerciseQuickCreateForm } from "@/components/exercises/exercise-quick-create-form";
+import { useIsCoarsePointer, useVisualViewportHeight } from "@/hooks/use-touch-viewport";
 import { ExerciseWarmupDialog } from "@/components/exercise-warmup-dialog";
 import { ExerciseVolumeTagsDialog } from "@/components/volume/exercise-volume-tags-dialog";
 import { MOVEMENT_PATTERN_LABELS, VARIATION_LABELS } from "@/lib/volume";
@@ -581,8 +582,16 @@ function EditExerciseDialog({
 }
 
 function NewExerciseDialog({ onClose, onCreated }: { onClose: () => void; onCreated: () => void }) {
+  const coarsePointer = useIsCoarsePointer();
+  const viewportHeight = useVisualViewportHeight();
   return (
-    <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+    <DialogContent
+      className="max-w-lg overflow-y-auto pb-[env(safe-area-inset-bottom)]"
+      // Visual-viewport sizing keeps the form scrollable above the Android
+      // keyboard; no auto-focus on touch so typing works on first tap.
+      style={viewportHeight ? { maxHeight: Math.max(240, viewportHeight - 32) } : { maxHeight: "90dvh" }}
+      onOpenAutoFocus={(e) => { if (coarsePointer) e.preventDefault(); }}
+    >
       <DialogHeader><DialogTitle>New exercise</DialogTitle></DialogHeader>
       <ExerciseQuickCreateForm
         onCancel={onClose}

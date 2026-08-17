@@ -1,5 +1,6 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
+import { useIsCoarsePointer } from "@/hooks/use-touch-viewport";
 import { ChevronDown } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
@@ -52,6 +53,11 @@ export function ExerciseQuickCreateForm({
   submitLabel?: string;
 }) {
   const qc = useQueryClient();
+  // Touch devices never auto-focus: Android Chrome pops the soft keyboard +
+  // autofill strip while Radix is still moving focus, which leaves the field
+  // unable to receive keystrokes. Desktop keeps the convenience.
+  const coarsePointer = useIsCoarsePointer();
+  const submittingRef = useRef(false);
   const [busy, setBusy] = useState(false);
   const [more, setMore] = useState(false);
   const [name, setName] = useState(defaultName ?? "");
@@ -69,7 +75,8 @@ export function ExerciseQuickCreateForm({
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     const trimmed = name.trim();
-    if (!trimmed || busy) return;
+    if (!trimmed || busy || submittingRef.current) return;
+    submittingRef.current = true;
     setBusy(true);
     const payload: Record<string, unknown> = {
       name: trimmed,
@@ -92,6 +99,7 @@ export function ExerciseQuickCreateForm({
       .select("*")
       .single();
     setBusy(false);
+    submittingRef.current = false;
     if (error || !data) {
       toast.error(error?.message ?? "Could not save exercise");
       return;
@@ -103,12 +111,25 @@ export function ExerciseQuickCreateForm({
   };
 
   return (
-    <form onSubmit={submit} className="space-y-3">
+    <form onSubmit={submit} className="space-y-3" autoComplete="off">
       <div>
         <Label>Name *</Label>
         <Input
-          autoFocus
+          autoFocus={!coarsePointer}
           required
+          // Explicit non-contact identity keeps Android's "Autofill · Contact"
+          // strip from covering the form; nothing else about the browser's
+          // autofill behaviour is disabled.
+          name="exercise_name"
+          type="text"
+          inputMode="text"
+          enterKeyHint="done"
+          autoComplete="off"
+          autoCorrect="off"
+          autoCapitalize="words"
+          spellCheck={false}
+          data-1p-ignore
+          data-lpignore="true"
           value={name}
           onChange={(e) => setName(e.target.value)}
           placeholder="e.g. Chest Supported Dumbbell Row"
@@ -178,6 +199,8 @@ export function ExerciseQuickCreateForm({
           <div>
             <Label>Secondary / legacy muscle notes</Label>
             <Input
+              name="exercise_muscle_notes"
+              autoComplete="off"
               value={muscleGroup}
               onChange={(e) => setMuscleGroup(e.target.value)}
               placeholder="Optional"
@@ -185,7 +208,16 @@ export function ExerciseQuickCreateForm({
           </div>
           <div>
             <Label>YouTube URL</Label>
-            <Input value={youtubeUrl} onChange={(e) => setYoutubeUrl(e.target.value)} />
+            <Input
+              name="exercise_youtube_url"
+              type="url"
+              inputMode="url"
+              autoComplete="off"
+              autoCapitalize="none"
+              spellCheck={false}
+              value={youtubeUrl}
+              onChange={(e) => setYoutubeUrl(e.target.value)}
+            />
           </div>
           <div>
             <Label>Coaching cues</Label>
