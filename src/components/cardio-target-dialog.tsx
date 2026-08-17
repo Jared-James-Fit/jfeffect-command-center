@@ -136,6 +136,10 @@ export function CardioTargetDialog({ open, onOpenChange, clientId, clients = [],
   if (!form) return null;
   const set = (k: string, v: any) => setForm({ ...form, [k]: v });
   const calculatedTargets = resolveCardioTargets(form);
+  const activityValue = activityOptionValue(form.cardio_type, form.custom_type);
+  const activityView = resolveCardioActivity(form);
+  const walkMode = activityView.mode ?? "treadmill";
+  const isTreadmill = activityValue === "Walk" && activityView.isTreadmill;
 
   const save = async () => {
     if (!form.client_id) return toast.error("Pick a client first");
