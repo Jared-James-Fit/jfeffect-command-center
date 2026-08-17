@@ -1,65 +1,73 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
+import { useState } from "react";
 import { z } from "zod";
 import { PageHeader } from "@/components/app-shell";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { listCrmContacts, listCoachOptions } from "@/lib/crm.functions";
+import { LeadDetailDrawer } from "@/components/admin/lead-detail-drawer";
+import {
+  LEAD_STAGES, leadStage, displayLeadSource, displayLeadName, leadScoreDisplay,
+  nextActionDisplay, lastMeaningfulContact, NO_FOLLOW_UP, type LeadStageKey,
+} from "@/lib/crm-display";
+import { LEAD_SCORE_DISCLAIMER } from "@/lib/lead-score-display";
 import { format, formatDistanceToNow } from "date-fns";
-import { Search, X, ArrowUp, ArrowDown, ChevronLeft, ChevronRight } from "lucide-react";
+import { Search, X, ChevronLeft, ChevronRight, Info } from "lucide-react";
 
-const SORTABLE = [
-  "full_name",
-  "created_at",
-  "lead_temperature",
-  "lead_score",
-  "next_follow_up_at",
-  "last_contacted_at",
-  "lifecycle_stage",
-  "applied_at",
-] as const;
-type SortKey = (typeof SORTABLE)[number];
+/** Displayed stage → canonical lifecycle_stage values (server-side filter). */
+const STAGE_TO_LIFECYCLE: Record<LeadStageKey, string[]> = {
+  new: ["lead", "applicant", "new"],
+  contacted: ["contacted", "call_booked", "follow_up", "nurture"],
+  qualified: ["qualified"],
+  offer_sent: ["offer_sent", "proposal_sent", "proposal"],
+  won: ["won", "active_client"],
+  lost: ["lost", "disqualified", "churned"],
+};
 
 const searchSchema = z.object({
   q: z.string().optional(),
-  scope: z.enum(["all","prospects","active","applicants"]).optional(),
+  scope: z.enum(["all", "prospects", "active", "applicants"]).optional(),
+  stage: z.enum(["new", "contacted", "qualified", "offer_sent", "won", "lost"]).optional(),
   lifecycle_stage: z.string().optional(),
-  lead_temperature: z.enum(["hot","warm","cold"]).optional(),
+  lead_temperature: z.enum(["hot", "warm", "cold"]).optional(),
   source: z.string().optional(),
-  call_booked: z.enum(["true","false"]).optional(),
+  call_booked: z.enum(["true", "false"]).optional(),
   assigned_coach_id: z.string().optional(),
-  overdue: z.enum(["true","false"]).optional(),
-  sort: z.enum(SORTABLE).optional(),
+  overdue: z.enum(["true", "false"]).optional(),
+  sort: z.enum(["full_name", "created_at", "lead_score", "next_follow_up_at", "last_contacted_at"]).optional(),
   dir: z.enum(["asc", "desc"]).optional(),
   page: z.coerce.number().int().min(1).optional(),
   pageSize: z.coerce.number().int().min(10).max(100).optional(),
+  open: z.string().optional(),
 });
 
 export const Route = createFileRoute("/_authenticated/admin/crm/contacts/")({
   validateSearch: (s: any) => searchSchema.parse(s ?? {}),
-  component: ContactsList,
+  component: LeadsList,
 });
 
-const STAGES = ["lead","applicant","call_booked","qualified","follow_up","won","active_client","paused","lost","disqualified"];
-
-function ContactsList() {
+function LeadsList() {
   const search = Route.useSearch();
   const nav = useNavigate({ from: Route.fullPath });
   const fetchList = useServerFn(listCrmContacts);
   const fetchCoaches = useServerFn(listCoachOptions);
+  const [openId, setOpenId] = useState<string | null>(search.open ?? null);
 
-  const sort: SortKey = (search.sort as SortKey) ?? "created_at";
-  const dir: "asc" | "desc" = (search.dir as "asc" | "desc") ?? "desc";
   const page = search.page ?? 1;
   const pageSize = search.pageSize ?? 50;
+  const sort = search.sort ?? "created_at";
+  const dir = search.dir ?? "desc";
 
   const filters: any = {
     search: search.q || "",
     scope: search.scope || "all",
+    stage_in: search.stage ? STAGE_TO_LIFECYCLE[search.stage] : undefined,
     lifecycle_stage: search.lifecycle_stage,
     lead_temperature: search.lead_temperature,
     source: search.source,
@@ -73,56 +81,41 @@ function ContactsList() {
   };
 
   const { data, isLoading } = useQuery({
-    queryKey: ["crm","contacts", filters],
+    queryKey: ["crm", "contacts", filters],
     queryFn: () => fetchList({ data: filters }),
   });
-  const { data: coachData } = useQuery({ queryKey: ["crm","coaches"], queryFn: () => fetchCoaches() });
+  const { data: coachData } = useQuery({ queryKey: ["crm", "coaches"], queryFn: () => fetchCoaches() });
 
+  // Stage counts across the whole filtered set (one lightweight head query per stage
+  // is avoided by counting the current page plus the server total for the active stage).
   const rows = data?.contacts ?? [];
   const total = data?.total ?? 0;
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
-  const showingFrom = total === 0 ? 0 : (page - 1) * pageSize + 1;
-  const showingTo = Math.min(page * pageSize, total);
 
   function setSearch(patch: any) {
-    // Any filter/search change resets to page 1.
-    nav({
-      search: (prev: any) => ({ ...prev, ...patch, page: undefined }),
-      replace: true,
-    });
-  }
-  function clearFilters() {
-    nav({ search: {} as any, replace: true });
-  }
-  function toggleSort(key: SortKey) {
-    nav({
-      search: (prev: any) => {
-        if (prev.sort === key) {
-          return { ...prev, dir: prev.dir === "asc" ? "desc" : "asc", page: undefined };
-        }
-        // First click: sensible default direction per field.
-        const defaultDir: "asc" | "desc" =
-          key === "full_name" || key === "lifecycle_stage" ? "asc" : "desc";
-        return { ...prev, sort: key, dir: defaultDir, page: undefined };
-      },
-      replace: true,
-    });
-  }
-  function setPage(p: number) {
-    nav({ search: (prev: any) => ({ ...prev, page: p }), replace: true });
+    nav({ search: (prev: any) => ({ ...prev, ...patch, page: undefined }), replace: true });
   }
 
   return (
     <div className="space-y-4">
       <PageHeader
-        title="CRM Contacts"
-        subtitle="Leads, applicants, prospects, and active coaching clients."
-        actions={
-          <Link to="/admin/crm">
-            <Button size="sm" variant="outline">Dashboard</Button>
-          </Link>
-        }
+        title="Leads"
+        subtitle="Sales pipeline — applications and prospects. Active coaching is managed separately."
+        actions={<Link to="/admin/crm"><Button size="sm" variant="outline">Dashboard</Button></Link>}
       />
+
+      <div className="flex flex-wrap gap-1 px-1">
+        <StageChip active={!search.stage} label="All" count={total} onClick={() => setSearch({ stage: undefined })} />
+        {LEAD_STAGES.map((s) => (
+          <StageChip
+            key={s.key}
+            active={search.stage === s.key}
+            label={s.label}
+            count={search.stage === s.key ? total : undefined}
+            onClick={() => setSearch({ stage: s.key })}
+          />
+        ))}
+      </div>
 
       <Card className="p-3">
         <div className="flex flex-wrap items-center gap-2">
@@ -140,148 +133,122 @@ function ContactsList() {
             />
           </div>
           <FilterSelect label="Scope" value={search.scope} onChange={(v) => setSearch({ scope: v })}
-            options={[["all","All contacts"],["prospects","Prospects"],["applicants","Applicants"],["active","Active clients"]]} />
-          <FilterSelect label="Stage" value={search.lifecycle_stage} onChange={(v) => setSearch({ lifecycle_stage: v })}
-            options={STAGES.map((s) => [s, s.replace(/_/g," ")])} />
-          <FilterSelect label="Temp" value={search.lead_temperature} onChange={(v) => setSearch({ lead_temperature: v as any })}
-            options={[["hot","Hot"],["warm","Warm"],["cold","Cold"]]} />
-          <FilterSelect label="Call booked" value={search.call_booked} onChange={(v) => setSearch({ call_booked: v as any })}
-            options={[["true","Yes"],["false","No"]]} />
+            options={[["all", "All contacts"], ["prospects", "Prospects"], ["applicants", "Applicants"], ["active", "Active clients"]]} />
           <FilterSelect label="Overdue" value={search.overdue} onChange={(v) => setSearch({ overdue: v as any })}
-            options={[["true","Follow-up overdue"]]} />
+            options={[["true", "Follow-up overdue"]]} />
           <FilterSelect label="Coach" value={search.assigned_coach_id} onChange={(v) => setSearch({ assigned_coach_id: v })}
             options={(coachData?.coaches ?? []).map((c: any) => [c.id, c.full_name])} />
-          <Button size="sm" variant="ghost" onClick={clearFilters}><X className="mr-1 h-3 w-3" />Clear</Button>
+          <FilterSelect label="Sort" value={search.sort} onChange={(v) => setSearch({ sort: v as any })}
+            options={[["created_at", "Newest"], ["lead_score", "Lead score"], ["next_follow_up_at", "Follow-up"], ["last_contacted_at", "Last contact"], ["full_name", "Name"]]} />
+          <Button size="sm" variant="ghost" onClick={() => nav({ search: {} as any, replace: true })}>
+            <X className="mr-1 h-3 w-3" />Clear
+          </Button>
         </div>
       </Card>
 
-      <Card className="overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead className="bg-muted/40 text-left text-[11px] uppercase tracking-wider text-muted-foreground">
-            <tr>
-              <SortTh k="full_name" sort={sort} dir={dir} onSort={toggleSort}>Name</SortTh>
-              <Th>Email</Th>
-              <Th>Phone</Th>
-              <SortTh k="lifecycle_stage" sort={sort} dir={dir} onSort={toggleSort}>Stage</SortTh>
-              <SortTh k="lead_temperature" sort={sort} dir={dir} onSort={toggleSort}>Temp</SortTh>
-              <SortTh k="lead_score" sort={sort} dir={dir} onSort={toggleSort}>Score</SortTh>
-              <Th>Source</Th>
-              <Th>Call</Th>
-              <SortTh k="next_follow_up_at" sort={sort} dir={dir} onSort={toggleSort}>Follow-up</SortTh>
-              <SortTh k="last_contacted_at" sort={sort} dir={dir} onSort={toggleSort}>Last contacted</SortTh>
-              <Th>Coach</Th>
-              <SortTh k="created_at" sort={sort} dir={dir} onSort={toggleSort}>Created</SortTh>
-            </tr>
-          </thead>
-          <tbody>
-            {isLoading && <tr><td colSpan={12} className="p-6 text-center text-muted-foreground">Loading…</td></tr>}
-            {!isLoading && rows.length === 0 && (
-              <tr><td colSpan={12} className="p-6 text-center text-sm text-muted-foreground">
-                No contacts match these filters. Adjust filters or wait for new applications to come in.
-              </td></tr>
-            )}
-            {rows.map((r: any) => (
-              <tr key={r.id} className="border-t border-border hover:bg-muted/30">
-                <Td><Link to="/admin/crm/contacts/$id" params={{ id: r.id }} className="font-medium hover:underline">
-                  {r.full_name || `${r.first_name ?? ""} ${r.last_name ?? ""}`.trim() || "—"}
-                  {r.lifecycle_stage === "active_client" && <Badge className="ml-2 bg-emerald-500/15 text-emerald-500" variant="outline">Active</Badge>}
-                </Link></Td>
-                <Td className="text-xs">{r.email}</Td>
-                <Td className="text-xs">{r.phone ?? "—"}</Td>
-                <Td><Badge variant="outline" className="capitalize">{(r.lifecycle_stage ?? "—").replace(/_/g," ")}</Badge></Td>
-                <Td><TempBadge t={r.lead_temperature} /></Td>
-                <Td>{r.lead_score ?? "—"}</Td>
-                <Td className="text-xs">{r.source ?? "—"}</Td>
-                <Td>{r.call_booked ? "✓" : "—"}</Td>
-                <Td className="text-xs">{r.next_follow_up_at ? format(new Date(r.next_follow_up_at), "MMM d") : "—"}</Td>
-                <Td className="text-xs">
-                  {r.last_contacted_at ? (
-                    <span title={format(new Date(r.last_contacted_at), "PP p")}>
-                      {formatDistanceToNow(new Date(r.last_contacted_at), { addSuffix: true })}
-                    </span>
-                  ) : (
-                    <span className="text-muted-foreground">Never</span>
-                  )}
-                </Td>
-                <Td className="text-xs">{r.coaches?.full_name ?? "—"}</Td>
-                <Td className="text-xs">{format(new Date(r.created_at), "MMM d")}</Td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-        <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border px-3 py-2 text-xs text-muted-foreground">
-          <div>
-            {total > 0
-              ? `Showing ${showingFrom.toLocaleString()}–${showingTo.toLocaleString()} of ${total.toLocaleString()}`
-              : "No contacts"}
+      <Card className="divide-y divide-border">
+        {isLoading && <div className="p-6 text-center text-sm text-muted-foreground">Loading…</div>}
+        {!isLoading && rows.length === 0 && (
+          <div className="p-6 text-center text-sm text-muted-foreground">
+            No leads match these filters.
           </div>
-          <div className="flex items-center gap-2">
-            <Select
-              value={String(pageSize)}
-              onValueChange={(v) => nav({ search: (prev: any) => ({ ...prev, pageSize: Number(v), page: undefined }), replace: true })}
-            >
-              <SelectTrigger className="h-7 w-[90px]"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                {[25, 50, 100].map((n) => (
-                  <SelectItem key={n} value={String(n)}>{n} / page</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Button size="sm" variant="outline" disabled={page <= 1} onClick={() => setPage(page - 1)}>
-              <ChevronLeft className="h-3.5 w-3.5" /> Prev
-            </Button>
-            <span className="tabular-nums">Page {page} of {totalPages}</span>
-            <Button size="sm" variant="outline" disabled={page >= totalPages} onClick={() => setPage(page + 1)}>
-              Next <ChevronRight className="h-3.5 w-3.5" />
-            </Button>
-          </div>
-        </div>
+        )}
+        {rows.map((r: any) => (
+          <LeadRow key={r.id} r={r} onOpen={() => setOpenId(r.id)} />
+        ))}
       </Card>
+
+      <div className="flex items-center justify-between px-1 text-xs text-muted-foreground">
+        <span>{total.toLocaleString()} leads</span>
+        <div className="flex items-center gap-2">
+          <Button size="sm" variant="outline" disabled={page <= 1}
+            onClick={() => nav({ search: (p: any) => ({ ...p, page: page - 1 }), replace: true })}>
+            <ChevronLeft className="h-3.5 w-3.5" />
+          </Button>
+          <span>Page {page} / {totalPages}</span>
+          <Button size="sm" variant="outline" disabled={page >= totalPages}
+            onClick={() => nav({ search: (p: any) => ({ ...p, page: page + 1 }), replace: true })}>
+            <ChevronRight className="h-3.5 w-3.5" />
+          </Button>
+        </div>
+      </div>
+
+      <LeadDetailDrawer id={openId} onClose={() => setOpenId(null)} />
     </div>
   );
 }
 
-function Th({ children }: any) { return <th className="px-3 py-2">{children}</th>; }
-function SortTh({
-  k,
-  sort,
-  dir,
-  onSort,
-  children,
-}: {
-  k: SortKey;
-  sort: SortKey;
-  dir: "asc" | "desc";
-  onSort: (k: SortKey) => void;
-  children: React.ReactNode;
-}) {
-  const active = sort === k;
+function LeadRow({ r, onOpen }: { r: any; onOpen: () => void }) {
+  const stage = leadStage(r.lifecycle_stage);
+  const score = leadScoreDisplay(r.lead_score);
+  const next = nextActionDisplay({ next_follow_up_at: r.next_follow_up_at });
+  const last = lastMeaningfulContact(r);
+  const service = (r.coaching_type || r.recommended_offer || "").trim();
+  const goal = (r.goals || "").trim();
+
   return (
-    <th className="px-3 py-2">
-      <button
-        type="button"
-        onClick={() => onSort(k)}
-        className={`inline-flex items-center gap-1 hover:text-foreground ${active ? "text-foreground" : ""}`}
-        aria-sort={active ? (dir === "asc" ? "ascending" : "descending") : "none"}
-      >
-        {children}
-        {active && (dir === "asc" ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />)}
-      </button>
-    </th>
+    <button type="button" onClick={onOpen} className="block w-full px-3 py-3 text-left hover:bg-muted/30">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+        <span className="font-semibold">{displayLeadName(r)}</span>
+        <Badge variant="outline">{stage.label}</Badge>
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+                Lead Score {score.label} <Info className="h-3 w-3" />
+              </span>
+            </TooltipTrigger>
+            <TooltipContent className="max-w-xs text-xs">
+              <div>{score.reason}</div>
+              <div className="mt-1 opacity-80">{LEAD_SCORE_DISCLAIMER}</div>
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
+        {r.coaches?.full_name && (
+          <span className="text-xs text-muted-foreground">Owner: {r.coaches.full_name}</span>
+        )}
+      </div>
+      <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+        <span>{displayLeadSource(r.source)}</span>
+        {service && <span>· {service}</span>}
+        {goal && <span className="truncate max-w-[220px]">· {goal}</span>}
+        <span>
+          · {last.at
+            ? `${last.kind === "contacted" ? "Contacted" : "Applied"} ${formatDistanceToNow(new Date(last.at), { addSuffix: true })}`
+            : "No contact yet"}
+        </span>
+        <span className={next.isSet ? "" : "italic"}>
+          · {next.isSet
+            ? `${next.label}${next.dueAt ? ` · ${format(new Date(next.dueAt), "MMM d")}` : ""}`
+            : NO_FOLLOW_UP}
+        </span>
+      </div>
+    </button>
   );
 }
-function Td({ children, className }: any) { return <td className={`px-3 py-2 ${className ?? ""}`}>{children}</td>; }
-function TempBadge({ t }: { t: string | null }) {
-  if (!t) return <span>—</span>;
-  const tone = t === "hot" ? "bg-red-500/15 text-red-500" : t === "warm" ? "bg-amber-500/15 text-amber-500" : "bg-sky-500/15 text-sky-500";
-  return <Badge variant="outline" className={`capitalize ${tone}`}>{t}</Badge>;
-}
-function FilterSelect({ label, value, onChange, options }: { label: string; value: any; onChange: (v: any) => void; options: any[] }) {
+
+function StageChip({ active, label, count, onClick }: { active: boolean; label: string; count?: number; onClick: () => void }) {
   return (
-    <Select value={value ?? "_any"} onValueChange={(v) => onChange(v === "_any" ? undefined : v)}>
-      <SelectTrigger className="w-[160px]"><SelectValue placeholder={label} /></SelectTrigger>
+    <button
+      type="button"
+      onClick={onClick}
+      className={`rounded-full border px-3 py-1 text-xs font-semibold transition-colors ${
+        active ? "border-primary bg-primary/10 text-foreground" : "border-border text-muted-foreground hover:text-foreground"
+      }`}
+    >
+      {label}{typeof count === "number" ? ` · ${count}` : ""}
+    </button>
+  );
+}
+
+function FilterSelect({ label, value, onChange, options }: {
+  label: string; value?: string; onChange: (v: string | undefined) => void; options: any[];
+}) {
+  return (
+    <Select value={value ?? "_all"} onValueChange={(v) => onChange(v === "_all" ? undefined : v)}>
+      <SelectTrigger className="h-8 w-auto min-w-[130px] text-xs"><SelectValue placeholder={label} /></SelectTrigger>
       <SelectContent>
-        <SelectItem value="_any">{label}: Any</SelectItem>
+        <SelectItem value="_all">{label}: any</SelectItem>
         {options.map(([v, l]: any) => <SelectItem key={v} value={v}>{l}</SelectItem>)}
       </SelectContent>
     </Select>

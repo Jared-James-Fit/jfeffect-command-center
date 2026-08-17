@@ -281,6 +281,9 @@ const listSchema = z.object({
   assigned_coach_id: z.string().uuid().optional(),
   overdue: z.enum(["true","false"]).optional(),
   scope: z.enum(["all","prospects","active","applicants"]).optional().default("all"),
+  // Scan-first Leads board: one displayed stage maps to several canonical
+  // lifecycle_stage values. Filtering stays server-side so paging is correct.
+  stage_in: z.array(z.string()).optional(),
   applied_from: z.string().optional(),
   applied_to: z.string().optional(),
   // Pagination
@@ -327,7 +330,8 @@ export const listCrmContacts = createServerFn({ method: "POST" })
         id, full_name, first_name, last_name, email, phone, instagram,
         lifecycle_stage, lead_temperature, lead_score, source, call_booked,
         next_follow_up_at, applied_at, converted_to_client_at,
-        assigned_coach_id, archived, status, user_id, created_at
+        assigned_coach_id, archived, status, user_id, created_at,
+        coaching_type, goals, recommended_offer
       `,
         { count: "exact" },
       )
@@ -341,6 +345,7 @@ export const listCrmContacts = createServerFn({ method: "POST" })
     else if (data.scope === "applicants") q = q.eq("lifecycle_stage", "applicant").eq("archived", false);
 
     if (data.lifecycle_stage) q = q.eq("lifecycle_stage", data.lifecycle_stage);
+    if (data.stage_in && data.stage_in.length) q = q.in("lifecycle_stage", data.stage_in);
     if (data.lead_temperature) q = q.eq("lead_temperature", data.lead_temperature);
     if (data.source) q = q.eq("source", data.source);
     if (data.call_booked) q = q.eq("call_booked", data.call_booked === "true");
