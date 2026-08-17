@@ -90,6 +90,8 @@ export function ClientCardioSection({
   });
 
   const filteredTargets = resolved?.target ? [resolved.target] : [];
+  // Day classification is nutrition/day context — it is never part of the
+  // cardio activity name, so it renders as subtle secondary text only.
   const resolvedLabel = resolved?.day?.cardioDayType === "high"
     ? "High Day"
     : resolved?.day?.cardioDayType === "training"
@@ -126,10 +128,12 @@ export function ClientCardioSection({
 
   return (
     <div className="space-y-3">
-      <h2 className="flex items-center gap-2 text-xs uppercase tracking-widest text-muted-foreground px-0.5">
-        <Heart className="h-4 w-4 shrink-0" /> Cardio
-        <span className="text-primary font-bold">· {resolvedLabel}</span>
-      </h2>
+      <div className="px-0.5">
+        <h2 className="flex items-center gap-2 text-xs uppercase tracking-widest text-muted-foreground">
+          <Heart className="h-4 w-4 shrink-0" /> Cardio
+        </h2>
+        <p className="mt-0.5 text-[11px] text-muted-foreground/80">Today's plan: {resolvedLabel}</p>
+      </div>
       {filteredTargets.map((t: any) => (
         <CardioCompletionCard
           key={t.id}
