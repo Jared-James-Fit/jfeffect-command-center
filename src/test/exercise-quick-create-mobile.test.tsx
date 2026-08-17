@@ -28,7 +28,7 @@ describe("exercise quick-create form attributes", () => {
 
 describe("isCoarsePointer", () => {
   const setMatchMedia = (impl: (q: string) => { matches: boolean }) => {
-    Object.defineProperty(window, "matchMedia", { value: impl, configurable: true, writable: true });
+    vi.stubGlobal("window", { matchMedia: impl });
   };
 
   beforeEach(() => {
