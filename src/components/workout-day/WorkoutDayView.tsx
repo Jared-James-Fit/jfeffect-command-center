@@ -61,6 +61,7 @@ import { ActiveRestTimerProvider, useRestTimer } from "@/components/active-rest-
 import { RestTimerButton } from "@/components/workout-day/RestTimerButton";
 import { ExerciseHistoryButton } from "@/components/exercise-history-sheet";
 import { QuickSwapButton } from "@/components/workout-day/QuickSwapButton";
+import { WorkoutToolsProvider, WorkoutToolsButton } from "@/components/workout-tools/workout-tools";
 import { convertWeight } from "@/lib/progress-metrics";
 import {
   formatPreviousLiftLoad,
