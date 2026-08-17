@@ -6,6 +6,7 @@ import {
   AT_HOME_BACKUP_SESSIONS_BLOCK_NAME,
   AT_HOME_BACKUP_SESSIONS_KEY,
   AT_HOME_BACKUP_SUBTITLE,
+  backupSessionDedupeKey,
   backupSessionTitle,
   cloneBackupRow,
   isAtHomeBackupClient,
@@ -191,8 +192,22 @@ export const startAtHomeBackupSession = createServerFn({ method: "POST" })
         })
         .select("id")
         .single();
-      if (error) throw error;
-      sessBlock = created;
+      if (error) {
+        if ((error as any).code === "23505") {
+          const { data: raced } = await db
+            .from("pl_blocks")
+            .select("id")
+            .eq("client_id", data.clientId)
+            .eq("source_template_block_key", AT_HOME_BACKUP_SESSIONS_KEY)
+            .maybeSingle();
+          if (raced) sessBlock = raced;
+          else throw error;
+        } else {
+          throw error;
+        }
+      } else {
+        sessBlock = created;
+      }
     }
     let { data: sessWeek } = await db
       .from("pl_weeks")
@@ -210,19 +225,20 @@ export const startAtHomeBackupSession = createServerFn({ method: "POST" })
       sessWeek = created;
     }
 
-    // 3) Reuse any existing session for the same definition+date. A retry
-    // after completion must reopen the historical session instead of creating
-    // a duplicate calendar item or second workout log.
-    const { data: existingDays } = await db
-      .from("pl_days")
-      .select("id")
-      .eq("week_id", sessWeek!.id)
-      .eq("source_day_id", data.definitionDayId)
-      .eq("scheduled_date", data.date)
-      .eq("archived", false)
-      .order("created_at", { ascending: true })
-      .limit(1);
-    const existing = (existingDays ?? [])[0] as any;
+    // 3) Reuse any existing session for the same definition+date. The
+    // database key also makes this race-safe across tabs and devices.
+    const sessionKey = backupSessionDedupeKey(data.definitionDayId, data.date);
+    const findExistingSession = async () => {
+      const { data: existingDays } = await db
+        .from("pl_days")
+        .select("id")
+        .eq("at_home_backup_session_key", sessionKey)
+        .eq("archived", false)
+        .order("created_at", { ascending: true })
+        .limit(1);
+      return (existingDays ?? [])[0] as any;
+    };
+    const existing = await findExistingSession();
     if (existing) {
       const { data: inst } = await db
         .from("pl_scheduled_workouts")
@@ -256,10 +272,27 @@ export const startAtHomeBackupSession = createServerFn({ method: "POST" })
         scheduled_date: data.date,
         schedule_source: "manual",
         source_day_id: data.definitionDayId,
+        at_home_backup_session_key: sessionKey,
       })
       .select("id")
       .single();
-    if (dayErr) throw dayErr;
+    if (dayErr) {
+      // A concurrent request won the unique-key race. Reuse that session
+      // rather than creating another calendar item or workout log.
+      if ((dayErr as any).code === "23505") {
+        const raced = await findExistingSession();
+        if (raced) {
+          const { data: inst } = await db
+            .from("pl_scheduled_workouts")
+            .select("id")
+            .eq("client_id", data.clientId)
+            .eq("source_day_id", raced.id)
+            .maybeSingle();
+          return { dayId: raced.id as string, scheduledWorkoutId: (inst?.id ?? null) as string | null, reused: true };
+        }
+      }
+      throw dayErr;
+    }
 
     // 5) Clone prescription rows (never any logged result).
     const { data: defRows } = await db

@@ -44,6 +44,7 @@ import { CardioAnalyticsSection } from "@/components/analytics/cardio-analytics-
 import { RecoveryPatternsCard } from "@/components/analytics/recovery-patterns-card";
 import { PredictedWindowCard } from "@/components/analytics/predicted-window-card";
 import { getClientAnalyticsSettings } from "@/lib/analytics/settings";
+import { isPrimaryProgramBlock } from "@/lib/at-home-backup";
 import { InfoTip } from "@/components/analytics/info-tip";
 import {
   ANALYTICS_COLORS,
@@ -111,11 +112,11 @@ export function ClientAnalyticsDashboard({
       const { data } = await supabase
         .from("pl_blocks")
         .select(
-          "id, name, status, start_date, end_date, weeks, sort_order, training_focus, prep_id, pl_preps(id, title, event_name, event_date)",
+          "id, name, status, start_date, end_date, weeks, sort_order, training_focus, prep_id, source_template_block_key, pl_preps(id, title, event_name, event_date)",
         )
         .eq("client_id", clientId)
         .order("sort_order", { ascending: true });
-      return (data ?? []).map(normalizeAnalyticsBlock);
+      return (data ?? []).filter(isPrimaryProgramBlock).map(normalizeAnalyticsBlock);
     },
   });
 

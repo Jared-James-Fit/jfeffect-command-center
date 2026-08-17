@@ -102,6 +102,24 @@ export function filterPrimaryProgramBlocks<
 }
 
 /**
+ * True for either implementation-only At-Home Backup block. Primary program
+ * selectors, editor lists, schedule repair, and block analytics must use this
+ * predicate rather than assuming client visibility or block status is enough.
+ */
+export function isAtHomeBackupReservedBlock(
+  block: { source_template_block_key?: string | null } | null | undefined,
+): boolean {
+  return isAtHomeBackupSessionBlock(block) || isAtHomeBackupDefinitionsBlock(block);
+}
+
+/** The explicit inclusion rule for canonical primary-program surfaces. */
+export function isPrimaryProgramBlock(
+  block: { source_template_block_key?: string | null } | null | undefined,
+): boolean {
+  return !isAtHomeBackupReservedBlock(block);
+}
+
+/**
  * Idempotency key for "this definition, started on this date".
  * Used to reuse an existing, not-yet-completed session instead of
  * creating a duplicate when the client double-taps Start.

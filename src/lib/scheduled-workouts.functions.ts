@@ -2,6 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { validateReorderPayload } from "@/lib/schedule-mutation-guards";
+import { isPrimaryProgramBlock } from "@/lib/at-home-backup";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Manual Workout Scheduling — server functions for pl_scheduled_workouts.
@@ -84,12 +85,15 @@ async function assertSourceDayAssignedToClient(
 
   const { data: block } = await supabase
     .from("pl_blocks")
-    .select("id, client_id, status, name")
+    .select("id, client_id, status, name, source_template_block_key")
     .eq("id", week.block_id)
     .maybeSingle();
   if (!block) throw new Error("Workout block missing.");
   if (block.client_id !== clientId) {
     throw new Error("That workout is not assigned to this client.");
+  }
+  if (!isPrimaryProgramBlock(block)) {
+    throw new Error("At-home backup sessions are managed from the dedicated backup workout flow.");
   }
   return { day, week, block };
 }
@@ -514,13 +518,14 @@ export const getSchedulableWorkouts = createServerFn({ method: "GET" })
 
     let blocksQ = context.supabase
       .from("pl_blocks")
-      .select("id, name, status, start_date, end_date, archived_at, template_id, program_name")
+      .select("id, name, status, start_date, end_date, archived_at, template_id, program_name, source_template_block_key")
       .eq("client_id", data.clientId);
     if (!showArchived) blocksQ = blocksQ.is("archived_at", null);
     const { data: blocks, error: bErr } = await blocksQ;
     if (bErr) throw new Error(bErr.message);
 
-    const blockIds = (blocks ?? []).map((b: any) => b.id);
+    const primaryBlocks = (blocks ?? []).filter(isPrimaryProgramBlock);
+    const blockIds = primaryBlocks.map((b: any) => b.id);
     if (!blockIds.length) return { blocks: [] };
 
     const { data: weeks } = await context.supabase
@@ -551,7 +556,7 @@ export const getSchedulableWorkouts = createServerFn({ method: "GET" })
       daysByBlock.set(w.block_id, arr);
     }
 
-    const enriched = (blocks ?? []).map((b: any) => ({
+    const enriched = primaryBlocks.map((b: any) => ({
       id: b.id,
       name: b.name,
       program_name: b.program_name,

@@ -2,6 +2,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { epley1RM } from "@/lib/pl-programs";
 import { todayLocalISO } from "@/lib/today";
 import { pickCurrentBlock } from "@/lib/block-dates";
+import { isPrimaryProgramBlock } from "@/lib/at-home-backup";
 
 const sb = supabase as any;
 
@@ -97,7 +98,7 @@ export async function getCoachIntel(opts?: { coachId?: string | null }): Promise
   const { data: preps = [] } = await sb.from("pl_preps").select("*").in("client_id", clientIds).in("status", ["Active", "Planned"]);
   const { data: blocks = [] } = await sb
     .from("pl_blocks")
-    .select("id, client_id, prep_id, name, status, weeks, updated_at, start_date, end_date, sort_order, archived, created_at")
+    .select("id, client_id, prep_id, name, status, weeks, updated_at, start_date, end_date, sort_order, archived, created_at, source_template_block_key")
     .in("client_id", clientIds)
     .in("status", ["Active", "Draft"]);
 
@@ -105,7 +106,7 @@ export async function getCoachIntel(opts?: { coachId?: string | null }): Promise
   // `pickCurrentBlock` for tiebreakers (earliest start_date, then sort_order).
   const currentBlockByClient = new Map<string, any>();
   const blocksByClient = new Map<string, any[]>();
-  for (const b of blocks as any[]) {
+  for (const b of (blocks as any[]).filter(isPrimaryProgramBlock)) {
     const list = blocksByClient.get(b.client_id) ?? [];
     list.push(b);
     blocksByClient.set(b.client_id, list);

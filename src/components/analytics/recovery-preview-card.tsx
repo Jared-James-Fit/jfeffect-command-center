@@ -21,6 +21,7 @@ import {
   type SleepSample,
 } from "@/lib/analytics/readiness-factors";
 import { pickCurrentBlock } from "@/lib/block-dates";
+import { isPrimaryProgramBlock } from "@/lib/at-home-backup";
 import {
   prescribedFor,
   isCompletedCardio,
@@ -123,10 +124,10 @@ export function RecoveryPreviewCard({ clientId }: Props) {
       // Blocks for "current block avg"
       const { data: blocks } = await (supabase as any)
         .from("pl_blocks")
-        .select("id, start_date, end_date, status, archived, sort_order, created_at")
+        .select("id, start_date, end_date, status, archived, sort_order, created_at, source_template_block_key")
         .eq("client_id", clientId)
         .order("sort_order", { ascending: true });
-      const curBlock = pickCurrentBlock((blocks ?? []) as any[]);
+      const curBlock = pickCurrentBlock((blocks ?? []).filter(isPrimaryProgramBlock) as any[]);
 
       // Series of readiness scores
       const series = await fetchRecoveryScoreSeries(

@@ -29,6 +29,7 @@ import {
 } from "@/lib/analytics/blocks";
 import { PowerliftingExposureSection } from "@/components/analytics/powerlifting-exposure-section";
 import { useEffect } from "react";
+import { isPrimaryProgramBlock } from "@/lib/at-home-backup";
 
 const analyticsSearchSchema = z.object({
   filter: fallback(z.string(), "").default(""),
@@ -60,11 +61,11 @@ function AnalyticsPage() {
       const { data } = await supabase
         .from("pl_blocks")
         .select(
-          "id, name, status, start_date, end_date, weeks, sort_order, training_focus, prep_id, pl_preps(id, title, event_name, event_date)",
+          "id, name, status, start_date, end_date, weeks, sort_order, training_focus, prep_id, source_template_block_key, pl_preps(id, title, event_name, event_date)",
         )
         .eq("client_id", clientId)
         .order("sort_order", { ascending: true });
-      return (data ?? []).map(normalizeAnalyticsBlock);
+      return (data ?? []).filter(isPrimaryProgramBlock).map(normalizeAnalyticsBlock);
     },
   });
   const resolvedCurrentBlockId = useMemo(

@@ -1,0 +1,22 @@
+-- Ashley At-Home Backup: race-safe session idempotency.
+-- Normal programmed days leave this nullable and are unaffected.
+-- The source-key index also ensures one reserved definition/session container
+-- per client when two Start requests arrive concurrently.
+
+ALTER TABLE public.pl_days
+  ADD COLUMN IF NOT EXISTS at_home_backup_session_key text;
+
+CREATE UNIQUE INDEX IF NOT EXISTS pl_days_at_home_backup_session_key_unique
+  ON public.pl_days (at_home_backup_session_key)
+  WHERE at_home_backup_session_key IS NOT NULL
+    AND archived = false;
+
+CREATE UNIQUE INDEX IF NOT EXISTS pl_blocks_at_home_backup_container_unique
+  ON public.pl_blocks (client_id, source_template_block_key)
+  WHERE source_template_block_key IN (
+    'at_home_backup_definitions_v1',
+    'at_home_backup_sessions_v1'
+  );
+
+COMMENT ON COLUMN public.pl_days.at_home_backup_session_key IS
+  'Reserved for At-Home Backup instantiated sessions: definition-day UUID plus local scheduled date. Prevents concurrent duplicate starts.';
