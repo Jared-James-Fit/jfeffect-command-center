@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, lazy, Suspense } from "react";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useServerFn } from "@tanstack/react-start";
 import {
   addDays, addWeeks, format, isSameDay, isSameMonth, startOfWeek,
   addMonths, startOfMonth, endOfMonth, endOfWeek, eachDayOfInterval,
@@ -62,6 +63,11 @@ const TrainingAnalyticsPreviewCard = lazy(() =>
 );
 import { RecoveryPreviewCard } from "@/components/analytics/recovery-preview-card";
 import { AtHomeBackupCard } from "@/components/workouts/at-home-backup-card";
+import {
+  cancelAtHomeBackupSession,
+  getAtHomeBackupSessionState,
+  removeEmptyAtHomeBackupSession,
+} from "@/lib/at-home-backup.functions";
 import { AT_HOME_BACKUP_BADGE, isAtHomeBackupClient, isAtHomeBackupSessionBlock } from "@/lib/at-home-backup";
 
 type Mode = "self" | "coach";
@@ -466,14 +472,6 @@ export function WorkoutsExperience({
           />
         )}
 
-        {isAtHomeBackupClient(clientId) && (
-          <AtHomeBackupCard
-            clientId={clientId}
-            readonly={mode === "coach"}
-            hasPrimaryWorkoutToday={todayPrimaryItems.length > 0}
-          />
-        )}
-
         <Tabs defaultValue="calendar" className="space-y-4">
           <TabsList className="grid w-full grid-cols-2 sm:w-auto sm:inline-flex">
             <TabsTrigger value="calendar" className="gap-1">
@@ -539,6 +537,7 @@ export function WorkoutsExperience({
                   readonly={mode === "coach"}
                   clientId={clientId}
                   mode={mode}
+                  backupEnabled={isAtHomeBackupClient(clientId)}
                 />
               </>
             )}
@@ -850,43 +849,45 @@ function MonthGrid({
 /* ---------------------------------------------------------------------- */
 
 function SelectedDayList({
-  items, date, readonly, clientId, mode,
+  items, date, readonly, clientId, mode, backupEnabled,
 }: {
   items: WorkoutItem[];
   date: Date;
   readonly: boolean;
   clientId: string;
   mode: Mode;
+  backupEnabled: boolean;
 }) {
-  // Render one card per scheduled workout on this date so nothing is
-  // dropped when a client stacks two workouts onto the same day (e.g.
-  // moves a mid-week session onto Friday where a workout already exists).
-  if (items.length === 0) {
-    return (
-      <SelectedDayCard
-        item={null}
-        date={date}
-        readonly={readonly}
-        clientId={clientId}
-        mode={mode}
-      />
-    );
-  }
+  // A backup is an optional, secondary session. Primary cards always render
+  // first, and the chooser is available only while no backup exists that day.
+  const primaryItems = items.filter((item) => !isAtHomeBackupSessionBlock(item.block));
+  const backupItems = items.filter((item) => isAtHomeBackupSessionBlock(item.block));
+  const card = (item: WorkoutItem, index: number) => (
+    <SelectedDayCard
+      key={`${item.scheduledWorkoutId ?? "legacy"}:${item.day?.id ?? `idx-${index}`}`}
+      item={item}
+      date={date}
+      readonly={readonly}
+      clientId={clientId}
+      mode={mode}
+    />
+  );
+
   return (
     <div className="space-y-3">
-      {items.map((it) => (
-        <SelectedDayCard
-          // Stable identity: prefer the scheduled-instance id so two stacked
-          // instances of the same source day don't collide on one key
-          // (duplicate keys used to remount cards and reset preview state).
-          key={`${it.scheduledWorkoutId ?? "legacy"}:${it.day?.id ?? `idx-${items.indexOf(it)}`}`}
-          item={it}
+      {primaryItems.length === 0 && backupItems.length === 0 && (
+        <SelectedDayCard item={null} date={date} readonly={readonly} clientId={clientId} mode={mode} />
+      )}
+      {primaryItems.map(card)}
+      {backupEnabled && mode === "self" && backupItems.length === 0 && (
+        <AtHomeBackupCard
+          clientId={clientId}
           date={date}
           readonly={readonly}
-          clientId={clientId}
-          mode={mode}
+          hasPrimaryWorkout={primaryItems.length > 0}
         />
-      ))}
+      )}
+      {backupItems.map((item, index) => card(item, primaryItems.length + index))}
     </div>
   );
 }
@@ -919,9 +920,60 @@ function SelectedDayCard({
   const [resetOpen, setResetOpen] = useState(false);
   const [resetting, setResetting] = useState(false);
   const [reviewOpen, setReviewOpen] = useState(false);
+  const [backupAction, setBackupAction] = useState<"remove" | "cancel" | null>(null);
   const qc = useQueryClient();
+  const fetchBackupState = useServerFn(getAtHomeBackupSessionState);
+  const removeBackup = useServerFn(removeEmptyAtHomeBackupSession);
+  const cancelBackup = useServerFn(cancelAtHomeBackupSession);
 
   const dayId = item?.day?.id;
+  const isBackupSession = !!item && isAtHomeBackupSessionBlock(item.block);
+  const isRealClient = mode === "self" && !isImpersonating;
+  const canManageBackupLifecycle = isBackupSession && isRealClient && !readonly;
+  const { data: backupState } = useQuery({
+    queryKey: ["at-home-backup-session-state", clientId, dayId],
+    enabled: !!dayId && isBackupSession,
+    staleTime: 15_000,
+    queryFn: () => fetchBackupState({ data: { clientId, dayId: dayId! } }),
+  });
+  const [backupActionPending, setBackupActionPending] = useState(false);
+
+  const invalidateBackupSurfaces = () => {
+    qc.invalidateQueries({ queryKey: ["my-workouts", clientId] });
+    qc.invalidateQueries({ queryKey: ["at-home-backup-sessions", clientId] });
+    qc.invalidateQueries({ queryKey: ["at-home-backup-session-state", clientId, dayId] });
+    qc.invalidateQueries({ queryKey: ["workouts-priority-rows", clientId] });
+    qc.invalidateQueries({ queryKey: ["scheduled-workouts", clientId] });
+    qc.invalidateQueries({ predicate: (q) => {
+      const key = q.queryKey?.[0];
+      return typeof key === "string" && (
+        key.startsWith("training-analytics") ||
+        key.startsWith("workout-") ||
+        key.startsWith("pl-")
+      );
+    } });
+  };
+
+  const confirmBackupAction = async () => {
+    if (!backupAction || !dayId) return;
+    setBackupActionPending(true);
+    try {
+      if (backupAction === "remove") {
+        await removeBackup({ data: { clientId, dayId } });
+        toast.success("Backup removed");
+      } else {
+        await cancelBackup({ data: { clientId, dayId } });
+        toast.success("Backup cancelled — your logged data was kept");
+      }
+      invalidateBackupSurfaces();
+      setBackupAction(null);
+    } catch (error: any) {
+      toast.error(error?.message || "Could not update this backup workout");
+    } finally {
+      setBackupActionPending(false);
+    }
+  };
+
   const isCompleted =
     item ? (() => {
       const s = getWorkoutStatus(item).status;
@@ -1104,22 +1156,55 @@ function SelectedDayCard({
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
-                <DropdownMenuItem onSelect={() => setMoveOpen(true)}>
-                  <Move className="mr-2 h-4 w-4" /> Move workout
-                </DropdownMenuItem>
-                <DropdownMenuItem onSelect={() => setStatusOpen(true)}>
-                  <CircleDot className="mr-2 h-4 w-4" /> Change status
-                </DropdownMenuItem>
+                {!isCompleted && (
+                  <DropdownMenuItem onSelect={() => setMoveOpen(true)}>
+                    <Move className="mr-2 h-4 w-4" /> Move workout
+                  </DropdownMenuItem>
+                )}
+                {canManageBackupLifecycle && backupState?.lifecycle === "in_progress" && (
+                  <DropdownMenuItem asChild>
+                    <Link
+                      to="/portal/workouts/$dayId"
+                      params={{ dayId: item.day.id }}
+                      search={{ ...(item.scheduledWorkoutId ? { instance: item.scheduledWorkoutId } : {}) } as any}
+                    >
+                      <Play className="mr-2 h-4 w-4" /> Resume workout
+                    </Link>
+                  </DropdownMenuItem>
+                )}
+                {canManageBackupLifecycle && backupState?.lifecycle === "empty" && (
+                  <DropdownMenuItem
+                    className="text-destructive focus:text-destructive"
+                    onSelect={(event) => {
+                      event.preventDefault();
+                      setBackupAction("remove");
+                    }}
+                  >
+                    <RotateCcw className="mr-2 h-4 w-4" /> Remove Backup
+                  </DropdownMenuItem>
+                )}
+                {canManageBackupLifecycle && backupState?.lifecycle === "in_progress" && (
+                  <DropdownMenuItem
+                    className="text-destructive focus:text-destructive"
+                    onSelect={(event) => {
+                      event.preventDefault();
+                      setBackupAction("cancel");
+                    }}
+                  >
+                    <RotateCcw className="mr-2 h-4 w-4" /> Cancel Backup
+                  </DropdownMenuItem>
+                )}
+                {canEditWorkout && (
+                  <DropdownMenuItem onSelect={() => setStatusOpen(true)}>
+                    <CircleDot className="mr-2 h-4 w-4" /> Change status
+                  </DropdownMenuItem>
+                )}
                 {isCompleted && (
                   <DropdownMenuItem onSelect={() => setReviewOpen(true)}>
                     {hasReview ? (
-                      <>
-                        <MessageSquare className="mr-2 h-4 w-4" /> View workout review
-                      </>
+                      <><MessageSquare className="mr-2 h-4 w-4" /> View workout review</>
                     ) : (
-                      <>
-                        <MessageSquare className="mr-2 h-4 w-4" /> Add workout review
-                      </>
+                      <><MessageSquare className="mr-2 h-4 w-4" /> Add workout review</>
                     )}
                   </DropdownMenuItem>
                 )}
@@ -1134,15 +1219,17 @@ function SelectedDayCard({
                     </Link>
                   </DropdownMenuItem>
                 )}
-                <DropdownMenuItem
-                  onSelect={(e) => {
-                    e.preventDefault();
-                    setResetOpen(true);
-                  }}
-                  className="text-destructive focus:text-destructive"
-                >
-                  <RotateCcw className="mr-2 h-4 w-4" /> Reset workout inputs
-                </DropdownMenuItem>
+                {canEditWorkout && (
+                  <DropdownMenuItem
+                    onSelect={(e) => {
+                      e.preventDefault();
+                      setResetOpen(true);
+                    }}
+                    className="text-destructive focus:text-destructive"
+                  >
+                    <RotateCcw className="mr-2 h-4 w-4" /> Reset workout inputs
+                  </DropdownMenuItem>
+                )}
               </DropdownMenuContent>
             </DropdownMenu>
           )}
@@ -1266,6 +1353,36 @@ function SelectedDayCard({
           }
         />
       )}
+
+      <AlertDialog open={backupAction !== null} onOpenChange={(open) => !backupActionPending && !open && setBackupAction(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {backupAction === "remove" ? "Remove this backup workout?" : "Cancel this backup workout?"}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {backupAction === "remove"
+                ? "Nothing has been logged yet, so this workout can be removed."
+                : "Your logged workout data will be kept, but this workout will no longer be active for today."}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={backupActionPending}>
+              {backupAction === "remove" ? "Keep Workout" : "Keep Training"}
+            </AlertDialogCancel>
+            <AlertDialogAction
+              disabled={backupActionPending}
+              onClick={(event) => {
+                event.preventDefault();
+                void confirmBackupAction();
+              }}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {backupActionPending ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Updating…</> : backupAction === "remove" ? "Remove" : "Cancel Workout"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <AlertDialog open={resetOpen} onOpenChange={(o) => !resetting && setResetOpen(o)}>
         <AlertDialogContent>

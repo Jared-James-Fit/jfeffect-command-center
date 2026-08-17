@@ -93,8 +93,11 @@ export function AtHomeBackupAdminPanel({ clientId }: { clientId: string }) {
                   <span className="truncate">{s.title}</span>
                   <span className="flex shrink-0 items-center gap-2 text-xs text-muted-foreground">
                     {s.date ?? "—"}
-                    <Badge variant={s.completedAt ? "default" : "outline"} className="text-[10px]">
-                      {s.completedAt ? "Completed" : "Open"}
+                    <Badge
+                      variant={s.lifecycle === "completed" ? "default" : "outline"}
+                      className="text-[10px]"
+                    >
+                      {s.lifecycle === "cancelled" ? "Cancelled" : s.completedAt ? "Completed" : "Open"}
                     </Badge>
                   </span>
                 </Link>

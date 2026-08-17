@@ -1,6 +1,6 @@
 import { supabase } from "@/integrations/supabase/client";
 import { mergeScheduledInstances } from "@/lib/scheduled-instances-merge";
-import { filterPrimaryProgramBlocks } from "@/lib/at-home-backup";
+import { filterPrimaryProgramBlocks, isAtHomeBackupSessionBlock } from "@/lib/at-home-backup";
 import { normalizeMuscle } from "@/lib/analytics/muscle-map";
 
 // ---------- Types ----------
@@ -1518,8 +1518,18 @@ export async function getClientWorkouts(
   if (!blockIds.length) return [];
   const { data: weeks } = await sb.from("pl_weeks").select("*").in("block_id", blockIds).order("week_index");
   const weekIds = (weeks ?? []).map((w: any) => w.id);
-  const { data: days } = weekIds.length ? await sb.from("pl_days").select("*").in("week_id", weekIds).order("day_index") : { data: [] };
-  const dayIds = (days ?? []).map((d: any) => d.id);
+  const { data: days } = weekIds.length
+    ? await sb.from("pl_days").select("*").in("week_id", weekIds).order("day_index")
+    : { data: [] };
+  // Only an archived at-home session is removed from active workout selection.
+  // Historical primary days retain their established archive behavior.
+  const blockById = new Map(visibleBlocks.map((block: any) => [block.id, block]));
+  const activeDays = (days ?? []).filter((day: any) => {
+    const week = (weeks ?? []).find((candidate: any) => candidate.id === day.week_id);
+    const block = week ? blockById.get(week.block_id) : null;
+    return !isAtHomeBackupSessionBlock(block) || !day.archived;
+  });
+  const dayIds = activeDays.map((d: any) => d.id);
   // Fire the two day-dependent reads (completions + exercise rows) in
   // parallel — they don't depend on each other and previously added a
   // serial round-trip each, which on mobile turned the workouts list
@@ -1573,7 +1583,7 @@ export async function getClientWorkouts(
   const blockOrder = new Map<string, number>();
   visibleBlocks.forEach((b: any, i: number) => blockOrder.set(b.id, i));
   const daysByWeek = new Map<string, any[]>();
-  for (const d of days ?? []) {
+  for (const d of activeDays) {
     const list = daysByWeek.get(d.week_id) ?? [];
     list.push(d);
     daysByWeek.set(d.week_id, list);

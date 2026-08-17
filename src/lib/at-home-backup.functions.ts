@@ -9,6 +9,7 @@ import {
   backupSessionDedupeKey,
   backupSessionTitle,
   cloneBackupRow,
+  deriveAtHomeBackupLifecycle,
   isAtHomeBackupClient,
   summarizeBackupDefinition,
 } from "@/lib/at-home-backup";
@@ -67,6 +68,100 @@ async function loadDefinitionsBlock(db: any, clientId: string) {
     .eq("source_template_block_key", AT_HOME_BACKUP_DEFINITIONS_KEY)
     .maybeSingle();
   return block ?? null;
+}
+
+async function loadBackupSessionSnapshot(db: any, clientId: string, dayId: string) {
+  const { data: day } = await db
+    .from("pl_days")
+    .select("id, week_id, title, scheduled_date, archived, archived_at")
+    .eq("id", dayId)
+    .maybeSingle();
+  if (!day) throw new Error("Backup workout not found.");
+
+  const { data: week } = await db
+    .from("pl_weeks")
+    .select("block_id")
+    .eq("id", day.week_id)
+    .maybeSingle();
+  if (!week) throw new Error("Backup workout week is missing.");
+
+  const { data: block } = await db
+    .from("pl_blocks")
+    .select("id, client_id, source_template_block_key")
+    .eq("id", week.block_id)
+    .maybeSingle();
+  if (
+    !block ||
+    block.client_id !== clientId ||
+    block.source_template_block_key !== AT_HOME_BACKUP_SESSIONS_KEY
+  ) {
+    throw new Error("This workout is not an active at-home backup session.");
+  }
+
+  const { data: instance } = await db
+    .from("pl_scheduled_workouts")
+    .select("id")
+    .eq("client_id", clientId)
+    .eq("source_day_id", day.id)
+    .maybeSingle();
+
+  // A session day is unique to this backup instance. Scope by client + day so
+  // a legacy/null instance link can never make a meaningful backup appear empty.
+  const { data: completion } = await db
+    .from("pl_day_completions")
+    .select("id, completed_at, client_notes, actual_duration_min, logged_sets_count")
+    .eq("client_id", clientId)
+    .eq("day_id", day.id)
+    .maybeSingle();
+
+  const { data: rows } = await db
+    .from("pl_exercise_rows")
+    .select("id")
+    .eq("day_id", day.id);
+  const rowIds = (rows ?? []).map((row: any) => row.id);
+  const { data: results } = rowIds.length
+    ? await db
+        .from("pl_row_results")
+        .select("actual_load, actual_reps, actual_rpe, actual_rir, completed_duration_seconds")
+        .eq("client_id", clientId)
+        .in("row_id", rowIds)
+    : { data: [] as any[] };
+  const { data: notes } = rowIds.length
+    ? await db
+        .from("pl_exercise_notes")
+        .select("id")
+        .eq("client_id", clientId)
+        .eq("day_id", day.id)
+        .limit(1)
+    : { data: [] as any[] };
+  const { data: feedback } = completion?.id
+    ? await db
+        .from("pl_workout_feedback")
+        .select("id")
+        .eq("completion_id", completion.id)
+        .limit(1)
+    : { data: [] as any[] };
+
+  const hasMeaningfulResult = (results ?? []).some((result: any) => {
+    const positive = (value: unknown) => value != null && Number.isFinite(Number(value)) && Number(value) > 0;
+    return positive(result.actual_load) || positive(result.actual_reps) ||
+      positive(result.actual_rpe) || positive(result.actual_rir) ||
+      positive(result.completed_duration_seconds);
+  });
+  const hasMeaningfulCompletion = !!(
+    completion?.client_notes?.trim?.() ||
+    Number(completion?.actual_duration_min ?? 0) > 0 ||
+    Number(completion?.logged_sets_count ?? 0) > 0 ||
+    (notes ?? []).length ||
+    (feedback ?? []).length
+  );
+  const lifecycle = deriveAtHomeBackupLifecycle({
+    archived: !!day.archived,
+    completedAt: completion?.completed_at ?? null,
+    hasMeaningfulData: hasMeaningfulResult || hasMeaningfulCompletion,
+  });
+
+  return { day, instance: instance ?? null, completion: completion ?? null, lifecycle };
 }
 
 /** List the coach-authored at-home backup templates for a client. */
@@ -330,6 +425,98 @@ export const startAtHomeBackupSession = createServerFn({ method: "POST" })
     return { dayId: newDay!.id as string, scheduledWorkoutId: instance!.id as string, reused: false };
   });
 
+/** Client-safe state for an instantiated backup. The server remains authoritative. */
+export const getAtHomeBackupSessionState = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) =>
+    z.object({ clientId: z.string().uuid(), dayId: z.string().uuid() }).parse(d),
+  )
+  .handler(async ({ data, context }) => {
+    await authorize(context as any, data.clientId);
+    const snapshot = await loadBackupSessionSnapshot(await admin(), data.clientId, data.dayId);
+    return {
+      lifecycle: snapshot.lifecycle,
+      scheduledWorkoutId: snapshot.instance?.id ?? null,
+      title: snapshot.day.title as string | null,
+    };
+  });
+
+/** Remove an unlogged disposable backup session without touching source definitions. */
+export const removeEmptyAtHomeBackupSession = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) =>
+    z.object({ clientId: z.string().uuid(), dayId: z.string().uuid() }).parse(d),
+  )
+  .handler(async ({ data, context }) => {
+    await authorize(context as any, data.clientId);
+    const db = await admin();
+    const snapshot = await loadBackupSessionSnapshot(db, data.clientId, data.dayId);
+    if (snapshot.lifecycle !== "empty") {
+      throw new Error("This backup has training data. Cancel it instead to keep the log.");
+    }
+
+    // Empty completion shells are disposable, but result/note/feedback data is
+    // refused above and therefore can never be deleted by this client action.
+    const { error: completionError } = await db
+      .from("pl_day_completions")
+      .delete()
+      .eq("client_id", data.clientId)
+      .eq("day_id", snapshot.day.id);
+    if (completionError) throw completionError;
+    if (snapshot.instance?.id) {
+      const { error: instanceError } = await db
+        .from("pl_scheduled_workouts")
+        .delete()
+        .eq("id", snapshot.instance.id)
+        .eq("client_id", data.clientId);
+      if (instanceError) throw instanceError;
+    }
+    const { error: dayError } = await db
+      .from("pl_days")
+      .delete()
+      .eq("id", snapshot.day.id);
+    if (dayError) throw dayError;
+    return { ok: true as const, lifecycle: "removed" as const };
+  });
+
+/** Archive a logged backup so its history remains while it stops being active today. */
+export const cancelAtHomeBackupSession = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) =>
+    z.object({ clientId: z.string().uuid(), dayId: z.string().uuid() }).parse(d),
+  )
+  .handler(async ({ data, context }) => {
+    await authorize(context as any, data.clientId);
+    const db = await admin();
+    const snapshot = await loadBackupSessionSnapshot(db, data.clientId, data.dayId);
+    if (snapshot.lifecycle === "completed") {
+      throw new Error("Completed backup workouts are historical training and cannot be cancelled here.");
+    }
+    if (snapshot.lifecycle !== "in_progress") {
+      throw new Error("Only a backup with logged training data can be cancelled.");
+    }
+
+    const { error: archiveError } = await db
+      .from("pl_days")
+      .update({
+        archived: true,
+        archived_at: new Date().toISOString(),
+        archived_by: context.userId,
+      })
+      .eq("id", snapshot.day.id)
+      .eq("archived", false);
+    if (archiveError) throw archiveError;
+    if (snapshot.instance?.id) {
+      const { error: instanceError } = await db
+        .from("pl_scheduled_workouts")
+        .delete()
+        .eq("id", snapshot.instance.id)
+        .eq("client_id", data.clientId);
+      if (instanceError) throw instanceError;
+    }
+    return { ok: true as const, lifecycle: "cancelled" as const };
+  });
+
 /** Coach view: recent instantiated backup sessions with completion state. */
 export const listAtHomeBackupSessions = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
@@ -354,9 +541,8 @@ export const listAtHomeBackupSessions = createServerFn({ method: "GET" })
 
     const { data: days } = await db
       .from("pl_days")
-      .select("id, title, scheduled_date")
+      .select("id, title, scheduled_date, archived, archived_at")
       .in("week_id", weekIds)
-      .eq("archived", false)
       .order("scheduled_date", { ascending: false })
       .limit(data.limit ?? 10);
     const dayIds = (days ?? []).map((d: any) => d.id);
@@ -378,6 +564,12 @@ export const listAtHomeBackupSessions = createServerFn({ method: "GET" })
         title: d.title as string,
         date: (d.scheduled_date ?? null) as string | null,
         completedAt: doneById.get(d.id) ?? null,
+        lifecycle: deriveAtHomeBackupLifecycle({
+          archived: !!d.archived,
+          completedAt: doneById.get(d.id) ?? null,
+          hasMeaningfulData: false,
+        }),
+        cancelledAt: (d.archived_at ?? null) as string | null,
       })),
     };
   });

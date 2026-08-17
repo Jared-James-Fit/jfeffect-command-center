@@ -2,11 +2,9 @@ import { useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { Home, Loader2, Play } from "lucide-react";
+import { ChevronLeft, Home, Loader2, Play } from "lucide-react";
 import { toast } from "sonner";
-import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
@@ -14,33 +12,35 @@ import {
 import {
   Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle,
 } from "@/components/ui/sheet";
-import { toLocalISO, localStartOfToday } from "@/lib/today";
 import {
   listAtHomeBackupDefinitions,
   startAtHomeBackupSession,
 } from "@/lib/at-home-backup.functions";
 import {
-  AT_HOME_BACKUP_BADGE,
   AT_HOME_BACKUP_CONFIRM_ACCEPT,
   AT_HOME_BACKUP_CONFIRM_BODY,
   AT_HOME_BACKUP_CONFIRM_CANCEL,
   AT_HOME_BACKUP_CONFIRM_TITLE,
   shouldConfirmBackupStart,
 } from "@/lib/at-home-backup";
+import { toLocalISO } from "@/lib/today";
 
 /**
- * Client-facing entry point for the At-Home Backup workouts.
- * Additive: renders nothing when the client has no definitions configured.
+ * Contextual client entry point for an optional At-Home Backup. It deliberately
+ * renders after the selected primary/rest card rather than competing with the
+ * primary program above Calendar and Block View.
  */
 export function AtHomeBackupCard({
   clientId,
+  date,
   readonly = false,
-  hasPrimaryWorkoutToday = false,
+  hasPrimaryWorkout = false,
 }: {
   clientId: string;
+  date: Date;
   readonly?: boolean;
-  /** A backup never replaces this workout; it only controls the confirmation copy. */
-  hasPrimaryWorkoutToday?: boolean;
+  /** A backup never replaces this workout; this controls confirmation copy only. */
+  hasPrimaryWorkout?: boolean;
 }) {
   const navigate = useNavigate();
   const qc = useQueryClient();
@@ -49,6 +49,7 @@ export function AtHomeBackupCard({
 
   const fetchDefinitions = useServerFn(listAtHomeBackupDefinitions);
   const startSession = useServerFn(startAtHomeBackupSession);
+  const dateISO = toLocalISO(date);
 
   const { data, isLoading } = useQuery({
     queryKey: ["at-home-backup-definitions", clientId],
@@ -57,26 +58,40 @@ export function AtHomeBackupCard({
   });
   const definitions = data?.definitions ?? [];
 
+  const refreshClientWorkoutSurfaces = () => {
+    qc.invalidateQueries({ queryKey: ["my-workouts", clientId] });
+    qc.invalidateQueries({ queryKey: ["at-home-backup-sessions", clientId] });
+    qc.invalidateQueries({ queryKey: ["workouts-priority-rows", clientId] });
+    qc.invalidateQueries({ queryKey: ["scheduled-workouts", clientId] });
+    qc.invalidateQueries({ predicate: (q) => {
+      const key = q.queryKey?.[0];
+      return typeof key === "string" && (
+        key.startsWith("training-analytics") ||
+        key.startsWith("workout-") ||
+        key.startsWith("pl-")
+      );
+    } });
+  };
+
   const start = useMutation({
     mutationFn: (definitionDayId: string) =>
-      startSession({
-        data: { clientId, definitionDayId, date: toLocalISO(localStartOfToday()) },
-      }),
+      startSession({ data: { clientId, definitionDayId, date: dateISO } }),
     onSuccess: (res: any) => {
-      qc.invalidateQueries({ queryKey: ["my-workouts", clientId] });
-      qc.invalidateQueries({ queryKey: ["at-home-backup-sessions", clientId] });
+      refreshClientWorkoutSurfaces();
       setOpen(false);
       navigate({
         to: "/portal/workouts/$dayId",
         params: { dayId: res.dayId },
-        search: res.scheduledWorkoutId ? ({ instance: res.scheduledWorkoutId } as any) : ({} as any),
+        search: res.scheduledWorkoutId
+          ? ({ instance: res.scheduledWorkoutId } as any)
+          : ({} as any),
       });
     },
     onError: (e: any) => toast.error(e?.message || "Could not start the backup workout"),
   });
 
   const requestStart = (definitionDayId: string) => {
-    if (shouldConfirmBackupStart(hasPrimaryWorkoutToday)) {
+    if (shouldConfirmBackupStart(hasPrimaryWorkout)) {
       setPendingDefinitionId(definitionDayId);
       return;
     }
@@ -85,73 +100,71 @@ export function AtHomeBackupCard({
 
   if (!isLoading && definitions.length === 0) return null;
 
+  const prompt = hasPrimaryWorkout
+    ? { eyebrow: "Can't make it to the gym?", action: "Use At-Home Backup" }
+    : { eyebrow: "Want to train anyway?", action: "Choose At-Home Workout" };
+
   return (
     <>
-      <Card className="p-4">
-        <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0">
-            <div className="text-xs font-semibold text-muted-foreground">Can't make it to the gym?</div>
-            <div className="mt-1 flex items-center gap-2">
-              <Home className="h-4 w-4 text-muted-foreground" />
-              <span className="text-sm font-bold">At-Home Backup</span>
-              <Badge variant="outline" className="text-[10px]">Optional</Badge>
-            </div>
-            <p className="mt-1 text-xs text-muted-foreground">Use a simple dumbbell workout instead.</p>
+      <div className="mt-3 flex items-center justify-between gap-3 rounded-lg border border-dashed bg-muted/25 px-3 py-2.5">
+        <div className="min-w-0">
+          <div className="text-xs font-medium text-muted-foreground">{prompt.eyebrow}</div>
+          <div className="mt-0.5 flex items-center gap-1.5 text-sm font-semibold">
+            <Home className="h-3.5 w-3.5 text-muted-foreground" />
+            <span>At-Home Backup</span>
           </div>
-          <Button
-            size="sm"
-            variant="outline"
-            className="shrink-0"
-            disabled={readonly || isLoading}
-            onClick={() => setOpen(true)}
-          >
-            {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Choose Workout"}
-          </Button>
         </div>
-      </Card>
+        <Button
+          size="sm"
+          variant="outline"
+          className="shrink-0"
+          disabled={readonly || isLoading}
+          onClick={() => setOpen(true)}
+        >
+          {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <>{prompt.action}<span aria-hidden> ›</span></>}
+        </Button>
+      </div>
 
       <Sheet open={open} onOpenChange={setOpen}>
-        <SheetContent side="bottom" className="max-h-[88dvh] overflow-y-auto">
-          <SheetHeader className="pl-0 text-left">
-            <SheetTitle>At-Home Backup</SheetTitle>
-            <SheetDescription>Choose a full-body backup session for today.</SheetDescription>
-          </SheetHeader>
-          <div className="mt-4 space-y-3 pb-8">
+        <SheetContent side="bottom" className="max-h-[88dvh] overflow-y-auto px-4 pb-6 sm:mx-auto sm:max-w-xl sm:rounded-t-xl">
+          <div className="flex items-start gap-3 pr-9">
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="mt-0.5 h-8 shrink-0 px-2"
+              onClick={() => setOpen(false)}
+            >
+              <ChevronLeft className="mr-0.5 h-4 w-4" /> Back
+            </Button>
+            <SheetHeader className="min-w-0 pt-0.5 text-left">
+              <SheetTitle>At-Home Backup</SheetTitle>
+              <SheetDescription>Choose a workout for today.</SheetDescription>
+            </SheetHeader>
+          </div>
+          <div className="mt-4 space-y-2 pb-2">
             {definitions.map((def: any) => (
-              <Card key={def.dayId} className="p-4">
-                <div className="flex items-start justify-between gap-3">
+              <div key={def.dayId} className="rounded-lg border bg-card px-3 py-3">
+                <div className="flex items-center justify-between gap-3">
                   <div className="min-w-0">
-                    <div className="text-base font-bold">{def.title}</div>
-                    <div className="text-xs text-muted-foreground">{def.summary}</div>
+                    <div className="truncate text-sm font-bold">{def.title.replace(/^At-Home Backup\s*[·—-]?\s*/i, "")}</div>
+                    <div className="mt-0.5 text-xs text-muted-foreground">{def.summary}</div>
                   </div>
-                  <Badge variant="secondary" className="shrink-0 text-[10px]">
-                    {AT_HOME_BACKUP_BADGE}
-                  </Badge>
+                  <Button
+                    size="sm"
+                    className="shrink-0"
+                    disabled={readonly || start.isPending}
+                    onClick={() => requestStart(def.dayId)}
+                  >
+                    {start.isPending && start.variables === def.dayId ? (
+                      <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
+                    ) : (
+                      <Play className="mr-1.5 h-4 w-4" />
+                    )}
+                    Start
+                  </Button>
                 </div>
-                <ul className="mt-3 space-y-1 text-xs text-muted-foreground">
-                  {def.exercises.map((ex: any) => (
-                    <li key={ex.id} className="flex items-baseline justify-between gap-3">
-                      <span className="truncate">{ex.name}</span>
-                      <span className="shrink-0 tabular-nums">
-                        {ex.sets ? `${ex.sets} × ` : ""}
-                        {ex.reps ?? (ex.durationSeconds ? `${ex.durationSeconds}s` : "")}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-                <Button
-                  className="mt-3 w-full"
-                  disabled={readonly || start.isPending}
-                  onClick={() => requestStart(def.dayId)}
-                >
-                  {start.isPending && start.variables === def.dayId ? (
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  ) : (
-                    <Play className="mr-2 h-4 w-4" />
-                  )}
-                  Start
-                </Button>
-              </Card>
+              </div>
             ))}
           </div>
         </SheetContent>
@@ -163,9 +176,7 @@ export function AtHomeBackupCard({
             <AlertDialogDescription>{AT_HOME_BACKUP_CONFIRM_BODY}</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel disabled={start.isPending}>
-              {AT_HOME_BACKUP_CONFIRM_CANCEL}
-            </AlertDialogCancel>
+            <AlertDialogCancel disabled={start.isPending}>{AT_HOME_BACKUP_CONFIRM_CANCEL}</AlertDialogCancel>
             <AlertDialogAction
               disabled={start.isPending || !pendingDefinitionId}
               onClick={(event) => {

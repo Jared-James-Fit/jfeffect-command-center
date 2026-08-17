@@ -7,6 +7,7 @@ import {
   backupSessionDedupeKey,
   backupSessionTitle,
   cloneBackupRow,
+  deriveAtHomeBackupLifecycle,
   filterPrimaryProgramBlocks,
   isAtHomeBackupClient,
   isAtHomeBackupDefinitionsBlock,
@@ -67,6 +68,15 @@ describe("primary program boundary", () => {
 
   it("never includes the definitions block, even with the opt-in", () => {
     expect(filterPrimaryProgramBlocks([defs], { includeSessions: true })).toEqual([]);
+  });
+});
+
+describe("backup lifecycle classification", () => {
+  it("distinguishes disposable, logged, completed, and cancelled sessions", () => {
+    expect(deriveAtHomeBackupLifecycle({ archived: false, completedAt: null, hasMeaningfulData: false })).toBe("empty");
+    expect(deriveAtHomeBackupLifecycle({ archived: false, completedAt: null, hasMeaningfulData: true })).toBe("in_progress");
+    expect(deriveAtHomeBackupLifecycle({ archived: false, completedAt: "2026-08-17T12:00:00Z", hasMeaningfulData: true })).toBe("completed");
+    expect(deriveAtHomeBackupLifecycle({ archived: true, completedAt: null, hasMeaningfulData: true })).toBe("cancelled");
   });
 });
 

@@ -37,6 +37,22 @@ export const AT_HOME_BACKUP_BADGE = "At-home backup";
 export const AT_HOME_BACKUP_SUBTITLE = "At-home backup";
 export const AT_HOME_BACKUP_CALENDAR_BADGE = "AT HOME";
 
+export type AtHomeBackupLifecycle = "empty" | "in_progress" | "completed" | "cancelled";
+
+/**
+ * Classifies only an instantiated backup session. Empty session shells are
+ * disposable; meaningful work is retained even if the client later cancels.
+ */
+export function deriveAtHomeBackupLifecycle(input: {
+  archived?: boolean | null;
+  completedAt?: string | null;
+  hasMeaningfulData?: boolean;
+}): AtHomeBackupLifecycle {
+  if (input.archived) return "cancelled";
+  if (input.completedAt) return "completed";
+  return input.hasMeaningfulData ? "in_progress" : "empty";
+}
+
 /** Exact confirmation copy for "start a backup on a normal gym day". */
 export const AT_HOME_BACKUP_CONFIRM_TITLE = "Use this as today's backup?";
 export const AT_HOME_BACKUP_CONFIRM_BODY =
