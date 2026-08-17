@@ -1,6 +1,6 @@
 import { supabase } from "@/integrations/supabase/client";
 import { mergeScheduledInstances } from "@/lib/scheduled-instances-merge";
-import { isAtHomeBackupSessionBlock } from "@/lib/at-home-backup";
+import { filterPrimaryProgramBlocks } from "@/lib/at-home-backup";
 import { normalizeMuscle } from "@/lib/analytics/muscle-map";
 
 // ---------- Types ----------
