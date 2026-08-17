@@ -24,6 +24,8 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { ArrowLeft, Plus, Calendar, Target, Layers, History, BarChart3, BookOpen, CalendarClock, Wand2, Trash2 } from "lucide-react";
+import { isAtHomeBackupClient } from "@/lib/at-home-backup";
+import { AtHomeBackupAdminPanel } from "@/components/workouts/at-home-backup-admin-panel";
 import { toast } from "sonner";
 import { listClientPreps, listClientBlocks, createPrep, createBlock, countdownLabel, updatePrep, updateBlock, deleteBlock, deletePrep, GOAL_TYPES, PREP_STATUSES, BLOCK_STATUSES, type PrepStatus, type BlockStatus } from "@/lib/pl-programs";
 import { useAuth } from "@/lib/auth";
