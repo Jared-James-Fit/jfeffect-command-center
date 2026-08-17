@@ -103,6 +103,8 @@ function ClientProgramsPage() {
 
         <ClientTrainingIntelCard clientId={clientId} />
 
+        {isAtHomeBackupClient(clientId) && <AtHomeBackupAdminPanel clientId={clientId} />}
+
         <PrepsSection
           preps={preps as any[]}
           blocks={blocks as any[]}
