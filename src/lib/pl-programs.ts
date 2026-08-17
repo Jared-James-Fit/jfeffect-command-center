@@ -2,6 +2,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { mergeScheduledInstances } from "@/lib/scheduled-instances-merge";
 import { filterPrimaryProgramBlocks, isAtHomeBackupSessionBlock } from "@/lib/at-home-backup";
 import { normalizeMuscle } from "@/lib/analytics/muscle-map";
+import { compareWorkoutItemsBySchedule } from "@/lib/workout-today";
 
 // ---------- Types ----------
 export type PrepStatus = "Planned" | "Active" | "Completed" | "Archived";
@@ -1580,8 +1581,6 @@ export async function getClientWorkouts(
     loggedSetsByDay.set(dayId, (loggedSetsByDay.get(dayId) ?? 0) + 1);
   }
   const feedbackSet = new Set<string>((feedbacks ?? []).map((f: any) => f.completion_id));
-  const blockOrder = new Map<string, number>();
-  visibleBlocks.forEach((b: any, i: number) => blockOrder.set(b.id, i));
   const daysByWeek = new Map<string, any[]>();
   for (const d of activeDays) {
     const list = daysByWeek.get(d.week_id) ?? [];
@@ -1616,22 +1615,8 @@ export async function getClientWorkouts(
     feedbackCompletionIds: feedbackSet,
     loggedSetsByDay,
   });
-  // Sort: block (created order) → week_index → day_index
-  items.sort((a: any, b: any) => {
-    const ao = blockOrder.get(a.block?.id) ?? 999;
-    const bo = blockOrder.get(b.block?.id) ?? 999;
-    if (ao !== bo) return ao - bo;
-    const aw = a.week?.week_index ?? 0;
-    const bw = b.week?.week_index ?? 0;
-    if (aw !== bw) return aw - bw;
-    const di = (a.day?.day_index ?? 0) - (b.day?.day_index ?? 0);
-    if (di !== 0) return di;
-    // Two instances of the same source_day_id sort by scheduled_date +
-    // order_index so stacked cards render deterministically.
-    const ad = a.scheduledDate ?? "";
-    const bd = b.scheduledDate ?? "";
-    if (ad !== bd) return ad.localeCompare(bd);
-    return (a.scheduleOrderIndex ?? 0) - (b.scheduleOrderIndex ?? 0);
-  });
+  // Scheduled chronology is the canonical client-facing order. The shared
+  // comparator falls back to program order only for genuinely unscheduled days.
+  items.sort(compareWorkoutItemsBySchedule);
   return items;
 }

@@ -34,6 +34,39 @@ export type TodayState =
   | { kind: "block_complete"; block: any }
   | { kind: "no_program" };
 
+/**
+ * Canonical display ordering for workout items.
+ *
+ * An explicit instance or legacy scheduled date is the client-facing source of
+ * truth. Program block/week/day order is retained only for genuinely unscheduled
+ * days, so a moved workout never appears out of chronological order elsewhere.
+ */
+export function compareWorkoutItemsBySchedule(a: WorkoutItem, b: WorkoutItem): number {
+  const aDate = a.scheduledDate ?? a.day?.scheduled_date ?? "";
+  const bDate = b.scheduledDate ?? b.day?.scheduled_date ?? "";
+  if (aDate || bDate) {
+    if (!aDate) return 1;
+    if (!bDate) return -1;
+    if (aDate !== bDate) return aDate.localeCompare(bDate);
+    const aTime = a.scheduledTime ?? "";
+    const bTime = b.scheduledTime ?? "";
+    if (aTime !== bTime) return aTime.localeCompare(bTime);
+    const aOrder = a.scheduleOrderIndex ?? 0;
+    const bOrder = b.scheduleOrderIndex ?? 0;
+    if (aOrder !== bOrder) return aOrder - bOrder;
+  }
+  const aBlock = a.block?.sort_order ?? Number.POSITIVE_INFINITY;
+  const bBlock = b.block?.sort_order ?? Number.POSITIVE_INFINITY;
+  if (aBlock !== bBlock) return aBlock - bBlock;
+  const aWeek = a.week?.week_index ?? Number.POSITIVE_INFINITY;
+  const bWeek = b.week?.week_index ?? Number.POSITIVE_INFINITY;
+  if (aWeek !== bWeek) return aWeek - bWeek;
+  const aDay = a.day?.day_index ?? Number.POSITIVE_INFINITY;
+  const bDay = b.day?.day_index ?? Number.POSITIVE_INFINITY;
+  if (aDay !== bDay) return aDay - bDay;
+  return String(a.day?.id ?? "").localeCompare(String(b.day?.id ?? ""));
+}
+
 const DAY_NAMES = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
 
 const WEEKDAY_ALIASES: Record<string, string> = {

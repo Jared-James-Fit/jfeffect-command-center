@@ -915,6 +915,10 @@ function SelectedDayCard({
   // session, so admin RLS applies.
   const { isImpersonating } = useClientImpersonation();
   const canEditWorkout = mode === "coach" || isImpersonating;
+  // Real clients can safely change only the lifecycle state through the
+  // existing protected status sheet. Program editing and input reset remain
+  // limited to coaches and Client POV.
+  const canChangeWorkoutStatus = !readonly && (mode === "self" || canEditWorkout);
   const [moveOpen, setMoveOpen] = useState(false);
   const [statusOpen, setStatusOpen] = useState(false);
   const [resetOpen, setResetOpen] = useState(false);
@@ -1194,7 +1198,7 @@ function SelectedDayCard({
                     <RotateCcw className="mr-2 h-4 w-4" /> Cancel Backup
                   </DropdownMenuItem>
                 )}
-                {canEditWorkout && (
+                {canChangeWorkoutStatus && (
                   <DropdownMenuItem onSelect={() => setStatusOpen(true)}>
                     <CircleDot className="mr-2 h-4 w-4" /> Change status
                   </DropdownMenuItem>
@@ -1245,6 +1249,11 @@ function SelectedDayCard({
               {cta.icon} {cta.label}
             </Link>
           </Button>
+          {canChangeWorkoutStatus && (
+            <Button size="sm" variant="outline" onClick={() => setStatusOpen(true)}>
+              <CircleDot className="mr-1 h-3.5 w-3.5" /> Change status
+            </Button>
+          )}
           {cta.secondary && (
             cta.secondary.label === "Reschedule" ? (
               <Button size="sm" variant="outline" onClick={() => setMoveOpen(true)}>
