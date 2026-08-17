@@ -20,10 +20,11 @@ export function isCoarsePointer(): boolean {
 }
 
 export function useIsCoarsePointer(): boolean {
-  const [coarse, setCoarse] = useState(false);
-  useEffect(() => {
-    setCoarse(isCoarsePointer());
-  }, []);
+  // Resolved during the first render (not in an effect): React applies
+  // `autoFocus` and Radix fires `onOpenAutoFocus` on mount, so an
+  // effect-based value would arrive one render too late to suppress them.
+  // Dialogs render client-side only, so there is no hydration mismatch.
+  const [coarse] = useState(() => isCoarsePointer());
   return coarse;
 }
 
