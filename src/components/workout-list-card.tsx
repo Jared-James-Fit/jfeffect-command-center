@@ -2,11 +2,12 @@ import { useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Dumbbell, ChevronRight, Calendar as CalendarIcon, Pencil, MessageSquare, Move, ChevronDown } from "lucide-react";
+import { Dumbbell, ChevronRight, Calendar as CalendarIcon, Pencil, MessageSquare, Move, ChevronDown, CircleDot } from "lucide-react";
 import { format } from "date-fns";
 import { getWorkoutStatus } from "@/lib/workout-status";
 import { cleanDayTitle, dayScheduledDate } from "@/lib/workout-today";
 import { MoveWorkoutSheet } from "@/components/schedule/MoveWorkoutSheet";
+import { WorkoutStatusSheet } from "@/components/workout-status-sheet";
 import { InlineWorkoutPreview } from "@/components/workout/shared/inline-workout-preview";
 import { WorkoutProgressRing } from "@/components/workout/shared/workout-progress-ring";
 import { useWorkoutProgress } from "@/lib/workout-progress";
@@ -29,6 +30,7 @@ export function WorkoutListCard({
   const isCompleted = !!item.completion?.completed_at;
   const hasReview = !!item.completion?.has_feedback;
   const [moveOpen, setMoveOpen] = useState(false);
+  const [statusOpen, setStatusOpen] = useState(false);
   // Open state is stored by stable workout identity so remounts (list
   // refetch, progress updates, returning from the logger) never collapse it.
   const [expanded, , toggleExpanded] = usePreviewOpen(item.day?.id, item.scheduledWorkoutId ?? null);
@@ -88,13 +90,22 @@ export function WorkoutListCard({
           {expanded ? "Hide Preview" : "Preview Workout"}
         </button>
       )}
+      {!readonly && previewClientId && (
+        <button
+          type="button"
+          onClick={(e) => { e.stopPropagation(); setStatusOpen(true); }}
+          className="inline-flex items-center gap-1 rounded-full border border-border bg-background px-2.5 py-1 text-[11px] font-semibold text-muted-foreground hover:bg-secondary hover:text-foreground"
+        >
+          <CircleDot className="h-3 w-3" /> Change status
+        </button>
+      )}
       {!readonly && (
         <button
           type="button"
           onClick={(e) => { e.stopPropagation(); setMoveOpen(true); }}
           className="inline-flex items-center gap-1 rounded-full border border-border bg-background px-2.5 py-1 text-[11px] font-semibold text-muted-foreground hover:bg-secondary hover:text-foreground"
         >
-          <Move className="h-3 w-3" /> Move
+          <Move className="h-3 w-3" /> Reschedule
         </button>
       )}
       {isCompleted && (<>
@@ -132,6 +143,17 @@ export function WorkoutListCard({
         onOpenChange={setMoveOpen}
         currentScheduledDate={status.scheduled ?? dayScheduledDate(item)}
         scheduledWorkoutId={item.scheduledWorkoutId ?? null}
+      />
+    )}
+    {!readonly && previewClientId && (
+      <WorkoutStatusSheet
+        open={statusOpen}
+        onOpenChange={setStatusOpen}
+        dayId={item.day.id}
+        clientId={previewClientId}
+        completion={item.completion ?? null}
+        scheduledWorkoutId={item.scheduledWorkoutId ?? null}
+        invalidateKeys={[["my-workouts", previewClientId]]}
       />
     )}
     </div>

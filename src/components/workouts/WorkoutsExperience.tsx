@@ -9,7 +9,7 @@ import {
 import {
   Calendar as CalendarIcon, ChevronLeft, ChevronRight, ClipboardList,
   History, Loader2, Move, MoreVertical, Play, Pencil, Sun, Activity, Download,
-  RotateCcw, MessageSquare, Trophy, ChevronDown,
+  RotateCcw, MessageSquare, Trophy, ChevronDown, CircleDot,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/app-shell";
@@ -35,7 +35,6 @@ import { MoveWorkoutSheet } from "@/components/schedule/MoveWorkoutSheet";
 import { ScheduleHistoryDrawer } from "@/components/schedule/ScheduleHistoryDrawer";
 import { ClientBlockView } from "@/components/client-block-view";
 import { WorkoutStatusSheet } from "@/components/workout-status-sheet";
-import { CircleDot } from "lucide-react";
 import { InlineWorkoutPreview } from "@/components/workout/shared/inline-workout-preview";
 import { usePreviewOpen } from "@/lib/preview-open-store";
 import { InlineWorkoutEditor } from "@/components/workout/shared/inline-workout-editor";
@@ -1160,11 +1159,9 @@ function SelectedDayCard({
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
-                {!isCompleted && (
-                  <DropdownMenuItem onSelect={() => setMoveOpen(true)}>
-                    <Move className="mr-2 h-4 w-4" /> Move workout
-                  </DropdownMenuItem>
-                )}
+                <DropdownMenuItem onSelect={() => setMoveOpen(true)}>
+                  <Move className="mr-2 h-4 w-4" /> Reschedule workout
+                </DropdownMenuItem>
                 {canManageBackupLifecycle && backupState?.lifecycle === "in_progress" && (
                   <DropdownMenuItem asChild>
                     <Link
@@ -1271,15 +1268,11 @@ function SelectedDayCard({
               </Button>
             )
           )}
-          {!readonly && status.status !== "completed_today"
-            && status.status !== "completed_on_scheduled"
-            && status.status !== "completed_different_day"
-            && cta.secondary?.label !== "Reschedule"
-            && (
-              <Button size="sm" variant="ghost" className="text-muted-foreground" onClick={() => setMoveOpen(true)}>
-                <Move className="mr-1 h-3.5 w-3.5" /> Reschedule
-              </Button>
-            )}
+          {!readonly && cta.secondary?.label !== "Reschedule" && (
+            <Button size="sm" variant="ghost" className="text-muted-foreground" onClick={() => setMoveOpen(true)}>
+              <Move className="mr-1 h-3.5 w-3.5" /> Reschedule
+            </Button>
+          )}
           <Button
             size="sm"
             variant="ghost"

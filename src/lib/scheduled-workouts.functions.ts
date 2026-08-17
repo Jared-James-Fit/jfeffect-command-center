@@ -13,11 +13,13 @@ import { isPrimaryProgramBlock } from "@/lib/at-home-backup";
 // structure (pl_blocks/pl_weeks/pl_days/pl_exercise_rows) or completions.
 //
 // Permission tiers (clients.workout_scheduling_permission):
-//   off               → client cannot modify
-//   move              → client can move/reorder/re-time own scheduled workouts
+//   off               → client cannot add workouts to the calendar
+//   move              → client may reschedule, reorder, or re-time own workouts
 //   add_current_block → move + add from client's CURRENT active block
 //   full_program      → move + add from any assigned program + copy
-//   Coaches/admins    → full access on every client.
+//   Every authenticated client may reschedule, reorder, and re-time existing
+//   workout instances. Calendar placement never mutates program structure or
+//   completion history; add/remove authority remains intentionally restricted.
 // ─────────────────────────────────────────────────────────────────────────────
 
 const isoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Expected YYYY-MM-DD");
@@ -278,12 +280,10 @@ export const moveScheduledWorkout = createServerFn({ method: "POST" })
       .eq("id", data.instanceId)
       .maybeSingle();
     if (!instance) throw new Error("Scheduled workout not found.");
-    const { actor, client } = await resolveActor(context, instance.client_id);
-    if (actor === "client") {
-      const perm = client.workout_scheduling_permission ?? "move";
-      if (perm === "off")
-        throw new Error("Schedule editing is disabled for your account.");
-    }
+    // Every authenticated client may reschedule an existing workout. The actor
+    // resolution still enforces ownership/coach/admin authorization; program
+    // additions and removals remain governed by their separate permissions.
+    await resolveActor(context, instance.client_id);
 
     // Calendar placement is separate from completion history. A completed
     // instance MAY be moved: we only write scheduled_date/time/order on
@@ -394,12 +394,9 @@ export const reorderScheduledWorkouts = createServerFn({ method: "POST" })
         .parse(d),
   )
   .handler(async ({ data, context }) => {
-    const { actor, client } = await resolveActor(context, data.clientId);
-    if (actor === "client") {
-      const perm = client.workout_scheduling_permission ?? "move";
-      if (perm === "off")
-        throw new Error("Schedule editing is disabled for your account.");
-    }
+    // Reordering is a calendar-placement operation. Resolve actor ownership,
+    // but let every authenticated client reorder their own scheduled workouts.
+    await resolveActor(context, data.clientId);
 
     // Load every instance for this (client, date). The caller MUST send
     // the exact full set of ids in the intended order — no missing ids
@@ -457,12 +454,9 @@ export const updateScheduledWorkoutTime = createServerFn({ method: "POST" })
       .eq("id", data.instanceId)
       .maybeSingle();
     if (!instance) throw new Error("Scheduled workout not found.");
-    const { actor, client } = await resolveActor(context, instance.client_id);
-    if (actor === "client") {
-      const perm = client.workout_scheduling_permission ?? "move";
-      if (perm === "off")
-        throw new Error("Schedule editing is disabled for your account.");
-    }
+    // Re-timing is also calendar placement. Authorization is still checked,
+    // while every authenticated client may modify their own scheduled time.
+    await resolveActor(context, instance.client_id);
 
     // Scheduled time is calendar placement only — completed instances may
     // have their time changed; completed_at and logged sets stay untouched.
