@@ -14,6 +14,13 @@ import { ChevronDown, ChevronUp } from "lucide-react";
 import { todayLocalISO } from "@/lib/today";
 import { cn } from "@/lib/utils";
 import { CARDIO_WEEKDAYS, INCLINE_TREADMILL_DEFAULT, normalizeCardioWeekdays, resolveCardioTargets } from "@/lib/cardio-prescription";
+import {
+  CARDIO_ACTIVITY_OPTIONS,
+  CARDIO_MODE_OPTIONS,
+  WALK_STORAGE,
+  activityOptionValue,
+  resolveCardioActivity,
+} from "@/lib/cardio-activity";
 
 type Props = {
   open: boolean;
@@ -28,15 +35,6 @@ const DAY_TYPE_OPTIONS = [
   { label: "Training Day", value: "Training Day" },
   { label: "Rest Day", value: "Rest Day" },
   { label: "Any Day", value: "General" },
-];
-
-const CARDIO_TYPE_OPTIONS = [
-  { label: "Incline Treadmill Walk", value: "Incline Treadmill Walk" },
-  { label: "Incline Walking", value: "Incline Walking" },
-  { label: "Bike", value: "Bike" },
-  { label: "Stairs", value: "Stairmaster" },
-  { label: "Outdoor Walk", value: "Outdoor Walking" },
-  { label: "Custom", value: "Custom" },
 ];
 
 const GOAL_OPTIONS = ["Fat Loss", "Recovery", "Conditioning", "Steps", "Custom"];
