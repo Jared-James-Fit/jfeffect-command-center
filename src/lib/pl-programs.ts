@@ -1,5 +1,6 @@
 import { supabase } from "@/integrations/supabase/client";
 import { mergeScheduledInstances } from "@/lib/scheduled-instances-merge";
+import { isAtHomeBackupSessionBlock } from "@/lib/at-home-backup";
 import { normalizeMuscle } from "@/lib/analytics/muscle-map";
 
 // ---------- Types ----------
@@ -1486,7 +1487,10 @@ export async function saveBlockAsTemplate(blockId: string, name: string, style: 
   });
 }
 
-export async function getClientWorkouts(clientId: string) {
+export async function getClientWorkouts(
+  clientId: string,
+  options: { includeAtHomeBackupSessions?: boolean } = {},
+) {
   // Visible blocks → weeks → days, plus completion status
   // Order matches pickCurrentBlock() and listClientBlocks(): sort_order first
   // so coach-driven reordering takes effect everywhere, with created_at as
@@ -1501,7 +1505,14 @@ export async function getClientWorkouts(clientId: string) {
     .neq("status", "Archived")
     .order("sort_order", { ascending: true, nullsFirst: false })
     .order("created_at", { ascending: true });
-  const blockIds = (blocks ?? []).map((b: any) => b.id);
+  // Session blocks need client visibility so the unchanged canonical logger can
+  // read their cloned prescriptions through existing RLS. Exclude them by
+  // default from every primary-program consumer; the Workout calendar opts in
+  // explicitly to show them as additional At-Home Backup history items.
+  const visibleBlocks = (blocks ?? []).filter(
+    (block: any) => options.includeAtHomeBackupSessions || !isAtHomeBackupSessionBlock(block),
+  );
+  const blockIds = visibleBlocks.map((b: any) => b.id);
   if (!blockIds.length) return [];
   const { data: weeks } = await sb.from("pl_weeks").select("*").in("block_id", blockIds).order("week_index");
   const weekIds = (weeks ?? []).map((w: any) => w.id);
@@ -1558,7 +1569,7 @@ export async function getClientWorkouts(clientId: string) {
   }
   const feedbackSet = new Set<string>((feedbacks ?? []).map((f: any) => f.completion_id));
   const blockOrder = new Map<string, number>();
-  (blocks ?? []).forEach((b: any, i: number) => blockOrder.set(b.id, i));
+  visibleBlocks.forEach((b: any, i: number) => blockOrder.set(b.id, i));
   const daysByWeek = new Map<string, any[]>();
   for (const d of days ?? []) {
     const list = daysByWeek.get(d.week_id) ?? [];
@@ -1570,7 +1581,7 @@ export async function getClientWorkouts(clientId: string) {
   // mergeScheduledInstances to emit one card per scheduled instance and
   // link completions instance-first with a safe legacy fallback.
   const baseItems = (weeks ?? []).flatMap((w: any) => {
-    const b = (blocks ?? []).find((x: any) => x.id === w?.block_id);
+    const b = visibleBlocks.find((x: any) => x.id === w?.block_id);
     const weekDays = daysByWeek.get(w.id) ?? [];
     if (weekDays.length === 0) return [{ day: null, week: w, block: b, completion: null, logged_sets_count: 0 }];
     return weekDays.map((d: any) => {

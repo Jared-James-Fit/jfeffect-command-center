@@ -137,8 +137,8 @@ export const listAtHomeBackupDefinitions = createServerFn({ method: "GET" })
 /**
  * Instantiate a backup definition as a dated, loggable session.
  *
- * Idempotent: if a session for the same definition + date already exists and
- * has not been completed, it is reused instead of creating a duplicate.
+ * Idempotent: any session for the same definition + date is reused instead
+ * of creating a duplicate, including a completed historical session.
  */
 export const startAtHomeBackupSession = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
@@ -209,30 +209,27 @@ export const startAtHomeBackupSession = createServerFn({ method: "POST" })
       sessWeek = created;
     }
 
-    // 3) Reuse an existing, uncompleted session for the same definition+date.
+    // 3) Reuse any existing session for the same definition+date. A retry
+    // after completion must reopen the historical session instead of creating
+    // a duplicate calendar item or second workout log.
     const { data: existingDays } = await db
       .from("pl_days")
-      .select("id, day_index")
+      .select("id")
       .eq("week_id", sessWeek!.id)
       .eq("source_day_id", data.definitionDayId)
       .eq("scheduled_date", data.date)
-      .eq("archived", false);
-    for (const d of (existingDays ?? []) as any[]) {
-      const { data: completion } = await db
-        .from("pl_day_completions")
+      .eq("archived", false)
+      .order("created_at", { ascending: true })
+      .limit(1);
+    const existing = (existingDays ?? [])[0] as any;
+    if (existing) {
+      const { data: inst } = await db
+        .from("pl_scheduled_workouts")
         .select("id")
-        .eq("day_id", d.id)
         .eq("client_id", data.clientId)
+        .eq("source_day_id", existing.id)
         .maybeSingle();
-      if (!completion) {
-        const { data: inst } = await db
-          .from("pl_scheduled_workouts")
-          .select("id")
-          .eq("client_id", data.clientId)
-          .eq("source_day_id", d.id)
-          .maybeSingle();
-        return { dayId: d.id as string, scheduledWorkoutId: (inst?.id ?? null) as string | null, reused: true };
-      }
+      return { dayId: existing.id as string, scheduledWorkoutId: (inst?.id ?? null) as string | null, reused: true };
     }
 
     // 4) Create the session day.

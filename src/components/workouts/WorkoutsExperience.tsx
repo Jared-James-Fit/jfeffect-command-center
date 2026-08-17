@@ -82,13 +82,23 @@ export function WorkoutsExperience({
   });
   const { data: items = [], isLoading } = useQuery({
     queryKey: ["my-workouts", clientId],
-    queryFn: () => getClientWorkouts(clientId) as Promise<WorkoutItem[]>,
+    queryFn: () => getClientWorkouts(
+      clientId,
+      { includeAtHomeBackupSessions: isAtHomeBackupClient(clientId) },
+    ) as Promise<WorkoutItem[]>,
   });
 
   // --- Build a date → item map from scheduled_date (canonical helper). -----
   const dayItems = useMemo(
     () => (items ?? []).filter((it) => it.day?.id) as WorkoutItem[],
     [items],
+  );
+  // Backup sessions remain visible as additional calendar/history entries, but
+  // they never participate in selecting, replacing, or measuring the primary
+  // gym program.
+  const primaryDayItems = useMemo(
+    () => dayItems.filter((it) => !isAtHomeBackupSessionBlock(it.block)),
+    [dayItems],
   );
   // Extract committed training days from client for calendar date resolution.
   // ROOT CAUSE FIX 2026-06-26: pass to dayScheduledDate so it uses the client's
@@ -168,28 +178,29 @@ export function WorkoutsExperience({
   // --- Current block / week label for the header subtitle. -----------------
   const today = localStartOfToday();
   const todayItems = byDate.get(toLocalISO(today)) ?? [];
-  const todayItem = todayItems[0] ?? null;
+  const todayPrimaryItems = todayItems.filter((it) => !isAtHomeBackupSessionBlock(it.block));
+  const todayItem = todayPrimaryItems[0] ?? null;
   // Collect unique blocks across scheduled days and pick the current one
   // by date range (with sort_order / earliest-start tiebreakers). Falls back
   // to today's item or the most recent scheduled item if no block covers today.
   const allBlocks = useMemo(() => {
     const seen = new Map<string, any>();
-    for (const it of dayItems) {
+    for (const it of primaryDayItems) {
       if (it.block?.id && !seen.has(it.block.id)) seen.set(it.block.id, it.block);
     }
     return [...seen.values()];
-  }, [dayItems]);
+  }, [primaryDayItems]);
   const headerBlock =
     pickCurrentBlock(allBlocks, today) ??
     todayItem?.block ??
-    dayItems.find((it) => {
+    primaryDayItems.find((it) => {
       const d = dayScheduledDate(it, committedDays);
       return d && d >= today;
     })?.block ??
-    dayItems[dayItems.length - 1]?.block ?? null;
+    primaryDayItems[primaryDayItems.length - 1]?.block ?? null;
   const headerWeek =
     todayItem?.week ??
-    dayItems.find((it) => it.block?.id === headerBlock?.id && (() => {
+    primaryDayItems.find((it) => it.block?.id === headerBlock?.id && (() => {
       const d = dayScheduledDate(it, committedDays); return d && d >= today;
     })())?.week ?? null;
   const subtitle = [
@@ -456,7 +467,11 @@ export function WorkoutsExperience({
         )}
 
         {isAtHomeBackupClient(clientId) && (
-          <AtHomeBackupCard clientId={clientId} readonly={mode === "coach"} />
+          <AtHomeBackupCard
+            clientId={clientId}
+            readonly={mode === "coach"}
+            hasPrimaryWorkoutToday={todayPrimaryItems.length > 0}
+          />
         )}
 
         <Tabs defaultValue="calendar" className="space-y-4">
@@ -535,7 +550,7 @@ export function WorkoutsExperience({
                 <Loader2 className="h-4 w-4 animate-spin" /> Loading program…
               </Card>
             ) : (
-              <BlockViewTab items={dayItems} clientId={clientId} mode={mode} />
+              <BlockViewTab items={primaryDayItems} clientId={clientId} mode={mode} />
             )}
           </TabsContent>
         </Tabs>
