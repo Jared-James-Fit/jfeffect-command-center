@@ -27,22 +27,26 @@ describe("exercise quick-create form attributes", () => {
 });
 
 describe("isCoarsePointer", () => {
+  const setMatchMedia = (impl: (q: string) => { matches: boolean }) => {
+    Object.defineProperty(window, "matchMedia", { value: impl, configurable: true, writable: true });
+  };
+
   beforeEach(() => {
     vi.unstubAllGlobals();
   });
 
   it("is true when the device reports a coarse pointer", () => {
-    vi.stubGlobal("matchMedia", vi.fn((q: string) => ({ matches: q.includes("coarse") })));
+    setMatchMedia((q: string) => ({ matches: q.includes("coarse") }));
     expect(isCoarsePointer()).toBe(true);
   });
 
   it("is false for fine pointers (desktop keeps auto-focus)", () => {
-    vi.stubGlobal("matchMedia", vi.fn(() => ({ matches: false })));
+    setMatchMedia(() => ({ matches: false }));
     expect(isCoarsePointer()).toBe(false);
   });
 
   it("never throws when matchMedia misbehaves", () => {
-    vi.stubGlobal("matchMedia", vi.fn(() => { throw new Error("nope"); }));
+    setMatchMedia(() => { throw new Error("nope"); });
     expect(isCoarsePointer()).toBe(false);
   });
 });
