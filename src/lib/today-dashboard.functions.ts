@@ -1,6 +1,7 @@
 import { supabase } from "@/integrations/supabase/client";
 import type { WorkoutItem } from "@/lib/workout-today";
 import { mergeScheduledInstances } from "@/lib/scheduled-instances-merge";
+import { filterPrimaryProgramBlocks } from "@/lib/at-home-backup";
 
 /**
  * Lightweight dashboard variant of getClientWorkouts.
@@ -8,16 +9,18 @@ import { mergeScheduledInstances } from "@/lib/scheduled-instances-merge";
  * computeTodayState, without the heavy exercise row result joins.
  */
 export async function getClientTodayItems(clientId: string): Promise<WorkoutItem[]> {
-  const { data: blocks } = await supabase
+  const { data: allBlocks } = await supabase
     .from("pl_blocks")
-    .select("id, client_id, name, status, sort_order, created_at, client_visible")
+    .select("id, client_id, name, status, sort_order, created_at, client_visible, source_template_block_key")
     .eq("client_id", clientId)
     .eq("client_visible", true)
     .neq("status", "Archived")
     .order("sort_order", { ascending: true, nullsFirst: false })
     .order("created_at", { ascending: true });
 
-  const blockIds = (blocks ?? []).map((b: any) => b.id);
+  // Reserved At-Home Backup blocks never drive Today / primary completion.
+  const blocks = filterPrimaryProgramBlocks(allBlocks ?? []);
+  const blockIds = blocks.map((b: any) => b.id);
   if (!blockIds.length) return [];
 
   const { data: weeks } = await supabase
