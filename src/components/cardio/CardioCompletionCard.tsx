@@ -11,7 +11,6 @@ import { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -23,7 +22,6 @@ import { format } from "date-fns";
 import { cardioStatus, cardioStatusLabel, formatCardioLogLine } from "@/lib/cardio-plan";
 import { resolveCardioTargets, resolveCompletionTarget } from "@/lib/cardio-prescription";
 import {
-  cardioActivityLabel,
   completionTargetParts,
   formatSpeedRange,
   resolveCardioActivity,
@@ -96,7 +94,6 @@ export function CardioCompletionCard({ target, clientId, date, readonly = false 
   const isSkipped = status === "skipped";
   const view = resolveCardioActivity(target);
   const smartTargets = resolveCardioTargets(target);
-  const typeName = cardioActivityLabel(target);
 
   useEffect(() => {
     if (!expanded) return;
