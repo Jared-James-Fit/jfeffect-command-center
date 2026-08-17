@@ -61,6 +61,8 @@ const TrainingAnalyticsPreviewCard = lazy(() =>
   })),
 );
 import { RecoveryPreviewCard } from "@/components/analytics/recovery-preview-card";
+import { AtHomeBackupCard } from "@/components/workouts/at-home-backup-card";
+import { AT_HOME_BACKUP_BADGE, isAtHomeBackupClient, isAtHomeBackupSessionBlock } from "@/lib/at-home-backup";
 
 type Mode = "self" | "coach";
 
@@ -451,6 +453,10 @@ export function WorkoutsExperience({
             editable={mode === "self"}
             compact
           />
+        )}
+
+        {isAtHomeBackupClient(clientId) && (
+          <AtHomeBackupCard clientId={clientId} readonly={mode === "coach"} />
         )}
 
         <Tabs defaultValue="calendar" className="space-y-4">
@@ -1056,6 +1062,9 @@ function SelectedDayCard({
             <div className="flex flex-wrap items-center gap-2">
               <div className="truncate text-lg font-black">{title}</div>
               <Badge variant="outline" className={cn("text-[10px]", status.tone)}>{status.label}</Badge>
+              {isAtHomeBackupSessionBlock(item.block) && (
+                <Badge variant="secondary" className="text-[10px]">{AT_HOME_BACKUP_BADGE}</Badge>
+              )}
               {progress && progress.prescribedSets > 0 && (
                 <WorkoutProgressRing
                   pct={progress.pct}
