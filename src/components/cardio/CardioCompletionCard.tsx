@@ -1,33 +1,31 @@
 /**
- * CardioCompletionCard — a single prescribed cardio session with real logging.
+ * CardioCompletionCard — one prescribed cardio session, simplified.
  *
- * Status is always explicit: Not started · Logged · Skipped.
- * Logging captures duration, type, distance, speed/incline, calories, avg HR,
- * RPE and notes — every field optional except duration. Logged sessions stay
- * editable, and Zone 2 / LISS targets offer a suggested default setup that
- * only fills gaps the coach left blank.
+ * Client hierarchy: Activity → Mode → Duration → machine settings →
+ * one completion rule → action. Historical `cardio_type` strings are
+ * normalized for display only (see @/lib/cardio-activity) so analytics,
+ * schedule sync and past logs are untouched.
  */
 
 import { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
-import { CheckCircle2, Circle, ChevronDown, ChevronUp, Loader2, SkipForward, Sparkles } from "lucide-react";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { CheckCircle2, Circle, ChevronDown, ChevronUp, Info, Loader2, SkipForward } from "lucide-react";
 import { toast } from "sonner";
-import { dayTypeLabel, dayTypeTone } from "@/lib/training-schedule";
 import { format } from "date-fns";
+import { cardioStatus, cardioStatusLabel, formatCardioLogLine } from "@/lib/cardio-plan";
+import { resolveCardioTargets, resolveCompletionTarget } from "@/lib/cardio-prescription";
 import {
-  cardioStatus,
-  cardioStatusLabel,
-  formatCardioLogLine,
-  suggestedCardioSetup,
-} from "@/lib/cardio-plan";
-import { cardioCompletionRuleLabel, resolveCardioTargets, resolveCompletionTarget } from "@/lib/cardio-prescription";
+  completionTargetParts,
+  formatSpeedRange,
+  resolveCardioActivity,
+} from "@/lib/cardio-activity";
 
 type CardioTarget = {
   id: string;
@@ -59,19 +57,13 @@ type Props = {
   readonly?: boolean;
 };
 
-const CARDIO_TYPES = [
-  "Walking", "Running", "Cycling", "Rowing", "Elliptical",
-  "Stairmaster", "Swimming", "LISS", "HIIT", "Incline Walk",
-  "Bike", "Ski Erg", "Sled Push", "Custom",
-];
-
 export function CardioCompletionCard({ target, clientId, date, readonly = false }: Props) {
   const qc = useQueryClient();
   const dateStr = date ? format(date, "yyyy-MM-dd") : format(new Date(), "yyyy-MM-dd");
   const [expanded, setExpanded] = useState(false);
+  const [showMore, setShowMore] = useState(false);
   const [saving, setSaving] = useState(false);
   const [actualDuration, setActualDuration] = useState("");
-  const [actualType, setActualType] = useState("");
   const [rpe, setRpe] = useState("");
   const [notes, setNotes] = useState("");
   const [distance, setDistance] = useState("");
@@ -100,15 +92,13 @@ export function CardioCompletionCard({ target, clientId, date, readonly = false 
   const status = cardioStatus(completion as any);
   const isCompleted = status === "logged";
   const isSkipped = status === "skipped";
-  const suggestion = suggestedCardioSetup(target);
+  const view = resolveCardioActivity(target);
   const smartTargets = resolveCardioTargets(target);
 
-  // Hydrate the form from the saved log so editing never starts blank.
   useEffect(() => {
     if (!expanded) return;
     const c: any = completion;
     setActualDuration(c?.duration_minutes != null ? String(c.duration_minutes) : "");
-    setActualType(c?.cardio_type ?? "");
     setRpe(c?.rpe != null ? String(c.rpe) : "");
     setNotes(c?.notes ?? "");
     setDistance(c?.distance != null ? String(c.distance) : "");
@@ -120,29 +110,27 @@ export function CardioCompletionCard({ target, clientId, date, readonly = false 
     setAvgHr(c?.avg_heart_rate != null ? String(c.avg_heart_rate) : "");
   }, [expanded, completion]);
 
-  const typeName = target.cardio_type === "Custom"
-    ? target.custom_type || "Custom"
-    : target.cardio_type;
-
-  const metaParts: string[] = [];
-  if (target.duration_minutes) metaParts.push(`${target.duration_minutes} min`);
-  else if (suggestion) metaParts.push(`${suggestion.durationMinutes} min (suggested)`);
-  if (target.intensity) metaParts.push(target.intensity);
-  if (target.heart_rate_zone) metaParts.push(target.heart_rate_zone);
-  else if (suggestion) metaParts.push(suggestion.heartRateZone);
-  if (target.machine_preference) metaParts.push(target.machine_preference);
-  if (smartTargets.steps) metaParts.push(`${smartTargets.steps.toLocaleString()} steps`);
-
-  const cal = target.show_calories_to_client && smartTargets.calories
-    ? `~${smartTargets.calories} kcal`
+  const speedLabel = view.isTreadmill
+    ? formatSpeedRange(target.speed_min_mph, target.speed_max_mph)
     : null;
+  const inclineLabel = view.isTreadmill && Number(target.incline) > 0
+    ? `${Number(target.incline)}%`
+    : null;
+  const finishParts = completionTargetParts({
+    duration_minutes: target.duration_minutes,
+    steps: smartTargets.steps,
+    calories: smartTargets.calories,
+    showCalories: target.show_calories_to_client,
+  });
+  // HR zone appears only when the coach intentionally prescribed one.
+  const hrZone = target.heart_rate_zone?.trim() || null;
+  const effort = target.intensity?.trim() || null;
 
   async function toggleComplete() {
     if (readonly || saving) return;
     setSaving(true);
     try {
       if (isCompleted || isSkipped) {
-        // Mark incomplete — delete the completion
         await (supabase as any)
           .from("cardio_completions")
           .delete()
@@ -151,7 +139,6 @@ export function CardioCompletionCard({ target, clientId, date, readonly = false 
           .eq("completed_date", dateStr);
         toast.success("Cardio reset to not started");
       } else {
-        // Mark complete with defaults
         await (supabase as any)
           .from("cardio_completions")
           .upsert({
@@ -160,8 +147,8 @@ export function CardioCompletionCard({ target, clientId, date, readonly = false 
             completed_date: dateStr,
             completed: true,
             skipped: false,
-            duration_minutes: target.duration_minutes ?? suggestion?.durationMinutes ?? null,
-            cardio_type: typeName,
+            duration_minutes: target.duration_minutes ?? null,
+            cardio_type: target.cardio_type,
             day_type: target.day_type,
             completion_target: "manual",
           }, { onConflict: "client_id,cardio_target_id,completed_date" });
@@ -188,7 +175,7 @@ export function CardioCompletionCard({ target, clientId, date, readonly = false 
           completed_date: dateStr,
           completed: false,
           skipped: true,
-          cardio_type: typeName,
+          cardio_type: target.cardio_type,
           day_type: target.day_type,
         }, { onConflict: "client_id,cardio_target_id,completed_date" });
       toast.success("Cardio marked as skipped");
@@ -199,16 +186,6 @@ export function CardioCompletionCard({ target, clientId, date, readonly = false 
     } finally {
       setSaving(false);
     }
-  }
-
-  function applySuggestion() {
-    if (!suggestion) return;
-    setActualDuration(String(suggestion.durationMinutes));
-    if (!actualType) setActualType(typeName);
-    if (!rpe) setRpe("3.5");
-    if (!incline) setIncline("8");
-    if (!avgSpeed) setAvgSpeed("3.2");
-    toast.success("Suggested Zone 2 setup applied");
   }
 
   async function saveDetails() {
@@ -235,10 +212,8 @@ export function CardioCompletionCard({ target, clientId, date, readonly = false 
           completed_date: dateStr,
           completed: true,
           skipped: false,
-          duration_minutes: actualDuration
-            ? parseInt(actualDuration, 10)
-            : target.duration_minutes ?? suggestion?.durationMinutes ?? null,
-          cardio_type: actualType || typeName,
+          duration_minutes: actualDuration ? parseInt(actualDuration, 10) : target.duration_minutes ?? null,
+          cardio_type: target.cardio_type,
           rpe: num(rpe),
           distance: num(distance),
           distance_unit: num(distance) != null ? distanceUnit : null,
@@ -269,9 +244,7 @@ export function CardioCompletionCard({ target, clientId, date, readonly = false 
       : "border-border"
     }`}>
       <div className="p-3">
-        {/* Header row */}
         <div className="flex items-start gap-2">
-          {/* Complete toggle */}
           {!readonly && (
             <button
               type="button"
@@ -290,48 +263,77 @@ export function CardioCompletionCard({ target, clientId, date, readonly = false 
             </button>
           )}
 
-          <div className="flex-1 min-w-0">
-            <div className="flex flex-wrap items-center gap-1.5 mb-1">
-              <Badge variant="outline" className={dayTypeTone(target.day_type)}>
-                {dayTypeLabel(target)}
-              </Badge>
-              <span className={`font-semibold text-sm ${isCompleted ? "line-through text-muted-foreground" : ""}`}>
-                {typeName}
+          <div className="min-w-0 flex-1">
+            {/* Activity · Mode · status */}
+            <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+              <span className={`text-base font-black leading-none ${isCompleted ? "line-through text-muted-foreground" : ""}`}>
+                {view.activity}
               </span>
-              <Badge
-                variant="outline"
-                className={`text-[10px] ${
-                  isCompleted ? "border-emerald-500/30 text-emerald-600"
-                  : isSkipped ? "border-amber-500/30 text-amber-600"
-                  : "text-muted-foreground"
-                }`}
-              >
-                {cardioStatusLabel(status)}
-              </Badge>
-              {cal && <Badge variant="outline" className="text-[10px]">{cal}</Badge>}
+              {view.modeLabel && (
+                <span className="text-sm font-semibold text-muted-foreground">{view.modeLabel}</span>
+              )}
+              <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                · {cardioStatusLabel(status)}
+              </span>
             </div>
 
-            {metaParts.length > 0 && (
-              <div className="text-xs text-muted-foreground">{metaParts.join(" · ")}</div>
-            )}
+            {/* Duration */}
+            {target.duration_minutes ? (
+              <div className="mt-1 text-sm font-bold">{target.duration_minutes} min</div>
+            ) : null}
 
-            {!isCompleted && (
-              <div className="mt-2 rounded-md border border-primary/25 bg-primary/5 px-2 py-1.5 text-[11px] text-foreground">
-                <p className="font-semibold">Finish when ONE target is reached</p>
-                <p className="mt-0.5 text-muted-foreground">
-                  {[target.duration_minutes ? `${target.duration_minutes} min` : null, smartTargets.steps ? `${smartTargets.steps.toLocaleString()} steps` : null, smartTargets.calories ? `~${smartTargets.calories} kcal` : null].filter(Boolean).join("  OR  ")}
-                </p>
-                <p className="mt-0.5 text-muted-foreground">{cardioCompletionRuleLabel()}</p>
+            {/* Treadmill settings — separated metrics, never a sentence */}
+            {view.isTreadmill && (inclineLabel || speedLabel) && (
+              <div className="mt-2 rounded-md border border-border bg-secondary/30 px-2.5 py-2">
+                <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Treadmill</p>
+                <div className="mt-1 flex gap-6">
+                  {inclineLabel && (
+                    <div>
+                      <p className="text-[10px] uppercase text-muted-foreground">Incline</p>
+                      <p className="text-sm font-bold">{inclineLabel}</p>
+                    </div>
+                  )}
+                  {speedLabel && (
+                    <div>
+                      <p className="text-[10px] uppercase text-muted-foreground">Speed</p>
+                      <p className="text-sm font-bold">
+                        {speedLabel}
+                        {formatSpeedRange(target.speed_min_mph, target.speed_max_mph, "kph")
+                          ? ` · ${formatSpeedRange(target.speed_min_mph, target.speed_max_mph, "kph")}`
+                          : ""}
+                      </p>
+                    </div>
+                  )}
+                </div>
               </div>
             )}
 
-            {suggestion && !isCompleted && (
-              <div className="mt-1 flex items-start gap-1.5 text-[11px] text-muted-foreground">
-                <Sparkles className="mt-0.5 h-3 w-3 shrink-0 text-primary" />
-                <span>
-                  Suggested: {suggestion.durationMinutes} min · {suggestion.speedHint} at{" "}
-                  {suggestion.inclineHint} incline · {suggestion.rpeHint}
-                </span>
+            {/* Effort / HR zone — only when prescribed */}
+            {(effort || hrZone) && (
+              <div className="mt-1.5 text-xs text-muted-foreground">
+                {[effort, hrZone].filter(Boolean).join(" · ")}
+              </div>
+            )}
+
+            {/* One completion rule */}
+            {!isCompleted && finishParts.length > 0 && (
+              <div className="mt-2">
+                <div className="flex items-center gap-1 text-[11px] font-semibold">
+                  Finish when you reach any one
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <button type="button" aria-label="What does this mean?" className="text-muted-foreground hover:text-foreground">
+                        <Info className="h-3.5 w-3.5" />
+                      </button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-64 text-xs">
+                      You don't need to hit every target. Once you reach the time, step, or calorie
+                      target, you're done.
+                    </PopoverContent>
+                  </Popover>
+                </div>
+                <p className="text-xs text-muted-foreground">{finishParts.join(" · ")}</p>
+                <p className="text-[10px] text-muted-foreground/80">Whichever comes first.</p>
               </div>
             )}
 
@@ -341,30 +343,24 @@ export function CardioCompletionCard({ target, clientId, date, readonly = false 
               </div>
             )}
 
-            {target.goal && (
-              <div className="text-xs text-muted-foreground mt-0.5">
-                Goal: <span className="text-foreground">{target.goal}</span>
-              </div>
-            )}
-
             {target.client_notes && (
-              <p className="mt-1.5 whitespace-pre-wrap text-xs text-muted-foreground">
-                {target.client_notes}
-              </p>
+              <details className="mt-2 text-xs text-muted-foreground">
+                <summary className="cursor-pointer select-none font-medium">Coach note</summary>
+                <p className="mt-1 whitespace-pre-wrap">{target.client_notes}</p>
+              </details>
             )}
 
             {isCompleted && completion?.notes && (
-              <p className="mt-1 text-xs text-emerald-700 italic">"{completion.notes}"</p>
+              <p className="mt-1 text-xs italic text-emerald-700">"{completion.notes}"</p>
             )}
           </div>
 
-          {/* Log details toggle */}
           {!readonly && (
             <button
               type="button"
               onClick={() => setExpanded((v) => !v)}
               aria-label={expanded ? "Hide log form" : isCompleted ? "Edit cardio log" : "Log details"}
-              className="shrink-0 text-muted-foreground hover:text-foreground transition"
+              className="shrink-0 text-muted-foreground transition hover:text-foreground"
             >
               {expanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
             </button>
@@ -374,7 +370,7 @@ export function CardioCompletionCard({ target, clientId, date, readonly = false 
         {!readonly && !expanded && !isCompleted && !isSkipped && (
           <div className="mt-2 flex gap-2">
             <Button size="sm" className="flex-1" onClick={() => setExpanded(true)}>
-              Log cardio
+              Log Cardio
             </Button>
             <Button size="sm" variant="outline" onClick={markSkipped} disabled={saving}>
               <SkipForward className="mr-1.5 h-3.5 w-3.5" /> Skip
@@ -382,64 +378,22 @@ export function CardioCompletionCard({ target, clientId, date, readonly = false 
           </div>
         )}
 
-        {/* Expandable log form */}
         {expanded && !readonly && (
           <div className="mt-3 space-y-3 border-t border-border pt-3">
-            {suggestion && (
-              <Button size="sm" variant="outline" className="w-full" onClick={applySuggestion}>
-                <Sparkles className="mr-1.5 h-3.5 w-3.5" /> Use suggested Zone 2 setup
-              </Button>
-            )}
-            <div className="grid grid-cols-2 gap-2">
+            <p className="text-[11px] text-muted-foreground">
+              Fill in whatever you tracked — one is enough.
+            </p>
+            <div className="grid grid-cols-3 gap-2">
               <div>
-                <Label className="text-xs">Duration (min)</Label>
+                <Label className="text-xs">Minutes</Label>
                 <Input
                   type="number"
                   inputMode="numeric"
                   placeholder={target.duration_minutes ? String(target.duration_minutes) : "—"}
                   value={actualDuration}
                   onChange={(e) => setActualDuration(e.target.value)}
-                  className="h-8 text-sm"
+                  className="h-9 text-sm"
                 />
-              </div>
-              <div>
-                <Label className="text-xs">RPE (1-10)</Label>
-                <Input
-                  type="number"
-                  inputMode="decimal"
-                  min="1"
-                  max="10"
-                  step="0.5"
-                  placeholder="—"
-                  value={rpe}
-                  onChange={(e) => setRpe(e.target.value)}
-                  className="h-8 text-sm"
-                />
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-              <div>
-                <Label className="text-xs">Distance</Label>
-                <Input
-                  type="number"
-                  inputMode="decimal"
-                  placeholder="—"
-                  value={distance}
-                  onChange={(e) => setDistance(e.target.value)}
-                  className="h-8 text-sm"
-                />
-              </div>
-              <div>
-                <Label className="text-xs">Unit</Label>
-                <select
-                  value={distanceUnit}
-                  onChange={(e) => setDistanceUnit(e.target.value)}
-                  className="h-8 w-full rounded-md border border-input bg-background px-2 text-sm"
-                >
-                  <option value="km">km</option>
-                  <option value="mi">mi</option>
-                  <option value="m">m</option>
-                </select>
               </div>
               <div>
                 <Label className="text-xs">Steps</Label>
@@ -449,7 +403,7 @@ export function CardioCompletionCard({ target, clientId, date, readonly = false 
                   placeholder={smartTargets.steps ? String(smartTargets.steps) : "—"}
                   value={steps}
                   onChange={(e) => setSteps(e.target.value)}
-                  className="h-8 text-sm"
+                  className="h-9 text-sm"
                 />
               </div>
               <div>
@@ -460,68 +414,69 @@ export function CardioCompletionCard({ target, clientId, date, readonly = false 
                   placeholder={smartTargets.calories ? String(smartTargets.calories) : "—"}
                   value={calories}
                   onChange={(e) => setCalories(e.target.value)}
-                  className="h-8 text-sm"
+                  className="h-9 text-sm"
                 />
               </div>
             </div>
-            <div className="grid grid-cols-3 gap-2">
-              <div>
-                <Label className="text-xs">Speed</Label>
-                <Input
-                  type="number"
-                  inputMode="decimal"
-                  placeholder={suggestion ? "3.2" : "—"}
-                  value={avgSpeed}
-                  onChange={(e) => setAvgSpeed(e.target.value)}
-                  className="h-8 text-sm"
-                />
+
+            <button
+              type="button"
+              onClick={() => setShowMore((v) => !v)}
+              className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
+            >
+              {showMore ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+              More details (optional)
+            </button>
+
+            {showMore && (
+              <div className="space-y-2">
+                <div className="grid grid-cols-3 gap-2">
+                  <div>
+                    <Label className="text-xs">RPE</Label>
+                    <Input type="number" inputMode="decimal" min="1" max="10" step="0.5" placeholder="—" value={rpe} onChange={(e) => setRpe(e.target.value)} className="h-9 text-sm" />
+                  </div>
+                  <div>
+                    <Label className="text-xs">Distance</Label>
+                    <Input type="number" inputMode="decimal" placeholder="—" value={distance} onChange={(e) => setDistance(e.target.value)} className="h-9 text-sm" />
+                  </div>
+                  <div>
+                    <Label className="text-xs">Unit</Label>
+                    <select
+                      value={distanceUnit}
+                      onChange={(e) => setDistanceUnit(e.target.value)}
+                      className="h-9 w-full rounded-md border border-input bg-background px-2 text-sm"
+                    >
+                      <option value="km">km</option>
+                      <option value="mi">mi</option>
+                      <option value="m">m</option>
+                    </select>
+                  </div>
+                </div>
+                <div className="grid grid-cols-3 gap-2">
+                  {view.isTreadmill && (
+                    <>
+                      <div>
+                        <Label className="text-xs">Speed</Label>
+                        <Input type="number" inputMode="decimal" placeholder={target.speed_min_mph ? String(target.speed_min_mph) : "—"} value={avgSpeed} onChange={(e) => setAvgSpeed(e.target.value)} className="h-9 text-sm" />
+                      </div>
+                      <div>
+                        <Label className="text-xs">Incline %</Label>
+                        <Input type="number" inputMode="decimal" placeholder={target.incline ? String(target.incline) : "—"} value={incline} onChange={(e) => setIncline(e.target.value)} className="h-9 text-sm" />
+                      </div>
+                    </>
+                  )}
+                  <div>
+                    <Label className="text-xs">Avg HR</Label>
+                    <Input type="number" inputMode="numeric" placeholder="—" value={avgHr} onChange={(e) => setAvgHr(e.target.value)} className="h-9 text-sm" />
+                  </div>
+                </div>
+                <div>
+                  <Label className="text-xs">Notes</Label>
+                  <Textarea value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="How did it feel?" rows={2} className="text-sm" />
+                </div>
               </div>
-              <div>
-                <Label className="text-xs">Incline %</Label>
-                <Input
-                  type="number"
-                  inputMode="decimal"
-                  placeholder={suggestion ? "8" : "—"}
-                  value={incline}
-                  onChange={(e) => setIncline(e.target.value)}
-                  className="h-8 text-sm"
-                />
-              </div>
-              <div>
-                <Label className="text-xs">Avg HR</Label>
-                <Input
-                  type="number"
-                  inputMode="numeric"
-                  placeholder="—"
-                  value={avgHr}
-                  onChange={(e) => setAvgHr(e.target.value)}
-                  className="h-8 text-sm"
-                />
-              </div>
-            </div>
-            <div>
-              <Label className="text-xs">Cardio Type</Label>
-              <select
-                value={actualType}
-                onChange={(e) => setActualType(e.target.value)}
-                className="w-full h-8 rounded-md border border-input bg-background px-2 text-sm"
-              >
-                <option value="">{typeName} (default)</option>
-                {CARDIO_TYPES.filter((t) => t !== typeName).map((t) => (
-                  <option key={t} value={t}>{t}</option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <Label className="text-xs">Notes (optional)</Label>
-              <Textarea
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
-                placeholder="How did it feel? Any notes…"
-                rows={2}
-                className="text-sm"
-              />
-            </div>
+            )}
+
             <div className="flex gap-2">
               <Button size="sm" className="flex-1" onClick={saveDetails} disabled={saving}>
                 {saving ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="mr-1.5 h-3.5 w-3.5" />}

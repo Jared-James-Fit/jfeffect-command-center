@@ -1033,9 +1033,12 @@ function SelectedDayCard({
         <div className="mx-auto grid h-10 w-10 place-items-center rounded-full bg-muted">
           <Sun className="h-5 w-5 text-muted-foreground" />
         </div>
-        <div className="mt-3 text-base font-bold">No workout scheduled</div>
+        <div className="mt-3 text-base font-bold">No lifting workout</div>
         <div className="text-xs text-muted-foreground">
-          {format(date, "EEEE, MMMM d")} · rest day
+          {format(date, "EEEE, MMMM d")}
+        </div>
+        <div className="mt-1 text-[11px] text-muted-foreground/80">
+          Any prescribed cardio still shows below.
         </div>
       </Card>
     );

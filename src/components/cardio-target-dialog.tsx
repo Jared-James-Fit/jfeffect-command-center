@@ -14,6 +14,13 @@ import { ChevronDown, ChevronUp } from "lucide-react";
 import { todayLocalISO } from "@/lib/today";
 import { cn } from "@/lib/utils";
 import { CARDIO_WEEKDAYS, INCLINE_TREADMILL_DEFAULT, normalizeCardioWeekdays, resolveCardioTargets } from "@/lib/cardio-prescription";
+import {
+  CARDIO_ACTIVITY_OPTIONS,
+  CARDIO_MODE_OPTIONS,
+  WALK_STORAGE,
+  activityOptionValue,
+  resolveCardioActivity,
+} from "@/lib/cardio-activity";
 
 type Props = {
   open: boolean;
@@ -28,15 +35,6 @@ const DAY_TYPE_OPTIONS = [
   { label: "Training Day", value: "Training Day" },
   { label: "Rest Day", value: "Rest Day" },
   { label: "Any Day", value: "General" },
-];
-
-const CARDIO_TYPE_OPTIONS = [
-  { label: "Incline Treadmill Walk", value: "Incline Treadmill Walk" },
-  { label: "Incline Walking", value: "Incline Walking" },
-  { label: "Bike", value: "Bike" },
-  { label: "Stairs", value: "Stairmaster" },
-  { label: "Outdoor Walk", value: "Outdoor Walking" },
-  { label: "Custom", value: "Custom" },
 ];
 
 const GOAL_OPTIONS = ["Fat Loss", "Recovery", "Conditioning", "Steps", "Custom"];
@@ -138,6 +136,10 @@ export function CardioTargetDialog({ open, onOpenChange, clientId, clients = [],
   if (!form) return null;
   const set = (k: string, v: any) => setForm({ ...form, [k]: v });
   const calculatedTargets = resolveCardioTargets(form);
+  const activityValue = activityOptionValue(form.cardio_type, form.custom_type);
+  const activityView = resolveCardioActivity(form);
+  const walkMode = activityView.mode ?? "treadmill";
+  const isTreadmill = activityValue === "Walk" && activityView.isTreadmill;
 
   const save = async () => {
     if (!form.client_id) return toast.error("Pick a client first");
@@ -242,21 +244,46 @@ export function CardioTargetDialog({ open, onOpenChange, clientId, clients = [],
             </div>
             <p className="mt-2 text-xs text-muted-foreground">These saved weekdays are the single schedule used by the client card, calendar, logging, and analytics.</p>
           </div>
-          <div className="md:col-span-2">
+          <div className="md:col-span-2 space-y-3">
             <TapGroup
-              label="Cardio type"
-              options={CARDIO_TYPE_OPTIONS}
-              value={form.cardio_type}
-              onChange={(v) => set("cardio_type", v)}
+              label="Activity"
+              options={CARDIO_ACTIVITY_OPTIONS as any}
+              value={activityValue}
+              onChange={(v) => {
+                if (v === "Walk") {
+                  setForm({ ...form, cardio_type: WALK_STORAGE[walkMode ?? "treadmill"] });
+                } else {
+                  setForm({ ...form, cardio_type: v, incline: null, speed_min_mph: null, speed_max_mph: null });
+                }
+              }}
             />
-            {form.cardio_type === "Custom" && (
-              <div className="mt-2">
-                <Input
-                  value={form.custom_type ?? ""}
-                  onChange={(e) => set("custom_type", e.target.value)}
-                  placeholder="Enter custom cardio type"
-                />
-              </div>
+            {activityValue === "Walk" && (
+              <TapGroup
+                label="Mode"
+                options={CARDIO_MODE_OPTIONS as any}
+                value={walkMode ?? "treadmill"}
+                onChange={(v) => {
+                  const mode = v === "outdoor" ? "outdoor" : "treadmill";
+                  setForm({
+                    ...form,
+                    cardio_type: WALK_STORAGE[mode],
+                    ...(mode === "outdoor"
+                      ? { incline: null, speed_min_mph: null, speed_max_mph: null }
+                      : {
+                          incline: form.incline ?? INCLINE_TREADMILL_DEFAULT.incline,
+                          speed_min_mph: form.speed_min_mph ?? INCLINE_TREADMILL_DEFAULT.speed_min_mph,
+                          speed_max_mph: form.speed_max_mph ?? INCLINE_TREADMILL_DEFAULT.speed_max_mph,
+                        }),
+                  });
+                }}
+              />
+            )}
+            {activityValue === "Custom" && (
+              <Input
+                value={form.custom_type ?? ""}
+                onChange={(e) => set("custom_type", e.target.value)}
+                placeholder="Enter custom cardio type"
+              />
             )}
           </div>
           <div className="md:col-span-2">
@@ -280,18 +307,22 @@ export function CardioTargetDialog({ open, onOpenChange, clientId, clients = [],
               onChange={(e) => set("duration_minutes", e.target.value)}
             />
           </div>
-          <div>
-            <Label>Incline</Label>
-            <Input type="number" inputMode="decimal" value={form.incline ?? ""} onChange={(e) => set("incline", e.target.value)} />
-          </div>
-          <div>
-            <Label>Speed min (mph)</Label>
-            <Input type="number" inputMode="decimal" value={form.speed_min_mph ?? ""} onChange={(e) => set("speed_min_mph", e.target.value)} />
-          </div>
-          <div>
-            <Label>Speed max (mph)</Label>
-            <Input type="number" inputMode="decimal" value={form.speed_max_mph ?? ""} onChange={(e) => set("speed_max_mph", e.target.value)} />
-          </div>
+          {isTreadmill && (
+            <>
+              <div>
+                <Label>Incline %</Label>
+                <Input type="number" inputMode="decimal" value={form.incline ?? ""} onChange={(e) => set("incline", e.target.value)} />
+              </div>
+              <div>
+                <Label>Speed min (mph)</Label>
+                <Input type="number" inputMode="decimal" value={form.speed_min_mph ?? ""} onChange={(e) => set("speed_min_mph", e.target.value)} />
+              </div>
+              <div>
+                <Label>Speed max (mph)</Label>
+                <Input type="number" inputMode="decimal" value={form.speed_max_mph ?? ""} onChange={(e) => set("speed_max_mph", e.target.value)} />
+              </div>
+            </>
+          )}
           <div className="md:col-span-2 grid gap-2 sm:grid-cols-2">
             <div className="rounded-md border border-border bg-secondary/20 p-3 text-sm"><p className="font-semibold">Steps: {calculatedTargets.steps?.toLocaleString() ?? "Not set"} · {calculatedTargets.stepMode === "auto" ? "Auto" : "Custom"}</p><p className="text-xs text-muted-foreground">Recalculates with duration while Auto is selected.</p></div>
             <div className="rounded-md border border-border bg-secondary/20 p-3 text-sm"><p className="font-semibold">Estimated calories: ~{calculatedTargets.calories ?? "Not set"} kcal · {calculatedTargets.calorieMode === "auto" ? "Auto" : "Custom"}</p><p className="text-xs text-muted-foreground">Estimate only; machines and individuals vary.</p></div>
