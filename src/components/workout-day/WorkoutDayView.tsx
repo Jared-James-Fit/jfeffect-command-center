@@ -339,9 +339,11 @@ export function WorkoutDayView({
       <WorkoutAdapterContext.Provider value={adapter ?? null}>
         <WorkoutUndoProvider>
           <ActiveRestTimerProvider>
-            <WorkoutDay dayId={dayId} search={search} adapter={adapter} navigation={navigation}>
-              {children}
-            </WorkoutDay>
+            <WorkoutToolsProvider scopeKey={dayId}>
+              <WorkoutDay dayId={dayId} search={search} adapter={adapter} navigation={navigation}>
+                {children}
+              </WorkoutDay>
+            </WorkoutToolsProvider>
           </ActiveRestTimerProvider>
         </WorkoutUndoProvider>
       </WorkoutAdapterContext.Provider>
