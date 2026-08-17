@@ -13765,6 +13765,7 @@ export type Database = {
           archived: boolean
           archived_at: string | null
           archived_by: string | null
+          at_home_backup_session_key: string | null
           created_at: string
           day_index: number
           deleted_at: string | null
@@ -13792,6 +13793,7 @@ export type Database = {
           archived?: boolean
           archived_at?: string | null
           archived_by?: string | null
+          at_home_backup_session_key?: string | null
           created_at?: string
           day_index: number
           deleted_at?: string | null
@@ -13819,6 +13821,7 @@ export type Database = {
           archived?: boolean
           archived_at?: string | null
           archived_by?: string | null
+          at_home_backup_session_key?: string | null
           created_at?: string
           day_index?: number
           deleted_at?: string | null
