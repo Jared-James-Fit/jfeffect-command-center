@@ -2,12 +2,18 @@ import { describe, expect, it } from "vitest";
 import {
   AT_HOME_BACKUP_DEFINITIONS_KEY,
   AT_HOME_BACKUP_SESSIONS_KEY,
+  BACKUP_DEFINITION_EXERCISE_COUNT,
+  RESERVED_AT_HOME_BACKUP_BLOCK_KEYS,
   backupSessionDedupeKey,
   backupSessionTitle,
   cloneBackupRow,
+  filterPrimaryProgramBlocks,
   isAtHomeBackupClient,
   isAtHomeBackupDefinitionsBlock,
   isAtHomeBackupSessionBlock,
+  isCompleteBackupDefinition,
+  isReservedAtHomeBackupBlock,
+  shouldConfirmBackupStart,
   summarizeBackupDefinition,
 } from "@/lib/at-home-backup";
 
@@ -29,6 +35,54 @@ describe("at-home backup scoping", () => {
     expect(isAtHomeBackupSessionBlock(defs)).toBe(false);
     expect(isAtHomeBackupSessionBlock(other)).toBe(false);
     expect(isAtHomeBackupSessionBlock(null)).toBe(false);
+  });
+
+  it("names both reserved block keys at the query boundary", () => {
+    expect(RESERVED_AT_HOME_BACKUP_BLOCK_KEYS).toEqual([
+      AT_HOME_BACKUP_DEFINITIONS_KEY,
+      AT_HOME_BACKUP_SESSIONS_KEY,
+    ]);
+    expect(isReservedAtHomeBackupBlock({ source_template_block_key: AT_HOME_BACKUP_DEFINITIONS_KEY })).toBe(true);
+    expect(isReservedAtHomeBackupBlock({ source_template_block_key: AT_HOME_BACKUP_SESSIONS_KEY })).toBe(true);
+    expect(isReservedAtHomeBackupBlock({ source_template_block_key: "b2:template" })).toBe(false);
+    expect(isReservedAtHomeBackupBlock(null)).toBe(false);
+  });
+});
+
+describe("primary program boundary", () => {
+  const primary = { source_template_block_key: null };
+  const defs = { source_template_block_key: AT_HOME_BACKUP_DEFINITIONS_KEY };
+  const sess = { source_template_block_key: AT_HOME_BACKUP_SESSIONS_KEY };
+
+  it("excludes both reserved blocks from primary schedule/adherence queries", () => {
+    expect(filterPrimaryProgramBlocks([primary, defs, sess])).toEqual([primary]);
+  });
+
+  it("includes started session blocks only on the narrow opt-in read path", () => {
+    expect(filterPrimaryProgramBlocks([primary, defs, sess], { includeSessions: true })).toEqual([
+      primary,
+      sess,
+    ]);
+  });
+
+  it("never includes the definitions block, even with the opt-in", () => {
+    expect(filterPrimaryProgramBlocks([defs], { includeSessions: true })).toEqual([]);
+  });
+});
+
+describe("today confirmation branching", () => {
+  it("confirms only when a normal gym session is scheduled today", () => {
+    expect(shouldConfirmBackupStart(true)).toBe(true);
+    expect(shouldConfirmBackupStart(false)).toBe(false);
+  });
+});
+
+describe("definition completeness", () => {
+  it("requires exactly seven prescribed rows per definition", () => {
+    expect(BACKUP_DEFINITION_EXERCISE_COUNT).toBe(7);
+    expect(isCompleteBackupDefinition(new Array(7).fill({}))).toBe(true);
+    expect(isCompleteBackupDefinition(new Array(5).fill({}))).toBe(false);
+    expect(isCompleteBackupDefinition([])).toBe(false);
   });
 });
 
