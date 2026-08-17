@@ -159,6 +159,14 @@ export function cloneBackupRow(row: any, sortOrder: number): BackupRowPrescripti
 }
 
 /** Compact "5 exercises · ~45 min" style summary for the picker list. */
+/** Each Full Body definition must carry exactly seven prescribed rows. */
+export const BACKUP_DEFINITION_EXERCISE_COUNT = 7;
+
+/** True when a definition day carries the full prescribed row set. */
+export function isCompleteBackupDefinition(rows: unknown[] | null | undefined): boolean {
+  return (rows?.length ?? 0) === BACKUP_DEFINITION_EXERCISE_COUNT;
+}
+
 export function summarizeBackupDefinition(rows: any[]): string {
   const count = rows.length;
   const totalSets = rows.reduce((sum, r) => sum + (Number(r?.sets) || 0), 0);
