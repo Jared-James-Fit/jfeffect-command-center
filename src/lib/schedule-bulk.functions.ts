@@ -2,6 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { WEEK_DAYS, type WeekDay } from "@/lib/training-schedule";
+import { filterPrimaryProgramBlocks } from "@/lib/at-home-backup";
 import { addDays, format, parseISO } from "date-fns";
 
 // ───────────────────────────────────────────────────────────────────────────
