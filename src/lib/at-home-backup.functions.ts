@@ -71,25 +71,28 @@ async function loadDefinitionsBlock(db: any, clientId: string) {
 }
 
 async function loadBackupSessionSnapshot(db: any, clientId: string, dayId: string) {
-  const { data: day } = await db
+  const { data: day, error: dayReadError } = await db
     .from("pl_days")
     .select("id, week_id, title, scheduled_date, archived, archived_at")
     .eq("id", dayId)
     .maybeSingle();
+  if (dayReadError) throw new Error(dayReadError.message);
   if (!day) throw new Error("Backup workout not found.");
 
-  const { data: week } = await db
+  const { data: week, error: weekReadError } = await db
     .from("pl_weeks")
     .select("block_id")
     .eq("id", day.week_id)
     .maybeSingle();
+  if (weekReadError) throw new Error(weekReadError.message);
   if (!week) throw new Error("Backup workout week is missing.");
 
-  const { data: block } = await db
+  const { data: block, error: blockReadError } = await db
     .from("pl_blocks")
     .select("id, client_id, source_template_block_key")
     .eq("id", week.block_id)
     .maybeSingle();
+  if (blockReadError) throw new Error(blockReadError.message);
   if (
     !block ||
     block.client_id !== clientId ||
@@ -98,49 +101,58 @@ async function loadBackupSessionSnapshot(db: any, clientId: string, dayId: strin
     throw new Error("This workout is not an active at-home backup session.");
   }
 
-  const { data: instance } = await db
+  const { data: instance, error: instanceReadError } = await db
     .from("pl_scheduled_workouts")
     .select("id")
     .eq("client_id", clientId)
     .eq("source_day_id", day.id)
     .maybeSingle();
+  if (instanceReadError) throw new Error(instanceReadError.message);
 
   // A session day is unique to this backup instance. Scope by client + day so
   // a legacy/null instance link can never make a meaningful backup appear empty.
-  const { data: completion } = await db
+  const { data: completion, error: completionReadError } = await db
     .from("pl_day_completions")
     .select("id, completed_at, client_notes, actual_duration_min, logged_sets_count")
     .eq("client_id", clientId)
     .eq("day_id", day.id)
     .maybeSingle();
+  if (completionReadError) throw new Error(completionReadError.message);
 
-  const { data: rows } = await db
+  const { data: rows, error: rowsReadError } = await db
     .from("pl_exercise_rows")
     .select("id")
     .eq("day_id", day.id);
+  if (rowsReadError) throw new Error(rowsReadError.message);
   const rowIds = (rows ?? []).map((row: any) => row.id);
-  const { data: results } = rowIds.length
+  const resultsResponse = rowIds.length
     ? await db
         .from("pl_row_results")
         .select("actual_load, actual_reps, actual_rpe, actual_rir, completed_duration_seconds")
         .eq("client_id", clientId)
         .in("row_id", rowIds)
-    : { data: [] as any[] };
-  const { data: notes } = rowIds.length
+    : { data: [] as any[], error: null };
+  if (resultsResponse.error) throw new Error(resultsResponse.error.message);
+  const notesResponse = rowIds.length
     ? await db
         .from("pl_exercise_notes")
         .select("id")
         .eq("client_id", clientId)
         .eq("day_id", day.id)
         .limit(1)
-    : { data: [] as any[] };
-  const { data: feedback } = completion?.id
+    : { data: [] as any[], error: null };
+  if (notesResponse.error) throw new Error(notesResponse.error.message);
+  const feedbackResponse = completion?.id
     ? await db
         .from("pl_workout_feedback")
         .select("id")
         .eq("completion_id", completion.id)
         .limit(1)
-    : { data: [] as any[] };
+    : { data: [] as any[], error: null };
+  if (feedbackResponse.error) throw new Error(feedbackResponse.error.message);
+  const results = resultsResponse.data;
+  const notes = notesResponse.data;
+  const feedback = feedbackResponse.data;
 
   const hasMeaningfulResult = (results ?? []).some((result: any) => {
     const positive = (value: unknown) => value != null && Number.isFinite(Number(value)) && Number(value) > 0;
