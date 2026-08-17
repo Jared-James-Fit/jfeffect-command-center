@@ -518,7 +518,7 @@ export const getSchedulableWorkouts = createServerFn({ method: "GET" })
 
     let blocksQ = context.supabase
       .from("pl_blocks")
-      .select("id, name, status, start_date, end_date, archived_at, template_id, program_name, source_template_block_key")
+      .select("id, name, status, start_date, end_date, archived_at, program_name, source_template_block_key")
       .eq("client_id", data.clientId);
     if (!showArchived) blocksQ = blocksQ.is("archived_at", null);
     const { data: blocks, error: bErr } = await blocksQ;
