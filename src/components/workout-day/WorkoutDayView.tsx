@@ -61,6 +61,7 @@ import { ActiveRestTimerProvider, useRestTimer } from "@/components/active-rest-
 import { RestTimerButton } from "@/components/workout-day/RestTimerButton";
 import { ExerciseHistoryButton } from "@/components/exercise-history-sheet";
 import { QuickSwapButton } from "@/components/workout-day/QuickSwapButton";
+import { WorkoutToolsProvider, WorkoutToolsButton } from "@/components/workout-tools/workout-tools";
 import { convertWeight } from "@/lib/progress-metrics";
 import {
   formatPreviousLiftLoad,
@@ -338,9 +339,11 @@ export function WorkoutDayView({
       <WorkoutAdapterContext.Provider value={adapter ?? null}>
         <WorkoutUndoProvider>
           <ActiveRestTimerProvider>
-            <WorkoutDay dayId={dayId} search={search} adapter={adapter} navigation={navigation}>
-              {children}
-            </WorkoutDay>
+            <WorkoutToolsProvider scopeKey={dayId}>
+              <WorkoutDay dayId={dayId} search={search} adapter={adapter} navigation={navigation}>
+                {children}
+              </WorkoutDay>
+            </WorkoutToolsProvider>
           </ActiveRestTimerProvider>
         </WorkoutUndoProvider>
       </WorkoutAdapterContext.Provider>
@@ -2870,6 +2873,10 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
         <Button size="sm" variant={hasNote ? "default" : "outline"} onClick={() => setNotesOpen(true)} className="h-7 rounded-full px-2.5 text-xs">
           <StickyNote className="mr-1 h-3 w-3" /> Notes
         </Button>
+        {/* Generic scratchpad aids (Tally / Stopwatch / Timer). Entirely
+            separate from the prescribed Rest timer below — nothing here
+            writes workout data. */}
+        {!readonly && <WorkoutToolsButton context={name} />}
         <QuickSwapButton
           rowId={row.id}
           exerciseId={exerciseId}
