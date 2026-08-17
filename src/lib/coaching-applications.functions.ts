@@ -7,172 +7,94 @@ import { toLeadScore5 } from "./lead-score-display";
 
 /* ─────────── Quick-Apply Quiz schema (v2) ─────────── */
 
-const submitSchema = z.object({
-  // Contact (required)
-  first_name: z.string().trim().min(1).max(60),
+const HELP_CATEGORIES = ["powerlifting", "fat_loss", "build_muscle", "general_fitness", "other"] as const;
+const START_WINDOWS = ["asap", "this_month", "one_three_months", "exploring"] as const;
+
+export function normalizeInstagramHandle(value: string): string {
+  const handle = value.trim().replace(/^@+/, "");
+  if (!/^[A-Za-z0-9._]{1,30}$/.test(handle)) {
+    throw new Error("Enter a valid Instagram handle, with or without @.");
+  }
+  return `@${handle}`;
+}
+
+export const publicCoachingApplicationSchema = z.object({
+  // The public application deliberately collects only lead-stage essentials.
+  full_name: z.string().trim().min(2).max(120),
   email: z.string().trim().email().max(200),
   phone: z.string().trim().min(5).max(40),
-  instagram: z.string().trim().max(80).optional().default(""),
-  location_timezone: z.string().trim().max(120).optional().default(""),
+  instagram: z.string().trim().min(1, "Instagram is required").max(80).transform(normalizeInstagramHandle),
+  main_goal: z.enum(HELP_CATEGORIES),
+  target_outcome: z.string().trim().min(1).max(250),
+  timeline: z.enum(START_WINDOWS),
 
-  // Goal + result
-  main_goal: z.string().trim().min(1).max(80),
-  target_outcome: z.string().trim().max(250).optional().default(""),
-
-  // Obstacle
-  obstacle: z.string().trim().max(80).optional().default(""),
-  obstacle_other: z.string().trim().max(80).optional().default(""),
-
-  // Training
-  training_location: z.string().trim().max(80).optional().default(""),
-  days_per_week: z.coerce.number().int().min(0).max(14).optional(),
-  timeline: z.string().trim().max(80).optional().default(""),
-
-  // Coaching fit
-  coaching_interest: z.string().trim().max(80).optional().default(""),
-  readiness: z.string().trim().max(80).optional().default(""),
-  tracking_willingness: z.string().trim().max(80).optional().default(""),
-  investment_readiness: z.string().trim().max(80).optional().default(""),
-
-  // Why now
-  why_now: z.string().trim().max(250).optional().default(""),
-  why_now_tags: z.array(z.string().trim().max(60)).max(10).optional().default([]),
-
-  // Contact preferences + consent
-  preferred_contact: z.enum(["text", "phone", "email", "instagram"]).optional(),
-  best_time: z.enum(["morning", "afternoon", "evening", "flexible"]).optional(),
-  consent_contact: z.boolean(),
-
-  // Bot trap
+  // Bot trap and automatic attribution only; neither is shown as a prospect question.
   honeypot: z.string().max(0).optional().default(""),
-
-  // Marketing attribution
   source_page: z.string().trim().max(80).optional().default(""),
   page_url: z.string().trim().max(500).optional().default(""),
   referrer: z.string().trim().max(500).optional().default(""),
   form_name: z.string().trim().max(120).optional().default(""),
   is_test: z.boolean().optional().default(false),
+}).refine((d) => !d.honeypot, { message: "Spam detected", path: ["honeypot"] });
 
-  // Legacy fields still accepted for back-compat but ignored
-  last_name: z.string().trim().max(60).optional().default(""),
-}).refine((d) => d.consent_contact === true, { message: "Consent required", path: ["consent_contact"] })
-  .refine((d) => !d.honeypot, { message: "Spam detected", path: ["honeypot"] });
-
-type Submission = z.infer<typeof submitSchema>;
+type Submission = z.infer<typeof publicCoachingApplicationSchema>;
 
 /* ─────────── Category scoring (0–100) ─────────── */
 
-function scoreApplication(d: Submission) {
+export function scoreApplication(d: Submission) {
   const breakdown: Record<string, { score: number; max: number; reason: string }> = {};
 
-  // Goal / service fit — 0–20
-  {
-    let s = 0; let reason = "no goal selected";
-    if (d.main_goal) { s = 14; reason = `clear goal: ${d.main_goal}`; }
-    if (d.coaching_interest && d.coaching_interest !== "help_me_choose") {
-      s += 6; reason += `; service: ${d.coaching_interest}`;
-    } else if (d.coaching_interest === "help_me_choose") {
-      s += 3; reason += `; wants help choosing service`;
-    }
-    breakdown.goal_service_fit = { score: Math.min(20, s), max: 20, reason };
-  }
-  // Readiness — 0–20
-  {
-    let s = 0; let reason = "no readiness selected";
-    switch (d.readiness) {
-      case "fully_ready": s = 20; reason = "fully ready"; break;
-      case "ready_accountability": s = 16; reason = "ready, needs accountability"; break;
-      case "unsure": s = 8; reason = "unsure"; break;
-      case "researching": s = 4; reason = "mostly researching"; break;
-    }
-    breakdown.readiness = { score: s, max: 20, reason };
-  }
-  // Willingness to follow process — 0–20
-  {
-    let s = 0; let reason = "tracking willingness unknown";
-    switch (d.tracking_willingness) {
-      case "yes": s = 20; reason = "will track everything"; break;
-      case "most": s = 14; reason = "will track most"; break;
-      case "not_sure": s = 6; reason = "not sure about tracking"; break;
-      case "no": s = 0; reason = "will not track"; break;
-    }
-    breakdown.willingness = { score: s, max: 20, reason };
-  }
-  // Investment / offer fit — 0–20
-  {
-    let s = 0; let reason = "investment unknown";
-    switch (d.investment_readiness) {
-      case "premium": s = 20; reason = "ready for premium"; break;
-      case "full_online": s = 16; reason = "ready for full online"; break;
-      case "lower_cost": s = 10; reason = "needs lower-cost option"; break;
-      case "explain_options": s = 8; reason = "needs to understand options"; break;
-      case "not_ready": s = 2; reason = "not ready to invest"; break;
-    }
-    breakdown.investment = { score: s, max: 20, reason };
-  }
-  // Urgency / reason for applying — 0–15
-  {
-    let s = 0; let reason = "no timeline";
-    switch (d.timeline) {
-      case "asap": s = 12; reason = "starting ASAP"; break;
-      case "two_weeks": s = 10; reason = "within 2 weeks"; break;
-      case "thirty_days": s = 7; reason = "within 30 days"; break;
-      case "one_three_months": s = 4; reason = "within 1–3 months"; break;
-      case "exploring": s = 1; reason = "just exploring"; break;
-    }
-    if ((d.why_now || "").trim().length >= 40 || (d.why_now_tags?.length ?? 0) > 0) {
-      s += 3; reason += "; clear why-now";
-    }
-    breakdown.urgency = { score: Math.min(15, s), max: 15, reason };
-  }
-  // Contact completeness — 0–5
-  {
-    let s = 0;
-    if (d.email) s += 2;
-    if (d.phone) s += 2;
-    if (d.preferred_contact) s += 1;
-    breakdown.contact = { score: Math.min(5, s), max: 5, reason: "contact fields filled" };
-  }
+  // Score only information that the concise prospect form actually collects.
+  const goalScores: Record<(typeof HELP_CATEGORIES)[number], number> = {
+    powerlifting: 30, fat_loss: 28, build_muscle: 28, general_fitness: 24, other: 20,
+  };
+  breakdown.goal_fit = {
+    score: goalScores[d.main_goal], max: 30,
+    reason: `clear coaching focus: ${d.main_goal.replace(/_/g, " ")}`,
+  };
 
-  const total = Object.values(breakdown).reduce((acc, b) => acc + b.score, 0);
-  const score = Math.max(0, Math.min(100, total));
+  const urgencyScores: Record<(typeof START_WINDOWS)[number], [number, string]> = {
+    asap: [40, "starting ASAP"],
+    this_month: [30, "starting this month"],
+    one_three_months: [18, "starting in 1–3 months"],
+    exploring: [8, "just exploring"],
+  };
+  const [urgencyScore, urgencyReason] = urgencyScores[d.timeline];
+  breakdown.start_window = { score: urgencyScore, max: 40, reason: urgencyReason };
+  breakdown.contact = { score: 20, max: 20, reason: "email, phone, and Instagram supplied" };
 
-  let qualification_label = "Low Readiness";
+  const score = Object.values(breakdown).reduce((acc, item) => acc + item.score, 0);
+  let qualification_label = "Needs Review";
   if (score >= 80) qualification_label = "Priority Lead";
   else if (score >= 60) qualification_label = "Strong Lead";
-  else if (score >= 40) qualification_label = "Needs Review";
 
-  let temperature: "hot" | "warm" | "cold" = "cold";
-  if (score >= 70) temperature = "hot";
-  else if (score >= 40) temperature = "warm";
-
-  // Recommended offer heuristic
-  let recommended_offer = "Coaching Discovery Call";
-  const g = (d.main_goal || "").toLowerCase();
-  if (g.includes("powerlift")) recommended_offer = "Powerlifting Coaching";
-  else if (g.includes("muscle") || g.includes("build")) recommended_offer = "Hypertrophy Coaching";
-  else if (g.includes("fat") || g.includes("lose")) recommended_offer = "Fat Loss Coaching";
-  else if (g.includes("strong") || g.includes("strength")) recommended_offer = "Strength Coaching";
-  if (d.coaching_interest === "membership") recommended_offer = "App Membership";
-
+  const temperature: "hot" | "warm" | "cold" = score >= 80 ? "hot" : score >= 50 ? "warm" : "cold";
+  const recommendedByGoal: Record<(typeof HELP_CATEGORIES)[number], string> = {
+    powerlifting: "Powerlifting Coaching",
+    fat_loss: "Fat Loss Coaching",
+    build_muscle: "Hypertrophy Coaching",
+    general_fitness: "General Fitness Coaching",
+    other: "Coaching Discovery Call",
+  };
+  const recommended_offer = recommendedByGoal[d.main_goal];
   const summary = [
-    `${d.main_goal} goal`,
-    d.timeline ? `start ${d.timeline.replace(/_/g, " ")}` : null,
-    d.coaching_interest ? `interest ${d.coaching_interest.replace(/_/g, " ")}` : null,
+    d.main_goal.replace(/_/g, " "),
+    `target: ${d.target_outcome}`,
+    `start: ${d.timeline.replace(/_/g, " ")}`,
     `${qualification_label} (${score}/100)`,
-  ].filter(Boolean).join(" · ");
+  ].join(" · ");
 
   return {
     score, temperature, recommended_offer, summary,
     qualification_label,
-    scoring: { version: "v2", total: score, breakdown, scored_at: new Date().toISOString() },
+    scoring: { version: "v3_concise_lead", total: score, breakdown, scored_at: new Date().toISOString() },
   };
 }
 
 /* ─────────── Public submit endpoint ─────────── */
 
 export const submitCoachingApplication = createServerFn({ method: "POST" })
-  .inputValidator((i: unknown) => submitSchema.parse(i))
+  .inputValidator((i: unknown) => publicCoachingApplicationSchema.parse(i))
   .handler(async ({ data }) => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const scored = scoreApplication(data);
@@ -183,7 +105,9 @@ export const submitCoachingApplication = createServerFn({ method: "POST" })
       form_name: data.form_name || "Quick Apply",
       default_source_label: DEFAULT_QUICK_APPLY_SOURCE,
     });
-    const full_name = data.first_name + (data.last_name ? " " + data.last_name : "");
+    const full_name = data.full_name.trim();
+    const [first_name, ...lastNameParts] = full_name.split(/\s+/);
+    const last_name = lastNameParts.join(" ");
 
     // Booking link configured by admin?
     const { data: settingsRows } = await supabaseAdmin
@@ -195,8 +119,8 @@ export const submitCoachingApplication = createServerFn({ method: "POST" })
 
     // CRM client (single source of truth)
     const upsert = await upsertApplicantClient(supabaseAdmin, {
-      first_name: data.first_name,
-      last_name: data.last_name || "",
+      first_name: first_name,
+      last_name: last_name || "",
       email: data.email,
       phone: data.phone || null,
       instagram: data.instagram || null,
@@ -210,31 +134,30 @@ export const submitCoachingApplication = createServerFn({ method: "POST" })
       .from("coaching_applications")
       .insert({
         client_id: upsert.client_id,
-        first_name: data.first_name,
-        last_name: data.last_name || null,
+        first_name: first_name,
+        last_name: last_name || null,
         full_name,
         email: data.email,
         phone: data.phone || null,
         instagram: data.instagram || null,
-        location_timezone: data.location_timezone || null,
+        location_timezone: null,
         main_goal: data.main_goal,
-        why_now: data.why_now || null,
-        target_outcome: data.target_outcome || null,
-        timeline: data.timeline || null,
-        days_per_week: data.days_per_week ?? null,
-        // New quiz fields
-        obstacle: data.obstacle || null,
-        obstacle_other: data.obstacle_other || null,
-        training_location: data.training_location || null,
-        coaching_interest: data.coaching_interest || null,
-        readiness: data.readiness || null,
-        tracking_willingness: data.tracking_willingness || null,
-        investment_readiness: data.investment_readiness || null,
-        preferred_contact: data.preferred_contact || null,
-        best_time: data.best_time || null,
-        why_now_tags: data.why_now_tags?.length ? data.why_now_tags : null,
-        consent_contact_at: new Date().toISOString(),
-        application_source: "quick_apply_v1",
+        why_now: null,
+        target_outcome: data.target_outcome,
+        timeline: data.timeline,
+        days_per_week: null,
+        obstacle: null,
+        obstacle_other: null,
+        training_location: null,
+        coaching_interest: null,
+        readiness: null,
+        tracking_willingness: null,
+        investment_readiness: null,
+        preferred_contact: null,
+        best_time: null,
+        why_now_tags: null,
+        consent_contact_at: null,
+        application_source: "quick_apply_v2",
         // Attribution (additive — legacy rows stay null and display as Unknown)
         source_label: attribution.source_label,
         form_name: attribution.form_name,
@@ -259,7 +182,7 @@ export const submitCoachingApplication = createServerFn({ method: "POST" })
         status: upsert.conflict ? "Needs Review" : "New",
         submitted_at: new Date().toISOString(),
         // Legacy back-compat
-        goals: [data.main_goal, data.why_now, data.target_outcome].filter(Boolean).join("\n\n") || null,
+        goals: [data.main_goal, data.target_outcome].filter(Boolean).join("\n\n") || null,
       })
       .select("id")
       .single();
@@ -304,7 +227,7 @@ export const submitCoachingApplication = createServerFn({ method: "POST" })
         timeZone: "America/Winnipeg", dateStyle: "medium", timeStyle: "short",
       }) + " CT";
       const sourceLabel = attribution.source_label ?? "Unknown";
-      const serviceLabel = (data.coaching_interest || data.main_goal || "—").replace(/_/g, " ");
+      const serviceLabel = (data.main_goal || "—").replace(/_/g, " ");
       const score5 = toLeadScore5(scored.score);
 
       const smsBody =
@@ -314,27 +237,13 @@ export const submitCoachingApplication = createServerFn({ method: "POST" })
         `Lead Score ${score5 ?? "?"}/5. ${adminLink}`;
 
       const answers: Array<[string, unknown]> = [
-        ["Name", full_name],
+        ["Full name", full_name],
         ["Email", data.email],
         ["Phone", data.phone],
         ["Instagram handle", data.instagram],
-        ["Location / timezone", data.location_timezone],
-        ["Main goal", data.main_goal],
-        ["Target outcome", data.target_outcome],
-        ["Biggest obstacle", data.obstacle],
-        ["Obstacle (other)", data.obstacle_other],
-        ["Training location", data.training_location],
-        ["Days per week", data.days_per_week],
-        ["Timeline to start", startLabel],
-        ["Coaching interest", data.coaching_interest],
-        ["Readiness", data.readiness],
-        ["Tracking willingness", data.tracking_willingness],
-        ["Investment readiness", data.investment_readiness],
-        ["Why now", data.why_now],
-        ["Why-now tags", (data.why_now_tags || []).join(", ")],
-        ["Preferred contact", data.preferred_contact],
-        ["Best time to reach", data.best_time],
-        ["Consent to contact", "Yes"],
+        ["Looking for help with", data.main_goal.replace(/_/g, " ")],
+        ["Result wanted", data.target_outcome],
+        ["When to start", startLabel],
       ];
 
       const emailBody = [
@@ -374,7 +283,7 @@ export const submitCoachingApplication = createServerFn({ method: "POST" })
       const { sendApplicantConfirmationEmail } = await import("./coaching-app-notify.server");
       await sendApplicantConfirmationEmail(supabaseAdmin, {
         to: data.email,
-        firstName: data.first_name,
+        firstName: first_name,
         applicationId: inserted.id,
         submittedAtStr: new Date().toLocaleString("en-CA", {
           timeZone: "America/Winnipeg", dateStyle: "medium", timeStyle: "short",
@@ -397,7 +306,7 @@ export const submitCoachingApplication = createServerFn({ method: "POST" })
       qualification_label: scored.qualification_label,
       recommended_offer: scored.recommended_offer,
       booking_slug: canBook ? bookingSlug : null,
-      first_name: data.first_name,
+      first_name: first_name,
       email: data.email,
       phone: data.phone,
     };

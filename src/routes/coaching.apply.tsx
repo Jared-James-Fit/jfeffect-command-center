@@ -4,14 +4,13 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { SalesPageShell, Section } from "@/components/sales/sales-page-shell";
 import {
-  ArrowLeft, ArrowRight, X, CheckCircle2, CalendarClock, Loader2, Clock, Video,
+  ArrowLeft, CheckCircle2, CalendarClock, Loader2, Clock, Video,
 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
 import { submitCoachingApplication } from "@/lib/coaching-applications.functions";
 import {
   computeAvailableSlots, bookSlotPublic, getBookingLinkPublic,
@@ -19,625 +18,109 @@ import {
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/coaching/apply")({
-  component: QuickApply,
+  component: SimpleQuickApply,
   head: () => ({
     meta: [
-      { title: "Apply for JF Effect Coaching — 60–120 seconds" },
-      { name: "description", content: "Answer a few quick questions, then book a call if coaching looks right for you." },
+      { title: "Apply for JF Effect Coaching — 30–60 seconds" },
+      { name: "description", content: "Tell us who you are, what you want, and when you want to start." },
       { property: "og:title", content: "Apply for JF Effect Coaching" },
-      { property: "og:description", content: "Answer a few quick questions, then book a call if coaching looks right for you." },
+      { property: "og:description", content: "Tell us who you are, what you want, and when you want to start." },
     ],
   }),
 });
 
 /* ────────────────── data ────────────────── */
 
-const GOALS = [
-  { v: "Lose body fat", l: "Lose body fat" },
-  { v: "Build muscle", l: "Build muscle" },
-  { v: "Get stronger", l: "Get stronger" },
-  { v: "Powerlifting", l: "Powerlifting" },
-  { v: "Improve consistency", l: "Improve consistency" },
-  { v: "Feel healthier", l: "Feel healthier" },
-  { v: "Prepare for an event", l: "Prepare for an event" },
-  { v: "Not sure yet", l: "Not sure yet" },
-];
-
-const OBSTACLES = [
-  { v: "dont_know_what", l: "I do not know what to do" },
-  { v: "falling_off", l: "I keep falling off" },
-  { v: "nutrition", l: "Nutrition" },
-  { v: "accountability", l: "Accountability" },
-  { v: "time", l: "Lack of time" },
-  { v: "plateau", l: "Training plateaus" },
-  { v: "motivation", l: "Motivation" },
+const SIMPLE_GOALS = [
+  { v: "powerlifting", l: "Powerlifting" },
+  { v: "fat_loss", l: "Fat Loss" },
+  { v: "build_muscle", l: "Build Muscle" },
+  { v: "general_fitness", l: "General Fitness" },
   { v: "other", l: "Other" },
-];
-
-const TRAINING_LOCATIONS = [
-  { v: "full_gym", l: "Full gym" },
-  { v: "home_gym", l: "Home gym" },
-  { v: "home_limited", l: "At home with limited equipment" },
-  { v: "not_training", l: "Not training right now" },
-];
-
-const DAYS = [
-  { v: 2, l: "2 days" }, { v: 3, l: "3 days" }, { v: 4, l: "4 days" },
-  { v: 5, l: "5 days" }, { v: 6, l: "6+ days" },
-];
-
-const TIMELINES = [
-  { v: "asap", l: "As soon as possible" },
-  { v: "two_weeks", l: "Within 2 weeks" },
-  { v: "thirty_days", l: "Within 30 days" },
-  { v: "one_three_months", l: "Within 1–3 months" },
-  { v: "exploring", l: "Just exploring" },
-];
-
-const COACHING_INTERESTS = [
-  { v: "high_access_private", l: "High-access private coaching" },
-  { v: "full_online", l: "Full online coaching" },
-  { v: "training_nutrition", l: "Training and nutrition support" },
-  { v: "membership", l: "Lower-cost app membership" },
-  { v: "help_me_choose", l: "Help me choose" },
-];
-
-const READINESS = [
-  { v: "fully_ready", l: "Fully ready" },
-  { v: "ready_accountability", l: "Ready, but I need accountability" },
-  { v: "unsure", l: "Unsure" },
-  { v: "researching", l: "Mostly researching" },
-];
-
-const TRACKING = [
-  { v: "yes", l: "Yes" },
-  { v: "most", l: "Most of it" },
-  { v: "not_sure", l: "Not sure" },
-  { v: "no", l: "No" },
-];
-
-const INVESTMENT = [
-  { v: "premium", l: "Ready for premium coaching" },
-  { v: "full_online", l: "Ready for full online coaching" },
-  { v: "lower_cost", l: "Need a lower-cost option" },
-  { v: "explain_options", l: "Need to understand the options" },
-  { v: "not_ready", l: "Not ready to invest yet" },
-];
-
-const WHY_NOW_TAGS = [
-  "I am tired of restarting",
-  "I have an event coming up",
-  "My health is becoming a priority",
-  "I want expert guidance",
-  "I need accountability",
-];
-
-const CONTACT_METHODS = [
-  { v: "text", l: "Text" },
-  { v: "phone", l: "Phone call" },
-  { v: "email", l: "Email" },
-  { v: "instagram", l: "Instagram" },
+] as const;
+const SIMPLE_TIMELINES = [
+  { v: "asap", l: "ASAP" },
+  { v: "this_month", l: "This Month" },
+  { v: "one_three_months", l: "Next 1–3 Months" },
+  { v: "exploring", l: "Just Exploring" },
 ] as const;
 
-const BEST_TIMES = [
-  { v: "morning", l: "Morning" },
-  { v: "afternoon", l: "Afternoon" },
-  { v: "evening", l: "Evening" },
-  { v: "flexible", l: "Flexible" },
-] as const;
-
-type FormState = {
-  main_goal: string;
-  target_outcome: string;
-  obstacle: string;
-  obstacle_other: string;
-  training_location: string;
-  days_per_week: number | null;
-  timeline: string;
-  coaching_interest: string;
-  readiness: string;
-  tracking_willingness: string;
-  investment_readiness: string;
-  why_now: string;
-  why_now_tags: string[];
-  first_name: string;
-  phone: string;
-  email: string;
-  instagram: string;
-  preferred_contact: "text" | "phone" | "email" | "instagram" | "";
-  best_time: "morning" | "afternoon" | "evening" | "flexible" | "";
-  consent_contact: boolean;
-  honeypot: string;
-  source_page: string;
+type SimpleFormState = {
+  full_name: string; email: string; phone: string; instagram: string;
+  main_goal: string; target_outcome: string; timeline: string;
+  honeypot: string; source_page: string;
+};
+const EMPTY_SIMPLE_FORM: SimpleFormState = {
+  full_name: "", email: "", phone: "", instagram: "", main_goal: "", target_outcome: "", timeline: "", honeypot: "", source_page: "",
 };
 
-const EMPTY: FormState = {
-  main_goal: "", target_outcome: "",
-  obstacle: "", obstacle_other: "",
-  training_location: "", days_per_week: null, timeline: "",
-  coaching_interest: "", readiness: "", tracking_willingness: "", investment_readiness: "",
-  why_now: "", why_now_tags: [],
-  first_name: "", phone: "", email: "", instagram: "",
-  preferred_contact: "", best_time: "",
-  consent_contact: false, honeypot: "",
-  source_page: "",
-};
-
-const STORAGE_KEY = "jf:quickapply:v1";
-const STORAGE_STEP_KEY = "jf:quickapply-step:v1";
-
-/* ────────────────── component ────────────────── */
-
-function QuickApply() {
+function SimpleQuickApply() {
   const submit = useServerFn(submitCoachingApplication);
-  const [form, setForm] = useState<FormState>(() => {
-    if (typeof window === "undefined") return EMPTY;
-    try {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      if (raw) return { ...EMPTY, ...JSON.parse(raw) };
-    } catch { /* noop */ }
-    return EMPTY;
-  });
-  const [step, setStep] = useState(() => {
-    if (typeof window === "undefined") return 0;
-    try {
-      const raw = localStorage.getItem(STORAGE_STEP_KEY);
-      const n = raw ? parseInt(raw, 10) : 0;
-      return Number.isFinite(n) && n >= 0 ? n : 0;
-    } catch { return 0; }
-  });
-  const suppressAutoAdvanceRef = useRef(false);
+  const [form, setForm] = useState<SimpleFormState>(EMPTY_SIMPLE_FORM);
   const [result, setResult] = useState<Awaited<ReturnType<typeof submit>> | null>(null);
+  const set = <K extends keyof SimpleFormState>(key: K, value: SimpleFormState[K]) => setForm((current) => ({ ...current, [key]: value }));
 
-  const set = <K extends keyof FormState>(k: K, v: FormState[K]) => setForm((f) => ({ ...f, [k]: v }));
-
-  // Capture marketing-source query param (e.g. /coaching/apply?from=selkirk)
   useEffect(() => {
     if (typeof window === "undefined") return;
-    try {
-      const params = new URLSearchParams(window.location.search);
-      const from = params.get("from");
-      if (from) setForm((f) => (f.source_page ? f : { ...f, source_page: from }));
-    } catch { /* noop */ }
+    const params = new URLSearchParams(window.location.search);
+    set("source_page", params.get("from") || "coaching_apply");
   }, []);
 
-  useEffect(() => {
-    if (result) return;
-    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(form)); } catch { /* noop */ }
-  }, [form, result]);
+  const valid =
+    form.full_name.trim().length >= 2 &&
+    /.+@.+\..+/.test(form.email.trim()) &&
+    /^[\d\s+\-()]{7,}$/.test(form.phone.trim()) &&
+    /^@?[A-Za-z0-9._]{1,30}$/.test(form.instagram.trim()) &&
+    !!form.main_goal && form.target_outcome.trim().length > 0 && !!form.timeline;
 
-  useEffect(() => {
-    if (result) return;
-    try { localStorage.setItem(STORAGE_STEP_KEY, String(step)); } catch { /* noop */ }
-  }, [step, result]);
-
-  const mut = useMutation({
+  const mutation = useMutation({
     mutationFn: () => submit({ data: {
       ...form,
-      days_per_week: form.days_per_week ?? undefined,
-      preferred_contact: form.preferred_contact || undefined,
-      best_time: form.best_time || undefined,
-      source_page: form.source_page || undefined,
-      page_url: typeof window !== "undefined" ? window.location.href : undefined,
-      referrer: typeof document !== "undefined" ? document.referrer || undefined : undefined,
-      form_name: "Quick Apply — Online Coaching",
-      is_test: typeof window !== "undefined" && new URLSearchParams(window.location.search).get("test") === "1",
-    } as any }),
-    onSuccess: (r) => {
-      setResult(r);
-      try {
-        localStorage.removeItem(STORAGE_KEY);
-        localStorage.removeItem(STORAGE_STEP_KEY);
-      } catch { /* noop */ }
-      window.scrollTo({ top: 0, behavior: "smooth" });
-    },
-    onError: (e: any) => toast.error(e?.message ?? "Couldn't submit application."),
+      page_url: typeof window !== "undefined" ? window.location.href : "",
+      referrer: typeof document !== "undefined" ? document.referrer : "",
+      form_name: "Public Coaching Application",
+    } }),
+    onSuccess: (next) => { setResult(next); window.scrollTo({ top: 0, behavior: "smooth" }); },
+    onError: (error: any) => toast.error(error?.message ?? "Could not submit your application. Please try again."),
   });
 
   if (result) return <PostSubmit result={result} />;
 
-  /* Step definitions — each step returns its own JSX, has a `valid()` predicate,
-     and may opt into auto-advance for single-choice answers. */
-  const steps = useMemo(() => buildSteps(form, set), [form]);
-  const total = steps.length;
-  const safeStep = Math.min(step, total - 1);
-  const cur = steps[safeStep];
-  useEffect(() => {
-    if (step > total - 1) setStep(total - 1);
-  }, [step, total]);
-  const pct = Math.round(((step + 1) / total) * 100);
-
-  function next() {
-    if (!cur.valid()) return;
-    if (step < total - 1) {
-      setStep(step + 1);
-      window.scrollTo({ top: 0, behavior: "smooth" });
-    } else {
-      mut.mutate();
-    }
-  }
-  function back() {
-    if (step > 0) {
-      suppressAutoAdvanceRef.current = true;
-      setStep(step - 1);
-      window.scrollTo({ top: 0, behavior: "smooth" });
-    }
-  }
-
-  // Auto-advance for steps that say so
-  useEffect(() => {
-    if (suppressAutoAdvanceRef.current) {
-      suppressAutoAdvanceRef.current = false;
-      return;
-    }
-    if (!cur.autoAdvance) return;
-    if (!cur.valid()) return;
-    const t = setTimeout(() => {
-      if (step < total - 1) setStep(step + 1);
-    }, 220);
-    return () => clearTimeout(t);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [cur.autoKey, step, total]);
-
   return (
     <SalesPageShell>
-      <Section className="!py-6 md:!py-10">
-        <div className="mx-auto w-full max-w-xl">
-          <div className="mb-4 flex items-center justify-between gap-3">
-            <Link to="/coaching" className="inline-flex items-center gap-1 rounded-md border border-border bg-background px-2.5 py-1.5 text-xs font-semibold text-foreground hover:bg-muted">
-              <X className="h-3 w-3" /> Exit
-            </Link>
-            <div className="text-[11px] uppercase tracking-widest text-muted-foreground">
-              Step {step + 1} of {total}
+      <Section className="!py-8 md:!py-12">
+        <div className="mx-auto max-w-xl">
+          <Card className="p-5 md:p-8">
+            <div className="mb-6">
+              <p className="text-xs font-bold uppercase tracking-[0.18em] text-primary">JF Effect Coaching</p>
+              <h1 className="mt-2 text-3xl font-black tracking-tight md:text-4xl">Apply for Coaching</h1>
+              <p className="mt-2 text-sm text-muted-foreground">A few quick details so we can understand what you need and how to reach you.</p>
             </div>
-          </div>
-
-          {/* Progress */}
-          <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
-            <div className="h-full bg-primary transition-all duration-300" style={{ width: `${pct}%` }} />
-          </div>
-
-          <Card className="mt-4 p-5 md:p-6">
-            <h1 className="text-xl md:text-2xl font-black tracking-tight">{cur.title}</h1>
-            {cur.sub && <p className="mt-1 text-sm text-muted-foreground">{cur.sub}</p>}
-            <div className="mt-5">{cur.body}</div>
-
-            {/* Honeypot */}
-            <input
-              type="text" name="company" tabIndex={-1} autoComplete="off"
-              value={form.honeypot} onChange={(e) => set("honeypot", e.target.value)}
-              className="absolute -left-[9999px] h-0 w-0 opacity-0" aria-hidden
-            />
+            <form className="space-y-5" onSubmit={(event) => { event.preventDefault(); if (valid) mutation.mutate(); }}>
+              <div className="space-y-2"><Label htmlFor="full_name">Full Name</Label><Input id="full_name" required autoComplete="name" value={form.full_name} onChange={(e) => set("full_name", e.target.value)} /></div>
+              <div className="space-y-2"><Label htmlFor="email">Email</Label><Input id="email" type="email" required autoComplete="email" value={form.email} onChange={(e) => set("email", e.target.value)} /></div>
+              <div className="space-y-2"><Label htmlFor="phone">Phone Number</Label><Input id="phone" type="tel" required autoComplete="tel" value={form.phone} onChange={(e) => set("phone", e.target.value)} /></div>
+              <div className="space-y-2"><Label htmlFor="instagram">Instagram @</Label><Input id="instagram" required autoComplete="off" placeholder="@username" value={form.instagram} onChange={(e) => set("instagram", e.target.value)} /><p className="text-xs text-muted-foreground">Enter @username or username.</p></div>
+              <ChoiceGrid label="What are you looking for help with?" options={SIMPLE_GOALS} value={form.main_goal} onChange={(value) => set("main_goal", value)} />
+              <div className="space-y-2"><Label htmlFor="target_outcome">What result are you trying to achieve?</Label><Textarea id="target_outcome" required rows={3} maxLength={250} placeholder="Tell me the main result you want." value={form.target_outcome} onChange={(e) => set("target_outcome", e.target.value)} className="resize-none text-base" /></div>
+              <ChoiceGrid label="When are you looking to get started?" options={SIMPLE_TIMELINES} value={form.timeline} onChange={(value) => set("timeline", value)} />
+              <input aria-hidden="true" tabIndex={-1} className="hidden" value={form.honeypot} onChange={(e) => set("honeypot", e.target.value)} />
+              <Button type="submit" size="lg" className="h-14 w-full text-base font-black" disabled={!valid || mutation.isPending}>
+                {mutation.isPending ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Applying…</> : "Apply for Coaching"}
+              </Button>
+              <p className="text-center text-xs text-muted-foreground">Takes about 30–60 seconds.</p>
+            </form>
           </Card>
-
-          {/* Sticky continue */}
-          <div className="sticky bottom-3 z-10 mt-4 flex items-center justify-between gap-3">
-            <Button
-              variant="ghost" size="lg" onClick={back} disabled={step === 0}
-              className="h-12 px-4"
-            >
-              <ArrowLeft className="mr-1 h-4 w-4" /> Back
-            </Button>
-            <Button
-              size="lg" onClick={next}
-              disabled={!cur.valid() || mut.isPending}
-              className="h-12 flex-1 text-base font-bold"
-            >
-              {mut.isPending ? (
-                <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Submitting…</>
-              ) : step === total - 1 ? (
-                "Submit Application"
-              ) : (
-                <>Continue <ArrowRight className="ml-1 h-4 w-4" /></>
-              )}
-            </Button>
-          </div>
         </div>
       </Section>
     </SalesPageShell>
   );
 }
 
-/* ────────────────── steps ────────────────── */
-
-type StepDef = {
-  title: string;
-  sub?: string;
-  body: React.ReactNode;
-  valid: () => boolean;
-  autoAdvance?: boolean;
-  /** Changing this key re-triggers the auto-advance effect (latest selection). */
-  autoKey?: string;
-};
-
-function buildSteps(f: FormState, set: <K extends keyof FormState>(k: K, v: FormState[K]) => void): StepDef[] {
-  const steps: StepDef[] = [];
-
-  // 1. Main goal
-  steps.push({
-    title: "What do you want help with most?",
-    sub: "Pick the one that fits best.",
-    body: <CardGrid options={GOALS} value={f.main_goal} onChange={(v) => set("main_goal", v)} />,
-    valid: () => !!f.main_goal,
-    autoAdvance: true, autoKey: f.main_goal,
-  });
-
-  // 2. Desired result (text)
-  steps.push({
-    title: "What result do you want most?",
-    sub: "Keep it short — we only need the main result.",
-    body: (
-      <TextField
-        value={f.target_outcome} max={250}
-        placeholder="Lose 20 lb, feel confident, and stop falling off."
-        onChange={(v) => set("target_outcome", v)}
-      />
-    ),
-    valid: () => f.target_outcome.trim().length >= 3,
-  });
-
-  // 3. Obstacle
-  steps.push({
-    title: "What is holding you back most?",
-    body: (
-      <div className="space-y-3">
-        <CardGrid options={OBSTACLES} value={f.obstacle} onChange={(v) => set("obstacle", v)} />
-        {f.obstacle === "other" && (
-          <Input
-            placeholder="Briefly — what's the obstacle?" maxLength={80}
-            value={f.obstacle_other} onChange={(e) => set("obstacle_other", e.target.value)}
-          />
-        )}
-      </div>
-    ),
-    valid: () => !!f.obstacle && (f.obstacle !== "other" || f.obstacle_other.trim().length >= 2),
-    autoAdvance: f.obstacle !== "" && f.obstacle !== "other",
-    autoKey: f.obstacle,
-  });
-
-  // 4. Training (3 questions on one screen)
-  steps.push({
-    title: "Your training situation",
-    body: (
-      <div className="space-y-5">
-        <SubSection label="Where do you train?">
-          <CardGrid compact options={TRAINING_LOCATIONS}
-            value={f.training_location} onChange={(v) => set("training_location", v)} />
-        </SubSection>
-        <SubSection label="How many days can you realistically train?">
-          <CardGrid compact options={DAYS.map((d) => ({ v: String(d.v), l: d.l }))}
-            value={f.days_per_week ? String(f.days_per_week) : ""}
-            onChange={(v) => set("days_per_week", Number(v))} />
-        </SubSection>
-        <SubSection label="When do you want to start?">
-          <CardGrid compact options={TIMELINES}
-            value={f.timeline} onChange={(v) => set("timeline", v)} />
-        </SubSection>
-      </div>
-    ),
-    valid: () => !!f.training_location && !!f.days_per_week && !!f.timeline,
-  });
-
-  // 5. Coaching fit (4 questions — split for breathability)
-  steps.push({
-    title: "What kind of support are you looking for?",
-    body: <CardGrid options={COACHING_INTERESTS} value={f.coaching_interest}
-      onChange={(v) => set("coaching_interest", v)} />,
-    valid: () => !!f.coaching_interest,
-    autoAdvance: true, autoKey: f.coaching_interest,
-  });
-  steps.push({
-    title: "How ready are you to follow a structured plan?",
-    body: <CardGrid options={READINESS} value={f.readiness} onChange={(v) => set("readiness", v)} />,
-    valid: () => !!f.readiness,
-    autoAdvance: true, autoKey: f.readiness,
-  });
-  steps.push({
-    title: "Are you willing to track workouts, progress, and check-ins?",
-    body: <CardGrid options={TRACKING} value={f.tracking_willingness}
-      onChange={(v) => set("tracking_willingness", v)} />,
-    valid: () => !!f.tracking_willingness,
-    autoAdvance: true, autoKey: f.tracking_willingness,
-  });
-  steps.push({
-    title: "Which best describes your investment readiness?",
-    sub: "We don't ask for income — and budget alone won't disqualify you.",
-    body: <CardGrid options={INVESTMENT} value={f.investment_readiness}
-      onChange={(v) => set("investment_readiness", v)} />,
-    valid: () => !!f.investment_readiness,
-    autoAdvance: true, autoKey: f.investment_readiness,
-  });
-
-  // 6. Why now
-  steps.push({
-    title: "Why do you want to change this now?",
-    sub: "Tap a prompt to start, then edit if you want.",
-    body: (
-      <div className="space-y-3">
-        <div className="flex flex-wrap gap-2">
-          {WHY_NOW_TAGS.map((t) => (
-            <button
-              key={t} type="button"
-              onClick={() => {
-                const has = f.why_now_tags.includes(t);
-                const next = has ? f.why_now_tags.filter((x) => x !== t) : [...f.why_now_tags, t];
-                set("why_now_tags", next);
-                if (!has && !f.why_now.trim()) set("why_now", t);
-              }}
-              className={
-                "rounded-full border px-3 py-1.5 text-xs transition " +
-                (f.why_now_tags.includes(t)
-                  ? "border-primary bg-primary text-primary-foreground"
-                  : "border-border bg-background hover:bg-muted")
-              }
-            >{t}</button>
-          ))}
-        </div>
-        <TextField
-          value={f.why_now} max={250}
-          placeholder="I'm tired of restarting and want real accountability."
-          onChange={(v) => set("why_now", v)}
-        />
-      </div>
-    ),
-    valid: () => f.why_now.trim().length >= 3 || f.why_now_tags.length > 0,
-  });
-
-  // 7. Contact + consent
-  steps.push({
-    title: "How can we reach you?",
-    sub: "We'll only use this to follow up on your application.",
-    body: (
-      <div className="space-y-4">
-        <div className="space-y-2">
-          <Label htmlFor="first_name">First name</Label>
-          <Input
-            id="first_name" autoComplete="given-name" inputMode="text"
-            value={f.first_name} onChange={(e) => set("first_name", e.target.value)}
-          />
-        </div>
-        <div className="space-y-2">
-          <Label htmlFor="phone">Mobile phone</Label>
-          <Input
-            id="phone" type="tel" inputMode="tel" autoComplete="tel"
-            placeholder="(555) 555-5555"
-            value={f.phone} onChange={(e) => set("phone", e.target.value)}
-          />
-        </div>
-        <div className="space-y-2">
-          <Label htmlFor="email">Email</Label>
-          <Input
-            id="email" type="email" inputMode="email" autoComplete="email"
-            value={f.email} onChange={(e) => set("email", e.target.value)}
-          />
-        </div>
-        <div className="space-y-2">
-          <Label htmlFor="instagram">Instagram handle</Label>
-          <Input
-            id="instagram" placeholder="@username"
-            value={f.instagram} onChange={(e) => set("instagram", e.target.value)}
-          />
-          <p className="text-xs text-muted-foreground">Optional if you don't use Instagram.</p>
-        </div>
-
-        <SubSection label="Best way to contact you?">
-          <CardGrid compact options={CONTACT_METHODS.map((c) => ({ v: c.v, l: c.l }))}
-            value={f.preferred_contact} onChange={(v) => set("preferred_contact", v as any)} />
-        </SubSection>
-        <SubSection label="When are you easiest to reach?">
-          <CardGrid compact options={BEST_TIMES.map((b) => ({ v: b.v, l: b.l }))}
-            value={f.best_time} onChange={(v) => set("best_time", v as any)} />
-        </SubSection>
-
-        <label className="flex items-start gap-3 rounded-lg border border-border p-3 text-sm">
-          <Checkbox
-            checked={f.consent_contact}
-            onCheckedChange={(c) => set("consent_contact", !!c)}
-            className="mt-0.5"
-          />
-          <span className="text-muted-foreground">
-            I agree that JF Effect may contact me about my coaching application by phone, text, and email. Message and data rates may apply.
-            {" "}
-            <Link to="/privacy" className="underline">Privacy</Link> · <Link to="/terms" className="underline">Terms</Link>.
-          </span>
-        </label>
-      </div>
-    ),
-    valid: () =>
-      f.first_name.trim().length >= 1 &&
-      /^[\d\s+\-()]{7,}$/.test(f.phone.trim()) &&
-      /.+@.+\..+/.test(f.email.trim()) &&
-      !!f.preferred_contact && !!f.best_time && f.consent_contact === true,
-  });
-
-  // 8. Final compact review
-  steps.push({
-    title: "Ready to submit?",
-    sub: "We'll save your application and offer you a coaching call right after.",
-    body: (
-      <div className="space-y-3 text-sm">
-        <Review label="Name" value={f.first_name} />
-        <Review label="Main goal" value={f.main_goal} />
-        <Review label="Start" value={(TIMELINES.find((t) => t.v === f.timeline)?.l) ?? f.timeline} />
-        <Review label="Preferred contact" value={(CONTACT_METHODS.find((c) => c.v === f.preferred_contact)?.l) ?? f.preferred_contact} />
-        <p className="pt-2 text-[11px] text-muted-foreground">
-          You'll get a chance to book a coaching call on the next screen.
-        </p>
-      </div>
-    ),
-    valid: () => true,
-  });
-
-  return steps;
+function ChoiceGrid<T extends string>({ label, options, value, onChange }: { label: string; options: readonly { v: T; l: string }[]; value: string; onChange: (value: string) => void }) {
+  return <fieldset className="space-y-2"><legend className="text-sm font-medium leading-none">{label}</legend><div className="grid grid-cols-1 gap-2 sm:grid-cols-2">{options.map((option) => <button key={option.v} type="button" onClick={() => onChange(option.v)} className={"min-h-[48px] rounded-xl border px-4 py-3 text-left text-sm font-semibold transition active:scale-[0.99] " + (value === option.v ? "border-primary bg-primary text-primary-foreground" : "border-border bg-background hover:border-primary/40 hover:bg-muted")}>{option.l}</button>)}</div></fieldset>;
 }
 
-/* ────────────────── small UI building blocks ────────────────── */
-
-function CardGrid<T extends string | number>({
-  options, value, onChange, compact = false,
-}: {
-  options: Array<{ v: T; l: string }>;
-  value: T | "" | null;
-  onChange: (v: T) => void;
-  compact?: boolean;
-}) {
-  return (
-    <div className={"grid gap-2 " + (compact ? "grid-cols-2 sm:grid-cols-3" : "grid-cols-1 sm:grid-cols-2")}>
-      {options.map((opt) => {
-        const active = value === opt.v;
-        return (
-          <button
-            key={String(opt.v)} type="button" onClick={() => onChange(opt.v)}
-            className={
-              "min-h-[56px] rounded-xl border px-4 py-3 text-left text-sm font-semibold transition " +
-              "active:scale-[0.99] " +
-              (active
-                ? "border-primary bg-primary text-primary-foreground shadow-[0_0_0_3px_hsl(var(--primary)/0.15)]"
-                : "border-border bg-background hover:border-primary/40 hover:bg-muted")
-            }
-          >
-            <span className="block">{opt.l}</span>
-          </button>
-        );
-      })}
-    </div>
-  );
-}
-
-function TextField({
-  value, onChange, max, placeholder,
-}: { value: string; onChange: (v: string) => void; max: number; placeholder: string }) {
-  return (
-    <div>
-      <Textarea
-        rows={3} placeholder={placeholder} maxLength={max}
-        value={value} onChange={(e) => onChange(e.target.value)}
-        className="resize-none text-base"
-      />
-      <div className="mt-1 text-right text-[11px] text-muted-foreground">
-        {value.length}/{max}
-      </div>
-    </div>
-  );
-}
-
-function SubSection({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div>
-      <div className="mb-2 text-xs font-bold uppercase tracking-widest text-muted-foreground">{label}</div>
-      {children}
-    </div>
-  );
-}
-
-function Review({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="flex items-center justify-between gap-3 rounded-lg border border-border bg-muted/30 px-3 py-2">
-      <span className="text-xs uppercase tracking-widest text-muted-foreground">{label}</span>
-      <span className="truncate font-semibold">{value || "—"}</span>
-    </div>
-  );
-}
 
 /* ────────────────── post-submit success + booking ────────────────── */
 
