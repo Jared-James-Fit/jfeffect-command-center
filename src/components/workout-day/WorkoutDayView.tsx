@@ -2870,6 +2870,10 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
         <Button size="sm" variant={hasNote ? "default" : "outline"} onClick={() => setNotesOpen(true)} className="h-7 rounded-full px-2.5 text-xs">
           <StickyNote className="mr-1 h-3 w-3" /> Notes
         </Button>
+        {/* Generic scratchpad aids (Tally / Stopwatch / Timer). Entirely
+            separate from the prescribed Rest timer below — nothing here
+            writes workout data. */}
+        {!readonly && <WorkoutToolsButton context={name} />}
         <QuickSwapButton
           rowId={row.id}
           exerciseId={exerciseId}
