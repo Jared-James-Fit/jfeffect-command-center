@@ -170,6 +170,9 @@ export const startWorkout = createServerFn({ method: "POST" })
         started_at: nowIso,
         in_progress_at: nowIso,
         last_activity_at: nowIso,
+        // Starting is not completing. This explicit null prevents the legacy
+        // pl_day_completions DEFAULT now() from completing a route-open draft.
+        completed_at: null,
         completion_source: "workout_view",
       };
       if (scheduledWorkoutId) insertRow.scheduled_workout_id = scheduledWorkoutId;

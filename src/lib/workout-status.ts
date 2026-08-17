@@ -53,9 +53,9 @@ export function getWorkoutStatus(item: WorkoutItem, now: Date = new Date()): {
     };
   }
 
-  // Partially Completed = some sets logged, not yet marked complete.
+  // Logged work is in progress until the client explicitly completes it.
   if (loggedSets > 0) {
-    return { status: "in_progress", label: "Partially Completed", tone: inProgressTone, scheduled, completedAt };
+    return { status: "in_progress", label: "In Progress", tone: inProgressTone, scheduled, completedAt };
   }
 
   if (!scheduled) {
