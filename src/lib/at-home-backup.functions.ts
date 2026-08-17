@@ -119,6 +119,7 @@ export const listAtHomeBackupDefinitions = createServerFn({ method: "GET" })
         const dayRows = rowsByDay.get(d.id) ?? [];
         return {
           dayId: d.id as string,
+          blockId: block.id as string,
           title: backupSessionTitle(d.title),
           notes: (d.notes ?? null) as string | null,
           summary: summarizeBackupDefinition(dayRows),

@@ -2,6 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { WEEK_DAYS, type WeekDay } from "@/lib/training-schedule";
+import { filterPrimaryProgramBlocks } from "@/lib/at-home-backup";
 import { addDays, format, parseISO } from "date-fns";
 
 // ───────────────────────────────────────────────────────────────────────────
@@ -72,13 +73,16 @@ export const getClientSchedule = createServerFn({ method: "GET" })
       { supabase, userId }, data.clientId,
     );
 
-    const { data: blocks } = await supabase
+    const { data: allBlocks } = await supabase
       .from("pl_blocks")
-      .select("id, name, start_date, end_date, status, client_visible")
+      .select("id, name, start_date, end_date, status, client_visible, source_template_block_key")
       .eq("client_id", data.clientId)
       .neq("status", "Archived")
       .order("created_at", { ascending: true });
-    const blockIds = (blocks ?? []).map((b: any) => b.id);
+    // Schedule Manager is a primary-program surface: reserved At-Home Backup
+    // blocks (definitions + sessions) are excluded entirely.
+    const blocks = filterPrimaryProgramBlocks(allBlocks ?? []);
+    const blockIds = blocks.map((b: any) => b.id);
     if (!blockIds.length) {
       return { client, blocks: [], weeks: [], days: [], completions: [] };
     }

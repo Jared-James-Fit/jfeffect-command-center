@@ -23,8 +23,31 @@
 export const AT_HOME_BACKUP_DEFINITIONS_KEY = "at_home_backup_definitions_v1";
 export const AT_HOME_BACKUP_SESSIONS_KEY = "at_home_backup_sessions_v1";
 
+/**
+ * Both reserved block keys. Neither block may take part in primary program
+ * selection, the Schedule Manager, the primary calendar query, Block View, or
+ * any adherence numerator/denominator.
+ */
+export const RESERVED_AT_HOME_BACKUP_BLOCK_KEYS: readonly string[] = [
+  AT_HOME_BACKUP_DEFINITIONS_KEY,
+  AT_HOME_BACKUP_SESSIONS_KEY,
+];
+
 export const AT_HOME_BACKUP_BADGE = "At-home backup";
 export const AT_HOME_BACKUP_SUBTITLE = "At-home backup";
+export const AT_HOME_BACKUP_CALENDAR_BADGE = "AT HOME";
+
+/** Exact confirmation copy for "start a backup on a normal gym day". */
+export const AT_HOME_BACKUP_CONFIRM_TITLE = "Use this as today's backup?";
+export const AT_HOME_BACKUP_CONFIRM_BODY =
+  "Your scheduled gym workout will stay on your program.";
+export const AT_HOME_BACKUP_CONFIRM_ACCEPT = "Use Backup";
+export const AT_HOME_BACKUP_CONFIRM_CANCEL = "Cancel";
+
+/** Confirmation shows only when a normal gym session is scheduled today. */
+export function shouldConfirmBackupStart(hasPrimaryWorkoutToday: boolean): boolean {
+  return !!hasPrimaryWorkoutToday;
+}
 
 export const AT_HOME_BACKUP_DEFINITIONS_BLOCK_NAME = "At-Home Backup — Definitions";
 export const AT_HOME_BACKUP_SESSIONS_BLOCK_NAME = "At-Home Backup — Sessions";
@@ -53,6 +76,29 @@ export function isAtHomeBackupDefinitionsBlock(
   block: { source_template_block_key?: string | null } | null | undefined,
 ): boolean {
   return block?.source_template_block_key === AT_HOME_BACKUP_DEFINITIONS_KEY;
+}
+
+/** True when a pl_blocks row is either reserved at-home backup block. */
+export function isReservedAtHomeBackupBlock(
+  block: { source_template_block_key?: string | null } | null | undefined,
+): boolean {
+  const key = block?.source_template_block_key ?? null;
+  return !!key && RESERVED_AT_HOME_BACKUP_BLOCK_KEYS.includes(key);
+}
+
+/**
+ * Canonical primary-program boundary: drop both reserved blocks.
+ * `includeSessions` is the narrow opt-in used only by the Ashley-only
+ * backup read path (calendar/history chips); definitions are never included.
+ */
+export function filterPrimaryProgramBlocks<
+  T extends { source_template_block_key?: string | null },
+>(blocks: T[] | null | undefined, opts: { includeSessions?: boolean } = {}): T[] {
+  return (blocks ?? []).filter((block) => {
+    if (isAtHomeBackupDefinitionsBlock(block)) return false;
+    if (isAtHomeBackupSessionBlock(block)) return !!opts.includeSessions;
+    return true;
+  });
 }
 
 /**
@@ -113,6 +159,14 @@ export function cloneBackupRow(row: any, sortOrder: number): BackupRowPrescripti
 }
 
 /** Compact "5 exercises · ~45 min" style summary for the picker list. */
+/** Each Full Body definition must carry exactly seven prescribed rows. */
+export const BACKUP_DEFINITION_EXERCISE_COUNT = 7;
+
+/** True when a definition day carries the full prescribed row set. */
+export function isCompleteBackupDefinition(rows: unknown[] | null | undefined): boolean {
+  return (rows?.length ?? 0) === BACKUP_DEFINITION_EXERCISE_COUNT;
+}
+
 export function summarizeBackupDefinition(rows: any[]): string {
   const count = rows.length;
   const totalSets = rows.reduce((sum, r) => sum + (Number(r?.sets) || 0), 0);

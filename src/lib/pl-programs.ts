@@ -1,6 +1,6 @@
 import { supabase } from "@/integrations/supabase/client";
 import { mergeScheduledInstances } from "@/lib/scheduled-instances-merge";
-import { isAtHomeBackupSessionBlock } from "@/lib/at-home-backup";
+import { filterPrimaryProgramBlocks } from "@/lib/at-home-backup";
 import { normalizeMuscle } from "@/lib/analytics/muscle-map";
 
 // ---------- Types ----------
@@ -178,7 +178,9 @@ export async function listClientPreps(clientId: string) {
 export async function listClientBlocks(clientId: string) {
   const { data, error } = await sb.from("pl_blocks").select("*").eq("client_id", clientId).order("sort_order").order("created_at");
   if (error) throw error;
-  return data ?? [];
+  // Reserved At-Home Backup blocks (definitions + sessions) never appear in
+  // primary block selection, Schedule Manager, or Block View.
+  return filterPrimaryProgramBlocks(data ?? []);
 }
 
 export async function getBlockTree(blockId: string) {
@@ -1509,9 +1511,9 @@ export async function getClientWorkouts(
   // read their cloned prescriptions through existing RLS. Exclude them by
   // default from every primary-program consumer; the Workout calendar opts in
   // explicitly to show them as additional At-Home Backup history items.
-  const visibleBlocks = (blocks ?? []).filter(
-    (block: any) => options.includeAtHomeBackupSessions || !isAtHomeBackupSessionBlock(block),
-  );
+  const visibleBlocks = filterPrimaryProgramBlocks(blocks ?? [], {
+    includeSessions: options.includeAtHomeBackupSessions,
+  });
   const blockIds = visibleBlocks.map((b: any) => b.id);
   if (!blockIds.length) return [];
   const { data: weeks } = await sb.from("pl_weeks").select("*").in("block_id", blockIds).order("week_index");
