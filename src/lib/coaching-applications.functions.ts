@@ -188,32 +188,35 @@ export const submitCoachingApplication = createServerFn({ method: "POST" })
       .single();
     if (error) throw new Error(error.message);
 
-    // CRM activity log (dedup-keyed by application id)
+    // CRM activity log (dedup-keyed by application id). The existing database
+    // uniqueness guard is a partial index, which PostgreSQL cannot target with
+    // ON CONFLICT (...) in an upsert. Insert directly and treat only the
+    // duplicate-key race as idempotent; all other errors are surfaced.
     const activityType = upsert.is_active_client
       ? "active_client_reapplied"
       : upsert.created
         ? "application_submitted"
         : "reapplied";
-    await supabaseAdmin.from("client_crm_activities").upsert(
-      {
-        client_id: upsert.client_id,
-        activity_type: activityType,
-        title: upsert.created ? "Application submitted" : "Reapplied",
-        details: {
-          application_id: inserted.id,
-          lead_score: scored.score,
-          qualification_label: scored.qualification_label,
-          recommended_offer: scored.recommended_offer,
-          conflict: upsert.conflict,
-          normalized_email: normalizeEmail(data.email),
-          normalized_phone: normalizePhone(data.phone),
-        },
-        source: "public_form",
+    const { error: activityError } = await supabaseAdmin.from("client_crm_activities").insert({
+      client_id: upsert.client_id,
+      activity_type: activityType,
+      title: upsert.created ? "Application submitted" : "Reapplied",
+      details: {
         application_id: inserted.id,
-        dedupe_key: `application:${inserted.id}`,
+        lead_score: scored.score,
+        qualification_label: scored.qualification_label,
+        recommended_offer: scored.recommended_offer,
+        conflict: upsert.conflict,
+        normalized_email: normalizeEmail(data.email),
+        normalized_phone: normalizePhone(data.phone),
       },
-      { onConflict: "client_id,dedupe_key", ignoreDuplicates: true } as any,
-    );
+      source: "public_form",
+      application_id: inserted.id,
+      dedupe_key: `application:${inserted.id}`,
+    });
+    if (activityError && activityError.code !== "23505") {
+      throw new Error(`Could not record CRM application activity: ${activityError.message}`);
+    }
 
     // Admin alert for NEW applications — fixed allowlist recipients only.
     // Best-effort: failures are logged and never roll back the saved
