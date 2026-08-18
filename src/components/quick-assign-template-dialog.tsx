@@ -20,6 +20,12 @@ import { todayLocalISO } from "@/lib/today";
 import { AdminTemplatePickerSheet } from "@/components/programs/admin-template-picker-sheet";
 import { TemplateCompatWarnings } from "@/components/programs/template-compat-warnings";
 import { getClientGoalsSetupFn } from "@/lib/client-goals/goals.functions";
+import { AvailabilityGuardDialog } from "@/components/program-planner/AvailabilityGuardDialog";
+import {
+  evaluateAvailabilityGuard, frequencyFromTemplateBlocks, resolveClientAvailability,
+  GUARD_WEEKDAY_LABEL,
+} from "@/lib/program-availability-guard";
+import type { Weekday } from "@/lib/program-planner/types";
 
 type Props = {
   open: boolean;
@@ -39,6 +45,7 @@ export function QuickAssignTemplateDialog({ open, onOpenChange, clientId, client
   const [busy, setBusy] = useState(false);
   const [ackIncomplete, setAckIncomplete] = useState(false);
   const [pickerOpen, setPickerOpen] = useState(false);
+  const [guardOpen, setGuardOpen] = useState(false);
 
   const { data: templates = [] } = useQuery({
     queryKey: ["pl-templates-assignable"],
@@ -89,6 +96,59 @@ export function QuickAssignTemplateDialog({ open, onOpenChange, clientId, client
       .select("id, name, start_date, end_date, status, archived")
       .eq("client_id", clientId)).data ?? [],
   });
+
+  // Availability guardrail: the client's saved training days vs the
+  // program's actual programmed workouts per week.
+  const { data: clientRow } = useQuery({
+    queryKey: ["quick-assign-client-availability", clientId],
+    enabled: open && !!clientId,
+    queryFn: async () => (await supabase
+      .from("clients")
+      .select("id, full_name, committed_training_days, available_training_days, preferred_training_days, unavailable_training_days")
+      .eq("id", clientId).maybeSingle()).data,
+  });
+  const availability = resolveClientAvailability(clientRow as any);
+  const guardBlocks = (() => {
+    if (!selected) return [] as any[];
+    try {
+      const p = normalizeTemplatePayload(selected.payload, { templateType: selected.template_type, templateId: selected.id });
+      return getActiveTemplateBlocks(p) as any[];
+    } catch { return [] as any[]; }
+  })();
+  const guardScopedBlocks = (() => {
+    if (!guardBlocks.length) return guardBlocks;
+    if (assignMode === "selected") return guardBlocks.filter((b) => selectedBlockIds.includes(b.id));
+    if (assignMode === "start_from") {
+      const idx = guardBlocks.findIndex((b) => b.id === startFromBlockId);
+      return idx >= 0 ? guardBlocks.slice(idx) : guardBlocks;
+    }
+    return guardBlocks;
+  })();
+  const guard = evaluateAvailabilityGuard({
+    frequency: frequencyFromTemplateBlocks(guardScopedBlocks as any),
+    availability,
+    clientName: clientName ?? (clientRow as any)?.full_name ?? null,
+  });
+  const firstWeekTitles = (() => {
+    const w = (guardScopedBlocks[0] as any)?.weeks?.[0];
+    const days = Array.isArray(w?.days) ? w.days : Array.isArray(w?.workout_days) ? w.workout_days : [];
+    return days.map((d: any, i: number) => d?.title || d?.name || `Day ${i + 1}`);
+  })();
+
+  /** Persist the coach's chosen weekdays so the canonical scheduler uses them. */
+  const persistDays = async (days: Weekday[]) => {
+    const longDays = days.map((d) => GUARD_WEEKDAY_LABEL[d]);
+    const { data: auth } = await supabase.auth.getUser();
+    await supabase.from("clients").update({
+      committed_training_days: longDays,
+      committed_training_frequency: longDays.length,
+      training_schedule_completed: true,
+      training_schedule_last_updated: new Date().toISOString(),
+      training_schedule_updated_by: auth.user?.id ?? null,
+    } as any).eq("id", clientId);
+    qc.invalidateQueries({ queryKey: ["quick-assign-client-availability", clientId] });
+    qc.invalidateQueries({ queryKey: ["client", clientId] });
+  };
 
   useEffect(() => {
     if (startDate && selectedWeeks > 0) {
