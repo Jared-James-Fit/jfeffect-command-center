@@ -1222,6 +1222,13 @@ function WorkoutDay({
 
   // Focus / full-screen logging mode.
   const [focusMode, setFocusMode] = useState(false);
+  // The exercise logger is isolated by WorkoutLoadBoundary while Finish Workout
+  // renders outside that boundary. Track a caught body error at this level so a
+  // fatal logger failure can never leave completion actionable by mistake.
+  const [workoutBodyError, setWorkoutBodyError] = useState(false);
+  useEffect(() => {
+    setWorkoutBodyError(false);
+  }, [dayId]);
   
   useEffect(() => {
     if (!focusMode) return;
@@ -1762,7 +1769,14 @@ function WorkoutDay({
             />
           )}
           <div className="mx-auto max-w-3xl p-4 md:p-6">
-            <WorkoutLoadBoundary clientId={client?.id ?? null} clientName={(client as any)?.full_name ?? null} dayId={dayId} route={`/portal/workouts/${dayId}`}>
+            <WorkoutLoadBoundary
+              clientId={client?.id ?? null}
+              clientName={(client as any)?.full_name ?? null}
+              dayId={dayId}
+              route={`/portal/workouts/${dayId}`}
+              onCaught={() => setWorkoutBodyError(true)}
+              onRetry={() => setWorkoutBodyError(false)}
+            >
               <div className="workout-stack-surface space-y-4 p-3 sm:p-4 workout-snap-list">
               {rowsIsError ? (
                 <WorkoutLoadFailureCard
@@ -1824,7 +1838,7 @@ function WorkoutDay({
                  successfully loaded and there is at least one exercise, so a
                  transient load-failure or empty-rows state cannot complete a
                  workout. */}
-            {!readonly && !completion?.completed_at && !rowsIsError && authReady && rowsLoaded && (rows as any[]).length > 0 && (
+            {!readonly && !workoutBodyError && !completion?.completed_at && !rowsIsError && authReady && rowsLoaded && (rows as any[]).length > 0 && (
               <div className="mx-auto max-w-3xl px-4 pb-4">
                 <Card className="p-4">
                   <ActionButton
@@ -2041,7 +2055,14 @@ function WorkoutDay({
         {/* Workouts are always editable — no date/block/program lock banners. */}
 
         {!focusMode && (
-        <WorkoutLoadBoundary clientId={client?.id ?? null} clientName={(client as any)?.full_name ?? null} dayId={dayId} route={`/portal/workouts/${dayId}`}>
+        <WorkoutLoadBoundary
+          clientId={client?.id ?? null}
+          clientName={(client as any)?.full_name ?? null}
+          dayId={dayId}
+          route={`/portal/workouts/${dayId}`}
+          onCaught={() => setWorkoutBodyError(true)}
+          onRetry={() => setWorkoutBodyError(false)}
+        >
           <div className="workout-stack-surface grid grid-cols-1 gap-3.5 p-2 sm:p-4 lg:grid-cols-2 lg:items-start">
             {rowsIsError ? (
               <WorkoutLoadFailureCard
@@ -2102,7 +2123,7 @@ function WorkoutDay({
              Guard: !completion?.completed_at prevents the glitchy state where
              both the completion card and the finish button are visible at once.
              This was the root cause of the Nicolas Galli stuck-state bug. */}
-        {!readonly && !completion?.completed_at && !rowsIsError && authReady && rowsLoaded && (rows as any[]).length > 0 && (
+        {!readonly && !workoutBodyError && !completion?.completed_at && !rowsIsError && authReady && rowsLoaded && (rows as any[]).length > 0 && (
           <Card className="p-4">
             <ActionButton
               className="w-full"
@@ -4572,7 +4593,15 @@ function UnitToggle({ unit, onChange, label, compact = false }: { unit: "kg" | "
 /* -------------------------------------------------------------------------- */
 
 class WorkoutLoadBoundary extends Component<
-  { children: ReactNode; clientId: string | null; clientName: string | null; dayId: string; route: string },
+  {
+    children: ReactNode;
+    clientId: string | null;
+    clientName: string | null;
+    dayId: string;
+    route: string;
+    onCaught?: () => void;
+    onRetry?: () => void;
+  },
   { hasError: boolean; error: Error | null }
 > {
   state = { hasError: false, error: null as Error | null };
@@ -4581,8 +4610,12 @@ class WorkoutLoadBoundary extends Component<
   }
   componentDidCatch(error: Error, info: { componentStack: string }) {
     console.error("[workout-load] error", error, info);
+    this.props.onCaught?.();
   }
-  reset = () => this.setState({ hasError: false, error: null });
+  reset = () => {
+    this.props.onRetry?.();
+    this.setState({ hasError: false, error: null });
+  };
   render() {
     if (!this.state.hasError) return this.props.children as any;
     return (
@@ -4615,7 +4648,7 @@ function WorkoutLoadFailureCard({
         <AlertTriangle className="mt-1 h-6 w-6 shrink-0 text-destructive" />
         <div className="space-y-1">
           <div className="text-base font-bold">Workout didn’t load properly.</div>
-          <div className="text-sm text-muted-foreground">Please contact your coach so we can fix this fast.</div>
+          <div className="text-sm text-muted-foreground">Please contact your coach so we can fix this fast. Your logged data is protected, and Finish Workout is disabled until the logger recovers.</div>
         </div>
       </div>
       {error?.message && (

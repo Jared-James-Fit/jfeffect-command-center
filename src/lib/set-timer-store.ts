@@ -19,6 +19,14 @@ const KEY = (k: string) => `jf.settimer.${k}`;
 const ACTIVE_KEY = "jf.settimer.active";
 export const SET_TIMER_EVENT = "jf-set-timer";
 
+// `useSyncExternalStore` requires getSnapshot to return the exact same
+// reference until the underlying store changes. Parsing localStorage on every
+// read creates a fresh object even when the timer has not changed, which React
+// treats as a new snapshot and can escalate into a maximum-update-depth loop.
+// Cache snapshots by their raw persisted value so every SetTimerInput sees a
+// stable identity between storage events.
+const snapshotCache = new Map<string, { raw: string | null; value: SetTimerState | null }>();
+
 function safeGet(key: string): string | null {
   try {
     return typeof window === "undefined" ? null : window.localStorage.getItem(key);
@@ -45,18 +53,27 @@ function emit() {
 
 export function readTimer(key: string): SetTimerState | null {
   const raw = safeGet(KEY(key));
-  if (!raw) return null;
-  try {
-    const p = JSON.parse(raw) as SetTimerState;
-    if (typeof p?.target !== "number") return null;
-    return p;
-  } catch {
-    return null;
+  const cached = snapshotCache.get(key);
+  if (cached?.raw === raw) return cached.value;
+
+  let value: SetTimerState | null = null;
+  if (raw) {
+    try {
+      const p = JSON.parse(raw) as SetTimerState;
+      value = typeof p?.target === "number" ? p : null;
+    } catch {
+      value = null;
+    }
   }
+
+  snapshotCache.set(key, { raw, value });
+  return value;
 }
 
 function writeTimer(key: string, state: SetTimerState | null) {
-  safeSet(KEY(key), state ? JSON.stringify(state) : null);
+  const raw = state ? JSON.stringify(state) : null;
+  safeSet(KEY(key), raw);
+  snapshotCache.set(key, { raw, value: state });
   emit();
 }
 
