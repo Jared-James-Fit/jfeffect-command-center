@@ -33,6 +33,10 @@ import type {
 } from "@/lib/program-planner/types";
 import { AssignmentCalendar, type CalendarExistingDay, type CalendarIncomingDay } from "./AssignmentCalendar";
 import { todayLocalISO } from "@/lib/today";
+import { AvailabilityGuardDialog } from "./AvailabilityGuardDialog";
+import {
+  evaluateAvailabilityGuard, frequencyFromPlacements, resolveClientAvailability,
+} from "@/lib/program-availability-guard";
 
 const STEPS = ["Content", "Method", "Calendar", "Conflicts", "Review"] as const;
 const WEEKDAYS: Weekday[] = ["mon","tue","wed","thu","fri","sat","sun"];
@@ -214,8 +218,10 @@ export function ProgramAssignmentPlanner({ clientId, templateId, onDone }: Props
   const back = () => setStep((s) => Math.max(0, s - 1));
 
   const commitServer = useServerFn(commitAssignmentFn);
-  const commit = async () => {
+  const commit = async (daysOverride?: Weekday[]) => {
     if (!preview) return;
+    const effectiveMethod: AssignmentMethod = daysOverride?.length ? "weekday_map" : method;
+    const effectiveDays: Weekday[] = daysOverride?.length ? daysOverride : trainingDays;
     setCommitting(true);
     setCommitProgress(8);
     setCommitStage("Preparing assignment…");
@@ -231,7 +237,7 @@ export function ProgramAssignmentPlanner({ clientId, templateId, onDone }: Props
     }, 250);
     try {
       const result = await commitServer({ data: {
-        clientId, templateId, selection, method, startDate, trainingDays,
+        clientId, templateId, selection, method: effectiveMethod, startDate, trainingDays: effectiveDays,
         conflictDecisions, publishStatus, publishAt, idempotencyKey,
         programName,
       } as any });
