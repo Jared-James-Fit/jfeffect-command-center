@@ -199,12 +199,16 @@ export function AvailabilityGuardDialog({
             <Button onClick={() => onConfirm(days)} disabled={busy}>
               {busy ? <><Loader2 className="mr-1 h-4 w-4 animate-spin" />Assigning…</> : "Assign Program"}
             </Button>
+          ) : override ? (
+            <Button variant="destructive" onClick={() => onConfirm(days)} disabled={busy || days.length === 0}>
+              {busy ? <><Loader2 className="mr-1 h-4 w-4 animate-spin" />Assigning…</> : "Assign Anyway"}
+            </Button>
           ) : needsSave ? (
             <Button onClick={saveAvailability} disabled={!exact || saving || busy}>
               {saving ? <><Loader2 className="mr-1 h-4 w-4 animate-spin" />Saving…</> : "Fix Schedule"}
             </Button>
           ) : (
-            <Button onClick={() => onConfirm(days)} disabled={(!exact && !override) || busy}>
+            <Button onClick={() => onConfirm(days)} disabled={!exact || busy}>
               {busy ? <><Loader2 className="mr-1 h-4 w-4 animate-spin" />Assigning…</> : "Use These Days"}
             </Button>
           )}
