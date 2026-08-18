@@ -136,6 +136,7 @@ export function ProgramAssignmentPlanner({ clientId, templateId, onDone }: Props
   const [commitProgress, setCommitProgress] = useState(0);
   const [commitStage, setCommitStage] = useState<string>("");
   const [successInfo, setSuccessInfo] = useState<null | { added: number; idempotent: boolean; programName: string }>(null);
+  const [guardOpen, setGuardOpen] = useState(false);
 
   // Default-select all once payload loads if user has no prior selection.
   useEffect(() => {
@@ -179,6 +180,33 @@ export function ProgramAssignmentPlanner({ clientId, templateId, onDone }: Props
     for (const n of perWeek.values()) if (n > max) max = n;
     return max;
   }, [preview?.placements]);
+
+  /** Guardrail: program frequency vs the client's saved training availability. */
+  const availability = useMemo(() => resolveClientAvailability(client as any), [client]);
+  const effectiveDays: Weekday[] = method === "client_days"
+    ? ((preview as any)?.resolvedTrainingDays?.length ? (preview as any).resolvedTrainingDays : clientTrainingDays.days)
+    : trainingDays;
+  const guard = useMemo(
+    () => evaluateAvailabilityGuard({
+      frequency: frequencyFromPlacements(((preview?.placements ?? []) as any[]).map((p) => ({
+        blockKey: p.blockKey, weekIndex: p.weekIndex, dayKey: p.dayKey,
+      }))),
+      availability,
+      selectedDays: method === "client_days" ? undefined : effectiveDays,
+      clientName: client?.full_name ?? null,
+    }),
+    [preview?.placements, availability, method, effectiveDays.join(","), client?.full_name], // eslint-disable-line react-hooks/exhaustive-deps
+  );
+  /** Titles of the first programmed week, in program order — drives the preview. */
+  const firstWeekTitles = useMemo(() => {
+    const ps = ((preview?.placements ?? []) as any[]);
+    if (!ps.length) return [];
+    const key = `${ps[0].blockKey}::w${ps[0].weekIndex}`;
+    return ps.filter((p) => `${p.blockKey}::w${p.weekIndex}` === key).map((p) => p.title as string);
+  }, [preview?.placements]);
+  /** Manual/date-driven methods are deliberate coach choices; the guard only
+   *  governs weekly recurring scheduling. */
+  const guardApplies = method === "client_days" || method === "weekday_map" || method === "fill_empty" || method === "insert";
 
   // Existing scheduled days for the calendar
   const { data: existingCal = [] as CalendarExistingDay[] } = useQuery({
