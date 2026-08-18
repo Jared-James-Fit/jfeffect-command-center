@@ -33,6 +33,7 @@ import { toast } from "sonner";
 import { CommandPalette } from "@/components/command-palette";
 import type { AdminRole } from "@/lib/admin-route-registry";
 import { DualAccountSwitcher } from "@/components/dual-account-switcher";
+import { useExerciseLibraryRealtime } from "@/hooks/use-exercise-library-realtime";
 
 export interface NavItem {
   to: string;
@@ -232,6 +233,7 @@ function useCollapsedSections() {
 
 export function AppShell({ items, bottomItems: customBottomItems, title, children }: { items: NavItem[]; bottomItems?: NavItem[]; title: string; children: ReactNode }) {
   useKeyboardOpen();
+  useExerciseLibraryRealtime();
   const { signOut, user, role } = useAuth();
   const navigate = useNavigate();
   const pathname = useRouterState({ select: (r) => r.location.pathname });

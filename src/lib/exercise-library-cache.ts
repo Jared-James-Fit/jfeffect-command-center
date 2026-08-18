@@ -35,7 +35,13 @@ const RAW_EXERCISE_LIST_PREFIXES = new Set([
   "exercise-search-pool-lite",
 ]);
 
-type CachedExercise = { id: string; name?: string | null; archived?: boolean | null } & Record<string, unknown>;
+export type CachedExercise = { id: string; name?: string | null; archived?: boolean | null } & Record<string, unknown>;
+
+export type ExerciseLibraryChange = {
+  eventType: "INSERT" | "UPDATE" | "DELETE";
+  newRow: CachedExercise | null;
+  oldRow: Pick<CachedExercise, "id"> | null;
+};
 
 /**
  * Put a newly-created exercise into every raw list immediately. Invalidating
@@ -70,6 +76,41 @@ export function upsertExerciseInLibraryCaches(
  * ones that are currently unmounted (`refetchType: "all"`), so reopening
  * a swap sheet or the program builder never serves a stale pool.
  */
+export function removeExerciseFromLibraryCaches(qc: QueryClient, exerciseId: string): void {
+  qc.setQueriesData<CachedExercise[]>(
+    {
+      predicate: (query) => {
+        const first = query.queryKey[0];
+        return typeof first === "string" && RAW_EXERCISE_LIST_PREFIXES.has(first);
+      },
+    },
+    (current) => Array.isArray(current) ? current.filter((row) => row?.id !== exerciseId) : current,
+  );
+}
+
+/**
+ * Apply a Supabase realtime exercise mutation to the currently mounted search
+ * pools before refetching derived lists. This keeps an open client add/swap
+ * sheet usable immediately when another tab or coach creates an exercise.
+ */
+export function reconcileExerciseLibraryChange(
+  qc: QueryClient,
+  change: ExerciseLibraryChange,
+): void {
+  const id = change.newRow?.id ?? change.oldRow?.id;
+  if (!id) return;
+
+  if (change.eventType === "DELETE" || change.newRow?.archived === true) {
+    removeExerciseFromLibraryCaches(qc, id);
+  } else if (change.newRow) {
+    upsertExerciseInLibraryCaches(qc, change.newRow);
+  }
+
+  // Suggestions and any cache projection that does not hold raw exercise rows
+  // are refreshed immediately after the local raw-pool reconciliation.
+  void invalidateExerciseLibrary(qc);
+}
+
 export async function invalidateExerciseLibrary(qc: QueryClient): Promise<void> {
   await qc.invalidateQueries({
     predicate: (q) => isExerciseLibraryQueryKey(q.queryKey),

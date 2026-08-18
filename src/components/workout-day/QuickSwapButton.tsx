@@ -544,7 +544,7 @@ export function QuickSwapButton({
   // The searchable pool is fetched once per sheet session and cached, so
   // keystrokes never hit the network — ranking happens locally and feels
   // instant on mobile.
-  const { data: searchPool = [], isFetching: isPoolLoading } = useQuery({
+  const { data: searchPool = [], isFetching: isPoolLoading, refetch: refetchSearchPool } = useQuery({
     queryKey: ["exercise-search-pool"],
     enabled: open && mode === "search",
     staleTime: 10 * 60_000,
@@ -560,6 +560,12 @@ export function QuickSwapButton({
       return (data ?? []) as ExerciseLite[];
     },
   });
+
+  // Realtime keeps an open picker current. Refresh on each deliberate entry
+  // to Search All Exercises as a fallback after background/mobile disconnects.
+  useEffect(() => {
+    if (open && mode === "search") void refetchSearchPool();
+  }, [open, mode, refetchSearchPool]);
 
   // Shared ranker: out-of-order tokens, aliases (DB/RDL/tri…), equipment,
   // muscle, movement pattern and typo tolerance. Equipment chip is applied

@@ -216,7 +216,7 @@ export function InlineWorkoutEditor({
   const [search, setSearch] = useState("");
   // Pool is loaded once and cached; ranking happens locally with the shared
   // exercise search engine (aliases, out-of-order words, typo tolerance).
-  const { data: searchPool = [] } = useQuery({
+  const { data: searchPool = [], refetch: refetchSearchPool } = useQuery({
     queryKey: ["exercise-search-pool-lite"],
     enabled: open,
     staleTime: 10 * 60_000,
@@ -232,6 +232,12 @@ export function InlineWorkoutEditor({
       return (ex ?? []) as SearchableExercise[];
     },
   });
+
+  // Realtime keeps an already-open editor current. This refetch is the
+  // resume/reopen fallback for browsers that slept through a socket event.
+  useEffect(() => {
+    if (open) void refetchSearchPool();
+  }, [open, refetchSearchPool]);
 
   const searchOutcome = useMemo(
     () => searchExercises(searchPool, search, { limit: 8 }),
