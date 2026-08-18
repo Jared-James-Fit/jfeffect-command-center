@@ -987,35 +987,11 @@ function WorkoutDay({
     return m;
   }, [rows, purposeLabels]);
 
-  // Auto-track: started_at on first mount (creates draft row if needed)
-  const startedRef = useRef(false);
-  useEffect(() => {
-    if (!client?.id || startedRef.current) return;
-    // Client POV (coach/admin viewing as client) is review-only — never auto-
-    // start a workout from this session. The server fn resolves clients.id
-    // from auth.uid(), which in POV is the coach, not the client; calling it
-    // here would either fail silently or write a pl_day_completions row
-    // against the coach's own client_id. Reviewers must use the explicit
-    // "Set workout status" controls instead.
-    if (isImpersonating) { startedRef.current = true; return; }
-    if (completion?.started_at) { startedRef.current = true; return; }
-    startedRef.current = true;
-    (async () => {
-      try {
-        const isMember = adapter?.kind === "member";
-        const memberRef = isMember ? (adapter?.ref as any) : null;
-        const startData = isMember && memberRef?.enrollmentId
-          ? { kind: "member" as const, enrollmentId: memberRef.enrollmentId, weekIndex: Number(dayId.split(":")[0]), dayIndex: Number(dayId.split(":")[1]) }
-          : { kind: "client" as const, dayId, scheduledWorkoutId };
-        await startWorkoutSrv({ data: startData });
-        qc.invalidateQueries({ queryKey: ["pl-day-completion", dayId] });
-        if (isMember) qc.invalidateQueries({ queryKey: ["member-workout-completion"] });
-      } catch (err) {
-        // Soft-fail: starting is best-effort; later writes will create the row.
-        console.warn("startWorkout failed", err);
-      }
-    })();
-  }, [client?.id, completion?.id, completion?.started_at, dayId, qc, startWorkoutSrv, isImpersonating, adapter]);
+  // Opening or previewing a workout is read-only. Lifecycle state is created
+  // only after a meaningful athlete action through markInProgress() below, or
+  // immediately before the explicit Finish Workout action. This prevents route
+  // navigation, future-workout previews, history, deep links, and Client POV
+  // views from creating an in-progress completion shell.
 
   // Mark in_progress when any meaningful entry occurs
   const markInProgress = async () => {
