@@ -33,6 +33,10 @@ import type {
 } from "@/lib/program-planner/types";
 import { AssignmentCalendar, type CalendarExistingDay, type CalendarIncomingDay } from "./AssignmentCalendar";
 import { todayLocalISO } from "@/lib/today";
+import { AvailabilityGuardDialog } from "./AvailabilityGuardDialog";
+import {
+  evaluateAvailabilityGuard, frequencyFromPlacements, resolveClientAvailability,
+} from "@/lib/program-availability-guard";
 
 const STEPS = ["Content", "Method", "Calendar", "Conflicts", "Review"] as const;
 const WEEKDAYS: Weekday[] = ["mon","tue","wed","thu","fri","sat","sun"];
@@ -132,6 +136,7 @@ export function ProgramAssignmentPlanner({ clientId, templateId, onDone }: Props
   const [commitProgress, setCommitProgress] = useState(0);
   const [commitStage, setCommitStage] = useState<string>("");
   const [successInfo, setSuccessInfo] = useState<null | { added: number; idempotent: boolean; programName: string }>(null);
+  const [guardOpen, setGuardOpen] = useState(false);
 
   // Default-select all once payload loads if user has no prior selection.
   useEffect(() => {
@@ -176,6 +181,33 @@ export function ProgramAssignmentPlanner({ clientId, templateId, onDone }: Props
     return max;
   }, [preview?.placements]);
 
+  /** Guardrail: program frequency vs the client's saved training availability. */
+  const availability = useMemo(() => resolveClientAvailability(client as any), [client]);
+  const effectiveDays: Weekday[] = method === "client_days"
+    ? ((preview as any)?.resolvedTrainingDays?.length ? (preview as any).resolvedTrainingDays : clientTrainingDays.days)
+    : trainingDays;
+  const guard = useMemo(
+    () => evaluateAvailabilityGuard({
+      frequency: frequencyFromPlacements(((preview?.placements ?? []) as any[]).map((p) => ({
+        blockKey: p.blockKey, weekIndex: p.weekIndex, dayKey: p.dayKey,
+      }))),
+      availability,
+      selectedDays: method === "client_days" ? undefined : effectiveDays,
+      clientName: client?.full_name ?? null,
+    }),
+    [preview?.placements, availability, method, effectiveDays.join(","), client?.full_name], // eslint-disable-line react-hooks/exhaustive-deps
+  );
+  /** Titles of the first programmed week, in program order — drives the preview. */
+  const firstWeekTitles = useMemo(() => {
+    const ps = ((preview?.placements ?? []) as any[]);
+    if (!ps.length) return [];
+    const key = `${ps[0].blockKey}::w${ps[0].weekIndex}`;
+    return ps.filter((p) => `${p.blockKey}::w${p.weekIndex}` === key).map((p) => p.title as string);
+  }, [preview?.placements]);
+  /** Manual/date-driven methods are deliberate coach choices; the guard only
+   *  governs weekly recurring scheduling. */
+  const guardApplies = method === "client_days" || method === "weekday_map" || method === "fill_empty" || method === "insert";
+
   // Existing scheduled days for the calendar
   const { data: existingCal = [] as CalendarExistingDay[] } = useQuery({
     queryKey: ["planner-existing-cal", clientId],
@@ -214,8 +246,10 @@ export function ProgramAssignmentPlanner({ clientId, templateId, onDone }: Props
   const back = () => setStep((s) => Math.max(0, s - 1));
 
   const commitServer = useServerFn(commitAssignmentFn);
-  const commit = async () => {
+  const commit = async (daysOverride?: Weekday[]) => {
     if (!preview) return;
+    const effectiveMethod: AssignmentMethod = daysOverride?.length ? "weekday_map" : method;
+    const effectiveDays: Weekday[] = daysOverride?.length ? daysOverride : trainingDays;
     setCommitting(true);
     setCommitProgress(8);
     setCommitStage("Preparing assignment…");
@@ -231,7 +265,7 @@ export function ProgramAssignmentPlanner({ clientId, templateId, onDone }: Props
     }, 250);
     try {
       const result = await commitServer({ data: {
-        clientId, templateId, selection, method, startDate, trainingDays,
+        clientId, templateId, selection, method: effectiveMethod, startDate, trainingDays: effectiveDays,
         conflictDecisions, publishStatus, publishAt, idempotencyKey,
         programName,
       } as any });
@@ -365,12 +399,31 @@ export function ProgramAssignmentPlanner({ clientId, templateId, onDone }: Props
             </Button>
           )}
           {step === STEPS.length - 1 && (
-            <Button onClick={commit} disabled={committing || !preview || preview.placements.length === 0}>
+            <Button
+              onClick={() => (guardApplies ? setGuardOpen(true) : void commit())}
+              disabled={committing || !preview || preview.placements.length === 0}
+            >
               {committing ? <><Loader2 className="mr-1 h-4 w-4 animate-spin" />Assigning…</> : `Assign ${preview?.placements.length ?? 0} workouts`}
             </Button>
           )}
         </div>
       </div>
+
+      {/* Availability guardrail — preview + fix before anything is written. */}
+      <AvailabilityGuardDialog
+        open={guardOpen}
+        onOpenChange={setGuardOpen}
+        guard={guard}
+        clientId={clientId}
+        clientName={client?.full_name ?? null}
+        workoutTitles={firstWeekTitles}
+        busy={committing}
+        onConfirm={(days) => {
+          setGuardOpen(false);
+          setTrainingDays(days);
+          void commit(days);
+        }}
+      />
 
       {/* Committing overlay: clear progress + stage text */}
       {committing && (
