@@ -446,7 +446,7 @@ export function QuickAssignTemplateDialog({ open, onOpenChange, clientId, client
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
           <Button
-            onClick={submit}
+            onClick={() => setGuardOpen(true)}
             disabled={
               !templateId ||
               busy ||
@@ -458,6 +458,20 @@ export function QuickAssignTemplateDialog({ open, onOpenChange, clientId, client
             {busy ? "Assigning…" : "Assign"}
           </Button>
         </DialogFooter>
+        <AvailabilityGuardDialog
+          open={guardOpen}
+          onOpenChange={setGuardOpen}
+          guard={guard}
+          clientId={clientId}
+          clientName={clientName ?? null}
+          workoutTitles={firstWeekTitles}
+          busy={busy}
+          onConfirm={async (days) => {
+            setGuardOpen(false);
+            if (guard.status !== "ok") await persistDays(days);
+            await submit();
+          }}
+        />
       </DialogContent>
     </Dialog>
   );
