@@ -399,12 +399,31 @@ export function ProgramAssignmentPlanner({ clientId, templateId, onDone }: Props
             </Button>
           )}
           {step === STEPS.length - 1 && (
-            <Button onClick={commit} disabled={committing || !preview || preview.placements.length === 0}>
+            <Button
+              onClick={() => (guardApplies ? setGuardOpen(true) : void commit())}
+              disabled={committing || !preview || preview.placements.length === 0}
+            >
               {committing ? <><Loader2 className="mr-1 h-4 w-4 animate-spin" />Assigning…</> : `Assign ${preview?.placements.length ?? 0} workouts`}
             </Button>
           )}
         </div>
       </div>
+
+      {/* Availability guardrail — preview + fix before anything is written. */}
+      <AvailabilityGuardDialog
+        open={guardOpen}
+        onOpenChange={setGuardOpen}
+        guard={guard}
+        clientId={clientId}
+        clientName={client?.full_name ?? null}
+        workoutTitles={firstWeekTitles}
+        busy={committing}
+        onConfirm={(days) => {
+          setGuardOpen(false);
+          setTrainingDays(days);
+          void commit(days);
+        }}
+      />
 
       {/* Committing overlay: clear progress + stage text */}
       {committing && (
