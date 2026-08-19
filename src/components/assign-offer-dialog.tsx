@@ -17,6 +17,7 @@ import { createCheckoutSessionForAssignment } from "@/lib/stripe-checkout.functi
 import { sendPaymentLinkEmail } from "@/lib/payments.functions";
 import { runJob } from "@/lib/progress-jobs";
 import { autoCalculatePurchaseTermDates } from "@/lib/purchase-term-dates.functions";
+import { FIRST50_CODE } from "@/lib/first50-policy";
 
 /** What actually happens when the admin confirms. */
 type AssignMode = "payment_request" | "paid_in_full" | "draft";
@@ -59,6 +60,7 @@ export function AssignOfferDialog({ offer, onClose, fixedClientId }: { offer: an
   const sendLinkFn = useServerFn(sendPaymentLinkEmail);
   const [checkoutUrl, setCheckoutUrl] = useState<string | null>(null);
   const [emailNote, setEmailNote] = useState<string | null>(null);
+  const [discountCodeId, setDiscountCodeId] = useState<string | null>(null);
   const recordPaid = mode === "paid_in_full";
 
   const { data: templates = [] } = useQuery({
@@ -76,6 +78,21 @@ export function AssignOfferDialog({ offer, onClose, fixedClientId }: { offer: an
     enabled: !!offer && !fixedClientId,
     queryFn: async () => (await supabase.from("clients").select("id, full_name, email, agreement_status, agreement_signed").eq("archived", false).order("full_name")).data ?? [],
   });
+
+  const { data: activeDiscounts = [] } = useQuery({
+    queryKey: ["assign-offer-active-discounts", offer?.id],
+    enabled: !!offer?.id,
+    queryFn: async () => (await supabase
+      .from("discount_codes")
+      .select("id, public_code, eligible_product_ids, applies_to_all_products, status")
+      .eq("status", "active")).data ?? [],
+  });
+  const first50 = (activeDiscounts as any[]).find(
+    (discount) =>
+      String(discount.public_code ?? "").toUpperCase() === FIRST50_CODE &&
+      !discount.applies_to_all_products &&
+      (discount.eligible_product_ids ?? []).includes(offer?.id),
+  ) ?? null;
 
   const { data: selectedClient } = useQuery({
     queryKey: ["client-for-assign", clientId],
@@ -135,7 +152,7 @@ export function AssignOfferDialog({ offer, onClose, fixedClientId }: { offer: an
       let generatedUrl: string | null = null;
       if (mode === "payment_request" && purchase?.id) {
         const res = await createCheckoutFn({
-          data: { purchaseRecordId: purchase.id, origin: window.location.origin },
+          data: { purchaseRecordId: purchase.id, discountCodeId, origin: window.location.origin },
         });
         generatedUrl = res.url;
         setCheckoutUrl(res.url);
@@ -211,6 +228,19 @@ export function AssignOfferDialog({ offer, onClose, fixedClientId }: { offer: an
               <div className="font-bold">{offer.name}</div>
               <div className="text-xs text-muted-foreground">{offer.offer_type} · v{offer.version ?? 1} · {offer.currency ?? "USD"} {Number(offer.full_payable_amount ?? offer.price ?? 0).toLocaleString()}</div>
             </div>
+            {mode === "payment_request" && first50 && (
+              <div>
+                <Label>Optional discount</Label>
+                <Select value={discountCodeId ?? "none"} onValueChange={(value) => setDiscountCodeId(value === "none" ? null : value)}>
+                  <SelectTrigger><SelectValue placeholder="No discount" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">No discount</SelectItem>
+                    <SelectItem value={first50.id}>{FIRST50_CODE} — CAD $50 off the first eligible monthly payment</SelectItem>
+                  </SelectContent>
+                </Select>
+                <p className="mt-1 text-xs text-muted-foreground">The server verifies CAD $180/month, eligible product, Stripe synchronization, and no stacking before checkout.</p>
+              </div>
+            )}
             {!fixedClientId && (
               <div>
                 <Label>Client</Label>

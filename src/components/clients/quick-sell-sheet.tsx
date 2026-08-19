@@ -26,6 +26,8 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { listCoachingProducts } from "@/lib/coaching-products.functions";
+import { listDiscountCodesFn } from "@/lib/discount-codes.functions";
+import { FIRST50_CODE } from "@/lib/first50-policy";
 import { createCheckoutSessionForAssignment } from "@/lib/stripe-checkout.functions";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -51,6 +53,7 @@ function formatPrice(cents: number, currency: string) {
 
 export function QuickSellSheet({ open, onOpenChange, clientId, clientName }: Props) {
   const listFn = useServerFn(listCoachingProducts);
+  const listDiscountsFn = useServerFn(listDiscountCodesFn);
   const checkoutFn = useServerFn(createCheckoutSessionForAssignment);
   const qc = useQueryClient();
 
@@ -58,11 +61,18 @@ export function QuickSellSheet({ open, onOpenChange, clientId, clientName }: Pro
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [sendingCheckout, setSendingCheckout] = useState<string | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [selectedDiscountId, setSelectedDiscountId] = useState<string | null>(null);
 
   const { data, isLoading } = useQuery({
     queryKey: ["coaching-products"],
     queryFn: () => listFn(),
     staleTime: 5 * 60_000,
+  });
+  const { data: discountData } = useQuery({
+    queryKey: ["quick-sell-active-discounts"],
+    enabled: open,
+    queryFn: () => listDiscountsFn({ data: { category: "promotion", status: "active", size: 100 } }),
+    staleTime: 60_000,
   });
 
   const products = ((data?.items ?? []) as any[])
@@ -85,6 +95,14 @@ export function QuickSellSheet({ open, onOpenChange, clientId, clientName }: Pro
     return acc;
   }, {});
 
+  const first50ForProduct = (productId: string) =>
+    ((discountData?.rows ?? []) as any[]).find(
+      (discount) =>
+        String(discount.public_code ?? "").toUpperCase() === FIRST50_CODE &&
+        !discount.applies_to_all_products &&
+        (discount.eligible_product_ids ?? []).includes(productId),
+    ) ?? null;
+
   const copyLink = async (url: string, productId: string) => {
     try {
       await navigator.clipboard.writeText(url);
@@ -96,7 +114,7 @@ export function QuickSellSheet({ open, onOpenChange, clientId, clientName }: Pro
     }
   };
 
-  const sendCheckout = async (product: any) => {
+  const sendCheckout = async (product: any, discountCodeId: string | null) => {
     setSendingCheckout(product.id);
     try {
       // Create a purchase record and generate a client-specific checkout session
@@ -123,7 +141,7 @@ export function QuickSellSheet({ open, onOpenChange, clientId, clientName }: Pro
       if (pErr) throw new Error(pErr.message);
 
       const origin = typeof window !== "undefined" ? window.location.origin : "https://jfeffect.com";
-      const res = await checkoutFn({ data: { purchaseRecordId: purchase.id, origin } });
+      const res = await checkoutFn({ data: { purchaseRecordId: purchase.id, discountCodeId, origin } });
 
       qc.invalidateQueries({ queryKey: ["coaching-products"] });
       qc.invalidateQueries({ queryKey: ["client-purchases", clientId] });
@@ -202,7 +220,10 @@ export function QuickSellSheet({ open, onOpenChange, clientId, clientName }: Pro
                           "cursor-pointer p-3 transition-all",
                           isSelected ? "border-primary bg-primary/5" : "hover:border-primary/30",
                         ].join(" ")}
-                        onClick={() => setSelectedId(isSelected ? null : p.id)}
+                        onClick={() => {
+                          setSelectedId(isSelected ? null : p.id);
+                          setSelectedDiscountId(null);
+                        }}
                       >
                         <div className="flex items-start justify-between gap-2">
                           <div className="min-w-0 flex-1">
@@ -256,6 +277,21 @@ export function QuickSellSheet({ open, onOpenChange, clientId, clientName }: Pro
                               Open Checkout Page
                             </Button>
 
+                            {/* FIRST50 remains optional and is never price-calculated in the browser. */}
+                            {first50ForProduct(p.id) && (
+                              <label onClick={(event) => event.stopPropagation()} className="flex cursor-pointer items-start gap-2 rounded-md border border-primary/20 bg-primary/5 px-3 py-2 text-xs">
+                                <input
+                                  type="checkbox"
+                                  checked={selectedDiscountId === first50ForProduct(p.id).id}
+                                  onChange={(event) => setSelectedDiscountId(event.target.checked ? first50ForProduct(p.id).id : null)}
+                                />
+                                <span>
+                                  <span className="font-semibold">Apply {FIRST50_CODE}</span> — CAD $50 off the first eligible monthly payment only.
+                                  <span className="block text-muted-foreground">The server verifies product, CAD $180/month, Stripe sync, and no stacking before checkout.</span>
+                                </span>
+                              </label>
+                            )}
+
                             {/* Option 3: Create a client-specific checkout (if has Stripe price) */}
                             {p.stripe_price_id && (
                               <Button
@@ -264,7 +300,7 @@ export function QuickSellSheet({ open, onOpenChange, clientId, clientName }: Pro
                                 disabled={isSending}
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  sendCheckout(p);
+                                  sendCheckout(p, selectedDiscountId === first50ForProduct(p.id)?.id ? selectedDiscountId : null);
                                 }}
                               >
                                 {isSending ? (

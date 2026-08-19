@@ -11,6 +11,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { assertFirst50Assignment } from "@/lib/first50-policy";
 
 const STRIPE_API = "https://api.stripe.com/v1";
 
@@ -241,6 +242,8 @@ export const createCustomerPortalSession = createServerFn({ method: "POST" })
 
 const CreateAssignmentCheckoutInput = z.object({
   purchaseRecordId: z.string().uuid(),
+  /** Existing admin-selected discount record; browser-entered code strings are never trusted. */
+  discountCodeId: z.string().uuid().nullable().optional(),
   origin: z.string().url(),
 });
 
@@ -279,12 +282,14 @@ export const createCheckoutSessionForAssignment = createServerFn({ method: "POST
     let priceId: string | null = purchase.stripe_price_id ?? null;
     let productMode: string | null = null;
     let paymentStructure: string | null = purchase.payment_structure ?? null;
+    let product: any = null;
     if (purchase.offer_id) {
       const { data: prod } = await supabase
         .from("coaching_products")
-        .select("stripe_price_id, mode, payment_structure")
+        .select("stripe_price_id, mode, payment_structure, price_cents, currency")
         .eq("id", purchase.offer_id)
         .maybeSingle();
+      product = prod;
       if (prod) {
         priceId = priceId || prod.stripe_price_id;
         productMode = prod.mode ?? null;
@@ -295,6 +300,32 @@ export const createCheckoutSessionForAssignment = createServerFn({ method: "POST
       throw new Error(
         `"${purchase.offer_name}" has no Stripe Price ID. Open Admin → Stripe Payment Links, edit this product, and add a Stripe Price ID before generating a checkout link.`,
       );
+    }
+
+    // FIRST50 can only be attached by a coach/admin through this existing
+    // assignment flow. Validate a server-read discount record before any
+    // Stripe customer/session write, then attach exactly one per-mode coupon.
+    let appliedDiscount: { id: string; publicCode: string; couponId: string } | null = null;
+    if (data.discountCodeId) {
+      const { data: discount, error: discountError } = await supabase
+        .from("discount_codes")
+        .select("id, public_code, category, discount_type, discount_value, subscription_duration, status, eligible_product_ids, applies_to_all_products, pairing_allowed, stripe_test_coupon_id, stripe_live_coupon_id")
+        .eq("id", data.discountCodeId)
+        .single();
+      if (discountError || !discount) throw new Error("Selected discount code was not found.");
+
+      const stripeMode = getStripeKey().includes("_test_") ? "test" : "live";
+      assertFirst50Assignment(discount, {
+        offer_id: purchase.offer_id ?? null,
+        currency: product?.currency ?? purchase.currency ?? null,
+        price_cents: product?.price_cents ?? Math.round(Number(purchase.full_payable_amount ?? 0) * 100),
+        payment_structure: paymentStructure,
+      });
+      const couponId = stripeMode === "test" ? discount.stripe_test_coupon_id : discount.stripe_live_coupon_id;
+      if (!couponId) {
+        throw new Error("FIRST50 is not synchronized for the current Stripe mode. Checkout was not created.");
+      }
+      appliedDiscount = { id: discount.id, publicCode: discount.public_code, couponId };
     }
 
     // Load client
@@ -345,7 +376,15 @@ export const createCheckoutSessionForAssignment = createServerFn({ method: "POST
       mode: checkoutMode,
       success_url: `${data.origin}/portal/purchases?checkout=success&session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${data.origin}/portal/purchases`,
-      allow_promotion_codes: "true",
+      ...(appliedDiscount
+        ? {
+            "discounts[0][coupon]": appliedDiscount.couponId,
+            "metadata[applied_code_id]": appliedDiscount.id,
+            "metadata[applied_code]": appliedDiscount.publicCode,
+            "subscription_data[metadata][applied_code_id]": appliedDiscount.id,
+            "subscription_data[metadata][applied_code]": appliedDiscount.publicCode,
+          }
+        : { allow_promotion_codes: "true" }),
       "metadata[purchase_record_id]": purchase.id,
       "metadata[client_id]": client.id,
       "metadata[offer_id]": purchase.offer_id ?? "",

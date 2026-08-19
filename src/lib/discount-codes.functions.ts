@@ -283,7 +283,11 @@ export const validatePublicDiscountCodesFn = createServerFn({ method: "POST" })
  *   - applies_to[products][] requires Stripe product IDs. We resolve our DB
  *     UUIDs against coaching_products.stripe_product_id when applicable.
  */
-function buildCouponParams(row: any, couponId: string): Record<string, any> {
+function buildCouponParams(
+  row: any,
+  couponId: string,
+  fixedAmountCurrency: string | null,
+): Record<string, any> {
   const params: Record<string, any> = {
     id: couponId,
     name: row.internal_name,
@@ -292,9 +296,13 @@ function buildCouponParams(row: any, couponId: string): Record<string, any> {
   if (row.discount_type === "percentage") {
     params.percent_off = row.discount_value;
   } else {
-    // Stripe expects integer cents; treat discount_value as dollars for fixed.
+    // Stripe expects integer cents. Resolve currency from the exactly one
+    // eligible coaching product; never default a fixed discount to USD.
+    if (!fixedAmountCurrency) {
+      throw new Error("Fixed discount currency could not be resolved from its eligible product.");
+    }
     params.amount_off = Math.round(Number(row.discount_value) * 100);
-    params.currency = "usd";
+    params.currency = fixedAmountCurrency.toLowerCase();
   }
   if (row.subscription_duration === "repeating" && row.duration_months) {
     params.duration_in_months = row.duration_months;
@@ -336,7 +344,12 @@ function buildPromotionCodeParams(row: any, couponId: string): Record<string, an
 }
 
 /** Create or fetch the Stripe coupon for this mode (idempotent on couponId). */
-async function ensureStripeCoupon(apiKey: string, row: any, couponId: string): Promise<string> {
+async function ensureStripeCoupon(
+  apiKey: string,
+  row: any,
+  couponId: string,
+  fixedAmountCurrency: string | null,
+): Promise<string> {
   // Try to fetch first — if it exists with our id, reuse it.
   try {
     const existing = await stripeFetch(`/coupons/${encodeURIComponent(couponId)}`, { apiKey });
@@ -344,7 +357,7 @@ async function ensureStripeCoupon(apiKey: string, row: any, couponId: string): P
   } catch {
     // not found → create
   }
-  const params = buildCouponParams(row, couponId);
+  const params = buildCouponParams(row, couponId, fixedAmountCurrency);
   const created = await stripeFetch(`/coupons`, {
     method: "POST",
     apiKey,
@@ -399,12 +412,34 @@ async function ensureStripePromotionCode(
   return created.id;
 }
 
-async function syncOneMode(row: any, mode: StripeMode): Promise<{ couponId: string; promoId: string } | null> {
+async function resolveFixedDiscountCurrency(supabase: any, row: any): Promise<string | null> {
+  if (row.discount_type !== "fixed") return null;
+  const eligibleProductIds = Array.isArray(row.eligible_product_ids) ? row.eligible_product_ids : [];
+  if (row.applies_to_all_products || eligibleProductIds.length !== 1) {
+    throw new Error("Fixed discounts must target exactly one eligible product before Stripe synchronization.");
+  }
+  const { data: product, error } = await supabase
+    .from("coaching_products")
+    .select("currency")
+    .eq("id", eligibleProductIds[0])
+    .maybeSingle();
+  if (error || !product?.currency) {
+    throw new Error("Fixed discount currency could not be resolved from its eligible product.");
+  }
+  return String(product.currency).toLowerCase();
+}
+
+async function syncOneMode(
+  supabase: any,
+  row: any,
+  mode: StripeMode,
+): Promise<{ couponId: string; promoId: string } | null> {
   const apiKey = getStripeKeyForMode(mode);
   if (!apiKey) return null;
   // Derive a stable per-mode coupon id from the row UUID.
   const couponId = `${mode === "test" ? "tst" : "lv"}_${row.id.replace(/-/g, "").slice(0, 24)}`;
-  const ensuredCoupon = await ensureStripeCoupon(apiKey, row, couponId);
+  const fixedAmountCurrency = await resolveFixedDiscountCurrency(supabase, row);
+  const ensuredCoupon = await ensureStripeCoupon(apiKey, row, couponId, fixedAmountCurrency);
   const existingPromoId = mode === "test"
     ? (row.stripe_test_promotion_code_id ?? null)
     : (row.stripe_live_promotion_code_id ?? null);
@@ -433,7 +468,7 @@ export const syncDiscountCodeToStripeFn = createServerFn({ method: "POST" })
 
     for (const mode of data.modes) {
       try {
-        const out = await syncOneMode(row, mode);
+        const out = await syncOneMode(supabase, row, mode);
         if (!out) {
           results.push({ mode, ok: false, error: `No ${mode}-mode Stripe key configured` });
           continue;
