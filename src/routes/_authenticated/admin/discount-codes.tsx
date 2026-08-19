@@ -208,7 +208,7 @@ export function DiscountCodesPage({ embedded = false }: { embedded?: boolean } =
                       <div>{new Date(c.expires_at).toLocaleString()}</div>
                       <div className="text-muted-foreground">{timeRemaining(c.expires_at)}</div>
                     </div>
-                  ) : <span className="text-muted-foreground">No expiry</span>}
+                  ) : <span className="text-muted-foreground">No expiration</span>}
                 </td>
                 <td className="p-2 text-xs">
                   <div className={c.stripe_test_mode_synced ? "text-emerald-600" : "text-muted-foreground"}>
@@ -306,20 +306,15 @@ export function DiscountCodesPage({ embedded = false }: { embedded?: boolean } =
             </AlertDialogTitle>
             <AlertDialogDescription>
               {confirmAction?.code.public_code}
-              {confirmAction?.next === "active" && confirmAction.code.category === "promotion" && !confirmAction.code.expires_at &&
-                " — Note: promotion codes require an expiration date before they can be activated."}
+              {confirmAction?.next === "active" && !confirmAction.code.expires_at &&
+                " — This code has no expiration date."}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction
               onClick={() => confirmAction && setStatusM.mutate({ id: confirmAction.code.id, status: confirmAction.next })}
-              disabled={
-                setStatusM.isPending ||
-                (confirmAction?.next === "active" &&
-                  confirmAction.code.category === "promotion" &&
-                  !confirmAction.code.expires_at)
-              }
+              disabled={setStatusM.isPending}
             >
               Confirm
             </AlertDialogAction>
@@ -527,9 +522,10 @@ function DiscountCodeForm({
                   onChange={(e) => set("start_at", e.target.value ? new Date(e.target.value).toISOString() : null)} />
               </div>
               <div>
-                <Label>Expires at</Label>
+                <Label>Expiration</Label>
                 <Input type="datetime-local" value={form.expires_at ? form.expires_at.slice(0, 16) : ""}
                   onChange={(e) => set("expires_at", e.target.value ? new Date(e.target.value).toISOString() : null)} />
+                <p className="mt-1 text-xs text-muted-foreground">Optional — leave blank for no expiration.</p>
               </div>
               <div>
                 <Label>Time zone</Label>
