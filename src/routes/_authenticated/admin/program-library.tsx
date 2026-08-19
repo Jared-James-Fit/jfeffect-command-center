@@ -26,7 +26,13 @@ import {
   listTemplateAssignments,
   type TemplateType, type TrainingStyle, type TemplatePlacement,
 } from "@/lib/pl-programs";
-import { BLOCK_PHASE_OPTIONS } from "@/lib/pl-template-blocks";
+import { BLOCK_PHASE_OPTIONS, normalizeTemplatePayload, getActiveTemplateBlocks } from "@/lib/pl-template-blocks";
+import { AvailabilityGuardDialog } from "@/components/program-planner/AvailabilityGuardDialog";
+import {
+  evaluateAvailabilityGuard, frequencyFromTemplateBlocks, resolveClientAvailability,
+  GUARD_WEEKDAY_LABEL,
+} from "@/lib/program-availability-guard";
+import type { Weekday } from "@/lib/program-planner/types";
 import { supabase } from "@/integrations/supabase/client";
 import { findOverlappingBlock, suggestNextStartISO } from "@/lib/block-schedule";
 import {
@@ -1176,6 +1182,7 @@ export function AssignDialog({ template, onClose }: { template: any; onClose: ()
   // to either add one or explicitly notify the admin before continuing.
   const [showMaxesGate, setShowMaxesGate] = useState(false);
   const [notifying, setNotifying] = useState(false);
+  const [guardOpen, setGuardOpen] = useState(false);
   const templateWeeks = template ? getTemplateWeeks(template) : 0;
 
   useEffect(() => {
@@ -1221,7 +1228,50 @@ export function AssignDialog({ template, onClose }: { template: any; onClose: ()
       (await (supabase as any).from("pl_templates").select("*").eq("id", template.id).maybeSingle()).data,
   });
 
+  // Availability guardrail — the client's saved training days vs the
+  // template's actual programmed workouts per week.
+  const { data: clientRow } = useQuery({
+    queryKey: ["assign-client-availability", clientId],
+    enabled: !!clientId,
+    queryFn: async () => (await supabase
+      .from("clients")
+      .select("id, full_name, committed_training_days, available_training_days, preferred_training_days, unavailable_training_days")
+      .eq("id", clientId).maybeSingle()).data,
+  });
+
   if (!template) return null;
+
+  const guardBlocks = (() => {
+    const tpl = fullTpl ?? template;
+    try {
+      const p = normalizeTemplatePayload(tpl.payload, { templateType: tpl.template_type, templateId: tpl.id });
+      return getActiveTemplateBlocks(p) as any[];
+    } catch { return [] as any[]; }
+  })();
+  const guard = evaluateAvailabilityGuard({
+    frequency: frequencyFromTemplateBlocks(guardBlocks as any),
+    availability: resolveClientAvailability(clientRow as any),
+    clientName: (clients as any[]).find((c) => c.id === clientId)?.full_name ?? null,
+  });
+  const firstWeekTitles = (() => {
+    const w = (guardBlocks[0] as any)?.weeks?.[0];
+    const ds = Array.isArray(w?.days) ? w.days : Array.isArray(w?.workout_days) ? w.workout_days : [];
+    return ds.map((d: any, i: number) => d?.title || d?.name || `Day ${i + 1}`);
+  })();
+  /** Persist the coach's chosen weekdays so the canonical scheduler uses them. */
+  const persistDays = async (days: Weekday[]) => {
+    const longDays = days.map((d) => GUARD_WEEKDAY_LABEL[d]);
+    const { data: auth } = await supabase.auth.getUser();
+    await supabase.from("clients").update({
+      committed_training_days: longDays,
+      committed_training_frequency: longDays.length,
+      training_schedule_completed: true,
+      training_schedule_last_updated: new Date().toISOString(),
+      training_schedule_updated_by: auth.user?.id ?? null,
+    } as any).eq("id", clientId);
+    qc.invalidateQueries({ queryKey: ["assign-client-availability", clientId] });
+    qc.invalidateQueries({ queryKey: ["client", clientId] });
+  };
 
   const isBlockish = template.template_type === "block" || template.template_type === "full_prep";
   const conflict = isBlockish
@@ -1567,9 +1617,29 @@ export function AssignDialog({ template, onClose }: { template: any; onClose: ()
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={onClose}>Cancel</Button>
-          <Button onClick={submit} disabled={!!conflict}>Assign to client</Button>
+          <Button
+            onClick={() => (guard.status === "no_program" ? submit() : setGuardOpen(true))}
+            disabled={!!conflict || !clientId}
+          >
+            Assign to client
+          </Button>
         </DialogFooter>
         </>
+        )}
+        {clientId && guard.status !== "no_program" && (
+          <AvailabilityGuardDialog
+            open={guardOpen}
+            onOpenChange={setGuardOpen}
+            guard={guard}
+            clientId={clientId}
+            clientName={(clients as any[]).find((c) => c.id === clientId)?.full_name ?? null}
+            workoutTitles={firstWeekTitles}
+            onConfirm={async (days) => {
+              setGuardOpen(false);
+              if (guard.status !== "ok") await persistDays(days);
+              await submit();
+            }}
+          />
         )}
       </DialogContent>
     </Dialog>
