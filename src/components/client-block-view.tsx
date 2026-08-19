@@ -13,7 +13,8 @@ import { cn } from "@/lib/utils";
 import { getBlockTree, durationRange } from "@/lib/pl-programs";
 import { supabase } from "@/integrations/supabase/client";
 import {
-  effectiveRestSeconds, resolveCategory, derivePurposeLabels, purposeLabelBadgeClass,
+  effectiveRestSeconds, resolveCategory,
+  deriveWeeklyPurposeLabelByRowId, purposeLabelBadgeClass,
 } from "@/lib/exercise-metadata";
 import { weekDisplayRange, isCurrentWeek, formatWeekRange } from "@/lib/block-dates";
 import { isWeekLocked, dayScheduledDate, cleanDayTitle } from "@/lib/workout-today";
@@ -207,6 +208,23 @@ export function ClientBlockView({
   const dayDate = (d: any): Date | null =>
     resolvedWeek ? dayScheduledDate({ day: d, week: resolvedWeek, block, completion: null }) : null;
 
+  // One weekly priority map is shared by the summary and every day card. Its
+  // schedule-first order prevents each workout card from resetting S/B/D to
+  // Primary when the same family appears again later that week.
+  const weeklyPurposeLabelById = useMemo(
+    () => deriveWeeklyPurposeLabelByRowId(
+      days.map((d: any, index: number) => {
+        const scheduled = dayScheduledDate({ day: d, week: resolvedWeek, block, completion: null });
+        return {
+          order: scheduled?.getTime() ?? d.day_index ?? d.sort_order ?? index,
+          rows: (rowsByDay.get(d.id) ?? []) as any[],
+        };
+      }),
+      (row: any) => row.exercises ?? null,
+    ),
+    [days, rowsByDay, block, resolvedWeek],
+  );
+
   // Weekly priority summary — collects non-Assistance labelled rows across
   // every day in the current week and groups by (movement family, label).
   const weeklyPriorities = useMemo(() => {
@@ -219,11 +237,10 @@ export function ClientBlockView({
     for (const d of days) {
       const rows = (rowsByDay.get(d.id) ?? []).slice().sort((a: any, b: any) => (a.sort_order ?? 0) - (b.sort_order ?? 0));
       if (!rows.length) continue;
-      const labels = derivePurposeLabels(rows, (r: any) => r.exercises ?? null);
       const dd = dayDate(d);
       const dayName = dd ? format(dd, "EEEE") : `Day ${d.day_index}`;
-      rows.forEach((r: any, i: number) => {
-        const label = labels[i];
+      rows.forEach((r: any) => {
+        const label = weeklyPurposeLabelById.get(r.id) ?? "Assistance";
         if (!label || label === "Assistance") return;
         const family = (r.movement_family as string | null) ?? r.exercises?.competition_lift_type ?? "other";
         items.push({
@@ -238,7 +255,7 @@ export function ClientBlockView({
     }
     items.sort((a, b) => a.rank - b.rank || a.family.localeCompare(b.family));
     return items;
-  }, [days, rowsByDay, block, resolvedWeek]);
+  }, [days, rowsByDay, block, resolvedWeek, weeklyPurposeLabelById]);
 
   // ── Selected day (URL-persisted via parent). Falls back to today, then the
   // first not-yet-completed day, then index 0. Invalid IDs fall back safely. ──
@@ -733,7 +750,7 @@ export function ClientBlockView({
             const dd = dayDate(d);
             const isToday = !!dd && dd.getTime() === today.getTime();
             const isPast = !!dd && dd < today;
-            const purpose = derivePurposeLabels(rows, (r) => r.exercises ?? null);
+            const purpose = rows.map((r: any) => weeklyPurposeLabelById.get(r.id) ?? "Assistance");
             const duration = durationRange(d.duration_override_min ?? d.duration_estimate_min ?? 60);
 
             const Action = () => {

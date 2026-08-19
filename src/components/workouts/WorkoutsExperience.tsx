@@ -29,7 +29,7 @@ import { getClientWorkouts, getBlockTree } from "@/lib/pl-programs";
 import { cleanDayTitle, type WorkoutItem, dayScheduledDate } from "@/lib/workout-today";
 import { getWorkoutStatus, type WorkoutStatus } from "@/lib/workout-status";
 import { localStartOfToday, toLocalISO } from "@/lib/today";
-import { derivePurposeLabels, purposeLabelBadgeClass } from "@/lib/exercise-metadata";
+import { deriveWeeklyPurposeLabelByRowId, purposeLabelBadgeClass } from "@/lib/exercise-metadata";
 import { pickCurrentBlock } from "@/lib/block-dates";
 import { MoveWorkoutSheet } from "@/components/schedule/MoveWorkoutSheet";
 import { ScheduleHistoryDrawer } from "@/components/schedule/ScheduleHistoryDrawer";
@@ -158,16 +158,38 @@ export function WorkoutsExperience({
       squat: "Squat", bench: "Bench", deadlift: "Deadlift",
       upper: "Upper", lower: "Lower", other: "Other",
     };
+    const priorityByRowId = new Map<string, string>();
+    const itemsByWeek = new Map<string, WorkoutItem[]>();
+    for (const item of dayItems) {
+      const key = `${item.block?.id ?? "block"}:${item.week?.id ?? "week"}`;
+      const group = itemsByWeek.get(key) ?? [];
+      group.push(item);
+      itemsByWeek.set(key, group);
+    }
+
+    for (const weekItems of itemsByWeek.values()) {
+      const labels = deriveWeeklyPurposeLabelByRowId(
+        weekItems.map((item, index) => {
+          const scheduled = dayScheduledDate(item, committedDays);
+          return {
+            order: scheduled?.getTime() ?? item.day?.day_index ?? item.day?.sort_order ?? index,
+            rows: (rowsByDay.get(item.day?.id) ?? []) as any[],
+          };
+        }),
+        (row: any) => row.exercises ?? null,
+      );
+      labels.forEach((label, rowId) => priorityByRowId.set(rowId, label));
+    }
+
     const out = new Map<string, Array<{ label: string; family: string }>>();
     for (const it of dayItems) {
       const id = it.day?.id;
       if (!id) continue;
       const rows = rowsByDay.get(id) ?? [];
       if (!rows.length) continue;
-      const labels = derivePurposeLabels(rows, (r: any) => r.exercises ?? null);
       const chips: Array<{ label: string; family: string }> = [];
-      rows.forEach((r: any, i: number) => {
-        const label = labels[i];
+      rows.forEach((r: any) => {
+        const label = priorityByRowId.get(r.id) ?? "Assistance";
         if (!label || label === "Assistance") return;
         const famRaw = (r.movement_family as string | null) ?? r.exercises?.competition_lift_type ?? "";
         chips.push({ label, family: FAMILY[String(famRaw).toLowerCase()] ?? "" });
