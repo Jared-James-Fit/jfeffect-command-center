@@ -340,8 +340,8 @@ export interface WorkoutContextAdapter {
   getDayRaw(dayId: string): Promise<PlDayRaw | null>;
   /** Raw pl_exercise_rows with `exercises(...)` join for `dayId`, in sort_order. */
   listRowsRaw(dayId: string): Promise<PlRowRaw[]>;
-  /** Raw pl_row_results for this day, scoped to the current trainee. */
-  listRowResultsRaw(dayId: string): Promise<PlRowResultRaw[]>;
+  /** Raw pl_row_results for this day, scoped to the current trainee. Callers may pass already-loaded row IDs to avoid a duplicate lookup. */
+  listRowResultsRaw(dayId: string, rowIds?: string[]): Promise<PlRowResultRaw[]>;
   /** Raw pl_day_completions row for this day + trainee, or null. */
   getDayCompletionRaw(dayId: string): Promise<PlDayCompletionRaw | null>;
   /** Raw pl_exercise_notes rows for this day + trainee. */

@@ -218,6 +218,21 @@ describe("client adapter — pl_row_results write isolation across instances", (
       sel?.filters.some((f) => f.col === "scheduled_workout_id" && f.op === "is" && f.val === null),
     ).toBe(true);
   });
+
+  it("uses logger-supplied row IDs without repeating pl_exercise_rows discovery", async () => {
+    const adapter = createClientAdapter({
+      kind: "client",
+      userId: "u",
+      ownerId: "client-1",
+      scheduledWorkoutId: "inst-A",
+    });
+    await adapter.listRowResultsRaw("day-1", ["row-1", "row-2"]);
+
+    expect(log.some((state) => state.table === "pl_exercise_rows" && state.op === "select")).toBe(false);
+    const resultQuery = [...log].reverse().find((state) => state.table === "pl_row_results" && state.op === "select");
+    expect(resultQuery?.filters).toContainEqual({ col: "row_id", op: "in", val: ["row-1", "row-2"] });
+    expect(resultQuery?.filters).toContainEqual({ col: "scheduled_workout_id", op: "eq", val: "inst-A" });
+  });
 });
 
 describe("client adapter — completion updates isolated per instance", () => {

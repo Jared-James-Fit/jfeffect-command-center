@@ -888,7 +888,7 @@ export function createMemberAdapter(ref: WorkoutContextRef): WorkoutContextAdapt
         return memberRowToPlRow({ row: merged, exerciseIndex: ei, dayId });
       });
     },
-    async listRowResultsRaw(dayId: string): Promise<PlRowResultRaw[]> {
+    async listRowResultsRaw(dayId: string, _knownRowIds?: string[]): Promise<PlRowResultRaw[]> {
       const { week, day } = decodeDayId(dayId);
       const { data, error } = await supabase
         .from("member_set_logs")

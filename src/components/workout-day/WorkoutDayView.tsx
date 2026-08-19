@@ -9,13 +9,11 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, Check, Clock, CheckCircle2, Circle, Play, StickyNote, NotebookPen, Info, Maximize2, Minimize2, AlertTriangle, RefreshCw, Send, MessageCircle, ChevronDown, ChevronUp, Zap, Trophy, MoreHorizontal, Undo2, HelpCircle } from "lucide-react";
+import { ArrowLeft, Check, Clock, CheckCircle2, Circle, StickyNote, NotebookPen, Info, Maximize2, Minimize2, AlertTriangle, RefreshCw, Send, MessageCircle, ChevronDown, ChevronUp, Zap, Trophy, MoreHorizontal, Undo2, HelpCircle } from "lucide-react";
 
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { getExerciseVideoSource } from "@/lib/exercise-video";
-import { useExerciseVideoSetGlobal } from "@/hooks/use-exercise-video-set";
 import { toast } from "sonner";
 import { exerciseAccent } from "@/components/program-builder";
 import {
@@ -59,8 +57,11 @@ import { enqueueOfflineWrite, registerQueueHandler } from "@/lib/workout-offline
 import { saveOfflineCompletion } from "@/lib/offline/workout-completion-store";
 import { ActiveRestTimerProvider, useRestTimer } from "@/components/active-rest-timer";
 import { RestTimerButton } from "@/components/workout-day/RestTimerButton";
-import { ExerciseHistoryButton } from "@/components/exercise-history-sheet";
-import { QuickSwapButton } from "@/components/workout-day/QuickSwapButton";
+import {
+  DeferredExerciseHistoryButton,
+  DeferredExerciseHowToButton,
+  DeferredQuickSwapButton,
+} from "@/components/workout-day/deferred-exercise-actions";
 import { WorkoutToolsProvider, WorkoutToolsButton } from "@/components/workout-tools/workout-tools";
 import { convertWeight } from "@/lib/progress-metrics";
 import {
@@ -598,7 +599,7 @@ function WorkoutDay({
       } else {
         const { data, error } = await sb
           .from("pl_exercise_rows")
-          .select("*, exercises(id,name,video_url,vimeo_embed_url,secondary_vimeo_embed_url,active_video_set,thumbnail_url,cues,common_mistakes,muscle_group,category,pl_lift_group,warmup_protocol_id,is_powerlifting,warmup_notes,default_load_unit,default_load_type,exercise_category,is_competition_lift,competition_lift_type,default_measurement_type)")
+          .select("*, exercises(id,name,cues,muscle_group,category,equipment,difficulty,pl_lift_group,default_load_unit,default_load_type,exercise_category,is_competition_lift,competition_lift_type,default_measurement_type)")
           .eq("day_id", dayId)
           .order("sort_order");
         // Surface RLS / network errors to react-query so the failure
@@ -607,21 +608,6 @@ function WorkoutDay({
         // "No exercises are assigned" report).
         if (error) throw error;
         r = data ?? [];
-      }
-      // Secondary lookup: for rows that have exercise_name_override but no exercise_id,
-      // look up the exercise by name so the How To sheet can show the Vimeo video.
-      const nameOnlyRows = (r as any[]).filter((row) => !row.exercise_id && row.exercise_name_override);
-      if (nameOnlyRows.length > 0) {
-        const names = [...new Set(nameOnlyRows.map((row: any) => row.exercise_name_override as string))];
-        const { data: exByName } = await sb.from("exercises").select("id,name,video_url,vimeo_embed_url,secondary_vimeo_embed_url,active_video_set,thumbnail_url,cues,common_mistakes,muscle_group,category,pl_lift_group,warmup_protocol_id,is_powerlifting,warmup_notes,default_load_unit,default_load_type,exercise_category,is_competition_lift,competition_lift_type,default_measurement_type").in("name", names);
-        if (exByName && exByName.length > 0) {
-          const nameMap = new Map<string, any>(exByName.map((e: any) => [e.name, e]));
-          for (const row of r as any[]) {
-            if (!row.exercise_id && row.exercise_name_override && nameMap.has(row.exercise_name_override)) {
-              row.exercises = nameMap.get(row.exercise_name_override);
-            }
-          }
-        }
       }
       writePlanCache(cacheScope, "rows", r);
       return r;
@@ -632,6 +618,20 @@ function WorkoutDay({
     // Empty state is now rendered inline (see WorkoutEmptyCard below) so we
     // no longer fire the misleading "empty workout" toast — that read like a
     // crash to clients. Failed loads are still caught by WorkoutLoadBoundary.
+  }, [rowsLoaded, rows.length]);
+
+  // Let the day shell, prescription cards, current logs, and completion state
+  // commit before starting history, notes, diagnostics, and subscriptions. This
+  // is deliberately a one-frame boundary: it improves first interaction without
+  // changing the existing data model or hiding any required workout content.
+  const [secondaryHydrationReady, setSecondaryHydrationReady] = useState(false);
+  useEffect(() => {
+    setSecondaryHydrationReady(false);
+  }, [dayId]);
+  useEffect(() => {
+    if (!rowsLoaded || (rows as any[]).length === 0) return;
+    const frame = requestAnimationFrame(() => setSecondaryHydrationReady(true));
+    return () => cancelAnimationFrame(frame);
   }, [rowsLoaded, rows.length]);
 
   const { data: results = [] } = useQuery({
@@ -647,7 +647,7 @@ function WorkoutDay({
       const rowIds = (rows as any[]).map((r) => r.id);
       if (!rowIds.length) return [];
       const r = adapter
-        ? await adapter.listRowResultsRaw(dayId)
+        ? await adapter.listRowResultsRaw(dayId, rowIds)
         : (await sb.from("pl_row_results").select("*").in("row_id", rowIds).eq("client_id", client!.id)).data ?? [];
       writePlanCache(cacheScope, `results:${client!.id}`, r);
       return r;
@@ -689,17 +689,22 @@ function WorkoutDay({
       scheduledWorkoutId,
       previousLiftIdentityKey,
     ],
-    enabled: !!historyOwnerId && previousLiftIdentities.length > 0,
+    enabled: secondaryHydrationReady && !!historyOwnerId && previousLiftIdentities.length > 0,
     staleTime: 2 * 60_000,
     gcTime: 10 * 60_000,
     retry: 1,
     queryFn: async () => {
       if (adapter?.kind === "member") {
         if (!adapter.ref.enrollmentId) return [];
+        const memberExerciseIds = Array.from(
+          new Set(previousLiftIdentities.map((identity) => identity.exerciseId).filter(Boolean) as string[]),
+        );
+        if (!memberExerciseIds.length) return [];
         const { data, error } = await (supabase as any)
           .from("member_set_logs")
           .select("id, week_index, day_index, exercise_id, logged_at, updated_at, reps, rpe, rir, entered_value, entered_unit, normalized_kg, normalized_lb, load_kg, load_lb, is_working_set, is_bodyweight, load_type")
           .eq("enrollment_id", adapter.ref.enrollmentId)
+          .in("exercise_id", memberExerciseIds)
           .order("logged_at", { ascending: false })
           .limit(2000);
         if (error) throw error;
@@ -727,18 +732,52 @@ function WorkoutDay({
         }));
       }
 
-      const { data, error } = await (supabase as any)
-        .from("pl_row_results")
-        .select(`id, row_id, scheduled_workout_id, completed_at, updated_at, created_at,
+      const exerciseIds = Array.from(
+        new Set(previousLiftIdentities.map((identity) => identity.exerciseId).filter(Boolean) as string[]),
+      );
+      const fallbackNames = Array.from(
+        new Set(
+          previousLiftIdentities
+            .filter((identity) => !identity.exerciseId && identity.exerciseName)
+            .map((identity) => identity.exerciseName),
+        ),
+      );
+      if (!exerciseIds.length && !fallbackNames.length) return [];
+
+      const columns = `id, row_id, scheduled_workout_id, completed_at, updated_at, created_at,
           actual_reps, actual_rpe, actual_rir, entered_value, entered_unit,
           normalized_kg, normalized_lb, actual_load, actual_load_unit, is_working_set,
           is_bodyweight, load_type,
-          pl_exercise_rows(exercise_id, exercise_name_override, day_id, exercises(name))`)
-        .eq("client_id", historyOwnerId)
-        .order("updated_at", { ascending: false })
-        .limit(2000);
-      if (error) throw error;
-      return ((data ?? []) as any[]).map((log) => {
+          pl_exercise_rows!inner(exercise_id, exercise_name_override, day_id, exercises(name))`;
+      const requests: Promise<any>[] = [];
+      if (exerciseIds.length) {
+        requests.push(
+          (supabase as any)
+            .from("pl_row_results")
+            .select(columns)
+            .eq("client_id", historyOwnerId)
+            .in("pl_exercise_rows.exercise_id", exerciseIds)
+            .order("updated_at", { ascending: false })
+            .limit(2000),
+        );
+      }
+      if (fallbackNames.length) {
+        requests.push(
+          (supabase as any)
+            .from("pl_row_results")
+            .select(columns)
+            .eq("client_id", historyOwnerId)
+            .in("pl_exercise_rows.exercise_name_override", fallbackNames)
+            .order("updated_at", { ascending: false })
+            .limit(2000),
+        );
+      }
+      const batches = await Promise.all(requests);
+      for (const batch of batches) if (batch.error) throw batch.error;
+      const uniqueLogs = Array.from(
+        new Map(batches.flatMap((batch) => batch.data ?? []).map((log: any) => [log.id, log])).values(),
+      );
+      return uniqueLogs.map((log: any) => {
         const historyRow = log.pl_exercise_rows;
         const enteredUnit = log.entered_unit === "kg" || log.entered_unit === "lb"
           ? log.entered_unit
@@ -798,7 +837,7 @@ function WorkoutDay({
   // instant cache invalidation and re-fetches the latest results within ~1 s.
   const rowIds = useMemo(() => (rows as any[]).map((r: any) => r.id as string), [rows]);
   useEffect(() => {
-    if (!client?.id || rowIds.length === 0) return;
+    if (!secondaryHydrationReady || !client?.id || rowIds.length === 0) return;
     const channelName = `workout-results:${dayId}:${client.id}`;
     const channel = supabase
       .channel(channelName)
@@ -825,7 +864,7 @@ function WorkoutDay({
       supabase.removeChannel(channel);
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [client?.id, dayId, rowIds.join(","), qc]);
+  }, [secondaryHydrationReady, client?.id, dayId, rowIds.join(","), qc]);
   // ────────────────────────────────────────────────────────────────────────
 
   // ── Member real-time multi-device sync ──────────────────────────────────
@@ -842,7 +881,7 @@ function WorkoutDay({
     return { enrollmentId: adapter.ref.enrollmentId, weekIndex, dayIndex };
   })();
   useEffect(() => {
-    if (!memberRealtimeCtx) return;
+    if (!secondaryHydrationReady || !memberRealtimeCtx) return;
     const { enrollmentId, weekIndex, dayIndex } = memberRealtimeCtx;
     const channel = supabase
       .channel(`member-workout:${enrollmentId}:${weekIndex}:${dayIndex}`)
@@ -886,7 +925,7 @@ function WorkoutDay({
       supabase.removeChannel(channel);
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [memberRealtimeCtx?.enrollmentId, memberRealtimeCtx?.weekIndex, memberRealtimeCtx?.dayIndex, dayId, qc]);
+  }, [secondaryHydrationReady, memberRealtimeCtx?.enrollmentId, memberRealtimeCtx?.weekIndex, memberRealtimeCtx?.dayIndex, dayId, qc]);
   // ────────────────────────────────────────────────────────────────────────
 
   // Slice 3 client fail-safe. A row "is unsupported" when it carries
@@ -903,7 +942,7 @@ function WorkoutDay({
   const completeWorkoutSrv = useServerFn(completeWorkoutFn);
   const { data: unsupportedRows = {} } = useQuery<Record<string, boolean>>({
     queryKey: ["pl-day-row-block-summaries", dayId, (rows as any[]).map((r) => r.id).sort().join(",")],
-    enabled: (rows as any[]).length > 0,
+    enabled: secondaryHydrationReady && (rows as any[]).length > 0,
     queryFn: async () => {
       const rowIds = (rows as any[]).map((r) => r.id);
       if (!rowIds.length) return {} as Record<string, boolean>;
@@ -943,7 +982,7 @@ function WorkoutDay({
   // Exercise notes for this day
   const { data: exerciseNotes = [], isLoading: notesLoading } = useQuery({
     queryKey: ["pl-day-exercise-notes", dayId, client?.id, adapter?.kind ?? null],
-    enabled: !!client?.id,
+    enabled: secondaryHydrationReady && !!client?.id,
     staleTime: 60_000,
     queryFn: async () =>
       adapter
@@ -955,7 +994,7 @@ function WorkoutDay({
   // Scoped by client + day; one row per (client, day) thanks to the Phase 1 unique constraint.
   const { data: existingReview } = useQuery({
     queryKey: ["pl-workout-feedback", dayId, client?.id, adapter?.kind ?? null],
-    enabled: !!client?.id && !!completion?.completed_at,
+    enabled: secondaryHydrationReady && !!client?.id && !!completion?.completed_at,
     staleTime: 60_000,
     queryFn: async () => {
       if (adapter) {
@@ -1084,7 +1123,7 @@ function WorkoutDay({
 
   const { data: prefRows = [] } = useQuery({
     queryKey: ["client-exercise-unit-prefs", adapter?.kind ?? "client", client?.id, exerciseIds.join(",")],
-    enabled: !!client?.id && exerciseIds.length > 0,
+    enabled: secondaryHydrationReady && !!client?.id && exerciseIds.length > 0,
     staleTime: 60_000,
     queryFn: async () => {
       // Route through the adapter so the member adapter can read its own
@@ -1101,7 +1140,7 @@ function WorkoutDay({
 
   const { data: historyRows = [] } = useQuery({
     queryKey: ["client-exercise-unit-history", client?.id, exerciseIds.join(",")],
-    enabled: !!client?.id && exerciseIds.length > 0,
+    enabled: secondaryHydrationReady && !!client?.id && exerciseIds.length > 0,
     staleTime: 5 * 60_000,
     queryFn: async () => (await sb
       .from("pl_row_results")
@@ -1754,7 +1793,9 @@ function WorkoutDay({
               onRetry={() => setWorkoutBodyError(false)}
             >
               <div className="workout-stack-surface space-y-4 p-3 sm:p-4 workout-snap-list">
-              {rowsIsError ? (
+              {!rowsLoaded ? (
+                <WorkoutExerciseCardsSkeleton focusMode />
+              ) : rowsIsError ? (
                 <WorkoutLoadFailureCard
                   clientId={client?.id ?? null}
                   clientName={(client as any)?.full_name ?? null}
@@ -2040,7 +2081,9 @@ function WorkoutDay({
           onRetry={() => setWorkoutBodyError(false)}
         >
           <div className="workout-stack-surface grid grid-cols-1 gap-3.5 p-2 sm:p-4 lg:grid-cols-2 lg:items-start">
-            {rowsIsError ? (
+            {!rowsLoaded ? (
+              <WorkoutExerciseCardsSkeleton />
+            ) : rowsIsError ? (
               <WorkoutLoadFailureCard
                 clientId={client?.id ?? null}
                 clientName={(client as any)?.full_name ?? null}
@@ -2386,7 +2429,6 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
     if (first) return resolveLoadType((first as any).load_type, (first as any).is_bodyweight);
     return defaultLoadType;
   })();
-  const video = exercise?.video_url ?? exercise?.vimeo_embed_url ?? null;
   // Always show the How To button for every exercise.
   // Previously this was Boolean(exerciseId || video) which hid the button for
   // exercises added via exercise_name_override without an exercise_id (e.g. Dead Bug,
@@ -2499,7 +2541,6 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
   const restDisplay = effectiveRest != null
     ? (restIsExplicit ? fmtRest(effectiveRest) : `Auto · ${fmtRest(effectiveRest)}`)
     : "Auto";
-  const [howToOpen, setHowToOpen] = useState(false);
   const [notesOpen, setNotesOpen] = useState(false);
   const [cuesOpen, setCuesOpen] = useState(false);
   const hasNote = Boolean(existingNote?.id);
@@ -2823,7 +2864,7 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
             className="mt-0"
           />
           {clientId && (
-            <ExerciseHistoryButton
+            <DeferredExerciseHistoryButton
               clientId={clientId}
               exerciseId={exerciseId}
               exerciseName={name}
@@ -2862,11 +2903,7 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
       {row.notes && <ExerciseNotesBlock notes={row.notes} />}
       {/* Row 3 — compact pill tool row (secondary controls: lighter weight) */}
       <div className="mt-2 flex flex-wrap items-center gap-1 opacity-70 hover:opacity-100 transition-opacity">
-        {hasGuide && (
-          <Button size="sm" variant="outline" onClick={() => setHowToOpen(true)} className="h-7 rounded-full px-2.5 text-xs">
-            <Play className="mr-1 h-3 w-3 fill-current" /> How&nbsp;To
-          </Button>
-        )}
+        {hasGuide && <DeferredExerciseHowToButton exerciseId={exerciseId} fallbackName={name} />}
         <Button size="sm" variant={hasNote ? "default" : "outline"} onClick={() => setNotesOpen(true)} className="h-7 rounded-full px-2.5 text-xs">
           <StickyNote className="mr-1 h-3 w-3" /> Notes
         </Button>
@@ -2874,7 +2911,7 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
             separate from the prescribed Rest timer below — nothing here
             writes workout data. */}
         {!readonly && <WorkoutToolsButton context={name} />}
-        <QuickSwapButton
+        <DeferredQuickSwapButton
           rowId={row.id}
           exerciseId={exerciseId}
           exerciseName={name}
@@ -3083,7 +3120,6 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
           );
         })}
       </div>
-      <HowToSheet open={howToOpen} onOpenChange={setHowToOpen} exercise={exercise} fallbackName={name} fallbackVideo={video} />
       <ExerciseNotesSheet
         open={notesOpen}
         onOpenChange={setNotesOpen}
@@ -3101,108 +3137,6 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
   );
 }
 
-function HowToSheet({ open, onOpenChange, exercise, fallbackName, fallbackVideo }: { open: boolean; onOpenChange: (v: boolean) => void; exercise: any; fallbackName: string; fallbackVideo: string | null }) {
-  const name = exercise?.name ?? fallbackName;
-  const cues = exercise?.cues ?? null;
-  const mistakes = exercise?.common_mistakes ?? null;
-  const muscles = exercise?.muscle_group ?? null;
-  const category = exercise?.category ?? null;
-  const { data: globalSet } = useExerciseVideoSetGlobal();
-  const videoSrc = exercise
-    ? getExerciseVideoSource(exercise, { globalOverride: globalSet ?? null })
-    : null;
-  // Always try fallbacks if primary source is not ready
-  const directVideo = fallbackVideo || exercise?.youtube_url || null;
-  const hasPrimary = videoSrc && videoSrc.status !== "coming_soon" && !!videoSrc.url;
-
-  return (
-    <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="bottom" className="h-[92vh] overflow-y-auto p-0 sm:max-w-xl sm:mx-auto sm:rounded-t-2xl">
-        <SheetHeader className="sticky top-0 z-10 bg-background/95 backdrop-blur border-b border-border px-5 py-3 text-left">
-          <SheetTitle className="text-base font-black">{name}</SheetTitle>
-          {(category || muscles) && (
-            <SheetDescription className="text-xs">
-              {[category, muscles].filter(Boolean).join(" · ")}
-            </SheetDescription>
-          )}
-        </SheetHeader>
-        <div className="px-5 py-4 space-y-4 pb-32">
-          {hasPrimary ? (
-            <iframe
-              src={videoSrc!.url!}
-              title={`${name} video`}
-              allow="autoplay; fullscreen; picture-in-picture; encrypted-media"
-              allowFullScreen
-              className="w-full aspect-video rounded-xl border border-border bg-black"
-            />
-          ) : directVideo ? (
-            <iframe
-              src={toEmbedUrl(directVideo)}
-              title={`${name} video`}
-              allow="autoplay; fullscreen; picture-in-picture; encrypted-media"
-              allowFullScreen
-              className="w-full aspect-video rounded-xl border border-border bg-black"
-            />
-          ) : (
-            <div className="grid aspect-video w-full place-items-center rounded-xl border border-dashed border-border bg-black/40 text-sm text-muted-foreground">
-              Video coming soon.
-            </div>
-          )}
-
-          {cues && (
-            <section>
-              <h3 className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Coaching cues</h3>
-              <p className="mt-1 text-sm whitespace-pre-wrap">
-                {typeof cues === "string" ? cues : Array.isArray(cues) ? cues.join("\n• ") : null}
-              </p>
-            </section>
-          )}
-
-          {mistakes && (
-            <section>
-              <h3 className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Common mistakes</h3>
-              <p className="mt-1 text-sm whitespace-pre-wrap">
-                {typeof mistakes === "string" ? mistakes : Array.isArray(mistakes) ? mistakes.join("\n• ") : null}
-              </p>
-            </section>
-          )}
-
-          {muscles && (
-            <section>
-              <h3 className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Muscles worked</h3>
-              <p className="mt-1 text-sm">{muscles}</p>
-            </section>
-          )}
-        </div>
-        <div className="sticky bottom-0 left-0 right-0 border-t border-border bg-background/95 backdrop-blur px-5 py-3">
-          <Button className="w-full" size="lg" onClick={() => onOpenChange(false)}>
-            <ArrowLeft className="mr-2 h-4 w-4" /> Back to Workout
-          </Button>
-        </div>
-      </SheetContent>
-    </Sheet>
-  );
-}
-
-function toEmbedUrl(url: string): string {
-  // Convert common YouTube watch URLs to embed form so iframe can play on mobile
-  try {
-    const u = new URL(url);
-    if (u.hostname.includes("youtube.com") && u.pathname === "/watch") {
-      const id = u.searchParams.get("v");
-      if (id) return `https://www.youtube.com/embed/${id}?playsinline=1`;
-    }
-    if (u.hostname === "youtu.be") {
-      const id = u.pathname.replace("/", "");
-      if (id) return `https://www.youtube.com/embed/${id}?playsinline=1`;
-    }
-    if (u.hostname.includes("vimeo.com") && !u.hostname.includes("player.")) {
-      const id = u.pathname.replace("/", "");
-      if (id) return `https://player.vimeo.com/video/${id}`;
-    }
-  } catch {}
-  return url;
-}
 
 /**
  * Save an exercise note with a single automatic retry when the database
@@ -4605,6 +4539,25 @@ class WorkoutLoadBoundary extends Component<
       />
     );
   }
+}
+
+function WorkoutExerciseCardsSkeleton({ focusMode = false }: { focusMode?: boolean }) {
+  return (
+    <div
+      className={cn("grid gap-3.5", focusMode ? "grid-cols-1" : "grid-cols-1 lg:col-span-2 lg:grid-cols-2")}
+      aria-busy="true"
+      aria-label="Loading workout exercises"
+    >
+      {[0, 1, 2, 3].map((index) => (
+        <Card key={index} className="space-y-3 p-4">
+          <div className="h-5 w-2/3 animate-pulse rounded bg-muted" />
+          <div className="h-4 w-1/3 animate-pulse rounded bg-muted" />
+          <div className="h-8 w-full animate-pulse rounded bg-muted" />
+          <div className="h-24 w-full animate-pulse rounded bg-muted" />
+        </Card>
+      ))}
+    </div>
+  );
 }
 
 function WorkoutLoadFailureCard({
