@@ -376,6 +376,9 @@ export function QuickSwapButton({
   equipment,
   difficulty,
   swapContext,
+  open: controlledOpen,
+  onOpenChange,
+  hideTrigger = false,
 }: {
   rowId: string;
   exerciseId: string | null;
@@ -400,8 +403,15 @@ export function QuickSwapButton({
         dayIndex: number;
         exerciseIndex: number;
       };
+  /** Optional controlled mode used by the logger's lazy user-intent boundary. */
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+  /** Hide the built-in trigger when an outer lazy boundary owns the first tap. */
+  hideTrigger?: boolean;
 }) {
-  const [open, setOpen] = useState(false);
+  const [uncontrolledOpen, setUncontrolledOpen] = useState(false);
+  const open = controlledOpen ?? uncontrolledOpen;
+  const setOpen = onOpenChange ?? setUncontrolledOpen;
   const [mode, setMode] = useState<ViewMode>("suggestions");
   const [pending, setPending] = useState<ExerciseLite | null>(null);
   const [scope, setScope] = useState<"today" | "future">("today");
@@ -654,15 +664,17 @@ export function QuickSwapButton({
 
   return (
     <>
-      <Button
-        size="sm"
-        variant="outline"
-        onClick={() => setOpen(true)}
-        className="h-7 rounded-full px-2.5 text-xs"
-        aria-label={`Quick swap ${exerciseName}`}
-      >
-        <ArrowLeftRight className="mr-1 h-3 w-3" /> Swap
-      </Button>
+      {!hideTrigger && (
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={() => setOpen(true)}
+          className="h-7 rounded-full px-2.5 text-xs"
+          aria-label={`Quick swap ${exerciseName}`}
+        >
+          <ArrowLeftRight className="mr-1 h-3 w-3" /> Swap
+        </Button>
+      )}
       <Sheet open={open} onOpenChange={setOpen}>
         <SheetContent
           side="bottom"
