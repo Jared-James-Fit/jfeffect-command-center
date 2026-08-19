@@ -11,7 +11,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, ExternalLink, Save, Trash2, Mail, Archive, KeyRound, Copy, CheckCircle2, AlertCircle, BellRing, Tag, Dumbbell, MessageSquare, Link2, MoreHorizontal, User as UserIcon, Apple, DollarSign, LayoutDashboard, IdCard, Target, Settings2, LogIn, Phone, Calendar, ChevronRight, BarChart3 } from "lucide-react";
+import { ArrowLeft, ExternalLink, Save, Trash2, Mail, Archive, KeyRound, Copy, CheckCircle2, AlertCircle, BellRing, Tag, Dumbbell, MessageSquare, Link2, MoreHorizontal, Apple, DollarSign, LayoutDashboard, IdCard, Target, Phone, Calendar } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { SendBookingLinkDialog } from "@/components/appointments/send-booking-link-dialog";
 import { SendPasswordResetDialog } from "@/components/account/send-password-reset-dialog";
@@ -59,6 +59,7 @@ import {
   EmergencyContactCard,
 } from "@/components/admin/client-profile/personal-info-cards";
 import { CoachNutritionOverrideCard } from "@/components/admin/coach-nutrition-override-card";
+import { ClientWorkspaceTabs, type WorkspaceTab } from "@/components/clients/client-workspace-tabs";
 
 // Heavy panels — code-split so visiting a client only loads the active tab's code.
 const lazyDefault = <T,>(loader: () => Promise<{ [k: string]: T }>, name: string) =>
@@ -94,103 +95,13 @@ function TabFallback() {
   return <div className="md:col-span-3 p-6 text-sm text-muted-foreground">Loading…</div>;
 }
 
-function SectionNav({ activeTab, onChange, compact = false, heading }: { activeTab: TabValue; onChange: (v: TabValue) => void; compact?: boolean; heading?: string }) {
-  const activeSection = TAB_TO_SECTION[activeTab] ?? "client-profile";
-  const current = SECTIONS.find((s) => s.id === activeSection)!;
+function SectionNav({ activeTab, onChange, heading }: { activeTab: TabValue; onChange: (v: TabValue) => void; compact?: boolean; heading?: string }) {
   return (
-    <div className={compact ? "space-y-3" : "mb-6 space-y-4"}>
-      {heading && (
-        <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-          {heading}
-        </div>
-      )}
-      {/* Top-level sections — large touch targets, 1 col on phones, 2 on small tablets, 5 across on desktop */}
-      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 sm:gap-3 lg:grid-cols-5">
-        {SECTIONS.map((s) => {
-          const Icon = s.icon;
-          const isActive = s.id === activeSection;
-          return (
-            <button
-              key={s.id}
-              type="button"
-              onClick={() => onChange(s.tabs[0].value)}
-              className={[
-                compact
-                  ? "group flex min-h-[52px] items-center gap-2.5 rounded-lg border p-2.5 text-left transition-all sm:flex-col sm:items-start sm:gap-1.5 sm:p-3"
-                  : "group flex min-h-[64px] items-center gap-3 rounded-xl border p-3 text-left transition-all sm:flex-col sm:items-start sm:gap-2 sm:p-4",
-                isActive
-                  ? "border-primary bg-primary/10 shadow-sm"
-                  : "border-border bg-card hover:border-primary/40 hover:bg-secondary/40 active:scale-[0.99]",
-              ].join(" ")}
-            >
-              <div className={[
-                compact
-                  ? "grid h-9 w-9 shrink-0 place-items-center rounded-md sm:h-8 sm:w-8"
-                  : "grid h-11 w-11 shrink-0 place-items-center rounded-lg sm:h-10 sm:w-10",
-                isActive ? "bg-primary text-primary-foreground" : "bg-secondary text-foreground/80 group-hover:bg-primary/15 group-hover:text-primary",
-              ].join(" ")}>
-                <Icon className={compact ? "h-4 w-4 sm:h-3.5 sm:w-3.5" : "h-5 w-5 sm:h-4 sm:w-4"} />
-              </div>
-              <div className="min-w-0 flex-1">
-                <div className={[compact ? "text-[13px] font-semibold leading-tight" : "text-sm font-semibold leading-tight", isActive ? "text-primary" : "text-foreground"].join(" ")}>{s.label}</div>
-                {!compact && (
-                  <div className="mt-0.5 text-[11px] leading-tight text-muted-foreground line-clamp-2">{s.description}</div>
-                )}
-              </div>
-            </button>
-          );
-        })}
-      </div>
-      {/* Sub-tabs as large icon + title + description cards (single column on mobile, multi-col on iPad/desktop) */}
-      {current.tabs.length > 1 && (
-        <div className={[
-          "grid gap-2 sm:gap-3",
-          current.tabs.length >= 5
-            ? "grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5"
-            : current.tabs.length === 4
-              ? "grid-cols-1 sm:grid-cols-2 lg:grid-cols-4"
-              : current.tabs.length === 3
-                ? "grid-cols-1 sm:grid-cols-3"
-                : "grid-cols-1 sm:grid-cols-2",
-        ].join(" ")}>
-          {current.tabs.map((t) => {
-            const isActive = t.value === activeTab;
-            const TIcon = t.icon ?? ChevronRight;
-            return (
-              <button
-                key={t.value}
-                type="button"
-                onClick={() => onChange(t.value)}
-                className={[
-                  compact
-                    ? "group flex min-h-[48px] items-center gap-2 rounded-md border p-2 text-left transition-all sm:min-h-[60px] sm:flex-col sm:items-start sm:gap-1.5 sm:p-2.5"
-                    : "group flex min-h-[64px] items-start gap-3 rounded-lg border p-3 text-left transition-all sm:min-h-[88px] sm:flex-col sm:gap-2 sm:p-4",
-                  isActive
-                    ? "border-primary bg-primary/15 shadow-sm"
-                    : "border-border bg-card/60 hover:border-primary/40 hover:bg-secondary/40 active:scale-[0.99]",
-                ].join(" ")}
-                aria-pressed={isActive}
-              >
-                <div className={[
-                  compact
-                    ? "grid h-8 w-8 shrink-0 place-items-center rounded"
-                    : "grid h-10 w-10 shrink-0 place-items-center rounded-md",
-                  isActive ? "bg-primary text-primary-foreground" : "bg-secondary text-foreground/80 group-hover:bg-primary/15 group-hover:text-primary",
-                ].join(" ")}>
-                  <TIcon className={compact ? "h-4 w-4" : "h-5 w-5"} />
-                </div>
-                <div className="min-w-0 flex-1">
-                  <div className={[compact ? "text-[13px] font-semibold leading-tight" : "text-sm font-semibold leading-tight", isActive ? "text-primary" : "text-foreground"].join(" ")}>{t.label}</div>
-                  {!compact && t.description && (
-                    <div className="mt-0.5 text-[11px] leading-tight text-muted-foreground line-clamp-2">{t.description}</div>
-                  )}
-                </div>
-              </button>
-            );
-          })}
-        </div>
-      )}
-    </div>
+    <ClientWorkspaceTabs
+      activeTab={activeTab as WorkspaceTab}
+      onChange={(next) => onChange(next as TabValue)}
+      heading={heading}
+    />
   );
 }
 
@@ -218,41 +129,7 @@ function AssignedCoachSelect({ value, onChange }: { value: string | null; onChan
 const TAB_VALUES = ["summary", "info", "goals-setup", "coaching", "account", "training", "analytics", "nutrition", "metrics", "messages", "lift-videos", "documents", "sessions", "purchases", "billing", "agreements", "notes"] as const;
 type TabValue = typeof TAB_VALUES[number];
 
-type SectionId = "client-profile" | "training" | "nutrition" | "communication" | "business";
-type TabDef = { value: TabValue; label: string; description?: string; icon?: ComponentType<any> };
-const SECTIONS: { id: SectionId; label: string; description: string; icon: ComponentType<any>; tabs: TabDef[] }[] = [
-  { id: "client-profile", label: "Client Profile", description: "Overview, personal info, goals, coaching & login", icon: UserIcon, tabs: [
-    { value: "summary", label: "Overview", description: "Snapshot & quick actions", icon: LayoutDashboard },
-    { value: "info", label: "Personal Info", description: "Identity, contact, address & emergency", icon: IdCard },
-    { value: "goals-setup", label: "Goals & Intake", description: "Goals, intake answers & lifting", icon: Target },
-    { value: "coaching", label: "Coaching Setup", description: "Coach, package, schedule & links", icon: Settings2 },
-    { value: "account", label: "Login & Access", description: "Setup link, password & sign-in", icon: LogIn },
-  ]},
-  { id: "training", label: "Training", description: "Program, metrics, sessions, videos", icon: Dumbbell, tabs: [
-    { value: "training", label: "Training Program", icon: Dumbbell },
-    { value: "analytics", label: "Analytics", description: "PRs, 1RM trend, volume", icon: BarChart3 },
-    { value: "metrics", label: "Progress Metrics", icon: Target },
-    { value: "lift-videos", label: "Lift Videos", icon: Dumbbell },
-    { value: "sessions", label: "Sessions", icon: Calendar },
-  ]},
-  { id: "nutrition", label: "Nutrition & Cardio", description: "Macros, targets & cardio", icon: Apple, tabs: [
-    { value: "nutrition", label: "Nutrition & Cardio", icon: Apple },
-  ]},
-  { id: "communication", label: "Communication", description: "Messages, notes, documents", icon: MessageSquare, tabs: [
-    { value: "messages", label: "Messages", icon: MessageSquare },
-    { value: "notes", label: "Notes", icon: MessageSquare },
-    { value: "documents", label: "Documents & Forms", icon: MessageSquare },
-  ]},
-  { id: "business", label: "Business", description: "Sales, billing, agreements", icon: DollarSign, tabs: [
-    { value: "purchases", label: "Sales", description: "Products sold & renewals", icon: DollarSign },
-    { value: "billing", label: "Billing", icon: DollarSign },
-    { value: "agreements", label: "Agreements", icon: DollarSign },
-  ]},
-];
-const TAB_TO_SECTION: Record<TabValue, SectionId> = SECTIONS.reduce((acc, s) => {
-  s.tabs.forEach((t) => { acc[t.value] = s.id; });
-  return acc;
-}, {} as Record<TabValue, SectionId>);
+
 
 export const Route = createFileRoute("/_authenticated/admin/clients/$id")({
   validateSearch: (s): { tab?: TabValue } => {
@@ -799,7 +676,7 @@ export function ClientProfileWorkspace({
         onValueChange={(v) => setTab(v as TabValue)}
         className={embedded ? "flex flex-col" : undefined}
       >
-        <div className={embedded && tab === "summary" ? "order-2 mt-6" : "order-1"}>
+        <div className="order-1">
           <SectionNav
             activeTab={(tab ?? "summary") as TabValue}
             onChange={(v) => setTab(v)}
@@ -808,7 +685,7 @@ export function ClientProfileWorkspace({
           />
         </div>
 
-        <TabsContent value="summary" className={embedded ? "order-1 grid gap-6 md:grid-cols-3" : "grid gap-6 md:grid-cols-3"}>
+        <TabsContent value="summary" className={embedded ? "order-2 grid gap-6 md:grid-cols-3" : "grid gap-6 md:grid-cols-3"}>
           <ClientOverviewSnapshot
             form={form}
             clientId={id}
