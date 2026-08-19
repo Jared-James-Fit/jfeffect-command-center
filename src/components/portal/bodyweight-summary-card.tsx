@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { ActionButton } from "@/components/action-button";
@@ -20,6 +19,7 @@ import {
 } from "@/lib/progress-metrics";
 import { useBodyweightGoal } from "@/lib/use-bodyweight-goal";
 import { todayLocalISO } from "@/lib/today";
+import { bodyweightQueryKey, listBodyweight, logBodyweight, type ProgressBodyweight } from "@/lib/progress";
 
 interface Props {
   clientId: string;
@@ -37,18 +37,22 @@ export function BodyweightSummaryCard({ clientId, defaultUnit = "lb" }: Props) {
   const inputRef = useRef<HTMLInputElement>(null);
 
   const { data: rows = [] } = useQuery({
-    queryKey: ["progress-metrics", clientId],
-    enabled: !!clientId,
-    queryFn: async () => {
-      const { data } = await supabase
-        .from("progress_metrics").select("*")
-        .eq("client_id", clientId).order("entry_date", { ascending: false }).limit(120);
-      return (data ?? []) as ProgressMetric[];
-    },
+    queryKey: bodyweightQueryKey(user?.id ?? "anonymous"),
+    enabled: !!user?.id,
+    queryFn: () => listBodyweight(user!.id),
   });
+  const metricRows = useMemo(
+    () => (rows as ProgressBodyweight[]).map((row) => ({
+      id: row.id,
+      entry_date: row.logged_date,
+      bodyweight: row.weight_value,
+      bodyweight_unit: row.weight_unit,
+    } as ProgressMetric)),
+    [rows],
+  );
   const { data: goal = null } = useBodyweightGoal(clientId);
 
-  const series = useMemo(() => normalizedBodyweightSeries(rows, unit), [rows, unit]);
+  const series = useMemo(() => normalizedBodyweightSeries(metricRows, unit), [metricRows, unit]);
   const sparkSeries = useMemo(
     () => filterByRange(series, "30").map((p) => ({ d: p.date, v: Number(p.value.toFixed(1)) })),
     [series],
@@ -58,11 +62,11 @@ export function BodyweightSummaryCard({ clientId, defaultUnit = "lb" }: Props) {
   const change = weeklyChange(series);
   const goalTarget = goal ? convertWeight(goal.value, goal.unit, unit) : null;
 
-  const todayEntry = rows.find((r) => r.entry_date === date);
+  const todayEntry = (rows as ProgressBodyweight[]).find((r) => r.logged_date === date);
 
   const openSheet = () => {
-    setWeight(todayEntry?.bodyweight != null
-      ? String(convertWeight(Number(todayEntry.bodyweight), (todayEntry.bodyweight_unit as WeightUnit) ?? unit, unit))
+    setWeight(todayEntry?.weight_value != null
+      ? String(convertWeight(Number(todayEntry.weight_value), (todayEntry.weight_unit as WeightUnit) ?? unit, unit))
       : "");
     setDate(todayLocalISO());
     setSheetOpen(true);
@@ -75,31 +79,25 @@ export function BodyweightSummaryCard({ clientId, defaultUnit = "lb" }: Props) {
     window.addEventListener("portal:log-bodyweight", onOpen);
     return () => window.removeEventListener("portal:log-bodyweight", onOpen);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [todayEntry?.bodyweight, unit]);
+  }, [todayEntry?.weight_value, unit]);
 
   const save = async () => {
     const v = Number(weight);
     if (!weight || Number.isNaN(v) || v <= 0) throw new Error("Enter a valid bodyweight.");
     setSaving(true);
     try {
-      // If an entry exists for that date, update it; else insert.
-      const existing = rows.find((r) => r.entry_date === date);
-      if (existing) {
-        const { error } = await supabase.from("progress_metrics").update({
-          bodyweight: v, bodyweight_unit: unit, source: "manual",
-        } as never).eq("id", existing.id);
-        if (error) throw new Error(error.message);
-      } else {
-        const { error } = await supabase.from("progress_metrics").insert({
-          client_id: clientId, entry_date: date, bodyweight: v,
-          bodyweight_unit: unit, source: "manual", created_by: user?.id ?? null,
-        } as never);
-        if (error) throw new Error(error.message);
-      }
+      if (!user?.id) throw new Error("Not signed in.");
+      await logBodyweight({
+        user_id: user.id,
+        weight_value: v,
+        weight_unit: unit,
+        logged_date: date,
+        note: null,
+      });
       toast.success("Bodyweight saved");
       setSheetOpen(false);
       window.setTimeout(() => {
-        qc.invalidateQueries({ queryKey: ["progress-metrics", clientId] });
+        qc.invalidateQueries({ queryKey: bodyweightQueryKey(user!.id) });
       }, 280);
     } finally {
       setSaving(false);

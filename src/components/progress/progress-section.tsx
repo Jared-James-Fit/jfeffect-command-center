@@ -1344,7 +1344,7 @@ function BodyweightTab({
 
   async function remove(id: string) {
     if (!confirm("Delete this entry?")) return;
-    await deleteBodyweight(id);
+    await deleteBodyweight(ctx.userId, id);
     qc.invalidateQueries({ queryKey: ["progress-bw", ctx.userId] });
   }
 
@@ -1492,9 +1492,9 @@ function EditBodyweightDialog({
     setBusy(true);
     try {
       if (row.source === "progress_bodyweight") {
-        await updateBodyweight(row.id, {
+        await updateBodyweight(ctx.userId, row.id, {
           weight_value: n, weight_unit: unit, logged_date: date, note: note || null,
-        } as never);
+        });
       } else {
         const { error } = await supabase.from("progress_metrics").update({
           bodyweight: n, bodyweight_unit: unit, entry_date: date, notes: note || null,
@@ -1514,7 +1514,7 @@ function EditBodyweightDialog({
     setBusy(true);
     try {
       if (row.source === "progress_bodyweight") {
-        await deleteBodyweight(row.id);
+        await deleteBodyweight(ctx.userId, row.id);
       } else {
         const { error } = await supabase.from("progress_metrics").update({
           bodyweight: null, bodyweight_unit: null,
@@ -1575,34 +1575,9 @@ function BodyweightDialog({ ctx, open, onOpenChange }: { ctx: ProgressContext; o
       await logBodyweight({
         user_id: ctx.userId, weight_value: Number(val), weight_unit: unit, logged_date: date, note: note || null,
       });
-      if (ctx.clientId) {
-        const { data: existing, error: findError } = await supabase
-          .from("progress_metrics")
-          .select("id")
-          .eq("client_id", ctx.clientId)
-          .eq("entry_date", date)
-          .maybeSingle();
-        if (findError) throw findError;
-        if (existing?.id) {
-          const { error } = await supabase.from("progress_metrics").update({
-            bodyweight: Number(val),
-            bodyweight_unit: unit,
-            source: "manual",
-            notes: note || null,
-          } as never).eq("id", existing.id);
-          if (error) throw error;
-        } else {
-          const { error } = await supabase.from("progress_metrics").insert({
-            client_id: ctx.clientId,
-            entry_date: date,
-            bodyweight: Number(val),
-            bodyweight_unit: unit,
-            source: "manual",
-            notes: note || null,
-          } as never);
-          if (error) throw error;
-        }
-      }
+      // Bodyweight is canonical in progress_bodyweight. Historical
+      // progress_metrics entries remain readable but are not mirrored from the
+      // client, preventing split writes and partial-sync failures.
       qc.invalidateQueries({ queryKey: ["progress-bw", ctx.userId] });
       qc.invalidateQueries({ queryKey: ["progress-metrics", ctx.clientId] });
       toast.success("Logged");

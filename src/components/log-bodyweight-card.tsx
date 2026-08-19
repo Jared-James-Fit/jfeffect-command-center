@@ -1,6 +1,5 @@
 import { useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { ActionButton } from "@/components/action-button";
@@ -22,6 +21,7 @@ import {
   filterByRange, formatWeight, normalizedBodyweightSeries, weeklyChange,
   type ProgressMetric, type RangeValue, type WeightUnit,
 } from "@/lib/progress-metrics";
+import { bodyweightQueryKey, listBodyweight, logBodyweight, type ProgressBodyweight } from "@/lib/progress";
 import { useBodyweightGoal } from "@/lib/use-bodyweight-goal";
 import { todayLocalISO } from "@/lib/today";
 
@@ -48,19 +48,24 @@ export function LogBodyweightCard({ clientId, defaultUnit = "lb" }: Props) {
   const [goalOpen, setGoalOpen] = useState(false);
 
   const { data: rows = [] } = useQuery({
-    queryKey: ["progress-metrics", clientId],
-    enabled: !!clientId,
-    queryFn: async () => {
-      const { data } = await supabase
-        .from("progress_metrics").select("*")
-        .eq("client_id", clientId).order("entry_date", { ascending: false }).limit(120);
-      return (data ?? []) as ProgressMetric[];
-    },
+    queryKey: bodyweightQueryKey(user?.id ?? "anonymous"),
+    enabled: !!user?.id,
+    queryFn: () => listBodyweight(user!.id),
   });
+
+  const metricRows = useMemo(
+    () => (rows as ProgressBodyweight[]).map((row) => ({
+      id: row.id,
+      entry_date: row.logged_date,
+      bodyweight: row.weight_value,
+      bodyweight_unit: row.weight_unit,
+    } as ProgressMetric)),
+    [rows],
+  );
 
   const { data: goal = null } = useBodyweightGoal(clientId);
 
-  const series = useMemo(() => normalizedBodyweightSeries(rows, unit), [rows, unit]);
+  const series = useMemo(() => normalizedBodyweightSeries(metricRows, unit), [metricRows, unit]);
   const chartSeries = useMemo(
     () => filterByRange(series, range).map((p) => ({ date: p.date, value: Number(p.value.toFixed(1)) })),
     [series, range],
@@ -79,27 +84,29 @@ export function LogBodyweightCard({ clientId, defaultUnit = "lb" }: Props) {
       throw new Error("Enter a valid bodyweight.");
     }
     setSaving(true);
-    const { error } = await supabase.from("progress_metrics").insert({
-      client_id: clientId,
-      entry_date: date,
-      bodyweight: v,
-      bodyweight_unit: unit,
-      source: "manual",
-      created_by: user?.id ?? null,
-    } as never);
-    setSaving(false);
-    if (error) throw new Error(error.message);
+    try {
+      if (!user?.id) throw new Error("Not signed in.");
+      await logBodyweight({
+        user_id: user.id,
+        weight_value: v,
+        weight_unit: unit,
+        logged_date: date,
+        note: null,
+      });
 
-    toast.success(acknowledgementForLog({
-      prior: latest?.value ?? null,
-      next: convertWeight(v, unit, unit),
-      goal,
-      displayUnit: unit,
-    }));
-    setWeight("");
-    setJustSaved(true);
-    window.setTimeout(() => setJustSaved(false), 1400);
-    qc.invalidateQueries({ queryKey: ["progress-metrics", clientId] });
+      toast.success(acknowledgementForLog({
+        prior: latest?.value ?? null,
+        next: convertWeight(v, unit, unit),
+        goal,
+        displayUnit: unit,
+      }));
+      setWeight("");
+      setJustSaved(true);
+      window.setTimeout(() => setJustSaved(false), 1400);
+      qc.invalidateQueries({ queryKey: bodyweightQueryKey(user.id) });
+    } finally {
+      setSaving(false);
+    }
   };
 
   const trendIcon = change == null ? null : change <= 0 ? (

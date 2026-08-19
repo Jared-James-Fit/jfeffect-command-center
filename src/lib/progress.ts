@@ -361,6 +361,9 @@ function guessContentType(ext: string) {
 
 // ---------- Bodyweight ----------
 
+export const bodyweightQueryKey = (userId: string) => ["progress-bw", userId] as const;
+export const legacyBodyweightQueryKey = (clientId: string) => ["progress-metrics", clientId] as const;
+
 export async function listBodyweight(userId: string) {
   const { data, error } = await db.from("progress_bodyweight").select("*")
     .eq("user_id", userId).order("logged_date", { ascending: false });
@@ -368,6 +371,25 @@ export async function listBodyweight(userId: string) {
   return (data ?? []) as ProgressBodyweight[];
 }
 
+function assertBodyweightInput(input: {
+  weight_value: number; weight_unit: "kg" | "lb"; logged_date: string;
+}) {
+  if (!Number.isFinite(input.weight_value) || input.weight_value <= 0) {
+    throw new Error("Enter a valid bodyweight.");
+  }
+  if (input.weight_unit !== "kg" && input.weight_unit !== "lb") {
+    throw new Error("Choose kg or lb.");
+  }
+  if (!input.logged_date) {
+    throw new Error("Choose a date.");
+  }
+}
+
+/**
+ * Saves one canonical bodyweight row. The staged RPC serializes per-user/date
+ * writes and updates an existing same-date row rather than inserting a duplicate.
+ * Offline inserts remain queued; edit/delete fail truthfully while offline.
+ */
 export async function logBodyweight(input: {
   user_id: string; weight_value: number; weight_unit: "kg" | "lb"; logged_date?: string; note?: string | null;
 }) {
@@ -378,33 +400,61 @@ export async function logBodyweight(input: {
     logged_date: input.logged_date ?? new Date().toISOString().slice(0, 10),
     note: input.note ?? null,
   };
-  // Offline-first: if there is no network, drop the insert into the durable
-  // queue and return an optimistic row so the UI updates immediately. The
-  // queue replays via `bodyweight_insert` (see src/lib/offline/data-handlers).
+  assertBodyweightInput(row);
+
   const offline = typeof navigator !== "undefined" && navigator.onLine === false;
   if (offline) {
     const { enqueueOfflineWrite } = await import("@/lib/workout-offline-queue");
     enqueueOfflineWrite({
-      // Stable id per (user, date) — re-saving the same day replaces.
       id: `bw:${row.user_id}:${row.logged_date}`,
       label: "Bodyweight entry",
-      handlerKey: "bodyweight_insert",
+      handlerKey: "bodyweight_save",
       payload: row,
     });
     return { id: `pending-bw-${row.logged_date}`, ...row, created_at: new Date().toISOString() } as unknown as ProgressBodyweight;
   }
-  const { data, error } = await db.from("progress_bodyweight").insert(row).select().single();
+
+  const { data, error } = await db.rpc("save_progress_bodyweight", {
+    p_user_id: row.user_id,
+    p_weight_value: row.weight_value,
+    p_weight_unit: row.weight_unit,
+    p_logged_date: row.logged_date,
+    p_note: row.note,
+    p_entry_id: null,
+  });
   if (error) throw error;
   return data as ProgressBodyweight;
 }
 
-export async function updateBodyweight(id: string, patch: Partial<ProgressBodyweight>) {
-  const { error } = await db.from("progress_bodyweight").update(patch).eq("id", id);
+export async function updateBodyweight(
+  userId: string,
+  id: string,
+  patch: Pick<ProgressBodyweight, "weight_value" | "weight_unit" | "logged_date"> & { note?: string | null },
+) {
+  const offline = typeof navigator !== "undefined" && navigator.onLine === false;
+  if (offline) throw new Error("Editing bodyweight requires a connection. Your entry was not changed.");
+  assertBodyweightInput(patch);
+
+  const { data, error } = await db.rpc("save_progress_bodyweight", {
+    p_user_id: userId,
+    p_weight_value: patch.weight_value,
+    p_weight_unit: patch.weight_unit,
+    p_logged_date: patch.logged_date,
+    p_note: patch.note ?? null,
+    p_entry_id: id,
+  });
   if (error) throw error;
+  return data as ProgressBodyweight;
 }
 
-export async function deleteBodyweight(id: string) {
-  const { error } = await db.from("progress_bodyweight").delete().eq("id", id);
+export async function deleteBodyweight(userId: string, id: string) {
+  const offline = typeof navigator !== "undefined" && navigator.onLine === false;
+  if (offline) throw new Error("Deleting bodyweight requires a connection. Your entry was not removed.");
+
+  const { error } = await db.rpc("delete_progress_bodyweight", {
+    p_user_id: userId,
+    p_entry_id: id,
+  });
   if (error) throw error;
 }
 

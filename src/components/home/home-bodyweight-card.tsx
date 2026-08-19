@@ -10,8 +10,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sh
 import { Scale, TrendingDown, TrendingUp, Plus, History, Loader2 } from "lucide-react";
 import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis } from "recharts";
 import { toast } from "sonner";
-import { logBodyweight } from "@/lib/progress";
-import { getCombinedBodyweightSeries, type BodyweightPoint } from "@/lib/bodyweight";
+import { bodyweightQueryKey, listBodyweight, logBodyweight, type ProgressBodyweight } from "@/lib/progress";
 import { todayLocalISO } from "@/lib/today";
 
 type Surface = "portal" | "member";
@@ -38,21 +37,30 @@ export function HomeBodyweightCard({ userId, surface, defaultUnit = "lb" }: Prop
   const inputRef = useRef<HTMLInputElement>(null);
 
   const { data: rows = [] } = useQuery({
-    queryKey: ["progress-bw", userId],
+    queryKey: bodyweightQueryKey(userId),
     enabled: !!userId,
-    queryFn: () => getCombinedBodyweightSeries(userId, 200),
+    queryFn: () => listBodyweight(userId),
     staleTime: 30_000,
   });
 
-  // Latest point (unioned across progress_bodyweight + progress_metrics)
-  const latestPoint = rows.length ? rows[rows.length - 1] : null;
+  const points = useMemo(
+    () => (rows as ProgressBodyweight[])
+      .map((row) => ({
+        date: row.logged_date,
+        value: Number(row.weight_value),
+        unit: row.weight_unit,
+      }))
+      .sort((a, b) => a.date.localeCompare(b.date)),
+    [rows],
+  );
+
+  const latestPoint = points.length ? points[points.length - 1] : null;
   const stats = latestPoint
     ? { latest: Number(latestPoint.value), unit: latestPoint.unit }
     : null;
   const spark = useMemo(() => {
-    const sorted = [...rows].sort((a, b) => a.date.localeCompare(b.date));
-    const last = sorted.slice(-30);
-    return last.map((r: BodyweightPoint) => ({
+    const last = points.slice(-30);
+    return last.map((r) => ({
       d: r.date,
       v: r.unit === unit
         ? Number(r.value)
@@ -60,7 +68,7 @@ export function HomeBodyweightCard({ userId, surface, defaultUnit = "lb" }: Prop
           ? +(Number(r.value) * 2.20462).toFixed(2)
           : +(Number(r.value) / 2.20462).toFixed(2),
     }));
-  }, [rows, unit]);
+  }, [points, unit]);
 
   // 7-day average and weekly change in the active unit
   const recent = useMemo(() => spark.slice(-7), [spark]);
@@ -98,7 +106,7 @@ export function HomeBodyweightCard({ userId, surface, defaultUnit = "lb" }: Prop
       // Defer cache invalidation until after the sheet close animation
       // finishes so we don't jank the closing transition with a re-render.
       window.setTimeout(() => {
-        qc.invalidateQueries({ queryKey: ["progress-bw", userId] });
+        qc.invalidateQueries({ queryKey: bodyweightQueryKey(userId) });
       }, 280);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Couldn't save weight");
