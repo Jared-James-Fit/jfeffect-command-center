@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
   assertFirst50Assignment,
+  assertFirst50CanonicalStripeSnapshot,
   type First50Assignment,
+  type First50CanonicalStripeSnapshot,
   type First50DiscountRecord,
 } from "@/lib/first50-policy";
 
@@ -22,6 +24,20 @@ const assignment: First50Assignment = {
   currency: "cad",
   price_cents: 18_000,
   payment_structure: "Monthly recurring",
+};
+
+const canonicalSnapshot: First50CanonicalStripeSnapshot = {
+  expected_product_id: "prod_test_online_coaching",
+  expected_price_id: "price_test_online_coaching_180",
+  stripe_product_id: "prod_test_online_coaching",
+  stripe_product_name: "Online Coaching",
+  stripe_product_active: true,
+  stripe_price_id: "price_test_online_coaching_180",
+  stripe_price_active: true,
+  currency: "cad",
+  unit_amount: 18_000,
+  recurring_interval: "month",
+  recurring_interval_count: 1,
 };
 
 const invalidCases: Array<[First50DiscountRecord, First50Assignment]> = [
@@ -45,4 +61,22 @@ describe("FIRST50 assignment policy", () => {
       expect(() => assertFirst50Assignment(invalidDiscount, invalidAssignment)).toThrow();
     },
   );
+
+  it("accepts only an active canonical Online Coaching CAD $180 monthly Stripe Price", () => {
+    expect(() => assertFirst50CanonicalStripeSnapshot(canonicalSnapshot)).not.toThrow();
+  });
+
+  it.each([
+    { ...canonicalSnapshot, stripe_product_name: "Online Coaching — Legacy" },
+    { ...canonicalSnapshot, stripe_product_active: false },
+    { ...canonicalSnapshot, stripe_price_active: false },
+    { ...canonicalSnapshot, currency: "usd" },
+    { ...canonicalSnapshot, unit_amount: 13_000 },
+    { ...canonicalSnapshot, recurring_interval: "week" },
+    { ...canonicalSnapshot, recurring_interval_count: 2 },
+    { ...canonicalSnapshot, stripe_product_id: "prod_other" },
+    { ...canonicalSnapshot, stripe_price_id: "price_other" },
+  ])("rejects a noncanonical Stripe catalog snapshot", (invalidSnapshot) => {
+    expect(() => assertFirst50CanonicalStripeSnapshot(invalidSnapshot)).toThrow();
+  });
 });

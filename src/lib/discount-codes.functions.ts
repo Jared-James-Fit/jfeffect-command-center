@@ -11,6 +11,10 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import {
+  assertFirst50CanonicalStripeSnapshot,
+  FIRST50_CODE,
+} from "@/lib/first50-policy";
 import { stripeFetch, getStripeKeyForMode, formEncode, type StripeMode } from "@/lib/stripe.server";
 
 export type DiscountCode = {
@@ -287,6 +291,7 @@ function buildCouponParams(
   row: any,
   couponId: string,
   fixedAmountCurrency: string | null,
+  eligibleStripeProductId: string,
 ): Record<string, any> {
   const params: Record<string, any> = {
     id: couponId,
@@ -309,6 +314,7 @@ function buildCouponParams(
   }
   if (row.total_usage_limit) params.max_redemptions = row.total_usage_limit;
   if (row.expires_at) params.redeem_by = Math.floor(new Date(row.expires_at).getTime() / 1000);
+  params["applies_to[products][0]"] = eligibleStripeProductId;
   params.metadata = {
     discount_code_id: row.id,
     public_code: row.public_code,
@@ -317,7 +323,11 @@ function buildCouponParams(
   return params;
 }
 
-function buildPromotionCodeParams(row: any, couponId: string): Record<string, any> {
+function buildPromotionCodeParams(
+  row: any,
+  couponId: string,
+  minimumAmountCurrency: string | null,
+): Record<string, any> {
   const params: Record<string, any> = {
     promotion: {
       type: "coupon",
@@ -331,8 +341,11 @@ function buildPromotionCodeParams(row: any, couponId: string): Record<string, an
   const restrictions: Record<string, any> = {};
   if (row.new_customers_only) restrictions.first_time_transaction = true;
   if (row.min_purchase_cents && row.min_purchase_cents > 0) {
+    if (!minimumAmountCurrency) {
+      throw new Error("Promotion minimum-amount currency could not be resolved from its eligible product.");
+    }
     restrictions.minimum_amount = row.min_purchase_cents;
-    restrictions.minimum_amount_currency = "usd";
+    restrictions.minimum_amount_currency = minimumAmountCurrency.toLowerCase();
   }
   if (Object.keys(restrictions).length) params.restrictions = restrictions;
   params.metadata = {
@@ -349,15 +362,45 @@ async function ensureStripeCoupon(
   row: any,
   couponId: string,
   fixedAmountCurrency: string | null,
+  eligibleStripeProductId: string,
 ): Promise<string> {
-  // Try to fetch first — if it exists with our id, reuse it.
+  // Try to fetch first — if it exists with our stable id, reuse only when its
+  // immutable contract still matches FIRST50 and the one canonical Product.
   try {
     const existing = await stripeFetch(`/coupons/${encodeURIComponent(couponId)}`, { apiKey });
-    if (existing?.id) return existing.id;
-  } catch {
+    if (existing?.id) {
+      if (String(row.public_code).trim().toUpperCase() === FIRST50_CODE) {
+        const appliedProducts = existing?.applies_to?.products ?? [];
+        const exactProductScope =
+          Array.isArray(appliedProducts) &&
+          appliedProducts.length === 1 &&
+          appliedProducts[0] === eligibleStripeProductId;
+        if (
+          existing.amount_off !== 5_000 ||
+          String(existing.currency ?? "").toLowerCase() !== "cad" ||
+          existing.duration !== "once" ||
+          existing.valid !== true ||
+          !exactProductScope
+        ) {
+          throw new Error(
+            "Existing FIRST50 Stripe Coupon conflicts with the canonical Online Coaching contract. Reconciliation was stopped.",
+          );
+        }
+      }
+      return existing.id;
+    }
+  } catch (error: any) {
+    if (/conflicts with the canonical Online Coaching contract/i.test(error?.message ?? "")) {
+      throw error;
+    }
     // not found → create
   }
-  const params = buildCouponParams(row, couponId, fixedAmountCurrency);
+  const params = buildCouponParams(
+    row,
+    couponId,
+    fixedAmountCurrency,
+    eligibleStripeProductId,
+  );
   const created = await stripeFetch(`/coupons`, {
     method: "POST",
     apiKey,
@@ -373,36 +416,61 @@ async function ensureStripePromotionCode(
   row: any,
   couponId: string,
   existingId: string | null,
+  minimumAmountCurrency: string | null,
 ): Promise<string> {
-  // If we already have an id, PATCH a small subset (active flag, expires_at, metadata).
+  // If we already have an id, prove it still belongs to this stable coupon
+  // before PATCHing its mutable state. A mismatched stored ID is a hard conflict.
   if (existingId) {
-    const patch: Record<string, any> = {
-      active: row.status === "active",
-      metadata: { discount_code_id: row.id, public_code: row.public_code, category: row.category },
-    };
     try {
+      const existing = await stripeFetch(`/promotion_codes/${encodeURIComponent(existingId)}`, {
+        apiKey,
+      });
+      const existingCoupon =
+        typeof existing?.coupon === "string"
+          ? existing.coupon
+          : existing?.coupon?.id ?? existing?.promotion?.coupon;
+      if (existingCoupon !== couponId) {
+        throw new Error(
+          `Stored Stripe promotion code ${existingId} does not match its canonical coupon. Reconciliation was stopped.`,
+        );
+      }
+      const patch: Record<string, any> = {
+        active: row.status === "active",
+        metadata: { discount_code_id: row.id, public_code: row.public_code, category: row.category },
+      };
       const updated = await stripeFetch(`/promotion_codes/${encodeURIComponent(existingId)}`, {
         method: "POST",
         apiKey,
         body: formEncode(patch),
       });
       return updated.id;
-    } catch (e: any) {
-      // Fall through to lookup by code below if the id no longer exists.
-      if (!/no such promotion_code/i.test(e?.message ?? "")) throw e;
+    } catch (error: any) {
+      if (/does not match its canonical coupon/i.test(error?.message ?? "")) throw error;
+      // Fall through to lookup by code only if the stored promotion code vanished.
+      if (!/no such promotion_code/i.test(error?.message ?? "")) throw error;
     }
   }
   // Look up by code first — Stripe rejects duplicate codes per coupon, so we reuse.
   const search = await stripeFetch(`/promotion_codes?code=${encodeURIComponent(row.public_code)}&limit=100`, { apiKey });
   if (Array.isArray(search?.data)) {
-    const match = search.data.find((promo: any) => {
-      const promoCoupon = typeof promo?.coupon === "string" ? promo.coupon : promo?.coupon?.id ?? promo?.promotion?.coupon;
-      return promoCoupon === couponId;
-    });
-    if (match?.id) return match.id;
+    const sameCode = search.data.find(
+      (promo: any) => String(promo?.code ?? "").toUpperCase() === String(row.public_code).toUpperCase(),
+    );
+    if (sameCode) {
+      const promoCoupon =
+        typeof sameCode?.coupon === "string"
+          ? sameCode.coupon
+          : sameCode?.coupon?.id ?? sameCode?.promotion?.coupon;
+      if (promoCoupon !== couponId) {
+        throw new Error(
+          `Stripe promotion code ${row.public_code} is already linked to a conflicting coupon. Reconciliation was stopped.`,
+        );
+      }
+      return sameCode.id;
+    }
   }
   // Create fresh.
-  const params = buildPromotionCodeParams(row, couponId);
+  const params = buildPromotionCodeParams(row, couponId, minimumAmountCurrency);
   const created = await stripeFetch(`/promotion_codes`, {
     method: "POST",
     apiKey,
@@ -412,21 +480,65 @@ async function ensureStripePromotionCode(
   return created.id;
 }
 
-async function resolveFixedDiscountCurrency(supabase: any, row: any): Promise<string | null> {
-  if (row.discount_type !== "fixed") return null;
+type EligibleCoachingProduct = {
+  id: string;
+  name: string | null;
+  stripe_product_id: string | null;
+  stripe_price_id: string | null;
+  currency: string | null;
+  price_cents: number | null;
+  payment_structure: string | null;
+};
+
+async function resolveSingleEligibleProduct(
+  supabase: any,
+  row: any,
+): Promise<EligibleCoachingProduct> {
   const eligibleProductIds = Array.isArray(row.eligible_product_ids) ? row.eligible_product_ids : [];
   if (row.applies_to_all_products || eligibleProductIds.length !== 1) {
-    throw new Error("Fixed discounts must target exactly one eligible product before Stripe synchronization.");
+    throw new Error("Discounts synchronized to Stripe must target exactly one eligible coaching product.");
   }
   const { data: product, error } = await supabase
     .from("coaching_products")
-    .select("currency")
+    .select("id, name, stripe_product_id, stripe_price_id, currency, price_cents, payment_structure")
     .eq("id", eligibleProductIds[0])
     .maybeSingle();
-  if (error || !product?.currency) {
-    throw new Error("Fixed discount currency could not be resolved from its eligible product.");
+  if (error || !product?.id || !product?.currency || !product?.stripe_product_id) {
+    throw new Error("Eligible coaching product Stripe synchronization is required.");
   }
-  return String(product.currency).toLowerCase();
+  return product as EligibleCoachingProduct;
+}
+
+async function assertFirst50StripeCatalog(
+  apiKey: string,
+  row: any,
+  product: EligibleCoachingProduct,
+): Promise<void> {
+  if (String(row.public_code).trim().toUpperCase() !== FIRST50_CODE) return;
+  if (!product.stripe_price_id) {
+    throw new Error("Canonical Online Coaching Stripe Price synchronization is required.");
+  }
+  const price = await stripeFetch(
+    `/prices/${encodeURIComponent(product.stripe_price_id)}?expand[]=product`,
+    { apiKey },
+  );
+  const stripeProduct = typeof price?.product === "object" ? price.product : null;
+  assertFirst50CanonicalStripeSnapshot({
+    expected_product_id: product.stripe_product_id,
+    expected_price_id: product.stripe_price_id,
+    stripe_product_id: stripeProduct?.id ?? (typeof price?.product === "string" ? price.product : null),
+    stripe_product_name: stripeProduct?.name ?? null,
+    stripe_product_active: stripeProduct?.active ?? null,
+    stripe_price_id: price?.id ?? null,
+    stripe_price_active: price?.active ?? null,
+    currency: price?.currency ?? null,
+    unit_amount: typeof price?.unit_amount === "number" ? price.unit_amount : null,
+    recurring_interval: price?.recurring?.interval ?? null,
+    recurring_interval_count:
+      typeof price?.recurring?.interval_count === "number"
+        ? price.recurring.interval_count
+        : null,
+  });
 }
 
 async function syncOneMode(
@@ -436,14 +548,29 @@ async function syncOneMode(
 ): Promise<{ couponId: string; promoId: string } | null> {
   const apiKey = getStripeKeyForMode(mode);
   if (!apiKey) return null;
+  // Resolve exactly one local eligible product before Stripe mutation. FIRST50
+  // additionally verifies its active canonical Product/Price at Stripe first.
+  const eligibleProduct = await resolveSingleEligibleProduct(supabase, row);
+  await assertFirst50StripeCatalog(apiKey, row, eligibleProduct);
   // Derive a stable per-mode coupon id from the row UUID.
   const couponId = `${mode === "test" ? "tst" : "lv"}_${row.id.replace(/-/g, "").slice(0, 24)}`;
-  const fixedAmountCurrency = await resolveFixedDiscountCurrency(supabase, row);
-  const ensuredCoupon = await ensureStripeCoupon(apiKey, row, couponId, fixedAmountCurrency);
+  const ensuredCoupon = await ensureStripeCoupon(
+    apiKey,
+    row,
+    couponId,
+    eligibleProduct.currency,
+    eligibleProduct.stripe_product_id,
+  );
   const existingPromoId = mode === "test"
     ? (row.stripe_test_promotion_code_id ?? null)
     : (row.stripe_live_promotion_code_id ?? null);
-  const promoId = await ensureStripePromotionCode(apiKey, row, ensuredCoupon, existingPromoId);
+  const promoId = await ensureStripePromotionCode(
+    apiKey,
+    row,
+    ensuredCoupon,
+    existingPromoId,
+    eligibleProduct.currency,
+  );
   return { couponId: ensuredCoupon, promoId };
 }
 
