@@ -73,7 +73,10 @@ export function MemberBodyweightCard() {
   });
 
   const remove = useMutation({
-    mutationFn: (id: string) => deleteBodyweight(id),
+    mutationFn: (id: string) => {
+      if (!userId) throw new Error("Not signed in");
+      return deleteBodyweight(userId, id);
+    },
     onSuccess: () => {
       toast.success("Entry removed");
       qc.invalidateQueries({ queryKey: ["progress-bw", userId] });
@@ -84,13 +87,14 @@ export function MemberBodyweightCard() {
   const update = useMutation({
     mutationFn: async () => {
       if (!editingId) throw new Error("No entry selected");
+      if (!userId) throw new Error("Not signed in");
       const w = parseFloat(editWeight);
       if (!Number.isFinite(w) || w <= 0) throw new Error("Enter a valid weight");
-      await updateBodyweight(editingId, {
+      await updateBodyweight(userId, editingId, {
         weight_value: w,
         weight_unit: editUnit,
         logged_date: editDate,
-      } as Partial<ProgressBodyweight>);
+      });
     },
     onSuccess: () => {
       toast.success("Entry updated");

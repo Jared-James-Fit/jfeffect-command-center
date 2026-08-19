@@ -18,13 +18,16 @@ export function registerOfflineDataHandlers() {
   registered = true;
 
   // ---- Bodyweight ---------------------------------------------------------
-  registerQueueHandler("bodyweight_insert", async (p: any) => {
-    const { error } = await supabase.from("progress_bodyweight").insert({
-      user_id: p.user_id,
-      weight_value: p.weight_value,
-      weight_unit: p.weight_unit,
-      logged_date: p.logged_date,
-      note: p.note ?? null,
+  // Canonical replay uses the same per-user/date RPC as connected saves, so a
+  // durable queued insert can be retried safely without creating a duplicate.
+  registerQueueHandler("bodyweight_save", async (p: any) => {
+    const { error } = await supabase.rpc("save_progress_bodyweight", {
+      p_user_id: p.user_id,
+      p_weight_value: p.weight_value,
+      p_weight_unit: p.weight_unit,
+      p_logged_date: p.logged_date,
+      p_note: p.note ?? null,
+      p_entry_id: null,
     } as never);
     if (error) throw error;
   });
