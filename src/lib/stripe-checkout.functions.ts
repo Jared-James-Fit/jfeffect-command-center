@@ -11,6 +11,10 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import {
+  assertFirst50Assignment,
+  assertFirst50CanonicalStripeSnapshot,
+} from "@/lib/first50-policy";
 
 const STRIPE_API = "https://api.stripe.com/v1";
 
@@ -62,6 +66,40 @@ async function assertPriceBelongsToAccount(priceId: string): Promise<void> {
   }
   const json: any = await res.json().catch(() => ({}));
   throw new Error(json?.error?.message || `Stripe error verifying price (${res.status})`);
+}
+
+/**
+ * Reads the immutable Stripe Price and expanded Product for the selected
+ * checkout line. Used only when FIRST50 is intentionally selected, before any
+ * Stripe customer/session side effect can occur.
+ */
+async function assertFirst50CanonicalStripePrice(
+  expectedProductId: string | null,
+  expectedPriceId: string | null,
+): Promise<void> {
+  if (!expectedProductId || !expectedPriceId) {
+    throw new Error("Canonical Online Coaching Stripe synchronization is required.");
+  }
+  const price = await stripeFetch(
+    `/prices/${encodeURIComponent(expectedPriceId)}?expand[]=product`,
+  );
+  const stripeProduct = typeof price?.product === "object" ? price.product : null;
+  assertFirst50CanonicalStripeSnapshot({
+    expected_product_id: expectedProductId,
+    expected_price_id: expectedPriceId,
+    stripe_product_id: stripeProduct?.id ?? (typeof price?.product === "string" ? price.product : null),
+    stripe_product_name: stripeProduct?.name ?? null,
+    stripe_product_active: stripeProduct?.active ?? null,
+    stripe_price_id: price?.id ?? null,
+    stripe_price_active: price?.active ?? null,
+    currency: price?.currency ?? null,
+    unit_amount: typeof price?.unit_amount === "number" ? price.unit_amount : null,
+    recurring_interval: price?.recurring?.interval ?? null,
+    recurring_interval_count:
+      typeof price?.recurring?.interval_count === "number"
+        ? price.recurring.interval_count
+        : null,
+  });
 }
 
 // ─── Create Checkout Session ──────────────────────────────────────────────────
@@ -241,6 +279,8 @@ export const createCustomerPortalSession = createServerFn({ method: "POST" })
 
 const CreateAssignmentCheckoutInput = z.object({
   purchaseRecordId: z.string().uuid(),
+  /** Existing admin-selected discount record; browser-entered code strings are never trusted. */
+  discountCodeId: z.string().uuid().nullable().optional(),
   origin: z.string().url(),
 });
 
@@ -279,12 +319,14 @@ export const createCheckoutSessionForAssignment = createServerFn({ method: "POST
     let priceId: string | null = purchase.stripe_price_id ?? null;
     let productMode: string | null = null;
     let paymentStructure: string | null = purchase.payment_structure ?? null;
+    let product: any = null;
     if (purchase.offer_id) {
       const { data: prod } = await supabase
         .from("coaching_products")
-        .select("stripe_price_id, mode, payment_structure")
+        .select("id, name, stripe_product_id, stripe_price_id, mode, payment_structure, price_cents, currency")
         .eq("id", purchase.offer_id)
         .maybeSingle();
+      product = prod;
       if (prod) {
         priceId = priceId || prod.stripe_price_id;
         productMode = prod.mode ?? null;
@@ -295,6 +337,47 @@ export const createCheckoutSessionForAssignment = createServerFn({ method: "POST
       throw new Error(
         `"${purchase.offer_name}" has no Stripe Price ID. Open Admin → Stripe Payment Links, edit this product, and add a Stripe Price ID before generating a checkout link.`,
       );
+    }
+
+    // FIRST50 can only be attached by a coach/admin through this existing
+    // assignment flow. Validate a server-read discount record before any
+    // Stripe customer/session write, then attach exactly one per-mode coupon.
+    let appliedDiscount: { id: string; publicCode: string; promotionCodeId: string } | null = null;
+    if (data.discountCodeId) {
+      const { data: discount, error: discountError } = await supabase
+        .from("discount_codes")
+        .select("id, public_code, category, discount_type, discount_value, subscription_duration, status, eligible_product_ids, applies_to_all_products, pairing_allowed, stripe_test_mode_synced, stripe_live_mode_synced, stripe_test_promotion_code_id, stripe_live_promotion_code_id")
+        .eq("id", data.discountCodeId)
+        .single();
+      if (discountError || !discount) throw new Error("Selected discount code was not found.");
+
+      const stripeMode = getStripeKey().includes("_test_") ? "test" : "live";
+      if (!product?.id || !product.stripe_product_id || !product.stripe_price_id) {
+        throw new Error("Canonical Online Coaching Stripe synchronization is required. Checkout was not created.");
+      }
+      if (purchase.stripe_price_id && purchase.stripe_price_id !== product.stripe_price_id) {
+        throw new Error("Purchase record Stripe Price does not match canonical Online Coaching. Checkout was not created.");
+      }
+      if (priceId !== product.stripe_price_id) {
+        throw new Error("Canonical Online Coaching Stripe Price is required. Checkout was not created.");
+      }
+      assertFirst50Assignment(discount, {
+        offer_id: product.id,
+        currency: product.currency ?? null,
+        price_cents: product.price_cents ?? null,
+        payment_structure: paymentStructure,
+      });
+      const promotionCodeId =
+        stripeMode === "test"
+          ? discount.stripe_test_promotion_code_id
+          : discount.stripe_live_promotion_code_id;
+      const modeSynced =
+        stripeMode === "test" ? discount.stripe_test_mode_synced : discount.stripe_live_mode_synced;
+      if (!modeSynced || !promotionCodeId) {
+        throw new Error("FIRST50 is not synchronized for the current Stripe mode. Checkout was not created.");
+      }
+      await assertFirst50CanonicalStripePrice(product.stripe_product_id, product.stripe_price_id);
+      appliedDiscount = { id: discount.id, publicCode: discount.public_code, promotionCodeId };
     }
 
     // Load client
@@ -345,7 +428,15 @@ export const createCheckoutSessionForAssignment = createServerFn({ method: "POST
       mode: checkoutMode,
       success_url: `${data.origin}/portal/purchases?checkout=success&session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${data.origin}/portal/purchases`,
-      allow_promotion_codes: "true",
+      ...(appliedDiscount
+        ? {
+            "discounts[0][promotion_code]": appliedDiscount.promotionCodeId,
+            "metadata[applied_code_id]": appliedDiscount.id,
+            "metadata[applied_code]": appliedDiscount.publicCode,
+            "subscription_data[metadata][applied_code_id]": appliedDiscount.id,
+            "subscription_data[metadata][applied_code]": appliedDiscount.publicCode,
+          }
+        : { allow_promotion_codes: "true" }),
       "metadata[purchase_record_id]": purchase.id,
       "metadata[client_id]": client.id,
       "metadata[offer_id]": purchase.offer_id ?? "",
