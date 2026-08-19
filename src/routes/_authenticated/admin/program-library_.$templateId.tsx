@@ -18,7 +18,7 @@ import {
 } from "@/lib/pl-programs";
 import { ExerciseLibraryPanel, type ExerciseRef, DND_EXERCISE, readDrop, exerciseAccent, EXERCISE_CARD_COLORS, HighlightedText, usePbDragging, beginPbDrag, endPbDrag } from "@/components/program-builder";
 import { searchExercises, type SearchableExercise } from "@/lib/exercise-search";
-import { derivePurposeLabels, defaultRestSeconds, effectiveRestSeconds, PURPOSE_LABEL_OPTIONS, resolveCategory, purposeLabelBadgeClass } from "@/lib/exercise-metadata";
+import { derivePurposeLabels, deriveWeeklyPurposeLabelByRowId, defaultRestSeconds, effectiveRestSeconds, PURPOSE_LABEL_OPTIONS, resolveCategory, purposeLabelBadgeClass } from "@/lib/exercise-metadata";
 import { validateDay } from "@/lib/pl-template-validation";
 import { ProgramBuilderShortcutsButton } from "@/components/program-builder-shortcuts";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -1743,6 +1743,19 @@ const SCHEDULE_STATUS_BADGE_CLASS: Record<string, string> = {
 
 function WeekEditor({ week, setWeek, exercises, onCopyDayToFuture, hideHeader, hideVolumeSummary, compact, dayKeyPrefix, blockId, blockStartDate, blockEndDate, onExtraDayAdded, dayScheduleStatus, onFixCalendarIssue }: { week: any; setWeek: (w: any) => void; exercises: any[]; onCopyDayToFuture?: (dayIdx: number) => void; hideHeader?: boolean; hideVolumeSummary?: boolean; compact?: boolean; dayKeyPrefix?: string; blockId?: string | null; blockStartDate?: string | null; blockEndDate?: string | null; onExtraDayAdded?: () => void; dayScheduleStatus?: Map<string, ProgramDayScheduleStatus>; onFixCalendarIssue?: (dayId: string) => void }) {
   const days = week.days || [];
+  const weeklyPurposeLabels = useMemo(() => {
+    const exerciseById = new Map<string, any>((exercises ?? []).map((exercise: any) => [exercise.id, exercise]));
+    return deriveWeeklyPurposeLabelByRowId(
+      days.map((day: any, index: number) => {
+        const scheduled = day.scheduled_date ? Date.parse(day.scheduled_date) : Number.NaN;
+        return {
+          order: Number.isFinite(scheduled) ? scheduled : day.day_index ?? day.sort_order ?? index,
+          rows: (day.rows ?? []) as any[],
+        };
+      }),
+      (row: any) => (row.exercise_id ? exerciseById.get(row.exercise_id) : null),
+    );
+  }, [days, exercises]);
   // Per-day "Day options" toggles: Focus input and copy-to-future-weeks live
   // behind these; a day with a saved Focus value keeps it visible.
   const [dayOpts, setDayOpts] = useState<Record<number, boolean>>({});
@@ -1895,7 +1908,7 @@ function WeekEditor({ week, setWeek, exercises, onCopyDayToFuture, hideHeader, h
               </div>
             )}
           </div>
-          <DayEditor day={d} setDay={(nd) => { const copy = [...days]; copy[i] = nd; setWeek({ ...week, days: copy }); }} exercises={exercises} compact={compact} dayKey={dKey} />
+          <DayEditor day={d} setDay={(nd) => { const copy = [...days]; copy[i] = nd; setWeek({ ...week, days: copy }); }} exercises={exercises} compact={compact} dayKey={dKey} weeklyPurposeLabels={weeklyPurposeLabels} />
         </Card>
       )})}
       {hideHeader && days.length > 0 && (
@@ -1905,15 +1918,18 @@ function WeekEditor({ week, setWeek, exercises, onCopyDayToFuture, hideHeader, h
   );
 }
 
-function DayEditor({ day, setDay, exercises, compact, dayKey }: { day: any; setDay: (d: any) => void; exercises: any[]; compact?: boolean; dayKey?: string }) {
+function DayEditor({ day, setDay, exercises, compact, dayKey, weeklyPurposeLabels }: { day: any; setDay: (d: any) => void; exercises: any[]; compact?: boolean; dayKey?: string; weeklyPurposeLabels?: Map<string, string> }) {
   const rows = day.rows || [];
   // Derive ordered purpose labels (Primary / Secondary / Tertiary / Quaternary
   // for competition + variation rows; Assistance for everything else). Manual
   // `purpose_label` on a row wins. Recomputes whenever rows are reordered.
   const purposeLabels = useMemo(() => {
+    if (weeklyPurposeLabels) {
+      return rows.map((row: any) => weeklyPurposeLabels.get(row.id) ?? "Assistance");
+    }
     const exById = new Map<string, any>((exercises as any[]).map((e) => [e.id, e]));
     return derivePurposeLabels(rows, (r: any) => (r.exercise_id ? exById.get(r.exercise_id) : null));
-  }, [rows, exercises]);
+  }, [rows, exercises, weeklyPurposeLabels]);
   // Video coverage: track which prescribed exercises have a demo video link.
   // Custom-name rows (no exercise_id) are counted as missing so coaches can spot them.
   const videoStats = useMemo(() => {
@@ -3336,8 +3352,8 @@ function RowEditor({ row, setRow, onDelete, exercises, compact, onMoveUp, onMove
 
 /**
  * Non-blocking warning banner shown inside WeekEditor. Surfaces conflicts
- * derived from the current week's rows via derivePurposeLabels — never
- * modifies any row or blocks saving.
+ * derived from the current week's rows via one scheduled weekly priority map
+ * — never modifies any row or blocks saving.
  */
 function WeekPriorityWarnings({ week, exercises }: { week: any; exercises: any[] }) {
   const FAMILY_LABEL: Record<string, string> = {
@@ -3349,12 +3365,18 @@ function WeekPriorityWarnings({ week, exercises }: { week: any; exercises: any[]
     const primaryByFamily = new Map<string, number>();
     const labelsByFamily = new Map<string, Set<string>>();
     const missingLabelOnCompRows: number[] = [];
+    const weeklyLabelsByRowId = deriveWeeklyPurposeLabelByRowId(
+      ((week?.days ?? []) as any[]).map((d, index) => ({
+        order: d?.day_index ?? d?.sort_order ?? index,
+        rows: (d?.rows ?? []) as any[],
+      })),
+      (row: any) => (row.exercise_id ? exById.get(row.exercise_id) : null),
+    );
     for (const d of (week?.days ?? []) as any[]) {
       const rows = (d?.rows ?? []) as any[];
       if (!rows.length) continue;
-      const labels = derivePurposeLabels(rows, (r: any) => (r.exercise_id ? exById.get(r.exercise_id) : null));
-      rows.forEach((r: any, i: number) => {
-        const label = labels[i];
+      rows.forEach((r: any) => {
+        const label = weeklyLabelsByRowId.get(r.id) ?? "Assistance";
         const famRaw = String(r.movement_family ?? "").toLowerCase();
         const isCompFamily = famRaw === "squat" || famRaw === "bench" || famRaw === "deadlift";
         if (label && label !== "Assistance" && famRaw) {

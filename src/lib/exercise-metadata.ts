@@ -155,6 +155,36 @@ export function derivePurposeLabels<
   });
 }
 
+/**
+ * Derive one weekly hierarchy across all scheduled workout days. The caller
+ * supplies the canonical weekly order (normally scheduled date, with day index
+ * as fallback). Labels are keyed by parent exercise-row ID so back-off set rows
+ * automatically inherit the same exposure priority as their top-set row.
+ */
+export function deriveWeeklyPurposeLabelByRowId<
+  R extends {
+    id?: string | null;
+    purpose_label?: string | null;
+    card_color?: string | null;
+    movement_family?: string | null;
+    sort_order?: number | null;
+  },
+>(
+  days: Array<{ order: number; rows: R[] }>,
+  resolveMeta: (row: R) => ExerciseMeta | null | undefined,
+): Map<string, PurposeLabel> {
+  const weeklyRows = days
+    .slice()
+    .sort((a, b) => a.order - b.order)
+    .flatMap((day) => day.rows.slice().sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0)));
+  const labels = derivePurposeLabels(weeklyRows, resolveMeta);
+  const byRowId = new Map<string, PurposeLabel>();
+  weeklyRows.forEach((row, index) => {
+    if (row.id) byRowId.set(row.id, labels[index]);
+  });
+  return byRowId;
+}
+
 /** Badge color class for a purpose label. */
 export function purposeLabelBadgeClass(label: string | null | undefined): string {
   const l = (label ?? "").trim();

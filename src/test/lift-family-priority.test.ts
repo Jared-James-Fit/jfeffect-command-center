@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { derivePurposeLabels, liftColorGroup } from "@/lib/exercise-metadata";
+import {
+  derivePurposeLabels,
+  deriveWeeklyPurposeLabelByRowId,
+  liftColorGroup,
+} from "@/lib/exercise-metadata";
 
 describe("lift-family priorities", () => {
   it("calculates weekly exposure priority independently for squat, bench, and deadlift", () => {
@@ -15,6 +19,21 @@ describe("lift-family priorities", () => {
     const labels = derivePurposeLabels(rows, () => null);
 
     expect(labels).toEqual(["Primary", "Primary", "Secondary", "Primary", "Secondary", "Tertiary"]);
+  });
+
+  it("sequences repeated family exposures across scheduled workout days instead of resetting per card", () => {
+    const labels = deriveWeeklyPurposeLabelByRowId(
+      [
+        { order: 3, rows: [{ id: "bench-late", movement_family: "bench", sort_order: 0 }] },
+        { order: 1, rows: [{ id: "bench-early", movement_family: "bench", sort_order: 0 }] },
+        { order: 2, rows: [{ id: "squat-mid", movement_family: "squat", sort_order: 0 }] },
+      ],
+      () => null,
+    );
+
+    expect(labels.get("bench-early")).toBe("Primary");
+    expect(labels.get("bench-late")).toBe("Secondary");
+    expect(labels.get("squat-mid")).toBe("Primary");
   });
 
   it("uses the manual movement family before card color or exercise metadata", () => {
