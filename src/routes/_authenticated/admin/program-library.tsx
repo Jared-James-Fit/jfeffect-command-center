@@ -1617,7 +1617,12 @@ export function AssignDialog({ template, onClose }: { template: any; onClose: ()
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={onClose}>Cancel</Button>
-          <Button onClick={() => setGuardOpen(true)} disabled={!!conflict || !clientId}>Assign to client</Button>
+          <Button
+            onClick={() => (guard.status === "no_program" ? submit() : setGuardOpen(true))}
+            disabled={!!conflict || !clientId}
+          >
+            Assign to client
+          </Button>
         </DialogFooter>
         </>
         )}
