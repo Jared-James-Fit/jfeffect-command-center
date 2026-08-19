@@ -18824,6 +18824,10 @@ export type Database = {
         Args: { message_id: number; queue_name: string }
         Returns: boolean
       }
+      delete_progress_bodyweight: {
+        Args: { p_entry_id: string; p_user_id: string }
+        Returns: undefined
+      }
       email_queue_dispatch: { Args: never; Returns: undefined }
       enqueue_email: {
         Args: { payload: Json; queue_name: string }
@@ -19285,6 +19289,32 @@ export type Database = {
         SetofOptions: {
           from: "*"
           to: "scheduled_submission_responses"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      save_progress_bodyweight: {
+        Args: {
+          p_entry_id?: string
+          p_logged_date: string
+          p_note?: string
+          p_user_id: string
+          p_weight_unit: string
+          p_weight_value: number
+        }
+        Returns: {
+          created_at: string
+          id: string
+          logged_date: string
+          note: string | null
+          updated_at: string
+          user_id: string
+          weight_unit: string
+          weight_value: number
+        }
+        SetofOptions: {
+          from: "*"
+          to: "progress_bodyweight"
           isOneToOne: true
           isSetofReturn: false
         }
