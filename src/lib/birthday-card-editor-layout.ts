@@ -13,7 +13,11 @@ export const BIRTHDAY_EDITOR_FOOTER_CLASS =
   "shrink-0 border-t border-border px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:px-6";
 
 export const BIRTHDAY_EDITOR_HEADER_CLASS =
-  "shrink-0 border-b border-border px-4 py-4 sm:px-6";
+  "shrink-0 border-b border-border px-4 py-3 sm:px-6 sm:py-4";
+export const BIRTHDAY_EDITOR_BACK_ROW_CLASS = "birthday-card-editor-back-row";
+export const BIRTHDAY_EDITOR_DESCRIPTION_CLASS = "birthday-card-editor-description";
+export const BIRTHDAY_EDITOR_MOBILE_SAFE_VIEWPORT =
+  "calc(100dvh - max(1rem, env(safe-area-inset-top)) - max(1rem, env(safe-area-inset-bottom)))";
 
 export const BIRTHDAY_EDITOR_TABS_CLASS =
   "flex min-h-0 flex-1 flex-col overflow-hidden";

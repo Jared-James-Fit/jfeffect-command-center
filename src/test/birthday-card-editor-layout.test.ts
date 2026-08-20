@@ -1,9 +1,12 @@
 import { describe, expect, it } from "vitest";
 import {
+  BIRTHDAY_EDITOR_BACK_ROW_CLASS,
+  BIRTHDAY_EDITOR_DESCRIPTION_CLASS,
   BIRTHDAY_EDITOR_DIALOG_CLASS,
   BIRTHDAY_EDITOR_EDIT_CONTENT_CLASS,
   BIRTHDAY_EDITOR_FOOTER_CLASS,
   BIRTHDAY_EDITOR_HEADER_CLASS,
+  BIRTHDAY_EDITOR_MOBILE_SAFE_VIEWPORT,
   BIRTHDAY_EDITOR_PREVIEW_CLASS,
   BIRTHDAY_EDITOR_PREVIEW_CONTENT_CLASS,
   BIRTHDAY_EDITOR_TABS_CLASS,
@@ -14,6 +17,14 @@ describe("birthday card editor responsive modal layout", () => {
     expect(BIRTHDAY_EDITOR_DIALOG_CLASS).toContain("birthday-card-editor-dialog");
     expect(BIRTHDAY_EDITOR_DIALOG_CLASS).toContain("flex-col");
     expect(BIRTHDAY_EDITOR_DIALOG_CLASS).toContain("overflow-hidden");
+  });
+
+  it("keeps the Back control in a dedicated header row with a separate description", () => {
+    expect(BIRTHDAY_EDITOR_BACK_ROW_CLASS).toBe("birthday-card-editor-back-row");
+    expect(BIRTHDAY_EDITOR_DESCRIPTION_CLASS).toBe("birthday-card-editor-description");
+    expect(BIRTHDAY_EDITOR_MOBILE_SAFE_VIEWPORT).toContain("100dvh");
+    expect(BIRTHDAY_EDITOR_MOBILE_SAFE_VIEWPORT).toContain("env(safe-area-inset-top)");
+    expect(BIRTHDAY_EDITOR_MOBILE_SAFE_VIEWPORT).toContain("env(safe-area-inset-bottom)");
   });
 
   it("keeps the header and footer visible while exactly one tab body scrolls", () => {
