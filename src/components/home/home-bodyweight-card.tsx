@@ -1,17 +1,18 @@
 import { useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Link } from "@tanstack/react-router";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { Scale, TrendingDown, TrendingUp, Plus, History, Loader2 } from "lucide-react";
 import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis } from "recharts";
 import { toast } from "sonner";
 import { bodyweightQueryKey, listBodyweight, logBodyweight, type ProgressBodyweight } from "@/lib/progress";
 import { todayLocalISO } from "@/lib/today";
+import { BodyweightSheetHeader } from "@/components/bodyweight/bodyweight-sheet-header";
+import { BodyweightHistorySheet } from "@/components/bodyweight/bodyweight-history-sheet";
 
 type Surface = "portal" | "member";
 
@@ -27,9 +28,10 @@ interface Props {
  * Progress page already uses (keyed on user_id), so members and clients
  * see the same data here as on their Progress > Weight tab.
  */
-export function HomeBodyweightCard({ userId, surface, defaultUnit = "lb" }: Props) {
+export function HomeBodyweightCard({ userId, defaultUnit = "lb" }: Props) {
   const qc = useQueryClient();
   const [open, setOpen] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
   const [val, setVal] = useState("");
   const [unit, setUnit] = useState<"kg" | "lb">(defaultUnit);
   const [date, setDate] = useState(todayLocalISO());
@@ -89,8 +91,6 @@ export function HomeBodyweightCard({ userId, surface, defaultUnit = "lb" }: Prop
     return +(latest.v - prev.v).toFixed(1);
   }, [spark]);
 
-  const historyHref = surface === "portal" ? "/portal/progress" : "/m/progress";
-
   async function save() {
     const w = Number(val);
     if (!val || !Number.isFinite(w) || w <= 0) {
@@ -128,9 +128,9 @@ export function HomeBodyweightCard({ userId, surface, defaultUnit = "lb" }: Prop
           <Scale className="h-5 w-5 text-primary" />
           <h3 className="text-base font-bold">Bodyweight</h3>
         </div>
-        <Link to={historyHref} className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground">
+        <Button type="button" variant="ghost" size="sm" className="h-11 gap-1 px-2 text-xs text-muted-foreground hover:text-foreground" onClick={() => setHistoryOpen(true)}>
           <History className="h-3.5 w-3.5" /> History
-        </Link>
+        </Button>
       </div>
 
       {hasData ? (
@@ -179,7 +179,8 @@ export function HomeBodyweightCard({ userId, surface, defaultUnit = "lb" }: Prop
       <Sheet open={open} onOpenChange={setOpen}>
         <SheetContent
           side="bottom"
-          className="rounded-t-2xl p-0"
+          hideCloseButton
+          className="gap-0 rounded-t-2xl p-0"
           onOpenAutoFocus={(e) => {
             // Defer focus until after the sheet's open animation so the
             // mobile keyboard doesn't fight the slide-up transition.
@@ -187,9 +188,7 @@ export function HomeBodyweightCard({ userId, surface, defaultUnit = "lb" }: Prop
             window.setTimeout(() => inputRef.current?.focus(), 220);
           }}
         >
-          <SheetHeader className="border-b border-border px-5 py-4">
-            <SheetTitle>Log Weight</SheetTitle>
-          </SheetHeader>
+          <BodyweightSheetHeader title="Log Bodyweight" />
           <div className="space-y-4 p-5 pb-[calc(env(safe-area-inset-bottom)+1rem)]">
             <div>
               <Label className="text-xs uppercase tracking-widest text-muted-foreground">Weight</Label>
@@ -227,12 +226,18 @@ export function HomeBodyweightCard({ userId, surface, defaultUnit = "lb" }: Prop
                 <Input type="date" className="h-11" max={todayLocalISO()} value={date} onChange={(e) => setDate(e.target.value)} />
               </div>
             </div>
+            {(rows as ProgressBodyweight[]).some((row) => row.logged_date === date) ? (
+              <div className="rounded-md border border-warning/30 bg-warning/10 px-3 py-2 text-xs">
+                You already logged a weight for this date. Saving will update it.
+              </div>
+            ) : null}
             <Button onClick={save} disabled={saving || !val} className="h-12 w-full bg-gradient-primary font-bold uppercase">
               {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : "Save Bodyweight"}
             </Button>
           </div>
         </SheetContent>
       </Sheet>
+      <BodyweightHistorySheet open={historyOpen} onOpenChange={setHistoryOpen} rows={rows as ProgressBodyweight[]} unit={unit} />
     </Card>
   );
 }
