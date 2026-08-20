@@ -415,6 +415,10 @@ export function createClientAdapter(ref: WorkoutContextRef): WorkoutContextAdapt
         setIndex: r.set_index,
         reps: r.actual_reps ?? null,
         loadLb: r.normalized_lb ?? r.actual_load ?? null,
+        enteredValue: r.entered_value ?? r.actual_load ?? null,
+        enteredUnit: r.entered_unit ?? r.actual_load_unit ?? null,
+        normalizedKg: r.normalized_kg ?? null,
+        normalizedLb: r.normalized_lb ?? null,
         actualLoadUnit: r.actual_load_unit ?? r.entered_unit ?? null,
         rpe: r.actual_rpe_num ?? null,
         rir: r.actual_rir ?? null,
@@ -447,7 +451,7 @@ export function createClientAdapter(ref: WorkoutContextRef): WorkoutContextAdapt
       const { data, error } = await sb
         .from("pl_row_results")
         .select(
-          "set_index, completed_at, updated_at, actual_reps, actual_rpe_num, normalized_lb, actual_load, pl_exercise_rows!inner(exercise_id)",
+          "set_index, completed_at, updated_at, actual_reps, actual_rpe_num, normalized_kg, normalized_lb, entered_value, entered_unit, actual_load, actual_load_unit, pl_exercise_rows!inner(exercise_id)",
         )
         .eq("client_id", ref.ownerId)
         .eq("pl_exercise_rows.exercise_id", exerciseId)
@@ -459,6 +463,10 @@ export function createClientAdapter(ref: WorkoutContextRef): WorkoutContextAdapt
         setIndex: r.set_index,
         reps: r.actual_reps ?? null,
         loadLb: r.normalized_lb ?? r.actual_load ?? null,
+        enteredValue: r.entered_value ?? r.actual_load ?? null,
+        enteredUnit: r.entered_unit ?? r.actual_load_unit ?? null,
+        normalizedKg: r.normalized_kg ?? null,
+        normalizedLb: r.normalized_lb ?? null,
         rpe: r.actual_rpe_num ?? null,
       }));
     },
@@ -539,15 +547,23 @@ export function createClientAdapter(ref: WorkoutContextRef): WorkoutContextAdapt
     },
 
     async upsertRowResult(input: UpsertRowResultInput): Promise<string> {
+      const enteredUnit = input.enteredUnit ?? (input.actualLoadUnit === "kg" ? "kg" : "lb");
+      const enteredValue = input.enteredValue ?? input.loadLb ?? null;
+      const normalizedLb = enteredValue == null
+        ? null
+        : enteredUnit === "kg"
+          ? Number(enteredValue) * 2.2046226218
+          : Number(enteredValue);
       const payload: Record<string, unknown> = {
         row_id: input.rowId,
         client_id: ref.ownerId,
         set_index: input.setIndex,
         actual_reps: input.reps ?? null,
-        normalized_lb: input.loadLb ?? null,
-        actual_load: input.loadLb ?? null,
-        actual_load_unit: input.actualLoadUnit ?? "lb",
-        entered_unit: input.actualLoadUnit ?? "lb",
+        normalized_lb: normalizedLb,
+        actual_load: enteredValue,
+        actual_load_unit: enteredUnit,
+        entered_value: enteredValue,
+        entered_unit: enteredUnit,
         actual_rpe_num: input.rpe ?? null,
         actual_rir: input.rir ?? null,
         is_working_set: input.isWorkingSet ?? null,

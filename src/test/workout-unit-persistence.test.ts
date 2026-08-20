@@ -1,40 +1,67 @@
-import { describe, it, expect } from "vitest";
-import { persistedUnitForValue } from "@/lib/workout-unit-persistence";
+import { describe, expect, it } from "vitest";
+import {
+  displayLoadInUnit,
+  equalDisplayLoads,
+  persistedLoadForDisplayValue,
+  persistedUnitForValue,
+} from "@/lib/workout-unit-persistence";
 
-describe("persistedUnitForValue — KG/LB toggle must not corrupt stored weight", () => {
-  it("returns next unit when there is no existing row", () => {
-    expect(persistedUnitForValue("100", "lb", null)).toBe("lb");
-    expect(persistedUnitForValue("100", "kg", undefined)).toBe("kg");
+describe("workout unit contract — display conversion never rewrites the original entered pair", () => {
+  const ninetyKg = {
+    actual_load: 90,
+    actual_load_unit: "kg",
+    entered_value: 90,
+    entered_unit: "kg",
+    normalized_kg: 90,
+    normalized_lb: 198.415,
+  };
+
+  it("renders a stored KG result truthfully in LB without relabeling its raw number", () => {
+    const existing = ninetyKg;
+    expect(displayLoadInUnit(existing, "kg")).toBe(90);
+    expect(displayLoadInUnit(existing, "lb")).toBeCloseTo(198.415, 2);
   });
 
-  it("preserves original entered unit when the raw value is unchanged", () => {
-    // User logged 11 kg, then flipped the display toggle to LB. An unrelated
-    // re-save (status tap, reps edit, autosave) must keep entered_unit=kg
-    // so the DB trigger does not re-normalize 11 as 11 lb (= 5 kg).
-    const existing = { actual_load: 11, actual_load_unit: "kg", entered_unit: "kg" };
-    expect(persistedUnitForValue("11", "lb", existing)).toBe("kg");
-    expect(persistedUnitForValue("11", "kg", existing)).toBe("kg");
+  it("preserves the original KG pair when the LB display is saved without a physical edit", () => {
+    const existing = { actual_load: 90, actual_load_unit: "kg", entered_value: 90, entered_unit: "kg" };
+    const persisted = persistedLoadForDisplayValue("198.415", "lb", existing);
+    expect(persisted).toEqual({ value: 90, unit: "kg" });
+    expect(persistedUnitForValue("198.415", "lb", existing)).toBe("kg");
   });
 
-  it("adopts the new unit only when the user actually types a different number", () => {
-    const existing = { actual_load: 11, actual_load_unit: "kg", entered_unit: "kg" };
-    expect(persistedUnitForValue("135", "lb", existing)).toBe("lb");
+  it("preserves an original LB pair when the KG display is saved without a physical edit", () => {
+    const existing = { actual_load: 220, actual_load_unit: "lb", entered_value: 220, entered_unit: "lb" };
+    const persisted = persistedLoadForDisplayValue("99.7903", "kg", existing);
+    expect(persisted).toEqual({ value: 220, unit: "lb" });
   });
 
-  it("regression: 100kg row toggled to LB and re-saved stays 100kg", () => {
-    // (a) set a weight value of 100 (kg)
-    const existing = { actual_load: 100, actual_load_unit: "kg", entered_unit: "kg" };
-    // (b) toggle display unit from KG to LB — autosave fires with the same
-    //     displayed string "100"
-    const unitToWrite = persistedUnitForValue("100", "lb", existing);
-    // (c) assert the unit written stays "kg" so the stored value
-    //     (actual_load=100, entered_unit=kg) is NOT reinterpreted as 100 lb
-    //     (which would normalize to 45.36 kg = the corruption bug).
-    expect(unitToWrite).toBe("kg");
+  it("adopts the active display unit only after a genuine physical-load edit", () => {
+    const existing = { actual_load: 90, actual_load_unit: "kg", entered_value: 90, entered_unit: "kg" };
+    expect(persistedLoadForDisplayValue("205", "lb", existing)).toEqual({ value: 205, unit: "lb" });
   });
 
-  it("falls back to actual_load_unit when entered_unit is missing", () => {
+  it("treats equivalent KG/LB display values as equal for autosave gating", () => {
+    expect(equalDisplayLoads({ load: "90", unit: "kg" }, { load: "198.415", unit: "lb" })).toBe(true);
+    expect(equalDisplayLoads({ load: "90", unit: "kg" }, { load: "205", unit: "lb" })).toBe(false);
+  });
+
+  it("falls back to legacy actual fields when entered metadata is absent", () => {
     const existing = { actual_load: 50, actual_load_unit: "lb" };
-    expect(persistedUnitForValue("50", "kg", existing)).toBe("lb");
+    expect(displayLoadInUnit(existing, "kg")).toBeCloseTo(22.6796, 3);
+    expect(persistedLoadForDisplayValue("22.6796", "kg", existing)).toEqual({ value: 50, unit: "lb" });
+  });
+});
+
+
+describe("workout unit contract — persisted mirror compatibility", () => {
+  it("uses actual_load_kg/lb mirrors when normalized aliases are absent", () => {
+    const legacy = {
+      actual_load: 90,
+      actual_load_unit: "kg",
+      actual_load_kg: 90,
+      actual_load_lb: 198.415,
+    };
+    expect(displayLoadInUnit(legacy, "kg")).toBe(90);
+    expect(displayLoadInUnit(legacy, "lb")).toBeCloseTo(198.415, 2);
   });
 });
