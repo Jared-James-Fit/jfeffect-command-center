@@ -29,6 +29,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { listUpcomingForBell, listMyPortalAppointments } from "@/lib/appointments.functions";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { cn } from "@/lib/utils";
+import { initialNotificationView, notificationListScrollClass } from "@/lib/notifications-page-layout";
 
 // =============================================================================
 // Types
@@ -672,14 +673,17 @@ type View = "new" | "all" | "archived";
 
 export function NotificationPanel({
   compact = false,
+  fullPage = false,
   onNavigate,
 }: {
   compact?: boolean;
+  /** The standalone route owns natural document scrolling. */
+  fullPage?: boolean;
   onNavigate?: () => void;
 }) {
   const { query, role, user, qc, items, unreadCount } = useNotificationFeed();
   const navigate = useNavigate();
-  const [view, setView] = useState<View>("new");
+  const [view, setView] = useState<View>(() => initialNotificationView(fullPage));
   const [archiveAllOpen, setArchiveAllOpen] = useState(false);
   const [clearReadOpen, setClearReadOpen] = useState(false);
   const [visible, setVisible] = useState(compact ? 10 : 20);
@@ -869,23 +873,30 @@ export function NotificationPanel({
   const hasAny = items.length > 0;
 
   return (
-    <div className={cn("flex flex-col", compact ? "max-h-[80vh]" : "")}>
-      {/* Header: filters + actions */}
-      <div className="flex flex-col gap-2 border-b px-3 py-2">
-        <div className="flex items-center justify-between gap-2">
-          <div className="flex items-center gap-1">
-            <FilterChip active={view === "new"} onClick={() => setView("new")}>
-              New
-              {unreadCount > 0 && (
-                <Badge variant="secondary" className="ml-1.5 h-4 px-1 text-[10px]">
-                  {unreadCount > 99 ? "99+" : unreadCount}
-                </Badge>
-              )}
-            </FilterChip>
+    <div className={cn(
+      "flex min-h-0 flex-col",
+      compact && "max-h-[80vh]",
+      fullPage && "notifications-panel-full-page",
+    )}>
+      {/* The full page uses one compact mobile controls row: tabs on the left,
+          secondary actions on the right. The route owns the title/back row. */}
+      <div className="flex flex-col gap-2 border-b px-3 py-2 sm:px-4">
+        <div className="flex min-w-0 items-center justify-between gap-2">
+          <div className="flex min-w-0 items-center gap-1 overflow-x-auto [scrollbar-width:none]">
+            {!fullPage && (
+              <FilterChip active={view === "new"} onClick={() => setView("new")}>
+                New
+                {unreadCount > 0 && (
+                  <Badge variant="secondary" className="ml-1.5 h-4 px-1 text-[10px]">
+                    {unreadCount > 99 ? "99+" : unreadCount}
+                  </Badge>
+                )}
+              </FilterChip>
+            )}
             <FilterChip active={view === "all"} onClick={() => setView("all")}>All</FilterChip>
             <FilterChip active={view === "archived"} onClick={() => setView("archived")}>Archived</FilterChip>
           </div>
-          <div className="flex items-center gap-1">
+          <div className="flex shrink-0 items-center gap-1">
             <Button
               variant="ghost" size="sm"
               className="h-11 gap-1 px-2 text-xs sm:h-7"
@@ -928,7 +939,7 @@ export function NotificationPanel({
 
         {/* Full-page extra controls: search, category, date */}
         {!compact && (
-          <div className="flex flex-wrap items-center gap-2 pt-1">
+          <div className="flex min-w-0 flex-col gap-2 pt-1 sm:flex-row sm:flex-wrap sm:items-center">
             <div className="relative min-w-0 flex-1 sm:max-w-xs">
               <Search className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
               <Input
@@ -950,7 +961,7 @@ export function NotificationPanel({
               )}
             </div>
             <Select value={kindFilter} onValueChange={(v) => { setKindFilter(v); setVisible(20); }}>
-              <SelectTrigger className="h-9 w-[140px] text-xs" aria-label="Filter by category">
+              <SelectTrigger className="h-9 w-full text-xs sm:w-[140px]" aria-label="Filter by category">
                 <SelectValue placeholder="Category" />
               </SelectTrigger>
               <SelectContent>
@@ -963,7 +974,7 @@ export function NotificationPanel({
               </SelectContent>
             </Select>
             <Select value={dateFilter} onValueChange={(v) => { setDateFilter(v); setVisible(20); }}>
-              <SelectTrigger className="h-9 w-[130px] text-xs" aria-label="Filter by date">
+              <SelectTrigger className="h-9 w-full text-xs sm:w-[130px]" aria-label="Filter by date">
                 <SelectValue placeholder="Date" />
               </SelectTrigger>
               <SelectContent>
@@ -977,8 +988,9 @@ export function NotificationPanel({
         )}
       </div>
 
-      {/* List */}
-      <div className="flex-1 overflow-y-auto">
+      {/* The full page participates in natural document scrolling; compact
+          popovers and sheets retain their bounded internal scroll region. */}
+      <div className={notificationListScrollClass(fullPage)}>
         {query.isLoading ? (
           <div className="flex items-center justify-center px-6 py-16">
             <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />

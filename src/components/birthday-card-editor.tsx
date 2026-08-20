@@ -4,6 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import {
   Dialog,
   DialogContent,
+  DialogClose,
   DialogHeader,
   DialogTitle,
   DialogDescription,
@@ -31,8 +32,10 @@ import {
   type BirthdayTemplateKey,
 } from "@/lib/birthday-templates";
 import { toast } from "sonner";
-import { RotateCcw, Save } from "lucide-react";
+import { ChevronLeft, RotateCcw, Save } from "lucide-react";
 import {
+  BIRTHDAY_EDITOR_BACK_ROW_CLASS,
+  BIRTHDAY_EDITOR_DESCRIPTION_CLASS,
   BIRTHDAY_EDITOR_DIALOG_CLASS,
   BIRTHDAY_EDITOR_EDIT_CONTENT_CLASS,
   BIRTHDAY_EDITOR_FOOTER_CLASS,
@@ -158,12 +161,21 @@ export function BirthdayCardEditorDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className={BIRTHDAY_EDITOR_DIALOG_CLASS}>
+      <DialogContent className={BIRTHDAY_EDITOR_DIALOG_CLASS} showBackButton={false}>
         <DialogHeader className={BIRTHDAY_EDITOR_HEADER_CLASS}>
-          <DialogTitle>
-            {previewOnly ? "Birthday Card Preview" : "Customize Birthday Card"}
-          </DialogTitle>
-          <DialogDescription>
+          <div className={BIRTHDAY_EDITOR_BACK_ROW_CLASS}>
+            <DialogClose
+              aria-label="Back"
+              className="inline-flex h-11 min-w-[88px] shrink-0 items-center justify-center gap-1.5 rounded-full border border-border bg-background px-3 text-sm font-semibold text-foreground shadow-sm transition hover:bg-secondary focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+            >
+              <ChevronLeft className="h-4 w-4" />
+              <span>Back</span>
+            </DialogClose>
+            <DialogTitle className="min-w-0 text-left">
+              {previewOnly ? "Birthday Card Preview" : "Customize Birthday Card"}
+            </DialogTitle>
+          </div>
+          <DialogDescription className={BIRTHDAY_EDITOR_DESCRIPTION_CLASS}>
             {previewOnly
               ? "This is exactly what the client will see on their birthday. Nothing is sent."
               : "Edit the message, pick a template, then save. The client sees this on their birthday."}
