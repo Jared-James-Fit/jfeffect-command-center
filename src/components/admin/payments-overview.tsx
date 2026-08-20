@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import type { AdminTransactionRow } from "@/lib/admin-transactions";
 import { ledgerStatusTone } from "@/lib/payment-display";
+import { countActiveDiscountCodes } from "@/lib/payments-overview";
 
 /**
  * Products & Payments → Overview.
@@ -74,7 +75,7 @@ export function PaymentsOverviewPanel({
     queryFn: async () => {
       const { data, error } = await supabase
         .from("discount_codes")
-        .select("id,status,code");
+        .select("id,status");
       if (error) throw error;
       return data ?? [];
     },
@@ -116,7 +117,7 @@ export function PaymentsOverviewPanel({
 
   const discountStats = useMemo(() => {
     const rows = discountsQuery.data ?? [];
-    const active = rows.filter((r: any) => r.status === "active").length;
+    const active = countActiveDiscountCodes(rows);
     return { total: rows.length, active };
   }, [discountsQuery.data]);
 
