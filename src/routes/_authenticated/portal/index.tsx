@@ -462,6 +462,7 @@ function PortalHome() {
             <SectionErrorBoundary label="Bodyweight">
               <BodyweightSummaryCard
                 clientId={client.id}
+                userId={portalUserId}
                 defaultUnit={((client as any)?.preferred_weight_unit as WeightUnit) ?? "lb"}
               />
             </SectionErrorBoundary>

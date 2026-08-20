@@ -4,7 +4,8 @@ import { Area, AreaChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "rec
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { BodyweightSheetHeader } from "@/components/bodyweight/bodyweight-sheet-header";
-import { bodyweightStats, type ProgressBodyweight } from "@/lib/progress";
+import { bodyweightStats } from "@/lib/progress";
+import { type BodyweightPoint } from "@/lib/bodyweight";
 import { convertWeight, formatWeight, type WeightUnit } from "@/lib/progress-metrics";
 
 type Range = "7d" | "30d" | "90d" | "all";
@@ -12,7 +13,7 @@ type Range = "7d" | "30d" | "90d" | "all";
 interface Props {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  rows: ProgressBodyweight[];
+  rows: BodyweightPoint[];
   unit: WeightUnit;
 }
 
@@ -26,15 +27,28 @@ function formatDate(value: string) {
 
 export function BodyweightHistorySheet({ open, onOpenChange, rows, unit }: Props) {
   const [range, setRange] = useState<Range>("all");
-  const stats = useMemo(() => bodyweightStats(rows), [rows]);
+  const statsRows = useMemo(
+    () =>
+      rows.map((row) => ({
+        id: row.id ?? `${row.source}:${row.date}`,
+        user_id: "",
+        logged_date: row.date,
+        weight_value: row.value,
+        weight_unit: row.unit,
+        note: row.note ?? null,
+        created_at: "",
+      })),
+    [rows],
+  );
+  const stats = useMemo(() => bodyweightStats(statsRows), [statsRows]);
 
   const allPoints = useMemo(
     () =>
       [...rows]
-        .sort((a, b) => a.logged_date.localeCompare(b.logged_date))
+        .sort((a, b) => a.date.localeCompare(b.date))
         .map((row) => ({
-          date: row.logged_date,
-          value: Number(convertWeight(row.weight_value, row.weight_unit, unit).toFixed(1)),
+          date: row.date,
+          value: Number(convertWeight(row.value, row.unit, unit).toFixed(1)),
           note: row.note,
         })),
     [rows, unit],
@@ -65,7 +79,7 @@ export function BodyweightHistorySheet({ open, onOpenChange, rows, unit }: Props
     : null;
 
   const recentRows = useMemo(
-    () => [...rows].sort((a, b) => b.logged_date.localeCompare(a.logged_date)).slice(0, 50),
+    () => [...rows].sort((a, b) => b.date.localeCompare(a.date)).slice(0, 50),
     [rows],
   );
 
@@ -174,13 +188,13 @@ export function BodyweightHistorySheet({ open, onOpenChange, rows, unit }: Props
                       className="flex min-h-12 items-center justify-between gap-4 px-4 py-3"
                     >
                       <div className="min-w-0">
-                        <p className="text-sm font-medium">{formatDate(row.logged_date)}</p>
+                        <p className="text-sm font-medium">{formatDate(row.date)}</p>
                         {row.note ? (
                           <p className="truncate text-xs text-muted-foreground">{row.note}</p>
                         ) : null}
                       </div>
                       <p className="shrink-0 text-sm font-semibold">
-                        {formatWeight(convertWeight(row.weight_value, row.weight_unit, unit), unit)}
+                        {formatWeight(convertWeight(row.value, row.unit, unit), unit)}
                       </p>
                     </div>
                   ))}
