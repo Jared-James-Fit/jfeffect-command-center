@@ -32,6 +32,16 @@ import {
 } from "@/lib/birthday-templates";
 import { toast } from "sonner";
 import { RotateCcw, Save } from "lucide-react";
+import {
+  BIRTHDAY_EDITOR_DIALOG_CLASS,
+  BIRTHDAY_EDITOR_EDIT_CONTENT_CLASS,
+  BIRTHDAY_EDITOR_FOOTER_CLASS,
+  BIRTHDAY_EDITOR_HEADER_CLASS,
+  BIRTHDAY_EDITOR_PREVIEW_CLASS,
+  BIRTHDAY_EDITOR_PREVIEW_CONTENT_CLASS,
+  BIRTHDAY_EDITOR_TABS_CLASS,
+  BIRTHDAY_EDITOR_TABS_LIST_CLASS,
+} from "@/lib/birthday-card-editor-layout";
 
 interface Props {
   clientId: string;
@@ -148,8 +158,8 @@ export function BirthdayCardEditorDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-3xl max-h-[90vh] overflow-hidden p-0">
-        <DialogHeader className="border-b border-border px-6 py-4">
+      <DialogContent className={BIRTHDAY_EDITOR_DIALOG_CLASS}>
+        <DialogHeader className={BIRTHDAY_EDITOR_HEADER_CLASS}>
           <DialogTitle>
             {previewOnly ? "Birthday Card Preview" : "Customize Birthday Card"}
           </DialogTitle>
@@ -161,7 +171,7 @@ export function BirthdayCardEditorDialog({
         </DialogHeader>
 
         {previewOnly ? (
-          <div className="overflow-y-auto px-6 py-6">
+          <div className={BIRTHDAY_EDITOR_PREVIEW_CLASS}>
             <PreviewFrame>
               <BirthdayCardView
                 card={draft}
@@ -173,13 +183,13 @@ export function BirthdayCardEditorDialog({
             </PreviewFrame>
           </div>
         ) : (
-          <Tabs defaultValue="edit" className="flex flex-col overflow-hidden">
-            <TabsList className="mx-6 mt-3 grid w-fit grid-cols-2">
+          <Tabs defaultValue="edit" className={BIRTHDAY_EDITOR_TABS_CLASS}>
+            <TabsList className={BIRTHDAY_EDITOR_TABS_LIST_CLASS}>
               <TabsTrigger value="edit">Edit</TabsTrigger>
               <TabsTrigger value="preview">Preview</TabsTrigger>
             </TabsList>
 
-            <TabsContent value="edit" className="overflow-y-auto px-6 pb-2">
+            <TabsContent value="edit" className={BIRTHDAY_EDITOR_EDIT_CONTENT_CLASS}>
               <div className="space-y-4 py-4">
                 <div className="flex items-center justify-between rounded-lg border border-border bg-secondary/30 px-3 py-2">
                   <div>
@@ -268,7 +278,7 @@ export function BirthdayCardEditorDialog({
               </div>
             </TabsContent>
 
-            <TabsContent value="preview" className="overflow-y-auto px-6 pb-2">
+            <TabsContent value="preview" className={BIRTHDAY_EDITOR_PREVIEW_CONTENT_CLASS}>
               <PreviewFrame>
                 <BirthdayCardView
                   card={draft}
@@ -283,7 +293,7 @@ export function BirthdayCardEditorDialog({
         )}
 
         {!previewOnly && (
-          <DialogFooter className="border-t border-border px-6 py-3">
+          <DialogFooter className={BIRTHDAY_EDITOR_FOOTER_CLASS}>
             <Button variant="ghost" onClick={reset} type="button">
               <RotateCcw className="mr-2 h-4 w-4" /> Reset to default
             </Button>
