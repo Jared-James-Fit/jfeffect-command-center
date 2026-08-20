@@ -27,9 +27,8 @@ import { SectionErrorBoundary } from "@/components/section-error-boundary";
 import { toast } from "sonner";
 import {
   DAY_TYPE_LABEL,
-  pickPlanDayIndex,
   resolveClientNutritionDay,
-  type ClientNutritionDayType,
+  resolvePlanDaySelection,
 } from "@/lib/client-nutrition-day";
 import { TodaysPlanHero } from "@/components/nutrition/TodaysPlanHero";
 import { MacroBreakdown } from "@/components/nutrition/MacroBreakdown";
@@ -126,12 +125,18 @@ function PortalNutrition() {
     [todayISO, scheduleQ.data, ctxQ.data?.preferredHighDays],
   );
 
-  // ONE selected-day state for the whole page. `null` = follow auto-detection.
-  const [manualDay, setManualDay] = useState<ClientNutritionDayType | null>(null);
-  const selectedDay: ClientNutritionDayType = manualDay ?? resolution.dayType;
-
-  const planIdx = pickPlanDayIndex(days, selectedDay);
-  const day = planIdx >= 0 ? days[planIdx] : null;
+  // Automatic day categories are guidance only. The client selects an exact
+  // uploaded plan-day record by stable ID, so coach-created titles never need
+  // to be normalized or remapped to become reviewable.
+  const automaticDayType = resolution.dayType;
+  const [manualPlanId, setManualPlanId] = useState<string | null>(null);
+  const selection = resolvePlanDaySelection(days, automaticDayType, manualPlanId);
+  const day = selection.selectedPlanDayId
+    ? days.find((candidate) => candidate.id === selection.selectedPlanDayId) ?? null
+    : null;
+  const planChoices = days
+    .filter((candidate) => typeof candidate.id === "string" && String(candidate.day_label ?? "").trim().length > 0)
+    .map((candidate) => ({ id: candidate.id as string, title: String(candidate.day_label).trim() }));
 
   const [downloading, setDownloading] = useState(false);
   const handleDownload = async () => {
@@ -165,8 +170,8 @@ function PortalNutrition() {
     [plan],
   );
 
-  const missingDayNote = plan && planIdx < 0
-    ? `Your coach hasn't set a ${DAY_TYPE_LABEL[selectedDay]} plan yet.`
+  const missingDayNote = plan && !day
+    ? `No ${DAY_TYPE_LABEL[automaticDayType]} plan is assigned for today. You can still review any uploaded plan above.`
     : null;
 
   return (
@@ -177,10 +182,12 @@ function PortalNutrition() {
         {/* 1. TODAY'S PLAN hero — owns nothing, reflects the container state. */}
         <SectionErrorBoundary label="Today's plan">
           <TodaysPlanHero
-            selected={selectedDay}
-            onSelect={(t) => setManualDay(t === resolution.dayType ? null : t)}
+            planChoices={planChoices}
+            selectedPlanId={selection.selectedPlanDayId}
+            automaticDayType={automaticDayType}
+            onSelectPlan={(planDayId) => setManualPlanId(planDayId === selection.automaticPlanDayId ? null : planDayId)}
             resolution={resolution}
-            isManual={manualDay != null && manualDay !== resolution.dayType}
+            isManual={selection.isManual}
             dateLabel={format(new Date(), "EEE, MMM d")}
           />
         </SectionErrorBoundary>
@@ -213,7 +220,7 @@ function PortalNutrition() {
                   <div>
                     <div className="text-sm font-black uppercase tracking-widest">Nutrition Targets</div>
                     <div className="text-[11px] text-muted-foreground">
-                      {DAY_TYPE_LABEL[selectedDay]}
+                      {day?.day_label || DAY_TYPE_LABEL[automaticDayType]}
                       {headerLine ? ` · ${headerLine}` : ""}
                     </div>
                   </div>
@@ -261,7 +268,7 @@ function PortalNutrition() {
                   />
                 </>
               ) : (
-                <div className="text-xs text-muted-foreground">{missingDayNote ?? "No day targets set."}</div>
+                <div className="text-xs text-muted-foreground">{missingDayNote ?? "No uploaded meal plan is available yet."}</div>
               )}
             </Card>
           )}
@@ -277,7 +284,7 @@ function PortalNutrition() {
                 </div>
                 <div>
                   <div className="text-sm font-black uppercase tracking-widest">Meal Plan</div>
-                  <div className="text-[11px] text-muted-foreground">{day.day_label || DAY_TYPE_LABEL[selectedDay]}</div>
+                  <div className="text-[11px] text-muted-foreground">{day.day_label || DAY_TYPE_LABEL[automaticDayType]}</div>
                 </div>
               </div>
               {day.notes && String(day.notes).trim() ? (
