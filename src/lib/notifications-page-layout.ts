@@ -20,4 +20,4 @@ export function notificationListScrollClass(fullPage: boolean): string {
 
 export const NOTIFICATIONS_PWA_SAFE_AREA_TOP = "max(0.75rem, env(safe-area-inset-top))";
 export const NOTIFICATIONS_PWA_SAFE_AREA_BOTTOM = "calc(1rem + env(safe-area-inset-bottom))";
-export const TOAST_PWA_SAFE_AREA_TOP = "calc(env(safe-area-inset-top) + 0.75rem)";
+export const TOAST_PWA_SAFE_AREA_TOP = "calc(max(3.5rem, env(safe-area-inset-top)) + 0.75rem)";
