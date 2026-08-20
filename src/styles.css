@@ -629,8 +629,11 @@ mark.gh-mark.gh-flash { animation: ghFlashPulse 1.4s ease-out 2; }
     margin-bottom: env(safe-area-inset-bottom);
   }
 
+  /* Sonner can receive a zero inset during the first standalone-PWA paint,
+     even on notched iPhones. Keep every top toast below the compact iOS
+     status area until the native safe-area value is available. */
   [data-sonner-toaster].toaster {
-    top: calc(env(safe-area-inset-top) + 0.75rem) !important;
+    top: calc(max(3.5rem, env(safe-area-inset-top)) + 0.75rem) !important;
     right: 0.75rem !important;
     left: 0.75rem !important;
     width: auto !important;
