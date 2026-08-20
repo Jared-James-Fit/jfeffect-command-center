@@ -6,9 +6,8 @@ import { ActionButton } from "@/components/action-button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { Scale, TrendingDown, TrendingUp, Target, Plus, History } from "lucide-react";
-import { Link } from "@tanstack/react-router";
 import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis } from "recharts";
 import { toast } from "sonner";
 import { useAuth } from "@/lib/auth";
@@ -20,6 +19,8 @@ import {
 import { useBodyweightGoal } from "@/lib/use-bodyweight-goal";
 import { todayLocalISO } from "@/lib/today";
 import { bodyweightQueryKey, listBodyweight, logBodyweight, type ProgressBodyweight } from "@/lib/progress";
+import { BodyweightSheetHeader } from "@/components/bodyweight/bodyweight-sheet-header";
+import { BodyweightHistorySheet } from "@/components/bodyweight/bodyweight-history-sheet";
 
 interface Props {
   clientId: string;
@@ -31,6 +32,7 @@ export function BodyweightSummaryCard({ clientId, defaultUnit = "lb" }: Props) {
   const { user } = useAuth();
   const [unit, setUnit] = useState<WeightUnit>(defaultUnit);
   const [sheetOpen, setSheetOpen] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
   const [weight, setWeight] = useState("");
   const [date, setDate] = useState(todayLocalISO());
   const [saving, setSaving] = useState(false);
@@ -117,9 +119,9 @@ export function BodyweightSummaryCard({ clientId, defaultUnit = "lb" }: Props) {
           <Scale className="h-5 w-5 text-primary" />
           <h3 className="text-base font-bold">Bodyweight</h3>
         </div>
-        <Link to="/portal/progress" search={{ action: "bodyweight" } as never} className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground">
+        <Button type="button" variant="ghost" size="sm" className="h-11 gap-1 px-2 text-xs text-muted-foreground hover:text-foreground" onClick={() => setHistoryOpen(true)}>
           <History className="h-3.5 w-3.5" /> History
-        </Link>
+        </Button>
       </div>
 
       {hasData ? (
@@ -176,15 +178,14 @@ export function BodyweightSummaryCard({ clientId, defaultUnit = "lb" }: Props) {
       <Sheet open={sheetOpen} onOpenChange={setSheetOpen}>
         <SheetContent
           side="bottom"
-          className="rounded-t-2xl p-0"
+          hideCloseButton
+          className="gap-0 rounded-t-2xl p-0"
           onOpenAutoFocus={(e) => {
             e.preventDefault();
             window.setTimeout(() => inputRef.current?.focus(), 220);
           }}
         >
-          <SheetHeader className="border-b border-border px-5 py-4">
-            <SheetTitle>Log Weight</SheetTitle>
-          </SheetHeader>
+          <BodyweightSheetHeader title="Log Bodyweight" />
           <div className="space-y-4 p-5 pb-[calc(env(safe-area-inset-bottom)+1rem)]">
             <div>
               <Label className="text-xs uppercase tracking-widest text-muted-foreground">Weight</Label>
@@ -238,6 +239,7 @@ export function BodyweightSummaryCard({ clientId, defaultUnit = "lb" }: Props) {
           </div>
         </SheetContent>
       </Sheet>
+      <BodyweightHistorySheet open={historyOpen} onOpenChange={setHistoryOpen} rows={rows as ProgressBodyweight[]} unit={unit} />
     </Card>
   );
 }
