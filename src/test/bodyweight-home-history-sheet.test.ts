@@ -26,6 +26,8 @@ describe("bodyweight Home quick actions", () => {
   ])("keeps %s History in place rather than navigating to Progress", (_surface, source) => {
     expect(source).toContain("setHistoryOpen(true)");
     expect(source).toContain("<BodyweightHistorySheet");
+    expect(source).toContain("getCombinedBodyweightSeries");
+    expect(source).not.toContain("listBodyweight");
     expect(source).not.toMatch(/<Link\s+to=.*progress/);
   });
 
@@ -37,8 +39,9 @@ describe("bodyweight Home quick actions", () => {
     expect(source).toContain('<BodyweightSheetHeader title="Log Bodyweight" />');
   });
 
-  it("keeps the history view focused and driven by caller-provided canonical rows", () => {
-    expect(historySheet).toContain("bodyweightStats(rows)");
+  it("keeps the history view focused and driven by caller-provided unified rows", () => {
+    expect(historySheet).toContain("bodyweightStats(statsRows)");
+    expect(historySheet).toContain("BodyweightPoint");
     expect(historySheet).not.toContain("useQuery");
     expect(historySheet).not.toContain("listBodyweight");
     expect(historySheet).not.toContain("/portal/progress");

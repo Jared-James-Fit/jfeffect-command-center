@@ -9,7 +9,8 @@ import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { Scale, TrendingDown, TrendingUp, Plus, History, Loader2 } from "lucide-react";
 import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis } from "recharts";
 import { toast } from "sonner";
-import { bodyweightQueryKey, listBodyweight, logBodyweight, type ProgressBodyweight } from "@/lib/progress";
+import { logBodyweight } from "@/lib/progress";
+import { combinedBodyweightQueryKey, getCombinedBodyweightSeries } from "@/lib/bodyweight";
 import { todayLocalISO } from "@/lib/today";
 import { BodyweightSheetHeader } from "@/components/bodyweight/bodyweight-sheet-header";
 import { BodyweightHistorySheet } from "@/components/bodyweight/bodyweight-history-sheet";
@@ -24,9 +25,9 @@ interface Props {
 
 /**
  * Shared bodyweight summary card for both the client portal Home and the
- * member Home. Reads & writes the same `progress_bodyweight` rows the
- * Progress page already uses (keyed on user_id), so members and clients
- * see the same data here as on their Progress > Weight tab.
+ * member Home. It reads the same canonical-plus-legacy compatibility series
+ * as bodyweight history while all new writes remain canonical `progress_bodyweight`
+ * entries keyed by user_id.
  */
 export function HomeBodyweightCard({ userId, defaultUnit = "lb" }: Props) {
   const qc = useQueryClient();
@@ -39,18 +40,18 @@ export function HomeBodyweightCard({ userId, defaultUnit = "lb" }: Props) {
   const inputRef = useRef<HTMLInputElement>(null);
 
   const { data: rows = [] } = useQuery({
-    queryKey: bodyweightQueryKey(userId),
+    queryKey: combinedBodyweightQueryKey(userId),
     enabled: !!userId,
-    queryFn: () => listBodyweight(userId),
+    queryFn: () => getCombinedBodyweightSeries(userId, 200),
     staleTime: 30_000,
   });
 
   const points = useMemo(
-    () => (rows as ProgressBodyweight[])
+    () => rows
       .map((row) => ({
-        date: row.logged_date,
-        value: Number(row.weight_value),
-        unit: row.weight_unit,
+        date: row.date,
+        value: Number(row.value),
+        unit: row.unit,
       }))
       .sort((a, b) => a.date.localeCompare(b.date)),
     [rows],
@@ -106,7 +107,7 @@ export function HomeBodyweightCard({ userId, defaultUnit = "lb" }: Props) {
       // Defer cache invalidation until after the sheet close animation
       // finishes so we don't jank the closing transition with a re-render.
       window.setTimeout(() => {
-        qc.invalidateQueries({ queryKey: bodyweightQueryKey(userId) });
+        qc.invalidateQueries({ queryKey: combinedBodyweightQueryKey(userId) });
       }, 280);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Couldn't save weight");
@@ -226,7 +227,7 @@ export function HomeBodyweightCard({ userId, defaultUnit = "lb" }: Props) {
                 <Input type="date" className="h-11" max={todayLocalISO()} value={date} onChange={(e) => setDate(e.target.value)} />
               </div>
             </div>
-            {(rows as ProgressBodyweight[]).some((row) => row.logged_date === date) ? (
+            {rows.some((row) => row.date === date && row.source === "progress_bodyweight") ? (
               <div className="rounded-md border border-warning/30 bg-warning/10 px-3 py-2 text-xs">
                 You already logged a weight for this date. Saving will update it.
               </div>
@@ -237,7 +238,7 @@ export function HomeBodyweightCard({ userId, defaultUnit = "lb" }: Props) {
           </div>
         </SheetContent>
       </Sheet>
-      <BodyweightHistorySheet open={historyOpen} onOpenChange={setHistoryOpen} rows={rows as ProgressBodyweight[]} unit={unit} />
+      <BodyweightHistorySheet open={historyOpen} onOpenChange={setHistoryOpen} rows={rows} unit={unit} />
     </Card>
   );
 }

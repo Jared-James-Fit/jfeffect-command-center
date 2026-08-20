@@ -10,26 +10,26 @@ import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { Scale, TrendingDown, TrendingUp, Target, Plus, History } from "lucide-react";
 import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis } from "recharts";
 import { toast } from "sonner";
-import { useAuth } from "@/lib/auth";
 import {
   averageOfLast, convertWeight, filterByRange, formatWeight,
-  normalizedBodyweightSeries, weeklyChange,
-  type ProgressMetric, type WeightUnit,
+  weeklyChange,
+  type WeightUnit,
 } from "@/lib/progress-metrics";
 import { useBodyweightGoal } from "@/lib/use-bodyweight-goal";
 import { todayLocalISO } from "@/lib/today";
-import { bodyweightQueryKey, listBodyweight, logBodyweight, type ProgressBodyweight } from "@/lib/progress";
+import { logBodyweight } from "@/lib/progress";
+import { combinedBodyweightQueryKey, getCombinedBodyweightSeries } from "@/lib/bodyweight";
 import { BodyweightSheetHeader } from "@/components/bodyweight/bodyweight-sheet-header";
 import { BodyweightHistorySheet } from "@/components/bodyweight/bodyweight-history-sheet";
 
 interface Props {
   clientId: string;
+  userId: string;
   defaultUnit?: WeightUnit;
 }
 
-export function BodyweightSummaryCard({ clientId, defaultUnit = "lb" }: Props) {
+export function BodyweightSummaryCard({ clientId, userId, defaultUnit = "lb" }: Props) {
   const qc = useQueryClient();
-  const { user } = useAuth();
   const [unit, setUnit] = useState<WeightUnit>(defaultUnit);
   const [sheetOpen, setSheetOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
@@ -39,22 +39,16 @@ export function BodyweightSummaryCard({ clientId, defaultUnit = "lb" }: Props) {
   const inputRef = useRef<HTMLInputElement>(null);
 
   const { data: rows = [] } = useQuery({
-    queryKey: bodyweightQueryKey(user?.id ?? "anonymous"),
-    enabled: !!user?.id,
-    queryFn: () => listBodyweight(user!.id),
+    queryKey: combinedBodyweightQueryKey(userId),
+    enabled: !!userId,
+    queryFn: () => getCombinedBodyweightSeries(userId, 200),
   });
-  const metricRows = useMemo(
-    () => (rows as ProgressBodyweight[]).map((row) => ({
-      id: row.id,
-      entry_date: row.logged_date,
-      bodyweight: row.weight_value,
-      bodyweight_unit: row.weight_unit,
-    } as ProgressMetric)),
-    [rows],
-  );
   const { data: goal = null } = useBodyweightGoal(clientId);
 
-  const series = useMemo(() => normalizedBodyweightSeries(metricRows, unit), [metricRows, unit]);
+  const series = useMemo(
+    () => rows.map((row) => ({ date: row.date, value: convertWeight(row.value, row.unit, unit) })),
+    [rows, unit],
+  );
   const sparkSeries = useMemo(
     () => filterByRange(series, "30").map((p) => ({ d: p.date, v: Number(p.value.toFixed(1)) })),
     [series],
@@ -64,11 +58,11 @@ export function BodyweightSummaryCard({ clientId, defaultUnit = "lb" }: Props) {
   const change = weeklyChange(series);
   const goalTarget = goal ? convertWeight(goal.value, goal.unit, unit) : null;
 
-  const todayEntry = (rows as ProgressBodyweight[]).find((r) => r.logged_date === date);
+  const todayEntry = rows.find((row) => row.date === date && row.source === "progress_bodyweight");
 
   const openSheet = () => {
-    setWeight(todayEntry?.weight_value != null
-      ? String(convertWeight(Number(todayEntry.weight_value), (todayEntry.weight_unit as WeightUnit) ?? unit, unit))
+    setWeight(todayEntry?.value != null
+      ? String(convertWeight(todayEntry.value, todayEntry.unit, unit))
       : "");
     setDate(todayLocalISO());
     setSheetOpen(true);
@@ -81,16 +75,16 @@ export function BodyweightSummaryCard({ clientId, defaultUnit = "lb" }: Props) {
     window.addEventListener("portal:log-bodyweight", onOpen);
     return () => window.removeEventListener("portal:log-bodyweight", onOpen);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [todayEntry?.weight_value, unit]);
+  }, [todayEntry?.value, unit]);
 
   const save = async () => {
     const v = Number(weight);
     if (!weight || Number.isNaN(v) || v <= 0) throw new Error("Enter a valid bodyweight.");
     setSaving(true);
     try {
-      if (!user?.id) throw new Error("Not signed in.");
+      if (!userId) throw new Error("Not signed in.");
       await logBodyweight({
-        user_id: user.id,
+        user_id: userId,
         weight_value: v,
         weight_unit: unit,
         logged_date: date,
@@ -99,7 +93,7 @@ export function BodyweightSummaryCard({ clientId, defaultUnit = "lb" }: Props) {
       toast.success("Bodyweight saved");
       setSheetOpen(false);
       window.setTimeout(() => {
-        qc.invalidateQueries({ queryKey: bodyweightQueryKey(user!.id) });
+        qc.invalidateQueries({ queryKey: combinedBodyweightQueryKey(userId) });
       }, 280);
     } finally {
       setSaving(false);
@@ -239,7 +233,7 @@ export function BodyweightSummaryCard({ clientId, defaultUnit = "lb" }: Props) {
           </div>
         </SheetContent>
       </Sheet>
-      <BodyweightHistorySheet open={historyOpen} onOpenChange={setHistoryOpen} rows={rows as ProgressBodyweight[]} unit={unit} />
+      <BodyweightHistorySheet open={historyOpen} onOpenChange={setHistoryOpen} rows={rows} unit={unit} />
     </Card>
   );
 }
