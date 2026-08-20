@@ -5,6 +5,7 @@ import {
   normalizeDayLabel,
   pickPlanDayIndex,
   resolveClientNutritionDay,
+  resolvePlanDaySelection,
   weekdayForISO,
 } from "@/lib/client-nutrition-day";
 import { buildCookbookQuerySpec, COOKBOOK_PAGE_SIZE } from "@/lib/recipes";
@@ -141,6 +142,25 @@ describe("plan day matching (one selected state for targets + meals)", () => {
   it("never substitutes another coach day when one is missing", () => {
     expect(pickPlanDayIndex([{ day_label: "TRAINING-DAY MENU" }], "high")).toBe(-1);
     expect(pickPlanDayIndex([], "training")).toBe(-1);
+  });
+
+  it("keeps exact coach-created titles independently reviewable by stable ID", () => {
+    const uploaded = [
+      { id: "training", day_label: "Training Day" },
+      { id: "friday", day_label: "Training Day (Friday Only)" },
+      { id: "off", day_label: "OFF-DAY" },
+    ];
+
+    const automatic = resolvePlanDaySelection(uploaded, "training", null);
+    expect(automatic).toMatchObject({ automaticPlanDayId: "training", selectedPlanDayId: "training", isManual: false });
+
+    const friday = resolvePlanDaySelection(uploaded, "training", "friday");
+    expect(friday).toMatchObject({ automaticPlanDayId: "training", selectedPlanDayId: "friday", isManual: true });
+    expect(uploaded.find((day) => day.id === friday.selectedPlanDayId)?.day_label).toBe("Training Day (Friday Only)");
+
+    const offDay = resolvePlanDaySelection(uploaded, "high", "off");
+    expect(offDay).toMatchObject({ automaticPlanDayId: null, selectedPlanDayId: "off", isManual: true });
+    expect(uploaded.find((day) => day.id === offDay.selectedPlanDayId)?.day_label).toBe("OFF-DAY");
   });
 
   it("resolution is pure — inputs are not mutated (no coach writes)", () => {

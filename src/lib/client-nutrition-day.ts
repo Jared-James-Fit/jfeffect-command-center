@@ -23,7 +23,13 @@ export type ClientNutritionDayType = "training" | "non_training" | "high";
 export const DEFAULT_HIGH_WEEKDAY: WeekDay = "Saturday";
 
 const SUNDAY_FIRST: WeekDay[] = [
-  "Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday",
+  "Sunday",
+  "Monday",
+  "Tuesday",
+  "Wednesday",
+  "Thursday",
+  "Friday",
+  "Saturday",
 ] as WeekDay[];
 
 export type DayOverrideRow = { override_date: string; day_label?: string | null };
@@ -62,8 +68,13 @@ export function weekdayForISO(dateISO: string): WeekDay {
 }
 
 function normalizeWeekday(raw: unknown): WeekDay | null {
-  const value = String(raw ?? "").trim().toLowerCase();
-  return ((WEEK_DAYS as readonly string[]).find((d) => d.toLowerCase() === value) as WeekDay | undefined) ?? null;
+  const value = String(raw ?? "")
+    .trim()
+    .toLowerCase();
+  return (
+    ((WEEK_DAYS as readonly string[]).find((d) => d.toLowerCase() === value) as
+      WeekDay | undefined) ?? null
+  );
 }
 
 /**
@@ -72,10 +83,13 @@ function normalizeWeekday(raw: unknown): WeekDay | null {
  * "training", so the negative form is checked first.
  */
 export function normalizeDayLabel(label: string | null | undefined): ClientNutritionDayType | null {
-  const s = String(label ?? "").trim().toLowerCase();
+  const s = String(label ?? "")
+    .trim()
+    .toLowerCase();
   if (!s) return null;
   if (s.includes("high")) return "high";
-  if (s.includes("non-training") || s.includes("non training") || s.includes("nontraining")) return "non_training";
+  if (s.includes("non-training") || s.includes("non training") || s.includes("nontraining"))
+    return "non_training";
   if (s.includes("rest") || s.includes("off day")) return "non_training";
   if (s.includes("training") || s.includes("workout") || s.includes("lifting")) return "training";
   return null;
@@ -133,16 +147,41 @@ export function resolveClientNutritionDay({
   };
 }
 
-export type PlanDayLike = { day_label?: string | null };
+export type PlanDayLike = { id?: string | null; day_label?: string | null };
 
 /**
  * Index of the coach plan day matching a day type. Returns -1 when the coach
  * did not author a day for that type (never substitutes another day).
  */
-export function pickPlanDayIndex(days: PlanDayLike[] | null | undefined, dayType: ClientNutritionDayType): number {
+export function pickPlanDayIndex(
+  days: PlanDayLike[] | null | undefined,
+  dayType: ClientNutritionDayType,
+): number {
   const list = days ?? [];
-  const exact = list.findIndex((d) => normalizeDayLabel(d?.day_label) === dayType);
-  return exact;
+  return list.findIndex((d) => normalizeDayLabel(d?.day_label) === dayType);
+}
+
+/**
+ * Resolves the automatic category match, then permits an explicit client
+ * selection by the plan-day record ID. Titles remain display-only.
+ */
+export function resolvePlanDaySelection(
+  days: PlanDayLike[] | null | undefined,
+  automaticDayType: ClientNutritionDayType,
+  manualPlanDayId: string | null | undefined,
+): { automaticPlanDayId: string | null; selectedPlanDayId: string | null; isManual: boolean } {
+  const list = days ?? [];
+  const automaticIndex = pickPlanDayIndex(list, automaticDayType);
+  const automaticPlanDayId = automaticIndex >= 0 ? (list[automaticIndex]?.id ?? null) : null;
+  const selectedPlanDayId =
+    manualPlanDayId && list.some((day) => day.id === manualPlanDayId)
+      ? manualPlanDayId
+      : automaticPlanDayId;
+  return {
+    automaticPlanDayId,
+    selectedPlanDayId,
+    isManual: selectedPlanDayId != null && selectedPlanDayId !== automaticPlanDayId,
+  };
 }
 
 export const DAY_TYPE_LABEL: Record<ClientNutritionDayType, string> = {
