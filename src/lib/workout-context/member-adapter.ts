@@ -274,6 +274,9 @@ export function createMemberAdapter(ref: WorkoutContextRef): WorkoutContextAdapt
         if (!m) throw new Error(`member adapter: rowId must be "ex:<index>", got ${input.rowId}`);
         return Number(m[1]);
       })();
+      const loadLb = input.enteredValue != null
+        ? (input.enteredUnit === "kg" ? Number(input.enteredValue) * 2.2046226218 : Number(input.enteredValue))
+        : input.loadLb ?? null;
       await logSetFn({
         data: {
           enrollmentId,
@@ -282,7 +285,7 @@ export function createMemberAdapter(ref: WorkoutContextRef): WorkoutContextAdapt
           exerciseIndex,
           setIndex: input.setIndex,
           reps: input.reps ?? null,
-          load_lb: input.loadLb ?? null,
+          load_lb: loadLb,
           rpe: input.rpe ?? null,
           rir: input.rir ?? null,
           notes: input.notes ?? null,
@@ -364,7 +367,11 @@ export function createMemberAdapter(ref: WorkoutContextRef): WorkoutContextAdapt
         rowId: `ex:${l.exercise_index}`,
         setIndex: l.set_index,
         reps: l.reps ?? null,
-        loadLb: l.load_lb ?? null,
+        loadLb: l.normalized_lb ?? l.load_lb ?? null,
+        enteredValue: l.entered_value ?? l.load_lb ?? null,
+        enteredUnit: l.entered_unit === "kg" || l.entered_unit === "lb" ? l.entered_unit : null,
+        normalizedKg: l.normalized_kg ?? l.load_kg ?? null,
+        normalizedLb: l.normalized_lb ?? l.load_lb ?? null,
         actualLoadUnit: l.entered_unit ?? "lb",
         rpe: l.rpe ?? null,
         rir: l.rir ?? null,
@@ -386,7 +393,7 @@ export function createMemberAdapter(ref: WorkoutContextRef): WorkoutContextAdapt
       const limit = opts?.limit ?? 50;
       const { data, error } = await supabase
         .from("member_set_logs")
-        .select("logged_at, set_index, reps, load_lb, rpe")
+        .select("logged_at, set_index, reps, load_lb, load_kg, entered_value, entered_unit, normalized_kg, normalized_lb, rpe")
         .eq("enrollment_id", enrollmentId)
         .eq("exercise_id", exerciseId)
         .order("logged_at", { ascending: false })
@@ -396,7 +403,11 @@ export function createMemberAdapter(ref: WorkoutContextRef): WorkoutContextAdapt
         date: (l.logged_at ?? "").slice(0, 10),
         setIndex: l.set_index,
         reps: l.reps ?? null,
-        loadLb: l.load_lb ?? null,
+        loadLb: l.normalized_lb ?? l.load_lb ?? null,
+        enteredValue: l.entered_value ?? l.load_lb ?? null,
+        enteredUnit: l.entered_unit === "kg" || l.entered_unit === "lb" ? l.entered_unit : null,
+        normalizedKg: l.normalized_kg ?? l.load_kg ?? null,
+        normalizedLb: l.normalized_lb ?? l.load_lb ?? null,
         rpe: l.rpe ?? null,
       }));
     },
@@ -487,6 +498,9 @@ export function createMemberAdapter(ref: WorkoutContextRef): WorkoutContextAdapt
       // index combined with current view will be saved through logSet.
       if (input.id) {
         const { weekIndex, dayIndex } = decodeRowResultId(input.id);
+        const loadLb = input.enteredValue != null
+          ? (input.enteredUnit === "kg" ? Number(input.enteredValue) * 2.2046226218 : Number(input.enteredValue))
+          : input.loadLb ?? null;
         await logSetFn({
           data: {
             enrollmentId,
@@ -495,7 +509,7 @@ export function createMemberAdapter(ref: WorkoutContextRef): WorkoutContextAdapt
             exerciseIndex,
             setIndex: input.setIndex,
             reps: input.reps ?? null,
-            load_lb: input.loadLb ?? null,
+            load_lb: loadLb,
             rpe: input.rpe ?? null,
             rir: input.rir ?? null,
             notes: input.notes ?? null,

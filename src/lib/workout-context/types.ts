@@ -75,7 +75,11 @@ export interface LogSetInput {
   rowId: string;
   setIndex: number;
   reps?: number | null;
+  /** Backward-compatible physical load in pounds. */
   loadLb?: number | null;
+  /** Optional original entered pair for unit-safe callers. */
+  enteredValue?: number | null;
+  enteredUnit?: "kg" | "lb" | null;
   rpe?: number | null;
   rir?: number | null;
   isWorkingSet?: boolean | null;
@@ -153,7 +157,15 @@ export interface RowResultDTO {
   rowId: string;
   setIndex: number;
   reps: number | null;
+  /** Backward-compatible physical-load mirror in pounds. */
   loadLb: number | null;
+  /** Original numeric value entered by the client/member. */
+  enteredValue?: number | null;
+  /** Unit attached to enteredValue. */
+  enteredUnit?: "kg" | "lb" | null;
+  /** Canonical physical-load mirrors for unit-aware consumers. */
+  normalizedKg?: number | null;
+  normalizedLb?: number | null;
   actualLoadUnit: string | null;
   rpe: number | null;
   rir: number | null;
@@ -176,7 +188,13 @@ export interface HistoryEntryDTO {
   date: string;
   setIndex: number;
   reps: number | null;
+  /** Backward-compatible physical-load mirror in pounds. */
   loadLb: number | null;
+  /** Original numeric value and unit for truthful history display. */
+  enteredValue?: number | null;
+  enteredUnit?: "kg" | "lb" | null;
+  normalizedKg?: number | null;
+  normalizedLb?: number | null;
   rpe: number | null;
 }
 
@@ -214,7 +232,11 @@ export interface UpsertRowResultInput {
   rowId: string;
   setIndex: number;
   reps?: number | null;
+  /** Backward-compatible canonical physical load in pounds. */
   loadLb?: number | null;
+  /** Optional original entered pair for unit-safe writes. */
+  enteredValue?: number | null;
+  enteredUnit?: "kg" | "lb" | null;
   actualLoadUnit?: string | null;
   rpe?: number | null;
   rir?: number | null;

@@ -49,7 +49,12 @@ import { useAuth } from "@/lib/auth";
 import { useClientImpersonation } from "@/lib/client-impersonation";
 import { writeSetEditAudit } from "@/lib/logged-set-audit";
 import { resolveExerciseUnit, modeUnit, saveExerciseUnitPref, type WUnit } from "@/lib/exercise-unit-prefs";
-import { persistedUnitForValue } from "@/lib/workout-unit-persistence";
+import {
+  convertLoad,
+  displayLoadInUnit,
+  equalDisplayLoads,
+  persistedLoadForDisplayValue,
+} from "@/lib/workout-unit-persistence";
 import { WorkoutUndoProvider, useWorkoutUndo } from "@/lib/workout-undo";
 import { WorkoutSyncBanner } from "@/components/workout-sync-banner";
 import { writePlanCache, cachedInitialData } from "@/lib/workout-plan-cache";
@@ -3377,10 +3382,7 @@ function SetRow({
     const rounded = Math.round(v * 10000) / 10000; // 4 decimal places max
     return fmtNum(rounded);
   };
-  const initialDisplayLoad = (() => {
-    if (!existing) return "";
-    return existing.actual_load != null ? fmtLoad(existing.actual_load) : "";
-  })();
+  const initialDisplayLoad = fmtLoad(displayLoadInUnit(existing, unit));
   const [load, setLoad] = useState(initialDisplayLoad);
   // Timer result for this set (seconds actually performed). Local state keeps
   // the cell responsive; the server value re-hydrates it whenever it changes.
@@ -3476,8 +3478,9 @@ function SetRow({
   }, [draftKey, hydrated, existing]);
 
   // Reset from server when the persisted result changes (but never while typing).
-  // Weight always hydrates from actual_load only. Normalized kg/lb columns are
-  // for analytics/history, not for changing the user's logged raw value.
+  // Original entered value/unit remains the durable source of truth; normalized
+  // kg/lb mirrors are used only to render that same physical load in the active
+  // display unit. Never hydrate a raw number under a different unit label.
   const lastUnitRef = useRef<"kg" | "lb">(unit);
   // Ref to the current focused field — used in the effect below without
   // causing the effect to re-run when focus changes.
@@ -3505,7 +3508,7 @@ function SetRow({
     // and window-focus refetches from clobbering typed values on mobile).
     // 8s covers: save latency + Realtime invalidation + window-focus refetch.
     const focused = focusedFieldRef.current;
-    const display0 = existing?.actual_load != null ? fmtLoad(existing.actual_load) : "";
+    const display0 = fmtLoad(displayLoadInUnit(existing, unit));
     const serverType0 = existing
       ? resolveLoadType((existing as any).load_type, (existing as any).is_bodyweight)
       : defaultLoadType;
@@ -3539,8 +3542,8 @@ function SetRow({
       else if (existing?.actual_rpe != null) setRpe(existing.actual_rpe);
       else if (!rpeEdited) setRpe(prescribedRpeStr);
     }
-    // Track the display unit at hydration so later preference changes can be
-    // recognized without touching the raw displayed load.
+    // Track the display unit at hydration so later preference changes can
+    // convert only the displayed number while preserving the stored pair.
     lastUnitRef.current = unit;
     // Signal that server data has arrived — autosave is now safe to fire
     setServerHydrated(true);
@@ -3549,15 +3552,16 @@ function SetRow({
 
   useEffect(() => {
     if (lastUnitRef.current === unit) return;
+    const previousUnit = lastUnitRef.current;
     lastUnitRef.current = unit;
-    // UNIT TOGGLE IS DISPLAY-ONLY — stored weight must never be converted on
-    // toggle. Regression fix 2026-06-25. If you remove this, the weight
-    // corruption bug returns (stored values get divided/multiplied by 2.2046
-    // on every toggle via the pl_row_results normalization trigger).
-    //
-    // Unit changes are preference/label only. Do not convert the displayed
-    // number and do not write pl_row_results; just adopt the current value as
-    // clean so the toggle cannot trigger an autosave.
+    // The toggle changes only the display representation. Convert the visible
+    // number so 90 kg becomes 198.4 lb (and vice versa), then retain the
+    // existing entered pair as the autosave baseline. No unit toggle may
+    // relabel or rewrite historical storage.
+    const current = Number(load);
+    if (load.trim() !== "" && Number.isFinite(current)) {
+      setLoad(fmtLoad(convertLoad(current, previousUnit, unit)));
+    }
     queueMicrotask(() => { saveRef.current?.markClean(); });
   }, [unit]);
 
@@ -3589,12 +3593,13 @@ function SetRow({
     // mismatch reported on Jared McIntyre's Block 1 / Wk 2 / Day 1.
     if (forcedFill && setIndex !== 1 && !latest?.completed_at) {
       // forcedFill wins for uncompleted sets — it's the value just written to the DB
-      setLoad(forcedFill.load);
+      const forcedLoad = Number(forcedFill.load);
+      setLoad(Number.isFinite(forcedLoad) ? fmtLoad(convertLoad(forcedLoad, forcedFill.unit, unit)) : forcedFill.load);
       if (forcedFill.loadType) setLoadType(forcedFill.loadType);
       if (forcedFill.reps) setReps(forcedFill.reps);
       if (forcedFill.rpe) setRpe(forcedFill.rpe);
     } else {
-      const display = latest?.actual_load != null ? fmtLoad(latest.actual_load) : "";
+      const display = fmtLoad(displayLoadInUnit(latest, unit));
       setLoad(display);
       if (latest?.actual_reps != null) setReps(String(latest.actual_reps));
       if (latest?.actual_rpe_num != null) setRpe(String(latest.actual_rpe_num));
@@ -3615,11 +3620,12 @@ function SetRow({
     recentlySavedTimerRef.current = setTimeout(() => { recentlySavedRef.current = false; }, 8000);
     setFocusedField(null);
     setLoadType(cascade.loadType);
-    setLoad(cascade.loadType === "bodyweight" ? "0" : cascade.load);
+    const cascadeLoad = Number(cascade.load);
+    setLoad(cascade.loadType === "bodyweight" ? "0" : Number.isFinite(cascadeLoad) ? fmtLoad(convertLoad(cascadeLoad, cascade.unit, unit)) : cascade.load);
     // The parent's batch write carries this value — treat it as our commit so
     // a stale refetch can't restore the pre-cascade weight either.
     committedLoadRef.current = {
-      load: cascade.loadType === "bodyweight" ? "0" : cascade.load,
+      load: cascade.loadType === "bodyweight" ? "0" : Number.isFinite(cascadeLoad) ? fmtLoad(convertLoad(cascadeLoad, cascade.unit, unit)) : cascade.load,
       loadType: cascade.loadType,
     };
     if (!repsEdited && existing?.actual_reps == null && cascade.reps) setReps(cascade.reps);
@@ -3643,8 +3649,8 @@ function SetRow({
   // Forward-ref to the autosave handle so effects defined above can call
   // markClean() without a TDZ error.
   const saveRef = useRef<ReturnType<typeof useAutosave<typeof value>> | null>(null);
-  // persistedUnitForValue is a pure helper — see src/lib/workout-unit-persistence.ts
-  // for the full contract and regression-test coverage.
+  // The pure persistence contract keeps the stored entered pair stable while
+  // the current card renders the same physical load in either unit.
   const save = useAutosave({
     key: draftKey,
     value,
@@ -3655,7 +3661,7 @@ function SetRow({
       if (a.reps !== b.reps || a.rpe !== b.rpe) return false;
       if (a.bw !== b.bw) return false;
       if (a.loadType !== b.loadType) return false;
-      return a.load === b.load;
+      return equalDisplayLoads(a, b);
     },
     // NOTE: hydrated is intentionally excluded from this condition.
     // hydrated only gates the draft-restore optimization; it must not
@@ -3672,10 +3678,11 @@ function SetRow({
     enabled: !readonly && !!clientId && serverHydrated && (load.length > 0 || reps.length > 0 || rpe.length > 0 || bw || !!existing),
     onPermanentFailure: ({ value }) => {
       if (!clientId) return;
-      const loadNum = value.bw ? 0 : value.load ? Number(value.load) : null;
       const repsNum = value.reps ? parseInt(value.reps, 10) : null;
       const rpeNum = value.rpe ? Number(value.rpe) : null;
-      const loadUnit = persistedUnitForValue(value.load, value.unit, existing);
+      const persistedLoad = value.bw
+        ? { value: 0, unit: value.unit }
+        : persistedLoadForDisplayValue(value.load, value.unit, existing);
       const completedAt = isSetLogComplete({
         requireReps: showReps,
         requireTime: showTimer,
@@ -3698,10 +3705,10 @@ function SetRow({
             row_id: rowId,
             client_id: clientId,
             set_index: setIndex,
-            actual_load: loadNum,
-            actual_load_unit: loadUnit,
-            entered_value: loadNum,
-            entered_unit: loadUnit,
+            actual_load: persistedLoad.value,
+            actual_load_unit: persistedLoad.unit,
+            entered_value: persistedLoad.value,
+            entered_unit: persistedLoad.unit,
             is_bodyweight: value.bw,
             load_type: value.loadType,
             actual_reps: repsNum,
@@ -3719,13 +3726,15 @@ function SetRow({
       // Auto-start the Workout Session clock on the first meaningful log.
       beginWorkoutSession(workoutId ?? null);
       // Validate numerics; silently skip persistence for invalid values (input stays).
-      const loadNum = bw ? 0 : load ? Number(load) : null;
+      const displayLoadNum = bw ? 0 : load ? Number(load) : null;
       const repsNum = reps ? parseInt(reps, 10) : null;
       const rpeNum = rpe ? Number(rpe) : null;
-      if (load && (loadNum == null || !isFinite(loadNum) || loadNum < 0)) throw new Error("Weight must be a number");
+      if (load && (displayLoadNum == null || !isFinite(displayLoadNum) || displayLoadNum < 0)) throw new Error("Weight must be a number");
       if (reps && (repsNum == null || !isFinite(repsNum) || repsNum < 0)) throw new Error("Reps must be a whole number");
       if (rpe && (rpeNum == null || !isFinite(rpeNum) || rpeNum < 0 || rpeNum > 10)) throw new Error("RPE must be 0–10");
-      const loadUnit = persistedUnitForValue(load, unit, existing);
+      const persistedLoad = bw
+        ? { value: 0, unit }
+        : persistedLoadForDisplayValue(load, unit, existing);
       const completedAt = isSetLogComplete({
         requireReps: showReps,
         requireTime: showTimer,
@@ -3742,10 +3751,10 @@ function SetRow({
         load_type: loadType,
         client_id: clientId,
         set_index: setIndex,
-        actual_load: loadNum,
-        actual_load_unit: loadUnit,
-        entered_value: loadNum,
-        entered_unit: loadUnit,
+        actual_load: persistedLoad.value,
+        actual_load_unit: persistedLoad.unit,
+        entered_value: persistedLoad.value,
+        entered_unit: persistedLoad.unit,
         is_bodyweight: bw,
         actual_reps: repsNum,
         actual_rpe: rpe || null,
@@ -3832,10 +3841,10 @@ function SetRow({
       // fields that actually changed, only after the save succeeds.
       if (isImpersonating && user?.id && povClient?.id === clientId) {
         const after = {
-          weight: loadNum,
+          weight: persistedLoad.value,
           reps: repsNum,
           rpe: rpeNum,
-          unit: loadUnit,
+          unit: persistedLoad.unit,
           status: existing?.completed_at ? "completed" : "saved",
         };
         void writeSetEditAudit(before, after, {
@@ -3972,10 +3981,11 @@ function SetRow({
   const saveCompletionStatus = async () => {
     if (readonly || !clientId || statusSaving) return;
     const nextCompletedAt = isConfirmed ? null : new Date().toISOString();
-    const loadNum = bw ? 0 : load ? Number(load) : null;
     const repsNum = reps ? parseInt(reps, 10) : null;
     const rpeNum = rpe ? Number(rpe) : null;
-    const loadUnit = persistedUnitForValue(load, unit, existing);
+    const persistedLoad = bw
+      ? { value: 0, unit }
+      : persistedLoadForDisplayValue(load, unit, existing);
     const currentHasRequiredValues = isSetLogComplete({
       requireReps: showReps,
       requireTime: showTimer,
@@ -4001,10 +4011,10 @@ function SetRow({
         row_id: rowId,
         client_id: clientId,
         set_index: setIndex,
-        actual_load: loadNum,
-        actual_load_unit: loadUnit,
-        entered_value: loadNum,
-        entered_unit: loadUnit,
+        actual_load: persistedLoad.value,
+        actual_load_unit: persistedLoad.unit,
+        entered_value: persistedLoad.value,
+        entered_unit: persistedLoad.unit,
         is_bodyweight: bw,
         actual_reps: repsNum,
         actual_rpe: rpe || null,
@@ -4065,8 +4075,8 @@ function SetRow({
   };
   const copyPrevious = () => {
     if (!prevExisting) return;
-    const pkg = prevExisting.actual_load;
-    if (pkg != null) setLoad(String(pkg));
+    const pkg = displayLoadInUnit(prevExisting, unit);
+    if (pkg != null) setLoad(fmtLoad(pkg));
     if (prevExisting.actual_reps != null) setReps(String(prevExisting.actual_reps));
     const prevRpe = prevExisting.actual_rpe_num ?? prevExisting.actual_rpe;
     if (prevRpe != null) setRpe(String(prevRpe));
@@ -4167,10 +4177,11 @@ function SetRow({
     beginWorkoutSession(workoutId ?? null);
     const nowIso = opts.completedAt ?? new Date().toISOString();
     setDurationSec(completedSeconds);
-    const loadNumNow = bw ? 0 : load ? Number(load) : null;
     const repsNumNow = reps ? parseInt(reps, 10) : null;
     const rpeNumNow = rpe ? Number(rpe) : null;
-    const loadUnitNow = persistedUnitForValue(load, unit, existing);
+    const persistedLoadNow = bw
+      ? { value: 0, unit }
+      : persistedLoadForDisplayValue(load, unit, existing);
     // Timer is one of several inputs — the set only turns green when every
     // required input for this row has a value.
     const completeNow = isSetLogComplete({
@@ -4191,10 +4202,10 @@ function SetRow({
       timer_completed_at: nowIso,
       completion_method: opts.method,
       load_type: loadType,
-      actual_load: loadNumNow,
-      actual_load_unit: loadUnitNow,
-      entered_value: loadNumNow,
-      entered_unit: loadUnitNow,
+      actual_load: persistedLoadNow.value,
+      actual_load_unit: persistedLoadNow.unit,
+      entered_value: persistedLoadNow.value,
+      entered_unit: persistedLoadNow.unit,
       is_bodyweight: bw,
       actual_reps: repsNumNow,
       actual_rpe: rpe || null,
@@ -4315,8 +4326,8 @@ function SetRow({
         referenceWeight={
           // Prefill priority: current value (handled inside the input) →
           // previous set in this exercise → Last Time → prescribed load.
-          (prevExisting?.actual_load != null && Number(prevExisting.actual_load) > 0
-            ? Number(prevExisting.actual_load)
+          (displayLoadInUnit(prevExisting, unit) != null && Number(displayLoadInUnit(prevExisting, unit)) > 0
+            ? Number(displayLoadInUnit(prevExisting, unit))
             : null) ?? lastTimeWeight ?? suggestedWeight ?? null
         }
         disabled={readonly}
