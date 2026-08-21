@@ -172,8 +172,11 @@ export function BlockWeekColumns({
                   // SmartTodayCard, the workout-logger header, and
                   // client-block-view. Honors explicit day.scheduled_date,
                   // then week.training_days, then a linear fallback.
+                  // Canonical instance date (pl_scheduled_workouts) is passed
+                  // through so it wins over pl_days.scheduled_date / cadence.
                   const resolved = dayScheduledDate({
                     day: it.day, week: it.week ?? sel.week, block: it.block ?? block, completion: null,
+                    scheduledDate: (it as any).scheduledDate ?? null,
                   });
                   if (resolved) dayDate = startOfDay(resolved);
                   else if (it.day?.scheduled_date) {
