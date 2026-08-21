@@ -94,7 +94,11 @@ export function ExercisesAdmin({ embedded = false }: { embedded?: boolean } = {}
     // let a hydrated snapshot mask a database row that was successfully saved.
     staleTime: 0,
     refetchOnMount: "always",
-    refetchOnWindowFocus: true,
+    // While the quick-create dialog is open, a focus refetch would re-render
+    // the whole library underneath it (iOS fires focus events when the soft
+    // keyboard opens). Pause it until the dialog closes.
+    refetchOnWindowFocus: !open,
+
     refetchOnReconnect: "always",
     queryFn: fetchExerciseLibrary,
   });
