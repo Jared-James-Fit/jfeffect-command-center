@@ -69,8 +69,17 @@ export function ExerciseQuickCreateForm({
   const [youtubeUrl, setYoutubeUrl] = useState("");
   const [cues, setCues] = useState("");
   const [commonMistakes, setCommonMistakes] = useState("");
+  const nameInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => { setName(defaultName ?? ""); }, [defaultName]);
+
+  const focusNameFromTouchGesture = () => {
+    if (!coarsePointer || busy) return;
+    window.requestAnimationFrame(() => {
+      const input = nameInputRef.current;
+      if (input && document.activeElement !== input) input.focus({ preventScroll: true });
+    });
+  };
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -93,21 +102,26 @@ export function ExerciseQuickCreateForm({
     if (cues.trim()) payload.cues = cues.trim();
     if (commonMistakes.trim()) payload.common_mistakes = commonMistakes.trim();
 
-    const { data, error } = await supabase
-      .from("exercises")
-      .insert(payload as never)
-      .select("*")
-      .single();
-    setBusy(false);
-    submittingRef.current = false;
-    if (error || !data) {
-      toast.error(error?.message ?? "Could not save exercise");
-      return;
+    try {
+      const { data, error } = await supabase
+        .from("exercises")
+        .insert(payload as never)
+        .select("*")
+        .single();
+      if (error || !data) {
+        toast.error(error?.message ?? "Could not save exercise");
+        return;
+      }
+      upsertExerciseInLibraryCaches(qc, data as never);
+      toast.success(`Added "${(data as any).name}" to library`);
+      void invalidateExerciseLibrary(qc);
+      onCreated?.((data as any).id, (data as any).name);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not save exercise");
+    } finally {
+      setBusy(false);
+      submittingRef.current = false;
     }
-    upsertExerciseInLibraryCaches(qc, data as never);
-    toast.success(`Added "${(data as any).name}" to library`);
-    void invalidateExerciseLibrary(qc);
-    onCreated?.((data as any).id, (data as any).name);
   };
 
   return (
@@ -115,8 +129,12 @@ export function ExerciseQuickCreateForm({
       <div>
         <Label>Name *</Label>
         <Input
+          ref={nameInputRef}
           autoFocus={!coarsePointer}
           required
+          onPointerDown={(event) => {
+            if (event.pointerType === "touch") focusNameFromTouchGesture();
+          }}
           // Explicit non-contact identity keeps Android's "Autofill · Contact"
           // strip from covering the form; nothing else about the browser's
           // autofill behaviour is disabled.

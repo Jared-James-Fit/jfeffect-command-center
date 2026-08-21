@@ -21,8 +21,17 @@ describe("exercise quick-create form attributes", () => {
     expect(formSource).toContain('inputMode="text"');
   });
 
-  it("guards against duplicate submits", () => {
+  it("recovers focus from the first explicit touch gesture", () => {
+    expect(formSource).toContain("nameInputRef");
+    expect(formSource).toContain("focusNameFromTouchGesture");
+    expect(formSource).toContain('event.pointerType === "touch"');
+    expect(formSource).toContain("input.focus({ preventScroll: true })");
+  });
+
+  it("guards against duplicate submits and clears a failed save lock", () => {
     expect(formSource).toContain("submittingRef.current");
+    expect(formSource).toContain("finally {");
+    expect(formSource).toContain("setBusy(false)");
   });
 });
 
