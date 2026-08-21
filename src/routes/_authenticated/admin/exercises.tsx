@@ -260,7 +260,8 @@ export function ExercisesAdmin({ embedded = false }: { embedded?: boolean } = {}
           </div>
         </div>
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {filtered.map((e) => (
+          {visible.map((e) => (
+
             <Card key={e.id} className="border-border bg-card p-4 space-y-2">
               <div className="flex items-start justify-between">
                 <div>
