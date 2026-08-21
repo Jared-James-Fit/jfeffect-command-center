@@ -1,6 +1,7 @@
 import { supabase } from "@/integrations/supabase/client";
 import { mergeScheduledInstances } from "@/lib/scheduled-instances-merge";
 import { filterPrimaryProgramBlocks, isAtHomeBackupSessionBlock } from "@/lib/at-home-backup";
+import { isInactivePrimaryDay } from "@/lib/active-calendar";
 import { normalizeMuscle } from "@/lib/analytics/muscle-map";
 import { compareWorkoutItemsBySchedule } from "@/lib/workout-today";
 
