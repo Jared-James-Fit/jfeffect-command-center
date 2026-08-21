@@ -62,14 +62,14 @@ export async function renderAgreementPdf(packageId: string): Promise<{
   finalPdfHash: string;
   byteSize: number;
 }> {
-  const { data: pkg, error: packageError } = await supabaseAdmin
+  const { data: pkg, error: packageError } = await (supabaseAdmin as any)
     .from("na_packages")
     .select("id, client_id, template_version_id")
     .eq("id", packageId)
     .maybeSingle();
   if (packageError || !pkg) throw new Error(packageError?.message ?? "Package not found");
 
-  const { data: snapshot, error: snapshotError } = await supabaseAdmin
+  const { data: snapshot, error: snapshotError } = await (supabaseAdmin as any)
     .from("na_snapshots")
     .select("id, snapshot_hash, source_pdf_bucket, source_pdf_path, source_pdf_sha256")
     .eq("package_id", packageId)
@@ -89,7 +89,7 @@ export async function renderAgreementPdf(packageId: string): Promise<{
     .limit(1)
     .maybeSingle();
   if (existing?.storage_path && existing.final_pdf_hash) {
-    await supabaseAdmin
+    await (supabaseAdmin as any)
       .from("na_packages")
       .update({
         artifact_status: "ready",
@@ -202,7 +202,7 @@ export async function renderAgreementPdf(packageId: string): Promise<{
   if (documentError || !documentRow)
     throw new Error(documentError?.message ?? "Could not persist signed agreement document");
 
-  await supabaseAdmin
+  await (supabaseAdmin as any)
     .from("na_packages")
     .update({
       artifact_status: "ready",

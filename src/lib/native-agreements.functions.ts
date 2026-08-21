@@ -242,7 +242,7 @@ export const sealAndSendPackage = createServerFn({ method: "POST" })
     const snapshotHash = sha256(canonical);
 
     // Insert snapshot (sealed). Admin client because trigger blocks update; insert sealed=true directly.
-    const { data: snap, error: snapErr } = await supabaseAdmin
+    const { data: snap, error: snapErr } = await (supabaseAdmin as any)
       .from("na_snapshots")
       .insert({
         package_id: pkg.id,
@@ -320,7 +320,7 @@ export const getGuestSigningContext = createServerFn({ method: "POST" })
     if (gt.used_at) throw new Error("This signing link has already been used");
     if (new Date(gt.expires_at).getTime() < Date.now()) throw new Error("This signing link has expired");
 
-    const { data: pkg } = await supabaseAdmin
+    const { data: pkg } = await (supabaseAdmin as any)
       .from("na_packages")
       .select("id, status, custom_title, contract_value_minor, currency, service_order, financial_terms, first_viewed_at, jurisdiction_profiles(display_name, legal_operator_name, business_address)")
       .eq("id", gt.package_id)
@@ -331,7 +331,7 @@ export const getGuestSigningContext = createServerFn({ method: "POST" })
     }
 
     const { data: signer } = await supabaseAdmin.from("na_signers").select("*").eq("id", gt.signer_id).maybeSingle();
-    const { data: snap } = await supabaseAdmin
+    const { data: snap } = await (supabaseAdmin as any)
       .from("na_snapshots")
       .select("id, snapshot_hash, content, sealed_at")
       .eq("package_id", gt.package_id)
@@ -343,7 +343,7 @@ export const getGuestSigningContext = createServerFn({ method: "POST" })
 
     // Mark first-view if not already
     if (!(pkg as any).first_viewed_at) {
-      await supabaseAdmin.from("na_packages").update({ first_viewed_at: new Date().toISOString(), status: (pkg as any).status === "sent" ? "viewed" : (pkg as any).status }).eq("id", (pkg as any).id);
+      await (supabaseAdmin as any).from("na_packages").update({ first_viewed_at: new Date().toISOString(), status: (pkg as any).status === "sent" ? "viewed" : (pkg as any).status }).eq("id", (pkg as any).id);
       await supabaseAdmin.from("na_events").insert({
         package_id: (pkg as any).id, snapshot_id: snap.id, signer_id: signer?.id,
         event_type: "package.viewed", actor_role: "signer", details: { via: "guest_token" },
@@ -376,7 +376,7 @@ export const submitGuestSignature = createServerFn({ method: "POST" })
     if (gt.revoked_at || gt.used_at) throw new Error("Link no longer valid");
     if (new Date(gt.expires_at).getTime() < Date.now()) throw new Error("Link expired");
 
-    const { data: snap } = await supabaseAdmin
+    const { data: snap } = await (supabaseAdmin as any)
       .from("na_snapshots")
       .select("id, snapshot_hash")
       .eq("package_id", gt.package_id)
@@ -421,7 +421,7 @@ export const submitGuestSignature = createServerFn({ method: "POST" })
     const { data: allSigners } = await supabaseAdmin.from("na_signers").select("id, status").eq("package_id", gt.package_id);
     const allSigned = (allSigners ?? []).every((s: any) => s.status === "signed");
     if (allSigned) {
-      await supabaseAdmin.from("na_packages").update({ status: "completed", completed_at: new Date().toISOString() }).eq("id", gt.package_id);
+      await (supabaseAdmin as any).from("na_packages").update({ status: "completed", completed_at: new Date().toISOString() }).eq("id", gt.package_id);
       await supabaseAdmin.from("na_events").insert({
         package_id: gt.package_id, snapshot_id: snap.id,
         event_type: "package.completed", actor_role: "system", details: {},
