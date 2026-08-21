@@ -17,10 +17,13 @@ describe("bodyweight write contract", () => {
     }
   });
 
-  it("keeps the shared home card on the canonical series after edits and deletes", () => {
+  it("keeps the shared home card on the unified reader with canonical-only writes", () => {
     const source = read("src/components/home/home-bodyweight-card.tsx");
-    expect(source).toContain("listBodyweight");
-    expect(source).not.toContain("getCombinedBodyweightSeries");
+    // Approved production behavior: read legacy + canonical, write canonical only.
+    expect(source).toContain("getCombinedBodyweightSeries");
+    expect(source).toContain("logBodyweight");
+    expect(source).not.toMatch(/from\("progress_metrics"\)\.(insert|update|delete)/);
+    expect(source).not.toMatch(/from\("progress_bodyweight"\)\.(insert|update|delete)/);
   });
 
   it("stages owner-scoped save and delete RPCs before revoking direct authenticated writes", () => {
