@@ -445,6 +445,16 @@ export function QuickSwapButton({
     setPage(0);
   }, [debouncedSearch, chip]);
 
+  // Focus once, on the frame after entering search mode. Radix's own
+  // open-autofocus has already settled by then, so the keyboard opens a
+  // single time and the input keeps focus between keystrokes.
+  useEffect(() => {
+    if (!open || mode !== "search") return;
+    const raf = requestAnimationFrame(() => searchInputRef.current?.focus());
+    return () => cancelAnimationFrame(raf);
+  }, [open, mode]);
+
+
   const {
     data: suggestions = [],
     isLoading,
