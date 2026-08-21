@@ -793,12 +793,15 @@ function WeekStrip({
             : "none";
           const isToday = isSameDay(d, today);
           const isSelected = isSameDay(d, selectedDate);
+          const cellDnd = dayCellDndProps(dnd ?? null, iso, item, overIso === iso, setOverIso);
           return (
             <button
               key={iso}
               type="button"
               onClick={() => onSelectDate(d)}
+              {...cellDnd.props}
               className={cn(
+                cellDnd.className,
                 "flex flex-col items-center justify-between rounded-lg px-1 py-2 text-center transition",
                 "min-h-[64px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
                 isSelected
@@ -902,12 +905,15 @@ function MonthGrid({
             ? formatCompactWorkoutLabel(item.day as any, item.week as any)
               ?? cleanDayTitle(item.day?.title, item.day?.day_index)
             : null;
+          const cellDnd = dayCellDndProps(dnd ?? null, iso, item, overIso === iso, setOverIso);
           return (
             <button
               key={iso}
               type="button"
               onClick={() => onSelectDate(d)}
+              {...cellDnd.props}
               className={cn(
+                cellDnd.className,
                 "flex min-h-[64px] flex-col items-stretch rounded-lg border p-1 text-left transition",
                 "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
                 isSelected
@@ -1430,6 +1436,7 @@ function SelectedDayCard({
       {!readonly && (
         <MoveWorkoutSheet
           dayId={item.day.id}
+          clientId={clientId}
           open={moveOpen}
           onOpenChange={setMoveOpen}
           currentScheduledDate={date}
