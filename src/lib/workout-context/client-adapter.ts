@@ -250,7 +250,7 @@ export function createClientAdapter(ref: WorkoutContextRef): WorkoutContextAdapt
           (d as any).target_minutes ?? (d as any).est_minutes ?? null,
         blockId: b?.id ?? null,
         blockName: b?.name ?? null,
-        scheduledDate: (d as any).scheduled_date ?? null,
+        scheduledDate: instanceDate ?? (d as any).scheduled_date ?? null,
       };
     },
 
