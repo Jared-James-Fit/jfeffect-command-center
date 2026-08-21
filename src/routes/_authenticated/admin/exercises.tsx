@@ -1,6 +1,6 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { searchExercises, type SearchableExercise } from "@/lib/exercise-search";
 import { HighlightedExerciseName } from "@/components/exercise-search-highlight";
 import { supabase } from "@/integrations/supabase/client";
@@ -94,7 +94,11 @@ export function ExercisesAdmin({ embedded = false }: { embedded?: boolean } = {}
     // let a hydrated snapshot mask a database row that was successfully saved.
     staleTime: 0,
     refetchOnMount: "always",
-    refetchOnWindowFocus: true,
+    // While the quick-create dialog is open, a focus refetch would re-render
+    // the whole library underneath it (iOS fires focus events when the soft
+    // keyboard opens). Pause it until the dialog closes.
+    refetchOnWindowFocus: !open,
+
     refetchOnReconnect: "always",
     queryFn: fetchExerciseLibrary,
   });
@@ -135,6 +139,28 @@ export function ExercisesAdmin({ embedded = false }: { embedded?: boolean } = {}
   );
   const filtered = searched.results.map((r) => r.exercise) as unknown as typeof exercises;
   const highlightTerms = searched.highlightTerms;
+
+  // Windowed rendering. The full library is ~1700 rows and every admin card
+  // mounts a Radix Select + badge cluster; rendering them all made iOS/PWA
+  // spike memory and let WebKit jettison the tab the moment a dialog mounted
+  // — which relaunched the PWA into the "Loading your dashboard…" splash.
+  const ADMIN_PAGE = 60;
+  const [visibleCount, setVisibleCount] = useState(ADMIN_PAGE);
+  useEffect(() => { setVisibleCount(ADMIN_PAGE); }, [search, category, migration, muscleFilter]);
+  const sentinelRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    const node = sentinelRef.current;
+    if (!node) return;
+    const io = new IntersectionObserver((entries) => {
+      if (entries.some((entry) => entry.isIntersecting)) {
+        setVisibleCount((c) => Math.min(c + ADMIN_PAGE, filtered.length));
+      }
+    }, { rootMargin: "600px 0px" });
+    io.observe(node);
+    return () => io.disconnect();
+  }, [filtered.length]);
+  const visible = filtered.slice(0, visibleCount);
+
 
   const stillYouTubeCount = exercises.filter(
     (e) =>
@@ -190,7 +216,9 @@ export function ExercisesAdmin({ embedded = false }: { embedded?: boolean } = {}
         actions={
           <Dialog open={open} onOpenChange={setOpen}>
             <DialogTrigger asChild>
-              <Button className="bg-gradient-primary font-bold uppercase tracking-wide">
+              {/* type="button" — never submit an ancestor form; opening the
+                  quick-create dialog is local UI state only. */}
+              <Button type="button" className="bg-gradient-primary font-bold uppercase tracking-wide">
                 <Plus className="mr-2 h-4 w-4" /> Add exercise
               </Button>
             </DialogTrigger>
@@ -202,7 +230,7 @@ export function ExercisesAdmin({ embedded = false }: { embedded?: boolean } = {}
         <div className="flex justify-end px-6 pt-4 md:px-8">
           <Dialog open={open} onOpenChange={setOpen}>
             <DialogTrigger asChild>
-              <Button className="bg-gradient-primary font-bold uppercase tracking-wide">
+              <Button type="button" className="bg-gradient-primary font-bold uppercase tracking-wide">
                 <Plus className="mr-2 h-4 w-4" /> Add exercise
               </Button>
             </DialogTrigger>
@@ -210,6 +238,7 @@ export function ExercisesAdmin({ embedded = false }: { embedded?: boolean } = {}
           </Dialog>
         </div>
       )}
+
       <div className="space-y-4 p-6 md:p-8">
         <Card className="border-primary/30 bg-card p-3 flex flex-wrap items-center gap-3">
           <div className="text-xs font-bold uppercase tracking-widest text-muted-foreground">
@@ -260,7 +289,8 @@ export function ExercisesAdmin({ embedded = false }: { embedded?: boolean } = {}
           </div>
         </div>
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {filtered.map((e) => (
+          {visible.map((e) => (
+
             <Card key={e.id} className="border-border bg-card p-4 space-y-2">
               <div className="flex items-start justify-between">
                 <div>
@@ -354,7 +384,11 @@ export function ExercisesAdmin({ embedded = false }: { embedded?: boolean } = {}
             </Card>
           ))}
         </div>
+        {visibleCount < filtered.length && (
+          <div ref={sentinelRef} className="h-10 w-full" aria-hidden="true" />
+        )}
       </div>
+
       <Dialog open={!!editing} onOpenChange={(o) => !o && setEditing(null)}>
         {editing && (
           <EditExerciseDialog
