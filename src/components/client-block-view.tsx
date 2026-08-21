@@ -231,8 +231,19 @@ export function ClientBlockView({
   // Declared BEFORE weeklyPriorities (which calls dayDate inside a
   // useMemo that runs during render) so the TDZ doesn't throw once
   // `days` becomes non-empty.
+  // Canonical instance date (pl_scheduled_workouts) is passed as
+  // `scheduledDate` so dayScheduledDate() short-circuits on it before any
+  // pl_days.scheduled_date / cadence derivation.
   const dayDate = (d: any): Date | null =>
-    resolvedWeek ? dayScheduledDate({ day: d, week: resolvedWeek, block, completion: null }) : null;
+    resolvedWeek
+      ? dayScheduledDate({
+          day: d,
+          week: resolvedWeek,
+          block,
+          completion: null,
+          scheduledDate: instanceDateByDay.get(d?.id) ?? null,
+        })
+      : null;
 
   // One weekly priority map is shared by the summary and every day card. Its
   // schedule-first order prevents each workout card from resetting S/B/D to
