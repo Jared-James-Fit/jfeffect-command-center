@@ -219,38 +219,29 @@ export function MoveWorkoutSheet({
     return out;
   }, [ctx, today]);
 
+  // Canonical shared reschedule mutation (optimistic + minimal invalidation).
+  // Drag/drop on the calendar uses the exact same hook.
+  const sharedMove = useMoveWorkout(clientId ?? (ctx?.block?.client_id as string | undefined) ?? null);
+
   const moveMutation = useMutation({
     mutationFn: async (args: { newDate: Date }) => {
-      if (isInstanceMode) {
-        const res = await moveInstanceFn({
-          data: {
-            instanceId: effectiveScheduledWorkoutId!,
-            newDate: toYMD(args.newDate),
-          },
-        });
-        return { ...res, __instance: true as const };
-      }
-      const res = await move({
-        data: {
+      const res = await sharedMove.mutateAsync({
+        target: {
+          scheduledWorkoutId: effectiveScheduledWorkoutId,
           dayId: dayId!,
-          newDate: toYMD(args.newDate),
+          fromDate: (ctx?.instance?.scheduled_date as string | null) ?? null,
         },
+        newDate: toYMD(args.newDate),
       });
-      return { ...res, __instance: false as const };
+      return res as any;
     },
     onSuccess: (res) => {
-      if (!res.ok) {
-        return;
-      }
+      if (!res?.ok) return;
       if ((res as any).noop) {
         toast.info("That workout was already on that date.");
         onOpenChange(false);
         return;
       }
-      void queryClient.invalidateQueries();
-      void queryClient.invalidateQueries({ queryKey: ["client-cardio-resolved"] });
-      void queryClient.invalidateQueries({ queryKey: ["cal-client-cardio"] });
-      void queryClient.invalidateQueries({ queryKey: ["week-sched-data"] });
 
       // Instance-scoped undo — restore date/time/orderIndex on the same
       // instance id. Never touches pl_days.scheduled_date.
@@ -264,21 +255,17 @@ export function MoveWorkoutSheet({
         toast.success("Workout moved.", {
           action: {
             label: "Undo",
-            onClick: async () => {
-              try {
-                await moveInstanceFn({
-                  data: {
-                    instanceId: capturedInstanceId,
-                    newDate: prev.scheduledDate,
-                    time: prev.scheduledTime,
-                    orderIndex: prev.orderIndex,
-                  },
-                });
-                toast.success("Move undone.");
-                void queryClient.invalidateQueries();
-              } catch (e: any) {
-                toast.error(e?.message ?? "Could not undo.");
-              }
+            onClick: () => {
+              sharedMove.mutate({
+                target: {
+                  scheduledWorkoutId: capturedInstanceId,
+                  dayId: dayId!,
+                  fromDate: null,
+                },
+                newDate: prev.scheduledDate,
+                time: prev.scheduledTime,
+                orderIndex: prev.orderIndex,
+              });
             },
           },
           duration: 6000,
@@ -296,10 +283,9 @@ export function MoveWorkoutSheet({
                 try {
                   await undo({ data: { batchId } });
                   toast.success("Move undone.");
-                  void queryClient.invalidateQueries();
-                  void queryClient.invalidateQueries({ queryKey: ["client-cardio-resolved"] });
-                  void queryClient.invalidateQueries({ queryKey: ["cal-client-cardio"] });
-                  void queryClient.invalidateQueries({ queryKey: ["week-sched-data"] });
+                  for (const key of scheduleQueryKeys(clientId ?? null)) {
+                    void queryClient.invalidateQueries({ queryKey: key });
+                  }
                 } catch (e: any) {
                   toast.error(e?.message ?? "Could not undo.");
                 }
@@ -310,10 +296,8 @@ export function MoveWorkoutSheet({
       });
       onOpenChange(false);
     },
-    onError: (e: any) => {
-      toast.error(e?.message ?? "Could not save the new date.");
-    },
   });
+
 
   const swapMutation = useMutation({
     mutationFn: async (otherDayId: string) => {
