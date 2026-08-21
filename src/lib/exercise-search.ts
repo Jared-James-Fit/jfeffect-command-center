@@ -245,9 +245,27 @@ const KIND_WEIGHT: Record<TermMatchKind, number> = {
   none: 0,
 };
 
+/**
+ * Deterministic ranking tiers. Tier ALWAYS beats score, so no
+ * recommendation / muscle / equipment similarity signal can outrank an
+ * explicit text match while the user is actively typing.
+ */
+export const SEARCH_TIER = {
+  exactName: 0,
+  namePrefix: 1,
+  orderedTokens: 2,
+  allTokensInName: 3,
+  nameSubstring: 4,
+  metadataComplete: 5,
+  partial: 6,
+} as const;
+export type SearchTier = (typeof SEARCH_TIER)[keyof typeof SEARCH_TIER];
+
 export type ScoredExercise<T extends SearchableExercise = SearchableExercise> = {
   exercise: T;
   score: number;
+  /** Deterministic rank bucket — lower is stronger. */
+  tier: SearchTier;
   /** True when every query term matched something. */
   complete: boolean;
   /** Literal strings to highlight inside the name. */
@@ -255,6 +273,7 @@ export type ScoredExercise<T extends SearchableExercise = SearchableExercise> = 
   /** e.g. "DB = dumbbell" — only set when an alias/metadata carried the match. */
   reason?: string;
 };
+
 
 type Haystacks = {
   name: string;
@@ -336,13 +355,58 @@ function matchTerm(
   return best;
 }
 
+/**
+ * Position of the first place a term matches inside the *name* only.
+ * Returns -1 when the term is not present in the name at all (metadata-only
+ * matches deliberately do not count toward a name tier).
+ */
+function nameMatchIndex(term: QueryTerm, hay: Haystacks): number {
+  let best = -1;
+  for (const needle of term.needles) {
+    if (!needle) continue;
+    if (needle.includes(" ")) {
+      const i = hay.name.indexOf(needle);
+      if (i >= 0 && (best < 0 || i < best)) best = i;
+      continue;
+    }
+    let cursor = 0;
+    for (const w of hay.nameWords) {
+      if (w === needle || w.startsWith(needle) || (needle.length >= 3 && w.includes(needle))) {
+        if (best < 0 || cursor < best) best = cursor;
+        break;
+      }
+      cursor += w.length + 1;
+    }
+  }
+  return best;
+}
+
+function computeTier(query: ParsedQuery, hay: Haystacks, complete: boolean): SearchTier {
+  const tokenQuery = query.terms.map((t) => t.token).join(" ");
+  const needle = query.normalized || tokenQuery;
+  if (hay.name === needle || hay.name === tokenQuery) return SEARCH_TIER.exactName;
+  if (needle && hay.name.startsWith(needle)) return SEARCH_TIER.namePrefix;
+
+  const positions = query.terms.map((t) => nameMatchIndex(t, hay));
+  const allInName = positions.length > 0 && positions.every((p) => p >= 0);
+  if (allInName) {
+    let ordered = true;
+    for (let i = 1; i < positions.length; i++) {
+      if (positions[i] <= positions[i - 1]) { ordered = false; break; }
+    }
+    return ordered ? SEARCH_TIER.orderedTokens : SEARCH_TIER.allTokensInName;
+  }
+  if (needle && hay.name.includes(needle)) return SEARCH_TIER.nameSubstring;
+  return complete ? SEARCH_TIER.metadataComplete : SEARCH_TIER.partial;
+}
+
 export function scoreExercise<T extends SearchableExercise>(
   exercise: T,
   query: ParsedQuery,
   hay = buildHaystacks(exercise),
 ): ScoredExercise<T> | null {
   if (query.terms.length === 0) {
-    return { exercise, score: 0, complete: true, highlights: [] };
+    return { exercise, score: 0, tier: SEARCH_TIER.partial, complete: true, highlights: [] };
   }
   let score = 0;
   let matched = 0;
@@ -371,8 +435,10 @@ export function scoreExercise<T extends SearchableExercise>(
   // Prefer concise names when scores tie ("Leg Curl" over "Seated Leg Curl Machine Variation").
   score += Math.max(0, 40 - hay.nameWords.length * 4);
 
-  return { exercise, score, complete, highlights, reason };
+  const tier = computeTier(query, hay, complete);
+  return { exercise, score, tier, complete, highlights, reason };
 }
+
 
 /* ------------------------------------------------------------------ */
 /* Public search API                                                   */
@@ -402,7 +468,7 @@ export function searchExercises<T extends SearchableExercise>(
   if (parsed.terms.length === 0) {
     return {
       results: list.slice(0, limit).map((exercise) => ({
-        exercise, score: 0, complete: true, highlights: [],
+        exercise, score: 0, tier: SEARCH_TIER.partial, complete: true, highlights: [],
       })),
       highlightTerms: [],
       hasExactMatches: true,
@@ -416,10 +482,14 @@ export function searchExercises<T extends SearchableExercise>(
     if (s) scored.push(s);
   }
   scored.sort((a, b) => {
+    // Tier is the primary, deterministic signal: an explicit text match can
+    // never be outranked by metadata / similarity scoring.
+    if (a.tier !== b.tier) return a.tier - b.tier;
     if (a.complete !== b.complete) return a.complete ? -1 : 1;
     if (b.score !== a.score) return b.score - a.score;
     return a.exercise.name.localeCompare(b.exercise.name);
   });
+
 
   const highlightTerms = new Set<string>();
   for (const term of parsed.terms) highlightTerms.add(term.token);

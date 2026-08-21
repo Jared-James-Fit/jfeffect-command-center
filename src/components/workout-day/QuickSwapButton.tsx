@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertTriangle,
   ArrowLeft,
@@ -417,6 +417,8 @@ export function QuickSwapButton({
   const [scope, setScope] = useState<"today" | "future">("today");
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(0);
+  const searchInputRef = useRef<HTMLInputElement>(null);
+
   const [chip, setChip] = useState<EquipmentChip>("Best Match");
   // Local ranking — a short debounce is enough to keep typing smooth.
   const debouncedSearch = useDebounced(search.trim(), 120);
@@ -442,6 +444,16 @@ export function QuickSwapButton({
   useEffect(() => {
     setPage(0);
   }, [debouncedSearch, chip]);
+
+  // Focus once, on the frame after entering search mode. Radix's own
+  // open-autofocus has already settled by then, so the keyboard opens a
+  // single time and the input keeps focus between keystrokes.
+  useEffect(() => {
+    if (!open || mode !== "search") return;
+    const raf = requestAnimationFrame(() => searchInputRef.current?.focus());
+    return () => cancelAnimationFrame(raf);
+  }, [open, mode]);
+
 
   const {
     data: suggestions = [],
@@ -588,7 +600,10 @@ export function QuickSwapButton({
 
   const searchRows = searchOutcome?.results ?? [];
   const searchTotal = searchRows.length;
-  const pagedRows = searchRows.slice(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE);
+  // Cumulative windowing — "Show more" appends instead of paging, so the
+  // result list never jumps under the sticky search header.
+  const pagedRows = searchRows.slice(0, (page + 1) * PAGE_SIZE);
+
   const isSearching = isPoolLoading && searchPool.length === 0;
 
   const startSelect = (ex: ExerciseLite) => {
@@ -660,7 +675,7 @@ export function QuickSwapButton({
     },
   });
 
-  const totalPages = Math.max(1, Math.ceil(searchTotal / PAGE_SIZE));
+  
 
   return (
     <>
@@ -679,20 +694,68 @@ export function QuickSwapButton({
         <SheetContent
           side="bottom"
           hideCloseButton
-          className="max-h-[85vh] overflow-y-auto"
+          className="flex flex-col gap-0 overflow-hidden p-0"
+          style={{
+            // Size off the *visual* viewport so the iOS keyboard shrinks the
+            // sheet instead of hiding it, and lift the sheet above the
+            // keyboard inset. Falls back to dvh when the vars are unset.
+            height: mode === "search"
+              ? "min(88dvh, calc(var(--vv-h, 100dvh) - env(safe-area-inset-top) - 1rem))"
+              : undefined,
+            maxHeight: "min(88dvh, calc(var(--vv-h, 100dvh) - env(safe-area-inset-top) - 1rem))",
+            bottom: "var(--keyboard-inset, 0px)",
+          }}
         >
-          <SheetHeader className="text-left">
-            <SheetTitle className="truncate">{exerciseName}</SheetTitle>
-            <SheetDescription>
-              {mode === "search"
-                ? "Search all exercises."
-                : mode === "warning"
-                ? "Confirm different target."
-                : mode === "scope"
-                ? "Choose where to apply."
-                : "Pick an alternate exercise."}
-            </SheetDescription>
-          </SheetHeader>
+          <div className="shrink-0 border-b border-border bg-background px-4 pb-3 pt-4">
+            <SheetHeader className="min-h-0 pl-0 text-left">
+              <SheetTitle className="truncate text-base">{exerciseName}</SheetTitle>
+              <SheetDescription className="text-xs">
+                {mode === "search"
+                  ? "Search all exercises."
+                  : mode === "warning"
+                  ? "Confirm different target."
+                  : mode === "scope"
+                  ? "Choose where to apply."
+                  : "Pick an alternate exercise."}
+              </SheetDescription>
+            </SheetHeader>
+            {mode === "search" && (
+              <div className="mt-3 flex items-center gap-2">
+                <Button
+                  type="button"
+                  size="icon"
+                  variant="ghost"
+                  className="h-10 w-10 shrink-0"
+                  onClick={() => setMode("suggestions")}
+                  aria-label="Back to suggestions"
+                >
+                  <ArrowLeft className="h-4 w-4" />
+                </Button>
+                <Input
+                  ref={searchInputRef}
+                  type="search"
+                  inputMode="search"
+                  enterKeyHint="search"
+                  autoComplete="off"
+                  autoCorrect="off"
+                  autoCapitalize="none"
+                  spellCheck={false}
+                  name="exercise-search"
+                  placeholder="Search exercises…"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") e.preventDefault();
+                  }}
+                  /* 16px min font-size prevents iOS Safari auto-zoom. */
+                  className="h-11 text-base"
+                />
+              </div>
+            )}
+          </div>
+
+          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 pb-2">
+
 
           {mode === "suggestions" && (
             <div className="mt-4 space-y-2">
@@ -769,28 +832,9 @@ export function QuickSwapButton({
           )}
 
           {mode === "search" && (
-            <div className="mt-4 space-y-2">
-              <div className="flex items-center gap-2">
-                <Button
-                  size="icon"
-                  variant="ghost"
-                  className="h-8 w-8 shrink-0"
-                  onClick={() => setMode("suggestions")}
-                  aria-label="Back to suggestions"
-                >
-                  <ArrowLeft className="h-4 w-4" />
-                </Button>
-                <Input
-                  autoFocus
-                  placeholder="Search exercises…"
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  className="h-9"
-                />
-              </div>
-
+            <div className="mt-3 space-y-2 pb-2">
               {debouncedSearch.length < 2 && (
-                <p className="text-xs text-muted-foreground px-1">Type at least 2 characters.</p>
+                <p className="px-1 text-xs text-muted-foreground">Type at least 2 characters.</p>
               )}
               {debouncedSearch.length >= 2 && isSearching && (
                 <div className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -815,31 +859,20 @@ export function QuickSwapButton({
                 />
               ))}
 
-              {searchTotal > PAGE_SIZE && (
-                <div className="flex items-center justify-between pt-2">
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    disabled={page === 0}
-                    onClick={() => setPage((p) => Math.max(0, p - 1))}
-                  >
-                    Previous
-                  </Button>
-                  <span className="text-xs text-muted-foreground">
-                    Page {page + 1} of {totalPages}
-                  </span>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    disabled={page + 1 >= totalPages}
-                    onClick={() => setPage((p) => p + 1)}
-                  >
-                    Next
-                  </Button>
-                </div>
+              {searchTotal > pagedRows.length && (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  className="w-full"
+                  onClick={() => setPage((p) => p + 1)}
+                >
+                  Show more ({searchTotal - pagedRows.length} more)
+                </Button>
               )}
             </div>
           )}
+
 
           {mode === "warning" && pending && (
             <div className="mt-4 space-y-3">
@@ -919,12 +952,17 @@ export function QuickSwapButton({
               </div>
             </div>
           )}
+          </div>
 
-          <SheetFooter className="mt-4">
-            <Button variant="ghost" onClick={() => setOpen(false)} className="w-full sm:w-auto">
+          <SheetFooter
+            className="shrink-0 border-t border-border bg-background px-4 pb-3 pt-2"
+            style={{ paddingBottom: "calc(env(safe-area-inset-bottom) + 0.75rem)" }}
+          >
+            <Button type="button" variant="ghost" onClick={() => setOpen(false)} className="w-full sm:w-auto">
               Cancel
             </Button>
           </SheetFooter>
+
         </SheetContent>
       </Sheet>
     </>
