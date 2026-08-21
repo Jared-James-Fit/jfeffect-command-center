@@ -15,7 +15,7 @@ function item(overrides: Record<string, unknown> = {}) {
 }
 
 describe("workout lifecycle status", () => {
-  it("keeps an opened or started draft out of Completed until completed_at is explicit", () => {
+  it("keeps a legitimately started draft resumable without marking it complete", () => {
     const status = getWorkoutStatus(
       item({
         completion: {
@@ -28,8 +28,26 @@ describe("workout lifecycle status", () => {
       TODAY,
     );
 
+    expect(status.status).toBe("in_progress");
+    expect(status.label).toBe("In Progress");
+  });
+
+  it("does not treat an empty completion row as an in-progress workout", () => {
+    const status = getWorkoutStatus(
+      item({
+        completion: {
+          id: "empty-draft-1",
+          started_at: null,
+          in_progress_at: null,
+          completed_at: null,
+        },
+        logged_sets_count: 0,
+      }),
+      TODAY,
+    );
+
     expect(status.status).toBe("today");
-    expect(status.label).not.toMatch(/completed/i);
+    expect(status.label).toBe("Today");
   });
 
   it("shows In Progress after meaningful logged activity without completing the workout", () => {
