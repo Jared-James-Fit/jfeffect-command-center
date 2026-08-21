@@ -663,7 +663,7 @@ export function QuickSwapButton({
     },
   });
 
-  const totalPages = Math.max(1, Math.ceil(searchTotal / PAGE_SIZE));
+  
 
   return (
     <>
