@@ -237,9 +237,9 @@ serve(async (request) => {
     const modes = Array.isArray(body.modes) && body.modes.length > 0 ? body.modes.filter((mode: unknown) => mode === "test" || mode === "live") : ["test", "live"];
     if ((!id && !publicCode) || modes.length === 0) return json({ error: "Provide id or public_code and at least one mode" }, 400);
 
-    let query = adminClient.from("discount_codes").select("*").limit(1).single();
-    query = id ? query.eq("id", id) : query.eq("public_code", publicCode);
-    const { data: row, error: rowError } = await query;
+    const baseQuery = adminClient.from("discount_codes").select("*");
+    const filtered = id ? baseQuery.eq("id", id) : baseQuery.eq("public_code", publicCode);
+    const { data: row, error: rowError } = await filtered.limit(1).single();
     if (rowError || !row) return json({ error: "Discount code not found" }, 404);
 
     const update: Record<string, unknown> = {
