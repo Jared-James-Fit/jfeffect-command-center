@@ -190,7 +190,9 @@ export function ExercisesAdmin({ embedded = false }: { embedded?: boolean } = {}
         actions={
           <Dialog open={open} onOpenChange={setOpen}>
             <DialogTrigger asChild>
-              <Button className="bg-gradient-primary font-bold uppercase tracking-wide">
+              {/* type="button" — never submit an ancestor form; opening the
+                  quick-create dialog is local UI state only. */}
+              <Button type="button" className="bg-gradient-primary font-bold uppercase tracking-wide">
                 <Plus className="mr-2 h-4 w-4" /> Add exercise
               </Button>
             </DialogTrigger>
@@ -202,7 +204,7 @@ export function ExercisesAdmin({ embedded = false }: { embedded?: boolean } = {}
         <div className="flex justify-end px-6 pt-4 md:px-8">
           <Dialog open={open} onOpenChange={setOpen}>
             <DialogTrigger asChild>
-              <Button className="bg-gradient-primary font-bold uppercase tracking-wide">
+              <Button type="button" className="bg-gradient-primary font-bold uppercase tracking-wide">
                 <Plus className="mr-2 h-4 w-4" /> Add exercise
               </Button>
             </DialogTrigger>
@@ -210,6 +212,7 @@ export function ExercisesAdmin({ embedded = false }: { embedded?: boolean } = {}
           </Dialog>
         </div>
       )}
+
       <div className="space-y-4 p-6 md:p-8">
         <Card className="border-primary/30 bg-card p-3 flex flex-wrap items-center gap-3">
           <div className="text-xs font-bold uppercase tracking-widest text-muted-foreground">
