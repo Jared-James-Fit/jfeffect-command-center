@@ -28,6 +28,9 @@ export function getWorkoutStatus(item: WorkoutItem, now: Date = new Date()): {
   const completedAtRaw: string | null = item.completion?.completed_at ?? null;
   const completedAt = completedAtRaw ? new Date(completedAtRaw) : null;
   const loggedSets = item.logged_sets_count ?? 0;
+  const legitimatelyStarted = Boolean(
+    item.completion?.started_at || item.completion?.in_progress_at,
+  );
 
   if (completedAt) {
     if (isSameDay(completedAt, today)) {
@@ -53,8 +56,10 @@ export function getWorkoutStatus(item: WorkoutItem, now: Date = new Date()): {
     };
   }
 
-  // Logged work is in progress until the client explicitly completes it.
-  if (loggedSets > 0) {
+  // Meaningful logging or an explicit lifecycle timestamp is in progress until
+  // the client explicitly completes it. Loading or previewing must not create
+  // an in-progress state.
+  if (loggedSets > 0 || legitimatelyStarted) {
     return { status: "in_progress", label: "In Progress", tone: inProgressTone, scheduled, completedAt };
   }
 

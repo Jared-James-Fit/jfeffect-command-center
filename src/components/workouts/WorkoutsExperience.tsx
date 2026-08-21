@@ -202,14 +202,15 @@ export function WorkoutsExperience({
     return out;
   }, [priorityRows, dayItems, committedDays]);
 
-  // --- Current block / week label for the header subtitle. -----------------
+  // --- Selected date drives the calendar tab and header context. ----------
   const today = localStartOfToday();
+  const [selectedDate, setSelectedDate] = useState<Date>(today);
+  const selectedItems = byDate.get(toLocalISO(selectedDate)) ?? [];
+  const selectedPrimaryItems = selectedItems.filter((it) => !isAtHomeBackupSessionBlock(it.block));
   const todayItems = byDate.get(toLocalISO(today)) ?? [];
   const todayPrimaryItems = todayItems.filter((it) => !isAtHomeBackupSessionBlock(it.block));
   const todayItem = todayPrimaryItems[0] ?? null;
-  // Collect unique blocks across scheduled days and pick the current one
-  // by date range (with sort_order / earliest-start tiebreakers). Falls back
-  // to today's item or the most recent scheduled item if no block covers today.
+  const selectedHeaderItem = selectedPrimaryItems[0] ?? null;
   const allBlocks = useMemo(() => {
     const seen = new Map<string, any>();
     for (const it of primaryDayItems) {
@@ -217,27 +218,20 @@ export function WorkoutsExperience({
     }
     return [...seen.values()];
   }, [primaryDayItems]);
-  const headerBlock =
-    pickCurrentBlock(allBlocks, today) ??
-    todayItem?.block ??
+  const fallbackHeaderItem =
+    todayItem ??
     primaryDayItems.find((it) => {
       const d = dayScheduledDate(it, committedDays);
       return d && d >= today;
-    })?.block ??
-    primaryDayItems[primaryDayItems.length - 1]?.block ?? null;
-  const headerWeek =
-    todayItem?.week ??
-    primaryDayItems.find((it) => it.block?.id === headerBlock?.id && (() => {
-      const d = dayScheduledDate(it, committedDays); return d && d >= today;
-    })())?.week ?? null;
+    }) ??
+    primaryDayItems[primaryDayItems.length - 1] ?? null;
+  const headerItem = selectedHeaderItem ?? fallbackHeaderItem;
+  const headerBlock = headerItem?.block ?? pickCurrentBlock(allBlocks, today) ?? null;
+  const headerWeek = headerItem?.week ?? null;
   const subtitle = [
     headerBlock?.name ? headerBlock.name : null,
     headerWeek?.week_index ? `Week ${headerWeek.week_index}` : null,
   ].filter(Boolean).join(" · ");
-
-
-  // --- Selected date drives the calendar tab. Defaults to today. ----------
-  const [selectedDate, setSelectedDate] = useState<Date>(today);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [calView, setCalView] = useState<"week" | "month">("week");
   const [downloadingPdf, setDownloadingPdf] = useState(false);
@@ -1446,12 +1440,7 @@ function primaryCtaFor(item: WorkoutItem, status: WorkoutStatus): {
   search?: Record<string, any>;
   secondary?: { label: string; search?: Record<string, any> };
 } {
-  const inProgress = !!item.completion && !item.completion?.completed_at;
-  const partial = status === "in_progress" || (inProgress && (item.logged_sets_count ?? 0) > 0);
-  if (partial) {
-    return { label: "Continue Workout", tone: "bg-amber-500 text-black hover:bg-amber-400", icon: <Play className="mr-1 h-4 w-4" /> };
-  }
-  if (inProgress) {
+  if (status === "in_progress") {
     return { label: "Continue Workout", tone: "bg-amber-500 text-black hover:bg-amber-400", icon: <Play className="mr-1 h-4 w-4" /> };
   }
   switch (status) {
@@ -1466,10 +1455,9 @@ function primaryCtaFor(item: WorkoutItem, status: WorkoutStatus): {
       };
     case "missed":
       return {
-        label: "Continue Workout",
+        label: "View Workout",
         tone: "bg-primary text-primary-foreground hover:bg-primary/90",
-        icon: <Play className="mr-1 h-4 w-4" />,
-        secondary: { label: "Reschedule" },
+        secondary: { label: "Start Workout", search: { start: 1 } },
       };
     case "today":
       return {
