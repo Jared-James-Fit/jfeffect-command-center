@@ -69,6 +69,8 @@ import {
 } from "@/lib/at-home-backup.functions";
 import { AT_HOME_BACKUP_BADGE, isAtHomeBackupClient, isAtHomeBackupSessionBlock } from "@/lib/at-home-backup";
 import { filterActiveCalendarItems } from "@/lib/active-calendar";
+import { canDragRescheduleItem, moveTargetFromItem, type MoveTarget } from "@/lib/workout-move";
+import { useMoveWorkout } from "@/lib/use-move-workout";
 import { formatCompactWorkoutLabel } from "@/lib/workout-day-label";
 
 type Mode = "self" | "coach";
@@ -241,6 +243,37 @@ export function WorkoutsExperience({
   ].filter(Boolean).join(" · ");
   const [historyOpen, setHistoryOpen] = useState(false);
   const [calView, setCalView] = useState<"week" | "month">("week");
+
+  // ---- Drag & drop rescheduling (pointer devices) ------------------------
+  // Touch keeps normal scrolling: HTML5 drag never activates there, and the
+  // Reschedule button remains the accessible/mobile path.
+  const canReschedule = mode === "self";
+  const moveWorkoutMutation = useMoveWorkout(clientId);
+  const [drag, setDrag] = useState<{ target: MoveTarget; fromIso: string } | null>(null);
+
+  const startWorkoutDrag = (item: WorkoutItem, fromIso: string) => {
+    if (!canReschedule || !canDragRescheduleItem(item)) return;
+    const target = moveTargetFromItem(item, fromIso);
+    if (!target) return;
+    setDrag({ target, fromIso });
+  };
+  const endWorkoutDrag = () => setDrag(null);
+  const dropWorkoutOnDate = (iso: string) => {
+    const active = drag;
+    setDrag(null);
+    if (!active || active.fromIso === iso) return;
+    moveWorkoutMutation.mutate({ target: active.target, newDate: iso });
+  };
+  const dnd = canReschedule
+    ? {
+        dragging: !!drag,
+        draggingFromIso: drag?.fromIso ?? null,
+        canDragItem: (item: WorkoutItem) => canDragRescheduleItem(item),
+        onDragStartItem: startWorkoutDrag,
+        onDragEndItem: endWorkoutDrag,
+        onDropDate: dropWorkoutOnDate,
+      }
+    : null;
   const [downloadingPdf, setDownloadingPdf] = useState(false);
   const navigate = useNavigate();
 
@@ -544,6 +577,7 @@ export function WorkoutsExperience({
                     selectedDate={selectedDate}
                     onSelectDate={setSelectedDate}
                     byDate={byDate}
+                    dnd={dnd}
                   />
                 ) : (
                   <MonthGrid
@@ -551,6 +585,7 @@ export function WorkoutsExperience({
                     onSelectDate={setSelectedDate}
                     byDate={byDate}
                     chipsByDate={priorityChipsByDate}
+                    dnd={dnd}
                   />
                 )}
                 <SelectedDayList
@@ -651,13 +686,74 @@ function statusDotClass(status: WorkoutStatus | "none"): string {
   }
 }
 
+export type CalendarDnd = {
+  dragging: boolean;
+  draggingFromIso: string | null;
+  canDragItem: (item: WorkoutItem) => boolean;
+  onDragStartItem: (item: WorkoutItem, fromIso: string) => void;
+  onDragEndItem: () => void;
+  onDropDate: (iso: string) => void;
+} | null;
+
+/** Shared drag/drop wiring for a single calendar day cell. */
+function dayCellDndProps(
+  dnd: CalendarDnd,
+  iso: string,
+  item: WorkoutItem | undefined,
+  isOver: boolean,
+  setOver: (iso: string | null) => void,
+) {
+  if (!dnd) return { props: {} as Record<string, unknown>, className: "" };
+  const draggable = !!item && dnd.canDragItem(item);
+  const isDropTarget = dnd.dragging && dnd.draggingFromIso !== iso;
+  return {
+    props: {
+      draggable,
+      onDragStart: (e: React.DragEvent) => {
+        if (!draggable || !item) return;
+        e.dataTransfer.effectAllowed = "move";
+        // Some browsers require payload data for the drag to start.
+        e.dataTransfer.setData("text/plain", iso);
+        dnd.onDragStartItem(item, iso);
+      },
+      onDragEnd: () => {
+        setOver(null);
+        dnd.onDragEndItem();
+      },
+      onDragOver: (e: React.DragEvent) => {
+        if (!isDropTarget) return;
+        e.preventDefault();
+        e.dataTransfer.dropEffect = "move";
+        if (!isOver) setOver(iso);
+      },
+      onDragLeave: () => {
+        if (isOver) setOver(null);
+      },
+      onDrop: (e: React.DragEvent) => {
+        if (!isDropTarget) return;
+        e.preventDefault();
+        setOver(null);
+        dnd.onDropDate(iso);
+      },
+    } as Record<string, unknown>,
+    className: cn(
+      draggable && "cursor-grab active:cursor-grabbing",
+      dnd.dragging && dnd.draggingFromIso === iso && "opacity-50",
+      isDropTarget && "ring-1 ring-primary/40",
+      isOver && "ring-2 ring-primary bg-primary/10 scale-[1.03]",
+    ),
+  };
+}
+
 function WeekStrip({
-  selectedDate, onSelectDate, byDate,
+  selectedDate, onSelectDate, byDate, dnd,
 }: {
   selectedDate: Date;
   onSelectDate: (d: Date) => void;
   byDate: Map<string, WorkoutItem[]>;
+  dnd?: CalendarDnd;
 }) {
+  const [overIso, setOverIso] = useState<string | null>(null);
   // Week the selected date belongs to. Mon-first to match existing schedule UI.
   const weekStart = startOfWeek(selectedDate, { weekStartsOn: 1 });
   const days = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
@@ -746,13 +842,15 @@ function WeekStrip({
 /* ---------------------------------------------------------------------- */
 
 function MonthGrid({
-  selectedDate, onSelectDate, byDate, chipsByDate,
+  selectedDate, onSelectDate, byDate, chipsByDate, dnd,
 }: {
   selectedDate: Date;
   onSelectDate: (d: Date) => void;
   byDate: Map<string, WorkoutItem[]>;
   chipsByDate?: Map<string, Array<{ label: string; family: string }>>;
+  dnd?: CalendarDnd;
 }) {
+  const [overIso, setOverIso] = useState<string | null>(null);
   const monthStart = startOfMonth(selectedDate);
   const monthEnd = endOfMonth(selectedDate);
   const gridStart = startOfWeek(monthStart, { weekStartsOn: 1 });
