@@ -817,28 +817,9 @@ export function QuickSwapButton({
           )}
 
           {mode === "search" && (
-            <div className="mt-4 space-y-2">
-              <div className="flex items-center gap-2">
-                <Button
-                  size="icon"
-                  variant="ghost"
-                  className="h-8 w-8 shrink-0"
-                  onClick={() => setMode("suggestions")}
-                  aria-label="Back to suggestions"
-                >
-                  <ArrowLeft className="h-4 w-4" />
-                </Button>
-                <Input
-                  autoFocus
-                  placeholder="Search exercises…"
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  className="h-9"
-                />
-              </div>
-
+            <div className="mt-3 space-y-2 pb-2">
               {debouncedSearch.length < 2 && (
-                <p className="text-xs text-muted-foreground px-1">Type at least 2 characters.</p>
+                <p className="px-1 text-xs text-muted-foreground">Type at least 2 characters.</p>
               )}
               {debouncedSearch.length >= 2 && isSearching && (
                 <div className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -863,31 +844,20 @@ export function QuickSwapButton({
                 />
               ))}
 
-              {searchTotal > PAGE_SIZE && (
-                <div className="flex items-center justify-between pt-2">
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    disabled={page === 0}
-                    onClick={() => setPage((p) => Math.max(0, p - 1))}
-                  >
-                    Previous
-                  </Button>
-                  <span className="text-xs text-muted-foreground">
-                    Page {page + 1} of {totalPages}
-                  </span>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    disabled={page + 1 >= totalPages}
-                    onClick={() => setPage((p) => p + 1)}
-                  >
-                    Next
-                  </Button>
-                </div>
+              {searchTotal > pagedRows.length && (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  className="w-full"
+                  onClick={() => setPage((p) => p + 1)}
+                >
+                  Show more ({searchTotal - pagedRows.length} more)
+                </Button>
               )}
             </div>
           )}
+
 
           {mode === "warning" && pending && (
             <div className="mt-4 space-y-3">
