@@ -355,13 +355,58 @@ function matchTerm(
   return best;
 }
 
+/**
+ * Position of the first place a term matches inside the *name* only.
+ * Returns -1 when the term is not present in the name at all (metadata-only
+ * matches deliberately do not count toward a name tier).
+ */
+function nameMatchIndex(term: QueryTerm, hay: Haystacks): number {
+  let best = -1;
+  for (const needle of term.needles) {
+    if (!needle) continue;
+    if (needle.includes(" ")) {
+      const i = hay.name.indexOf(needle);
+      if (i >= 0 && (best < 0 || i < best)) best = i;
+      continue;
+    }
+    let cursor = 0;
+    for (const w of hay.nameWords) {
+      if (w === needle || w.startsWith(needle) || (needle.length >= 3 && w.includes(needle))) {
+        if (best < 0 || cursor < best) best = cursor;
+        break;
+      }
+      cursor += w.length + 1;
+    }
+  }
+  return best;
+}
+
+function computeTier(query: ParsedQuery, hay: Haystacks, complete: boolean): SearchTier {
+  const tokenQuery = query.terms.map((t) => t.token).join(" ");
+  const needle = query.normalized || tokenQuery;
+  if (hay.name === needle || hay.name === tokenQuery) return SEARCH_TIER.exactName;
+  if (needle && hay.name.startsWith(needle)) return SEARCH_TIER.namePrefix;
+
+  const positions = query.terms.map((t) => nameMatchIndex(t, hay));
+  const allInName = positions.length > 0 && positions.every((p) => p >= 0);
+  if (allInName) {
+    let ordered = true;
+    for (let i = 1; i < positions.length; i++) {
+      if (positions[i] <= positions[i - 1]) { ordered = false; break; }
+    }
+    return ordered ? SEARCH_TIER.orderedTokens : SEARCH_TIER.allTokensInName;
+  }
+  if (needle && hay.name.includes(needle)) return SEARCH_TIER.nameSubstring;
+  return complete ? SEARCH_TIER.metadataComplete : SEARCH_TIER.partial;
+}
+
 export function scoreExercise<T extends SearchableExercise>(
   exercise: T,
   query: ParsedQuery,
   hay = buildHaystacks(exercise),
 ): ScoredExercise<T> | null {
   if (query.terms.length === 0) {
-    return { exercise, score: 0, complete: true, highlights: [] };
+    return { exercise, score: 0, tier: SEARCH_TIER.partial, complete: true, highlights: [] };
   }
   let score = 0;
   let matched = 0;
@@ -390,8 +435,10 @@ export function scoreExercise<T extends SearchableExercise>(
   // Prefer concise names when scores tie ("Leg Curl" over "Seated Leg Curl Machine Variation").
   score += Math.max(0, 40 - hay.nameWords.length * 4);
 
-  return { exercise, score, complete, highlights, reason };
+  const tier = computeTier(query, hay, complete);
+  return { exercise, score, tier, complete, highlights, reason };
 }
+
 
 /* ------------------------------------------------------------------ */
 /* Public search API                                                   */
