@@ -679,20 +679,68 @@ export function QuickSwapButton({
         <SheetContent
           side="bottom"
           hideCloseButton
-          className="max-h-[85vh] overflow-y-auto"
+          className="flex flex-col gap-0 overflow-hidden p-0"
+          style={{
+            // Size off the *visual* viewport so the iOS keyboard shrinks the
+            // sheet instead of hiding it, and lift the sheet above the
+            // keyboard inset. Falls back to dvh when the vars are unset.
+            height: mode === "search"
+              ? "min(88dvh, calc(var(--vv-h, 100dvh) - env(safe-area-inset-top) - 1rem))"
+              : undefined,
+            maxHeight: "min(88dvh, calc(var(--vv-h, 100dvh) - env(safe-area-inset-top) - 1rem))",
+            bottom: "var(--keyboard-inset, 0px)",
+          }}
         >
-          <SheetHeader className="text-left">
-            <SheetTitle className="truncate">{exerciseName}</SheetTitle>
-            <SheetDescription>
-              {mode === "search"
-                ? "Search all exercises."
-                : mode === "warning"
-                ? "Confirm different target."
-                : mode === "scope"
-                ? "Choose where to apply."
-                : "Pick an alternate exercise."}
-            </SheetDescription>
-          </SheetHeader>
+          <div className="shrink-0 border-b border-border bg-background px-4 pb-3 pt-4">
+            <SheetHeader className="min-h-0 pl-0 text-left">
+              <SheetTitle className="truncate text-base">{exerciseName}</SheetTitle>
+              <SheetDescription className="text-xs">
+                {mode === "search"
+                  ? "Search all exercises."
+                  : mode === "warning"
+                  ? "Confirm different target."
+                  : mode === "scope"
+                  ? "Choose where to apply."
+                  : "Pick an alternate exercise."}
+              </SheetDescription>
+            </SheetHeader>
+            {mode === "search" && (
+              <div className="mt-3 flex items-center gap-2">
+                <Button
+                  type="button"
+                  size="icon"
+                  variant="ghost"
+                  className="h-10 w-10 shrink-0"
+                  onClick={() => setMode("suggestions")}
+                  aria-label="Back to suggestions"
+                >
+                  <ArrowLeft className="h-4 w-4" />
+                </Button>
+                <Input
+                  ref={searchInputRef}
+                  type="search"
+                  inputMode="search"
+                  enterKeyHint="search"
+                  autoComplete="off"
+                  autoCorrect="off"
+                  autoCapitalize="none"
+                  spellCheck={false}
+                  name="exercise-search"
+                  placeholder="Search exercises…"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") e.preventDefault();
+                  }}
+                  /* 16px min font-size prevents iOS Safari auto-zoom. */
+                  className="h-11 text-base"
+                />
+              </div>
+            )}
+          </div>
+
+          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 pb-2">
+
 
           {mode === "suggestions" && (
             <div className="mt-4 space-y-2">
