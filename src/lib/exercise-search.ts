@@ -482,10 +482,14 @@ export function searchExercises<T extends SearchableExercise>(
     if (s) scored.push(s);
   }
   scored.sort((a, b) => {
+    // Tier is the primary, deterministic signal: an explicit text match can
+    // never be outranked by metadata / similarity scoring.
+    if (a.tier !== b.tier) return a.tier - b.tier;
     if (a.complete !== b.complete) return a.complete ? -1 : 1;
     if (b.score !== a.score) return b.score - a.score;
     return a.exercise.name.localeCompare(b.exercise.name);
   });
+
 
   const highlightTerms = new Set<string>();
   for (const term of parsed.terms) highlightTerms.add(term.token);
