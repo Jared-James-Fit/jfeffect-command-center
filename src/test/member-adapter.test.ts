@@ -60,7 +60,9 @@ describe("member adapter capabilities", () => {
       canEditTemplate: false,
       canEditOwnLogs: true,
       canReschedule: true,
-      canSubstituteExercise: false,
+      // Members may swap an exercise; persisted in `member_exercise_swaps`
+      // and overlaid by listRowsRaw.
+      canSubstituteExercise: true,
       canSeeCoachNotes: false,
       canSeeCoachIntel: false,
       canLeaveCoachFeedback: false,
@@ -309,6 +311,8 @@ describe("member adapter — raw reshape (pl_*-shaped)", () => {
     const out = memberLogToPlRowResult({
       log: {
         id: "log-uuid",
+        week_index: 1,
+        day_index: 2,
         exercise_index: 4,
         set_index: 2,
         reps: 8,
@@ -326,7 +330,9 @@ describe("member adapter — raw reshape (pl_*-shaped)", () => {
       },
       clientId: "user-uuid",
     });
-    expect(out.id).toBe("log-uuid");
+    // The pl_row_results id is a deterministic synthetic id so the shared
+    // write paths can decode (week, day, exercise, set) back out of it.
+    expect(out.id).toBe("mlog:1:2:4:2");
     expect(out.row_id).toBe("ex:4");
     expect(out.client_id).toBe("user-uuid");
     expect(out.set_index).toBe(2);
