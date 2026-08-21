@@ -186,6 +186,7 @@ export function ScheduleManagerShell({ clientId, mode }: ScheduleManagerShellPro
 
       <MoveWorkoutSheet
         dayId={moveDayId}
+        clientId={clientId}
         scheduledWorkoutId={moveInstanceId}
         coachControls={mode === "coach"}
         open={!!moveDayId}

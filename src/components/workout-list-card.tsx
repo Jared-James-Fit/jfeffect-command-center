@@ -139,6 +139,7 @@ export function WorkoutListCard({
     {!readonly && (
       <MoveWorkoutSheet
         dayId={item.day.id}
+        clientId={previewClientId ?? null}
         open={moveOpen}
         onOpenChange={setMoveOpen}
         currentScheduledDate={status.scheduled ?? dayScheduledDate(item)}
