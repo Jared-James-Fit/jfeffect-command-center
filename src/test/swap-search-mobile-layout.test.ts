@@ -48,4 +48,16 @@ describe("in-workout swap sheet — mobile search layout", () => {
     const searchBlock = src.slice(src.indexOf('mode === "search"'));
     expect(searchBlock).not.toMatch(/\.update\(|startWorkout|completeWorkout/);
   });
+
+  it("searches the full eligible cache instead of the Best Match subset", () => {
+    expect(src).toContain("searchEligibleExercises(searchPool, debouncedSearch");
+    expect(src).not.toContain("searchEligibleExercises(filteredSuggestions");
+    expect(src).not.toContain("searchExercises(filteredSuggestions");
+  });
+
+  it("fetches the complete eligible library in bounded pages", () => {
+    expect(src).toContain("fetchEligibleExerciseLibrary");
+    expect(src).toContain(".range(from, from + LIBRARY_FETCH_PAGE_SIZE - 1)");
+    expect(src).not.toContain(".limit(5000)");
+  });
 });

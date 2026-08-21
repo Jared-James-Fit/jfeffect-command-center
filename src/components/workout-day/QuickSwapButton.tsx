@@ -26,7 +26,7 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import { applySwap, getSwapImpact } from "@/lib/quick-swap.functions";
-import { searchExercises } from "@/lib/exercise-search";
+import { searchEligibleExercises } from "@/lib/exercise-search";
 import { HighlightedExerciseName } from "@/components/exercise-search-highlight";
 import {
   applyMemberSwap,
@@ -251,6 +251,23 @@ function matchesChip(chip: EquipmentChip, equipment: string | null): boolean {
 
 const SELECT_COLS = "id,name,muscle_group,category,equipment,difficulty,vimeo_embed_url,youtube_url,thumbnail_url,cues,common_mistakes,default_measurement_type,primary_movement_pattern";
 const PAGE_SIZE = 20;
+const LIBRARY_FETCH_PAGE_SIZE = 1000;
+
+async function fetchEligibleExerciseLibrary(): Promise<ExerciseLite[]> {
+  const rows: ExerciseLite[] = [];
+  for (let from = 0; ; from += LIBRARY_FETCH_PAGE_SIZE) {
+    const { data, error } = await supabase
+      .from("exercises")
+      .select(SELECT_COLS)
+      .eq("archived", false)
+      .order("name")
+      .range(from, from + LIBRARY_FETCH_PAGE_SIZE - 1);
+    if (error) throw error;
+    const pageRows = (data ?? []) as ExerciseLite[];
+    rows.push(...pageRows);
+    if (pageRows.length < LIBRARY_FETCH_PAGE_SIZE) return rows;
+  }
+}
 
 function useDebounced<T>(value: T, ms: number): T {
   const [v, setV] = useState(value);
@@ -571,16 +588,7 @@ export function QuickSwapButton({
     enabled: open && mode === "search",
     staleTime: 10 * 60_000,
     gcTime: 30 * 60_000,
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("exercises")
-        .select(SELECT_COLS)
-        .eq("archived", false)
-        .order("name")
-        .limit(5000);
-      if (error) throw error;
-      return (data ?? []) as ExerciseLite[];
-    },
+    queryFn: fetchEligibleExerciseLibrary,
   });
 
   // Realtime keeps an open picker current. Refresh on each deliberate entry
@@ -589,13 +597,14 @@ export function QuickSwapButton({
     if (open && mode === "search") void refetchSearchPool();
   }, [open, mode, refetchSearchPool]);
 
-  // Shared ranker: out-of-order tokens, aliases (DB/RDL/tri…), equipment,
-  // muscle, movement pattern and typo tolerance. Equipment chip is applied
-  // after scoring so filters and search combine.
+  // Active text search always ranks the complete eligible library. The
+  // browsing-only Best Match/equipment chips never restrict this pool.
   const searchOutcome = useMemo(() => {
     if (debouncedSearch.length < 2) return null;
-    const candidates = searchPool.filter((e) => e.id !== exerciseId);
-    return searchExercises(candidates, debouncedSearch, { limit: 300 });
+    return searchEligibleExercises(searchPool, debouncedSearch, {
+      excludeId: exerciseId,
+      limit: 300,
+    });
   }, [searchPool, debouncedSearch, exerciseId]);
 
   const searchRows = searchOutcome?.results ?? [];

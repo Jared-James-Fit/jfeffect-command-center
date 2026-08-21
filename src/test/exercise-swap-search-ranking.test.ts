@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { SEARCH_TIER, searchExercises, type SearchableExercise } from "@/lib/exercise-search";
+import {
+  SEARCH_TIER,
+  highlightSegments,
+  searchEligibleExercises,
+  searchExercises,
+  type SearchableExercise,
+} from "@/lib/exercise-search";
 
 const lib: SearchableExercise[] = [
   { id: "csr", name: "Chest Supported Dumbbell Row", muscle_group: "Upper Back", equipment: "Dumbbell", category: "Row" },
@@ -10,6 +16,8 @@ const lib: SearchableExercise[] = [
   { id: "scr", name: "Standing Calf Raise", muscle_group: "Calves", equipment: "Machine", category: "Calf" },
   { id: "sdb", name: "Standing Dumbbell Curl", muscle_group: "Biceps", equipment: "Dumbbell", category: "Curl" },
   { id: "comp", name: "Competition Deadlift", muscle_group: "Posterior Chain", equipment: "Barbell", category: "Hinge" },
+  { id: "scm", name: "Standing Calf Raise Machine", muscle_group: "Calves", equipment: "Machine", category: "Calf" },
+  { id: "seated", name: "Seated Calf Raise Machine", muscle_group: "Calves", equipment: "Machine", category: "Calf" },
 ];
 
 const top = (q: string) => searchExercises(lib, q).results[0]?.exercise.name;
@@ -67,5 +75,80 @@ describe("swap search ranking contract", () => {
     }));
     const pool = [...big, { id: "needle", name: "Zercher Carry" }];
     expect(searchExercises(pool, "zercher carry").results[0]?.exercise.id).toBe("needle");
+  });
+
+  it.each([
+    "Standing Calf Raise Machine",
+    "standing calf raise machine",
+    "standing calf raises machine",
+    "calf raise machine",
+    "calf raises machine",
+    "standing calf",
+    "raise machine",
+  ])("finds the canonical calf exercise for %s", (query) => {
+    expect(names(query)).toContain("Standing Calf Raise Machine");
+  });
+
+  it("ranks plural-equivalent full titles directly after literal exact titles", () => {
+    const result = searchExercises(lib, "standing calf raises machine").results[0];
+    expect(result.exercise.id).toBe("scm");
+    expect(result.tier).toBe(SEARCH_TIER.tokenEquivalent);
+  });
+
+  it.each([
+    ["raises", "raise"],
+    ["curls", "curl"],
+    ["extensions", "extension"],
+    ["rows", "row"],
+    ["presses", "press"],
+  ])("normalises %s to match %s", (plural, singular) => {
+    const pool = [{ id: singular, name: `Cable ${singular}` }];
+    expect(searchExercises(pool, `cable ${plural}`).results[0]?.exercise.id).toBe(singular);
+  });
+
+  it("supports unordered all-token plural matches", () => {
+    expect(top("machine standing raises calf")).toBe("Standing Calf Raise Machine");
+  });
+
+  it("searches the full eligible pool regardless of recommendation ordering", () => {
+    const recommendationSubset = lib.filter((exercise) => exercise.equipment === "Dumbbell");
+    expect(recommendationSubset.some((exercise) => exercise.id === "scm")).toBe(false);
+    expect(searchEligibleExercises(lib, "standing calf raises machine").results[0]?.exercise.id).toBe("scm");
+  });
+
+  it("keeps archived and current exercises out of eligible swap results", () => {
+    const pool = [
+      ...lib,
+      { id: "archived", name: "Perfect Exact Name", archived: true },
+    ];
+    expect(searchEligibleExercises(pool, "perfect exact name", { excludeId: "csr" }).results).toHaveLength(0);
+    expect(searchEligibleExercises(pool, "chest supported dumbbell row", { excludeId: "csr" }).results[0]?.exercise.id).not.toBe("csr");
+  });
+
+  it("scores every eligible row before applying a result limit", () => {
+    const filler = Array.from({ length: 6000 }, (_, index) => ({
+      id: `f${index}`,
+      name: `Standing Machine Movement ${index}`,
+    }));
+    const result = searchEligibleExercises(
+      [...filler, { id: "exact", name: "Standing Calf Raise Machine" }],
+      "standing calf raise machine",
+      { limit: 10 },
+    );
+    expect(result.results[0]?.exercise.id).toBe("exact");
+  });
+
+  it("highlights singular title words for plural query tokens", () => {
+    const result = searchExercises(lib, "standing calf raises machine");
+    const segments = highlightSegments("Standing Calf Raise Machine", result.highlightTerms);
+    expect(segments.filter((segment) => segment.match).map((segment) => segment.text.toLowerCase())).toEqual(
+      expect.arrayContaining(["standing", "calf", "raise", "machine"]),
+    );
+  });
+
+  it("does not mutate the exercise pool while searching", () => {
+    const before = structuredClone(lib);
+    searchEligibleExercises(lib, "standing calf raises machine");
+    expect(lib).toEqual(before);
   });
 });
