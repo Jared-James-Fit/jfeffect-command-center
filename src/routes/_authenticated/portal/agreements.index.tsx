@@ -10,6 +10,7 @@ import { FileText, ExternalLink, CheckCircle2, Download } from "lucide-react";
 import type { Agreement } from "@/lib/agreements";
 import { useServerFn } from "@tanstack/react-start";
 import { getSignedAgreementUrl } from "@/lib/agreements.functions";
+import { listClientNativeAgreements } from "@/lib/native-agreement-client.functions";
 import { toast } from "sonner";
 import { usePortalUserId } from "@/lib/client-impersonation";
 
@@ -19,6 +20,7 @@ export const Route = createFileRoute("/_authenticated/portal/agreements/")({
 
 function PortalAgreementsPage() {
   const getUrl = useServerFn(getSignedAgreementUrl);
+  const listNative = useServerFn(listClientNativeAgreements);
   const portalUserId = usePortalUserId();
   const downloadSigned = async (id: string) => {
     const r: any = await getUrl({ data: { id } });
@@ -46,6 +48,11 @@ function PortalAgreementsPage() {
       if (error) throw error;
       return (data ?? []) as Agreement[];
     },
+  });
+
+  const { data: nativeAgreements = [] } = useQuery({
+    queryKey: ["portal-native-agreements"],
+    queryFn: () => listNative(),
   });
 
   const completedStatuses = ["Signed", "Completed", "Verified"];
@@ -129,7 +136,24 @@ function PortalAgreementsPage() {
                 ))}
               </section>
             )}
-            {data.length === 0 && (
+            {nativeAgreements.length > 0 && (
+              <section className="space-y-2">
+                <h2 className="text-sm font-semibold text-muted-foreground">Native agreements</h2>
+                {(nativeAgreements as any[]).map((agreement) => {
+                  const complete = agreement.status === "completed";
+                  const ready = agreement.artifact_status === "ready";
+                  return <Card key={agreement.id} className="border-border bg-card p-4 flex items-center gap-3 flex-wrap">
+                    <FileText className="h-5 w-5 text-primary" />
+                    <div className="flex-1 min-w-0">
+                      <p className="font-semibold truncate">{agreement.custom_title ?? "JF Effect Coaching Agreement"}</p>
+                      <p className="text-xs text-muted-foreground">Native v1 · {complete ? "Completed" : "Needs your signature"}</p>
+                    </div>
+                    {complete ? <span className="text-xs text-muted-foreground">{ready ? "Signed copy ready" : "Signed copy preparing"}</span> : <Button size="sm" asChild><a href={`/portal/agreements/native/${agreement.id}`}>Review & sign</a></Button>}
+                  </Card>;
+                })}
+              </section>
+            )}
+            {data.length === 0 && nativeAgreements.length === 0 && (
               <Card className="border-border bg-card p-10 text-center text-sm text-muted-foreground">You don't have any agreements yet.</Card>
             )}
           </>

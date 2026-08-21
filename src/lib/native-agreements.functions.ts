@@ -2,6 +2,10 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { createHash, randomBytes } from "node:crypto";
+import {
+  assertSupportedNativeSignerRoles,
+  requireKnownDateOfBirth,
+} from "@/lib/native-agreement-contract";
 
 async function assertAdmin(supabase: any, userId: string) {
   const { data } = await supabase.from("user_roles").select("role").eq("user_id", userId);
@@ -107,6 +111,16 @@ export const createNativePackage = createServerFn({ method: "POST" })
     const { supabase, userId } = context as any;
     await assertAdmin(supabase, userId);
 
+    assertSupportedNativeSignerRoles(data.signers.map((signer) => signer.role));
+    const { data: client, error: clientErr } = await supabase
+      .from("clients")
+      .select("id, user_id, date_of_birth")
+      .eq("id", data.clientId)
+      .maybeSingle();
+    if (clientErr || !client) throw new Error(clientErr?.message ?? "Client not found");
+    if (!client.user_id) throw new Error("Client must have an authenticated account before a native agreement can be created");
+    requireKnownDateOfBirth(client.date_of_birth);
+
     // Resolve latest template version
     const { data: tv, error: tvErr } = await supabase
       .from("na_template_versions")
@@ -161,6 +175,7 @@ export const createNativePackage = createServerFn({ method: "POST" })
         package_id: pkg.id,
         role: s.role,
         ordinal: s.ordinal,
+        user_id: client.user_id,
         full_name: s.fullName,
         email: s.email.toLowerCase(),
         phone: s.phone ?? null,
@@ -172,7 +187,14 @@ export const createNativePackage = createServerFn({ method: "POST" })
       event_type: "package.created",
       actor_user_id: userId,
       actor_role: "admin",
-      details: { template_version_id: tv.id, blockers, status: initialStatus },
+      details: {
+        template_version_id: tv.id,
+        blockers,
+        status: initialStatus,
+        client_dob_checked: true,
+        signing_methods: ["typed", "drawn"],
+        non_client_payor_flow: "deferred",
+      },
     });
 
     return { packageId: pkg.id, status: initialStatus, blockers };
@@ -191,6 +213,11 @@ export const sealAndSendPackage = createServerFn({ method: "POST" })
     if (pkg.status === "sent" || pkg.status === "completed") throw new Error("Package already sent");
     if (!pkg.jurisdiction_supported) throw new Error("Jurisdiction not supported — cannot send");
     if ((pkg.jurisdiction_block_reasons ?? []).length > 0) throw new Error("Publication blockers must be resolved: " + (pkg.jurisdiction_block_reasons as string[]).join(", "));
+
+    const templateVersion = pkg.na_template_versions as any;
+    if (!templateVersion?.source_pdf_bucket || !templateVersion?.source_pdf_path || !templateVersion?.source_pdf_sha256) {
+      throw new Error("The selected native agreement template version is missing its immutable source PDF");
+    }
 
     const { data: signers } = await supabase.from("na_signers").select("*").eq("package_id", data.packageId).order("ordinal");
     if (!signers || signers.length === 0) throw new Error("At least one signer is required");
@@ -228,6 +255,10 @@ export const sealAndSendPackage = createServerFn({ method: "POST" })
         financial_terms_snapshot: pkg.financial_terms,
         signers_snapshot: snapshotContent.signers,
         required_acknowledgements_snapshot: [],
+        source_pdf_bucket: templateVersion.source_pdf_bucket,
+        source_pdf_path: templateVersion.source_pdf_path,
+        source_pdf_sha256: templateVersion.source_pdf_sha256,
+        source_pdf_page_count: templateVersion.source_pdf_page_count ?? null,
         sealed: true,
         sealed_at: new Date().toISOString(),
         created_by: userId,
@@ -236,23 +267,11 @@ export const sealAndSendPackage = createServerFn({ method: "POST" })
       .single();
     if (snapErr) throw new Error(snapErr.message);
 
-    // Generate guest tokens for every signer
-    const tokens: { signerId: string; token: string; email: string; signingUrl: string }[] = [];
-    for (const s of signers) {
-      const rawToken = randomBytes(32).toString("hex");
-      const tokenHash = sha256(rawToken);
-      const expires = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString();
-      const { error: gtErr } = await supabaseAdmin.from("na_guest_tokens").insert({
-        package_id: pkg.id,
-        signer_id: s.id,
-        token_hash: tokenHash,
-        email_to_verify: s.email,
-        expires_at: expires,
-      });
-      if (gtErr) throw new Error(gtErr.message);
-      await supabase.from("na_signers").update({ status: "invited", invited_at: new Date().toISOString() }).eq("id", s.id);
-      tokens.push({ signerId: s.id, token: rawToken, email: s.email, signingUrl: `/sign/${rawToken}` });
-    }
+    assertSupportedNativeSignerRoles(signers.map((signer: any) => signer.role));
+    const clientSigner = signers.find((signer: any) => signer.role === "client");
+    if (!clientSigner?.user_id) throw new Error("Native agreement v1 requires an authenticated client signer");
+    await supabase.from("na_signers").update({ status: "invited", invited_at: new Date().toISOString() }).eq("id", clientSigner.id);
+    const signingLinks = [{ signerId: clientSigner.id, email: clientSigner.email, signingUrl: `/portal/agreements/native/${pkg.id}` }];
 
     await supabase.from("na_packages").update({ status: "sent", sent_at: new Date().toISOString() }).eq("id", pkg.id);
     await supabase.from("na_events").insert({
@@ -264,7 +283,7 @@ export const sealAndSendPackage = createServerFn({ method: "POST" })
       details: { snapshot_hash: snapshotHash, signer_count: signers.length },
     });
 
-    return { snapshotId: snap.id, snapshotHash, signingLinks: tokens };
+    return { snapshotId: snap.id, snapshotHash, signingLinks };
   });
 
 export const voidPackage = createServerFn({ method: "POST" })
