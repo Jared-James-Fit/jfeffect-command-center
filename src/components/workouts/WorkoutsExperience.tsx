@@ -247,7 +247,9 @@ export function WorkoutsExperience({
   // ---- Drag & drop rescheduling (pointer devices) ------------------------
   // Touch keeps normal scrolling: HTML5 drag never activates there, and the
   // Reschedule button remains the accessible/mobile path.
-  const canReschedule = mode === "self";
+  // Both a client in self mode and an authorized coach/admin viewing one
+  // specific client calendar use the same canonical optimistic move path.
+  const canReschedule = mode === "self" || mode === "coach";
   const moveWorkoutMutation = useMoveWorkout(clientId);
   const [drag, setDrag] = useState<{ target: MoveTarget; fromIso: string } | null>(null);
 

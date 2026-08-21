@@ -7,6 +7,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Card, CardContent } from "@/components/ui/card";
 import { getClientSchedule } from "@/lib/schedule-bulk.functions";
 import { reorderScheduledWorkouts } from "@/lib/scheduled-workouts.functions";
+import { useMoveWorkout } from "@/lib/use-move-workout";
+import { scheduleQueryKeys } from "@/lib/workout-move";
+import { format } from "date-fns";
 import { toast } from "sonner";
 import { ScheduleCalendar } from "./ScheduleCalendar";
 import { ScheduleManagerList } from "./ScheduleManagerList";
@@ -26,6 +29,7 @@ export function ScheduleManagerShell({ clientId, mode }: ScheduleManagerShellPro
   const fetchFn = useServerFn(getClientSchedule);
   const reorderFn = useServerFn(reorderScheduledWorkouts);
   const queryClient = useQueryClient();
+  const optimisticMove = useMoveWorkout(clientId);
   const { data, isLoading } = useQuery({
     queryKey: ["client-schedule", clientId],
     enabled: !!clientId,
@@ -53,6 +57,26 @@ export function ScheduleManagerShell({ clientId, mode }: ScheduleManagerShellPro
     target: { dayId: string; instanceId: string | null },
     targetDate: Date,
   ) => {
+    // Calendar drag/drop is the fast path: exact scheduled instances move
+    // optimistically through the same canonical hook as MoveWorkoutSheet.
+    // Legacy program-day cards retain the existing sheet flow.
+    if (target.instanceId) {
+      const instance = (scheduledInstances as any[])?.find((row) => row.id === target.instanceId);
+      const completion = (completions as any[])?.find(
+        (row) => row.scheduled_workout_id === target.instanceId,
+      );
+      if (instance && !completion?.completed_at) {
+        optimisticMove.mutate({
+          target: {
+            scheduledWorkoutId: target.instanceId,
+            dayId: target.dayId,
+            fromDate: instance.scheduled_date,
+          },
+          newDate: format(targetDate, "yyyy-MM-dd"),
+        });
+        return;
+      }
+    }
     setMoveDayId(target.dayId);
     setMoveInstanceId(target.instanceId);
     setMoveInitialDate(targetDate);
@@ -67,7 +91,9 @@ export function ScheduleManagerShell({ clientId, mode }: ScheduleManagerShellPro
     mutationFn: async (args: { date: string; orderedInstanceIds: string[] }) =>
       reorderFn({ data: { clientId, date: args.date, orderedInstanceIds: args.orderedInstanceIds } }),
     onSuccess: () => {
-      void queryClient.invalidateQueries();
+      for (const key of scheduleQueryKeys(clientId)) {
+        void queryClient.invalidateQueries({ queryKey: key, refetchType: "active" });
+      }
     },
     onError: (e: any) => toast.error(e?.message ?? "Could not reorder."),
   });
