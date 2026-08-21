@@ -120,6 +120,15 @@ export function MoveWorkoutSheet({
   const updateInstanceTimeFn = useServerFn(updateScheduledWorkoutTime);
   const removeInstanceFn = useServerFn(removeScheduledWorkout);
 
+  /** Schedule-only invalidation: never refetch programs/analytics/library. */
+  const invalidateScheduleOnly = () => {
+    for (const key of scheduleQueryKeys(clientId ?? null)) {
+      void queryClient.invalidateQueries({ queryKey: key, refetchType: "active" });
+    }
+    void queryClient.invalidateQueries({ queryKey: ["client-cardio-resolved"] });
+    void queryClient.invalidateQueries({ queryKey: ["cal-client-cardio"] });
+  };
+
   const ctxQuery = useQuery({
     queryKey: ["schedule-move-context", dayId, scheduledWorkoutId ?? null],
     enabled: !!dayId && open,
@@ -317,10 +326,7 @@ export function MoveWorkoutSheet({
       return swap({ data: { dayIdA: dayId!, dayIdB: otherDayId } });
     },
     onSuccess: (res) => {
-      void queryClient.invalidateQueries();
-      void queryClient.invalidateQueries({ queryKey: ["client-cardio-resolved"] });
-      void queryClient.invalidateQueries({ queryKey: ["cal-client-cardio"] });
-      void queryClient.invalidateQueries({ queryKey: ["week-sched-data"] });
+      invalidateScheduleOnly();
       toast.success("Workouts swapped.", {
         action: res.batchId
           ? {
@@ -329,10 +335,7 @@ export function MoveWorkoutSheet({
                 try {
                   await undo({ data: { batchId: res.batchId! } });
                   toast.success("Swap undone.");
-                  void queryClient.invalidateQueries();
-                  void queryClient.invalidateQueries({ queryKey: ["client-cardio-resolved"] });
-                  void queryClient.invalidateQueries({ queryKey: ["cal-client-cardio"] });
-                  void queryClient.invalidateQueries({ queryKey: ["week-sched-data"] });
+                  invalidateScheduleOnly();
                 } catch (e: any) {
                   toast.error(e?.message ?? "Could not undo.");
                 }
@@ -351,7 +354,7 @@ export function MoveWorkoutSheet({
       updateInstanceTimeFn({ data: { instanceId: effectiveScheduledWorkoutId!, time: t } }),
     onSuccess: () => {
       toast.success("Time updated.");
-      void queryClient.invalidateQueries();
+      invalidateScheduleOnly();
     },
     onError: (e: any) => toast.error(e?.message ?? "Could not update time."),
   });
@@ -361,7 +364,7 @@ export function MoveWorkoutSheet({
       removeInstanceFn({ data: { instanceId: effectiveScheduledWorkoutId! } }),
     onSuccess: () => {
       toast.success("Removed from schedule.");
-      void queryClient.invalidateQueries();
+      invalidateScheduleOnly();
       onOpenChange(false);
     },
     onError: (e: any) => toast.error(e?.message ?? "Could not remove."),

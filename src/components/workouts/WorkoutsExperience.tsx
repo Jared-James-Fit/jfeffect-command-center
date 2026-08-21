@@ -71,6 +71,11 @@ import { AT_HOME_BACKUP_BADGE, isAtHomeBackupClient, isAtHomeBackupSessionBlock 
 import { filterActiveCalendarItems } from "@/lib/active-calendar";
 import { canDragRescheduleItem, moveTargetFromItem, type MoveTarget } from "@/lib/workout-move";
 import { useMoveWorkout } from "@/lib/use-move-workout";
+import {
+  CalendarDayCell,
+  CalendarDndProvider,
+  type CalendarDnd,
+} from "@/components/workouts/calendar-day-dnd";
 import { formatCompactWorkoutLabel } from "@/lib/workout-day-label";
 
 type Mode = "self" | "coach";
@@ -244,9 +249,9 @@ export function WorkoutsExperience({
   const [historyOpen, setHistoryOpen] = useState(false);
   const [calView, setCalView] = useState<"week" | "month">("week");
 
-  // ---- Drag & drop rescheduling (pointer devices) ------------------------
-  // Touch keeps normal scrolling: HTML5 drag never activates there, and the
-  // Reschedule button remains the accessible/mobile path.
+  // ---- Drag & drop rescheduling (pointer + touch) ------------------------
+  // dnd-kit PointerSensor (mouse/iPad pointer) + TouchSensor (press-and-hold,
+  // so vertical scrolling still works). Reschedule button stays as fallback.
   // Both a client in self mode and an authorized coach/admin viewing one
   // specific client calendar use the same canonical optimistic move path.
   const canReschedule = mode === "self" || mode === "coach";
@@ -574,22 +579,24 @@ export function WorkoutsExperience({
                     </button>
                   </div>
                 </div>
-                {calView === "week" ? (
-                  <WeekStrip
-                    selectedDate={selectedDate}
-                    onSelectDate={setSelectedDate}
-                    byDate={byDate}
-                    dnd={dnd}
-                  />
-                ) : (
-                  <MonthGrid
-                    selectedDate={selectedDate}
-                    onSelectDate={setSelectedDate}
-                    byDate={byDate}
-                    chipsByDate={priorityChipsByDate}
-                    dnd={dnd}
-                  />
-                )}
+                <CalendarDndProvider dnd={dnd}>
+                  {calView === "week" ? (
+                    <WeekStrip
+                      selectedDate={selectedDate}
+                      onSelectDate={setSelectedDate}
+                      byDate={byDate}
+                      dnd={dnd}
+                    />
+                  ) : (
+                    <MonthGrid
+                      selectedDate={selectedDate}
+                      onSelectDate={setSelectedDate}
+                      byDate={byDate}
+                      chipsByDate={priorityChipsByDate}
+                      dnd={dnd}
+                    />
+                  )}
+                </CalendarDndProvider>
                 <SelectedDayList
                   items={byDate.get(toLocalISO(selectedDate)) ?? []}
                   date={selectedDate}
@@ -688,64 +695,8 @@ function statusDotClass(status: WorkoutStatus | "none"): string {
   }
 }
 
-export type CalendarDnd = {
-  dragging: boolean;
-  draggingFromIso: string | null;
-  canDragItem: (item: WorkoutItem) => boolean;
-  onDragStartItem: (item: WorkoutItem, fromIso: string) => void;
-  onDragEndItem: () => void;
-  onDropDate: (iso: string) => void;
-} | null;
+export type { CalendarDnd } from "@/components/workouts/calendar-day-dnd";
 
-/** Shared drag/drop wiring for a single calendar day cell. */
-function dayCellDndProps(
-  dnd: CalendarDnd,
-  iso: string,
-  item: WorkoutItem | undefined,
-  isOver: boolean,
-  setOver: (iso: string | null) => void,
-) {
-  if (!dnd) return { props: {} as Record<string, unknown>, className: "" };
-  const draggable = !!item && dnd.canDragItem(item);
-  const isDropTarget = dnd.dragging && dnd.draggingFromIso !== iso;
-  return {
-    props: {
-      draggable,
-      onDragStart: (e: React.DragEvent) => {
-        if (!draggable || !item) return;
-        e.dataTransfer.effectAllowed = "move";
-        // Some browsers require payload data for the drag to start.
-        e.dataTransfer.setData("text/plain", iso);
-        dnd.onDragStartItem(item, iso);
-      },
-      onDragEnd: () => {
-        setOver(null);
-        dnd.onDragEndItem();
-      },
-      onDragOver: (e: React.DragEvent) => {
-        if (!isDropTarget) return;
-        e.preventDefault();
-        e.dataTransfer.dropEffect = "move";
-        if (!isOver) setOver(iso);
-      },
-      onDragLeave: () => {
-        if (isOver) setOver(null);
-      },
-      onDrop: (e: React.DragEvent) => {
-        if (!isDropTarget) return;
-        e.preventDefault();
-        setOver(null);
-        dnd.onDropDate(iso);
-      },
-    } as Record<string, unknown>,
-    className: cn(
-      draggable && "cursor-grab active:cursor-grabbing",
-      dnd.dragging && dnd.draggingFromIso === iso && "opacity-50",
-      isDropTarget && "ring-1 ring-primary/40",
-      isOver && "ring-2 ring-primary bg-primary/10 scale-[1.03]",
-    ),
-  };
-}
 
 function WeekStrip({
   selectedDate, onSelectDate, byDate, dnd,
@@ -755,7 +706,6 @@ function WeekStrip({
   byDate: Map<string, WorkoutItem[]>;
   dnd?: CalendarDnd;
 }) {
-  const [overIso, setOverIso] = useState<string | null>(null);
   // Week the selected date belongs to. Mon-first to match existing schedule UI.
   const weekStart = startOfWeek(selectedDate, { weekStartsOn: 1 });
   const days = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
@@ -795,11 +745,12 @@ function WeekStrip({
             : "none";
           const isToday = isSameDay(d, today);
           const isSelected = isSameDay(d, selectedDate);
-          const cellDnd = dayCellDndProps(dnd ?? null, iso, item, overIso === iso, setOverIso);
           return (
+            <CalendarDayCell key={iso} iso={iso} item={item} label={format(d, "MMM d")}>
+              {(cellDnd) => (
             <button
-              key={iso}
               type="button"
+              ref={cellDnd.setNodeRef as any}
               onClick={() => onSelectDate(d)}
               {...cellDnd.props}
               className={cn(
@@ -835,7 +786,10 @@ function WeekStrip({
                 )}>+{extra}</span>
               )}
             </button>
+              )}
+            </CalendarDayCell>
           );
+
         })}
       </div>
     </Card>
@@ -855,7 +809,6 @@ function MonthGrid({
   chipsByDate?: Map<string, Array<{ label: string; family: string }>>;
   dnd?: CalendarDnd;
 }) {
-  const [overIso, setOverIso] = useState<string | null>(null);
   const monthStart = startOfMonth(selectedDate);
   const monthEnd = endOfMonth(selectedDate);
   const gridStart = startOfWeek(monthStart, { weekStartsOn: 1 });
@@ -907,10 +860,12 @@ function MonthGrid({
             ? formatCompactWorkoutLabel(item.day as any, item.week as any)
               ?? cleanDayTitle(item.day?.title, item.day?.day_index)
             : null;
-          const cellDnd = dayCellDndProps(dnd ?? null, iso, item, overIso === iso, setOverIso);
           return (
+            <CalendarDayCell key={iso} iso={iso} item={item} label={title ?? format(d, "MMM d")}>
+              {(cellDnd) => (
             <button
-              key={iso}
+              ref={cellDnd.setNodeRef as any}
+
               type="button"
               onClick={() => onSelectDate(d)}
               {...cellDnd.props}
@@ -970,7 +925,10 @@ function MonthGrid({
                 );
               })()}
             </button>
+              )}
+            </CalendarDayCell>
           );
+
         })}
       </div>
     </Card>
