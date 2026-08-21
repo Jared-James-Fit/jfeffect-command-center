@@ -34,7 +34,7 @@ function NativeAgreementDetail() {
     onSuccess: (res: any) => {
       const origin = typeof window !== "undefined" ? window.location.origin : "";
       setLinks(res.signingLinks.map((l: any) => ({ email: l.email, url: origin + l.signingUrl })));
-      toast.success("Sealed and sent. Share the signing links below with each signer.");
+      toast.success("Sealed and sent. The client can review and sign through their authenticated portal.");
       qc.invalidateQueries({ queryKey: ["native-package", packageId] });
     },
     onError: (e: Error) => toast.error(e.message),
@@ -83,6 +83,7 @@ function NativeAgreementDetail() {
           {(pkg.jurisdiction_block_reasons ?? []).map((r: string) => (
             <Badge key={r} variant="destructive">{r.replace(/_/g, " ")}</Badge>
           ))}
+          {pkg.status === "completed" && <Badge variant={pkg.artifact_status === "ready" ? "default" : "secondary"}>Signed artifact: {pkg.artifact_status ?? "pending"}</Badge>}
         </div>
         <div className="flex gap-2">
           <Button size="sm" disabled={!canSend || send.isPending} onClick={() => send.mutate()}>
@@ -90,7 +91,7 @@ function NativeAgreementDetail() {
           </Button>
           {pkg.status === "completed" && (
             <Button size="sm" variant="outline" onClick={() => regenPdf.mutate()} disabled={regenPdf.isPending}>
-              Re-generate PDF
+              {pkg.artifact_status === "failed" ? "Retry signed PDF" : "Generate signed PDF"}
             </Button>
           )}
           {!["voided", "completed"].includes(pkg.status) && (
@@ -106,7 +107,7 @@ function NativeAgreementDetail() {
 
       {links.length > 0 && (
         <Card className="p-4 space-y-2">
-          <h3 className="font-semibold">Signing links (shown only once)</h3>
+          <h3 className="font-semibold">Authenticated signing access</h3>
           {links.map((l) => (
             <div key={l.email} className="flex items-center gap-2 text-sm">
               <span className="font-mono text-xs flex-1 truncate">{l.email} → {l.url}</span>
@@ -115,7 +116,7 @@ function NativeAgreementDetail() {
               </Button>
             </div>
           ))}
-          <p className="text-xs text-muted-foreground">These tokens are only shown now. They expire in 14 days.</p>
+          <p className="text-xs text-muted-foreground">Native v1 requires the client’s authenticated JF Effect portal session. No reusable guest signing token is created.</p>
         </Card>
       )}
 
