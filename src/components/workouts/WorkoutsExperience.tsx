@@ -68,6 +68,8 @@ import {
   removeEmptyAtHomeBackupSession,
 } from "@/lib/at-home-backup.functions";
 import { AT_HOME_BACKUP_BADGE, isAtHomeBackupClient, isAtHomeBackupSessionBlock } from "@/lib/at-home-backup";
+import { filterActiveCalendarItems } from "@/lib/active-calendar";
+import { formatCompactWorkoutLabel } from "@/lib/workout-day-label";
 
 type Mode = "self" | "coach";
 
@@ -110,12 +112,17 @@ export function WorkoutsExperience({
   // actual schedule (e.g. Mon/Wed/Fri) when pl_weeks.training_days is not set.
   const committedDays = (client as any)?.committed_training_days ?? null;
 
+  // The current calendar grid shows the live program only: active + upcoming
+  // blocks. Completed/archived blocks stay fully available through block and
+  // history surfaces, but must not stack old workouts onto current dates.
+  const calendarItems = useMemo(() => filterActiveCalendarItems(dayItems), [dayItems]);
+
   const byDate = useMemo(() => {
     // Multiple workouts can land on the same calendar date (e.g. a
     // reschedule stacks Day 2 onto Day 4's Friday). Group them so no
     // workout is silently dropped from the calendar / selected-day view.
     const map = new Map<string, WorkoutItem[]>();
-    for (const it of dayItems) {
+    for (const it of calendarItems) {
       const d = dayScheduledDate(it, committedDays);
       if (!d) continue;
       const key = toLocalISO(d);
@@ -124,7 +131,7 @@ export function WorkoutsExperience({
       map.set(key, list);
     }
     return map;
-  }, [dayItems, committedDays]);
+  }, [calendarItems, committedDays]);
 
   // Fetch priority-labelled rows for every visible scheduled day so the
   // month/week grids can render compact priority chips. Only pulls the
@@ -791,7 +798,12 @@ function MonthGrid({
           const inMonth = isSameMonth(d, monthStart);
           const isToday = isSameDay(d, today);
           const isSelected = isSameDay(d, selectedDate);
-          const title = item ? cleanDayTitle(item.day?.title, item.day?.day_index) : null;
+          // Compact month cells: prefer a meaningful subtitle, else week+day
+          // identity so W1 D3 and W2 D3 never read as the same workout.
+          const title = item
+            ? formatCompactWorkoutLabel(item.day as any, item.week as any)
+              ?? cleanDayTitle(item.day?.title, item.day?.day_index)
+            : null;
           return (
             <button
               key={iso}
