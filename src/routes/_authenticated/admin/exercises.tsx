@@ -380,7 +380,11 @@ export function ExercisesAdmin({ embedded = false }: { embedded?: boolean } = {}
             </Card>
           ))}
         </div>
+        {visibleCount < filtered.length && (
+          <div ref={sentinelRef} className="h-10 w-full" aria-hidden="true" />
+        )}
       </div>
+
       <Dialog open={!!editing} onOpenChange={(o) => !o && setEditing(null)}>
         {editing && (
           <EditExerciseDialog
