@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import {
   DndContext, useDraggable, useDroppable, PointerSensor, TouchSensor,
   useSensor, useSensors, DragOverlay, type DragEndEvent,
@@ -185,6 +185,7 @@ export function ScheduleCalendar(props: ScheduleCalendarProps) {
   const [view, setView] = useState<"month" | "list">("month");
   const [cursor, setCursor] = useState<Date>(startOfMonth(new Date()));
   const [dragId, setDragId] = useState<string | null>(null);
+  const suppressNextSelectRef = useRef(false);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
@@ -267,6 +268,10 @@ export function ScheduleCalendar(props: ScheduleCalendarProps) {
 
   const handleDragEnd = (e: DragEndEvent) => {
     setDragId(null);
+    // A successful drag must not also activate the card click handler and
+    // open the move sheet. Reset after the browser dispatches that click.
+    suppressNextSelectRef.current = true;
+    setTimeout(() => { suppressNextSelectRef.current = false; }, 0);
     if (!e.over || !e.active) return;
     const chipId = String(e.active.id);
     const chip = chipById.get(chipId);
@@ -331,8 +336,14 @@ export function ScheduleCalendar(props: ScheduleCalendarProps) {
   return (
     <DndContext
       sensors={sensors}
-      onDragStart={(e) => setDragId(String(e.active.id))}
-      onDragCancel={() => setDragId(null)}
+      onDragStart={(e) => {
+        suppressNextSelectRef.current = true;
+        setDragId(String(e.active.id));
+      }}
+      onDragCancel={() => {
+        setDragId(null);
+        setTimeout(() => { suppressNextSelectRef.current = false; }, 0);
+      }}
       onDragEnd={handleDragEnd}
     >
       {unscheduled.length > 0 && (
@@ -410,14 +421,20 @@ export function ScheduleCalendar(props: ScheduleCalendarProps) {
                     const instIdx = chip.instanceId ? instChips.findIndex((c) => c.chipId === chip.chipId) : -1;
                     const canReorder = canEdit && !!chip.instanceId && !!onReorder && instChips.length > 1;
                     return (
-                      <div key={chip.chipId} onClick={() => onSelectDay?.({ dayId: day.id, instanceId: chip.instanceId })}>
+                      <div
+                        key={chip.chipId}
+                        onClick={() => {
+                          if (suppressNextSelectRef.current) return;
+                          onSelectDay?.({ dayId: day.id, instanceId: chip.instanceId });
+                        }}
+                      >
                         <DayChip
                           chipId={chip.chipId}
                           day={day}
                           week={wk}
                           blockName={blk?.name ?? null}
                           comp={chip.comp}
-                          draggable={canEdit}
+                          draggable={canEdit && !chip.comp?.completed_at}
                           canReorderUp={canReorder && instIdx > 0}
                           canReorderDown={canReorder && instIdx >= 0 && instIdx < instChips.length - 1}
                           onNudge={canReorder ? (dir) => handleReorderNudge(chip.chipId, dir) : undefined}

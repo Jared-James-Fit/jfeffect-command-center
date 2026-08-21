@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   applyOptimisticMove,
+  applyOptimisticScheduleInstanceMove,
   canDragRescheduleItem,
   moveTargetFromItem,
   reconcileMovedDate,
@@ -87,8 +88,25 @@ describe("drag/drop reschedule", () => {
     const keys = scheduleQueryKeys("client-1").map((k) => k[0]);
     expect(keys).toContain("my-workouts");
     expect(keys).toContain("scheduled-workouts");
+    expect(keys).toContain("client-schedule");
     expect(keys.some((k) => String(k).startsWith("training-analytics"))).toBe(false);
     expect(keys.some((k) => String(k).startsWith("pl-"))).toBe(false);
+  });
+
+  it("coach calendar cache moves only the exact scheduled instance immediately", () => {
+    const before = {
+      scheduledInstances: [
+        { id: "inst-a", source_day_id: "day-a", scheduled_date: "2026-08-24", original_date: "2026-08-24" },
+        { id: "inst-b", source_day_id: "day-b", scheduled_date: "2026-08-26", original_date: "2026-08-26" },
+      ],
+      completions: [{ scheduled_workout_id: "inst-b", completed_at: "2026-08-26T12:00:00Z" }],
+    };
+    const next = applyOptimisticScheduleInstanceMove(before, "inst-a", "2026-08-27")!;
+    expect(next.scheduledInstances![0].scheduled_date).toBe("2026-08-27");
+    expect(next.scheduledInstances![0].source_day_id).toBe("day-a");
+    expect(next.scheduledInstances![0].original_date).toBe("2026-08-24");
+    expect(next.scheduledInstances![1]).toBe(before.scheduledInstances[1]);
+    expect(next.completions).toBe(before.completions);
   });
 
   it("realtime echo of the old date does not flash the card back", () => {

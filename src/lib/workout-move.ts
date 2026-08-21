@@ -94,6 +94,7 @@ export function scheduleQueryKeys(clientId: string | null | undefined) {
   return [
     ["my-workouts", id],
     ["scheduled-workouts", id],
+    ["client-schedule", id],
     ["week-sched-data"],
     ["schedule-manager"],
     ["today-dashboard", id],
@@ -116,4 +117,40 @@ export function reconcileMovedDate(
   // Server still reports the pre-move date while our move is confirmed →
   // keep the optimistic value so the card never flashes back.
   return confirmed ? optimisticDate : serverDate;
+}
+
+/**
+ * Patch the Schedule Manager cache for an exact canonical instance. This is
+ * deliberately narrower than a refetch: moving an instance changes only its
+ * placement, so its source day, completion, prescriptions, and all other
+ * cached schedule records keep their identities.
+ */
+type ScheduleInstanceCache = {
+  id: string;
+  scheduled_date: string;
+  [key: string]: unknown;
+};
+
+type ClientScheduleCache = {
+  scheduledInstances?: ScheduleInstanceCache[];
+  [key: string]: unknown;
+};
+
+export function applyOptimisticScheduleInstanceMove(
+  schedule: ClientScheduleCache | undefined | null,
+  scheduledWorkoutId: string | null,
+  newDate: string,
+): ClientScheduleCache | undefined | null {
+  if (!schedule || !scheduledWorkoutId || !Array.isArray(schedule.scheduledInstances)) {
+    return schedule;
+  }
+
+  let hit = false;
+  const scheduledInstances = schedule.scheduledInstances.map((instance) => {
+    if (hit || instance.id !== scheduledWorkoutId) return instance;
+    hit = true;
+    return { ...instance, scheduled_date: newDate };
+  });
+
+  return hit ? { ...schedule, scheduledInstances } : schedule;
 }

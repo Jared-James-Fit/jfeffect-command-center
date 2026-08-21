@@ -15,6 +15,7 @@ import { moveWorkout } from "@/lib/schedule-manager.functions";
 import type { WorkoutItem } from "@/lib/workout-today";
 import {
   applyOptimisticMove,
+  applyOptimisticScheduleInstanceMove,
   scheduleQueryKeys,
   type MoveTarget,
 } from "@/lib/workout-move";
@@ -49,16 +50,32 @@ export function useMoveWorkout(clientId?: string | null) {
       return { ...(res as any), __instance: false as const };
     },
     onMutate: async ({ target, newDate }) => {
-      // Stop in-flight schedule reads from clobbering the optimistic state.
-      await qc.cancelQueries({ queryKey: ["my-workouts"] });
-      const snapshots = qc.getQueriesData<WorkoutItem[]>({ queryKey: ["my-workouts"] });
+      // Stop only the affected calendar reads from clobbering the optimistic
+      // placement before the canonical instance mutation returns.
+      await Promise.all([
+        qc.cancelQueries({ queryKey: ["my-workouts"] }),
+        ...(clientId ? [qc.cancelQueries({ queryKey: ["client-schedule", clientId] })] : []),
+      ]);
+      const workoutSnapshots = qc.getQueriesData<WorkoutItem[]>({ queryKey: ["my-workouts"] });
+      const scheduleSnapshots = clientId
+        ? qc.getQueriesData({ queryKey: ["client-schedule", clientId] })
+        : [];
+
       qc.setQueriesData<WorkoutItem[]>({ queryKey: ["my-workouts"] }, (old) =>
         Array.isArray(old) ? applyOptimisticMove(old, target, newDate) : old,
       );
-      return { snapshots };
+      if (clientId) {
+        qc.setQueriesData({ queryKey: ["client-schedule", clientId] }, (old) =>
+          applyOptimisticScheduleInstanceMove(old as any, target.scheduledWorkoutId, newDate),
+        );
+      }
+      return { workoutSnapshots, scheduleSnapshots };
     },
     onError: (error: any, _vars, ctx) => {
-      for (const [key, data] of ctx?.snapshots ?? []) {
+      for (const [key, data] of [
+        ...(ctx?.workoutSnapshots ?? []),
+        ...(ctx?.scheduleSnapshots ?? []),
+      ]) {
         qc.setQueryData(key, data);
       }
       toast.error(error?.message ?? "Could not move that workout — put it back.");
