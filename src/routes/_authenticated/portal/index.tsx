@@ -446,7 +446,7 @@ function PortalHome() {
             gates for profile picture / basic info / training schedule / goals). */}
         {client?.id && portalUserId && (
           <SectionErrorBoundary label="Setup checklist">
-            <SetupChecklistBanner clientId={client.id} userId={portalUserId} />
+            <SetupChecklistBanner clientId={client.id} userId={portalUserId ?? ""} />
           </SectionErrorBoundary>
         )}
 
@@ -462,7 +462,7 @@ function PortalHome() {
             <SectionErrorBoundary label="Bodyweight">
               <BodyweightSummaryCard
                 clientId={client.id}
-                userId={portalUserId}
+                userId={portalUserId ?? ""}
                 defaultUnit={((client as any)?.preferred_weight_unit as WeightUnit) ?? "lb"}
               />
             </SectionErrorBoundary>
@@ -475,7 +475,7 @@ function PortalHome() {
         {portalUserId && (
           <SectionErrorBoundary label="Water">
             <HomeWaterCard
-              userId={portalUserId}
+              userId={portalUserId ?? ""}
               currentUserId={portalUserId}
               surface="portal"
             />
@@ -486,7 +486,7 @@ function PortalHome() {
         {portalUserId ? (
           <SectionErrorBoundary label="Progress">
             <ProgressSummaryCard
-              userId={portalUserId}
+              userId={portalUserId ?? ""}
               currentUserId={portalUserId}
               viewerRole="owner"
               progressHref={{ kind: "portal" }}

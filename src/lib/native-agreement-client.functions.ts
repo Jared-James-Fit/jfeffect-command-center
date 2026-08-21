@@ -92,7 +92,7 @@ export const acknowledgeClientNativeAgreementReview = createServerFn({ method: "
       throw new Error(`This agreement is not available for review (status: ${pkg.status})`);
     }
     const now = new Date().toISOString();
-    await supabaseAdmin
+    await (supabaseAdmin as any)
       .from("na_packages")
       .update({
         first_viewed_at: pkg.first_viewed_at ?? now,
@@ -183,7 +183,7 @@ export const submitClientNativeAgreementSignature = createServerFn({ method: "PO
       .from("na_signers")
       .update({ status: "signed", signed_at: now })
       .eq("id", signer.id);
-    await supabaseAdmin
+    await (supabaseAdmin as any)
       .from("na_packages")
       .update({
         status: "completed",
@@ -221,7 +221,7 @@ export const submitClientNativeAgreementSignature = createServerFn({ method: "PO
         await renderAgreementPdf(pkg.id);
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
-        await supabaseAdmin
+        await (supabaseAdmin as any)
           .from("na_packages")
           .update({ artifact_status: "failed", artifact_error: message })
           .eq("id", pkg.id);

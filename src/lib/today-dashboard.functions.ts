@@ -2,6 +2,7 @@ import { supabase } from "@/integrations/supabase/client";
 import type { WorkoutItem } from "@/lib/workout-today";
 import { mergeScheduledInstances } from "@/lib/scheduled-instances-merge";
 import { filterPrimaryProgramBlocks } from "@/lib/at-home-backup";
+import { isInactivePrimaryDay } from "@/lib/active-calendar";
 
 /**
  * Lightweight dashboard variant of getClientWorkouts.
@@ -32,13 +33,15 @@ export async function getClientTodayItems(clientId: string): Promise<WorkoutItem
   const weekIds = (weeks ?? []).map((w: any) => w.id);
   if (!weekIds.length) return [];
 
-  const { data: days } = await supabase
+  const { data: allDays } = await supabase
     .from("pl_days")
     .select("*")
     .in("week_id", weekIds)
     .order("day_index");
 
-  const dayIds = (days ?? []).map((d: any) => d.id);
+  // Archived / soft-deleted days never drive Today.
+  const days = (allDays ?? []).filter((d: any) => !isInactivePrimaryDay(d));
+  const dayIds = days.map((d: any) => d.id);
   if (!dayIds.length) return [];
 
   const [completionsRes, scheduledInstancesRes] = await Promise.all([
@@ -57,7 +60,7 @@ export async function getClientTodayItems(clientId: string): Promise<WorkoutItem
   const { data: scheduledInstances } = scheduledInstancesRes;
 
   const daysByWeek = new Map<string, any[]>();
-  for (const d of days ?? []) {
+  for (const d of days) {
     const list = daysByWeek.get(d.week_id) ?? [];
     list.push(d);
     daysByWeek.set(d.week_id, list);

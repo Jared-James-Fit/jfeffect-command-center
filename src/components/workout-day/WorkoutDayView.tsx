@@ -1830,7 +1830,7 @@ function WorkoutDay({
                   dayId={dayId}
                   route={`/portal/workouts/${dayId}`}
                   error={(rowsError as Error) ?? null}
-                  onRetry={() => { void refetchRows(); }}
+                  onRetry={() => { void (refetchRows as any)(); }}
                 />
               ) : authReady && rowsLoaded && !rowsFetching && (rows as any[]).length === 0 ? (
                 <WorkoutEmptyCard
@@ -2035,7 +2035,7 @@ function WorkoutDay({
                 dayId={dayId}
                 route={`/portal/workouts/${dayId}`}
                 error={(rowsError as Error) ?? null}
-                onRetry={() => { void refetchRows(); }}
+                onRetry={() => { void (refetchRows as any)(); }}
               />
             ) : authReady && rowsLoaded && !rowsFetching && (rows as any[]).length === 0 ? (
               <WorkoutEmptyCard

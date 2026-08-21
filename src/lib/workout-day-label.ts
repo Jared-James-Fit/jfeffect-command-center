@@ -80,3 +80,25 @@ export function formatDayCardLabel(day: DayLike | null | undefined, positionalIn
   const sub = formatDaySubtitle(day);
   return sub ? `${label} — ${sub}` : label;
 }
+/**
+ * Compact label for dense grids (month calendar cells).
+ *
+ * A bare "Day 3" repeats across every week of a block, which makes Week 1
+ * Day 3 and Week 2 Day 3 look like duplicate workouts on the month grid.
+ * Prefer the coach's meaningful subtitle when one exists; otherwise fall back
+ * to week+day identity ("W2 D3"). Display only — never mutates prescriptions.
+ */
+export function formatCompactWorkoutLabel(
+  day: DayLike | null | undefined,
+  week?: { week_index?: number | null } | null,
+  maxLength = 22,
+): string | null {
+  const sub = formatDaySubtitle(day);
+  if (sub) return sub.length > maxLength ? `${sub.slice(0, maxLength - 1).trimEnd()}…` : sub;
+  const w = week?.week_index ?? null;
+  const d = day?.day_index ?? null;
+  if (w && d) return `W${w} D${d}`;
+  if (d) return `D${d}`;
+  if (w) return `W${w}`;
+  return null;
+}

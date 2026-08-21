@@ -14,6 +14,8 @@ import {
   type WorkspaceTab,
 } from "@/components/clients/client-workspace-tab-model";
 
+export type { WorkspaceTab };
+
 interface ClientWorkspaceTabsProps {
   activeTab: WorkspaceTab;
   onChange: (tab: WorkspaceTab) => void;

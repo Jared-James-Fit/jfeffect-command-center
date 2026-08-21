@@ -559,7 +559,7 @@ async function syncOneMode(
     row,
     couponId,
     eligibleProduct.currency,
-    eligibleProduct.stripe_product_id,
+    eligibleProduct.stripe_product_id ?? "",
   );
   const existingPromoId = mode === "test"
     ? (row.stripe_test_promotion_code_id ?? null)
