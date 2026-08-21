@@ -155,6 +155,32 @@ export function ClientBlockView({
     return m;
   }, [completions]);
 
+  // Canonical schedule instances (pl_scheduled_workouts) — WHEN a workout
+  // happens. Whenever an instance exists for a pl_days row, its date wins
+  // over pl_days.scheduled_date and any derived cadence.
+  const { data: instances = [] } = useQuery({
+    queryKey: ["client-block-instances", blockId, dayIds.length],
+    enabled: dayIds.length > 0,
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("pl_scheduled_workouts")
+        .select("id, source_day_id, scheduled_date, order_index")
+        .in("source_day_id", dayIds);
+      return data ?? [];
+    },
+    staleTime: 15_000,
+  });
+  const instanceDateByDay = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const i of (instances as any[]).slice().sort((a, b) =>
+      String(a.scheduled_date).localeCompare(String(b.scheduled_date)) ||
+      (a.order_index ?? 0) - (b.order_index ?? 0),
+    )) {
+      if (!m.has(i.source_day_id)) m.set(i.source_day_id, i.scheduled_date);
+    }
+    return m;
+  }, [instances]);
+
   const weeks = useMemo(
     () => (tree?.weeks ?? []).slice().sort((a: any, b: any) => a.week_index - b.week_index),
     [tree?.weeks],
@@ -205,8 +231,19 @@ export function ClientBlockView({
   // Declared BEFORE weeklyPriorities (which calls dayDate inside a
   // useMemo that runs during render) so the TDZ doesn't throw once
   // `days` becomes non-empty.
+  // Canonical instance date (pl_scheduled_workouts) is passed as
+  // `scheduledDate` so dayScheduledDate() short-circuits on it before any
+  // pl_days.scheduled_date / cadence derivation.
   const dayDate = (d: any): Date | null =>
-    resolvedWeek ? dayScheduledDate({ day: d, week: resolvedWeek, block, completion: null }) : null;
+    resolvedWeek
+      ? dayScheduledDate({
+          day: d,
+          week: resolvedWeek,
+          block,
+          completion: null,
+          scheduledDate: instanceDateByDay.get(d?.id) ?? null,
+        })
+      : null;
 
   // One weekly priority map is shared by the summary and every day card. Its
   // schedule-first order prevents each workout card from resetting S/B/D to
@@ -214,7 +251,13 @@ export function ClientBlockView({
   const weeklyPurposeLabelById = useMemo(
     () => deriveWeeklyPurposeLabelByRowId(
       days.map((d: any, index: number) => {
-        const scheduled = dayScheduledDate({ day: d, week: resolvedWeek, block, completion: null });
+        const scheduled = dayScheduledDate({
+          day: d,
+          week: resolvedWeek,
+          block,
+          completion: null,
+          scheduledDate: instanceDateByDay.get(d?.id) ?? null,
+        });
         return {
           order: scheduled?.getTime() ?? d.day_index ?? d.sort_order ?? index,
           rows: (rowsByDay.get(d.id) ?? []) as any[],

@@ -561,17 +561,40 @@ function WorkoutDay({
   const block = (weekWithBlock as any)?.pl_blocks ?? null;
   const blockId = (block as any)?.id ?? (weekWithBlock as any)?.block_id ?? null;
 
-  const scheduledDate = useMemo(() => {
-    if (!day) return null;
-    return dayScheduledDate({ day, week, block, completion: null } as any);
-  }, [day, week, block]);
-  const today = startOfDay(new Date());
-  const isOutsideScheduledDay = !!scheduledDate && scheduledDate.getTime() !== today.getTime();
-
   const { isImpersonating } = useClientImpersonation();
   const scheduledWorkoutId = adapter?.kind === "client"
     ? adapter.ref.scheduledWorkoutId ?? (search as any)?.instance ?? null
     : null;
+
+  // Canonical schedule instance (pl_scheduled_workouts) owns WHEN this
+  // workout happens. When the logger was opened from a calendar instance,
+  // its date must beat pl_days.scheduled_date and any cadence derivation.
+  const { data: instanceRow = null } = useQuery({
+    queryKey: ["pl-scheduled-workout", scheduledWorkoutId],
+    enabled: !!scheduledWorkoutId,
+    staleTime: 60_000,
+    queryFn: async () => {
+      const { data } = await sb
+        .from("pl_scheduled_workouts")
+        .select("id, scheduled_date, source_day_id")
+        .eq("id", scheduledWorkoutId!)
+        .maybeSingle();
+      return data;
+    },
+  });
+
+  const scheduledDate = useMemo(() => {
+    if (!day) return null;
+    return dayScheduledDate({
+      day,
+      week,
+      block,
+      completion: null,
+      scheduledDate: (instanceRow as any)?.scheduled_date ?? null,
+    } as any);
+  }, [day, week, block, instanceRow]);
+  const today = startOfDay(new Date());
+  const isOutsideScheduledDay = !!scheduledDate && scheduledDate.getTime() !== today.getTime();
   // Workouts are ALWAYS editable — past, today, future, completed. There is no
   // automatic lock based on date, block status, program status, or completion.
   // The only way a workout becomes read-only is an explicit manual lock
