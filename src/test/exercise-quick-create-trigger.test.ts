@@ -27,7 +27,14 @@ describe("Add Exercise trigger is local UI state", () => {
       expect(source).not.toContain("location.href =");
       expect(source).not.toContain("location.assign");
       expect(source).not.toContain("router.invalidate");
+    }
+    // The only navigate() in the admin file is the legacy /admin/exercises
+    // route alias — never part of the Add Exercise interaction.
+    expect((adminLibrary.match(/navigate\(\{\s*to:/g) ?? []).length).toBe(1);
+    expect(adminLibrary).toContain('navigate({ to: "/admin/programming"');
+    for (const source of [quickAddDialog, quickCreateForm]) {
       expect(source).not.toMatch(/navigate\(\{\s*to:/);
+
     }
   });
 
