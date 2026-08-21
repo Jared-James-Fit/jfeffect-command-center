@@ -30,6 +30,8 @@ import {
   removeScheduledWorkout,
 } from "@/lib/scheduled-workouts.functions";
 import { detectScheduleConflicts } from "@/lib/schedule-conflicts";
+import { useMoveWorkout } from "@/lib/use-move-workout";
+import { scheduleQueryKeys } from "@/lib/workout-move";
 import { useClientImpersonation } from "@/lib/client-impersonation";
 
 const WEEKDAY_TO_INT: Record<string, number> = {
@@ -51,6 +53,8 @@ function toYMD(d: Date) {
 
 export interface MoveWorkoutSheetProps {
   dayId: string | null;
+  /** Owning client — enables precise, minimal schedule cache invalidation. */
+  clientId?: string | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   /** Optional pre-selected target date (used when arriving from drag-drop). */
@@ -96,6 +100,7 @@ export interface MoveWorkoutSheetProps {
  */
 export function MoveWorkoutSheet({
   dayId,
+  clientId,
   open,
   onOpenChange,
   initialTargetDate,
@@ -118,6 +123,10 @@ export function MoveWorkoutSheet({
   const ctxQuery = useQuery({
     queryKey: ["schedule-move-context", dayId, scheduledWorkoutId ?? null],
     enabled: !!dayId && open,
+    // The sheet renders instantly from already-known state; this context is
+    // only an enhancement (conflicts / suggested days / instance actions).
+    staleTime: 60_000,
+    gcTime: 5 * 60_000,
     queryFn: () =>
       fetchCtx({
         data: {
@@ -219,38 +228,29 @@ export function MoveWorkoutSheet({
     return out;
   }, [ctx, today]);
 
+  // Canonical shared reschedule mutation (optimistic + minimal invalidation).
+  // Drag/drop on the calendar uses the exact same hook.
+  const sharedMove = useMoveWorkout(clientId ?? ((ctx?.block as any)?.client_id as string | undefined) ?? null);
+
   const moveMutation = useMutation({
     mutationFn: async (args: { newDate: Date }) => {
-      if (isInstanceMode) {
-        const res = await moveInstanceFn({
-          data: {
-            instanceId: effectiveScheduledWorkoutId!,
-            newDate: toYMD(args.newDate),
-          },
-        });
-        return { ...res, __instance: true as const };
-      }
-      const res = await move({
-        data: {
+      const res = await sharedMove.mutateAsync({
+        target: {
+          scheduledWorkoutId: effectiveScheduledWorkoutId,
           dayId: dayId!,
-          newDate: toYMD(args.newDate),
+          fromDate: (ctx?.instance?.scheduled_date as string | null) ?? null,
         },
+        newDate: toYMD(args.newDate),
       });
-      return { ...res, __instance: false as const };
+      return res as any;
     },
     onSuccess: (res) => {
-      if (!res.ok) {
-        return;
-      }
+      if (!res?.ok) return;
       if ((res as any).noop) {
         toast.info("That workout was already on that date.");
         onOpenChange(false);
         return;
       }
-      void queryClient.invalidateQueries();
-      void queryClient.invalidateQueries({ queryKey: ["client-cardio-resolved"] });
-      void queryClient.invalidateQueries({ queryKey: ["cal-client-cardio"] });
-      void queryClient.invalidateQueries({ queryKey: ["week-sched-data"] });
 
       // Instance-scoped undo — restore date/time/orderIndex on the same
       // instance id. Never touches pl_days.scheduled_date.
@@ -264,21 +264,17 @@ export function MoveWorkoutSheet({
         toast.success("Workout moved.", {
           action: {
             label: "Undo",
-            onClick: async () => {
-              try {
-                await moveInstanceFn({
-                  data: {
-                    instanceId: capturedInstanceId,
-                    newDate: prev.scheduledDate,
-                    time: prev.scheduledTime,
-                    orderIndex: prev.orderIndex,
-                  },
-                });
-                toast.success("Move undone.");
-                void queryClient.invalidateQueries();
-              } catch (e: any) {
-                toast.error(e?.message ?? "Could not undo.");
-              }
+            onClick: () => {
+              sharedMove.mutate({
+                target: {
+                  scheduledWorkoutId: capturedInstanceId,
+                  dayId: dayId!,
+                  fromDate: null,
+                },
+                newDate: prev.scheduledDate,
+                time: prev.scheduledTime,
+                orderIndex: prev.orderIndex,
+              });
             },
           },
           duration: 6000,
@@ -296,10 +292,9 @@ export function MoveWorkoutSheet({
                 try {
                   await undo({ data: { batchId } });
                   toast.success("Move undone.");
-                  void queryClient.invalidateQueries();
-                  void queryClient.invalidateQueries({ queryKey: ["client-cardio-resolved"] });
-                  void queryClient.invalidateQueries({ queryKey: ["cal-client-cardio"] });
-                  void queryClient.invalidateQueries({ queryKey: ["week-sched-data"] });
+                  for (const key of scheduleQueryKeys(clientId ?? null)) {
+                    void queryClient.invalidateQueries({ queryKey: key });
+                  }
                 } catch (e: any) {
                   toast.error(e?.message ?? "Could not undo.");
                 }
@@ -310,10 +305,8 @@ export function MoveWorkoutSheet({
       });
       onOpenChange(false);
     },
-    onError: (e: any) => {
-      toast.error(e?.message ?? "Could not save the new date.");
-    },
   });
+
 
   const swapMutation = useMutation({
     mutationFn: async (otherDayId: string) => {
@@ -408,8 +401,8 @@ export function MoveWorkoutSheet({
 
         <div className="px-4 space-y-4 max-h-[60vh] overflow-y-auto">
           {ctxQuery.isLoading && (
-            <div className="flex items-center gap-2 py-6 text-sm text-muted-foreground">
-              <Loader2 className="h-4 w-4 animate-spin" /> Loading…
+            <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
+              <Loader2 className="h-3 w-3 animate-spin" /> Checking conflicts…
             </div>
           )}
 
@@ -435,8 +428,8 @@ export function MoveWorkoutSheet({
             </div>
           )}
 
-          {/* Quick chips */}
-          {ctx && (
+          {/* Quick chips — available immediately, no data dependency. */}
+          {(
             <div className="flex flex-wrap gap-2">
               <Button
                 size="sm"
@@ -469,7 +462,7 @@ export function MoveWorkoutSheet({
           )}
 
           {/* Calendar */}
-          {ctx && (
+          {(
             <div className="rounded-lg border border-border bg-card">
               <Calendar
                 mode="single"
@@ -556,7 +549,7 @@ export function MoveWorkoutSheet({
             </div>
           )}
 
-          {effectiveTarget && ctx && (
+          {effectiveTarget && (
             <div className="rounded-md bg-secondary/40 p-3 text-xs">
               <span className="text-muted-foreground">{currentDateLabel}</span>
               <ArrowRight className="mx-2 inline h-3.5 w-3.5" />
@@ -625,7 +618,6 @@ export function MoveWorkoutSheet({
               className="flex-1"
               disabled={
                 !effectiveTarget ||
-                !!ctxQuery.isError ||
                 moveMutation.isPending ||
                 swapMutation.isPending
               }
