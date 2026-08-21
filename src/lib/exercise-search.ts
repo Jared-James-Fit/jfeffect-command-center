@@ -468,7 +468,7 @@ export function searchExercises<T extends SearchableExercise>(
   if (parsed.terms.length === 0) {
     return {
       results: list.slice(0, limit).map((exercise) => ({
-        exercise, score: 0, complete: true, highlights: [],
+        exercise, score: 0, tier: SEARCH_TIER.partial, complete: true, highlights: [],
       })),
       highlightTerms: [],
       hasExactMatches: true,
