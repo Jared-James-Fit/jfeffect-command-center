@@ -30,6 +30,8 @@ import {
   removeScheduledWorkout,
 } from "@/lib/scheduled-workouts.functions";
 import { detectScheduleConflicts } from "@/lib/schedule-conflicts";
+import { useMoveWorkout } from "@/lib/use-move-workout";
+import { scheduleQueryKeys } from "@/lib/workout-move";
 import { useClientImpersonation } from "@/lib/client-impersonation";
 
 const WEEKDAY_TO_INT: Record<string, number> = {
@@ -51,6 +53,8 @@ function toYMD(d: Date) {
 
 export interface MoveWorkoutSheetProps {
   dayId: string | null;
+  /** Owning client — enables precise, minimal schedule cache invalidation. */
+  clientId?: string | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   /** Optional pre-selected target date (used when arriving from drag-drop). */
@@ -96,6 +100,7 @@ export interface MoveWorkoutSheetProps {
  */
 export function MoveWorkoutSheet({
   dayId,
+  clientId,
   open,
   onOpenChange,
   initialTargetDate,
@@ -221,7 +226,7 @@ export function MoveWorkoutSheet({
 
   // Canonical shared reschedule mutation (optimistic + minimal invalidation).
   // Drag/drop on the calendar uses the exact same hook.
-  const sharedMove = useMoveWorkout(clientId ?? (ctx?.block?.client_id as string | undefined) ?? null);
+  const sharedMove = useMoveWorkout(clientId ?? ((ctx?.block as any)?.client_id as string | undefined) ?? null);
 
   const moveMutation = useMutation({
     mutationFn: async (args: { newDate: Date }) => {
