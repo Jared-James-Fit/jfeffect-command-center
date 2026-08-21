@@ -417,6 +417,8 @@ export function QuickSwapButton({
   const [scope, setScope] = useState<"today" | "future">("today");
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(0);
+  const searchInputRef = useRef<HTMLInputElement>(null);
+
   const [chip, setChip] = useState<EquipmentChip>("Best Match");
   // Local ranking — a short debounce is enough to keep typing smooth.
   const debouncedSearch = useDebounced(search.trim(), 120);
