@@ -123,6 +123,10 @@ export function MoveWorkoutSheet({
   const ctxQuery = useQuery({
     queryKey: ["schedule-move-context", dayId, scheduledWorkoutId ?? null],
     enabled: !!dayId && open,
+    // The sheet renders instantly from already-known state; this context is
+    // only an enhancement (conflicts / suggested days / instance actions).
+    staleTime: 60_000,
+    gcTime: 5 * 60_000,
     queryFn: () =>
       fetchCtx({
         data: {
@@ -397,8 +401,8 @@ export function MoveWorkoutSheet({
 
         <div className="px-4 space-y-4 max-h-[60vh] overflow-y-auto">
           {ctxQuery.isLoading && (
-            <div className="flex items-center gap-2 py-6 text-sm text-muted-foreground">
-              <Loader2 className="h-4 w-4 animate-spin" /> Loading…
+            <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
+              <Loader2 className="h-3 w-3 animate-spin" /> Checking conflicts…
             </div>
           )}
 
@@ -424,8 +428,8 @@ export function MoveWorkoutSheet({
             </div>
           )}
 
-          {/* Quick chips */}
-          {ctx && (
+          {/* Quick chips — available immediately, no data dependency. */}
+          {(
             <div className="flex flex-wrap gap-2">
               <Button
                 size="sm"
@@ -458,7 +462,7 @@ export function MoveWorkoutSheet({
           )}
 
           {/* Calendar */}
-          {ctx && (
+          {(
             <div className="rounded-lg border border-border bg-card">
               <Calendar
                 mode="single"
@@ -545,7 +549,7 @@ export function MoveWorkoutSheet({
             </div>
           )}
 
-          {effectiveTarget && ctx && (
+          {effectiveTarget && (
             <div className="rounded-md bg-secondary/40 p-3 text-xs">
               <span className="text-muted-foreground">{currentDateLabel}</span>
               <ArrowRight className="mx-2 inline h-3.5 w-3.5" />
@@ -614,7 +618,6 @@ export function MoveWorkoutSheet({
               className="flex-1"
               disabled={
                 !effectiveTarget ||
-                !!ctxQuery.isError ||
                 moveMutation.isPending ||
                 swapMutation.isPending
               }
