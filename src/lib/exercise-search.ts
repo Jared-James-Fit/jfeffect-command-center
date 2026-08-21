@@ -18,6 +18,7 @@
 export type SearchableExercise = {
   id: string;
   name: string;
+  archived?: boolean | null;
   muscle_group?: string | null;
   primary_muscle_group?: string | null;
   category?: string | null;
@@ -45,6 +46,25 @@ export function normalizeText(input: string | null | undefined): string {
 function words(input: string | null | undefined): string[] {
   const n = normalizeText(input);
   return n ? n.split(" ") : [];
+}
+
+/** Conservative English singularisation for exercise-name search tokens. */
+export function singularizeSearchToken(token: string): string {
+  const value = normalizeText(token);
+  if (value.length <= 3) return value;
+  if (value.endsWith("ies") && value.length > 4) return `${value.slice(0, -3)}y`;
+  if (/(?:ss|sh|ch|x|z)es$/.test(value)) return value.slice(0, -2);
+  if (value.endsWith("s") && !value.endsWith("ss")) return value.slice(0, -1);
+  return value;
+}
+
+function tokenVariants(token: string): string[] {
+  const singular = singularizeSearchToken(token);
+  return singular && singular !== token ? [token, singular] : [token];
+}
+
+function canonicalTokens(input: string | null | undefined): string[] {
+  return words(input).map(singularizeSearchToken);
 }
 
 /* ------------------------------------------------------------------ */
@@ -178,7 +198,10 @@ export function parseQuery(raw: string): ParsedQuery {
   for (const token of words(raw)) {
     if (!token || NOISE_TOKENS.has(token) || seen.has(token)) continue;
     seen.add(token);
-    const needles = [token, ...(TOKEN_ALIASES[token] ?? [])];
+    const needles = Array.from(new Set([
+      ...tokenVariants(token),
+      ...(TOKEN_ALIASES[token] ?? []),
+    ]));
     terms.push({ token, needles });
   }
   return { raw, normalized: normalizeText(raw), terms };
@@ -252,12 +275,13 @@ const KIND_WEIGHT: Record<TermMatchKind, number> = {
  */
 export const SEARCH_TIER = {
   exactName: 0,
-  namePrefix: 1,
-  orderedTokens: 2,
-  allTokensInName: 3,
-  nameSubstring: 4,
-  metadataComplete: 5,
-  partial: 6,
+  tokenEquivalent: 1,
+  namePrefix: 2,
+  orderedTokens: 3,
+  allTokensInName: 4,
+  nameSubstring: 5,
+  metadataComplete: 6,
+  partial: 7,
 } as const;
 export type SearchTier = (typeof SEARCH_TIER)[keyof typeof SEARCH_TIER];
 
@@ -385,6 +409,12 @@ function computeTier(query: ParsedQuery, hay: Haystacks, complete: boolean): Sea
   const tokenQuery = query.terms.map((t) => t.token).join(" ");
   const needle = query.normalized || tokenQuery;
   if (hay.name === needle || hay.name === tokenQuery) return SEARCH_TIER.exactName;
+  const canonicalQuery = query.terms.map((term) => singularizeSearchToken(term.token));
+  const canonicalName = canonicalTokens(hay.name);
+  if (
+    canonicalQuery.length === canonicalName.length &&
+    canonicalQuery.every((token, index) => token === canonicalName[index])
+  ) return SEARCH_TIER.tokenEquivalent;
   if (needle && hay.name.startsWith(needle)) return SEARCH_TIER.namePrefix;
 
   const positions = query.terms.map((t) => nameMatchIndex(t, hay));
@@ -501,6 +531,22 @@ export function searchExercises<T extends SearchableExercise>(
     hasExactMatches: scored.some((s) => s.complete),
     parsed,
   };
+}
+
+/**
+ * Swap-search contract: search the complete eligible pool before applying the
+ * result limit. Browsing recommendation/equipment filters are intentionally
+ * absent here, so the default "Best Match" state cannot hide a text match.
+ */
+export function searchEligibleExercises<T extends SearchableExercise>(
+  list: readonly T[],
+  query: string,
+  opts: { limit?: number; excludeId?: string | null } = {},
+): SearchResult<T> {
+  const eligible = list.filter(
+    (exercise) => exercise.archived !== true && exercise.id !== opts.excludeId,
+  );
+  return searchExercises(eligible, query, { limit: opts.limit });
 }
 
 /** Split `text` into highlighted / plain segments for any of `terms`. */
