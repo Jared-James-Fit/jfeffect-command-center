@@ -1522,14 +1522,12 @@ export async function getClientWorkouts(
   const { data: days } = weekIds.length
     ? await sb.from("pl_days").select("*").in("week_id", weekIds).order("day_index")
     : { data: [] };
-  // Only an archived at-home session is removed from active workout selection.
-  // Historical primary days retain their established archive behavior.
-  const blockById = new Map(visibleBlocks.map((block: any) => [block.id, block]));
-  const activeDays = (days ?? []).filter((day: any) => {
-    const week = (weeks ?? []).find((candidate: any) => candidate.id === day.week_id);
-    const block = week ? blockById.get(week.block_id) : null;
-    return !isAtHomeBackupSessionBlock(block) || !day.archived;
-  });
+  // Archived or soft-deleted days never render on active workout surfaces —
+  // primary program days included. This is what stops a removed day from
+  // regenerating through the legacy derived-cadence fallback once its
+  // canonical pl_scheduled_workouts instance has been deleted. Prescriptions
+  // are untouched; history/audit readers query pl_days directly.
+  const activeDays = (days ?? []).filter((day: any) => !isInactivePrimaryDay(day));
   const dayIds = activeDays.map((d: any) => d.id);
   // Fire the two day-dependent reads (completions + exercise rows) in
   // parallel — they don't depend on each other and previously added a
