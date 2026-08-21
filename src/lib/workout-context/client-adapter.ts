@@ -230,6 +230,16 @@ export function createClientAdapter(ref: WorkoutContextRef): WorkoutContextAdapt
       if (!d) throw new Error(`pl_days row not found for ${dayId}`);
       const w = (d as any).pl_weeks ?? null;
       const b = w?.pl_blocks ?? null;
+      // Canonical instance date wins over the legacy pl_days.scheduled_date.
+      let instanceDate: string | null = null;
+      if (scheduledWorkoutId) {
+        const { data: inst } = await sb
+          .from("pl_scheduled_workouts")
+          .select("scheduled_date")
+          .eq("id", scheduledWorkoutId)
+          .maybeSingle();
+        instanceDate = (inst as any)?.scheduled_date ?? null;
+      }
       return {
         id: dayId,
         week: w?.week_index ?? 0,
