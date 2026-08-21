@@ -588,7 +588,10 @@ export function QuickSwapButton({
 
   const searchRows = searchOutcome?.results ?? [];
   const searchTotal = searchRows.length;
-  const pagedRows = searchRows.slice(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE);
+  // Cumulative windowing — "Show more" appends instead of paging, so the
+  // result list never jumps under the sticky search header.
+  const pagedRows = searchRows.slice(0, (page + 1) * PAGE_SIZE);
+
   const isSearching = isPoolLoading && searchPool.length === 0;
 
   const startSelect = (ex: ExerciseLite) => {
