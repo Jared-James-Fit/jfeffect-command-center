@@ -11049,11 +11049,6 @@ export type Database = {
       na_packages: {
         Row: {
           active_modules: Json
-          artifact_error: string | null
-          artifact_ready_at: string | null
-          artifact_requested_at: string | null
-          artifact_status: string
-          client_dob_checked_at: string | null
           client_id: string
           completed_at: string | null
           contract_value_minor: number | null
@@ -11083,11 +11078,6 @@ export type Database = {
         }
         Insert: {
           active_modules?: Json
-          artifact_error?: string | null
-          artifact_ready_at?: string | null
-          artifact_requested_at?: string | null
-          artifact_status?: string
-          client_dob_checked_at?: string | null
           client_id: string
           completed_at?: string | null
           contract_value_minor?: number | null
@@ -11117,11 +11107,6 @@ export type Database = {
         }
         Update: {
           active_modules?: Json
-          artifact_error?: string | null
-          artifact_ready_at?: string | null
-          artifact_requested_at?: string | null
-          artifact_status?: string
-          client_dob_checked_at?: string | null
           client_id?: string
           completed_at?: string | null
           contract_value_minor?: number | null
@@ -11424,10 +11409,6 @@ export type Database = {
           sealed: boolean
           sealed_at: string | null
           service_order_snapshot: Json
-          source_pdf_bucket: string | null
-          source_pdf_page_count: number | null
-          source_pdf_path: string | null
-          source_pdf_sha256: string | null
           signers_snapshot: Json
           snapshot_hash: string
           template_version_snapshot: Json
@@ -11445,10 +11426,6 @@ export type Database = {
           sealed?: boolean
           sealed_at?: string | null
           service_order_snapshot: Json
-          source_pdf_bucket?: string | null
-          source_pdf_page_count?: number | null
-          source_pdf_path?: string | null
-          source_pdf_sha256?: string | null
           signers_snapshot: Json
           snapshot_hash: string
           template_version_snapshot: Json
@@ -11466,10 +11443,6 @@ export type Database = {
           sealed?: boolean
           sealed_at?: string | null
           service_order_snapshot?: Json
-          source_pdf_bucket?: string | null
-          source_pdf_page_count?: number | null
-          source_pdf_path?: string | null
-          source_pdf_sha256?: string | null
           signers_snapshot?: Json
           snapshot_hash?: string
           template_version_snapshot?: Json
@@ -11496,10 +11469,6 @@ export type Database = {
           package_rules: Json
           published_at: string | null
           retired_at: string | null
-          source_pdf_bucket: string | null
-          source_pdf_page_count: number | null
-          source_pdf_path: string | null
-          source_pdf_sha256: string | null
           status: string
           template_id: string
           updated_at: string
@@ -11516,10 +11485,6 @@ export type Database = {
           package_rules?: Json
           published_at?: string | null
           retired_at?: string | null
-          source_pdf_bucket?: string | null
-          source_pdf_page_count?: number | null
-          source_pdf_path?: string | null
-          source_pdf_sha256?: string | null
           status?: string
           template_id: string
           updated_at?: string
@@ -11536,10 +11501,6 @@ export type Database = {
           package_rules?: Json
           published_at?: string | null
           retired_at?: string | null
-          source_pdf_bucket?: string | null
-          source_pdf_page_count?: number | null
-          source_pdf_path?: string | null
-          source_pdf_sha256?: string | null
           status?: string
           template_id?: string
           updated_at?: string
