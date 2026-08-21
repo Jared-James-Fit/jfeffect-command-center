@@ -937,12 +937,17 @@ export function QuickSwapButton({
               </div>
             </div>
           )}
+          </div>
 
-          <SheetFooter className="mt-4">
-            <Button variant="ghost" onClick={() => setOpen(false)} className="w-full sm:w-auto">
+          <SheetFooter
+            className="shrink-0 border-t border-border bg-background px-4 pb-3 pt-2"
+            style={{ paddingBottom: "calc(env(safe-area-inset-bottom) + 0.75rem)" }}
+          >
+            <Button type="button" variant="ghost" onClick={() => setOpen(false)} className="w-full sm:w-auto">
               Cancel
             </Button>
           </SheetFooter>
+
         </SheetContent>
       </Sheet>
     </>
