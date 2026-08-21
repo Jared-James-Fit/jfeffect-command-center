@@ -245,9 +245,27 @@ const KIND_WEIGHT: Record<TermMatchKind, number> = {
   none: 0,
 };
 
+/**
+ * Deterministic ranking tiers. Tier ALWAYS beats score, so no
+ * recommendation / muscle / equipment similarity signal can outrank an
+ * explicit text match while the user is actively typing.
+ */
+export const SEARCH_TIER = {
+  exactName: 0,
+  namePrefix: 1,
+  orderedTokens: 2,
+  allTokensInName: 3,
+  nameSubstring: 4,
+  metadataComplete: 5,
+  partial: 6,
+} as const;
+export type SearchTier = (typeof SEARCH_TIER)[keyof typeof SEARCH_TIER];
+
 export type ScoredExercise<T extends SearchableExercise = SearchableExercise> = {
   exercise: T;
   score: number;
+  /** Deterministic rank bucket — lower is stronger. */
+  tier: SearchTier;
   /** True when every query term matched something. */
   complete: boolean;
   /** Literal strings to highlight inside the name. */
@@ -255,6 +273,7 @@ export type ScoredExercise<T extends SearchableExercise = SearchableExercise> = 
   /** e.g. "DB = dumbbell" — only set when an alias/metadata carried the match. */
   reason?: string;
 };
+
 
 type Haystacks = {
   name: string;
