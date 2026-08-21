@@ -251,7 +251,13 @@ export function ClientBlockView({
   const weeklyPurposeLabelById = useMemo(
     () => deriveWeeklyPurposeLabelByRowId(
       days.map((d: any, index: number) => {
-        const scheduled = dayScheduledDate({ day: d, week: resolvedWeek, block, completion: null });
+        const scheduled = dayScheduledDate({
+          day: d,
+          week: resolvedWeek,
+          block,
+          completion: null,
+          scheduledDate: instanceDateByDay.get(d?.id) ?? null,
+        });
         return {
           order: scheduled?.getTime() ?? d.day_index ?? d.sort_order ?? index,
           rows: (rowsByDay.get(d.id) ?? []) as any[],
