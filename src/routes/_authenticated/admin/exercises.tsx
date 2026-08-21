@@ -136,6 +136,28 @@ export function ExercisesAdmin({ embedded = false }: { embedded?: boolean } = {}
   const filtered = searched.results.map((r) => r.exercise) as unknown as typeof exercises;
   const highlightTerms = searched.highlightTerms;
 
+  // Windowed rendering. The full library is ~1700 rows and every admin card
+  // mounts a Radix Select + badge cluster; rendering them all made iOS/PWA
+  // spike memory and let WebKit jettison the tab the moment a dialog mounted
+  // — which relaunched the PWA into the "Loading your dashboard…" splash.
+  const ADMIN_PAGE = 60;
+  const [visibleCount, setVisibleCount] = useState(ADMIN_PAGE);
+  useEffect(() => { setVisibleCount(ADMIN_PAGE); }, [search, category, migration, muscleFilter]);
+  const sentinelRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    const node = sentinelRef.current;
+    if (!node) return;
+    const io = new IntersectionObserver((entries) => {
+      if (entries.some((entry) => entry.isIntersecting)) {
+        setVisibleCount((c) => Math.min(c + ADMIN_PAGE, filtered.length));
+      }
+    }, { rootMargin: "600px 0px" });
+    io.observe(node);
+    return () => io.disconnect();
+  }, [filtered.length]);
+  const visible = filtered.slice(0, visibleCount);
+
+
   const stillYouTubeCount = exercises.filter(
     (e) =>
       !(
