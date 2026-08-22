@@ -1387,9 +1387,13 @@ function WorkoutDay({
   const refresh = () => {
     qc.invalidateQueries({ queryKey: ["pl-day-results", dayId] });
     qc.invalidateQueries({ queryKey: ["pl-day-completion", dayId] });
+    // Keep LAST TIME + the History sheet in step with what was just logged.
+    qc.invalidateQueries({ queryKey: ["workout-previous-lifts"] });
+    qc.invalidateQueries({ queryKey: ["exercise-history"] });
     beginSessionOnAction();
     markInProgress();
   };
+
 
   // Quick "Workout Complete" sheet state. The long review flow has been removed.
   const navigate = useNavigate();
