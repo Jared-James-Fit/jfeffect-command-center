@@ -1,6 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
-import { resolveShareLinkForPurchase } from "@/lib/payment-share.server";
+import { mintShareLinkForPurchase } from "@/lib/payment-share.server";
 import { sanitizeShareUrl } from "@/lib/payment-share-link";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 
@@ -200,8 +200,8 @@ export const sendPaymentLinkBySms = createServerFn({ method: "POST" })
     if (error) throw new Error(error.message);
     if (!rec) throw new Error("Purchase not found");
     await assertAdminOrAssignedCoach(supabase, userId, rec.client_id);
-    const shareLink = await resolveShareLinkForPurchase(supabase, userId, rec.id);
-    const shareUrl = sanitizeShareUrl(shareLink.url);
+    const shareLink = await mintShareLinkForPurchase(supabase, userId, rec.id, "https://jfeffect.com");
+    const shareUrl = sanitizeShareUrl(shareLink.shareUrl);
     if (!shareUrl) throw new Error(shareLink.reason ?? "No valid Stripe payment link for this purchase yet.");
     const settings = await loadSmsSettings(supabase);
     const { client, toPhone } = await loadClientForSms(supabase, rec.client_id);
@@ -261,8 +261,8 @@ export const postPaymentRequestInChat = createServerFn({ method: "POST" })
     if (error) throw new Error(error.message);
     if (!rec) throw new Error("Purchase not found");
     await assertAdminOrAssignedCoach(supabase, userId, rec.client_id);
-    const shareLink = await resolveShareLinkForPurchase(supabase, userId, rec.id);
-    const shareUrl = sanitizeShareUrl(shareLink.url);
+    const shareLink = await mintShareLinkForPurchase(supabase, userId, rec.id, "https://jfeffect.com");
+    const shareUrl = sanitizeShareUrl(shareLink.shareUrl);
     if (!shareUrl) throw new Error(shareLink.reason ?? "No valid Stripe payment link for this purchase yet.");
 
     const attachment = await buildPaymentAttachment(rec, shareUrl);
