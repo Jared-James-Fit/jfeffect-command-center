@@ -167,11 +167,17 @@ function PurchaseRow({ purchase, clientId, onChanged, ledger, isPaid }: { purcha
         </div>
         <div className="text-right text-sm">
           <div>Contract <span className="font-mono">{fmt(contract, currency)}</span></div>
-          <div>Paid <span className="font-mono">{fmt(paid, currency)}</span></div>
+          <div>Paid <span className="font-mono">{fmt(paid, currency)}</span> <span className="text-[11px] text-muted-foreground">before tax</span></div>
+          {taxPaid > 0 && (
+            <div className="text-[11px] text-muted-foreground">
+              Tax <span className="font-mono">{fmt(taxPaid, currency)}</span> · charged <span className="font-mono">{fmt(grossPaid, currency)}</span>
+            </div>
+          )}
           <div className={isPaid || outstanding <= 0 ? "text-green-600" : "text-destructive"}>
             {isPaid || outstanding <= 0 ? "Paid in full" : `Owes ${fmt(outstanding, currency)}`}
           </div>
         </div>
+
       </div>
       <div className="flex gap-2 flex-wrap">
         <RecordPaymentDialog purchase={purchase} onDone={onChanged} />
