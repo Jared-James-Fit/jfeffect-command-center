@@ -2009,7 +2009,9 @@ function EmbeddedActionCenter({
       onClick: () => { void onRequestUpdate(); },
     },
   ];
-  return <WorkspaceActionCenter actions={actions} />;
+  // Message / POV / Assign Program stay one tap away; the rest collapse so the
+  // workspace opens on client information, not a grid of buttons.
+  return <WorkspaceActionCenter actions={actions} maxVisible={3} />;
 }
 
 function CommsToggleRow({ title, description, checked, onChange }: { title: string; description: string; checked: boolean; onChange: (v: boolean) => void | Promise<void> }) {
