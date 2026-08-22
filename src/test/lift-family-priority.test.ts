@@ -3,61 +3,67 @@ import {
   derivePurposeLabels,
   deriveWeeklyPurposeLabelByRowId,
   liftColorGroup,
+  resolvePurposeLabel,
 } from "@/lib/exercise-metadata";
 
-describe("lift-family priorities", () => {
-  it("calculates weekly exposure priority independently for squat, bench, and deadlift", () => {
-    const rows = [
-      { movement_family: "squat" },
-      { movement_family: "bench" },
-      { movement_family: "squat" },
-      { movement_family: "deadlift" },
-      { movement_family: "bench" },
-      { movement_family: "squat" },
-    ];
+const competition = (type: "squat" | "bench" | "deadlift") => ({
+  exercise_category: "competition" as const,
+  is_competition_lift: true,
+  competition_lift_type: type,
+});
 
-    const labels = derivePurposeLabels(rows, () => null);
-
-    expect(labels).toEqual(["Primary", "Primary", "Secondary", "Primary", "Secondary", "Tertiary"]);
+describe("exercise role classification comes from the prescription", () => {
+  it("labels two Competition Squat entries on the same day both Primary", () => {
+    const rows = [{}, {}];
+    expect(derivePurposeLabels(rows, () => competition("squat"))).toEqual(["Primary", "Primary"]);
   });
 
-  it("sequences repeated family exposures across scheduled workout days instead of resetting per card", () => {
+  it("renders Jared-style Day 4 (squat/bench/deadlift, top set + backoff) as all Primary", () => {
+    const rows = [{}, {}, {}, {}, {}, {}];
+    const metas = [
+      competition("squat"), competition("squat"),
+      competition("bench"), competition("bench"),
+      competition("deadlift"), competition("deadlift"),
+    ];
+    const labels = derivePurposeLabels(rows, (_row) => metas[rows.indexOf(_row)] ?? null);
+    expect(derivePurposeLabels(rows.map((_, i) => ({ i })), (r: any) => metas[r.i])).toEqual([
+      "Primary", "Primary", "Primary", "Primary", "Primary", "Primary",
+    ]);
+    expect(labels.length).toBe(6);
+  });
+
+  it("never infers role from occurrence order or page position", () => {
+    const rows = [{ i: 0 }, { i: 1 }, { i: 2 }];
+    const metas = [competition("bench"), { exercise_category: "assistance" as const }, competition("bench")];
+    expect(derivePurposeLabels(rows, (r: any) => metas[r.i])).toEqual(["Primary", "Assistance", "Primary"]);
+  });
+
+  it("keeps programmed Secondary / Tertiary / Assistance labels intact", () => {
+    expect(resolvePurposeLabel({ purpose_label: "Secondary" }, competition("squat"))).toBe("Secondary");
+    expect(resolvePurposeLabel({ purpose_label: "Tertiary" }, competition("squat"))).toBe("Tertiary");
+    expect(resolvePurposeLabel({}, { exercise_category: "assistance" })).toBe("Assistance");
+    expect(resolvePurposeLabel({}, { exercise_category: "variation" })).toBe("Secondary");
+  });
+
+  it("treats a backoff row as the same role as its top set", () => {
+    const top = resolvePurposeLabel({}, competition("deadlift"));
+    const backoff = resolvePurposeLabel({}, competition("deadlift"));
+    expect([top, backoff]).toEqual(["Primary", "Primary"]);
+  });
+
+  it("preserves role identically across weekly (POV/preview) derivation", () => {
     const labels = deriveWeeklyPurposeLabelByRowId(
       [
-        { order: 3, rows: [{ id: "bench-late", movement_family: "bench", sort_order: 0 }] },
-        { order: 1, rows: [{ id: "bench-early", movement_family: "bench", sort_order: 0 }] },
-        { order: 2, rows: [{ id: "squat-mid", movement_family: "squat", sort_order: 0 }] },
+        { order: 3, rows: [{ id: "bench-late", sort_order: 0 }] },
+        { order: 1, rows: [{ id: "bench-early", sort_order: 0 }] },
       ],
-      () => null,
+      () => competition("bench"),
     );
-
     expect(labels.get("bench-early")).toBe("Primary");
-    expect(labels.get("bench-late")).toBe("Secondary");
-    expect(labels.get("squat-mid")).toBe("Primary");
+    expect(labels.get("bench-late")).toBe("Primary");
   });
 
   it("uses the manual movement family before card color or exercise metadata", () => {
-    expect(liftColorGroup({ competition_lift_type: "deadlift" } as never, "emerald", "bench")).toBe(
-      "bench",
-    );
-  });
-
-  it("does not advance an SBD family for non-competition assistance rows", () => {
-    const rows = [
-      { movement_family: "bench" },
-      { movement_family: "upper" },
-      { movement_family: "bench" },
-    ];
-
-    expect(derivePurposeLabels(rows, () => null)).toEqual(["Primary", "Assistance", "Secondary"]);
-  });
-
-  it("keeps a manual purpose label authoritative for its parent exercise row", () => {
-    const rows = [
-      { movement_family: "bench", purpose_label: "Primary" },
-      { movement_family: "bench" },
-    ];
-
-    expect(derivePurposeLabels(rows, () => null)).toEqual(["Primary", "Primary"]);
+    expect(liftColorGroup({ competition_lift_type: "deadlift" } as never, "emerald", "bench")).toBe("bench");
   });
 });
