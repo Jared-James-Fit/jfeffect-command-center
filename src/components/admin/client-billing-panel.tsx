@@ -84,11 +84,12 @@ export function ClientBillingPanel({ clientId }: { clientId: string }) {
     <div className="md:col-span-3 space-y-6">
       {/* Summary tiles */}
       <div className="grid gap-4 md:grid-cols-4">
-        <SummaryTile label="Total paid" value={fmt(totalPaid)} />
+        <SummaryTile label="Total paid (before tax)" value={fmt(totalPaid)} sub={taxPaid > 0 ? `+ ${fmt(taxPaid)} tax · ${fmt(grossPaid)} charged` : undefined} />
         <SummaryTile label="Total refunded" value={fmt(totalRefunded)} />
         <SummaryTile label="Outstanding" value={fmt(totalOutstanding)} highlight={totalOutstanding > 0} />
         <SummaryTile label="Credit balance" value={fmt(data.credit_balance_minor)} />
       </div>
+
 
       <Tabs defaultValue="purchases">
         <TabsList>
