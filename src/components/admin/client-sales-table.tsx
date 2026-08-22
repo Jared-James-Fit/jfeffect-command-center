@@ -14,8 +14,13 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import {
   ShoppingBag, Plus, MoreHorizontal, ExternalLink, Pencil, Copy, Send, Download,
-  CheckCircle2, AlertTriangle, RefreshCw,
+  CheckCircle2, AlertTriangle, RefreshCw, Share2,
 } from "lucide-react";
+import { resolvePaymentShareLink } from "@/lib/payment-share.functions";
+import { createCheckoutSessionForAssignment } from "@/lib/stripe-checkout.functions";
+import { getShareablePaymentUrl } from "@/components/payments/copy-payment-link-button";
+import { shareKindLabel } from "@/lib/payment-share-link";
+import { share as nativeShare, canShare } from "@/platform/share";
 import { toast } from "sonner";
 import { AssignOfferDialog } from "@/components/assign-offer-dialog";
 import { TermDateEditor, downloadPurchasePdf } from "@/components/purchase-records-panel";
@@ -379,6 +384,23 @@ function RowMenu({
   onEmailLink: () => void;
 }) {
   const paid = raw.payment_status === "Paid" || raw.payment_status === "Active Subscription";
+  const resolveFn = useServerFn(resolvePaymentShareLink);
+  const checkoutFn = useServerFn(createCheckoutSessionForAssignment);
+
+  const copyLink = async (mode: "copy" | "share") => {
+    const t = toast.loading("Getting payment link…");
+    try {
+      const { url, kind } = await getShareablePaymentUrl(resolveFn as any, checkoutFn as any, raw.id);
+      if (mode === "share" && canShare({ url })) {
+        const res = await nativeShare({ url, title: "Payment link" });
+        if (res === "shared") return void toast.success("Payment link shared", { id: t });
+      }
+      await navigator.clipboard.writeText(url);
+      toast.success("Payment link copied", { id: t, description: shareKindLabel(kind as any) });
+    } catch (e: any) {
+      toast.error(e?.message ?? "Could not get a payment link", { id: t });
+    }
+  };
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
@@ -405,16 +427,19 @@ function RowMenu({
             <AlertTriangle className="mr-2 h-3.5 w-3.5" />Mark overdue
           </DropdownMenuItem>
         )}
-        {raw.stripe_payment_link && (
+        {!paid && (
           <>
-            <DropdownMenuItem
-              onSelect={() => { navigator.clipboard.writeText(raw.stripe_payment_link); toast.success("Payment link copied"); }}
-            >
+            <DropdownMenuItem onSelect={() => { void copyLink("copy"); }}>
               <Copy className="mr-2 h-3.5 w-3.5" />Copy payment link
             </DropdownMenuItem>
-            <DropdownMenuItem onSelect={() => onEmailLink()}>
-              <Send className="mr-2 h-3.5 w-3.5" />Email payment setup request
+            <DropdownMenuItem onSelect={() => { void copyLink("share"); }}>
+              <Share2 className="mr-2 h-3.5 w-3.5" />Share payment link
             </DropdownMenuItem>
+            {raw.stripe_payment_link && (
+              <DropdownMenuItem onSelect={() => onEmailLink()}>
+                <Send className="mr-2 h-3.5 w-3.5" />Email payment setup request
+              </DropdownMenuItem>
+            )}
           </>
         )}
         <DropdownMenuItem onSelect={() => { void downloadPurchasePdf(raw, clientName); }}>

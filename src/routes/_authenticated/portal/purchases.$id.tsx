@@ -11,6 +11,9 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { ArrowLeft, ExternalLink, CheckCircle2, AlertTriangle, FileSignature, Receipt, FileText, Download } from "lucide-react";
 import { toast } from "sonner";
 import { resolvePaymentDisplay, formatMoney } from "@/lib/payment-display";
+import { useServerFn } from "@tanstack/react-start";
+import { resolvePaymentShareLink } from "@/lib/payment-share.functions";
+import { sanitizeShareUrl } from "@/lib/payment-share-link";
 
 export const Route = createFileRoute("/_authenticated/portal/purchases/$id")({ component: ClientPurchase });
 
@@ -20,6 +23,7 @@ function ClientPurchase() {
   const qc = useQueryClient();
   const [agree, setAgree] = useState(false);
   const [busy, setBusy] = useState(false);
+  const resolveShareFn = useServerFn(resolvePaymentShareLink);
 
   const { data: r } = useQuery({
     queryKey: ["my-purchase", id],
@@ -55,8 +59,19 @@ function ClientPurchase() {
     qc.invalidateQueries({ queryKey: ["my-purchases"] });
   };
 
-  const goToStripe = () => {
-    if (r.stripe_payment_link) window.open(r.stripe_payment_link, "_blank");
+  const goToStripe = async () => {
+    // Never open the stored (possibly expired) Checkout Session URL — resolve
+    // the canonical current link server-side first.
+    const t = toast.loading("Opening secure payment…");
+    try {
+      const res: any = await resolveShareFn({ data: { purchaseRecordId: id } });
+      const url = sanitizeShareUrl(res?.url);
+      if (!url) throw new Error("Your coach needs to send a fresh payment link.");
+      toast.dismiss(t);
+      window.open(url, "_blank");
+    } catch (e: any) {
+      toast.error(e?.message ?? "Could not open payment", { id: t });
+    }
   };
 
   const accepted = r.terms_accepted;
@@ -220,7 +235,7 @@ function ClientPurchase() {
               >
                 {paid ? "Paid · Active" : r.payment_status === "Active Subscription" ? "Active subscription" : r.payment_status === "Cancelled" ? "Cancelled" : "Payment setup needed"}
               </Badge>
-              <Button onClick={goToStripe} disabled={!accepted} className="w-full bg-gradient-primary font-bold uppercase">
+              <Button onClick={() => { void goToStripe(); }} disabled={!accepted} className="w-full bg-gradient-primary font-bold uppercase">
                 {paid ? "Manage payment" : "Pay now"} <ExternalLink className="ml-2 h-4 w-4" />
               </Button>
               {!accepted && <p className="text-xs text-muted-foreground">Accept the terms above to enable payment.</p>}
