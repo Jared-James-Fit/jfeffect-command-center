@@ -11,10 +11,10 @@ const ALL_CLIENT_WORKSPACE_TABS = [
   "coaching",
   "account",
   "training",
+  "program-setup",
   "analytics",
   "nutrition",
   "metrics",
-  "messages",
   "lift-videos",
   "documents",
   "sessions",
@@ -39,10 +39,18 @@ describe("client workspace tabs", () => {
     expect(CLIENT_WORKSPACE_PRIMARY_TABS.map((tab) => tab.value)).toEqual([
       "summary",
       "training",
+      "sessions",
       "nutrition",
-      "messages",
       "documents",
       "purchases",
     ]);
+  });
+
+  it("no longer exposes a messages tab (messaging lives in the inbox)", () => {
+    const tabValues = [
+      ...CLIENT_WORKSPACE_PRIMARY_TABS.map((tab) => tab.value),
+      ...CLIENT_WORKSPACE_MORE_TABS.map((tab) => tab.value),
+    ];
+    expect(tabValues).not.toContain("messages");
   });
 });
