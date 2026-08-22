@@ -50,6 +50,35 @@ export function normalizeExerciseHistoryName(value: string | null | undefined): 
   return withoutCompetition.join(" ");
 }
 
+/**
+ * Canonical exercise identities that a history view may read for one row.
+ *
+ * Returns the row's own exercise id plus any OTHER library rows whose name
+ * normalizes to exactly the same key (duplicate library entries, cosmetic
+ * renames, archived predecessors). Names that merely look similar
+ * ("Hip Thrust - Barbell" vs "Hip Thrust Machine") normalize differently and
+ * are therefore never merged.
+ *
+ * Both the History sheet and the LAST TIME badge resolve identity through
+ * this one helper so they can never disagree.
+ */
+export function matchingHistoryExerciseIds(
+  exerciseId: string | null | undefined,
+  exerciseName: string | null | undefined,
+  catalog: Array<{ id: string; name?: string | null }> = [],
+): string[] {
+  const ids = new Set<string>();
+  if (exerciseId) ids.add(exerciseId);
+  const key = normalizeExerciseHistoryName(exerciseName);
+  if (key) {
+    for (const entry of catalog) {
+      if (!entry?.id) continue;
+      if (normalizeExerciseHistoryName(entry.name) === key) ids.add(entry.id);
+    }
+  }
+  return [...ids];
+}
+
 function finitePositive(value: unknown): number | null {
   const number = Number(value);
   return Number.isFinite(number) && number > 0 ? number : null;
