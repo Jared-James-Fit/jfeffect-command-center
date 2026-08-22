@@ -14,8 +14,13 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import {
   ShoppingBag, Plus, MoreHorizontal, ExternalLink, Pencil, Copy, Send, Download,
-  CheckCircle2, AlertTriangle, RefreshCw,
+  CheckCircle2, AlertTriangle, RefreshCw, Share2,
 } from "lucide-react";
+import { resolvePaymentShareLink } from "@/lib/payment-share.functions";
+import { createCheckoutSessionForAssignment } from "@/lib/stripe-checkout.functions";
+import { getShareablePaymentUrl } from "@/components/payments/copy-payment-link-button";
+import { shareKindLabel } from "@/lib/payment-share-link";
+import { share as nativeShare, canShare } from "@/platform/share";
 import { toast } from "sonner";
 import { AssignOfferDialog } from "@/components/assign-offer-dialog";
 import { TermDateEditor, downloadPurchasePdf } from "@/components/purchase-records-panel";
