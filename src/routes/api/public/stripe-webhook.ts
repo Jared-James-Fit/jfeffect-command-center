@@ -975,7 +975,7 @@ export const Route = createFileRoute("/api/public/stripe-webhook")({
                       await stripeFetch(`/subscriptions/${invSubId}`, {
                         apiKey: eventApiKey ?? undefined,
                         method: "POST",
-                        body: { cancel_at_period_end: "true" },
+                        body: "cancel_at_period_end=true",
                         idempotencyKey: `fixedterm_end_${invSubId}_${contractedPayments}`,
                       });
                       await supabase.from("purchase_records").update({
