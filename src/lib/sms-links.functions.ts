@@ -1,5 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
+import { resolveShareLinkForPurchase } from "@/lib/payment-share.server";
+import { sanitizeShareUrl } from "@/lib/payment-share-link";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 
 /* ============================================================
@@ -197,16 +199,17 @@ export const sendPaymentLinkBySms = createServerFn({ method: "POST" })
       .maybeSingle();
     if (error) throw new Error(error.message);
     if (!rec) throw new Error("Purchase not found");
-    if (!rec.stripe_payment_link) throw new Error("No Stripe payment link on this purchase. Attach one first.");
-
     await assertAdminOrAssignedCoach(supabase, userId, rec.client_id);
+    const shareLink = await resolveShareLinkForPurchase(supabase, userId, rec.id);
+    const shareUrl = sanitizeShareUrl(shareLink.url);
+    if (!shareUrl) throw new Error(shareLink.reason ?? "No valid Stripe payment link for this purchase yet.");
     const settings = await loadSmsSettings(supabase);
     const { client, toPhone } = await loadClientForSms(supabase, rec.client_id);
 
     const first = client.first_name ?? client.full_name?.split(" ")[0] ?? "there";
     const brand = settings.brand_name ?? "Coaching";
     const amount = `${rec.currency ?? "USD"} ${Number(rec.full_payable_amount ?? 0).toLocaleString()}`;
-    const body = `Hi ${first}, this is ${brand}. Your payment link for ${rec.offer_name} (${amount}) is ready: ${rec.stripe_payment_link}\n\nReply STOP to opt out.`;
+    const body = `Hi ${first}, this is ${brand}. Your payment link for ${rec.offer_name} (${amount}) is ready: ${shareUrl}\n\nReply STOP to opt out.`;
 
     try {
       const { sid } = await sendViaTwilio(toPhone, settings.from_phone, body);
@@ -229,12 +232,12 @@ const PostPaymentSchema = z.object({
   note: z.string().max(500).optional(),
 });
 
-async function buildPaymentAttachment(rec: any) {
+async function buildPaymentAttachment(rec: any, shareUrl: string) {
   return {
     type: "link" as const,
     kind: "payment_request" as const,
-    url: rec.stripe_payment_link as string,
-    payment_url: rec.stripe_payment_link as string,
+    url: shareUrl,
+    payment_url: shareUrl,
     name: `Payment: ${rec.offer_name ?? "Coaching"}`,
     title: rec.offer_name ?? "Coaching",
     amount_cents: Math.round(Number(rec.full_payable_amount ?? 0) * 100),
@@ -257,10 +260,12 @@ export const postPaymentRequestInChat = createServerFn({ method: "POST" })
       .maybeSingle();
     if (error) throw new Error(error.message);
     if (!rec) throw new Error("Purchase not found");
-    if (!rec.stripe_payment_link) throw new Error("No Stripe payment link on this purchase. Attach one first.");
     await assertAdminOrAssignedCoach(supabase, userId, rec.client_id);
+    const shareLink = await resolveShareLinkForPurchase(supabase, userId, rec.id);
+    const shareUrl = sanitizeShareUrl(shareLink.url);
+    if (!shareUrl) throw new Error(shareLink.reason ?? "No valid Stripe payment link for this purchase yet.");
 
-    const attachment = await buildPaymentAttachment(rec);
+    const attachment = await buildPaymentAttachment(rec, shareUrl);
     const body = data.note?.trim() || `Payment request for ${rec.offer_name}. Tap to complete payment.`;
 
     if (data.target === "dm") {
