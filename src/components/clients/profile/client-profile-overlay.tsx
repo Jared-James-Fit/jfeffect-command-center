@@ -1,5 +1,5 @@
 import * as DialogPrimitive from "@radix-ui/react-dialog";
-import { X } from "lucide-react";
+import { ChevronLeft } from "lucide-react";
 import { lazy, Suspense, useEffect, useRef } from "react";
 import { useOverlayClientId, useCloseClientProfile } from "@/lib/open-client-profile";
 
@@ -79,13 +79,15 @@ export function ClientProfileOverlayMount() {
 
           {/* Fixed close button (top-right on md+, top-left back-arrow on mobile inside content). */}
           <DialogPrimitive.Close
-            aria-label="Close client workspace"
-            className="absolute right-3 top-3 z-20 inline-flex h-10 w-10 items-center justify-center rounded-full border border-border bg-background/95 text-foreground shadow-sm hover:bg-secondary focus:outline-none focus:ring-2 focus:ring-ring"
+            aria-label="Back"
+            style={{ top: "calc(env(safe-area-inset-top) + 0.75rem)" }}
+            className="absolute left-3 z-30 inline-flex h-10 min-w-[72px] items-center justify-center gap-1 rounded-full border border-border bg-background/95 px-3 text-sm font-semibold text-foreground shadow-sm backdrop-blur hover:bg-secondary focus:outline-none focus:ring-2 focus:ring-ring md:left-auto md:right-3 md:top-3"
           >
-            <X className="h-5 w-5" />
+            <ChevronLeft className="h-4 w-4" />
+            <span>Back</span>
           </DialogPrimitive.Close>
 
-          <div className="flex-1 overflow-y-auto">
+          <div className="flex-1 overflow-y-auto pt-14 md:pt-0">
             <Suspense fallback={<Skeleton />}>
               {clientId ? (
                 <ClientProfileWorkspace
