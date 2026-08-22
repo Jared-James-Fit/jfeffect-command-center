@@ -12,8 +12,32 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, Search, Trash2, Youtube, Pencil, CheckCircle2, AlertTriangle, Flame, BarChart3 } from "lucide-react";
-import { invalidateExerciseLibrary, upsertExerciseInLibraryCaches } from "@/lib/exercise-library-cache";
+import { Plus, Search, Trash2, Youtube, Pencil, CheckCircle2, AlertTriangle, Flame, BarChart3, MoreVertical, Archive, RotateCcw, CalendarClock } from "lucide-react";
+import { invalidateExerciseLibrary, upsertExerciseInLibraryCaches, reconcileExerciseLibraryChange } from "@/lib/exercise-library-cache";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
+  ARCHIVE_SCOPES,
+  EXERCISE_SORTS,
+  filterByArchiveScope,
+  sortExercises,
+  formatAddedDate,
+  formatAddedDateTime,
+  describeReferences,
+  type ArchiveScope,
+  type ExerciseSort,
+} from "@/lib/exercise-admin";
+import {
+  setExerciseArchived,
+  deleteExercisePermanently,
+  getExerciseReferenceCounts,
+} from "@/lib/exercise-admin.functions";
+import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
 import { EXERCISE_CATEGORIES, PRIMARY_MUSCLE_GROUPS as SHARED_PRIMARY_MUSCLE_GROUPS } from "@/lib/exercise-taxonomy";
 import { Badge } from "@/components/ui/badge";
@@ -85,6 +109,8 @@ export function ExercisesAdmin({ embedded = false }: { embedded?: boolean } = {}
   const [category, setCategory] = useState("all");
   const [migration, setMigration] = useState("all");
   const [muscleFilter, setMuscleFilter] = useState("all");
+  const [archiveScope, setArchiveScope] = useState<ArchiveScope>("active");
+  const [sortMode, setSortMode] = useState<ExerciseSort>("az");
   const [editing, setEditing] = useState<any | null>(null);
 
   const { data: exercises = [] } = useQuery({
@@ -103,7 +129,11 @@ export function ExercisesAdmin({ embedded = false }: { embedded?: boolean } = {}
     queryFn: fetchExerciseLibrary,
   });
 
-  const preFiltered = exercises.filter((e) => {
+  // Archive scope first: an archived exercise is hidden from every picker, so
+  // the admin library defaults to Active and can opt into Archived / All.
+  const scoped = filterByArchiveScope(exercises as any[], archiveScope);
+
+  const preFiltered = scoped.filter((e) => {
     if (category !== "all" && e.category !== category) return false;
     if (muscleFilter !== "all") {
       const mg = (e as any).primary_muscle_group ?? "Other";
@@ -135,9 +165,12 @@ export function ExercisesAdmin({ embedded = false }: { embedded?: boolean } = {}
   const searched = useMemo(
     () => searchExercises(preFiltered as unknown as SearchableExercise[], search, { limit: 5000 }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [preFiltered.length, search, category, migration, muscleFilter, exercises],
+    [preFiltered.length, search, category, migration, muscleFilter, archiveScope, exercises],
   );
-  const filtered = searched.results.map((r) => r.exercise) as unknown as typeof exercises;
+  // While searching, keyword relevance owns the order. With no query, the
+  // admin sort (A–Z / newest / oldest added) applies.
+  const ranked = searched.results.map((r) => r.exercise) as any[];
+  const filtered = (search.trim() ? ranked : sortExercises(ranked, sortMode)) as unknown as typeof exercises;
   const highlightTerms = searched.highlightTerms;
 
   // Windowed rendering. The full library is ~1700 rows and every admin card
@@ -146,7 +179,7 @@ export function ExercisesAdmin({ embedded = false }: { embedded?: boolean } = {}
   // — which relaunched the PWA into the "Loading your dashboard…" splash.
   const ADMIN_PAGE = 60;
   const [visibleCount, setVisibleCount] = useState(ADMIN_PAGE);
-  useEffect(() => { setVisibleCount(ADMIN_PAGE); }, [search, category, migration, muscleFilter]);
+  useEffect(() => { setVisibleCount(ADMIN_PAGE); }, [search, category, migration, muscleFilter, archiveScope, sortMode]);
   const sentinelRef = useRef<HTMLDivElement | null>(null);
   useEffect(() => {
     const node = sentinelRef.current;
@@ -171,10 +204,56 @@ export function ExercisesAdmin({ embedded = false }: { embedded?: boolean } = {}
       ) && e.youtube_fallback_allowed === true && !!e.youtube_url,
   ).length;
 
-  const del = async (id: string) => {
-    if (!confirm("Delete exercise?")) return;
-    await supabase.from("exercises").delete().eq("id", id);
-    void invalidateExerciseLibrary(qc);
+  const archiveFn = useServerFn(setExerciseArchived);
+  const deleteFn = useServerFn(deleteExercisePermanently);
+  const referencesFn = useServerFn(getExerciseReferenceCounts);
+  const [busyId, setBusyId] = useState<string | null>(null);
+
+  /**
+   * Archive is the safe removal path: history, PRs and analytics keep their
+   * exercise link, but no picker offers it any more.
+   */
+  const toggleArchived = async (row: any, archived: boolean) => {
+    setBusyId(row.id);
+    try {
+      const updated: any = await archiveFn({ data: { exerciseId: row.id, archived } });
+      reconcileExerciseLibraryChange(qc, {
+        eventType: "UPDATE",
+        newRow: updated ?? { ...row, archived },
+        oldRow: { id: row.id },
+      });
+      toast.success(archived ? `Archived ${row.name}` : `Restored ${row.name}`);
+    } catch (err: any) {
+      toast.error(err?.message ?? "Could not update this exercise");
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  /**
+   * Permanent delete is only offered when nothing references the exercise.
+   * Several foreign keys are ON DELETE SET NULL, so an unguarded delete would
+   * silently detach logged sets and program rows from their exercise.
+   */
+  const del = async (row: any) => {
+    setBusyId(row.id);
+    try {
+      const refs: any = await referencesFn({ data: { exerciseId: row.id } });
+      if (!refs?.safeToDelete) {
+        toast.error("Used in training history — archive it instead", {
+          description: describeReferences(refs?.counts ?? {}),
+        });
+        return;
+      }
+      if (!confirm(`Permanently delete “${row.name}”? This cannot be undone.`)) return;
+      await deleteFn({ data: { exerciseId: row.id } });
+      reconcileExerciseLibraryChange(qc, { eventType: "DELETE", newRow: null, oldRow: { id: row.id } });
+      toast.success("Exercise deleted");
+    } catch (err: any) {
+      toast.error(err?.message ?? "Could not delete this exercise");
+    } finally {
+      setBusyId(null);
+    }
   };
 
   const [warmupTarget, setWarmupTarget] = useState<any | null>(null);
@@ -277,6 +356,22 @@ export function ExercisesAdmin({ embedded = false }: { embedded?: boolean } = {}
                 ))}
               </SelectContent>
             </Select>
+            <Select value={archiveScope} onValueChange={(v) => setArchiveScope(v as ArchiveScope)}>
+              <SelectTrigger className="w-40"><SelectValue placeholder="Status" /></SelectTrigger>
+              <SelectContent>
+                {ARCHIVE_SCOPES.map((s) => (
+                  <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Select value={sortMode} onValueChange={(v) => setSortMode(v as ExerciseSort)}>
+              <SelectTrigger className="w-48"><SelectValue placeholder="Sort" /></SelectTrigger>
+              <SelectContent>
+                {EXERCISE_SORTS.map((s) => (
+                  <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
             <Select value={muscleFilter} onValueChange={setMuscleFilter}>
               <SelectTrigger className="w-56"><SelectValue placeholder="Primary muscle" /></SelectTrigger>
               <SelectContent>
@@ -301,12 +396,43 @@ export function ExercisesAdmin({ embedded = false }: { embedded?: boolean } = {}
                     {e.category} · <span className={(e as any).needs_muscle_review ? "text-amber-500 font-semibold" : "text-primary font-semibold"}>{(e as any).primary_muscle_group ?? "—"}</span>
                     {(e as any).needs_muscle_review && <span className="ml-1 text-amber-500">⚠ review</span>}
                   </div>
+                  <div
+                    className="mt-1 flex items-center gap-1 text-[11px] text-muted-foreground"
+                    title={formatAddedDateTime((e as any).created_at)}
+                  >
+                    <CalendarClock className="h-3 w-3" />
+                    Added {formatAddedDate((e as any).created_at)}
+                  </div>
                 </div>
-                <div className="flex gap-1">
+                <div className="flex items-center gap-1">
                   <Button variant="ghost" size="sm" onClick={() => setEditing(e)}><Pencil className="h-3 w-3" /></Button>
                   <Button variant="ghost" size="sm" title="Volume tags" onClick={() => setVolumeTarget(e)}><BarChart3 className="h-3 w-3 text-primary" /></Button>
                   <Button variant="ghost" size="sm" title="Warm-up settings" onClick={() => setWarmupTarget(e)}><Flame className="h-3 w-3 text-orange-500" /></Button>
-                  <Button variant="ghost" size="sm" onClick={() => del(e.id)}><Trash2 className="h-3 w-3" /></Button>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="ghost" size="sm" disabled={busyId === e.id} title="More actions">
+                        <MoreVertical className="h-3.5 w-3.5" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="w-52">
+                      {(e as any).archived ? (
+                        <DropdownMenuItem onSelect={() => void toggleArchived(e, false)}>
+                          <RotateCcw className="mr-2 h-3.5 w-3.5" /> Restore to library
+                        </DropdownMenuItem>
+                      ) : (
+                        <DropdownMenuItem onSelect={() => void toggleArchived(e, true)}>
+                          <Archive className="mr-2 h-3.5 w-3.5" /> Archive (keeps history)
+                        </DropdownMenuItem>
+                      )}
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem
+                        className="text-destructive focus:text-destructive"
+                        onSelect={() => void del(e)}
+                      >
+                        <Trash2 className="mr-2 h-3.5 w-3.5" /> Delete permanently
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
                 </div>
               </div>
               <div>
@@ -323,6 +449,11 @@ export function ExercisesAdmin({ embedded = false }: { embedded?: boolean } = {}
                 </Select>
               </div>
               <div className="flex flex-wrap gap-1">
+                {(e as any).archived && (
+                  <Badge variant="outline" className="text-[10px] border-destructive/50 text-destructive">
+                    archived
+                  </Badge>
+                )}
                 {e.primary_movement_pattern ? (
                   <Badge variant="secondary" className="text-[10px]">
                     {(MOVEMENT_PATTERN_LABELS as any)[e.primary_movement_pattern] ?? e.primary_movement_pattern}

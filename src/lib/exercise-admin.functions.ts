@@ -81,7 +81,7 @@ export const setExerciseArchived = createServerFn({ method: "POST" })
       .maybeSingle();
     if (error) throw new Error(error.message);
     if (!row) throw new Error("Exercise not found or you do not have permission to change it.");
-    return row as Record<string, unknown>;
+    return JSON.parse(JSON.stringify(row)) as { id: string; name: string; archived: boolean | null };
   });
 
 export const deleteExercisePermanently = createServerFn({ method: "POST" })
