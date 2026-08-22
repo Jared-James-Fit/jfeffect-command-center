@@ -91,7 +91,7 @@ export type PurposeLabel =
   | "Assistance"
   | string;
 
-const ORDERED: PurposeLabel[] = ["Primary", "Secondary", "Tertiary", "Quaternary"];
+
 
 /**
  * Identify the competition-lift colour group a row belongs to.
@@ -119,18 +119,36 @@ export function liftColorGroup(
 }
 
 /**
+ * Resolve the programmed role of ONE exercise instance.
+ *
+ * Role is a property of the prescription, never of page order:
+ *   1. explicit `purpose_label` stored on the row (coach override) wins
+ *   2. otherwise the exercise's own category decides
+ *        competition -> Primary
+ *        variation   -> Secondary
+ *        assistance  -> Assistance
+ *
+ * It is deliberately NOT derived from occurrence count, sort order, whether
+ * the same lift already appears earlier in the day/week, top-set vs backoff,
+ * or set count. Two Competition Squat entries programmed on the same day are
+ * both Primary.
+ */
+export function resolvePurposeLabel<
+  R extends { purpose_label?: string | null; card_color?: string | null; movement_family?: string | null },
+>(row: R, meta?: ExerciseMeta | null): PurposeLabel {
+  if (row.purpose_label && row.purpose_label.trim()) return row.purpose_label.trim();
+  const category = resolveCategory(meta);
+  if (category === "competition" || meta?.is_competition_lift) return "Primary";
+  if (category === "variation") return "Secondary";
+  // A neutral row that was explicitly painted into a competition-lift colour
+  // group still counts as competition-adjacent variation work.
+  if (liftColorGroup(meta, row.card_color ?? null, row.movement_family ?? null)) return "Secondary";
+  return "Assistance";
+}
+
+/**
  * Derive purpose labels for an ordered list of rows in a workout day.
- *
- * Sequencing is calculated SEPARATELY within each competition-lift colour
- * group (squat / bench / deadlift). The first row in each group is
- * "Primary", the second "Secondary", the third "Tertiary", the fourth
- * "Quaternary"; any 5th+ row in the same group returns "" (no badge).
- *
- * Rows that do not belong to a squat/bench/deadlift colour group never
- * advance any sequence and are labelled "Assistance" (unless they have a
- * manual `purpose_label`).
- *
- * Manual `purpose_label` on a row always wins.
+ * Positional order is irrelevant — each row resolves independently.
  */
 export function derivePurposeLabels<
   R extends { purpose_label?: string | null; card_color?: string | null; movement_family?: string | null },
@@ -138,22 +156,9 @@ export function derivePurposeLabels<
   rows: R[],
   resolveMeta: (row: R) => ExerciseMeta | null | undefined,
 ): PurposeLabel[] {
-  const counters: Record<"squat" | "bench" | "deadlift", number> = {
-    squat: 0,
-    bench: 0,
-    deadlift: 0,
-  };
-  return rows.map((row) => {
-    if (row.purpose_label && row.purpose_label.trim()) return row.purpose_label.trim();
-    const meta = resolveMeta(row);
-    const group = liftColorGroup(meta, row.card_color ?? null, row.movement_family ?? null);
-    if (group) {
-      const idx = counters[group]++;
-      return idx < ORDERED.length ? ORDERED[idx] : "";
-    }
-    return "Assistance";
-  });
+  return rows.map((row) => resolvePurposeLabel(row, resolveMeta(row)));
 }
+
 
 /**
  * Derive one weekly hierarchy across all scheduled workout days. The caller
