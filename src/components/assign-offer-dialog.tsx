@@ -14,6 +14,7 @@ import { snapshotOfferForPurchase } from "@/lib/offers";
 import { useServerFn } from "@tanstack/react-start";
 import { createAgreement } from "@/lib/agreements.functions";
 import { createCheckoutSessionForAssignment } from "@/lib/stripe-checkout.functions";
+import { createPaymentShareLink } from "@/lib/payment-share.functions";
 import { sendPaymentLinkEmail } from "@/lib/payments.functions";
 import { runJob } from "@/lib/progress-jobs";
 import { autoCalculatePurchaseTermDates } from "@/lib/purchase-term-dates.functions";
@@ -56,6 +57,8 @@ export function AssignOfferDialog({ offer, onClose, fixedClientId }: { offer: an
   const [createAgreementOnAssign, setCreateAgreementOnAssign] = useState<boolean>(!!offerDefaultTemplateId);
   const createAgreementFn = useServerFn(createAgreement);
   const createCheckoutFn = useServerFn(createCheckoutSessionForAssignment);
+  const shareLinkFn = useServerFn(createPaymentShareLink);
+  const [stripeUrl, setStripeUrl] = useState<string | null>(null);
   const autoCalcTermDatesFn = useServerFn(autoCalculatePurchaseTermDates);
   const sendLinkFn = useServerFn(sendPaymentLinkEmail);
   const [checkoutUrl, setCheckoutUrl] = useState<string | null>(null);
@@ -155,8 +158,18 @@ export function AssignOfferDialog({ offer, onClose, fixedClientId }: { offer: an
           data: { purchaseRecordId: purchase.id, discountCodeId, origin: window.location.origin },
         });
         generatedUrl = res.url;
-        setCheckoutUrl(res.url);
-        try { await navigator.clipboard.writeText(res.url); } catch {}
+        setStripeUrl(res.url);
+        // Give the admin a SHORT, iMessage-safe JF Effect link — the raw
+        // Stripe Checkout URL gets split by iMessage's link detector.
+        let shareUrl = res.url as string;
+        try {
+          const minted: any = await shareLinkFn({
+            data: { purchaseRecordId: purchase.id, origin: window.location.origin },
+          });
+          if (minted?.shareUrl) shareUrl = minted.shareUrl;
+        } catch { /* fall back to the canonical Stripe URL */ }
+        setCheckoutUrl(shareUrl);
+        try { await navigator.clipboard.writeText(shareUrl); } catch {}
         job.completeStep(2); // Create checkout session
         // Prefer the existing email sender; fall back to copy/paste.
         try {
@@ -212,12 +225,13 @@ export function AssignOfferDialog({ offer, onClose, fixedClientId }: { offer: an
             {checkoutUrl && (
               <div className="rounded-md border border-primary/40 bg-primary/5 p-3 text-sm space-y-2">
                 <div className="font-semibold flex items-center gap-2">
-                  <CheckCircle2 className="h-4 w-4 text-primary" /> Stripe checkout link ready
+                  <CheckCircle2 className="h-4 w-4 text-primary" /> Payment link ready
                 </div>
                 <div className="break-all rounded bg-background px-2 py-1 font-mono text-xs">{checkoutUrl}</div>
                 <div className="flex gap-2">
                   <ActionButton size="sm" variant="outline" onClick={async () => { try { await navigator.clipboard.writeText(checkoutUrl); toast.success("Copied"); } catch {} }}>Copy link</ActionButton>
-                  <ActionButton size="sm" variant="outline" onClick={() => window.open(checkoutUrl, "_blank")}>Open</ActionButton>
+                  <ActionButton size="sm" variant="outline" onClick={() => window.open(stripeUrl ?? checkoutUrl, "_blank")}>Open</ActionButton>
+                  <ActionButton size="sm" variant="outline" onClick={async () => { try { await navigator.clipboard.writeText(`Here's your secure payment link:\n${checkoutUrl}`); toast.success("Message copied"); } catch {} }}>Copy message</ActionButton>
                 </div>
                 <p className="text-xs text-muted-foreground">
                   {emailNote ?? "Payment link created. Copy and send this link to the client."} The webhook marks this exact purchase as paid when they complete checkout.

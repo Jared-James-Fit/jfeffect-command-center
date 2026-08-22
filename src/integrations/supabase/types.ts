@@ -13160,6 +13160,47 @@ export type Database = {
           },
         ]
       }
+      payment_share_links: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          id: string
+          last_resolved_at: string | null
+          purchase_record_id: string
+          resolve_count: number
+          revoked: boolean
+          token: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          last_resolved_at?: string | null
+          purchase_record_id: string
+          resolve_count?: number
+          revoked?: boolean
+          token: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          last_resolved_at?: string | null
+          purchase_record_id?: string
+          resolve_count?: number
+          revoked?: boolean
+          token?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "payment_share_links_purchase_record_id_fkey"
+            columns: ["purchase_record_id"]
+            isOneToOne: false
+            referencedRelation: "purchase_records"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       pl_assignment_operations: {
         Row: {
           actor_user_id: string | null

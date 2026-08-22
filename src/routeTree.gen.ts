@@ -44,6 +44,7 @@ import { Route as CoachingApplyRouteImport } from './routes/coaching.apply'
 import { Route as EmailUnsubscribeRouteImport } from './routes/email/unsubscribe'
 import { Route as LegalSlugRouteImport } from './routes/legal.$slug'
 import { Route as MWelcomeRouteImport } from './routes/m.welcome'
+import { Route as PayTokenRouteImport } from './routes/pay.$token'
 import { Route as PersonalTrainerSelkirkApplyRouteImport } from './routes/personal-trainer-selkirk.apply'
 import { Route as SignTokenRouteImport } from './routes/sign.$token'
 import { Route as SignupJfRouteImport } from './routes/signup.jf'
@@ -463,6 +464,11 @@ const LegalSlugRoute = LegalSlugRouteImport.update({
 const MWelcomeRoute = MWelcomeRouteImport.update({
   id: '/m/welcome',
   path: '/m/welcome',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PayTokenRoute = PayTokenRouteImport.update({
+  id: '/pay/$token',
+  path: '/pay/$token',
   getParentRoute: () => rootRouteImport,
 } as any)
 const PersonalTrainerSelkirkApplyRoute =
@@ -1933,6 +1939,7 @@ export interface FileRoutesByFullPath {
   '/email/unsubscribe': typeof EmailUnsubscribeRoute
   '/legal/$slug': typeof LegalSlugRoute
   '/m/welcome': typeof MWelcomeRoute
+  '/pay/$token': typeof PayTokenRoute
   '/personal-trainer-selkirk/apply': typeof PersonalTrainerSelkirkApplyRoute
   '/sign/$token': typeof SignTokenRoute
   '/signup/jf': typeof SignupJfRoute
@@ -2209,6 +2216,7 @@ export interface FileRoutesByTo {
   '/email/unsubscribe': typeof EmailUnsubscribeRoute
   '/legal/$slug': typeof LegalSlugRoute
   '/m/welcome': typeof MWelcomeRoute
+  '/pay/$token': typeof PayTokenRoute
   '/personal-trainer-selkirk/apply': typeof PersonalTrainerSelkirkApplyRoute
   '/sign/$token': typeof SignTokenRoute
   '/signup/jf': typeof SignupJfRoute
@@ -2490,6 +2498,7 @@ export interface FileRoutesById {
   '/email/unsubscribe': typeof EmailUnsubscribeRoute
   '/legal/$slug': typeof LegalSlugRoute
   '/m/welcome': typeof MWelcomeRoute
+  '/pay/$token': typeof PayTokenRoute
   '/personal-trainer-selkirk/apply': typeof PersonalTrainerSelkirkApplyRoute
   '/sign/$token': typeof SignTokenRoute
   '/signup/jf': typeof SignupJfRoute
@@ -2772,6 +2781,7 @@ export interface FileRouteTypes {
     | '/email/unsubscribe'
     | '/legal/$slug'
     | '/m/welcome'
+    | '/pay/$token'
     | '/personal-trainer-selkirk/apply'
     | '/sign/$token'
     | '/signup/jf'
@@ -3048,6 +3058,7 @@ export interface FileRouteTypes {
     | '/email/unsubscribe'
     | '/legal/$slug'
     | '/m/welcome'
+    | '/pay/$token'
     | '/personal-trainer-selkirk/apply'
     | '/sign/$token'
     | '/signup/jf'
@@ -3328,6 +3339,7 @@ export interface FileRouteTypes {
     | '/email/unsubscribe'
     | '/legal/$slug'
     | '/m/welcome'
+    | '/pay/$token'
     | '/personal-trainer-selkirk/apply'
     | '/sign/$token'
     | '/signup/jf'
@@ -3604,6 +3616,7 @@ export interface RootRouteChildren {
   EmailUnsubscribeRoute: typeof EmailUnsubscribeRoute
   LegalSlugRoute: typeof LegalSlugRoute
   MWelcomeRoute: typeof MWelcomeRoute
+  PayTokenRoute: typeof PayTokenRoute
   SignTokenRoute: typeof SignTokenRoute
   SignupJfRoute: typeof SignupJfRoute
   CoachingIndexRoute: typeof CoachingIndexRoute
@@ -3877,6 +3890,13 @@ declare module '@tanstack/react-router' {
       path: '/m/welcome'
       fullPath: '/m/welcome'
       preLoaderRoute: typeof MWelcomeRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/pay/$token': {
+      id: '/pay/$token'
+      path: '/pay/$token'
+      fullPath: '/pay/$token'
+      preLoaderRoute: typeof PayTokenRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/personal-trainer-selkirk/apply': {
@@ -6376,6 +6396,7 @@ const rootRouteChildren: RootRouteChildren = {
   EmailUnsubscribeRoute: EmailUnsubscribeRoute,
   LegalSlugRoute: LegalSlugRoute,
   MWelcomeRoute: MWelcomeRoute,
+  PayTokenRoute: PayTokenRoute,
   SignTokenRoute: SignTokenRoute,
   SignupJfRoute: SignupJfRoute,
   CoachingIndexRoute: CoachingIndexRoute,
