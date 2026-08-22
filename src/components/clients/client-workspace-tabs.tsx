@@ -31,7 +31,9 @@ export function ClientWorkspaceTabs({ activeTab, onChange, heading }: ClientWork
   const activeMore = CLIENT_WORKSPACE_MORE_TABS.find((item) => item.value === activeTab);
 
   return (
-    <div className="mb-5 space-y-2">
+    // Sticky so the coach can switch sections from anywhere in a long panel
+    // without scrolling back to the top of the client workspace.
+    <div className="sticky top-0 z-30 -mx-1 mb-5 space-y-2 bg-background/95 px-1 py-2 backdrop-blur supports-[backdrop-filter]:bg-background/80">
       {heading ? (
         <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
           {heading}
