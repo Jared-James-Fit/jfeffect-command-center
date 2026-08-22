@@ -18,11 +18,13 @@ import { setPtSessionStatus } from "@/lib/pt-pack.functions";
 import { statusTone, fmtTimeRange, COMMON_TIMEZONES } from "@/lib/pt-sessions";
 import {
   summarizeSessions,
-  packageValue,
+  packageValueWithTax,
   fmtMoneyMinor,
   sessionEventLabel,
+  type LedgerPaymentRow,
   type SessionBalanceRow,
 } from "@/lib/sessions-inventory";
+
 import { WORKSPACE_FULL_SPAN_CLASS } from "@/components/workspace/workspace-container";
 import { useAuth } from "@/lib/auth";
 
