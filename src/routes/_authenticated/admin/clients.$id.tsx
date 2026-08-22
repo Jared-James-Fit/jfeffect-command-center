@@ -671,21 +671,23 @@ export function ClientProfileWorkspace({
         onSetPassword={() => { setPwValue(""); setPwOpen(true); }}
         onGoToAccountTab={() => setTab("account")}
       />
-      <Tabs
-        value={tab ?? "summary"}
-        onValueChange={(v) => setTab(v as TabValue)}
-        className={embedded ? "flex flex-col" : undefined}
-      >
-        <div className="order-1">
-          <SectionNav
-            activeTab={(tab ?? "summary") as TabValue}
-            onChange={(v) => setTab(v)}
-            compact={embedded}
-            heading={embedded ? "Workspace" : undefined}
-          />
-        </div>
+      {/*
+        The workspace nav MUST stay directly under the client header.
+        Previously this Tabs root was `flex flex-col` with the nav at `order-1`
+        while only the Summary panel carried `order-2` — every other tab
+        (Training, Nutrition, Sales…) defaulted to order-0 and rendered ABOVE
+        the nav, pushing the tab bar to the bottom of the page. Plain document
+        order keeps the nav first for every tab.
+      */}
+      <Tabs value={tab ?? "summary"} onValueChange={(v) => setTab(v as TabValue)}>
+        <SectionNav
+          activeTab={(tab ?? "summary") as TabValue}
+          onChange={(v) => setTab(v)}
+          compact={embedded}
+          heading={embedded ? "Workspace" : undefined}
+        />
 
-        <TabsContent value="summary" className={embedded ? "order-2 grid gap-6 md:grid-cols-3" : "grid gap-6 md:grid-cols-3"}>
+        <TabsContent value="summary" className="grid gap-6 md:grid-cols-3">
           <ClientOverviewSnapshot
             form={form}
             clientId={id}
