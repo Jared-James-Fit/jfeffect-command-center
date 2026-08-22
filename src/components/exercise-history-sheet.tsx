@@ -75,8 +75,27 @@ export function ExerciseHistorySheet({
     };
   }, [open, clientId, exerciseId, queryClient]);
 
+  // Canonical identity for this exercise, shared with the LAST TIME badge:
+  // the row's own exercise id plus any library duplicates/renames whose name
+  // normalizes identically. Similar-but-different exercises never merge.
+  const { data: identityIds = [] } = useQuery({
+    queryKey: ["exercise-history-identity", exerciseId ?? null, exerciseName],
+    enabled: open && (!!exerciseId || !!exerciseName),
+    staleTime: 10 * 60_000,
+    gcTime: 30 * 60_000,
+    queryFn: async () => {
+      const token = String(exerciseName ?? "").split(/[^A-Za-z0-9]+/).filter(Boolean)[0] ?? "";
+      let catalog: { id: string; name: string | null }[] = [];
+      if (token) {
+        const { data } = await sb.from("exercises").select("id, name").ilike("name", `%${token}%`).limit(300);
+        catalog = (data ?? []) as { id: string; name: string | null }[];
+      }
+      return matchingHistoryExerciseIds(exerciseId, exerciseName, catalog);
+    },
+  });
+
   const { data: rows = [], isLoading, isFetching } = useQuery({
-    queryKey: ["exercise-history", clientId, exerciseId ?? null, exerciseName, days],
+    queryKey: ["exercise-history", clientId, exerciseId ?? null, exerciseName, identityIds.join(","), days],
     enabled: !!clientId && (!!exerciseId || !!exerciseName) && open,
     staleTime: 2 * 60_000,   // cache for 2 min — avoids re-fetch on every open
     gcTime: 10 * 60_000,
@@ -97,11 +116,12 @@ export function ExerciseHistorySheet({
         .eq("client_id", clientId)
         .order("updated_at", { ascending: false })
         .limit(500);
-      // Match by canonical exercise id when we have one; otherwise fall
+      // Match by canonical exercise identity when we have one; otherwise fall
       // back to the row's custom name override so custom-named exercises
       // (no exercise_id) still show a training history.
-      if (exerciseId) {
-        q = q.eq("pl_exercise_rows.exercise_id", exerciseId);
+      const ids = identityIds.length ? identityIds : exerciseId ? [exerciseId] : [];
+      if (ids.length) {
+        q = q.in("pl_exercise_rows.exercise_id", ids);
       } else if (exerciseName) {
         q = q.eq("pl_exercise_rows.exercise_name_override", exerciseName);
       }
@@ -113,6 +133,7 @@ export function ExerciseHistorySheet({
       if (error) throw error;
       return (data ?? []) as any[];
     },
+
   });
 
   // Pull the canonical workout-completion timestamps for every day shown so
