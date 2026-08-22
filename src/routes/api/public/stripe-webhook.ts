@@ -7,6 +7,12 @@ import {
   upsertPromoRedemption,
 } from "@/lib/promo-capture";
 import { sendBillingAdminEmail, buildBillingEmailBody } from "@/lib/billing-notify.server";
+import {
+  invoiceSubscriptionId,
+  invoicePaymentIntentId,
+  invoiceChargeId,
+  invoiceTaxMinor,
+} from "@/lib/stripe-invoice-refs";
 
 // Verify Stripe signature using Web Crypto (HMAC-SHA256).
 // Header format: t=timestamp,v1=sig,v1=sig...
@@ -519,9 +525,9 @@ export const Route = createFileRoute("/api/public/stripe-webhook")({
 
                 if (obj.payment_status === "paid") {
                   await provisionMemberFromPurchase(supabase, { ...purchase, stripe_customer_id: obj.customer ?? purchase.stripe_customer_id });
-                  // Create payment_ledger row for this payment (idempotent via stripe_checkout_session_id)
+                  // Create payment_ledger row for this payment (idempotent via external_reference)
                   if (obj.amount_total && obj.amount_total > 0) {
-                    await supabase.from("payment_ledger").upsert({
+                    const { error: ledgerErr } = await supabase.from("payment_ledger").upsert({
                       client_id: purchase.client_id,
                       purchase_id: purchase.id,
                       txn_type: "payment",
@@ -531,16 +537,24 @@ export const Route = createFileRoute("/api/public/stripe-webhook")({
                       currency: (obj.currency ?? "cad").toUpperCase(),
                       transaction_date: new Date(event.created * 1000).toISOString().slice(0, 10),
                       received_at: new Date(event.created * 1000).toISOString(),
-                      external_reference: obj.id,
+                      external_reference: obj.invoice ?? obj.id,
                       stripe_event_id: event.id,
                       stripe_payment_intent_id: obj.payment_intent ?? null,
                       stripe_invoice_id: obj.invoice ?? null,
+                      stripe_customer_id: obj.customer ?? null,
+                      stripe_subscription_id: obj.subscription ?? null,
+                      stripe_checkout_session_id: obj.id,
+                      stripe_mode: eventMode ?? null,
                       source: "stripe_checkout",
                       internal_note: `Stripe checkout.session.completed — session ${obj.id}`,
-                    }, { onConflict: "external_reference", ignoreDuplicates: true }).then(() => {}, (e: any) => {
-                      console.error("[stripe-webhook] payment_ledger upsert failed", e?.message);
-                    });
+                    }, { onConflict: "external_reference", ignoreDuplicates: true });
+                    if (ledgerErr) {
+                      console.error("[stripe-webhook] payment_ledger upsert failed (checkout)", {
+                        sessionId: obj.id, purchaseId: purchase.id, message: ledgerErr.message,
+                      });
+                    }
                   }
+
                 }
               }
 
@@ -826,16 +840,20 @@ export const Route = createFileRoute("/api/public/stripe-webhook")({
             // settlement; dedupe by event.id already prevents double work.
             case "invoice.paid":
             case "invoice.payment_succeeded": {
-              if (obj.subscription) {
+              // Newer Stripe API versions nest these refs under `parent`/`payments`.
+              const invSubId = invoiceSubscriptionId(obj);
+              const invPiId = invoicePaymentIntentId(obj);
+              const invChargeId = invoiceChargeId(obj);
+              if (invSubId) {
                 let sub: any;
                 try {
-                  sub = await stripeFetch(`/subscriptions/${obj.subscription}`, { apiKey: eventApiKey ?? undefined });
+                  sub = await stripeFetch(`/subscriptions/${invSubId}`, { apiKey: eventApiKey ?? undefined });
                 } catch (err: any) {
                   console.error("[stripe-webhook] subscription.lookup.failed", {
                     eventId: event?.id ?? null,
                     eventType: event?.type ?? null,
                     eventMode,
-                    subscriptionId: obj.subscription,
+                    subscriptionId: invSubId,
                     keyAvailable: !!eventApiKey,
                     message: err?.message ?? String(err),
                   });
@@ -857,10 +875,38 @@ export const Route = createFileRoute("/api/public/stripe-webhook")({
                   break;
                 }
               }
-              const purchase = await resolvePurchase(supabase, obj, {
-                stripe_subscription_id: obj.subscription,
+              let purchase = await resolvePurchase(supabase, obj, {
+                stripe_subscription_id: invSubId,
                 stripe_customer_id: obj.customer,
+                stripe_payment_intent_id: invPiId,
               });
+              // Last-resort match: an active coaching purchase for the client
+              // that owns this Stripe customer / billing email. Without this a
+              // dashboard-created payment link (no metadata) never records a
+              // transaction.
+              if (!purchase) {
+                const billingEmail = obj.customer_email ?? obj.customer_details?.email ?? null;
+                let clientId: string | null = null;
+                if (obj.customer) {
+                  const { data: c } = await supabase
+                    .from("clients").select("id").eq("stripe_customer_id", obj.customer).maybeSingle();
+                  clientId = c?.id ?? null;
+                }
+                if (!clientId && billingEmail) {
+                  const { data: c } = await supabase
+                    .from("clients").select("id").ilike("email", billingEmail).maybeSingle();
+                  clientId = c?.id ?? null;
+                }
+                if (clientId) {
+                  const { data: pr } = await supabase
+                    .from("purchase_records").select("*")
+                    .eq("client_id", clientId)
+                    .in("payment_status", ["Active Subscription", "Pending Payment", "Payment Link Sent", "Unpaid"])
+                    .order("purchased_at", { ascending: false })
+                    .limit(1).maybeSingle();
+                  purchase = pr ?? null;
+                }
+              }
               if (purchase) {
                 await supabase.from("purchase_records").update({
                   payment_status: "Active Subscription",
@@ -868,6 +914,8 @@ export const Route = createFileRoute("/api/public/stripe-webhook")({
                   service_status: "Active",
                   paid_at: now,
                   stripe_receipt_url: obj.hosted_invoice_url ?? purchase.stripe_receipt_url,
+                  ...(invSubId ? { stripe_subscription_id: invSubId } : {}),
+                  ...(obj.customer ? { stripe_customer_id: obj.customer } : {}),
                   // Roll next_billing_date forward from the invoice line period end.
                   ...(obj.lines?.data?.[0]?.period?.end
                     ? { next_billing_date: new Date(obj.lines.data[0].period.end * 1000).toISOString().split("T")[0] }
@@ -876,30 +924,78 @@ export const Route = createFileRoute("/api/public/stripe-webhook")({
                   last_payment_update_at: now,
                 }).eq("id", purchase.id);
                 await provisionMemberFromPurchase(supabase, { ...purchase, stripe_customer_id: obj.customer ?? purchase.stripe_customer_id });
-                // Create payment_ledger row for subscription renewal (idempotent via stripe_invoice_id)
+                // Create payment_ledger row for subscription renewal (idempotent via invoice id)
                 if ((obj.amount_paid ?? 0) > 0) {
-                  await supabase.from("payment_ledger").upsert({
+                  const { error: ledgerErr } = await supabase.from("payment_ledger").upsert({
                     client_id: purchase.client_id,
                     purchase_id: purchase.id,
                     txn_type: "payment",
                     method: "stripe",
                     amount_minor: obj.amount_paid,
-                    tax_minor: obj.tax ?? 0,
+                    tax_minor: invoiceTaxMinor(obj),
                     currency: (obj.currency ?? "cad").toUpperCase(),
                     transaction_date: new Date(event.created * 1000).toISOString().slice(0, 10),
                     received_at: new Date(event.created * 1000).toISOString(),
                     external_reference: obj.id,
                     stripe_event_id: event.id,
-                    stripe_payment_intent_id: obj.payment_intent ?? null,
+                    stripe_payment_intent_id: invPiId,
+                    stripe_charge_id: invChargeId,
                     stripe_invoice_id: obj.id,
-                    stripe_subscription_id: obj.subscription ?? null,
+                    stripe_customer_id: obj.customer ?? null,
+                    stripe_subscription_id: invSubId,
+                    stripe_mode: eventMode ?? null,
+                    receipt_url: obj.hosted_invoice_url ?? null,
+                    hosted_invoice_url: obj.hosted_invoice_url ?? null,
+                    invoice_pdf_url: obj.invoice_pdf ?? null,
                     source: "stripe_subscription",
                     internal_note: `Stripe invoice.payment_succeeded — invoice ${obj.id}`,
-                  }, { onConflict: "external_reference", ignoreDuplicates: true }).then(() => {}, (e: any) => {
-                    console.error("[stripe-webhook] payment_ledger upsert failed (invoice)", e?.message);
-                  });
+                  }, { onConflict: "external_reference", ignoreDuplicates: true });
+                  if (ledgerErr) {
+                    console.error("[stripe-webhook] payment_ledger upsert failed (invoice)", {
+                      invoiceId: obj.id, purchaseId: purchase.id, message: ledgerErr.message,
+                    });
+                  }
                 }
+
+                // ── Fixed-term safety net ────────────────────────────────
+                // Payment links created directly in Stripe carry no
+                // `payment_count` price metadata, so no Subscription Schedule
+                // exists to end the plan. Once the contracted number of
+                // installments has been paid, stop future billing.
+                const contractedPayments = Number(purchase.number_of_payments ?? 0);
+                if (invSubId && contractedPayments > 0) {
+                  const { count: paidCount } = await supabase
+                    .from("payment_ledger")
+                    .select("id", { count: "exact", head: true })
+                    .eq("purchase_id", purchase.id)
+                    .eq("txn_type", "payment")
+                    .eq("voided", false);
+                  if ((paidCount ?? 0) >= contractedPayments) {
+                    try {
+                      await stripeFetch(`/subscriptions/${invSubId}`, {
+                        apiKey: eventApiKey ?? undefined,
+                        method: "POST",
+                        body: "cancel_at_period_end=true",
+                        idempotencyKey: `fixedterm_end_${invSubId}_${contractedPayments}`,
+                      });
+                      await supabase.from("purchase_records").update({
+                        cancel_at_period_end: true,
+                        payment_status: "Paid",
+                        last_payment_update_source: "stripe_webhook_fixed_term",
+                        last_payment_update_at: now,
+                      }).eq("id", purchase.id);
+                      console.log(`[stripe-webhook] fixed-term complete — ${invSubId} set to end after ${contractedPayments} payments`);
+                    } catch (e: any) {
+                      console.error("[stripe-webhook] fixed-term cancel_at_period_end failed", e?.message);
+                    }
+                  }
+                }
+              } else {
+                console.error("[stripe-webhook] invoice paid but no purchase matched", {
+                  invoiceId: obj.id, customer: obj.customer ?? null, subscription: invSubId,
+                });
               }
+
               // Admin billing notification — best-effort, never fails the webhook
               if ((obj.amount_paid ?? 0) > 0) {
                 try {
@@ -964,16 +1060,17 @@ export const Route = createFileRoute("/api/public/stripe-webhook")({
             }
             // ── Invoice failed (payment issue) ──────────────────────────────
             case "invoice.payment_failed": {
-              if (obj.subscription) {
+              const failedSubId = invoiceSubscriptionId(obj);
+              if (failedSubId) {
                 let sub: any;
                 try {
-                  sub = await stripeFetch(`/subscriptions/${obj.subscription}`, { apiKey: eventApiKey ?? undefined });
+                  sub = await stripeFetch(`/subscriptions/${failedSubId}`, { apiKey: eventApiKey ?? undefined });
                 } catch (err: any) {
                   console.error("[stripe-webhook] subscription.lookup.failed", {
                     eventId: event?.id ?? null,
                     eventType: event?.type ?? null,
                     eventMode,
-                    subscriptionId: obj.subscription,
+                    subscriptionId: failedSubId,
                     keyAvailable: !!eventApiKey,
                     message: err?.message ?? String(err),
                   });
@@ -992,7 +1089,7 @@ export const Route = createFileRoute("/api/public/stripe-webhook")({
                 }
               }
               const purchase = await resolvePurchase(supabase, obj, {
-                stripe_subscription_id: obj.subscription,
+                stripe_subscription_id: failedSubId,
                 stripe_customer_id: obj.customer,
               });
               if (purchase) {
