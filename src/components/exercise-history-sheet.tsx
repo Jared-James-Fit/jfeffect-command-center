@@ -9,6 +9,7 @@ import { Card } from "@/components/ui/card";
 import { History, CheckCircle2, Circle, StickyNote } from "lucide-react";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
+import { matchingHistoryExerciseIds } from "@/lib/workout-previous-lift";
 
 const sb = supabase as any;
 
