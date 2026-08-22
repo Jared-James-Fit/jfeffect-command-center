@@ -3,34 +3,40 @@ import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
 import { Copy, ExternalLink, Share2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { resolvePaymentShareLink } from "@/lib/payment-share.functions";
+import { createPaymentShareLink } from "@/lib/payment-share.functions";
 import { createCheckoutSessionForAssignment } from "@/lib/stripe-checkout.functions";
 import { sanitizeShareUrl, shareKindLabel } from "@/lib/payment-share-link";
 import { share as nativeShare, canShare } from "@/platform/share";
 
 /**
- * Resolves the canonical shareable Stripe URL for a purchase.
+ * Resolves the CLIENT-FACING payment URL for a purchase.
+ *
+ * For client-specific Stripe Checkout Sessions this is a short JF Effect link
+ * (https://…/pay/<token>) that redirects to Stripe — a giant
+ * checkout.stripe.com URL with a `#` fragment gets split by iMessage's link
+ * detector, producing a truncated (broken) link plus a stray text bubble.
+ * Reusable buy.stripe.com Payment Links are already share-safe and pass through.
+ *
  * Never charges: it reads Stripe, and only creates a fresh Checkout Session
  * through the existing server-side assignment flow when the stored one is stale.
  */
 export async function getShareablePaymentUrl(
-  resolveFn: (a: { data: { purchaseRecordId: string } }) => Promise<any>,
+  shareFn: (a: { data: { purchaseRecordId: string; origin: string } }) => Promise<any>,
   checkoutFn: (a: { data: { purchaseRecordId: string; discountCodeId: null; origin: string } }) => Promise<any>,
   purchaseId: string,
-): Promise<{ url: string; kind: string }> {
-  const res = await resolveFn({ data: { purchaseRecordId: purchaseId } });
+): Promise<{ url: string; kind: string; canonicalUrl: string | null }> {
+  const origin = window.location.origin;
+  let res = await shareFn({ data: { purchaseRecordId: purchaseId, origin } });
   if (res.kind === "none") throw new Error(res.reason ?? "No payment link needed for this purchase.");
-  if (!res.needsFreshCheckout) {
-    const clean = sanitizeShareUrl(res.url);
-    if (!clean) throw new Error("Stripe returned an unusable link. Try again.");
-    return { url: clean, kind: res.kind };
+
+  if (res.needsFreshCheckout) {
+    await checkoutFn({ data: { purchaseRecordId: purchaseId, discountCodeId: null, origin } });
+    res = await shareFn({ data: { purchaseRecordId: purchaseId, origin } });
   }
-  const fresh = await checkoutFn({
-    data: { purchaseRecordId: purchaseId, discountCodeId: null, origin: window.location.origin },
-  });
-  const clean = sanitizeShareUrl(fresh?.url);
-  if (!clean) throw new Error("Stripe did not return a checkout URL.");
-  return { url: clean, kind: "checkout_session" };
+
+  const clean = sanitizeShareUrl(res.shareUrl);
+  if (!clean) throw new Error("Could not build a shareable payment link. Try again.");
+  return { url: clean, kind: res.kind, canonicalUrl: res.canonicalUrl ?? null };
 }
 
 export function CopyPaymentLinkButton({
