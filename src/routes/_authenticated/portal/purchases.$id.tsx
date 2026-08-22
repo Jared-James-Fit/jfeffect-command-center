@@ -235,7 +235,7 @@ function ClientPurchase() {
               >
                 {paid ? "Paid · Active" : r.payment_status === "Active Subscription" ? "Active subscription" : r.payment_status === "Cancelled" ? "Cancelled" : "Payment setup needed"}
               </Badge>
-              <Button onClick={goToStripe} disabled={!accepted} className="w-full bg-gradient-primary font-bold uppercase">
+              <Button onClick={() => { void goToStripe(); }} disabled={!accepted} className="w-full bg-gradient-primary font-bold uppercase">
                 {paid ? "Manage payment" : "Pay now"} <ExternalLink className="ml-2 h-4 w-4" />
               </Button>
               {!accepted && <p className="text-xs text-muted-foreground">Accept the terms above to enable payment.</p>}
