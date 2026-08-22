@@ -31,6 +31,7 @@ import {
 import { createPreviewCheckoutSession } from "@/lib/stripe-checkout.functions";
 import { ProductAccessGrantDialog } from "@/components/product-access-grant-dialog";
 import { Lock as LockIcon } from "lucide-react";
+import { BILLING_FREQUENCY_OPTIONS, toStripeRecurring, type BillingFrequency } from "@/lib/billing-frequency";
 
 const NewProductModal = lazy(() => import("@/components/products/new-product-modal"));
 
@@ -151,7 +152,7 @@ type FormState = {
   stripePriceId: string;
   checkoutMode: "payment" | "subscription" | "";
   generateStripeProduct: boolean;
-  billingInterval: "month" | "year" | "week" | "day" | "";
+  billingInterval: BillingFrequency | "";
   accessLevel: string;
 };
 
@@ -893,7 +894,10 @@ function ProductFormDialog({
         notes: form.notes.trim() || null,
         stripePriceId: form.stripePriceId.trim() || null,
         checkoutMode: form.checkoutMode || "auto",
-        billingInterval: (form.billingInterval as any) || null,
+        billingFrequency: (form.billingInterval as BillingFrequency) || null,
+        billingInterval: form.billingInterval
+          ? toStripeRecurring(form.billingInterval as BillingFrequency).interval
+          : null,
         accessLevel: form.accessLevel ? parseInt(form.accessLevel, 10) : null,
       };
 
@@ -1043,12 +1047,15 @@ function ProductFormDialog({
                       <SelectTrigger><SelectValue placeholder="One-time payment" /></SelectTrigger>
                       <SelectContent>
                         <SelectItem value="__none">One-time payment</SelectItem>
-                        <SelectItem value="week">Weekly</SelectItem>
-                        <SelectItem value="month">Monthly</SelectItem>
-                        <SelectItem value="year">Yearly</SelectItem>
+                        {BILLING_FREQUENCY_OPTIONS.map((o) => (
+                          <SelectItem key={o.value} value={o.value}>
+                            {o.label}
+                            <span className="ml-2 text-xs text-muted-foreground">{o.hint}</span>
+                          </SelectItem>
+                        ))}
                       </SelectContent>
                     </Select>
-                    <p className="text-xs text-muted-foreground mt-1">One-time for packages. Monthly/Weekly/Yearly for recurring coaching.</p>
+                    <p className="text-xs text-muted-foreground mt-1">One-time for packages. Weekly, bi-weekly (every 2 weeks), monthly or yearly for recurring coaching.</p>
                   </div>
                 )}
               </div>
