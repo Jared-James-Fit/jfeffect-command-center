@@ -23,6 +23,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { CalendarClock, RefreshCw, RotateCcw, XCircle, Zap } from "lucide-react";
 import { toast } from "sonner";
+import { stripeRecurringPhrase } from "@/lib/billing-frequency";
 
 type Mode = "period_end" | "immediate" | "undo";
 
@@ -52,9 +53,8 @@ function fmtMoney(cents: number | null | undefined, currency: string | null | un
 }
 
 function fmtInterval(interval: string | null, count: number) {
-  if (!interval) return "—";
-  const base = interval === "day" ? "day" : interval === "week" ? "week" : interval === "month" ? "month" : "year";
-  return count > 1 ? `every ${count} ${base}s` : `every ${base}`;
+  // Canonical: week x 2 renders as "every 2 weeks", never "weekly".
+  return stripeRecurringPhrase({ interval, interval_count: count });
 }
 
 /**

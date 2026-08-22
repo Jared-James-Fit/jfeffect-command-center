@@ -29,6 +29,13 @@ import {
 } from "@/components/ui/select";
 import { supabase } from "@/integrations/supabase/client";
 import { createCoachingProduct } from "@/lib/coaching-products.functions";
+import {
+  BILLING_FREQUENCY_OPTIONS,
+  billingCadencePhrase,
+  paymentStructureLabel,
+  toStripeRecurring,
+  type BillingFrequency,
+} from "@/lib/billing-frequency";
 
 /* ─────────────────────────────────────────────────────────────
    Field labels for validation surfacing
@@ -101,7 +108,7 @@ type PaymentType = "one_time" | "recurring" | "free";
 // NOTE: "payment_plan" is intentionally deferred — the underlying Stripe sync
 // path does not yet support fixed-instalment schedules natively. Follow-up.
 
-type BillingInterval = "week" | "month" | "year";
+type BillingInterval = BillingFrequency;
 
 type SubscriptionDuration = "until_cancelled" | "fixed_payments";
 
@@ -235,7 +242,7 @@ function initialForm(defaultWorkspace: "coaching" | "membership"): FormState {
     paymentType: "recurring",
     priceText: "",
     currency: "CAD",
-    billingInterval: "month",
+    billingInterval: "monthly",
     subscriptionDuration: "until_cancelled",
     fixedPaymentCount: "12",
     serviceDurationValue: "12",
@@ -276,14 +283,8 @@ function formatMoney(amount: number, currency: string) {
 }
 
 function intervalWord(iv: BillingInterval) {
-  switch (iv) {
-    case "week":
-      return "week";
-    case "month":
-      return "month";
-    case "year":
-      return "year";
-  }
+  // Client-facing, unambiguous ("every 2 weeks" for bi-weekly).
+  return billingCadencePhrase(iv).replace(/^every\s*/, "");
 }
 
 function priceLine(f: FormState): string {
@@ -292,7 +293,7 @@ function priceLine(f: FormState): string {
   if (!price) return "—";
   const money = formatMoney(price, f.currency);
   if (f.paymentType === "one_time") return `${money} one-time`;
-  const every = `every ${intervalWord(f.billingInterval)}`;
+  const every = billingCadencePhrase(f.billingInterval);
   if (f.subscriptionDuration === "fixed_payments") {
     const n = parseInt(f.fixedPaymentCount || "0", 10);
     if (n > 0) return `${money} ${every} for ${n} payment${n === 1 ? "" : "s"}`;
@@ -500,7 +501,7 @@ export default function NewProductModal({
 
       let paymentStructure: string | null = null;
       let checkoutMode: "payment" | "subscription" | "auto" = "auto";
-      let billingInterval: "week" | "month" | "year" | null = null;
+      let billingFrequency: BillingFrequency | null = null;
       let generateStripe = false;
 
       if (form.paymentType === "free") {
@@ -513,15 +514,14 @@ export default function NewProductModal({
         generateStripe = true;
       } else {
         // recurring
-        billingInterval = form.billingInterval;
+        billingFrequency = form.billingInterval;
         checkoutMode = "subscription";
         generateStripe = true;
-        if (form.subscriptionDuration === "fixed_payments") {
-          const n = parseInt(form.fixedPaymentCount || "0", 10);
-          paymentStructure = `${intervalWord(form.billingInterval).replace(/^./, (c) => c.toUpperCase())}ly subscription — ${n} payments`;
-        } else {
-          paymentStructure = `${intervalWord(form.billingInterval).replace(/^./, (c) => c.toUpperCase())}ly subscription`;
-        }
+        const fixedCount =
+          form.subscriptionDuration === "fixed_payments"
+            ? parseInt(form.fixedPaymentCount || "0", 10)
+            : null;
+        paymentStructure = paymentStructureLabel(form.billingInterval, fixedCount);
       }
 
       const termLength =
@@ -578,7 +578,8 @@ export default function NewProductModal({
         imagePath: imagePath ?? null,
         stripePriceId: null,
         checkoutMode,
-        billingInterval,
+        billingFrequency,
+        billingInterval: billingFrequency ? toStripeRecurring(billingFrequency).interval : null,
         accessLevel: accessPresetToLevel(form.accessPreset),
         generateStripeLink: generateStripe,
         isMemberFacing: form.workspace !== "coaching",
@@ -798,9 +799,12 @@ export default function NewProductModal({
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="week">Weekly</SelectItem>
-                          <SelectItem value="month">Monthly</SelectItem>
-                          <SelectItem value="year">Yearly</SelectItem>
+                          {BILLING_FREQUENCY_OPTIONS.map((o) => (
+                            <SelectItem key={o.value} value={o.value}>
+                              {o.label}
+                              <span className="ml-2 text-xs text-muted-foreground">{o.hint}</span>
+                            </SelectItem>
+                          ))}
                         </SelectContent>
                       </Select>
                     </div>
