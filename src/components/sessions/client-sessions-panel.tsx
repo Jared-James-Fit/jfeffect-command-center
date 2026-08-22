@@ -205,10 +205,12 @@ export function ClientSessionsPanel({
                         {row ? <> · {Number(row.used ?? 0)} used · <strong className="text-foreground">{Number(row.remaining ?? 0)} remaining</strong></> : " · not active yet"}
                       </div>
                       <div className="text-xs text-muted-foreground">
-                        Paid {fmtMoneyMinor(v.amountPaidMinor, v.currency)} of {fmtMoneyMinor(v.packageValueMinor, v.currency)}
-                        {v.paidRatePerSessionMinor != null ? ` · paid rate ${fmtMoneyMinor(v.paidRatePerSessionMinor, v.currency)}/session` : ""}
-                        {v.listRatePerSessionMinor != null ? ` · list ${fmtMoneyMinor(v.listRatePerSessionMinor, v.currency)}/session` : ""}
-                        {v.outstandingMinor ? ` · ${fmtMoneyMinor(v.outstandingMinor, v.currency)} outstanding` : ""}
+                        Contract {fmtMoneyMinor(v.packageValueMinor, v.currency)}
+                        {v.listRatePerSessionMinor != null ? ` · ${fmtMoneyMinor(v.listRatePerSessionMinor, v.currency)}/session` : ""}
+                      </div>
+                      <div className="text-xs text-muted-foreground">
+                        Paid {fmtMoneyMinor(v.amountPaidMinor, v.currency)}
+                        {v.outstandingMinor ? ` · ${fmtMoneyMinor(v.outstandingMinor, v.currency)} outstanding` : " · paid in full"}
                       </div>
                     </div>
                     <Badge variant="outline" className="shrink-0">{p.payment_status ?? "—"}</Badge>
