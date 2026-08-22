@@ -1690,6 +1690,11 @@ function WorkoutDay({
         qc.invalidateQueries({ queryKey: ["schedule"] }),
         qc.invalidateQueries({ queryKey: ["resolved-client-days"] }),
         qc.invalidateQueries({ queryKey: ["pl-workout-feedback", dayId, client.id] }),
+        // Finishing a workout makes today's sets history: LAST TIME and the
+        // History sheet must refresh without a reload or re-login.
+        qc.invalidateQueries({ queryKey: ["workout-previous-lifts"] }),
+        qc.invalidateQueries({ queryKey: ["exercise-history"] }),
+
       ]);
     }
     setLastSummary(computed);
