@@ -45,11 +45,10 @@ import { replaceClientNativeFormAssignments } from "@/lib/native-forms.functions
 import { ActionButton } from "@/components/action-button";
 import { IntakeAnswersBigButton } from "@/components/clients/intake-answers-dialog";
 import { UserAvatar } from "@/components/user-avatar";
+import { describeAccountAccess } from "@/lib/client-account-access";
 import {
   WorkspaceIdentityHeader,
-  WorkspaceActionCenter,
   WorkspaceSnapshotField,
-  type WorkspaceAction,
 } from "@/components/workspace";
 import {
   IdentityCard,
@@ -628,27 +627,10 @@ export function ClientProfileWorkspace({
         />
       )}
       <div className={embedded ? "p-4 md:p-6" : "p-6 md:p-8"}>
-      {embedded && (
-        <EmbeddedActionCenter
-          clientId={id}
-          canPov={canPov}
-          form={form}
-          onMessage={() => setTab("messages")}
-          onPov={() => {
-            if (!form.user_id) {
-              toast.error("Client has no account yet — send a setup link first.");
-              return;
-            }
-            impersonation.start(
-              { id, user_id: form.user_id, full_name: form.full_name },
-              typeof window !== "undefined" ? window.location.pathname + window.location.search : `/admin/clients/${id}`,
-            );
-            navigate({ to: "/portal" });
-          }}
-          onIntake={() => setTab("goals-setup")}
-          onRequestUpdate={requestUpdate}
-        />
-      )}
+      {/*
+        The profile-shell "Actions" grid was removed — Message, POV and More
+        live in the client header, Assign Program lives in the Training tab.
+      */}
       {form.status === "Deactivated" && (
         <div className="mb-4 rounded-md border border-warning/40 bg-warning/10 px-4 py-3 text-sm">
           <div className="font-semibold text-warning">Account Deactivated</div>
@@ -662,15 +644,6 @@ export function ClientProfileWorkspace({
           )}
         </div>
       )}
-      <SetupStatusBanner
-        form={form}
-        onSendSetup={sendSetup}
-        onCopySetup={copySetupLink}
-        onSendReset={sendReset}
-        onCopyReset={copyResetLink}
-        onSetPassword={() => { setPwValue(""); setPwOpen(true); }}
-        onGoToAccountTab={() => setTab("account")}
-      />
       {/*
         The workspace nav MUST stay directly under the client header.
         Previously this Tabs root was `flex flex-col` with the nav at `order-1`
@@ -688,6 +661,18 @@ export function ClientProfileWorkspace({
         />
 
         <TabsContent value="summary" className="grid gap-6 md:grid-cols-3">
+          {/* Setup/access alerts live at the top of Summary, never above the nav. */}
+          <div className="md:col-span-3 empty:hidden">
+            <SetupStatusBanner
+              form={form}
+              onSendSetup={sendSetup}
+              onCopySetup={copySetupLink}
+              onSendReset={sendReset}
+              onCopyReset={copyResetLink}
+              onSetPassword={() => { setPwValue(""); setPwOpen(true); }}
+              onGoToAccountTab={() => setTab("account")}
+            />
+          </div>
           <ClientOverviewSnapshot
             form={form}
             clientId={id}
@@ -1969,57 +1954,6 @@ function EmbeddedIdentityHeader({
   );
 }
 
-/**
- * Coaching action center — feeds the coaching-specific action set into
- * the shared WorkspaceActionCenter. Membership feeds its own array.
- */
-function EmbeddedActionCenter({
-  clientId,
-  canPov,
-  form,
-  onMessage,
-  onPov,
-  onIntake,
-  onRequestUpdate,
-}: {
-  clientId: string;
-  canPov: boolean;
-  form: any;
-  onMessage: () => void;
-  onPov: () => void;
-  onIntake: () => void;
-  onRequestUpdate: () => unknown | Promise<unknown>;
-}) {
-  const actions: WorkspaceAction[] = [
-    { key: "message", label: "Message", icon: MessageSquare, onClick: onMessage },
-    { key: "pov", label: "Client POV", icon: Eye, onClick: onPov, tone: "warn", hidden: !canPov },
-    {
-      key: "program",
-      label: "Assign Program",
-      icon: Dumbbell,
-      to: "/admin/client-programs/$clientId",
-      params: { clientId },
-    },
-    {
-      key: "schedule",
-      label: "Schedule",
-      icon: Calendar,
-      to: "/admin/clients/$id/schedule",
-      params: { id: clientId },
-    },
-    { key: "intake", label: "Intake & Goals", icon: Target, onClick: onIntake },
-    {
-      key: "update",
-      label: form.info_update_requested ? "Update sent" : "Request Update",
-      icon: BellRing,
-      onClick: () => { void onRequestUpdate(); },
-    },
-  ];
-  // Message / POV / Assign Program stay one tap away; the rest collapse so the
-  // workspace opens on client information, not a grid of buttons.
-  return <WorkspaceActionCenter actions={actions} maxVisible={3} />;
-}
-
 function CommsToggleRow({ title, description, checked, onChange }: { title: string; description: string; checked: boolean; onChange: (v: boolean) => void | Promise<void> }) {
   return (
     <label className="flex min-h-[64px] items-center justify-between gap-3 rounded-md border border-border bg-secondary/30 px-4 py-3 text-sm">
@@ -2205,6 +2139,48 @@ function ClientOverviewSnapshot({
               <p className="text-xs text-success">All critical fields complete.</p>
             )}
           </Card>
+
+          {/* Account & Access — consolidated from the removed top-level
+              "Account Setup" card. Quiet when healthy; never repeats the
+              "Last signed in" value shown in App Activity. */}
+          {(() => {
+            const access = describeAccountAccess(form);
+            return (
+              <Card
+                className={[
+                  "border-border bg-card p-6 space-y-3",
+                  access.needsAttention ? "border-warning/40 bg-warning/5" : "",
+                ].join(" ")}
+                data-testid="account-access-card"
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <h3 className="text-sm font-semibold uppercase tracking-widest text-muted-foreground">
+                    Account &amp; Access
+                  </h3>
+                  <Badge
+                    variant="outline"
+                    className={access.needsAttention ? "border-warning/40 text-warning bg-warning/10 text-[11px]" : "text-[11px]"}
+                  >
+                    {access.statusLabel}
+                  </Badge>
+                </div>
+                <dl className="grid grid-cols-2 gap-y-1.5 text-xs">
+                  <dt className="text-muted-foreground">Account created</dt>
+                  <dd className="font-medium">{fmtDate(access.accountCreatedAt)}</dd>
+                  <dt className="text-muted-foreground">Invite status</dt>
+                  <dd className="font-medium">{access.inviteStatusLabel}</dd>
+                </dl>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="min-h-[40px] w-full justify-between text-primary"
+                  onClick={() => onGoToTab("account")}
+                >
+                  Manage access <span aria-hidden>→</span>
+                </Button>
+              </Card>
+            );
+          })()}
 
           {/* Personal snapshot, read-only */}
           <Card className="border-border bg-card p-6 space-y-3">
