@@ -8,7 +8,7 @@ import {
 } from "@/lib/pt-session-manage";
 
 /**
- * Compact credit / event history for one PT session.
+ * Compact session activity history for one PT session.
  * Events come from getPtSessionCreditEvents (parent fetches).
  */
 export function PtSessionHistory({
@@ -26,7 +26,7 @@ export function PtSessionHistory({
       {loading ? (
         <p className="text-xs text-muted-foreground">Loading history…</p>
       ) : events.length === 0 ? (
-        <p className="text-xs text-muted-foreground">No credit events for this session yet.</p>
+        <p className="text-xs text-muted-foreground">No session activity yet.</p>
       ) : (
         <ul className="space-y-1.5">
           {events.map((e) => {

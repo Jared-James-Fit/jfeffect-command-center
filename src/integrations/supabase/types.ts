@@ -4174,6 +4174,8 @@ export type Database = {
           payment_structure: string | null
           price_cents: number
           product_type: string | null
+          session_fulfillment: string
+          sessions_included: number
           status: string
           stripe_payment_link_id: string | null
           stripe_price_id: string | null
@@ -4208,6 +4210,8 @@ export type Database = {
           payment_structure?: string | null
           price_cents: number
           product_type?: string | null
+          session_fulfillment?: string
+          sessions_included?: number
           status?: string
           stripe_payment_link_id?: string | null
           stripe_price_id?: string | null
@@ -4242,6 +4246,8 @@ export type Database = {
           payment_structure?: string | null
           price_cents?: number
           product_type?: string | null
+          session_fulfillment?: string
+          sessions_included?: number
           status?: string
           stripe_payment_link_id?: string | null
           stripe_price_id?: string | null
@@ -12722,6 +12728,7 @@ export type Database = {
           required_agreement_template_id: string | null
           requires_agreement: boolean | null
           rescheduling_policy: string | null
+          session_fulfillment: string
           session_length_minutes: number | null
           sessions_included: number | null
           short_description: string | null
@@ -12802,6 +12809,7 @@ export type Database = {
           required_agreement_template_id?: string | null
           requires_agreement?: boolean | null
           rescheduling_policy?: string | null
+          session_fulfillment?: string
           session_length_minutes?: number | null
           sessions_included?: number | null
           short_description?: string | null
@@ -12882,6 +12890,7 @@ export type Database = {
           required_agreement_template_id?: string | null
           requires_agreement?: boolean | null
           rescheduling_policy?: string | null
+          session_fulfillment?: string
           session_length_minutes?: number | null
           sessions_included?: number | null
           short_description?: string | null
@@ -15997,6 +16006,7 @@ export type Database = {
           receipt_url: string | null
           refund_policy: string | null
           service_status: string
+          session_fulfillment: string
           session_length_minutes: number | null
           sessions_booked: number | null
           sessions_cancelled: number | null
@@ -16084,6 +16094,7 @@ export type Database = {
           receipt_url?: string | null
           refund_policy?: string | null
           service_status?: string
+          session_fulfillment?: string
           session_length_minutes?: number | null
           sessions_booked?: number | null
           sessions_cancelled?: number | null
@@ -16171,6 +16182,7 @@ export type Database = {
           receipt_url?: string | null
           refund_policy?: string | null
           service_status?: string
+          session_fulfillment?: string
           session_length_minutes?: number | null
           sessions_booked?: number | null
           sessions_cancelled?: number | null
@@ -18603,6 +18615,7 @@ export type Database = {
           receipt_url: string | null
           refund_policy: string | null
           service_status: string
+          session_fulfillment: string
           session_length_minutes: number | null
           sessions_booked: number | null
           sessions_cancelled: number | null
