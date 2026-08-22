@@ -980,50 +980,20 @@ export function ClientProfileWorkspace({
           </Card>
         </TabsContent>
 
-        <TabsContent value="sessions" className="grid gap-6 md:grid-cols-3">
+        {/*
+          ONE canonical Sessions surface. The old split (PT sessions panel +
+          separate "Session credits" panel + a raw counter form) let three
+          sources disagree; the ledger is now the single source of truth and
+          the user-facing word is always "Sessions", never "credits".
+        */}
+        <TabsContent value="sessions" className={WORKSPACE_GRID_CLASS}>
           <Suspense fallback={<TabFallback />}>
-          <div id="session-transactions" className="contents">
-            <PtSessionsPanel clientId={id} client={form} />
-          </div>
-
-        <SessionCreditsPanel clientId={id} />
-
-        <Card className="border-border bg-card p-6 md:col-span-3 space-y-4">
-          <h3 className="text-xs uppercase tracking-widest text-muted-foreground">Time Zone & Sessions</h3>
-          <div className="grid gap-3 md:grid-cols-4">
-            <div>
-              <Label>Client time zone</Label>
-              <Select value={form.timezone ?? "America/Winnipeg"} onValueChange={(v) => set("timezone", v)}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>{COMMON_TIMEZONES.map((t) => <SelectItem key={t} value={t}>{t}</SelectItem>)}</SelectContent>
-              </Select>
+            <div id="session-transactions" className="contents">
+              <ClientSessionsPanel clientId={id} client={form} onChangeField={set} />
             </div>
-            <div>
-              <Label>Default session location</Label>
-              <Input value={form.default_session_location ?? ""} onChange={(e) => set("default_session_location", e.target.value)} placeholder="Iron Image Gym" />
-            </div>
-            <div className="flex items-end justify-between rounded-md border border-border bg-secondary/30 px-3 py-2">
-              <Label className="text-xs">Session package tracking</Label>
-              <Switch checked={!!form.package_tracking_enabled} onCheckedChange={(v) => set("package_tracking_enabled", v)} />
-            </div>
-            <div />
-            <div>
-              <Label>Sessions purchased</Label>
-              <Input type="number" value={form.sessions_purchased ?? 0} onChange={(e) => set("sessions_purchased", Number(e.target.value))} />
-            </div>
-            <div>
-              <Label>Sessions used</Label>
-              <Input type="number" value={form.sessions_used ?? 0} onChange={(e) => set("sessions_used", Number(e.target.value))} />
-            </div>
-            <div>
-              <Label>Remaining</Label>
-              <Input value={Math.max((form.sessions_purchased ?? 0) - (form.sessions_used ?? 0), 0)} readOnly className="bg-secondary/40" />
-            </div>
-          </div>
-          <p className="text-xs text-muted-foreground">Reminder emails are sent in the client's time zone. Defaults to America/Winnipeg if not set.</p>
-        </Card>
           </Suspense>
         </TabsContent>
+
 
         <TabsContent value="purchases" className="grid gap-6 md:grid-cols-3">
           <Suspense fallback={<TabFallback />}>
