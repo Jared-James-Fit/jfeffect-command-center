@@ -7,6 +7,12 @@ import {
   upsertPromoRedemption,
 } from "@/lib/promo-capture";
 import { sendBillingAdminEmail, buildBillingEmailBody } from "@/lib/billing-notify.server";
+import {
+  invoiceSubscriptionId,
+  invoicePaymentIntentId,
+  invoiceChargeId,
+  invoiceTaxMinor,
+} from "@/lib/stripe-invoice-refs";
 
 // Verify Stripe signature using Web Crypto (HMAC-SHA256).
 // Header format: t=timestamp,v1=sig,v1=sig...
@@ -1020,16 +1026,17 @@ export const Route = createFileRoute("/api/public/stripe-webhook")({
             }
             // ── Invoice failed (payment issue) ──────────────────────────────
             case "invoice.payment_failed": {
-              if (obj.subscription) {
+              const failedSubId = invoiceSubscriptionId(obj);
+              if (failedSubId) {
                 let sub: any;
                 try {
-                  sub = await stripeFetch(`/subscriptions/${obj.subscription}`, { apiKey: eventApiKey ?? undefined });
+                  sub = await stripeFetch(`/subscriptions/${failedSubId}`, { apiKey: eventApiKey ?? undefined });
                 } catch (err: any) {
                   console.error("[stripe-webhook] subscription.lookup.failed", {
                     eventId: event?.id ?? null,
                     eventType: event?.type ?? null,
                     eventMode,
-                    subscriptionId: obj.subscription,
+                    subscriptionId: failedSubId,
                     keyAvailable: !!eventApiKey,
                     message: err?.message ?? String(err),
                   });
@@ -1048,7 +1055,7 @@ export const Route = createFileRoute("/api/public/stripe-webhook")({
                 }
               }
               const purchase = await resolvePurchase(supabase, obj, {
-                stripe_subscription_id: obj.subscription,
+                stripe_subscription_id: failedSubId,
                 stripe_customer_id: obj.customer,
               });
               if (purchase) {
