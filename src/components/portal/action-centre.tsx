@@ -365,7 +365,9 @@ export function ActionCentre({ items, clientId }: { items: ActionItem[]; clientI
           )}
         </>
       )}
-      <CoachFeedbackCard clientId={clientId} />
+      {/* Coach Feedback lives on the Check-Ins / Progress surfaces — removing
+          the duplicate card here keeps Home compact. */}
+
       {fallbackDialog}
       <ClientFormSheet
         formId={formSheet?.id ?? null}
