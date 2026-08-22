@@ -149,7 +149,10 @@ export function PtSessionDialog({ open, onOpenChange, clientId, clients = [], in
       setStep("pick");
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, initial, clientId, clients, initialCard]);
+    // NOTE: `clients` is intentionally NOT a dependency — callers pass a fresh
+    // array literal on every render, which would reset the form (and wipe the
+    // just-picked booking card) the instant the parent re-rendered.
+  }, [open, initial, clientId, initialCard]);
 
   const selectedClient = form ? clients.find((c) => c.id === form.client_id) : undefined;
   const tracking = !!selectedClient?.package_tracking_enabled;
