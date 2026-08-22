@@ -45,10 +45,10 @@ import { replaceClientNativeFormAssignments } from "@/lib/native-forms.functions
 import { ActionButton } from "@/components/action-button";
 import { IntakeAnswersBigButton } from "@/components/clients/intake-answers-dialog";
 import { UserAvatar } from "@/components/user-avatar";
+import { describeAccountAccess } from "@/lib/client-account-access";
 import {
   WorkspaceIdentityHeader,
   WorkspaceSnapshotField,
-  type WorkspaceAction,
 } from "@/components/workspace";
 import {
   IdentityCard,
@@ -2139,6 +2139,48 @@ function ClientOverviewSnapshot({
               <p className="text-xs text-success">All critical fields complete.</p>
             )}
           </Card>
+
+          {/* Account & Access — consolidated from the removed top-level
+              "Account Setup" card. Quiet when healthy; never repeats the
+              "Last signed in" value shown in App Activity. */}
+          {(() => {
+            const access = describeAccountAccess(form);
+            return (
+              <Card
+                className={[
+                  "border-border bg-card p-6 space-y-3",
+                  access.needsAttention ? "border-warning/40 bg-warning/5" : "",
+                ].join(" ")}
+                data-testid="account-access-card"
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <h3 className="text-sm font-semibold uppercase tracking-widest text-muted-foreground">
+                    Account &amp; Access
+                  </h3>
+                  <Badge
+                    variant="outline"
+                    className={access.needsAttention ? "border-warning/40 text-warning bg-warning/10 text-[11px]" : "text-[11px]"}
+                  >
+                    {access.statusLabel}
+                  </Badge>
+                </div>
+                <dl className="grid grid-cols-2 gap-y-1.5 text-xs">
+                  <dt className="text-muted-foreground">Account created</dt>
+                  <dd className="font-medium">{fmtDate(access.accountCreatedAt)}</dd>
+                  <dt className="text-muted-foreground">Invite status</dt>
+                  <dd className="font-medium">{access.inviteStatusLabel}</dd>
+                </dl>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="min-h-[40px] w-full justify-between text-primary"
+                  onClick={() => onGoToTab("account")}
+                >
+                  Manage access <span aria-hidden>→</span>
+                </Button>
+              </Card>
+            );
+          })()}
 
           {/* Personal snapshot, read-only */}
           <Card className="border-border bg-card p-6 space-y-3">
