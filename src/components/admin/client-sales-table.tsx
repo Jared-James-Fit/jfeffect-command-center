@@ -379,6 +379,23 @@ function RowMenu({
   onEmailLink: () => void;
 }) {
   const paid = raw.payment_status === "Paid" || raw.payment_status === "Active Subscription";
+  const resolveFn = useServerFn(resolvePaymentShareLink);
+  const checkoutFn = useServerFn(createCheckoutSessionForAssignment);
+
+  const copyLink = async (mode: "copy" | "share") => {
+    const t = toast.loading("Getting payment link…");
+    try {
+      const { url, kind } = await getShareablePaymentUrl(resolveFn as any, checkoutFn as any, raw.id);
+      if (mode === "share" && canShare({ url })) {
+        const res = await nativeShare({ url, title: "Payment link" });
+        if (res === "shared") return void toast.success("Payment link shared", { id: t });
+      }
+      await navigator.clipboard.writeText(url);
+      toast.success("Payment link copied", { id: t, description: shareKindLabel(kind as any) });
+    } catch (e: any) {
+      toast.error(e?.message ?? "Could not get a payment link", { id: t });
+    }
+  };
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
