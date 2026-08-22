@@ -44,35 +44,52 @@ export function ClientBillingPanel({ clientId }: { clientId: string }) {
   if (isLoading) return <Card className="p-6 md:col-span-3 text-sm text-muted-foreground">Loading billing…</Card>;
   if (!data?.ok) return <Card className="p-6 md:col-span-3 text-sm text-destructive">Failed to load billing.</Card>;
 
-  const totalPaid = (data.ledger as any[])
-    .filter((l) => !l.voided && ["payment","deposit","legacy_backfill"].includes(l.txn_type))
-    .reduce((s, l) => s + Number(l.amount_minor), 0);
+  // Stripe charges are gross (subtotal + tax); contract values are pre-tax.
+  // Net the tax out so "paid" and "outstanding" compare like for like.
+  const paidRows = (data.ledger as any[]).filter(
+    (l) => !l.voided && ["payment", "deposit", "legacy_backfill"].includes(l.txn_type),
+  );
+  const grossPaid = paidRows.reduce((s, l) => s + Number(l.amount_minor ?? 0), 0);
+  const taxPaid = paidRows.reduce((s, l) => s + Number(l.tax_minor ?? 0), 0);
+  const totalPaid = Math.max(grossPaid - taxPaid, 0);
   const totalRefunded = (data.ledger as any[])
     .filter((l) => !l.voided && ["refund","partial_refund"].includes(l.txn_type))
     .reduce((s, l) => s + Number(l.amount_minor), 0);
   const PAID_STATUSES = new Set(["paid", "paid in full", "active subscription", "completed"]);
   const isPurchasePaid = (p: any) =>
     PAID_STATUSES.has(String(p.payment_status ?? "").toLowerCase());
+  const netPaidFor = (purchaseId: string) => {
+    const rows = (data.ledger as any[]).filter(
+      (l) => l.purchase_id === purchaseId && !l.voided && ["payment", "deposit", "legacy_backfill"].includes(l.txn_type),
+    );
+    if (rows.length === 0) return null;
+    return rows.reduce((s, l) => s + Number(l.amount_minor ?? 0) - Number(l.tax_minor ?? 0), 0);
+  };
   const totalOutstanding = (data.purchases as any[])
     .filter((p) => !isPurchasePaid(p))
     .reduce((s, p) => {
       const contract = Number(p.contract_value_cents ?? Math.round(Number(p.full_payable_amount ?? 0) * 100));
-      const paid = Number(p.amount_paid_cents ?? 0);
-      const out = p.amount_outstanding_cents != null
-        ? Number(p.amount_outstanding_cents)
-        : Math.max(0, contract - paid);
+      const net = netPaidFor(p.id);
+      const paid = net ?? Number(p.amount_paid_cents ?? 0);
+      const out = net != null
+        ? Math.max(0, contract - net)
+        : p.amount_outstanding_cents != null
+          ? Number(p.amount_outstanding_cents)
+          : Math.max(0, contract - paid);
       return s + out;
     }, 0);
+
 
   return (
     <div className="md:col-span-3 space-y-6">
       {/* Summary tiles */}
       <div className="grid gap-4 md:grid-cols-4">
-        <SummaryTile label="Total paid" value={fmt(totalPaid)} />
+        <SummaryTile label="Total paid (before tax)" value={fmt(totalPaid)} sub={taxPaid > 0 ? `+ ${fmt(taxPaid)} tax · ${fmt(grossPaid)} charged` : undefined} />
         <SummaryTile label="Total refunded" value={fmt(totalRefunded)} />
         <SummaryTile label="Outstanding" value={fmt(totalOutstanding)} highlight={totalOutstanding > 0} />
         <SummaryTile label="Credit balance" value={fmt(data.credit_balance_minor)} />
       </div>
+
 
       <Tabs defaultValue="purchases">
         <TabsList>
@@ -105,11 +122,12 @@ export function ClientBillingPanel({ clientId }: { clientId: string }) {
   );
 }
 
-function SummaryTile({ label, value, highlight }: { label: string; value: string; highlight?: boolean }) {
+function SummaryTile({ label, value, highlight, sub }: { label: string; value: string; highlight?: boolean; sub?: string }) {
   return (
     <Card className={`p-4 ${highlight ? "border-destructive/40 bg-destructive/5" : ""}`}>
       <div className="text-xs uppercase tracking-widest text-muted-foreground">{label}</div>
       <div className="mt-1 text-2xl font-semibold tabular-nums">{value}</div>
+      {sub && <div className="mt-1 text-[11px] text-muted-foreground tabular-nums">{sub}</div>}
     </Card>
   );
 }
@@ -117,9 +135,15 @@ function SummaryTile({ label, value, highlight }: { label: string; value: string
 function PurchaseRow({ purchase, clientId, onChanged, ledger, isPaid }: { purchase: any; clientId: string; onChanged: () => void; ledger: any[]; isPaid: boolean }) {
   const currency = purchase.currency ?? "CAD";
   const contract = Number(purchase.contract_value_cents ?? Math.round(Number(purchase.full_payable_amount ?? 0) * 100));
-  const paid = Number(purchase.amount_paid_cents ?? 0);
-  const outstandingRaw = Number(purchase.amount_outstanding_cents ?? Math.max(0, contract - paid));
+  const paidRows = ledger.filter((l) => !l.voided && ["payment", "deposit", "legacy_backfill"].includes(l.txn_type));
+  const grossPaid = paidRows.reduce((s, l) => s + Number(l.amount_minor ?? 0), 0);
+  const taxPaid = paidRows.reduce((s, l) => s + Number(l.tax_minor ?? 0), 0);
+  const paid = paidRows.length > 0 ? Math.max(grossPaid - taxPaid, 0) : Number(purchase.amount_paid_cents ?? 0);
+  const outstandingRaw = paidRows.length > 0
+    ? Math.max(0, contract - paid)
+    : Number(purchase.amount_outstanding_cents ?? Math.max(0, contract - paid));
   const outstanding = isPaid ? 0 : outstandingRaw;
+
   const renewal = resolvePaymentDisplay(purchase).renewal;
 
   return (
@@ -143,11 +167,17 @@ function PurchaseRow({ purchase, clientId, onChanged, ledger, isPaid }: { purcha
         </div>
         <div className="text-right text-sm">
           <div>Contract <span className="font-mono">{fmt(contract, currency)}</span></div>
-          <div>Paid <span className="font-mono">{fmt(paid, currency)}</span></div>
+          <div>Paid <span className="font-mono">{fmt(paid, currency)}</span> <span className="text-[11px] text-muted-foreground">before tax</span></div>
+          {taxPaid > 0 && (
+            <div className="text-[11px] text-muted-foreground">
+              Tax <span className="font-mono">{fmt(taxPaid, currency)}</span> · charged <span className="font-mono">{fmt(grossPaid, currency)}</span>
+            </div>
+          )}
           <div className={isPaid || outstanding <= 0 ? "text-green-600" : "text-destructive"}>
             {isPaid || outstanding <= 0 ? "Paid in full" : `Owes ${fmt(outstanding, currency)}`}
           </div>
         </div>
+
       </div>
       <div className="flex gap-2 flex-wrap">
         <RecordPaymentDialog purchase={purchase} onDone={onChanged} />

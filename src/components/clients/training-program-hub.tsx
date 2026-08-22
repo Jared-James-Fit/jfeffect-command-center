@@ -153,7 +153,8 @@ export function TrainingProgramHub({ clientId, clientName }: { clientId: string;
     : null;
 
   return (
-    <section aria-label="Training Program" className="space-y-4 md:col-span-3">
+    <section aria-label="Training Program" className="w-full min-w-0 space-y-4 md:col-span-3">
+
       <div className="flex items-center justify-between gap-2">
         <h2 className="flex items-center gap-2 text-sm font-bold uppercase tracking-widest text-muted-foreground">
           <Dumbbell className="h-4 w-4 text-primary" /> Training Program
@@ -171,7 +172,7 @@ export function TrainingProgramHub({ clientId, clientName }: { clientId: string;
         <Card className="border-border bg-card p-6 text-sm text-muted-foreground">Loading training program…</Card>
       ) : !hasAnyProgram ? (
         <Card className="border-border bg-card p-6">
-          <div className="flex flex-wrap items-center justify-between gap-4">
+          <div className="flex w-full min-w-0 flex-wrap items-center justify-between gap-4">
             <div>
               <div className="text-base font-bold">No active training program</div>
               <p className="mt-1 text-sm text-muted-foreground">
@@ -191,9 +192,9 @@ export function TrainingProgramHub({ clientId, clientName }: { clientId: string;
           </div>
         </Card>
       ) : (
-        <div className="grid gap-4 md:grid-cols-3">
+        <div className="grid w-full min-w-0 grid-cols-[minmax(0,1fr)] gap-4 md:grid-cols-[repeat(3,minmax(0,1fr))]">
           {/* Current Program — front and center */}
-          <Card className="border-border bg-card p-5 md:col-span-2">
+          <Card className="min-w-0 border-border bg-card p-5 md:col-span-2">
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
                 <div className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">Current Program</div>
@@ -236,7 +237,7 @@ export function TrainingProgramHub({ clientId, clientName }: { clientId: string;
                 )}
               </div>
             </div>
-            <div className="mt-4 flex flex-wrap gap-2">
+            <div className="mt-4 flex min-w-0 flex-wrap gap-2">
               <Link to="/admin/client-programs/$clientId" params={{ clientId }}>
                 <Button size="sm" className="min-h-[40px]">
                   <BookOpen className="mr-1 h-4 w-4" /> Open Program
@@ -258,7 +259,7 @@ export function TrainingProgramHub({ clientId, clientName }: { clientId: string;
           </Card>
 
           {/* Schedule — status at a glance */}
-          <Card className="border-border bg-card p-5">
+          <Card className="min-w-0 border-border bg-card p-5">
             <div className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">Schedule</div>
             {activeBlock && sched ? (
               <>
@@ -294,8 +295,8 @@ export function TrainingProgramHub({ clientId, clientName }: { clientId: string;
 
       {/* Program tools — secondary, one compact row */}
       {hasAnyProgram && !loading && (
-        <Card className="border-border bg-card/60 p-3">
-          <div className="flex flex-wrap items-center gap-2">
+        <Card className="min-w-0 border-border bg-card/60 p-3">
+          <div className="flex min-w-0 flex-wrap items-center gap-2">
             <span className="px-1 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">Program tools</span>
             <Link to="/admin/client-programs/$clientId/history" params={{ clientId }}>
               <Button size="sm" variant="outline" className="min-h-[40px] text-xs">

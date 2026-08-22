@@ -114,10 +114,118 @@ export function packageValue(purchase: {
   };
 }
 
+/**
+ * Stripe tax separation.
+ *
+ * `payment_ledger.amount_minor` is the GROSS amount Stripe actually charged
+ * (subtotal + tax) and `tax_minor` is the tax portion of that charge.
+ * Contract/package values (`contract_value_cents`, offer prices) are stored
+ * PRE-TAX. Comparing a gross payment against a pre-tax contract overstates
+ * what the client has paid toward the package, so every money surface must
+ * net the tax out first.
+ */
+export type LedgerPaymentRow = {
+  txn_type?: string | null;
+  amount_minor?: number | null;
+  tax_minor?: number | null;
+  voided?: boolean | null;
+};
+
+export type PaymentTotals = {
+  /** Total charged by Stripe, tax included. */
+  grossMinor: number;
+  /** Tax portion of the charges. */
+  taxMinor: number;
+  /** Gross minus tax — the amount that counts toward the contract. */
+  netMinor: number;
+  /** Refunds (gross) already netted out of the numbers above. */
+  refundedMinor: number;
+  /** True when a ledger row carried tax, so callers can label the split. */
+  hasTax: boolean;
+};
+
+const PAYMENT_TYPES = new Set(["payment", "deposit", "credit_applied"]);
+const REFUND_TYPES = new Set(["refund", "partial_refund"]);
+
+export function paymentTotals(rows: LedgerPaymentRow[]): PaymentTotals {
+  let grossMinor = 0;
+  let taxMinor = 0;
+  let refundedMinor = 0;
+  for (const r of rows) {
+    if (r.voided) continue;
+    const type = (r.txn_type ?? "payment").toLowerCase();
+    const amount = n(r.amount_minor);
+    const tax = n(r.tax_minor);
+    if (PAYMENT_TYPES.has(type)) {
+      grossMinor += amount;
+      taxMinor += tax;
+    } else if (REFUND_TYPES.has(type)) {
+      refundedMinor += amount;
+      grossMinor -= amount;
+      taxMinor -= tax;
+    }
+  }
+  taxMinor = Math.max(taxMinor, 0);
+  return {
+    grossMinor: Math.max(grossMinor, 0),
+    taxMinor,
+    netMinor: Math.max(grossMinor - taxMinor, 0),
+    refundedMinor,
+    hasTax: taxMinor > 0,
+  };
+}
+
+export type PackageValueWithTax = PackageValue & {
+  /** Tax charged on this package's payments. */
+  taxPaidMinor: number;
+  /** Gross charged (what appears on the client's Stripe receipts). */
+  grossPaidMinor: number;
+  /** Pre-tax paid amount — the only figure that counts against the contract. */
+  netPaidMinor: number;
+  /** True when tax was separated from the ledger for this package. */
+  taxSeparated: boolean;
+};
+
+/**
+ * Package money math using the payment ledger so Stripe tax is excluded from
+ * contract progress and per-session rates. Falls back to the purchase record
+ * totals when no ledger rows exist for the package.
+ */
+export function packageValueWithTax(
+  purchase: Parameters<typeof packageValue>[0],
+  ledger: LedgerPaymentRow[] = [],
+): PackageValueWithTax {
+  const base = packageValue(purchase);
+  const totals = paymentTotals(ledger);
+  if (ledger.length === 0) {
+    return {
+      ...base,
+      taxPaidMinor: 0,
+      grossPaidMinor: base.amountPaidMinor ?? 0,
+      netPaidMinor: base.amountPaidMinor ?? 0,
+      taxSeparated: false,
+    };
+  }
+  const netPaidMinor = totals.netMinor;
+  const outstandingMinor =
+    base.packageValueMinor != null ? Math.max(base.packageValueMinor - netPaidMinor, 0) : base.outstandingMinor;
+  return {
+    ...base,
+    amountPaidMinor: netPaidMinor,
+    outstandingMinor,
+    paidRatePerSessionMinor: base.sessions > 0 ? Math.round(netPaidMinor / base.sessions) : null,
+    taxPaidMinor: totals.taxMinor,
+    grossPaidMinor: totals.grossMinor,
+    netPaidMinor,
+    taxSeparated: totals.hasTax,
+  };
+}
+
 export function fmtMoneyMinor(minor: number | null | undefined, currency = "CAD"): string {
   if (minor == null) return "—";
   return new Intl.NumberFormat("en-CA", { style: "currency", currency }).format(minor / 100);
 }
+
 
 /**
  * Sessions granted by a sold product, honouring the product's fulfillment

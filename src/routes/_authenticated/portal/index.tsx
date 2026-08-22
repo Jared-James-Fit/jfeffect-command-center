@@ -17,6 +17,7 @@ import { ClientActionRequestModal } from "@/components/client-action-request-mod
 import { UpcomingEventsPanel } from "@/components/events/upcoming-events-panel";
 import { InstallAppCard } from "@/components/portal/install-app-card";
 import { ActionCentre, type ActionItem } from "@/components/portal/action-centre";
+import { UpcomingScheduleCard } from "@/components/home/upcoming-schedule-card";
 import { TrainingBlockCard } from "@/components/portal/training-block-card";
 import { ProgressSummaryCard } from "@/components/progress/progress-summary-card";
 import { HomeWaterCard } from "@/components/home/home-water-card";
@@ -455,6 +456,14 @@ function PortalHome() {
         <SectionErrorBoundary label="Action centre">
           <ActionCentre items={actions} clientId={client?.id ?? null} />
         </SectionErrorBoundary>
+
+        {/* 1b — Compact Today / Upcoming schedule (full calendar one tap away) */}
+        {client?.id && (
+          <SectionErrorBoundary label="Upcoming schedule">
+            <UpcomingScheduleCard clientId={client.id} />
+          </SectionErrorBoundary>
+        )}
+
 
         {/* 2 — Bodyweight tracker (syncs with Progress > Weight tracker) */}
         {client?.id ? (

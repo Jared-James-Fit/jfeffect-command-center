@@ -18,11 +18,13 @@ import { setPtSessionStatus } from "@/lib/pt-pack.functions";
 import { statusTone, fmtTimeRange, COMMON_TIMEZONES } from "@/lib/pt-sessions";
 import {
   summarizeSessions,
-  packageValue,
+  packageValueWithTax,
   fmtMoneyMinor,
   sessionEventLabel,
+  type LedgerPaymentRow,
   type SessionBalanceRow,
 } from "@/lib/sessions-inventory";
+
 import { WORKSPACE_FULL_SPAN_CLASS } from "@/components/workspace/workspace-container";
 import { useAuth } from "@/lib/auth";
 
@@ -73,6 +75,7 @@ export function ClientSessionsPanel({
     qc.invalidateQueries({ queryKey: ["pt-pack-purchases", clientId] });
     qc.invalidateQueries({ queryKey: ["pt-adhoc-sessions", clientId] });
     qc.invalidateQueries({ queryKey: ["client-purchases", clientId] });
+    qc.invalidateQueries({ queryKey: ["pt-payment-ledger", clientId] });
   };
 
   useEffect(() => {
@@ -134,6 +137,22 @@ export function ClientSessionsPanel({
     },
   });
 
+  // Stripe tax lives on the payment ledger: amount_minor is the gross charge,
+  // tax_minor the tax portion. Contract values are pre-tax, so package math
+  // must net the tax out before comparing against them.
+  const { data: ledger = [] } = useQuery<(LedgerPaymentRow & { purchase_id: string | null })[]>({
+    queryKey: ["pt-payment-ledger", clientId],
+    queryFn: async () => {
+      const { data } = await (supabase as any)
+        .from("payment_ledger")
+        .select("purchase_id, txn_type, amount_minor, tax_minor, voided")
+        .eq("client_id", clientId);
+      return (data ?? []) as any[];
+    },
+  });
+
+
+
   const today = todayISO();
   const upcoming = sessions
     .filter((s) => s.status === "Scheduled" && s.session_date >= today)
@@ -191,7 +210,7 @@ export function ClientSessionsPanel({
             <p className="text-sm text-muted-foreground">No session packages yet.</p>
           ) : (
             purchases.map((p) => {
-              const v = packageValue(p);
+              const v = packageValueWithTax(p, ledger.filter((l) => l.purchase_id === p.id));
               const row = balance.find((b) => b.purchase_id === p.id);
               const purchasedAt = p.purchased_at ?? p.created_at;
               return (
@@ -205,13 +224,19 @@ export function ClientSessionsPanel({
                         {row ? <> · {Number(row.used ?? 0)} used · <strong className="text-foreground">{Number(row.remaining ?? 0)} remaining</strong></> : " · not active yet"}
                       </div>
                       <div className="text-xs text-muted-foreground">
-                        Contract {fmtMoneyMinor(v.packageValueMinor, v.currency)}
+                        Contract {fmtMoneyMinor(v.packageValueMinor, v.currency)} (before tax)
                         {v.listRatePerSessionMinor != null ? ` · ${fmtMoneyMinor(v.listRatePerSessionMinor, v.currency)}/session` : ""}
                       </div>
                       <div className="text-xs text-muted-foreground">
-                        Paid {fmtMoneyMinor(v.amountPaidMinor, v.currency)}
+                        Paid {fmtMoneyMinor(v.netPaidMinor, v.currency)} before tax
                         {v.outstandingMinor ? ` · ${fmtMoneyMinor(v.outstandingMinor, v.currency)} outstanding` : " · paid in full"}
                       </div>
+                      {v.taxSeparated && (
+                        <div className="text-xs text-muted-foreground">
+                          Tax {fmtMoneyMinor(v.taxPaidMinor, v.currency)} · charged {fmtMoneyMinor(v.grossPaidMinor, v.currency)} total
+                        </div>
+                      )}
+
                     </div>
                     <Badge variant="outline" className="shrink-0">{p.payment_status ?? "—"}</Badge>
                   </div>
