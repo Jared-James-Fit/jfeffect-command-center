@@ -91,7 +91,7 @@ export type PurposeLabel =
   | "Assistance"
   | string;
 
-const ORDERED: PurposeLabel[] = ["Primary", "Secondary", "Tertiary", "Quaternary"];
+
 
 /**
  * Identify the competition-lift colour group a row belongs to.
