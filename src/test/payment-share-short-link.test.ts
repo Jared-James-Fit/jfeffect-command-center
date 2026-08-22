@@ -1,4 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
+import { readFileSync } from "node:fs";
 import {
   generateShareToken,
   isValidShareToken,
@@ -117,5 +118,43 @@ describe("getShareablePaymentUrl (clipboard contract)", () => {
   it("refuses to share a settled purchase", async () => {
     const shareFn = vi.fn(async () => ({ kind: "none", shareUrl: null, canonicalUrl: null, needsFreshCheckout: false, label: "x", reason: "Already settled" }));
     await expect(getShareablePaymentUrl(shareFn as any, vi.fn() as any, "p4")).rejects.toThrow("Already settled");
+  });
+});
+
+describe("redirect + Stripe attribution contracts", () => {
+  const routeSrc = readFileSync("src/routes/pay.$token.tsx", "utf8");
+  const serverSrc = readFileSync("src/lib/payment-share.server.ts", "utf8");
+  const checkoutSrc = readFileSync("src/lib/stripe-checkout.functions.ts", "utf8");
+
+  it("short URL responds with an HTTP redirect to the exact resolved URL", () => {
+    expect(routeSrc).toContain("status: 302");
+    expect(routeSrc).toContain("Location: result.url");
+    // The destination is used verbatim — no re-encoding, truncation or rebuilding.
+    expect(routeSrc).not.toMatch(/encodeURI|slice\(|split\("#"\)/);
+  });
+
+  it("token resolution performs no Stripe writes and creates no payment", () => {
+    const block = serverSrc.slice(serverSrc.indexOf("export async function resolveShareToken"));
+    expect(block).not.toMatch(/method:\s*"POST"/);
+    expect(block).not.toMatch(/checkout\/sessions",/);
+    expect(block).not.toMatch(/\.insert\(/);
+    expect(block).toContain("stripeGet");
+  });
+
+  it("invalid or revoked tokens fail safe with 404 and leak nothing", () => {
+    const block = serverSrc.slice(serverSrc.indexOf("export async function resolveShareToken"));
+    expect(block).toContain("isValidShareToken");
+    expect(block).toContain("status: 404");
+    expect(block).toContain("This payment link is not valid.");
+  });
+
+  it("settled purchases are never redirected to checkout", () => {
+    const block = serverSrc.slice(serverSrc.indexOf("export async function resolveShareToken"));
+    expect(block).toContain("already settled");
+  });
+
+  it("Stripe Checkout Session metadata for webhook attribution is untouched", () => {
+    expect(checkoutSrc).toContain('metadata[purchase_record_id]');
+    expect(checkoutSrc).toContain('sessionParams["metadata[client_id]"]');
   });
 });
