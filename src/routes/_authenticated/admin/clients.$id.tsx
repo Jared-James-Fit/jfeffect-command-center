@@ -1736,6 +1736,12 @@ function SetupStatusBanner({
   else if (inviteSent) stage = "invite_pending";
   else stage = "no_account";
 
+  // A live account needs no banner — the same detail lives in the Summary
+  // panel and on the Account tab. Only surface this strip when there is
+  // something the coach still has to do.
+  if (stage === "live" && !form.needs_admin_help) return null;
+
+
   const cfg = {
     no_account: {
       tone: "border-warning/40 bg-warning/10 text-warning",
