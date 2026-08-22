@@ -75,6 +75,7 @@ export function ClientSessionsPanel({
     qc.invalidateQueries({ queryKey: ["pt-pack-purchases", clientId] });
     qc.invalidateQueries({ queryKey: ["pt-adhoc-sessions", clientId] });
     qc.invalidateQueries({ queryKey: ["client-purchases", clientId] });
+    qc.invalidateQueries({ queryKey: ["pt-payment-ledger", clientId] });
   };
 
   useEffect(() => {
