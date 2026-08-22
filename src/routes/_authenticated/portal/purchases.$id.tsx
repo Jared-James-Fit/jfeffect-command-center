@@ -55,8 +55,19 @@ function ClientPurchase() {
     qc.invalidateQueries({ queryKey: ["my-purchases"] });
   };
 
-  const goToStripe = () => {
-    if (r.stripe_payment_link) window.open(r.stripe_payment_link, "_blank");
+  const goToStripe = async () => {
+    // Never open the stored (possibly expired) Checkout Session URL — resolve
+    // the canonical current link server-side first.
+    const t = toast.loading("Opening secure payment…");
+    try {
+      const res: any = await resolveShareFn({ data: { purchaseRecordId: id } });
+      const url = sanitizeShareUrl(res?.url);
+      if (!url) throw new Error("Your coach needs to send a fresh payment link.");
+      toast.dismiss(t);
+      window.open(url, "_blank");
+    } catch (e: any) {
+      toast.error(e?.message ?? "Could not open payment", { id: t });
+    }
   };
 
   const accepted = r.terms_accepted;
