@@ -47,7 +47,6 @@ import { IntakeAnswersBigButton } from "@/components/clients/intake-answers-dial
 import { UserAvatar } from "@/components/user-avatar";
 import {
   WorkspaceIdentityHeader,
-  WorkspaceActionCenter,
   WorkspaceSnapshotField,
   type WorkspaceAction,
 } from "@/components/workspace";
