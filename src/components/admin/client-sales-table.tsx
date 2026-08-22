@@ -422,16 +422,19 @@ function RowMenu({
             <AlertTriangle className="mr-2 h-3.5 w-3.5" />Mark overdue
           </DropdownMenuItem>
         )}
-        {raw.stripe_payment_link && (
+        {!paid && (
           <>
-            <DropdownMenuItem
-              onSelect={() => { navigator.clipboard.writeText(raw.stripe_payment_link); toast.success("Payment link copied"); }}
-            >
+            <DropdownMenuItem onSelect={() => { void copyLink("copy"); }}>
               <Copy className="mr-2 h-3.5 w-3.5" />Copy payment link
             </DropdownMenuItem>
-            <DropdownMenuItem onSelect={() => onEmailLink()}>
-              <Send className="mr-2 h-3.5 w-3.5" />Email payment setup request
+            <DropdownMenuItem onSelect={() => { void copyLink("share"); }}>
+              <Share2 className="mr-2 h-3.5 w-3.5" />Share payment link
             </DropdownMenuItem>
+            {raw.stripe_payment_link && (
+              <DropdownMenuItem onSelect={() => onEmailLink()}>
+                <Send className="mr-2 h-3.5 w-3.5" />Email payment setup request
+              </DropdownMenuItem>
+            )}
           </>
         )}
         <DropdownMenuItem onSelect={() => { void downloadPurchasePdf(raw, clientName); }}>
