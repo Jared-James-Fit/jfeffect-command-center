@@ -265,7 +265,7 @@ export async function resolveShareToken(token: string): Promise<ResolvedTokenDes
     if (url) {
       await supabaseAdmin
         .from("payment_share_links")
-        .update({ last_resolved_at: new Date().toISOString(), resolve_count: (undefined as any) ?? undefined })
+        .update({ last_resolved_at: new Date().toISOString() })
         .eq("id", link.id);
       return { ok: true, url };
     }
