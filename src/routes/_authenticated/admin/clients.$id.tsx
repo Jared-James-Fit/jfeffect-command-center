@@ -67,6 +67,7 @@ const lazyDefault = <T,>(loader: () => Promise<{ [k: string]: T }>, name: string
     const m = await loader();
     return { default: (m as any)[name] as ComponentType<any> };
   });
+const ScheduleManagerShell = lazyDefault(() => import("@/components/schedule/ScheduleManagerShell"), "ScheduleManagerShell");
 const TrainingPhasesPanel = lazyDefault(() => import("@/components/training-phases-panel"), "TrainingPhasesPanel");
 const ClientMaxesPanel = lazyDefault(() => import("@/components/client-maxes-panel"), "ClientMaxesPanel");
 const ImportantDatesPanel = lazyDefault(() => import("@/components/important-dates-panel"), "ImportantDatesPanel");
