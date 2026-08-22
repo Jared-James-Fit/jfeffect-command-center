@@ -1,10 +1,10 @@
 import {
   Apple,
+  CalendarCheck,
   DollarSign,
   Dumbbell,
   FileText,
   LayoutDashboard,
-  MessageSquare,
 } from "lucide-react";
 
 export type WorkspaceTab =
@@ -14,10 +14,10 @@ export type WorkspaceTab =
   | "coaching"
   | "account"
   | "training"
+  | "program-setup"
   | "analytics"
   | "nutrition"
   | "metrics"
-  | "messages"
   | "lift-videos"
   | "documents"
   | "sessions"
@@ -29,20 +29,20 @@ export type WorkspaceTab =
 export const CLIENT_WORKSPACE_PRIMARY_TABS = [
   { value: "summary", label: "Summary", icon: LayoutDashboard },
   { value: "training", label: "Training", icon: Dumbbell },
+  { value: "sessions", label: "Sessions", icon: CalendarCheck },
   { value: "nutrition", label: "Nutrition", icon: Apple },
-  { value: "messages", label: "Messages", icon: MessageSquare },
   { value: "documents", label: "Forms", icon: FileText },
   { value: "purchases", label: "Sales", icon: DollarSign },
 ] satisfies { value: WorkspaceTab; label: string; icon: typeof LayoutDashboard }[];
 
 export const CLIENT_WORKSPACE_MORE_TABS = [
+  { value: "program-setup", label: "Program setup" },
   { value: "info", label: "Client details" },
   { value: "goals-setup", label: "Goals & intake" },
   { value: "coaching", label: "Coaching setup" },
   { value: "analytics", label: "Analytics" },
   { value: "metrics", label: "Progress metrics" },
   { value: "lift-videos", label: "Lift videos" },
-  { value: "sessions", label: "Sessions" },
   { value: "billing", label: "Billing" },
   { value: "agreements", label: "Agreements" },
   { value: "notes", label: "Coach notes" },

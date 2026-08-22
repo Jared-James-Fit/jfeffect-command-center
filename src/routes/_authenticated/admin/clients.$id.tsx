@@ -27,7 +27,6 @@ import { COMMON_TIMEZONES } from "@/lib/pt-sessions";
 import { Tabs, TabsContent } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
 import { WORKSPACE_CONTAINER_CLASS, WORKSPACE_GRID_CLASS } from "@/components/workspace/workspace-container";
-import type { ConversationState } from "@/lib/messages";
 import { ClientDriveFolderPanel } from "@/components/client-drive-folder-panel";
 import { TrainingScheduleCard } from "@/components/training-schedule-card";
 import { PowerlifterBadge, POWERLIFTER_BADGE_LABELS } from "@/components/powerlifter-badge";
@@ -68,6 +67,7 @@ const lazyDefault = <T,>(loader: () => Promise<{ [k: string]: T }>, name: string
     const m = await loader();
     return { default: (m as any)[name] as ComponentType<any> };
   });
+const ScheduleManagerShell = lazyDefault(() => import("@/components/schedule/ScheduleManagerShell"), "ScheduleManagerShell");
 const TrainingPhasesPanel = lazyDefault(() => import("@/components/training-phases-panel"), "TrainingPhasesPanel");
 const ClientMaxesPanel = lazyDefault(() => import("@/components/client-maxes-panel"), "ClientMaxesPanel");
 const ImportantDatesPanel = lazyDefault(() => import("@/components/important-dates-panel"), "ImportantDatesPanel");
@@ -80,7 +80,6 @@ const ClientAnalyticsDashboard = lazyDefault(() => import("@/components/analytic
 const BasicInfoForm = lazyDefault(() => import("@/components/basic-info-form"), "BasicInfoForm");
 const ClientExerciseNotesCard = lazyDefault(() => import("@/components/client-exercise-notes-card"), "ClientExerciseNotesCard");
 const ProfilePictureCapture = lazyDefault(() => import("@/components/profile-picture-capture"), "ProfilePictureCapture");
-const MessageThread = lazyDefault(() => import("@/components/message-thread"), "MessageThread");
 const AgreementStatusPanel = lazyDefault(() => import("@/components/agreement-status-panel"), "AgreementStatusPanel");
 const ClientSalesTable = lazyDefault(() => import("@/components/admin/client-sales-table"), "ClientSalesTable");
 const PriceCardPickerDialog = lazyDefault(() => import("@/components/price-card-picker-dialog"), "PriceCardPickerDialog");
@@ -126,7 +125,7 @@ function AssignedCoachSelect({ value, onChange }: { value: string | null; onChan
   );
 }
 
-const TAB_VALUES = ["summary", "info", "goals-setup", "coaching", "account", "training", "analytics", "nutrition", "metrics", "messages", "lift-videos", "documents", "sessions", "purchases", "billing", "agreements", "notes"] as const;
+const TAB_VALUES = ["summary", "info", "goals-setup", "coaching", "account", "training", "program-setup", "analytics", "nutrition", "metrics", "lift-videos", "documents", "sessions", "purchases", "billing", "agreements", "notes"] as const;
 type TabValue = typeof TAB_VALUES[number];
 
 
@@ -135,7 +134,8 @@ export const Route = createFileRoute("/_authenticated/admin/clients/$id")({
   validateSearch: (s): { tab?: TabValue } => {
     const parsed = z.object({ tab: z.string().optional() }).parse(s);
     // Redirect deprecated tabs after the Client Profile / Nutrition consolidation.
-    const remap: Record<string, TabValue> = { profile: "info", cardio: "nutrition" };
+    // "messages" now lives in the unified inbox, not the client workspace.
+    const remap: Record<string, TabValue> = { profile: "info", cardio: "nutrition", messages: "summary" };
     const t = parsed.tab ? (remap[parsed.tab] ?? parsed.tab) : undefined;
     return { tab: t && (TAB_VALUES as readonly string[]).includes(t) ? (t as TabValue) : undefined };
   },
@@ -180,6 +180,11 @@ export function ClientProfileWorkspace({
   const setTab = (t: TabValue) => {
     setTabState(t);
     onTabChange?.(t);
+  };
+  // Messaging is owned by the unified inbox — the workspace links out to the
+  // client's thread instead of duplicating the whole thread inside a tab.
+  const openMessages = () => {
+    navigate({ to: "/admin/communication", search: { tab: "messages", client: clientId } as any });
   };
   const qc = useQueryClient();
   const navigate = useNavigate();
@@ -501,7 +506,7 @@ export function ClientProfileWorkspace({
             <Button
               variant="outline"
               size="sm"
-              onClick={() => setTab("messages")}
+              onClick={openMessages}
             >
               <MessageSquare className="mr-2 h-4 w-4" />Message
             </Button>
@@ -577,7 +582,7 @@ export function ClientProfileWorkspace({
           form={form}
           canPov={canPov}
           onClose={onClose}
-          onMessage={() => setTab("messages")}
+          onMessage={openMessages}
           onPov={() => {
             if (!form.user_id) {
               toast.error("Client has no account yet — send a setup link first.");
@@ -679,7 +684,7 @@ export function ClientProfileWorkspace({
             clientId={id}
             canPov={canPov}
             embedded={embedded}
-            onMessage={() => setTab("messages")}
+            onMessage={openMessages}
             onPov={() => {
               if (!form.user_id) {
                 toast.error("Client has no account yet — send a setup link first.");
@@ -849,9 +854,20 @@ export function ClientProfileWorkspace({
           </div>
         </TabsContent>
 
-        <TabsContent value="training" className={WORKSPACE_GRID_CLASS}>
+        {/*
+          Calendar-first Training tab: the schedule the coach acts on every day
+          comes first, the program hub sits under it, and lower-frequency setup
+          panels moved to the "Program setup" tab so nothing was removed.
+        */}
+        <TabsContent value="training" className="grid w-full min-w-0 grid-cols-[minmax(0,1fr)] gap-6">
           <Suspense fallback={<TabFallback />}>
+            <ScheduleManagerShell clientId={id} mode="coach" />
             <TrainingProgramHub clientId={id} clientName={form?.full_name ?? null} />
+          </Suspense>
+        </TabsContent>
+
+        <TabsContent value="program-setup" className={WORKSPACE_GRID_CLASS}>
+          <Suspense fallback={<TabFallback />}>
             <div className="md:col-span-3"><TrainingScheduleCard client={form} /></div>
             <AssignedProgramsCard clientId={id} mode="admin" />
             <TrainingPhasesPanel clientId={id} />
@@ -887,12 +903,6 @@ export function ClientProfileWorkspace({
               preferredUnit={(form?.preferred_weight_unit as "lb" | "kg") ?? "lb"}
               canOpenLog
             />
-          </Suspense>
-        </TabsContent>
-
-        <TabsContent value="messages" className="grid w-full min-w-0 grid-cols-[minmax(0,1fr)] gap-6">
-          <Suspense fallback={<TabFallback />}>
-            <ClientMessagesTab clientId={id} />
           </Suspense>
         </TabsContent>
 
@@ -1526,17 +1536,6 @@ function InviteExpiryPanel({ expiresAt, accountCreatedAt }: { expiresAt: string 
       <div className="mt-2 text-[11px] text-muted-foreground">Invites are valid for 48 hours.</div>
     </div>
   );
-}
-
-function ClientMessagesTab({ clientId }: { clientId: string }) {
-  const { data: state } = useQuery({
-    queryKey: ["conversation-state", clientId],
-    queryFn: async () => {
-      const { data } = await (supabase.from("conversation_state") as any).select("*").eq("client_id", clientId).maybeSingle();
-      return (data ?? null) as ConversationState | null;
-    },
-  });
-  return <MessageThread clientId={clientId} role="admin" conversationState={state ?? null} />;
 }
 
 function ClientNativeFormsAssignment({ clientId }: { clientId: string }) {
