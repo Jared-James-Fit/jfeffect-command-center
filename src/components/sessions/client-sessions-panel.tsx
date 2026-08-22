@@ -136,6 +136,22 @@ export function ClientSessionsPanel({
     },
   });
 
+  // Stripe tax lives on the payment ledger: amount_minor is the gross charge,
+  // tax_minor the tax portion. Contract values are pre-tax, so package math
+  // must net the tax out before comparing against them.
+  const { data: ledger = [] } = useQuery<(LedgerPaymentRow & { purchase_id: string | null })[]>({
+    queryKey: ["pt-payment-ledger", clientId],
+    queryFn: async () => {
+      const { data } = await (supabase as any)
+        .from("payment_ledger")
+        .select("purchase_id, txn_type, amount_minor, tax_minor, voided")
+        .eq("client_id", clientId);
+      return (data ?? []) as any[];
+    },
+  });
+
+
+
   const today = todayISO();
   const upcoming = sessions
     .filter((s) => s.status === "Scheduled" && s.session_date >= today)
