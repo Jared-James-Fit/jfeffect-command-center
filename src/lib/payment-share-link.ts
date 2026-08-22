@@ -88,7 +88,11 @@ export function isStripeHostedInvoiceUrl(url: string | null | undefined): boolea
   if (!v) return false;
   try {
     const u = new URL(v);
-    return u.hostname.toLowerCase().endsWith("stripe.com") && /\/invoice\//.test(u.pathname);
+    const host = u.hostname.toLowerCase();
+    // Stripe hosted invoices live on invoice.stripe.com/i/... (and legacy
+    // pay.stripe.com/invoice/... links).
+    if (host === "invoice.stripe.com" || host.endsWith(".invoice.stripe.com")) return true;
+    return host.endsWith("stripe.com") && /\/invoice\//.test(u.pathname);
   } catch {
     return false;
   }
