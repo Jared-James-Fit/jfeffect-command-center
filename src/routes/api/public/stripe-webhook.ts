@@ -519,9 +519,9 @@ export const Route = createFileRoute("/api/public/stripe-webhook")({
 
                 if (obj.payment_status === "paid") {
                   await provisionMemberFromPurchase(supabase, { ...purchase, stripe_customer_id: obj.customer ?? purchase.stripe_customer_id });
-                  // Create payment_ledger row for this payment (idempotent via stripe_checkout_session_id)
+                  // Create payment_ledger row for this payment (idempotent via external_reference)
                   if (obj.amount_total && obj.amount_total > 0) {
-                    await supabase.from("payment_ledger").upsert({
+                    const { error: ledgerErr } = await supabase.from("payment_ledger").upsert({
                       client_id: purchase.client_id,
                       purchase_id: purchase.id,
                       txn_type: "payment",
@@ -531,16 +531,24 @@ export const Route = createFileRoute("/api/public/stripe-webhook")({
                       currency: (obj.currency ?? "cad").toUpperCase(),
                       transaction_date: new Date(event.created * 1000).toISOString().slice(0, 10),
                       received_at: new Date(event.created * 1000).toISOString(),
-                      external_reference: obj.id,
+                      external_reference: obj.invoice ?? obj.id,
                       stripe_event_id: event.id,
                       stripe_payment_intent_id: obj.payment_intent ?? null,
                       stripe_invoice_id: obj.invoice ?? null,
+                      stripe_customer_id: obj.customer ?? null,
+                      stripe_subscription_id: obj.subscription ?? null,
+                      stripe_checkout_session_id: obj.id,
+                      stripe_mode: eventMode ?? null,
                       source: "stripe_checkout",
                       internal_note: `Stripe checkout.session.completed — session ${obj.id}`,
-                    }, { onConflict: "external_reference", ignoreDuplicates: true }).then(() => {}, (e: any) => {
-                      console.error("[stripe-webhook] payment_ledger upsert failed", e?.message);
-                    });
+                    }, { onConflict: "external_reference", ignoreDuplicates: true });
+                    if (ledgerErr) {
+                      console.error("[stripe-webhook] payment_ledger upsert failed (checkout)", {
+                        sessionId: obj.id, purchaseId: purchase.id, message: ledgerErr.message,
+                      });
+                    }
                   }
+
                 }
               }
 
