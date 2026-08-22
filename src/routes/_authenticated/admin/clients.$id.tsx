@@ -25,6 +25,8 @@ import { calcAge, formatHeight } from "@/lib/basic-info";
 import { Switch } from "@/components/ui/switch";
 import { COMMON_TIMEZONES } from "@/lib/pt-sessions";
 import { Tabs, TabsContent } from "@/components/ui/tabs";
+import { cn } from "@/lib/utils";
+import { WORKSPACE_CONTAINER_CLASS, WORKSPACE_GRID_CLASS } from "@/components/workspace/workspace-container";
 import type { ConversationState } from "@/lib/messages";
 import { ClientDriveFolderPanel } from "@/components/client-drive-folder-panel";
 import { TrainingScheduleCard } from "@/components/training-schedule-card";
@@ -69,7 +71,7 @@ const lazyDefault = <T,>(loader: () => Promise<{ [k: string]: T }>, name: string
 const TrainingPhasesPanel = lazyDefault(() => import("@/components/training-phases-panel"), "TrainingPhasesPanel");
 const ClientMaxesPanel = lazyDefault(() => import("@/components/client-maxes-panel"), "ClientMaxesPanel");
 const ImportantDatesPanel = lazyDefault(() => import("@/components/important-dates-panel"), "ImportantDatesPanel");
-const PtSessionsPanel = lazyDefault(() => import("@/components/pt-sessions-panel"), "PtSessionsPanel");
+const ClientSessionsPanel = lazyDefault(() => import("@/components/sessions/client-sessions-panel"), "ClientSessionsPanel");
 const NutritionTargetsPanel = lazyDefault(() => import("@/components/nutrition-targets-panel"), "NutritionTargetsPanel");
 const CardioTargetsPanel = lazyDefault(() => import("@/components/cardio-targets-panel"), "CardioTargetsPanel");
 const LiftVideosPanel = lazyDefault(() => import("@/components/lift-videos-panel"), "LiftVideosPanel");
@@ -87,7 +89,6 @@ const AssignedProgramsCard = lazyDefault(() => import("@/components/assigned-pro
 const ClientWarmupCard = lazyDefault(() => import("@/components/client-warmup-card"), "ClientWarmupCard");
 const ClientBillingPanel = lazyDefault(() => import("@/components/admin/client-billing-panel"), "ClientBillingPanel");
 const GoalsSetupPanel = lazyDefault(() => import("@/components/clients/goals-setup-panel"), "GoalsSetupPanel");
-const SessionCreditsPanel = lazyDefault(() => import("@/components/admin/session-credits-panel"), "SessionCreditsPanel");
 const TrainingProgramHub = lazyDefault(() => import("@/components/clients/training-program-hub"), "TrainingProgramHub");
 
 function TabFallback() {
@@ -626,7 +627,7 @@ export function ClientProfileWorkspace({
           )}
         />
       )}
-      <div className={embedded ? "p-4 md:p-6" : "p-6 md:p-8"}>
+      <div className={cn(WORKSPACE_CONTAINER_CLASS, embedded && "px-3 py-3 md:px-6 md:py-4")}>
       {/*
         The profile-shell "Actions" grid was removed — Message, POV and More
         live in the client header, Assign Program lives in the Training tab.
@@ -660,7 +661,7 @@ export function ClientProfileWorkspace({
           heading={embedded ? "Workspace" : undefined}
         />
 
-        <TabsContent value="summary" className="grid gap-6 md:grid-cols-3">
+        <TabsContent value="summary" className={WORKSPACE_GRID_CLASS}>
           {/* Setup/access alerts live at the top of Summary, never above the nav. */}
           <div className="md:col-span-3 empty:hidden">
             <SetupStatusBanner
@@ -696,7 +697,7 @@ export function ClientProfileWorkspace({
           />
         </TabsContent>
 
-        <TabsContent value="coaching" className="grid gap-6 md:grid-cols-3">
+        <TabsContent value="coaching" className={WORKSPACE_GRID_CLASS}>
           <Card className="border-border bg-card p-6 md:col-span-2 space-y-4">
             <div className="flex items-center justify-between">
               <h3 className="text-sm font-semibold uppercase tracking-widest text-muted-foreground">Coaching Setup</h3>
@@ -815,7 +816,7 @@ export function ClientProfileWorkspace({
           </div>
         </TabsContent>
 
-        <TabsContent value="goals-setup" className="grid gap-6">
+        <TabsContent value="goals-setup" className="grid w-full min-w-0 grid-cols-[minmax(0,1fr)] gap-6">
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             <IntakeAnswersBigButton
               clientId={id}
@@ -848,7 +849,7 @@ export function ClientProfileWorkspace({
           </div>
         </TabsContent>
 
-        <TabsContent value="training" className="grid gap-6 md:grid-cols-3">
+        <TabsContent value="training" className={WORKSPACE_GRID_CLASS}>
           <Suspense fallback={<TabFallback />}>
             <TrainingProgramHub clientId={id} clientName={form?.full_name ?? null} />
             <div className="md:col-span-3"><TrainingScheduleCard client={form} /></div>
@@ -861,14 +862,14 @@ export function ClientProfileWorkspace({
           </Suspense>
         </TabsContent>
 
-        <TabsContent value="nutrition" className="grid gap-6 md:grid-cols-3">
+        <TabsContent value="nutrition" className={WORKSPACE_GRID_CLASS}>
           <Suspense fallback={<TabFallback />}>
             <NutritionTargetsPanel clientId={id} />
             <CardioTargetsPanel clientId={id} />
           </Suspense>
         </TabsContent>
 
-        <TabsContent value="metrics" className="grid gap-6 md:grid-cols-3">
+        <TabsContent value="metrics" className={WORKSPACE_GRID_CLASS}>
           <Suspense fallback={<TabFallback />}>
             <ProgressMetricsPanel
               clientId={id}
@@ -889,19 +890,19 @@ export function ClientProfileWorkspace({
           </Suspense>
         </TabsContent>
 
-        <TabsContent value="messages" className="grid gap-6">
+        <TabsContent value="messages" className="grid w-full min-w-0 grid-cols-[minmax(0,1fr)] gap-6">
           <Suspense fallback={<TabFallback />}>
             <ClientMessagesTab clientId={id} />
           </Suspense>
         </TabsContent>
 
-        <TabsContent value="lift-videos" className="grid gap-6 md:grid-cols-3">
+        <TabsContent value="lift-videos" className={WORKSPACE_GRID_CLASS}>
           <Suspense fallback={<TabFallback />}>
             <LiftVideosPanel clientId={id} />
           </Suspense>
         </TabsContent>
 
-        <TabsContent value="documents" className="grid gap-6 md:grid-cols-3">
+        <TabsContent value="documents" className={WORKSPACE_GRID_CLASS}>
           <div className="md:col-span-3">
             <ClientQuickLinksCard
               clientId={id}
@@ -995,26 +996,26 @@ export function ClientProfileWorkspace({
         </TabsContent>
 
 
-        <TabsContent value="purchases" className="grid gap-6 md:grid-cols-3">
+        <TabsContent value="purchases" className={WORKSPACE_GRID_CLASS}>
           <Suspense fallback={<TabFallback />}>
             <ClientSalesTable clientId={id} />
           </Suspense>
         </TabsContent>
 
-        <TabsContent value="billing" className="grid gap-6 md:grid-cols-3">
+        <TabsContent value="billing" className={WORKSPACE_GRID_CLASS}>
           <Suspense fallback={<TabFallback />}>
             <ClientBillingPanel clientId={id} />
           </Suspense>
         </TabsContent>
 
-        <TabsContent value="agreements" className="grid gap-6 md:grid-cols-3">
+        <TabsContent value="agreements" className={WORKSPACE_GRID_CLASS}>
           <Suspense fallback={<TabFallback />}>
             <AgreementStatusPanel client={form} />
             <AgreementsPanel clientId={id} clientName={form?.full_name} />
           </Suspense>
         </TabsContent>
 
-        <TabsContent value="notes" className="grid gap-6 md:grid-cols-3">
+        <TabsContent value="notes" className={WORKSPACE_GRID_CLASS}>
           <Card className="border-border bg-card p-6 md:col-span-2 space-y-3">
             <h3 className="text-xs uppercase tracking-widest text-muted-foreground">Coaching Notes</h3>
             <div><Label>Goals</Label><Textarea rows={2} value={form.goals ?? ""} onChange={(e) => set("goals", e.target.value)} /></div>
@@ -1032,7 +1033,7 @@ export function ClientProfileWorkspace({
           </Card>
         </TabsContent>
 
-        <TabsContent value="info" className="grid gap-6 md:grid-cols-3">
+        <TabsContent value="info" className={WORKSPACE_GRID_CLASS}>
           <div className="md:col-span-2 space-y-4">
             <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-border bg-card/60 px-4 py-3">
               <div>
@@ -1186,7 +1187,7 @@ export function ClientProfileWorkspace({
           </Card>
         </TabsContent>
 
-        <TabsContent value="account" className="grid gap-6 md:grid-cols-3">
+        <TabsContent value="account" className={WORKSPACE_GRID_CLASS}>
         <Card className="border-border bg-card p-6 md:col-span-3 space-y-4">
           <div className="flex items-center justify-between">
             <h3 className="text-sm font-semibold uppercase tracking-widest text-muted-foreground">Login & Access</h3>
@@ -2063,7 +2064,7 @@ function ClientOverviewSnapshot({
       </div>
       )}
 
-      <div className="grid gap-6 md:grid-cols-3">
+      <div className={WORKSPACE_GRID_CLASS}>
         <div className="space-y-6 md:col-span-2">
           <AppActivityCard
             clientId={clientId}
