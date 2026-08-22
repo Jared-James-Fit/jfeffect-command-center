@@ -645,15 +645,6 @@ export function ClientProfileWorkspace({
           )}
         </div>
       )}
-      <SetupStatusBanner
-        form={form}
-        onSendSetup={sendSetup}
-        onCopySetup={copySetupLink}
-        onSendReset={sendReset}
-        onCopyReset={copyResetLink}
-        onSetPassword={() => { setPwValue(""); setPwOpen(true); }}
-        onGoToAccountTab={() => setTab("account")}
-      />
       {/*
         The workspace nav MUST stay directly under the client header.
         Previously this Tabs root was `flex flex-col` with the nav at `order-1`
@@ -671,6 +662,18 @@ export function ClientProfileWorkspace({
         />
 
         <TabsContent value="summary" className="grid gap-6 md:grid-cols-3">
+          {/* Setup/access alerts live at the top of Summary, never above the nav. */}
+          <div className="md:col-span-3 empty:hidden">
+            <SetupStatusBanner
+              form={form}
+              onSendSetup={sendSetup}
+              onCopySetup={copySetupLink}
+              onSendReset={sendReset}
+              onCopyReset={copyResetLink}
+              onSetPassword={() => { setPwValue(""); setPwOpen(true); }}
+              onGoToAccountTab={() => setTab("account")}
+            />
+          </div>
           <ClientOverviewSnapshot
             form={form}
             clientId={id}
