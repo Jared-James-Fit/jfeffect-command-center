@@ -86,23 +86,23 @@ export function creditImpact(
     case "Scheduled":
       return outstanding > 0
         ? { label: `Reserved ${outstanding}`, tone: "primary" }
-        : { label: "No credit impact", tone: "muted" };
+        : { label: "No session used", tone: "muted" };
     case "Completed":
       return netUsed > 0
         ? { label: `Used ${netUsed}`, tone: "success" }
-        : { label: "No credit impact", tone: "muted" };
+        : { label: "No session used", tone: "muted" };
     case "Cancelled":
       return releasedCount > 0
-        ? { label: "Cancelled · credit released", tone: "muted" }
-        : { label: "Cancelled · no credit impact", tone: "muted" };
+        ? { label: "Cancelled · session returned", tone: "muted" }
+        : { label: "Cancelled · no session used", tone: "muted" };
     case "Missed":
       if (netUsed > 0) return { label: `No-show deducted ${netUsed}`, tone: "destructive" };
-      if (releasedCount > 0) return { label: "No-show · credit released", tone: "muted" };
-      return { label: "No credit impact", tone: "muted" };
+      if (releasedCount > 0) return { label: "No-show · session returned", tone: "muted" };
+      return { label: "No session used", tone: "muted" };
     default:
       return outstanding > 0
         ? { label: `Reserved ${outstanding}`, tone: "primary" }
-        : { label: "No credit impact", tone: "muted" };
+        : { label: "No session used", tone: "muted" };
   }
 }
 
@@ -125,24 +125,24 @@ export function creditToneClasses(tone: CreditTone): string {
 export function friendlyEventLabel(e: PtLedgerEvent): string {
   switch (e.event_type) {
     case "reserved":
-      return "Credit reserved";
+      return "Session reserved";
     case "released":
-      return e.source === "convert_on_complete" ? "Reservation converted to used" : "Credit released";
+      return e.source === "convert_on_complete" ? "Reserved session used" : "Session returned";
     case "used":
-      return "Credit used";
+      return "Session used";
     case "granted":
-      return e.source === "admin_adjust" ? "Credit added by admin" : "Credits granted";
+      return e.source === "admin_adjust" ? "Sessions added by admin" : "Sessions added";
     case "adjusted":
-      if (e.source === "revert_on_uncomplete") return "Deduction reversed · credit restored";
-      return Number(e.session_count) > 0 ? "Credit added (adjustment)" : "Credit deducted (adjustment)";
+      if (e.source === "revert_on_uncomplete") return "Deduction reversed · session returned";
+      return Number(e.session_count) > 0 ? "Sessions added (adjustment)" : "Sessions deducted (adjustment)";
     case "transferred_out":
-      return "Credit applied to new package";
+      return "Sessions applied to new package";
     case "transferred_in":
-      return "Credit received from transfer";
+      return "Sessions received from transfer";
     case "expired":
-      return "Credit expired";
+      return "Sessions expired";
     case "refunded":
-      return "Credit refunded";
+      return "Sessions refunded";
     default:
       return e.event_type;
   }

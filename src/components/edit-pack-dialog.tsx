@@ -83,7 +83,7 @@ export function EditPackDialog({ open, onOpenChange, clientId, pack, onSaved }: 
       });
       toast.success(
         res.paymentStatus === "Paid"
-          ? "Pack updated — paid in full, credits active"
+          ? "Package updated — paid in full, sessions active"
           : `Pack updated — ${currency} ${(res.outstandingMinor / 100).toFixed(2)} still due`,
       );
       qc.invalidateQueries({ queryKey: ["pt-balance", clientId] });

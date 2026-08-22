@@ -20,7 +20,7 @@ type Props = {
 
 /**
  * Sell a Personal Training session pack to a client.
- * Creates a purchase record; session credits are granted automatically when
+ * Creates a purchase record; sessions are granted automatically when
  * the pack is paid in full (manual or via Stripe webhook reconciliation).
  */
 export function SellSessionsDialog({ open, onOpenChange, clientId }: Props) {

@@ -214,7 +214,7 @@ export function PtSessionDialog({ open, onOpenChange, clientId, clients = [], in
                       variant="outline"
                       className={card.uses_credit ? "border-primary/40 bg-primary/10 text-primary" : "border-border bg-secondary/40 text-muted-foreground"}
                     >
-                      {card.uses_credit ? "Uses 1 credit" : "No credit"}
+                      {card.uses_credit ? "Uses 1 session" : "No session"}
                     </Badge>
                   </div>
                 </button>
@@ -266,7 +266,7 @@ export function PtSessionDialog({ open, onOpenChange, clientId, clients = [], in
     if (!form.title) return toast.error("Title is required");
     if (form._isRecurring && previewDates.length === 0) return toast.error("Pick at least one weekday");
     if (overbook && form.uses_credit !== false && !confirmOverbook) {
-      toast.error(`Only ${remaining} credit${remaining === 1 ? "" : "s"} available — top up or confirm overbooking`);
+      toast.error(`Only ${remaining} session${remaining === 1 ? "" : "s"} available — add sessions or confirm overbooking`);
       return;
     }
     setSaving(true);
@@ -357,7 +357,7 @@ export function PtSessionDialog({ open, onOpenChange, clientId, clients = [], in
               <LayoutTemplate className="h-3.5 w-3.5 shrink-0" />
               <span className="truncate">{form._cardName ? `Template: ${form._cardName}` : "Custom booking (no template)"}</span>
               {form.uses_credit === false && (
-                <Badge variant="outline" className="shrink-0 border-primary/40 text-primary">No credit</Badge>
+                <Badge variant="outline" className="shrink-0 border-primary/40 text-primary">No session used</Badge>
               )}
             </span>
             <Button
@@ -380,7 +380,7 @@ export function PtSessionDialog({ open, onOpenChange, clientId, clients = [], in
               <span className="text-sm font-bold break-words">{form.title}</span>
               {impact && (
                 <Badge variant="outline" className={creditToneClasses(impact.tone)}>
-                  Credit: {impact.label}
+                  Sessions: {impact.label}
                 </Badge>
               )}
             </div>
@@ -413,7 +413,7 @@ export function PtSessionDialog({ open, onOpenChange, clientId, clients = [], in
               <div className="flex items-center gap-2">
                 {overbook ? <AlertTriangle className="h-4 w-4 text-destructive" /> : <CalendarDays className="h-4 w-4" />}
                 <span>
-                  <strong>{remaining}</strong> credit{remaining === 1 ? "" : "s"} available
+                  <strong>{remaining}</strong> session{remaining === 1 ? "" : "s"} available
                   {willReserve > 0 && <> · booking reserves <strong>{willReserve}</strong></>}
                 </span>
               </div>
@@ -426,7 +426,7 @@ export function PtSessionDialog({ open, onOpenChange, clientId, clients = [], in
             </div>
             {overbook && (
               <p className="mt-1 text-xs text-muted-foreground">
-                No session credits available. Add sessions from the Personal Training panel, or toggle Overbook to book anyway (tracked as a negative balance).
+                No sessions available. Add sessions from the Sessions tab, or toggle Overbook to book anyway (tracked as a negative balance).
               </p>
             )}
           </div>
@@ -572,7 +572,7 @@ export function PtSessionDialog({ open, onOpenChange, clientId, clients = [], in
               </Select>
               {form.id && (
                 <p className="mt-1 text-[11px] text-muted-foreground">
-                  Prefer the action buttons below — manual status changes skip the credit prompts.
+                  Prefer the action buttons below — manual status changes skip the session prompts.
                 </p>
               )}
             </div>
@@ -600,7 +600,7 @@ export function PtSessionDialog({ open, onOpenChange, clientId, clients = [], in
                   <Button
                     size="sm" variant="outline"
                     className="border-success/40 text-success hover:bg-success/10"
-                    onClick={() => applyStatus("Completed", "Marked completed — reserved credit converted to used")}
+                    onClick={() => applyStatus("Completed", "Marked completed — reserved session converted to used")}
                   >
                     <CheckCircle2 className="mr-1.5 h-3.5 w-3.5" /> Complete
                   </Button>
@@ -613,7 +613,7 @@ export function PtSessionDialog({ open, onOpenChange, clientId, clients = [], in
                 </>
               )}
               {form.status === "Completed" && (
-                <Button size="sm" variant="outline" onClick={() => applyStatus("Scheduled", "Completion undone — credit restored and reserved again")}>
+                <Button size="sm" variant="outline" onClick={() => applyStatus("Scheduled", "Completion undone — session restored and reserved again")}>
                   <Undo2 className="mr-1.5 h-3.5 w-3.5" /> Undo Completion
                 </Button>
               )}
@@ -623,13 +623,13 @@ export function PtSessionDialog({ open, onOpenChange, clientId, clients = [], in
                 </Button>
               )}
               {form.status === "Cancelled" && (
-                <Button size="sm" variant="outline" onClick={() => applyStatus("Scheduled", "Session restored — 1 credit reserved")}>
+                <Button size="sm" variant="outline" onClick={() => applyStatus("Scheduled", "Session restored — 1 session reserved")}>
                   <Undo2 className="mr-1.5 h-3.5 w-3.5" /> Restore Session
                 </Button>
               )}
               {isAdmin && (
                 <Button size="sm" variant="outline" onClick={() => setAdjustOpen(true)}>
-                  <Wallet className="mr-1.5 h-3.5 w-3.5" /> Adjust Credit
+                  <Wallet className="mr-1.5 h-3.5 w-3.5" /> Adjust Sessions
                 </Button>
               )}
               <Button

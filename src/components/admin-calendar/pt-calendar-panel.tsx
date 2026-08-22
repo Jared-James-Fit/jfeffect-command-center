@@ -203,7 +203,7 @@ export function PtCalendarPanel() {
           )}
           <span className="text-sm font-semibold break-words">{s.title}</span>
           <Badge variant="outline" className={`${creditToneClasses(impact.tone)} shrink-0`}>
-            Credit: {impact.label}
+            Sessions: {impact.label}
           </Badge>
         </div>
         <div className="text-xs text-muted-foreground break-words">
@@ -224,13 +224,13 @@ export function PtCalendarPanel() {
             <Button
               size="sm" variant="outline"
               className="border-success/40 text-success hover:bg-success/10"
-              onClick={() => changeStatus(s, "Completed", "Marked completed — reserved credit converted to used")}
+              onClick={() => changeStatus(s, "Completed", "Marked completed — reserved session converted to used")}
             >
               <CheckCircle2 className="mr-1.5 h-3.5 w-3.5" /> Complete
             </Button>
           )}
           {s.status === "Completed" && (
-            <Button size="sm" variant="outline" onClick={() => changeStatus(s, "Scheduled", "Completion undone — credit restored and reserved again")}>
+            <Button size="sm" variant="outline" onClick={() => changeStatus(s, "Scheduled", "Completion undone — session restored and reserved again")}>
               <Undo2 className="mr-1.5 h-3.5 w-3.5" /> Undo Completion
             </Button>
           )}
@@ -255,7 +255,7 @@ export function PtCalendarPanel() {
                 </>
               )}
               {s.status === "Cancelled" && (
-                <DropdownMenuItem onClick={() => changeStatus(s, "Scheduled", "Session restored — 1 credit reserved")}>
+                <DropdownMenuItem onClick={() => changeStatus(s, "Scheduled", "Session restored — 1 session reserved")}>
                   <Undo2 className="mr-2 h-4 w-4" /> Restore Session
                 </DropdownMenuItem>
               )}
@@ -266,7 +266,7 @@ export function PtCalendarPanel() {
               )}
               {isAdmin && (
                 <DropdownMenuItem onClick={() => setAdjustFor(s)}>
-                  <Wallet className="mr-2 h-4 w-4" /> Adjust Credit
+                  <Wallet className="mr-2 h-4 w-4" /> Adjust Sessions
                 </DropdownMenuItem>
               )}
               <DropdownMenuSeparator />
@@ -282,7 +282,7 @@ export function PtCalendarPanel() {
 
   return (
     <>
-      <PageHeader title="PT Calendar" subtitle="Manage personal training sessions, outcomes, and credits." actions={
+      <PageHeader title="PT Calendar" subtitle="Manage personal training sessions, outcomes, and sessions." actions={
         <Button size="sm" className="bg-gradient-primary font-bold uppercase" onClick={() => { setEditing(null); setCardFor(null); setOpen(true); }}>
           <Plus className="mr-2 h-4 w-4" /> Book Session
         </Button>
