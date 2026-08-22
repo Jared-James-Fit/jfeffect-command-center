@@ -1,5 +1,5 @@
 import * as DialogPrimitive from "@radix-ui/react-dialog";
-import { X } from "lucide-react";
+import { ChevronLeft } from "lucide-react";
 import { lazy, Suspense, useEffect, useRef } from "react";
 import { useOverlayClientId, useCloseClientProfile } from "@/lib/open-client-profile";
 
@@ -87,7 +87,7 @@ export function ClientProfileOverlayMount() {
             <span>Back</span>
           </DialogPrimitive.Close>
 
-          <div className="flex-1 overflow-y-auto">
+          <div className="flex-1 overflow-y-auto pt-14 md:pt-0">
             <Suspense fallback={<Skeleton />}>
               {clientId ? (
                 <ClientProfileWorkspace
