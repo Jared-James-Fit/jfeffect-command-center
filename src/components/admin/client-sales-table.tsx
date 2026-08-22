@@ -261,10 +261,7 @@ export function ClientSalesTable({ clientId }: { clientId: string }) {
                       <Link to="/admin/purchases/$id" params={{ id: raw.id }} className="font-medium hover:underline">
                         {raw.offer_name ?? "Product"}
                       </Link>
-                      <div className="text-xs text-muted-foreground tabular-nums">
-                        {formatMoney(display.contractTotal, display.currency)}
-                        {display.amountOutstanding > 0 && ` · ${formatMoney(display.amountOutstanding, display.currency)} outstanding`}
-                      </div>
+                      <InstallmentSummary display={display} />
                     </TableCell>
                     <TableCell className="text-sm text-muted-foreground">{raw.offer_type ?? "—"}</TableCell>
                     <TableCell className="text-sm">{fmtDate(raw.purchased_at) ?? "—"}</TableCell>
@@ -314,10 +311,11 @@ export function ClientSalesTable({ clientId }: { clientId: string }) {
                   <span className="text-sm font-mono">{formatMoney(display.contractTotal, display.currency)}</span>
                   {display.amountOutstanding > 0 && (
                     <Badge variant="outline" className={TONE.warn}>
-                      {formatMoney(display.amountOutstanding, display.currency)} outstanding
+                      {formatMoney(display.amountOutstanding, display.currency)} remaining
                     </Badge>
                   )}
                 </div>
+                <InstallmentSummary display={display} />
                 <dl className="grid grid-cols-2 gap-x-3 gap-y-1 text-xs">
                   <Field label="Date added" value={fmtDate(raw.purchased_at) ?? "—"} />
                   <Field label="Start" value={fmtDate(raw.term_start_date) ?? "Not set"} />
@@ -447,5 +445,36 @@ function RowMenu({
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
+  );
+}
+
+/**
+ * Financial state for a sale. Fixed installment contracts (e.g. 4 × CA$200)
+ * must show the FULL contract value, how much is paid, and what remains —
+ * never just the single installment amount.
+ */
+function InstallmentSummary({ display }: { display: PaymentDisplay }) {
+  const plan = display.installmentPlan;
+  if (!plan) {
+    return (
+      <div className="text-xs text-muted-foreground tabular-nums">
+        {formatMoney(display.contractTotal, display.currency)}
+        {display.amountOutstanding > 0 &&
+          ` \u00b7 ${formatMoney(display.amountOutstanding, display.currency)} remaining`}
+      </div>
+    );
+  }
+  return (
+    <div className="text-xs text-muted-foreground tabular-nums">
+      <div>
+        {formatMoney(plan.contractTotal, display.currency)} total {"\u00b7"}{" "}
+        {formatMoney(plan.amountPaid, display.currency)} paid {"\u00b7"}{" "}
+        {formatMoney(plan.amountRemaining, display.currency)} remaining
+      </div>
+      <div>
+        {plan.numberOfPayments} {"\u00d7"} {formatMoney(plan.installmentAmount, display.currency)}{" "}
+        {"\u00b7"} {plan.paymentsMade} / {plan.numberOfPayments} paid
+      </div>
+    </div>
   );
 }

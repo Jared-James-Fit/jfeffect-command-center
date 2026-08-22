@@ -16,6 +16,8 @@
  *   - No Stripe IDs are exposed to clients (caller decides whether to render admin fields).
  */
 
+import { resolveInstallmentPlan, type InstallmentPlan } from "./installment-plan";
+
 export type PaymentDisplayStatus =
   | "paid"
   | "partially_paid"
@@ -56,6 +58,11 @@ export type PaymentDisplay = {
    * Never fabricated: `date` is only set when we have a real stored date.
    */
   renewal: RenewalDisplay;
+  /**
+   * Fixed-installment contract (e.g. 4 × $200 = $800 total, ends after #4).
+   * Null for one-time purchases and renews-until-cancelled subscriptions.
+   */
+  installmentPlan: InstallmentPlan | null;
 };
 
 export type RenewalKind =
@@ -85,6 +92,8 @@ type PurchaseInput = {
   full_description?: string | null;
   currency?: string | null;
   full_payable_amount?: number | string | null;
+  installment_amount?: number | string | null;
+  number_of_payments?: number | null;
   amount_paid?: number | string | null;
   amount_paid_cents?: number | null;
   amount_refunded_cents?: number | null;
@@ -150,10 +159,15 @@ export function resolvePaymentDisplay(p: PurchaseInput): PaymentDisplay {
     p.amount_paid_cents != null
       ? p.amount_paid_cents
       : Math.round(toNum(p.amount_paid) * 100);
+  const installmentPlan = resolveInstallmentPlan(p);
   const contractCents =
     p.contract_value_cents != null
       ? p.contract_value_cents
-      : Math.round(toNum(p.full_payable_amount) * 100);
+      : installmentPlan
+        // Fixed installment plan: the contract is installment × count, never
+        // the single-installment amount stored in full_payable_amount.
+        ? Math.round(installmentPlan.contractTotal * 100)
+        : Math.round(toNum(p.full_payable_amount) * 100);
   const refundedCents = p.amount_refunded_cents ?? 0;
 
   const amountPaid = centsToMajor(paidCents);
@@ -262,6 +276,7 @@ export function resolvePaymentDisplay(p: PurchaseInput): PaymentDisplay {
     stripePaymentIntentId: p.stripe_payment_intent_id ?? null,
     stripeSubscriptionId: p.stripe_subscription_id ?? null,
     renewal,
+    installmentPlan,
   };
 }
 

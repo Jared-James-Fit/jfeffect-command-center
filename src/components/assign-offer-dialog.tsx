@@ -19,6 +19,7 @@ import { sendPaymentLinkEmail } from "@/lib/payments.functions";
 import { runJob } from "@/lib/progress-jobs";
 import { autoCalculatePurchaseTermDates } from "@/lib/purchase-term-dates.functions";
 import { FIRST50_CODE } from "@/lib/first50-policy";
+import { findReusablePurchaseIntent } from "@/lib/purchase-idempotency";
 
 /** What actually happens when the admin confirms. */
 type AssignMode = "payment_request" | "paid_in_full" | "draft";
@@ -131,10 +132,40 @@ export function AssignOfferDialog({ offer, onClose, fixedClientId }: { offer: an
       };
       
       job.completeStep(1); // Create assignment
-      
-      const { data: purchase, error } = await supabase
-        .from("purchase_records").insert(payload as any).select("id").single();
-      if (error) throw error;
+
+      // A payment REQUEST is not a SALE. Repeated "assign / generate link" runs
+      // for the same client + offer must resolve to the SAME purchase intent —
+      // otherwise every attempt leaves a permanent duplicate sale row (the
+      // Marc Asugui duplicate-sales bug). Rows with real Stripe money attached
+      // are never reused.
+      const { data: existingRows } = await supabase
+        .from("purchase_records")
+        .select(
+          "id, client_id, offer_id, payment_status, amount_paid, amount_paid_cents, stripe_subscription_id, stripe_payment_intent_id, stripe_checkout_session_id, created_at",
+        )
+        .eq("client_id", clientId)
+        .eq("offer_id", offer.id);
+      const reusable = findReusablePurchaseIntent((existingRows ?? []) as any[], {
+        clientId,
+        offerId: offer.id,
+      });
+
+      let purchase: { id: string } | null = null;
+      if (reusable) {
+        const { data: updated, error: updateError } = await supabase
+          .from("purchase_records")
+          .update(payload as any)
+          .eq("id", reusable.id)
+          .select("id")
+          .single();
+        if (updateError) throw updateError;
+        purchase = updated as any;
+      } else {
+        const { data: inserted, error } = await supabase
+          .from("purchase_records").insert(payload as any).select("id").single();
+        if (error) throw error;
+        purchase = inserted as any;
+      }
       
       job.completeStep(3); // Save purchase record
 
