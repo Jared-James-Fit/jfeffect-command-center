@@ -209,7 +209,7 @@ export function ClientSessionsPanel({
             <p className="text-sm text-muted-foreground">No session packages yet.</p>
           ) : (
             purchases.map((p) => {
-              const v = packageValue(p);
+              const v = packageValueWithTax(p, ledger.filter((l) => l.purchase_id === p.id));
               const row = balance.find((b) => b.purchase_id === p.id);
               const purchasedAt = p.purchased_at ?? p.created_at;
               return (
@@ -223,13 +223,19 @@ export function ClientSessionsPanel({
                         {row ? <> · {Number(row.used ?? 0)} used · <strong className="text-foreground">{Number(row.remaining ?? 0)} remaining</strong></> : " · not active yet"}
                       </div>
                       <div className="text-xs text-muted-foreground">
-                        Contract {fmtMoneyMinor(v.packageValueMinor, v.currency)}
+                        Contract {fmtMoneyMinor(v.packageValueMinor, v.currency)} (before tax)
                         {v.listRatePerSessionMinor != null ? ` · ${fmtMoneyMinor(v.listRatePerSessionMinor, v.currency)}/session` : ""}
                       </div>
                       <div className="text-xs text-muted-foreground">
-                        Paid {fmtMoneyMinor(v.amountPaidMinor, v.currency)}
+                        Paid {fmtMoneyMinor(v.netPaidMinor, v.currency)} before tax
                         {v.outstandingMinor ? ` · ${fmtMoneyMinor(v.outstandingMinor, v.currency)} outstanding` : " · paid in full"}
                       </div>
+                      {v.taxSeparated && (
+                        <div className="text-xs text-muted-foreground">
+                          Tax {fmtMoneyMinor(v.taxPaidMinor, v.currency)} · charged {fmtMoneyMinor(v.grossPaidMinor, v.currency)} total
+                        </div>
+                      )}
+
                     </div>
                     <Badge variant="outline" className="shrink-0">{p.payment_status ?? "—"}</Badge>
                   </div>
