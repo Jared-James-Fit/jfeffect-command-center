@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { toStripeRecurring } from "@/lib/billing-frequency";
 
 const STRIPE_API = "https://api.stripe.com/v1";
 
@@ -106,6 +107,9 @@ const createSchema = z.object({
   checkoutMode: z.enum(["payment", "subscription", "auto"]).optional().default("auto"),
   // Billing interval for subscription prices (used when auto-creating Stripe price)
   billingInterval: z.enum(["month", "year", "week", "day"]).optional().nullable(),
+  // Canonical cadence (preferred). When present it wins over billingInterval
+  // and maps through toStripeRecurring() — bi-weekly = week x 2.
+  billingFrequency: z.enum(["weekly", "biweekly", "monthly", "yearly"]).optional().nullable(),
   // Access level (0-5) for display purposes
   accessLevel: z.number().int().min(0).max(5).optional().nullable(),
   isMemberFacing: z.boolean().optional(),
@@ -138,7 +142,9 @@ export const createCoachingProduct = createServerFn({ method: "POST" })
           ...(data.description ? { description: data.description } : {}),
         }),
       });
-      const isSubscription = data.checkoutMode === "subscription" || (data.checkoutMode !== "payment" && !!data.billingInterval);
+      const isSubscription =
+        data.checkoutMode === "subscription" ||
+        (data.checkoutMode !== "payment" && !!(data.billingFrequency || data.billingInterval));
       const priceParams: Record<string, string | number> = {
         product: product.id,
         unit_amount: data.priceCents,
@@ -146,8 +152,12 @@ export const createCoachingProduct = createServerFn({ method: "POST" })
         // Exclusive tax: price shown before tax; Stripe Tax adds GST/HST on top
         tax_behavior: "exclusive",
       };
-      if (isSubscription && data.billingInterval) {
-        priceParams["recurring[interval]"] = data.billingInterval;
+      if (isSubscription && (data.billingFrequency || data.billingInterval)) {
+        const recurring = data.billingFrequency
+          ? toStripeRecurring(data.billingFrequency)
+          : { interval: data.billingInterval as string, interval_count: 1 };
+        priceParams["recurring[interval]"] = recurring.interval;
+        priceParams["recurring[interval_count]"] = recurring.interval_count;
       }
       const price = await stripeFetch("/prices", {
         method: "POST",
