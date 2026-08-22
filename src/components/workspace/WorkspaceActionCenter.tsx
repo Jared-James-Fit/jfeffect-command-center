@@ -1,5 +1,12 @@
 import { Link } from "@tanstack/react-router";
+import { MoreHorizontal } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import type { WorkspaceAction, WorkspaceTone } from "./types";
 
 const TONE_TO_BUTTON: Record<WorkspaceTone, { variant: "outline" | "default"; extra: string }> = {
