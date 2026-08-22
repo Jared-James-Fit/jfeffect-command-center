@@ -23,6 +23,7 @@ function ClientPurchase() {
   const qc = useQueryClient();
   const [agree, setAgree] = useState(false);
   const [busy, setBusy] = useState(false);
+  const resolveShareFn = useServerFn(resolvePaymentShareLink);
 
   const { data: r } = useQuery({
     queryKey: ["my-purchase", id],
