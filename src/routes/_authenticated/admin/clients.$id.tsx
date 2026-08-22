@@ -628,27 +628,10 @@ export function ClientProfileWorkspace({
         />
       )}
       <div className={embedded ? "p-4 md:p-6" : "p-6 md:p-8"}>
-      {embedded && (
-        <EmbeddedActionCenter
-          clientId={id}
-          canPov={canPov}
-          form={form}
-          onMessage={() => setTab("messages")}
-          onPov={() => {
-            if (!form.user_id) {
-              toast.error("Client has no account yet — send a setup link first.");
-              return;
-            }
-            impersonation.start(
-              { id, user_id: form.user_id, full_name: form.full_name },
-              typeof window !== "undefined" ? window.location.pathname + window.location.search : `/admin/clients/${id}`,
-            );
-            navigate({ to: "/portal" });
-          }}
-          onIntake={() => setTab("goals-setup")}
-          onRequestUpdate={requestUpdate}
-        />
-      )}
+      {/*
+        The profile-shell "Actions" grid was removed — Message, POV and More
+        live in the client header, Assign Program lives in the Training tab.
+      */}
       {form.status === "Deactivated" && (
         <div className="mb-4 rounded-md border border-warning/40 bg-warning/10 px-4 py-3 text-sm">
           <div className="font-semibold text-warning">Account Deactivated</div>
