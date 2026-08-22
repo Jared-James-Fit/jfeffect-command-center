@@ -16,7 +16,7 @@ import {
   ShoppingBag, Plus, MoreHorizontal, ExternalLink, Pencil, Copy, Send, Download,
   CheckCircle2, AlertTriangle, RefreshCw, Share2,
 } from "lucide-react";
-import { resolvePaymentShareLink } from "@/lib/payment-share.functions";
+import { createPaymentShareLink } from "@/lib/payment-share.functions";
 import { createCheckoutSessionForAssignment } from "@/lib/stripe-checkout.functions";
 import { getShareablePaymentUrl } from "@/components/payments/copy-payment-link-button";
 import { shareKindLabel } from "@/lib/payment-share-link";
@@ -384,13 +384,13 @@ function RowMenu({
   onEmailLink: () => void;
 }) {
   const paid = raw.payment_status === "Paid" || raw.payment_status === "Active Subscription";
-  const resolveFn = useServerFn(resolvePaymentShareLink);
+  const shareFn = useServerFn(createPaymentShareLink);
   const checkoutFn = useServerFn(createCheckoutSessionForAssignment);
 
   const copyLink = async (mode: "copy" | "share") => {
     const t = toast.loading("Getting payment link…");
     try {
-      const { url, kind } = await getShareablePaymentUrl(resolveFn as any, checkoutFn as any, raw.id);
+      const { url, kind } = await getShareablePaymentUrl(shareFn as any, checkoutFn as any, raw.id);
       if (mode === "share" && canShare({ url })) {
         const res = await nativeShare({ url, title: "Payment link" });
         if (res === "shared") return void toast.success("Payment link shared", { id: t });

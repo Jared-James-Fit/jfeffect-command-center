@@ -34,7 +34,11 @@ export async function getShareablePaymentUrl(
     res = await shareFn({ data: { purchaseRecordId: purchaseId, origin } });
   }
 
-  const clean = sanitizeShareUrl(res.shareUrl);
+  const clean =
+    sanitizeShareUrl(res.shareUrl) ??
+    (typeof res.shareUrl === "string" && /^http:\/\/localhost(:\d+)?\/\S*$/.test(res.shareUrl)
+      ? res.shareUrl
+      : null);
   if (!clean) throw new Error("Could not build a shareable payment link. Try again.");
   return { url: clean, kind: res.kind, canonicalUrl: res.canonicalUrl ?? null };
 }
@@ -52,7 +56,7 @@ export function CopyPaymentLinkButton({
   className?: string;
   label?: string;
 }) {
-  const resolveFn = useServerFn(resolvePaymentShareLink);
+  const shareFn = useServerFn(createPaymentShareLink);
   const checkoutFn = useServerFn(createCheckoutSessionForAssignment);
   const [busy, setBusy] = useState(false);
   const [lastUrl, setLastUrl] = useState<string | null>(null);
@@ -61,7 +65,7 @@ export function CopyPaymentLinkButton({
     setBusy(true);
     const t = toast.loading("Getting payment link…");
     try {
-      const { url, kind } = await getShareablePaymentUrl(resolveFn as any, checkoutFn as any, purchaseId);
+      const { url, kind } = await getShareablePaymentUrl(shareFn as any, checkoutFn as any, purchaseId);
       setLastUrl(url);
       if (mode === "share" && canShare({ url })) {
         const result = await nativeShare({ url, title: "Payment link" });
