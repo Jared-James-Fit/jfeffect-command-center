@@ -153,7 +153,8 @@ export function TrainingProgramHub({ clientId, clientName }: { clientId: string;
     : null;
 
   return (
-    <section aria-label="Training Program" className="space-y-4 md:col-span-3">
+    <section aria-label="Training Program" className="w-full min-w-0 space-y-4 md:col-span-3">
+
       <div className="flex items-center justify-between gap-2">
         <h2 className="flex items-center gap-2 text-sm font-bold uppercase tracking-widest text-muted-foreground">
           <Dumbbell className="h-4 w-4 text-primary" /> Training Program
