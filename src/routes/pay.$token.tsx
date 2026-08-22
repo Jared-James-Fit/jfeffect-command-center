@@ -12,9 +12,7 @@ export const Route = createFileRoute("/pay/$token")({
     handlers: {
       GET: async ({ params }) => {
         const { resolveShareToken } = await import("@/lib/payment-share.server");
-        const tok = String((params as any)?.token ?? "");
-        console.log("[pay] token=", tok);
-        const result = await resolveShareToken(tok);
+        const result = await resolveShareToken(String((params as any).token ?? ""));
         if (result.ok) {
           return new Response(null, {
             status: 302,

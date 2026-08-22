@@ -234,9 +234,7 @@ export async function resolveShareToken(token: string): Promise<ResolvedTokenDes
     .from("payment_share_links")
     .select("id, purchase_record_id, revoked")
     .eq("token", token)
-    .maybeSingle()
-    .then((r: any) => { if (r.error) console.log("[pay] linkErr=", r.error.message); return r; });
-  console.log("[pay] link=", JSON.stringify(link));
+    .maybeSingle();
   if (!link || link.revoked) {
     return { ok: false, status: 404, message: "This payment link is not valid." };
   }
