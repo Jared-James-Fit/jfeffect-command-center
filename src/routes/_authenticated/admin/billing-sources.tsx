@@ -357,6 +357,7 @@ function InviteLegacyDialog({
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="week">Weekly</SelectItem>
+                    <SelectItem value="biweekly">Bi-weekly (every 2 weeks)</SelectItem>
                     <SelectItem value="month">Monthly</SelectItem>
                     <SelectItem value="quarter">Quarterly</SelectItem>
                     <SelectItem value="year">Yearly</SelectItem>
