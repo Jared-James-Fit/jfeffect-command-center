@@ -9,7 +9,6 @@ import { ActionTaskSheet } from "./action-task-sheet";
 import { supabase } from "@/integrations/supabase/client";
 import { ClientFormSheet } from "@/components/forms/client-form-sheet";
 import { isExternalForm, useExternalFormOpener } from "@/lib/external-form-open";
-import { CoachFeedbackCard } from "@/components/forms/coach-feedback-card";
 import { listFormsForClient, pickWeeklyCheckInForm, pickNutritionUpdateForm } from "@/lib/native-forms";
 
 export type ActionTone = "warning" | "primary" | "success";
