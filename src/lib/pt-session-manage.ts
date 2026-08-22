@@ -23,6 +23,7 @@ export function invalidatePtSessionCaches(qc: QueryClient, clientId?: string | n
   qc.invalidateQueries({ queryKey: ["pt-balance"] });
   qc.invalidateQueries({ queryKey: ["pt-pack-purchases"] });
   qc.invalidateQueries({ queryKey: ["pt-adhoc-credits"] });
+  qc.invalidateQueries({ queryKey: ["pt-adhoc-sessions"] });
   qc.invalidateQueries({ queryKey: ["pt-session-events"] });
   qc.invalidateQueries({ queryKey: ["calendar-upcoming"] });
   qc.invalidateQueries({ queryKey: ["appointments"] });
