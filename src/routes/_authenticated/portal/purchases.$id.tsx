@@ -11,6 +11,9 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { ArrowLeft, ExternalLink, CheckCircle2, AlertTriangle, FileSignature, Receipt, FileText, Download } from "lucide-react";
 import { toast } from "sonner";
 import { resolvePaymentDisplay, formatMoney } from "@/lib/payment-display";
+import { useServerFn } from "@tanstack/react-start";
+import { resolvePaymentShareLink } from "@/lib/payment-share.functions";
+import { sanitizeShareUrl } from "@/lib/payment-share-link";
 
 export const Route = createFileRoute("/_authenticated/portal/purchases/$id")({ component: ClientPurchase });
 
