@@ -40,11 +40,11 @@ describe("isCheckoutSessionShareable", () => {
   const future = Math.floor(Date.now() / 1000) + 3600;
   const past = Math.floor(Date.now() / 1000) - 3600;
   it("accepts open, unexpired sessions", () => {
-    expect(isCheckoutSessionShareable({ status: "open", expires_at: future })).toBe(true);
+    expect(isCheckoutSessionShareable({ status: "open", url: "https://checkout.stripe.com/c/pay/cs_1", expires_at: future })).toBe(true);
   });
   it("rejects expired or completed sessions", () => {
-    expect(isCheckoutSessionShareable({ status: "open", expires_at: past })).toBe(false);
-    expect(isCheckoutSessionShareable({ status: "complete", expires_at: future })).toBe(false);
+    expect(isCheckoutSessionShareable({ status: "open", url: "https://checkout.stripe.com/c/pay/cs_1", expires_at: past })).toBe(false);
+    expect(isCheckoutSessionShareable({ status: "complete", url: "https://checkout.stripe.com/c/pay/cs_1", expires_at: future })).toBe(false);
     expect(isCheckoutSessionShareable(null)).toBe(false);
   });
 });
@@ -52,22 +52,22 @@ describe("isCheckoutSessionShareable", () => {
 describe("choosePaymentShareStrategy", () => {
   it("returns none for settled purchases", () => {
     expect(
-      choosePaymentShareStrategy({ paymentStatus: "Paid", paymentLinkUrl: "https://buy.stripe.com/x" }).kind,
+      choosePaymentShareStrategy({ paymentStatus: "Paid", productPaymentLinkUrl: "https://buy.stripe.com/x" }).kind,
     ).toBe("none");
   });
   it("prefers a hosted invoice for overdue subscriptions", () => {
     const s = choosePaymentShareStrategy({
       paymentStatus: "Overdue",
       hostedInvoiceUrl: "https://invoice.stripe.com/i/acct_1/live_abc",
-      paymentLinkUrl: "https://buy.stripe.com/x",
+      productPaymentLinkUrl: "https://buy.stripe.com/x",
     });
     expect(s.kind).toBe("hosted_invoice");
   });
   it("prefers a reusable payment link over a checkout session", () => {
     const s = choosePaymentShareStrategy({
       paymentStatus: "Pending",
-      paymentLinkUrl: "https://buy.stripe.com/x",
-      checkoutSessionUrl: "https://checkout.stripe.com/c/pay/cs_live_123",
+      productPaymentLinkUrl: "https://buy.stripe.com/x",
+      existingSession: { status: "open", url: "https://checkout.stripe.com/c/pay/cs_live_123", expires_at: Math.floor(Date.now()/1000)+3600 },
     });
     expect(s.kind).toBe("payment_link");
   });
