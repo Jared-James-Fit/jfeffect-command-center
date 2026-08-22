@@ -956,6 +956,40 @@ export const Route = createFileRoute("/api/public/stripe-webhook")({
                     });
                   }
                 }
+
+                // ── Fixed-term safety net ────────────────────────────────
+                // Payment links created directly in Stripe carry no
+                // `payment_count` price metadata, so no Subscription Schedule
+                // exists to end the plan. Once the contracted number of
+                // installments has been paid, stop future billing.
+                const contractedPayments = Number(purchase.number_of_payments ?? 0);
+                if (invSubId && contractedPayments > 0) {
+                  const { count: paidCount } = await supabase
+                    .from("payment_ledger")
+                    .select("id", { count: "exact", head: true })
+                    .eq("purchase_id", purchase.id)
+                    .eq("txn_type", "payment")
+                    .eq("voided", false);
+                  if ((paidCount ?? 0) >= contractedPayments) {
+                    try {
+                      await stripeFetch(`/subscriptions/${invSubId}`, {
+                        apiKey: eventApiKey ?? undefined,
+                        method: "POST",
+                        body: { cancel_at_period_end: "true" },
+                        idempotencyKey: `fixedterm_end_${invSubId}_${contractedPayments}`,
+                      });
+                      await supabase.from("purchase_records").update({
+                        cancel_at_period_end: true,
+                        payment_status: "Paid",
+                        last_payment_update_source: "stripe_webhook_fixed_term",
+                        last_payment_update_at: now,
+                      }).eq("id", purchase.id);
+                      console.log(`[stripe-webhook] fixed-term complete — ${invSubId} set to end after ${contractedPayments} payments`);
+                    } catch (e: any) {
+                      console.error("[stripe-webhook] fixed-term cancel_at_period_end failed", e?.message);
+                    }
+                  }
+                }
               } else {
                 console.error("[stripe-webhook] invoice paid but no purchase matched", {
                   invoiceId: obj.id, customer: obj.customer ?? null, subscription: invSubId,
