@@ -1955,57 +1955,6 @@ function EmbeddedIdentityHeader({
   );
 }
 
-/**
- * Coaching action center — feeds the coaching-specific action set into
- * the shared WorkspaceActionCenter. Membership feeds its own array.
- */
-function EmbeddedActionCenter({
-  clientId,
-  canPov,
-  form,
-  onMessage,
-  onPov,
-  onIntake,
-  onRequestUpdate,
-}: {
-  clientId: string;
-  canPov: boolean;
-  form: any;
-  onMessage: () => void;
-  onPov: () => void;
-  onIntake: () => void;
-  onRequestUpdate: () => unknown | Promise<unknown>;
-}) {
-  const actions: WorkspaceAction[] = [
-    { key: "message", label: "Message", icon: MessageSquare, onClick: onMessage },
-    { key: "pov", label: "Client POV", icon: Eye, onClick: onPov, tone: "warn", hidden: !canPov },
-    {
-      key: "program",
-      label: "Assign Program",
-      icon: Dumbbell,
-      to: "/admin/client-programs/$clientId",
-      params: { clientId },
-    },
-    {
-      key: "schedule",
-      label: "Schedule",
-      icon: Calendar,
-      to: "/admin/clients/$id/schedule",
-      params: { id: clientId },
-    },
-    { key: "intake", label: "Intake & Goals", icon: Target, onClick: onIntake },
-    {
-      key: "update",
-      label: form.info_update_requested ? "Update sent" : "Request Update",
-      icon: BellRing,
-      onClick: () => { void onRequestUpdate(); },
-    },
-  ];
-  // Message / POV / Assign Program stay one tap away; the rest collapse so the
-  // workspace opens on client information, not a grid of buttons.
-  return <WorkspaceActionCenter actions={actions} maxVisible={3} />;
-}
-
 function CommsToggleRow({ title, description, checked, onChange }: { title: string; description: string; checked: boolean; onChange: (v: boolean) => void | Promise<void> }) {
   return (
     <label className="flex min-h-[64px] items-center justify-between gap-3 rounded-md border border-border bg-secondary/30 px-4 py-3 text-sm">
