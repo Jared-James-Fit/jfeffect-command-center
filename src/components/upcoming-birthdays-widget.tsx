@@ -111,6 +111,23 @@ export function UpcomingBirthdaysWidget({ windowDays = UPCOMING_DAYS_DEFAULT }: 
     },
   });
 
+  // Live sync: flip the "Seen" state as soon as the client opens their card.
+  useEffect(() => {
+    const channel = supabase
+      .channel("birthday-card-views-live")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "client_birthday_card_views" },
+        () => {
+          qc.invalidateQueries({ queryKey: ["birthday-card-views", currentYear - 1, currentYear] });
+        },
+      )
+      .subscribe();
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [qc, currentYear]);
+
   const wishMap = new Map<string, number>();
   for (const w of wishes) wishMap.set(`${w.client_id}:${w.birthday_year}`, 1);
 
