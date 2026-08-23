@@ -8,11 +8,30 @@ import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { BirthdayCardView } from "@/components/birthday-card-view";
 import { resolveBirthdayCard } from "@/lib/birthday-templates";
 
-function isBirthdayToday(dob: string | null | undefined, ref = new Date()) {
-  if (!dob) return false;
+/** How many days after the birthday an unseen card still shows. */
+const BIRTHDAY_GRACE_DAYS = 7;
+
+/**
+ * Resolve the birthday "window" for a client. The card shows on the actual
+ * birthday and — if the client never opened the app that day — for a short
+ * grace period afterwards, so a missed card is never lost.
+ * Returns the birthday year to record the view against, or null.
+ */
+export function resolveBirthdayWindow(
+  dob: string | null | undefined,
+  ref = new Date(),
+): { year: number; daysSince: number } | null {
+  if (!dob) return null;
   const d = new Date(dob + "T00:00:00");
-  if (isNaN(d.getTime())) return false;
-  return d.getMonth() === ref.getMonth() && d.getDate() === ref.getDate();
+  if (isNaN(d.getTime())) return null;
+  const today = new Date(ref.getFullYear(), ref.getMonth(), ref.getDate());
+  // Check this year's and last year's occurrence (handles Dec→Jan rollover).
+  for (const year of [today.getFullYear(), today.getFullYear() - 1]) {
+    const occurrence = new Date(year, d.getMonth(), d.getDate());
+    const daysSince = Math.round((today.getTime() - occurrence.getTime()) / 86_400_000);
+    if (daysSince >= 0 && daysSince <= BIRTHDAY_GRACE_DAYS) return { year, daysSince };
+  }
+  return null;
 }
 
 /**
