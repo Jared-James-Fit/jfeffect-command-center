@@ -60,11 +60,12 @@ export function ClientBirthdayCard() {
     },
   });
 
-  const birthdayToday = useMemo(
-    () => isBirthdayToday(client?.date_of_birth),
+  const window_ = useMemo(
+    () => resolveBirthdayWindow(client?.date_of_birth),
     [client?.date_of_birth],
   );
-  const year = new Date().getFullYear();
+  const birthdayToday = !!window_;
+  const year = window_?.year ?? new Date().getFullYear();
 
   const { data: card } = useQuery({
     queryKey: ["my-birthday-card", client?.id],
