@@ -1,0 +1,2 @@
+alter publication supabase_realtime add table public.client_birthday_card_views;
+alter table public.client_birthday_card_views replica identity full;
