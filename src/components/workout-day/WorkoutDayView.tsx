@@ -4740,6 +4740,7 @@ function CompactWorkoutSummaryRow({
   dayId,
   readonly,
   savedDurationMin,
+  estimatedMinutes,
   completedAt,
   onViewScore,
 }: {
@@ -4750,6 +4751,10 @@ function CompactWorkoutSummaryRow({
   dayId: string;
   readonly?: boolean;
   savedDurationMin?: number | null;
+  /** Pre-workout estimate (canonical day/block fields, row-based fallback).
+   *  Shown only while the workout is NOT completed — actual duration from
+   *  savedDurationMin always takes over after completion. */
+  estimatedMinutes?: number | null;
   completedAt: string | null;
   onViewScore?: () => void;
 }) {
