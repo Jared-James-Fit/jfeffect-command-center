@@ -1243,6 +1243,17 @@ function SelectedDayCard({
                 format(date, "EEE MMM d"),
               ].filter(Boolean).join(" · ")}
             </div>
+            {!isCompleted && (() => {
+              const est = resolveEstimatedWorkoutMinutes({ day: item.day as any, block: item.block as any });
+              return est != null ? (
+                <div
+                  className="mt-1 inline-flex items-center gap-1 text-[11px] font-medium text-muted-foreground"
+                  data-testid="workout-est-duration"
+                >
+                  <Clock className="h-3 w-3" /> Est. {est} min
+                </div>
+              ) : null;
+            })()}
           </div>
           {!readonly && (
             <DropdownMenu>
