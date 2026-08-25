@@ -3224,8 +3224,34 @@ function ExerciseNotesSheet({ open, onOpenChange, clientId, dayId, dayTitle, row
               </p>
             )}
           </div>
+
+          {/* Previous notes for THIS exercise, newest first. Reference-only:
+              tapping/saving here never mutates a historical note. */}
+          <div data-testid="exercise-note-history">
+            <div className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground">
+              Previous notes
+            </div>
+            {historyLoading ? (
+              <div className="mt-2 flex items-center gap-2 text-xs text-muted-foreground">
+                <Loader2 className="h-3.5 w-3.5 animate-spin" /> Loading history…
+              </div>
+            ) : history.length === 0 ? (
+              <p className="mt-2 text-xs text-muted-foreground">
+                No previous notes for this exercise yet.
+              </p>
+            ) : (
+              <ul className="mt-2 space-y-2">
+                {history.map((n) => (
+                  <NoteHistoryItem key={n.id} note={n} />
+                ))}
+              </ul>
+            )}
+          </div>
         </div>
-        <div className="sticky bottom-0 left-0 right-0 border-t border-border bg-background/95 backdrop-blur px-5 py-3 space-y-2">
+        <div
+          className="sticky bottom-0 left-0 right-0 border-t border-border bg-background/95 backdrop-blur px-5 pt-3 space-y-2"
+          style={{ paddingBottom: "max(env(safe-area-inset-bottom), 0.75rem)" }}
+        >
           <ActionButton
             className="w-full"
             size="lg"
