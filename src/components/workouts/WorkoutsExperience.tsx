@@ -7,7 +7,7 @@ import {
   addMonths, startOfMonth, endOfMonth, endOfWeek, eachDayOfInterval,
 } from "date-fns";
 import {
-  Calendar as CalendarIcon, ChevronLeft, ChevronRight, ClipboardList,
+  Calendar as CalendarIcon, ChevronLeft, ChevronRight, ClipboardList, Clock,
   History, Loader2, Move, MoreVertical, Play, Pencil, Sun, Activity, Download,
   RotateCcw, MessageSquare, Trophy, ChevronDown, CircleDot,
 } from "lucide-react";
@@ -26,6 +26,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
 import { getClientWorkouts, getBlockTree } from "@/lib/pl-programs";
+import { resolveEstimatedWorkoutMinutes } from "@/lib/workout-estimate";
 import { cleanDayTitle, type WorkoutItem, dayScheduledDate } from "@/lib/workout-today";
 import { getWorkoutStatus, type WorkoutStatus } from "@/lib/workout-status";
 import { localStartOfToday, toLocalISO } from "@/lib/today";
