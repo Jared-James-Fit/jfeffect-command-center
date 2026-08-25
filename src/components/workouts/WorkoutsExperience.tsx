@@ -7,7 +7,7 @@ import {
   addMonths, startOfMonth, endOfMonth, endOfWeek, eachDayOfInterval,
 } from "date-fns";
 import {
-  Calendar as CalendarIcon, ChevronLeft, ChevronRight, ClipboardList,
+  Calendar as CalendarIcon, ChevronLeft, ChevronRight, ClipboardList, Clock,
   History, Loader2, Move, MoreVertical, Play, Pencil, Sun, Activity, Download,
   RotateCcw, MessageSquare, Trophy, ChevronDown, CircleDot,
 } from "lucide-react";
@@ -26,6 +26,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
 import { getClientWorkouts, getBlockTree } from "@/lib/pl-programs";
+import { resolveEstimatedWorkoutMinutes } from "@/lib/workout-estimate";
 import { cleanDayTitle, type WorkoutItem, dayScheduledDate } from "@/lib/workout-today";
 import { getWorkoutStatus, type WorkoutStatus } from "@/lib/workout-status";
 import { localStartOfToday, toLocalISO } from "@/lib/today";
@@ -1242,6 +1243,17 @@ function SelectedDayCard({
                 format(date, "EEE MMM d"),
               ].filter(Boolean).join(" · ")}
             </div>
+            {!isCompleted && (() => {
+              const est = resolveEstimatedWorkoutMinutes({ day: item.day as any, block: item.block as any });
+              return est != null ? (
+                <div
+                  className="mt-1 inline-flex items-center gap-1 text-[11px] font-medium text-muted-foreground"
+                  data-testid="workout-est-duration"
+                >
+                  <Clock className="h-3 w-3" /> Est. {est} min
+                </div>
+              ) : null;
+            })()}
           </div>
           {!readonly && (
             <DropdownMenu>
@@ -1388,7 +1400,11 @@ function SelectedDayCard({
         </div>
         {inlineOpen && item.day?.id && (
           <div className="mt-3">
-            <InlineWorkoutPreview dayId={item.day.id} clientId={clientId} />
+            <InlineWorkoutPreview
+              dayId={item.day.id}
+              clientId={clientId}
+              estimatedMinutes={resolveEstimatedWorkoutMinutes({ day: item.day as any, block: item.block as any })}
+            />
           </div>
         )}
       </Card>
@@ -1603,8 +1619,19 @@ function DayPreviewSheet({
             ].filter(Boolean).join(" · ")}
           </SheetDescription>
         </SheetHeader>
-        <div className="mt-3">
+        <div className="mt-3 flex flex-wrap items-center gap-2">
           <Badge variant="outline" className={cn("text-[10px]", status.tone)}>{status.label}</Badge>
+          {(() => {
+            const est = resolveEstimatedWorkoutMinutes({ day: item.day as any, block: item.block as any });
+            return est != null ? (
+              <span
+                className="inline-flex items-center gap-1 text-[11px] font-medium text-muted-foreground"
+                data-testid="workout-est-duration"
+              >
+                <Clock className="h-3 w-3" /> Estimated duration · {est} min
+              </span>
+            ) : null;
+          })()}
         </div>
         {exercises.length > 0 && (
           <div className="mt-4">

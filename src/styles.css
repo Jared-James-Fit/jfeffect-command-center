@@ -657,3 +657,17 @@ mark.gh-mark.gh-flash { animation: ghFlashPulse 1.4s ease-out 2; }
     max-height: min(90vh, calc(100dvh - 2rem));
   }
 }
+
+/* ------------------------------------------------------------------
+ * Keyboard-aware bottom sheets.
+ * When the iOS/Android on-screen keyboard opens, useKeyboardOpen sets
+ * --vv-h/--vv-top + data-keyboard-open on <html>. Pinning the sheet to
+ * the *visual* viewport keeps sticky actions (e.g. Save Note) above the
+ * keyboard instead of buried behind it. No device-specific offsets.
+ * ------------------------------------------------------------------ */
+html[data-keyboard-open="true"] .keyboard-aware-bottom-sheet {
+  top: var(--vv-top, 0px);
+  bottom: auto;
+  height: var(--vv-h, 100dvh);
+  max-height: var(--vv-h, 100dvh);
+}

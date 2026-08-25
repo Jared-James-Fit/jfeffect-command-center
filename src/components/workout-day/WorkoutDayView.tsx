@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, Check, Clock, CheckCircle2, Circle, StickyNote, NotebookPen, Info, Maximize2, Minimize2, AlertTriangle, RefreshCw, Send, MessageCircle, ChevronDown, ChevronUp, Zap, Trophy, MoreHorizontal, Undo2, HelpCircle } from "lucide-react";
+import { ArrowLeft, Check, Clock, CheckCircle2, Circle, StickyNote, NotebookPen, Info, Maximize2, Minimize2, AlertTriangle, RefreshCw, Send, MessageCircle, ChevronDown, ChevronUp, Zap, Trophy, MoreHorizontal, Undo2, HelpCircle, Loader2 } from "lucide-react";
 
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
@@ -33,7 +33,7 @@ import { TrainingHelpButton, TrainingHelpSheet } from "@/components/training-hel
 import { WarmupButton } from "@/components/warmup-sheet";
 import { dayScheduledDate, cleanDayTitle } from "@/lib/workout-today";
 import { formatDayLabel, formatDaySubtitle } from "@/lib/workout-day-label";
-import { format, startOfDay } from "date-fns";
+import { format, parseISO, startOfDay } from "date-fns";
 import { useServerFn } from "@tanstack/react-start";
 import { notifyCoachOfWorkoutFailure } from "@/lib/support-alerts.functions";
 import { getRowBlockSummariesFn } from "@/lib/exercise-blocks.functions";
@@ -44,6 +44,12 @@ import {
 } from "@/lib/workout-completion.functions";
 import { runJob } from "@/lib/progress-jobs";
 import { cn } from "@/lib/utils";
+import { resolveEstimatedWorkoutMinutes } from "@/lib/workout-estimate";
+import {
+  selectExerciseNoteHistory,
+  noteContextLabel,
+  NOTE_PREVIEW_CHARS,
+} from "@/lib/exercise-note-history";
 import { WorkoutEmptyCard } from "@/components/workout-empty-state";
 import { useAuth } from "@/lib/auth";
 import { useClientImpersonation } from "@/lib/client-impersonation";
@@ -1992,6 +1998,11 @@ function WorkoutDay({
           dayId={dayId}
           readonly={readonly || isImpersonating}
           savedDurationMin={completion?.actual_duration_min ?? null}
+          estimatedMinutes={resolveEstimatedWorkoutMinutes({
+            day: day as any,
+            block: block as any,
+            rows: (rows as any[]) ?? [],
+          })}
           completedAt={completion?.completed_at ?? null}
           onViewScore={completion?.completed_at ? openRecapSummary : undefined}
         />
@@ -3148,10 +3159,45 @@ function ExerciseNotesSheet({ open, onOpenChange, clientId, dayId, dayTitle, row
   // content, making it feel like the note couldn't be edited.
   useEffect(() => { setDraft(existingNote?.content ?? ""); }, [existingNote?.id, open]);
   const adapter = useOptionalAdapter();
+  const qc = useQueryClient();
+
+  // Per-exercise note history. Lazy: only fetched when the sheet is open,
+  // keyed by canonical exercise identity, and cached so reopening is instant.
+  // Same table (pl_exercise_notes) the coach view / POV read — one source.
+  const { data: historyRaw = [], isLoading: historyLoading } = useQuery({
+    queryKey: ["exercise-note-history", clientId, exerciseId ?? "", exerciseName],
+    enabled: open && !!clientId,
+    staleTime: 30_000,
+    queryFn: async () => {
+      let q = sb
+        .from("pl_exercise_notes")
+        .select(
+          "id, exercise_id, exercise_name, content, status, created_at, updated_at, day_id, pl_days(title, day_index, pl_weeks(week_index, pl_blocks(name)))",
+        )
+        .eq("client_id", clientId!)
+        .order("updated_at", { ascending: false })
+        .limit(50);
+      q = exerciseId ? q.eq("exercise_id", exerciseId) : q.eq("exercise_name", exerciseName);
+      const { data, error } = await q;
+      if (error) throw error;
+      return (data ?? []) as any[];
+    },
+  });
+  const history = useMemo(
+    () =>
+      selectExerciseNoteHistory(historyRaw as any[], {
+        exerciseId,
+        exerciseName,
+        excludeNoteId: existingNote?.id ?? null,
+        excludeDayId: dayId,
+        limit: 20,
+      }),
+    [historyRaw, exerciseId, exerciseName, existingNote?.id, dayId],
+  );
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="bottom" hideCloseButton className="h-[88vh] overflow-y-auto p-0 sm:max-w-xl sm:mx-auto sm:rounded-t-2xl">
+      <SheetContent side="bottom" hideCloseButton className="keyboard-aware-bottom-sheet h-[88vh] overflow-y-auto p-0 sm:max-w-xl sm:mx-auto sm:rounded-t-2xl">
         <SheetHeader className="sticky top-0 z-10 bg-background/95 backdrop-blur border-b border-border px-5 py-3 text-left">
           <SheetTitle className="text-base font-black">{exerciseName}</SheetTitle>
           <SheetDescription className="text-xs">{dayTitle} · Exercise notes</SheetDescription>
@@ -3184,8 +3230,34 @@ function ExerciseNotesSheet({ open, onOpenChange, clientId, dayId, dayTitle, row
               </p>
             )}
           </div>
+
+          {/* Previous notes for THIS exercise, newest first. Reference-only:
+              tapping/saving here never mutates a historical note. */}
+          <div data-testid="exercise-note-history">
+            <div className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground">
+              Previous notes
+            </div>
+            {historyLoading ? (
+              <div className="mt-2 flex items-center gap-2 text-xs text-muted-foreground">
+                <Loader2 className="h-3.5 w-3.5 animate-spin" /> Loading history…
+              </div>
+            ) : history.length === 0 ? (
+              <p className="mt-2 text-xs text-muted-foreground">
+                No previous notes for this exercise yet.
+              </p>
+            ) : (
+              <ul className="mt-2 space-y-2">
+                {history.map((n) => (
+                  <NoteHistoryItem key={n.id} note={n} />
+                ))}
+              </ul>
+            )}
+          </div>
         </div>
-        <div className="sticky bottom-0 left-0 right-0 border-t border-border bg-background/95 backdrop-blur px-5 py-3 space-y-2">
+        <div
+          className="sticky bottom-0 left-0 right-0 border-t border-border bg-background/95 backdrop-blur px-5 pt-3 space-y-2"
+          style={{ paddingBottom: "max(env(safe-area-inset-bottom), 0.75rem)" }}
+        >
           <ActionButton
             className="w-full"
             size="lg"
@@ -3225,6 +3297,7 @@ function ExerciseNotesSheet({ open, onOpenChange, clientId, dayId, dayTitle, row
                 }
               };
               await saveExerciseNoteWithRetry(doSave);
+              qc.invalidateQueries({ queryKey: ["exercise-note-history", clientId] });
               onSaved();
             }}
           >
@@ -3236,6 +3309,36 @@ function ExerciseNotesSheet({ open, onOpenChange, clientId, dayId, dayTitle, row
         </div>
       </SheetContent>
     </Sheet>
+  );
+}
+
+/** One historical note row: date-first, context secondary, long notes collapse. */
+function NoteHistoryItem({ note }: { note: any }) {
+  const [expanded, setExpanded] = useState(false);
+  const content: string = note.content ?? "";
+  const isLong = content.length > NOTE_PREVIEW_CHARS;
+  const ctx = noteContextLabel(note);
+  return (
+    <li className="rounded-md border border-border bg-secondary/30 p-2.5">
+      <div className="flex flex-wrap items-baseline gap-x-2 text-[11px]">
+        <span className="font-bold text-foreground">
+          {format(parseISO(note.updated_at), "MMM d, yyyy")}
+        </span>
+        {ctx && <span className="text-muted-foreground">{ctx}</span>}
+      </div>
+      <p className={cn("mt-1 whitespace-pre-wrap text-sm", isLong && !expanded && "line-clamp-2")}>
+        {content}
+      </p>
+      {isLong && (
+        <button
+          type="button"
+          className="mt-0.5 text-[11px] font-semibold text-primary"
+          onClick={() => setExpanded((v) => !v)}
+        >
+          {expanded ? "Show less" : "Read more"}
+        </button>
+      )}
+    </li>
   );
 }
 
@@ -4637,6 +4740,7 @@ function CompactWorkoutSummaryRow({
   dayId,
   readonly,
   savedDurationMin,
+  estimatedMinutes,
   completedAt,
   onViewScore,
 }: {
@@ -4647,6 +4751,10 @@ function CompactWorkoutSummaryRow({
   dayId: string;
   readonly?: boolean;
   savedDurationMin?: number | null;
+  /** Pre-workout estimate (canonical day/block fields, row-based fallback).
+   *  Shown only while the workout is NOT completed — actual duration from
+   *  savedDurationMin always takes over after completion. */
+  estimatedMinutes?: number | null;
   completedAt: string | null;
   onViewScore?: () => void;
 }) {
@@ -4676,6 +4784,14 @@ function CompactWorkoutSummaryRow({
           className=""
         />
       </div>
+      {!showCompleted && estimatedMinutes != null && estimatedMinutes > 0 && (
+        <span
+          className="inline-flex items-center gap-1 rounded-md bg-secondary/60 px-2 py-0.5 tabular-nums"
+          data-testid="workout-est-duration"
+        >
+          Est. {Math.round(estimatedMinutes)} min
+        </span>
+      )}
       <button
         type="button"
         onClick={scrollToFirstIncompleteExercise}

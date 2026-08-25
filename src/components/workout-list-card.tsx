@@ -9,6 +9,7 @@ import { cleanDayTitle, dayScheduledDate } from "@/lib/workout-today";
 import { MoveWorkoutSheet } from "@/components/schedule/MoveWorkoutSheet";
 import { WorkoutStatusSheet } from "@/components/workout-status-sheet";
 import { InlineWorkoutPreview } from "@/components/workout/shared/inline-workout-preview";
+import { resolveEstimatedWorkoutMinutes } from "@/lib/workout-estimate";
 import { WorkoutProgressRing } from "@/components/workout/shared/workout-progress-ring";
 import { useWorkoutProgress } from "@/lib/workout-progress";
 import { usePreviewOpen } from "@/lib/preview-open-store";
@@ -133,7 +134,11 @@ export function WorkoutListCard({
     </div>
     {expanded && previewClientId && (
       <div className="pt-1">
-        <InlineWorkoutPreview dayId={item.day.id} clientId={previewClientId} />
+        <InlineWorkoutPreview
+          dayId={item.day.id}
+          clientId={previewClientId}
+          estimatedMinutes={resolveEstimatedWorkoutMinutes({ day: item.day, block: item.block })}
+        />
       </div>
     )}
     {!readonly && (
