@@ -3307,6 +3307,36 @@ function ExerciseNotesSheet({ open, onOpenChange, clientId, dayId, dayTitle, row
   );
 }
 
+/** One historical note row: date-first, context secondary, long notes collapse. */
+function NoteHistoryItem({ note }: { note: any }) {
+  const [expanded, setExpanded] = useState(false);
+  const content: string = note.content ?? "";
+  const isLong = content.length > NOTE_PREVIEW_CHARS;
+  const ctx = noteContextLabel(note);
+  return (
+    <li className="rounded-md border border-border bg-secondary/30 p-2.5">
+      <div className="flex flex-wrap items-baseline gap-x-2 text-[11px]">
+        <span className="font-bold text-foreground">
+          {format(parseISO(note.updated_at), "MMM d, yyyy")}
+        </span>
+        {ctx && <span className="text-muted-foreground">{ctx}</span>}
+      </div>
+      <p className={cn("mt-1 whitespace-pre-wrap text-sm", isLong && !expanded && "line-clamp-2")}>
+        {content}
+      </p>
+      {isLong && (
+        <button
+          type="button"
+          className="mt-0.5 text-[11px] font-semibold text-primary"
+          onClick={() => setExpanded((v) => !v)}
+        >
+          {expanded ? "Show less" : "Read more"}
+        </button>
+      )}
+    </li>
+  );
+}
+
 function SetRow({
   rowId, workoutId, exerciseId, exerciseName, clientId, setIndex, existing, prevExisting,
   targetReps, targetRpe, targetRir, suggestedWeight, lastTimeWeight,
