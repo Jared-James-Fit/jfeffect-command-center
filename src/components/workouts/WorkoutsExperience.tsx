@@ -1615,8 +1615,19 @@ function DayPreviewSheet({
             ].filter(Boolean).join(" · ")}
           </SheetDescription>
         </SheetHeader>
-        <div className="mt-3">
+        <div className="mt-3 flex flex-wrap items-center gap-2">
           <Badge variant="outline" className={cn("text-[10px]", status.tone)}>{status.label}</Badge>
+          {(() => {
+            const est = resolveEstimatedWorkoutMinutes({ day: item.day as any, block: item.block as any });
+            return est != null ? (
+              <span
+                className="inline-flex items-center gap-1 text-[11px] font-medium text-muted-foreground"
+                data-testid="workout-est-duration"
+              >
+                <Clock className="h-3 w-3" /> Estimated duration · {est} min
+              </span>
+            ) : null;
+          })()}
         </div>
         {exercises.length > 0 && (
           <div className="mt-4">
