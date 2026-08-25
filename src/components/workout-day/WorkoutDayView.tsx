@@ -3155,9 +3155,43 @@ function ExerciseNotesSheet({ open, onOpenChange, clientId, dayId, dayTitle, row
   useEffect(() => { setDraft(existingNote?.content ?? ""); }, [existingNote?.id, open]);
   const adapter = useOptionalAdapter();
 
+  // Per-exercise note history. Lazy: only fetched when the sheet is open,
+  // keyed by canonical exercise identity, and cached so reopening is instant.
+  // Same table (pl_exercise_notes) the coach view / POV read — one source.
+  const { data: historyRaw = [], isLoading: historyLoading } = useQuery({
+    queryKey: ["exercise-note-history", clientId, exerciseId ?? "", exerciseName],
+    enabled: open && !!clientId,
+    staleTime: 30_000,
+    queryFn: async () => {
+      let q = sb
+        .from("pl_exercise_notes")
+        .select(
+          "id, exercise_id, exercise_name, content, status, created_at, updated_at, day_id, pl_days(title, day_index, pl_weeks(week_index, pl_blocks(name)))",
+        )
+        .eq("client_id", clientId!)
+        .order("updated_at", { ascending: false })
+        .limit(50);
+      q = exerciseId ? q.eq("exercise_id", exerciseId) : q.eq("exercise_name", exerciseName);
+      const { data, error } = await q;
+      if (error) throw error;
+      return (data ?? []) as any[];
+    },
+  });
+  const history = useMemo(
+    () =>
+      selectExerciseNoteHistory(historyRaw as any[], {
+        exerciseId,
+        exerciseName,
+        excludeNoteId: existingNote?.id ?? null,
+        excludeDayId: dayId,
+        limit: 20,
+      }),
+    [historyRaw, exerciseId, exerciseName, existingNote?.id, dayId],
+  );
+
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="bottom" hideCloseButton className="h-[88vh] overflow-y-auto p-0 sm:max-w-xl sm:mx-auto sm:rounded-t-2xl">
+      <SheetContent side="bottom" hideCloseButton className="keyboard-aware-bottom-sheet h-[88vh] overflow-y-auto p-0 sm:max-w-xl sm:mx-auto sm:rounded-t-2xl">
         <SheetHeader className="sticky top-0 z-10 bg-background/95 backdrop-blur border-b border-border px-5 py-3 text-left">
           <SheetTitle className="text-base font-black">{exerciseName}</SheetTitle>
           <SheetDescription className="text-xs">{dayTitle} · Exercise notes</SheetDescription>
