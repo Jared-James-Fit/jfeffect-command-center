@@ -3154,6 +3154,7 @@ function ExerciseNotesSheet({ open, onOpenChange, clientId, dayId, dayTitle, row
   // content, making it feel like the note couldn't be edited.
   useEffect(() => { setDraft(existingNote?.content ?? ""); }, [existingNote?.id, open]);
   const adapter = useOptionalAdapter();
+  const qc = useQueryClient();
 
   // Per-exercise note history. Lazy: only fetched when the sheet is open,
   // keyed by canonical exercise identity, and cached so reopening is instant.
