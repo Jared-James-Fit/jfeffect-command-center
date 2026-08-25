@@ -4784,6 +4784,14 @@ function CompactWorkoutSummaryRow({
           className=""
         />
       </div>
+      {!showCompleted && estimatedMinutes != null && estimatedMinutes > 0 && (
+        <span
+          className="inline-flex items-center gap-1 rounded-md bg-secondary/60 px-2 py-0.5 tabular-nums"
+          data-testid="workout-est-duration"
+        >
+          Est. {Math.round(estimatedMinutes)} min
+        </span>
+      )}
       <button
         type="button"
         onClick={scrollToFirstIncompleteExercise}
