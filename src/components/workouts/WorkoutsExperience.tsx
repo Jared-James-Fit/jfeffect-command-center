@@ -1400,7 +1400,11 @@ function SelectedDayCard({
         </div>
         {inlineOpen && item.day?.id && (
           <div className="mt-3">
-            <InlineWorkoutPreview dayId={item.day.id} clientId={clientId} />
+            <InlineWorkoutPreview
+              dayId={item.day.id}
+              clientId={clientId}
+              estimatedMinutes={resolveEstimatedWorkoutMinutes({ day: item.day as any, block: item.block as any })}
+            />
           </div>
         )}
       </Card>
