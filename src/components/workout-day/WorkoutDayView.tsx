@@ -3291,6 +3291,7 @@ function ExerciseNotesSheet({ open, onOpenChange, clientId, dayId, dayTitle, row
                 }
               };
               await saveExerciseNoteWithRetry(doSave);
+              qc.invalidateQueries({ queryKey: ["exercise-note-history", clientId] });
               onSaved();
             }}
           >
