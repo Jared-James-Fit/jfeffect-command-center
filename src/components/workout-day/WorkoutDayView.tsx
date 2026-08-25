@@ -1998,6 +1998,11 @@ function WorkoutDay({
           dayId={dayId}
           readonly={readonly || isImpersonating}
           savedDurationMin={completion?.actual_duration_min ?? null}
+          estimatedMinutes={resolveEstimatedWorkoutMinutes({
+            day: day as any,
+            block: block as any,
+            rows: (rows as any[]) ?? [],
+          })}
           completedAt={completion?.completed_at ?? null}
           onViewScore={completion?.completed_at ? openRecapSummary : undefined}
         />
