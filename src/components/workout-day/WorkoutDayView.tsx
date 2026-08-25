@@ -44,6 +44,12 @@ import {
 } from "@/lib/workout-completion.functions";
 import { runJob } from "@/lib/progress-jobs";
 import { cn } from "@/lib/utils";
+import { resolveEstimatedWorkoutMinutes } from "@/lib/workout-estimate";
+import {
+  selectExerciseNoteHistory,
+  noteContextLabel,
+  NOTE_PREVIEW_CHARS,
+} from "@/lib/exercise-note-history";
 import { WorkoutEmptyCard } from "@/components/workout-empty-state";
 import { useAuth } from "@/lib/auth";
 import { useClientImpersonation } from "@/lib/client-impersonation";
