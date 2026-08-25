@@ -1,10 +1,11 @@
 import { useQuery } from "@tanstack/react-query";
-import { Check, Circle, CircleDot, RefreshCw } from "lucide-react";
+import { Check, Circle, CircleDot, Clock, RefreshCw } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
 import { derivePurposeLabels, purposeLabelBadgeClass } from "@/lib/exercise-metadata";
 import { computeWorkoutProgress } from "@/lib/workout-progress";
 import { WorkoutProgressRing } from "@/components/workout/shared/workout-progress-ring";
+import { resolveEstimatedWorkoutMinutes } from "@/lib/workout-estimate";
 
 /**
  * Read-only inline preview of a workout day. Shows exercise order,
@@ -24,6 +25,8 @@ type Row = {
   purpose_label: string | null;
   time_profile: string | null;
   sets: number | null;
+  rest_seconds?: number | null;
+  estimated_seconds_override?: number | null;
   reps_text: string | null;
   rpe: number | string | null;
   load_kg: number | null;
@@ -94,10 +97,14 @@ export function InlineWorkoutPreview({
   dayId,
   clientId,
   enabled = true,
+  estimatedMinutes,
 }: {
   dayId: string;
   clientId: string;
   enabled?: boolean;
+  /** Explicit estimate from the day/block (canonical fields). When omitted,
+   *  falls back to the deterministic row-based estimator. */
+  estimatedMinutes?: number | null;
 }) {
   // CANONICAL structure query. The exercise list renders from this alone —
   // logged sets are an optional overlay so a results failure can never keep
@@ -112,7 +119,7 @@ export function InlineWorkoutPreview({
       const rowsRes = await supabase
         .from("pl_exercise_rows")
         .select(
-          "id, sort_order, exercise_name_override, purpose_label, time_profile, sets, reps_text, rpe, load_kg, load_lb, measurement_type, card_color, movement_family, exercise_id, exercises(name, competition_lift_type, is_competition_lift, exercise_category)",
+          "id, sort_order, exercise_name_override, purpose_label, time_profile, sets, rest_seconds, estimated_seconds_override, reps_text, rpe, load_kg, load_lb, measurement_type, card_color, movement_family, exercise_id, exercises(name, competition_lift_type, is_competition_lift, exercise_category)",
         )
         .eq("day_id", dayId)
         .order("sort_order", { ascending: true });
@@ -208,6 +215,10 @@ export function InlineWorkoutPreview({
     })),
   );
   const purposeLabels = derivePurposeLabels(rows as any[], (r: any) => r.exercises ?? null);
+  const estMin =
+    estimatedMinutes != null && estimatedMinutes > 0
+      ? estimatedMinutes
+      : resolveEstimatedWorkoutMinutes({ rows: rows as any[] });
 
   return (
     <div className="space-y-2 rounded-lg border border-border/60 bg-background/60 p-2.5">
@@ -222,6 +233,14 @@ export function InlineWorkoutPreview({
               ? "Progress unavailable"
               : `${progress.completedSets} of ${progress.prescribedSets} Sets Completed`}
           </div>
+          {estMin != null && (
+            <div
+              className="mt-0.5 inline-flex items-center gap-1 text-[10px] font-medium text-muted-foreground"
+              data-testid="workout-est-duration"
+            >
+              <Clock className="h-3 w-3" /> Estimated duration · {estMin} min
+            </div>
+          )}
         </div>
       </div>
       {rows.map((row, i) => {
