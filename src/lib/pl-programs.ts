@@ -474,6 +474,44 @@ export interface CopyWeekOptions {
   notes: boolean;
 }
 
+/**
+ * Build the explicit programming payload shared by the two legacy copy flows.
+ * A role is a property of the prescription, not exercise order or display
+ * metadata, so it must always be retained even when numerical prescriptions
+ * are intentionally omitted.
+ */
+export function buildCopiedExerciseRowPayload(r: Record<string, any>, dayId: string, opts: CopyWeekOptions) {
+  return {
+    day_id: dayId,
+    sort_order: r.sort_order,
+    exercise_id: r.exercise_id,
+    exercise_name_override: r.exercise_name_override,
+    sets: opts.prescriptions ? r.sets : null,
+    reps_text: opts.prescriptions ? r.reps_text : null,
+    rpe: opts.prescriptions ? r.rpe : null,
+    rir: opts.prescriptions ? r.rir : null,
+    percentage: opts.prescriptions ? r.percentage : null,
+    percentage_basis: opts.prescriptions ? r.percentage_basis : "manual",
+    load_kg: opts.prescriptions ? r.load_kg : null,
+    load_lb: opts.prescriptions ? r.load_lb : null,
+    rest_seconds: opts.prescriptions ? r.rest_seconds : null,
+    tempo: opts.prescriptions ? r.tempo : null,
+    time_profile: r.time_profile,
+    notes: opts.notes ? r.notes : null,
+    measurement_type: r.measurement_type ?? "reps",
+    tracking_type: r.tracking_type ?? (r.measurement_type === "time" ? "time" : "reps_weight"),
+    duration_seconds: opts.prescriptions ? r.duration_seconds : null,
+    reps_text_backup: opts.prescriptions ? r.reps_text_backup : null,
+    duration_seconds_backup: opts.prescriptions ? r.duration_seconds_backup : null,
+    // Keep the stored canonical role plus the display/family metadata that
+    // identifies the same competition-lift prescription in every downstream
+    // view. These fields intentionally do not depend on `opts.prescriptions`.
+    purpose_label: r.purpose_label ?? null,
+    movement_family: r.movement_family ?? null,
+    card_color: r.card_color ?? null,
+  };
+}
+
 /** Copy week structure (days + rows) into another week. Never touches client logs. */
 export async function copyWeek(srcWeekId: string, targetWeekId: string, opts: CopyWeekOptions) {
   if (srcWeekId === targetWeekId) throw new Error("Source and target weeks must differ");
@@ -511,29 +549,7 @@ export async function copyWeek(srcWeekId: string, targetWeekId: string, opts: Co
       .eq("day_id", d.id)
       .order("sort_order");
     for (const r of (rows ?? []) as any[]) {
-      await sb.from("pl_exercise_rows").insert({
-        day_id: newDay.id,
-        sort_order: r.sort_order,
-        exercise_id: r.exercise_id,
-        exercise_name_override: r.exercise_name_override,
-        sets: opts.prescriptions ? r.sets : null,
-        reps_text: opts.prescriptions ? r.reps_text : null,
-        rpe: opts.prescriptions ? r.rpe : null,
-        rir: opts.prescriptions ? r.rir : null,
-        percentage: opts.prescriptions ? r.percentage : null,
-        percentage_basis: opts.prescriptions ? r.percentage_basis : "manual",
-        load_kg: opts.prescriptions ? r.load_kg : null,
-        load_lb: opts.prescriptions ? r.load_lb : null,
-        rest_seconds: opts.prescriptions ? r.rest_seconds : null,
-        tempo: opts.prescriptions ? r.tempo : null,
-        time_profile: r.time_profile,
-        notes: opts.notes ? r.notes : null,
-        measurement_type: r.measurement_type ?? "reps",
-        tracking_type: r.tracking_type ?? (r.measurement_type === "time" ? "time" : "reps_weight"),
-        duration_seconds: opts.prescriptions ? r.duration_seconds : null,
-        reps_text_backup: opts.prescriptions ? r.reps_text_backup : null,
-        duration_seconds_backup: opts.prescriptions ? r.duration_seconds_backup : null,
-      });
+      await sb.from("pl_exercise_rows").insert(buildCopiedExerciseRowPayload(r, newDay.id, opts));
     }
   }
 }
@@ -678,29 +694,7 @@ async function copyDayContent(srcDayId: string, targetWeekId: string, dayIndex: 
     .single();
   const { data: rows } = await sb.from("pl_exercise_rows").select("*").eq("day_id", srcDayId).order("sort_order");
   for (const r of (rows ?? []) as any[]) {
-    await sb.from("pl_exercise_rows").insert({
-      day_id: newDay.id,
-      sort_order: r.sort_order,
-      exercise_id: r.exercise_id,
-      exercise_name_override: r.exercise_name_override,
-      sets: opts.prescriptions ? r.sets : null,
-      reps_text: opts.prescriptions ? r.reps_text : null,
-      rpe: opts.prescriptions ? r.rpe : null,
-      rir: opts.prescriptions ? r.rir : null,
-      percentage: opts.prescriptions ? r.percentage : null,
-      percentage_basis: opts.prescriptions ? r.percentage_basis : "manual",
-      load_kg: opts.prescriptions ? r.load_kg : null,
-      load_lb: opts.prescriptions ? r.load_lb : null,
-      rest_seconds: opts.prescriptions ? r.rest_seconds : null,
-      tempo: opts.prescriptions ? r.tempo : null,
-      time_profile: r.time_profile,
-      notes: opts.notes ? r.notes : null,
-      measurement_type: r.measurement_type ?? "reps",
-        tracking_type: r.tracking_type ?? (r.measurement_type === "time" ? "time" : "reps_weight"),
-      duration_seconds: opts.prescriptions ? r.duration_seconds : null,
-      reps_text_backup: opts.prescriptions ? r.reps_text_backup : null,
-      duration_seconds_backup: opts.prescriptions ? r.duration_seconds_backup : null,
-    });
+    await sb.from("pl_exercise_rows").insert(buildCopiedExerciseRowPayload(r, newDay.id, opts));
   }
 }
 
