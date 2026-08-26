@@ -1613,7 +1613,7 @@ export async function getClientWorkouts(
       const estimatedMinutes =
         d.duration_override_min ??
         d.duration_estimate_min ??
-        b?.estimated_minutes ??
+        (b as any)?.estimated_minutes ??
         (estRows.length > 0 ? estimateDayMinutes(estRows) : null);
       return {
         day: d,
