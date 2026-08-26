@@ -1244,7 +1244,7 @@ function SelectedDayCard({
               ].filter(Boolean).join(" · ")}
             </div>
             {!isCompleted && (() => {
-              const est = resolveEstimatedWorkoutMinutes({ day: item.day as any, block: item.block as any });
+              const est = ((item as any).estimated_minutes ?? resolveEstimatedWorkoutMinutes({ day: item.day as any, block: item.block as any }));
               return est != null ? (
                 <div
                   className="mt-1 inline-flex items-center gap-1 text-[11px] font-medium text-muted-foreground"
@@ -1403,7 +1403,7 @@ function SelectedDayCard({
             <InlineWorkoutPreview
               dayId={item.day.id}
               clientId={clientId}
-              estimatedMinutes={resolveEstimatedWorkoutMinutes({ day: item.day as any, block: item.block as any })}
+              estimatedMinutes={((item as any).estimated_minutes ?? resolveEstimatedWorkoutMinutes({ day: item.day as any, block: item.block as any }))}
             />
           </div>
         )}
@@ -1622,7 +1622,7 @@ function DayPreviewSheet({
         <div className="mt-3 flex flex-wrap items-center gap-2">
           <Badge variant="outline" className={cn("text-[10px]", status.tone)}>{status.label}</Badge>
           {(() => {
-            const est = resolveEstimatedWorkoutMinutes({ day: item.day as any, block: item.block as any });
+            const est = ((item as any).estimated_minutes ?? resolveEstimatedWorkoutMinutes({ day: item.day as any, block: item.block as any }));
             return est != null ? (
               <span
                 className="inline-flex items-center gap-1 text-[11px] font-medium text-muted-foreground"

@@ -137,7 +137,7 @@ export function WorkoutListCard({
         <InlineWorkoutPreview
           dayId={item.day.id}
           clientId={previewClientId}
-          estimatedMinutes={resolveEstimatedWorkoutMinutes({ day: item.day, block: item.block })}
+          estimatedMinutes={(item as any).estimated_minutes ?? resolveEstimatedWorkoutMinutes({ day: item.day, block: item.block })}
         />
       </div>
     )}
