@@ -1537,7 +1537,9 @@ export async function getClientWorkouts(
   const [completionsRes, exerciseRowsRes, scheduledInstancesRes] = dayIds.length
     ? await Promise.all([
         sb.from("pl_day_completions").select("*").in("day_id", dayIds).eq("client_id", clientId),
-        sb.from("pl_exercise_rows").select("id, day_id").in("day_id", dayIds),
+        // Estimate fields ride along (sets/rest/profile) so the workouts
+        // list can show a per-day duration estimate without a second query.
+        sb.from("pl_exercise_rows").select("id, day_id, sets, rest_seconds, time_profile, estimated_seconds_override").in("day_id", dayIds),
         // Phase 2a: fetch instance-level schedule alongside prescriptions.
         // Filtered to this client so we never merge another client's cards.
         sb.from("pl_scheduled_workouts")
@@ -1550,7 +1552,13 @@ export async function getClientWorkouts(
   const { data: exerciseRows } = exerciseRowsRes;
   const { data: scheduledInstances } = scheduledInstancesRes;
   const rowIdToDay = new Map<string, string>();
-  for (const r of (exerciseRows ?? []) as any[]) rowIdToDay.set(r.id, r.day_id);
+  const rowsByDay = new Map<string, RowForEstimate[]>();
+  for (const r of (exerciseRows ?? []) as any[]) {
+    rowIdToDay.set(r.id, r.day_id);
+    const list = rowsByDay.get(r.day_id) ?? [];
+    list.push(r);
+    rowsByDay.set(r.day_id, list);
+  }
   const rowIds = Array.from(rowIdToDay.keys());
   // Run the two completion-derived reads (logged-set counts + feedback
   // presence) in parallel too — they're independent.
@@ -1598,12 +1606,22 @@ export async function getClientWorkouts(
       // Base completion resolution is done by mergeScheduledInstances
       // (instance-first, legacy fallback). Leave null here so the merge
       // owns linkage — otherwise it would double-attach.
+      // Resolve the day's estimated duration once, here, so every surface
+      // (list card, calendar, logger) reads the same value: coach override
+      // → stored day estimate → block estimate → computed from rows.
+      const estRows = rowsByDay.get(d.id) ?? [];
+      const estimatedMinutes =
+        d.duration_override_min ??
+        d.duration_estimate_min ??
+        b?.estimated_minutes ??
+        (estRows.length > 0 ? estimateDayMinutes(estRows) : null);
       return {
         day: d,
         week: w,
         block: b,
         completion: null,
         logged_sets_count: 0,
+        ...(estimatedMinutes != null ? { estimated_minutes: estimatedMinutes } : {}),
       };
     });
   });

@@ -10,6 +10,13 @@ export type WorkoutItem = {
   /** Count of logged sets for this day; >0 with no completion = in-progress. */
   logged_sets_count?: number;
   /**
+   * Pre-resolved estimated duration (minutes) for this day, computed at
+   * item build time in getClientWorkouts (coach override → day estimate →
+   * block estimate → computed from prescribed rows). List surfaces prefer
+   * this over re-resolving, since rows aren't part of the list payload.
+   */
+  estimated_minutes?: number;
+  /**
    * Instance-level scheduling fields (Phase 2a canonical merge).
    *
    * When this item was emitted by the pl_scheduled_workouts merge, these
