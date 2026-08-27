@@ -50,3 +50,60 @@ export function filterActiveCalendarItems<T extends { block?: any }>(
 export function isInactivePrimaryDay(day: any): boolean {
   return !!day?.archived || day?.deleted_at != null;
 }
+
+/**
+ * HISTORY CONTRACT (2026-08-27)
+ * -----------------------------
+ * The calendar is a historical training timeline, not just a "what's next"
+ * surface. Completed / archived blocks must keep rendering the workouts that
+ * genuinely happened, on their real dates.
+ *
+ * The original reason completed blocks were filtered out entirely was the
+ * cadence fallback: a finished block with no real dates would be re-derived
+ * onto the CURRENT committed weekdays and stack duplicates on live cells.
+ *
+ * So the rule is anchoring, not recency:
+ *   - Active / Upcoming / Draft block → render as today (cadence fallback ok).
+ *   - Any other block (Completed, Archived, ended program) → render ONLY when
+ *     the item is anchored to a real historical date: a canonical
+ *     pl_scheduled_workouts instance, a legacy pl_days.scheduled_date, or a
+ *     completion timestamp. Never cadence-derived.
+ */
+export function historicalAnchorDate(item: any): string | null {
+  const explicit = item?.scheduledDate ?? item?.day?.scheduled_date ?? null;
+  if (explicit) return String(explicit).slice(0, 10);
+  const completedAt = item?.completion?.completed_at ?? null;
+  if (!completedAt) return null;
+  const d = new Date(completedAt);
+  if (Number.isNaN(d.getTime())) return null;
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+/** True when this item belongs to a finished/archived block but really happened. */
+export function isAnchoredHistoricalItem(item: any): boolean {
+  return historicalAnchorDate(item) != null;
+}
+
+/**
+ * Calendar dataset = live blocks (as before) + anchored historical workouts
+ * from previous programs/blocks. Replaces filterActiveCalendarItems on
+ * calendar surfaces; the old helper stays for "current schedule only" callers.
+ */
+export function filterCalendarItemsWithHistory<T extends { block?: any }>(
+  items: T[],
+  today: string = todayISOLocal(),
+): T[] {
+  const blocks = new Map<string, any>();
+  for (const it of items ?? []) {
+    const b = (it as any)?.block;
+    if (b?.id && !blocks.has(b.id)) blocks.set(b.id, b);
+  }
+  if (!blocks.size) return items ?? [];
+  const live = activeCalendarBlockIds([...blocks.values()], today);
+  return (items ?? []).filter((it) => {
+    const id = (it as any)?.block?.id;
+    if (!id) return true;
+    if (live.has(id)) return true;
+    return isAnchoredHistoricalItem(it);
+  });
+}
