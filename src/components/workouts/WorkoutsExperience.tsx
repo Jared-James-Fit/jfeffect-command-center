@@ -120,10 +120,16 @@ export function WorkoutsExperience({
   // actual schedule (e.g. Mon/Wed/Fri) when pl_weeks.training_days is not set.
   const committedDays = (client as any)?.committed_training_days ?? null;
 
-  // The current calendar grid shows the live program only: active + upcoming
-  // blocks. Completed/archived blocks stay fully available through block and
-  // history surfaces, but must not stack old workouts onto current dates.
-  const calendarItems = useMemo(() => filterActiveCalendarItems(dayItems), [dayItems]);
+  // The calendar is a historical timeline: live (active/upcoming) blocks plus
+  // anchored workouts from previous/completed/archived programs. Old blocks are
+  // only rendered on dates they actually own (instance / legacy scheduled_date /
+  // completion) — never re-derived from the current committed cadence.
+  const liveBlockIds = useMemo(() => {
+    const blocks = new Map<string, any>();
+    for (const it of dayItems) if (it.block?.id && !blocks.has(it.block.id)) blocks.set(it.block.id, it.block);
+    return activeCalendarBlockIds([...blocks.values()]);
+  }, [dayItems]);
+  const calendarItems = useMemo(() => filterCalendarItemsWithHistory(dayItems), [dayItems]);
 
   const byDate = useMemo(() => {
     // Multiple workouts can land on the same calendar date (e.g. a
@@ -131,15 +137,23 @@ export function WorkoutsExperience({
     // workout is silently dropped from the calendar / selected-day view.
     const map = new Map<string, WorkoutItem[]>();
     for (const it of calendarItems) {
-      const d = dayScheduledDate(it, committedDays);
-      if (!d) continue;
-      const key = toLocalISO(d);
+      const historical = !!it.block?.id && !liveBlockIds.has(it.block.id);
+      let key: string;
+      if (historical) {
+        const anchor = historicalAnchorDate(it);
+        if (!anchor) continue;
+        key = anchor;
+      } else {
+        const d = dayScheduledDate(it, committedDays);
+        if (!d) continue;
+        key = toLocalISO(d);
+      }
       const list = map.get(key) ?? [];
       list.push(it);
       map.set(key, list);
     }
     return map;
-  }, [calendarItems, committedDays]);
+  }, [calendarItems, committedDays, liveBlockIds]);
 
   // Fetch priority-labelled rows for every visible scheduled day so the
   // month/week grids can render compact priority chips. Only pulls the
