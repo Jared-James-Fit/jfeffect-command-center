@@ -69,7 +69,7 @@ import {
   removeEmptyAtHomeBackupSession,
 } from "@/lib/at-home-backup.functions";
 import { AT_HOME_BACKUP_BADGE, isAtHomeBackupClient, isAtHomeBackupSessionBlock } from "@/lib/at-home-backup";
-import { filterActiveCalendarItems } from "@/lib/active-calendar";
+import { activeCalendarBlockIds, filterCalendarItemsWithHistory, historicalAnchorDate } from "@/lib/active-calendar";
 import { canDragRescheduleItem, moveTargetFromItem, type MoveTarget } from "@/lib/workout-move";
 import { useMoveWorkout } from "@/lib/use-move-workout";
 import {
