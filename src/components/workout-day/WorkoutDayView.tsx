@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, Check, Clock, CheckCircle2, Circle, StickyNote, NotebookPen, Info, Maximize2, Minimize2, AlertTriangle, RefreshCw, Send, MessageCircle, ChevronDown, ChevronUp, Zap, Trophy, MoreHorizontal, Undo2, HelpCircle, Loader2 } from "lucide-react";
+import { ArrowLeft, Check, CheckCircle2, Circle, StickyNote, NotebookPen, Info, Maximize2, Minimize2, AlertTriangle, RefreshCw, Send, MessageCircle, ChevronDown, ChevronUp, Zap, Trophy, MoreHorizontal, Undo2, HelpCircle, Loader2 } from "lucide-react";
 
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
@@ -44,7 +44,6 @@ import {
 } from "@/lib/workout-completion.functions";
 import { runJob } from "@/lib/progress-jobs";
 import { cn } from "@/lib/utils";
-import { resolveEstimatedWorkoutMinutes } from "@/lib/workout-estimate";
 import {
   selectExerciseNoteHistory,
   noteContextLabel,
@@ -129,10 +128,9 @@ import { WorkoutProgressRing } from "@/components/workout/shared/workout-progres
 import { CompletedWorkoutActions } from "@/components/workout/shared/completed-workout-actions";
 import { WorkoutStatusBar } from "@/components/workout-day/WorkoutStatusBar";
 import {
-  WorkoutTimer,
   beginWorkoutSession,
   clearWorkoutSession,
-  readWorkoutSession,
+  formatDurationMin,
   sessionDurationMin,
   estimateDurationFromLogs,
 } from "@/components/workout-day/WorkoutTimer";
@@ -1802,6 +1800,17 @@ function WorkoutDay({
     statusSummary.exercisesTotal > 0 &&
     (!!completion?.started_at || !!completion?.in_progress_at || !!completion?.completed_at);
 
+  // Tiny header progress indicator (ring beside the Day title).
+  const progressPct = statusSummary.setsTotal > 0
+    ? Math.min(100, Math.round((statusSummary.setsDone / statusSummary.setsTotal) * 100))
+    : 0;
+  const progressStatus: import("@/lib/workout-progress").WorkoutProgressStatus =
+    completion?.completed_at || (statusSummary.setsTotal > 0 && statusSummary.setsDone >= statusSummary.setsTotal)
+      ? "completed"
+      : statusSummary.setsDone > 0
+        ? "in_progress"
+        : "not_started";
+
   return (
     <>
       {focusMode && (
@@ -1963,7 +1972,22 @@ function WorkoutDay({
       <PageHeader
         backTo={navigation.backTo}
         backLabel="Workouts"
-        title={formatDayLabel(day)}
+        title={
+          <>
+            {formatDayLabel(day)}
+            {statusSummary.setsTotal > 0 && (
+              <button
+                type="button"
+                onClick={scrollToFirstIncompleteExercise}
+                className="inline-flex items-center gap-1.5 rounded-full bg-secondary/60 px-2 py-0.5 text-[11px] font-bold tabular-nums text-muted-foreground transition-colors hover:bg-secondary focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+                aria-label={`Workout progress ${progressPct}%, ${statusSummary.exercisesDone} of ${statusSummary.exercisesTotal} exercises. Scroll to first incomplete exercise.`}
+              >
+                <WorkoutProgressRing pct={progressPct} status={progressStatus} size={16} strokeWidth={3} />
+                {progressPct}% · {statusSummary.exercisesDone}/{statusSummary.exercisesTotal}
+              </button>
+            )}
+          </>
+        }
         subtitle={(() => {
           // Inside the logger the athlete only needs to know WHICH workout
           // this is: the coach subtitle plus short block/week context. The
@@ -1982,7 +2006,7 @@ function WorkoutDay({
           ) : undefined
         }
       />
-      <div className="px-3 pt-2 space-y-2.5 md:p-8 md:space-y-4 pb-[calc(var(--bottom-nav-clearance,96px)+env(safe-area-inset-bottom)+32px)] md:pb-8">
+      <div className="px-3 pt-1.5 space-y-2 md:p-8 md:space-y-4 pb-[calc(var(--bottom-nav-clearance,96px)+env(safe-area-inset-bottom)+32px)] md:pb-8">
 
         <WorkoutSyncBanner
           clientId={client?.id ?? null}
@@ -1990,36 +2014,44 @@ function WorkoutDay({
           pageRoute={`/portal/workouts/${dayId}`}
         />
 
-        <CompactWorkoutSummaryRow
-          setsDone={statusSummary.setsDone}
-          setsTotal={statusSummary.setsTotal}
-          exercisesDone={statusSummary.exercisesDone}
-          exercisesTotal={statusSummary.exercisesTotal}
-          dayId={dayId}
-          readonly={readonly || isImpersonating}
-          savedDurationMin={completion?.actual_duration_min ?? null}
-          estimatedMinutes={resolveEstimatedWorkoutMinutes({
-            day: day as any,
-            block: block as any,
-            rows: (rows as any[]) ?? [],
-          })}
-          completedAt={completion?.completed_at ?? null}
-          onViewScore={completion?.completed_at ? openRecapSummary : undefined}
-        />
-        {/* Compact action row — Warm-Up launcher. Rescheduling lives on the
-            outside workout card / Schedule Manager, not inside the logger. */}
+        {/* Completed state: slim badge + recap. Pre-workout there is no
+            workout-level status row at all — the session clock auto-starts on
+            the first logged set (beginWorkoutSession) and progress lives in
+            the tiny ring beside the Day title. */}
+        {completion?.completed_at && statusSummary.setsDone > 0 && (
+          <div className="flex flex-wrap items-center gap-2 text-xs">
+            <Badge
+              variant="outline"
+              className="border-green-500/30 bg-green-500/10 text-green-500"
+            >
+              <CheckCircle2 className="mr-1 h-3 w-3" /> Completed
+              {completion.actual_duration_min != null && completion.actual_duration_min > 0
+                ? ` · ${formatDurationMin(completion.actual_duration_min)}`
+                : ""}
+            </Badge>
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-7 gap-1.5 border-primary/40 bg-primary/10 px-2.5 text-xs font-bold text-primary hover:bg-primary/20"
+              onClick={openRecapSummary}
+            >
+              <Trophy className="h-3.5 w-3.5" /> View Score
+            </Button>
+          </div>
+        )}
+        {/* Compact Warm-Up launcher. Rescheduling lives on the outside
+            workout card / Schedule Manager, not inside the logger. */}
         {(!readonly || !!client?.id) && client?.id && (
           <div className="flex flex-wrap items-center gap-2">
-            {client?.id && (
-              <WarmupButton
-                dayId={dayId}
-                blockId={blockId}
-                clientId={client.id}
-                warmupMode={(day as any).warmup_mode}
-                dayProtocolId={(day as any).warmup_protocol_id}
-                exerciseRows={rows as any[]}
-              />
-            )}
+            <WarmupButton
+              dayId={dayId}
+              blockId={blockId}
+              clientId={client.id}
+              warmupMode={(day as any).warmup_mode}
+              dayProtocolId={(day as any).warmup_protocol_id}
+              exerciseRows={rows as any[]}
+              className="h-7 min-h-0 px-2.5 text-xs"
+            />
           </div>
         )}
 
@@ -4732,97 +4764,3 @@ function scrollToFirstIncompleteExercise() {
   }
 }
 
-function CompactWorkoutSummaryRow({
-  setsDone,
-  setsTotal,
-  exercisesDone,
-  exercisesTotal,
-  dayId,
-  readonly,
-  savedDurationMin,
-  estimatedMinutes,
-  completedAt,
-  onViewScore,
-}: {
-  setsDone: number;
-  setsTotal: number;
-  exercisesDone: number;
-  exercisesTotal: number;
-  dayId: string;
-  readonly?: boolean;
-  savedDurationMin?: number | null;
-  /** Pre-workout estimate (canonical day/block fields, row-based fallback).
-   *  Shown only while the workout is NOT completed — actual duration from
-   *  savedDurationMin always takes over after completion. */
-  estimatedMinutes?: number | null;
-  completedAt: string | null;
-  onViewScore?: () => void;
-}) {
-  const pct = setsTotal > 0 ? Math.min(100, Math.round((setsDone / setsTotal) * 100)) : 0;
-  const status: import("@/lib/workout-progress").WorkoutProgressStatus =
-    completedAt || (setsTotal > 0 && setsDone >= setsTotal)
-      ? "completed"
-      : setsDone > 0
-        ? "in_progress"
-        : "not_started";
-  // Display correction: a workout with zero logged sets must never read as
-  // "Completed" in the summary strip, even if a completion row exists.
-  const showCompleted = !!completedAt && setsDone > 0;
-  // "Not Started" is the only status the timer + ring can't already convey at
-  // a glance; "In Progress" duplicated the running timer and the progress
-  // ring, and the logging-quality badge duplicated the percentage, so both
-  // were removed from this row.
-  return (
-    <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5 text-xs text-muted-foreground">
-      <div className="inline-flex items-center gap-1.5 rounded-md bg-secondary/60 px-2 py-0.5">
-        <Clock className="h-3.5 w-3.5 text-primary" />
-        <WorkoutTimer
-          dayId={dayId}
-          completedAt={completedAt}
-          savedDurationMin={savedDurationMin ?? null}
-          readonly={readonly}
-          className=""
-        />
-      </div>
-      {!showCompleted && estimatedMinutes != null && estimatedMinutes > 0 && (
-        <span
-          className="inline-flex items-center gap-1 rounded-md bg-secondary/60 px-2 py-0.5 tabular-nums"
-          data-testid="workout-est-duration"
-        >
-          Est. {Math.round(estimatedMinutes)} min
-        </span>
-      )}
-      <button
-        type="button"
-        onClick={scrollToFirstIncompleteExercise}
-        className="ml-auto inline-flex items-center gap-2 rounded-md px-1 py-0.5 tabular-nums transition-colors hover:bg-secondary/60 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
-        aria-label={`Workout progress ${pct}%, ${exercisesDone} of ${exercisesTotal} exercises. Scroll to first incomplete exercise.`}
-      >
-        <WorkoutProgressRing pct={pct} status={status} size={26} strokeWidth={3} />
-        <span className="font-bold text-foreground">
-          {pct}% · {exercisesDone}/{exercisesTotal}
-        </span>
-      </button>
-      {showCompleted && (
-        <>
-          <Badge
-            variant="outline"
-            className="border-green-500/30 bg-green-500/10 text-green-500"
-          >
-            <CheckCircle2 className="mr-1 h-3 w-3" /> Completed
-          </Badge>
-          {onViewScore && (
-            <Button
-              size="sm"
-              variant="outline"
-              className="h-7 gap-1.5 border-primary/40 bg-primary/10 px-2.5 text-xs font-bold text-primary hover:bg-primary/20"
-              onClick={onViewScore}
-            >
-              <Trophy className="h-3.5 w-3.5" /> View Score
-            </Button>
-          )}
-        </>
-      )}
-    </div>
-  );
-}
