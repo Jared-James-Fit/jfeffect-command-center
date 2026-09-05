@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import type { NavItem } from "@/components/app-shell";
-import { Search, Eye } from "lucide-react";
+import { Search, Eye, MoreHorizontal } from "lucide-react";
 
 const KEY = "jf-floating-bar-v2";
 const EVT = "floating-bar-updated";
