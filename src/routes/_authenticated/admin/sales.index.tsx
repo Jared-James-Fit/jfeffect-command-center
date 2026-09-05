@@ -1,46 +1,76 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useMemo } from "react";
+import { useEffect, useMemo } from "react";
 import { PageHeader } from "@/components/app-shell";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/lib/auth";
 import { SalesPageEditor } from "@/components/admin/sales-page-editor";
-import { CrmDashboard } from "./crm.index";
 import { PaymentLinksPage } from "./payment-links";
-import { PromoCodesPage } from "./promo-codes";
 import { DiscountCodesPage } from "./discount-codes";
 import { AdminTransactionsPage } from "./transactions";
-import { PaymentsOverviewPanel } from "@/components/admin/payments-overview";
 import { BillingSourcesPage } from "./billing-sources";
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from "@/components/ui/select";
+import { Package, Receipt, Ticket, Settings2, LayoutTemplate } from "lucide-react";
 
-type TabKey = "pipeline" | "products-payments" | "sales-pages" | "promotions";
+/**
+ * Canonical Sales information architecture.
+ *
+ * One navigation layer only: Products / Transactions / Discount Codes /
+ * Settings. Pipeline moved to CRM, Promotions folded into Discount Codes,
+ * Overview folded into Transactions. Sales Pages stays reachable by deep
+ * link (media managers) but is no longer a primary Sales section.
+ */
+type SectionKey = "products" | "transactions" | "discount-codes" | "settings" | "sales-pages";
 
-const ALL_TABS: { value: TabKey; label: string; roles: Array<"admin" | "coach" | "media_manager"> }[] = [
-  { value: "pipeline", label: "Pipeline", roles: ["admin"] },
-  { value: "products-payments", label: "Products & Payments", roles: ["admin"] },
-  { value: "sales-pages", label: "Sales Pages", roles: ["admin", "media_manager"] },
-  { value: "promotions", label: "Promotions", roles: ["admin"] },
+const SECTIONS: {
+  value: SectionKey;
+  label: string;
+  icon: typeof Package;
+  roles: Array<"admin" | "coach" | "media_manager">;
+  primary: boolean;
+}[] = [
+  { value: "products", label: "Products", icon: Package, roles: ["admin"], primary: true },
+  { value: "transactions", label: "Transactions", icon: Receipt, roles: ["admin"], primary: true },
+  { value: "discount-codes", label: "Discount Codes", icon: Ticket, roles: ["admin"], primary: true },
+  { value: "settings", label: "Settings", icon: Settings2, roles: ["admin"], primary: true },
+  { value: "sales-pages", label: "Sales Pages", icon: LayoutTemplate, roles: ["admin", "media_manager"], primary: false },
 ];
 
 const LAST_TAB_KEY = "jf-admin-sales-last-tab";
 
-function isTab(v: unknown): v is TabKey {
-  return typeof v === "string" && ALL_TABS.some((t) => t.value === v);
+/** Legacy `?tab=` / `?sub=` values → canonical section. */
+function normalizeSection(tab: unknown, sub: unknown): SectionKey | "redirect:crm" | null {
+  const t = typeof tab === "string" ? tab : "";
+  const s = typeof sub === "string" ? sub : "";
+  if (SECTIONS.some((x) => x.value === t)) return t as SectionKey;
+  if (t === "pipeline") return "redirect:crm";
+  if (t === "promotions") return "discount-codes";
+  if (t === "sales-pages") return "sales-pages";
+  if (t === "products-payments") {
+    if (s === "transactions" || s === "payments" || s === "purchases" || s === "overview") return "transactions";
+    if (s === "discount-codes") return "discount-codes";
+    if (s === "settings") return "settings";
+    return "products";
+  }
+  return null;
 }
 
-type Search = { tab: TabKey; sub?: string };
+type Search = { tab: SectionKey | "pipeline"; sub?: string };
 
 export const Route = createFileRoute("/_authenticated/admin/sales/")({
   validateSearch: (raw: Record<string, unknown>): Search => {
-    const t = raw?.tab;
     const sub = typeof raw?.sub === "string" ? (raw.sub as string) : undefined;
-    if (isTab(t)) return { tab: t, sub };
-    if (typeof t === "undefined" && typeof window !== "undefined") {
+    const resolved = normalizeSection(raw?.tab, sub);
+    if (resolved === "redirect:crm") return { tab: "pipeline", sub };
+    if (resolved) return { tab: resolved, sub };
+    if (typeof raw?.tab === "undefined" && typeof window !== "undefined") {
       try {
-        const stored = window.localStorage.getItem(LAST_TAB_KEY);
-        if (isTab(stored)) return { tab: stored, sub };
+        const stored = normalizeSection(window.localStorage.getItem(LAST_TAB_KEY), undefined);
+        if (stored && stored !== "redirect:crm") return { tab: stored, sub };
       } catch {}
     }
-    return { tab: "pipeline", sub };
+    return { tab: "products", sub };
   },
   component: SalesWorkspace,
 });
@@ -50,156 +80,96 @@ function SalesWorkspace() {
   const navigate = useNavigate();
   const { role } = useAuth();
 
-  const visibleTabs = useMemo(() => {
+  // Pipeline now lives in CRM — bounce legacy deep links there.
+  useEffect(() => {
+    if (tab === "pipeline") navigate({ to: "/admin/crm", replace: true });
+  }, [tab, navigate]);
+
+  const visible = useMemo(() => {
     const r = (role ?? "admin") as "admin" | "coach" | "media_manager";
-    return ALL_TABS.filter((t) => t.roles.includes(r));
+    return SECTIONS.filter((s) => s.roles.includes(r));
   }, [role]);
 
-  const activeTab: TabKey = visibleTabs.some((t) => t.value === tab) ? tab : (visibleTabs[0]?.value ?? "pipeline");
+  const primary = visible.filter((s) => s.primary);
+  const active: SectionKey =
+    visible.some((s) => s.value === tab) ? (tab as SectionKey) : (visible[0]?.value ?? "products");
 
-  useMemo(() => {
-    try { window.localStorage.setItem(LAST_TAB_KEY, activeTab); } catch {}
-  }, [activeTab]);
+  useEffect(() => {
+    try { window.localStorage.setItem(LAST_TAB_KEY, active); } catch {}
+  }, [active]);
 
-  const setTab = (next: TabKey) => {
+  const setSection = (next: SectionKey) => {
     navigate({ to: "/admin/sales", search: { tab: next } as any, replace: false });
   };
-  const setSub = (nextSub: string) => {
-    navigate({ to: "/admin/sales", search: { tab: activeTab, sub: nextSub } as any, replace: false });
-  };
+
+  const navItems = primary.length ? primary : visible;
+  const activeLabel = visible.find((s) => s.value === active)?.label ?? "Products";
 
   return (
-    <>
+    <div className="flex min-h-0 flex-1 flex-col">
       <PageHeader
         title="Sales"
-        subtitle="Manage your pipeline, offers, checkout, promotions, and sales assets."
+        subtitle="Products, transactions, discount codes and checkout settings."
       />
-      <div className="border-b border-border bg-background/50">
-        <div className="-mb-px flex flex-wrap gap-1 overflow-x-hidden px-2 md:px-4">
-          {visibleTabs.map((t) => {
-            const active = t.value === activeTab;
+
+      {/* Mobile / tablet portrait: single section picker, full-width workspace */}
+      <div className="border-b border-border bg-background/60 px-4 py-2 lg:hidden">
+        <Select value={active} onValueChange={(v) => setSection(v as SectionKey)}>
+          <SelectTrigger className="h-10 w-full text-sm font-semibold" aria-label="Sales section">
+            <SelectValue>{activeLabel}</SelectValue>
+          </SelectTrigger>
+          <SelectContent>
+            {visible.map((s) => (
+              <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+
+      {/* Desktop / tablet landscape: local left rail + independent workspace */}
+      <div className="flex min-h-0 flex-1 lg:overflow-hidden">
+        <nav
+          data-sales-rail
+          className="hidden w-48 shrink-0 flex-col gap-0.5 overflow-y-auto border-r border-border bg-card/40 p-2 lg:flex xl:w-56"
+          aria-label="Sales sections"
+        >
+          <div className="px-2 pb-1 pt-1 text-[10px] font-black uppercase tracking-widest text-muted-foreground">
+            Sales
+          </div>
+          {navItems.map((s) => {
+            const Icon = s.icon;
+            const isActive = s.value === active;
             return (
               <button
-                key={t.value}
+                key={s.value}
                 type="button"
-                onClick={() => setTab(t.value)}
+                onClick={() => setSection(s.value)}
+                aria-current={isActive ? "page" : undefined}
                 className={cn(
-                  "shrink-0 whitespace-nowrap border-b-2 px-3 py-3 text-sm font-semibold transition-colors",
-                  active ? "border-primary text-foreground" : "border-transparent text-muted-foreground hover:text-foreground",
+                  "flex items-center gap-2 rounded-md px-2.5 py-2 text-left text-sm font-medium transition-colors",
+                  isActive
+                    ? "bg-primary/10 text-foreground"
+                    : "text-muted-foreground hover:bg-accent hover:text-foreground",
                 )}
-                aria-current={active ? "page" : undefined}
               >
-                {t.label}
+                <Icon className="h-4 w-4 shrink-0" />
+                <span className="truncate">{s.label}</span>
               </button>
             );
           })}
+        </nav>
+
+        <div className="min-w-0 flex-1 lg:overflow-y-auto">
+          {active === "products" && <PaymentLinksPage embedded />}
+          {active === "transactions" && <AdminTransactionsPage embedded />}
+          {active === "discount-codes" && <DiscountCodesPage embedded />}
+          {active === "settings" && <BillingSourcesPage />}
+          {active === "sales-pages" && (
+            <div className="p-4 md:p-6">
+              <SalesPageEditor pageKey={sub === "membership" ? "join" : "coaching"} />
+            </div>
+          )}
         </div>
-      </div>
-      <div>
-        {activeTab === "pipeline" && <PipelinePanel />}
-        {activeTab === "products-payments" && <ProductsPaymentsPanel sub={sub} onSub={setSub} />}
-        {activeTab === "sales-pages" && <SalesPagesPanel sub={sub} onSub={setSub} />}
-        {activeTab === "promotions" && <PromotionsPanel sub={sub} onSub={setSub} />}
-      </div>
-    </>
-  );
-}
-
-function PipelinePanel() {
-  return (
-    <div className="p-4 md:p-6">
-      <CrmDashboard embedded />
-    </div>
-  );
-}
-
-const PP_SUBS = [
-  { value: "products", label: "Products" },
-  { value: "transactions", label: "Transactions" },
-  { value: "overview", label: "Overview" },
-  { value: "discount-codes", label: "Discount Codes" },
-  { value: "settings", label: "Settings" },
-] as const;
-
-function ProductsPaymentsPanel({ sub, onSub }: { sub?: string; onSub: (s: string) => void }) {
-  // Back-compat: old links still point at ?sub=payments|purchases. Both
-  // routed to the same purchase-records table, which is now the Transactions
-  // view (backed by admin_transactions_v1).
-  const normalized =
-    sub === "payments" || sub === "purchases" ? "transactions" : sub;
-  const active =
-    (PP_SUBS.find((s) => s.value === normalized)?.value) ?? "products";
-  return (
-    <div>
-      <SubTabs items={PP_SUBS as any} active={active} onChange={onSub} />
-      {active === "products" && <PaymentLinksPage embedded />}
-      {active === "transactions" && <AdminTransactionsPage embedded />}
-      {active === "overview" && (
-        <PaymentsOverviewPanel onNavigateSub={onSub} />
-      )}
-      {active === "discount-codes" && <DiscountCodesPage embedded />}
-      {active === "settings" && <BillingSourcesPage />}
-    </div>
-  );
-}
-
-const SP_SUBS = [
-  { value: "coaching", label: "Coaching" },
-  { value: "membership", label: "Membership" },
-] as const;
-
-function SalesPagesPanel({ sub, onSub }: { sub?: string; onSub: (s: string) => void }) {
-  const active = (SP_SUBS.find((s) => s.value === sub)?.value) ?? "coaching";
-  return (
-    <div>
-      <SubTabs items={SP_SUBS as any} active={active} onChange={onSub} />
-      <div className="p-4 md:p-6">
-        <SalesPageEditor pageKey={active === "membership" ? "join" : "coaching"} />
-      </div>
-    </div>
-  );
-}
-
-const PROMO_SUBS = [
-  { value: "redemptions", label: "Redemption History" },
-] as const;
-
-function PromotionsPanel({ sub, onSub }: { sub?: string; onSub: (s: string) => void }) {
-  const active = (PROMO_SUBS.find((s) => s.value === sub)?.value) ?? "redemptions";
-  return (
-    <div>
-      <SubTabs items={PROMO_SUBS as any} active={active} onChange={onSub} />
-      {active === "redemptions" && <PromoCodesPage embedded />}
-    </div>
-  );
-}
-
-function SubTabs({
-  items, active, onChange,
-}: {
-  items: ReadonlyArray<{ value: string; label: string }>;
-  active: string;
-  onChange: (v: string) => void;
-}) {
-  return (
-    <div className="border-b border-border bg-muted/20">
-      <div className="-mb-px flex flex-wrap gap-1 overflow-x-hidden px-2 md:px-4">
-        {items.map((t) => {
-          const isActive = t.value === active;
-          return (
-            <button
-              key={t.value}
-              type="button"
-              onClick={() => onChange(t.value)}
-              className={cn(
-                "shrink-0 whitespace-nowrap border-b-2 px-3 py-2 text-xs font-semibold uppercase tracking-wide transition-colors",
-                isActive ? "border-primary text-foreground" : "border-transparent text-muted-foreground hover:text-foreground",
-              )}
-            >
-              {t.label}
-            </button>
-          );
-        })}
       </div>
     </div>
   );
