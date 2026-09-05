@@ -2,6 +2,9 @@ import { describe, it, expect } from "vitest";
 import { Home } from "lucide-react";
 import {
   MAX_BAR_SLOTS,
+  MORE_BAR_ITEM,
+  MORE_BAR_TO,
+  resolveVisibleBarItems,
   mergeNavSources,
   navItemsToLayout,
   resolveLayout,
@@ -42,7 +45,6 @@ describe("floating bar slots", () => {
 
 describe("visible bar contract", () => {
   it("never renders more than five buttons and always keeps More reachable", () => {
-    const { MORE_BAR_TO, resolveVisibleBarItems } = require("@/lib/floating-bar");
     const six = ["/a", "/b", "/c", "/d", "/e", "/f"].map((t) => item(t));
     const visible = resolveVisibleBarItems(six);
     expect(visible).toHaveLength(MAX_BAR_SLOTS);
@@ -50,7 +52,6 @@ describe("visible bar contract", () => {
   });
 
   it("keeps an explicitly configured More slot in place without adding a sixth", () => {
-    const { MORE_BAR_ITEM, MORE_BAR_TO, resolveVisibleBarItems } = require("@/lib/floating-bar");
     const items = [item("/a"), MORE_BAR_ITEM, item("/b"), item("/c"), item("/d")];
     const visible = resolveVisibleBarItems(items);
     expect(visible).toHaveLength(5);
