@@ -121,7 +121,7 @@ export function resolveLayout(layout: BarLayout, nav: NavItem[]): NavItem[] {
   const byTo = new Map<string, NavItem>();
   for (const n of nav) byTo.set(n.to, n);
   const out: NavItem[] = [];
-  for (const slot of layout.slots.slice(0, 5)) {
+  for (const slot of layout.slots.slice(0, MAX_BAR_SLOTS)) {
     const base = byTo.get(slot.to);
     if (!base) continue;
     const children = (slot.children ?? [])
@@ -154,7 +154,7 @@ export function useBarLayout(scope: BarScope): BarLayout | null {
 /** Convert a list of NavItems (with possible children) back into a layout. */
 export function navItemsToLayout(items: NavItem[]): BarLayout {
   return {
-    slots: items.slice(0, 5).map((i) => ({
+    slots: items.slice(0, MAX_BAR_SLOTS).map((i) => ({
       to: i.to,
       label: i.label,
       children: i.children?.map((c) => c.to),

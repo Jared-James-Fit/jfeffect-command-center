@@ -10,7 +10,7 @@ import { ArrowDown, ArrowUp, Plus, Trash2, X, RotateCcw, Save, Layers } from "lu
 import type { NavItem } from "@/components/app-shell";
 import {
   type BarScope, type BarLayout, type BarSlot,
-  loadBarLayout, saveBarLayout, clearBarLayout, navItemsToLayout,
+  loadBarLayout, saveBarLayout, clearBarLayout, navItemsToLayout, MAX_BAR_SLOTS,
 } from "@/lib/floating-bar";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -118,8 +118,8 @@ export function FloatingBarCustomizer({
   };
 
   const addSlot = (item: NavItem) => {
-    if (layout.slots.length >= 5) {
-      toast.error("Max 5 main toggles");
+    if (layout.slots.length >= MAX_BAR_SLOTS) {
+      toast.error(`Max ${MAX_BAR_SLOTS} main toggles`);
       return;
     }
     persist({ slots: [...layout.slots, { to: item.to }] });
@@ -229,7 +229,7 @@ export function FloatingBarCustomizer({
       </ol>
 
       <div className="mt-3 flex items-center justify-between gap-2">
-        <div className="text-[11px] text-muted-foreground">{layout.slots.length} / 5 main toggles</div>
+        <div className="text-[11px] text-muted-foreground">{layout.slots.length} of {MAX_BAR_SLOTS} slots used</div>
         <NavPicker
           nav={nav}
           exclude={usedTopLevel}
