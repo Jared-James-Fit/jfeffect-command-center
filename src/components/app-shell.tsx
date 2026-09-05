@@ -877,22 +877,26 @@ export function AppShell({ items, bottomItems: customBottomItems, title, childre
           )}
           style={{ bottom: "max(env(safe-area-inset-bottom), 6px)" }}
         >
-          {visible.map((item) => (
-            <BottomNavSlot
-              key={(item.children ? "g:" : "") + item.to + ":" + item.label}
-              item={item}
-              pathname={pathname}
-              search={search}
-              navBadges={navBadges}
-              onNavigate={(to) => markNavSeen(user?.id, to)}
-              dense={dense}
-            />
-          ))}
-          <MoreNavSlot
-            dense={dense}
-            active={moreOpen}
-            onOpenMore={() => setMoreOpen(true)}
-          />
+          {visible.map((item) =>
+            item.to === MORE_BAR_TO ? (
+              <MoreNavSlot
+                key="more"
+                dense={dense}
+                active={moreOpen}
+                onOpenMore={() => setMoreOpen(true)}
+              />
+            ) : (
+              <BottomNavSlot
+                key={(item.children ? "g:" : "") + item.to + ":" + item.label}
+                item={item}
+                pathname={pathname}
+                search={search}
+                navBadges={navBadges}
+                onNavigate={(to) => markNavSeen(user?.id, to)}
+                dense={dense}
+              />
+            ),
+          )}
         </nav>
           );
         })()}
