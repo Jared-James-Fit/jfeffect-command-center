@@ -576,172 +576,169 @@ export function PaymentLinksPage({ embedded = false }: { embedded?: boolean } = 
             {hasFilters ? "No products match your filters. Try clearing some filters." : "No products yet. Create your first product."}
           </Card>
         ) : (
-          <div className="grid gap-4 md:grid-cols-2">
-            {visible.map((p) => (
-              <Card key={p.id} className={`border-border bg-card p-4 flex gap-4 w-full ${selected.has(p.id) ? "ring-2 ring-primary" : ""}`}>
-                {manageMode && (
-                  <div className="pt-1">
-                    <Checkbox checked={selected.has(p.id)} onCheckedChange={() => toggleSelected(p.id)} />
-                  </div>
-                )}
-                <div className="h-24 w-24 shrink-0 rounded-md bg-muted overflow-hidden">
-                  {p.image_signed_url ? (
-                    <img loading="lazy" src={p.image_signed_url} alt={p.name} className="h-full w-full object-cover" />
-                  ) : (
-                    <div className="h-full w-full grid place-items-center text-muted-foreground text-xs">No image</div>
-                  )}
-                </div>
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="min-w-0">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <h3 className="font-bold truncate">{p.name}</h3>
-                        <Badge variant={p.status === "Active" ? "default" : "outline"} className={p.status === "Active" ? "bg-gradient-primary" : ""}>{p.status ?? (p.active ? "Active" : "Draft")}</Badge>
-                        {readiness(p).ready && (
-                          <Badge className="bg-green-600 hover:bg-green-600 text-white border-0">
-                            <Sparkles className="h-3 w-3 mr-1" /> Ready
-                          </Badge>
-                        )}
-                      </div>
-                      <div className="text-xs text-muted-foreground">
-                        {normalizeProductType(p.product_type)}{inferDelivery(p.product_type) !== "Online" ? ` · ${inferDelivery(p.product_type)}` : ""}{p.payment_structure ? ` · ${normalizePaymentStructure(p.payment_structure)}` : ""}{termLabel(p) ? ` · ${termLabel(p)}` : ""}
-                      </div>
-                      {/* Always show price; if description contains payment/frequency info, show it below */}
-                      <div className="text-lg font-black mt-1">{p.currency.toUpperCase()} {formatPrice(p.price_cents, p.currency)}</div>
-                      {p.description && /every|payment|week|month|year/i.test(p.description) && (
-                        <div className="text-sm font-semibold mt-1 text-muted-foreground">{p.description}</div>
+          <Card className="overflow-hidden border-border bg-card">
+            {/* Desktop column headings */}
+            <div className="hidden grid-cols-[minmax(0,2.2fr)_1fr_0.9fr_1fr_1fr_0.7fr_auto] items-center gap-3 border-b border-border px-4 py-2 text-[10px] font-black uppercase tracking-widest text-muted-foreground lg:grid">
+              <span>Product</span><span>Type</span><span>Price</span><span>Billing</span>
+              <span>Duration</span><span>Status</span><span className="sr-only">Actions</span>
+            </div>
+            <ul className="divide-y divide-border">
+              {visible.map((p) => {
+                const r = readiness(p);
+                const archived = p.status === "Archived";
+                const hasPriceId = !!(p as any).stripe_price_id;
+                const hasLink = !!p.payment_link_url;
+                const status = p.status ?? (p.active ? "Active" : "Draft");
+                const menu = (
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button size="icon" variant="ghost" className="h-8 w-8 shrink-0" aria-label={`Actions for ${p.name}`}>
+                        <MoreHorizontal className="h-4 w-4" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="w-56">
+                      <DropdownMenuItem onClick={() => setEditing({ open: true, product: p })}>
+                        <Pencil className="mr-2 h-3.5 w-3.5" /> Edit product
+                      </DropdownMenuItem>
+                      {!archived && (
+                        <DropdownMenuItem onClick={() => setAssigning(productToOfferLike(p))}>
+                          <ListChecks className="mr-2 h-3.5 w-3.5" /> Assign to client
+                        </DropdownMenuItem>
                       )}
-                    </div>
-                  </div>
-                  <div className="mt-2 flex flex-wrap gap-1.5">
-                    {(() => {
-                      const r = readiness(p);
-                      if (r.ready) {
-                        return (
-                          <>
-                            <Badge variant="outline" className="text-xs border-primary/40 text-primary">
-                              <CheckCircle2 className="h-3 w-3 mr-1" />Checkout Ready
-                            </Badge>
-                            {p.payment_link_url && (
-                              <Badge variant="outline" className="text-xs border-green-600/40 text-green-600">
-                                <Link2 className="h-3 w-3 mr-1" />Payment Link Ready
-                              </Badge>
-                            )}
-                          </>
-                        );
-                      }
-                      return r.missing.map((m) => (
-                        <Badge key={m} variant="outline" className="text-xs text-destructive border-destructive/40">
-                          <AlertTriangle className="h-3 w-3 mr-1" />{m}
-                        </Badge>
-                      ));
-                    })()}
-                    {p.agreement_required && <Badge variant="outline" className="text-xs"><FileSignature className="h-3 w-3 mr-1" />Agreement Required</Badge>}
-                  </div>
-                  {p.description && <p className="text-sm mt-2 line-clamp-2 text-muted-foreground">{p.description}</p>}
-                  <div className="mt-3 flex flex-wrap gap-2">
-                    {(() => {
-                      const r = readiness(p);
-                      const archived = p.status === "Archived";
-                      const hasPriceId = !!(p as any).stripe_price_id;
-                      const hasLink = !!p.payment_link_url;
-                      if (archived) {
-                        return (
-                          <>
-                            <Button size="sm" variant="outline" onClick={() => setStatusMutation.mutate({ id: p.id, status: "Draft" })}>
-                              <ArchiveRestore className="h-3.5 w-3.5 mr-1" /> Restore
-                            </Button>
-                            <Button size="sm" variant="outline" onClick={() => setEditing({ open: true, product: p })}>
-                              <Pencil className="h-3.5 w-3.5 mr-1" /> Edit
-                            </Button>
-                          </>
-                        );
-                      }
-                      return (
+                      {hasLink && (
                         <>
-                          <Button size="sm" className="bg-gradient-primary font-bold uppercase" onClick={() => setAssigning(productToOfferLike(p))}>
-                            Assign to client
-                          </Button>
-                          {hasLink && (
-                            <>
-                              <Button size="sm" variant="outline" onClick={() => copyLink(p.payment_link_url!)} title="Copy the Stripe payment link to share manually">
-                                <Copy className="h-3.5 w-3.5 mr-1" /> Copy payment link
-                              </Button>
-                              <Button size="sm" variant="outline" onClick={() => setSharing(p)} title="Open share panel with message templates">
-                                <Share2 className="h-3.5 w-3.5 mr-1" /> Share
-                              </Button>
-                              <a href={p.payment_link_url!} target="_blank" rel="noreferrer">
-                                <Button size="sm" variant="outline" title="Open the live payment link in a new tab">
-                                  <ExternalLink className="h-3.5 w-3.5 mr-1" /> Open checkout
-                                </Button>
-                              </a>
-                            </>
-                          )}
-                          {!hasLink && hasPriceId && r.ready && (
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => handleGenerateLink(p)}
-                              disabled={generatingLink === p.id}
-                              title="Create a reusable Stripe payment link you can copy and send anywhere"
-                            >
-                              {generatingLink === p.id
-                                ? <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" />
-                                : <Wand2 className="h-3.5 w-3.5 mr-1" />}
-                              Generate payment link
-                            </Button>
-                          )}
-                          {!hasPriceId && (
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              className="border-amber-500/40 text-amber-500 hover:bg-amber-500/10"
-                              onClick={() => setEditing({ open: true, product: p })}
-                              title="This product needs a Stripe Price ID and checkout mode before clients can pay."
-                            >
-                              <AlertTriangle className="h-3.5 w-3.5 mr-1" /> Complete Stripe setup
-                            </Button>
-                          )}
-                          <Button size="sm" variant="outline" onClick={() => setPreviewing(p)} title="Preview the client-facing product card">
-                            <Eye className="h-3.5 w-3.5 mr-1" /> Preview
-                          </Button>
-                          {hasPriceId && (
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => handleStripePreview(p)}
-                              disabled={previewingCheckout === p.id}
-                              title="Open the live Stripe-hosted checkout page in a new tab"
-                            >
-                              {previewingCheckout === p.id
-                                ? <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" />
-                                : <CreditCard className="h-3.5 w-3.5 mr-1" />}
-                              Open Stripe checkout
-                            </Button>
-                          )}
-                          <Button size="sm" variant="outline" onClick={() => setEditing({ open: true, product: p })} title="Edit product">
-                            <Pencil className="h-3.5 w-3.5" />
-                          </Button>
-                          <Button size="sm" variant="outline" onClick={() => setGrantFor(p)} title="Membership access granted by this product">
-                            <LockIcon className="h-3.5 w-3.5 mr-1" /> Access
-                          </Button>
-                          <Button size="sm" variant="ghost" onClick={() => duplicateMutation.mutate(p.id)} title="Duplicate">
-                            <Copy className="h-3.5 w-3.5" />
-                          </Button>
+                          <DropdownMenuItem onClick={() => copyLink(p.payment_link_url!)}>
+                            <Copy className="mr-2 h-3.5 w-3.5" /> Copy payment link
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => setSharing(p)}>
+                            <Share2 className="mr-2 h-3.5 w-3.5" /> Share payment link
+                          </DropdownMenuItem>
                         </>
-                      );
-                    })()}
-                    {p.status === "Archived" ? (
-                      null
-                    ) : (
-                      <Button size="sm" variant="ghost" onClick={() => setStatusMutation.mutate({ id: p.id, status: "Archived" })} title="Archive"><Archive className="h-3.5 w-3.5" /></Button>
-                    )}
-                    <Button size="sm" variant="ghost" className="text-destructive hover:bg-destructive/10" onClick={() => setPendingDelete(p)}><Trash2 className="h-3.5 w-3.5" /></Button>
-                  </div>
-                </div>
-              </Card>
-            ))}
-          </div>
+                      )}
+                      {!hasLink && hasPriceId && r.ready && (
+                        <DropdownMenuItem onClick={() => handleGenerateLink(p)} disabled={generatingLink === p.id}>
+                          <Wand2 className="mr-2 h-3.5 w-3.5" /> Generate payment link
+                        </DropdownMenuItem>
+                      )}
+                      <DropdownMenuItem onClick={() => setPreviewing(p)}>
+                        <Eye className="mr-2 h-3.5 w-3.5" /> Preview checkout
+                      </DropdownMenuItem>
+                      {hasPriceId && (
+                        <DropdownMenuItem onClick={() => handleStripePreview(p)} disabled={previewingCheckout === p.id}>
+                          <CreditCard className="mr-2 h-3.5 w-3.5" /> Open in Stripe
+                        </DropdownMenuItem>
+                      )}
+                      <DropdownMenuItem onClick={() => setGrantFor(p)}>
+                        <LockIcon className="mr-2 h-3.5 w-3.5" /> Access granted
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => duplicateMutation.mutate(p.id)}>
+                        <Copy className="mr-2 h-3.5 w-3.5" /> Duplicate product
+                      </DropdownMenuItem>
+                      <DropdownMenuSeparator />
+                      {archived ? (
+                        <DropdownMenuItem onClick={() => setStatusMutation.mutate({ id: p.id, status: "Draft" })}>
+                          <ArchiveRestore className="mr-2 h-3.5 w-3.5" /> Restore product
+                        </DropdownMenuItem>
+                      ) : (
+                        <DropdownMenuItem onClick={() => setStatusMutation.mutate({ id: p.id, status: "Archived" })}>
+                          <Archive className="mr-2 h-3.5 w-3.5" /> Archive product
+                        </DropdownMenuItem>
+                      )}
+                      <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => setPendingDelete(p)}>
+                        <Trash2 className="mr-2 h-3.5 w-3.5" /> Permanent delete
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                );
+                const statusBadge = (
+                  <Badge
+                    variant={status === "Active" ? "default" : "outline"}
+                    className={status === "Active" ? "bg-gradient-primary" : ""}
+                  >
+                    {status}
+                  </Badge>
+                );
+                const primary = archived ? (
+                  <Button size="sm" variant="outline" onClick={() => setStatusMutation.mutate({ id: p.id, status: "Draft" })}>
+                    <ArchiveRestore className="mr-1 h-3.5 w-3.5" /> Restore
+                  </Button>
+                ) : !hasPriceId ? (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="border-amber-500/40 text-amber-500 hover:bg-amber-500/10"
+                    onClick={() => setEditing({ open: true, product: p })}
+                  >
+                    <AlertTriangle className="mr-1 h-3.5 w-3.5" /> Finish setup
+                  </Button>
+                ) : (
+                  <Button size="sm" className="bg-gradient-primary font-bold uppercase" onClick={() => setAssigning(productToOfferLike(p))}>
+                    Assign
+                  </Button>
+                );
+
+                return (
+                  <li
+                    key={p.id}
+                    className={`px-4 py-3 ${selected.has(p.id) ? "bg-primary/5" : ""}`}
+                  >
+                    {/* Desktop compact row */}
+                    <div className="hidden grid-cols-[minmax(0,2.2fr)_1fr_0.9fr_1fr_1fr_0.7fr_auto] items-center gap-3 lg:grid">
+                      <div className="flex min-w-0 items-center gap-3">
+                        {manageMode && <Checkbox checked={selected.has(p.id)} onCheckedChange={() => toggleSelected(p.id)} />}
+                        <div className="h-9 w-9 shrink-0 overflow-hidden rounded bg-muted">
+                          {p.image_signed_url && <img loading="lazy" src={p.image_signed_url} alt="" className="h-full w-full object-cover" />}
+                        </div>
+                        <div className="min-w-0">
+                          <div className="truncate text-sm font-bold">{p.name}</div>
+                          {!r.ready && !archived && (
+                            <div className="truncate text-[11px] text-destructive">{r.missing.join(" · ")}</div>
+                          )}
+                        </div>
+                      </div>
+                      <div className="truncate text-xs text-muted-foreground">{normalizeProductType(p.product_type)}</div>
+                      <div className="text-sm font-bold">{formatPrice(p.price_cents, p.currency)}</div>
+                      <div className="truncate text-xs text-muted-foreground">
+                        {p.payment_structure ? normalizePaymentStructure(p.payment_structure) : "One-time payment"}
+                      </div>
+                      <div className="truncate text-xs text-muted-foreground">{termLabel(p) ?? "—"}</div>
+                      <div>{statusBadge}</div>
+                      <div className="flex items-center justify-end gap-1">{primary}{menu}</div>
+                    </div>
+
+                    {/* Mobile / tablet card */}
+                    <div className="flex items-start gap-3 lg:hidden">
+                      {manageMode && <Checkbox className="mt-1" checked={selected.has(p.id)} onCheckedChange={() => toggleSelected(p.id)} />}
+                      <div className="h-12 w-12 shrink-0 overflow-hidden rounded bg-muted">
+                        {p.image_signed_url && <img loading="lazy" src={p.image_signed_url} alt="" className="h-full w-full object-cover" />}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="min-w-0">
+                            <div className="truncate text-sm font-bold">{p.name}</div>
+                            <div className="truncate text-[11px] text-muted-foreground">
+                              {normalizeProductType(p.product_type)}
+                              {p.payment_structure ? ` · ${normalizePaymentStructure(p.payment_structure)}` : ""}
+                              {termLabel(p) ? ` · ${termLabel(p)}` : ""}
+                            </div>
+                          </div>
+                          {menu}
+                        </div>
+                        <div className="mt-1.5 flex flex-wrap items-center gap-2">
+                          <span className="text-sm font-black">{formatPrice(p.price_cents, p.currency)}</span>
+                          {statusBadge}
+                          {p.agreement_required && (
+                            <Badge variant="outline" className="text-[10px]"><FileSignature className="mr-1 h-3 w-3" />Agreement</Badge>
+                          )}
+                        </div>
+                        <div className="mt-2">{primary}</div>
+                      </div>
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          </Card>
         )}
       </div>
 
