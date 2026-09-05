@@ -258,7 +258,9 @@ function initialForm(defaultWorkspace: "coaching" | "membership"): FormState {
     agreementBeforeService: false,
     selfPurchase: true,
     allowPromotionCodes: true,
-    allowSelfCancellation: true,
+    // Coach-controlled by default: clients cannot cancel themselves unless
+    // this is explicitly turned on per product.
+    allowSelfCancellation: false,
     newCustomersOnly: false,
     visibleOnSalesPage: true,
     workspace: defaultWorkspace === "membership" ? "membership" : "coaching",
@@ -1006,6 +1008,8 @@ export default function NewProductModal({
                 />
                 <ToggleRow
                   label="Allow client self-cancellation"
+                  hint="Off by default — the coach cancels on the client's behalf."
+
                   checked={form.allowSelfCancellation}
                   onChange={(v) => set("allowSelfCancellation", v)}
                 />
