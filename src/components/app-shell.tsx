@@ -858,12 +858,15 @@ export function AppShell({ items, bottomItems: customBottomItems, title, childre
 
         {/* Mobile bottom nav — fixed, app-like tab bar */}
         {(() => {
-          const visible = bottomItems.slice(0, MAX_BAR_SLOTS);
-          const cols = visible.length + 1; // + More (system slot)
-          const gridCols = cols === 6 ? "grid-cols-6" : cols === 5 ? "grid-cols-5" : "grid-cols-4";
-          // With 6 columns a 320px phone gives ~50px per slot — tighten
-          // padding so labels stay on one line and nothing clips.
-          const dense = cols >= 6;
+          // Canonical contract: five buttons TOTAL, with "More" occupying one
+          // of the five positions (never a fixed sixth button).
+          const visible = resolveVisibleBarItems(bottomItems);
+          const cols = visible.length;
+          const gridCols =
+            cols === 5 ? "grid-cols-5" : cols === 4 ? "grid-cols-4" : cols === 3 ? "grid-cols-3" : "grid-cols-2";
+          // At 320px five columns give ~60px per slot — tighten padding so
+          // labels stay on one line and nothing clips.
+          const dense = cols >= 5;
           return (
         <nav
           data-mobile-bottom-nav
