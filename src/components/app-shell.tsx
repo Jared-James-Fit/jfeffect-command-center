@@ -34,6 +34,7 @@ import { CommandPalette } from "@/components/command-palette";
 import type { AdminRole } from "@/lib/admin-route-registry";
 import { DualAccountSwitcher } from "@/components/dual-account-switcher";
 import { useExerciseLibraryRealtime } from "@/hooks/use-exercise-library-realtime";
+import { MAX_BAR_SLOTS } from "@/lib/floating-bar";
 
 export interface NavItem {
   to: string;
@@ -857,14 +858,18 @@ export function AppShell({ items, bottomItems: customBottomItems, title, childre
 
         {/* Mobile bottom nav — fixed, app-like tab bar */}
         {(() => {
-          const visible = bottomItems.slice(0, 5);
-          const cols = visible.length + 1; // + More
+          const visible = bottomItems.slice(0, MAX_BAR_SLOTS);
+          const cols = visible.length + 1; // + More (system slot)
           const gridCols = cols === 6 ? "grid-cols-6" : cols === 5 ? "grid-cols-5" : "grid-cols-4";
+          // With 6 columns a 320px phone gives ~50px per slot — tighten
+          // padding so labels stay on one line and nothing clips.
+          const dense = cols >= 6;
           return (
         <nav
           data-mobile-bottom-nav
           className={cn(
-            "fixed left-3 right-3 z-50 grid overflow-hidden rounded-2xl border border-border bg-card/95 px-1 py-1 backdrop-blur supports-[backdrop-filter]:bg-card/80 shadow-[0_8px_24px_-6px_rgba(0,0,0,0.55)] md:hidden",
+            "fixed left-3 right-3 z-50 grid overflow-hidden rounded-2xl border border-border bg-card/95 py-1 backdrop-blur supports-[backdrop-filter]:bg-card/80 shadow-[0_8px_24px_-6px_rgba(0,0,0,0.55)] md:hidden",
+            dense ? "px-0.5" : "px-1",
             gridCols,
           )}
           style={{ bottom: "max(env(safe-area-inset-bottom), 6px)" }}
@@ -877,9 +882,11 @@ export function AppShell({ items, bottomItems: customBottomItems, title, childre
               search={search}
               navBadges={navBadges}
               onNavigate={(to) => markNavSeen(user?.id, to)}
+              dense={dense}
             />
           ))}
           <MoreNavSlot
+            dense={dense}
             active={moreOpen}
             onOpenMore={() => setMoreOpen(true)}
           />
@@ -1387,12 +1394,14 @@ function BottomNavBadge({ badge }: { badge?: { count?: number; dot?: boolean } }
   return null;
 }
 
-function BottomNavSlot({ item, pathname, search, navBadges, onNavigate }: {
+function BottomNavSlot({ item, pathname, search, navBadges, onNavigate, dense }: {
   item: NavItem;
   pathname: string;
   search?: Record<string, unknown>;
   navBadges: Record<string, { count?: number; dot?: boolean }>;
   onNavigate: (to: string) => void;
+  /** True when 6 columns share the bar — tightens icon/label sizing. */
+  dense?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const navigate = useNavigate();
@@ -1412,7 +1421,7 @@ function BottomNavSlot({ item, pathname, search, navBadges, onNavigate }: {
           <div className="relative">
             <Icon className="h-5 w-5" />
           </div>
-          <span className="w-full px-0.5 text-center text-[9.5px] leading-tight tracking-tight">{item.label}</span>
+          <span className={"w-full px-0.5 text-center leading-tight tracking-tight " + (dense ? "text-[9px]" : "text-[9.5px]")}>{item.label}</span>
         </button>
       );
     }
@@ -1428,7 +1437,7 @@ function BottomNavSlot({ item, pathname, search, navBadges, onNavigate }: {
           <div className="relative">
             <Icon className="h-5 w-5" />
           </div>
-          <span className="w-full px-0.5 text-center text-[9.5px] leading-tight tracking-tight">{item.label}</span>
+          <span className={"w-full px-0.5 text-center leading-tight tracking-tight " + (dense ? "text-[9px]" : "text-[9.5px]")}>{item.label}</span>
         </button>
       );
     }
@@ -1461,7 +1470,7 @@ function BottomNavSlot({ item, pathname, search, navBadges, onNavigate }: {
           <Icon className={cn("h-5 w-5", active && "drop-shadow-[0_0_6px_hsl(var(--primary)/0.6)]")} />
           <BottomNavBadge badge={badge} />
         </div>
-        <span className="w-full px-0.5 text-center text-[9.5px] leading-tight tracking-tight">{item.label}</span>
+        <span className={"w-full px-0.5 text-center leading-tight tracking-tight " + (dense ? "text-[9px]" : "text-[9.5px]")}>{item.label}</span>
         {active && <span className="mt-0.5 h-0.5 w-5 rounded-full bg-primary" />}
       </Link>
     );
@@ -1514,7 +1523,7 @@ function BottomNavSlot({ item, pathname, search, navBadges, onNavigate }: {
               ))}
             </span>
           </div>
-          <span className="w-full px-0.5 text-center text-[9.5px] leading-tight tracking-tight">{item.label}</span>
+          <span className={"w-full px-0.5 text-center leading-tight tracking-tight " + (dense ? "text-[9px]" : "text-[9.5px]")}>{item.label}</span>
           {childActive && <span className="mt-0.5 h-0.5 w-5 rounded-full bg-primary" />}
         </button>
       </PopoverTrigger>
@@ -1610,7 +1619,7 @@ function BottomNavSlot({ item, pathname, search, navBadges, onNavigate }: {
   );
 }
 
-function MoreNavSlot({ active, onOpenMore }: { active: boolean; onOpenMore: () => void }) {
+function MoreNavSlot({ active, onOpenMore, dense }: { active: boolean; onOpenMore: () => void; dense?: boolean }) {
   return (
     <button
       type="button"
@@ -1622,8 +1631,8 @@ function MoreNavSlot({ active, onOpenMore }: { active: boolean; onOpenMore: () =
       )}
       aria-label="More"
     >
-      <MoreHorizontal className="h-5 w-5" />
-      <span className="w-full px-0.5 text-center text-[9.5px] leading-tight tracking-tight">More</span>
+      <MoreHorizontal className={dense ? "h-[18px] w-[18px]" : "h-5 w-5"} />
+      <span className={cn("w-full px-0 text-center leading-tight tracking-tight", dense ? "text-[9px]" : "text-[9.5px]")}>More</span>
     </button>
   );
 }

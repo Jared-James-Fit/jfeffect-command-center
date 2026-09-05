@@ -258,7 +258,9 @@ function initialForm(defaultWorkspace: "coaching" | "membership"): FormState {
     agreementBeforeService: false,
     selfPurchase: true,
     allowPromotionCodes: true,
-    allowSelfCancellation: true,
+    // Coach-controlled by default: clients cannot cancel themselves unless
+    // this is explicitly turned on per product.
+    allowSelfCancellation: false,
     newCustomersOnly: false,
     visibleOnSalesPage: true,
     workspace: defaultWorkspace === "membership" ? "membership" : "coaching",
@@ -1006,6 +1008,8 @@ export default function NewProductModal({
                 />
                 <ToggleRow
                   label="Allow client self-cancellation"
+                  hint="Off by default — the coach cancels on the client's behalf."
+
                   checked={form.allowSelfCancellation}
                   onChange={(v) => set("allowSelfCancellation", v)}
                 />
@@ -1253,15 +1257,20 @@ function ToggleRow({
   label,
   checked,
   onChange,
+  hint,
 }: {
   label: string;
   checked: boolean;
   onChange: (v: boolean) => void;
+  hint?: string;
 }) {
   return (
     <label className="flex items-center gap-3 rounded-md border border-border px-3 py-2 cursor-pointer hover:bg-muted/40">
       <Switch checked={checked} onCheckedChange={onChange} />
-      <span className="text-sm">{label}</span>
+      <span className="min-w-0 text-sm">
+        {label}
+        {hint && <span className="block text-xs text-muted-foreground">{hint}</span>}
+      </span>
     </label>
   );
 }

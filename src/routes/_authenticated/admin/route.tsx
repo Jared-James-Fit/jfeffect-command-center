@@ -3,12 +3,12 @@ import { useEffect, useMemo } from "react";
 import { useAuth } from "@/lib/auth";
 import { AppShell } from "@/components/app-shell";
 import { coachingAdminNav, coachNav } from "@/lib/admin-nav";
-import { buildInternalNavCollapsed, buildMembershipAdminNav, resolveStaffRoleTag } from "@/lib/internal-nav";
+import { buildInternalNav, buildInternalNavCollapsed, buildMembershipAdminNav, resolveStaffRoleTag } from "@/lib/internal-nav";
 import { useDashboardMode, setDashboardMode } from "@/lib/dashboard-mode";
 import { AdminTopBar } from "@/components/admin-top-bar";
 import { TaskPopupGate } from "@/components/tasks/task-popup-gate";
 import { ClipboardList, LayoutDashboard, Users, MessagesSquare, BookOpen, Library } from "lucide-react";
-import { useBarLayout, resolveLayout, withBarActionItems } from "@/lib/floating-bar";
+import { useBarLayout, resolveLayout, withBarActionItems, mergeNavSources } from "@/lib/floating-bar";
 import { FullPageLoader } from "@/components/full-page-loader";
 
 export const Route = createFileRoute("/_authenticated/admin")({
@@ -118,11 +118,18 @@ function AdminLayout() {
 
   const bottomItems = useMemo(() => {
     if (customLayout && customLayout.slots.length > 0) {
-      const resolved = resolveLayout(customLayout, withBarActionItems(nav));
+      // Resolve against the FULL flat registry merged with the collapsed
+      // shell nav. The customizer picks from the full registry, so resolving
+      // against the collapsed nav alone dropped slots whose route is folded
+      // into a workspace group (the real cause of the "5th slot won't save").
+      const source = withBarActionItems(
+        mergeNavSources(nav, roleTag ? buildInternalNav(roleTag, { mode: isMembership ? "membership" : "coaching" }) : []),
+      );
+      const resolved = resolveLayout(customLayout, source);
       if (resolved.length) return resolved;
     }
     return defaultBottom;
-  }, [customLayout, nav, defaultBottom]);
+  }, [customLayout, nav, defaultBottom, roleTag, isMembership]);
 
   if (loading || !role) {
     return <FullPageLoader />;

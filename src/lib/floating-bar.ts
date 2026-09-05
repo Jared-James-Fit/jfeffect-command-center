@@ -37,6 +37,32 @@ export function withBarActionItems(nav: NavItem[]): NavItem[] {
 
 export type BarScope = "admin" | "coach";
 
+/**
+ * Canonical maximum number of configurable primary slots in the mobile
+ * floating bar. The system "More" button sits alongside these and is not
+ * configurable.
+ */
+export const MAX_BAR_SLOTS = 5;
+
+/**
+ * Merge several nav sources (e.g. the collapsed shell nav plus the full flat
+ * registry) into one lookup list, de-duplicated by `to`, first source wins.
+ *
+ * The floating-bar customizer picks from the FULL registry while the admin
+ * shell renders a COLLAPSED nav. Resolving a saved layout against the
+ * collapsed list alone silently dropped any slot whose route was folded into
+ * a workspace group — which is why extra slots appeared not to save.
+ */
+export function mergeNavSources(...sources: NavItem[][]): NavItem[] {
+  const byTo = new Map<string, NavItem>();
+  for (const source of sources) {
+    for (const item of source) {
+      if (!byTo.has(item.to)) byTo.set(item.to, item);
+    }
+  }
+  return Array.from(byTo.values());
+}
+
 export interface BarSlot {
   to: string;
   label?: string;
@@ -95,7 +121,7 @@ export function resolveLayout(layout: BarLayout, nav: NavItem[]): NavItem[] {
   const byTo = new Map<string, NavItem>();
   for (const n of nav) byTo.set(n.to, n);
   const out: NavItem[] = [];
-  for (const slot of layout.slots.slice(0, 5)) {
+  for (const slot of layout.slots.slice(0, MAX_BAR_SLOTS)) {
     const base = byTo.get(slot.to);
     if (!base) continue;
     const children = (slot.children ?? [])
@@ -128,7 +154,7 @@ export function useBarLayout(scope: BarScope): BarLayout | null {
 /** Convert a list of NavItems (with possible children) back into a layout. */
 export function navItemsToLayout(items: NavItem[]): BarLayout {
   return {
-    slots: items.slice(0, 5).map((i) => ({
+    slots: items.slice(0, MAX_BAR_SLOTS).map((i) => ({
       to: i.to,
       label: i.label,
       children: i.children?.map((c) => c.to),
