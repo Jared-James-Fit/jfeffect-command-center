@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import type { NavItem } from "@/components/app-shell";
-import { Search, Eye } from "lucide-react";
+import { Search, Eye, MoreHorizontal } from "lucide-react";
 
 const KEY = "jf-floating-bar-v2";
 const EVT = "floating-bar-updated";
@@ -27,12 +27,41 @@ export const CLIENT_POV_BAR_ITEM: NavItem = {
   group: "Actions",
 };
 
+/** Route id of the synthetic "More" overflow slot. */
+export const MORE_BAR_TO = "__more__";
+
+/**
+ * Synthetic nav item — not a route. Opens the full grouped navigation drawer.
+ * It is a CONFIGURABLE slot: when present it occupies one of the five visible
+ * positions instead of adding a sixth fixed button.
+ */
+export const MORE_BAR_ITEM: NavItem = {
+  to: MORE_BAR_TO,
+  label: "More",
+  icon: MoreHorizontal,
+  group: "Actions",
+};
+
 /** Returns nav plus any synthetic action items the bar can use. */
 export function withBarActionItems(nav: NavItem[]): NavItem[] {
   const out = [...nav];
   if (!out.some((n) => n.to === SEARCH_BAR_ITEM.to)) out.push(SEARCH_BAR_ITEM);
   if (!out.some((n) => n.to === CLIENT_POV_BAR_ITEM.to)) out.push(CLIENT_POV_BAR_ITEM);
+  if (!out.some((n) => n.to === MORE_BAR_ITEM.to)) out.push(MORE_BAR_ITEM);
   return out;
+}
+
+/**
+ * Canonical visible-bar contract: at most five buttons TOTAL.
+ *
+ * "More" is one of those five, never an extra sixth button. When a layout does
+ * not configure More explicitly, the last position is reserved for it so the
+ * overflow drawer stays reachable.
+ */
+export function resolveVisibleBarItems(items: NavItem[]): NavItem[] {
+  const capped = items.slice(0, MAX_BAR_SLOTS);
+  if (capped.some((i) => i.to === MORE_BAR_TO)) return capped;
+  return [...capped.slice(0, MAX_BAR_SLOTS - 1), MORE_BAR_ITEM];
 }
 
 export type BarScope = "admin" | "coach";

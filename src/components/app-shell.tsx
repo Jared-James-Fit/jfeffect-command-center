@@ -34,7 +34,7 @@ import { CommandPalette } from "@/components/command-palette";
 import type { AdminRole } from "@/lib/admin-route-registry";
 import { DualAccountSwitcher } from "@/components/dual-account-switcher";
 import { useExerciseLibraryRealtime } from "@/hooks/use-exercise-library-realtime";
-import { MAX_BAR_SLOTS } from "@/lib/floating-bar";
+import { MORE_BAR_TO, resolveVisibleBarItems } from "@/lib/floating-bar";
 
 export interface NavItem {
   to: string;
@@ -858,12 +858,15 @@ export function AppShell({ items, bottomItems: customBottomItems, title, childre
 
         {/* Mobile bottom nav — fixed, app-like tab bar */}
         {(() => {
-          const visible = bottomItems.slice(0, MAX_BAR_SLOTS);
-          const cols = visible.length + 1; // + More (system slot)
-          const gridCols = cols === 6 ? "grid-cols-6" : cols === 5 ? "grid-cols-5" : "grid-cols-4";
-          // With 6 columns a 320px phone gives ~50px per slot — tighten
-          // padding so labels stay on one line and nothing clips.
-          const dense = cols >= 6;
+          // Canonical contract: five buttons TOTAL, with "More" occupying one
+          // of the five positions (never a fixed sixth button).
+          const visible = resolveVisibleBarItems(bottomItems);
+          const cols = visible.length;
+          const gridCols =
+            cols === 5 ? "grid-cols-5" : cols === 4 ? "grid-cols-4" : cols === 3 ? "grid-cols-3" : "grid-cols-2";
+          // At 320px five columns give ~60px per slot — tighten padding so
+          // labels stay on one line and nothing clips.
+          const dense = cols >= 5;
           return (
         <nav
           data-mobile-bottom-nav
@@ -874,22 +877,26 @@ export function AppShell({ items, bottomItems: customBottomItems, title, childre
           )}
           style={{ bottom: "max(env(safe-area-inset-bottom), 6px)" }}
         >
-          {visible.map((item) => (
-            <BottomNavSlot
-              key={(item.children ? "g:" : "") + item.to + ":" + item.label}
-              item={item}
-              pathname={pathname}
-              search={search}
-              navBadges={navBadges}
-              onNavigate={(to) => markNavSeen(user?.id, to)}
-              dense={dense}
-            />
-          ))}
-          <MoreNavSlot
-            dense={dense}
-            active={moreOpen}
-            onOpenMore={() => setMoreOpen(true)}
-          />
+          {visible.map((item) =>
+            item.to === MORE_BAR_TO ? (
+              <MoreNavSlot
+                key="more"
+                dense={dense}
+                active={moreOpen}
+                onOpenMore={() => setMoreOpen(true)}
+              />
+            ) : (
+              <BottomNavSlot
+                key={(item.children ? "g:" : "") + item.to + ":" + item.label}
+                item={item}
+                pathname={pathname}
+                search={search}
+                navBadges={navBadges}
+                onNavigate={(to) => markNavSeen(user?.id, to)}
+                dense={dense}
+              />
+            ),
+          )}
         </nav>
           );
         })()}
