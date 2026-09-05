@@ -1257,15 +1257,20 @@ function ToggleRow({
   label,
   checked,
   onChange,
+  hint,
 }: {
   label: string;
   checked: boolean;
   onChange: (v: boolean) => void;
+  hint?: string;
 }) {
   return (
     <label className="flex items-center gap-3 rounded-md border border-border px-3 py-2 cursor-pointer hover:bg-muted/40">
       <Switch checked={checked} onCheckedChange={onChange} />
-      <span className="text-sm">{label}</span>
+      <span className="min-w-0 text-sm">
+        {label}
+        {hint && <span className="block text-xs text-muted-foreground">{hint}</span>}
+      </span>
     </label>
   );
 }
