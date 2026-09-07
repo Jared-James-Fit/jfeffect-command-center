@@ -1,0 +1,13 @@
+{
+  "version": "7",
+  "dialect": "postgresql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "7",
+      "when": 1788762690423,
+      "tag": "0000_fix_pl_exercise_rows_autolink_min_uuid",
+      "breakpoints": true
+    }
+  ]
+}
