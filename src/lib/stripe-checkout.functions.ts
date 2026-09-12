@@ -461,6 +461,17 @@ export const createCheckoutSessionForAssignment = createServerFn({ method: "POST
     if (checkoutMode === "payment") {
       sessionParams["invoice_creation[enabled]"] = "true";
     }
+    // Recurring: copy the mapping metadata onto the SUBSCRIPTION itself.
+    // Without this, every future invoice / subscription event arrives with no
+    // purchase_record_id and the webhook has to guess which sale it belongs to
+    // (which breaks for repeat buyers). Stripe copies subscription metadata
+    // onto its invoices, so renewals stay linked forever.
+    if (checkoutMode === "subscription") {
+      sessionParams["subscription_data[metadata][purchase_record_id]"] = purchase.id;
+      sessionParams["subscription_data[metadata][client_id]"] = client.id;
+      sessionParams["subscription_data[metadata][offer_id]"] = purchase.offer_id ?? "";
+      sessionParams["subscription_data[metadata][workspace]"] = "jfeffect";
+    }
     if (stripeCustomerId) {
       sessionParams["customer"] = stripeCustomerId;
       // Auto-update customer address from checkout so future sessions use it
