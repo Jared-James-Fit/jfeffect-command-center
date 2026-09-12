@@ -109,7 +109,7 @@ async function resolvePurchase(
   fallback: Record<string, string | null | undefined>,
 ) {
   const res = await resolvePurchaseDetailed(supabase, obj, fallback);
-  return res.matched;
+  return (res.matched ?? null) as any;
 }
 
 /**
