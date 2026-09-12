@@ -257,6 +257,8 @@ export interface OfferLike {
   location?: string | null;
   session_length_minutes?: number | null;
   sessions_included?: number | null;
+  /** first_payment | per_installment | manual — when credits are granted. */
+  session_fulfillment?: string | null;
   cancellation_window?: string | null;
   no_show_policy?: string | null;
   late_arrival_policy?: string | null;
@@ -338,6 +340,9 @@ export function snapshotOfferForPurchase(o: any, extras: { clientId: string; ass
     session_length_minutes: o.session_length_minutes ?? null,
     sessions_purchased: o.sessions_included ?? 0,
     package_tracking_enabled: !!(o.sessions_included && o.sessions_included > 0),
+    // Snapshot the delivery rule too: once the sale exists, later catalogue
+    // edits must not change how this purchase releases its credits.
+    session_fulfillment: o.session_fulfillment ?? "first_payment",
     timezone: extras.timezone ?? "America/Winnipeg",
     assigned_by: extras.assignedBy ?? null,
   };

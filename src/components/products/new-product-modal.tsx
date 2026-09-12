@@ -28,6 +28,14 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { supabase } from "@/integrations/supabase/client";
+import {
+  SESSION_DELIVERY_HINTS,
+  SESSION_DELIVERY_LABELS,
+  availableDeliveries,
+  entitlementDeliveryLine,
+  entitlementSummaryLine,
+  type SessionDelivery,
+} from "@/lib/product-sessions";
 import { createCoachingProduct } from "@/lib/coaching-products.functions";
 import {
   BILLING_FREQUENCY_OPTIONS,
@@ -206,6 +214,7 @@ type FormState = {
   sessionsIncluded: string;
   sessionLengthMin: string;
   sessionExpiryDays: string;
+  sessionDelivery: SessionDelivery;
   accessPreset: AccessPreset;
 
   // agreement
@@ -252,6 +261,7 @@ function initialForm(defaultWorkspace: "coaching" | "membership"): FormState {
     sessionsIncluded: "",
     sessionLengthMin: "60",
     sessionExpiryDays: "",
+    sessionDelivery: "first_payment",
     accessPreset: defaultAccessPreset(category),
     agreementRequired: false,
     agreementTemplateId: null,
@@ -548,16 +558,17 @@ export default function NewProductModal({
       noteLines.push(`[workspace] ${form.workspace}`);
       if (CATEGORIES_WITH_ACCESS[form.category])
         noteLines.push(`[start] ${form.startRule}`);
-      if (CATEGORIES_WITH_SESSIONS[form.category]) {
-        noteLines.push(
-          `[sessions] ${form.sessionsIncluded} × ${form.sessionLengthMin}min` +
-            (form.sessionExpiryDays ? ` (expires ${form.sessionExpiryDays}d)` : ""),
-        );
-      }
+      // Session entitlement is stored in real columns (below), not in notes —
+      // it has to drive the canonical session ledger, not just read nicely.
       noteLines.push(
         `[selling] self=${form.selfPurchase} promo=${form.allowPromotionCodes} self_cancel=${form.allowSelfCancellation} new_only=${form.newCustomersOnly} sales_page=${form.visibleOnSalesPage}`,
       );
       const notesFinal = noteLines.join("\n");
+
+      const sessionsIncludedNum = Math.max(
+        parseInt(form.sessionsIncluded || "0", 10) || 0,
+        0,
+      );
 
       const payload = {
         name: form.name.trim(),
@@ -585,6 +596,12 @@ export default function NewProductModal({
         accessLevel: accessPresetToLevel(form.accessPreset),
         generateStripeLink: generateStripe,
         isMemberFacing: form.workspace !== "coaching",
+        sessionsIncluded: sessionsIncludedNum,
+        sessionFulfillment: sessionsIncludedNum > 0 ? form.sessionDelivery : "first_payment",
+        sessionLengthMinutes:
+          sessionsIncludedNum > 0 ? parseInt(form.sessionLengthMin || "0", 10) || null : null,
+        sessionExpiryDays:
+          sessionsIncludedNum > 0 ? parseInt(form.sessionExpiryDays || "0", 10) || null : null,
         idempotencyKey: idempotencyKeyRef.current,
       };
 
@@ -612,6 +629,18 @@ export default function NewProductModal({
     : "Create Product";
 
   const missingFieldList = Object.keys(errors).map((k) => FIELD_LABELS[k] ?? k);
+
+  // Live session count drives progressive disclosure in the Included sessions
+  // section and the entitlement line in the summary panel.
+  const sessionsIncludedLive = Math.max(parseInt(form.sessionsIncluded || "0", 10) || 0, 0);
+
+  // Per-cycle delivery is only meaningful for recurring products; fall back
+  // when the admin flips a recurring product back to one-time.
+  useEffect(() => {
+    if (form.paymentType !== "recurring" && form.sessionDelivery === "per_installment") {
+      set("sessionDelivery", "first_payment");
+    }
+  }, [form.paymentType, form.sessionDelivery]);
 
   /* ── render ────────────────────────────────────────────── */
   return (
@@ -993,6 +1022,88 @@ export default function NewProductModal({
               </Section>
             )}
 
+            {/* 3b. Included sessions — drives the real session-credit ledger */}
+            <Section title="Included sessions">
+              <div className="space-y-3">
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div>
+                    <Label>
+                      Sessions included
+                      {CATEGORIES_WITH_SESSIONS[form.category] ? <Req /> : null}
+                    </Label>
+                    <Input
+                      ref={registerField("sessionsIncluded") as any}
+                      type="number"
+                      min="0"
+                      step="1"
+                      inputMode="numeric"
+                      value={form.sessionsIncluded}
+                      onChange={(e) => set("sessionsIncluded", e.target.value)}
+                      onBlur={() => setTouched((t) => ({ ...t, sessionsIncluded: true }))}
+                      placeholder={CATEGORIES_WITH_SESSIONS[form.category] ? "16" : "0 — none"}
+                      className={showErr("sessionsIncluded") ? "border-destructive" : ""}
+                    />
+                    {showErr("sessionsIncluded") ? (
+                      <FieldError msg={errors.sessionsIncluded!} />
+                    ) : (
+                      <p className="mt-1 text-[11px] text-muted-foreground">
+                        Credits added to the client's session balance.
+                      </p>
+                    )}
+                  </div>
+                  {sessionsIncludedLive > 0 && (
+                    <div>
+                      <Label>Credit delivery</Label>
+                      <Select
+                        value={form.sessionDelivery}
+                        onValueChange={(v) => set("sessionDelivery", v as SessionDelivery)}
+                      >
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {availableDeliveries(form.paymentType === "recurring").map((d) => (
+                            <SelectItem key={d} value={d}>
+                              {SESSION_DELIVERY_LABELS[d]}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <p className="mt-1 text-[11px] text-muted-foreground">
+                        {SESSION_DELIVERY_HINTS[form.sessionDelivery]}
+                      </p>
+                    </div>
+                  )}
+                </div>
+                {sessionsIncludedLive > 0 && (
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <div>
+                      <Label className="text-xs">Session length (min)</Label>
+                      <Input
+                        type="number"
+                        min="15"
+                        step="5"
+                        inputMode="numeric"
+                        value={form.sessionLengthMin}
+                        onChange={(e) => set("sessionLengthMin", e.target.value)}
+                      />
+                    </div>
+                    <div>
+                      <Label className="text-xs">Credits expire after (days)</Label>
+                      <Input
+                        type="number"
+                        min="0"
+                        inputMode="numeric"
+                        value={form.sessionExpiryDays}
+                        onChange={(e) => set("sessionExpiryDays", e.target.value)}
+                        placeholder="Optional"
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
+            </Section>
+
             {/* 4. Selling Options */}
             <Section title="Selling options">
               <div className="grid gap-2">
@@ -1099,50 +1210,11 @@ export default function NewProductModal({
                   Advanced options
                 </span>
                 <span className="text-xs font-normal text-muted-foreground">
-                  Sessions, status, internal notes
+                  Status, internal notes
                 </span>
               </button>
               {showAdvanced && (
                 <div className="border-t border-border p-3 space-y-3">
-                  {CATEGORIES_WITH_SESSIONS[form.category] && (
-                    <div className="grid grid-cols-3 gap-3">
-                      <div>
-                        <Label className="text-xs">Sessions included <Req /></Label>
-                        <Input
-                          ref={registerField("sessionsIncluded") as any}
-                          type="number"
-                          min="1"
-                          value={form.sessionsIncluded}
-                          onChange={(e) => set("sessionsIncluded", e.target.value)}
-                          onBlur={() => setTouched((t) => ({ ...t, sessionsIncluded: true }))}
-                          placeholder="10"
-                          className={showErr("sessionsIncluded") ? "border-destructive" : ""}
-                        />
-                        {showErr("sessionsIncluded") && (
-                          <FieldError msg={errors.sessionsIncluded!} />
-                        )}
-                      </div>
-                      <div>
-                        <Label className="text-xs">Session length (min)</Label>
-                        <Input
-                          type="number"
-                          min="15"
-                          value={form.sessionLengthMin}
-                          onChange={(e) => set("sessionLengthMin", e.target.value)}
-                        />
-                      </div>
-                      <div>
-                        <Label className="text-xs">Expires (days)</Label>
-                        <Input
-                          type="number"
-                          min="0"
-                          value={form.sessionExpiryDays}
-                          onChange={(e) => set("sessionExpiryDays", e.target.value)}
-                          placeholder="Optional"
-                        />
-                      </div>
-                    </div>
-                  )}
                   <p className="text-xs text-muted-foreground">
                     Stripe IDs are generated automatically on save. Edit existing
                     products from the product list.
@@ -1319,6 +1391,20 @@ function Req() {
   );
 }
 
+/** Session entitlement as the summary panel should describe it, or null. */
+function summaryEntitlement(form: FormState) {
+  const sessions = Math.max(parseInt(form.sessionsIncluded || "0", 10) || 0, 0);
+  if (sessions <= 0) return null;
+  const len = parseInt(form.sessionLengthMin || "0", 10) || 0;
+  const exp = parseInt(form.sessionExpiryDays || "0", 10) || 0;
+  return {
+    sessions,
+    delivery: form.sessionDelivery,
+    lengthMinutes: len > 0 ? len : null,
+    expiryDays: exp > 0 ? exp : null,
+  };
+}
+
 function SummaryContent({
   form,
   hasErrors,
@@ -1330,6 +1416,7 @@ function SummaryContent({
 }) {
   return (
     <div>
+
       <div className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
         Live summary
       </div>
@@ -1342,6 +1429,14 @@ function SummaryContent({
       )}
       {startLine(form) && (
         <p className="mt-0.5 text-xs text-muted-foreground">{startLine(form)}.</p>
+      )}
+      {summaryEntitlement(form) && (
+        <p className="mt-1 text-xs font-medium text-foreground">
+          {entitlementSummaryLine(summaryEntitlement(form)!)}
+          <span className="block text-[11px] font-normal text-muted-foreground">
+            {entitlementDeliveryLine(summaryEntitlement(form)!)}
+          </span>
+        </p>
       )}
       {form.includedItems.filter(Boolean).length > 0 && (
         <div className="mt-3">

@@ -4174,7 +4174,9 @@ export type Database = {
           payment_structure: string | null
           price_cents: number
           product_type: string | null
+          session_expiry_days: number | null
           session_fulfillment: string
+          session_length_minutes: number | null
           sessions_included: number
           status: string
           stripe_payment_link_id: string | null
@@ -4210,7 +4212,9 @@ export type Database = {
           payment_structure?: string | null
           price_cents: number
           product_type?: string | null
+          session_expiry_days?: number | null
           session_fulfillment?: string
+          session_length_minutes?: number | null
           sessions_included?: number
           status?: string
           stripe_payment_link_id?: string | null
@@ -4246,7 +4250,9 @@ export type Database = {
           payment_structure?: string | null
           price_cents?: number
           product_type?: string | null
+          session_expiry_days?: number | null
           session_fulfillment?: string
+          session_length_minutes?: number | null
           sessions_included?: number
           status?: string
           stripe_payment_link_id?: string | null

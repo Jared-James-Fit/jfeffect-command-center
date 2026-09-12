@@ -114,6 +114,12 @@ const createSchema = z.object({
   accessLevel: z.number().int().min(0).max(5).optional().nullable(),
   isMemberFacing: z.boolean().optional(),
   memberTierLabel: z.string().trim().max(60).optional().nullable(),
+  // Session entitlement — feeds purchase_records.sessions_purchased at sale
+  // time, which the canonical grant trigger turns into session_ledger_events.
+  sessionsIncluded: z.number().int().min(0).max(500).optional().nullable(),
+  sessionFulfillment: z.enum(["first_payment", "per_installment", "manual"]).optional().nullable(),
+  sessionLengthMinutes: z.number().int().min(0).max(600).optional().nullable(),
+  sessionExpiryDays: z.number().int().min(0).max(3650).optional().nullable(),
 });
 
 export const createCoachingProduct = createServerFn({ method: "POST" })
@@ -209,6 +215,10 @@ export const createCoachingProduct = createServerFn({ method: "POST" })
         active: (data.status ?? "Active") === "Active",
         notes: data.notes ?? null,
         mode: data.checkoutMode ?? (data.generateStripeLink ? "auto" : "manual"),
+        sessions_included: data.sessionsIncluded ?? 0,
+        session_fulfillment: data.sessionFulfillment ?? "first_payment",
+        session_length_minutes: data.sessionLengthMinutes || null,
+        session_expiry_days: data.sessionExpiryDays || null,
         created_by: userId,
       })
       .select("*")
@@ -256,6 +266,15 @@ export const updateCoachingProduct = createServerFn({ method: "POST" })
     if (data.checkoutMode !== undefined) patch.mode = data.checkoutMode;
     if (data.isMemberFacing !== undefined) patch.is_member_facing = data.isMemberFacing;
     if (data.memberTierLabel !== undefined) patch.member_tier_label = data.memberTierLabel ?? null;
+    // Catalogue edits change FUTURE sales only — purchase_records already hold
+    // their own snapshot, so historical entitlements are never rewritten here.
+    if (data.sessionsIncluded !== undefined) patch.sessions_included = data.sessionsIncluded ?? 0;
+    if (data.sessionFulfillment !== undefined)
+      patch.session_fulfillment = data.sessionFulfillment ?? "first_payment";
+    if (data.sessionLengthMinutes !== undefined)
+      patch.session_length_minutes = data.sessionLengthMinutes || null;
+    if (data.sessionExpiryDays !== undefined)
+      patch.session_expiry_days = data.sessionExpiryDays || null;
 
     // ── Stripe currency sync ───────────────────────────────────────────
     // Stripe Prices are immutable, so when the admin changes currency (or

@@ -8,6 +8,13 @@
       "when": 1788762690423,
       "tag": "0000_fix_pl_exercise_rows_autolink_min_uuid",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1789253378082,
+      "tag": "0001_product_session_entitlement_fields",
+      "breakpoints": true
     }
   ]
 }
