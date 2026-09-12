@@ -575,5 +575,5 @@ export const rescheduleFromCommittedDays = createServerFn({ method: "POST" })
       })),
     );
 
-    return { ok: true as const, applied: applied.length, batchId };
+    return { ok: true as const, applied: applied.length, batchId, pendingPinned };
   });
