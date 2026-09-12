@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import { createPaymentShareLink } from "@/lib/payment-share.functions";
 import { createCheckoutSessionForAssignment } from "@/lib/stripe-checkout.functions";
+import { reconcilePurchaseWithStripe } from "@/lib/stripe-sync.functions";
 import { getShareablePaymentUrl } from "@/components/payments/copy-payment-link-button";
 import { shareKindLabel } from "@/lib/payment-share-link";
 import { share as nativeShare, canShare } from "@/platform/share";
@@ -384,6 +385,25 @@ function RowMenu({
   const paid = raw.payment_status === "Paid" || raw.payment_status === "Active Subscription";
   const shareFn = useServerFn(createPaymentShareLink);
   const checkoutFn = useServerFn(createCheckoutSessionForAssignment);
+  const reconcileFn = useServerFn(reconcilePurchaseWithStripe);
+  const qc = useQueryClient();
+
+  // Read-only pull from Stripe for this one sale: refreshes billing state and
+  // backfills any payment Stripe recorded but the webhook never delivered.
+  const syncWithStripe = async () => {
+    const t = toast.loading("Reading this sale from Stripe…");
+    try {
+      const res: any = await reconcileFn({ data: { purchaseId: raw.id } });
+      if (!res?.ok) return void toast.error(res?.error ?? "Could not reconcile", { id: t });
+      qc.invalidateQueries({ queryKey: ["client-purchases"] });
+      toast.success(`Synced — ${res.status}`, {
+        id: t,
+        description: res.ledgerAdded ? `${res.ledgerAdded} missing payment(s) recorded.` : "Already up to date.",
+      });
+    } catch (e: any) {
+      toast.error(e?.message ?? "Could not reconcile", { id: t });
+    }
+  };
 
   const copyLink = async (mode: "copy" | "share") => {
     const t = toast.loading("Getting payment link…");
@@ -439,6 +459,11 @@ function RowMenu({
               </DropdownMenuItem>
             )}
           </>
+        )}
+        {(raw.stripe_subscription_id || raw.stripe_checkout_session_id) && (
+          <DropdownMenuItem onSelect={() => { void syncWithStripe(); }}>
+            <RefreshCw className="mr-2 h-3.5 w-3.5" />Sync with Stripe
+          </DropdownMenuItem>
         )}
         <DropdownMenuItem onSelect={() => { void downloadPurchasePdf(raw, clientName); }}>
           <Download className="mr-2 h-3.5 w-3.5" />Download PDF

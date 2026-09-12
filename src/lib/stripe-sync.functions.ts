@@ -237,3 +237,127 @@ export const syncStripePayments = createServerFn({ method: "POST" })
 
     return { ok: true, scanned: sessions.length, counts, entries };
   });
+
+/**
+ * Reconcile ONE sale against Stripe, on demand.
+ *
+ * Read-only against Stripe (subscription + latest invoices + checkout session).
+ * Writes back the canonical billing state and any missing payment_ledger rows,
+ * idempotently keyed on the Stripe invoice / session id. It never charges,
+ * refunds, cancels, retries, or edits anything in Stripe.
+ */
+export const reconcilePurchaseWithStripe = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) =>
+    z.object({ purchaseId: z.string().uuid(), mode: z.enum(["test", "live"]).default("live") }).parse(d),
+  )
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context as any;
+    await assertAdmin(supabase, userId);
+
+    const apiKey = getStripeKeyForMode(data.mode as StripeMode);
+    if (!apiKey) return { ok: false, error: `No Stripe ${data.mode} key configured.` };
+
+    const { data: purchase } = await supabase
+      .from("purchase_records").select("*").eq("id", data.purchaseId).maybeSingle();
+    if (!purchase) return { ok: false, error: "Sale not found." };
+
+    const patch: Record<string, any> = {
+      last_payment_update_source: "stripe_reconcile",
+      last_payment_update_at: new Date().toISOString(),
+    };
+    let ledgerAdded = 0;
+    const notes: string[] = [];
+
+    // Subscription state (authoritative for recurring sales).
+    if (purchase.stripe_subscription_id) {
+      const sub: any = await stripeFetch(`/subscriptions/${purchase.stripe_subscription_id}`, { apiKey });
+      const status = sub?.status ?? null;
+      patch.is_recurring = true;
+      patch.stripe_subscription_status = status;
+      patch.cancel_at_period_end = !!sub?.cancel_at_period_end;
+      patch.next_billing_date =
+        sub?.cancel_at_period_end || !sub?.current_period_end || !["active", "trialing"].includes(status ?? "")
+          ? null
+          : new Date(sub.current_period_end * 1000).toISOString().split("T")[0];
+      patch.payment_status =
+        status === "active" || status === "trialing" ? "Active Subscription"
+        : status === "past_due" || status === "unpaid" ? "Overdue"
+        : status === "canceled" || status === "incomplete_expired" ? "Cancelled"
+        : "Pending Payment";
+      patch.service_status =
+        status === "active" || status === "trialing" ? "Active"
+        : status === "canceled" ? "Cancelled"
+        : purchase.service_status;
+      notes.push(`Subscription ${purchase.stripe_subscription_id} is ${status}.`);
+
+      // Backfill any paid invoice that never produced a ledger row.
+      const inv: any = await stripeFetch(
+        `/invoices?subscription=${purchase.stripe_subscription_id}&limit=100`, { apiKey },
+      );
+      for (const i of (inv?.data ?? []) as any[]) {
+        if (i.status !== "paid" || !i.amount_paid) continue;
+        const { data: exists } = await supabase
+          .from("payment_ledger").select("id").eq("external_reference", i.id).maybeSingle();
+        if (exists) continue;
+        const at = new Date((i.status_transitions?.paid_at ?? i.created) * 1000).toISOString();
+        await supabase.from("payment_ledger").insert({
+          client_id: purchase.client_id,
+          purchase_id: purchase.id,
+          txn_type: "payment",
+          method: "stripe",
+          amount_minor: i.amount_paid,
+          tax_minor: i.tax ?? 0,
+          currency: (i.currency ?? "cad").toUpperCase(),
+          transaction_date: at.slice(0, 10),
+          received_at: at,
+          external_reference: i.id,
+          stripe_invoice_id: i.id,
+          stripe_customer_id: i.customer ?? null,
+          stripe_subscription_id: purchase.stripe_subscription_id,
+          stripe_mode: data.mode,
+          source: "stripe_reconcile",
+          internal_note: `Stripe reconcile — invoice ${i.id}`,
+        });
+        ledgerAdded += 1;
+      }
+    } else if (purchase.stripe_checkout_session_id) {
+      const s: any = await stripeFetch(`/checkout/sessions/${purchase.stripe_checkout_session_id}`, { apiKey });
+      notes.push(`Checkout session is ${s?.payment_status}.`);
+      if (s?.payment_status === "paid") {
+        patch.payment_status = "Paid";
+        patch.service_status = "Active";
+        patch.paid_at = purchase.paid_at ?? new Date((s.created ?? Date.now() / 1000) * 1000).toISOString();
+        const { data: exists } = await supabase
+          .from("payment_ledger").select("id").eq("external_reference", s.id).maybeSingle();
+        if (!exists && s.amount_total > 0) {
+          await supabase.from("payment_ledger").insert({
+            client_id: purchase.client_id,
+            purchase_id: purchase.id,
+            txn_type: "payment",
+            method: "stripe",
+            amount_minor: s.amount_total,
+            tax_minor: s.total_details?.amount_tax ?? 0,
+            currency: (s.currency ?? "cad").toUpperCase(),
+            transaction_date: new Date(s.created * 1000).toISOString().slice(0, 10),
+            received_at: new Date(s.created * 1000).toISOString(),
+            external_reference: s.id,
+            stripe_checkout_session_id: s.id,
+            stripe_payment_intent_id: s.payment_intent ?? null,
+            stripe_customer_id: s.customer ?? null,
+            stripe_mode: data.mode,
+            source: "stripe_reconcile",
+            internal_note: `Stripe reconcile — checkout session ${s.id}`,
+          });
+          ledgerAdded += 1;
+        }
+      }
+    } else {
+      return { ok: false, error: "This sale has no Stripe subscription or checkout session to reconcile against." };
+    }
+
+    const { error } = await supabase.from("purchase_records").update(patch).eq("id", purchase.id);
+    if (error) return { ok: false, error: error.message };
+
+    return { ok: true, ledgerAdded, status: patch.payment_status ?? purchase.payment_status, notes };
+  });

@@ -15,6 +15,20 @@
       "when": 1789253378082,
       "tag": "0001_product_session_entitlement_fields",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1789254182553,
+      "tag": "0002_purchase_totals_preserve_stripe_status",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1789254451619,
+      "tag": "0003_realtime_sales_tables",
+      "breakpoints": true
     }
   ]
 }

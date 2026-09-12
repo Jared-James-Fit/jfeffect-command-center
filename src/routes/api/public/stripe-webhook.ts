@@ -13,6 +13,7 @@ import {
   invoiceChargeId,
   invoiceTaxMinor,
 } from "@/lib/stripe-invoice-refs";
+import { matchPurchase, type MatchResult } from "@/lib/stripe-purchase-match";
 
 // Verify Stripe signature using Web Crypto (HMAC-SHA256).
 // Header format: t=timestamp,v1=sig,v1=sig...
@@ -60,38 +61,90 @@ function admin() {
   );
 }
 
-async function findPurchase(supabase: any, lookup: Record<string, string | null | undefined>) {
-  for (const [col, val] of Object.entries(lookup)) {
-    if (!val) continue;
-    const { data } = await supabase.from("purchase_records").select("*").eq(col, val).maybeSingle();
-    if (data) return data;
-  }
-  return null;
+async function rowsBy(supabase: any, col: string, val: string | null | undefined) {
+  if (!val) return [];
+  const { data } = await supabase.from("purchase_records").select("*").eq(col, val).limit(5);
+  return (data ?? []) as any[];
 }
 
 /**
  * Resolve the purchase record for a Stripe event.
- * Primary: metadata.purchase_record_id (set by createCheckoutSessionForAssignment).
- * Fallback: lookups by Stripe IDs we ourselves stamped onto the row
- * (checkout session id, subscription id, payment intent id, customer id).
- * NOTE: legacy "build a URL from obj.payment_link" fallback was removed —
- * obj.payment_link is a `plink_…` ID, not a URL slug, so that match never worked.
+ *
+ * Primary: metadata.purchase_record_id — stamped on the Checkout Session AND
+ * on subscription_data by createCheckoutSessionForAssignment, so every future
+ * invoice/subscription event carries it too.
+ * Fallback: Stripe ids we ourselves stamped onto the row, then the customer.
+ *
+ * Matching rules live in `@/lib/stripe-purchase-match` (pure + unit tested).
+ * Ambiguous matches are NEVER guessed — they return null with a reason so the
+ * caller can flag the event for admin reconciliation.
  */
+async function resolvePurchaseDetailed(
+  supabase: any,
+  obj: any,
+  fallback: Record<string, string | null | undefined>,
+): Promise<MatchResult> {
+  const metaId: string | undefined =
+    obj?.metadata?.purchase_record_id ||
+    obj?.subscription_details?.metadata?.purchase_record_id ||
+    obj?.lines?.data?.[0]?.metadata?.purchase_record_id;
+  let metaRow: any = null;
+  if (metaId) {
+    const { data } = await supabase
+      .from("purchase_records").select("*").eq("id", metaId).maybeSingle();
+    metaRow = data ?? null;
+  }
+  return matchPurchase({
+    metaRow,
+    bySubscription: await rowsBy(supabase, "stripe_subscription_id", fallback.stripe_subscription_id),
+    byCheckoutSession: await rowsBy(supabase, "stripe_checkout_session_id", fallback.stripe_checkout_session_id),
+    byPaymentIntent: await rowsBy(supabase, "stripe_payment_intent_id", fallback.stripe_payment_intent_id),
+    byCustomer: await rowsBy(supabase, "stripe_customer_id", fallback.stripe_customer_id),
+  });
+}
+
 async function resolvePurchase(
   supabase: any,
   obj: any,
   fallback: Record<string, string | null | undefined>,
 ) {
-  const metaId: string | undefined =
-    obj?.metadata?.purchase_record_id ||
-    obj?.subscription_details?.metadata?.purchase_record_id;
-  if (metaId) {
-    const { data } = await supabase
-      .from("purchase_records").select("*").eq("id", metaId).maybeSingle();
-    if (data) return data;
-  }
-  return findPurchase(supabase, fallback);
+  const res = await resolvePurchaseDetailed(supabase, obj, fallback);
+  return (res.matched ?? null) as any;
 }
+
+/**
+ * Record a Stripe object we could not confidently attach to a sale so an admin
+ * can reconcile it, instead of silently dropping it or guessing.
+ */
+async function flagUnlinked(
+  supabase: any,
+  event: any,
+  obj: any,
+  reason: string,
+  candidates: string[] = [],
+) {
+  try {
+    await supabase.from("stripe_unlinked_events").upsert({
+      stripe_event_id: event.id,
+      event_type: event.type,
+      reason,
+      stripe_customer_id: typeof obj?.customer === "string" ? obj.customer : null,
+      stripe_subscription_id: typeof obj?.subscription === "string" ? obj.subscription : (event.type?.startsWith("customer.subscription") ? obj?.id ?? null : null),
+      stripe_invoice_id: event.type?.startsWith("invoice") ? obj?.id ?? null : null,
+      stripe_checkout_session_id: event.type?.startsWith("checkout.session") ? obj?.id ?? null : null,
+      stripe_payment_intent_id: typeof obj?.payment_intent === "string" ? obj.payment_intent : null,
+      amount_minor: obj?.amount_total ?? obj?.amount_paid ?? obj?.amount ?? null,
+      currency: obj?.currency ? String(obj.currency).toUpperCase() : null,
+      customer_email: obj?.customer_details?.email ?? obj?.customer_email ?? null,
+      candidate_purchase_ids: candidates,
+      payload: obj ?? null,
+    }, { onConflict: "stripe_event_id" });
+  } catch (e) {
+    console.error("[stripe-webhook] failed to flag unlinked event", e);
+  }
+  console.error(`[stripe-webhook] UNLINKED ${event.type} (${event.id}): ${reason}`);
+}
+
 
 /**
  * Cancelled is a terminal state. Once a purchase_record is Cancelled we
@@ -504,6 +557,14 @@ export const Route = createFileRoute("/api/public/stripe-webhook")({
                   }
                 }
               }
+              if (!purchase && obj?.metadata?.preview !== "true") {
+                await flagUnlinked(
+                  supabase,
+                  event,
+                  obj,
+                  "Completed checkout could not be matched to a JF Effect sale (no metadata, no stored session id, no single open sale for this customer).",
+                );
+              }
               if (purchase) {
                 await supabase.from("purchase_records").update({
                   payment_status: obj.payment_status === "paid"
@@ -657,6 +718,9 @@ export const Route = createFileRoute("/api/public/stripe-webhook")({
                 stripe_subscription_id: obj.id,
                 stripe_customer_id: obj.customer,
               });
+              if (!purchase) {
+                await flagUnlinked(supabase, event, obj, "New subscription could not be matched to a JF Effect sale.");
+              }
               if (purchase) {
                 await supabase.from("purchase_records").update({
                   payment_status: obj.status === "active" ? "Active Subscription"
@@ -778,6 +842,9 @@ export const Route = createFileRoute("/api/public/stripe-webhook")({
                 break;
               }
               const purchase = await resolvePurchase(supabase, obj, { stripe_subscription_id: obj.id });
+              if (!purchase) {
+                await flagUnlinked(supabase, event, obj, "Cancelled subscription could not be matched to a JF Effect sale.");
+              }
               if (purchase) {
                 await supabase.from("purchase_records").update({
                   payment_status: "Cancelled",
@@ -906,6 +973,14 @@ export const Route = createFileRoute("/api/public/stripe-webhook")({
                     .limit(1).maybeSingle();
                   purchase = pr ?? null;
                 }
+              }
+              if (!purchase && (obj.amount_paid ?? 0) > 0) {
+                await flagUnlinked(
+                  supabase,
+                  event,
+                  obj,
+                  "Paid invoice could not be matched to a JF Effect sale — no metadata, no stored subscription/payment-intent id, and no single open sale for this customer.",
+                );
               }
               if (purchase) {
                 await supabase.from("purchase_records").update({

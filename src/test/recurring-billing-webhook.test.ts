@@ -67,7 +67,23 @@ vi.mock("@supabase/supabase-js", () => {
         is() { return this; },
         neq() { return Promise.resolve({ data: null, error: null }); },
         order() { return this; },
-        limit() { return this; },
+        // `.limit(n)` is awaited directly by the webhook's purchase matcher,
+        // so it resolves to a rows array (Supabase list semantics).
+        limit(this: any) {
+          const filters = this._filters as Array<[string, any]>;
+          const rows =
+            table === "purchase_records"
+              ? filters.some(([col, val]) => val && (purchaseRow as any)[col] === val)
+                ? [{ ...purchaseRow }]
+                : []
+              : [];
+          const self = this;
+          return {
+            ...self,
+            maybeSingle: self.maybeSingle.bind(self),
+            then: (resolve: any) => resolve({ data: rows, error: null }),
+          };
+        },
         maybeSingle: async function () {
           if (table === "purchase_records") {
             // Return the shared purchase row for any lookup that matches one of its fields.

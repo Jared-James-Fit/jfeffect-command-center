@@ -34,6 +34,7 @@ import { CommandPalette } from "@/components/command-palette";
 import type { AdminRole } from "@/lib/admin-route-registry";
 import { DualAccountSwitcher } from "@/components/dual-account-switcher";
 import { useExerciseLibraryRealtime } from "@/hooks/use-exercise-library-realtime";
+import { useSalesRealtime } from "@/hooks/use-sales-realtime";
 import { MORE_BAR_TO, resolveVisibleBarItems } from "@/lib/floating-bar";
 
 export interface NavItem {
@@ -235,6 +236,7 @@ function useCollapsedSections() {
 export function AppShell({ items, bottomItems: customBottomItems, title, children }: { items: NavItem[]; bottomItems?: NavItem[]; title: string; children: ReactNode }) {
   useKeyboardOpen();
   useExerciseLibraryRealtime();
+  useSalesRealtime();
   const { signOut, user, role } = useAuth();
   const navigate = useNavigate();
   const pathname = useRouterState({ select: (r) => r.location.pathname });
