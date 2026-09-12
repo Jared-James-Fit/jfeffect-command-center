@@ -547,10 +547,15 @@ export const rescheduleFromCommittedDays = createServerFn({ method: "POST" })
         } else {
           await supabaseAdmin
             .from("pl_days")
-            .update({ scheduled_date: a.prev, schedule_source: a.prevSource ?? "auto" })
+            .update({
+              scheduled_date: a.prev,
+              schedule_source: a.prevSource ?? "auto",
+              schedule_locked: a.wasPinned,
+            })
             .eq("id", a.dayId);
         }
       }
+
       throw err;
     }
 
