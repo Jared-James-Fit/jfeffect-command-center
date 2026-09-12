@@ -235,6 +235,7 @@ function useCollapsedSections() {
 export function AppShell({ items, bottomItems: customBottomItems, title, children }: { items: NavItem[]; bottomItems?: NavItem[]; title: string; children: ReactNode }) {
   useKeyboardOpen();
   useExerciseLibraryRealtime();
+  useSalesRealtime();
   const { signOut, user, role } = useAuth();
   const navigate = useNavigate();
   const pathname = useRouterState({ select: (r) => r.location.pathname });
