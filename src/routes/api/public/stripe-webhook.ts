@@ -557,6 +557,14 @@ export const Route = createFileRoute("/api/public/stripe-webhook")({
                   }
                 }
               }
+              if (!purchase && obj?.metadata?.preview !== "true") {
+                await flagUnlinked(
+                  supabase,
+                  event,
+                  obj,
+                  "Completed checkout could not be matched to a JF Effect sale (no metadata, no stored session id, no single open sale for this customer).",
+                );
+              }
               if (purchase) {
                 await supabase.from("purchase_records").update({
                   payment_status: obj.payment_status === "paid"
