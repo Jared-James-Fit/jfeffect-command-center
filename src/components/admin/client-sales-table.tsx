@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import { createPaymentShareLink } from "@/lib/payment-share.functions";
 import { createCheckoutSessionForAssignment } from "@/lib/stripe-checkout.functions";
+import { reconcilePurchaseWithStripe } from "@/lib/stripe-sync.functions";
 import { getShareablePaymentUrl } from "@/components/payments/copy-payment-link-button";
 import { shareKindLabel } from "@/lib/payment-share-link";
 import { share as nativeShare, canShare } from "@/platform/share";
