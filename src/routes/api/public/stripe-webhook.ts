@@ -841,7 +841,9 @@ export const Route = createFileRoute("/api/public/stripe-webhook")({
                 }).then(() => {}, () => {});
                 break;
               }
-              const purchase = await resolvePurchase(supabase, obj, { stripe_subscription_id: obj.id });
+              if (!purchase) {
+                await flagUnlinked(supabase, event, obj, "Cancelled subscription could not be matched to a JF Effect sale.");
+              }
               if (purchase) {
                 await supabase.from("purchase_records").update({
                   payment_status: "Cancelled",
