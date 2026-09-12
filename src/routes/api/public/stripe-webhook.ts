@@ -968,6 +968,14 @@ export const Route = createFileRoute("/api/public/stripe-webhook")({
                   purchase = pr ?? null;
                 }
               }
+              if (!purchase && (obj.amount_paid ?? 0) > 0) {
+                await flagUnlinked(
+                  supabase,
+                  event,
+                  obj,
+                  "Paid invoice could not be matched to a JF Effect sale — no metadata, no stored subscription/payment-intent id, and no single open sale for this customer.",
+                );
+              }
               if (purchase) {
                 await supabase.from("purchase_records").update({
                   payment_status: "Active Subscription",
