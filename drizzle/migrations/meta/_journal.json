@@ -22,6 +22,13 @@
       "when": 1789254182553,
       "tag": "0002_purchase_totals_preserve_stripe_status",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1789254451619,
+      "tag": "0003_realtime_sales_tables",
+      "breakpoints": true
     }
   ]
 }
