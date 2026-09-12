@@ -319,7 +319,16 @@ export const setScheduleLock = createServerFn({ method: "POST" })
 export const rescheduleFromCommittedDays = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((i: unknown) =>
-    z.object({ clientId: z.string().uuid() }).parse(i),
+    z
+      .object({
+        clientId: z.string().uuid(),
+        // When true, upcoming workouts that were pinned to a specific date
+        // (manually placed or locked) are ALSO realigned onto the new
+        // committed days. Started/completed and past workouts are still
+        // never moved. Used for the explicit "move them anyway" confirmation.
+        includePinned: z.boolean().optional().default(false),
+      })
+      .parse(i),
   )
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context;
@@ -393,7 +402,11 @@ export const rescheduleFromCommittedDays = createServerFn({ method: "POST" })
       prev: string | null;
       next: string;
       prevSource: string | null;
+      wasPinned: boolean;
     }> = [];
+    // Upcoming workouts we left alone only because they are pinned
+    // (manually placed / locked) yet do not sit on a committed day.
+    let pendingPinned = 0;
 
     for (const block of blockList) {
       const dur = (block as any).week_duration_days ?? 7;
@@ -411,47 +424,62 @@ export const rescheduleFromCommittedDays = createServerFn({ method: "POST" })
           .slice()
           .sort((a: any, b: any) => a.day_index - b.day_index);
 
-        const committedDates = committed.map((wd) =>
-          format(addDays(weekStart, (WEEKDAY_INDEX[wd] + 6) % 7), "yyyy-MM-dd"),
-        );
+        // Walk the 7 dates in this week window and keep the ones that fall on a
+        // committed weekday. Scanning (instead of offsetting from Monday) keeps
+        // this correct for blocks that start mid-week.
+        const committedSet = new Set<number>(committed.map((wd) => WEEKDAY_INDEX[wd]));
+        const committedDates: string[] = [];
+        for (let i = 0; i < 7; i++) {
+          const dt = addDays(weekStart, i);
+          if (committedSet.has(dt.getDay())) committedDates.push(format(dt, "yyyy-MM-dd"));
+        }
 
         // Classify days as preserved vs movable.
         const consumed = new Set<string>();
-        const movable: any[] = [];
+        const movable: Array<{ row: any; pinned: boolean }> = [];
         for (const d of weekDays) {
-          const isLocked = !!d.schedule_locked;
-          const isManual = d.schedule_source === "manual";
+          const isPinned = !!d.schedule_locked || d.schedule_source === "manual";
           const isTouched = touchedDayIds.has(d.id);
           const isPast = d.scheduled_date && d.scheduled_date < todayISO;
-          const preserved = isLocked || isManual || isTouched || isPast;
-          if (preserved) {
+          // Started / completed / past workouts are never moved.
+          if (isTouched || isPast) {
             if (d.scheduled_date) consumed.add(d.scheduled_date);
-          } else {
-            movable.push(d);
+            continue;
           }
+          if (isPinned && !data.includePinned) {
+            if (d.scheduled_date) consumed.add(d.scheduled_date);
+            if (!d.scheduled_date || !committedDates.includes(d.scheduled_date)) {
+              pendingPinned++;
+            }
+            continue;
+          }
+          movable.push({ row: d, pinned: isPinned });
         }
 
         const pool = committedDates.filter(
           (dt) => !consumed.has(dt) && dt >= todayISO,
         );
         let cursor = 0;
-        for (const d of movable) {
+        for (const m of movable) {
           if (cursor >= pool.length) break;
           const next = pool[cursor++];
-          if (d.scheduled_date === next) continue;
+          if (m.row.scheduled_date === next && !m.pinned) continue;
+          if (m.row.scheduled_date === next) continue;
           moves.push({
-            dayId: d.id,
-            prev: d.scheduled_date ?? null,
+            dayId: m.row.id,
+            prev: m.row.scheduled_date ?? null,
             next,
-            prevSource: d.schedule_source ?? null,
+            prevSource: m.row.schedule_source ?? null,
+            wasPinned: m.pinned,
           });
         }
       }
     }
 
     if (moves.length === 0) {
-      return { ok: true as const, applied: 0, batchId: null, noop: true };
+      return { ok: true as const, applied: 0, batchId: null, noop: true, pendingPinned };
     }
+
 
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const batchId = crypto.randomUUID();
@@ -500,8 +528,11 @@ export const rescheduleFromCommittedDays = createServerFn({ method: "POST" })
         } else {
           const { error } = await supabaseAdmin
             .from("pl_days")
-            .update({ scheduled_date: m.next, schedule_source: "auto" })
+            // A realigned workout is back under automatic scheduling, so the
+            // pin is released — otherwise the next change would skip it again.
+            .update({ scheduled_date: m.next, schedule_source: "auto", schedule_locked: false })
             .eq("id", m.dayId);
+
           if (error) throw new Error(error.message);
           applied.push({ ...m, target: "day" });
         }
@@ -516,10 +547,15 @@ export const rescheduleFromCommittedDays = createServerFn({ method: "POST" })
         } else {
           await supabaseAdmin
             .from("pl_days")
-            .update({ scheduled_date: a.prev, schedule_source: a.prevSource ?? "auto" })
+            .update({
+              scheduled_date: a.prev,
+              schedule_source: a.prevSource ?? "auto",
+              schedule_locked: a.wasPinned,
+            })
             .eq("id", a.dayId);
         }
       }
+
       throw err;
     }
 
@@ -539,5 +575,5 @@ export const rescheduleFromCommittedDays = createServerFn({ method: "POST" })
       })),
     );
 
-    return { ok: true as const, applied: applied.length, batchId };
+    return { ok: true as const, applied: applied.length, batchId, pendingPinned };
   });

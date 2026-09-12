@@ -101,11 +101,26 @@ export function TrainingScheduleCard({ client, editable = true, compact = false,
     setSaving(false);
     if (error) return toast.error(error.message);
     // Realign future auto-scheduled workouts onto the new committed days.
-    // Manually moved, locked, started, and completed workouts are preserved.
+    // Started, completed and past workouts are always preserved.
     let movedCount = 0;
+    let pinned = 0;
     try {
-      const res = await reschedule({ data: { clientId: client.id } });
-      movedCount = (res as any)?.applied ?? 0;
+      const res: any = await reschedule({ data: { clientId: client.id } });
+      movedCount = res?.applied ?? 0;
+      pinned = res?.pendingPinned ?? 0;
+      // Workouts that were pinned to specific dates don't move automatically.
+      // Ask once, then move them too so the calendar matches the new days.
+      if (movedCount === 0 && pinned > 0) {
+        const ok = window.confirm(
+          `${pinned} upcoming workout${pinned === 1 ? " is" : "s are"} set to specific dates that aren't your new training days. Move ${pinned === 1 ? "it" : "them"} onto ${sortedDays.map((d) => SHORT_DAY[d as WeekDay]).join(" / ")}?`,
+        );
+        if (ok) {
+          const forced: any = await reschedule({
+            data: { clientId: client.id, includePinned: true },
+          });
+          movedCount = forced?.applied ?? 0;
+        }
+      }
     } catch (e: any) {
       toast.error(`Saved, but could not realign workouts: ${e?.message ?? "unknown error"}`);
     }
@@ -114,6 +129,7 @@ export function TrainingScheduleCard({ client, editable = true, compact = false,
         ? `Schedule saved · ${movedCount} workout${movedCount === 1 ? "" : "s"} moved`
         : "Schedule saved",
     );
+
     qc.invalidateQueries({ queryKey: ["client", client.id] });
     qc.invalidateQueries({ queryKey: ["my-client"] });
     qc.invalidateQueries({ queryKey: ["my-client-schedule-gate"] });
