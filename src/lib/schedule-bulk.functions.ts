@@ -319,7 +319,16 @@ export const setScheduleLock = createServerFn({ method: "POST" })
 export const rescheduleFromCommittedDays = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((i: unknown) =>
-    z.object({ clientId: z.string().uuid() }).parse(i),
+    z
+      .object({
+        clientId: z.string().uuid(),
+        // When true, upcoming workouts that were pinned to a specific date
+        // (manually placed or locked) are ALSO realigned onto the new
+        // committed days. Started/completed and past workouts are still
+        // never moved. Used for the explicit "move them anyway" confirmation.
+        includePinned: z.boolean().optional().default(false),
+      })
+      .parse(i),
   )
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context;
