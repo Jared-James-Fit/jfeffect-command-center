@@ -17520,6 +17520,66 @@ export type Database = {
         }
         Relationships: []
       }
+      stripe_unlinked_events: {
+        Row: {
+          amount_minor: number | null
+          candidate_purchase_ids: string[] | null
+          created_at: string
+          currency: string | null
+          customer_email: string | null
+          event_type: string
+          id: string
+          payload: Json | null
+          reason: string
+          resolved_at: string | null
+          resolved_purchase_id: string | null
+          stripe_checkout_session_id: string | null
+          stripe_customer_id: string | null
+          stripe_event_id: string
+          stripe_invoice_id: string | null
+          stripe_payment_intent_id: string | null
+          stripe_subscription_id: string | null
+        }
+        Insert: {
+          amount_minor?: number | null
+          candidate_purchase_ids?: string[] | null
+          created_at?: string
+          currency?: string | null
+          customer_email?: string | null
+          event_type: string
+          id?: string
+          payload?: Json | null
+          reason: string
+          resolved_at?: string | null
+          resolved_purchase_id?: string | null
+          stripe_checkout_session_id?: string | null
+          stripe_customer_id?: string | null
+          stripe_event_id: string
+          stripe_invoice_id?: string | null
+          stripe_payment_intent_id?: string | null
+          stripe_subscription_id?: string | null
+        }
+        Update: {
+          amount_minor?: number | null
+          candidate_purchase_ids?: string[] | null
+          created_at?: string
+          currency?: string | null
+          customer_email?: string | null
+          event_type?: string
+          id?: string
+          payload?: Json | null
+          reason?: string
+          resolved_at?: string | null
+          resolved_purchase_id?: string | null
+          stripe_checkout_session_id?: string | null
+          stripe_customer_id?: string | null
+          stripe_event_id?: string
+          stripe_invoice_id?: string | null
+          stripe_payment_intent_id?: string | null
+          stripe_subscription_id?: string | null
+        }
+        Relationships: []
+      }
       submission_ai_generations: {
         Row: {
           client_response: string | null
