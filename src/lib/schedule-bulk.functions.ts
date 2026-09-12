@@ -528,8 +528,11 @@ export const rescheduleFromCommittedDays = createServerFn({ method: "POST" })
         } else {
           const { error } = await supabaseAdmin
             .from("pl_days")
-            .update({ scheduled_date: m.next, schedule_source: "auto" })
+            // A realigned workout is back under automatic scheduling, so the
+            // pin is released — otherwise the next change would skip it again.
+            .update({ scheduled_date: m.next, schedule_source: "auto", schedule_locked: false })
             .eq("id", m.dayId);
+
           if (error) throw new Error(error.message);
           applied.push({ ...m, target: "day" });
         }
