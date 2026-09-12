@@ -718,6 +718,9 @@ export const Route = createFileRoute("/api/public/stripe-webhook")({
                 stripe_subscription_id: obj.id,
                 stripe_customer_id: obj.customer,
               });
+              if (!purchase) {
+                await flagUnlinked(supabase, event, obj, "New subscription could not be matched to a JF Effect sale.");
+              }
               if (purchase) {
                 await supabase.from("purchase_records").update({
                   payment_status: obj.status === "active" ? "Active Subscription"
