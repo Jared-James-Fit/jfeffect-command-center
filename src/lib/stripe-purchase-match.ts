@@ -25,6 +25,8 @@ export type MatchRow = {
   stripe_checkout_session_id?: string | null;
   stripe_payment_intent_id?: string | null;
   purchased_at?: string | null;
+  /** Purchase rows carry many more columns; matching only needs the above. */
+  [key: string]: unknown;
 };
 
 export type MatchInput = {
