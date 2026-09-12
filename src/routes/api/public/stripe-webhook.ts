@@ -13,6 +13,7 @@ import {
   invoiceChargeId,
   invoiceTaxMinor,
 } from "@/lib/stripe-invoice-refs";
+import { matchPurchase, type MatchResult } from "@/lib/stripe-purchase-match";
 
 // Verify Stripe signature using Web Crypto (HMAC-SHA256).
 // Header format: t=timestamp,v1=sig,v1=sig...
