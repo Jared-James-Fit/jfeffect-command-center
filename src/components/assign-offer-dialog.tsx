@@ -8,9 +8,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
-import { AlertTriangle, CheckCircle2, CreditCard, FileText, Send } from "lucide-react";
+import { AlertTriangle, CheckCircle2, CreditCard, FileText, Send, Ticket } from "lucide-react";
 import { toast } from "sonner";
 import { snapshotOfferForPurchase } from "@/lib/offers";
+import { assignEntitlementPreview } from "@/lib/product-sessions";
 import { useServerFn } from "@tanstack/react-start";
 import { createAgreement } from "@/lib/agreements.functions";
 import { createCheckoutSessionForAssignment } from "@/lib/stripe-checkout.functions";
@@ -66,6 +67,9 @@ export function AssignOfferDialog({ offer, onClose, fixedClientId }: { offer: an
   const [emailNote, setEmailNote] = useState<string | null>(null);
   const [discountCodeId, setDiscountCodeId] = useState<string | null>(null);
   const recordPaid = mode === "paid_in_full";
+  // What this assignment does to the client's session balance (canonical
+  // ledger — nothing is granted here, this only describes what will happen).
+  const entitlement = offer ? assignEntitlementPreview(offer, mode) : null;
 
   const { data: templates = [] } = useQuery({
     queryKey: ["agreement-templates-active-for-assign"],
@@ -249,7 +253,7 @@ export function AssignOfferDialog({ offer, onClose, fixedClientId }: { offer: an
 
   return (
     <Dialog open={!!offer} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-w-lg">
+      <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
         <DialogHeader><DialogTitle>Assign offer to client</DialogTitle></DialogHeader>
         {offer && (
           <div className="space-y-4">
@@ -272,6 +276,17 @@ export function AssignOfferDialog({ offer, onClose, fixedClientId }: { offer: an
             <div className="rounded-md border border-border bg-secondary/30 p-3">
               <div className="font-bold">{offer.name}</div>
               <div className="text-xs text-muted-foreground">{offer.offer_type} · v{offer.version ?? 1} · {offer.currency ?? "USD"} {Number(offer.full_payable_amount ?? offer.price ?? 0).toLocaleString()}</div>
+              {entitlement && (
+                <div className="mt-2 border-t border-border/60 pt-2">
+                  <div className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
+                    Includes
+                  </div>
+                  <div className="mt-0.5 flex items-center gap-2 text-sm font-semibold">
+                    <Ticket className="h-4 w-4 text-primary" />
+                    {entitlement.headline} of session credit
+                  </div>
+                </div>
+              )}
             </div>
             {mode === "payment_request" && first50 && (
               <div>
@@ -334,6 +349,25 @@ export function AssignOfferDialog({ offer, onClose, fixedClientId }: { offer: an
                   {MODE_COPY[mode].title}
                 </div>
                 <p className="mt-1 text-xs text-muted-foreground">{MODE_COPY[mode].blurb}</p>
+                {entitlement && (
+                  <div className="mt-3 grid gap-2 border-t border-border/60 pt-2 sm:grid-cols-2">
+                    <div>
+                      <div className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
+                        Sessions
+                      </div>
+                      <div className="text-sm font-semibold">{entitlement.headline}</div>
+                    </div>
+                    <div>
+                      <div className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
+                        Added to balance
+                      </div>
+                      <div className="text-sm font-semibold">
+                        {entitlement.grantedNow > 0 ? "Now" : "After payment"}
+                      </div>
+                    </div>
+                    <p className="text-xs text-muted-foreground sm:col-span-2">{entitlement.detail}</p>
+                  </div>
+                )}
               </div>
             </div>
 
