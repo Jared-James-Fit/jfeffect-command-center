@@ -384,6 +384,25 @@ function RowMenu({
   const paid = raw.payment_status === "Paid" || raw.payment_status === "Active Subscription";
   const shareFn = useServerFn(createPaymentShareLink);
   const checkoutFn = useServerFn(createCheckoutSessionForAssignment);
+  const reconcileFn = useServerFn(reconcilePurchaseWithStripe);
+  const qc = useQueryClient();
+
+  // Read-only pull from Stripe for this one sale: refreshes billing state and
+  // backfills any payment Stripe recorded but the webhook never delivered.
+  const syncWithStripe = async () => {
+    const t = toast.loading("Reading this sale from Stripe…");
+    try {
+      const res: any = await reconcileFn({ data: { purchaseId: raw.id } });
+      if (!res?.ok) return void toast.error(res?.error ?? "Could not reconcile", { id: t });
+      qc.invalidateQueries({ queryKey: ["client-purchases"] });
+      toast.success(`Synced — ${res.status}`, {
+        id: t,
+        description: res.ledgerAdded ? `${res.ledgerAdded} missing payment(s) recorded.` : "Already up to date.",
+      });
+    } catch (e: any) {
+      toast.error(e?.message ?? "Could not reconcile", { id: t });
+    }
+  };
 
   const copyLink = async (mode: "copy" | "share") => {
     const t = toast.loading("Getting payment link…");
