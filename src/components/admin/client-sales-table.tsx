@@ -440,6 +440,11 @@ function RowMenu({
             )}
           </>
         )}
+        {(raw.stripe_subscription_id || raw.stripe_checkout_session_id) && (
+          <DropdownMenuItem onSelect={() => { void syncWithStripe(); }}>
+            <RefreshCw className="mr-2 h-3.5 w-3.5" />Sync with Stripe
+          </DropdownMenuItem>
+        )}
         <DropdownMenuItem onSelect={() => { void downloadPurchasePdf(raw, clientName); }}>
           <Download className="mr-2 h-3.5 w-3.5" />Download PDF
         </DropdownMenuItem>
