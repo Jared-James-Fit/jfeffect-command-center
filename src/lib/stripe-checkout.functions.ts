@@ -9,7 +9,7 @@
  * No Stripe SDK is needed — we call the Stripe REST API directly via fetch.
  */
 import { createServerFn } from "@tanstack/react-start";
-import { stripeFirstPaymentParams } from "@/lib/billing-schedule";
+import { stripeFirstPaymentParams, sanitizeSubscriptionParams } from "@/lib/billing-schedule";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import {
@@ -218,7 +218,7 @@ export const createCheckoutSession = createServerFn({ method: "POST" })
     // 6. Create the Checkout Session
     const session = await stripeFetch("/checkout/sessions", {
       method: "POST",
-      body: formEncode(sessionParams),
+      body: formEncode(sanitizeSubscriptionParams(sessionParams)),
     });
 
     return { url: session.url as string, sessionId: session.id as string };
@@ -494,7 +494,9 @@ export const createCheckoutSessionForAssignment = createServerFn({ method: "POST
 
     const session = await stripeFetch("/checkout/sessions", {
       method: "POST",
-      body: formEncode(sessionParams),
+      // Canonical guard: proration_behavior may only travel with a billing
+      // cycle anchor, otherwise Stripe rejects the whole session.
+      body: formEncode(sanitizeSubscriptionParams(sessionParams)),
     });
 
     await supabase

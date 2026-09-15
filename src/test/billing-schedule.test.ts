@@ -31,7 +31,8 @@ describe("first payment timing", () => {
   it("delays the charge with trial_end and never a bare future billing_cycle_anchor", () => {
     const p = stripeFirstPaymentParams("2026-10-01", { today: TODAY });
     expect(p["subscription_data[trial_end]"]).toBe(String(businessEpochSeconds("2026-10-01")));
-    expect(p["subscription_data[proration_behavior]"]).toBe("none");
+    // No anchor is sent, so Stripe forbids proration_behavior in this request.
+    expect(p["subscription_data[proration_behavior]"]).toBeUndefined();
     expect(Object.keys(p).some((k) => k.includes("billing_cycle_anchor"))).toBe(false);
   });
 
