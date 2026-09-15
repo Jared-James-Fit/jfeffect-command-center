@@ -184,7 +184,7 @@ export const previewEndBlockEarlyFn = createServerFn({ method: "GET" })
     affected.sort((a, b) => a.date.localeCompare(b.date));
     return {
       blockName: loaded.block.name as string,
-      currentEnd: (loaded.block.end_date as string | null) ?? null,
+      currentEnd: loaded.actualEnd ?? (loaded.block.end_date as string | null) ?? null,
       newEnd: data.newEnd,
       affectedCount: affected.length + legacyAffected,
       affected: affected.slice(0, 12),
@@ -205,51 +205,21 @@ export const endBlockEarlyFn = createServerFn({ method: "POST" })
     const loaded = await loadBlockSchedule(ctx.supabase, data.blockId);
     await assertCoachOrAdmin(ctx, loaded.block.client_id);
 
-    const removeIds: string[] = [];
-    for (const inst of loaded.instances) {
-      if (!inst.scheduled_date || inst.scheduled_date <= data.newEnd) continue;
-      if (isCompletedInstance(inst, loaded.completedInstanceIds, loaded.completedDayIds)) continue;
-      removeIds.push(inst.id);
-    }
-    if (removeIds.length) {
-      const { error } = await ctx.supabase
-        .from("pl_scheduled_workouts")
-        .delete()
-        .in("id", removeIds);
-      if (error) throw new Error(error.message);
-    }
+    // Execute the schedule cleanup + block completion as ONE database
+    // transaction. This prevents a late block-update failure from leaving the
+    // client's future schedule partially cleared.
+    const { data: result, error } = await ctx.supabase.rpc("pl_end_block_early", {
+      _block_id: data.blockId,
+      _new_end: data.newEnd,
+    });
+    if (error) throw new Error(error.message);
 
-    // Clear legacy mirror dates for future uncompleted days with no instance.
-    const legacyDayIds = loaded.days
-      .filter(
-        (d: any) =>
-          d.scheduled_date &&
-          d.scheduled_date > data.newEnd &&
-          !loaded.completedDayIds.has(d.id) &&
-          !loaded.instances.some((i: any) => i.source_day_id === d.id),
-      )
-      .map((d: any) => d.id);
-    if (legacyDayIds.length) {
-      await ctx.supabase
-        .from("pl_days")
-        .update({ scheduled_date: null })
-        .in("id", legacyDayIds);
-    }
-
-    const { error: upErr } = await ctx.supabase
-      .from("pl_blocks")
-      .update({
-        end_date: data.newEnd,
-        status: "Completed",
-        completed_at: new Date().toISOString(),
-        completion_method: "ended_early",
-      })
-      .eq("id", data.blockId);
-    if (upErr) throw new Error(upErr.message);
+    const removed = Number((result as any)?.removed ?? 0);
+    const cleared = Number((result as any)?.cleared ?? 0);
 
     return {
       ok: true as const,
-      unscheduled: removeIds.length + legacyDayIds.length,
+      unscheduled: removed + cleared,
       newEnd: data.newEnd,
     };
   });
