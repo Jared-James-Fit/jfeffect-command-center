@@ -75,10 +75,10 @@ async function loadBlockSchedule(supabase: any, blockId: string) {
   const { data: days } = weekIds.length
     ? await supabase
         .from("pl_days")
-        .select("id, week_id, day_index, title, scheduled_date, archived")
+        .select("id, week_id, day_index, title, scheduled_date, archived, deleted_at")
         .in("week_id", weekIds)
     : { data: [] as any[] };
-  const dayList = (days ?? []).filter((d: any) => !d.archived);
+  const dayList = (days ?? []).filter((d: any) => !d.archived && !d.deleted_at);
   const dayIds = dayList.map((d: any) => d.id);
 
   const { data: instances } = dayIds.length
@@ -111,14 +111,29 @@ async function loadBlockSchedule(supabase: any, blockId: string) {
     dayList.map((d: any) => [d.id, d.title ?? `Day ${d.day_index ?? ""}`.trim()]),
   );
 
+  const instList = (instances ?? []) as any[];
+  // Canonical actual schedule: instance date when an instance exists, else the
+  // legacy pl_days.scheduled_date. Stale pl_blocks.end_date is fallback only.
+  const actualDates: string[] = [];
+  for (const d of dayList) {
+    const inst = instList.find((i: any) => i.source_day_id === d.id);
+    const date = inst?.scheduled_date ?? d.scheduled_date ?? null;
+    if (date) actualDates.push(String(date));
+  }
+  actualDates.sort();
+  const actualStart = actualDates[0] ?? null;
+  const actualEnd = actualDates.length ? actualDates[actualDates.length - 1] : null;
+
   return {
     block,
     weeks: weeks ?? [],
     days: dayList,
-    instances: (instances ?? []) as any[],
+    instances: instList,
     completedDayIds,
     completedInstanceIds,
     titleByDay,
+    actualStart,
+    actualEnd,
   };
 }
 
