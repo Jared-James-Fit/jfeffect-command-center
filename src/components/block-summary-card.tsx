@@ -19,6 +19,8 @@ import {
 } from "@/lib/pl-programs";
 import { useAuth } from "@/lib/auth";
 import { EditBlockDatesDialog } from "@/components/edit-block-dates-dialog";
+import { deriveSchedule, STATUS_LABEL } from "@/lib/block-schedule-model";
+
 
 type Mode = "admin" | "client";
 
@@ -71,10 +73,11 @@ export function BlockSummaryCard({
   const completedWeeks = weeks.filter((w) => w.status === "Completed" || w.status === "Manually Completed").length;
   const totalWeeks = weeks.length || block.weeks || 0;
   const remaining = Math.max(0, total_workouts - completed_workouts);
-  const displayStatus =
-    block.status === "Completed" ? "Complete" :
-    block.status === "Draft" ? "Upcoming" :
-    block.status ?? "—";
+  // Status is DATE-DERIVED, never the stale raw row value: a block whose end
+  // date has passed can never render "Active".
+  const derivedStatus = deriveSchedule([block as any])[0]?.status_derived ?? null;
+  const displayStatus = derivedStatus ? STATUS_LABEL[derivedStatus] : (block.status ?? "—");
+
 
   const endPassed =
     !!block.end_date &&
@@ -103,7 +106,7 @@ export function BlockSummaryCard({
           <div className="min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
             <Link {...toBlock} className="font-bold text-base hover:underline truncate">{block.name}</Link>
-            <Badge variant="outline" className={cn("text-[10px]", statusTone(block.status))}>{displayStatus}</Badge>
+            <Badge variant="outline" className={cn("text-[10px]", statusTone(derivedStatus ?? block.status))}>{displayStatus}</Badge>
           </div>
           <div className="mt-0.5 text-xs text-muted-foreground">
             {totalWeeks} Weeks
