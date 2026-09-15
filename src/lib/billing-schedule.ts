@@ -57,6 +57,65 @@ export function blankBillingSchedule(): BillingScheduleDraft {
   };
 }
 
+/* ─────────────────────────────────────────────────────────────
+   Product-level service start defaults
+   A reusable product stores WHEN coaching starts for new sales.
+   "admin_choice" forces the coach to pick a real date at assign
+   time — a sale must never be saved with an undecided start.
+   These values never touch Stripe billing dates.
+   ───────────────────────────────────────────────────────────── */
+
+export type ProductServiceStartMode = ServiceStartMode | "admin_choice";
+
+export type ProductStartDefaults = {
+  service_start_mode?: string | null;
+  service_start_date?: string | null;
+};
+
+export function productServiceStartMode(product?: ProductStartDefaults | null): ProductServiceStartMode {
+  const mode = String(product?.service_start_mode ?? "").trim();
+  if (mode === "with_first_payment" || mode === "on_date" || mode === "admin_choice") return mode;
+  return "immediate";
+}
+
+/** True when the coach MUST choose a start date before the sale can be sent. */
+export function productRequiresStartDecision(product?: ProductStartDefaults | null): boolean {
+  return productServiceStartMode(product) === "admin_choice";
+}
+
+/** The schedule a new sale starts from, before any client-specific override. */
+export function productDefaultSchedule(product?: ProductStartDefaults | null): BillingScheduleDraft {
+  const base = blankBillingSchedule();
+  const mode = productServiceStartMode(product);
+  if (mode === "admin_choice") {
+    return { ...base, serviceStartMode: "on_date", serviceStartDate: "" };
+  }
+  if (mode === "on_date") {
+    return {
+      ...base,
+      serviceStartMode: "on_date",
+      serviceStartDate: isDateString(product?.service_start_date) ? product!.service_start_date! : "",
+    };
+  }
+  if (mode === "with_first_payment") return { ...base, serviceStartMode: "with_first_payment" };
+  return base;
+}
+
+export function productStartLabel(product?: ProductStartDefaults | null): string {
+  switch (productServiceStartMode(product)) {
+    case "with_first_payment":
+      return "Starts on the first payment date";
+    case "on_date":
+      return isDateString(product?.service_start_date)
+        ? `Starts ${formatBusinessDate(product!.service_start_date!)}`
+        : "Starts on a set date";
+    case "admin_choice":
+      return "Start date chosen when assigning";
+    default:
+      return "Starts immediately";
+  }
+}
+
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
 export function isDateString(v: unknown): v is string {
