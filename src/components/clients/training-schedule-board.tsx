@@ -82,7 +82,7 @@ export function TrainingScheduleBoard({
   clientId: string;
   clientName?: string | null;
 }) {
-  void todayISO();
+  const qc = useQueryClient();
 
   const qc = useQueryClient();
   const { data, isLoading } = useClientTrainingSchedule(clientId);
