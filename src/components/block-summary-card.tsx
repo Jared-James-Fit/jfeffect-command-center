@@ -19,6 +19,8 @@ import {
 } from "@/lib/pl-programs";
 import { useAuth } from "@/lib/auth";
 import { EditBlockDatesDialog } from "@/components/edit-block-dates-dialog";
+import { deriveSchedule, STATUS_LABEL } from "@/lib/block-schedule-model";
+
 
 type Mode = "admin" | "client";
 
