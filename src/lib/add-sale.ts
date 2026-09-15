@@ -183,7 +183,24 @@ export function validateCustomSale(d: CustomSaleDraft): string | null {
   }
   const sessions = Math.trunc(Number(d.sessionsIncluded) || 0);
   if (sessions < 0 || sessions > 500) return "Sessions included must be between 0 and 500.";
+  if (d.paymentType !== "free") {
+    const scheduleProblem = validateBillingSchedule(d.schedule ?? blankBillingSchedule());
+    if (scheduleProblem) return scheduleProblem;
+  }
   return null;
+}
+
+/** The agreed payment/access dates for this sale, snapshotted onto the purchase. */
+export function customSaleScheduleSnapshot(d: CustomSaleDraft) {
+  const schedule = d.schedule ?? blankBillingSchedule();
+  const frequency = d.paymentType === "recurring" ? d.interval : null;
+  const firstPaymentDate = d.paymentType === "free" ? null : resolveFirstPaymentDate(schedule, { frequency });
+  return {
+    first_payment_date: firstPaymentDate,
+    billing_anchor_day: firstPaymentDate ? Number(firstPaymentDate.slice(8, 10)) : null,
+    service_start_date: resolveServiceStartDate(schedule, firstPaymentDate),
+    billing_schedule_source: "client_override" as const,
+  };
 }
 
 /** Input for createCoachingProduct built from a custom-sale draft. */
