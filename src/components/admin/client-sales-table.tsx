@@ -10,7 +10,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import {
   ShoppingBag, Plus, MoreHorizontal, ExternalLink, Pencil, Copy, Send, Download,
@@ -206,7 +205,7 @@ export function ClientSalesTable({ clientId }: { clientId: string }) {
               </SelectContent>
             </Select>
           )}
-          {addSale}
+          {rows.length > 0 && addSale}
         </div>
       </div>
 
