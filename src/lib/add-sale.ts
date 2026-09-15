@@ -196,10 +196,6 @@ export function customSaleToProductInput(d: CustomSaleDraft, opts: { idempotency
     billingFrequency: recurring ? d.interval : null,
     sessionsIncluded: sessions,
     sessionFulfillment: d.sessionDelivery,
-    numberOfPayments:
-      recurring && d.durationMode === "fixed"
-        ? Math.max(1, Math.trunc(Number(d.numberOfPayments) || 0))
-        : null,
     isOneOff: !d.saveAsProduct,
     idempotencyKey: opts.idempotencyKey ?? null,
   };
