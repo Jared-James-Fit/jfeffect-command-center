@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
@@ -15,7 +15,8 @@ import { snapshotOfferForPurchase } from "@/lib/offers";
 import { parseBillingFrequency, type BillingFrequency } from "@/lib/billing-frequency";
 import {
   blankBillingSchedule, businessToday, resolveFirstPaymentDate, resolveServiceStartDate,
-  scheduleSummary, validateBillingSchedule, type BillingScheduleDraft,
+  scheduleSummary, validateBillingSchedule, productDefaultSchedule,
+  productRequiresStartDecision, productStartLabel, type BillingScheduleDraft,
 } from "@/lib/billing-schedule";
 import { assignEntitlementPreview } from "@/lib/product-sessions";
 import { useServerFn } from "@tanstack/react-start";
