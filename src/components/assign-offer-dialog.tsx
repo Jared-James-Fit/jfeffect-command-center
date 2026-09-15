@@ -11,6 +11,11 @@ import { Badge } from "@/components/ui/badge";
 import { AlertTriangle, CheckCircle2, CreditCard, FileText, Send, Ticket } from "lucide-react";
 import { toast } from "sonner";
 import { snapshotOfferForPurchase } from "@/lib/offers";
+import { parseBillingFrequency, type BillingFrequency } from "@/lib/billing-frequency";
+import {
+  blankBillingSchedule, businessToday, resolveFirstPaymentDate, resolveServiceStartDate,
+  scheduleSummary, validateBillingSchedule, type BillingScheduleDraft,
+} from "@/lib/billing-schedule";
 import { assignEntitlementPreview } from "@/lib/product-sessions";
 import { useServerFn } from "@tanstack/react-start";
 import { createAgreement } from "@/lib/agreements.functions";
@@ -74,7 +79,7 @@ export function AssignOfferDialog({ offer, onClose, fixedClientId }: { offer: an
   const [customizeSchedule, setCustomizeSchedule] = useState(false);
   const [schedule, setSchedule] = useState<BillingScheduleDraft>(blankBillingSchedule());
   const offerFrequency: BillingFrequency | null = offer?.is_recurring
-    ? (normalizeBillingFrequency(offer?.payment_frequency ?? offer?.payment_structure) ?? "monthly")
+    ? (parseBillingFrequency(offer?.payment_frequency ?? offer?.payment_structure) ?? "monthly")
     : null;
   const effectiveSchedule: BillingScheduleDraft = customizeSchedule
     ? schedule
@@ -153,6 +158,10 @@ export function AssignOfferDialog({ offer, onClose, fixedClientId }: { offer: an
 
   const submit = async () => {
     if (!offer || !clientId || !selectedClient) return;
+    if (customizeSchedule) {
+      const problem = validateBillingSchedule(schedule);
+      if (problem) return void toast.error(problem);
+    }
 
     runJob({
       title: MODE_COPY[mode].button,
@@ -176,6 +185,12 @@ export function AssignOfferDialog({ offer, onClose, fixedClientId }: { offer: an
         amount_paid: recordPaid ? snap.full_payable_amount ?? 0 : 0,
         last_payment_update_source: recordPaid ? "manual" : "admin_assignment",
         last_payment_update_at: new Date().toISOString(),
+        // Agreed payment dates are snapshotted onto THIS sale. Editing the
+        // product later never rewrites an existing client's commitment.
+        first_payment_date: scheduleSnapshotWithDay.first_payment_date ?? null,
+        billing_anchor_day: scheduleSnapshotWithDay.billing_anchor_day ?? null,
+        service_start_date: scheduleSnapshotWithDay.service_start_date ?? null,
+        billing_schedule_source: scheduleSnapshotWithDay.billing_schedule_source ?? "product_default",
       };
       
       job.completeStep(1); // Create assignment
