@@ -191,18 +191,22 @@ export function buildEvidence(
   return map;
 }
 
-/** The window the block really occupies: declared dates widened by its calendar. */
+/**
+ * The window the block really occupies.
+ *
+ * When the block has ANY actual scheduled workouts, those bounds are the
+ * truth and the stored `pl_blocks.start_date/end_date` are treated as stale
+ * metadata / audit only. Stored dates are used solely as a fallback for
+ * blocks with nothing on the calendar yet.
+ */
 export function coveredSpan(
   b: ScheduleBlockInput,
   ev?: BlockEvidence,
-): { start: string | null; end: string | null } {
-  const declaredStart = b.start_date ?? null;
-  const declaredEnd = effectiveEnd(b);
-  const start =
-    ev?.first && (!declaredStart || ev.first < declaredStart) ? ev.first : declaredStart ?? ev?.first ?? null;
-  const end =
-    ev?.last && (!declaredEnd || ev.last > declaredEnd) ? ev.last : declaredEnd ?? ev?.last ?? null;
-  return { start, end };
+): { start: string | null; end: string | null; fromSchedule: boolean } {
+  if (ev?.first && ev.last) {
+    return { start: ev.first, end: ev.last, fromSchedule: true };
+  }
+  return { start: b.start_date ?? null, end: effectiveEnd(b), fromSchedule: false };
 }
 
 /** Schedule says this block is still running today (rest days included). */
@@ -220,9 +224,11 @@ export function scheduleSaysRunning(
 /**
  * Derive one canonical status per block.
  *
- * Order of truth: archived flag → live calendar evidence → explicit terminal
- * flags → dates. A block is Active for its whole span, rest days included;
- * "no workout today" never means "no current block".
+ * Order of truth: archived flag → actual scheduled workouts → explicit
+ * terminal flags → stored dates. A block is Active for its whole scheduled
+ * span, rest days included; "no workout today" never means "no current
+ * block". A stale Completed flag can never hide live scheduled workouts, and
+ * a stale Active flag can never keep a fully finished schedule current.
  *
  * `evidence` is optional so date-only callers keep working.
  */
@@ -241,29 +247,36 @@ export function deriveSchedule(
     )
     .map((e) => e.b);
 
-  // Pass 1 — provisional status from evidence, terminal flags and dates.
+  // Pass 1 — provisional status from schedule evidence, then flags and dates.
   const provisional = ordered.map((b) => {
     const ev = evidence?.get(b.id);
     const term = terminalStatus(b);
-    const end = effectiveEnd(b);
-    const running = scheduleSaysRunning(b, today, ev);
+    const span = coveredSpan(b, ev);
     let status: ScheduleBlockStatus;
     if (b.archived || b.status === "Archived") {
       status = "Archived";
-    } else if (running) {
+    } else if (span.fromSchedule) {
       // The client's own calendar outranks stale declared dates and a stale
       // status column. This is the Nicole Yusi case.
-      status = "Active";
+      if (scheduleSaysRunning(b, today, ev)) {
+        status = "Active";
+      } else if (span.end && span.end < today) {
+        // Scheduled span is fully in the past with nothing outstanding.
+        status = term === "EndedEarly" || isEndedEarly(b) ? "EndedEarly" : "Completed";
+      } else if (span.start && span.start > today) {
+        status = "Upcoming";
+      } else {
+        // Span covers today; every scheduled session already logged.
+        status = term ?? "Active";
+      }
     } else if (term) {
       status = term;
-    } else if (ev?.first && ev.first > today && !b.start_date) {
-      status = "Upcoming";
     } else if (!b.start_date) {
       status = "Draft";
-    } else if (b.start_date > today && !(ev?.first && ev.first <= today)) {
+    } else if (b.start_date > today) {
       status = "Upcoming";
-    } else if (end && end < today) {
-      // Past its end, nothing left on the calendar. It is history, and it is
+    } else if (span.end && span.end < today) {
+      // Past its end, nothing on the calendar. It is history, and it is
       // "ended early" only when the coach shortened it.
       status = isEndedEarly(b) ? "EndedEarly" : "Completed";
     } else {
@@ -271,6 +284,7 @@ export function deriveSchedule(
     }
     return { b, status, ev };
   });
+
 
   // Pass 2 — exactly one Active. Calendar evidence wins; otherwise the
   // latest-starting block, i.e. the phase the coach most recently started.
