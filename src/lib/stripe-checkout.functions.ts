@@ -9,6 +9,7 @@
  * No Stripe SDK is needed — we call the Stripe REST API directly via fetch.
  */
 import { createServerFn } from "@tanstack/react-start";
+import { stripeFirstPaymentParams } from "@/lib/billing-schedule";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import {
@@ -309,7 +310,7 @@ export const createCheckoutSessionForAssignment = createServerFn({ method: "POST
     const { data: purchase, error: pErr } = await supabase
       .from("purchase_records")
       .select(
-        "id, client_id, offer_id, stripe_price_id, stripe_product_id, payment_structure, full_payable_amount, currency, offer_name",
+        "id, client_id, offer_id, stripe_price_id, stripe_product_id, payment_structure, full_payable_amount, currency, offer_name, first_payment_date",
       )
       .eq("id", data.purchaseRecordId)
       .single();
@@ -471,6 +472,15 @@ export const createCheckoutSessionForAssignment = createServerFn({ method: "POST
       sessionParams["subscription_data[metadata][client_id]"] = client.id;
       sessionParams["subscription_data[metadata][offer_id]"] = purchase.offer_id ?? "";
       sessionParams["subscription_data[metadata][workspace]"] = "jfeffect";
+
+      // Agreed future first payment: Stripe collects the payment method now and
+      // charges NOTHING until this date (trial_end), then anchors every later
+      // invoice to it. A bare future billing_cycle_anchor is deliberately NOT
+      // used — it can bill a prorated amount immediately.
+      Object.assign(
+        sessionParams,
+        stripeFirstPaymentParams((purchase as any).first_payment_date ?? null),
+      );
     }
     if (stripeCustomerId) {
       sessionParams["customer"] = stripeCustomerId;

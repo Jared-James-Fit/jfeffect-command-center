@@ -4,6 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { ActionButton } from "@/components/action-button";
 import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
@@ -11,6 +12,11 @@ import { Badge } from "@/components/ui/badge";
 import { AlertTriangle, CheckCircle2, CreditCard, FileText, Send, Ticket } from "lucide-react";
 import { toast } from "sonner";
 import { snapshotOfferForPurchase } from "@/lib/offers";
+import { parseBillingFrequency, type BillingFrequency } from "@/lib/billing-frequency";
+import {
+  blankBillingSchedule, businessToday, resolveFirstPaymentDate, resolveServiceStartDate,
+  scheduleSummary, validateBillingSchedule, type BillingScheduleDraft,
+} from "@/lib/billing-schedule";
 import { assignEntitlementPreview } from "@/lib/product-sessions";
 import { useServerFn } from "@tanstack/react-start";
 import { createAgreement } from "@/lib/agreements.functions";
@@ -66,6 +72,49 @@ export function AssignOfferDialog({ offer, onClose, fixedClientId }: { offer: an
   const [checkoutUrl, setCheckoutUrl] = useState<string | null>(null);
   const [emailNote, setEmailNote] = useState<string | null>(null);
   const [discountCodeId, setDiscountCodeId] = useState<string | null>(null);
+
+  // Payment schedule. A reusable Product carries DEFAULT billing behaviour;
+  // the coach may override it FOR THIS SALE ONLY (off by default) — the master
+  // product, and every other client's existing sale, are never touched.
+  const incomingSchedule = offer?.billing_schedule ?? null;
+  const [customizeSchedule, setCustomizeSchedule] = useState(false);
+  const [schedule, setSchedule] = useState<BillingScheduleDraft>(blankBillingSchedule());
+  const offerFrequency: BillingFrequency | null = offer?.is_recurring
+    ? (parseBillingFrequency(offer?.payment_frequency ?? offer?.payment_structure) ?? "monthly")
+    : null;
+  const effectiveSchedule: BillingScheduleDraft = customizeSchedule
+    ? schedule
+    : blankBillingSchedule();
+  // A custom sale already agreed its dates in the previous step; otherwise use
+  // the product default, optionally overridden here.
+  const scheduleSnapshot = incomingSchedule && !customizeSchedule
+    ? incomingSchedule
+    : {
+        first_payment_date: resolveFirstPaymentDate(effectiveSchedule, { frequency: offerFrequency }),
+        service_start_date: resolveServiceStartDate(
+          effectiveSchedule,
+          resolveFirstPaymentDate(effectiveSchedule, { frequency: offerFrequency }),
+        ),
+        billing_schedule_source: customizeSchedule ? "client_override" : "product_default",
+      } as any;
+  const scheduleSnapshotWithDay = {
+    ...scheduleSnapshot,
+    billing_anchor_day: scheduleSnapshot.first_payment_date
+      ? Number(String(scheduleSnapshot.first_payment_date).slice(8, 10))
+      : null,
+  };
+  const reviewSchedule = scheduleSummary({
+    draft: incomingSchedule && !customizeSchedule
+      ? {
+          ...blankBillingSchedule(),
+          firstPaymentMode: incomingSchedule.first_payment_date ? "on_date" : "immediate",
+          firstPaymentDate: incomingSchedule.first_payment_date ?? "",
+        }
+      : effectiveSchedule,
+    paymentType: offer?.is_recurring ? "recurring" : "one_time",
+    frequency: offerFrequency,
+    numberOfPayments: offer?.number_of_payments ?? 0,
+  });
   const recordPaid = mode === "paid_in_full";
   // What this assignment does to the client's session balance (canonical
   // ledger — nothing is granted here, this only describes what will happen).
@@ -110,6 +159,10 @@ export function AssignOfferDialog({ offer, onClose, fixedClientId }: { offer: an
 
   const submit = async () => {
     if (!offer || !clientId || !selectedClient) return;
+    if (customizeSchedule) {
+      const problem = validateBillingSchedule(schedule);
+      if (problem) return void toast.error(problem);
+    }
 
     runJob({
       title: MODE_COPY[mode].button,
@@ -133,6 +186,12 @@ export function AssignOfferDialog({ offer, onClose, fixedClientId }: { offer: an
         amount_paid: recordPaid ? snap.full_payable_amount ?? 0 : 0,
         last_payment_update_source: recordPaid ? "manual" : "admin_assignment",
         last_payment_update_at: new Date().toISOString(),
+        // Agreed payment dates are snapshotted onto THIS sale. Editing the
+        // product later never rewrites an existing client's commitment.
+        first_payment_date: scheduleSnapshotWithDay.first_payment_date ?? null,
+        billing_anchor_day: scheduleSnapshotWithDay.billing_anchor_day ?? null,
+        service_start_date: scheduleSnapshotWithDay.service_start_date ?? null,
+        billing_schedule_source: scheduleSnapshotWithDay.billing_schedule_source ?? "product_default",
       };
       
       job.completeStep(1); // Create assignment
@@ -288,6 +347,110 @@ export function AssignOfferDialog({ offer, onClose, fixedClientId }: { offer: an
                 </div>
               )}
             </div>
+            {mode === "payment_request" && (
+              <div className="rounded-md border border-border bg-secondary/20 p-3">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
+                    Payment schedule
+                  </div>
+                  {!incomingSchedule && (
+                    <label className="flex items-center gap-2 text-xs">
+                      <Switch checked={customizeSchedule} onCheckedChange={setCustomizeSchedule} />
+                      Customize for this client
+                    </label>
+                  )}
+                </div>
+
+                {customizeSchedule && (
+                  <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                    <div className="space-y-1.5">
+                      <Label>First payment</Label>
+                      <Select
+                        value={schedule.firstPaymentMode}
+                        onValueChange={(v) => setSchedule({ ...schedule, firstPaymentMode: v as any })}
+                      >
+                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="immediate">When checkout is completed</SelectItem>
+                          <SelectItem value="on_date">On a specific date</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    {schedule.firstPaymentMode === "on_date" && (
+                      <div className="space-y-1.5">
+                        <Label>Date</Label>
+                        <Input
+                          type="date"
+                          min={businessToday()}
+                          value={schedule.firstPaymentDate}
+                          onChange={(e) => setSchedule({ ...schedule, firstPaymentDate: e.target.value })}
+                          className="text-base md:text-sm"
+                        />
+                      </div>
+                    )}
+                    <div className="space-y-1.5 sm:col-span-2">
+                      <Label>Coaching starts</Label>
+                      <Select
+                        value={schedule.serviceStartMode}
+                        onValueChange={(v) => setSchedule({ ...schedule, serviceStartMode: v as any })}
+                      >
+                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="immediate">Immediately after purchase</SelectItem>
+                          <SelectItem value="with_first_payment">Same date as first payment</SelectItem>
+                          <SelectItem value="on_date">On a specific date</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    {schedule.serviceStartMode === "on_date" && (
+                      <div className="space-y-1.5 sm:col-span-2">
+                        <Label>Start date</Label>
+                        <Input
+                          type="date"
+                          value={schedule.serviceStartDate}
+                          onChange={(e) => setSchedule({ ...schedule, serviceStartDate: e.target.value })}
+                          className="text-base md:text-sm"
+                        />
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                <dl className="mt-3 grid gap-x-4 gap-y-1 border-t border-border/60 pt-2 text-xs sm:grid-cols-2">
+                  <div>
+                    <dt className="text-muted-foreground">First payment</dt>
+                    <dd className="font-semibold">{reviewSchedule.firstPayment}</dd>
+                  </div>
+                  {reviewSchedule.anchor && (
+                    <div>
+                      <dt className="text-muted-foreground">Then</dt>
+                      <dd className="font-semibold">{reviewSchedule.anchor}</dd>
+                    </div>
+                  )}
+                  {reviewSchedule.duration && (
+                    <div>
+                      <dt className="text-muted-foreground">Duration</dt>
+                      <dd className="font-semibold">{reviewSchedule.duration}</dd>
+                    </div>
+                  )}
+                  {reviewSchedule.finalPayment && (
+                    <div>
+                      <dt className="text-muted-foreground">Final payment</dt>
+                      <dd className="font-semibold">{reviewSchedule.finalPayment}</dd>
+                    </div>
+                  )}
+                  <div>
+                    <dt className="text-muted-foreground">Access starts</dt>
+                    <dd className="font-semibold">{reviewSchedule.serviceStart}</dd>
+                  </div>
+                </dl>
+                {reviewSchedule.firstPayment !== "When the client completes checkout" && (
+                  <p className="mt-2 text-xs text-muted-foreground">
+                    The client saves their card at checkout and is not charged until then.
+                  </p>
+                )}
+              </div>
+            )}
             {mode === "payment_request" && first50 && (
               <div>
                 <Label>Optional discount</Label>
