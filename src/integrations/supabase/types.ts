@@ -19372,6 +19372,10 @@ export type Database = {
       }
       pl_block_logger_enabled: { Args: never; Returns: boolean }
       pl_clone_blocks_for_rows: { Args: { p_mappings: Json }; Returns: number }
+      pl_end_block_early: {
+        Args: { _block_id: string; _new_end: string }
+        Returns: Json
+      }
       pl_move_row: {
         Args: { p_direction: string; p_row_id: string }
         Returns: {

@@ -57,6 +57,13 @@
       "when": 1789438355364,
       "tag": "0007_defer_session_grants_until_service_start",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1789443086986,
+      "tag": "0008_pl_end_block_early_atomic",
+      "breakpoints": true
     }
   ]
 }
