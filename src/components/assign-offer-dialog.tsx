@@ -379,12 +379,11 @@ export function AssignOfferDialog({ offer, onClose, fixedClientId }: { offer: an
                     {schedule.firstPaymentMode === "on_date" && (
                       <div className="space-y-1.5">
                         <Label>Date</Label>
-                        <Input
-                          type="date"
+                        <DateField
+                          aria-label="First payment date"
                           min={businessToday()}
                           value={schedule.firstPaymentDate}
-                          onChange={(e) => setSchedule({ ...schedule, firstPaymentDate: e.target.value })}
-                          className="text-base md:text-sm"
+                          onChange={(v) => setSchedule({ ...schedule, firstPaymentDate: v })}
                         />
                       </div>
                     )}
@@ -404,13 +403,17 @@ export function AssignOfferDialog({ offer, onClose, fixedClientId }: { offer: an
                     </div>
                     {schedule.serviceStartMode === "on_date" && (
                       <div className="space-y-1.5 sm:col-span-2">
-                        <Label>Start date</Label>
-                        <Input
-                          type="date"
+                        <Label htmlFor="assign-service-start">Start date</Label>
+                        <DateField
+                          id="assign-service-start"
+                          aria-label="Coaching start date"
+                          placeholder="Pick the coaching start date"
                           value={schedule.serviceStartDate}
-                          onChange={(e) => setSchedule({ ...schedule, serviceStartDate: e.target.value })}
-                          className="text-base md:text-sm"
+                          onChange={(v) => setSchedule({ ...schedule, serviceStartDate: v })}
                         />
+                        <p className="text-xs text-muted-foreground">
+                          Applies to this client's sale only — the product is unchanged.
+                        </p>
                       </div>
                     )}
                   </div>
