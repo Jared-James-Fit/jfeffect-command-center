@@ -173,8 +173,10 @@ export function AssignOfferDialog({ offer, onClose, fixedClientId }: { offer: an
 
   const submit = async () => {
     if (!offer || !clientId || !selectedClient) return;
-    if (customizeSchedule) {
-      const problem = validateBillingSchedule(schedule);
+    if (!incomingSchedule) {
+      // Validates the schedule actually being used — including a product whose
+      // start date the admin must choose at assign time.
+      const problem = validateBillingSchedule(effectiveSchedule);
       if (problem) return void toast.error(problem);
     }
 
