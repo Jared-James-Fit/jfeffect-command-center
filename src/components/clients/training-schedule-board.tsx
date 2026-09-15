@@ -94,7 +94,13 @@ export function TrainingScheduleBoard({
   const blocks = data?.blocks ?? [];
   const workouts = data?.workouts ?? [];
   const current = pickCurrent(blocks);
-  const upcoming = upcomingBlocks(blocks);
+  // Up next stays inside the client's CURRENT assignment — blocks from a
+  // different (older or parallel) assignment are never flattened into it.
+  const assignmentId = data?.currentAssignmentId ?? null;
+  const upcoming = upcomingBlocks(blocks).filter(
+    (b) => !assignmentId || !b.prep_id || b.prep_id === assignmentId,
+  );
+
   const drafts = draftBlocks(blocks);
   const history = historyBlocks(blocks);
   const overlaps = findOverlaps(blocks);
