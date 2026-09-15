@@ -55,12 +55,22 @@ export type ScheduleBlock = ScheduleBlockInput & {
   status_derived: ScheduleBlockStatus;
   /** end implied by start + length, i.e. the ORIGINAL scheduled end. */
   original_end: string | null;
-  /** the end actually in effect (stored end_date, else implied). */
+  /** the start actually in effect (real scheduled workouts, else stored). */
+  effective_start: string | null;
+  /** the end actually in effect (real scheduled workouts, else stored). */
   effective_end: string | null;
+  /** first/last ACTUAL scheduled workout date, when the block has any. */
+  schedule_start: string | null;
+  schedule_end: string | null;
+  /** true when the effective dates come from real scheduled workouts. */
+  dates_from_schedule: boolean;
+  /** next scheduled, incomplete workout in this block. */
+  next_workout_date: string | null;
   /** 1-based week the client is in today, when active. */
   week_of: number | null;
   total_weeks: number | null;
 };
+
 
 export const STATUS_LABEL: Record<ScheduleBlockStatus, string> = {
   Active: "Active",
