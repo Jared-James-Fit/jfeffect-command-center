@@ -120,6 +120,9 @@ const createSchema = z.object({
   sessionFulfillment: z.enum(["first_payment", "per_installment", "manual"]).optional().nullable(),
   sessionLengthMinutes: z.number().int().min(0).max(600).optional().nullable(),
   sessionExpiryDays: z.number().int().min(0).max(3650).optional().nullable(),
+  // One-off custom sale created from a client profile: kept out of the
+  // reusable catalogue and out of the Add Sale product picker.
+  isOneOff: z.boolean().optional().default(false),
 });
 
 export const createCoachingProduct = createServerFn({ method: "POST" })
@@ -219,6 +222,7 @@ export const createCoachingProduct = createServerFn({ method: "POST" })
         session_fulfillment: data.sessionFulfillment ?? "first_payment",
         session_length_minutes: data.sessionLengthMinutes || null,
         session_expiry_days: data.sessionExpiryDays || null,
+        is_one_off: !!data.isOneOff,
         created_by: userId,
       })
       .select("*")

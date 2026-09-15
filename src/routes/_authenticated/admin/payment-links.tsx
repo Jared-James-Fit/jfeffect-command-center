@@ -370,7 +370,9 @@ export function PaymentLinksPage({ embedded = false }: { embedded?: boolean } = 
     onError: (e: any) => toast.error(e?.message ?? "Failed to update"),
   });
 
-  const items = (data?.items ?? []) as Product[];
+  // One-off custom sales created from a client profile never belong in the
+  // reusable product catalogue.
+  const items = ((data?.items ?? []) as Product[]).filter((p: any) => !p.is_one_off);
 
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | "Active" | "Draft" | "Archived">("all");
