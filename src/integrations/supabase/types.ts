@@ -15976,6 +15976,8 @@ export type Database = {
           amount_refunded_cents: number
           assigned_at: string
           assigned_by: string | null
+          billing_anchor_day: number | null
+          billing_schedule_source: string | null
           cancel_at_period_end: boolean
           cancellation_policy: string | null
           client_id: string
@@ -15985,6 +15987,7 @@ export type Database = {
           currency: string | null
           deposit_amount: number | null
           excluded_features: string[] | null
+          first_payment_date: string | null
           full_description: string | null
           full_payable_amount: number | null
           id: string
@@ -16014,6 +16017,7 @@ export type Database = {
           purchased_at: string
           receipt_url: string | null
           refund_policy: string | null
+          service_start_date: string | null
           service_status: string
           session_fulfillment: string
           session_length_minutes: number | null
@@ -16064,6 +16068,8 @@ export type Database = {
           amount_refunded_cents?: number
           assigned_at?: string
           assigned_by?: string | null
+          billing_anchor_day?: number | null
+          billing_schedule_source?: string | null
           cancel_at_period_end?: boolean
           cancellation_policy?: string | null
           client_id: string
@@ -16073,6 +16079,7 @@ export type Database = {
           currency?: string | null
           deposit_amount?: number | null
           excluded_features?: string[] | null
+          first_payment_date?: string | null
           full_description?: string | null
           full_payable_amount?: number | null
           id?: string
@@ -16102,6 +16109,7 @@ export type Database = {
           purchased_at?: string
           receipt_url?: string | null
           refund_policy?: string | null
+          service_start_date?: string | null
           service_status?: string
           session_fulfillment?: string
           session_length_minutes?: number | null
@@ -16152,6 +16160,8 @@ export type Database = {
           amount_refunded_cents?: number
           assigned_at?: string
           assigned_by?: string | null
+          billing_anchor_day?: number | null
+          billing_schedule_source?: string | null
           cancel_at_period_end?: boolean
           cancellation_policy?: string | null
           client_id?: string
@@ -16161,6 +16171,7 @@ export type Database = {
           currency?: string | null
           deposit_amount?: number | null
           excluded_features?: string[] | null
+          first_payment_date?: string | null
           full_description?: string | null
           full_payable_amount?: number | null
           id?: string
@@ -16190,6 +16201,7 @@ export type Database = {
           purchased_at?: string
           receipt_url?: string | null
           refund_policy?: string | null
+          service_start_date?: string | null
           service_status?: string
           session_fulfillment?: string
           session_length_minutes?: number | null
@@ -18645,6 +18657,8 @@ export type Database = {
           amount_refunded_cents: number
           assigned_at: string
           assigned_by: string | null
+          billing_anchor_day: number | null
+          billing_schedule_source: string | null
           cancel_at_period_end: boolean
           cancellation_policy: string | null
           client_id: string
@@ -18654,6 +18668,7 @@ export type Database = {
           currency: string | null
           deposit_amount: number | null
           excluded_features: string[] | null
+          first_payment_date: string | null
           full_description: string | null
           full_payable_amount: number | null
           id: string
@@ -18683,6 +18698,7 @@ export type Database = {
           purchased_at: string
           receipt_url: string | null
           refund_policy: string | null
+          service_start_date: string | null
           service_status: string
           session_fulfillment: string
           session_length_minutes: number | null
