@@ -242,11 +242,53 @@ export function installmentDates(
 }
 
 /**
+ * CANONICAL STRIPE RULE — `subscription_data[proration_behavior]` is only a
+ * legal Checkout Session parameter when `subscription_data[billing_cycle_anchor]`
+ * or `[billing_cycle_anchor_config]` is sent in the SAME request. Sending it on
+ * its own makes Stripe reject the session with:
+ *   "The `proration_behavior` parameter can only be passed if
+ *    `billing_cycle_anchor` or `billing_cycle_anchor_config` exist."
+ *
+ * Every recurring Checkout Session in the app must pass its subscription params
+ * through {@link sanitizeSubscriptionParams} (or build them with
+ * {@link stripeFirstPaymentParams}) so this combination cannot be produced by
+ * any entry path: Add Sale, Custom Sale, Assign Product, member self-checkout.
+ */
+function hasBillingCycleAnchor(params: Record<string, string>): boolean {
+  return Object.keys(params).some(
+    (k) =>
+      k === "subscription_data[billing_cycle_anchor]" ||
+      k.startsWith("subscription_data[billing_cycle_anchor_config]") ||
+      k === "billing_cycle_anchor" ||
+      k.startsWith("billing_cycle_anchor_config"),
+  );
+}
+
+/**
+ * Strips `proration_behavior` when no billing cycle anchor accompanies it.
+ * One-time (`mode=payment`) sessions carry no subscription params and pass
+ * through untouched.
+ */
+export function sanitizeSubscriptionParams(
+  params: Record<string, string>,
+): Record<string, string> {
+  if (hasBillingCycleAnchor(params)) return params;
+  const out: Record<string, string> = {};
+  for (const [k, v] of Object.entries(params)) {
+    if (k === "subscription_data[proration_behavior]" || k === "proration_behavior") continue;
+    out[k] = v;
+  }
+  return out;
+}
+
+/**
  * Stripe Checkout Session params implementing the agreed first payment.
  *
  * Returns `{}` for "charge at checkout" — never emits a raw future
  * billing_cycle_anchor, which is the parameter that can trigger a surprise
- * prorated charge before the intended date.
+ * prorated charge before the intended date. Because no anchor is sent, no
+ * proration_behavior is sent either (see the canonical rule above); trial_end
+ * alone already produces zero proration.
  */
 export function stripeFirstPaymentParams(
   firstPaymentDate: string | null,
@@ -254,12 +296,25 @@ export function stripeFirstPaymentParams(
 ): Record<string, string> {
   const today = opts.today ?? businessToday();
   if (!firstPaymentDate || !isDateString(firstPaymentDate) || firstPaymentDate <= today) return {};
-  return {
+  return sanitizeSubscriptionParams({
     // No charge until this instant; the billing cycle then anchors to it, so
     // every later invoice lands on the same calendar day with no proration.
     "subscription_data[trial_end]": String(businessEpochSeconds(firstPaymentDate)),
-    "subscription_data[proration_behavior]": "none",
     "subscription_data[metadata][first_payment_at]": firstPaymentDate,
+  });
+}
+
+/**
+ * Params for an explicitly anchored recurring sale. Here `proration_behavior`
+ * IS valid because the anchor is present in the same request.
+ */
+export function stripeAnchoredBillingParams(
+  anchorDate: string,
+  opts: { prorationBehavior?: "none" | "create_prorations" } = {},
+): Record<string, string> {
+  return {
+    "subscription_data[billing_cycle_anchor]": String(businessEpochSeconds(anchorDate)),
+    "subscription_data[proration_behavior]": opts.prorationBehavior ?? "none",
   };
 }
 
