@@ -333,29 +333,12 @@ export function ClientSalesTable({ clientId }: { clientId: string }) {
         </>
       )}
 
-      <Dialog open={picker} onOpenChange={setPicker}>
-        <DialogContent className="max-w-lg">
-          <DialogHeader><DialogTitle>Pick a product</DialogTitle></DialogHeader>
-          <div className="max-h-96 space-y-2 overflow-y-auto">
-            {offers.map((o: any) => (
-              <button
-                key={o.id}
-                type="button"
-                onClick={() => { setChosenOffer(o); setPicker(false); }}
-                className="w-full rounded-md border border-border bg-secondary/20 p-3 text-left hover:bg-secondary/40"
-              >
-                <div className="font-semibold">{o.name}</div>
-                <div className="text-xs text-muted-foreground">
-                  {o.offer_type} · {o.currency ?? "USD"} {Number(o.full_payable_amount ?? o.price ?? 0).toLocaleString()}
-                </div>
-              </button>
-            ))}
-            {offers.length === 0 && <p className="text-sm text-muted-foreground">No active products. Create one in Products.</p>}
-          </div>
-        </DialogContent>
-      </Dialog>
-
-      <AssignOfferDialog offer={chosenOffer} fixedClientId={clientId} onClose={() => setChosenOffer(null)} />
+      <AddSaleDialog
+        open={picker}
+        onOpenChange={setPicker}
+        clientId={clientId}
+        clientName={clientLite?.full_name ?? null}
+      />
       {editingDates && (
         <TermDateEditor purchase={editingDates} clientId={clientId} onClose={() => setEditingDates(null)} />
       )}
