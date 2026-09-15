@@ -71,10 +71,11 @@ export function BlockSummaryCard({
   const completedWeeks = weeks.filter((w) => w.status === "Completed" || w.status === "Manually Completed").length;
   const totalWeeks = weeks.length || block.weeks || 0;
   const remaining = Math.max(0, total_workouts - completed_workouts);
-  const displayStatus =
-    block.status === "Completed" ? "Complete" :
-    block.status === "Draft" ? "Upcoming" :
-    block.status ?? "—";
+  // Status is DATE-DERIVED, never the stale raw row value: a block whose end
+  // date has passed can never render "Active".
+  const derivedStatus = deriveSchedule([block as any])[0]?.status_derived ?? null;
+  const displayStatus = derivedStatus ? STATUS_LABEL[derivedStatus] : (block.status ?? "—");
+
 
   const endPassed =
     !!block.end_date &&
