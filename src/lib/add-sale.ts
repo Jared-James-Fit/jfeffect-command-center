@@ -99,6 +99,8 @@ export function productToOfferLike(p: any) {
 }
 
 export type CustomSaleDraft = {
+  /** Payment dates: first payment, billing anchor and service start. */
+  schedule: BillingScheduleDraft;
   name: string;
   description: string;
   paymentType: "one_time" | "recurring" | "free";
@@ -117,6 +119,7 @@ export type CustomSaleDraft = {
 
 export function blankCustomSale(): CustomSaleDraft {
   return {
+    schedule: blankBillingSchedule(),
     name: "",
     description: "",
     paymentType: "one_time",
