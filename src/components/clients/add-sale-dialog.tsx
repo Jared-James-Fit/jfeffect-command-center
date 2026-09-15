@@ -134,7 +134,8 @@ export function AddSaleDialog({
     <>
       <Dialog open={open} onOpenChange={(o) => (o ? onOpenChange(true) : close())}>
         <DialogContent className="flex max-h-[92dvh] w-full max-w-2xl flex-col overflow-hidden p-0">
-          <DialogHeader className="border-b border-border px-4 py-3 md:px-6">
+          {/* pl-24 keeps the title clear of the client workspace Back pill. */}
+          <DialogHeader className="border-b border-border py-3 pl-24 pr-4 md:px-6">
             <DialogTitle>Add sale</DialogTitle>
             <DialogDescription className="flex items-center gap-1.5">
               <User className="h-3.5 w-3.5" />
