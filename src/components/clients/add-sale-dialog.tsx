@@ -10,14 +10,15 @@
  * session entitlement snapshot.
  *
  * The client is fixed by the profile this was opened from — never re-picked.
+ * The header is a single grid (Back / title / close) so nothing floats over
+ * the title at any width — see @/lib/sale-dialog-layout.
  */
 
 import { useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import {
-  Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
-} from "@/components/ui/dialog";
+import * as DialogPrimitive from "@radix-ui/react-dialog";
+import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -28,14 +29,22 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
-import { Loader2, Search, Ticket, User, Sparkles, PackageSearch } from "lucide-react";
+import {
+  ChevronLeft, Loader2, Search, Ticket, User, Sparkles, PackageSearch, X, CalendarClock,
+} from "lucide-react";
 import { toast } from "sonner";
 import { listCoachingProducts, createCoachingProduct } from "@/lib/coaching-products.functions";
 import {
-  blankCustomSale, customSalePriceCents, customSalePaymentStructure,
+  blankCustomSale, customSalePriceCents, customSalePaymentStructure, customSaleScheduleSnapshot,
   customSaleToProductInput, pickableProducts, productAssignEligibility,
   productToOfferLike, searchProducts, validateCustomSale, type CustomSaleDraft,
 } from "@/lib/add-sale";
+import { businessToday, scheduleSummary, type BillingScheduleDraft } from "@/lib/billing-schedule";
+import {
+  SALE_DIALOG_BACK_CLASS, SALE_DIALOG_BODY_CLASS, SALE_DIALOG_CLOSE_CLASS,
+  SALE_DIALOG_CONTENT_CLASS, SALE_DIALOG_FOOTER_CLASS, SALE_DIALOG_HEADER_CLASS,
+  SALE_DIALOG_TITLE_CLASS,
+} from "@/lib/sale-dialog-layout";
 import { AssignOfferDialog } from "@/components/assign-offer-dialog";
 
 function money(cents: number, currency: string) {
@@ -46,6 +55,14 @@ function money(cents: number, currency: string) {
   } catch {
     return `${(currency || "cad").toUpperCase()} ${((cents ?? 0) / 100).toFixed(2)}`;
   }
+}
+
+function SectionLabel({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
+      {children}
+    </div>
+  );
 }
 
 export function AddSaleDialog({
@@ -66,6 +83,9 @@ export function AddSaleDialog({
   const [creating, setCreating] = useState(false);
   const [chosenOffer, setChosenOffer] = useState<any | null>(null);
 
+  const setSchedule = (patch: Partial<BillingScheduleDraft>) =>
+    setDraft((d) => ({ ...d, schedule: { ...d.schedule, ...patch } }));
+
   // Same cache key the Products page uses, so a product created/activated
   // there shows up here without a refresh.
   const { data, isLoading, isError, refetch } = useQuery({
@@ -78,7 +98,6 @@ export function AddSaleDialog({
   const allProducts = useMemo(() => pickableProducts((data?.items ?? []) as any[]), [data]);
   const results = useMemo(() => {
     const ranked = searchProducts(allProducts, search);
-    // Assignable first, ineligible (draft / missing pricing) shown but disabled.
     return [...ranked].sort(
       (a, b) =>
         Number(productAssignEligibility(b).assignable) - Number(productAssignEligibility(a).assignable),
@@ -115,6 +134,8 @@ export function AddSaleDialog({
           draft.paymentType === "recurring" && draft.durationMode === "fixed"
             ? Math.max(1, Math.trunc(Number(draft.numberOfPayments) || 0))
             : null,
+        // Agreed payment dates travel with the sale, not with the product.
+        billing_schedule: customSaleScheduleSnapshot(draft),
       };
       toast.success("Sale ready to send", { id: t });
       setChosenOffer(offer);
@@ -128,24 +149,45 @@ export function AddSaleDialog({
   };
 
   const recurring = draft.paymentType === "recurring";
+  const paid = draft.paymentType !== "free";
   const sessions = Math.max(0, Math.trunc(Number(draft.sessionsIncluded) || 0));
+  const today = businessToday();
+  const summary = scheduleSummary({
+    draft: draft.schedule,
+    paymentType: draft.paymentType,
+    frequency: recurring ? draft.interval : null,
+    numberOfPayments:
+      recurring && draft.durationMode === "fixed" ? Number(draft.numberOfPayments) || 0 : 0,
+  });
 
   return (
     <>
       <Dialog open={open} onOpenChange={(o) => (o ? onOpenChange(true) : close())}>
-        <DialogContent className="flex max-h-[92dvh] w-full max-w-2xl flex-col overflow-hidden p-0">
-          {/* pl-24 keeps the title clear of the client workspace Back pill. */}
-          <DialogHeader className="border-b border-border py-3 pl-24 pr-4 md:px-6">
-            <DialogTitle>Add sale</DialogTitle>
-            <DialogDescription className="flex items-center gap-1.5">
-              <User className="h-3.5 w-3.5" />
-              <span className="font-semibold text-foreground">{clientName ?? "This client"}</span>
-              <span>is already selected.</span>
-            </DialogDescription>
-          </DialogHeader>
+        <DialogContent showBackButton={false} className={SALE_DIALOG_CONTENT_CLASS}>
+          <div className={SALE_DIALOG_HEADER_CLASS}>
+            <button type="button" onClick={close} className={SALE_DIALOG_BACK_CLASS}>
+              <ChevronLeft className="h-4 w-4" />
+              <span className="hidden sm:inline">Back</span>
+            </button>
+            <div className="min-w-0">
+              <DialogTitle className={SALE_DIALOG_TITLE_CLASS}>
+                {tab === "custom" ? "Custom sale" : "Add sale"}
+              </DialogTitle>
+              <DialogDescription className="flex items-center justify-center gap-1.5 truncate text-xs">
+                <User className="h-3 w-3 shrink-0" />
+                <span className="truncate">
+                  <span className="font-semibold text-foreground">{clientName ?? "This client"}</span>{" "}
+                  is already selected.
+                </span>
+              </DialogDescription>
+            </div>
+            <DialogPrimitive.Close aria-label="Close" className={SALE_DIALOG_CLOSE_CLASS}>
+              <X className="h-4 w-4" />
+            </DialogPrimitive.Close>
+          </div>
 
           <Tabs value={tab} onValueChange={(v) => setTab(v as any)} className="flex min-h-0 flex-1 flex-col">
-            <div className="px-4 pt-3 md:px-6">
+            <div className="px-3 pt-3 sm:px-6">
               <TabsList className="grid w-full grid-cols-2">
                 <TabsTrigger value="existing">
                   <PackageSearch className="mr-1.5 h-3.5 w-3.5" />Existing product
@@ -157,7 +199,7 @@ export function AddSaleDialog({
             </div>
 
             {/* ── Existing product ── */}
-            <TabsContent value="existing" className="mt-0 min-h-0 flex-1 overflow-y-auto px-4 pb-4 pt-3 md:px-6">
+            <TabsContent value="existing" className={`mt-0 ${SALE_DIALOG_BODY_CLASS}`}>
               <div className="relative mb-3">
                 <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                 <Input
@@ -232,187 +274,300 @@ export function AddSaleDialog({
                   );
                 })}
               </ul>
+              <p className="mt-3 text-xs text-muted-foreground">
+                You can set the first payment date for this client on the next screen.
+              </p>
             </TabsContent>
 
             {/* ── Custom sale ── */}
-            <TabsContent value="custom" className="mt-0 min-h-0 flex-1 overflow-y-auto px-4 pb-4 pt-3 md:px-6">
-              <div className="space-y-4">
-                <div className="space-y-1.5">
-                  <Label>Sale name</Label>
-                  <Input
-                    value={draft.name}
-                    onChange={(e) => setDraft({ ...draft, name: e.target.value })}
-                    placeholder="e.g. 16 Sessions (Final Payment)"
-                    className="text-base md:text-sm"
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <Label>Description (optional)</Label>
-                  <Textarea
-                    rows={2}
-                    value={draft.description}
-                    onChange={(e) => setDraft({ ...draft, description: e.target.value })}
-                  />
-                </div>
-
-                <div className="grid gap-3 sm:grid-cols-2">
+            <TabsContent value="custom" className={`mt-0 ${SALE_DIALOG_BODY_CLASS}`}>
+              <div className="space-y-5">
+                <div className="space-y-3">
                   <div className="space-y-1.5">
-                    <Label>Payment type</Label>
-                    <Select
-                      value={draft.paymentType}
-                      onValueChange={(v) => setDraft({ ...draft, paymentType: v as any })}
-                    >
-                      <SelectTrigger><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="one_time">One-time</SelectItem>
-                        <SelectItem value="recurring">Recurring</SelectItem>
-                        <SelectItem value="free">Free / no payment</SelectItem>
-                      </SelectContent>
-                    </Select>
+                    <Label>Sale name</Label>
+                    <Input
+                      value={draft.name}
+                      onChange={(e) => setDraft({ ...draft, name: e.target.value })}
+                      placeholder="e.g. 16 Sessions (Final Payment)"
+                      className="text-base md:text-sm"
+                    />
                   </div>
-                  {draft.paymentType !== "free" && (
-                    <div className="grid grid-cols-[1fr_auto] gap-2">
-                      <div className="space-y-1.5">
-                        <Label>Price</Label>
-                        <Input
-                          inputMode="decimal"
-                          value={draft.priceText}
-                          onChange={(e) => setDraft({ ...draft, priceText: e.target.value })}
-                          placeholder="400"
-                          className="text-base md:text-sm"
-                        />
-                      </div>
-                      <div className="space-y-1.5">
-                        <Label>Currency</Label>
-                        <Select value={draft.currency} onValueChange={(v) => setDraft({ ...draft, currency: v })}>
-                          <SelectTrigger className="w-[92px]"><SelectValue /></SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="CAD">CAD</SelectItem>
-                            <SelectItem value="USD">USD</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-                    </div>
-                  )}
+                  <div className="space-y-1.5">
+                    <Label>Description (optional)</Label>
+                    <Textarea
+                      rows={2}
+                      value={draft.description}
+                      onChange={(e) => setDraft({ ...draft, description: e.target.value })}
+                    />
+                  </div>
                 </div>
 
-                {recurring && (
-                  <div className="grid gap-3 rounded-md border border-border bg-secondary/20 p-3 sm:grid-cols-2">
+                {/* PAYMENT */}
+                <div className="space-y-3">
+                  <SectionLabel>Payment</SectionLabel>
+                  <div className="grid gap-3 sm:grid-cols-2">
                     <div className="space-y-1.5">
-                      <Label>Billed every</Label>
-                      <Select value={draft.interval} onValueChange={(v) => setDraft({ ...draft, interval: v as any })}>
-                        <SelectTrigger><SelectValue /></SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="weekly">Week</SelectItem>
-                          <SelectItem value="biweekly">2 weeks</SelectItem>
-                          <SelectItem value="monthly">Month</SelectItem>
-                          <SelectItem value="yearly">Year</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="space-y-1.5">
-                      <Label>Duration</Label>
+                      <Label>Payment type</Label>
                       <Select
-                        value={draft.durationMode}
-                        onValueChange={(v) => setDraft({ ...draft, durationMode: v as any })}
+                        value={draft.paymentType}
+                        onValueChange={(v) => setDraft({ ...draft, paymentType: v as any })}
                       >
                         <SelectTrigger><SelectValue /></SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="until_cancelled">Renews until cancelled</SelectItem>
-                          <SelectItem value="fixed">Fixed number of payments</SelectItem>
+                          <SelectItem value="one_time">One-time</SelectItem>
+                          <SelectItem value="recurring">Recurring</SelectItem>
+                          <SelectItem value="free">Free / no payment</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
-                    {draft.durationMode === "fixed" && (
+                    {paid && (
+                      <div className="grid grid-cols-[1fr_auto] gap-2">
+                        <div className="space-y-1.5">
+                          <Label>Price</Label>
+                          <Input
+                            inputMode="decimal"
+                            value={draft.priceText}
+                            onChange={(e) => setDraft({ ...draft, priceText: e.target.value })}
+                            placeholder="400"
+                            className="text-base md:text-sm"
+                          />
+                        </div>
+                        <div className="space-y-1.5">
+                          <Label>Currency</Label>
+                          <Select value={draft.currency} onValueChange={(v) => setDraft({ ...draft, currency: v })}>
+                            <SelectTrigger className="w-[92px]"><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="CAD">CAD</SelectItem>
+                              <SelectItem value="USD">USD</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* BILLING — recurring only */}
+                {recurring && (
+                  <div className="space-y-3">
+                    <SectionLabel>Billing</SectionLabel>
+                    <div className="grid gap-3 rounded-md border border-border bg-secondary/20 p-3 sm:grid-cols-2">
                       <div className="space-y-1.5">
-                        <Label>Number of payments</Label>
+                        <Label>Billed every</Label>
+                        <Select value={draft.interval} onValueChange={(v) => setDraft({ ...draft, interval: v as any })}>
+                          <SelectTrigger><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="weekly">Week</SelectItem>
+                            <SelectItem value="biweekly">2 weeks</SelectItem>
+                            <SelectItem value="monthly">Month</SelectItem>
+                            <SelectItem value="yearly">Year</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label>Duration</Label>
+                        <Select
+                          value={draft.durationMode}
+                          onValueChange={(v) => setDraft({ ...draft, durationMode: v as any })}
+                        >
+                          <SelectTrigger><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="until_cancelled">Renews until cancelled</SelectItem>
+                            <SelectItem value="fixed">Fixed number of payments</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      {draft.durationMode === "fixed" && (
+                        <div className="space-y-1.5">
+                          <Label>Number of payments</Label>
+                          <Input
+                            inputMode="numeric"
+                            value={draft.numberOfPayments}
+                            onChange={(e) => setDraft({ ...draft, numberOfPayments: e.target.value })}
+                            placeholder="4"
+                            className="text-base md:text-sm"
+                          />
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* PAYMENT DATES */}
+                {paid && (
+                  <div className="space-y-3">
+                    <SectionLabel>Payment dates</SectionLabel>
+                    <div className="space-y-3 rounded-md border border-border bg-secondary/20 p-3">
+                      <div className="grid gap-3 sm:grid-cols-2">
+                        <div className="space-y-1.5">
+                          <Label>First payment</Label>
+                          <Select
+                            value={draft.schedule.firstPaymentMode}
+                            onValueChange={(v) => setSchedule({ firstPaymentMode: v as any })}
+                          >
+                            <SelectTrigger><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="immediate">When checkout is completed</SelectItem>
+                              <SelectItem value="on_date">On a specific date</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        {draft.schedule.firstPaymentMode === "on_date" && (
+                          <div className="space-y-1.5">
+                            <Label>First payment date</Label>
+                            <Input
+                              type="date"
+                              min={today}
+                              value={draft.schedule.firstPaymentDate}
+                              onChange={(e) => setSchedule({ firstPaymentDate: e.target.value })}
+                              className="text-base md:text-sm"
+                            />
+                          </div>
+                        )}
+                        {recurring &&
+                          draft.schedule.firstPaymentMode === "immediate" &&
+                          (draft.interval === "monthly" || draft.interval === "yearly") && (
+                            <div className="space-y-1.5">
+                              <Label>Billing day (optional)</Label>
+                              <Select
+                                value={draft.schedule.billingDay || "none"}
+                                onValueChange={(v) => setSchedule({ billingDay: v === "none" ? "" : v })}
+                              >
+                                <SelectTrigger><SelectValue /></SelectTrigger>
+                                <SelectContent className="max-h-64">
+                                  <SelectItem value="none">Same day they check out</SelectItem>
+                                  {Array.from({ length: 28 }, (_, i) => i + 1).map((d) => (
+                                    <SelectItem key={d} value={String(d)}>
+                                      {d} of every month
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            </div>
+                          )}
+                      </div>
+                      {draft.schedule.firstPaymentMode === "on_date" && (
+                        <p className="text-xs text-muted-foreground">
+                          The client enters their card at checkout but is <strong>not charged</strong> until
+                          this date. Future payments then land on the same date each cycle.
+                        </p>
+                      )}
+                      {!recurring && (
+                        <p className="text-xs text-muted-foreground">
+                          One-time sales are collected when the client completes checkout.
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* INCLUDED SESSIONS */}
+                <div className="space-y-3">
+                  <SectionLabel>Included sessions</SectionLabel>
+                  <div className="grid gap-3 rounded-md border border-border bg-secondary/20 p-3 sm:grid-cols-2">
+                    <div className="space-y-1.5">
+                      <Label>Sessions included</Label>
+                      <Input
+                        inputMode="numeric"
+                        value={draft.sessionsIncluded}
+                        onChange={(e) => setDraft({ ...draft, sessionsIncluded: e.target.value })}
+                        className="text-base md:text-sm"
+                      />
+                    </div>
+                    {sessions > 0 && (
+                      <>
+                        <div className="space-y-1.5">
+                          <Label>Session type</Label>
+                          <Select
+                            value={draft.sessionType}
+                            onValueChange={(v) => setDraft({ ...draft, sessionType: v })}
+                          >
+                            <SelectTrigger><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="Personal Training">Personal Training</SelectItem>
+                              <SelectItem value="Online Coaching">Online Coaching</SelectItem>
+                              <SelectItem value="Consultation">Consultation</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="space-y-1.5 sm:col-span-2">
+                          <Label>Credit delivery</Label>
+                          <Select
+                            value={draft.sessionDelivery}
+                            onValueChange={(v) => setDraft({ ...draft, sessionDelivery: v as any })}
+                          >
+                            <SelectTrigger><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="first_payment">Once on activation</SelectItem>
+                              {recurring && (
+                                <SelectItem value="per_installment">After each successful payment</SelectItem>
+                              )}
+                              <SelectItem value="manual">Manually granted by coach</SelectItem>
+                            </SelectContent>
+                          </Select>
+                          <p className="text-xs text-muted-foreground">
+                            Credit delivery is independent of the payment schedule.
+                          </p>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                </div>
+
+                {/* SERVICE ACCESS */}
+                <div className="space-y-3">
+                  <SectionLabel>Service access</SectionLabel>
+                  <div className="grid gap-3 rounded-md border border-border bg-secondary/20 p-3 sm:grid-cols-2">
+                    <div className="space-y-1.5">
+                      <Label>Coaching starts</Label>
+                      <Select
+                        value={draft.schedule.serviceStartMode}
+                        onValueChange={(v) => setSchedule({ serviceStartMode: v as any })}
+                      >
+                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="immediate">Immediately after purchase</SelectItem>
+                          <SelectItem value="with_first_payment">Same date as first payment</SelectItem>
+                          <SelectItem value="on_date">On a specific date</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    {draft.schedule.serviceStartMode === "on_date" && (
+                      <div className="space-y-1.5">
+                        <Label>Start date</Label>
                         <Input
-                          inputMode="numeric"
-                          value={draft.numberOfPayments}
-                          onChange={(e) => setDraft({ ...draft, numberOfPayments: e.target.value })}
-                          placeholder="4"
+                          type="date"
+                          value={draft.schedule.serviceStartDate}
+                          onChange={(e) => setSchedule({ serviceStartDate: e.target.value })}
                           className="text-base md:text-sm"
                         />
                       </div>
                     )}
-                  </div>
-                )}
-
-                <div className="grid gap-3 rounded-md border border-border bg-secondary/20 p-3 sm:grid-cols-2">
-                  <div className="space-y-1.5 sm:col-span-2">
-                    <Label className="text-xs uppercase tracking-widest text-muted-foreground">
-                      Included sessions
-                    </Label>
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label>Sessions included</Label>
-                    <Input
-                      inputMode="numeric"
-                      value={draft.sessionsIncluded}
-                      onChange={(e) => setDraft({ ...draft, sessionsIncluded: e.target.value })}
-                      className="text-base md:text-sm"
-                    />
-                  </div>
-                  {sessions > 0 && (
-                    <>
-                      <div className="space-y-1.5">
-                        <Label>Session type</Label>
-                        <Select
-                          value={draft.sessionType}
-                          onValueChange={(v) => setDraft({ ...draft, sessionType: v })}
-                        >
-                          <SelectTrigger><SelectValue /></SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="Personal Training">Personal Training</SelectItem>
-                            <SelectItem value="Online Coaching">Online Coaching</SelectItem>
-                            <SelectItem value="Consultation">Consultation</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      <div className="space-y-1.5 sm:col-span-2">
-                        <Label>Credit delivery</Label>
-                        <Select
-                          value={draft.sessionDelivery}
-                          onValueChange={(v) => setDraft({ ...draft, sessionDelivery: v as any })}
-                        >
-                          <SelectTrigger><SelectValue /></SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="first_payment">Once on activation</SelectItem>
-                            {recurring && (
-                              <SelectItem value="per_installment">After each successful payment</SelectItem>
-                            )}
-                            <SelectItem value="manual">Manually granted by coach</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-                    </>
-                  )}
-                </div>
-
-                <div className="grid gap-3 sm:grid-cols-2">
-                  <div className="space-y-1.5">
-                    <Label>Service duration (optional)</Label>
-                    <Input
-                      inputMode="numeric"
-                      value={draft.termLength}
-                      onChange={(e) => setDraft({ ...draft, termLength: e.target.value })}
-                      placeholder="12"
-                      className="text-base md:text-sm"
-                    />
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label>Unit</Label>
-                    <Select value={draft.termUnit} onValueChange={(v) => setDraft({ ...draft, termUnit: v })}>
-                      <SelectTrigger><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="Weeks">Weeks</SelectItem>
-                        <SelectItem value="Months">Months</SelectItem>
-                        <SelectItem value="Years">Years</SelectItem>
-                      </SelectContent>
-                    </Select>
+                    <div className="space-y-1.5">
+                      <Label>Service duration (optional)</Label>
+                      <Input
+                        inputMode="numeric"
+                        value={draft.termLength}
+                        onChange={(e) => setDraft({ ...draft, termLength: e.target.value })}
+                        placeholder="12"
+                        className="text-base md:text-sm"
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label>Unit</Label>
+                      <Select value={draft.termUnit} onValueChange={(v) => setDraft({ ...draft, termUnit: v })}>
+                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="Weeks">Weeks</SelectItem>
+                          <SelectItem value="Months">Months</SelectItem>
+                          <SelectItem value="Years">Years</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
                   </div>
                 </div>
 
+                {/* OPTIONS */}
                 <div className="flex items-start gap-3 rounded-md border border-border p-3">
                   <Switch
                     checked={draft.saveAsProduct}
@@ -427,23 +582,55 @@ export function AddSaleDialog({
                   </div>
                 </div>
 
+                {/* LIVE SUMMARY */}
                 <div className="rounded-md border border-primary/30 bg-primary/5 p-3 text-sm">
-                  <div className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
-                    Summary
+                  <div className="flex items-center gap-1.5">
+                    <CalendarClock className="h-3.5 w-3.5 text-primary" />
+                    <SectionLabel>Summary</SectionLabel>
                   </div>
-                  <div className="font-semibold">{draft.name || "Untitled sale"}</div>
+                  <div className="mt-1 font-semibold">{draft.name || "Untitled sale"}</div>
                   <div className="text-xs text-muted-foreground">
                     {draft.paymentType === "free"
                       ? "No payment"
                       : `${money(customSalePriceCents(draft), draft.currency)} · ${customSalePaymentStructure(draft)}`}
                     {sessions > 0 ? ` · ${sessions} ${draft.sessionType} sessions` : ""}
                   </div>
+                  {paid && (
+                    <dl className="mt-2 grid gap-x-4 gap-y-1 border-t border-primary/20 pt-2 text-xs sm:grid-cols-2">
+                      <div>
+                        <dt className="text-muted-foreground">First payment</dt>
+                        <dd className="font-semibold">{summary.firstPayment}</dd>
+                      </div>
+                      {summary.anchor && (
+                        <div>
+                          <dt className="text-muted-foreground">Then</dt>
+                          <dd className="font-semibold">{summary.anchor}</dd>
+                        </div>
+                      )}
+                      {summary.duration && (
+                        <div>
+                          <dt className="text-muted-foreground">Duration</dt>
+                          <dd className="font-semibold">{summary.duration}</dd>
+                        </div>
+                      )}
+                      {summary.finalPayment && (
+                        <div>
+                          <dt className="text-muted-foreground">Final payment</dt>
+                          <dd className="font-semibold">{summary.finalPayment}</dd>
+                        </div>
+                      )}
+                      <div>
+                        <dt className="text-muted-foreground">Access</dt>
+                        <dd className="font-semibold">{summary.serviceStart}</dd>
+                      </div>
+                    </dl>
+                  )}
                 </div>
               </div>
             </TabsContent>
           </Tabs>
 
-          <DialogFooter className="border-t border-border px-4 py-3 md:px-6">
+          <div className={`flex items-center justify-end gap-2 ${SALE_DIALOG_FOOTER_CLASS}`}>
             <Button variant="ghost" onClick={close}>Cancel</Button>
             {tab === "custom" && (
               <Button onClick={buildCustom} disabled={creating} className="bg-gradient-primary font-bold uppercase">
@@ -451,7 +638,7 @@ export function AddSaleDialog({
                 Continue
               </Button>
             )}
-          </DialogFooter>
+          </div>
         </DialogContent>
       </Dialog>
 
