@@ -37,6 +37,8 @@ import {
   type SessionDelivery,
 } from "@/lib/product-sessions";
 import { createCoachingProduct } from "@/lib/coaching-products.functions";
+import { DateField } from "@/components/ui/date-field";
+import { formatCalendarDate } from "@/lib/calendar-date";
 import {
   BILLING_FREQUENCY_OPTIONS,
   billingCadencePhrase,
@@ -55,7 +57,22 @@ const FIELD_LABELS: Record<string, string> = {
   serviceDuration: "Access duration",
   sessionsIncluded: "Sessions included",
   agreementTemplateId: "Agreement template",
+  startDate: "Start date",
 };
+
+/** Maps the product-setup start rule onto the canonical sale start mode. */
+function productStartModeFor(f: { startRule: StartRule }) {
+  switch (f.startRule) {
+    case "on_first_payment":
+      return "with_first_payment" as const;
+    case "specific_date":
+      return "on_date" as const;
+    case "admin_choice":
+      return "admin_choice" as const;
+    default:
+      return "immediate" as const;
+  }
+}
 
 /* ─────────────────────────────────────────────────────────────
    Config
@@ -124,6 +141,9 @@ type DurationUnit = "days" | "weeks" | "months" | "ongoing";
 
 type StartRule =
   | "immediately"
+  | "on_first_payment"
+  | "specific_date"
+  | "admin_choice"
   | "after_current"
   | "next_monday"
   | "manual";
@@ -206,6 +226,8 @@ type FormState = {
   serviceDurationValue: string;
   serviceDurationUnit: DurationUnit;
   startRule: StartRule;
+  /** Calendar date used when startRule = specific_date. */
+  startDate: string;
 
   // included
   includedItems: string[];
@@ -257,6 +279,7 @@ function initialForm(defaultWorkspace: "coaching" | "membership"): FormState {
     serviceDurationValue: "12",
     serviceDurationUnit: "months",
     startRule: "immediately",
+    startDate: "",
     includedItems: [],
     sessionsIncluded: "",
     sessionLengthMin: "60",
@@ -326,6 +349,14 @@ function startLine(f: FormState): string | null {
   switch (f.startRule) {
     case "immediately":
       return "Starts immediately after purchase";
+    case "on_first_payment":
+      return "Starts on the first payment date";
+    case "specific_date":
+      return f.startDate
+        ? `Starts ${formatCalendarDate(f.startDate)}`
+        : "Starts on a specific date";
+    case "admin_choice":
+      return "Start date chosen when assigning";
     case "after_current":
       return "Starts after current product ends";
     case "next_monday":
@@ -364,6 +395,8 @@ function validate(f: FormState): FieldErrors {
     if (!Number.isFinite(s) || s < 1)
       errs.sessionsIncluded = "Session packages must include at least one session";
   }
+  if (f.startRule === "specific_date" && !/^\d{4}-\d{2}-\d{2}$/.test(f.startDate))
+    errs.startDate = "Pick the start date";
   if (f.agreementRequired && !f.agreementTemplateId)
     errs.agreementTemplateId = "Pick an agreement template";
   return errs;
@@ -557,7 +590,9 @@ export default function NewProductModal({
       if (form.notes.trim()) noteLines.push(form.notes.trim());
       noteLines.push(`[workspace] ${form.workspace}`);
       if (CATEGORIES_WITH_ACCESS[form.category])
-        noteLines.push(`[start] ${form.startRule}`);
+        noteLines.push(
+          `[start] ${form.startRule}${form.startRule === "specific_date" && form.startDate ? `:${form.startDate}` : ""}`,
+        );
       // Session entitlement is stored in real columns (below), not in notes —
       // it has to drive the canonical session ledger, not just read nicely.
       noteLines.push(
@@ -602,6 +637,8 @@ export default function NewProductModal({
           sessionsIncludedNum > 0 ? parseInt(form.sessionLengthMin || "0", 10) || null : null,
         sessionExpiryDays:
           sessionsIncludedNum > 0 ? parseInt(form.sessionExpiryDays || "0", 10) || null : null,
+        serviceStartMode: productStartModeFor(form),
+        serviceStartDate: form.startRule === "specific_date" ? form.startDate : null,
         idempotencyKey: idempotencyKeyRef.current,
       };
 
@@ -944,11 +981,30 @@ export default function NewProductModal({
                         </SelectTrigger>
                         <SelectContent>
                           <SelectItem value="immediately">Immediately after purchase</SelectItem>
+                          <SelectItem value="on_first_payment">On the first payment date</SelectItem>
+                          <SelectItem value="specific_date">A specific date</SelectItem>
+                          <SelectItem value="admin_choice">Admin chooses when assigning</SelectItem>
                           <SelectItem value="after_current">After current product ends</SelectItem>
                           <SelectItem value="next_monday">Next Monday</SelectItem>
                           <SelectItem value="manual">Manually activated by admin</SelectItem>
                         </SelectContent>
                       </Select>
+                      {form.startRule === "specific_date" && (
+                        <div className="mt-2 space-y-1.5">
+                          <Label htmlFor="product-start-date">Start date</Label>
+                          <DateField
+                            id="product-start-date"
+                            aria-label="Product start date"
+                            placeholder="Pick the start date"
+                            value={form.startDate}
+                            onChange={(v) => set("startDate", v)}
+                          />
+                          {showErr("startDate") && <FieldError msg={errors.startDate!} />}
+                        </div>
+                      )}
+                      <p className="mt-1 text-[11px] text-muted-foreground">
+                        Controls when access begins — not when Stripe charges.
+                      </p>
                     </div>
                   </div>
 

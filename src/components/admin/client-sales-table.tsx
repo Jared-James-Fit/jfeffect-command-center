@@ -6,6 +6,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { accessBadge } from "@/lib/service-access-status";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
@@ -84,6 +85,18 @@ function resolveSaleStatus(r: any, d: PaymentDisplay): { label: string; tone: st
   if (d.status === "unpaid" || d.status === "past_due") return { label: "Past Due", tone: TONE.bad };
   if (d.status === "pending_setup") return { label: "Payment setup pending", tone: TONE.warn };
   return { label: "Unknown", tone: TONE.muted };
+}
+
+/** Access (service) state — deliberately separate from the payment badge. */
+function AccessBadge({ raw }: { raw: any }) {
+  const { state, label } = accessBadge(raw);
+  const tone =
+    state === "active" ? TONE.ok : state === "upcoming" ? TONE.info : TONE.muted;
+  return (
+    <Badge variant="outline" className={`${tone} ml-1 whitespace-nowrap text-[10px]`}>
+      {label}
+    </Badge>
+  );
 }
 
 /** Next Payment cell text — mirrors resolveRenewal, never fabricated. */
@@ -264,7 +277,10 @@ export function ClientSalesTable({ clientId }: { clientId: string }) {
                       <span className={next.tone}>{next.text}</span>
                       {next.helper && <div className="text-[11px] text-muted-foreground">{next.helper}</div>}
                     </TableCell>
-                    <TableCell><Badge variant="outline" className={status.tone}>{status.label}</Badge></TableCell>
+                    <TableCell>
+                      <Badge variant="outline" className={status.tone}>{status.label}</Badge>
+                      <AccessBadge raw={raw} />
+                    </TableCell>
                     <TableCell>
                       <RowMenu
                         raw={raw}
@@ -301,6 +317,7 @@ export function ClientSalesTable({ clientId }: { clientId: string }) {
                 </div>
                 <div className="flex flex-wrap items-center gap-1.5">
                   <Badge variant="outline" className={status.tone}>{status.label}</Badge>
+                  <AccessBadge raw={raw} />
                   <span className="text-sm font-mono">{formatMoney(display.contractTotal, display.currency)}</span>
                   {display.amountOutstanding > 0 && (
                     <Badge variant="outline" className={TONE.warn}>

@@ -123,6 +123,13 @@ const createSchema = z.object({
   // One-off custom sale created from a client profile: kept out of the
   // reusable catalogue and out of the Add Sale product picker.
   isOneOff: z.boolean().optional().default(false),
+  // Default coaching/service start rule for new sales. Purely an access
+  // concept — it never changes when Stripe charges the client.
+  serviceStartMode: z
+    .enum(["immediate", "with_first_payment", "on_date", "admin_choice"])
+    .optional()
+    .nullable(),
+  serviceStartDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().nullable(),
 });
 
 export const createCoachingProduct = createServerFn({ method: "POST" })
@@ -223,6 +230,9 @@ export const createCoachingProduct = createServerFn({ method: "POST" })
         session_length_minutes: data.sessionLengthMinutes || null,
         session_expiry_days: data.sessionExpiryDays || null,
         is_one_off: !!data.isOneOff,
+        service_start_mode: data.serviceStartMode ?? "immediate",
+        service_start_date:
+          data.serviceStartMode === "on_date" ? (data.serviceStartDate ?? null) : null,
         created_by: userId,
       })
       .select("*")
@@ -279,6 +289,15 @@ export const updateCoachingProduct = createServerFn({ method: "POST" })
       patch.session_length_minutes = data.sessionLengthMinutes || null;
     if (data.sessionExpiryDays !== undefined)
       patch.session_expiry_days = data.sessionExpiryDays || null;
+    // Start-rule edits apply to FUTURE sales only; existing purchase_records
+    // keep their own snapshotted service_start_date.
+    if (data.serviceStartMode !== undefined) {
+      patch.service_start_mode = data.serviceStartMode ?? "immediate";
+      patch.service_start_date =
+        data.serviceStartMode === "on_date" ? (data.serviceStartDate ?? null) : null;
+    } else if (data.serviceStartDate !== undefined) {
+      patch.service_start_date = data.serviceStartDate ?? null;
+    }
 
     // ── Stripe currency sync ───────────────────────────────────────────
     // Stripe Prices are immutable, so when the admin changes currency (or

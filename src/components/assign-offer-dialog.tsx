@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
@@ -15,7 +15,8 @@ import { snapshotOfferForPurchase } from "@/lib/offers";
 import { parseBillingFrequency, type BillingFrequency } from "@/lib/billing-frequency";
 import {
   blankBillingSchedule, businessToday, resolveFirstPaymentDate, resolveServiceStartDate,
-  scheduleSummary, validateBillingSchedule, type BillingScheduleDraft,
+  scheduleSummary, validateBillingSchedule, productDefaultSchedule,
+  productRequiresStartDecision, productStartLabel, type BillingScheduleDraft,
 } from "@/lib/billing-schedule";
 import { assignEntitlementPreview } from "@/lib/product-sessions";
 import { useServerFn } from "@tanstack/react-start";
@@ -27,6 +28,7 @@ import { runJob } from "@/lib/progress-jobs";
 import { autoCalculatePurchaseTermDates } from "@/lib/purchase-term-dates.functions";
 import { FIRST50_CODE } from "@/lib/first50-policy";
 import { findReusablePurchaseIntent } from "@/lib/purchase-idempotency";
+import { DateField } from "@/components/ui/date-field";
 
 /** What actually happens when the admin confirms. */
 type AssignMode = "payment_request" | "paid_in_full" | "draft";
@@ -77,14 +79,26 @@ export function AssignOfferDialog({ offer, onClose, fixedClientId }: { offer: an
   // the coach may override it FOR THIS SALE ONLY (off by default) — the master
   // product, and every other client's existing sale, are never touched.
   const incomingSchedule = offer?.billing_schedule ?? null;
+  // Product default start rule. "Admin chooses when assigning" forces the
+  // override panel open so the sale can never be saved without a real date.
+  const productDefault = productDefaultSchedule(offer);
+  const mustChooseStart = productRequiresStartDecision(offer);
   const [customizeSchedule, setCustomizeSchedule] = useState(false);
-  const [schedule, setSchedule] = useState<BillingScheduleDraft>(blankBillingSchedule());
+  const [schedule, setSchedule] = useState<BillingScheduleDraft>(productDefault);
+  const offerIdRef = useRef<string | null>(null);
+  useEffect(() => {
+    const id = offer?.id ?? null;
+    if (id === offerIdRef.current) return;
+    offerIdRef.current = id;
+    setSchedule(productDefaultSchedule(offer));
+    setCustomizeSchedule(productRequiresStartDecision(offer));
+  }, [offer]);
   const offerFrequency: BillingFrequency | null = offer?.is_recurring
     ? (parseBillingFrequency(offer?.payment_frequency ?? offer?.payment_structure) ?? "monthly")
     : null;
   const effectiveSchedule: BillingScheduleDraft = customizeSchedule
     ? schedule
-    : blankBillingSchedule();
+    : productDefault;
   // A custom sale already agreed its dates in the previous step; otherwise use
   // the product default, optionally overridden here.
   const scheduleSnapshot = incomingSchedule && !customizeSchedule
@@ -159,8 +173,10 @@ export function AssignOfferDialog({ offer, onClose, fixedClientId }: { offer: an
 
   const submit = async () => {
     if (!offer || !clientId || !selectedClient) return;
-    if (customizeSchedule) {
-      const problem = validateBillingSchedule(schedule);
+    if (!incomingSchedule) {
+      // Validates the schedule actually being used — including a product whose
+      // start date the admin must choose at assign time.
+      const problem = validateBillingSchedule(effectiveSchedule);
       if (problem) return void toast.error(problem);
     }
 
@@ -353,13 +369,20 @@ export function AssignOfferDialog({ offer, onClose, fixedClientId }: { offer: an
                   <div className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
                     Payment schedule
                   </div>
-                  {!incomingSchedule && (
+                  {!incomingSchedule && !mustChooseStart && (
                     <label className="flex items-center gap-2 text-xs">
                       <Switch checked={customizeSchedule} onCheckedChange={setCustomizeSchedule} />
                       Customize for this client
                     </label>
                   )}
                 </div>
+                {!incomingSchedule && (
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {mustChooseStart
+                      ? "This product needs a coaching start date for this client."
+                      : `Product default: ${productStartLabel(offer)}.`}
+                  </p>
+                )}
 
                 {customizeSchedule && (
                   <div className="mt-3 grid gap-3 sm:grid-cols-2">
@@ -379,12 +402,11 @@ export function AssignOfferDialog({ offer, onClose, fixedClientId }: { offer: an
                     {schedule.firstPaymentMode === "on_date" && (
                       <div className="space-y-1.5">
                         <Label>Date</Label>
-                        <Input
-                          type="date"
+                        <DateField
+                          aria-label="First payment date"
                           min={businessToday()}
                           value={schedule.firstPaymentDate}
-                          onChange={(e) => setSchedule({ ...schedule, firstPaymentDate: e.target.value })}
-                          className="text-base md:text-sm"
+                          onChange={(v) => setSchedule({ ...schedule, firstPaymentDate: v })}
                         />
                       </div>
                     )}
@@ -404,13 +426,17 @@ export function AssignOfferDialog({ offer, onClose, fixedClientId }: { offer: an
                     </div>
                     {schedule.serviceStartMode === "on_date" && (
                       <div className="space-y-1.5 sm:col-span-2">
-                        <Label>Start date</Label>
-                        <Input
-                          type="date"
+                        <Label htmlFor="assign-service-start">Start date</Label>
+                        <DateField
+                          id="assign-service-start"
+                          aria-label="Coaching start date"
+                          placeholder="Pick the coaching start date"
                           value={schedule.serviceStartDate}
-                          onChange={(e) => setSchedule({ ...schedule, serviceStartDate: e.target.value })}
-                          className="text-base md:text-sm"
+                          onChange={(v) => setSchedule({ ...schedule, serviceStartDate: v })}
                         />
+                        <p className="text-xs text-muted-foreground">
+                          Applies to this client's sale only — the product is unchanged.
+                        </p>
                       </div>
                     )}
                   </div>

@@ -46,6 +46,7 @@ import {
   SALE_DIALOG_TITLE_CLASS,
 } from "@/lib/sale-dialog-layout";
 import { AssignOfferDialog } from "@/components/assign-offer-dialog";
+import { DateField } from "@/components/ui/date-field";
 
 function money(cents: number, currency: string) {
   try {
@@ -415,12 +416,11 @@ export function AddSaleDialog({
                         {draft.schedule.firstPaymentMode === "on_date" && (
                           <div className="space-y-1.5">
                             <Label>First payment date</Label>
-                            <Input
-                              type="date"
+                            <DateField
+                              aria-label="First payment date"
                               min={today}
                               value={draft.schedule.firstPaymentDate}
-                              onChange={(e) => setSchedule({ firstPaymentDate: e.target.value })}
-                              className="text-base md:text-sm"
+                              onChange={(v) => setSchedule({ firstPaymentDate: v })}
                             />
                           </div>
                         )}
@@ -534,13 +534,17 @@ export function AddSaleDialog({
                     </div>
                     {draft.schedule.serviceStartMode === "on_date" && (
                       <div className="space-y-1.5">
-                        <Label>Start date</Label>
-                        <Input
-                          type="date"
+                        <Label htmlFor="custom-sale-service-start">Start date</Label>
+                        <DateField
+                          id="custom-sale-service-start"
+                          aria-label="Coaching start date"
+                          placeholder="Pick the coaching start date"
                           value={draft.schedule.serviceStartDate}
-                          onChange={(e) => setSchedule({ serviceStartDate: e.target.value })}
-                          className="text-base md:text-sm"
+                          onChange={(v) => setSchedule({ serviceStartDate: v })}
                         />
+                        <p className="text-xs text-muted-foreground">
+                          Access begins on this date. It does not change when Stripe charges.
+                        </p>
                       </div>
                     )}
                     <div className="space-y-1.5">

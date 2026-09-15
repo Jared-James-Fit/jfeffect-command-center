@@ -4175,6 +4175,8 @@ export type Database = {
           payment_structure: string | null
           price_cents: number
           product_type: string | null
+          service_start_date: string | null
+          service_start_mode: string | null
           session_expiry_days: number | null
           session_fulfillment: string
           session_length_minutes: number | null
@@ -4214,6 +4216,8 @@ export type Database = {
           payment_structure?: string | null
           price_cents: number
           product_type?: string | null
+          service_start_date?: string | null
+          service_start_mode?: string | null
           session_expiry_days?: number | null
           session_fulfillment?: string
           session_length_minutes?: number | null
@@ -4253,6 +4257,8 @@ export type Database = {
           payment_structure?: string | null
           price_cents?: number
           product_type?: string | null
+          service_start_date?: string | null
+          service_start_mode?: string | null
           session_expiry_days?: number | null
           session_fulfillment?: string
           session_length_minutes?: number | null
@@ -19062,6 +19068,7 @@ export type Database = {
           subscription_status: string
         }[]
       }
+      grant_sessions_due_today: { Args: never; Returns: number }
       grant_sessions_if_paid_in_full: {
         Args: { _purchase_id: string }
         Returns: undefined
