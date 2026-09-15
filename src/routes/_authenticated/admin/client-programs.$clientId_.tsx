@@ -107,25 +107,40 @@ function ClientProgramsPage() {
 
         {isAtHomeBackupClient(clientId) && <AtHomeBackupAdminPanel clientId={clientId} />}
 
-        <PrepsSection
-          preps={preps as any[]}
-          blocks={blocks as any[]}
-          templateLookup={templateLookup as any}
-          onRefresh={refresh}
-        />
+        {/* Schedule-first manager: what is running, what is next, the calendar. */}
+        <TrainingScheduleBoard clientId={clientId} clientName={client?.full_name ?? null} />
 
-        <section>
-          <BlocksSection
-            blocks={blocks as any[]}
-            templateLookup={templateLookup as any}
-            onRefresh={refresh}
-          />
-        </section>
+        {/* Everything else stays available, just out of the daily workflow. */}
+        <details className="group rounded-lg border border-border bg-card">
+          <summary className="cursor-pointer list-none px-4 py-3 text-sm font-semibold">
+            Programs, phases &amp; all blocks
+            <span className="ml-2 text-xs font-normal text-muted-foreground">
+              (preps, block library, recent assignments)
+            </span>
+          </summary>
+          <div className="space-y-6 border-t border-border p-4">
+            <PrepsSection
+              preps={preps as any[]}
+              blocks={blocks as any[]}
+              templateLookup={templateLookup as any}
+              onRefresh={refresh}
+            />
 
-        <section>
-          <h2 className="mb-3 text-sm font-bold uppercase tracking-widest text-muted-foreground">Recent Assignments</h2>
-          <AssignmentHistoryPanel clientId={clientId} />
-        </section>
+            <section>
+              <BlocksSection
+                blocks={blocks as any[]}
+                templateLookup={templateLookup as any}
+                onRefresh={refresh}
+              />
+            </section>
+
+            <section>
+              <h2 className="mb-3 text-sm font-bold uppercase tracking-widest text-muted-foreground">Recent Assignments</h2>
+              <AssignmentHistoryPanel clientId={clientId} />
+            </section>
+          </div>
+        </details>
+
       </div>
 
       <NewPrepDialog open={prepOpen} onOpenChange={setPrepOpen} clientId={clientId} onCreated={refresh} />
