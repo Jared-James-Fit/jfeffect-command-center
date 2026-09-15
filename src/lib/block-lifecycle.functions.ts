@@ -97,14 +97,15 @@ async function loadBlockSchedule(supabase: any, blockId: string) {
         .in("day_id", dayIds)
     : { data: [] as any[] };
 
-  const completedDayIds = new Set(
-    (completions ?? []).filter((c: any) => c.completed_at).map((c: any) => c.day_id),
+  const completedDayIds = new Set<string>(
+    (completions ?? []).filter((c: any) => c.completed_at).map((c: any) => String(c.day_id)),
   );
-  const completedInstanceIds = new Set(
+  const completedInstanceIds = new Set<string>(
     (completions ?? [])
       .filter((c: any) => c.completed_at && c.scheduled_workout_id)
-      .map((c: any) => c.scheduled_workout_id),
+      .map((c: any) => String(c.scheduled_workout_id)),
   );
+
 
   const titleByDay = new Map<string, string>(
     dayList.map((d: any) => [d.id, d.title ?? `Day ${d.day_index ?? ""}`.trim()]),
