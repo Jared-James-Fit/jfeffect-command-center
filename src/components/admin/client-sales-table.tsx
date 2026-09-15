@@ -23,7 +23,7 @@ import { getShareablePaymentUrl } from "@/components/payments/copy-payment-link-
 import { shareKindLabel } from "@/lib/payment-share-link";
 import { share as nativeShare, canShare } from "@/platform/share";
 import { toast } from "sonner";
-import { AssignOfferDialog } from "@/components/assign-offer-dialog";
+import { AddSaleDialog } from "@/components/clients/add-sale-dialog";
 import { TermDateEditor, downloadPurchasePdf } from "@/components/purchase-records-panel";
 import { updatePurchasePayment, sendPaymentLinkEmail } from "@/lib/payments.functions";
 import { resolvePaymentDisplay, formatMoney, type PaymentDisplay } from "@/lib/payment-display";
@@ -117,7 +117,6 @@ export function ClientSalesTable({ clientId }: { clientId: string }) {
   const qc = useQueryClient();
   const [sort, setSort] = useState<SortKey>("recent");
   const [picker, setPicker] = useState(false);
-  const [chosenOffer, setChosenOffer] = useState<any | null>(null);
   const [editingDates, setEditingDates] = useState<any | null>(null);
 
   const updateFn = useServerFn(updatePurchasePayment);
@@ -149,12 +148,6 @@ export function ClientSalesTable({ clientId }: { clientId: string }) {
       );
       return waiting ? 45_000 : false;
     },
-  });
-
-  const { data: offers = [] } = useQuery({
-    queryKey: ["offers-pickable"],
-    enabled: picker,
-    queryFn: async () => (await supabase.from("offers").select("*").eq("archived", false).order("name")).data ?? [],
   });
 
   const rows: Row[] = useMemo(() => {
