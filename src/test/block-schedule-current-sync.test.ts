@@ -160,3 +160,75 @@ describe("page and client calendar share one source", () => {
     expect(hook).not.toMatch(/\.update\(|\.insert\(|\.delete\(|\.upsert\(/);
   });
 });
+
+/**
+ * Exact production shape for Nicole Yusi (read-only reconcile, no mutations):
+ * stored block metadata is stale in BOTH directions while pl_days carries the
+ * real schedule.
+ */
+describe("Nicole Yusi — stale stored dates in both directions", () => {
+  const SEP14 = "2026-09-14";
+  const blocks = [
+    { id: "92fac0f9", prep_id: PREP_NOW, name: "Block 2 — Strength / Intensification", status: "Active", start_date: "2026-08-17", end_date: "2026-09-13", weeks: 4, sort_order: 1 },
+    { id: "c6535816", prep_id: PREP_NOW, name: "Block 3 — Peak / Taper / Competition", status: "Completed", completed_at: "2026-09-11T19:25:34Z", start_date: "2026-09-14", end_date: "2026-10-11", weeks: 4, sort_order: 2 },
+  ];
+  // pl_days.scheduled_date — no pl_scheduled_workouts rows exist for her.
+  const days = [
+    { blockId: "c6535816", date: "2026-08-17", completed: true },
+    { blockId: "c6535816", date: "2026-09-11", completed: true },
+    { blockId: "92fac0f9", date: "2026-09-14", completed: true },
+    { blockId: "92fac0f9", date: "2026-09-17", completed: false },
+    { blockId: "92fac0f9", date: "2026-10-09", completed: false },
+  ];
+  const list = (today: string) => deriveSchedule(blocks, today, buildEvidence(days, today));
+
+  it("Block 2 is CURRENT on Sep 14 despite stored end 2026-09-13", () => {
+    const cur = currentBlock(list(SEP14))!;
+    expect(cur.id).toBe("92fac0f9");
+    expect(cur.effective_start).toBe("2026-09-14");
+    expect(cur.effective_end).toBe("2026-10-09");
+    expect(cur.dates_from_schedule).toBe(true);
+  });
+
+  it("Block 3 is HISTORY on Sep 14 despite stored start 2026-09-14", () => {
+    const b3 = list(SEP14).find((b) => b.id === "c6535816")!;
+    expect(b3.status_derived).toBe("Completed");
+    expect(historyBlocks(list(SEP14)).map((b) => b.id)).toContain("c6535816");
+    expect(b3.effective_start).toBe("2026-08-17");
+    expect(b3.effective_end).toBe("2026-09-11");
+  });
+
+  it("a stale Completed flag cannot hide live scheduled workouts", () => {
+    const stale = [{ ...blocks[0], status: "Completed", completed_at: "2026-09-13T00:00:00Z" }];
+    const derivedStale = deriveSchedule(stale, SEP14, buildEvidence(days, SEP14));
+    expect(currentBlock(derivedStale)!.id).toBe("92fac0f9");
+  });
+
+  it("a stale Active flag cannot keep a fully past schedule current", () => {
+    const stale = [{ ...blocks[1], status: "Active", completed_at: null }];
+    const derivedStale = deriveSchedule(stale, SEP14, buildEvidence(days, SEP14));
+    expect(currentBlock(derivedStale)).toBeNull();
+    expect(derivedStale[0].status_derived).toBe("Completed");
+  });
+
+  it("stays CURRENT on a rest day inside the scheduled span", () => {
+    expect(currentBlock(list("2026-09-16"))!.id).toBe("92fac0f9");
+    expect(currentBlock(list("2026-10-01"))!.id).toBe("92fac0f9");
+  });
+
+  it("next workout after today's completion is the next incomplete day", () => {
+    const cur = currentBlock(list(SEP14))!;
+    expect(cur.next_workout_date).toBe("2026-09-17");
+  });
+
+  it("does not mix a separate prep into the current sequence", () => {
+    const withOther = [
+      ...blocks,
+      { id: "other", prep_id: PREP_OLD, name: "Old Block 2", status: "Active", start_date: "2026-01-01", end_date: "2026-12-31", weeks: 52 },
+    ];
+    const l = deriveSchedule(withOther, SEP14, buildEvidence(days, SEP14));
+    expect(currentBlock(l)!.id).toBe("92fac0f9");
+    expect(currentAssignmentId(l)).toBe(PREP_NOW);
+    expect(l.find((b) => b.id === "other")!.status_derived).not.toBe("Active");
+  });
+});
