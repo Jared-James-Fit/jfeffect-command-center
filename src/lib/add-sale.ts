@@ -11,6 +11,14 @@
  * the public sales page must still be assignable by staff.
  */
 
+import {
+  blankBillingSchedule,
+  resolveFirstPaymentDate,
+  resolveServiceStartDate,
+  validateBillingSchedule,
+  type BillingScheduleDraft,
+} from "@/lib/billing-schedule";
+
 export type AssignEligibility =
   | { assignable: true; reason: null }
   | { assignable: false; reason: string };
