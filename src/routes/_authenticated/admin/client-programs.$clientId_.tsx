@@ -32,6 +32,8 @@ import { useAuth } from "@/lib/auth";
 import { BLOCK_PHASE_OPTIONS } from "@/lib/pl-template-blocks";
 import { ClientTrainingIntelCard } from "@/components/client-training-intel-card";
 import { AssignmentHistoryPanel } from "@/components/program-planner/AssignmentHistoryPanel";
+import { TrainingScheduleBoard } from "@/components/clients/training-schedule-board";
+
 
 export const Route = createFileRoute("/_authenticated/admin/client-programs/$clientId_")({ component: ClientProgramsPage });
 
