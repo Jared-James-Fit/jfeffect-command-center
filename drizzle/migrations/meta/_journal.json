@@ -50,6 +50,13 @@
       "when": 1789437861723,
       "tag": "0006_product_service_start_defaults",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1789438355364,
+      "tag": "0007_defer_session_grants_until_service_start",
+      "breakpoints": true
     }
   ]
 }

@@ -19068,6 +19068,7 @@ export type Database = {
           subscription_status: string
         }[]
       }
+      grant_sessions_due_today: { Args: never; Returns: number }
       grant_sessions_if_paid_in_full: {
         Args: { _purchase_id: string }
         Returns: undefined
