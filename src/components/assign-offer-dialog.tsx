@@ -78,14 +78,26 @@ export function AssignOfferDialog({ offer, onClose, fixedClientId }: { offer: an
   // the coach may override it FOR THIS SALE ONLY (off by default) — the master
   // product, and every other client's existing sale, are never touched.
   const incomingSchedule = offer?.billing_schedule ?? null;
+  // Product default start rule. "Admin chooses when assigning" forces the
+  // override panel open so the sale can never be saved without a real date.
+  const productDefault = productDefaultSchedule(offer);
+  const mustChooseStart = productRequiresStartDecision(offer);
   const [customizeSchedule, setCustomizeSchedule] = useState(false);
-  const [schedule, setSchedule] = useState<BillingScheduleDraft>(blankBillingSchedule());
+  const [schedule, setSchedule] = useState<BillingScheduleDraft>(productDefault);
+  const offerIdRef = useRef<string | null>(null);
+  useEffect(() => {
+    const id = offer?.id ?? null;
+    if (id === offerIdRef.current) return;
+    offerIdRef.current = id;
+    setSchedule(productDefaultSchedule(offer));
+    setCustomizeSchedule(productRequiresStartDecision(offer));
+  }, [offer]);
   const offerFrequency: BillingFrequency | null = offer?.is_recurring
     ? (parseBillingFrequency(offer?.payment_frequency ?? offer?.payment_structure) ?? "monthly")
     : null;
   const effectiveSchedule: BillingScheduleDraft = customizeSchedule
     ? schedule
-    : blankBillingSchedule();
+    : productDefault;
   // A custom sale already agreed its dates in the previous step; otherwise use
   // the product default, optionally overridden here.
   const scheduleSnapshot = incomingSchedule && !customizeSchedule
