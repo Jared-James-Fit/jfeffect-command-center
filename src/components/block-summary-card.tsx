@@ -106,7 +106,7 @@ export function BlockSummaryCard({
           <div className="min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
             <Link {...toBlock} className="font-bold text-base hover:underline truncate">{block.name}</Link>
-            <Badge variant="outline" className={cn("text-[10px]", statusTone(block.status))}>{displayStatus}</Badge>
+            <Badge variant="outline" className={cn("text-[10px]", statusTone(derivedStatus ?? block.status))}>{displayStatus}</Badge>
           </div>
           <div className="mt-0.5 text-xs text-muted-foreground">
             {totalWeeks} Weeks
