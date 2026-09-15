@@ -113,7 +113,7 @@ export function TrainingScheduleBoard({
 
   const currentProgram = current?.prep_id ? prepById.get(current.prep_id) : null;
   const nextBlock = upcoming[0] ?? null;
-  const gap = gapDays(current?.effective_end ?? null, nextBlock?.start_date ?? null);
+  const gap = gapDays(current?.effective_end ?? null, nextBlock?.effective_start ?? null);
 
   const blockWorkouts = useMemo(
     () => workouts.filter((w) => w.blockId === current?.id),
@@ -177,7 +177,7 @@ export function TrainingScheduleBoard({
                   <div className="font-semibold">Schedule overlap detected</div>
                   {overlaps.map(({ a, b }, i) => (
                     <div key={i} className="mt-0.5">
-                      {a.name} ({formatRange(a.start_date, a.effective_end)}) overlaps {b.name} ({formatRange(b.start_date, b.effective_end)})
+                      {a.name} ({formatRange(a.effective_start, a.effective_end)}) overlaps {b.name} ({formatRange(b.effective_start, b.effective_end)})
                     </div>
                   ))}
                 </div>
@@ -200,7 +200,7 @@ export function TrainingScheduleBoard({
                       <StatusBadge status={current.status_derived} />
                     </div>
                     <div className="mt-1 text-sm text-muted-foreground">
-                      {formatRange(current.start_date, current.effective_end)}
+                      {formatRange(current.effective_start, current.effective_end)}
                       {durationLabel(current) ? ` · ${durationLabel(current)}` : ""}
                     </div>
                   </div>
@@ -212,7 +212,7 @@ export function TrainingScheduleBoard({
                 </div>
 
                 <div className="mt-3 grid grid-cols-2 gap-2 text-xs sm:grid-cols-4">
-                  <Stat label="Started" value={pretty(current.start_date)} />
+                  <Stat label="Started" value={pretty(current.effective_start)} />
                   <Stat label="Ends" value={pretty(current.effective_end)} />
                   <Stat
                     label="Today"
@@ -277,7 +277,7 @@ export function TrainingScheduleBoard({
                     <StatusBadge status={nextBlock.status_derived} />
                   </div>
                   <div className="mt-0.5 text-sm text-muted-foreground">
-                    Starts {pretty(nextBlock.start_date)} · Ends {pretty(nextBlock.effective_end)}
+                    Starts {pretty(nextBlock.effective_start)} · Ends {pretty(nextBlock.effective_end)}
                     {durationLabel(nextBlock) ? ` · ${durationLabel(nextBlock)}` : ""}
                   </div>
                   {gap > 0 && (
@@ -383,7 +383,7 @@ function BlockMenu({
 }
 
 function BlockTimeline({ blocks }: { blocks: ScheduleBlock[] }) {
-  const ordered = blocks.filter((b) => b.status_derived !== "Archived" && b.start_date);
+  const ordered = blocks.filter((b) => b.status_derived !== "Archived" && b.effective_start);
   if (!ordered.length) return null;
   return (
     <Card className="min-w-0 p-3">
@@ -398,7 +398,7 @@ function BlockTimeline({ blocks }: { blocks: ScheduleBlock[] }) {
             )}
           >
             <div className="truncate text-xs font-semibold">{b.name}</div>
-            <div className="mt-0.5 text-[11px] text-muted-foreground">{formatRange(b.start_date, b.effective_end)}</div>
+            <div className="mt-0.5 text-[11px] text-muted-foreground">{formatRange(b.effective_start, b.effective_end)}</div>
             <div className="mt-1"><StatusBadge status={b.status_derived} /></div>
           </div>
         ))}
@@ -418,7 +418,7 @@ function HistoryList({ blocks }: { blocks: ScheduleBlock[] }) {
               {b.name}
             </Link>
             <div className="text-xs text-muted-foreground">
-              {formatRange(b.start_date, b.effective_end)}
+              {formatRange(b.effective_start, b.effective_end)}
               {durationLabel(b) ? ` · ${durationLabel(b)}` : ""}
               {b.status_derived === "EndedEarly" && b.original_end
                 ? ` · originally ended ${pretty(b.original_end)}`
@@ -458,7 +458,7 @@ function ScheduleCalendarView({
     return m;
   }, [workouts]);
 
-  const spans = blocks.filter((b) => b.start_date && b.status_derived !== "Archived");
+  const spans = blocks.filter((b) => b.effective_start && b.status_derived !== "Archived");
 
   const [y, m] = cursor.split("-").map(Number);
   const firstWeekday = new Date(y, m - 1, 1).getDay();
@@ -520,7 +520,7 @@ function ScheduleCalendarView({
             >
               <Dot className="h-3 w-3 shrink-0" />
               <span className="truncate">{b.name}</span>
-              <span className="shrink-0 opacity-70">{formatRange(b.start_date, b.effective_end)}</span>
+              <span className="shrink-0 opacity-70">{formatRange(b.effective_start, b.effective_end)}</span>
             </span>
           ))}
         </div>
@@ -911,7 +911,7 @@ function AddNextBlockDialog({
               {overlaps && (
                 <div className="mt-1 inline-flex items-start gap-1 text-amber-600 dark:text-amber-400">
                   <AlertTriangle className="mt-0.5 h-3 w-3 shrink-0" />
-                  Overlaps the current block ({formatRange(current?.start_date, current?.effective_end)}).
+                  Overlaps the current block ({formatRange(current?.effective_start, current?.effective_end)}).
                 </div>
               )}
             </div>

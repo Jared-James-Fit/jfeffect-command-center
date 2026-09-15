@@ -55,12 +55,22 @@ export type ScheduleBlock = ScheduleBlockInput & {
   status_derived: ScheduleBlockStatus;
   /** end implied by start + length, i.e. the ORIGINAL scheduled end. */
   original_end: string | null;
-  /** the end actually in effect (stored end_date, else implied). */
+  /** the start actually in effect (real scheduled workouts, else stored). */
+  effective_start: string | null;
+  /** the end actually in effect (real scheduled workouts, else stored). */
   effective_end: string | null;
+  /** first/last ACTUAL scheduled workout date, when the block has any. */
+  schedule_start: string | null;
+  schedule_end: string | null;
+  /** true when the effective dates come from real scheduled workouts. */
+  dates_from_schedule: boolean;
+  /** next scheduled, incomplete workout in this block. */
+  next_workout_date: string | null;
   /** 1-based week the client is in today, when active. */
   week_of: number | null;
   total_weeks: number | null;
 };
+
 
 export const STATUS_LABEL: Record<ScheduleBlockStatus, string> = {
   Active: "Active",
@@ -191,18 +201,22 @@ export function buildEvidence(
   return map;
 }
 
-/** The window the block really occupies: declared dates widened by its calendar. */
+/**
+ * The window the block really occupies.
+ *
+ * When the block has ANY actual scheduled workouts, those bounds are the
+ * truth and the stored `pl_blocks.start_date/end_date` are treated as stale
+ * metadata / audit only. Stored dates are used solely as a fallback for
+ * blocks with nothing on the calendar yet.
+ */
 export function coveredSpan(
   b: ScheduleBlockInput,
   ev?: BlockEvidence,
-): { start: string | null; end: string | null } {
-  const declaredStart = b.start_date ?? null;
-  const declaredEnd = effectiveEnd(b);
-  const start =
-    ev?.first && (!declaredStart || ev.first < declaredStart) ? ev.first : declaredStart ?? ev?.first ?? null;
-  const end =
-    ev?.last && (!declaredEnd || ev.last > declaredEnd) ? ev.last : declaredEnd ?? ev?.last ?? null;
-  return { start, end };
+): { start: string | null; end: string | null; fromSchedule: boolean } {
+  if (ev?.first && ev.last) {
+    return { start: ev.first, end: ev.last, fromSchedule: true };
+  }
+  return { start: b.start_date ?? null, end: effectiveEnd(b), fromSchedule: false };
 }
 
 /** Schedule says this block is still running today (rest days included). */
@@ -220,9 +234,11 @@ export function scheduleSaysRunning(
 /**
  * Derive one canonical status per block.
  *
- * Order of truth: archived flag → live calendar evidence → explicit terminal
- * flags → dates. A block is Active for its whole span, rest days included;
- * "no workout today" never means "no current block".
+ * Order of truth: archived flag → actual scheduled workouts → explicit
+ * terminal flags → stored dates. A block is Active for its whole scheduled
+ * span, rest days included; "no workout today" never means "no current
+ * block". A stale Completed flag can never hide live scheduled workouts, and
+ * a stale Active flag can never keep a fully finished schedule current.
  *
  * `evidence` is optional so date-only callers keep working.
  */
@@ -241,29 +257,36 @@ export function deriveSchedule(
     )
     .map((e) => e.b);
 
-  // Pass 1 — provisional status from evidence, terminal flags and dates.
+  // Pass 1 — provisional status from schedule evidence, then flags and dates.
   const provisional = ordered.map((b) => {
     const ev = evidence?.get(b.id);
     const term = terminalStatus(b);
-    const end = effectiveEnd(b);
-    const running = scheduleSaysRunning(b, today, ev);
+    const span = coveredSpan(b, ev);
     let status: ScheduleBlockStatus;
     if (b.archived || b.status === "Archived") {
       status = "Archived";
-    } else if (running) {
+    } else if (span.fromSchedule) {
       // The client's own calendar outranks stale declared dates and a stale
       // status column. This is the Nicole Yusi case.
-      status = "Active";
+      if (scheduleSaysRunning(b, today, ev)) {
+        status = "Active";
+      } else if (span.end && span.end < today) {
+        // Scheduled span is fully in the past with nothing outstanding.
+        status = term === "EndedEarly" || isEndedEarly(b) ? "EndedEarly" : "Completed";
+      } else if (span.start && span.start > today) {
+        status = "Upcoming";
+      } else {
+        // Span covers today; every scheduled session already logged.
+        status = term ?? "Active";
+      }
     } else if (term) {
       status = term;
-    } else if (ev?.first && ev.first > today && !b.start_date) {
-      status = "Upcoming";
     } else if (!b.start_date) {
       status = "Draft";
-    } else if (b.start_date > today && !(ev?.first && ev.first <= today)) {
+    } else if (b.start_date > today) {
       status = "Upcoming";
-    } else if (end && end < today) {
-      // Past its end, nothing left on the calendar. It is history, and it is
+    } else if (span.end && span.end < today) {
+      // Past its end, nothing on the calendar. It is history, and it is
       // "ended early" only when the coach shortened it.
       status = isEndedEarly(b) ? "EndedEarly" : "Completed";
     } else {
@@ -272,13 +295,18 @@ export function deriveSchedule(
     return { b, status, ev };
   });
 
-  // Pass 2 — exactly one Active. Calendar evidence wins; otherwise the
-  // latest-starting block, i.e. the phase the coach most recently started.
+  // Pass 2 — exactly one Active. Blocks with real outstanding scheduled work
+  // win; among equals the latest-starting span wins, i.e. the phase the coach
+  // most recently put the client into.
   const actives = provisional.filter((p) => p.status === "Active");
   if (actives.length > 1) {
     const withWork = actives.filter((p) => (p.ev?.remaining ?? 0) > 0);
     const pool = withWork.length ? withWork : actives;
-    const winner = pool[pool.length - 1];
+    const winner = pool.reduce((best, p) => {
+      const a = coveredSpan(p.b, p.ev).start ?? "";
+      const b = coveredSpan(best.b, best.ev).start ?? "";
+      return a >= b ? p : best;
+    }, pool[0]);
     for (const p of actives) if (p !== winner) p.status = "Completed";
   }
 
@@ -300,11 +328,17 @@ export function deriveSchedule(
       ...b,
       status_derived: status,
       original_end: impliedEnd(b),
+      effective_start: span.start ?? b.start_date ?? null,
       effective_end: span.end ?? effectiveEnd(b),
+      schedule_start: ev?.first ?? null,
+      schedule_end: ev?.last ?? null,
+      dates_from_schedule: span.fromSchedule,
+      next_workout_date: ev?.nextIncomplete ?? null,
       week_of: status === "Active" ? weekOf({ ...b, start_date: span.start ?? b.start_date }, today) : null,
       total_weeks: b.weeks ?? null,
     };
   });
+
 }
 
 /** The program assignment (prep) the client is actually training under. */
@@ -353,20 +387,23 @@ export function findOverlaps(list: ScheduleBlock[]): BlockOverlap[] {
   const live = list.filter(
     (b) =>
       (b.status_derived === "Active" || b.status_derived === "Upcoming") &&
-      b.start_date,
+      (b.effective_start ?? b.start_date),
   );
   const out: BlockOverlap[] = [];
   for (let i = 0; i < live.length; i++) {
     for (let j = i + 1; j < live.length; j++) {
       const a = live[i];
       const b = live[j];
-      const aEnd = a.effective_end ?? a.start_date!;
-      const bEnd = b.effective_end ?? b.start_date!;
-      if (a.start_date! <= bEnd && b.start_date! <= aEnd) out.push({ a, b });
+      const aStart = a.effective_start ?? a.start_date!;
+      const bStart = b.effective_start ?? b.start_date!;
+      const aEnd = a.effective_end ?? aStart;
+      const bEnd = b.effective_end ?? bStart;
+      if (aStart <= bEnd && bStart <= aEnd) out.push({ a, b });
     }
   }
   return out;
 }
+
 
 /** Informational training gap in days between one block ending and the next starting. */
 export function gapDays(prevEnd: string | null, nextStart: string | null): number {
@@ -429,10 +466,11 @@ export function formatRange(start?: string | null, end?: string | null): string 
   return `${format(s!, "MMM d")} – ${format(e!, sameYear ? "MMM d, yyyy" : "MMM d, yyyy")}`;
 }
 
-export function durationLabel(b: ScheduleBlockInput): string | null {
-  const start = b.start_date ?? null;
-  const end = effectiveEnd(b);
+export function durationLabel(b: ScheduleBlockInput & { effective_start?: string | null; effective_end?: string | null }): string | null {
+  const start = b.effective_start ?? b.start_date ?? null;
+  const end = b.effective_end ?? effectiveEnd(b);
   if (!start || !end) return b.weeks ? `${b.weeks} weeks` : null;
+
   const days = daysBetween(start, end) + 1;
   const dur = Number(b.week_duration_days ?? 7) || 7;
   const wks = days / dur;
