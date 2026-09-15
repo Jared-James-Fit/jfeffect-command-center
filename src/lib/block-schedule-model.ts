@@ -466,10 +466,11 @@ export function formatRange(start?: string | null, end?: string | null): string 
   return `${format(s!, "MMM d")} – ${format(e!, sameYear ? "MMM d, yyyy" : "MMM d, yyyy")}`;
 }
 
-export function durationLabel(b: ScheduleBlockInput): string | null {
-  const start = b.start_date ?? null;
-  const end = effectiveEnd(b);
+export function durationLabel(b: ScheduleBlockInput & { effective_start?: string | null; effective_end?: string | null }): string | null {
+  const start = b.effective_start ?? b.start_date ?? null;
+  const end = b.effective_end ?? effectiveEnd(b);
   if (!start || !end) return b.weeks ? `${b.weeks} weeks` : null;
+
   const days = daysBetween(start, end) + 1;
   const dur = Number(b.week_duration_days ?? 7) || 7;
   const wks = days / dur;
