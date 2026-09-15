@@ -82,7 +82,8 @@ export function TrainingScheduleBoard({
   clientId: string;
   clientName?: string | null;
 }) {
-  const today = todayISO();
+  void todayISO();
+
   const qc = useQueryClient();
   const { data, isLoading } = useClientTrainingSchedule(clientId);
   const [view, setView] = useState<View>("schedule");
