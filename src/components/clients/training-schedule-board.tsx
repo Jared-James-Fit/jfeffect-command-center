@@ -114,10 +114,8 @@ export function TrainingScheduleBoard({
     [workouts, current?.id],
   );
   const doneCount = blockWorkouts.filter((w) => w.completed).length;
-  const nextWorkout = useMemo(
-    () => workouts.filter((w) => !w.completed && w.date >= today).sort((a, b) => a.date.localeCompare(b.date))[0] ?? null,
-    [workouts, today],
-  );
+  const nextWorkout = data?.nextWorkout ?? null;
+
 
   const refresh = () => {
     qc.invalidateQueries({ queryKey: clientTrainingScheduleKey(clientId) });
