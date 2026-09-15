@@ -46,6 +46,7 @@ import {
   SALE_DIALOG_TITLE_CLASS,
 } from "@/lib/sale-dialog-layout";
 import { AssignOfferDialog } from "@/components/assign-offer-dialog";
+import { DateField } from "@/components/ui/date-field";
 
 function money(cents: number, currency: string) {
   try {

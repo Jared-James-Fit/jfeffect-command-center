@@ -27,6 +27,7 @@ import { runJob } from "@/lib/progress-jobs";
 import { autoCalculatePurchaseTermDates } from "@/lib/purchase-term-dates.functions";
 import { FIRST50_CODE } from "@/lib/first50-policy";
 import { findReusablePurchaseIntent } from "@/lib/purchase-idempotency";
+import { DateField } from "@/components/ui/date-field";
 
 /** What actually happens when the admin confirms. */
 type AssignMode = "payment_request" | "paid_in_full" | "draft";
