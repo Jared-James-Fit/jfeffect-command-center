@@ -367,13 +367,20 @@ export function AssignOfferDialog({ offer, onClose, fixedClientId }: { offer: an
                   <div className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
                     Payment schedule
                   </div>
-                  {!incomingSchedule && (
+                  {!incomingSchedule && !mustChooseStart && (
                     <label className="flex items-center gap-2 text-xs">
                       <Switch checked={customizeSchedule} onCheckedChange={setCustomizeSchedule} />
                       Customize for this client
                     </label>
                   )}
                 </div>
+                {!incomingSchedule && (
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {mustChooseStart
+                      ? "This product needs a coaching start date for this client."
+                      : `Product default: ${productStartLabel(offer)}.`}
+                  </p>
+                )}
 
                 {customizeSchedule && (
                   <div className="mt-3 grid gap-3 sm:grid-cols-2">
