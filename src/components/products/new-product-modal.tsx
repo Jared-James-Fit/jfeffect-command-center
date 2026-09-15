@@ -395,6 +395,8 @@ function validate(f: FormState): FieldErrors {
     if (!Number.isFinite(s) || s < 1)
       errs.sessionsIncluded = "Session packages must include at least one session";
   }
+  if (f.startRule === "specific_date" && !/^\d{4}-\d{2}-\d{2}$/.test(f.startDate))
+    errs.startDate = "Pick the start date";
   if (f.agreementRequired && !f.agreementTemplateId)
     errs.agreementTemplateId = "Pick an agreement template";
   return errs;
@@ -635,6 +637,8 @@ export default function NewProductModal({
           sessionsIncludedNum > 0 ? parseInt(form.sessionLengthMin || "0", 10) || null : null,
         sessionExpiryDays:
           sessionsIncludedNum > 0 ? parseInt(form.sessionExpiryDays || "0", 10) || null : null,
+        serviceStartMode: productStartModeFor(form),
+        serviceStartDate: form.startRule === "specific_date" ? form.startDate : null,
         idempotencyKey: idempotencyKeyRef.current,
       };
 
