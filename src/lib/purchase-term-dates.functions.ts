@@ -16,6 +16,8 @@ export const updatePurchaseTermDates = createServerFn({ method: "POST" })
       startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
       endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
       reason: z.string().optional(),
+      // Coaching/service access start. Editing it NEVER touches Stripe billing.
+      serviceStartDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
     }).parse(d)
   )
   .handler(async ({ data, context }) => {
@@ -30,6 +32,13 @@ export const updatePurchaseTermDates = createServerFn({ method: "POST" })
       }
     );
     if (error) throw error;
+    if (data.serviceStartDate !== undefined) {
+      const { error: sErr } = await (supabase as any)
+        .from("purchase_records")
+        .update({ service_start_date: data.serviceStartDate })
+        .eq("id", data.purchaseId);
+      if (sErr) throw sErr;
+    }
     return result;
   });
 

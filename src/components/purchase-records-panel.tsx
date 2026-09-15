@@ -24,6 +24,7 @@ import {
 } from "@/lib/payments.functions";
 import { updatePurchaseTermDates, getPurchaseStripeFailures } from "@/lib/purchase-term-dates.functions";
 import { toast } from "sonner";
+import { DateField } from "@/components/ui/date-field";
 import { SendPaymentRequestDialog } from "@/components/send-payment-request-dialog";
 import { differenceInDays, format, parseISO } from "date-fns";
 import { resolvePaymentDisplay, formatMoney } from "@/lib/payment-display";
@@ -113,6 +114,9 @@ export function TermDateEditor({ purchase, clientId, onClose }: { purchase: any;
   const updateFn = useServerFn(updatePurchaseTermDates);
   const [startDate, setStartDate] = useState(purchase.term_start_date ?? "");
   const [endDate, setEndDate] = useState(purchase.term_end_date ?? "");
+  const [serviceStart, setServiceStart] = useState(
+    (purchase.service_start_date ?? "").slice(0, 10),
+  );
   const [reason, setReason] = useState("");
   const [busy, setBusy] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
@@ -138,7 +142,15 @@ export function TermDateEditor({ purchase, clientId, onClose }: { purchase: any;
     if (startDate > endDate) return toast.error("Start date must be before end date");
     setBusy(true);
     try {
-      await updateFn({ data: { purchaseId: purchase.id, startDate, endDate, reason: reason.trim() || undefined } });
+      await updateFn({
+        data: {
+          purchaseId: purchase.id,
+          startDate,
+          endDate,
+          reason: reason.trim() || undefined,
+          serviceStartDate: serviceStart || null,
+        },
+      });
       toast.success("Service dates updated");
       qc.invalidateQueries({ queryKey: ["client-purchases", clientId] });
       onClose();
@@ -168,7 +180,12 @@ export function TermDateEditor({ purchase, clientId, onClose }: { purchase: any;
             <Label htmlFor="term-start" className="text-sm font-semibold">
               Service Start Date <span className="text-destructive">*</span>
             </Label>
-            <Input id="term-start" type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} onBlur={autoFillEndDate} />
+            <DateField
+              id="term-start"
+              aria-label="Service start date"
+              value={startDate}
+              onChange={(v) => { setStartDate(v); }}
+            />
             <p className="text-xs text-muted-foreground">When does the client's service begin? Defaults to purchase date.</p>
           </div>
           <div className="space-y-1.5">
@@ -182,8 +199,21 @@ export function TermDateEditor({ purchase, clientId, onClose }: { purchase: any;
                 </button>
               )}
             </div>
-            <Input id="term-end" type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} min={startDate} />
+            <DateField id="term-end" aria-label="Service end date" value={endDate} min={startDate} onChange={setEndDate} />
             <p className="text-xs text-muted-foreground">When does the service expire or next renewal is due?</p>
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="coaching-start" className="text-sm font-semibold">Coaching starts (access)</Label>
+            <DateField
+              id="coaching-start"
+              aria-label="Coaching start date"
+              placeholder="Same as service start"
+              value={serviceStart}
+              onChange={setServiceStart}
+            />
+            <p className="text-xs text-muted-foreground">
+              Controls when access turns Active. Stripe billing dates are unchanged.
+            </p>
           </div>
           <div className="space-y-1.5">
             <Label htmlFor="term-reason" className="text-sm font-semibold">
