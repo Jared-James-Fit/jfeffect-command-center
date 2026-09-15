@@ -4165,6 +4165,7 @@ export type Database = {
           image_url: string | null
           included_features: string[]
           is_member_facing: boolean
+          is_one_off: boolean
           member_tier_label: string | null
           mode: string
           name: string
@@ -4203,6 +4204,7 @@ export type Database = {
           image_url?: string | null
           included_features?: string[]
           is_member_facing?: boolean
+          is_one_off?: boolean
           member_tier_label?: string | null
           mode?: string
           name: string
@@ -4241,6 +4243,7 @@ export type Database = {
           image_url?: string | null
           included_features?: string[]
           is_member_facing?: boolean
+          is_one_off?: boolean
           member_tier_label?: string | null
           mode?: string
           name?: string

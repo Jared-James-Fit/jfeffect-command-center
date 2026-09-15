@@ -29,6 +29,13 @@
       "when": 1789254451619,
       "tag": "0003_realtime_sales_tables",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1789433633116,
+      "tag": "0004_coaching_products_is_one_off",
+      "breakpoints": true
     }
   ]
 }
