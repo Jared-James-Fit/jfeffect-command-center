@@ -387,20 +387,23 @@ export function findOverlaps(list: ScheduleBlock[]): BlockOverlap[] {
   const live = list.filter(
     (b) =>
       (b.status_derived === "Active" || b.status_derived === "Upcoming") &&
-      b.start_date,
+      (b.effective_start ?? b.start_date),
   );
   const out: BlockOverlap[] = [];
   for (let i = 0; i < live.length; i++) {
     for (let j = i + 1; j < live.length; j++) {
       const a = live[i];
       const b = live[j];
-      const aEnd = a.effective_end ?? a.start_date!;
-      const bEnd = b.effective_end ?? b.start_date!;
-      if (a.start_date! <= bEnd && b.start_date! <= aEnd) out.push({ a, b });
+      const aStart = a.effective_start ?? a.start_date!;
+      const bStart = b.effective_start ?? b.start_date!;
+      const aEnd = a.effective_end ?? aStart;
+      const bEnd = b.effective_end ?? bStart;
+      if (aStart <= bEnd && bStart <= aEnd) out.push({ a, b });
     }
   }
   return out;
 }
+
 
 /** Informational training gap in days between one block ending and the next starting. */
 export function gapDays(prevEnd: string | null, nextStart: string | null): number {
