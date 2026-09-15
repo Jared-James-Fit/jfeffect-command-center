@@ -285,14 +285,18 @@ export function deriveSchedule(
     return { b, status, ev };
   });
 
-
-  // Pass 2 — exactly one Active. Calendar evidence wins; otherwise the
-  // latest-starting block, i.e. the phase the coach most recently started.
+  // Pass 2 — exactly one Active. Blocks with real outstanding scheduled work
+  // win; among equals the latest-starting span wins, i.e. the phase the coach
+  // most recently put the client into.
   const actives = provisional.filter((p) => p.status === "Active");
   if (actives.length > 1) {
     const withWork = actives.filter((p) => (p.ev?.remaining ?? 0) > 0);
     const pool = withWork.length ? withWork : actives;
-    const winner = pool[pool.length - 1];
+    const winner = pool.reduce((best, p) => {
+      const a = coveredSpan(p.b, p.ev).start ?? "";
+      const b = coveredSpan(best.b, best.ev).start ?? "";
+      return a >= b ? p : best;
+    }, pool[0]);
     for (const p of actives) if (p !== winner) p.status = "Completed";
   }
 
@@ -314,11 +318,17 @@ export function deriveSchedule(
       ...b,
       status_derived: status,
       original_end: impliedEnd(b),
+      effective_start: span.start ?? b.start_date ?? null,
       effective_end: span.end ?? effectiveEnd(b),
+      schedule_start: ev?.first ?? null,
+      schedule_end: ev?.last ?? null,
+      dates_from_schedule: span.fromSchedule,
+      next_workout_date: ev?.nextIncomplete ?? null,
       week_of: status === "Active" ? weekOf({ ...b, start_date: span.start ?? b.start_date }, today) : null,
       total_weeks: b.weeks ?? null,
     };
   });
+
 }
 
 /** The program assignment (prep) the client is actually training under. */
