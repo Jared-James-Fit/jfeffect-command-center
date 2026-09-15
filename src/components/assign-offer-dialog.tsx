@@ -346,6 +346,110 @@ export function AssignOfferDialog({ offer, onClose, fixedClientId }: { offer: an
                 </div>
               )}
             </div>
+            {mode === "payment_request" && (
+              <div className="rounded-md border border-border bg-secondary/20 p-3">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
+                    Payment schedule
+                  </div>
+                  {!incomingSchedule && (
+                    <label className="flex items-center gap-2 text-xs">
+                      <Switch checked={customizeSchedule} onCheckedChange={setCustomizeSchedule} />
+                      Customize for this client
+                    </label>
+                  )}
+                </div>
+
+                {customizeSchedule && (
+                  <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                    <div className="space-y-1.5">
+                      <Label>First payment</Label>
+                      <Select
+                        value={schedule.firstPaymentMode}
+                        onValueChange={(v) => setSchedule({ ...schedule, firstPaymentMode: v as any })}
+                      >
+                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="immediate">When checkout is completed</SelectItem>
+                          <SelectItem value="on_date">On a specific date</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    {schedule.firstPaymentMode === "on_date" && (
+                      <div className="space-y-1.5">
+                        <Label>Date</Label>
+                        <Input
+                          type="date"
+                          min={businessToday()}
+                          value={schedule.firstPaymentDate}
+                          onChange={(e) => setSchedule({ ...schedule, firstPaymentDate: e.target.value })}
+                          className="text-base md:text-sm"
+                        />
+                      </div>
+                    )}
+                    <div className="space-y-1.5 sm:col-span-2">
+                      <Label>Coaching starts</Label>
+                      <Select
+                        value={schedule.serviceStartMode}
+                        onValueChange={(v) => setSchedule({ ...schedule, serviceStartMode: v as any })}
+                      >
+                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="immediate">Immediately after purchase</SelectItem>
+                          <SelectItem value="with_first_payment">Same date as first payment</SelectItem>
+                          <SelectItem value="on_date">On a specific date</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    {schedule.serviceStartMode === "on_date" && (
+                      <div className="space-y-1.5 sm:col-span-2">
+                        <Label>Start date</Label>
+                        <Input
+                          type="date"
+                          value={schedule.serviceStartDate}
+                          onChange={(e) => setSchedule({ ...schedule, serviceStartDate: e.target.value })}
+                          className="text-base md:text-sm"
+                        />
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                <dl className="mt-3 grid gap-x-4 gap-y-1 border-t border-border/60 pt-2 text-xs sm:grid-cols-2">
+                  <div>
+                    <dt className="text-muted-foreground">First payment</dt>
+                    <dd className="font-semibold">{reviewSchedule.firstPayment}</dd>
+                  </div>
+                  {reviewSchedule.anchor && (
+                    <div>
+                      <dt className="text-muted-foreground">Then</dt>
+                      <dd className="font-semibold">{reviewSchedule.anchor}</dd>
+                    </div>
+                  )}
+                  {reviewSchedule.duration && (
+                    <div>
+                      <dt className="text-muted-foreground">Duration</dt>
+                      <dd className="font-semibold">{reviewSchedule.duration}</dd>
+                    </div>
+                  )}
+                  {reviewSchedule.finalPayment && (
+                    <div>
+                      <dt className="text-muted-foreground">Final payment</dt>
+                      <dd className="font-semibold">{reviewSchedule.finalPayment}</dd>
+                    </div>
+                  )}
+                  <div>
+                    <dt className="text-muted-foreground">Access starts</dt>
+                    <dd className="font-semibold">{reviewSchedule.serviceStart}</dd>
+                  </div>
+                </dl>
+                {reviewSchedule.firstPayment !== "When the client completes checkout" && (
+                  <p className="mt-2 text-xs text-muted-foreground">
+                    The client saves their card at checkout and is not charged until then.
+                  </p>
+                )}
+              </div>
+            )}
             {mode === "payment_request" && first50 && (
               <div>
                 <Label>Optional discount</Label>
