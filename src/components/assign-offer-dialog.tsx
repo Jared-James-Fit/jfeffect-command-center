@@ -66,6 +66,49 @@ export function AssignOfferDialog({ offer, onClose, fixedClientId }: { offer: an
   const [checkoutUrl, setCheckoutUrl] = useState<string | null>(null);
   const [emailNote, setEmailNote] = useState<string | null>(null);
   const [discountCodeId, setDiscountCodeId] = useState<string | null>(null);
+
+  // Payment schedule. A reusable Product carries DEFAULT billing behaviour;
+  // the coach may override it FOR THIS SALE ONLY (off by default) — the master
+  // product, and every other client's existing sale, are never touched.
+  const incomingSchedule = offer?.billing_schedule ?? null;
+  const [customizeSchedule, setCustomizeSchedule] = useState(false);
+  const [schedule, setSchedule] = useState<BillingScheduleDraft>(blankBillingSchedule());
+  const offerFrequency: BillingFrequency | null = offer?.is_recurring
+    ? (normalizeBillingFrequency(offer?.payment_frequency ?? offer?.payment_structure) ?? "monthly")
+    : null;
+  const effectiveSchedule: BillingScheduleDraft = customizeSchedule
+    ? schedule
+    : blankBillingSchedule();
+  // A custom sale already agreed its dates in the previous step; otherwise use
+  // the product default, optionally overridden here.
+  const scheduleSnapshot = incomingSchedule && !customizeSchedule
+    ? incomingSchedule
+    : {
+        first_payment_date: resolveFirstPaymentDate(effectiveSchedule, { frequency: offerFrequency }),
+        service_start_date: resolveServiceStartDate(
+          effectiveSchedule,
+          resolveFirstPaymentDate(effectiveSchedule, { frequency: offerFrequency }),
+        ),
+        billing_schedule_source: customizeSchedule ? "client_override" : "product_default",
+      } as any;
+  const scheduleSnapshotWithDay = {
+    ...scheduleSnapshot,
+    billing_anchor_day: scheduleSnapshot.first_payment_date
+      ? Number(String(scheduleSnapshot.first_payment_date).slice(8, 10))
+      : null,
+  };
+  const reviewSchedule = scheduleSummary({
+    draft: incomingSchedule && !customizeSchedule
+      ? {
+          ...blankBillingSchedule(),
+          firstPaymentMode: incomingSchedule.first_payment_date ? "on_date" : "immediate",
+          firstPaymentDate: incomingSchedule.first_payment_date ?? "",
+        }
+      : effectiveSchedule,
+    paymentType: offer?.is_recurring ? "recurring" : "one_time",
+    frequency: offerFrequency,
+    numberOfPayments: offer?.number_of_payments ?? 0,
+  });
   const recordPaid = mode === "paid_in_full";
   // What this assignment does to the client's session balance (canonical
   // ledger — nothing is granted here, this only describes what will happen).
