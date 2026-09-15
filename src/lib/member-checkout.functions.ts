@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { sanitizeSubscriptionParams } from "@/lib/billing-schedule";
 
 const STRIPE_API = "https://api.stripe.com/v1";
 
@@ -127,6 +128,9 @@ export const createMemberCheckoutSession = createServerFn({ method: "POST" })
     if (stripeCustomerId) params["customer"] = stripeCustomerId;
     else if (email) params["customer_email"] = email;
 
-    const session = await stripeFetch("/checkout/sessions", { method: "POST", body: formEncode(params) });
+    const session = await stripeFetch("/checkout/sessions", {
+      method: "POST",
+      body: formEncode(sanitizeSubscriptionParams(params)),
+    });
     return { url: session.url as string, sessionId: session.id as string };
   });
