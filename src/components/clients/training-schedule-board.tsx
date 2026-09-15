@@ -82,8 +82,8 @@ export function TrainingScheduleBoard({
   clientId: string;
   clientName?: string | null;
 }) {
-  const today = todayISO();
   const qc = useQueryClient();
+
   const { data, isLoading } = useClientTrainingSchedule(clientId);
   const [view, setView] = useState<View>("schedule");
   const [assignOpen, setAssignOpen] = useState(false);
@@ -94,7 +94,13 @@ export function TrainingScheduleBoard({
   const blocks = data?.blocks ?? [];
   const workouts = data?.workouts ?? [];
   const current = pickCurrent(blocks);
-  const upcoming = upcomingBlocks(blocks);
+  // Up next stays inside the client's CURRENT assignment — blocks from a
+  // different (older or parallel) assignment are never flattened into it.
+  const assignmentId = data?.currentAssignmentId ?? null;
+  const upcoming = upcomingBlocks(blocks).filter(
+    (b) => !assignmentId || !b.prep_id || b.prep_id === assignmentId,
+  );
+
   const drafts = draftBlocks(blocks);
   const history = historyBlocks(blocks);
   const overlaps = findOverlaps(blocks);
@@ -114,10 +120,8 @@ export function TrainingScheduleBoard({
     [workouts, current?.id],
   );
   const doneCount = blockWorkouts.filter((w) => w.completed).length;
-  const nextWorkout = useMemo(
-    () => workouts.filter((w) => !w.completed && w.date >= today).sort((a, b) => a.date.localeCompare(b.date))[0] ?? null,
-    [workouts, today],
-  );
+  const nextWorkout = data?.nextWorkout ?? null;
+
 
   const refresh = () => {
     qc.invalidateQueries({ queryKey: clientTrainingScheduleKey(clientId) });

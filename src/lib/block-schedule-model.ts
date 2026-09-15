@@ -139,13 +139,97 @@ function orderKey(b: ScheduleBlockInput, i: number): [number, string, string] {
 }
 
 /**
- * Derive one canonical status per block. Dates win over the status column:
- * a block whose effective end is in the past is finished no matter what the
- * column says, which is exactly the contradiction this replaces.
+ * SCHEDULE EVIDENCE — what the client's calendar actually says.
+ *
+ * `pl_blocks.start_date/end_date/status` are declarations. The rows that drive
+ * the client's real workouts (scheduled instances, else the day's own
+ * scheduled_date) are the truth. When a coach reschedules or reorders blocks,
+ * the declared window goes stale while the calendar keeps running — that is
+ * how a client can be training today under a block whose `end_date` passed
+ * and whose `status` was flipped to Completed.
+ */
+export type BlockEvidence = {
+  blockId: string;
+  first: string | null;
+  last: string | null;
+  /** next scheduled, not-yet-completed workout on/after today */
+  nextIncomplete: string | null;
+  /** scheduled workouts still outstanding on/after today */
+  remaining: number;
+  total: number;
+};
+
+export type EvidenceWorkout = {
+  blockId: string;
+  date: string;
+  completed?: boolean;
+};
+
+export type EvidenceMap = Map<string, BlockEvidence>;
+
+/** Collapse scheduled workouts into one evidence record per block. */
+export function buildEvidence(
+  workouts: EvidenceWorkout[],
+  today: string = todayISO(),
+): EvidenceMap {
+  const map: EvidenceMap = new Map();
+  for (const w of workouts ?? []) {
+    if (!w?.blockId || !w?.date) continue;
+    const date = String(w.date).slice(0, 10);
+    const ev =
+      map.get(w.blockId) ??
+      { blockId: w.blockId, first: null, last: null, nextIncomplete: null, remaining: 0, total: 0 };
+    ev.total += 1;
+    if (!ev.first || date < ev.first) ev.first = date;
+    if (!ev.last || date > ev.last) ev.last = date;
+    if (!w.completed && date >= today) {
+      ev.remaining += 1;
+      if (!ev.nextIncomplete || date < ev.nextIncomplete) ev.nextIncomplete = date;
+    }
+    map.set(w.blockId, ev);
+  }
+  return map;
+}
+
+/** The window the block really occupies: declared dates widened by its calendar. */
+export function coveredSpan(
+  b: ScheduleBlockInput,
+  ev?: BlockEvidence,
+): { start: string | null; end: string | null } {
+  const declaredStart = b.start_date ?? null;
+  const declaredEnd = effectiveEnd(b);
+  const start =
+    ev?.first && (!declaredStart || ev.first < declaredStart) ? ev.first : declaredStart ?? ev?.first ?? null;
+  const end =
+    ev?.last && (!declaredEnd || ev.last > declaredEnd) ? ev.last : declaredEnd ?? ev?.last ?? null;
+  return { start, end };
+}
+
+/** Schedule says this block is still running today (rest days included). */
+export function scheduleSaysRunning(
+  b: ScheduleBlockInput,
+  today: string,
+  ev?: BlockEvidence,
+): boolean {
+  if (!ev || !ev.first) return false;
+  if (!ev.remaining) return false;          // nothing left to do → not current
+  const { start } = coveredSpan(b, ev);
+  return !!start && start <= today;          // started, and work remains
+}
+
+/**
+ * Derive one canonical status per block.
+ *
+ * Order of truth: archived flag → live calendar evidence → explicit terminal
+ * flags → dates. A block is Active for its whole span, rest days included;
+ * "no workout today" never means "no current block".
+ *
+ * `evidence` is optional so date-only callers keep working.
  */
 export function deriveSchedule(
   blocks: ScheduleBlockInput[],
   today: string = todayISO(),
+  evidence?: EvidenceMap,
 ): ScheduleBlock[] {
   const ordered = (blocks ?? [])
     .filter(Boolean)
@@ -157,45 +241,86 @@ export function deriveSchedule(
     )
     .map((e) => e.b);
 
-  // Pass 1 — provisional status from terminal flags + dates.
+  // Pass 1 — provisional status from evidence, terminal flags and dates.
   const provisional = ordered.map((b) => {
+    const ev = evidence?.get(b.id);
     const term = terminalStatus(b);
     const end = effectiveEnd(b);
+    const running = scheduleSaysRunning(b, today, ev);
     let status: ScheduleBlockStatus;
-    if (term) {
+    if (b.archived || b.status === "Archived") {
+      status = "Archived";
+    } else if (running) {
+      // The client's own calendar outranks stale declared dates and a stale
+      // status column. This is the Nicole Yusi case.
+      status = "Active";
+    } else if (term) {
       status = term;
+    } else if (ev?.first && ev.first > today && !b.start_date) {
+      status = "Upcoming";
     } else if (!b.start_date) {
       status = "Draft";
-    } else if (b.start_date > today) {
+    } else if (b.start_date > today && !(ev?.first && ev.first <= today)) {
       status = "Upcoming";
     } else if (end && end < today) {
-      // Past its end but never explicitly closed off. It is history, and it
-      // is "ended early" only when the coach shortened it.
+      // Past its end, nothing left on the calendar. It is history, and it is
+      // "ended early" only when the coach shortened it.
       status = isEndedEarly(b) ? "EndedEarly" : "Completed";
     } else {
       status = "Active";
     }
-    return { b, status };
+    return { b, status, ev };
   });
 
-  // Pass 2 — exactly one Active. When several blocks cover today (overlapping
-  // assignments), the latest-starting one wins: that is the phase the coach
-  // most recently put the client into.
+  // Pass 2 — exactly one Active. Calendar evidence wins; otherwise the
+  // latest-starting block, i.e. the phase the coach most recently started.
   const actives = provisional.filter((p) => p.status === "Active");
   if (actives.length > 1) {
-    const winner = actives[actives.length - 1];
+    const withWork = actives.filter((p) => (p.ev?.remaining ?? 0) > 0);
+    const pool = withWork.length ? withWork : actives;
+    const winner = pool[pool.length - 1];
     for (const p of actives) if (p !== winner) p.status = "Completed";
   }
 
-  return provisional.map(({ b, status }) => ({
-    ...b,
-    status_derived: status,
-    original_end: impliedEnd(b),
-    effective_end: effectiveEnd(b),
-    week_of: status === "Active" ? weekOf(b, today) : null,
-    total_weeks: b.weeks ?? null,
-  }));
+  // Pass 3 — assignment scoping. Blocks belonging to a different program
+  // assignment are never merged into the current sequence: an older
+  // assignment is history, no matter what its own dates claim.
+  const current = provisional.find((p) => p.status === "Active");
+  if (current?.b.prep_id) {
+    for (const p of provisional) {
+      if (p === current) continue;
+      if (!p.b.prep_id || p.b.prep_id === current.b.prep_id) continue;
+      if (p.status === "Active") p.status = "Completed";
+    }
+  }
+
+  return provisional.map(({ b, status, ev }) => {
+    const span = coveredSpan(b, ev);
+    return {
+      ...b,
+      status_derived: status,
+      original_end: impliedEnd(b),
+      effective_end: span.end ?? effectiveEnd(b),
+      week_of: status === "Active" ? weekOf({ ...b, start_date: span.start ?? b.start_date }, today) : null,
+      total_weeks: b.weeks ?? null,
+    };
+  });
 }
+
+/** The program assignment (prep) the client is actually training under. */
+export function currentAssignmentId(list: ScheduleBlock[]): string | null {
+  const active = list.find((b) => b.status_derived === "Active");
+  if (active?.prep_id) return active.prep_id ?? null;
+  const upcoming = list.find((b) => b.status_derived === "Upcoming");
+  return upcoming?.prep_id ?? null;
+}
+
+/** Blocks belonging to the client's current assignment only. */
+export function blocksInAssignment(list: ScheduleBlock[], prepId: string | null): ScheduleBlock[] {
+  if (!prepId) return [];
+  return list.filter((b) => b.prep_id === prepId);
+}
+
 
 export function currentBlock(list: ScheduleBlock[]): ScheduleBlock | null {
   return list.find((b) => b.status_derived === "Active") ?? null;
