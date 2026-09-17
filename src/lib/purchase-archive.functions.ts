@@ -3,6 +3,7 @@ import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 
 const IdInput = z.object({ id: z.string().uuid() });
+const SETTLED = new Set(["paid", "active subscription", "refunded", "partially paid"]);
 
 async function assertCanManagePurchase(supabase: any, userId: string, purchaseId: string) {
   const { data: purchase, error } = await supabase
@@ -14,12 +15,31 @@ async function assertCanManagePurchase(supabase: any, userId: string, purchaseId
 
   const { data: roleRows } = await supabase.from("user_roles").select("role").eq("user_id", userId);
   const roles = (roleRows ?? []).map((r: any) => r.role);
-  if (roles.includes("admin")) return purchase;
+  if (roles.includes("admin")) return { purchase, actorRole: "admin" } as const;
   if (roles.includes("coach")) {
     const { data: allowed } = await supabase.rpc("is_assigned_coach", { _client_id: purchase.client_id });
-    if (allowed) return purchase;
+    if (allowed) return { purchase, actorRole: "coach" } as const;
   }
   throw new Error("Forbidden");
+}
+
+async function expireUnpaidCheckout(sessionId: string | null | undefined) {
+  if (!sessionId || !process.env.STRIPE_SECRET_KEY) return;
+  try {
+    const lookup = await fetch(`https://api.stripe.com/v1/checkout/sessions/${encodeURIComponent(sessionId)}`, {
+      headers: { Authorization: `Bearer ${process.env.STRIPE_SECRET_KEY}` },
+    });
+    if (!lookup.ok) return;
+    const session: any = await lookup.json().catch(() => null);
+    if (!session || session.status !== "open") return;
+    await fetch(`https://api.stripe.com/v1/checkout/sessions/${encodeURIComponent(sessionId)}/expire`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${process.env.STRIPE_SECRET_KEY}` },
+    }).catch(() => null);
+  } catch {
+    // Archive must still succeed if Stripe is temporarily unavailable. The
+    // JF short-link token is revoked below, so the app never serves the stale URL.
+  }
 }
 
 export const archivePurchaseRecord = createServerFn({ method: "POST" })
@@ -27,8 +47,16 @@ export const archivePurchaseRecord = createServerFn({ method: "POST" })
   .inputValidator((d: unknown) => IdInput.parse(d))
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context as any;
-    const purchase = await assertCanManagePurchase(supabase, userId, data.id);
+    const { purchase, actorRole } = await assertCanManagePurchase(supabase, userId, data.id);
     if (purchase.archived_at) return { ok: true, alreadyArchived: true };
+
+    const status = String(purchase.payment_status ?? "").trim().toLowerCase();
+    if (!SETTLED.has(status)) {
+      // An archived wrong/unpaid assignment must not leave a shareable JF link
+      // behind. Expire its client-specific Checkout Session when possible.
+      await supabase.from("payment_share_links").update({ revoked: true }).eq("purchase_record_id", data.id);
+      await expireUnpaidCheckout(purchase.stripe_checkout_session_id);
+    }
 
     const now = new Date().toISOString();
     const { error } = await supabase
@@ -40,7 +68,7 @@ export const archivePurchaseRecord = createServerFn({ method: "POST" })
     await supabase.from("client_activity_log").insert({
       client_id: purchase.client_id,
       actor_user_id: userId,
-      actor_role: "admin",
+      actor_role: actorRole,
       action: "purchase_archived",
       details: { purchase_id: data.id, offer_name: purchase.offer_name },
     });
@@ -52,7 +80,7 @@ export const restorePurchaseRecord = createServerFn({ method: "POST" })
   .inputValidator((d: unknown) => IdInput.parse(d))
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context as any;
-    const purchase = await assertCanManagePurchase(supabase, userId, data.id);
+    const { purchase, actorRole } = await assertCanManagePurchase(supabase, userId, data.id);
     if (!purchase.archived_at) return { ok: true, alreadyCurrent: true };
 
     const { error } = await supabase
@@ -64,7 +92,7 @@ export const restorePurchaseRecord = createServerFn({ method: "POST" })
     await supabase.from("client_activity_log").insert({
       client_id: purchase.client_id,
       actor_user_id: userId,
-      actor_role: "admin",
+      actor_role: actorRole,
       action: "purchase_restored",
       details: { purchase_id: data.id, offer_name: purchase.offer_name },
     });
@@ -74,7 +102,7 @@ export const restorePurchaseRecord = createServerFn({ method: "POST" })
 /**
  * Permanent removal is intentionally much stricter than archive. It is only
  * for accidental, never-paid assignments. Any Stripe payment/subscription,
- * open checkout, or ledger evidence blocks deletion so financial history and
+ * checkout, or ledger evidence blocks deletion so financial history and
  * client-facing Stripe objects can never be orphaned.
  */
 export const removeUnpaidPurchaseRecord = createServerFn({ method: "POST" })
@@ -82,11 +110,11 @@ export const removeUnpaidPurchaseRecord = createServerFn({ method: "POST" })
   .inputValidator((d: unknown) => IdInput.parse(d))
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context as any;
-    const purchase = await assertCanManagePurchase(supabase, userId, data.id);
+    const { purchase, actorRole } = await assertCanManagePurchase(supabase, userId, data.id);
 
     const status = String(purchase.payment_status ?? "").trim().toLowerCase();
     const paidAmount = Math.max(Number(purchase.amount_paid ?? 0), Number(purchase.amount_paid_cents ?? 0) / 100);
-    if (["paid", "active subscription", "refunded", "partially paid"].includes(status) || paidAmount > 0) {
+    if (SETTLED.has(status) || paidAmount > 0) {
       throw new Error("This sale has payment history and cannot be deleted. Archive it instead.");
     }
     if (purchase.stripe_payment_intent_id || purchase.stripe_subscription_id || purchase.stripe_checkout_session_id) {
@@ -103,18 +131,14 @@ export const removeUnpaidPurchaseRecord = createServerFn({ method: "POST" })
       throw new Error("This sale has transaction history and cannot be deleted. Archive it instead.");
     }
 
-    await supabase
-      .from("payment_share_links")
-      .update({ revoked: true })
-      .eq("purchase_record_id", data.id);
-
+    await supabase.from("payment_share_links").delete().eq("purchase_record_id", data.id);
     const { error } = await supabase.from("purchase_records").delete().eq("id", data.id);
     if (error) throw new Error(error.message);
 
     await supabase.from("client_activity_log").insert({
       client_id: purchase.client_id,
       actor_user_id: userId,
-      actor_role: "admin",
+      actor_role: actorRole,
       action: "unpaid_purchase_removed",
       details: { purchase_id: data.id, offer_name: purchase.offer_name },
     });
