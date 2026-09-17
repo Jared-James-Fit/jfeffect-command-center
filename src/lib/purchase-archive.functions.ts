@@ -16,7 +16,7 @@ async function assertCanManagePurchase(supabase: any, userId: string, purchaseId
   const roles = (roleRows ?? []).map((r: any) => r.role);
   if (roles.includes("admin")) return purchase;
   if (roles.includes("coach")) {
-    const { data: allowed } = await supabase.rpc("is_assigned_coach", { p_client_id: purchase.client_id });
+    const { data: allowed } = await supabase.rpc("is_assigned_coach", { _client_id: purchase.client_id });
     if (allowed) return purchase;
   }
   throw new Error("Forbidden");
@@ -73,8 +73,9 @@ export const restorePurchaseRecord = createServerFn({ method: "POST" })
 
 /**
  * Permanent removal is intentionally much stricter than archive. It is only
- * for accidental, never-paid assignments. Any Stripe payment/subscription or
- * ledger evidence blocks deletion so financial history cannot disappear.
+ * for accidental, never-paid assignments. Any Stripe payment/subscription,
+ * open checkout, or ledger evidence blocks deletion so financial history and
+ * client-facing Stripe objects can never be orphaned.
  */
 export const removeUnpaidPurchaseRecord = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
@@ -88,8 +89,8 @@ export const removeUnpaidPurchaseRecord = createServerFn({ method: "POST" })
     if (["paid", "active subscription", "refunded", "partially paid"].includes(status) || paidAmount > 0) {
       throw new Error("This sale has payment history and cannot be deleted. Archive it instead.");
     }
-    if (purchase.stripe_payment_intent_id || purchase.stripe_subscription_id) {
-      throw new Error("This sale is linked to a Stripe payment/subscription and cannot be deleted. Archive it instead.");
+    if (purchase.stripe_payment_intent_id || purchase.stripe_subscription_id || purchase.stripe_checkout_session_id) {
+      throw new Error("This sale is already linked to Stripe and cannot be deleted. Archive it instead.");
     }
 
     const { count: ledgerCount, error: ledgerErr } = await supabase
@@ -102,9 +103,6 @@ export const removeUnpaidPurchaseRecord = createServerFn({ method: "POST" })
       throw new Error("This sale has transaction history and cannot be deleted. Archive it instead.");
     }
 
-    // Revoke short links first. Checkout Sessions are temporary and are not a
-    // payment; deleting this accidental app assignment does not charge/cancel
-    // anything in Stripe.
     await supabase
       .from("payment_share_links")
       .update({ revoked: true })
