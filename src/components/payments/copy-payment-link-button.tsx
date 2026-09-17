@@ -17,8 +17,9 @@ import { share as nativeShare, canShare } from "@/platform/share";
  * detector, producing a truncated (broken) link plus a stray text bubble.
  * Reusable buy.stripe.com Payment Links are already share-safe and pass through.
  *
- * Never charges: it reads Stripe, and only creates a fresh Checkout Session
- * through the existing server-side assignment flow when the stored one is stale.
+ * This helper creates a fresh Checkout Session only when the coach explicitly
+ * asks to Copy/Share and the existing purchase has no usable checkout. It never
+ * creates another purchase record and never marks anything paid.
  */
 export async function getShareablePaymentUrl(
   shareFn: (a: { data: { purchaseRecordId: string; origin: string } }) => Promise<any>,
@@ -30,8 +31,19 @@ export async function getShareablePaymentUrl(
   if (res.kind === "none") throw new Error(res.reason ?? "No payment link needed for this purchase.");
 
   if (res.needsFreshCheckout) {
-    await checkoutFn({ data: { purchaseRecordId: purchaseId, discountCodeId: null, origin } });
+    const checkout = await checkoutFn({
+      data: { purchaseRecordId: purchaseId, discountCodeId: null, origin },
+    });
+    if (!checkout?.sessionId || !sanitizeShareUrl(checkout?.url ?? null)) {
+      throw new Error("Stripe checkout was not created. Retry the payment link or open the sale details for the exact error.");
+    }
+
+    // The checkout function persists the session on THIS purchase. Resolve
+    // again so a stable short /pay/<token> URL is minted for sharing.
     res = await shareFn({ data: { purchaseRecordId: purchaseId, origin } });
+    if (res.needsFreshCheckout) {
+      throw new Error("Stripe checkout was created but could not be linked to this sale. Retry once; no duplicate sale was created.");
+    }
   }
 
   const clean =
@@ -39,7 +51,7 @@ export async function getShareablePaymentUrl(
     (typeof res.shareUrl === "string" && /^http:\/\/localhost(:\d+)?\/\S*$/.test(res.shareUrl)
       ? res.shareUrl
       : null);
-  if (!clean) throw new Error("Could not build a shareable payment link. Try again.");
+  if (!clean) throw new Error(res.reason ?? "Could not build a shareable payment link. Try again.");
   return { url: clean, kind: res.kind, canonicalUrl: res.canonicalUrl ?? null };
 }
 
