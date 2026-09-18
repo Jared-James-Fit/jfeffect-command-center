@@ -15980,6 +15980,8 @@ export type Database = {
           amount_paid: number | null
           amount_paid_cents: number
           amount_refunded_cents: number
+          archived_at: string | null
+          archived_by: string | null
           assigned_at: string
           assigned_by: string | null
           billing_anchor_day: number | null
@@ -16072,6 +16074,8 @@ export type Database = {
           amount_paid?: number | null
           amount_paid_cents?: number
           amount_refunded_cents?: number
+          archived_at?: string | null
+          archived_by?: string | null
           assigned_at?: string
           assigned_by?: string | null
           billing_anchor_day?: number | null
@@ -16164,6 +16168,8 @@ export type Database = {
           amount_paid?: number | null
           amount_paid_cents?: number
           amount_refunded_cents?: number
+          archived_at?: string | null
+          archived_by?: string | null
           assigned_at?: string
           assigned_by?: string | null
           billing_anchor_day?: number | null
@@ -18661,6 +18667,8 @@ export type Database = {
           amount_paid: number | null
           amount_paid_cents: number
           amount_refunded_cents: number
+          archived_at: string | null
+          archived_by: string | null
           assigned_at: string
           assigned_by: string | null
           billing_anchor_day: number | null
