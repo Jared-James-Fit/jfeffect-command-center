@@ -34,7 +34,8 @@ describe("auth login resilience", () => {
   it("keeps the splash up until the first session restore and retries a transient null session", () => {
     expect(authProvider).toContain("const [loading, setLoading] = useState(true)");
     expect(guard).toContain("hasPersistedSessionHint");
-    expect(guard).toContain('key.startsWith("sb-") && key.endsWith("-auth-token")');
+    expect(guard).toContain('key.startsWith("sb-")');
+    expect(guard).toContain('key.endsWith("-auth-token")');
     expect(guard).toContain("shouldRetryNull");
     expect(guard).toContain("250 * (attempt + 1)");
   });
@@ -60,5 +61,19 @@ describe("auth login resilience", () => {
     expect(authProvider).toContain("sessionRecoveryBlockedRef.current = true");
     expect(authProvider).toContain("lastSessionRef.current = null");
     expect(authProvider).toContain("await supabase.auth.signOut()");
+  });
+
+  it("keeps a warm authenticated shell during retryable network refresh failures", () => {
+    expect(authProvider).toContain("isRetryableAuthError");
+    expect(authProvider).toContain("keepWarmUserOnTransientFailure");
+    expect(authProvider).toContain("scheduleRetry");
+    expect(authProvider).toContain("attempt < 2");
+  });
+
+  it("does not keep warm auth after a terminal refresh-token rejection", () => {
+    expect(guard).toContain("isTerminalRefreshError");
+    expect(guard).toContain("refreshRejected = isTerminalRefreshError(error)");
+    expect(guard).toContain("!refreshRejected");
+    expect(authProvider).toContain("A non-retryable auth rejection");
   });
 });
