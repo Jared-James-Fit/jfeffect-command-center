@@ -27,6 +27,18 @@ function hasPersistedAuthSession(): boolean {
   }
 }
 
+function isTerminalRefreshError(error: unknown): boolean {
+  const candidate = error as { status?: number; name?: string; message?: string } | null;
+  const status = Number(candidate?.status ?? 0);
+  const message = String(candidate?.message ?? "");
+  return (
+    status === 400 ||
+    status === 401 ||
+    status === 403 ||
+    /refresh token.*(invalid|expired|not found|already used)/i.test(message)
+  );
+}
+
 export const Route = createFileRoute("/_authenticated")({
   ssr: false,
   beforeLoad: async ({ location }) => {
@@ -42,6 +54,7 @@ export const Route = createFileRoute("/_authenticated")({
     const maxAttempts = 3;
     let session: Awaited<ReturnType<typeof supabase.auth.getSession>>["data"]["session"] | null = null;
     let threw = false;
+    let refreshRejected = false;
 
     // On a PWA cold launch, a still-valid persisted session can briefly read as
     // null while browser storage / Supabase auth restoration settles. Only
@@ -81,6 +94,11 @@ export const Route = createFileRoute("/_authenticated")({
         const { data, error } = await supabase.auth.refreshSession();
         if (!error && data.session?.user) {
           session = data.session;
+        } else if (error) {
+          refreshRejected = isTerminalRefreshError(error);
+          if (!refreshRejected) {
+            console.warn("[auth] refreshSession transiently failed during route recovery", error);
+          }
         }
       } catch (err) {
         console.warn("[auth] refreshSession failed during route recovery", err);
@@ -91,7 +109,12 @@ export const Route = createFileRoute("/_authenticated")({
       // Never let a single resume/revalidation blip log out a previously
       // validated user while the persisted refresh session is still present.
       // Explicit Sign Out removes that storage first, so it still redirects.
-      if (isRevalidation && warmUser && (threw || hasPersistedAuthSession())) {
+      if (
+        !refreshRejected &&
+        isRevalidation &&
+        warmUser &&
+        (threw || hasPersistedAuthSession())
+      ) {
         return { user: warmUser };
       }
       const next = location.href;
