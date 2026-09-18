@@ -68,24 +68,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return uid ? readCachedRole(uid) : null;
     } catch { return null; }
   });
-  // Start loading=false if we have a cached session+role in localStorage.
-  // This makes PWA resume instant — the splash clears immediately and the
-  // user lands on their dashboard while the role re-validates in the background.
-  const [loading, setLoading] = useState(() => {
-    if (typeof window === "undefined") return true;
-    try {
-      // Supabase persists the session under this key by default
-      const sessionKey = Object.keys(localStorage).find((k) => k.startsWith("sb-") && k.endsWith("-auth-token"));
-      if (!sessionKey) return true;
-      const raw = localStorage.getItem(sessionKey);
-      if (!raw) return true;
-      const parsed = JSON.parse(raw);
-      const uid = parsed?.user?.id;
-      if (!uid) return true;
-      const cachedRole = readCachedRole(uid);
-      return cachedRole === null; // if we have a cached role, start non-loading
-    } catch { return true; }
-  });
+  // Always keep the auth splash up until Supabase has performed its first
+  // session read. Previously a cached role could set loading=false before
+  // `user` was restored, briefly showing returning PWA users the login form
+  // even though they still had a valid refresh session.
+  const [loading, setLoading] = useState(true);
   const router = useRouter();
 
   // Dev-only: log when auth finishes resolving (role known or no session).
@@ -112,8 +99,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         roleLoadedForRef.current = null;
         setLoading(false);
       } else if (identityChanged) {
-        // Real user change (sign-in, account switch). Need to load role.
-        setLoading(true);
+        // Real user change (sign-in, account switch). A cached role can make
+        // session restoration instant, but never expose the login form before
+        // the user object itself has been restored.
+        const cached = newUid ? readCachedRole(newUid) : null;
+        if (cached) {
+          setRole((prev) => prev ?? cached);
+          setLoading(false);
+        } else {
+          setLoading(true);
+        }
       }
       // For TOKEN_REFRESHED / USER_UPDATED with the SAME user id, do NOT
       // toggle loading — the role is already resolved. Toggling loading
@@ -134,9 +129,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     supabase.auth.getSession().then(({ data }) => {
       setSession(data.session);
       setUser(data.session?.user ?? null);
-      lastUserIdRef.current = data.session?.user?.id ?? null;
-      if (!data.session) setLoading(false);
-      if (data.session) void markClientSignedIn();
+      const restoredUid = data.session?.user?.id ?? null;
+      lastUserIdRef.current = restoredUid;
+      if (!data.session) {
+        setLoading(false);
+      } else {
+        const cached = restoredUid ? readCachedRole(restoredUid) : null;
+        if (cached) {
+          setRole((prev) => prev ?? cached);
+          // Session + cached role are now both known. Let the role effect
+          // revalidate in the background without blocking the dashboard.
+          setLoading(false);
+        }
+        void markClientSignedIn();
+      }
     }).catch(() => {
       // Never strand the app in `loading` if getSession itself throws.
       setLoading(false);
@@ -156,96 +162,145 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return;
     }
     let cancelled = false;
+    const ROLE_QUERY_TIMEOUT_MS = 2500;
+
+    const withTimeout = async <T,>(promise: PromiseLike<T>): Promise<T | null> => {
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      try {
+        return await Promise.race([
+          promise,
+          new Promise<null>((resolve) => {
+            timer = setTimeout(() => resolve(null), ROLE_QUERY_TIMEOUT_MS);
+          }),
+        ]);
+      } finally {
+        if (timer) clearTimeout(timer);
+      }
+    };
+
+    const commitRole = (resolvedRole: AppRole) => {
+      if (cancelled) return;
+      setRole(resolvedRole);
+      roleLoadedForRef.current = uid;
+      writeCachedRole(uid, resolvedRole);
+      setLoading(false);
+
+      // Warm the client record cache so the dashboard doesn't waterfall.
+      if (resolvedRole === "client") {
+        queryClient.prefetchQuery({
+          queryKey: ["my-client", uid],
+          queryFn: async () => {
+            const { data } = await supabase
+              .from("clients")
+              .select("*")
+              .eq("user_id", uid)
+              .maybeSingle();
+            return data;
+          },
+          staleTime: 30_000,
+        });
+      }
+    };
+
     const fetchRole = async (attempt = 0): Promise<void> => {
       try {
-        // Race the role lookup against a hard timeout so a slow DB
-        // response (RLS contention, transient PgBouncer saturation) can
-        // never strand the splash. On timeout we fall back to a cached
-        // or default role; the next attempt re-runs in the background.
-        const fetchPromise = Promise.all([
+        // Resolve explicit app roles FIRST. Almost every coaching user has a
+        // user_roles row, so login should not wait on unrelated membership and
+        // client-table queries before routing.
+        const roleResult = await withTimeout(
           supabase.from("user_roles").select("role").eq("user_id", uid),
-          supabase.from("app_members").select("id").eq("user_id", uid).maybeSingle(),
-          supabase.from("clients").select("id").eq("user_id", uid).maybeSingle(),
-        ]);
-        const TIMEOUT_MS = 3000;
-        const timeoutPromise = new Promise<"__timeout__">((resolve) =>
-          setTimeout(() => resolve("__timeout__"), TIMEOUT_MS),
         );
-        const raced = await Promise.race([fetchPromise, timeoutPromise]);
         if (cancelled) return;
-        if (raced === "__timeout__") {
-          // Don't strand the user. Use a cached role if present.
-          // CRITICAL: Do NOT fall back to "client" — admin/coach users
-          // would get bounced to /portal by the admin route gate before
-          // the background fetch can correct it (which also hides the
-          // Client POV buttons on the way out). Leave role null and let
-          // the background fetch fill it; the splash already cleared.
-          const cached = readCachedRole(uid);
-          if (!roleLoadedForRef.current) {
-            if (cached) setRole((prev) => prev ?? cached);
-            setLoading(false);
-          }
-          // Let the original fetch finish in the background and update.
-          fetchPromise.then(([{ data: roleRows }, { data: memberRow }, { data: clientRow }]) => {
-            if (cancelled) return;
-            const roles = (roleRows ?? []).map((r: any) => r.role as AppRole);
-            const resolvedRole: AppRole =
-              roles.includes("admin") ? "admin"
-              : roles.includes("coach") ? "coach"
-              : roles.includes("media_manager") ? "media_manager"
-              : (memberRow && !clientRow) ? "member"
-              : roles.includes("client") ? "client"
-              : memberRow ? "member"
-              : clientRow ? "client"
-              : "client";
-            setRole(resolvedRole);
-            roleLoadedForRef.current = uid;
-            writeCachedRole(uid, resolvedRole);
-          }).catch(() => { /* background failure; user already on a page */ });
-          return;
-        }
-        const [{ data: roleRows, error: roleErr }, { data: memberRow }, { data: clientRow }] = raced;
-        if (cancelled) return;
-        if (roleErr) throw roleErr;
-        const roles = (roleRows ?? []).map((r: any) => r.role as AppRole);
-        const resolvedRole: AppRole =
+        if (!roleResult) throw new Error("role_lookup_timeout");
+        if (roleResult.error) throw roleResult.error;
+
+        const roles = (roleResult.data ?? []).map((r: any) => r.role as AppRole);
+        const explicitRole: AppRole | null =
           roles.includes("admin") ? "admin"
           : roles.includes("coach") ? "coach"
           : roles.includes("media_manager") ? "media_manager"
-          : (memberRow && !clientRow) ? "member"
           : roles.includes("client") ? "client"
-          : memberRow ? "member"
-          : clientRow ? "client"
-          : "client";
-        setRole(resolvedRole);
-        roleLoadedForRef.current = uid;
-        writeCachedRole(uid, resolvedRole); // persist for instant PWA resume
-        setLoading(false);
-        // Warm the client record cache so the dashboard doesn't waterfall
-        if (resolvedRole === "client") {
-          queryClient.prefetchQuery({
-            queryKey: ["my-client", uid],
-            queryFn: async () => {
-              const { data } = await supabase.from("clients").select("*").eq("user_id", uid).maybeSingle();
-              return data;
-            },
-            staleTime: 30_000,
-          });
-        }
-      } catch (err) {
-        // Transient network failure — DO NOT sign the user out. Retry with
-        // backoff. After max attempts give up but keep the auth session;
-        // default the role to "client" so they at least land somewhere
-        // sensible rather than getting bounced back to /auth.
-        if (cancelled) return;
-        if (attempt < 3) {
-          const delay = 400 * Math.pow(2, attempt);
-          setTimeout(() => { if (!cancelled) void fetchRole(attempt + 1); }, delay);
+          : null;
+
+        if (explicitRole) {
+          commitRole(explicitRole);
           return;
         }
-        console.error("[auth] role load failed after retries", err);
-        setRole((prev) => prev ?? "client");
-        roleLoadedForRef.current = uid;
+
+        // Only accounts without an explicit role need the membership/client
+        // fallback. Keep this bounded too so a single slow RLS query can never
+        // strand the login splash.
+        const fallback = await withTimeout(Promise.all([
+          supabase.from("app_members").select("id").eq("user_id", uid).maybeSingle(),
+          supabase.from("clients").select("id").eq("user_id", uid).maybeSingle(),
+        ]));
+        if (cancelled) return;
+        if (!fallback) throw new Error("account_kind_lookup_timeout");
+
+        const [
+          { data: memberRow, error: memberErr },
+          { data: clientRow, error: clientErr },
+        ] = fallback;
+
+        if (memberErr && clientErr) throw memberErr;
+
+        const resolvedRole: AppRole =
+          memberRow && !clientRow ? "member"
+          : clientRow ? "client"
+          : memberRow ? "member"
+          : "client";
+
+        commitRole(resolvedRole);
+      } catch (err) {
+        if (cancelled) return;
+
+        // A known cached role is always safer than guessing and lets returning
+        // users through immediately during a transient DB slowdown.
+        const cached = readCachedRole(uid);
+        if (cached) {
+          commitRole(cached);
+          return;
+        }
+
+        // Retry every bounded lookup instead of leaving an unresolved promise
+        // running forever in the background.
+        if (attempt < 3) {
+          const delay = 350 * Math.pow(2, attempt);
+          setTimeout(() => {
+            if (!cancelled) void fetchRole(attempt + 1);
+          }, delay);
+          return;
+        }
+
+        // Last-resort classification for uncached users: independently check
+        // the self-readable client/member rows. This avoids defaulting an
+        // admin/coach to client just because user_roles was temporarily slow.
+        try {
+          const clientResult = await withTimeout(
+            supabase.from("clients").select("id").eq("user_id", uid).maybeSingle(),
+          );
+          if (cancelled) return;
+          if (clientResult && !clientResult.error && clientResult.data) {
+            commitRole("client");
+            return;
+          }
+
+          const memberResult = await withTimeout(
+            supabase.from("app_members").select("id").eq("user_id", uid).maybeSingle(),
+          );
+          if (cancelled) return;
+          if (memberResult && !memberResult.error && memberResult.data) {
+            commitRole("member");
+            return;
+          }
+        } catch {
+          // Fall through to the explicit retry state below.
+        }
+
+        console.error("[auth] role load failed after bounded retries", err);
+        // Keep the authenticated session, but never leave the app in an
+        // endless splash. /auth renders a clear retry/sign-out state when
+        // user exists and role is still null.
         setLoading(false);
       }
     };
