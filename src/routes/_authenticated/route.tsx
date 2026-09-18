@@ -26,12 +26,36 @@ export const Route = createFileRoute("/_authenticated")({
     const maxAttempts = isRevalidation ? 1 : 3;
     let session: Awaited<ReturnType<typeof supabase.auth.getSession>>["data"]["session"] | null = null;
     let threw = false;
+
+    // On a PWA cold launch, a still-valid persisted session can briefly read as
+    // null while browser storage / Supabase auth restoration settles. Only
+    // retry a null result when local storage actually contains a Supabase auth
+    // token; genuinely signed-out visitors still redirect immediately.
+    const hasPersistedSessionHint = (() => {
+      if (typeof window === "undefined") return false;
+      try {
+        return Object.keys(window.localStorage).some(
+          (key) => key.startsWith("sb-") && key.endsWith("-auth-token") && !!window.localStorage.getItem(key),
+        );
+      } catch {
+        return false;
+      }
+    })();
+
     for (let attempt = 0; attempt < maxAttempts; attempt++) {
       try {
         const { data, error } = await supabase.auth.getSession();
         if (error) throw error;
         session = data.session;
-        break;
+        if (session?.user) break;
+
+        const shouldRetryNull =
+          !isRevalidation &&
+          hasPersistedSessionHint &&
+          attempt < maxAttempts - 1;
+        if (!shouldRetryNull) break;
+
+        await new Promise((r) => setTimeout(r, 250 * (attempt + 1)));
       } catch (err) {
         if (attempt === maxAttempts - 1) {
           console.warn("[auth] getSession failed during route guard", err);
