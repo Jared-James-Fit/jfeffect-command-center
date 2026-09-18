@@ -55,6 +55,20 @@ function readPersistedSessionTokens(): { access_token: string; refresh_token: st
     return null;
   }
 }
+
+function isRetryableAuthError(error: unknown): boolean {
+  const candidate = error as { status?: number; name?: string; message?: string } | null;
+  const status = Number(candidate?.status ?? 0);
+  const name = String(candidate?.name ?? "");
+  const message = String(candidate?.message ?? "");
+  return (
+    name.includes("Retryable") ||
+    status === 0 ||
+    status === 429 ||
+    status >= 500 ||
+    /(failed to fetch|network|timeout|temporar)/i.test(message)
+  );
+}
 // ─────────────────────────────────────────────────────────────────────────────
 
 interface AuthState {
@@ -118,7 +132,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setLoading(false);
   };
 
-  const recoverPersistedSession = async () => {
+  const recoverPersistedSession = async (attempt = 0) => {
     if (
       explicitSignOutRef.current ||
       sessionRecoveryInFlightRef.current ||
@@ -136,10 +150,34 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return;
     }
 
+    const keepWarmUserOnTransientFailure = () => {
+      if (!lastSessionRef.current?.user) return false;
+      // A suspended iPhone PWA can briefly lose network exactly when its token
+      // needs refreshing. Keep the already-validated identity in memory and
+      // let the next resume/route check retry instead of showing Login.
+      setLoading(false);
+      return true;
+    };
+
+    const scheduleRetry = (nextAttempt: number) => {
+      const delay = 400 * nextAttempt;
+      setTimeout(() => void recoverPersistedSession(nextAttempt), delay);
+    };
+
     sessionRecoveryInFlightRef.current = true;
     try {
       const { data, error } = await supabase.auth.setSession(tokens);
       if (error || !data.session?.user) {
+        if (error && isRetryableAuthError(error)) {
+          if (attempt < 2) {
+            scheduleRetry(attempt + 1);
+            return;
+          }
+          if (keepWarmUserOnTransientFailure()) return;
+        }
+
+        // A non-retryable auth rejection (revoked/invalid refresh token) is a
+        // real logout condition. Never preserve a stale authenticated shell.
         sessionRecoveryBlockedRef.current = true;
         clearResolvedAuth();
         return;
@@ -153,6 +191,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (cached) setRole((prev) => prev ?? cached);
       setLoading(false);
     } catch (err) {
+      if (isRetryableAuthError(err)) {
+        if (attempt < 2) {
+          scheduleRetry(attempt + 1);
+          return;
+        }
+        if (keepWarmUserOnTransientFailure()) return;
+      }
+
       console.warn("[auth] persisted session recovery failed", err);
       sessionRecoveryBlockedRef.current = true;
       clearResolvedAuth();
