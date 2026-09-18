@@ -63,7 +63,6 @@ function isRetryableAuthError(error: unknown): boolean {
   const message = String(candidate?.message ?? "");
   return (
     name.includes("Retryable") ||
-    status === 0 ||
     status === 429 ||
     status >= 500 ||
     /(failed to fetch|network|timeout|temporar)/i.test(message)
