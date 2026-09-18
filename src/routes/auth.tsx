@@ -33,7 +33,7 @@ const FEATURES = [
 ];
 
 function AuthPage() {
-  const { user, role, loading } = useAuth();
+  const { user, role, loading, signOut } = useAuth();
   const navigate = useNavigate();
   const { next } = Route.useSearch();
   const [email, setEmail] = useState("");
@@ -55,18 +55,66 @@ function AuthPage() {
   }, [user, role, loading, navigate, next]);
 
   // Avoid flashing the login form while the session is still restoring,
-  // or while an authenticated user is being routed to their dashboard.
-  if (loading || user) {
+  // or while an authenticated user with a resolved role is being routed.
+  if (loading || (user && role)) {
     return <AuthSplash />;
+  }
+
+  // A successful password login can establish the Supabase session before a
+  // role lookup finishes. If role resolution ultimately fails, never strand
+  // the user on an endless splash — give them a clear retry path while
+  // preserving the authenticated session.
+  if (user && !role) {
+    return (
+      <main className="relative min-h-screen overflow-hidden bg-background text-foreground">
+        <div className="flex min-h-screen flex-col items-center justify-center px-6 py-16">
+          <div className="w-full max-w-sm text-center">
+            <img src="/logo.png" alt="JF Effect" className="mx-auto h-11 w-11 rounded-xl shadow-glow" />
+            <h1 className="mt-5 text-xl font-black tracking-tight">Finishing your sign-in</h1>
+            <p className="mt-2 text-sm text-muted-foreground">
+              Your password was accepted, but your account access did not finish loading.
+            </p>
+            <div className="mt-6 space-y-2">
+              <Button
+                type="button"
+                className="w-full bg-gradient-primary py-6 text-sm font-bold uppercase tracking-[0.15em] shadow-glow"
+                onClick={() => window.location.reload()}
+              >
+                Retry account access
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                className="w-full"
+                onClick={() => void signOut()}
+              >
+                Sign out
+              </Button>
+            </div>
+          </div>
+        </div>
+      </main>
+    );
   }
 
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
     setBusy(true);
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    const normalizedEmail = email.trim().toLowerCase();
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email: normalizedEmail,
+      password,
+    });
     setBusy(false);
-    if (error) toast.error(error.message);
-    else toast.success("Welcome back");
+    if (error) {
+      toast.error(error.message);
+      return;
+    }
+    if (!data.session?.user) {
+      toast.error("Sign-in did not create a session. Please try again.");
+      return;
+    }
+    toast.success("Welcome back");
   };
 
   return (
