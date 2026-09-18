@@ -68,24 +68,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return uid ? readCachedRole(uid) : null;
     } catch { return null; }
   });
-  // Start loading=false if we have a cached session+role in localStorage.
-  // This makes PWA resume instant — the splash clears immediately and the
-  // user lands on their dashboard while the role re-validates in the background.
-  const [loading, setLoading] = useState(() => {
-    if (typeof window === "undefined") return true;
-    try {
-      // Supabase persists the session under this key by default
-      const sessionKey = Object.keys(localStorage).find((k) => k.startsWith("sb-") && k.endsWith("-auth-token"));
-      if (!sessionKey) return true;
-      const raw = localStorage.getItem(sessionKey);
-      if (!raw) return true;
-      const parsed = JSON.parse(raw);
-      const uid = parsed?.user?.id;
-      if (!uid) return true;
-      const cachedRole = readCachedRole(uid);
-      return cachedRole === null; // if we have a cached role, start non-loading
-    } catch { return true; }
-  });
+  // Always keep the auth splash up until Supabase has performed its first
+  // session read. Previously a cached role could set loading=false before
+  // `user` was restored, briefly showing returning PWA users the login form
+  // even though they still had a valid refresh session.
+  const [loading, setLoading] = useState(true);
   const router = useRouter();
 
   // Dev-only: log when auth finishes resolving (role known or no session).
@@ -112,8 +99,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         roleLoadedForRef.current = null;
         setLoading(false);
       } else if (identityChanged) {
-        // Real user change (sign-in, account switch). Need to load role.
-        setLoading(true);
+        // Real user change (sign-in, account switch). A cached role can make
+        // session restoration instant, but never expose the login form before
+        // the user object itself has been restored.
+        const cached = newUid ? readCachedRole(newUid) : null;
+        if (cached) {
+          setRole((prev) => prev ?? cached);
+          setLoading(false);
+        } else {
+          setLoading(true);
+        }
       }
       // For TOKEN_REFRESHED / USER_UPDATED with the SAME user id, do NOT
       // toggle loading — the role is already resolved. Toggling loading
@@ -134,9 +129,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     supabase.auth.getSession().then(({ data }) => {
       setSession(data.session);
       setUser(data.session?.user ?? null);
-      lastUserIdRef.current = data.session?.user?.id ?? null;
-      if (!data.session) setLoading(false);
-      if (data.session) void markClientSignedIn();
+      const restoredUid = data.session?.user?.id ?? null;
+      lastUserIdRef.current = restoredUid;
+      if (!data.session) {
+        setLoading(false);
+      } else {
+        const cached = restoredUid ? readCachedRole(restoredUid) : null;
+        if (cached) {
+          setRole((prev) => prev ?? cached);
+          // Session + cached role are now both known. Let the role effect
+          // revalidate in the background without blocking the dashboard.
+          setLoading(false);
+        }
+        void markClientSignedIn();
+      }
     }).catch(() => {
       // Never strand the app in `loading` if getSession itself throws.
       setLoading(false);
@@ -158,7 +164,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     let cancelled = false;
     const ROLE_QUERY_TIMEOUT_MS = 2500;
 
-    const withTimeout = async <T,>(promise: Promise<T>): Promise<T | null> => {
+    const withTimeout = async <T,>(promise: PromiseLike<T>): Promise<T | null> => {
       let timer: ReturnType<typeof setTimeout> | undefined;
       try {
         return await Promise.race([
