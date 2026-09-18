@@ -44,7 +44,8 @@ describe("auth login resilience", () => {
     expect(guard).toContain("const maxAttempts = 3");
     expect(guard).toContain("await supabase.auth.refreshSession()");
     expect(guard).toContain("hasPersistedAuthSession()");
-    expect(guard).toContain("warmUser && (threw || hasPersistedAuthSession())");
+    expect(guard).toContain("warmUser");
+    expect(guard).toContain("threw || hasPersistedAuthSession()");
     expect(guard).not.toContain("!isRevalidation &&\n          hasPersistedSessionHint");
   });
 
