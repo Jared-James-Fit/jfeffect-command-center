@@ -35,6 +35,26 @@ function clearCachedRole(uid: string): void {
   if (typeof window === "undefined") return;
   try { localStorage.removeItem(ROLE_CACHE_PREFIX + uid); } catch {}
 }
+
+function readPersistedSessionTokens(): { access_token: string; refresh_token: string } | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const sessionKey = Object.keys(localStorage).find(
+      (key) => key.startsWith("sb-") && key.endsWith("-auth-token"),
+    );
+    if (!sessionKey) return null;
+    const raw = localStorage.getItem(sessionKey);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    const access_token = parsed?.access_token;
+    const refresh_token = parsed?.refresh_token;
+    return typeof access_token === "string" && typeof refresh_token === "string"
+      ? { access_token, refresh_token }
+      : null;
+  } catch {
+    return null;
+  }
+}
 // ─────────────────────────────────────────────────────────────────────────────
 
 interface AuthState {
@@ -83,6 +103,63 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const queryClient = useQueryClient();
   const lastUserIdRef = useRef<string | null>(null);
   const roleLoadedForRef = useRef<string | null>(null);
+  const lastSessionRef = useRef<Session | null>(null);
+  const explicitSignOutRef = useRef(false);
+  const sessionRecoveryInFlightRef = useRef(false);
+  const sessionRecoveryBlockedRef = useRef(false);
+
+  const clearResolvedAuth = () => {
+    setSession(null);
+    setUser(null);
+    setRole(null);
+    roleLoadedForRef.current = null;
+    lastUserIdRef.current = null;
+    lastSessionRef.current = null;
+    setLoading(false);
+  };
+
+  const recoverPersistedSession = async () => {
+    if (
+      explicitSignOutRef.current ||
+      sessionRecoveryInFlightRef.current ||
+      sessionRecoveryBlockedRef.current
+    ) return;
+
+    const previous = lastSessionRef.current;
+    const persisted = readPersistedSessionTokens();
+    const tokens = previous?.access_token && previous?.refresh_token
+      ? { access_token: previous.access_token, refresh_token: previous.refresh_token }
+      : persisted;
+
+    if (!tokens) {
+      clearResolvedAuth();
+      return;
+    }
+
+    sessionRecoveryInFlightRef.current = true;
+    try {
+      const { data, error } = await supabase.auth.setSession(tokens);
+      if (error || !data.session?.user) {
+        sessionRecoveryBlockedRef.current = true;
+        clearResolvedAuth();
+        return;
+      }
+
+      lastSessionRef.current = data.session;
+      lastUserIdRef.current = data.session.user.id;
+      setSession(data.session);
+      setUser(data.session.user);
+      const cached = readCachedRole(data.session.user.id);
+      if (cached) setRole((prev) => prev ?? cached);
+      setLoading(false);
+    } catch (err) {
+      console.warn("[auth] persisted session recovery failed", err);
+      sessionRecoveryBlockedRef.current = true;
+      clearResolvedAuth();
+    } finally {
+      sessionRecoveryInFlightRef.current = false;
+    }
+  };
 
   useEffect(() => {
     const { data: sub } = supabase.auth.onAuthStateChange((event, sess) => {
@@ -90,32 +167,45 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const prevUid = lastUserIdRef.current;
       const identityChanged = newUid !== prevUid;
 
-      setSession(sess);
-      setUser(sess?.user ?? null);
-
       if (!sess) {
-        // Signed out — clear role and stop loading.
-        setRole(null);
-        roleLoadedForRef.current = null;
-        setLoading(false);
-      } else if (identityChanged) {
-        // Real user change (sign-in, account switch). A cached role can make
-        // session restoration instant, but never expose the login form before
-        // the user object itself has been restored.
-        const cached = newUid ? readCachedRole(newUid) : null;
-        if (cached) {
-          setRole((prev) => prev ?? cached);
-          setLoading(false);
-        } else {
-          setLoading(true);
-        }
-      }
-      // For TOKEN_REFRESHED / USER_UPDATED with the SAME user id, do NOT
-      // toggle loading — the role is already resolved. Toggling loading
-      // here was causing the AuthSplash to flash on every token refresh
-      // (hourly, on tab focus, on PWA resume).
+        // Explicit logout should be immediate. A spontaneous SIGNED_OUT /
+        // transient INITIAL_SESSION null on iOS PWA resume gets one bounded
+        // recovery attempt from the persisted refresh session instead of
+        // throwing the user back to Login.
+        const canAttemptRecovery =
+          !explicitSignOutRef.current &&
+          !sessionRecoveryBlockedRef.current &&
+          !!(lastSessionRef.current?.refresh_token || readPersistedSessionTokens());
 
-      lastUserIdRef.current = newUid;
+        if (canAttemptRecovery) {
+          setLoading(true);
+          setTimeout(() => void recoverPersistedSession(), 0);
+          return;
+        }
+
+        clearResolvedAuth();
+      } else {
+        sessionRecoveryBlockedRef.current = false;
+        lastSessionRef.current = sess;
+        setSession(sess);
+        setUser(sess.user);
+
+        if (identityChanged) {
+          // Real user change (sign-in, account switch). A cached role can make
+          // session restoration instant, but never expose the login form before
+          // the user object itself has been restored.
+          const cached = newUid ? readCachedRole(newUid) : null;
+          if (cached) {
+            setRole((prev) => prev ?? cached);
+            setLoading(false);
+          } else {
+            setLoading(true);
+          }
+        }
+        // For TOKEN_REFRESHED / USER_UPDATED with the SAME user id, do NOT
+        // toggle loading — the role is already resolved.
+        lastUserIdRef.current = newUid;
+      }
 
       if (sess && (event === "SIGNED_IN" || event === "TOKEN_REFRESHED" || event === "INITIAL_SESSION")) {
         void markClientSignedIn();
@@ -127,25 +217,40 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     });
     supabase.auth.getSession().then(({ data }) => {
-      setSession(data.session);
-      setUser(data.session?.user ?? null);
       const restoredUid = data.session?.user?.id ?? null;
-      lastUserIdRef.current = restoredUid;
       if (!data.session) {
-        setLoading(false);
-      } else {
-        const cached = restoredUid ? readCachedRole(restoredUid) : null;
-        if (cached) {
-          setRole((prev) => prev ?? cached);
-          // Session + cached role are now both known. Let the role effect
-          // revalidate in the background without blocking the dashboard.
-          setLoading(false);
+        if (readPersistedSessionTokens()) {
+          setLoading(true);
+          void recoverPersistedSession();
+        } else {
+          clearResolvedAuth();
         }
-        void markClientSignedIn();
+        return;
       }
+
+      lastSessionRef.current = data.session;
+      setSession(data.session);
+      setUser(data.session.user);
+      lastUserIdRef.current = restoredUid;
+      sessionRecoveryBlockedRef.current = false;
+
+      const cached = restoredUid ? readCachedRole(restoredUid) : null;
+      if (cached) {
+        setRole((prev) => prev ?? cached);
+        // Session + cached role are now both known. Let the role effect
+        // revalidate in the background without blocking the dashboard.
+        setLoading(false);
+      }
+      void markClientSignedIn();
     }).catch(() => {
-      // Never strand the app in `loading` if getSession itself throws.
-      setLoading(false);
+      // A transient getSession exception on PWA resume should try the persisted
+      // refresh session once before exposing the Login screen.
+      if (readPersistedSessionTokens()) {
+        setLoading(true);
+        void recoverPersistedSession();
+      } else {
+        clearResolvedAuth();
+      }
     });
     return () => sub.subscription.unsubscribe();
   }, [router, queryClient]);
@@ -311,6 +416,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const signOut = async () => {
     // Capture the user id before clearing state.
     const uid = user?.id ?? null;
+    explicitSignOutRef.current = true;
+    sessionRecoveryBlockedRef.current = true;
+    lastSessionRef.current = null;
+
     // Stop in-flight queries before clearing the session so they don't 401.
     try { await queryClient.cancelQueries(); } catch { /* best-effort */ }
     queryClient.clear();
@@ -320,13 +429,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const { clearPersistedQueryCache } = await import("@/lib/query-persister");
       clearPersistedQueryCache();
     } catch { /* best-effort */ }
-    await supabase.auth.signOut();
-    setSession(null);
-    setUser(null);
-    setRole(null);
-    roleLoadedForRef.current = null;
-    lastUserIdRef.current = null;
-    if (uid) clearCachedRole(uid); // clear role cache on sign-out
+
+    try {
+      await supabase.auth.signOut();
+    } finally {
+      clearResolvedAuth();
+      if (uid) clearCachedRole(uid); // clear role cache on explicit sign-out
+      explicitSignOutRef.current = false;
+    }
+
     // Remove the persisted last-route so the next user on this device
     // never lands in a previous user's workout or profile.
     if (uid) clearLastRoute(uid);
