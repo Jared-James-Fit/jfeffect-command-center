@@ -131,7 +131,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setLoading(false);
   };
 
-  const recoverPersistedSession = async (attempt = 0) => {
+  const recoverPersistedSession = async (attempt = 0): Promise<void> => {
     if (
       explicitSignOutRef.current ||
       sessionRecoveryInFlightRef.current ||
