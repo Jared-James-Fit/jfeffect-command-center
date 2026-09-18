@@ -101,7 +101,10 @@ export const Route = createFileRoute("/_authenticated")({
           }
         }
       } catch (err) {
-        console.warn("[auth] refreshSession failed during route recovery", err);
+        refreshRejected = isTerminalRefreshError(err);
+        if (!refreshRejected) {
+          console.warn("[auth] refreshSession failed during route recovery", err);
+        }
       }
     }
 
