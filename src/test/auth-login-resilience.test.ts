@@ -38,4 +38,27 @@ describe("auth login resilience", () => {
     expect(guard).toContain("shouldRetryNull");
     expect(guard).toContain("250 * (attempt + 1)");
   });
+
+  it("does not treat a transient null session on PWA resume as a logout", () => {
+    expect(guard).toContain("const maxAttempts = 3");
+    expect(guard).toContain("await supabase.auth.refreshSession()");
+    expect(guard).toContain("hasPersistedAuthSession()");
+    expect(guard).toContain("warmUser && (threw || hasPersistedAuthSession())");
+    expect(guard).not.toContain("!isRevalidation &&\n          hasPersistedSessionHint");
+  });
+
+  it("recovers a persisted refresh session before clearing authenticated state", () => {
+    expect(authProvider).toContain("readPersistedSessionTokens");
+    expect(authProvider).toContain("recoverPersistedSession");
+    expect(authProvider).toContain("await supabase.auth.setSession(tokens)");
+    expect(authProvider).toContain("sessionRecoveryInFlightRef");
+    expect(authProvider).toContain("sessionRecoveryBlockedRef");
+  });
+
+  it("keeps explicit sign-out authoritative and never resurrects that session", () => {
+    expect(authProvider).toContain("explicitSignOutRef.current = true");
+    expect(authProvider).toContain("sessionRecoveryBlockedRef.current = true");
+    expect(authProvider).toContain("lastSessionRef.current = null");
+    expect(authProvider).toContain("await supabase.auth.signOut()");
+  });
 });
