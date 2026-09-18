@@ -18,13 +18,11 @@ describe("auth login resilience", () => {
   });
 
   it("resolves explicit roles before slower membership/client fallbacks", () => {
-    const roleQuery = authProvider.indexOf('supabase.from("user_roles")');
-    const memberQuery = authProvider.indexOf('supabase.from("app_members")');
-    const clientQuery = authProvider.indexOf('supabase.from("clients")');
+    const roleLookup = authProvider.indexOf("const roleResult = await withTimeout");
+    const fallbackLookup = authProvider.indexOf("const fallback = await withTimeout");
 
-    expect(roleQuery).toBeGreaterThan(-1);
-    expect(memberQuery).toBeGreaterThan(roleQuery);
-    expect(clientQuery).toBeGreaterThan(roleQuery);
+    expect(roleLookup).toBeGreaterThan(-1);
+    expect(fallbackLookup).toBeGreaterThan(roleLookup);
   });
 
   it("bounds role lookups so a slow query cannot strand login", () => {
@@ -33,7 +31,8 @@ describe("auth login resilience", () => {
     expect(authProvider).toContain("setLoading(false)");
   });
 
-  it("retries a transient null session only when a persisted Supabase token exists", () => {
+  it("keeps the splash up until the first session restore and retries a transient null session", () => {
+    expect(authProvider).toContain("const [loading, setLoading] = useState(true)");
     expect(guard).toContain("hasPersistedSessionHint");
     expect(guard).toContain('key.startsWith("sb-") && key.endsWith("-auth-token")');
     expect(guard).toContain("shouldRetryNull");
