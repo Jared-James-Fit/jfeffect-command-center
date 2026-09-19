@@ -543,8 +543,9 @@ export const rescheduleFromCommittedDays = createServerFn({ method: "POST" })
 
     // Any day with a pl_scheduled_workouts instance is instance-canonical.
     // instanceByDayId was loaded BEFORE planning so both the move decision and
-    // the write target use the same source of truth. Legacy-only days continue
-    // to update pl_days.scheduled_date.
+    // the write target use the same source of truth. Instance realignments use
+    // the valid "moved" source; legacy-only days continue to update
+    // pl_days.scheduled_date with the legacy "auto" source.
 
     type AppliedRow = (typeof moves)[number] & {
       target: "instance" | "day";
@@ -557,7 +558,7 @@ export const rescheduleFromCommittedDays = createServerFn({ method: "POST" })
         if (inst) {
           const { error } = await supabaseAdmin
             .from("pl_scheduled_workouts")
-            .update({ scheduled_date: m.next, schedule_source: "auto" })
+            .update({ scheduled_date: m.next, schedule_source: "moved" })
             .eq("id", inst.id);
           if (error) throw new Error(error.message);
           applied.push({ ...m, target: "instance", instanceId: inst.id, prev: inst.scheduled_date });
@@ -578,7 +579,7 @@ export const rescheduleFromCommittedDays = createServerFn({ method: "POST" })
         if (a.target === "instance" && a.instanceId) {
           await supabaseAdmin
             .from("pl_scheduled_workouts")
-            .update({ scheduled_date: a.prev ?? undefined, schedule_source: "auto" })
+            .update({ scheduled_date: a.prev ?? undefined, schedule_source: a.prevSource ?? "manual" })
             .eq("id", a.instanceId);
         } else {
           await supabaseAdmin
@@ -603,7 +604,7 @@ export const rescheduleFromCommittedDays = createServerFn({ method: "POST" })
         previous_date: a.prev,
         new_date: a.next,
         previous_source: a.prevSource,
-        new_source: "auto",
+        new_source: a.target === "instance" ? "moved" : "auto",
         scope: "committed-schedule-change",
         changed_by: userId,
         changed_by_role: role,

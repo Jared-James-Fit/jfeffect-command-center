@@ -31,6 +31,13 @@ describe("committed training schedule canonical sync", () => {
     expect(card).not.toContain("window.confirm(");
   });
 
+
+  it("uses a valid scheduled-workout source when realigning instances", () => {
+    expect(bulk).toContain('.update({ scheduled_date: m.next, schedule_source: "moved" })');
+    expect(bulk).toContain('new_source: a.target === "instance" ? "moved" : "auto"');
+    expect(bulk).not.toContain('.update({ scheduled_date: m.next, schedule_source: "auto" })');
+  });
+
   it("never rewrites a completed workout through committed-day sync", () => {
     const touchedCheck = bulk.indexOf("if (isTouched || isPast)");
     const movePush = bulk.indexOf("moves.push({", touchedCheck);
