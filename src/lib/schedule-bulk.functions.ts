@@ -605,7 +605,7 @@ export const rescheduleFromCommittedDays = createServerFn({ method: "POST" })
         new_date: a.next,
         previous_source: a.prevSource,
         new_source: a.target === "instance" ? "moved" : "auto",
-        scope: "committed-schedule-change",
+        scope: "pattern",
         changed_by: userId,
         changed_by_role: role,
         note: "Auto-realigned after committed training days change.",
