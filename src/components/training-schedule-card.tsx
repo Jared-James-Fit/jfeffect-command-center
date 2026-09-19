@@ -105,29 +105,24 @@ export function TrainingScheduleCard({ client, editable = true, compact = false,
     let movedCount = 0;
     let pinned = 0;
     try {
-      const res: any = await reschedule({ data: { clientId: client.id } });
+      // Changing the committed schedule is the explicit instruction to
+      // realign every FUTURE, unstarted workout onto those days. Manual
+      // instance placements are included; coach-locked workouts remain
+      // protected server-side for clients.
+      const res: any = await reschedule({
+        data: { clientId: client.id, includePinned: true },
+      });
       movedCount = res?.applied ?? 0;
       pinned = res?.pendingPinned ?? 0;
-      // Workouts that were pinned to specific dates don't move automatically.
-      // Ask once, then move them too so the calendar matches the new days.
-      if (movedCount === 0 && pinned > 0) {
-        const ok = window.confirm(
-          `${pinned} upcoming workout${pinned === 1 ? " is" : "s are"} set to specific dates that aren't your new training days. Move ${pinned === 1 ? "it" : "them"} onto ${sortedDays.map((d) => SHORT_DAY[d as WeekDay]).join(" / ")}?`,
-        );
-        if (ok) {
-          const forced: any = await reschedule({
-            data: { clientId: client.id, includePinned: true },
-          });
-          movedCount = forced?.applied ?? 0;
-        }
-      }
     } catch (e: any) {
       toast.error(`Saved, but could not realign workouts: ${e?.message ?? "unknown error"}`);
     }
     toast.success(
       movedCount > 0
-        ? `Schedule saved · ${movedCount} workout${movedCount === 1 ? "" : "s"} moved`
-        : "Schedule saved",
+        ? `Schedule saved · ${movedCount} workout${movedCount === 1 ? "" : "s"} moved${pinned > 0 ? ` · ${pinned} locked kept` : ""}`
+        : pinned > 0
+          ? `Schedule saved · ${pinned} locked workout${pinned === 1 ? "" : "s"} kept`
+          : "Schedule saved",
     );
 
     qc.invalidateQueries({ queryKey: ["client", client.id] });
