@@ -38,6 +38,11 @@ describe("committed training schedule canonical sync", () => {
     expect(bulk).not.toContain('.update({ scheduled_date: m.next, schedule_source: "auto" })');
   });
 
+  it("uses a valid schedule audit scope for committed-day realignment", () => {
+    expect(bulk).toContain('scope: "pattern"');
+    expect(bulk).not.toContain('scope: "committed-schedule-change"');
+  });
+
   it("never rewrites a completed workout through committed-day sync", () => {
     const touchedCheck = bulk.indexOf("if (isTouched || isPast)");
     const movePush = bulk.indexOf("moves.push({", touchedCheck);
