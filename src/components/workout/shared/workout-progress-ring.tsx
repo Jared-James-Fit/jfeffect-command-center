@@ -72,17 +72,19 @@ export function WorkoutProgressRing({
             strokeDashoffset={c - dash}
           />
         </svg>
-        <div className="pointer-events-none absolute inset-0 grid place-items-center">
-          <span
-            className={cn(
-              "font-bold tabular-nums leading-none",
-              size >= 44 ? "text-[11px]" : "text-[9px]",
-              color,
-            )}
-          >
-            {clamped}%
-          </span>
-        </div>
+        {size >= 28 && (
+          <div className="pointer-events-none absolute inset-0 grid place-items-center">
+            <span
+              className={cn(
+                "font-bold tabular-nums leading-none",
+                size >= 44 ? "text-[11px]" : "text-[9px]",
+                color,
+              )}
+            >
+              {clamped}%
+            </span>
+          </div>
+        )}
       </div>
       {showLabel && (
         <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">

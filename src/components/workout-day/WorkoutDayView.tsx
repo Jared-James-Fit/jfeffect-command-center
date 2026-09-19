@@ -1979,7 +1979,7 @@ function WorkoutDay({
               <button
                 type="button"
                 onClick={scrollToFirstIncompleteExercise}
-                className="inline-flex items-center gap-1.5 rounded-full bg-secondary/60 px-2 py-0.5 text-[11px] font-bold tabular-nums text-muted-foreground transition-colors hover:bg-secondary focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+                className="inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full bg-secondary/60 px-2 py-0.5 text-[11px] font-bold tabular-nums text-muted-foreground transition-colors hover:bg-secondary focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
                 aria-label={`Workout progress ${progressPct}%, ${statusSummary.exercisesDone} of ${statusSummary.exercisesTotal} exercises. Scroll to first incomplete exercise.`}
               >
                 <WorkoutProgressRing pct={progressPct} status={progressStatus} size={16} strokeWidth={3} />
