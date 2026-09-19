@@ -152,6 +152,9 @@ jobs:
             echo "⚠️ Info.plist not found at $INFOPLIST"
           fi
 
+      - name: Install Pillow for icon generation
+        run: python3 -m pip install --user Pillow
+
       - name: Set AppIcon
         run: |
           ICONSET="ios/App/App/Assets.xcassets/AppIcon.appiconset"
