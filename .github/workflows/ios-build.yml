@@ -166,29 +166,27 @@ jobs:
           src = "AppIcon-1024.png"
           iconset = "ios/App/App/Assets.xcassets/AppIcon.appiconset"
           sizes = [
-            (20, "iphone", "1x"), (40, "iphone", "2x"), (60, "iphone", "3x"),
-            (29, "iphone", "1x"), (58, "iphone", "2x"), (87, "iphone", "3x"),
-            (40, "iphone", "2x"), (80, "iphone", "2x"), (120, "iphone", "2x"), (120, "iphone", "3x"),
-            (180, "iphone", "3x"),
-            (20, "ipad", "1x"), (20, "ipad", "2x"),
-            (29, "ipad", "1x"), (58, "ipad", "2x"),
-            (40, "ipad", "1x"), (80, "ipad", "2x"),
-            (76, "ipad", "1x"), (152, "ipad", "2x"),
-            (167, "ipad", "2x"),
-            (1024, "ios-marketing", "1x"),
+            ("20x20", 1, "iphone"), ("20x20", 2, "iphone"), ("20x20", 3, "iphone"),
+            ("29x29", 1, "iphone"), ("29x29", 2, "iphone"), ("29x29", 3, "iphone"),
+            ("40x40", 2, "iphone"), ("40x40", 3, "iphone"),
+            ("60x60", 2, "iphone"), ("60x60", 3, "iphone"),
+            ("20x20", 1, "ipad"), ("20x20", 2, "ipad"),
+            ("29x29", 1, "ipad"), ("29x29", 2, "ipad"),
+            ("40x40", 1, "ipad"), ("40x40", 2, "ipad"),
+            ("76x76", 1, "ipad"), ("76x76", 2, "ipad"),
+            ("83.5x83.5", 2, "ipad"),
+            ("1024x1024", 1, "ios-marketing"),
           ]
           img = Image.open(src).convert("RGB")
           images = []
-          seen = set()
-          for px, idiom, scale in sizes:
-            key = (px, idiom, scale)
-            if key in seen: continue
-            seen.add(key)
-            fname = f"AppIcon-{px}@{scale}.png"
+          for points, scale, idiom in sizes:
+            point_value = float(points.split("x")[0])
+            px = int(round(point_value * scale))
+            scale_label = f"{scale}x"
+            fname = f"AppIcon-{points.replace('.', '_')}@{scale_label}.png"
             resized = img.resize((px, px), Image.LANCZOS)
             resized.save(os.path.join(iconset, fname), "PNG")
-            base = px // int(scale[0])
-            images.append({"filename": fname, "idiom": idiom, "scale": scale, "size": f"{base}x{base}"})
+            images.append({"filename": fname, "idiom": idiom, "scale": scale_label, "size": points})
           contents = {"images": images, "info": {"author": "xcode", "version": 1}}
           with open(os.path.join(iconset, "Contents.json"), "w") as f:
             json.dump(contents, f, indent=2)
