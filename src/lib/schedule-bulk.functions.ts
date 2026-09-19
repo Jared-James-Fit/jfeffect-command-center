@@ -307,13 +307,14 @@ export const setScheduleLock = createServerFn({ method: "POST" })
 
 // ───────────────────────────────────────────────────────────────────────────
 // rescheduleFromCommittedDays — realign future auto-scheduled workouts onto
-// the client's currently committed training days. Skips:
+// the client's currently committed training days. Canonical instance dates
+// win over legacy pl_days dates. Always preserves:
 //   • workouts already in the past
-//   • workouts with schedule_locked = true (coach-locked)
-//   • workouts with schedule_source = 'manual' (manually moved by anyone)
 //   • workouts that have a completion row (started, in-progress, or completed)
-// Preserved workouts consume their weekday from the pool, so movable
-// workouts in the same week land on the remaining committed days in order.
+// Coach-locked dates remain protected from client overrides. Manual future
+// placements may be explicitly realigned when includePinned=true.
+// Preserved workouts consume their ordinal committed-day slot so completed
+// history never shifts the remaining workout order within a week.
 // ───────────────────────────────────────────────────────────────────────────
 
 export const rescheduleFromCommittedDays = createServerFn({ method: "POST" })
@@ -322,10 +323,10 @@ export const rescheduleFromCommittedDays = createServerFn({ method: "POST" })
     z
       .object({
         clientId: z.string().uuid(),
-        // When true, upcoming workouts that were pinned to a specific date
-        // (manually placed or locked) are ALSO realigned onto the new
-        // committed days. Started/completed and past workouts are still
-        // never moved. Used for the explicit "move them anyway" confirmation.
+        // When true, upcoming MANUAL placements are realigned onto the new
+        // committed days. Started/completed and past workouts are never moved.
+        // Coach-locked days remain protected for clients; only coach/admin can
+        // override those locks.
         includePinned: z.boolean().optional().default(false),
       })
       .parse(i),
@@ -377,15 +378,43 @@ export const rescheduleFromCommittedDays = createServerFn({ method: "POST" })
       .order("day_index");
     const dayList = days ?? [];
     const dayIds = dayList.map((d: any) => d.id);
-    const { data: completions } = dayIds.length
-      ? await supabase
-          .from("pl_day_completions")
-          .select("day_id, completed_at, in_progress_at, started_at")
-          .in("day_id", dayIds)
-      : { data: [] as any[] };
+    const [completionsRes, instancesRes] = dayIds.length
+      ? await Promise.all([
+          supabase
+            .from("pl_day_completions")
+            .select("day_id, completed_at, in_progress_at, started_at")
+            .in("day_id", dayIds),
+          supabase
+            .from("pl_scheduled_workouts")
+            .select("id, source_day_id, scheduled_date, schedule_source")
+            .eq("client_id", data.clientId)
+            .in("source_day_id", dayIds),
+        ])
+      : [{ data: [] as any[] }, { data: [] as any[] }];
+
+    const completions = completionsRes.data ?? [];
     const touchedDayIds = new Set<string>();
-    for (const c of (completions ?? []) as any[]) {
+    for (const c of completions as any[]) {
       if (c.completed_at || c.in_progress_at || c.started_at) touchedDayIds.add(c.day_id);
+    }
+
+    // Canonical calendar placement is the scheduled-workout instance whenever
+    // one exists. The legacy pl_days date is only a fallback. This map MUST be
+    // available before we calculate moves, otherwise an already-correct
+    // pl_days fallback can hide a stale instance (the exact Nico Fri→Sat bug).
+    const instanceByDayId = new Map<
+      string,
+      { id: string; scheduled_date: string; schedule_source: string | null }
+    >();
+    for (const r of (instancesRes.data ?? []) as any[]) {
+      const prev = instanceByDayId.get(r.source_day_id);
+      if (!prev || r.scheduled_date < prev.scheduled_date) {
+        instanceByDayId.set(r.source_day_id, {
+          id: r.id,
+          scheduled_date: r.scheduled_date,
+          schedule_source: r.schedule_source ?? null,
+        });
+      }
     }
 
     const todayISO = format(new Date(), "yyyy-MM-dd");
@@ -434,26 +463,55 @@ export const rescheduleFromCommittedDays = createServerFn({ method: "POST" })
           if (committedSet.has(dt.getDay())) committedDates.push(format(dt, "yyyy-MM-dd"));
         }
 
-        // Classify days as preserved vs movable.
+        // Classify days using the CANONICAL date/source: instance first,
+        // pl_days fallback second. Day order still maps to committed-day order
+        // so a completed Day 1 keeps the Day 1 slot consumed even if it was
+        // completed on an older weekday.
         const consumed = new Set<string>();
-        const movable: Array<{ row: any; pinned: boolean }> = [];
-        for (const d of weekDays) {
-          const isPinned = !!d.schedule_locked || d.schedule_source === "manual";
+        const movable: Array<{
+          row: any;
+          pinned: boolean;
+          effectiveDate: string | null;
+          effectiveSource: string | null;
+        }> = [];
+        for (let dayPos = 0; dayPos < weekDays.length; dayPos++) {
+          const d = weekDays[dayPos];
+          const inst = instanceByDayId.get(d.id);
+          const effectiveDate = inst?.scheduled_date ?? d.scheduled_date ?? null;
+          const effectiveSource = inst?.schedule_source ?? d.schedule_source ?? null;
+          const isCoachLocked = !!d.schedule_locked;
+          const isManual = effectiveSource === "manual";
+          const isPinned = isCoachLocked || isManual;
+          const canOverridePinned =
+            data.includePinned && (role === "coach" || role === "admin" || !isCoachLocked);
           const isTouched = touchedDayIds.has(d.id);
-          const isPast = d.scheduled_date && d.scheduled_date < todayISO;
-          // Started / completed / past workouts are never moved.
+          const isPast = !!effectiveDate && effectiveDate < todayISO;
+          const ordinalTarget = committedDates[dayPos] ?? null;
+
+          // Started / completed / past workouts are never moved. Reserve their
+          // intended committed-day slot too, so a completed Friday Day 1 does
+          // not cause Day 2 to slide from Sunday onto Saturday.
           if (isTouched || isPast) {
-            if (d.scheduled_date) consumed.add(d.scheduled_date);
+            if (effectiveDate) consumed.add(effectiveDate);
+            if (ordinalTarget) consumed.add(ordinalTarget);
             continue;
           }
-          if (isPinned && !data.includePinned) {
-            if (d.scheduled_date) consumed.add(d.scheduled_date);
-            if (!d.scheduled_date || !committedDates.includes(d.scheduled_date)) {
+
+          if (isPinned && !canOverridePinned) {
+            if (effectiveDate) consumed.add(effectiveDate);
+            if (ordinalTarget) consumed.add(ordinalTarget);
+            if (!effectiveDate || !committedDates.includes(effectiveDate)) {
               pendingPinned++;
             }
             continue;
           }
-          movable.push({ row: d, pinned: isPinned });
+
+          movable.push({
+            row: d,
+            pinned: isPinned,
+            effectiveDate,
+            effectiveSource,
+          });
         }
 
         const pool = committedDates.filter(
@@ -463,13 +521,12 @@ export const rescheduleFromCommittedDays = createServerFn({ method: "POST" })
         for (const m of movable) {
           if (cursor >= pool.length) break;
           const next = pool[cursor++];
-          if (m.row.scheduled_date === next && !m.pinned) continue;
-          if (m.row.scheduled_date === next) continue;
+          if (m.effectiveDate === next) continue;
           moves.push({
             dayId: m.row.id,
-            prev: m.row.scheduled_date ?? null,
+            prev: m.effectiveDate,
             next,
-            prevSource: m.row.schedule_source ?? null,
+            prevSource: m.effectiveSource,
             wasPinned: m.pinned,
           });
         }
@@ -484,31 +541,10 @@ export const rescheduleFromCommittedDays = createServerFn({ method: "POST" })
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const batchId = crypto.randomUUID();
 
-    // Slice 2d: any day that has a pl_scheduled_workouts instance for this
-    // client is instance-canonical. We update the instance's scheduled_date
-    // (schedule_source: "auto") and MUST NOT touch pl_days.scheduled_date —
-    // that would desync the visible calendar from the underlying data.
-    // Days without an instance stay on the legacy pl_days fallback so
-    // brand-new blocks that predate any instance backfill still realign.
-    const { data: instRows } = await supabaseAdmin
-      .from("pl_scheduled_workouts")
-      .select("id, source_day_id, scheduled_date")
-      .eq("client_id", data.clientId)
-      .in("source_day_id", moves.map((m) => m.dayId));
-    const instanceByDayId = new Map<string, { id: string; scheduled_date: string }>();
-    for (const r of instRows ?? []) {
-      // Duplicate scheduling is guarded elsewhere, so at most one instance
-      // per source_day at Slice 2d. If multiple ever exist we take the
-      // earliest — the realign write still ends up correct after the guard
-      // is removed because the caller supplies one target date per day.
-      const prev = instanceByDayId.get((r as any).source_day_id);
-      if (!prev || (r as any).scheduled_date < prev.scheduled_date) {
-        instanceByDayId.set((r as any).source_day_id, {
-          id: (r as any).id,
-          scheduled_date: (r as any).scheduled_date,
-        });
-      }
-    }
+    // Any day with a pl_scheduled_workouts instance is instance-canonical.
+    // instanceByDayId was loaded BEFORE planning so both the move decision and
+    // the write target use the same source of truth. Legacy-only days continue
+    // to update pl_days.scheduled_date.
 
     type AppliedRow = (typeof moves)[number] & {
       target: "instance" | "day";
