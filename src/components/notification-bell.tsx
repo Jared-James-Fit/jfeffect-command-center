@@ -705,7 +705,7 @@ export function NotificationPanel({
   fullPage?: boolean;
   onNavigate?: () => void;
 }) {
-  const { query, role, user, qc, items, unreadCount } = useNotificationFeed();
+  const { query, role, user, qc, items } = useNotificationFeed();
   const navigate = useNavigate();
   const [view, setView] = useState<View>(() => initialNotificationView(fullPage));
   const [archiveAllOpen, setArchiveAllOpen] = useState(false);
@@ -828,25 +828,6 @@ export function NotificationPanel({
       return { prev };
     },
     onError: (_e, _v, ctx) => { restore(ctx?.prev); toast.error("That notification could not be updated. Try again."); },
-    onSettled: invalidateBadgeCaches,
-  });
-
-  const markAllMut = useMutation({
-    mutationFn: async () => {
-      const targets = items.filter((i) => !i.isRead && !i.isArchived);
-      await Promise.all([
-        rpc("notif_mark_read", toPairs(targets)),
-        ...targets.map((i) => markSourceRead(i, role)),
-      ]);
-    },
-    onMutate: async () => {
-      await cancelInflight();
-      const prev = snapshot();
-      patchCache(qc, role, userId, (it) => it.isArchived ? it : { ...it, isRead: true });
-      return { prev };
-    },
-    onSuccess: () => toast.success("All notifications marked as read."),
-    onError: (_e, _v, ctx) => { restore(ctx?.prev); toast.error("Couldn't mark notifications as read. Try again."); },
     onSettled: invalidateBadgeCaches,
   });
 
