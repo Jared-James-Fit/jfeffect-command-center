@@ -36,6 +36,7 @@ import { DualAccountSwitcher } from "@/components/dual-account-switcher";
 import { useExerciseLibraryRealtime } from "@/hooks/use-exercise-library-realtime";
 import { useSalesRealtime } from "@/hooks/use-sales-realtime";
 import { MORE_BAR_TO, resolveVisibleBarItems } from "@/lib/floating-bar";
+import { touchActiveWorkoutSession } from "@/components/workout-day/WorkoutTimer";
 
 export interface NavItem {
   to: string;
@@ -253,6 +254,28 @@ export function AppShell({ items, bottomItems: customBottomItems, title, childre
   const [moreOpenGroup, setMoreOpenGroup] = useState<string | null>(null);
   const [paletteQuery, setPaletteQuery] = useState("");
   const [debouncedPaletteQuery, setDebouncedPaletteQuery] = useState("");
+
+  // Keep the single active workout clock alive at the app-shell level so it
+  // survives route changes (Messages, Nutrition, Home, etc.) and time spent in
+  // another app. A true PWA/browser close is detected on the next runtime via
+  // the sessionStorage runtime id in WorkoutTimer.tsx.
+  useEffect(() => {
+    const touch = () => { touchActiveWorkoutSession(); };
+    const onVisibility = () => touch();
+    touch();
+    const id = window.setInterval(() => {
+      if (document.visibilityState === "visible") touch();
+    }, 5_000);
+    window.addEventListener("focus", touch);
+    window.addEventListener("pagehide", touch);
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => {
+      window.clearInterval(id);
+      window.removeEventListener("focus", touch);
+      window.removeEventListener("pagehide", touch);
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
+  }, []);
 
   // Debounce the workout-library search so we don't fire a query on every keystroke.
   useEffect(() => {

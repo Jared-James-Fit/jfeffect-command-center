@@ -128,11 +128,14 @@ import { WorkoutProgressRing } from "@/components/workout/shared/workout-progres
 import { CompletedWorkoutActions } from "@/components/workout/shared/completed-workout-actions";
 import { WorkoutStatusBar } from "@/components/workout-day/WorkoutStatusBar";
 import {
+  WorkoutTimer,
   beginWorkoutSession,
   clearWorkoutSession,
   formatDurationMin,
   sessionDurationMin,
+  sessionDurationSeconds,
   estimateDurationFromLogs,
+  touchWorkoutSession,
 } from "@/components/workout-day/WorkoutTimer";
 
 /* -------------------------------------------------------------------------- */
@@ -1098,6 +1101,29 @@ function WorkoutDay({
     if (completion?.completed_at) return;
     beginWorkoutSession(dayId);
   }, [dayId, readonly, isImpersonating, completion?.completed_at]);
+
+  // Keep the local workout-session runtime alive independently of the route
+  // repaint interval. Navigation inside the PWA and switching to another app
+  // must never pause the clock. visibility/pagehide only record the last known
+  // alive instant so a later full PWA relaunch can exclude time spent closed.
+  useEffect(() => {
+    if (readonly || isImpersonating || completion?.completed_at) return;
+    const touch = () => { touchWorkoutSession(dayId); };
+    const onVisibility = () => touch();
+    touch();
+    const id = window.setInterval(() => {
+      if (document.visibilityState === "visible") touch();
+    }, 5_000);
+    window.addEventListener("focus", touch);
+    window.addEventListener("pagehide", touch);
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => {
+      window.clearInterval(id);
+      window.removeEventListener("focus", touch);
+      window.removeEventListener("pagehide", touch);
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
+  }, [dayId, readonly, isImpersonating, completion?.completed_at]);
   // Ping shape depends on the mounted adapter: members address workouts by
   // (enrollmentId, weekIndex, dayIndex) tuples (the member adapter encodes
   // these into the `"week:day"` dayId), so the heartbeat must report the
@@ -1588,6 +1614,7 @@ function WorkoutDay({
       .map((x: any) => x?.completed_at)
       .filter(Boolean)
       .sort()[0] ?? null;
+    const sessionSeconds = sessionDurationSeconds(dayId);
     const activeMin = sessionDurationMin(dayId) ?? estimateDurationFromLogs(firstLogAt);
     const resolvedDurationMin = Number.isFinite(typedMin) && typedMin > 0
       ? typedMin
@@ -1609,6 +1636,7 @@ function WorkoutDay({
           sessionRating: null,
           notes: completion?.client_notes ?? null,
           actualDurationMin: resolvedDurationMin,
+          sessionElapsedSeconds: sessionSeconds,
           sessionWeightTotal: computed.totalLifted > 0 ? computed.totalLifted : null,
           sessionWeightUnit: computed.totalLifted > 0 ? displayUnit : null,
           confirmedMissingLogs: true,
@@ -1651,6 +1679,7 @@ function WorkoutDay({
               sessionRating: null,
               notes: null,
               actualDurationMin: resolvedDurationMin,
+              sessionElapsedSeconds: sessionSeconds,
               sessionWeightTotal: computed.totalLifted > 0 ? computed.totalLifted : null,
               sessionWeightUnit: computed.totalLifted > 0 ? displayUnit : null,
               confirmedMissingLogs: true,
@@ -1666,6 +1695,7 @@ function WorkoutDay({
               sessionRating: null,
               notes: completion?.client_notes ?? null,
               actualDurationMin: resolvedDurationMin,
+              sessionElapsedSeconds: sessionSeconds,
               sessionWeightTotal: computed.totalLifted > 0 ? computed.totalLifted : null,
               sessionWeightUnit: computed.totalLifted > 0 ? displayUnit : null,
               confirmedMissingLogs: true,
@@ -1828,6 +1858,14 @@ function WorkoutDay({
           </div>
           {statusBarVisible && (
             <WorkoutStatusBar
+              sessionTimer={
+                <WorkoutTimer
+                  dayId={dayId}
+                  completedAt={completion?.completed_at ?? null}
+                  savedDurationMin={completion?.actual_duration_min ?? null}
+                  readonly
+                />
+              }
               exercisesDone={statusSummary.exercisesDone}
               exercisesTotal={statusSummary.exercisesTotal}
               setsDone={statusSummary.setsDone}
@@ -2014,10 +2052,23 @@ function WorkoutDay({
           pageRoute={`/portal/workouts/${dayId}`}
         />
 
-        {/* Completed state: slim badge + recap. Pre-workout there is no
-            workout-level status row at all — the session clock auto-starts on
-            the first logged set (beginWorkoutSession) and progress lives in
-            the tiny ring beside the Day title. */}
+        {statusBarVisible && !completion?.completed_at && (
+          <div className="flex items-center justify-between rounded-xl border border-border bg-card px-3 py-2">
+            <div className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+              Workout time
+            </div>
+            <WorkoutTimer
+              dayId={dayId}
+              completedAt={null}
+              savedDurationMin={null}
+              readonly
+            />
+          </div>
+        )}
+
+        {/* Completed state: slim badge + recap. The live wall-clock tracker
+            appears above after the first meaningful logging action and keeps
+            counting across PWA navigation and app switching. */}
         {completion?.completed_at && statusSummary.setsDone > 0 && (
           <div className="flex flex-wrap items-center gap-2 text-xs">
             <Badge

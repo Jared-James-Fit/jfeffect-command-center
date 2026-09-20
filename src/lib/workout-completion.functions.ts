@@ -493,6 +493,7 @@ const CompleteInput = z.intersection(
     notes: z.string().nullable().optional(),
     confirmedMissingLogs: z.boolean().optional(),
     actualDurationMin: z.number().int().nonnegative().nullable().optional(),
+    sessionElapsedSeconds: z.number().int().nonnegative().nullable().optional(),
     sessionWeightTotal: z.number().nullable().optional(),
     sessionWeightUnit: z.enum(["kg", "lb"]).nullable().optional(),
     // Post-workout review fields
@@ -591,7 +592,10 @@ export const completeWorkout = createServerFn({ method: "POST" })
         return { needsMissingLogConfirmation: true, summary };
       }
 
-      const elapsed = computeElapsedSeconds(startedAt, nowIso);
+      const elapsed =
+        data.sessionElapsedSeconds != null && data.sessionElapsedSeconds > 0
+          ? data.sessionElapsedSeconds
+          : computeElapsedSeconds(startedAt, nowIso);
       const active = computeActiveSeconds(startedAt, nowIso, data.activityTimestamps ?? []);
 
       const update: Record<string, any> = {
@@ -709,7 +713,10 @@ export const completeWorkout = createServerFn({ method: "POST" })
       return { needsMissingLogConfirmation: true, summary };
     }
 
-    const elapsed = computeElapsedSeconds(startedAt, nowIso);
+    const elapsed =
+      data.sessionElapsedSeconds != null && data.sessionElapsedSeconds > 0
+        ? data.sessionElapsedSeconds
+        : computeElapsedSeconds(startedAt, nowIso);
     const active = computeActiveSeconds(startedAt, nowIso, data.activityTimestamps ?? []);
 
     const update: Record<string, any> = {
@@ -719,7 +726,9 @@ export const completeWorkout = createServerFn({ method: "POST" })
       started_at: startedAt,
       completed_at: nowIso,
       last_activity_at: nowIso,
-      actual_duration_min: elapsed != null ? Math.max(1, Math.round(elapsed / 60)) : null,
+      actual_duration_min:
+        data.actualDurationMin ??
+        (elapsed != null ? Math.max(1, Math.round(elapsed / 60)) : null),
       elapsed_duration_seconds: elapsed,
       active_duration_seconds: active,
       completion_method: data.completionMethod,
