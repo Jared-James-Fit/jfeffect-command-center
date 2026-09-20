@@ -902,7 +902,14 @@ export function NotificationPanel({
   // ---- Row click: navigate + mark read -----------------------------------
   const handleRowClick = useCallback(
     (it: BellItem) => {
-      if (!it.isRead) markReadMut.mutate(it);
+      if (!it.isRead) {
+        markReadMut.mutate(it);
+      } else {
+        // Opening the notification center marks the bell item as seen, but the
+        // underlying source (message thread, lift video, check-in review, etc.)
+        // should only be marked viewed when the user actually opens that item.
+        void markSourceRead(it, role);
+      }
       const dest = destinationFor(it, role);
       try { navigate(dest as any); } catch { /* ignore */ }
       onNavigate?.();
