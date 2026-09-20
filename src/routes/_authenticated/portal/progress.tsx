@@ -25,7 +25,7 @@ function PortalProgress() {
     }
   }, [action, navigate]);
 
-  const { data: client } = useQuery({
+  const { data: client, isLoading } = useQuery({
     queryKey: ["my-client-progress-ctx", userId],
     enabled: !!userId && !!action,
     staleTime: 5 * 60_000,
@@ -40,7 +40,7 @@ function PortalProgress() {
     },
   });
 
-  if (!action || !userId) return null;
+  if (!action || !userId || isLoading) return null;
 
   return (
     <ProgressSection
