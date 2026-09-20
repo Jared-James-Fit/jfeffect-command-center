@@ -26,6 +26,7 @@ import { cn } from "@/lib/utils";
 
 const SESSION_PREFIX = "wsession:";
 const RUNTIME_KEY = "workout-runtime-id";
+const ACTIVE_DAY_KEY = "workout-active-day";
 /** Sessions running longer than this are treated as abandoned, not real. */
 export const MAX_SESSION_MS = 6 * 60 * 60 * 1000;
 
@@ -144,6 +145,52 @@ function writeWorkoutSession(dayId: string, s: WorkoutSession) {
   writeWorkoutSessionRaw(dayId, s);
 }
 
+export function stopWorkoutSession(
+  dayId: string | null | undefined,
+  at: number = Date.now(),
+): WorkoutSession | null {
+  if (!dayId || typeof window === "undefined") return null;
+  const s = readWorkoutSession(dayId);
+  if (!s || s.stoppedAt != null) return s;
+  const segmentEnd = s.pausedAt != null ? Math.min(s.pausedAt, at) : at;
+  const segmentMs = Math.max(0, segmentEnd - s.startedAt - Math.max(0, s.pausedMs || 0));
+  const next: WorkoutSession = {
+    startedAt: at,
+    pausedMs: 0,
+    pausedAt: null,
+    carriedMs: Math.max(0, Number(s.carriedMs) || 0) + segmentMs,
+    runtimeId: runtimeId(),
+    lastSeenAt: at,
+    stoppedAt: at,
+  };
+  writeWorkoutSession(dayId, next);
+  try {
+    if (window.localStorage.getItem(ACTIVE_DAY_KEY) === dayId) {
+      window.localStorage.removeItem(ACTIVE_DAY_KEY);
+    }
+  } catch {}
+  return next;
+}
+
+function setActiveWorkoutDay(dayId: string, at: number) {
+  if (typeof window === "undefined") return;
+  try {
+    const previous = window.localStorage.getItem(ACTIVE_DAY_KEY);
+    if (previous && previous !== dayId) stopWorkoutSession(previous, at);
+    window.localStorage.setItem(ACTIVE_DAY_KEY, dayId);
+  } catch {}
+}
+
+export function touchActiveWorkoutSession(at: number = Date.now()): WorkoutSession | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const dayId = window.localStorage.getItem(ACTIVE_DAY_KEY);
+    return dayId ? touchWorkoutSession(dayId, at) : null;
+  } catch {
+    return null;
+  }
+}
+
 /** Idempotent start — safe to call from every meaningful logging action. */
 export function beginWorkoutSession(
   dayId: string | null | undefined,
@@ -165,6 +212,7 @@ export function beginWorkoutSession(
         stoppedAt: null,
       };
       writeWorkoutSession(dayId, resumed);
+      setActiveWorkoutDay(dayId, at);
       return resumed;
     }
     const touched = {
@@ -173,6 +221,7 @@ export function beginWorkoutSession(
       lastSeenAt: at,
     };
     writeWorkoutSession(dayId, touched);
+    setActiveWorkoutDay(dayId, at);
     return touched;
   }
   const next: WorkoutSession = {
@@ -185,6 +234,7 @@ export function beginWorkoutSession(
     stoppedAt: null,
   };
   writeWorkoutSession(dayId, next);
+  setActiveWorkoutDay(dayId, at);
   return next;
 }
 
@@ -224,12 +274,18 @@ export function resetWorkoutSession(dayId: string, at: number = Date.now()): Wor
     stoppedAt: null,
   };
   writeWorkoutSession(dayId, next);
+  setActiveWorkoutDay(dayId, at);
   return next;
 }
 
 export function clearWorkoutSession(dayId: string | null | undefined) {
   if (!dayId || typeof window === "undefined") return;
-  try { window.localStorage.removeItem(key(dayId)); } catch { /* ignore */ }
+  try {
+    window.localStorage.removeItem(key(dayId));
+    if (window.localStorage.getItem(ACTIVE_DAY_KEY) === dayId) {
+      window.localStorage.removeItem(ACTIVE_DAY_KEY);
+    }
+  } catch { /* ignore */ }
 }
 
 export function sessionElapsedMs(s: WorkoutSession, now: number = Date.now()): number {
