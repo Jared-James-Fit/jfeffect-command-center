@@ -787,6 +787,7 @@ export async function applyProgression(blockId: string, rule: ProgressionRule): 
 // e1RM math lives in the unified analytics module; re-exported here for
 // backward compatibility with existing callers.
 import { epley1RM } from "@/lib/analytics/e1rm";
+import { neutralizeObviousLoadOutliers } from "@/lib/analytics/load-sanity";
 export { epley1RM };
 
 export interface LiftResultPoint {
@@ -820,10 +821,11 @@ export async function getClientResults(
     .select("id, set_index, actual_load, actual_load_unit, entered_value, entered_unit, normalized_lb, normalized_kg, actual_reps, actual_rpe, actual_rir, is_bodyweight, load_type, notes, completed_at, completed_duration_seconds, row_id, pl_exercise_rows(exercise_id, exercise_name_override, day_id, purpose_label, movement_family, exercises(name, muscle_group, primary_muscle_group, category))")
     .eq("client_id", clientId)
     .not("actual_reps", "is", null)
+    .not("completed_at", "is", null)
     .order("completed_at", { ascending: true });
   if (error) throw error;
   const LB_PER_KG = 2.2046226;
-  return (data ?? [])
+  const mapped = (data ?? [])
     .filter((r: any) => {
       if (!allowedDayIds) return true;
       const did = r.pl_exercise_rows?.day_id ?? null;
@@ -892,6 +894,11 @@ export async function getClientResults(
         category: r.pl_exercise_rows?.exercises?.category ?? null,
       };
     });
+
+  // Preserve the completed set itself, but prevent clearly impossible imported
+  // load spikes from driving e1RM, PR and tonnage analytics. The helper is
+  // deliberately conservative and never mutates the stored workout history.
+  return neutralizeObviousLoadOutliers(mapped);
 }
 
 /**
