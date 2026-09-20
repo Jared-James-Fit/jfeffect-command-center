@@ -33,11 +33,11 @@ export function ClientPovBanner() {
         </div>
         <Button size="sm" variant="outline" className="h-8 shrink-0 gap-1 px-2 text-xs" onClick={switchClient}>
           <ArrowRightLeft className="h-3.5 w-3.5" />
-          <span className="hidden sm:inline">Switch</span>
+          <span>Switch</span>
         </Button>
         <Button size="sm" variant="outline" className="h-8 shrink-0 gap-1 px-2 text-xs" onClick={exit}>
           <ShieldCheck className="h-3.5 w-3.5" />
-          <span className="hidden sm:inline">Coach</span>
+          <span>Coach</span>
         </Button>
       </div>
     </div>
