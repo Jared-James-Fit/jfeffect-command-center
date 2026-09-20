@@ -55,6 +55,7 @@ import { runJob } from "@/lib/progress-jobs";
 import { toast } from "sonner";
 import { useUnsavedWarning } from "@/hooks/use-unsaved-warning";
 import { uploadLiftFileToStorage } from "@/lib/lift-video-storage-upload";
+import { compressImage } from "@/lib/image-compress";
 import {
   MessengerCheckinRequestCard,
   MessengerCheckinSubmissionCard,
@@ -108,23 +109,49 @@ async function uploadAttachment(
   onProgress?: (pct: number) => void,
   signal?: AbortSignal,
 ): Promise<MessageAttachment> {
-  const ext = file.name.includes(".") ? file.name.split(".").pop() : "";
+  onProgress?.(1);
+
+  // Phone photos are commonly several MB even though a chat preview only needs
+  // a fraction of that resolution. Compress before upload to cut transfer time.
+  let uploadFile = file;
+  if (file.type.startsWith("image/") && file.type !== "image/gif") {
+    try {
+      const compressed = await compressImage(file, {
+        maxDimension: 1600,
+        quality: 0.82,
+        skipUnder: 300 * 1024,
+      });
+      if (compressed instanceof File) uploadFile = compressed;
+      else if (compressed !== file) {
+        uploadFile = new File(
+          [compressed],
+          file.name.replace(/\.[^.]+$/, "") + ".jpg",
+          { type: "image/jpeg" },
+        );
+      }
+    } catch {
+      // Keep the original if compression isn't supported on this device.
+    }
+  }
+
+  onProgress?.(3);
+  const ext = uploadFile.name.includes(".") ? uploadFile.name.split(".").pop() : "";
   const path = `${clientId}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}${ext ? "." + ext : ""}`;
   await uploadLiftFileToStorage({
-    file,
+    file: uploadFile,
     userId: clientId,
     bucket: "message-attachments",
     path,
-    onProgress,
+    onProgress: (pct) => onProgress?.(Math.max(3, pct)),
     signal,
   });
   return {
-    type: fileToAttachmentType(file),
+    type: fileToAttachmentType(uploadFile),
     url: "",
     storage_path: path,
     name: file.name,
-    size: file.size,
-    mime: file.type,
+    size: uploadFile.size,
+    mime: uploadFile.type || file.type,
   };
 }
 
@@ -1178,22 +1205,61 @@ export function MessageThread({
 
   const onPickFiles = async (files: FileList | null) => {
     if (!files || !files.length) return;
-    setUploading(true);
-    try {
-      const uploaded: MessageAttachment[] = [];
-      for (const f of Array.from(files)) {
-        if (f.size > 50 * 1024 * 1024) { toast.error(`${f.name} is over 50MB`); continue; }
-        const controller = new AbortController();
-        uploadAbortRef.current = controller;
-        setUploadProgress({ name: f.name, pct: 0 });
-        uploaded.push(await uploadAttachment(clientId, f, (pct) => setUploadProgress({ name: f.name, pct }), controller.signal));
+    const selected = Array.from(files);
+    const valid = selected.filter((f) => {
+      if (f.size > 50 * 1024 * 1024) {
+        toast.error(`${f.name} is over 50MB`);
+        return false;
       }
-      setAttachments((prev) => [...prev, ...uploaded]);
+      return true;
+    });
+    if (!valid.length) return;
+
+    setUploading(true);
+    const controller = new AbortController();
+    uploadAbortRef.current = controller;
+    const progressByIndex = new Array(valid.length).fill(0);
+    const uploaded = new Array<MessageAttachment | null>(valid.length).fill(null);
+    const label = valid.length === 1 ? valid[0].name : `${valid.length} files`;
+    setUploadProgress({ name: label, pct: 1 });
+
+    const updateOverall = (index: number, pct: number) => {
+      progressByIndex[index] = Math.max(progressByIndex[index], pct);
+      const overall = Math.max(
+        1,
+        Math.round(progressByIndex.reduce((sum, p) => sum + p, 0) / valid.length),
+      );
+      setUploadProgress({ name: label, pct: overall });
+    };
+
+    let cursor = 0;
+    const worker = async () => {
+      while (cursor < valid.length) {
+        const i = cursor++;
+        const file = valid[i];
+        uploaded[i] = await uploadAttachment(
+          clientId,
+          file,
+          (pct) => updateOverall(i, pct),
+          controller.signal,
+        );
+      }
+    };
+
+    try {
+      await Promise.all(
+        Array.from({ length: Math.min(2, valid.length) }, () => worker()),
+      );
+      setAttachments((prev) => [
+        ...prev,
+        ...uploaded.filter(Boolean) as MessageAttachment[],
+      ]);
+      setUploadProgress({ name: label, pct: 100 });
     } catch (e: any) {
-      toast.error(e?.message ?? "Upload failed");
+      if (!controller.signal.aborted) toast.error(e?.message ?? "Upload failed");
     } finally {
       uploadAbortRef.current = null;
-      setUploadProgress(null);
+      window.setTimeout(() => setUploadProgress(null), 250);
       setUploading(false);
     }
   };
@@ -1787,7 +1853,7 @@ export function MessageThread({
           <div className="flex items-center gap-2 rounded-xl border border-primary/20 bg-primary/5 px-3 py-2 text-xs">
             <div className="min-w-0 flex-1">
               <div className="flex items-center justify-between gap-2">
-                <span className="truncate font-medium">Uploading {uploadProgress.name}</span>
+                <span className="truncate font-medium">{uploadProgress.pct <= 3 ? "Preparing" : "Uploading"} {uploadProgress.name}</span>
                 <span className="shrink-0 tabular-nums text-muted-foreground">{uploadProgress.pct}%</span>
               </div>
               <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-primary/15">

@@ -1,5 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
-import * as tus from "tus-js-client";
+import { uploadLiftFileToStorage } from "@/lib/lift-video-storage-upload";
 
 export type ProgressAngle = "front" | "left" | "back" | "right" | "all";
 export type ProgressOwnerType = "client" | "member";
@@ -281,12 +281,7 @@ export async function getSignedMediaUrl(path: string, expiresIn = 60 * 60 * 6) {
   return data?.signedUrl ?? null;
 }
 
-// ---------- Upload (tus) ----------
-
-const SUPABASE_URL =
-  (import.meta.env.VITE_SUPABASE_URL as string | undefined) ?? "";
-const SUPABASE_ANON =
-  (import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY as string | undefined) ?? "";
+// ---------- Upload ----------
 
 export type ProgressUploadResult = {
   path: string;
@@ -300,63 +295,13 @@ export async function uploadProgressFile(args: {
   onProgress?: (pct: number) => void;
   signal?: AbortSignal;
 }): Promise<ProgressUploadResult> {
-  if (!SUPABASE_URL || !SUPABASE_ANON) throw new Error("Storage not configured.");
-  const { data: sessionData } = await supabase.auth.getSession();
-  const token = sessionData.session?.access_token;
-  if (!token) throw new Error("Your session expired. Please sign in again.");
-
-  const ext = (args.file.name.split(".").pop() || "bin").toLowerCase();
-  const path = `${args.userId}/${Date.now()}-${crypto.randomUUID()}.${ext}`;
-  const contentType = args.file.type || guessContentType(ext);
-
-  await new Promise<void>((resolve, reject) => {
-    const upload = new tus.Upload(args.file, {
-      endpoint: `${SUPABASE_URL}/storage/v1/upload/resumable`,
-      retryDelays: [0, 1000, 3000, 5000, 10_000, 20_000],
-      headers: {
-        authorization: `Bearer ${token}`,
-        "x-upsert": "false",
-        apikey: SUPABASE_ANON,
-      },
-      uploadDataDuringCreation: true,
-      removeFingerprintOnSuccess: true,
-      chunkSize: 6 * 1024 * 1024,
-      metadata: {
-        bucketName: "progress-media",
-        objectName: path,
-        contentType,
-        cacheControl: "3600",
-      },
-      onError: (err) => reject(err instanceof Error ? err : new Error(String(err))),
-      onProgress: (sent, total) => {
-        if (!args.onProgress || !total) return;
-        args.onProgress(Math.max(1, Math.min(99, Math.round((sent / total) * 100))));
-      },
-      onSuccess: () => resolve(),
-    });
-    if (args.signal) {
-      args.signal.addEventListener("abort", () => {
-        try { void upload.abort(true); } catch { /* noop */ }
-        reject(new Error("Upload cancelled."));
-      });
-    }
-    upload.start();
+  return uploadLiftFileToStorage({
+    file: args.file,
+    userId: args.userId,
+    bucket: "progress-media",
+    onProgress: args.onProgress,
+    signal: args.signal,
   });
-
-  return { path, mimeType: contentType, sizeBytes: args.file.size };
-}
-
-function guessContentType(ext: string) {
-  switch (ext) {
-    case "jpg": case "jpeg": return "image/jpeg";
-    case "png": return "image/png";
-    case "webp": return "image/webp";
-    case "heic": return "image/heic";
-    case "mp4": return "video/mp4";
-    case "mov": return "video/quicktime";
-    case "webm": return "video/webm";
-    default: return "application/octet-stream";
-  }
 }
 
 // ---------- Bodyweight ----------
