@@ -36,11 +36,7 @@ import { DualAccountSwitcher } from "@/components/dual-account-switcher";
 import { useExerciseLibraryRealtime } from "@/hooks/use-exercise-library-realtime";
 import { useSalesRealtime } from "@/hooks/use-sales-realtime";
 import { MORE_BAR_TO, resolveVisibleBarItems } from "@/lib/floating-bar";
-import {
-  markActiveWorkoutSessionBackgrounded,
-  markActiveWorkoutSessionForegrounded,
-  touchActiveWorkoutSession,
-} from "@/components/workout-day/WorkoutTimer";
+import { touchActiveWorkoutSession } from "@/components/workout-day/WorkoutTimer";
 
 export interface NavItem {
   to: string;
@@ -260,52 +256,24 @@ export function AppShell({ items, bottomItems: customBottomItems, title, childre
   const [debouncedPaletteQuery, setDebouncedPaletteQuery] = useState("");
 
   // Keep the single active workout clock alive at the app-shell level so it
-  // survives route changes, phone lock, and switching to other apps. Hiding is
-  // only a *candidate* close boundary: if this same runtime returns, the
-  // background gap still counts. A new runtime later confirms a true close.
+  // survives route changes (Messages, Nutrition, Home, etc.) and time spent in
+  // another app. A true PWA/browser close is detected on the next runtime via
+  // the sessionStorage runtime id in WorkoutTimer.tsx.
   useEffect(() => {
-    const foreground = () => { markActiveWorkoutSessionForegrounded(); };
-    const background = () => { markActiveWorkoutSessionBackgrounded(); };
     const touch = () => { touchActiveWorkoutSession(); };
-    const onVisibility = () => {
-      if (document.visibilityState === "hidden") background();
-      else foreground();
-    };
-
-    foreground();
-
+    const onVisibility = () => touch();
+    touch();
     const id = window.setInterval(() => {
       if (document.visibilityState === "visible") touch();
     }, 5_000);
-
-    window.addEventListener("focus", foreground);
-    window.addEventListener("pagehide", background);
-    window.addEventListener("beforeunload", background);
+    window.addEventListener("focus", touch);
+    window.addEventListener("pagehide", touch);
     document.addEventListener("visibilitychange", onVisibility);
-
-    // Native TestFlight / Android builds get a stronger lifecycle signal than
-    // visibilitychange. Use it when available; the web/PWA path above remains
-    // the fallback.
-    let removeNativeListener: (() => void | Promise<void>) | null = null;
-    void Promise.all([
-      import("@capacitor/core"),
-      import("@capacitor/app"),
-    ]).then(async ([{ Capacitor }, { App }]) => {
-      if (!Capacitor.isNativePlatform()) return;
-      const handle = await App.addListener("appStateChange", ({ isActive }) => {
-        if (isActive) foreground();
-        else background();
-      });
-      removeNativeListener = () => handle.remove();
-    }).catch(() => {});
-
     return () => {
       window.clearInterval(id);
-      window.removeEventListener("focus", foreground);
-      window.removeEventListener("pagehide", background);
-      window.removeEventListener("beforeunload", background);
+      window.removeEventListener("focus", touch);
+      window.removeEventListener("pagehide", touch);
       document.removeEventListener("visibilitychange", onVisibility);
-      if (removeNativeListener) void removeNativeListener();
     };
   }, []);
 

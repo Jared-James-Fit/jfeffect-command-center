@@ -135,6 +135,7 @@ import {
   sessionDurationMin,
   sessionDurationSeconds,
   estimateDurationFromLogs,
+  touchWorkoutSession,
 } from "@/components/workout-day/WorkoutTimer";
 
 /* -------------------------------------------------------------------------- */
@@ -1101,6 +1102,28 @@ function WorkoutDay({
     beginWorkoutSession(dayId);
   }, [dayId, readonly, isImpersonating, completion?.completed_at]);
 
+  // Keep the local workout-session runtime alive independently of the route
+  // repaint interval. Navigation inside the PWA and switching to another app
+  // must never pause the clock. visibility/pagehide only record the last known
+  // alive instant so a later full PWA relaunch can exclude time spent closed.
+  useEffect(() => {
+    if (readonly || isImpersonating || completion?.completed_at) return;
+    const touch = () => { touchWorkoutSession(dayId); };
+    const onVisibility = () => touch();
+    touch();
+    const id = window.setInterval(() => {
+      if (document.visibilityState === "visible") touch();
+    }, 5_000);
+    window.addEventListener("focus", touch);
+    window.addEventListener("pagehide", touch);
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => {
+      window.clearInterval(id);
+      window.removeEventListener("focus", touch);
+      window.removeEventListener("pagehide", touch);
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
+  }, [dayId, readonly, isImpersonating, completion?.completed_at]);
   // Ping shape depends on the mounted adapter: members address workouts by
   // (enrollmentId, weekIndex, dayIndex) tuples (the member adapter encodes
   // these into the `"week:day"` dayId), so the heartbeat must report the
