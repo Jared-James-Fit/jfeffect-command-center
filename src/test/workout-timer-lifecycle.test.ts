@@ -9,7 +9,7 @@ const completion = readFileSync("src/lib/workout-completion.functions.ts", "utf8
 describe("workout timer lifecycle", () => {
   it("uses an in-memory runtime id instead of sessionStorage for true relaunch detection", () => {
     expect(timer).toContain("const PAGE_RUNTIME_ID");
-    expect(timer).not.toContain("sessionStorage");
+    expect(timer).not.toContain("window.sessionStorage");
     expect(timer).toContain("session.runtimeId === PAGE_RUNTIME_ID");
     expect(timer).toContain("some mobile browsers restore sessionStorage");
   });
