@@ -4,18 +4,16 @@ import { useAuth } from "@/lib/auth";
 import { supabase } from "@/integrations/supabase/client";
 import { usePortalUserId } from "@/lib/client-impersonation";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Bell, ClipboardCheck, ShieldAlert, MessageCircle, Mail, CheckCheck, AlertTriangle, Dumbbell, Settings, Receipt, FileSignature, Calendar as CalendarIcon, Target, Video, ChevronDown, Smartphone } from "lucide-react";
+import { Bell, Settings, Receipt, FileSignature, Calendar as CalendarIcon, ChevronDown, Smartphone } from "lucide-react";
 import { isGoalsSetupComplete, type ClientGoalsSetupRow } from "@/lib/client-goals/schema";
 import type { TrainingPhase } from "@/lib/training-phases";
 import { derivePhase } from "@/lib/training-phases";
 import { toast } from "sonner";
 import type { WeightUnit } from "@/lib/progress-metrics";
 import { HomeScreenSetupCard } from "@/components/home-screen-setup-card";
-import { ManualCheckInReviewModal } from "@/components/manual-check-in-review-modal";
 import { ClientActionRequestModal } from "@/components/client-action-request-modal";
 import { UpcomingEventsPanel } from "@/components/events/upcoming-events-panel";
 import { InstallAppCard } from "@/components/portal/install-app-card";
-import type { ActionItem } from "@/components/portal/action-centre";
 import { UpcomingScheduleCard } from "@/components/home/upcoming-schedule-card";
 import { TrainingBlockCard } from "@/components/portal/training-block-card";
 import { ProgressSummaryCard } from "@/components/progress/progress-summary-card";
@@ -122,35 +120,6 @@ function PortalHome() {
       .catch(() => {});
   }, [client?.id, bootstrapOcc, ensureMessengerCheckins, qc]);
 
-  const { data: outstandingAgreements = [] } = useQuery({
-    queryKey: ["portal-outstanding-agreements", client?.id],
-    enabled: !!client?.id,
-    staleTime: 2 * 60_000,
-    queryFn: async () => {
-      const { data } = await (supabase
-        .from("agreements") as any)
-        .select("id, template_name, status, signnow_signing_link, sent_at, client_marked_complete_at")
-        .eq("client_id", client!.id)
-        .in("status", ["Sent", "Opened", "Waiting on Client", "Needs Resend", "Manual Action Needed"])
-        .order("created_at", { ascending: false });
-      return (data ?? []) as any[];
-    },
-  });
-
-  const { data: purchases = [] } = useQuery({
-    queryKey: ["portal-purchases", client?.id],
-    enabled: !!client?.id,
-    staleTime: 5 * 60_000,
-    queryFn: async () => {
-      const { data } = await supabase
-        .from("purchase_records")
-        .select("*")
-        .eq("client_id", client!.id)
-        .order("purchased_at", { ascending: false });
-      return (data ?? []) as any[];
-    },
-  });
-
   const { data: phases = [] } = useQuery({
     queryKey: ["my-phases", client?.id],
     enabled: !!client?.id,
@@ -181,7 +150,7 @@ function PortalHome() {
     queryKey: ["portal-coach-updates", client?.id],
     enabled: !!client?.id,
     queryFn: async () => {
-      const [{ data: msgs }, { data: state }, { data: vids }, { data: vcomments }, { data: reviews }] = await Promise.all([
+      const [{ data: msgs }, { data: state }, { data: vids }, { data: vcomments }] = await Promise.all([
         (supabase.from("messages") as any)
           .select("body, attachments, created_at, sender_role, is_internal_note")
           .eq("client_id", client!.id)
@@ -204,14 +173,6 @@ function PortalHome() {
           .eq("is_internal_note", false)
           .order("created_at", { ascending: false })
           .limit(20),
-        (supabase.from("manual_check_in_reviews") as any)
-          .select("id, title, message, created_at, read_at, dismissed_at, notify_client")
-          .eq("client_id", client!.id)
-          .eq("notify_client", true)
-          .is("read_at", null)
-          .is("dismissed_at", null)
-          .order("created_at", { ascending: false })
-          .limit(10),
       ]);
       const lastRead = (state as any)?.client_last_read_at;
       const unreadMsgs = (msgs ?? []).filter((m: any) => !lastRead || new Date(m.created_at).getTime() > new Date(lastRead).getTime());
@@ -240,7 +201,6 @@ function PortalHome() {
       return {
         unreadMessages: unreadMsgs as any[],
         liftPings: liftDeduped,
-        checkInReviews: (reviews ?? []) as any[],
       };
     },
   });
@@ -263,147 +223,13 @@ function PortalHome() {
   useEffect(() => { if (appts) logPerf("card:appointments loaded"); }, [appts]);
   const nextAppointment: any = (appts as any[])[0] ?? null;
 
-  const markAgreementComplete = async (id: string) => {
-    const { error } = await supabase
-      .from("agreements")
-      .update({ client_marked_complete_at: new Date().toISOString(), client_marked_complete_by: user?.id ?? null } as any)
-      .eq("id", id);
-    if (error) { toast.error(error.message); return; }
-    toast.success("Thanks — Coach Jared will verify it.");
-    qc.invalidateQueries({ queryKey: ["portal-outstanding-agreements", client?.id] });
-  };
-
   // Only derive the name from the loaded client record. Falling back to the
   // email username mid-load caused a visible "jaredm…" → "Jared" flash.
   const firstName = (client?.full_name ?? "").split(" ")[0];
   void user;
 
-  const primaryPurchase = (purchases as any[]).find(
-    (p) => !["Cancelled", "Expired", "Refunded"].includes(p.payment_status),
-  ) ?? (purchases as any[])[0];
-
-  const billingNeedsAction = !!primaryPurchase && ["Pending Payment", "Pending", "Overdue", "Failed", "Manual Payment Needed"].includes(primaryPurchase.payment_status);
-
-  // Build Action Centre items from existing data only.
-  const actions: ActionItem[] = [];
-  if (goalsSetup?.update_requested_at) {
-    actions.push({
-      key: "goals-update-requested",
-      icon: Target,
-      tone: "primary",
-      title: "Update your Goals & Setup",
-      message: goalsSetup.update_request_message || "Your coach asked you to review your answers.",
-      to: "/portal/goals-setup",
-      chip: "Action",
-    });
-  } else if (!isGoalsSetupComplete(goalsSetup ?? null)) {
-    actions.push({
-      key: "goals-incomplete",
-      icon: Target,
-      tone: "warning",
-      title: "Goals & Setup incomplete",
-      message: "Spend ~2 minutes so your coach can build the right plan for you.",
-      to: "/portal/goals-setup",
-      chip: "Setup",
-    });
-  }
-  if (billingNeedsAction) {
-    actions.push({
-      key: `billing-${primaryPurchase.id}`,
-      icon: AlertTriangle,
-      tone: "warning",
-      title: "Payment needed",
-      message: "Keep your coaching active.",
-      chip: "Action",
-      ...(primaryPurchase.stripe_payment_link
-        ? { href: primaryPurchase.stripe_payment_link }
-        : { to: "/portal/messages" }),
-    });
-  }
-  if (client?.info_update_requested) {
-    actions.push({
-      key: "info-update",
-      icon: ShieldAlert,
-      tone: "warning",
-      title: "Update your account info",
-      message: "Confirm your contact details are current.",
-      to: "/portal/account",
-      chip: "Action",
-    });
-  }
-  for (const a of outstandingAgreements as any[]) {
-    if (a.client_marked_complete_at) {
-      actions.push({
-        key: `agreement-${a.id}`,
-        icon: CheckCheck,
-        tone: "success",
-        title: "Agreement marked complete",
-        message: "Coach Jared will verify it.",
-        to: "/portal/agreements",
-        chip: "Pending",
-      });
-    } else {
-      actions.push({
-        key: `agreement-${a.id}`,
-        icon: Mail,
-        tone: "warning",
-        title: a.template_name ? `Sign: ${a.template_name}` : "Agreement needs signature",
-        message: a.signnow_signing_link
-          ? "Check your Gmail for the SignNow document."
-          : "Open Agreements to view or mark complete.",
-        chip: "Sign",
-        ...(a.signnow_signing_link ? { href: a.signnow_signing_link } : { to: "/portal/agreements" }),
-      });
-    }
-  }
   const unreadMsgs = coachUpdates?.unreadMessages ?? [];
-  if (unreadMsgs.length > 0) {
-    actions.push({
-      key: "coach-messages",
-      icon: MessageCircle,
-      tone: "primary",
-      title: unreadMsgs.length > 1 ? `${unreadMsgs.length} new from Coach Jared` : "New message from Coach Jared",
-      message: (unreadMsgs[0]?.body || "Open your messages").toString().slice(0, 120),
-      to: "/portal/messages",
-      chip: "New",
-    });
-  }
-  // Aggregate lift video feedback into a single grouped item (prevents notification fatigue)
-  const liftPings = coachUpdates?.liftPings ?? [];
-  if (liftPings.length > 0) {
-    const count = liftPings.length;
-    const firstExercise = liftPings[0]?.exercise || "Lift video";
-    // Direct navigation: single unread reply jumps into that video's thread;
-    // multiple unread replies open the Replies tab filtered to unread only.
-    const search: Record<string, unknown> =
-      count === 1
-        ? { tab: "replies", openId: liftPings[0].videoId }
-        : { tab: "replies", unread: 1 };
-    actions.push({
-      key: "lift-reviews-grouped",
-      icon: Dumbbell,
-      tone: "primary",
-      title: count === 1 ? `Coach feedback on ${firstExercise}` : `${count} new coach feedback replies`,
-      message: count === 1 ? (liftPings[0]?.preview || "Coach reviewed your video.") : `Coach reviewed ${count} videos. Tap to view.`,
-      to: "/portal/lift-videos",
-      search,
-      chip: count > 1 ? String(count) : "New",
-    });
-  }
-  // Aggregate check-in reviews into a single grouped item
-  const checkInReviews = coachUpdates?.checkInReviews ?? [];
-  if (checkInReviews.length > 0) {
-    const count = checkInReviews.length;
-    actions.push({
-      key: "checkin-reviews-grouped",
-      icon: ClipboardCheck,
-      tone: "primary",
-      title: count === 1 ? (checkInReviews[0]?.title || "New Check-In review") : `${count} New Check-In Reviews`,
-      message: count === 1 ? (checkInReviews[0]?.message || "Open to read your coach's review.") : `Coach reviewed ${count} check-ins. Tap to view.`,
-      chip: count > 1 ? String(count) : "New",
-      to: "/portal/check-ins",
-    });
-  }
+
   // We render the shell + per-section skeletons immediately so the dashboard
   // never blocks waiting on one query. Each section is wrapped in a local
   // error boundary so a single failure can't take the whole dashboard down.
@@ -414,7 +240,6 @@ function PortalHome() {
   return (
     <>
       {/* Background gates / popups — keep wired exactly as before. */}
-      {client?.id && <ManualCheckInReviewModal clientId={client.id} />}
       {client?.id && <ClientActionRequestModal clientId={client.id} />}
       {client?.id && (
         <HomeScreenSetupCard
@@ -611,29 +436,6 @@ function UpcomingAppointmentRow({ appt }: { appt: any }) {
         </div>
       </div>
     </Link>
-  );
-}
-
-function SecondaryLinks({ handleAgreementComplete: _ }: { handleAgreementComplete: (id: string) => void }) {
-  const items = [
-    { to: "/portal/purchases", label: "Purchases", icon: Receipt },
-    { to: "/portal/agreements", label: "Agreements", icon: FileSignature },
-    { to: "/portal/account", label: "Account & Coaching", icon: Settings },
-  ];
-  return (
-    <ul className="overflow-hidden rounded-2xl border border-border bg-card">
-      {items.map((it, i) => {
-        const Icon = it.icon;
-        return (
-          <li key={it.to} className={i > 0 ? "border-t border-border/70" : ""}>
-            <Link to={it.to} className="flex min-h-[56px] items-center gap-3 px-4 py-3 transition active:bg-secondary/30">
-              <Icon className="h-5 w-5 text-muted-foreground" />
-              <span className="flex-1 text-sm font-semibold">{it.label}</span>
-            </Link>
-          </li>
-        );
-      })}
-    </ul>
   );
 }
 
