@@ -25,7 +25,7 @@ export type LiftStorageUploadArgs = {
   file: File;
   userId: string;
   /** Defaults to the existing lift-videos bucket; message attachments opt in explicitly. */
-  bucket?: "lift-videos" | "message-attachments";
+  bucket?: "lift-videos" | "message-attachments" | "progress-media";
   /** Preserve callers' established storage paths when they already own path generation. */
   path?: string;
   onProgress?: (pct: number) => void;
@@ -51,6 +51,31 @@ export async function uploadLiftFileToStorage(
   const path = args.path ?? `${args.userId}/${Date.now()}-${crypto.randomUUID()}.${ext}`;
   const bucket = args.bucket ?? "lift-videos";
   const contentType = args.file.type || guessContentType(ext);
+
+  // Give the UI feedback before auth/network setup. This avoids a "dead" pause
+  // after the user picks a photo/video.
+  args.onProgress?.(1);
+
+  // Supabase's resumable/TUS path is excellent for large videos, but its
+  // creation handshake is noticeable for tiny phone photos (e.g. 100–500 KB).
+  // Use one direct authenticated Storage request for small/medium files and
+  // reserve TUS for larger files where resumability matters.
+  const DIRECT_UPLOAD_MAX_BYTES = 6 * 1024 * 1024;
+  if (args.file.size <= DIRECT_UPLOAD_MAX_BYTES && typeof XMLHttpRequest !== "undefined") {
+    await uploadDirectWithProgress({
+      bucket,
+      path,
+      file: args.file,
+      contentType,
+      token,
+      anonKey: SUPABASE_ANON,
+      supabaseUrl: SUPABASE_URL,
+      onProgress: args.onProgress,
+      signal: args.signal,
+    });
+    args.onProgress?.(100);
+    return { path, mimeType: contentType, sizeBytes: args.file.size };
+  }
 
   await new Promise<void>((resolve, reject) => {
     const upload = new tus.Upload(args.file, {
@@ -89,7 +114,63 @@ export async function uploadLiftFileToStorage(
     upload.start();
   });
 
+  args.onProgress?.(100);
   return { path, mimeType: contentType, sizeBytes: args.file.size };
+}
+
+function encodeStoragePath(path: string): string {
+  return path.split("/").map(encodeURIComponent).join("/");
+}
+
+async function uploadDirectWithProgress(args: {
+  bucket: string;
+  path: string;
+  file: File;
+  contentType: string;
+  token: string;
+  anonKey: string;
+  supabaseUrl: string;
+  onProgress?: (pct: number) => void;
+  signal?: AbortSignal;
+}): Promise<void> {
+  await new Promise<void>((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    const url =
+      `${args.supabaseUrl}/storage/v1/object/${encodeURIComponent(args.bucket)}/${encodeStoragePath(args.path)}`;
+    xhr.open("POST", url, true);
+    xhr.setRequestHeader("Authorization", `Bearer ${args.token}`);
+    xhr.setRequestHeader("apikey", args.anonKey);
+    xhr.setRequestHeader("x-upsert", "false");
+    xhr.setRequestHeader("Content-Type", args.contentType);
+    xhr.setRequestHeader("cache-control", "3600");
+
+    xhr.upload.onprogress = (e) => {
+      if (!args.onProgress) return;
+      const total = e.lengthComputable ? e.total : args.file.size;
+      if (!total) return;
+      const pct = Math.max(1, Math.min(99, Math.round((e.loaded / total) * 100)));
+      args.onProgress(pct);
+    };
+    xhr.onerror = () => reject(new Error("Network error during upload."));
+    xhr.onabort = () => reject(new Error("Upload cancelled."));
+    xhr.onload = () => {
+      if ((xhr.status >= 200 && xhr.status < 300) || xhr.status === 409) {
+        resolve();
+      } else {
+        reject(new Error(`Upload failed (${xhr.status}): ${xhr.responseText || xhr.statusText}`));
+      }
+    };
+
+    if (args.signal) {
+      const onAbort = () => xhr.abort();
+      if (args.signal.aborted) {
+        xhr.abort();
+        return;
+      }
+      args.signal.addEventListener("abort", onAbort, { once: true });
+    }
+    xhr.send(args.file);
+  });
 }
 
 function guessContentType(ext: string) {
