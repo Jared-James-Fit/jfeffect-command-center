@@ -109,8 +109,13 @@ export type ProgressInitialAction =
   | "history";
 
 export function ProgressSection({
-  ctx, initialAction,
-}: { ctx: ProgressContext; initialAction?: ProgressInitialAction }) {
+  ctx, initialAction, actionOnly = false, onActionClose,
+}: {
+  ctx: ProgressContext;
+  initialAction?: ProgressInitialAction;
+  actionOnly?: boolean;
+  onActionClose?: () => void;
+}) {
   const [tab, setTab] = useState<string>(initialAction === "history" ? "timeline" : initialAction === "bodyweight" || initialAction === "weight" ? "bodyweight" : "overview");
   const [photoDialog, setPhotoDialog] = useState(false);
   const [videoDialog, setVideoDialog] = useState(false);
@@ -130,6 +135,22 @@ export function ProgressSection({
     else if (initialAction === "video") setVideoDialog(true);
     else if (initialAction === "lift") { setTab("videos"); setVideoDialog(true); }
   }, [initialAction]);
+
+  const setDialogOpen = (setter: (open: boolean) => void) => (open: boolean) => {
+    setter(open);
+    if (!open && initialAction && onActionClose) onActionClose();
+  };
+
+  if (actionOnly) {
+    return (
+      <>
+        {photoDialog && <PhotoSubmissionDialog ctx={ctx} open={photoDialog} onOpenChange={setDialogOpen(setPhotoDialog)} />}
+        {videoDialog && <VideoSubmissionDialog ctx={ctx} open={videoDialog} onOpenChange={setDialogOpen(setVideoDialog)} />}
+        {weightDialog && <BodyweightDialog ctx={ctx} open={weightDialog} onOpenChange={setDialogOpen(setWeightDialog)} />}
+        {measureDialog && <MeasurementDialog ctx={ctx} open={measureDialog} onOpenChange={setDialogOpen(setMeasureDialog)} />}
+      </>
+    );
+  }
 
   return (
     <div className="space-y-4 p-3 pb-[max(5rem,env(safe-area-inset-bottom))] md:p-6 md:pb-12">
