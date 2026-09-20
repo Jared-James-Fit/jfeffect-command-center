@@ -3,10 +3,11 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { Sheet, SheetClose, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Progress } from "@/components/ui/progress";
 import {
   CheckCircle2,
+  ChevronLeft,
   ChevronRight,
   ClipboardCheck,
   Flag,
@@ -345,13 +346,23 @@ function CheckinWizard({
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent
         side="bottom"
+        hideCloseButton
         className="max-h-[92dvh] rounded-t-3xl p-0"
       >
         <div className="mx-auto max-w-lg">
-          <SheetHeader className="border-b border-border px-5 pb-4 pt-5 text-left">
-            <div className="mb-2 flex items-center justify-between gap-3">
-              <SheetTitle className="text-base">{titleFor(taskType)}</SheetTitle>
-              <span className="text-xs tabular-nums text-muted-foreground">
+          <SheetHeader className="min-h-0 space-y-0 border-b border-border px-5 pb-4 pt-4 text-left">
+            <div className="mb-3 grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3">
+              <SheetClose
+                aria-label="Back"
+                className="inline-flex h-10 min-w-[78px] shrink-0 items-center justify-center gap-1 rounded-full border border-border bg-background/95 px-3 text-sm font-semibold text-foreground shadow-sm transition hover:bg-secondary active:bg-secondary/80 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+              >
+                <ChevronLeft className="h-4 w-4" />
+                <span>Back</span>
+              </SheetClose>
+              <SheetTitle className="min-w-0 truncate text-base">
+                {titleFor(taskType)}
+              </SheetTitle>
+              <span className="shrink-0 text-xs tabular-nums text-muted-foreground">
                 {step + 1} / {visible.length}
               </span>
             </div>
