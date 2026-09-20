@@ -67,6 +67,8 @@ const WEEKLY: Q[] = [
       "Digestion / bloating",
       "Pain / injury",
       "Hunger / appetite",
+      "Cardio",
+      "Water / hydration",
     ],
   },
   {
@@ -344,7 +346,6 @@ function CheckinWizard({
       <SheetContent
         side="bottom"
         className="max-h-[92dvh] rounded-t-3xl p-0"
-        hideCloseButton
       >
         <div className="mx-auto max-w-lg">
           <SheetHeader className="border-b border-border px-5 pb-4 pt-5 text-left">
