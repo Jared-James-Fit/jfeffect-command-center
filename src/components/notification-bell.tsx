@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -714,6 +714,7 @@ export function NotificationPanel({
   const [search, setSearch] = useState("");
   const [kindFilter, setKindFilter] = useState<string>("all");
   const [dateFilter, setDateFilter] = useState<string>("all");
+  const autoSeenOnceRef = useRef(false);
 
   const userId = user?.id;
   const cacheKey = ["notifications", role, userId] as const;
@@ -893,10 +894,11 @@ export function NotificationPanel({
   // This clears the bell badge instantly without marking the underlying message
   // thread or lift-video queue as read.
   useEffect(() => {
-    if (markSeenMut.isPending) return;
+    if (autoSeenOnceRef.current || query.isLoading || markSeenMut.isPending) return;
+    autoSeenOnceRef.current = true;
     const targets = items.filter((i) => !i.isRead && !i.isArchived);
     if (targets.length) markSeenMut.mutate(targets);
-  }, [items, markSeenMut.isPending]);
+  }, [query.isLoading, items, markSeenMut.isPending]);
 
   // ---- Row click: navigate + mark read -----------------------------------
   const handleRowClick = useCallback(
