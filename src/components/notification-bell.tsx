@@ -160,7 +160,7 @@ async function fetchUnreadGroupItems(userId: string): Promise<Omit<BellItem, "is
 // per user. Prevents duplicate invalidations when both the bell and the
 // full /notifications page are mounted at once.
 type QC = ReturnType<typeof useQueryClient>;
-const NOTIFICATION_REALTIME_DEBOUNCE_MS = 350;
+const NOTIFICATION_REALTIME_DEBOUNCE_MS = 75;
 const _notifChannels = new Map<string, { ch: ReturnType<typeof supabase.channel>; timer: ReturnType<typeof setTimeout> | null; refs: number }>();
 
 function acquireNotificationsChannel(userId: string, qc: QC): () => void {
@@ -226,7 +226,9 @@ export function useNotificationFeed() {
   const query = useQuery({
     queryKey: ["notifications", role, user?.id],
     enabled: !!user && !!role,
-    staleTime: 60_000,  // 60s — reduces refetch frequency; realtime channel handles live updates
+    staleTime: 15_000,
+    refetchOnWindowFocus: "always",
+    refetchOnReconnect: true,
     queryFn: async () => {
       // ---- Collect raw items (source-implicit unread or noteworthy) -----
       const raw: Omit<BellItem, "isRead" | "isArchived">[] = [];
@@ -469,10 +471,16 @@ export function useNotificationFeed() {
 
       const items: BellItem[] = unique.map((u) => {
         const st = stateMap.get(u.id);
+        const eventAt = Date.parse(u.created_at);
+        const readAt = st?.read_at ? Date.parse(st.read_at) : 0;
+        const archivedAt = st?.archived_at ? Date.parse(st.archived_at) : 0;
         return {
           ...u,
-          isRead: !!st?.read_at,
-          isArchived: !!st?.archived_at,
+          // State only applies to the event that existed when the state was
+          // written. A newer message/comment on the same source must surface
+          // as new again.
+          isRead: readAt >= eventAt && readAt > 0,
+          isArchived: archivedAt >= eventAt && archivedAt > 0,
         };
       });
       items.sort((a, b) => +new Date(b.created_at) - +new Date(a.created_at));
@@ -874,6 +882,41 @@ export function NotificationPanel({
     onSettled: invalidateBadgeCaches,
   });
 
+  const markSeenMut = useMutation({
+    mutationFn: async (targets: BellItem[]) => {
+      await rpc("notif_mark_read", toPairs(targets));
+    },
+    onMutate: async (targets) => {
+      await cancelInflight();
+      const prev = snapshot();
+      const ids = new Set(targets.map((t) => t.id));
+      patchCache(qc, role, userId, (it) => ids.has(it.id) ? { ...it, isRead: true } : it);
+      return { prev, ids };
+    },
+    onSuccess: (_data, targets) => {
+      // Re-assert the optimistic state after the write finishes so a realtime
+      // refetch that started mid-mutation cannot make the badge flash back on.
+      const ids = new Set(targets.map((t) => t.id));
+      patchCache(qc, role, userId, (it) => ids.has(it.id) ? { ...it, isRead: true } : it);
+    },
+    onError: (_e, _v, ctx) => restore(ctx?.prev),
+    onSettled: () => {
+      invalidateBadgeCaches();
+      window.setTimeout(() => {
+        qc.invalidateQueries({ queryKey: ["notifications", role, userId] });
+      }, 125);
+    },
+  });
+
+  // Opening the notification center counts as seeing the current notifications.
+  // This clears the bell badge instantly without marking the underlying message
+  // thread or lift-video queue as read.
+  useEffect(() => {
+    if (markSeenMut.isPending) return;
+    const targets = items.filter((i) => !i.isRead && !i.isArchived);
+    if (targets.length) markSeenMut.mutate(targets);
+  }, [items, markSeenMut.isPending]);
+
   // ---- Row click: navigate + mark read -----------------------------------
   const handleRowClick = useCallback(
     (it: BellItem) => {
@@ -899,31 +942,10 @@ export function NotificationPanel({
       <div className="flex flex-col gap-2 border-b px-3 py-2 sm:px-4">
         <div className="flex min-w-0 items-center justify-between gap-2">
           <div className="flex min-w-0 items-center gap-1 overflow-x-auto [scrollbar-width:none]">
-            {!fullPage && (
-              <FilterChip active={view === "new"} onClick={() => setView("new")}>
-                New
-                {unreadCount > 0 && (
-                  <Badge variant="secondary" className="ml-1.5 h-4 px-1 text-[10px]">
-                    {unreadCount > 99 ? "99+" : unreadCount}
-                  </Badge>
-                )}
-              </FilterChip>
-            )}
             <FilterChip active={view === "all"} onClick={() => setView("all")}>All</FilterChip>
             <FilterChip active={view === "archived"} onClick={() => setView("archived")}>Archived</FilterChip>
           </div>
           <div className="flex shrink-0 items-center gap-1">
-            <Button
-              variant="ghost" size="sm"
-              className="h-11 gap-1 px-2 text-xs sm:h-7"
-              aria-label="Mark all notifications as read"
-              disabled={markAllMut.isPending || unreadCount === 0}
-              onClick={() => markAllMut.mutate()}
-              title={unreadCount === 0 ? "You have no new notifications." : "Mark all as read"}
-            >
-              {markAllMut.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <CheckCheck className="h-3 w-3" />}
-              <span className="hidden sm:inline">Mark all read</span>
-            </Button>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="ghost" size="icon" className="h-11 w-11 sm:h-7 sm:w-7" aria-label="More notification actions">
