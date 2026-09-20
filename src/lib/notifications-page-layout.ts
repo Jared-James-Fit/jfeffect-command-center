@@ -9,8 +9,8 @@ export const NOTIFICATIONS_PAGE_SHELL_CLASS =
   "notifications-page-shell mx-auto flex w-full max-w-2xl min-w-0 flex-col px-3 sm:px-4 sm:py-6";
 
 /** Full-page notification centers default to a complete, actionable inbox. */
-export function initialNotificationView(fullPage: boolean): NotificationPageView {
-  return fullPage ? "all" : "new";
+export function initialNotificationView(_fullPage: boolean): NotificationPageView {
+  return "all";
 }
 
 /** Full-page feeds participate in document scrolling; transient bell surfaces do not. */
