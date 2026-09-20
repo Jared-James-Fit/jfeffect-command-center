@@ -804,9 +804,7 @@ function PhotoSubmissionDialog({ ctx, open, onOpenChange }: { ctx: ProgressConte
   const subPromiseRef = useRef<Promise<string> | null>(null);
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
   const [label, setLabel] = useState("Weekly Check-In");
-  const [bw, setBw] = useState("");
   const [notes, setNotes] = useState("");
-  const [unit, setUnit] = useState<"kg" | "lb">(ctx.preferredWeightUnit ?? "lb");
   const [busy, setBusy] = useState(false);
   const multiRef = useRef<HTMLInputElement>(null);
   // Map of angle → File to inject into the matching AngleUploadCard.
@@ -834,7 +832,6 @@ function PhotoSubmissionDialog({ ctx, open, onOpenChange }: { ctx: ProgressConte
     const id = await ensureSub();
     await updateSubmission(id, {
       submission_date: date, check_in_label: label,
-      bodyweight: bw ? Number(bw) : null, weight_unit: bw ? unit : null,
       notes: notes || null,
       review_status: asDraft ? "draft" : ctx.canRequestReview ? "awaiting_review" : "self_tracking",
       submitted_at: asDraft ? null : new Date().toISOString(),
@@ -871,21 +868,6 @@ function PhotoSubmissionDialog({ ctx, open, onOpenChange }: { ctx: ProgressConte
         </DialogHeader>
 
         <div className="space-y-4">
-          {/* Date + label are now front-and-centre so the check-in can be
-              backdated in one tap — no need to expand the details drawer. */}
-          <div className="grid grid-cols-2 gap-3">
-            <DateField value={date} onChange={setDate} />
-            <div>
-              <Label className="text-xs">Label</Label>
-              <Select value={label} onValueChange={setLabel}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {CHECK_IN_LABELS.map((l) => <SelectItem key={l} value={l}>{l}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-
           {/* Big one-tap multi-upload — fastest path */}
           <Button
             type="button"
@@ -918,25 +900,22 @@ function PhotoSubmissionDialog({ ctx, open, onOpenChange }: { ctx: ProgressConte
             ))}
           </div>
 
-          <details className="rounded-md border border-border p-3 text-sm">
-            <summary className="cursor-pointer font-medium">Bodyweight &amp; notes (optional)</summary>
+          <details className="rounded-xl border border-border p-3 text-sm">
+            <summary className="cursor-pointer font-medium">Options</summary>
             <div className="mt-3 space-y-3">
               <div className="grid grid-cols-2 gap-3">
+                <DateField value={date} onChange={setDate} />
                 <div>
-                  <Label className="text-xs">Bodyweight</Label>
-                  <div className="flex gap-2">
-                    <Input type="number" inputMode="decimal" value={bw} onChange={(e) => setBw(e.target.value)} placeholder="—" />
-                    <Select value={unit} onValueChange={(v: any) => setUnit(v)}>
-                      <SelectTrigger className="w-20"><SelectValue /></SelectTrigger>
-                      <SelectContent><SelectItem value="kg">kg</SelectItem><SelectItem value="lb">lb</SelectItem></SelectContent>
-                    </Select>
-                  </div>
-                </div>
-                <div>
-                  <Label className="text-xs">Notes</Label>
-                  <Textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} />
+                  <Label className="text-xs">Label</Label>
+                  <Select value={label} onValueChange={setLabel}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {CHECK_IN_LABELS.map((l) => <SelectItem key={l} value={l}>{l}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
                 </div>
               </div>
+              <Textarea placeholder="Note (optional)" value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} />
             </div>
           </details>
         </div>
@@ -1129,8 +1108,6 @@ function VideoSubmissionDialog({ ctx, open, onOpenChange }: { ctx: ProgressConte
   const subPromiseRef = useRef<Promise<string> | null>(null);
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
   const [label, setLabel] = useState("Weekly Check-In");
-  const [bw, setBw] = useState("");
-  const [unit, setUnit] = useState<"kg" | "lb">(ctx.preferredWeightUnit ?? "lb");
   const [notes, setNotes] = useState("");
   const [busy, setBusy] = useState(false);
 
@@ -1157,7 +1134,6 @@ function VideoSubmissionDialog({ ctx, open, onOpenChange }: { ctx: ProgressConte
     const id = await ensureSub();
     await updateSubmission(id, {
       video_format: format, submission_date: date, check_in_label: label,
-      bodyweight: bw ? Number(bw) : null, weight_unit: bw ? unit : null,
       notes: notes || null,
       review_status: asDraft ? "draft" : ctx.canRequestReview ? "awaiting_review" : "self_tracking",
       submitted_at: asDraft ? null : new Date().toISOString(),
@@ -1190,45 +1166,28 @@ function VideoSubmissionDialog({ ctx, open, onOpenChange }: { ctx: ProgressConte
             </Button>
           </div>
 
-          {/* Date + label surfaced at top so backdating is one tap. */}
-          <div className="grid grid-cols-2 gap-3">
-            <DateField value={date} onChange={setDate} />
-            <div>
-              <Label className="text-xs">Label</Label>
-              <Select value={label} onValueChange={setLabel}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {CHECK_IN_LABELS.map((l) => <SelectItem key={l} value={l}>{l}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-
           <div className={`grid gap-3 ${angles.length === 1 ? "grid-cols-1" : "grid-cols-2"}`}>
             {angles.map((a) => (
               <AngleUploadCard key={a} angle={a} mediaType="video" ctx={ctx} getSubId={ensureSub} subId={subId} />
             ))}
           </div>
 
-          <details className="rounded-md border border-border p-3 text-sm">
-            <summary className="cursor-pointer font-medium">Bodyweight &amp; notes (optional)</summary>
+          <details className="rounded-xl border border-border p-3 text-sm">
+            <summary className="cursor-pointer font-medium">Options</summary>
             <div className="mt-3 space-y-3">
               <div className="grid grid-cols-2 gap-3">
+                <DateField value={date} onChange={setDate} />
                 <div>
-                  <Label className="text-xs">Bodyweight</Label>
-                  <div className="flex gap-2">
-                    <Input type="number" inputMode="decimal" value={bw} onChange={(e) => setBw(e.target.value)} />
-                    <Select value={unit} onValueChange={(v: any) => setUnit(v)}>
-                      <SelectTrigger className="w-20"><SelectValue /></SelectTrigger>
-                      <SelectContent><SelectItem value="kg">kg</SelectItem><SelectItem value="lb">lb</SelectItem></SelectContent>
-                    </Select>
-                  </div>
-                </div>
-                <div>
-                  <Label className="text-xs">Notes</Label>
-                  <Textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} />
+                  <Label className="text-xs">Label</Label>
+                  <Select value={label} onValueChange={setLabel}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {CHECK_IN_LABELS.map((l) => <SelectItem key={l} value={l}>{l}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
                 </div>
               </div>
+              <Textarea placeholder="Note (optional)" value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} />
             </div>
           </details>
         </div>
@@ -1702,22 +1661,20 @@ function MeasurementDialog({ ctx, open, onOpenChange }: { ctx: ProgressContext; 
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
         <DialogHeader><DialogTitle>Add Measurements</DialogTitle></DialogHeader>
-        <div className="space-y-3">
-          <div className="grid grid-cols-[1fr_120px] gap-2 items-end">
-            <DateField value={date} onChange={setDate} />
-            <div>
-              <Label className="text-xs">Unit</Label>
-              <Select value={unit} onValueChange={(v: any) => setUnit(v)}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent><SelectItem value="cm">cm</SelectItem><SelectItem value="in">inches</SelectItem></SelectContent>
-              </Select>
+        <div className="space-y-4">
+          <div>
+            <Label className="text-xs">Unit</Label>
+            <div className="mt-1 grid grid-cols-2 gap-2">
+              <Button type="button" variant={unit === "cm" ? "default" : "outline"} onClick={() => setUnit("cm")}>cm</Button>
+              <Button type="button" variant={unit === "in" ? "default" : "outline"} onClick={() => setUnit("in")}>inches</Button>
             </div>
           </div>
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             {MEASUREMENT_FIELDS.map((f) => (
               <div key={f.key}>
                 <Label className="text-xs">{f.label}</Label>
                 <Input
+                  className="h-12"
                   type="number" inputMode="decimal"
                   value={fields[f.key] ?? ""}
                   onChange={(e) => setFields((p) => ({ ...p, [f.key]: e.target.value }))}
@@ -1725,7 +1682,13 @@ function MeasurementDialog({ ctx, open, onOpenChange }: { ctx: ProgressContext; 
               </div>
             ))}
           </div>
-          <Textarea placeholder="Note (optional)" rows={2} value={note} onChange={(e) => setNote(e.target.value)} />
+          <details className="rounded-xl border border-border p-3 text-sm">
+            <summary className="cursor-pointer font-medium">Options</summary>
+            <div className="mt-3 space-y-3">
+              <DateField value={date} onChange={setDate} />
+              <Textarea placeholder="Note (optional)" rows={2} value={note} onChange={(e) => setNote(e.target.value)} />
+            </div>
+          </details>
         </div>
         <DialogFooter><Button onClick={save} disabled={saving}>{saving ? "Saving…" : "Save"}</Button></DialogFooter>
       </DialogContent>
