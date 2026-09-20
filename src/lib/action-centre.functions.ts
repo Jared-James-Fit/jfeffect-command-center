@@ -291,7 +291,7 @@ export const listActionCentre = createServerFn({ method: "GET" })
     });
   });
 
-async function ensureNextOccurrence(
+export async function ensureNextOccurrence(
   supabase: any,
   clientId: string,
   taskType: string,

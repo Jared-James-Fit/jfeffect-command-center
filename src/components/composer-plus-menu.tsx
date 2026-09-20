@@ -15,6 +15,7 @@ import { createMeetLink } from "@/lib/meet.functions";
 import { toast } from "sonner";
 import type { ChatGif } from "@/lib/chat-gifs";
 import type { ChatSound } from "@/lib/chat-sounds";
+import { MessengerCheckinRequestDialog } from "@/components/messages/messenger-checkin-request-dialog";
 
 type Tile = {
   key: string;
@@ -61,7 +62,7 @@ export function ComposerPlusMenu({
 }) {
   const [open, setOpen] = useState(false);
   const [gifOpen, setGifOpen] = useState(false);
-  const [formOpen, setFormOpen] = useState(false);
+  const [checkinOpen, setCheckinOpen] = useState(false);
   const [sigOpen, setSigOpen] = useState(false);
   const [recipeOpen, setRecipeOpen] = useState(false);
   const [actionOpen, setActionOpen] = useState(false);
@@ -99,13 +100,13 @@ export function ComposerPlusMenu({
       tone: "accent",
     },
     {
-      key: "form",
-      label: "Form / Check-in",
+      key: "checkin",
+      label: "Check-In",
       icon: <ClipboardList className="h-6 w-6" />,
-      onClick: () => { setOpen(false); setFormOpen(true); },
-      hidden: !canSendRequests,
+      onClick: () => { setOpen(false); setCheckinOpen(true); },
+      hidden: !isAdmin || surface !== "dm" || !defaultClientId,
       tone: "primary",
-      disabled: clientIds.length === 0,
+      disabled: !defaultClientId,
     },
     {
       key: "sig",
@@ -208,6 +209,14 @@ export function ComposerPlusMenu({
         </PopoverContent>
       </Popover>
 
+      {isAdmin && surface === "dm" && defaultClientId && (
+        <MessengerCheckinRequestDialog
+          open={checkinOpen}
+          onOpenChange={setCheckinOpen}
+          clientId={defaultClientId}
+        />
+      )}
+
       {/* GIF/Sound picker — opened from grid */}
       {canSendGifs && onPickGif && (
         <GifPicker
@@ -230,9 +239,9 @@ export function ComposerPlusMenu({
           defaultClientId={defaultClientId}
           disabled={disabled}
           onAttach={onAttach}
-          externalOpen={{ form: formOpen, sig: sigOpen, recipe: recipeOpen, action: actionOpen }}
+          externalOpen={{ form: false, sig: sigOpen, recipe: recipeOpen, action: actionOpen }}
           onExternalOpenChange={(key, v) => {
-            if (key === "form") setFormOpen(v);
+            if (key === "form") return;
             else if (key === "sig") setSigOpen(v);
             else if (key === "recipe") setRecipeOpen(v);
             else if (key === "action") setActionOpen(v);

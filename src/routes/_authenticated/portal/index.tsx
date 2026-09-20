@@ -11,12 +11,11 @@ import { derivePhase } from "@/lib/training-phases";
 import { toast } from "sonner";
 import type { WeightUnit } from "@/lib/progress-metrics";
 import { HomeScreenSetupCard } from "@/components/home-screen-setup-card";
-import { listFormsForClient, pickWeeklyCheckInForm } from "@/lib/native-forms";
 import { ManualCheckInReviewModal } from "@/components/manual-check-in-review-modal";
 import { ClientActionRequestModal } from "@/components/client-action-request-modal";
 import { UpcomingEventsPanel } from "@/components/events/upcoming-events-panel";
 import { InstallAppCard } from "@/components/portal/install-app-card";
-import { ActionCentre, type ActionItem } from "@/components/portal/action-centre";
+import type { ActionItem } from "@/components/portal/action-centre";
 import { UpcomingScheduleCard } from "@/components/home/upcoming-schedule-card";
 import { TrainingBlockCard } from "@/components/portal/training-block-card";
 import { ProgressSummaryCard } from "@/components/progress/progress-summary-card";
@@ -28,6 +27,7 @@ import { useEffect, useState } from "react";
 import { listMyPortalAppointments } from "@/lib/appointments.functions";
 import { useServerFn } from "@tanstack/react-start";
 import { setClientTimeZone, bootstrapClientOccurrences } from "@/lib/action-centre.functions";
+import { ensureDueMessengerCheckins } from "@/lib/messenger-checkins.functions";
 import { format, parseISO, isToday, isTomorrow } from "date-fns";
 import { SectionErrorBoundary } from "@/components/section-error-boundary";
 import { DashboardRefreshIndicator } from "@/components/portal/dashboard-refresh-indicator";
@@ -59,6 +59,7 @@ function PortalHome() {
   // occurrence per enabled task definition. Both are idempotent server-side.
   const persistTz = useServerFn(setClientTimeZone);
   const bootstrapOcc = useServerFn(bootstrapClientOccurrences);
+  const ensureMessengerCheckins = useServerFn(ensureDueMessengerCheckins);
   useEffect(() => {
     try {
       const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
@@ -108,15 +109,18 @@ function PortalHome() {
 
   useEffect(() => {
     if (!client?.id) return;
-    void bootstrapOcc({ data: { clientId: client.id } }).catch(() => {});
-  }, [client?.id, bootstrapOcc]);
-
-  const { data: assignedForms = [] } = useQuery({
-    queryKey: ["nf-forms-for-client", client?.id],
-    enabled: !!client?.id,
-    staleTime: 2 * 60_000,
-    queryFn: () => listFormsForClient(client!.id),
-  });
+    // Seed the recurring task first, then turn any due Weekly Check-In /
+    // Nutrition Review into a Messenger reminder. No Home-page form card.
+    void bootstrapOcc({ data: { clientId: client.id } })
+      .then(() => ensureMessengerCheckins({ data: { clientId: client.id } }))
+      .then((res) => {
+        if (res?.created) {
+          qc.invalidateQueries({ queryKey: ["portal-coach-updates", client.id] });
+          qc.invalidateQueries({ queryKey: ["messages", client.id, "client"] });
+        }
+      })
+      .catch(() => {});
+  }, [client?.id, bootstrapOcc, ensureMessengerCheckins, qc]);
 
   const { data: outstandingAgreements = [] } = useQuery({
     queryKey: ["portal-outstanding-agreements", client?.id],
@@ -400,14 +404,6 @@ function PortalHome() {
       to: "/portal/check-ins",
     });
   }
-  // Note: the "Submit Form/Check-In/Nutrition" tile was removed here —
-  // the Action Centre's task occurrences already cover Weekly Check-In,
-  // Nutrition Review, Monthly Assessment, etc. one item per assignment.
-  const weeklyCheckInForm = pickWeeklyCheckInForm(assignedForms as any);
-  const weeklyCheckInHref = weeklyCheckInForm?.id
-    ? `/portal/check-ins/${weeklyCheckInForm.id}`
-    : "/portal/check-ins";
-
   // We render the shell + per-section skeletons immediately so the dashboard
   // never blocks waiting on one query. Each section is wrapped in a local
   // error boundary so a single failure can't take the whole dashboard down.
@@ -450,12 +446,6 @@ function PortalHome() {
             <SetupChecklistBanner clientId={client.id} userId={portalUserId ?? ""} />
           </SectionErrorBoundary>
         )}
-
-        {/* 1 — Action Centre (top priority). Pass full list; the component
-            collapses to the top 2–3 by default with a "View all" toggle. */}
-        <SectionErrorBoundary label="Action centre">
-          <ActionCentre items={actions} clientId={client?.id ?? null} />
-        </SectionErrorBoundary>
 
         {/* 1b — Compact Today / Upcoming schedule (full calendar one tap away) */}
         {client?.id && (
@@ -500,7 +490,6 @@ function PortalHome() {
               viewerRole="owner"
               progressHref={{ kind: "portal" }}
               liftHref="/portal/lift-videos"
-              checkInHref={weeklyCheckInHref}
             />
           </SectionErrorBoundary>
         ) : (

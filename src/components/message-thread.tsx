@@ -55,6 +55,11 @@ import { runJob } from "@/lib/progress-jobs";
 import { toast } from "sonner";
 import { useUnsavedWarning } from "@/hooks/use-unsaved-warning";
 import { uploadLiftFileToStorage } from "@/lib/lift-video-storage-upload";
+import {
+  MessengerCheckinRequestCard,
+  MessengerCheckinSubmissionCard,
+} from "@/components/messages/messenger-checkin-card";
+import { ensureDueMessengerCheckins } from "@/lib/messenger-checkins.functions";
 
 function attachIcon(t: MessageAttachment["type"]) {
   if (t === "image") return ImageIcon;
@@ -378,7 +383,41 @@ function LinkAttachment({ att, mine }: { att: MessageAttachment; mine: boolean }
   );
 }
 
-function AttachmentView({ att, mine, message }: { att: MessageAttachment; mine: boolean; message?: Message }) {
+function AttachmentView({
+  att,
+  mine,
+  message,
+  role,
+  clientId,
+  onUseReply,
+}: {
+  att: MessageAttachment;
+  mine: boolean;
+  message?: Message;
+  role: SenderRole;
+  clientId: string;
+  onUseReply?: (text: string) => void;
+}) {
+  if (att.kind === "checkin_request" && att.checkin_submission_id && att.checkin_task_type) {
+    return (
+      <MessengerCheckinRequestCard
+        submissionId={att.checkin_submission_id}
+        taskType={att.checkin_task_type}
+        role={role}
+        clientId={clientId}
+      />
+    );
+  }
+  if (att.kind === "checkin_submission" && att.checkin_submission_id && att.checkin_task_type) {
+    return (
+      <MessengerCheckinSubmissionCard
+        submissionId={att.checkin_submission_id}
+        taskType={att.checkin_task_type}
+        role={role}
+        onUseReply={role === "admin" ? onUseReply : undefined}
+      />
+    );
+  }
   if (att.kind === "payment_request") {
     return <PaymentRequestCard att={att} mine={mine} />;
   }
@@ -626,6 +665,7 @@ export function MessageThread({
   const photoInputRef = useRef<HTMLInputElement>(null);
   const recorder = useVoiceRecorder();
   const transcribeFn = useServerFn(transcribeVoiceMessage);
+  const ensureCheckinsFn = useServerFn(ensureDueMessengerCheckins);
   // Defer PWA updates while there's an in-flight composer draft. No unload prompt
   // — chat threads navigate freely and the draft is short-lived.
   useUnsavedWarning(body.trim().length > 0 || sending || uploading, { warnOnUnload: false });
@@ -668,6 +708,19 @@ export function MessageThread({
     }, 350);
     return () => window.clearTimeout(t);
   }, [sheetForId, actionsForId]);
+
+  // Recurring check-ins arrive as real chat requests instead of Home-page
+  // form cards. Client opens are an idempotent safety trigger for due reminders.
+  useEffect(() => {
+    if (role !== "client" || !clientId) return;
+    void ensureCheckinsFn({ data: { clientId } })
+      .then((res) => {
+        if (res?.created) {
+          qc.invalidateQueries({ queryKey: ["messages", clientId, role] });
+        }
+      })
+      .catch(() => {});
+  }, [role, clientId, ensureCheckinsFn, qc]);
 
   const { data: messages = [] } = useQuery({
     queryKey: ["messages", clientId, role],
@@ -1529,7 +1582,15 @@ export function MessageThread({
                 {!isDeleted && !isEditing && m.attachments?.length > 0 && (
                   <div className={cn("mt-2 space-y-2", m.body ? "" : "")}>
                     {m.attachments.map((a, i) => (
-                      <AttachmentView key={i} att={a} mine={mine} message={m} />
+                      <AttachmentView
+                        key={i}
+                        att={a}
+                        mine={mine}
+                        message={m}
+                        role={role}
+                        clientId={clientId}
+                        onUseReply={(text) => setBody(text)}
+                      />
                     ))}
                   </div>
                 )}
