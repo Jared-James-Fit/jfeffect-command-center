@@ -630,9 +630,35 @@ const CATEGORY_BUCKETS: { id: string; label: string; kinds: string[] }[] = [
 // =============================================================================
 
 export function NotificationBell() {
-  const { unreadCount } = useNotificationFeed();
+  const { unreadCount, role, user, qc, items } = useNotificationFeed();
   const [open, setOpen] = useState(false);
   const isMobile = useIsMobile();
+
+  const handleOpenChange = (next: boolean) => {
+    if (next && user) {
+      const targets = items.filter((i) => !i.isRead && !i.isArchived);
+      if (targets.length) {
+        const prev = qc.getQueryData<{ items: BellItem[] }>(["notifications", role, user.id]);
+        const ids = new Set(targets.map((t) => t.id));
+
+        // Synchronous cache patch: the bell badge disappears on the same tap
+        // that opens Notifications instead of waiting for the sheet render or
+        // a network round-trip.
+        patchCache(qc, role, user.id, (it) => ids.has(it.id) ? { ...it, isRead: true } : it);
+
+        void rpc("notif_mark_read", toPairs(targets))
+          .then(() => {
+            qc.invalidateQueries({ queryKey: ["client-nav-badges"] });
+            qc.invalidateQueries({ queryKey: ["admin-nav-badges"] });
+            qc.invalidateQueries({ queryKey: ["media-nav-badges"] });
+          })
+          .catch(() => {
+            if (prev) qc.setQueryData(["notifications", role, user.id], prev);
+          });
+      }
+    }
+    setOpen(next);
+  };
 
   const trigger = (
     <button
@@ -651,7 +677,7 @@ export function NotificationBell() {
 
   if (isMobile) {
     return (
-      <Sheet open={open} onOpenChange={setOpen}>
+      <Sheet open={open} onOpenChange={handleOpenChange}>
         <SheetTrigger asChild>{trigger}</SheetTrigger>
         <SheetContent
           side="right"
@@ -680,7 +706,7 @@ export function NotificationBell() {
   }
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
+    <Popover open={open} onOpenChange={handleOpenChange}>
       <PopoverTrigger asChild>{trigger}</PopoverTrigger>
       <PopoverContent align="end" className="w-[400px] p-0">
         <NotificationPanel compact onNavigate={() => setOpen(false)} />
