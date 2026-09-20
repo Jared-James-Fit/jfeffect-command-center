@@ -7,7 +7,7 @@ import {
 } from "@/components/ui/command";
 import { useClientImpersonation } from "@/lib/client-impersonation";
 import { useAuth } from "@/lib/auth";
-import { Eye, UserX } from "lucide-react";
+import { ChevronLeft, Eye, UserX } from "lucide-react";
 import { toast } from "sonner";
 
 /**
@@ -65,9 +65,29 @@ export function ClientPovQuickPicker() {
   };
 
   return (
-    <CommandDialog open={open} onOpenChange={setOpen}>
-      <CommandInput placeholder="Search a client to enter their POV…" />
-      <CommandList>
+    <CommandDialog
+      open={open}
+      onOpenChange={setOpen}
+      showBackButton={false}
+      contentClassName="w-[calc(100vw-1.5rem)] max-w-lg rounded-2xl"
+    >
+      <div className="flex min-h-14 items-center gap-3 border-b border-border px-3 py-2">
+        <button
+          type="button"
+          aria-label="Back"
+          onClick={() => setOpen(false)}
+          className="inline-flex h-10 shrink-0 items-center justify-center gap-1 rounded-full border border-border bg-background px-3 text-sm font-semibold text-foreground shadow-sm transition active:bg-secondary focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+        >
+          <ChevronLeft className="h-4 w-4" />
+          <span>Back</span>
+        </button>
+        <div className="min-w-0 flex-1">
+          <div className="truncate text-sm font-bold">Switch client POV</div>
+          <div className="truncate text-xs text-muted-foreground">Choose another client</div>
+        </div>
+      </div>
+      <CommandInput placeholder="Search clients…" />
+      <CommandList className="max-h-[min(55dvh,420px)]">
         <CommandEmpty>
           {isLoading ? "Loading clients…" : "No clients match."}
         </CommandEmpty>
