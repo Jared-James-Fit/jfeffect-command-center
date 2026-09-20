@@ -21,8 +21,8 @@ const taskSchema = z.enum(["weekly_checkin", "nutrition_review"]);
 const ANSWER_LABELS: Record<MessengerCheckinTaskType, Record<string, string>> = {
   weekly_checkin: {
     week_rating: "Overall week",
-    training_rating: "Training",
-    nutrition_rating: "Nutrition consistency",
+    training_rating: "Training rating (1–5)",
+    nutrition_rating: "Nutrition consistency rating (1–5)",
     recovery_flags: "Recovery / issues",
     pain_details: "Pain / injury details",
     win: "Biggest win",
@@ -30,10 +30,10 @@ const ANSWER_LABELS: Record<MessengerCheckinTaskType, Record<string, string>> = 
     next_week_goal: "Main goal for next week",
   },
   nutrition_review: {
-    nutrition_rating: "Nutrition consistency",
+    nutrition_rating: "Nutrition consistency rating (1–5)",
     hunger: "Hunger / appetite",
     digestion: "Digestion",
-    training_energy: "Energy around training",
+    training_energy: "Energy around training rating (1–5)",
     hardest: "Hardest nutrition issue",
     food_changes: "Foods / meals to change",
     goal: "Nutrition goal until next review",
@@ -322,53 +322,205 @@ export const getMessengerCheckin = createServerFn({ method: "POST" })
     return row;
   });
 
-async function buildContextSnapshot(sb: any, clientId: string) {
+function isoDateAdd(date: string, days: number): string {
+  const d = new Date(`${date}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
+}
+
+function isoWeekMonday(date: string): string {
+  const d = new Date(`${date}T00:00:00Z`);
+  const day = d.getUTCDay(); // Sun=0 ... Sat=6
+  const offset = (day + 6) % 7;
+  d.setUTCDate(d.getUTCDate() - offset);
+  return d.toISOString().slice(0, 10);
+}
+
+function normalizeWeight(value: number, unit: string, targetUnit: string): number {
+  if (unit === targetUnit) return value;
+  return unit === "kg" ? value * 2.2046226 : value / 2.2046226;
+}
+
+async function buildContextSnapshot(
+  sb: any,
+  clientId: string,
+  opts?: { dueLocalDate?: string | null; clientTz?: string | null },
+) {
   const { data: client } = await sb
     .from("clients")
-    .select("id,user_id,full_name,preferred_weight_unit")
+    .select("id,user_id,full_name,preferred_weight_unit,timezone,committed_training_days,committed_training_frequency")
     .eq("id", clientId)
     .maybeSingle();
   if (!client?.user_id) return { client_name: client?.full_name ?? null };
 
-  const since = new Date(Date.now() - 7 * 86_400_000).toISOString();
-  const [{ data: bw }, { data: completions }] = await Promise.all([
+  // Weekly check-ins summarize the scheduled training period ending on the
+  // check-in due date. A rolling 7-day completion count can leak a prior
+  // Sunday's workout into a Saturday check-in and overstate adherence.
+  const periodEnd =
+    opts?.dueLocalDate ||
+    localDateInTimeZone(opts?.clientTz || client.timezone || "UTC");
+  const periodStart = isoWeekMonday(periodEnd);
+
+  const bwStart = isoDateAdd(periodEnd, -13);
+  const currentBwStart = isoDateAdd(periodEnd, -6);
+  const previousBwEnd = isoDateAdd(periodEnd, -7);
+
+  const [
+    { data: bw },
+    { data: completions },
+    { data: canonicalScheduled },
+  ] = await Promise.all([
     sb
       .from("progress_bodyweight")
       .select("logged_date,weight_value,weight_unit")
       .eq("user_id", client.user_id)
-      .order("logged_date", { ascending: false })
-      .limit(7),
+      .gte("logged_date", bwStart)
+      .lte("logged_date", periodEnd)
+      .order("logged_date", { ascending: true }),
     sb
       .from("pl_day_completions")
-      .select("completed_at")
+      .select("id,day_id,scheduled_workout_id,completed_at")
       .eq("client_id", clientId)
-      .gte("completed_at", since),
+      .gte("completed_at", `${isoDateAdd(periodStart, -7)}T00:00:00Z`)
+      .lte("completed_at", `${isoDateAdd(periodEnd, 7)}T23:59:59Z`),
+    sb
+      .from("pl_scheduled_workouts")
+      .select("id,source_day_id,scheduled_date")
+      .eq("client_id", clientId)
+      .gte("scheduled_date", periodStart)
+      .lte("scheduled_date", periodEnd)
+      .order("scheduled_date", { ascending: true }),
   ]);
+
+  const completionRows = completions ?? [];
+  const scheduledIds = Array.from(new Set(
+    completionRows.map((r: any) => r.scheduled_workout_id).filter(Boolean),
+  ));
+  const dayIds = Array.from(new Set(
+    completionRows.map((r: any) => r.day_id).filter(Boolean),
+  ));
+
+  const [{ data: completionSchedules }, { data: completionDays }] = await Promise.all([
+    scheduledIds.length
+      ? sb.from("pl_scheduled_workouts").select("id,scheduled_date").in("id", scheduledIds)
+      : Promise.resolve({ data: [] }),
+    dayIds.length
+      ? sb.from("pl_days").select("id,scheduled_date").in("id", dayIds)
+      : Promise.resolve({ data: [] }),
+  ]);
+
+  const scheduledDateById = new Map(
+    (completionSchedules ?? []).map((r: any) => [r.id, r.scheduled_date]),
+  );
+  const dayDateById = new Map(
+    (completionDays ?? []).map((r: any) => [r.id, r.scheduled_date]),
+  );
+
+  const completedKeys = new Set<string>();
+  const completedDates = new Set<string>();
+  for (const row of completionRows) {
+    const scheduledDate = row.scheduled_workout_id
+      ? scheduledDateById.get(row.scheduled_workout_id)
+      : dayDateById.get(row.day_id);
+    if (!scheduledDate || scheduledDate < periodStart || scheduledDate > periodEnd) continue;
+    completedKeys.add(
+      row.scheduled_workout_id
+        ? `sw:${row.scheduled_workout_id}`
+        : `day:${row.day_id}`,
+    );
+    completedDates.add(scheduledDate);
+  }
+
+  let plannedWorkouts = (canonicalScheduled ?? []).length;
+  let scheduleSource: "canonical" | "legacy" | "committed-frequency" | "none" =
+    plannedWorkouts > 0 ? "canonical" : "none";
+
+  // Older programs may not have canonical scheduled-workout instances. Fall
+  // back to their dated program days, traversing only this client's preps.
+  if (plannedWorkouts === 0) {
+    const { data: preps } = await sb
+      .from("pl_preps")
+      .select("id")
+      .eq("client_id", clientId)
+      .eq("archived", false);
+    const prepIds = (preps ?? []).map((r: any) => r.id);
+
+    if (prepIds.length) {
+      const { data: blocks } = await sb
+        .from("pl_blocks")
+        .select("id")
+        .in("prep_id", prepIds)
+        .eq("archived", false);
+      const blockIds = (blocks ?? []).map((r: any) => r.id);
+
+      if (blockIds.length) {
+        const { data: weeks } = await sb
+          .from("pl_weeks")
+          .select("id")
+          .in("block_id", blockIds);
+        const weekIds = (weeks ?? []).map((r: any) => r.id);
+
+        if (weekIds.length) {
+          const { data: days } = await sb
+            .from("pl_days")
+            .select("id,scheduled_date")
+            .in("week_id", weekIds)
+            .gte("scheduled_date", periodStart)
+            .lte("scheduled_date", periodEnd);
+          plannedWorkouts = new Set((days ?? []).map((r: any) => r.id)).size;
+          if (plannedWorkouts > 0) scheduleSource = "legacy";
+        }
+      }
+    }
+  }
+
+  // Last-resort context only. We never use this to overwrite a real schedule.
+  if (plannedWorkouts === 0 && Number(client.committed_training_frequency) > 0) {
+    plannedWorkouts = Number(client.committed_training_frequency);
+    scheduleSource = "committed-frequency";
+  }
 
   const weights = (bw ?? []).map((r: any) => ({
     date: r.logged_date,
     value: Number(r.weight_value),
     unit: r.weight_unit,
   }));
-  const latest = weights[0] ?? null;
-  let avg7: number | null = null;
-  if (weights.length) {
-    const targetUnit = latest.unit;
-    const vals = weights.map((w: any) =>
-      w.unit === targetUnit
-        ? w.value
-        : w.unit === "kg"
-          ? w.value * 2.2046226
-          : w.value / 2.2046226,
-    );
-    avg7 = Number((vals.reduce((a: number, b: number) => a + b, 0) / vals.length).toFixed(1));
+  const latest = weights.length ? weights[weights.length - 1] : null;
+  const targetUnit = latest?.unit || client.preferred_weight_unit || "lb";
+
+  function averageFor(from: string, to: string): number | null {
+    const vals = weights
+      .filter((w: any) => w.date >= from && w.date <= to)
+      .map((w: any) => normalizeWeight(w.value, w.unit, targetUnit))
+      .filter((v: number) => Number.isFinite(v));
+    if (!vals.length) return null;
+    return Number((vals.reduce((a: number, b: number) => a + b, 0) / vals.length).toFixed(1));
   }
+
+  const currentAvg = averageFor(currentBwStart, periodEnd);
+  const previousAvg = averageFor(bwStart, previousBwEnd);
+  const avgChange =
+    currentAvg != null && previousAvg != null
+      ? Number((currentAvg - previousAvg).toFixed(1))
+      : null;
 
   return {
     client_name: client.full_name ?? null,
+    checkin_period_start: periodStart,
+    checkin_period_end: periodEnd,
+    planned_workouts_this_checkin_period: plannedWorkouts || null,
+    completed_workouts_this_checkin_period: completedKeys.size,
+    workout_adherence_this_checkin_period:
+      plannedWorkouts > 0 ? `${completedKeys.size}/${plannedWorkouts}` : null,
+    completed_workout_dates_this_checkin_period: Array.from(completedDates).sort(),
+    workout_schedule_source: scheduleSource,
+    committed_training_days: client.committed_training_days ?? null,
+    committed_training_frequency: client.committed_training_frequency ?? null,
     bodyweight_latest: latest,
-    bodyweight_7d_average: avg7,
-    completed_workouts_last_7d: (completions ?? []).length,
+    bodyweight_7d_average: currentAvg,
+    bodyweight_previous_7d_average: previousAvg,
+    bodyweight_7d_average_change: avgChange,
+    bodyweight_unit: targetUnit,
   };
 }
 
@@ -449,6 +601,11 @@ async function generateAnalysis(
     const system = [
       "You help a strength and nutrition coach review a client check-in.",
       "Use only the supplied answers and app context. Do not invent facts.",
+      "Workout counts in APP CONTEXT are authoritative. Never infer a workout count from a 1–5 rating or from qualitative text like 'all my workouts'.",
+      "For weekly check-ins, summarize only checkin_period_start through checkin_period_end. Do not use a rolling 7-day interpretation.",
+      "If planned_workouts_this_checkin_period and completed_workouts_this_checkin_period are present, use those exact numbers. Never substitute committed_training_frequency for a real scheduled count.",
+      "A training_rating of 5 means the client rated training 5/5; it does NOT mean five workouts.",
+      "bodyweight_latest versus bodyweight_7d_average is not a trend. Only call weight up/down if bodyweight_7d_average_change is explicitly present.",
       "Be concise and practical. Do not diagnose medical conditions.",
       "A red flag means something the coach should notice or ask about, not a medical diagnosis.",
       "Pain/injury, unusually poor recovery, very low sleep/energy, major adherence problems, or a direct request for help should be surfaced clearly.",
@@ -530,7 +687,17 @@ export const submitMessengerCheckin = createServerFn({ method: "POST" })
     if (row.status === "completed") return row;
 
     const taskType = row.task_type as MessengerCheckinTaskType;
-    const contextSnapshot = await buildContextSnapshot(sb, row.client_id);
+    const { data: occurrence } = row.occurrence_id
+      ? await sb
+          .from("client_task_occurrences")
+          .select("*")
+          .eq("id", row.occurrence_id)
+          .maybeSingle()
+      : { data: null };
+    const contextSnapshot = await buildContextSnapshot(sb, row.client_id, {
+      dueLocalDate: occurrence?.due_local_date ?? null,
+      clientTz: occurrence?.client_tz ?? null,
+    });
     const analysis = await generateAnalysis(sb, taskType, data.answers, contextSnapshot);
     const now = new Date().toISOString();
 
@@ -548,30 +715,23 @@ export const submitMessengerCheckin = createServerFn({ method: "POST" })
       })
       .eq("id", row.id);
 
-    if (row.occurrence_id) {
-      const { data: occ } = await sb
+    if (occurrence && !["completed", "skipped"].includes(occurrence.status)) {
+      await sb
         .from("client_task_occurrences")
-        .select("*")
-        .eq("id", row.occurrence_id)
-        .maybeSingle();
-      if (occ && !["completed", "skipped"].includes(occ.status)) {
-        await sb
-          .from("client_task_occurrences")
-          .update({
-            status: "completed",
-            completed_at: now,
-            completed_by: context.userId,
-            payload_ref: {
-              ...(occ.payload_ref ?? {}),
-              messenger_checkin_id: row.id,
-            },
-          })
-          .eq("id", row.occurrence_id);
-        try {
-          await ensureNextOccurrence(sb, row.client_id, taskType, new Date());
-        } catch {
-          // Home bootstrap is an idempotent fallback if next-occurrence seeding fails.
-        }
+        .update({
+          status: "completed",
+          completed_at: now,
+          completed_by: context.userId,
+          payload_ref: {
+            ...(occurrence.payload_ref ?? {}),
+            messenger_checkin_id: row.id,
+          },
+        })
+        .eq("id", row.occurrence_id);
+      try {
+        await ensureNextOccurrence(sb, row.client_id, taskType, new Date());
+      } catch {
+        // Home bootstrap is an idempotent fallback if next-occurrence seeding fails.
       }
     }
 
