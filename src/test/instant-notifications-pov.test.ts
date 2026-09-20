@@ -32,7 +32,7 @@ describe("messages client POV shortcuts", () => {
   it("offers one-tap profile and POV actions for the selected client", () => {
     expect(messages).toContain("useClientImpersonation");
     expect(messages).toContain("enterSelectedClientPov");
-    expect(messages).toContain('title="Client profile"');
+    expect(messages).toContain('title="Open client profile"');
     expect(messages).toContain('title="View client POV"');
     expect(messages).toContain("id, user_id, full_name");
   });
