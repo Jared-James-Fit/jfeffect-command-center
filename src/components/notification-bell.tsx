@@ -3,14 +3,14 @@ import { Link, useNavigate } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Bell, CheckCheck, Loader2, MoreHorizontal, Archive, ArchiveRestore, MailOpen, Mail,
-  Inbox, Filter, Search, X,
+  Inbox, Filter, Search, X, ChevronLeft,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
 import { markRead } from "@/lib/messages";
 import { markClientViewed, markAdminViewed } from "@/lib/lift-videos";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
+import { Sheet, SheetClose, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -645,10 +645,26 @@ export function NotificationBell() {
     return (
       <Sheet open={open} onOpenChange={setOpen}>
         <SheetTrigger asChild>{trigger}</SheetTrigger>
-        <SheetContent side="right" className="flex w-full flex-col p-0 sm:max-w-md">
-          <SheetHeader className="border-b px-4 py-3">
-            <SheetTitle className="text-base">Notifications</SheetTitle>
-          </SheetHeader>
+        <SheetContent
+          side="right"
+          hideCloseButton
+          className="flex w-full flex-col p-0 sm:max-w-md"
+        >
+          <div
+            className="flex shrink-0 items-center gap-3 border-b border-border px-4 pb-3"
+            style={{ paddingTop: "max(0.75rem, env(safe-area-inset-top))" }}
+          >
+            <SheetClose
+              aria-label="Back"
+              className="inline-flex h-10 min-w-[78px] shrink-0 items-center justify-center gap-1 rounded-full border border-border bg-background/95 px-3 text-sm font-semibold text-foreground shadow-sm ring-offset-background backdrop-blur transition hover:bg-secondary active:bg-secondary/80 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+            >
+              <ChevronLeft className="h-4 w-4" />
+              <span>Back</span>
+            </SheetClose>
+            <div className="min-w-0 flex-1 truncate text-base font-black tracking-tight">
+              Notifications
+            </div>
+          </div>
           <NotificationPanel compact onNavigate={() => setOpen(false)} />
         </SheetContent>
       </Sheet>
