@@ -693,7 +693,7 @@ export function NotificationBell() {
 // Panel (used by bell + full page)
 // =============================================================================
 
-type View = "new" | "all" | "archived";
+type View = "all" | "archived";
 
 export function NotificationPanel({
   compact = false,
@@ -740,7 +740,6 @@ export function NotificationPanel({
   const filtered = useMemo(() => {
     let base: BellItem[];
     if (view === "archived") base = items.filter((i) => i.isArchived);
-    else if (view === "new") base = items.filter((i) => !i.isRead && !i.isArchived);
     else base = items.filter((i) => !i.isArchived);
 
     if (kindFilter !== "all") {
@@ -942,7 +941,7 @@ export function NotificationPanel({
                 >
                   <Archive className="mr-2 h-3.5 w-3.5" /> Clear read ({readCount})
                 </DropdownMenuItem>
-                <DropdownMenuItem onSelect={() => setView(view === "archived" ? "new" : "archived")}>
+                <DropdownMenuItem onSelect={() => setView(view === "archived" ? "all" : "archived")}>
                   <Inbox className="mr-2 h-3.5 w-3.5" />
                   {view === "archived" ? "Back to inbox" : "View archived"}
                 </DropdownMenuItem>
