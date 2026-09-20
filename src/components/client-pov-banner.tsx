@@ -1,5 +1,5 @@
 import { useNavigate } from "@tanstack/react-router";
-import { Eye, X } from "lucide-react";
+import { ArrowRightLeft, Eye, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useClientImpersonation } from "@/lib/client-impersonation";
 
@@ -16,21 +16,28 @@ export function ClientPovBanner() {
     navigate({ to: target });
   };
 
+  const switchClient = () => {
+    window.dispatchEvent(new CustomEvent("open-client-pov-picker"));
+  };
+
   return (
     <div
       className="sticky top-0 z-50 w-full border-b border-warning/40 bg-warning/15 text-warning-foreground backdrop-blur"
       style={{ paddingTop: "env(safe-area-inset-top)" }}
     >
-      <div className="grid min-h-12 grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2 px-3 py-2 text-sm sm:px-4">
+      <div className="flex min-h-12 items-center gap-2 px-3 py-2 text-sm sm:px-4">
         <Eye className="h-4 w-4 shrink-0 text-warning" />
-        <div className="min-w-0 flex items-center gap-2">
-          <span className="truncate font-semibold">Viewing as {client.full_name ?? "client"}</span>
-          <span className="hidden sm:inline-flex shrink-0 rounded-full border border-warning/40 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-widest text-warning">
-            Client POV
-          </span>
+        <div className="min-w-0 flex-1">
+          <div className="truncate font-semibold">Viewing as {client.full_name ?? "client"}</div>
+          <div className="text-[10px] font-bold uppercase tracking-widest text-warning">Client POV</div>
         </div>
-        <Button size="sm" variant="outline" className="h-8 shrink-0 text-xs" onClick={exit}>
-          <X className="mr-1 h-3.5 w-3.5" /> Exit
+        <Button size="sm" variant="outline" className="h-8 shrink-0 gap-1 px-2 text-xs" onClick={switchClient}>
+          <ArrowRightLeft className="h-3.5 w-3.5" />
+          <span>Switch</span>
+        </Button>
+        <Button size="sm" variant="outline" className="h-8 shrink-0 gap-1 px-2 text-xs" onClick={exit}>
+          <ShieldCheck className="h-3.5 w-3.5" />
+          <span>Coach</span>
         </Button>
       </div>
     </div>
