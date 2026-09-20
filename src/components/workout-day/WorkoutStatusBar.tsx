@@ -9,12 +9,14 @@ import { cn } from "@/lib/utils";
  * single source of truth stays in WorkoutDayView.
  */
 export function WorkoutStatusBar({
+  sessionTimer,
   exercisesDone,
   exercisesTotal,
   setsDone,
   setsTotal,
   className,
 }: {
+  sessionTimer?: React.ReactNode;
   exercisesDone: number;
   exercisesTotal: number;
   setsDone: number;
@@ -33,7 +35,8 @@ export function WorkoutStatusBar({
       role="status"
       aria-live="polite"
     >
-      <div className="mx-auto flex max-w-3xl items-center justify-end gap-3 text-sm">
+      <div className="mx-auto flex max-w-3xl items-center gap-3 text-sm">
+        {sessionTimer && <div className="mr-auto shrink-0">{sessionTimer}</div>}
         <Stat
           icon={<Dumbbell className="h-3.5 w-3.5" />}
           label="Exercises"
