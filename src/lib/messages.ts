@@ -11,7 +11,7 @@ export type MessageAttachment = {
   duration?: number;
   storage_path?: string;
   peaks?: number[];
-  kind?: "sound" | "gif" | "payment_request" | "form_request" | "signature_request" | "recipe_share";
+  kind?: "sound" | "gif" | "payment_request" | "form_request" | "signature_request" | "recipe_share" | "checkin_request" | "checkin_submission";
   fallback_emoji?: string;
   category?: string;
   purchase_id?: string;
@@ -30,6 +30,9 @@ export type MessageAttachment = {
   agreement_client_map?: { client_id: string; agreement_id: string }[];
   request_title?: string;
   request_note?: string;
+  checkin_submission_id?: string;
+  checkin_occurrence_id?: string | null;
+  checkin_task_type?: "weekly_checkin" | "nutrition_review";
 };
 
 export type Message = {
