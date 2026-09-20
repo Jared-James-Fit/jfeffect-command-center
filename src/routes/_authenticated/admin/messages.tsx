@@ -18,7 +18,7 @@ import {
   setConversationStatus, setConversationPriority, PRIORITIES,
   markUnread, markRead,
 } from "@/lib/messages";
-import { Search, ChevronLeft, MoreHorizontal, ExternalLink, Phone, MessageSquare, MailOpen, Mail, Trash2, Archive } from "lucide-react";
+import { Search, ChevronLeft, MoreHorizontal, ExternalLink, Phone, MessageSquare, MailOpen, Mail, Trash2, Archive, Eye, UserRound } from "lucide-react";
 import { SwipeableRow } from "@/components/ui/swipeable-row";
 import { toast } from "sonner";
 import { SendSmsDialog } from "@/components/send-sms-dialog";
@@ -29,6 +29,7 @@ import { GroupChatsPane } from "@/components/group-chats-pane";
 import { GroupChatErrorBoundary } from "@/components/group-chat-error-boundary";
 import { MassMessageDialog } from "@/components/mass-message-dialog";
 import { Megaphone, Users as UsersIcon } from "lucide-react";
+import { useClientImpersonation } from "@/lib/client-impersonation";
 
 const FILTERS = ["All", "Unread", "Needs Response", "High Priority", "Important", "Resolved", "Archived"] as const;
 type Filter = typeof FILTERS[number];
@@ -58,6 +59,7 @@ export function MessagesInbox({
   const selectedFromUrl = initialClient;
   const navigate = useNavigate();
   const qc = useQueryClient();
+  const clientPov = useClientImpersonation();
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<Filter>("All");
   const [selectedId, setSelectedId] = useState<string | null>(selectedFromUrl ?? null);
@@ -72,7 +74,7 @@ export function MessagesInbox({
     queryFn: async () => {
       const { data, error } = await supabase
         .from("clients")
-        .select("id, full_name, first_name, last_name, email, phone, call_access_enabled, sms_opt_out, profile_picture_url, archived, status, last_active_at")
+        .select("id, user_id, full_name, first_name, last_name, email, phone, call_access_enabled, sms_opt_out, profile_picture_url, archived, status, last_active_at")
         .order("full_name");
       if (error) throw error;
       return data;
@@ -216,6 +218,25 @@ export function MessagesInbox({
   const clearSelection = () => {
     setSelectedId(null);
     navigate({ to: "/admin/communication", search: { tab: "messages" } as any, replace: true });
+  };
+
+  const enterSelectedClientPov = () => {
+    if (!selected) return;
+    if (!(selected as any).user_id) {
+      toast.error("This client doesn't have an app account yet.");
+      return;
+    }
+    clientPov.start(
+      {
+        id: selected.id,
+        user_id: (selected as any).user_id,
+        full_name: selected.full_name,
+      },
+      typeof window !== "undefined"
+        ? window.location.pathname + window.location.search
+        : `/admin/communication?tab=messages&client=${selected.id}`,
+    );
+    navigate({ to: "/portal" });
   };
 
   const updateStatus = async (status: ConversationState["status"]) => {
@@ -492,6 +513,24 @@ export function MessagesInbox({
                   <span className="truncate">{selected.email}</span>
                 </div>
               </div>
+              <ClientNameLink
+                clientId={selected.id}
+                ariaLabel={`Open ${selected.full_name ?? "client"} profile`}
+                title="Client profile"
+                className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-border bg-background text-muted-foreground transition hover:bg-secondary hover:text-foreground"
+              >
+                <UserRound className="h-4 w-4" />
+              </ClientNameLink>
+              <Button
+                variant="outline"
+                size="icon"
+                className="h-9 w-9 shrink-0 border-warning/40 bg-warning/10 text-warning-foreground hover:bg-warning/20"
+                title="View client POV"
+                aria-label={`View ${selected.full_name ?? "client"} POV`}
+                onClick={enterSelectedClientPov}
+              >
+                <Eye className="h-4 w-4" />
+              </Button>
               {(selected as any).call_access_enabled && (selected as any).phone ? (
                 <Button
                   asChild
