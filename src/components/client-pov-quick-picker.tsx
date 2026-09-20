@@ -51,9 +51,11 @@ export function ClientPovQuickPicker() {
   const enter = (c: { id: string; user_id: string | null; full_name: string | null }) => {
     impersonation.start(
       { id: c.id, user_id: c.user_id, full_name: c.full_name },
-      typeof window !== "undefined"
-        ? window.location.pathname + window.location.search
-        : null,
+      impersonation.isImpersonating && impersonation.returnTo
+        ? impersonation.returnTo
+        : (typeof window !== "undefined"
+            ? window.location.pathname + window.location.search
+            : null),
     );
     if (!c.user_id) {
       toast.message("Entering POV preview — client account isn't set up yet, so personal data will be empty.");
