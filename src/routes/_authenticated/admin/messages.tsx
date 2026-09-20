@@ -18,7 +18,7 @@ import {
   setConversationStatus, setConversationPriority, PRIORITIES,
   markUnread, markRead,
 } from "@/lib/messages";
-import { Search, ChevronLeft, MoreHorizontal, ExternalLink, Phone, MessageSquare, MailOpen, Mail, Trash2, Archive, Eye, UserRound } from "lucide-react";
+import { Search, ChevronLeft, MoreHorizontal, ExternalLink, Phone, MessageSquare, MailOpen, Mail, Trash2, Archive, Eye } from "lucide-react";
 import { SwipeableRow } from "@/components/ui/swipeable-row";
 import { toast } from "sonner";
 import { SendSmsDialog } from "@/components/send-sms-dialog";
@@ -476,7 +476,12 @@ export function MessagesInbox({
               >
                 <ChevronLeft className="h-5 w-5" />
               </Button>
-              <span className="relative shrink-0">
+              <ClientNameLink
+                clientId={selected.id}
+                ariaLabel={`Open ${selected.full_name ?? "client"} profile`}
+                title="Open client profile"
+                className="relative shrink-0 rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              >
                 <UserAvatar
                   src={selected.profile_picture_url}
                   name={selected.full_name}
@@ -486,7 +491,7 @@ export function MessagesInbox({
                 {(selectedClientLive || isClientActive((selected as any).last_active_at)) && (
                   <span className="absolute bottom-0 right-0"><LiveDot /></span>
                 )}
-              </span>
+              </ClientNameLink>
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-1.5 truncate text-sm font-bold">
                   <span className="truncate">{selected.full_name}</span>
@@ -513,14 +518,6 @@ export function MessagesInbox({
                   <span className="truncate">{selected.email}</span>
                 </div>
               </div>
-              <ClientNameLink
-                clientId={selected.id}
-                ariaLabel={`Open ${selected.full_name ?? "client"} profile`}
-                title="Client profile"
-                className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-border bg-background text-muted-foreground transition hover:bg-secondary hover:text-foreground"
-              >
-                <UserRound className="h-4 w-4" />
-              </ClientNameLink>
               <Button
                 variant="outline"
                 size="icon"
