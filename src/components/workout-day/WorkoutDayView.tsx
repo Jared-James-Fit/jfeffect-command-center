@@ -2052,10 +2052,23 @@ function WorkoutDay({
           pageRoute={`/portal/workouts/${dayId}`}
         />
 
-        {/* Completed state: slim badge + recap. Pre-workout there is no
-            workout-level status row at all — the session clock auto-starts on
-            the first logged set (beginWorkoutSession) and progress lives in
-            the tiny ring beside the Day title. */}
+        {statusBarVisible && !completion?.completed_at && (
+          <div className="flex items-center justify-between rounded-xl border border-border bg-card px-3 py-2">
+            <div className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+              Workout time
+            </div>
+            <WorkoutTimer
+              dayId={dayId}
+              completedAt={null}
+              savedDurationMin={null}
+              readonly
+            />
+          </div>
+        )}
+
+        {/* Completed state: slim badge + recap. The live wall-clock tracker
+            appears above after the first meaningful logging action and keeps
+            counting across PWA navigation and app switching. */}
         {completion?.completed_at && statusSummary.setsDone > 0 && (
           <div className="flex flex-wrap items-center gap-2 text-xs">
             <Badge
