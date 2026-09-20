@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { Dumbbell, ListChecks } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -16,7 +17,7 @@ export function WorkoutStatusBar({
   setsTotal,
   className,
 }: {
-  sessionTimer?: React.ReactNode;
+  sessionTimer?: ReactNode;
   exercisesDone: number;
   exercisesTotal: number;
   setsDone: number;
