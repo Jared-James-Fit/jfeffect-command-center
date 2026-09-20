@@ -356,14 +356,16 @@ async function buildContextSnapshot(
   // Weekly check-ins summarize the scheduled training period ending on the
   // check-in due date. A rolling 7-day completion count can leak a prior
   // Sunday's workout into a Saturday check-in and overstate adherence.
-  const periodEnd =
-    opts?.dueLocalDate ||
-    localDateInTimeZone(opts?.clientTz || client.timezone || "UTC");
+  const contextDate = localDateInTimeZone(opts?.clientTz || client.timezone || "UTC");
+  const periodEnd = opts?.dueLocalDate || contextDate;
   const periodStart = isoWeekMonday(periodEnd);
 
-  const bwStart = isoDateAdd(periodEnd, -13);
-  const currentBwStart = isoDateAdd(periodEnd, -6);
-  const previousBwEnd = isoDateAdd(periodEnd, -7);
+  // Weight context can include a same-day weigh-in submitted after the formal
+  // check-in deadline; workout adherence still stops at the due date above.
+  const bwEnd = contextDate;
+  const bwStart = isoDateAdd(bwEnd, -13);
+  const currentBwStart = isoDateAdd(bwEnd, -6);
+  const previousBwEnd = isoDateAdd(bwEnd, -7);
 
   const [
     { data: bw },
@@ -375,7 +377,7 @@ async function buildContextSnapshot(
       .select("logged_date,weight_value,weight_unit")
       .eq("user_id", client.user_id)
       .gte("logged_date", bwStart)
-      .lte("logged_date", periodEnd)
+      .lte("logged_date", bwEnd)
       .order("logged_date", { ascending: true }),
     sb
       .from("pl_day_completions")
@@ -497,7 +499,7 @@ async function buildContextSnapshot(
     return Number((vals.reduce((a: number, b: number) => a + b, 0) / vals.length).toFixed(1));
   }
 
-  const currentAvg = averageFor(currentBwStart, periodEnd);
+  const currentAvg = averageFor(currentBwStart, bwEnd);
   const previousAvg = averageFor(bwStart, previousBwEnd);
   const avgChange =
     currentAvg != null && previousAvg != null
