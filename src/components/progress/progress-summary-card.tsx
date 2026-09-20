@@ -3,7 +3,7 @@ import { Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card } from "@/components/ui/card";
-import { Camera, Scale, Ruler, ArrowRight, Video, MessageSquare, Dumbbell, ClipboardCheck } from "lucide-react";
+import { Camera, Scale, Ruler, ArrowRight, Video, MessageSquare, Dumbbell, ClipboardCheck, ChevronRight } from "lucide-react";
 import { CoachCheckinReplies } from "./coach-checkin-replies";
 
 /**
@@ -54,7 +54,7 @@ export function ProgressSummaryCard({
   const { data: latest } = useQuery({
     queryKey: ["progress-snapshot-latest", userId],
     staleTime: 60_000,
-    enabled: !!userId,
+    enabled: !!userId && progressHref.kind !== "portal",
     queryFn: async () => {
       const [bwRes, photoRes, videoRes, measRes] = await Promise.all([
         supabase
@@ -109,12 +109,48 @@ export function ProgressSummaryCard({
   };
 
   type Primary = { label: string; icon: ComponentType<{ className?: string }>; action: "bodyweight" | "photo" | "video" | "measure" };
-  const primary: Primary[] = [
-    { label: "Log Weight", icon: Scale, action: "bodyweight" },
-    { label: "Add Photos", icon: Camera, action: "photo" },
-    { label: "Add Video", icon: Video, action: "video" },
-    { label: "Add Measurements", icon: Ruler, action: "measure" },
-  ];
+  const primary: Primary[] = progressHref.kind === "portal"
+    ? [
+        { label: "Add Photos", icon: Camera, action: "photo" },
+        { label: "Add Video", icon: Video, action: "video" },
+        { label: "Measurements", icon: Ruler, action: "measure" },
+      ]
+    : [
+        { label: "Log Weight", icon: Scale, action: "bodyweight" },
+        { label: "Add Photos", icon: Camera, action: "photo" },
+        { label: "Add Video", icon: Video, action: "video" },
+        { label: "Add Measurements", icon: Ruler, action: "measure" },
+      ];
+
+  if (progressHref.kind === "portal") {
+    return (
+      <Card className="overflow-hidden">
+        <div className="border-b border-border px-4 py-3">
+          <h3 className="text-sm font-bold">Progress</h3>
+          <p className="mt-0.5 text-xs text-muted-foreground">Add an update in one tap.</p>
+        </div>
+        <div className="divide-y divide-border">
+          {primary.map((p) => {
+            const Icon = p.icon;
+            return (
+              <Link
+                key={p.action}
+                to="/portal/progress"
+                search={{ action: p.action } as never}
+                className="flex min-h-14 items-center gap-3 px-4 py-3 transition active:bg-secondary/60 hover:bg-secondary/30"
+              >
+                <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-primary/10">
+                  <Icon className="h-4.5 w-4.5 text-primary" />
+                </span>
+                <span className="flex-1 text-sm font-semibold">{p.label}</span>
+                <ChevronRight className="h-4 w-4 text-muted-foreground" />
+              </Link>
+            );
+          })}
+        </div>
+      </Card>
+    );
+  }
 
   const PrimaryTile = ({ p }: { p: Primary }) => {
     const Icon = p.icon;
