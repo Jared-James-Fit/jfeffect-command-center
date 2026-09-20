@@ -806,6 +806,7 @@ function PhotoSubmissionDialog({ ctx, open, onOpenChange }: { ctx: ProgressConte
   const [label, setLabel] = useState("Weekly Check-In");
   const [notes, setNotes] = useState("");
   const [busy, setBusy] = useState(false);
+  const [preparingMulti, setPreparingMulti] = useState(false);
   const multiRef = useRef<HTMLInputElement>(null);
   // Map of angle → File to inject into the matching AngleUploadCard.
   const [pendingByAngle, setPendingByAngle] = useState<Partial<Record<ProgressAngle, { file: File; ts: number }>>>({});
@@ -847,16 +848,26 @@ function PhotoSubmissionDialog({ ctx, open, onOpenChange }: { ctx: ProgressConte
   // One-tap multi-upload: assigns picked files to angles that are still empty,
   // in PHOTO_ANGLES order. Called from the big "Upload all" button.
   async function multiUpload(files: File[]) {
-    const sid = await ensureSub();
-    const { data: existing = [] } = await supabase
-      .from("progress_media").select("angle").eq("submission_id", sid);
-    const taken = new Set((existing ?? []).map((r: any) => r.angle));
-    const targets = PHOTO_ANGLES.filter((a) => !taken.has(a)).slice(0, files.length);
-    if (!targets.length) { toast.message("All four angles already have a photo. Tap a tile to replace one."); return; }
-    const ts = Date.now();
-    const next: Partial<Record<ProgressAngle, { file: File; ts: number }>> = {};
-    targets.forEach((a, i) => { next[a] = { file: files[i], ts: ts + i }; });
-    setPendingByAngle((prev) => ({ ...prev, ...next }));
+    // Show feedback on the same tap instead of waiting for the submission +
+    // existing-angle lookups before the UI changes.
+    setPreparingMulti(true);
+    try {
+      const sid = await ensureSub();
+      const { data: existing = [] } = await supabase
+        .from("progress_media").select("angle").eq("submission_id", sid);
+      const taken = new Set((existing ?? []).map((r: any) => r.angle));
+      const targets = PHOTO_ANGLES.filter((a) => !taken.has(a)).slice(0, files.length);
+      if (!targets.length) {
+        toast.message("All four angles already have a photo. Tap a tile to replace one.");
+        return;
+      }
+      const ts = Date.now();
+      const next: Partial<Record<ProgressAngle, { file: File; ts: number }>> = {};
+      targets.forEach((a, i) => { next[a] = { file: files[i], ts: ts + i }; });
+      setPendingByAngle((prev) => ({ ...prev, ...next }));
+    } finally {
+      setPreparingMulti(false);
+    }
   }
 
   return (
@@ -873,9 +884,10 @@ function PhotoSubmissionDialog({ ctx, open, onOpenChange }: { ctx: ProgressConte
             type="button"
             className="h-14 w-full text-base font-bold gap-2"
             onClick={() => multiRef.current?.click()}
+            disabled={preparingMulti}
           >
-            <ImagePlus className="h-5 w-5" />
-            Upload Photos
+            {preparingMulti ? <Loader2 className="h-5 w-5 animate-spin" /> : <ImagePlus className="h-5 w-5" />}
+            {preparingMulti ? "Preparing photos…" : "Upload Photos"}
           </Button>
           <input
             ref={multiRef}
@@ -964,46 +976,67 @@ function AngleUploadCard({
 
   async function onFile(f: File) {
     setErr(null);
+    let uploadedPath: string | null = null;
     try {
-      // Instant local preview — don't make the user wait for upload to "see" the file.
+      // Instant local preview + status. Yield one frame before any image work so
+      // iPhone users see feedback immediately after choosing the file.
       const previewUrl = URL.createObjectURL(f);
       setLocalPreview((prev) => { if (prev) URL.revokeObjectURL(prev); return previewUrl; });
       setProgress(1);
+      await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
 
-      // Compress images aggressively before upload (massive speed-up on phone photos / HEIC).
+      // Compress large phone photos before upload. Small photos skip this path.
       let fileToUpload: File = f;
       if (mediaType === "photo" && f.type.startsWith("image/") && f.type !== "image/gif") {
         try {
-          const compressed = await compressImage(f, { maxDimension: 2000, quality: 0.82 });
+          const compressed = await compressImage(f, {
+            maxDimension: 1800,
+            quality: 0.82,
+            skipUnder: 300 * 1024,
+          });
           fileToUpload = compressed instanceof File
             ? compressed
             : new File([compressed], f.name.replace(/\.[^.]+$/, "") + ".jpg", { type: "image/jpeg" });
         } catch { /* fall back to original */ }
       }
+      setProgress((prev) => Math.max(prev ?? 0, 3));
 
-      const sid = await getSubId();
-      // Pre-create media row in "uploading" state
-      const m = await createMedia({
-        submission_id: sid, user_id: ctx.userId, media_type: mediaType, angle,
-        original_filename: f.name, file_size_bytes: fileToUpload.size, mime_type: fileToUpload.type || f.type,
-        upload_status: "uploading",
+      // Start the DB submission creation and the storage upload together.
+      // Previously these were three serial round-trips before/after transfer.
+      const subPromise = getSubId();
+      const uploadPromise = uploadProgressFile({
+        file: fileToUpload,
+        userId: ctx.userId,
+        onProgress: (p) => setProgress((prev) => Math.max(prev ?? 0, p)),
       });
-      qc.invalidateQueries({ queryKey: ["progress-media", sid] });
-      const res = await uploadProgressFile({
-        file: fileToUpload, userId: ctx.userId, onProgress: (p) => setProgress(p),
-      });
-      await updateMedia(m.id, {
-        storage_path: res.path, thumbnail_path: res.path,
-        mime_type: res.mimeType, file_size_bytes: res.sizeBytes,
-        upload_status: "ready", drive_sync_status: "pending",
+      const [sid, res] = await Promise.all([subPromise, uploadPromise]);
+      uploadedPath = res.path;
+
+      await createMedia({
+        submission_id: sid,
+        user_id: ctx.userId,
+        media_type: mediaType,
+        angle,
+        original_filename: f.name,
+        file_size_bytes: res.sizeBytes,
+        mime_type: res.mimeType,
+        storage_path: res.path,
+        thumbnail_path: res.path,
+        upload_status: "ready",
+        drive_sync_status: "pending",
       } as any);
+
       setProgress(100);
       qc.invalidateQueries({ queryKey: ["progress-media", sid] });
       setTimeout(() => {
         setProgress(null);
         setLocalPreview((prev) => { if (prev) URL.revokeObjectURL(prev); return null; });
-      }, 800);
+      }, 450);
     } catch (e: any) {
+      // Avoid leaving an orphaned object if the final DB insert fails.
+      if (uploadedPath) {
+        void supabase.storage.from("progress-media").remove([uploadedPath]).catch(() => {});
+      }
       setErr(e?.message ?? "Upload failed");
       setProgress(null);
       setLocalPreview((prev) => { if (prev) URL.revokeObjectURL(prev); return null; });
@@ -1058,7 +1091,7 @@ function AngleUploadCard({
             <div className="progress-shimmer" />
             <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 to-transparent p-2">
               <ProgressBar value={progress} className="h-1.5" />
-              <p className="mt-1 text-[11px] font-semibold text-white">Uploading… {progress}%</p>
+              <p className="mt-1 text-[11px] font-semibold text-white">{progress <= 3 ? "Preparing…" : `Uploading… ${progress}%`}</p>
             </div>
           </>
         )}
