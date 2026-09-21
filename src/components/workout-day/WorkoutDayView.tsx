@@ -2124,9 +2124,17 @@ function WorkoutDay({
           <div className="flex flex-wrap items-center gap-2 text-xs">
             <Badge
               variant="outline"
-              className="border-green-500/30 bg-green-500/10 text-green-500"
+              className={
+                hasSubmittedReview
+                  ? "border-green-500/30 bg-green-500/10 text-green-600 dark:text-green-400"
+                  : "border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-300"
+              }
             >
-              <CheckCircle2 className="mr-1 h-3 w-3" /> Completed
+              {hasSubmittedReview ? (
+                <><CheckCircle2 className="mr-1 h-3 w-3" /> Complete</>
+              ) : (
+                <><MessageSquare className="mr-1 h-3 w-3" /> Review pending</>
+              )}
               {completion.actual_duration_min != null && completion.actual_duration_min > 0
                 ? ` · ${formatDurationMin(completion.actual_duration_min)}`
                 : ""}
