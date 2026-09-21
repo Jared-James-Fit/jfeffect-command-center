@@ -1842,6 +1842,56 @@ function WorkoutDay({
         ? "in_progress"
         : "not_started";
 
+  const allRequiredWorkLogged =
+    statusSummary.setsTotal > 0 &&
+    statusSummary.setsDone >= statusSummary.setsTotal &&
+    statusSummary.exercisesTotal > 0 &&
+    statusSummary.exercisesDone >= statusSummary.exercisesTotal;
+
+  useEffect(() => {
+    const key = `${dayId}:${scheduledWorkoutId ?? "legacy"}`;
+    if (!allRequiredWorkLogged) {
+      if (autoFinishReviewRef.current === key) autoFinishReviewRef.current = null;
+      return;
+    }
+    if (
+      readonly ||
+      isImpersonating ||
+      workoutBodyError ||
+      rowsIsError ||
+      !rowsLoaded ||
+      completion?.completed_at ||
+      (typeof navigator !== "undefined" && navigator.onLine === false) ||
+      autoFinishReviewRef.current === key
+    ) {
+      return;
+    }
+
+    autoFinishReviewRef.current = key;
+    const id = window.setTimeout(() => {
+      setFocusMode(false);
+      void handleFinishWorkout();
+    }, 180);
+    return () => window.clearTimeout(id);
+    // The key above makes this a one-shot state-transition effect.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    allRequiredWorkLogged,
+    dayId,
+    scheduledWorkoutId,
+    readonly,
+    isImpersonating,
+    workoutBodyError,
+    rowsIsError,
+    rowsLoaded,
+    completion?.completed_at,
+  ]);
+
+  const hasSubmittedReview = !!(
+    existingReview?.review_submitted_at ??
+    existingReview?.created_at
+  );
+
   return (
     <>
       {focusMode && (
