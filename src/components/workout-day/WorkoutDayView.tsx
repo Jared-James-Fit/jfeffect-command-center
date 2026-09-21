@@ -1472,6 +1472,7 @@ function WorkoutDay({
   // exact same form. Consumed once by CompletedWorkoutActions via its
   // autoOpenReview prop.
   const [autoOpenReviewAfterFinish, setAutoOpenReviewAfterFinish] = useState(false);
+  const autoFinishReviewRef = useRef<string | null>(null);
   // Notifications can deep-link with ?review=1 to nudge the member to open
   // the shared review sheet on a completed workout.
   const reviewParam = search.review === 1;
