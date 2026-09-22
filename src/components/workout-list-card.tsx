@@ -53,11 +53,6 @@ export function WorkoutListCard({
           <div className="flex flex-wrap items-center gap-2">
             <div className="truncate font-bold">{title}</div>
             <Badge variant="outline" className={`text-[10px] ${status.tone}`}>{status.label}</Badge>
-            {isCompleted && !hasReview && (
-              <Badge variant="outline" className="border-amber-500/40 bg-amber-500/10 text-[10px] text-amber-700 dark:text-amber-300">
-                Review pending
-              </Badge>
-            )}
           </div>
           <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-muted-foreground">
             {weekLabel && <span>{weekLabel}</span>}
@@ -71,7 +66,7 @@ export function WorkoutListCard({
         {progress && progress.prescribedSets > 0 && (
           <WorkoutProgressRing
             pct={progress.pct}
-            status={progress.status}
+            status={status.status === "review_pending" ? "in_progress" : progress.status}
             size={36}
             className="shrink-0"
           />

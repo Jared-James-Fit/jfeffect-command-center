@@ -63,6 +63,38 @@ describe("workout lifecycle status", () => {
     expect(status.label).toBe("In Progress");
   });
 
+  it("keeps a completed workout amber until the client submits the review", () => {
+    const status = getWorkoutStatus(
+      item({
+        completion: {
+          id: "finished-review-pending",
+          completed_at: "2026-08-17T12:15:00Z",
+          has_feedback: false,
+        },
+      }),
+      TODAY,
+    );
+
+    expect(status.status).toBe("review_pending");
+    expect(status.label).toBe("Review pending");
+    expect(status.tone).toContain("amber");
+  });
+
+  it("turns green-complete once feedback is present", () => {
+    const status = getWorkoutStatus(
+      item({
+        completion: {
+          id: "finished-reviewed",
+          completed_at: "2026-08-17T12:15:00Z",
+          has_feedback: true,
+        },
+      }),
+      TODAY,
+    );
+
+    expect(status.status).toBe("completed_today");
+  });
+
   it("shows Completed only when an explicit completed_at timestamp exists", () => {
     const status = getWorkoutStatus(
       item({

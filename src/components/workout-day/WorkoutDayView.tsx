@@ -1557,7 +1557,7 @@ function WorkoutDay({
    * the shared review sheet writes the rating, sleep, recovery, and coach
    * notes to pl_workout_feedback / member_workout_reviews as a single UPSERT.
    */
-  async function handleFinishWorkout() {
+  async function handleFinishWorkout(completionMethod: "manual" | "automatic" = "manual") {
     if (!client?.id) return;
     if (completion?.completed_at) {
       qc.invalidateQueries({ queryKey: ["pl-day-completion", dayId] });
@@ -1631,7 +1631,7 @@ function WorkoutDay({
           scheduledWorkoutId,
           requiredRows,
           activityTimestamps: heartbeats,
-          completionMethod: "manual",
+          completionMethod,
           completionSource: "workout_view",
           sessionRating: null,
           notes: completion?.client_notes ?? null,
@@ -1674,7 +1674,7 @@ function WorkoutDay({
               dayIndex: memberDayIndex!,
               requiredRows,
               activityTimestamps: heartbeats,
-              completionMethod: "manual",
+              completionMethod,
               completionSource: "workout_view",
               sessionRating: null,
               notes: null,
@@ -1690,7 +1690,7 @@ function WorkoutDay({
               scheduledWorkoutId,
               requiredRows,
               activityTimestamps: heartbeats,
-              completionMethod: "manual",
+              completionMethod,
               completionSource: "workout_view",
               sessionRating: null,
               notes: completion?.client_notes ?? null,
@@ -1735,6 +1735,93 @@ function WorkoutDay({
     recapFromSubmitRef.current = true;
     setAutoOpenReviewAfterFinish(true);
   }
+
+  // When every prescribed set has been fully confirmed, remove the extra
+  // "Finish Workout" tap. Persist the workout automatically, then the existing
+  // review sheet opens as the final athlete action. Until that review is
+  // submitted the UI stays amber ("Review pending"), not green-complete.
+  const autoFinishReady = useMemo(() => {
+    try {
+      const required: RequiredRowSpec[] = (rows as any[])
+        .filter((r: any) => !r?.skipped)
+        .map((r: any) => ({
+          rowId: String(r.id),
+          prescribedSets: Math.max(1, Number(r.sets) || 1),
+          skipped: false,
+          metricKind: ((
+            r?.tracking_type === "time" ||
+            r?.measurement_type === "time" ||
+            (r as any)?.exercises?.default_measurement_type === "time" ||
+            (r?.duration_seconds != null && Number(r.duration_seconds) > 0) ||
+            /\b(sec(onds?)?|min(utes?)?)\b/i.test(String(r?.reps_text ?? ""))
+          ) ? "timed" : "load_reps") as RowMetricKind,
+        }));
+      if (required.length === 0) return false;
+
+      const confirmed: LoggedSetSpec[] = (results as any[])
+        .filter((x: any) => !!x?.completed_at)
+        .map((x: any) => ({
+          rowId: String(x.row_id),
+          setIndex: x.set_index ?? 0,
+          reps: x.actual_reps,
+          loadLb: x.actual_load_unit === "kg" ? null : x.actual_load,
+          loadKg: x.actual_load_unit === "kg" ? x.actual_load : null,
+          rpe: x.actual_rpe_num ?? x.actual_rpe,
+          completedDurationSeconds: x.completed_duration_seconds ?? null,
+        }));
+      const summary = summarizeCompleteness(required, confirmed);
+      return summary.requiredSets > 0 && summary.loggedSets >= summary.requiredSets;
+    } catch {
+      return false;
+    }
+  }, [rows, results]);
+
+  const autoFinishAttemptRef = useRef<string | null>(null);
+  useEffect(() => {
+    const key = `${dayId}:${scheduledWorkoutId ?? "legacy"}`;
+
+    if (
+      readonly ||
+      isImpersonating ||
+      workoutBodyError ||
+      rowsIsError ||
+      !authReady ||
+      !rowsLoaded ||
+      rowsFetching ||
+      completion?.completed_at ||
+      !autoFinishReady ||
+      (typeof navigator !== "undefined" && navigator.onLine === false)
+    ) {
+      if (!autoFinishReady && autoFinishAttemptRef.current === key) {
+        autoFinishAttemptRef.current = null;
+      }
+      return;
+    }
+
+    if (autoFinishAttemptRef.current === key) return;
+    autoFinishAttemptRef.current = key;
+
+    // Tiny debounce lets the final set autosave/refetch settle before the
+    // completion summary is persisted.
+    const id = window.setTimeout(() => {
+      setFocusMode(false);
+      void handleFinishWorkout("automatic");
+    }, 250);
+
+    return () => window.clearTimeout(id);
+  }, [
+    autoFinishReady,
+    authReady,
+    completion?.completed_at,
+    dayId,
+    isImpersonating,
+    readonly,
+    rowsFetching,
+    rowsIsError,
+    rowsLoaded,
+    scheduledWorkoutId,
+    workoutBodyError,
+  ]);
 
   if (!day) {
     return (
@@ -1825,6 +1912,11 @@ function WorkoutDay({
     }
   })();
 
+  const reviewSubmitted = !!(
+    existingReview?.review_submitted_at ??
+    existingReview?.created_at
+  );
+
   const statusBarVisible =
     !readonly &&
     statusSummary.exercisesTotal > 0 &&
@@ -1835,7 +1927,7 @@ function WorkoutDay({
     ? Math.min(100, Math.round((statusSummary.setsDone / statusSummary.setsTotal) * 100))
     : 0;
   const progressStatus: import("@/lib/workout-progress").WorkoutProgressStatus =
-    completion?.completed_at || (statusSummary.setsTotal > 0 && statusSummary.setsDone >= statusSummary.setsTotal)
+    completion?.completed_at && reviewSubmitted
       ? "completed"
       : statusSummary.setsDone > 0
         ? "in_progress"
@@ -1992,9 +2084,10 @@ function WorkoutDay({
                         }
                       : null
                   }
-                  onReviewSaved={() =>
-                    qc.invalidateQueries({ queryKey: ["pl-workout-feedback", dayId, client.id] })
-                  }
+                  onReviewSaved={() => {
+                    qc.invalidateQueries({ queryKey: ["pl-workout-feedback", dayId, client.id] });
+                    qc.invalidateQueries({ queryKey: ["my-workouts", client.id] });
+                  }}
                   onViewScore={(rating) => {
                     setLastSessionRating(rating);
                     setTimeout(() => openRecapSummary(), 350);
@@ -2073,21 +2166,28 @@ function WorkoutDay({
           <div className="flex flex-wrap items-center gap-2 text-xs">
             <Badge
               variant="outline"
-              className="border-green-500/30 bg-green-500/10 text-green-500"
+              className={
+                reviewSubmitted
+                  ? "border-green-500/30 bg-green-500/10 text-green-500"
+                  : "border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-300"
+              }
             >
-              <CheckCircle2 className="mr-1 h-3 w-3" /> Completed
+              <CheckCircle2 className="mr-1 h-3 w-3" />
+              {reviewSubmitted ? "Completed" : "Review pending"}
               {completion.actual_duration_min != null && completion.actual_duration_min > 0
                 ? ` · ${formatDurationMin(completion.actual_duration_min)}`
                 : ""}
             </Badge>
-            <Button
-              size="sm"
-              variant="outline"
-              className="h-7 gap-1.5 border-primary/40 bg-primary/10 px-2.5 text-xs font-bold text-primary hover:bg-primary/20"
-              onClick={openRecapSummary}
-            >
-              <Trophy className="h-3.5 w-3.5" /> View Score
-            </Button>
+            {reviewSubmitted && (
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-7 gap-1.5 border-primary/40 bg-primary/10 px-2.5 text-xs font-bold text-primary hover:bg-primary/20"
+                onClick={openRecapSummary}
+              >
+                <Trophy className="h-3.5 w-3.5" /> View Score
+              </Button>
+            )}
           </div>
         )}
         {/* Compact Warm-Up launcher. Rescheduling lives on the outside
@@ -2237,9 +2337,10 @@ function WorkoutDay({
                   }
                 : null
             }
-            onReviewSaved={() =>
-              qc.invalidateQueries({ queryKey: ["pl-workout-feedback", dayId, client.id] })
-            }
+            onReviewSaved={() => {
+              qc.invalidateQueries({ queryKey: ["pl-workout-feedback", dayId, client.id] });
+              qc.invalidateQueries({ queryKey: ["my-workouts", client.id] });
+            }}
             onViewScore={(rating) => {
               setLastSessionRating(rating);
               setTimeout(() => openRecapSummary(), 350);

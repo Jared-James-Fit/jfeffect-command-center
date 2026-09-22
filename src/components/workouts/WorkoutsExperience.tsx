@@ -700,7 +700,9 @@ function statusDotClass(status: WorkoutStatus | "none"): string {
     case "completed_different_day":
       return "bg-emerald-500";
     case "today": return "bg-primary";
-    case "in_progress": return "bg-amber-500";
+    case "in_progress":
+    case "review_pending":
+      return "bg-amber-500";
     case "missed": return "bg-rose-500";
     case "upcoming": return "bg-muted-foreground/60";
     case "available":
@@ -1084,11 +1086,9 @@ function SelectedDayCard({
     }
   };
 
-  const isCompleted =
-    item ? (() => {
-      const s = getWorkoutStatus(item).status;
-      return s === "completed_today" || s === "completed_on_scheduled" || s === "completed_different_day";
-    })() : false;
+  // Completion is a backend fact; the visual status can still be
+  // "review_pending" until the quick post-workout check-out is submitted.
+  const isCompleted = !!item?.completion?.completed_at;
 
   const { data: existingReview } = useQuery({
     queryKey: ["pl-workout-feedback", dayId, clientId],
@@ -1245,7 +1245,7 @@ function SelectedDayCard({
               {progress && progress.prescribedSets > 0 && (
                 <WorkoutProgressRing
                   pct={progress.pct}
-                  status={progress.status}
+                  status={status.status === "review_pending" ? "in_progress" : progress.status}
                   size={36}
                 />
               )}
@@ -1473,9 +1473,12 @@ function SelectedDayCard({
           ctx={{ kind: "client", dayId: item.day.id, scheduledWorkoutId: item.scheduledWorkoutId ?? null }}
           hasCoach
           initial={reviewInitial}
-          onSaved={() =>
-            qc.invalidateQueries({ queryKey: ["pl-workout-feedback", item.day.id, clientId] })
-          }
+          onSaved={() => {
+            qc.invalidateQueries({ queryKey: ["pl-workout-feedback", item.day.id, clientId] });
+            // Refresh the canonical workout item too so has_feedback flips
+            // immediately and the orange "Review pending" state turns green.
+            qc.invalidateQueries({ queryKey: ["my-workouts", clientId] });
+          }}
         />
       )}
 
@@ -1551,6 +1554,13 @@ function primaryCtaFor(item: WorkoutItem, status: WorkoutStatus): {
     return { label: "Continue Workout", tone: "bg-amber-500 text-black hover:bg-amber-400", icon: <Play className="mr-1 h-4 w-4" /> };
   }
   switch (status) {
+    case "review_pending":
+      return {
+        label: "Finish Review",
+        tone: "bg-amber-500 text-black hover:bg-amber-400",
+        icon: <MessageSquare className="mr-1 h-4 w-4" />,
+        search: { review: 1 },
+      };
     case "completed_today":
     case "completed_on_scheduled":
     case "completed_different_day":
