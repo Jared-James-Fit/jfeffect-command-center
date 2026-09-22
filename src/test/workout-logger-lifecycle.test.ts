@@ -22,7 +22,7 @@ describe("workout logger lifecycle", () => {
     expect(startCalls).toHaveLength(2);
     expect(source).toContain("const markInProgress = async () => {");
     expect(source).toContain("beginSessionOnAction();\n    markInProgress();");
-    expect(source).toContain("async function handleFinishWorkout() {");
+    expect(source).toContain('async function handleFinishWorkout(completionMethod: "manual" | "automatic" = "manual")');
   });
 
   it("keeps the final completion write inside the shared finish handler", () => {
