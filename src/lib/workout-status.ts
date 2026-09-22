@@ -7,6 +7,7 @@ export type WorkoutStatus =
   | "available"
   | "not_started"
   | "in_progress"
+  | "review_pending"
   | "completed_today"
   | "completed_on_scheduled"
   | "completed_different_day"
@@ -33,6 +34,19 @@ export function getWorkoutStatus(item: WorkoutItem, now: Date = new Date()): {
   );
 
   if (completedAt) {
+    // A workout is not visually "done" for the athlete until the quick
+    // post-workout review is submitted. getClientWorkouts attaches
+    // has_feedback explicitly; readers that do not fetch feedback leave it
+    // undefined and retain the legacy completed behavior.
+    if (item.completion?.has_feedback === false) {
+      return {
+        status: "review_pending",
+        label: "Review pending",
+        tone: reviewPendingTone,
+        scheduled,
+        completedAt,
+      };
+    }
     if (isSameDay(completedAt, today)) {
       return { status: "completed_today", label: "Completed today", tone: completedTone, scheduled, completedAt };
     }
@@ -83,6 +97,7 @@ export function getWorkoutStatus(item: WorkoutItem, now: Date = new Date()): {
 }
 
 const completedTone = "border-emerald-500/40 bg-emerald-500/10 text-emerald-500";
+const reviewPendingTone = "border-amber-500/40 bg-amber-500/10 text-amber-600 dark:text-amber-300";
 const todayTone = "border-primary/40 bg-primary/10 text-primary";
 const inProgressTone = "border-amber-500/40 bg-amber-500/10 text-amber-500";
 const upcomingTone = "border-muted-foreground/30 bg-muted/30 text-muted-foreground";
