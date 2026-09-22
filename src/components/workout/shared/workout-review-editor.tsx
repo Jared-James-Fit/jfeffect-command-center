@@ -230,7 +230,7 @@ export function WorkoutReviewEditor({
       });
     },
     onSuccess: (res: any) => {
-      toast.success(res?.edited ? "Review updated." : "Review saved.");
+      toast.success(res?.edited ? "Review updated." : "Workout complete.");
       // Recovery/sleep answers feed the Training Readiness ring. Invalidate
       // both member and coaching readiness queries so the ring reflects the
       // just-saved (or edited/cleared) Recovery value immediately.
