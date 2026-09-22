@@ -25,11 +25,29 @@ describe("workout logger lifecycle", () => {
     expect(source).toContain("async function handleFinishWorkout() {");
   });
 
-  it("keeps the only final completion write behind Finish Workout", () => {
+  it("keeps the final completion write inside the shared finish handler", () => {
     const source = loggerSource();
 
     expect(source).toContain("await completeWorkoutSrv({");
-    expect(source).toContain("async function handleFinishWorkout() {");
+    expect(source).toContain('async function handleFinishWorkout(completionMethod: "manual" | "automatic" = "manual")');
     expect(source).toContain("completed_at: nowIso,");
+  });
+
+  it("automatically opens the finish/review flow after every prescribed set is confirmed", () => {
+    const source = loggerSource();
+
+    expect(source).toContain("const autoFinishReady = useMemo(() => {");
+    expect(source).toContain("summary.requiredSets > 0 && summary.loggedSets >= summary.requiredSets");
+    expect(source).toContain('void handleFinishWorkout("automatic")');
+    expect(source).toContain("setAutoOpenReviewAfterFinish(true)");
+  });
+
+  it("does not auto-finish previews, coach POV, errored, or offline workouts", () => {
+    const source = loggerSource();
+
+    expect(source).toContain("readonly ||");
+    expect(source).toContain("isImpersonating ||");
+    expect(source).toContain("workoutBodyError ||");
+    expect(source).toContain('navigator.onLine === false');
   });
 });
