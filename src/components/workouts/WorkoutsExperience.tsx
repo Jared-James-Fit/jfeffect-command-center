@@ -695,13 +695,6 @@ function DeferredAnalytics({ clientId }: { clientId: string }) {
 
 function statusDotClass(status: WorkoutStatus | "none"): string {
   switch (status) {
-    case "review_pending":
-      return {
-        label: "Finish Review",
-        tone: "bg-amber-500 text-black hover:bg-amber-400",
-        icon: <MessageSquare className="mr-1 h-4 w-4" />,
-        search: { review: 1 },
-      };
     case "completed_today":
     case "completed_on_scheduled":
     case "completed_different_day":
@@ -1561,6 +1554,13 @@ function primaryCtaFor(item: WorkoutItem, status: WorkoutStatus): {
     return { label: "Continue Workout", tone: "bg-amber-500 text-black hover:bg-amber-400", icon: <Play className="mr-1 h-4 w-4" /> };
   }
   switch (status) {
+    case "review_pending":
+      return {
+        label: "Finish Review",
+        tone: "bg-amber-500 text-black hover:bg-amber-400",
+        icon: <MessageSquare className="mr-1 h-4 w-4" />,
+        search: { review: 1 },
+      };
     case "completed_today":
     case "completed_on_scheduled":
     case "completed_different_day":
