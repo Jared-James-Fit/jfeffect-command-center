@@ -63,9 +63,21 @@ export function CompletedWorkoutActions({
 
   return (
     <>
-      <Card className="flex flex-wrap items-center gap-2 border-emerald-500/30 bg-emerald-500/5 p-3">
-        <div className="mr-auto text-sm font-bold text-emerald-700 dark:text-emerald-300">
-          Workout completed
+      <Card
+        className={
+          hasReview
+            ? "flex flex-wrap items-center gap-2 border-emerald-500/30 bg-emerald-500/5 p-3"
+            : "flex flex-wrap items-center gap-2 border-amber-500/30 bg-amber-500/5 p-3"
+        }
+      >
+        <div
+          className={
+            hasReview
+              ? "mr-auto text-sm font-bold text-emerald-700 dark:text-emerald-300"
+              : "mr-auto text-sm font-bold text-amber-700 dark:text-amber-300"
+          }
+        >
+          {hasReview ? "Workout complete" : "Workout logged · review pending"}
         </div>
         <Button
           variant={hasReview ? "outline" : "default"}
@@ -81,7 +93,7 @@ export function CompletedWorkoutActions({
           ) : (
             <>
               <MessageSquare className="h-4 w-4" />
-              Mark Workout Complete
+              Finish Review
             </>
           )}
         </Button>
