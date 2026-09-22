@@ -15,6 +15,7 @@ import {
   type LiftFamily, type Role, ROLES, FAMILIES,
 } from "@/lib/analytics/powerlifting-exposure";
 import { fmtNum } from "@/lib/analytics-format";
+import { buildPowerliftingPerformanceTrend } from "@/lib/analytics/powerlifting-performance-trend";
 import type { AnalyticsFilter } from "./analytics-filter-bar";
 
 interface Props {
@@ -211,22 +212,17 @@ export function PowerliftingExposureSection({
   const [trendFamily, setTrendFamily] = useState<LiftFamily>("squat");
   const [trendRole, setTrendRole] = useState<"all" | Role>("all");
 
-  const trendPoints = useMemo(() => {
-    if (!results || results.length === 0) return [];
-    return results
-      .filter((r: any) => {
-        const mf = (r.movement_family ?? "").toLowerCase();
-        if (mf !== trendFamily) return false;
-        if (trendRole !== "all" && r.purpose_label !== trendRole) return false;
-        if (!r.date) return false;
-        const t = new Date(r.date).getTime();
-        return t >= filter.start.getTime() && t <= filter.end.getTime();
-      })
-      .map((r: any) => ({
-        date: format(new Date(r.date), "MMM d"),
-        est: Number((r.est_1rm ?? 0).toFixed(1)),
-      }));
-  }, [results, trendFamily, trendRole, filter.start, filter.end]);
+  const trendPoints = useMemo(
+    () =>
+      buildPowerliftingPerformanceTrend(results ?? [], {
+        family: trendFamily,
+        role: trendRole,
+        start: filter.start,
+        end: filter.end,
+        displayUnit,
+      }),
+    [results, trendFamily, trendRole, filter.start, filter.end, displayUnit],
+  );
 
   const hasRoleData = exposures.length > 0;
   const hasCompletedSbdRow = (results ?? []).some((r: any) => {
@@ -540,8 +536,13 @@ export function PowerliftingExposureSection({
           {/* D. Performance Trend */}
           <Card className="p-4">
             <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-              <div className="text-xs font-bold uppercase tracking-widest text-muted-foreground">
-                Performance Trend {displayUnit && `(${displayUnit})`}
+              <div>
+                <div className="text-xs font-bold uppercase tracking-widest text-muted-foreground">
+                  Performance Trend {displayUnit && `(${displayUnit})`}
+                </div>
+                <div className="mt-0.5 text-[11px] text-muted-foreground">
+                  Best estimated 1RM from each workout — warm-ups and back-off sets are not plotted.
+                </div>
               </div>
               <div className="flex flex-wrap items-center gap-2">
                 <ToggleGroup
@@ -593,8 +594,17 @@ export function PowerliftingExposureSection({
                         const d: any = payload[0].payload;
                         return (
                           <div className="rounded-lg border border-border bg-popover px-3 py-2 text-sm text-popover-foreground shadow-xl">
-                            <div className="text-xs font-bold uppercase text-muted-foreground">{d.date}</div>
-                            <div className="mt-1 font-extrabold text-foreground">{fmtNum(d.est)} est 1RM</div>
+                            <div className="text-xs font-bold uppercase text-muted-foreground">{d.fullDate}</div>
+                            <div className="mt-1 font-extrabold text-foreground">
+                              {fmtNum(d.est)} {displayUnit} est 1RM
+                            </div>
+                            <div className="text-xs text-muted-foreground">
+                              {fmtNum(d.load)} {displayUnit} × {d.reps}
+                              {d.role ? ` · ${d.role}` : ""}
+                            </div>
+                            {d.exerciseName && (
+                              <div className="mt-0.5 text-[11px] text-muted-foreground">{d.exerciseName}</div>
+                            )}
                           </div>
                         );
                       }}
