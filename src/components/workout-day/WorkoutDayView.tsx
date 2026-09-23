@@ -1073,7 +1073,7 @@ function WorkoutDay({
 
   // Mark in_progress when any meaningful entry occurs
   const markInProgress = async () => {
-    if (!client?.id) return false;
+    if (!client?.id) return;
     // Same POV safety as startWorkout above — coach/admin reviewing a
     // client's workout must not flip the client's in_progress timestamp.
     if (isImpersonating) return;
@@ -1484,11 +1484,10 @@ function WorkoutDay({
   useEffect(() => {
     if (!reviewParam) { autoOpenedReviewRef.current = false; return; }
     if (autoOpenedReviewRef.current) return;
-    if (!completion?.completed_at && !autoFinishReady) return;
+    if (!completion?.completed_at) return;
     autoOpenedReviewRef.current = true;
-    if (completion?.completed_at) setAutoOpenReviewAfterFinish(true);
-    else setQuickFinishReviewOpen(true);
-  }, [reviewParam, completion?.completed_at, autoFinishReady]);
+    setAutoOpenReviewAfterFinish(true);
+  }, [reviewParam, completion?.completed_at]);
 
   // ?recap=1 deep-link → open the workout score/recap dialog for an
   // already-completed workout (read-only). Reuses the same summary modal
@@ -1567,7 +1566,7 @@ function WorkoutDay({
     completionMethod: "manual" | "automatic" = "manual",
     openReviewAfterFinish = true,
   ): Promise<boolean> {
-    if (!client?.id) return;
+    if (!client?.id) return false;
     if (completion?.completed_at) {
       qc.invalidateQueries({ queryKey: ["pl-day-completion", dayId] });
       if (openReviewAfterFinish) setAutoOpenReviewAfterFinish(true);
