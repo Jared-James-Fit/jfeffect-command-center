@@ -35,7 +35,7 @@ type ResultRow = { primary: string; secondary: string };
 
 const headlineStats = [
   ["100+", "Clients coached", "General fitness to international-level powerlifting"],
-  ["🇨🇦", "Team Canada", "International powerlifting athlete"],
+  ["🇨🇦 8", "International Medals", "Team Canada · 🥇 7 Gold · 🥈 1 Silver · 🥉 0 Bronze"],
   ["2×", "International Champion", "NAPF + Commonwealth · 2026"],
   ["Top 50", "All-Time World Ranking", "66 kg powerlifting · 2026"],
   ["5×", "Drug-Tested Athlete", "Sanctioned drug-tested competition"],
@@ -43,6 +43,7 @@ const headlineStats = [
 ];
 
 const internationalResults: ResultRow[] = [
+  { primary: "Team Canada · International medal count", secondary: "8 total medals · 🥇 7 Gold · 🥈 1 Silver · 🥉 0 Bronze" },
   { primary: "2026 · NAPF North American Championships", secondary: "Gold — Squat · Bench · Deadlift · Overall Total" },
   { primary: "2026 · Commonwealth Championships", secondary: "Gold — Squat · Bench · Overall Total · Silver — Deadlift" },
 ];
@@ -295,7 +296,7 @@ const timeline = [
   { year: "2018", title: "DTS Level 1 + bodybuilding champion", body: "Completed Darby Training Systems Level 1 and won the MABBA Men's Physique title." },
   { year: "2021", title: "JF Effect became the full-time path", body: "Built the coaching business around personalized training, nutrition structure, accountability, form review, and direct support." },
   { year: "2023", title: "ISSA Certified Personal Trainer", body: "Added the ISSA Personal Training Certification alongside practical coaching and competitive experience." },
-  { year: "2026", title: "Team Canada · 2× International Champion", body: "Won the overall total at both the NAPF North American Championships and Commonwealth Championships." },
+  { year: "2026", title: "Team Canada · 2× International Champion", body: "Won the overall total at both the NAPF North American Championships and Commonwealth Championships, earning 8 international medals for Team Canada: 7 gold and 1 silver." },
 ];
 
 const SCROLL_IMAGE_PLACEHOLDER =
