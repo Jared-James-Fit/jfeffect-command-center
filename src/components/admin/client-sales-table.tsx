@@ -284,12 +284,23 @@ function RowMenu({ raw, clientName, onEditDates, onMarkPaid, onMarkOverdue, onEm
     catch (e: any) { toast.error(e?.message ?? "Could not restore sale"); }
   };
   const remove = async () => {
-    if (!window.confirm("Remove this unpaid sale permanently? This is only allowed when there is no payment or Stripe transaction history.")) return;
+    if (!window.confirm("Delete this unpaid payment setup permanently? Any open Stripe checkout will be closed first. Paid or transaction-backed sales cannot be deleted.")) return;
     try { await removeFn({ data: { id: raw.id } }); toast.success("Unpaid sale removed"); onChanged(); }
     catch (e: any) { toast.error(e?.message ?? "Could not remove sale"); }
   };
 
-  const removable = !paid && !raw.stripe_payment_intent_id && !raw.stripe_subscription_id && !raw.stripe_checkout_session_id && Number(raw.amount_paid ?? 0) <= 0 && Number(raw.amount_paid_cents ?? 0) <= 0;
+  const protectedFinancialStatus = ["paid", "active subscription", "refunded", "partially paid"].includes(
+    String(raw.payment_status ?? "").trim().toLowerCase(),
+  );
+  // An unpaid Checkout Session is a payment setup, not financial history by
+  // itself. The server re-checks Stripe and expires an open session before
+  // permanent removal. Paid/payment-intent/subscription/ledger-backed rows stay protected.
+  const removable =
+    !protectedFinancialStatus &&
+    !raw.stripe_payment_intent_id &&
+    !raw.stripe_subscription_id &&
+    Number(raw.amount_paid ?? 0) <= 0 &&
+    Number(raw.amount_paid_cents ?? 0) <= 0;
 
   return <DropdownMenu>
     <DropdownMenuTrigger asChild><Button size="icon" variant="ghost" className="h-9 w-9" aria-label="Sale actions"><MoreHorizontal className="h-4 w-4" /></Button></DropdownMenuTrigger>
@@ -307,7 +318,7 @@ function RowMenu({ raw, clientName, onEditDates, onMarkPaid, onMarkOverdue, onEm
       <DropdownMenuItem onSelect={() => void downloadPurchasePdf(raw, clientName)}><Download className="mr-2 h-3.5 w-3.5" />Download PDF</DropdownMenuItem>
       <DropdownMenuSeparator />
       {raw.archived_at ? <DropdownMenuItem onSelect={() => void restore()}><ArchiveRestore className="mr-2 h-3.5 w-3.5" />Restore sale</DropdownMenuItem> : <DropdownMenuItem onSelect={() => void archive()}><Archive className="mr-2 h-3.5 w-3.5" />Archive sale</DropdownMenuItem>}
-      {removable && <DropdownMenuItem className="text-destructive focus:text-destructive" onSelect={() => void remove()}><Trash2 className="mr-2 h-3.5 w-3.5" />Remove unpaid sale</DropdownMenuItem>}
+      {removable && <DropdownMenuItem className="text-destructive focus:text-destructive" onSelect={() => void remove()}><Trash2 className="mr-2 h-3.5 w-3.5" />Delete unpaid setup</DropdownMenuItem>}
     </DropdownMenuContent>
   </DropdownMenu>;
 }
