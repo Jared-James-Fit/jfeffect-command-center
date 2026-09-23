@@ -107,6 +107,66 @@ const athleteResults: ResultRow[] = [
   { primary: "2025 · Elisa Vena", secondary: "6th Place · Western Canadians · Nanaimo, BC" },
 ];
 
+const transformationProof = [
+  { name: "Sarah", result: "Fat Loss Recomp · Toned and beach-ready", image: "https://jaredjamesfit.com/assets/client-sarah-front-BftNcK0b.png" },
+  { name: "Madison", result: "-20 lb fat loss · Leaner and stronger", image: "https://jaredjamesfit.com/assets/client-madison-front-yvUrLdnU.png" },
+  { name: "Samantha", result: "Fat Loss Recomp · Core defined and leaned out", image: "https://jaredjamesfit.com/assets/client-samantha-front-vectZqwI.png" },
+  { name: "Ashtyn", result: "Lean Recomp · From soft to sculpted", image: "https://jaredjamesfit.com/assets/client-ashtyn-front-CIV-Wo3_.png" },
+  { name: "Colby", result: "Body Recomp · Leaner and more sculpted", image: "https://jaredjamesfit.com/assets/client-colby-front-BRYqRzpR.png" },
+  { name: "Shaina", result: "10+ lb muscle · Curves built and shape developed", image: "https://jaredjamesfit.com/assets/shaina-side-featured-BCqrcR05.jpg" },
+  { name: "Cedric", result: "Lean Muscle Build · From average to athletic", image: "https://jaredjamesfit.com/assets/cedric-front-C6nR1LtL.jpg" },
+  { name: "Landon", result: "Lean Bulk Recomp · From soft to shredded", image: "https://jaredjamesfit.com/assets/client-landon-front-C7p3lWAr.png" },
+  { name: "Drew", result: "Fat Loss Transformation · Dramatic fat loss", image: "https://jaredjamesfit.com/assets/client-drew-front-CI7ZiSsI.png" },
+  { name: "Dwayne", result: "Body Recomp · From soft to stage-lean", image: "https://jaredjamesfit.com/assets/dwayne-side-W5YYB7cP.jpg" },
+  { name: "Reece", result: "-35 lb shred · Lean and defined", image: "https://jaredjamesfit.com/assets/client-reece-front-DzLoaVqW.png" },
+  { name: "Thomas", result: "Weight Loss Progress · First real standard shift", image: "https://jaredjamesfit.com/assets/thomas-front-pzh_FHkD.jpg" },
+  { name: "Jonathan", result: "Weight Loss Phase · Belly reduced and tightened", image: "https://jaredjamesfit.com/assets/client-jonathan-side-RJvnZnyG.png" },
+  { name: "Mike", result: "Lean Muscle Build · Shredded and defined", image: "https://jaredjamesfit.com/assets/client-mike-front-DxJ62TQC.png" },
+  { name: "Daniel", result: "Lean Cut · Midsection pulled in", image: "https://jaredjamesfit.com/assets/client-daniel-side-DjJtQ64r.png" },
+  { name: "Branden", result: "Muscle Build · From skinny to stacked", image: "https://jaredjamesfit.com/assets/client-branden-front-CSvWkc5M.png" },
+  { name: "Sarwar", result: "Body Recomp · Major fat loss and muscle gain", image: "https://jaredjamesfit.com/assets/client-sarwar-front-D_QmESQd.png" },
+  { name: "Coach Jared", result: "Long-Term Recomp · Built over years", image: "https://jaredjamesfit.com/assets/client-coach-jared-front-1-Dk4eNuoA.png" },
+  { name: "Tyler", result: "Lean Transformation · Leaner and more athletic", image: "https://jaredjamesfit.com/assets/leveled-up-5-BIqnV8nJ.png" },
+  { name: "Camryn", result: "Body Recomp · Tightened and toned", image: "https://jaredjamesfit.com/assets/client-camryn-front-eEwinvFm.png" },
+  { name: "Erick", result: "Fat Loss Recomp · Leaner and sharper", image: "https://jaredjamesfit.com/assets/client-erick-front-DdH-Vzin.png" },
+  { name: "Icah", result: "Fat Loss Transformation · Midsection tightened", image: "https://jaredjamesfit.com/assets/client-icah-front-ERK6G0Of.png" },
+  { name: "Jasmine", result: "Body Recomp · Midsection tightened and toned", image: "https://jaredjamesfit.com/assets/client-jasmine-front-DrcRPRYO.png" },
+  { name: "Jennifer", result: "Fat Loss Recomp · Leaner and more confident", image: "https://jaredjamesfit.com/assets/client-jennifer-front-DILRPyfm.png" },
+  { name: "Kailey", result: "Body Recomp · Leaner and more toned", image: "https://jaredjamesfit.com/assets/client-kailey-front-CDo4_ARW.png" },
+  { name: "Karen", result: "Weight Loss Transformation · Major fat loss", image: "https://jaredjamesfit.com/assets/client-karen-front-DARTt-xR.png" },
+  { name: "Karina", result: "Fat Loss Recomp · Midsection tightened", image: "https://jaredjamesfit.com/assets/client-karina-front-4nuWP27u.png" },
+  { name: "Kyrstin", result: "-35 lb fat loss · Leaner and more defined", image: "https://jaredjamesfit.com/assets/client-kyrstin-front-Dh2_oclg.png" },
+  { name: "Romelyn", result: "Body Recomp · Leaner and more sculpted", image: "https://jaredjamesfit.com/assets/client-romelyn-front-C1lSPKXi.png" },
+];
+
+const multiAngleProof = [
+  ["Jared · Fat Loss", "https://jaredjamesfit.com/assets/leveled-up-12-Dvp868jE.png"],
+  ["Jared · Fat Loss Side", "https://jaredjamesfit.com/assets/client-jared-side-BazJEXkY.png"],
+  ["Jared · Fat Loss Back", "https://jaredjamesfit.com/assets/client-jared-back-Baz7-tAA.png"],
+  ["Coach Jared · Long-Term Recomp", "https://jaredjamesfit.com/assets/leveled-up-4-DWlPm4Gd.png"],
+  ["Coach Jared · Long-Term Recomp Back", "https://jaredjamesfit.com/assets/client-coach-jared-back-vPzp-iOL.png"],
+  ["Tyler · Side", "https://jaredjamesfit.com/assets/client-tyler-side-CwekuRs8.png"],
+  ["Tyler · Back", "https://jaredjamesfit.com/assets/client-tyler-back-hN_DvyPt.png"],
+  ["Camryn · Side", "https://jaredjamesfit.com/assets/client-camryn-side-DizI9SpV.png"],
+  ["Camryn · Back", "https://jaredjamesfit.com/assets/client-camryn-back-CcYXPGfi.png"],
+  ["Erick · Side", "https://jaredjamesfit.com/assets/client-erick-side-Bjp9hhqS.png"],
+  ["Erick · Back", "https://jaredjamesfit.com/assets/client-erick-back-BfhJOrOm.png"],
+  ["Icah · Side", "https://jaredjamesfit.com/assets/client-icah-side-B91Uukzk.png"],
+  ["Icah · Back", "https://jaredjamesfit.com/assets/client-icah-back-C6TK9Rpl.png"],
+  ["Jasmine · Side", "https://jaredjamesfit.com/assets/client-jasmine-side-BxHU9YN5.png"],
+  ["Jasmine · Back", "https://jaredjamesfit.com/assets/client-jasmine-back-Dpwgb4nn.png"],
+  ["Jennifer · Side", "https://jaredjamesfit.com/assets/client-jennifer-side-Dgeh1qnN.png"],
+  ["Kailey · Side", "https://jaredjamesfit.com/assets/client-kailey-side-Bbu9DFWJ.png"],
+  ["Kailey · Back", "https://jaredjamesfit.com/assets/client-kailey-back-Bm3koxV5.png"],
+  ["Karen · Side", "https://jaredjamesfit.com/assets/client-karen-side-B5HMwXgT.png"],
+  ["Karen · Back", "https://jaredjamesfit.com/assets/client-karen-back-BSztvFaH.png"],
+  ["Karina · Side", "https://jaredjamesfit.com/assets/client-karina-side-BzudAiAM.png"],
+  ["Karina · Back", "https://jaredjamesfit.com/assets/client-karina-back-HXHFN9N3.png"],
+  ["Kyrstin · Back", "https://jaredjamesfit.com/assets/client-kyrstin-back-D5IKY3VK.png"],
+  ["Romelyn · Side", "https://jaredjamesfit.com/assets/client-romelyn-side-BOQmt44A.png"],
+  ["Romelyn · Back", "https://jaredjamesfit.com/assets/client-romelyn-back-CApkI_Jq.png"],
+] as const;
+
 const timeline = [
   { year: "2014", title: "Started training", body: "The start of my own training journey and the years of learning that eventually became the foundation for coaching." },
   { year: "2017", title: "Personal trainer at GoodLife Fitness", body: "Worked in a real coaching environment managing clients, sessions, progression, and day-to-day accountability." },
@@ -294,6 +354,44 @@ function AboutJaredPage() {
 
       <Reveal stagger={4}>
         <Section className="bg-card/30">
+          <SectionTitle
+            eyebrow="Client transformations"
+            title="Real coaching. Visible proof."
+            sub="Fat loss, muscle gain and body recomposition results from JF Effect clients. Swipe horizontally on mobile."
+          />
+          <div className="mx-auto max-w-6xl overflow-x-auto pb-4 [-webkit-overflow-scrolling:touch]">
+            <div className="flex w-max gap-4">
+              {transformationProof.map((item) => (
+                <Card key={item.name} className="w-[78vw] max-w-[340px] shrink-0 overflow-hidden">
+                  <img src={item.image} alt={`${item.name} JF Effect client transformation`} className="aspect-square w-full object-cover" loading="lazy" />
+                  <div className="p-4">
+                    <div className="font-black">{item.name}</div>
+                    <div className="mt-1 text-sm leading-relaxed text-muted-foreground">{item.result}</div>
+                  </div>
+                </Card>
+              ))}
+            </div>
+          </div>
+          <div className="mx-auto mt-4 max-w-5xl">
+            <CredentialAccordion title="View additional transformation angles" summary="Front · side · back progress comparisons">
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                {multiAngleProof.map(([label, image]) => (
+                  <figure key={label} className="overflow-hidden rounded-xl border border-border bg-background">
+                    <img src={image} alt={`${label} transformation comparison`} className="aspect-square w-full object-cover" loading="lazy" />
+                    <figcaption className="p-3 text-xs font-bold">{label}</figcaption>
+                  </figure>
+                ))}
+              </div>
+            </CredentialAccordion>
+          </div>
+          <p className="mx-auto mt-5 max-w-4xl text-xs leading-relaxed text-muted-foreground">
+            Client transformations reflect individual experiences. Results vary based on starting point, consistency, effort, adherence, lifestyle and other individual factors; results are not guaranteed.
+          </p>
+        </Section>
+      </Reveal>
+
+      <Reveal stagger={5}>
+        <Section className="bg-card/30">
           <SectionTitle eyebrow="Education + experience" title="Coaching credentials" sub="Formal education backed by years of hands-on coaching and competition." />
           <div className="mx-auto grid max-w-5xl gap-4 md:grid-cols-2">
             {[
@@ -328,7 +426,7 @@ function AboutJaredPage() {
         </Section>
       </Reveal>
 
-      <Reveal stagger={5}>
+      <Reveal stagger={6}>
         <Section>
           <SectionTitle eyebrow="Timeline" title="How it got here" />
           <div className="mx-auto max-w-4xl space-y-3">
@@ -342,9 +440,9 @@ function AboutJaredPage() {
         </Section>
       </Reveal>
 
-      <Reveal stagger={6}><CoachTimelineSection /></Reveal>
+      <Reveal stagger={7}><CoachTimelineSection /></Reveal>
 
-      <Reveal stagger={7}>
+      <Reveal stagger={8}>
         <Section>
           <SectionTitle eyebrow="How I coach" title="Simple enough to execute. Detailed enough to work." />
           <div className="mx-auto grid max-w-5xl gap-4 md:grid-cols-3">
@@ -359,7 +457,7 @@ function AboutJaredPage() {
         </Section>
       </Reveal>
 
-      <Reveal stagger={8}>
+      <Reveal stagger={9}>
         <Section className="bg-card/30">
           <div className="mx-auto max-w-4xl rounded-3xl border border-primary/20 bg-background p-7 md:p-10">
             <div className="flex items-start gap-4">
@@ -374,7 +472,7 @@ function AboutJaredPage() {
         </Section>
       </Reveal>
 
-      <Reveal stagger={9}>
+      <Reveal stagger={10}>
         <Section className="!pt-8">
           <div className="mx-auto max-w-3xl rounded-3xl border border-primary/30 bg-gradient-to-br from-primary/15 via-card to-card p-8 text-center md:p-12">
             <div className="text-xs font-bold uppercase tracking-[0.18em] text-primary">Work with me</div>
