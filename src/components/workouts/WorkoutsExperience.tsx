@@ -702,6 +702,7 @@ function statusDotClass(status: WorkoutStatus | "none"): string {
     case "today": return "bg-primary";
     case "in_progress":
     case "review_pending":
+    case "incomplete":
       return "bg-amber-500";
     case "missed": return "bg-rose-500";
     case "upcoming": return "bg-muted-foreground/60";
