@@ -848,22 +848,74 @@ export const submitOrEditReview = createServerFn({ method: "POST" })
         ? (await import("@/integrations/supabase/client.server")).supabaseAdmin
         : supabase;
       const scheduledWorkoutId = (data as any).scheduledWorkoutId ?? null;
-      const { data: completion } = await scopeCompletion(
-        supabase.from("pl_day_completions").select("id"),
-        clientId,
-        data.dayId,
-        scheduledWorkoutId,
-      ).maybeSingle();
-      if (!completion?.id) throw new Error("Cannot submit review before completion exists");
 
+      // The quick "Review to Finish" flow intentionally lets the review be the
+      // athlete's final tap. That means the feedback request can arrive before
+      // React has observed (or, after a transient start failure, before we have
+      // even created) the completion shell. In coach/admin Client POV we also
+      // must read through the service-role writer; querying with the signed-in
+      // coach client can make a real client completion look missing under RLS.
+      //
+      // Guarantee an in-progress completion shell here, then the parent finish
+      // handler can persist the final completion stats immediately after the
+      // review saves. This keeps review submission idempotent and prevents the
+      // "Cannot submit review before completion exists" dead-end.
+      const lookupCompletion = async () =>
+        scopeCompletion(
+          writer.from("pl_day_completions").select("id"),
+          clientId,
+          data.dayId,
+          scheduledWorkoutId,
+        ).maybeSingle();
+
+      let { data: completion, error: completionLookupError } = await lookupCompletion();
+      if (completionLookupError) throw completionLookupError;
+
+      if (!completion?.id) {
+        const insertRow: Record<string, any> = {
+          client_id: clientId,
+          day_id: data.dayId,
+          started_at: nowIso,
+          in_progress_at: nowIso,
+          last_activity_at: nowIso,
+          completed_at: null,
+          completion_source: "review_to_finish",
+        };
+        if (scheduledWorkoutId) insertRow.scheduled_workout_id = scheduledWorkoutId;
+
+        const { data: inserted, error: insertError } = await writer
+          .from("pl_day_completions")
+          .insert(insertRow)
+          .select("id")
+          .single();
+
+        if (insertError) {
+          // A rapid double-tap / concurrent start may have created the shell
+          // between our lookup and insert. Re-read on unique conflict instead
+          // of surfacing a false failure to the athlete.
+          if ((insertError as any)?.code === "23505") {
+            const retry = await lookupCompletion();
+            if (retry.error) throw retry.error;
+            completion = retry.data;
+          } else {
+            throw insertError;
+          }
+        } else {
+          completion = inserted;
+        }
+      }
+
+      if (!completion?.id) throw new Error("Could not prepare workout completion for review");
+
+      const completionId = completion.id;
       const { data: existing } = await writer
         .from("pl_workout_feedback")
         .select("id, review_edit_count, review_submitted_at")
-        .eq("completion_id", completion.id)
+        .eq("completion_id", completionId)
         .maybeSingle();
 
       const base = {
-        completion_id: completion.id,
+        completion_id: completionId,
         client_id: clientId,
         day_id: data.dayId,
         overall_rating: data.overallRating,
