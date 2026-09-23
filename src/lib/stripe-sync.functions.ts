@@ -177,7 +177,7 @@ export const syncStripePayments = createServerFn({ method: "POST" })
     // Page through recent Checkout Sessions (Stripe max 100 per page).
     let startingAfter: string | null = null;
     const sessions: any[] = [];
-    for (let page = 0; page < 5; page++) {
+    for (let page = 0; page < 20; page++) {
       const qs = new URLSearchParams({
         limit: "100",
         "created[gte]": String(createdAfter),
@@ -346,11 +346,13 @@ export const syncStripePayments = createServerFn({ method: "POST" })
     // renewals and dashboard-created invoices, which made the Billing page drift
     // from the Stripe account even though the webhook updated the purchase.
     let invoiceStartingAfter: string | null = null;
+    let invoicesScanned = 0;
     for (let page = 0; page < 20; page++) {
       const qs = new URLSearchParams({ limit: "100", "created[gte]": String(createdAfter) });
       if (invoiceStartingAfter) qs.set("starting_after", invoiceStartingAfter);
       const res: any = await stripeFetch(`/invoices?${qs.toString()}`, { apiKey });
       const rows: any[] = res?.data ?? [];
+      invoicesScanned += rows.length;
       for (const i of rows) {
         if (i.status !== "paid" || !(i.amount_paid > 0)) continue;
         const subId = invoiceSubscriptionId(i);
@@ -427,11 +429,13 @@ export const syncStripePayments = createServerFn({ method: "POST" })
     // Checkout Session or invoice. This covers direct/dashboard payments and
     // delayed payment methods whose checkout initially completed as unpaid.
     let piStartingAfter: string | null = null;
+    let paymentIntentsScanned = 0;
     for (let page = 0; page < 20; page++) {
       const qs = new URLSearchParams({ limit: "100", "created[gte]": String(createdAfter) });
       if (piStartingAfter) qs.set("starting_after", piStartingAfter);
       const res: any = await stripeFetch(`/payment_intents?${qs.toString()}`, { apiKey });
       const rows: any[] = res?.data ?? [];
+      paymentIntentsScanned += rows.length;
       for (const pi of rows) {
         if (pi.status !== "succeeded" || !(pi.amount_received > 0)) continue;
         const chargeId = typeof pi.latest_charge === "string"
@@ -489,11 +493,13 @@ export const syncStripePayments = createServerFn({ method: "POST" })
     // Backfill refunds as first-class transaction rows so Billing reflects money
     // leaving Stripe too, not only successful payments.
     let refundStartingAfter: string | null = null;
+    let refundsScanned = 0;
     for (let page = 0; page < 20; page++) {
       const qs = new URLSearchParams({ limit: "100", "created[gte]": String(createdAfter) });
       if (refundStartingAfter) qs.set("starting_after", refundStartingAfter);
       const res: any = await stripeFetch(`/refunds?${qs.toString()}`, { apiKey });
       const rows: any[] = res?.data ?? [];
+      refundsScanned += rows.length;
       for (const refund of rows) {
         if (!["succeeded", "pending"].includes(refund.status ?? "") || !(refund.amount > 0)) continue;
         const existing = await existingLedgerByStripeRef(supabase, { external: refund.id });
@@ -566,7 +572,18 @@ export const syncStripePayments = createServerFn({ method: "POST" })
       unmapped: entries.filter((e) => e.action === "unmapped").length,
     };
 
-    return { ok: true, scanned: sessions.length, counts, entries };
+    return {
+      ok: true,
+      scanned: sessions.length + invoicesScanned + paymentIntentsScanned + refundsScanned,
+      scanned_by_type: {
+        checkouts: sessions.length,
+        invoices: invoicesScanned,
+        payment_intents: paymentIntentsScanned,
+        refunds: refundsScanned,
+      },
+      counts,
+      entries,
+    };
   });
 
 /**
