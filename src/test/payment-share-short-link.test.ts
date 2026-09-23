@@ -115,6 +115,24 @@ describe("getShareablePaymentUrl (clipboard contract)", () => {
     expect(res.url).toBe("https://jfeffect.com/pay/ZzYyXxWw1234");
   });
 
+  it("preserves the selected discount when a stale checkout must be regenerated", async () => {
+    const shareFn = vi
+      .fn()
+      .mockResolvedValueOnce({ kind: "checkout_session", shareUrl: null, canonicalUrl: null, needsFreshCheckout: true, label: "x" })
+      .mockResolvedValueOnce({
+        kind: "checkout_session",
+        shareUrl: "https://jfeffect.com/pay/Discount1234",
+        canonicalUrl: GIANT_CHECKOUT_URL,
+        needsFreshCheckout: false,
+        label: "x",
+      });
+    const checkoutFn = vi.fn(async () => ({ sessionId: "cs_live_discount", url: GIANT_CHECKOUT_URL }));
+    await getShareablePaymentUrl(shareFn as any, checkoutFn as any, "p-discount", "discount-id");
+    expect(checkoutFn).toHaveBeenCalledWith({
+      data: { purchaseRecordId: "p-discount", discountCodeId: "discount-id", origin },
+    });
+  });
+
   it("refuses to share a settled purchase", async () => {
     const shareFn = vi.fn(async () => ({ kind: "none", shareUrl: null, canonicalUrl: null, needsFreshCheckout: false, label: "x", reason: "Already settled" }));
     await expect(getShareablePaymentUrl(shareFn as any, vi.fn() as any, "p4")).rejects.toThrow("Already settled");
