@@ -426,7 +426,9 @@ function AboutJaredPage() {
         </Section>
       </Reveal>
 
-      <Reveal stagger={6}>\n        <Section>\n          <SectionTitle eyebrow="Timeline" title="How it got here" />
+      <Reveal stagger={6}>
+        <Section>
+          <SectionTitle eyebrow="Timeline" title="How it got here" />
           <div className="mx-auto max-w-4xl space-y-3">
             {timeline.map((item) => (
               <Card key={item.year} className="grid gap-3 p-5 sm:grid-cols-[90px_1fr] sm:items-start">
@@ -440,7 +442,7 @@ function AboutJaredPage() {
 
       <Reveal stagger={7}><CoachTimelineSection /></Reveal>
 
-      <Reveal stagger={7}>
+      <Reveal stagger={8}>
         <Section>
           <SectionTitle eyebrow="How I coach" title="Simple enough to execute. Detailed enough to work." />
           <div className="mx-auto grid max-w-5xl gap-4 md:grid-cols-3">
@@ -455,7 +457,7 @@ function AboutJaredPage() {
         </Section>
       </Reveal>
 
-      <Reveal stagger={8}>
+      <Reveal stagger={9}>
         <Section className="bg-card/30">
           <div className="mx-auto max-w-4xl rounded-3xl border border-primary/20 bg-background p-7 md:p-10">
             <div className="flex items-start gap-4">
@@ -470,7 +472,7 @@ function AboutJaredPage() {
         </Section>
       </Reveal>
 
-      <Reveal stagger={9}>
+      <Reveal stagger={10}>
         <Section className="!pt-8">
           <div className="mx-auto max-w-3xl rounded-3xl border border-primary/30 bg-gradient-to-br from-primary/15 via-card to-card p-8 text-center md:p-12">
             <div className="text-xs font-bold uppercase tracking-[0.18em] text-primary">Work with me</div>
