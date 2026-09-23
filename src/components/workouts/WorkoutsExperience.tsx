@@ -1228,8 +1228,28 @@ function SelectedDayCard({
   }
 
   const status = getWorkoutStatus(item);
+  const needsReviewToFinish =
+    !isCompleted &&
+    progress?.prescribedSets != null &&
+    progress.prescribedSets > 0 &&
+    progress.status === "completed";
+  const visibleStatus = needsReviewToFinish
+    ? {
+        ...status,
+        status: "review_pending" as const,
+        label: "Review to finish",
+        tone: "border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-300",
+      }
+    : status;
   const title = cleanDayTitle(item.day?.title, item.day?.day_index);
-  const cta = primaryCtaFor(item, status.status);
+  const cta = needsReviewToFinish
+    ? {
+        label: "Finish Review",
+        tone: "bg-amber-500 text-black hover:bg-amber-400",
+        icon: <MessageSquare className="mr-1 h-4 w-4" />,
+        search: { review: 1 },
+      }
+    : primaryCtaFor(item, status.status);
 
   return (
     <>
@@ -1238,14 +1258,18 @@ function SelectedDayCard({
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
               <div className="truncate text-lg font-black">{title}</div>
-              <Badge variant="outline" className={cn("text-[10px]", status.tone)}>{status.label}</Badge>
+              <Badge variant="outline" className={cn("text-[10px]", visibleStatus.tone)}>{visibleStatus.label}</Badge>
               {isAtHomeBackupSessionBlock(item.block) && (
                 <Badge variant="secondary" className="text-[10px]">{AT_HOME_BACKUP_BADGE}</Badge>
               )}
               {progress && progress.prescribedSets > 0 && (
                 <WorkoutProgressRing
                   pct={progress.pct}
-                  status={status.status === "review_pending" ? "in_progress" : progress.status}
+                  status={
+                    visibleStatus.status === "review_pending" || visibleStatus.status === "incomplete"
+                      ? "in_progress"
+                      : progress.status
+                  }
                   size={36}
                 />
               )}
@@ -1560,6 +1584,13 @@ function primaryCtaFor(item: WorkoutItem, status: WorkoutStatus): {
         tone: "bg-amber-500 text-black hover:bg-amber-400",
         icon: <MessageSquare className="mr-1 h-4 w-4" />,
         search: { review: 1 },
+      };
+    case "incomplete":
+      return {
+        label: "Finish Workout",
+        tone: "bg-amber-500 text-black hover:bg-amber-400",
+        icon: <Pencil className="mr-1 h-4 w-4" />,
+        search: { edit: 1 },
       };
     case "completed_today":
     case "completed_on_scheduled":
