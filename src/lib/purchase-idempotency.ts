@@ -8,9 +8,10 @@
  *
  * Rule: a payment REQUEST is not a SALE. An existing pending/draft row for the
  * same client + offer that has no Stripe money attached is the same purchase
- * intent and must be reused. Only rows with real Stripe evidence (completed
- * checkout, payment intent, subscription, or money paid) are sales and are
- * never reused or overwritten.
+ * intent and must be reused. Creating a Stripe Checkout Session does NOT make
+ * it a sale — the client still has not paid. Only rows with real payment
+ * evidence (money paid, a recorded payment intent, or a subscription) are
+ * treated as settled and are never reused or overwritten.
  *
  * Pure — no I/O.
  */
@@ -25,6 +26,7 @@ export type PurchaseIntentRow = {
   stripe_subscription_id?: string | null;
   stripe_payment_intent_id?: string | null;
   stripe_checkout_session_id?: string | null;
+  archived_at?: string | null;
   created_at?: string | null;
 };
 
@@ -44,8 +46,7 @@ export function isSettledSale(row: PurchaseIntentRow): boolean {
   return (
     paid ||
     !!row.stripe_subscription_id ||
-    !!row.stripe_payment_intent_id ||
-    !!row.stripe_checkout_session_id
+    !!row.stripe_payment_intent_id
   );
 }
 
@@ -68,6 +69,7 @@ export function findReusablePurchaseIntent(
     (r) =>
       r.client_id === match.clientId &&
       (r.offer_id ?? null) === (match.offerId ?? null) &&
+      !r.archived_at &&
       isReusablePurchaseIntent(r),
   );
   if (candidates.length === 0) return null;
