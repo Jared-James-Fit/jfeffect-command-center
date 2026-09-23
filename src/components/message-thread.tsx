@@ -12,6 +12,7 @@ import {
   type Message, type MessageAttachment, type SenderRole, type ConversationState,
   type MessageReaction,
 } from "@/lib/messages";
+import type { SharedAttachment } from "@/components/chat-shared";
 import { transcribeVoiceMessage } from "@/lib/voice-transcribe.functions";
 import { Button } from "@/components/ui/button";
 import { ChatImageAttachment } from "@/components/chat-media-attachment";
