@@ -8,6 +8,7 @@ export type WorkoutStatus =
   | "not_started"
   | "in_progress"
   | "review_pending"
+  | "incomplete"
   | "completed_today"
   | "completed_on_scheduled"
   | "completed_different_day"
@@ -34,6 +35,24 @@ export function getWorkoutStatus(item: WorkoutItem, now: Date = new Date()): {
   );
 
   if (completedAt) {
+    const loggingPct = Number((item.completion as any)?.logging_percentage);
+    const missingLogs =
+      (item.completion as any)?.completed_with_missing_logs === true ||
+      (Number.isFinite(loggingPct) && loggingPct < 100);
+
+    // A workout can be intentionally ended with missing sets. Keep that
+    // visibly amber even after a review so "completed" always means the
+    // training log itself is fully complete.
+    if (missingLogs) {
+      return {
+        status: "incomplete",
+        label: "Incomplete",
+        tone: reviewPendingTone,
+        scheduled,
+        completedAt,
+      };
+    }
+
     // A workout is not visually "done" for the athlete until the quick
     // post-workout review is submitted. getClientWorkouts attaches
     // has_feedback explicitly; readers that do not fetch feedback leave it
