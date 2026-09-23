@@ -78,7 +78,11 @@ export function WorkoutListCard({
         {progress && progress.prescribedSets > 0 && (
           <WorkoutProgressRing
             pct={progress.pct}
-            status={status.status === "review_pending" ? "in_progress" : progress.status}
+            status={
+              needsReviewToFinish || status.status === "review_pending" || status.status === "incomplete"
+                ? "in_progress"
+                : progress.status
+            }
             size={36}
             className="shrink-0"
           />
