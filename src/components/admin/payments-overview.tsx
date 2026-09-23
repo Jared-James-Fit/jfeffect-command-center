@@ -1,5 +1,5 @@
 import { Link } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
@@ -358,36 +358,49 @@ function StripeSyncBar() {
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<any | null>(null);
 
-  const run = async () => {
+  const run = async (silent = false) => {
     setBusy(true);
     try {
-      const res: any = await syncFn({ data: { days: 30, mode: "live" } });
+      const res: any = await syncFn({ data: { days: 365, mode: "live" } });
       setResult(res);
       if (res?.ok === false) {
-        toast.error(res.error ?? "Sync unavailable");
+        if (!silent) toast.error(res.error ?? "Sync unavailable");
       } else {
         const c = res.counts;
-        toast.success(
-          `Scanned ${res.scanned} Stripe checkouts — ${c.updated} updated, ${c.no_change} already correct, ${c.unmapped} unmatched.`,
-        );
+        if (!silent) {
+          toast.success(
+            `Stripe account synced — ${c.updated} updated, ${c.no_change} already correct, ${c.unmapped} unmatched.`,
+          );
+        }
         qc.invalidateQueries({ queryKey: ["pp-overview-transactions-30d"] });
         qc.invalidateQueries({ queryKey: ["admin-transactions"] });
         qc.invalidateQueries({ queryKey: ["purchase-records"] });
       }
     } catch (e: any) {
-      toast.error(e?.message ?? "Stripe sync failed");
+      if (!silent) toast.error(e?.message ?? "Stripe sync failed");
     } finally {
       setBusy(false);
     }
   };
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const key = "jf-stripe-account-sync-v2";
+    if (window.sessionStorage.getItem(key)) return;
+    window.sessionStorage.setItem(key, "1");
+    void run(true);
+    // Intentionally once per browser session. Stripe webhooks keep live state
+    // current; this reconciliation pass repairs anything a webhook missed.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return (
     <Card className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
       <div>
         <div className="text-sm font-semibold">Stripe sync</div>
         <p className="text-xs text-muted-foreground">
-          Pulls the last 30 days of Stripe checkouts and repairs any purchase that didn't update.
-          Read-only in Stripe — nothing is charged or cancelled.
+          Mirrors the last year of Stripe checkouts, invoices, direct payments, and refunds into Billing.
+          It also runs automatically once per app session. Read-only in Stripe — nothing is charged or cancelled.
         </p>
         {result?.ok && (
           <p className="mt-1 text-xs text-muted-foreground">
@@ -399,7 +412,7 @@ function StripeSyncBar() {
       </div>
       <Button size="sm" variant="outline" onClick={run} disabled={busy} className="min-h-11 shrink-0">
         <RefreshCw className={`mr-2 h-4 w-4 ${busy ? "animate-spin" : ""}`} />
-        {busy ? "Syncing…" : "Sync from Stripe"}
+        {busy ? "Syncing…" : "Sync Stripe account"}
       </Button>
     </Card>
   );
