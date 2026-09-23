@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { useEffect, useRef, useState } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import {
   BadgeCheck,
@@ -290,12 +291,69 @@ const multiAngleProof = [
 
 const timeline = [
   { year: "2014", title: "Started training", body: "The start of my own training journey and the years of learning that eventually became the foundation for coaching." },
-  { year: "2017", title: "Personal trainer at GoodLife Fitness", body: "Worked in a real coaching environment managing clients, sessions, progression, and day-to-day accountability." },
+  { year: "2017", title: "Professional Personal Trainer", body: "Began coaching clients in a commercial fitness environment, building hands-on experience with programming, technique, progression, and day-to-day accountability." },
   { year: "2018", title: "DTS Level 1 + bodybuilding champion", body: "Completed Darby Training Systems Level 1 and won the MABBA Men's Physique title." },
   { year: "2021", title: "JF Effect became the full-time path", body: "Built the coaching business around personalized training, nutrition structure, accountability, form review, and direct support." },
   { year: "2023", title: "ISSA Certified Personal Trainer", body: "Added the ISSA Personal Training Certification alongside practical coaching and competitive experience." },
   { year: "2026", title: "Team Canada · 2× International Champion", body: "Won the overall total at both the NAPF North American Championships and Commonwealth Championships." },
 ];
+
+const SCROLL_IMAGE_PLACEHOLDER =
+  "data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs=";
+
+function ScrollImage({
+  src,
+  alt,
+  className,
+  eager = false,
+}: {
+  src: string;
+  alt: string;
+  className: string;
+  eager?: boolean;
+}) {
+  const ref = useRef<HTMLImageElement>(null);
+  const [shouldLoad, setShouldLoad] = useState(eager);
+  const [loaded, setLoaded] = useState(false);
+
+  useEffect(() => {
+    if (eager || shouldLoad) return;
+    const node = ref.current;
+    if (!node || typeof IntersectionObserver === "undefined") {
+      setShouldLoad(true);
+      return;
+    }
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (!entry?.isIntersecting) return;
+        setShouldLoad(true);
+        observer.disconnect();
+      },
+      { rootMargin: "900px 0px", threshold: 0.01 },
+    );
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [eager, shouldLoad]);
+
+  useEffect(() => {
+    setLoaded(false);
+  }, [src]);
+
+  return (
+    <img
+      ref={ref}
+      src={shouldLoad ? src : SCROLL_IMAGE_PLACEHOLDER}
+      alt={alt}
+      className={`${className} bg-muted transition-[opacity,filter] duration-700 ease-out ${loaded ? "opacity-100 blur-0" : "opacity-75 blur-[7px] animate-pulse"}`}
+      loading={eager ? "eager" : "lazy"}
+      decoding="async"
+      fetchPriority={eager ? "high" : "auto"}
+      onLoad={() => {
+        if (shouldLoad) setLoaded(true);
+      }}
+    />
+  );
+}
 
 function ResultList({ rows }: { rows: ResultRow[] }) {
   return (
@@ -393,7 +451,12 @@ function AboutJaredPage() {
           </div>
           <div className="relative mx-auto w-full max-w-lg">
             <div className="absolute -inset-4 -z-10 rounded-[2rem] bg-primary/10 blur-2xl" />
-            <img src={jaredHeroImage} alt="Jared James representing Canada in international powerlifting competition" className="aspect-[4/5] w-full rounded-3xl object-cover object-center shadow-2xl ring-1 ring-border" loading="eager" />
+            <ScrollImage
+              src={jaredHeroImage}
+              alt="Jared James representing Canada in international powerlifting competition"
+              className="aspect-[4/5] w-full rounded-3xl object-cover object-center shadow-2xl ring-1 ring-border"
+              eager
+            />
           </div>
         </div>
       </section>
@@ -470,7 +533,11 @@ function AboutJaredPage() {
             <div className="flex w-max gap-4">
               {coachedAthletePhotos.map((athlete) => (
                 <Card key={athlete.name} className="w-[76vw] max-w-[300px] shrink-0 overflow-hidden">
-                  <img src={athlete.image} alt={`${athlete.name} JF Effect coached powerlifting athlete`} className="aspect-square w-full bg-black object-contain" loading="lazy" />
+                  <ScrollImage
+                    src={athlete.image}
+                    alt={`${athlete.name} JF Effect coached powerlifting athlete`}
+                    className="aspect-square w-full bg-black object-contain"
+                  />
                   <div className="p-4">
                     <div className="font-black">{athlete.name}</div>
                     <div className="mt-1 text-sm leading-relaxed text-muted-foreground">{athlete.achievement}</div>
@@ -500,12 +567,11 @@ function AboutJaredPage() {
                 <div className="overflow-x-auto [-webkit-overflow-scrolling:touch]">
                   <div className="flex w-max gap-2 p-3">
                     {client.photos.map((photo, index) => (
-                      <img
+                      <ScrollImage
                         key={photo}
                         src={photo}
                         alt={`${client.name} client snapshot ${index + 1}`}
                         className="h-[320px] w-[240px] shrink-0 rounded-xl object-cover sm:h-[380px] sm:w-[285px]"
-                        loading="lazy"
                       />
                     ))}
                   </div>
@@ -535,7 +601,13 @@ function AboutJaredPage() {
             <div className="flex w-max gap-4">
               {transformationProof.map((item) => (
                 <Card key={item.name} className="w-[78vw] max-w-[340px] shrink-0 overflow-hidden">
-                  <div className="aspect-square overflow-hidden bg-muted"><img src={item.image} alt={`${item.name} JF Effect client transformation`} className={`h-full w-full object-cover object-top ${item.crop ?? "scale-[1.18]"}`} loading="lazy" /></div>
+                  <div className="aspect-square overflow-hidden bg-muted">
+                    <ScrollImage
+                      src={item.image}
+                      alt={`${item.name} JF Effect client transformation`}
+                      className={`h-full w-full object-cover object-top ${item.crop ?? "scale-[1.18]"}`}
+                    />
+                  </div>
                   <div className="p-4">
                     <div className="font-black">{item.name}</div>
                     <div className="mt-1 text-sm leading-relaxed text-muted-foreground">{item.result}</div>
@@ -549,7 +621,13 @@ function AboutJaredPage() {
               <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                 {multiAngleProof.map(([label, image]) => (
                   <figure key={label} className="overflow-hidden rounded-xl border border-border bg-background">
-                    <div className="aspect-square overflow-hidden bg-muted"><img src={image} alt={`${label} transformation comparison`} className="h-full w-full scale-[1.18] object-cover object-top" loading="lazy" /></div>
+                    <div className="aspect-square overflow-hidden bg-muted">
+                      <ScrollImage
+                        src={image}
+                        alt={`${label} transformation comparison`}
+                        className="h-full w-full scale-[1.18] object-cover object-top"
+                      />
+                    </div>
                     <figcaption className="p-3 text-xs font-bold">{label}</figcaption>
                   </figure>
                 ))}
@@ -584,7 +662,7 @@ function AboutJaredPage() {
           <div className="mx-auto mt-4 max-w-5xl space-y-3">
             <CredentialAccordion title="Coaching career" summary="Personal training → full-time JF Effect">
               <ResultList rows={[
-                { primary: "May 2017 – July 2018 · GoodLife Fitness", secondary: "Personal Trainer" },
+                { primary: "May 2017 – July 2018 · Professional Personal Training", secondary: "Commercial fitness environment · client programming, technique, progression and accountability" },
                 { primary: "2018 · Darby Training Systems", secondary: "DTS Level 1 Certification" },
                 { primary: "October 2021 – Present · JF Effect / JJT Powerlifting", secondary: "Founder · Online Fitness Coach · In-Person Personal Trainer · full-time self-employed coaching" },
                 { primary: "2023 · International Sports Sciences Association", secondary: "Personal Training Certification" },
