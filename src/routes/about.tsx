@@ -1,16 +1,11 @@
+import type { ReactNode } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import {
-  Award,
   BadgeCheck,
-  BriefcaseBusiness,
   CheckCircle2,
   ChevronDown,
-  Dumbbell,
   MapPin,
-  Medal,
   ShieldCheck,
-  Target,
-  Trophy,
   Users,
 } from "lucide-react";
 import { SalesPageShell, Section, SectionTitle } from "@/components/sales/sales-page-shell";
@@ -142,7 +137,7 @@ function CredentialAccordion({
 }: {
   title: string;
   summary: string;
-  children: React.ReactNode;
+  children: ReactNode;
   defaultOpen?: boolean;
 }) {
   return (
