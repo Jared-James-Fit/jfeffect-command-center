@@ -411,11 +411,11 @@ async function buildContextSnapshot(
       : Promise.resolve({ data: [] }),
   ]);
 
-  const scheduledDateById = new Map(
-    (completionSchedules ?? []).map((r: any) => [r.id, r.scheduled_date]),
+  const scheduledDateById = new Map<string, string>(
+    (completionSchedules ?? []).map((r: any) => [r.id, r.scheduled_date] as [string, string]),
   );
-  const dayDateById = new Map(
-    (completionDays ?? []).map((r: any) => [r.id, r.scheduled_date]),
+  const dayDateById = new Map<string, string>(
+    (completionDays ?? []).map((r: any) => [r.id, r.scheduled_date] as [string, string]),
   );
 
   const completedKeys = new Set<string>();

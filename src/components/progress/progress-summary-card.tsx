@@ -163,9 +163,6 @@ export function ProgressSummaryCard({
     if (progressHref.kind === "member") {
       return <Link to="/m/progress" search={{ action: p.action } as never}>{inner}</Link>;
     }
-    if (progressHref.kind === "portal") {
-      return <Link to="/portal/progress" search={{ action: p.action } as never}>{inner}</Link>;
-    }
     return (
       <Link to="/admin/clients/$id/progress" params={{ id: progressHref.clientId }} search={{ action: p.action } as never}>
         {inner}
@@ -190,8 +187,6 @@ export function ProgressSummaryCard({
   const progressHubHref =
     progressHref.kind === "member"
       ? "/m/progress"
-      : progressHref.kind === "portal"
-      ? "/portal/progress"
       : `/admin/clients/${progressHref.clientId}/progress`;
 
   type SecondaryAction = { label: string; icon: ComponentType<{ className?: string }>; to: string };
