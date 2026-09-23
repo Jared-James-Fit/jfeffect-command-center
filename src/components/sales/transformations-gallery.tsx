@@ -40,7 +40,7 @@ export function TransformationsGallery({
             alt="Client transformation — before and after"
             loading="lazy"
             decoding="async"
-            className="aspect-square w-full rounded-lg object-cover ring-1 ring-white/5"
+            className="aspect-square w-full rounded-lg object-cover object-top" style={{ transform: "scale(1.18)" }}
           />
         ))}
       </div>

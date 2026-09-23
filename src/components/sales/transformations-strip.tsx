@@ -69,7 +69,7 @@ export function TransformationsStrip({
               decoding="async"
               width={400}
               height={400}
-              className="aspect-square w-full rounded-lg object-cover ring-1 ring-white/5"
+              className="aspect-square w-full rounded-lg object-cover object-top" style={{ transform: "scale(1.18)" }}
             />
           ))}
         </div>
