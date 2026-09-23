@@ -10734,6 +10734,79 @@ export type Database = {
           },
         ]
       }
+      messenger_checkins: {
+        Row: {
+          ai_analysis: Json | null
+          ai_error: string | null
+          ai_status: string
+          answers: Json
+          client_id: string
+          context_snapshot: Json
+          created_at: string
+          id: string
+          occurrence_id: string | null
+          request_message_id: string | null
+          status: string
+          submitted_at: string | null
+          task_type: string
+          updated_at: string
+        }
+        Insert: {
+          ai_analysis?: Json | null
+          ai_error?: string | null
+          ai_status?: string
+          answers?: Json
+          client_id: string
+          context_snapshot?: Json
+          created_at?: string
+          id?: string
+          occurrence_id?: string | null
+          request_message_id?: string | null
+          status?: string
+          submitted_at?: string | null
+          task_type: string
+          updated_at?: string
+        }
+        Update: {
+          ai_analysis?: Json | null
+          ai_error?: string | null
+          ai_status?: string
+          answers?: Json
+          client_id?: string
+          context_snapshot?: Json
+          created_at?: string
+          id?: string
+          occurrence_id?: string | null
+          request_message_id?: string | null
+          status?: string
+          submitted_at?: string | null
+          task_type?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "messenger_checkins_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "messenger_checkins_occurrence_id_fkey"
+            columns: ["occurrence_id"]
+            isOneToOne: false
+            referencedRelation: "client_task_occurrences"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "messenger_checkins_request_message_id_fkey"
+            columns: ["request_message_id"]
+            isOneToOne: false
+            referencedRelation: "messages"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       na_acknowledgements: {
         Row: {
           accepted_at: string
@@ -19021,6 +19094,7 @@ export type Database = {
         Returns: undefined
       }
       email_queue_dispatch: { Args: never; Returns: undefined }
+      enqueue_due_messenger_checkins: { Args: never; Returns: number }
       enqueue_email: {
         Args: { payload: Json; queue_name: string }
         Returns: number
@@ -19495,6 +19569,7 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      run_messenger_checkin_automation: { Args: never; Returns: Json }
       save_progress_bodyweight: {
         Args: {
           p_entry_id?: string
@@ -19521,6 +19596,7 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      seed_messenger_checkin_occurrences: { Args: never; Returns: number }
       session_balance: {
         Args: { _client_id: string }
         Returns: {
