@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
-import { syncStripePayments } from "@/lib/stripe-sync.functions";
+import { listStripeAccountTransactions, syncStripePayments } from "@/lib/stripe-sync.functions";
 import { supabase } from "@/integrations/supabase/client";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -25,38 +25,28 @@ import { countActiveDiscountCodes } from "@/lib/payments-overview";
  * Products & Payments → Overview.
  *
  * Real-data summary only. Sources:
- *  - admin_transactions_v1 (last 30 days) → revenue + recent activity
- *  - coaching_products                    → product counts
- *  - discount_codes                       → active promo count
+ *  - live Stripe account (last 30 days) → revenue + recent activity
+ *  - coaching_products                  → product counts
+ *  - discount_codes                     → active promo count
  *
- * All numbers come from RLS-guarded reads that admins/coaches already use
- * elsewhere in this workspace. No new tables, no fabricated stats. When a
- * source returns nothing, a clean empty state is shown.
+ * Stripe is the source of truth for money movement. JF Effect data enriches
+ * matched rows with client / product context, while unlinked Stripe charges
+ * remain visible instead of disappearing from Billing.
  */
 export function PaymentsOverviewPanel({
   onNavigateSub,
 }: {
   onNavigateSub: (sub: string) => void;
 }) {
-  const since = useMemo(() => {
-    const d = new Date();
-    d.setDate(d.getDate() - 30);
-    return d.toISOString();
-  }, []);
-
+  const stripeAccountFn = useServerFn(listStripeAccountTransactions);
   const txQuery = useQuery({
-    queryKey: ["pp-overview-transactions-30d"],
+    queryKey: ["pp-overview-stripe-account-30d"],
     queryFn: async () => {
-      const client = supabase as unknown as { from: (t: string) => any };
-      const { data, error } = await client
-        .from("admin_transactions_v1")
-        .select("*")
-        .gte("occurred_at", since)
-        .order("occurred_at", { ascending: false })
-        .limit(500);
-      if (error) throw error;
-      return (data ?? []) as AdminTransactionRow[];
+      const res: any = await stripeAccountFn({ data: { days: 30, mode: "live" } });
+      if (!res?.ok) throw new Error(res?.error ?? "Unable to load Stripe account activity.");
+      return (res.rows ?? []) as AdminTransactionRow[];
     },
+    staleTime: 30_000,
   });
 
   const productsQuery = useQuery({
@@ -210,21 +200,23 @@ export function PaymentsOverviewPanel({
               <tbody>
                 {recent.map((r) => {
                   const href =
-                    r.subject_kind === "client"
+                    r.subject_id && r.subject_kind === "client"
                       ? `/admin/clients/${r.subject_id}`
-                      : `/admin/members/${r.subject_id}`;
+                      : r.subject_id && r.subject_kind === "member"
+                        ? `/admin/members/${r.subject_id}`
+                        : null;
                   return (
                     <tr key={`${r.source}-${r.id}`} className="border-t border-border">
                       <td className="px-4 py-2 whitespace-nowrap text-xs text-muted-foreground">
                         {new Date(r.occurred_at).toLocaleDateString()}
                       </td>
                       <td className="px-4 py-2">
-                        {r.subject_id ? (
+                        {href ? (
                           <Link to={href} className="font-medium hover:underline">
                             {r.subject_name ?? "Unknown"}
                           </Link>
                         ) : (
-                          <span className="font-medium">{r.subject_name ?? "Unknown"}</span>
+                          <span className="font-medium">{r.subject_name ?? "Stripe customer"}</span>
                         )}
                       </td>
                       <td className="px-4 py-2">{r.product_name}</td>
@@ -361,7 +353,7 @@ function StripeSyncBar() {
   const run = async (silent = false) => {
     setBusy(true);
     try {
-      const res: any = await syncFn({ data: { days: 365, mode: "live" } });
+      const res: any = await syncFn({ data: { days: 3650, mode: "live" } });
       setResult(res);
       if (res?.ok === false) {
         if (!silent) toast.error(res.error ?? "Sync unavailable");
@@ -372,8 +364,8 @@ function StripeSyncBar() {
             `Stripe account synced — ${c.updated} updated, ${c.no_change} already correct, ${c.unmapped} unmatched.`,
           );
         }
-        qc.invalidateQueries({ queryKey: ["pp-overview-transactions-30d"] });
-        qc.invalidateQueries({ queryKey: ["admin-transactions"] });
+        qc.invalidateQueries({ queryKey: ["pp-overview-stripe-account-30d"] });
+        qc.invalidateQueries({ queryKey: ["admin-transactions-stripe-account"] });
         qc.invalidateQueries({ queryKey: ["purchase-records"] });
       }
     } catch (e: any) {
@@ -385,7 +377,7 @@ function StripeSyncBar() {
 
   useEffect(() => {
     if (typeof window === "undefined") return;
-    const key = "jf-stripe-account-sync-v2";
+    const key = "jf-stripe-account-sync-v3";
     if (window.sessionStorage.getItem(key)) return;
     window.sessionStorage.setItem(key, "1");
     void run(true);
@@ -399,8 +391,8 @@ function StripeSyncBar() {
       <div>
         <div className="text-sm font-semibold">Stripe sync</div>
         <p className="text-xs text-muted-foreground">
-          Mirrors the last year of Stripe checkouts, invoices, direct payments, and refunds into Billing.
-          It also runs automatically once per app session. Read-only in Stripe — nothing is charged or cancelled.
+          Billing reads the live Stripe account directly. This sync scans the full available account history and links matching Stripe activity back to JF Effect clients and purchases.
+          Unlinked Stripe charges still stay visible. Read-only in Stripe — nothing is charged or cancelled.
         </p>
         {result?.ok && (
           <p className="mt-1 text-xs text-muted-foreground">
