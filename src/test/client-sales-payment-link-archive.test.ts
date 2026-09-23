@@ -40,10 +40,21 @@ describe("client sales payment links and archive controls", () => {
     expect(sales).toContain("Restore sale");
   });
 
-  it("only permits permanent removal for never-paid, never-linked assignments", () => {
-    expect(archive).toContain("purchase.stripe_payment_intent_id || purchase.stripe_subscription_id || purchase.stripe_checkout_session_id");
+  it("permits safe removal of unpaid payment setups while protecting real financial history", () => {
+    expect(archive).toContain("assertCheckoutCanBeRemoved");
+    expect(archive).toContain('session.status === "complete"');
+    expect(archive).toContain('session.payment_status === "paid"');
+    expect(archive).toContain('/expire');
+    expect(archive).toContain("purchase.stripe_payment_intent_id || purchase.stripe_subscription_id");
     expect(archive).toContain('.from("payment_ledger")');
     expect(archive).toContain("This sale has transaction history and cannot be deleted. Archive it instead.");
-    expect(sales).toContain("Remove unpaid sale");
+    expect(sales).toContain("Delete unpaid setup");
+    expect(sales).not.toContain("!raw.stripe_checkout_session_id &&");
+  });
+
+  it("uses the server admin client after authorization so archive/delete are not blocked by row policies", () => {
+    expect(archive).toContain("const admin = await getAdminClient()");
+    expect(archive).toContain('admin.from("purchase_records")');
+    expect(archive).toContain('admin.from("payment_share_links")');
   });
 });
