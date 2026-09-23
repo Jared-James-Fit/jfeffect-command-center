@@ -505,7 +505,7 @@ function AboutJaredPage() {
             <div className="flex w-max gap-4">
               {transformationProof.map((item) => (
                 <Card key={item.name} className="w-[78vw] max-w-[340px] shrink-0 overflow-hidden">
-                  <img src={item.image} alt={`${item.name} JF Effect client transformation`} className="aspect-square w-full object-cover" loading="lazy" />
+                  <div className="aspect-square overflow-hidden bg-muted"><img src={item.image} alt={`${item.name} JF Effect client transformation`} className="h-full w-full scale-[1.18] object-cover object-top" loading="lazy" /></div>
                   <div className="p-4">
                     <div className="font-black">{item.name}</div>
                     <div className="mt-1 text-sm leading-relaxed text-muted-foreground">{item.result}</div>
@@ -519,7 +519,7 @@ function AboutJaredPage() {
               <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                 {multiAngleProof.map(([label, image]) => (
                   <figure key={label} className="overflow-hidden rounded-xl border border-border bg-background">
-                    <img src={image} alt={`${label} transformation comparison`} className="aspect-square w-full object-cover" loading="lazy" />
+                    <div className="aspect-square overflow-hidden bg-muted"><img src={image} alt={`${label} transformation comparison`} className="h-full w-full scale-[1.18] object-cover object-top" loading="lazy" /></div>
                     <figcaption className="p-3 text-xs font-bold">{label}</figcaption>
                   </figure>
                 ))}
