@@ -35,10 +35,14 @@ export function getWorkoutStatus(item: WorkoutItem, now: Date = new Date()): {
   );
 
   if (completedAt) {
-    const loggingPct = Number((item.completion as any)?.logging_percentage);
+    const loggingPctRaw = (item.completion as any)?.logging_percentage;
+    const loggingPct =
+      loggingPctRaw == null || loggingPctRaw === ""
+        ? null
+        : Number(loggingPctRaw);
     const missingLogs =
       (item.completion as any)?.completed_with_missing_logs === true ||
-      (Number.isFinite(loggingPct) && loggingPct < 100);
+      (loggingPct != null && Number.isFinite(loggingPct) && loggingPct < 100);
 
     // A workout can be intentionally ended with missing sets. Keep that
     // visibly amber even after a review so "completed" always means the
