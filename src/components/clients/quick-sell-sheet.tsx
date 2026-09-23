@@ -156,13 +156,15 @@ export function QuickSellSheet({ open, onOpenChange, clientId, clientName }: Pro
         purchase = inserted;
       }
 
-      const origin = typeof window !== "undefined" ? window.location.origin : "https://jfeffect.com";
-      const checkout = await checkoutFn({ data: { purchaseRecordId: purchase!.id, discountCodeId, origin } });
-      if (!checkout?.sessionId || !checkout?.url) {
-        throw new Error("Stripe checkout was not created. Retry from the sale — the same sale will be reused.");
-      }
-      // Share the short, iMessage-safe JF Effect link minted from the verified session.
-      const { url: shareUrl } = await getShareablePaymentUrl(shareFn as any, checkoutFn as any, purchase!.id);
+      // Resolve/reuse the same unpaid purchase first. Only create a new Stripe
+      // Checkout Session if the existing one is missing or expired, then return
+      // the stable short JF Effect share link.
+      const { url: shareUrl } = await getShareablePaymentUrl(
+        shareFn as any,
+        checkoutFn as any,
+        purchase!.id,
+        discountCodeId,
+      );
       const res = { url: shareUrl };
 
       qc.invalidateQueries({ queryKey: ["coaching-products"] });
