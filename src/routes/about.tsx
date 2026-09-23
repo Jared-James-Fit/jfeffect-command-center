@@ -382,7 +382,7 @@ function AboutJaredPage() {
           </div>
           <div className="relative mx-auto w-full max-w-lg">
             <div className="absolute -inset-4 -z-10 rounded-[2rem] bg-primary/10 blur-2xl" />
-            <img src="/athletes/jared-napf-2026.webp" alt="Jared James representing Canada in international powerlifting competition" className="aspect-[4/5] w-full rounded-3xl object-cover object-center shadow-2xl ring-1 ring-border" loading="eager" />
+            <img src="/athletes/jared-napf-2026.jpg" alt="Jared James representing Canada in international powerlifting competition" className="aspect-[4/5] w-full rounded-3xl object-cover object-center shadow-2xl ring-1 ring-border" loading="eager" />
           </div>
         </div>
       </section>
