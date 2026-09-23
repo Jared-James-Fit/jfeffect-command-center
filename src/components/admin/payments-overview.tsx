@@ -410,7 +410,7 @@ function StripeSyncBar() {
           </p>
         )}
       </div>
-      <Button size="sm" variant="outline" onClick={run} disabled={busy} className="min-h-11 shrink-0">
+      <Button size="sm" variant="outline" onClick={() => void run(false)} disabled={busy} className="min-h-11 shrink-0">
         <RefreshCw className={`mr-2 h-4 w-4 ${busy ? "animate-spin" : ""}`} />
         {busy ? "Syncing…" : "Sync Stripe account"}
       </Button>
