@@ -107,6 +107,110 @@ const athleteResults: ResultRow[] = [
   { primary: "2025 · Elisa Vena", secondary: "6th Place · Western Canadians · Nanaimo, BC" },
 ];
 
+const clientSnapshots = [
+  {
+    name: "Colby",
+    result: "Body Recomposition",
+    role: "UGC Media Creator",
+    quote: "Growing my glutes has been a struggle but i am FINALLY seeing progress",
+    photos: [
+      "https://jaredjamesfit.com/assets/colby-ladder-DwHbqFQw.jpg",
+      "https://jaredjamesfit.com/assets/colby-3-0HpCACK6.jpg",
+      "https://jaredjamesfit.com/assets/colby-9-CHIiO1aS.jpg",
+      "https://jaredjamesfit.com/assets/colby-4-YCO5-hxp.jpg",
+      "https://jaredjamesfit.com/assets/colby-5-C88QVzUB.jpg",
+      "https://jaredjamesfit.com/assets/colby-6-CzUKtJsJ.jpg",
+      "https://jaredjamesfit.com/assets/colby-7-acduIaH0.jpg",
+      "https://jaredjamesfit.com/assets/colby-8-DfHfldnc.jpg",
+    ],
+  },
+  {
+    name: "Cedric",
+    result: "Added lean muscle",
+    role: "Model",
+    quote: "thanks Jared",
+    photos: [
+      "https://jaredjamesfit.com/assets/cedric-1-CkNjKRpx.jpg",
+      "https://jaredjamesfit.com/assets/cedric-7-C6rtBWUI.jpg",
+      "https://jaredjamesfit.com/assets/cedric-3-DkU46smS.jpg",
+      "https://jaredjamesfit.com/assets/cedric-6-DL40nzGW.jpg",
+      "https://jaredjamesfit.com/assets/cedric-5-BOs600D4.jpg",
+      "https://jaredjamesfit.com/assets/cedric-4-CquBv9du.jpg",
+      "https://jaredjamesfit.com/assets/cedric-2-DWDg1LcR.jpg",
+      "https://jaredjamesfit.com/assets/cedric-8-DbR5VA6R.jpg",
+    ],
+  },
+  {
+    name: "Madison",
+    result: "-20lbs fat loss",
+    role: "Navy Veteran",
+    quote: "I'm also so grateful to have a coach that understands the rollercoaster of life and adapts my plan according to the season I'm in.",
+    photos: [
+      "https://jaredjamesfit.com/assets/madison-first-Bbke_YzO.jpg",
+      "https://jaredjamesfit.com/assets/madison-6-BgpQHSMa.jpg",
+      "https://jaredjamesfit.com/assets/madison-2-eE64EskD.jpg",
+      "https://jaredjamesfit.com/assets/madison-7-DeC9jxc4.jpg",
+      "https://jaredjamesfit.com/assets/madison-3-BBNwGben.jpg",
+      "https://jaredjamesfit.com/assets/madison-4-BAlCAWPY.jpg",
+      "https://jaredjamesfit.com/assets/madison-5-BsuWU0Nh.jpg",
+    ],
+  },
+  {
+    name: "Drew",
+    result: "Fat Loss Transformation",
+    role: "Security",
+    quote: "I appreciate all the things that you've done to help me with my personal growth over the years.",
+    photos: [
+      "https://jaredjamesfit.com/assets/drew-1-Cu4zQ5CW.jpg",
+      "https://jaredjamesfit.com/assets/drew-2-_saMUDrm.jpg",
+      "https://jaredjamesfit.com/assets/drew-3-C_RBnnIP.jpg",
+    ],
+  },
+  {
+    name: "Kyrstin",
+    result: "-35lbs fat burn",
+    role: "Bartender & Artist",
+    quote: "I feel better in myself, I feel better in my day to day, talking to people, my social confidence has gone up a lot and that's all thanks to Jared",
+    photos: [
+      "https://jaredjamesfit.com/assets/kyrstin-1-D5f3VBZ6.jpg",
+      "https://jaredjamesfit.com/assets/kyrstin-3-BI_yvL36.jpg",
+      "https://jaredjamesfit.com/assets/kyrstin-4-CC2DrfLV.jpg",
+      "https://jaredjamesfit.com/assets/kyrstin-5-1xSzw870.jpg",
+      "https://jaredjamesfit.com/assets/kyrstin-2-CqhY6uCd.jpg",
+      "https://jaredjamesfit.com/assets/kyrstin-6-DHcNuMRc.jpg",
+    ],
+  },
+  {
+    name: "Dwayne",
+    result: "Stage-Lean Transformation",
+    role: "Banker",
+    quote: "despite training for over a decade by myself he's helped me break through my plateau.",
+    photos: [
+      "https://jaredjamesfit.com/assets/dwayne-5-C_mfMQus.jpg",
+      "https://jaredjamesfit.com/assets/dwayne-1-BTIsjX-L.jpg",
+      "https://jaredjamesfit.com/assets/dwayne-3-dQRNGOLx.jpg",
+      "https://jaredjamesfit.com/assets/dwayne-4-D2HiTmYz.jpg",
+    ],
+  },
+  {
+    name: "Shaina",
+    result: "10lbs+ muscle",
+    role: "Fitness Coach",
+    quote: "very happy with the results today:) thank you @jaredjamesfit for helping me even in different cities",
+    photos: [
+      "https://jaredjamesfit.com/assets/shaina-3-Cr6i8f2C.jpg",
+      "https://jaredjamesfit.com/assets/shaina-1-367--6JA.jpg",
+      "https://jaredjamesfit.com/assets/shaina-2-8PaiTAJw.jpg",
+      "https://jaredjamesfit.com/assets/shaina-4-B973bsgz.jpg",
+      "https://jaredjamesfit.com/assets/shaina-5-DQA2A7Yb.jpg",
+      "https://jaredjamesfit.com/assets/shaina-6-DGTgw6KX.jpg",
+      "https://jaredjamesfit.com/assets/shaina-7-CLKMWEYC.jpg",
+      "https://jaredjamesfit.com/assets/shaina-8-CgOu_8x7.jpg",
+      "https://jaredjamesfit.com/assets/shaina-9-B0tZ52NJ.jpg",
+    ],
+  },
+];
+
 const transformationProof = [
   { name: "Sarah", result: "Fat Loss Recomp · Toned and beach-ready", image: "https://jaredjamesfit.com/assets/client-sarah-front-BftNcK0b.png" },
   { name: "Madison", result: "-20 lb fat loss · Leaner and stronger", image: "https://jaredjamesfit.com/assets/client-madison-front-yvUrLdnU.png" },
@@ -353,6 +457,43 @@ function AboutJaredPage() {
       </Reveal>
 
       <Reveal stagger={4}>
+        <Section>
+          <SectionTitle
+            eyebrow="Client snapshots"
+            title="The people behind the results."
+            sub="The same live client photo sets featured on Jared James Fit. Swipe each client and each photo row on mobile."
+          />
+          <div className="mx-auto max-w-6xl space-y-5">
+            {clientSnapshots.map((client) => (
+              <Card key={client.name} className="overflow-hidden">
+                <div className="overflow-x-auto [-webkit-overflow-scrolling:touch]">
+                  <div className="flex w-max gap-2 p-3">
+                    {client.photos.map((photo, index) => (
+                      <img
+                        key={photo}
+                        src={photo}
+                        alt={`${client.name} client snapshot ${index + 1}`}
+                        className="h-[320px] w-[240px] shrink-0 rounded-xl object-cover sm:h-[380px] sm:w-[285px]"
+                        loading="lazy"
+                      />
+                    ))}
+                  </div>
+                </div>
+                <div className="border-t border-border p-5">
+                  <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+                    <h3 className="text-xl font-black">{client.name}</h3>
+                    <span className="text-sm font-bold text-primary">{client.result}</span>
+                    <span className="text-xs text-muted-foreground">{client.role}</span>
+                  </div>
+                  <p className="mt-3 text-sm italic leading-relaxed text-muted-foreground">“{client.quote}”</p>
+                </div>
+              </Card>
+            ))}
+          </div>
+        </Section>
+      </Reveal>
+
+      <Reveal stagger={5}>
         <Section className="bg-card/30">
           <SectionTitle
             eyebrow="Client transformations"
@@ -390,7 +531,7 @@ function AboutJaredPage() {
         </Section>
       </Reveal>
 
-      <Reveal stagger={5}>
+      <Reveal stagger={6}>
         <Section className="bg-card/30">
           <SectionTitle eyebrow="Education + experience" title="Coaching credentials" sub="Formal education backed by years of hands-on coaching and competition." />
           <div className="mx-auto grid max-w-5xl gap-4 md:grid-cols-2">
@@ -426,7 +567,7 @@ function AboutJaredPage() {
         </Section>
       </Reveal>
 
-      <Reveal stagger={6}>
+      <Reveal stagger={7}>
         <Section>
           <SectionTitle eyebrow="Timeline" title="How it got here" />
           <div className="mx-auto max-w-4xl space-y-3">
@@ -440,9 +581,9 @@ function AboutJaredPage() {
         </Section>
       </Reveal>
 
-      <Reveal stagger={7}><CoachTimelineSection /></Reveal>
+      <Reveal stagger={8}><CoachTimelineSection /></Reveal>
 
-      <Reveal stagger={8}>
+      <Reveal stagger={9}>
         <Section>
           <SectionTitle eyebrow="How I coach" title="Simple enough to execute. Detailed enough to work." />
           <div className="mx-auto grid max-w-5xl gap-4 md:grid-cols-3">
@@ -457,7 +598,7 @@ function AboutJaredPage() {
         </Section>
       </Reveal>
 
-      <Reveal stagger={9}>
+      <Reveal stagger={10}>
         <Section className="bg-card/30">
           <div className="mx-auto max-w-4xl rounded-3xl border border-primary/20 bg-background p-7 md:p-10">
             <div className="flex items-start gap-4">
@@ -472,7 +613,7 @@ function AboutJaredPage() {
         </Section>
       </Reveal>
 
-      <Reveal stagger={10}>
+      <Reveal stagger={11}>
         <Section className="!pt-8">
           <div className="mx-auto max-w-3xl rounded-3xl border border-primary/30 bg-gradient-to-br from-primary/15 via-card to-card p-8 text-center md:p-12">
             <div className="text-xs font-bold uppercase tracking-[0.18em] text-primary">Work with me</div>
