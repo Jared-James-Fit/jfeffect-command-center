@@ -37,6 +37,18 @@ export function WorkoutListCard({
   const [expanded, , toggleExpanded] = usePreviewOpen(item.day?.id, item.scheduledWorkoutId ?? null);
   const previewClientId = clientId ?? item.completion?.client_id ?? null;
   const { data: progress } = useWorkoutProgress(item.day?.id, previewClientId);
+  const needsReviewToFinish =
+    !isCompleted &&
+    progress?.prescribedSets != null &&
+    progress.prescribedSets > 0 &&
+    progress.status === "completed";
+  const visibleStatus = needsReviewToFinish
+    ? {
+        ...status,
+        label: "Review to finish",
+        tone: "border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-300",
+      }
+    : status;
   return (
     <div className="space-y-1.5">
     <Link
@@ -52,7 +64,7 @@ export function WorkoutListCard({
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
             <div className="truncate font-bold">{title}</div>
-            <Badge variant="outline" className={`text-[10px] ${status.tone}`}>{status.label}</Badge>
+            <Badge variant="outline" className={`text-[10px] ${visibleStatus.tone}`}>{visibleStatus.label}</Badge>
           </div>
           <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-muted-foreground">
             {weekLabel && <span>{weekLabel}</span>}
@@ -103,6 +115,16 @@ export function WorkoutListCard({
         >
           <Move className="h-3 w-3" /> Reschedule
         </button>
+      )}
+      {needsReviewToFinish && (
+        <Link
+          to="/portal/workouts/$dayId"
+          params={{ dayId: item.day.id }}
+          search={{ review: 1 } as any}
+          className="inline-flex items-center gap-1 rounded-full border border-amber-500/30 bg-amber-500/10 px-2.5 py-1 text-[11px] font-semibold text-amber-700 hover:bg-amber-500/20 dark:text-amber-300"
+        >
+          <MessageSquare className="h-3 w-3" /> Finish review
+        </Link>
       )}
       {isCompleted && (<>
         <Link
