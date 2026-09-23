@@ -109,7 +109,7 @@ describe("getShareablePaymentUrl (clipboard contract)", () => {
         needsFreshCheckout: false,
         label: "x",
       });
-    const checkoutFn = vi.fn(async () => ({ url: GIANT_CHECKOUT_URL }));
+    const checkoutFn = vi.fn(async () => ({ sessionId: "cs_live_test123", url: GIANT_CHECKOUT_URL }));
     const res = await getShareablePaymentUrl(shareFn as any, checkoutFn as any, "p3");
     expect(checkoutFn).toHaveBeenCalledTimes(1); // one canonical regeneration, no duplicates
     expect(res.url).toBe("https://jfeffect.com/pay/ZzYyXxWw1234");
@@ -156,5 +156,15 @@ describe("redirect + Stripe attribution contracts", () => {
   it("Stripe Checkout Session metadata for webhook attribution is untouched", () => {
     expect(checkoutSrc).toContain('metadata[purchase_record_id]');
     expect(checkoutSrc).toContain('sessionParams["metadata[client_id]"]');
+  });
+});
+
+describe("unverified checkout is never shared", () => {
+  it("throws when checkout returns a URL without a Stripe session id", async () => {
+    (globalThis as any).window = { location: { origin: "https://jfeffect.com" } };
+    const shareFn = vi.fn(async () => ({ kind: "checkout_session", shareUrl: null, canonicalUrl: null, needsFreshCheckout: true, label: "x" }));
+    const checkoutFn = vi.fn(async () => ({ url: GIANT_CHECKOUT_URL }));
+    await expect(getShareablePaymentUrl(shareFn as any, checkoutFn as any, "p5")).rejects.toThrow("Stripe checkout was not created");
+    expect(checkoutFn).toHaveBeenCalledTimes(1);
   });
 });

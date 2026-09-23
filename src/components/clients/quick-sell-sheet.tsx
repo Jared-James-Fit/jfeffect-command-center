@@ -29,6 +29,9 @@ import { listCoachingProducts } from "@/lib/coaching-products.functions";
 import { listDiscountCodesFn } from "@/lib/discount-codes.functions";
 import { FIRST50_CODE } from "@/lib/first50-policy";
 import { createCheckoutSessionForAssignment } from "@/lib/stripe-checkout.functions";
+import { createPaymentShareLink } from "@/lib/payment-share.functions";
+import { getShareablePaymentUrl } from "@/components/payments/copy-payment-link-button";
+import { findReusablePurchaseIntent } from "@/lib/purchase-idempotency";
 import { supabase } from "@/integrations/supabase/client";
 
 interface Props {
@@ -55,6 +58,7 @@ export function QuickSellSheet({ open, onOpenChange, clientId, clientName }: Pro
   const listFn = useServerFn(listCoachingProducts);
   const listDiscountsFn = useServerFn(listDiscountCodesFn);
   const checkoutFn = useServerFn(createCheckoutSessionForAssignment);
+  const shareFn = useServerFn(createPaymentShareLink);
   const qc = useQueryClient();
 
   const [search, setSearch] = useState("");
@@ -117,36 +121,53 @@ export function QuickSellSheet({ open, onOpenChange, clientId, clientName }: Pro
   const sendCheckout = async (product: any, discountCodeId: string | null) => {
     setSendingCheckout(product.id);
     try {
-      // Create a purchase record and generate a client-specific checkout session
-      // First, create a purchase record for this client
-      const { data: purchase, error: pErr } = await supabase
+      // A payment REQUEST is not a SALE: reuse an open, unpaid intent for the
+      // same client + product instead of inserting a duplicate sale row.
+      const { data: existingRows } = await supabase
         .from("purchase_records")
-        .insert({
-          client_id: clientId,
-          offer_id: product.id,
-          offer_name: product.name,
-          payment_structure: product.payment_structure ?? null,
-          full_payable_amount: product.price_cents / 100,
-          currency: product.currency?.toUpperCase() ?? "CAD",
-          stripe_price_id: product.stripe_price_id ?? null,
-          stripe_product_id: product.stripe_product_id ?? null,
-          payment_status: "Pending",
-          service_status: "Pending",
-          last_payment_update_source: "admin_quick_sell",
-          last_payment_update_at: new Date().toISOString(),
-        })
-        .select("id")
-        .single();
-
-      if (pErr) throw new Error(pErr.message);
+        .select("id, client_id, offer_id, payment_status, amount_paid, amount_paid_cents, stripe_subscription_id, stripe_payment_intent_id, stripe_checkout_session_id, created_at, archived_at")
+        .eq("client_id", clientId)
+        .eq("offer_id", product.id);
+      const reusable = findReusablePurchaseIntent(
+        ((existingRows ?? []) as any[]).filter((r) => !r.archived_at),
+        { clientId, offerId: product.id },
+      );
+      let purchase: { id: string } | null = reusable ? { id: reusable.id } : null;
+      if (!purchase) {
+        const { data: inserted, error: pErr } = await supabase
+          .from("purchase_records")
+          .insert({
+            client_id: clientId,
+            offer_id: product.id,
+            offer_name: product.name,
+            payment_structure: product.payment_structure ?? null,
+            full_payable_amount: product.price_cents / 100,
+            currency: product.currency?.toUpperCase() ?? "CAD",
+            stripe_price_id: product.stripe_price_id ?? null,
+            stripe_product_id: product.stripe_product_id ?? null,
+            payment_status: "Pending",
+            service_status: "Pending",
+            last_payment_update_source: "admin_quick_sell",
+            last_payment_update_at: new Date().toISOString(),
+          })
+          .select("id")
+          .single();
+        if (pErr) throw new Error(pErr.message);
+        purchase = inserted;
+      }
 
       const origin = typeof window !== "undefined" ? window.location.origin : "https://jfeffect.com";
-      const res = await checkoutFn({ data: { purchaseRecordId: purchase.id, discountCodeId, origin } });
+      const checkout = await checkoutFn({ data: { purchaseRecordId: purchase!.id, discountCodeId, origin } });
+      if (!checkout?.sessionId || !checkout?.url) {
+        throw new Error("Stripe checkout was not created. Retry from the sale — the same sale will be reused.");
+      }
+      // Share the short, iMessage-safe JF Effect link minted from the verified session.
+      const { url: shareUrl } = await getShareablePaymentUrl(shareFn as any, checkoutFn as any, purchase!.id);
+      const res = { url: shareUrl };
 
       qc.invalidateQueries({ queryKey: ["coaching-products"] });
       qc.invalidateQueries({ queryKey: ["client-purchases", clientId] });
 
-      // Copy the checkout URL
       try { await navigator.clipboard.writeText(res.url); } catch {}
 
       toast.success(
