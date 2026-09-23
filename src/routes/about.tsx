@@ -291,7 +291,7 @@ const multiAngleProof = [
 
 const timeline = [
   { year: "2014", title: "Started training", body: "The start of my own training journey and the years of learning that eventually became the foundation for coaching." },
-  { year: "2017", title: "Professional Personal Trainer", body: "Began coaching clients in a commercial fitness environment, building hands-on experience with programming, technique, progression, and day-to-day accountability." },
+  { year: "2017", title: "Professional Personal Trainer", body: "Began coaching clients in a commercial fitness facility, building hands-on experience with programming, technique, progression, and day-to-day accountability." },
   { year: "2018", title: "DTS Level 1 + bodybuilding champion", body: "Completed Darby Training Systems Level 1 and won the MABBA Men's Physique title." },
   { year: "2021", title: "JF Effect became the full-time path", body: "Built the coaching business around personalized training, nutrition structure, accountability, form review, and direct support." },
   { year: "2023", title: "ISSA Certified Personal Trainer", body: "Added the ISSA Personal Training Certification alongside practical coaching and competitive experience." },
@@ -662,7 +662,7 @@ function AboutJaredPage() {
           <div className="mx-auto mt-4 max-w-5xl space-y-3">
             <CredentialAccordion title="Coaching career" summary="Personal training → full-time JF Effect">
               <ResultList rows={[
-                { primary: "May 2017 – July 2018 · Professional Personal Training", secondary: "Commercial fitness environment · client programming, technique, progression and accountability" },
+                { primary: "May 2017 – July 2018 · Professional Personal Trainer", secondary: "Commercial fitness facility · coached clients through programming, technique, progression and accountability" },
                 { primary: "2018 · Darby Training Systems", secondary: "DTS Level 1 Certification" },
                 { primary: "October 2021 – Present · JF Effect / JJT Powerlifting", secondary: "Founder · Online Fitness Coach · In-Person Personal Trainer · full-time self-employed coaching" },
                 { primary: "2023 · International Sports Sciences Association", secondary: "Personal Training Certification" },
