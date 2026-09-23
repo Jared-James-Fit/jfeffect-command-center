@@ -719,7 +719,7 @@ export function NotificationBell() {
 // Panel (used by bell + full page)
 // =============================================================================
 
-type View = "all" | "archived";
+type View = "new" | "all" | "archived";
 
 export function NotificationPanel({
   compact = false,

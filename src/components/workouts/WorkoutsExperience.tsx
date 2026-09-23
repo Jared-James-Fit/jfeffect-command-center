@@ -1243,7 +1243,13 @@ function SelectedDayCard({
       }
     : status;
   const title = cleanDayTitle(item.day?.title, item.day?.day_index);
-  const cta = needsReviewToFinish
+  const cta: {
+    label: string;
+    tone: string;
+    icon?: React.ReactNode;
+    search?: Record<string, any>;
+    secondary?: { label: string; search?: Record<string, any> };
+  } = needsReviewToFinish
     ? {
         label: "Finish Review",
         tone: "bg-amber-500 text-black hover:bg-amber-400",

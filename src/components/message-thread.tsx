@@ -12,6 +12,7 @@ import {
   type Message, type MessageAttachment, type SenderRole, type ConversationState,
   type MessageReaction,
 } from "@/lib/messages";
+import type { SharedAttachment } from "@/components/chat-shared";
 import { transcribeVoiceMessage } from "@/lib/voice-transcribe.functions";
 import { Button } from "@/components/ui/button";
 import { ChatImageAttachment } from "@/components/chat-media-attachment";
@@ -446,7 +447,7 @@ function AttachmentView({
     );
   }
   if (att.kind === "payment_request") {
-    return <PaymentRequestCard att={att} mine={mine} />;
+    return <PaymentRequestCard att={att as unknown as SharedAttachment} mine={mine} />;
   }
   if (att.kind === "sound") {
     return (
