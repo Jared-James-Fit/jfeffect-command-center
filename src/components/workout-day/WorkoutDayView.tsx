@@ -1929,6 +1929,18 @@ function WorkoutDay({
     existingReview?.review_submitted_at ??
     existingReview?.created_at
   );
+  const completionLoggingPctRaw = completion?.logging_percentage;
+  const completionLoggingPct =
+    completionLoggingPctRaw == null || completionLoggingPctRaw === ""
+      ? null
+      : Number(completionLoggingPctRaw);
+  const completionIncomplete =
+    completion?.completed_with_missing_logs === true ||
+    (
+      completionLoggingPct != null &&
+      Number.isFinite(completionLoggingPct) &&
+      completionLoggingPct < 100
+    );
 
   const statusBarVisible =
     !readonly &&
@@ -1940,7 +1952,7 @@ function WorkoutDay({
     ? Math.min(100, Math.round((statusSummary.setsDone / statusSummary.setsTotal) * 100))
     : 0;
   const progressStatus: import("@/lib/workout-progress").WorkoutProgressStatus =
-    completion?.completed_at && reviewSubmitted
+    completion?.completed_at && reviewSubmitted && !completionIncomplete
       ? "completed"
       : statusSummary.setsDone > 0
         ? "in_progress"
@@ -2193,13 +2205,17 @@ function WorkoutDay({
             <Badge
               variant="outline"
               className={
-                reviewSubmitted
+                reviewSubmitted && !completionIncomplete
                   ? "border-green-500/30 bg-green-500/10 text-green-500"
                   : "border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-300"
               }
             >
               <CheckCircle2 className="mr-1 h-3 w-3" />
-              {reviewSubmitted ? "Completed" : "Review pending"}
+              {completionIncomplete
+                ? "Incomplete"
+                : reviewSubmitted
+                  ? "Completed"
+                  : "Review pending"}
               {completion.actual_duration_min != null && completion.actual_duration_min > 0
                 ? ` · ${formatDurationMin(completion.actual_duration_min)}`
                 : ""}
