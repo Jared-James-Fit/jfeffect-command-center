@@ -499,19 +499,70 @@ export const createCheckoutSessionForAssignment = createServerFn({ method: "POST
       body: formEncode(sanitizeSubscriptionParams(sessionParams)),
     });
 
-    await supabase
+    const checkoutPatch = {
+      stripe_payment_link: session.url,
+      stripe_checkout_session_id: session.id,
+      stripe_price_id: priceId,
+      stripe_customer_id: stripeCustomerId ?? null,
+      stripe_mode: getStripeKey().includes("_test_") ? "test" : "live",
+      payment_status: "Pending Payment",
+      last_payment_update_source: "admin_assignment",
+      last_payment_update_at: new Date().toISOString(),
+    };
+
+    // A Stripe Checkout Session is not useful unless THIS purchase row keeps
+    // the session id + URL. The old path ignored PostgREST update errors, so
+    // Stripe could successfully create checkout while the app immediately
+    // resolved the sale as "needsFreshCheckout" again. That is the exact
+    // half-linked state that makes Copy/Share fail after Stripe succeeds.
+    //
+    // First use the authenticated admin/coach client. If the write is blocked
+    // or returns no row, fall back to the server-only service client. This
+    // function has already passed the admin/coach gate and loaded the exact
+    // purchase before any Stripe side effect, so the fallback cannot target an
+    // arbitrary client sale.
+    let { data: linkedPurchase, error: linkError } = await supabase
       .from("purchase_records")
-      .update({
-        stripe_payment_link: session.url,
-        stripe_checkout_session_id: session.id,
-        stripe_price_id: priceId,
-        stripe_customer_id: stripeCustomerId ?? null,
-        stripe_mode: getStripeKey().includes("_test_") ? "test" : "live",
-        payment_status: "Pending Payment",
-        last_payment_update_source: "admin_assignment",
-        last_payment_update_at: new Date().toISOString(),
-      })
-      .eq("id", purchase.id);
+      .update(checkoutPatch)
+      .eq("id", purchase.id)
+      .select("id, stripe_checkout_session_id, stripe_payment_link")
+      .maybeSingle();
+
+    if (
+      linkError ||
+      !linkedPurchase ||
+      linkedPurchase.stripe_checkout_session_id !== session.id ||
+      linkedPurchase.stripe_payment_link !== session.url
+    ) {
+      const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+      const adminResult = await supabaseAdmin
+        .from("purchase_records")
+        .update(checkoutPatch)
+        .eq("id", purchase.id)
+        .select("id, stripe_checkout_session_id, stripe_payment_link")
+        .maybeSingle();
+
+      linkedPurchase = adminResult.data;
+      linkError = adminResult.error;
+    }
+
+    if (
+      linkError ||
+      !linkedPurchase ||
+      linkedPurchase.stripe_checkout_session_id !== session.id ||
+      linkedPurchase.stripe_payment_link !== session.url
+    ) {
+      // Do not leave a newly-created, untracked checkout live. Expiration is
+      // best-effort; the original persistence error remains the useful error.
+      try {
+        await stripeFetch(`/checkout/sessions/${encodeURIComponent(session.id)}/expire`, {
+          method: "POST",
+        });
+      } catch { /* best effort only */ }
+      throw new Error(
+        "Stripe created checkout, but the app could not save it to this sale. No payment link was shared. Retry once.",
+      );
+    }
 
     return { url: session.url as string, sessionId: session.id as string };
   });
