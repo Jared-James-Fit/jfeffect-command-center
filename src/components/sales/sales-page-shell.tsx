@@ -33,11 +33,18 @@ export function SalesPageShell({
           <Link to="/" className="text-base sm:text-lg font-black tracking-tight">JF Effect</Link>
           <nav className="flex items-center gap-1 sm:gap-2">
             {!hideMarketingNav && (
-              <Link to="/about">
-                <Button size="sm" variant="ghost" className="px-2 sm:px-3 text-xs sm:text-sm">
-                  About
-                </Button>
-              </Link>
+              <>
+                <Link to="/coaching">
+                  <Button size="sm" variant="ghost" className="px-2 sm:px-3 text-xs sm:text-sm">
+                    Coaching
+                  </Button>
+                </Link>
+                <Link to="/about">
+                  <Button size="sm" variant="ghost" className="px-2 sm:px-3 text-xs sm:text-sm">
+                    About
+                  </Button>
+                </Link>
+              </>
             )}
             <Link to="/auth"><Button size="sm" variant="outline" className="px-2 sm:px-3 text-xs sm:text-sm">Sign In</Button></Link>
           </nav>
