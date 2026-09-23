@@ -13,7 +13,17 @@ import { CoachTimelineSection } from "@/components/sales/coach-timeline-section"
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Reveal } from "@/components/sales/reveal";
-import { jaredHeroImage, phillipAthleteImage, dwayneAthleteImage, frederickAthleteImage, elisaAthleteImage } from "@/assets/embedded-athlete-images";
+import jaredAsset from "@/assets/athletes/jared-napf-2026.jpg.asset.json";
+import phillipAsset from "@/assets/athletes/phillip.png.asset.json";
+import dwayneAsset from "@/assets/athletes/dwayne.png.asset.json";
+import frederickAsset from "@/assets/athletes/frederick.png.asset.json";
+import elisaAsset from "@/assets/athletes/elisa.png.asset.json";
+
+const jaredHeroImage = jaredAsset.url;
+const phillipAthleteImage = phillipAsset.url;
+const dwayneAthleteImage = dwayneAsset.url;
+const frederickAthleteImage = frederickAsset.url;
+const elisaAthleteImage = elisaAsset.url;
 
 const TITLE = "About Jared James | Team Canada Powerlifter & JF Effect Founder";
 const DESCRIPTION =
