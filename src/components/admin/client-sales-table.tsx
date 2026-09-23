@@ -284,12 +284,19 @@ function RowMenu({ raw, clientName, onEditDates, onMarkPaid, onMarkOverdue, onEm
     catch (e: any) { toast.error(e?.message ?? "Could not restore sale"); }
   };
   const remove = async () => {
-    if (!window.confirm("Remove this unpaid sale permanently? This is only allowed when there is no payment or Stripe transaction history.")) return;
-    try { await removeFn({ data: { id: raw.id } }); toast.success("Unpaid sale removed"); onChanged(); }
-    catch (e: any) { toast.error(e?.message ?? "Could not remove sale"); }
+    if (!window.confirm("Delete this unpaid sale permanently? Any unused client checkout/payment link will be disabled. Sales with payment or transaction history cannot be deleted.")) return;
+    try { await removeFn({ data: { id: raw.id } }); toast.success("Sale deleted"); onChanged(); }
+    catch (e: any) { toast.error(e?.message ?? "Could not delete sale"); }
   };
 
-  const removable = !paid && !raw.stripe_payment_intent_id && !raw.stripe_subscription_id && !raw.stripe_checkout_session_id && Number(raw.amount_paid ?? 0) <= 0 && Number(raw.amount_paid_cents ?? 0) <= 0;
+  // A generated Checkout Session/payment link is still deletable when unpaid.
+  // The server verifies Stripe and expires that checkout before removing it.
+  const removable =
+    !paid &&
+    !raw.stripe_payment_intent_id &&
+    !raw.stripe_subscription_id &&
+    Number(raw.amount_paid ?? 0) <= 0 &&
+    Number(raw.amount_paid_cents ?? 0) <= 0;
 
   return <DropdownMenu>
     <DropdownMenuTrigger asChild><Button size="icon" variant="ghost" className="h-9 w-9" aria-label="Sale actions"><MoreHorizontal className="h-4 w-4" /></Button></DropdownMenuTrigger>
@@ -307,7 +314,7 @@ function RowMenu({ raw, clientName, onEditDates, onMarkPaid, onMarkOverdue, onEm
       <DropdownMenuItem onSelect={() => void downloadPurchasePdf(raw, clientName)}><Download className="mr-2 h-3.5 w-3.5" />Download PDF</DropdownMenuItem>
       <DropdownMenuSeparator />
       {raw.archived_at ? <DropdownMenuItem onSelect={() => void restore()}><ArchiveRestore className="mr-2 h-3.5 w-3.5" />Restore sale</DropdownMenuItem> : <DropdownMenuItem onSelect={() => void archive()}><Archive className="mr-2 h-3.5 w-3.5" />Archive sale</DropdownMenuItem>}
-      {removable && <DropdownMenuItem className="text-destructive focus:text-destructive" onSelect={() => void remove()}><Trash2 className="mr-2 h-3.5 w-3.5" />Remove unpaid sale</DropdownMenuItem>}
+      {removable && <DropdownMenuItem className="text-destructive focus:text-destructive" onSelect={() => void remove()}><Trash2 className="mr-2 h-3.5 w-3.5" />Delete sale</DropdownMenuItem>}
     </DropdownMenuContent>
   </DropdownMenu>;
 }
