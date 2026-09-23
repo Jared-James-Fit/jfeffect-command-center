@@ -1210,15 +1210,79 @@ export const Route = createFileRoute("/api/public/stripe-webhook")({
             case "payment_intent.succeeded": {
               const purchase = await resolvePurchase(supabase, obj, { stripe_payment_intent_id: obj.id });
               if (purchase) {
+                const charge =
+                  typeof obj.latest_charge === "object" ? obj.latest_charge
+                  : obj.charges?.data?.[0] ?? null;
+                const chargeId =
+                  typeof obj.latest_charge === "string" ? obj.latest_charge
+                  : charge?.id ?? null;
+                const receiptUrl = charge?.receipt_url ?? purchase.stripe_receipt_url ?? null;
                 await supabase.from("purchase_records").update({
                   payment_status: "Paid",
+                  service_status: "Active",
                   paid_at: now,
                   amount_paid: obj.amount_received ? obj.amount_received / 100 : purchase.amount_paid,
-                  stripe_receipt_url: obj.charges?.data?.[0]?.receipt_url ?? purchase.stripe_receipt_url,
+                  stripe_payment_intent_id: obj.id,
+                  ...(obj.customer ? { stripe_customer_id: obj.customer } : {}),
+                  stripe_receipt_url: receiptUrl,
                   last_payment_update_source: "stripe_webhook",
                   last_payment_update_at: now,
                 }).eq("id", purchase.id);
+
+                // Some payment methods complete Checkout before funds actually
+                // settle. In that flow checkout.session.completed may not write
+                // a ledger row, so PaymentIntent success must be able to do it.
+                // Dedupe by any existing PI/charge before inserting.
+                const { data: existingLedger } = await supabase
+                  .from("payment_ledger")
+                  .select("id")
+                  .or([
+                    `stripe_payment_intent_id.eq.${obj.id}`,
+                    chargeId ? `stripe_charge_id.eq.${chargeId}` : null,
+                  ].filter(Boolean).join(","))
+                  .limit(1);
+                if (!(existingLedger ?? []).length && (obj.amount_received ?? 0) > 0) {
+                  const occurredAt = new Date((obj.created ?? event.created) * 1000).toISOString();
+                  const { error: ledgerErr } = await supabase.from("payment_ledger").insert({
+                    client_id: purchase.client_id,
+                    purchase_id: purchase.id,
+                    txn_type: "payment",
+                    method: "stripe",
+                    amount_minor: obj.amount_received,
+                    tax_minor: 0,
+                    currency: (obj.currency ?? "cad").toUpperCase(),
+                    transaction_date: occurredAt.slice(0, 10),
+                    received_at: occurredAt,
+                    external_reference: obj.id,
+                    stripe_event_id: event.id,
+                    stripe_payment_intent_id: obj.id,
+                    stripe_charge_id: chargeId,
+                    stripe_customer_id: typeof obj.customer === "string" ? obj.customer : null,
+                    stripe_mode: eventMode,
+                    receipt_url: receiptUrl,
+                    source: "stripe_payment_intent",
+                    internal_note: `Stripe payment_intent.succeeded — ${obj.id}`,
+                  });
+                  if (ledgerErr) {
+                    console.error("[stripe-webhook] payment_ledger insert failed (payment intent)", {
+                      paymentIntentId: obj.id, purchaseId: purchase.id, message: ledgerErr.message,
+                    });
+                  }
+                }
+
+                await syncClientStripeCustomerId(
+                  supabase,
+                  typeof obj.customer === "string" ? obj.customer : null,
+                  purchase.client_id ?? null,
+                );
                 await provisionMemberFromPurchase(supabase, purchase);
+              } else {
+                await flagUnlinked(
+                  supabase,
+                  event,
+                  obj,
+                  "Successful PaymentIntent could not be matched to a JF Effect sale.",
+                );
               }
               break;
             }
@@ -1263,7 +1327,57 @@ export const Route = createFileRoute("/api/public/stripe-webhook")({
                   last_payment_update_source: "stripe_webhook",
                   last_payment_update_at: now,
                 }).eq("id", purchase.id);
+
+                // Persist each Stripe refund as its own transaction. A charge
+                // can emit charge.refunded more than once as partial refunds
+                // accumulate, so the refund id — not the event id — is the
+                // stable idempotency key.
+                const refunds = obj.refunds?.data ?? [];
+                const { data: originalRows } = await supabase
+                  .from("payment_ledger")
+                  .select("id")
+                  .eq("stripe_charge_id", obj.id)
+                  .eq("voided", false)
+                  .order("received_at", { ascending: false })
+                  .limit(1);
+                const reversalOf = originalRows?.[0]?.id ?? null;
+                for (const refund of refunds) {
+                  if (!(refund?.amount > 0) || !refund?.id) continue;
+                  const occurredAt = new Date((refund.created ?? event.created) * 1000).toISOString();
+                  const { error: ledgerErr } = await supabase.from("payment_ledger").upsert({
+                    client_id: purchase.client_id,
+                    purchase_id: purchase.id,
+                    txn_type: "refund",
+                    method: "stripe",
+                    amount_minor: refund.amount,
+                    tax_minor: 0,
+                    currency: (refund.currency ?? obj.currency ?? "cad").toUpperCase(),
+                    transaction_date: occurredAt.slice(0, 10),
+                    received_at: occurredAt,
+                    external_reference: refund.id,
+                    reversal_of: reversalOf,
+                    stripe_event_id: event.id,
+                    stripe_payment_intent_id: obj.payment_intent ?? null,
+                    stripe_charge_id: obj.id,
+                    stripe_customer_id: typeof obj.customer === "string" ? obj.customer : null,
+                    stripe_mode: eventMode,
+                    source: "stripe_refund",
+                    internal_note: `Stripe refund ${refund.id} on charge ${obj.id}`,
+                  }, { onConflict: "external_reference", ignoreDuplicates: true });
+                  if (ledgerErr) {
+                    console.error("[stripe-webhook] payment_ledger upsert failed (refund)", {
+                      refundId: refund.id, purchaseId: purchase.id, message: ledgerErr.message,
+                    });
+                  }
+                }
                 await revokeMemberFromPurchase(supabase, purchase);
+              } else {
+                await flagUnlinked(
+                  supabase,
+                  event,
+                  obj,
+                  "Refunded charge could not be matched to a JF Effect sale.",
+                );
               }
               break;
             }
