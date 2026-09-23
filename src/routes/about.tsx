@@ -13,6 +13,7 @@ import { CoachTimelineSection } from "@/components/sales/coach-timeline-section"
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Reveal } from "@/components/sales/reveal";
+import { jaredHeroImage, phillipAthleteImage, dwayneAthleteImage, frederickAthleteImage, elisaAthleteImage } from "@/assets/embedded-athlete-images";
 
 const TITLE = "About Jared James | Team Canada Powerlifter & JF Effect Founder";
 const DESCRIPTION =
@@ -107,10 +108,10 @@ const athleteResults: ResultRow[] = [
 ];
 
 const coachedAthletePhotos = [
-  { name: "Phillip Bennett", achievement: "National Champion · IPF Worlds · Sub-Junior 105 kg", image: "/athletes/phillip-bennett.png" },
-  { name: "Dwayne Gordon", achievement: "Central Canadian Champion · Open 105 kg", image: "/athletes/dwayne-gordon.jpg" },
-  { name: "Frederick Callahan", achievement: "Ontario Provincial Champion 2023 · Junior 74 kg", image: "/athletes/frederick-callahan.jpg" },
-  { name: "Elisa Vena", achievement: "Western Championships · Powerlifting competitor", image: "/athletes/elisa-vena.png" },
+  { name: "Phillip Bennett", achievement: "National Champion · IPF Worlds · Sub-Junior 105 kg", image: phillipAthleteImage },
+  { name: "Dwayne Gordon", achievement: "Central Canadian Champion · Open 105 kg", image: dwayneAthleteImage },
+  { name: "Frederick Callahan", achievement: "Ontario Provincial Champion 2023 · Junior 74 kg", image: frederickAthleteImage },
+  { name: "Elisa Vena", achievement: "Western Championships · Powerlifting competitor", image: elisaAthleteImage },
 ];
 
 const clientSnapshots = [
@@ -382,7 +383,7 @@ function AboutJaredPage() {
           </div>
           <div className="relative mx-auto w-full max-w-lg">
             <div className="absolute -inset-4 -z-10 rounded-[2rem] bg-primary/10 blur-2xl" />
-            <img src="/athletes/jared-napf-2026-original.jpg" alt="Jared James representing Canada in international powerlifting competition" className="aspect-[4/5] w-full rounded-3xl object-cover object-center shadow-2xl ring-1 ring-border" loading="eager" />
+            <img src={jaredHeroImage} alt="Jared James representing Canada in international powerlifting competition" className="aspect-[4/5] w-full rounded-3xl object-cover object-center shadow-2xl ring-1 ring-border" loading="eager" />
           </div>
         </div>
       </section>
@@ -459,7 +460,7 @@ function AboutJaredPage() {
             <div className="flex w-max gap-4">
               {coachedAthletePhotos.map((athlete) => (
                 <Card key={athlete.name} className="w-[76vw] max-w-[300px] shrink-0 overflow-hidden">
-                  <img src={athlete.image} alt={`${athlete.name} JF Effect coached powerlifting athlete`} className="aspect-square w-full object-cover" loading="lazy" />
+                  <img src={athlete.image} alt={`${athlete.name} JF Effect coached powerlifting athlete`} className="aspect-square w-full bg-black object-contain" loading="lazy" />
                   <div className="p-4">
                     <div className="font-black">{athlete.name}</div>
                     <div className="mt-1 text-sm leading-relaxed text-muted-foreground">{athlete.achievement}</div>
