@@ -10,8 +10,8 @@
 import { lazy, Suspense, useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
-import { BookOpen, ChefHat, Loader2 } from "lucide-react";
+import { Sheet, SheetClose, SheetContent, SheetTitle } from "@/components/ui/sheet";
+import { BookOpen, ChefHat, ChevronLeft, Loader2 } from "lucide-react";
 
 export type CookbookViewer = "member" | "client";
 
@@ -52,13 +52,22 @@ export function CookbookSheet({
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent
         side="bottom"
-        className="h-[100dvh] max-w-3xl overflow-y-auto pb-[max(1.5rem,env(safe-area-inset-bottom))] sm:h-[92vh] sm:mx-auto sm:rounded-t-2xl"
+        hideCloseButton
+        className="h-[100dvh] max-w-3xl overflow-y-auto pb-[max(1.5rem,env(safe-area-inset-bottom))] pt-[calc(env(safe-area-inset-top)+0.75rem)] sm:h-[92vh] sm:mx-auto sm:rounded-t-2xl sm:pt-6"
       >
-        <SheetHeader className="text-left">
-          <SheetTitle className="flex items-center gap-2">
-            <ChefHat className="h-5 w-5 text-primary" /> Cookbook
+        <div className="flex min-h-12 items-center gap-3">
+          <SheetClose
+            aria-label="Back to nutrition"
+            className="inline-flex h-12 min-w-[92px] shrink-0 touch-manipulation items-center justify-center gap-1.5 rounded-xl border border-border bg-background px-4 text-base font-semibold text-foreground shadow-sm transition active:scale-[0.98] hover:bg-secondary focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+          >
+            <ChevronLeft className="h-5 w-5" />
+            <span>Back</span>
+          </SheetClose>
+          <SheetTitle className="flex min-w-0 flex-1 items-center gap-2 text-2xl font-bold">
+            <ChefHat className="h-6 w-6 shrink-0 text-primary" />
+            <span className="truncate">Cookbook</span>
           </SheetTitle>
-        </SheetHeader>
+        </div>
         <Suspense
           fallback={
             <div className="flex items-center justify-center py-16 text-muted-foreground">
