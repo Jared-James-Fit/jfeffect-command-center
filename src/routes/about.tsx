@@ -345,7 +345,6 @@ function ScrollImage({
       decoding="async"
       fetchPriority={eager ? "high" : "auto"}
     />
-    />
   );
 }
 
