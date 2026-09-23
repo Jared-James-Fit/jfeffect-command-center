@@ -41,7 +41,7 @@ export async function resolveShareLinkForPurchase(
   const { data: purchase, error } = await supabase
     .from("purchase_records")
     .select(
-      "id, client_id, offer_id, offer_name, payment_status, stripe_payment_link, stripe_checkout_session_id, stripe_subscription_id, stripe_price_id",
+      "id, client_id, offer_id, offer_name, payment_status, stripe_payment_link, stripe_checkout_session_id, stripe_subscription_id, stripe_price_id, last_payment_update_at",
     )
     .eq("id", purchaseRecordId)
     .single();
@@ -93,6 +93,30 @@ export async function resolveShareLinkForPurchase(
         url: session.url ?? null,
         expires_at: typeof session.expires_at === "number" ? session.expires_at : null,
       };
+    } else {
+      // Stripe's read endpoint can briefly lag immediately after a Checkout
+      // Session is created. The assignment checkout creator only returns after
+      // it has verified this exact session id + URL were persisted on the
+      // purchase. During that tiny window, trust the just-persisted checkout
+      // instead of falsely reporting "needsFreshCheckout" and creating another
+      // session on retry. Older/stale rows still require a live Stripe GET.
+      const stored = sanitizeShareUrl(purchase.stripe_payment_link ?? null);
+      const updatedAt = purchase.last_payment_update_at
+        ? new Date(purchase.last_payment_update_at).getTime()
+        : 0;
+      const justCreated =
+        !!stored &&
+        /^https:\/\/checkout\.stripe\.com\//i.test(stored) &&
+        Number.isFinite(updatedAt) &&
+        Date.now() - updatedAt >= 0 &&
+        Date.now() - updatedAt <= 5 * 60_000;
+      if (justCreated) {
+        existingSession = {
+          status: "open",
+          url: stored,
+          expires_at: null,
+        };
+      }
     }
   }
 
