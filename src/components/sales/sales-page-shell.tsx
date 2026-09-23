@@ -1,4 +1,4 @@
-import { Link } from "@tanstack/react-router";
+import { Link, useRouterState } from "@tanstack/react-router";
 import { Button } from "@/components/ui/button";
 import type { ReactNode } from "react";
 
@@ -16,6 +16,12 @@ export function SalesPageShell({
   hideMarketingNav?: boolean;
 }) {
   const themeClass = theme === "light" ? "theme-light" : "";
+  const pathname = useRouterState({ select: (state) => state.location.pathname });
+  const isCoaching = pathname === "/coaching" || pathname.startsWith("/coaching/");
+  const isAbout = pathname === "/about" || pathname.startsWith("/about/");
+  const isAuth = pathname === "/auth" || pathname.startsWith("/auth/");
+  const navButtonClass = "relative px-2 text-xs transition-colors sm:px-3 sm:text-sm";
+  const activeNavClass = "bg-primary/10 text-primary hover:bg-primary/15 hover:text-primary after:absolute after:inset-x-2 after:-bottom-[13px] after:h-0.5 after:rounded-full after:bg-primary sm:after:inset-x-3";
   return (
     <div
       className={`min-h-screen bg-background text-foreground ${themeClass}`}
@@ -34,19 +40,35 @@ export function SalesPageShell({
           <nav className="flex items-center gap-1 sm:gap-2">
             {!hideMarketingNav && (
               <>
-                <Link to="/coaching">
-                  <Button size="sm" variant="ghost" className="px-2 sm:px-3 text-xs sm:text-sm">
+                <Link to="/coaching" aria-current={isCoaching ? "page" : undefined}>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className={`${navButtonClass} ${isCoaching ? activeNavClass : ""}`}
+                  >
                     Coaching
                   </Button>
                 </Link>
-                <Link to="/about">
-                  <Button size="sm" variant="ghost" className="px-2 sm:px-3 text-xs sm:text-sm">
+                <Link to="/about" aria-current={isAbout ? "page" : undefined}>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className={`${navButtonClass} ${isAbout ? activeNavClass : ""}`}
+                  >
                     About
                   </Button>
                 </Link>
               </>
             )}
-            <Link to="/auth"><Button size="sm" variant="outline" className="px-2 sm:px-3 text-xs sm:text-sm">Sign In</Button></Link>
+            <Link to="/auth" aria-current={isAuth ? "page" : undefined}>
+              <Button
+                size="sm"
+                variant={isAuth ? "default" : "outline"}
+                className={`px-2 text-xs transition-colors sm:px-3 sm:text-sm ${isAuth ? "shadow-sm" : ""}`}
+              >
+                Sign In
+              </Button>
+            </Link>
           </nav>
         </div>
       </header>
