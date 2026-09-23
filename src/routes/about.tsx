@@ -1,112 +1,211 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import {
-  Award,
-  BadgeCheck,
-  BriefcaseBusiness,
-  CheckCircle2,
-  Dumbbell,
-  MapPin,
-  Medal,
-  ShieldCheck,
-  Target,
-  Trophy,
-  Users,
-} from "lucide-react";
+import { Award, BadgeCheck, Dumbbell, Globe2, Medal, ShieldCheck, Trophy, Users } from "lucide-react";
 import { SalesPageShell, Section, SectionTitle } from "@/components/sales/sales-page-shell";
-import { CoachTimelineSection } from "@/components/sales/coach-timeline-section";
-import { Card } from "@/components/ui/card";
+import { AboutTransformations } from "@/components/sales/about-transformations";
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Button } from "@/components/ui/button";
-import { Reveal } from "@/components/sales/reveal";
 import coachingHero from "@/assets/coaching-hero.jpg";
 
-const TITLE = "About Jared James | Coach, Powerlifter & JF Effect Founder";
-const DESCRIPTION =
-  "Meet Jared James, founder of JF Effect: personal trainer, online coach, competitive powerlifter, 2026 Commonwealth Champion, ISSA Certified Personal Trainer, and coach to 100+ clients.";
+const TITLE = "About Jared James | Team Canada Powerlifter & JF Effect Coach";
+const DESCRIPTION = "Meet Jared James: Team Canada powerlifter, two-time international overall champion, Top 50 all-time at 66kg, and JF Effect coach to 100+ clients.";
 const URL = "https://jfeffect.com/about";
 
-const credentials = [
+type ResultRow = { date: string; result: string; event: string; location?: string; note?: string };
+type ResultGroup = { title: string; summary: string; rows: ResultRow[]; note?: string };
+
+const headlineCredentials = [
+  { value: "100+", label: "Clients coached", detail: "Strength, performance and body composition", Icon: Users },
+  { value: "🇨🇦 Team Canada", label: "International competitor", detail: "Representing Canada in powerlifting", Icon: Globe2 },
+  { value: "2×", label: "International champion", detail: "Overall Total · NAPF + Commonwealth · 2026", Icon: Trophy },
+  { value: "Top 50", label: "All-time in the world", detail: "66kg Class · 2026", Icon: Medal },
+  { value: "5×", label: "Drug-tested athlete", detail: "Sanctioned drug-tested competition", Icon: ShieldCheck },
+  { value: "3", label: "Professional certifications", detail: "GLPTI · DTS Level 1 · ISSA CPT", Icon: BadgeCheck },
+];
+
+const athleteGroups: ResultGroup[] = [
   {
-    title: "ISSA Personal Training Certification",
-    detail: "International Sports Sciences Association · 2023",
-    Icon: BadgeCheck,
+    title: "International championships",
+    summary: "2 overall titles · 8 lift medals",
+    note: "Two-time International Champion refers to two overall-total championship wins. Individual lift medals are listed results, not additional championship titles.",
+    rows: [
+      { date: "2026", result: "Total Gold · Squat Gold · Bench Gold · Deadlift Gold", event: "NAPF North American Championships" },
+      { date: "2026", result: "Total Gold · Squat Gold · Bench Gold · Deadlift Silver", event: "Commonwealth Championships" },
+    ],
   },
   {
-    title: "DTS Level 1 Certification",
-    detail: "Darby Training Systems · 2018",
-    Icon: ShieldCheck,
+    title: "National championships",
+    summary: "3 appearances",
+    rows: [
+      { date: "2024", result: "5th Place", event: "National Canadian Championship", location: "Summerside, PEI" },
+      { date: "2025", result: "4th Place", event: "National Canadian Championship", location: "Moose Jaw, SK" },
+      { date: "2026", result: "2nd Place", event: "National Canadian Championship", location: "St. John's, NL" },
+    ],
   },
   {
-    title: "100+ Clients Coached",
-    detail: "From first-time gym members to Team Canada powerlifting athletes",
-    Icon: Users,
+    title: "Regional championships",
+    summary: "2 gold · 1 silver",
+    rows: [
+      { date: "2018", result: "1st Place", event: "Western Canadian Championship", location: "Edmonton, AB" },
+      { date: "2023", result: "1st Place", event: "Central Canadian Championship", location: "Saint-Hyacinthe, QC" },
+      { date: "2024", result: "2nd Place", event: "Western Canadian Championship", location: "Moose Jaw, SK" },
+    ],
   },
   {
-    title: "Coaching Since 2019",
-    detail: "Full-time coaching since 2022",
-    Icon: Target,
+    title: "Provincial championships",
+    summary: "3 gold",
+    rows: [
+      { date: "2020", result: "1st Place", event: "Manitoba Provincial Championship", location: "Winnipeg, MB" },
+      { date: "2022", result: "1st Place", event: "Manitoba Provincial Championship", location: "Winnipeg, MB" },
+      { date: "2023", result: "1st Place", event: "Ontario Provincial Championship", location: "Bowmanville, ON" },
+    ],
+  },
+  {
+    title: "Local meets",
+    summary: "7 wins",
+    rows: [
+      { date: "2018", result: "1st", event: "Movement Powerlifting Classic" },
+      { date: "2019", result: "1st", event: "Brickhouse Power Challenge" },
+      { date: "2020", result: "1st", event: "Brickhouse Power Challenge" },
+      { date: "2020", result: "1st", event: "Movement Powerlifting Classic 3.0" },
+      { date: "2022", result: "1st", event: "Brickhouse Power Challenge" },
+      { date: "2022", result: "1st", event: "Nightmare Before Liftmass" },
+      { date: "2025", result: "1st", event: "MPA Summer Classic" },
+    ],
+  },
+  {
+    title: "Powerlifting records",
+    summary: "21 entries",
+    rows: [
+      { date: "02/02/2020", result: "Squat · 187.5kg", event: "MPA · 66kg Jr" },
+      { date: "02/02/2020", result: "Bench Press · 135.5kg", event: "MPA · 66kg Jr" },
+      { date: "02/02/2020", result: "Deadlift · 240kg", event: "MPA · 66kg Jr" },
+      { date: "02/02/2020", result: "Total · 563.5kg", event: "MPA · 66kg Jr" },
+      { date: "02/02/2020", result: "Bench Press Only · 135.5kg", event: "MPA · 66kg Jr" },
+      { date: "02/02/2020", result: "Bench Press Only · 135.5kg", event: "MPA · 66kg Open", note: "as a Jr." },
+      { date: "02/02/2020", result: "Bench Press Only · 155kg", event: "MPA · 74kg Jr" },
+      { date: "08/08/2020", result: "Bench Press · 155kg", event: "MPA · 74kg Jr" },
+      { date: "03/09/2022", result: "Squat · 240kg", event: "MPA · 66kg Open" },
+      { date: "03/09/2022", result: "Total · 662.5kg", event: "MPA · 66kg Open" },
+      { date: "03/26/2022", result: "Bench Press · 155.5kg", event: "MPA · 74kg Open" },
+      { date: "08/13/2022", result: "Squat · 225kg", event: "MPA · 66kg Open" },
+      { date: "08/13/2022", result: "Bench Press · 150kg", event: "MPA · 66kg Open" },
+      { date: "08/13/2022", result: "Total · 630kg", event: "MPA · 66kg Open" },
+      { date: "08/13/2022", result: "Highest GL Points", event: "MPA · 66kg Open" },
+      { date: "03/08/2024", result: "Bench Press · 170kg", event: "OPA · 74kg Open" },
+      { date: "03/08/2024", result: "Deadlift · 290kg", event: "OPA · 74kg Open" },
+      { date: "03/08/2024", result: "Total · 720kg", event: "OPA · 74kg Open" },
+      { date: "07/19/2025", result: "Total · 707.5kg", event: "MPA · 83kg Open" },
+      { date: "07/19/2025", result: "Ranked #1 · GL Points 100.40", event: "MPA · 3-Lift" },
+      { date: "07/19/2025", result: "Ranked #1 · GL Points 103.71", event: "MPA · 3-Lift" },
+    ],
+  },
+  {
+    title: "Federation awards / recognition",
+    summary: "1 award",
+    rows: [{ date: "2022", result: "Male Athlete of the Year", event: "MPA" }],
+  },
+  {
+    title: "Bodybuilding",
+    summary: "Champion + podium finish",
+    rows: [
+      { date: "2018", result: "1st Place · Men's Physique", event: "MABBA Champion" },
+      { date: "2019", result: "3rd Place · Men's Physique", event: "CPA Van Dijk Natural Classic" },
+    ],
+  },
+  {
+    title: "Coaching career & certifications",
+    summary: "3 certifications · coaching since 2017",
+    rows: [
+      { date: "May 2017 – July 2018", result: "Personal Trainer", event: "GoodLife Fitness" },
+      { date: "2018", result: "Level 1 Certification", event: "Darby Training Systems (DTS)" },
+      { date: "October 2021 – Present", result: "Founder · Online Fitness Coach · In-Person Personal Trainer", event: "JF Effect / JJT Powerlifting", note: "Began self-employed full-time coaching in October 2021." },
+      { date: "2023", result: "Personal Training Certification", event: "International Sports Sciences Association (ISSA)" },
+      { date: "", result: "GLPTI Certification", event: "GoodLife Fitness" },
+    ],
+  },
+  {
+    title: "Federation service & volunteering",
+    summary: "Local through international competition",
+    rows: [{ date: "Ongoing", result: "Meet volunteer", event: "Sanctioned powerlifting competitions", note: "Helps at local, provincial, regional, national and international-level meets." }],
   },
 ];
 
-const competition = [
+const coachedAthleteGroups: ResultGroup[] = [
   {
-    label: "2026 Commonwealth Champion",
-    detail: "Represented Canada in Winnipeg at the Commonwealth Championships.",
-    Icon: Trophy,
+    title: "IPF Worlds",
+    summary: "1 athlete",
+    rows: [{ date: "2025", result: "Phillip Bennett · 6th Place", event: "IPF Worlds", location: "San José, Costa Rica" }],
   },
   {
-    label: "2026 NAPF North American Championships",
-    detail: "Represented Canada internationally at the North American Championships.",
-    Icon: Medal,
+    title: "Nationals",
+    summary: "4 results · 2 podiums",
+    rows: [
+      { date: "2024", result: "Laine Vandriel · 1st Place", event: "Nationals", location: "Summerside, PEI" },
+      { date: "2024", result: "Frederick Callahan · 3rd Place", event: "Nationals", location: "Summerside, PEI" },
+      { date: "2025", result: "Phillip Bennett · 1st Place", event: "Nationals", location: "Moose Jaw, SK" },
+      { date: "2025", result: "Sarah Anderson · 11th Place", event: "Nationals", location: "Moose Jaw, SK" },
+    ],
   },
   {
-    label: "2026 Canadian Nationals",
-    detail: "66 kg class · 9/9 attempts · 27 white lights · 662.5 kg total.",
-    Icon: Award,
+    title: "Regionals",
+    summary: "6 results",
+    rows: [
+      { date: "2023", result: "Kenneth Morris · 3rd", event: "Western Canadians", location: "Brandon, MB" },
+      { date: "2023", result: "Shaina Sagar · 3rd", event: "Western Canadians", location: "Brandon, MB" },
+      { date: "2024", result: "Laine Vandriel · 3rd", event: "Western Canadians", location: "Moose Jaw, SK" },
+      { date: "2025", result: "Dwayne Gordon · 1st", event: "Central Canadians", location: "Québec City, QC" },
+      { date: "2025", result: "Shaina Sagar · 3rd", event: "Eastern Canadians", location: "Dartmouth, NS" },
+      { date: "2025", result: "Elisa Vena · 6th", event: "Western Canadians", location: "Nanaimo, BC" },
+    ],
   },
   {
-    label: "720 kg Total at 74 kg",
-    detail: "Previous competition best total before moving down to the 66 kg class.",
-    Icon: Dumbbell,
+    title: "Provincial achievements & records",
+    summary: "11+ golds · 14+ records",
+    rows: [
+      { date: "Multiple years", result: "11+ Provincial Golds", event: "Coached athletes", location: "Manitoba · Ontario" },
+      { date: "Multiple years", result: "14+ Provincial Records", event: "Set and held by coached athletes", location: "Manitoba · Ontario" },
+    ],
   },
 ];
 
-const timeline = [
-  {
-    year: "2014",
-    title: "Started from zero",
-    body: "The beginning of my own training journey. Years before coaching became the career, I was learning what actually moves the needle.",
-  },
-  {
-    year: "2018",
-    title: "DTS Level 1",
-    body: "Completed Darby Training Systems Level 1 and started building a more technical foundation for coaching movement and strength.",
-  },
-  {
-    year: "2019",
-    title: "Started coaching",
-    body: "Began coaching clients and founded Strong Culture Athletics, learning how to build a brand and serve people beyond a single training session.",
-  },
-  {
-    year: "2021",
-    title: "JF Effect began",
-    body: "Built the coaching business that became JF Effect, combining personalized training, nutrition structure, accountability, and strength coaching.",
-  },
-  {
-    year: "2022",
-    title: "Went full-time",
-    body: "Coaching became the full-time focus. The roster grew across general fitness, body composition, bodybuilding, and competitive powerlifting.",
-  },
-  {
-    year: "2023",
-    title: "ISSA Certified Personal Trainer",
-    body: "Added the ISSA Personal Training Certification to years of practical coaching and competitive experience.",
-  },
-  {
-    year: "2026",
-    title: "Back-to-back international competition",
-    body: "Competed for Canada at the NAPF North American Championships and the Commonwealth Championships, finishing the stretch as a Commonwealth Champion.",
-  },
-];
+function ResultRows({ rows }: { rows: ResultRow[] }) {
+  return (
+    <div className="divide-y divide-border border-t border-border">
+      {rows.map((row, index) => (
+        <div key={`${row.date}-${row.result}-${index}`} className="grid gap-1 py-3 sm:grid-cols-[9rem_minmax(0,1fr)] sm:gap-4">
+          <div className="text-xs font-bold tabular-nums text-primary">{row.date || "Credential"}</div>
+          <div className="min-w-0">
+            <div className="text-sm font-bold text-foreground">{row.result}</div>
+            <div className="mt-0.5 text-xs leading-relaxed text-muted-foreground">
+              {row.event}{row.location ? ` · ${row.location}` : ""}{row.note ? ` · ${row.note}` : ""}
+            </div>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function ResultsAccordion({ groups, defaultOpen }: { groups: ResultGroup[]; defaultOpen?: string }) {
+  return (
+    <Accordion type="single" collapsible defaultValue={defaultOpen} className="overflow-hidden rounded-lg border border-border bg-card px-4 sm:px-6">
+      {groups.map((group, index) => (
+        <AccordionItem key={group.title} value={`group-${index}`}>
+          <AccordionTrigger className="gap-4 py-5 no-underline hover:no-underline">
+            <span className="min-w-0">
+              <span className="block text-sm font-black sm:text-base">{group.title}</span>
+              <span className="mt-1 block text-xs font-normal text-muted-foreground">{group.summary} · View all</span>
+            </span>
+          </AccordionTrigger>
+          <AccordionContent>
+            {group.note ? <p className="mb-4 rounded-md bg-muted px-3 py-2 text-xs leading-relaxed text-muted-foreground">{group.note}</p> : null}
+            <ResultRows rows={group.rows} />
+          </AccordionContent>
+        </AccordionItem>
+      ))}
+    </Accordion>
+  );
+}
 
 export const Route = createFileRoute("/about")({
   component: AboutJaredPage,
@@ -124,310 +223,102 @@ export const Route = createFileRoute("/about")({
       { name: "twitter:description", content: DESCRIPTION },
     ],
     links: [{ rel: "canonical", href: URL }],
-    scripts: [
-      {
-        type: "application/ld+json",
-        children: JSON.stringify({
-          "@context": "https://schema.org",
-          "@type": "Person",
-          "@id": URL + "#jared-james",
-          name: "Jared James",
-          jobTitle: "Personal Trainer, Online Fitness Coach & Strength Coach",
-          url: URL,
-          worksFor: {
-            "@type": "Organization",
-            name: "JF Effect",
-            url: "https://jfeffect.com",
-          },
-          address: {
-            "@type": "PostalAddress",
-            addressLocality: "Selkirk",
-            addressRegion: "MB",
-            addressCountry: "CA",
-          },
-          knowsAbout: [
-            "Personal Training",
-            "Strength Training",
-            "Powerlifting",
-            "Bodybuilding",
-            "Fat Loss Coaching",
-            "Online Fitness Coaching",
-            "Nutrition Coaching",
-          ],
-          award: [
-            "2026 Commonwealth Champion",
-            "2026 Canadian Nationals — 9/9 attempts, 27 white lights",
-          ],
-        }),
-      },
-      {
-        type: "application/ld+json",
-        children: JSON.stringify({
-          "@context": "https://schema.org",
-          "@type": "BreadcrumbList",
-          itemListElement: [
-            { "@type": "ListItem", position: 1, name: "Home", item: "https://jfeffect.com/" },
-            { "@type": "ListItem", position: 2, name: "About Jared", item: URL },
-          ],
-        }),
-      },
-    ],
+    scripts: [{
+      type: "application/ld+json",
+      children: JSON.stringify({
+        "@context": "https://schema.org", "@type": "Person", "@id": `${URL}#jared-james`,
+        name: "Jared James", jobTitle: "Personal Trainer, Online Fitness Coach & Strength Coach", url: URL,
+        worksFor: { "@type": "Organization", name: "JF Effect", url: "https://jfeffect.com" },
+        address: { "@type": "PostalAddress", addressLocality: "Selkirk", addressRegion: "MB", addressCountry: "CA" },
+        knowsAbout: ["Personal Training", "Strength Training", "Powerlifting", "Bodybuilding", "Fat Loss Coaching", "Online Fitness Coaching"],
+        award: ["2026 NAPF North American Overall Total Champion", "2026 Commonwealth Overall Total Champion", "2022 MPA Male Athlete of the Year"],
+      }),
+    }],
   }),
 });
 
 function AboutJaredPage() {
   return (
     <SalesPageShell pageId="about-jared" floatingHeader>
-      {/* HERO */}
-      <section className="relative overflow-hidden">
-        <div className="absolute inset-0 -z-10 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-primary/20 via-background to-background" />
-        <div className="container mx-auto grid gap-8 px-4 py-12 md:py-20 lg:grid-cols-[1.05fr_.95fr] lg:items-center">
-          <div>
-            <div className="inline-flex items-center gap-2 rounded-full border border-primary/30 bg-primary/10 px-3 py-1 text-xs font-bold uppercase tracking-wider text-primary">
-              About Jared James
-            </div>
-            <h1 className="mt-5 max-w-3xl text-4xl font-black tracking-tight md:text-6xl">
-              Coach. Powerlifter. Builder.
-            </h1>
-            <p className="mt-5 max-w-2xl text-lg leading-relaxed text-muted-foreground md:text-xl">
-              I built JF Effect from both sides of the bar — as a coach responsible for other people's progress and as an athlete who still has to execute under pressure.
-            </p>
-            <p className="mt-4 max-w-2xl text-base leading-relaxed text-muted-foreground md:text-lg">
-              Today I coach everyone from people walking into a gym for the first time to Team Canada powerlifting athletes. The standard stays the same: build the right plan, track what matters, and adjust based on reality.
+      <section className="relative min-h-[38rem] overflow-hidden border-b border-border sm:min-h-[42rem]">
+        <img src={coachingHero} alt="Jared James, Team Canada powerlifter and founder of JF Effect" className="absolute inset-0 h-full w-full object-cover object-top" loading="eager" />
+        <div className="absolute inset-0 bg-background/80" />
+        <div className="container relative mx-auto flex min-h-[38rem] items-end px-4 py-12 sm:min-h-[42rem] sm:py-16">
+          <div className="max-w-3xl">
+            <div className="text-xs font-black uppercase tracking-[0.18em] text-primary">About Jared James</div>
+            <h1 className="mt-4 text-balance text-4xl font-black sm:text-5xl md:text-7xl">Team Canada · 2× International Champion</h1>
+            <p className="mt-4 text-lg font-bold text-foreground sm:text-xl">Top 50 All-Time in the World · 66kg</p>
+            <p className="mt-4 max-w-2xl text-sm leading-relaxed text-muted-foreground sm:text-base">
+              JF Effect was built by a coach who still competes at the highest level—and applies the same preparation, measurement and honest adjustment to every client.
             </p>
             <div className="mt-7 flex flex-col gap-3 sm:flex-row">
-              <Button asChild size="lg" className="h-12 px-6 font-bold">
-                <Link to="/coaching/apply">Apply for Coaching</Link>
-              </Button>
-              <Button asChild size="lg" variant="outline" className="h-12 px-6 font-bold">
-                <Link to="/personal-trainer-selkirk">Train With Me In Person</Link>
-              </Button>
+              <Button asChild size="lg" className="h-12 px-6 font-bold"><Link to="/coaching/apply">Apply for Coaching</Link></Button>
+              <Button asChild size="lg" variant="outline" className="h-12 px-6 font-bold"><Link to="/personal-trainer-selkirk">Train In Person</Link></Button>
             </div>
-          </div>
-
-          <div className="relative mx-auto w-full max-w-lg">
-            <div className="absolute -inset-4 -z-10 rounded-[2rem] bg-primary/10 blur-2xl" />
-            <img
-              src={coachingHero}
-              alt="Jared James, founder and coach at JF Effect"
-              className="aspect-[4/5] w-full rounded-3xl object-cover object-top shadow-2xl ring-1 ring-border"
-              loading="eager"
-            />
           </div>
         </div>
       </section>
 
-      {/* QUICK AUTHORITY */}
-      <Reveal stagger={0}>
-        <Section className="!pt-4">
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      <Section className="!py-8 md:!py-12">
+        <div className="grid gap-px overflow-hidden rounded-lg border border-border bg-border sm:grid-cols-2 lg:grid-cols-3">
+          {headlineCredentials.map(({ value, label, detail, Icon }) => (
+            <div key={label} className="grid grid-cols-[auto_minmax(0,1fr)] gap-3 bg-card p-4 sm:p-5">
+              <Icon className="mt-1 h-5 w-5 shrink-0 text-primary" aria-hidden="true" />
+              <div className="min-w-0">
+                <div className="text-xl font-black text-primary sm:text-2xl">{value}</div>
+                <div className="mt-0.5 text-xs font-black uppercase tracking-[0.12em]">{label}</div>
+                <div className="mt-1 text-xs leading-relaxed text-muted-foreground">{detail}</div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </Section>
+
+      <Section className="!pt-6">
+        <SectionTitle eyebrow="Athlete record" title="Built on the platform, proven on it" sub="International titles first. Every championship, placing, record and credential remains available below." />
+        <div className="mx-auto max-w-4xl"><ResultsAccordion groups={athleteGroups} defaultOpen="group-0" /></div>
+      </Section>
+
+      <section className="border-y border-border bg-card/40">
+        <Section>
+          <SectionTitle eyebrow="Coaching results" title="Athletes prepared for the biggest platforms" sub="From provincial records to Canadian titles and an IPF Worlds appearance." />
+          <div className="mx-auto grid max-w-5xl gap-px overflow-hidden rounded-lg border border-border bg-border sm:grid-cols-2 lg:grid-cols-4">
             {[
-              ["100+", "Clients coached"],
-              ["2019", "Coaching since"],
-              ["2026", "Commonwealth Champion"],
-              ["2", "Professional certifications"],
-            ].map(([value, label]) => (
-              <Card key={label} className="p-5 text-center">
+              ["1", "IPF Worlds Athlete", "Sub-Junior 105kg · Costa Rica 2025"],
+              ["3", "National Champions", "Gold at Canadian Nationals"],
+              ["11+", "Provincial Golds", "MB · ON across multiple years"],
+              ["14+", "Provincial Records", "Set & held by coached athletes"],
+            ].map(([value, label, detail]) => (
+              <div key={label} className="bg-background p-5">
                 <div className="text-3xl font-black text-primary">{value}</div>
-                <div className="mt-1 text-xs font-bold uppercase tracking-wider text-muted-foreground">{label}</div>
-              </Card>
-            ))}
-          </div>
-        </Section>
-      </Reveal>
-
-      {/* STORY */}
-      <Reveal stagger={1}>
-        <Section>
-          <div className="mx-auto grid max-w-5xl gap-8 lg:grid-cols-[.8fr_1.2fr] lg:items-start">
-            <div>
-              <div className="text-xs font-bold uppercase tracking-[0.18em] text-primary">The short version</div>
-              <h2 className="mt-3 text-3xl font-black tracking-tight md:text-5xl">
-                I don't coach from theory alone.
-              </h2>
-            </div>
-            <div className="space-y-4 text-base leading-relaxed text-muted-foreground md:text-lg">
-              <p>
-                My own training started in 2014. Coaching came later, but the obsession was already there: understand why something works, test it, track it, and make it repeatable.
-              </p>
-              <p>
-                I started coaching in 2019 and moved into it full-time in 2022. Since then I've coached more than 100 people across fat loss, muscle building, strength, bodybuilding, and powerlifting.
-              </p>
-              <p>
-                I still compete because it keeps me accountable to the same thing I ask from clients: preparation, execution, honest feedback, and adjustment. Coaching should work when life is busy and when the stakes are high — not only when everything is perfect.
-              </p>
-            </div>
-          </div>
-        </Section>
-      </Reveal>
-
-      {/* CREDENTIALS */}
-      <Reveal stagger={2}>
-        <Section className="bg-card/30">
-          <SectionTitle
-            eyebrow="Credentials"
-            title="Education + coaching experience"
-            sub="The formal education matters. So does what you've actually done with it."
-          />
-          <div className="mx-auto grid max-w-5xl gap-4 md:grid-cols-2">
-            {credentials.map(({ title, detail, Icon }) => (
-              <Card key={title} className="flex items-start gap-4 p-5">
-                <div className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary">
-                  <Icon className="h-5 w-5" />
-                </div>
-                <div>
-                  <div className="font-black">{title}</div>
-                  <div className="mt-1 text-sm leading-relaxed text-muted-foreground">{detail}</div>
-                </div>
-              </Card>
-            ))}
-          </div>
-
-          <div className="mx-auto mt-5 max-w-5xl">
-            <Card className="p-6">
-              <div className="flex items-start gap-4">
-                <div className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary">
-                  <BriefcaseBusiness className="h-5 w-5" />
-                </div>
-                <div>
-                  <div className="font-black">Built in the real coaching environment</div>
-                  <p className="mt-1 text-sm leading-relaxed text-muted-foreground md:text-base">
-                    Before JF Effect became the full-time focus, I worked as a personal trainer at GoodLife Fitness, managing a roster of 40+ monthly clients. I later built JF Effect around personalized training, nutrition structure, accountability, form review, and direct coaching support.
-                  </p>
-                </div>
+                <div className="mt-1 text-sm font-black">{label}</div>
+                <div className="mt-1 text-xs text-muted-foreground">{detail}</div>
               </div>
-            </Card>
-          </div>
-        </Section>
-      </Reveal>
-
-      {/* COMPETITIVE TRACK RECORD */}
-      <Reveal stagger={3}>
-        <Section>
-          <SectionTitle
-            eyebrow="Athlete"
-            title="Competitive powerlifting"
-            sub="I still compete. The pressure, preparation, and execution are part of how I coach."
-          />
-          <div className="mx-auto grid max-w-5xl gap-4 md:grid-cols-2">
-            {competition.map(({ label, detail, Icon }) => (
-              <Card key={label} className="p-5">
-                <div className="flex items-start gap-4">
-                  <div className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary">
-                    <Icon className="h-5 w-5" />
-                  </div>
-                  <div>
-                    <div className="font-black">{label}</div>
-                    <p className="mt-1 text-sm leading-relaxed text-muted-foreground">{detail}</p>
-                  </div>
-                </div>
-              </Card>
             ))}
           </div>
-        </Section>
-      </Reveal>
-
-      {/* TIMELINE */}
-      <Reveal stagger={4}>
-        <Section className="bg-card/30">
-          <SectionTitle
-            eyebrow="Timeline"
-            title="How it got here"
-            sub="The credentials make more sense when you see the years behind them."
-          />
-          <div className="mx-auto max-w-4xl space-y-3">
-            {timeline.map((item) => (
-              <Card key={item.year} className="grid gap-3 p-5 sm:grid-cols-[90px_1fr] sm:items-start">
-                <div className="text-2xl font-black text-primary">{item.year}</div>
-                <div>
-                  <div className="font-black">{item.title}</div>
-                  <p className="mt-1 text-sm leading-relaxed text-muted-foreground md:text-base">{item.body}</p>
-                </div>
-              </Card>
-            ))}
+          <div className="mx-auto mt-6 max-w-4xl">
+            <h3 className="mb-3 text-sm font-black uppercase tracking-[0.14em] text-muted-foreground">View all athlete results</h3>
+            <ResultsAccordion groups={coachedAthleteGroups} />
           </div>
         </Section>
-      </Reveal>
+      </section>
 
-      {/* EXISTING VISUAL TIMELINE */}
-      <Reveal stagger={5}>
-        <CoachTimelineSection />
-      </Reveal>
+      <Section>
+        <SectionTitle eyebrow="Client transformations" title="Results beyond the platform" sub="Fat loss, muscle gain and lasting progress from JF Effect clients." />
+        <div className="mx-auto max-w-6xl"><AboutTransformations /></div>
+      </Section>
 
-      {/* METHOD */}
-      <Reveal stagger={6}>
-        <Section>
-          <SectionTitle
-            eyebrow="How I coach"
-            title="Simple enough to execute. Detailed enough to work."
-          />
-          <div className="mx-auto grid max-w-5xl gap-4 md:grid-cols-3">
-            {[
-              {
-                title: "Build around the person",
-                body: "Your schedule, equipment, training age, recovery, goals, and real life come first. The plan has to fit the person using it.",
-              },
-              {
-                title: "Track the right data",
-                body: "Training performance, bodyweight, photos, recovery, adherence, and honest feedback tell us what to change — not guesswork.",
-              },
-              {
-                title: "Adjust before things break",
-                body: "One rough week should not become a lost month. Coaching is the process of making the plan keep working as life changes.",
-              },
-            ].map((item) => (
-              <Card key={item.title} className="p-6">
-                <CheckCircle2 className="h-6 w-6 text-primary" />
-                <h3 className="mt-4 text-lg font-black">{item.title}</h3>
-                <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{item.body}</p>
-              </Card>
-            ))}
+      <Section className="!pt-6">
+        <div className="mx-auto max-w-3xl border-y border-border py-10 text-center">
+          <Dumbbell className="mx-auto h-7 w-7 text-primary" aria-hidden="true" />
+          <h2 className="mt-4 text-3xl font-black sm:text-4xl">Put proven coaching behind your next result.</h2>
+          <p className="mx-auto mt-3 max-w-xl text-sm leading-relaxed text-muted-foreground sm:text-base">Get a plan built around your goals, schedule and real-world progress.</p>
+          <div className="mt-6 flex flex-col justify-center gap-3 sm:flex-row">
+            <Button asChild size="lg" className="h-12 px-7 font-bold"><Link to="/coaching/apply">Apply for Coaching</Link></Button>
+            <Button asChild size="lg" variant="outline" className="h-12 px-7 font-bold"><Link to="/coaching">See How Coaching Works</Link></Button>
           </div>
-        </Section>
-      </Reveal>
-
-      {/* LOCAL */}
-      <Reveal stagger={7}>
-        <Section className="bg-card/30">
-          <div className="mx-auto max-w-4xl rounded-3xl border border-primary/20 bg-background p-7 md:p-10">
-            <div className="flex items-start gap-4">
-              <div className="grid h-12 w-12 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary">
-                <MapPin className="h-6 w-6" />
-              </div>
-              <div>
-                <div className="text-xs font-bold uppercase tracking-wider text-primary">Selkirk, Manitoba</div>
-                <h2 className="mt-2 text-2xl font-black md:text-4xl">Online or in person.</h2>
-                <p className="mt-3 max-w-2xl text-sm leading-relaxed text-muted-foreground md:text-base">
-                  I coach online through JF Effect and offer in-person personal training in Selkirk. Whether you're starting from zero or competing at a high level, the goal is the same: make the next step obvious and measurable.
-                </p>
-              </div>
-            </div>
-          </div>
-        </Section>
-      </Reveal>
-
-      {/* CTA */}
-      <Reveal stagger={8}>
-        <Section className="!pt-8">
-          <div className="mx-auto max-w-3xl rounded-3xl border border-primary/30 bg-gradient-to-br from-primary/15 via-card to-card p-8 text-center md:p-12">
-            <div className="text-xs font-bold uppercase tracking-[0.18em] text-primary">Work with me</div>
-            <h2 className="mt-3 text-3xl font-black tracking-tight md:text-5xl">
-              The credentials matter. The coaching has to prove itself.
-            </h2>
-            <p className="mx-auto mt-4 max-w-xl text-base text-muted-foreground md:text-lg">
-              If you want a plan built around your actual life and a coach who will keep adjusting it with you, apply for private coaching.
-            </p>
-            <div className="mt-7 flex flex-col justify-center gap-3 sm:flex-row">
-              <Button asChild size="lg" className="h-12 px-7 font-bold">
-                <Link to="/coaching/apply">Apply for Coaching</Link>
-              </Button>
-              <Button asChild size="lg" variant="outline" className="h-12 px-7 font-bold">
-                <Link to="/coaching">See How Coaching Works</Link>
-              </Button>
-            </div>
-          </div>
-        </Section>
-      </Reveal>
+        </div>
+      </Section>
     </SalesPageShell>
   );
 }
