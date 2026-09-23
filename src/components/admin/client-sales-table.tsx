@@ -285,7 +285,7 @@ function RowMenu({ raw, clientName, onEditDates, onMarkPaid, onMarkOverdue, onEm
   };
   const remove = async () => {
     if (!window.confirm("Delete this unpaid payment setup permanently? Any open Stripe checkout will be closed first. Paid or transaction-backed sales cannot be deleted.")) return;
-    try { await removeFn({ data: { id: raw.id } }); toast.success("Unpaid sale removed"); onChanged(); }
+    try { await removeFn({ data: { id: raw.id } }); toast.success("Payment setup deleted"); onChanged(); }
     catch (e: any) { toast.error(e?.message ?? "Could not remove sale"); }
   };
 
