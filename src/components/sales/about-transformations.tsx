@@ -47,7 +47,7 @@ export function AboutTransformations() {
             decoding="async"
             width={320}
             height={320}
-            className="aspect-square w-[72vw] max-w-72 shrink-0 snap-start rounded-lg object-cover ring-1 ring-border sm:w-64"
+            className="aspect-square w-[72vw] max-w-72 shrink-0 snap-start rounded-lg object-cover object-top sm:w-64" style={{ transform: "scale(1.18)" }}
           />
         ))}
       </div>
