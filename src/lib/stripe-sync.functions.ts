@@ -14,6 +14,7 @@
  */
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
+import type { AdminTransactionRow } from "@/lib/admin-transactions";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { stripeFetch, getStripeKeyForMode, type StripeMode } from "@/lib/stripe.server";
 import {
@@ -708,4 +709,271 @@ export const reconcilePurchaseWithStripe = createServerFn({ method: "POST" })
     if (error) return { ok: false, error: error.message };
 
     return { ok: true, ledgerAdded, status: patch.payment_status ?? purchase.payment_status, notes };
+  });
+
+
+/**
+ * Read the live Stripe account directly for the Billing UI.
+ *
+ * This is intentionally separate from the local ledger. The Stripe account is
+ * the source of truth for what actually moved through Stripe; local purchase /
+ * ledger data is used only to enrich rows with client and product names when a
+ * safe match exists. Unlinked Stripe payments are still returned so they never
+ * disappear from Billing just because the app cannot map them to a purchase.
+ */
+const StripeAccountInput = z.object({
+  days: z.number().int().min(1).max(3650).default(90),
+  mode: z.enum(["test", "live"]).default("live"),
+});
+
+function stripeObjectId(value: any): string | null {
+  return typeof value === "string" ? value : value?.id ?? null;
+}
+
+function appRowKey(row: AdminTransactionRow): string[] {
+  const keys: string[] = [];
+  if (row.stripe_charge_id) keys.push(`charge:${row.stripe_charge_id}`);
+  if (row.stripe_payment_intent_id) keys.push(`pi:${row.stripe_payment_intent_id}`);
+  if (row.stripe_invoice_id) keys.push(`invoice:${row.stripe_invoice_id}`);
+  return keys;
+}
+
+function syntheticStripePayment(charge: any, mode: StripeMode): AdminTransactionRow {
+  const at = new Date((charge.created ?? Math.floor(Date.now() / 1000)) * 1000).toISOString();
+  const customer = stripeObjectId(charge.customer);
+  const pi = stripeObjectId(charge.payment_intent);
+  const invoice = stripeObjectId(charge.invoice);
+  const email = charge.billing_details?.email ?? charge.receipt_email ?? null;
+  const name = charge.billing_details?.name ?? null;
+  const description =
+    charge.metadata?.offer_name ||
+    charge.metadata?.product_name ||
+    charge.description ||
+    charge.statement_descriptor ||
+    "Stripe payment";
+  return {
+    id: `stripe:charge:${charge.id}`,
+    source: "stripe",
+    occurred_on: at.slice(0, 10),
+    occurred_at: at,
+    subject_id: customer,
+    subject_kind: "stripe",
+    subject_name: name || email || "Stripe customer",
+    subject_email: email,
+    purchase_id: null,
+    offer_id: null,
+    product_name: description,
+    purchase_type: "Stripe payment",
+    amount: Number(charge.amount ?? 0) / 100,
+    currency: String(charge.currency ?? "usd").toUpperCase(),
+    txn_type: "payment",
+    method: "stripe",
+    status: charge.paid && charge.status === "succeeded" ? "Paid" : "Failed",
+    stripe_customer_id: customer,
+    stripe_payment_intent_id: pi,
+    stripe_charge_id: charge.id ?? null,
+    stripe_invoice_id: invoice,
+    stripe_checkout_session_id: null,
+    stripe_subscription_id: null,
+    stripe_product_id: null,
+    stripe_price_id: null,
+    receipt_url: charge.receipt_url ?? null,
+    hosted_invoice_url: null,
+    invoice_pdf_url: null,
+    stripe_mode: mode,
+    admin_notes: "Live Stripe account transaction — not linked to a JF Effect purchase record.",
+    voided: false,
+  };
+}
+
+function syntheticStripeRefund(refund: any, charge: any | null, mode: StripeMode): AdminTransactionRow {
+  const at = new Date((refund.created ?? Math.floor(Date.now() / 1000)) * 1000).toISOString();
+  const customer = stripeObjectId(charge?.customer);
+  const email = charge?.billing_details?.email ?? charge?.receipt_email ?? null;
+  const name = charge?.billing_details?.name ?? null;
+  const pi = stripeObjectId(refund.payment_intent) ?? stripeObjectId(charge?.payment_intent);
+  return {
+    id: `stripe:refund:${refund.id}`,
+    source: "stripe",
+    occurred_on: at.slice(0, 10),
+    occurred_at: at,
+    subject_id: customer,
+    subject_kind: "stripe",
+    subject_name: name || email || "Stripe customer",
+    subject_email: email,
+    purchase_id: null,
+    offer_id: null,
+    product_name: charge?.description || "Stripe refund",
+    purchase_type: "Stripe refund",
+    amount: Number(refund.amount ?? 0) / 100,
+    currency: String(refund.currency ?? charge?.currency ?? "usd").toUpperCase(),
+    txn_type: "refund",
+    method: "stripe",
+    status: refund.status === "succeeded" ? "Refunded" : "Pending",
+    stripe_customer_id: customer,
+    stripe_payment_intent_id: pi,
+    stripe_charge_id: stripeObjectId(refund.charge) ?? stripeObjectId(charge),
+    stripe_invoice_id: stripeObjectId(charge?.invoice),
+    stripe_checkout_session_id: null,
+    stripe_subscription_id: null,
+    stripe_product_id: null,
+    stripe_price_id: null,
+    receipt_url: null,
+    hosted_invoice_url: null,
+    invoice_pdf_url: null,
+    stripe_mode: mode,
+    admin_notes: "Live Stripe account refund — not linked to a JF Effect ledger row.",
+    voided: false,
+  };
+}
+
+export const listStripeAccountTransactions = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => StripeAccountInput.parse(d ?? {}))
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context as any;
+    await assertAdmin(supabase, userId);
+
+    const apiKey = getStripeKeyForMode(data.mode as StripeMode);
+    if (!apiKey) {
+      return {
+        ok: false,
+        error: `No Stripe ${data.mode} key is configured.`,
+        rows: [] as AdminTransactionRow[],
+        stripe_count: 0,
+        linked_count: 0,
+        unlinked_count: 0,
+      };
+    }
+
+    const createdAfter = Math.floor(Date.now() / 1000) - data.days * 86400;
+    const sinceIso = new Date(createdAfter * 1000).toISOString();
+
+    const { data: appRowsRaw, error: appRowsError } = await (supabase as any)
+      .from("admin_transactions_v1")
+      .select("*")
+      .gte("occurred_at", sinceIso)
+      .order("occurred_at", { ascending: false })
+      .limit(5000);
+    if (appRowsError) throw new Error(appRowsError.message);
+
+    // Only active local rows can enrich Stripe. A locally voided duplicate must
+    // never hide a real Stripe payment.
+    const appRows = ((appRowsRaw ?? []) as AdminTransactionRow[]).filter((r) => !r.voided);
+    const appByKey = new Map<string, AdminTransactionRow>();
+    for (const row of appRows) {
+      for (const key of appRowKey(row)) {
+        if (!appByKey.has(key)) appByKey.set(key, row);
+      }
+    }
+
+    const charges: any[] = [];
+    let startingAfter: string | null = null;
+    for (let page = 0; page < 100; page++) {
+      const qs = new URLSearchParams({ limit: "100", "created[gte]": String(createdAfter) });
+      if (startingAfter) qs.set("starting_after", startingAfter);
+      const res: any = await stripeFetch(`/charges?${qs.toString()}`, { apiKey });
+      const batch: any[] = res?.data ?? [];
+      charges.push(...batch);
+      if (!res?.has_more || batch.length === 0) break;
+      startingAfter = batch[batch.length - 1].id;
+    }
+
+    const chargeById = new Map<string, any>();
+    for (const c of charges) if (c?.id) chargeById.set(c.id, c);
+
+    const rows: AdminTransactionRow[] = [];
+    const linkedIds = new Set<string>();
+
+    for (const charge of charges) {
+      // Stripe lists failed attempts too. Keep them visible because the user
+      // asked for the account transaction history, not only successful ledger rows.
+      const pi = stripeObjectId(charge.payment_intent);
+      const invoice = stripeObjectId(charge.invoice);
+      const matched =
+        appByKey.get(`charge:${charge.id}`) ||
+        (pi ? appByKey.get(`pi:${pi}`) : undefined) ||
+        (invoice ? appByKey.get(`invoice:${invoice}`) : undefined);
+
+      if (matched && (matched.txn_type ?? "").toLowerCase() !== "refund") {
+        linkedIds.add(matched.id);
+        rows.push({
+          ...matched,
+          status: charge.paid && charge.status === "succeeded" ? "Paid" : "Failed",
+          amount: Number(charge.amount ?? 0) / 100,
+          currency: String(charge.currency ?? matched.currency ?? "usd").toUpperCase(),
+          stripe_customer_id: stripeObjectId(charge.customer) ?? matched.stripe_customer_id,
+          stripe_payment_intent_id: pi ?? matched.stripe_payment_intent_id,
+          stripe_charge_id: charge.id ?? matched.stripe_charge_id,
+          stripe_invoice_id: invoice ?? matched.stripe_invoice_id,
+          receipt_url: charge.receipt_url ?? matched.receipt_url,
+          stripe_mode: data.mode,
+          voided: false,
+        });
+      } else {
+        rows.push(syntheticStripePayment(charge, data.mode as StripeMode));
+      }
+    }
+
+    const refunds: any[] = [];
+    let refundStartingAfter: string | null = null;
+    for (let page = 0; page < 100; page++) {
+      const qs = new URLSearchParams({ limit: "100", "created[gte]": String(createdAfter) });
+      if (refundStartingAfter) qs.set("starting_after", refundStartingAfter);
+      const res: any = await stripeFetch(`/refunds?${qs.toString()}`, { apiKey });
+      const batch: any[] = res?.data ?? [];
+      refunds.push(...batch);
+      if (!res?.has_more || batch.length === 0) break;
+      refundStartingAfter = batch[batch.length - 1].id;
+    }
+
+    const refundAppRows = appRows.filter((r) => ["refund", "partial_refund"].includes((r.txn_type ?? "").toLowerCase()));
+    for (const refund of refunds) {
+      const chargeId = stripeObjectId(refund.charge);
+      const pi = stripeObjectId(refund.payment_intent);
+      const at = new Date((refund.created ?? 0) * 1000).toISOString();
+      const amount = Number(refund.amount ?? 0) / 100;
+
+      const matched = refundAppRows.find((r) => {
+        const sameRef =
+          (!!chargeId && r.stripe_charge_id === chargeId) ||
+          (!!pi && r.stripe_payment_intent_id === pi);
+        const sameAmount = Math.abs(Number(r.amount ?? 0) - amount) < 0.005;
+        const sameDay = String(r.occurred_at).slice(0, 10) === at.slice(0, 10);
+        return sameRef && sameAmount && sameDay && !linkedIds.has(r.id);
+      });
+
+      if (matched) {
+        linkedIds.add(matched.id);
+        rows.push({
+          ...matched,
+          status: refund.status === "succeeded" ? "Refunded" : "Pending",
+          amount,
+          currency: String(refund.currency ?? matched.currency ?? "usd").toUpperCase(),
+          stripe_payment_intent_id: pi ?? matched.stripe_payment_intent_id,
+          stripe_charge_id: chargeId ?? matched.stripe_charge_id,
+          stripe_mode: data.mode,
+          voided: false,
+        });
+      } else {
+        rows.push(
+          syntheticStripeRefund(
+            refund,
+            chargeId ? chargeById.get(chargeId) ?? null : null,
+            data.mode as StripeMode,
+          ),
+        );
+      }
+    }
+
+    rows.sort((a, b) => String(b.occurred_at).localeCompare(String(a.occurred_at)));
+    const unlinkedCount = rows.filter((r) => r.source === "stripe").length;
+
+    return {
+      ok: true,
+      rows,
+      stripe_count: rows.length,
+      linked_count: rows.length - unlinkedCount,
+      unlinked_count: unlinkedCount,
+    };
   });
