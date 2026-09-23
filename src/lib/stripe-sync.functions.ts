@@ -16,6 +16,12 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { stripeFetch, getStripeKeyForMode, type StripeMode } from "@/lib/stripe.server";
+import {
+  invoiceSubscriptionId,
+  invoicePaymentIntentId,
+  invoiceChargeId,
+  invoiceTaxMinor,
+} from "@/lib/stripe-invoice-refs";
 
 async function assertAdmin(supabase: any, userId: string) {
   const { data } = await supabase.from("user_roles").select("role").eq("user_id", userId);
@@ -37,9 +43,116 @@ type SyncEntry = {
 
 const Input = z.object({
   /** How far back to scan Stripe, in days. */
-  days: z.number().int().min(1).max(180).default(30),
+  days: z.number().int().min(1).max(3650).default(365),
   mode: z.enum(["test", "live"]).default("live"),
 });
+
+
+const OPEN_PAYMENT_STATUSES = new Set([
+  "draft",
+  "pending",
+  "pending payment",
+  "payment link sent",
+  "not sent",
+  "unpaid",
+  "partially paid",
+  "overdue",
+  "failed",
+  "payment failed",
+]);
+
+async function uniquePurchaseByField(supabase: any, field: string, value: string | null | undefined) {
+  if (!value) return null;
+  const { data } = await supabase
+    .from("purchase_records")
+    .select("*")
+    .eq(field, value)
+    .order("purchased_at", { ascending: false })
+    .limit(2);
+  return (data ?? []).length === 1 ? data[0] : null;
+}
+
+function chooseSinglePlausiblePurchase(rows: any[]) {
+  if (rows.length === 1) return rows[0];
+  const plausible = rows.filter((r: any) => {
+    const status = String(r.payment_status ?? "").trim().toLowerCase();
+    return !["cancelled", "refunded", "expired"].includes(status);
+  });
+  if (plausible.length === 1) return plausible[0];
+  const open = plausible.filter((r: any) =>
+    OPEN_PAYMENT_STATUSES.has(String(r.payment_status ?? "").trim().toLowerCase()),
+  );
+  return open.length === 1 ? open[0] : null;
+}
+
+async function findPurchaseForStripeObject(
+  supabase: any,
+  obj: any,
+  refs: {
+    subscription?: string | null;
+    checkout?: string | null;
+    paymentIntent?: string | null;
+    customer?: string | null;
+    email?: string | null;
+  },
+) {
+  const metaId = obj?.metadata?.purchase_record_id || obj?.metadata?.payment_request_id || null;
+  if (metaId) {
+    const { data } = await supabase.from("purchase_records").select("*").eq("id", metaId).maybeSingle();
+    if (data) return data;
+  }
+
+  const exact =
+    (await uniquePurchaseByField(supabase, "stripe_subscription_id", refs.subscription)) ||
+    (await uniquePurchaseByField(supabase, "stripe_checkout_session_id", refs.checkout)) ||
+    (await uniquePurchaseByField(supabase, "stripe_payment_intent_id", refs.paymentIntent));
+  if (exact) return exact;
+
+  let clientId: string | null = null;
+  if (refs.customer) {
+    const { data: client } = await supabase
+      .from("clients")
+      .select("id")
+      .eq("stripe_customer_id", refs.customer)
+      .maybeSingle();
+    clientId = client?.id ?? null;
+  }
+  if (!clientId && refs.email) {
+    const { data: clients } = await supabase
+      .from("clients")
+      .select("id")
+      .ilike("email", refs.email)
+      .limit(2);
+    if ((clients ?? []).length === 1) clientId = clients![0].id;
+  }
+  if (!clientId) return null;
+
+  const { data: purchases } = await supabase
+    .from("purchase_records")
+    .select("*")
+    .eq("client_id", clientId)
+    .order("purchased_at", { ascending: false })
+    .limit(20);
+  return chooseSinglePlausiblePurchase(purchases ?? []);
+}
+
+async function existingLedgerByStripeRef(
+  supabase: any,
+  refs: { external?: string | null; paymentIntent?: string | null; charge?: string | null; invoice?: string | null },
+) {
+  const checks: Array<[string, string | null | undefined]> = [
+    ["external_reference", refs.external],
+    ["stripe_payment_intent_id", refs.paymentIntent],
+    ["stripe_charge_id", refs.charge],
+    ["stripe_invoice_id", refs.invoice],
+  ];
+  for (const [field, value] of checks) {
+    if (!value) continue;
+    const { data } = await supabase.from("payment_ledger").select("id,purchase_id,client_id,amount_minor").eq(field, value).limit(1);
+    if ((data ?? []).length) return data![0];
+  }
+  return null;
+}
 
 export const syncStripePayments = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
@@ -226,6 +339,224 @@ export const syncStripePayments = createServerFn({ method: "POST" })
         client_id: purchase.client_id,
         action: unchanged ? "no_change" : "updated",
       });
+    }
+
+
+    // Backfill paid invoices. Checkout-only reconciliation misses subscription
+    // renewals and dashboard-created invoices, which made the Billing page drift
+    // from the Stripe account even though the webhook updated the purchase.
+    let invoiceStartingAfter: string | null = null;
+    for (let page = 0; page < 20; page++) {
+      const qs = new URLSearchParams({ limit: "100", "created[gte]": String(createdAfter) });
+      if (invoiceStartingAfter) qs.set("starting_after", invoiceStartingAfter);
+      const res: any = await stripeFetch(`/invoices?${qs.toString()}`, { apiKey });
+      const rows: any[] = res?.data ?? [];
+      for (const i of rows) {
+        if (i.status !== "paid" || !(i.amount_paid > 0)) continue;
+        const subId = invoiceSubscriptionId(i);
+        const piId = invoicePaymentIntentId(i);
+        const chargeId = invoiceChargeId(i);
+        const occurredAt = new Date((i.status_transitions?.paid_at ?? i.created) * 1000).toISOString();
+        const existing = await existingLedgerByStripeRef(supabase, {
+          external: i.id, paymentIntent: piId, charge: chargeId, invoice: i.id,
+        });
+        if (existing) {
+          entries.push({
+            session_id: i.id,
+            purchase_id: existing.purchase_id ?? null,
+            client_id: existing.client_id ?? null,
+            action: "no_change",
+            amount: i.amount_paid / 100,
+            currency: (i.currency ?? "usd").toUpperCase(),
+            customer_email: i.customer_email ?? null,
+            occurred_at: occurredAt,
+            reason: "Paid invoice already exists in the ledger.",
+          });
+          continue;
+        }
+        const purchase = await findPurchaseForStripeObject(supabase, i, {
+          subscription: subId,
+          paymentIntent: piId,
+          customer: typeof i.customer === "string" ? i.customer : null,
+          email: i.customer_email ?? null,
+        });
+        if (!purchase) {
+          entries.push({
+            session_id: i.id, purchase_id: null, client_id: null, action: "unmapped",
+            amount: i.amount_paid / 100, currency: (i.currency ?? "usd").toUpperCase(),
+            customer_email: i.customer_email ?? null, occurred_at: occurredAt,
+            reason: "Paid Stripe invoice could not be matched to exactly one JF Effect purchase.",
+          });
+          continue;
+        }
+        const { error } = await supabase.from("payment_ledger").insert({
+          client_id: purchase.client_id,
+          purchase_id: purchase.id,
+          txn_type: "payment",
+          method: "stripe",
+          amount_minor: i.amount_paid,
+          tax_minor: invoiceTaxMinor(i),
+          currency: (i.currency ?? "usd").toUpperCase(),
+          transaction_date: occurredAt.slice(0, 10),
+          received_at: occurredAt,
+          external_reference: i.id,
+          stripe_payment_intent_id: piId,
+          stripe_charge_id: chargeId,
+          stripe_invoice_id: i.id,
+          stripe_customer_id: typeof i.customer === "string" ? i.customer : null,
+          stripe_subscription_id: subId,
+          stripe_mode: data.mode,
+          receipt_url: i.hosted_invoice_url ?? null,
+          hosted_invoice_url: i.hosted_invoice_url ?? null,
+          invoice_pdf_url: i.invoice_pdf ?? null,
+          source: "stripe_sync_invoice",
+          internal_note: `Stripe account sync — invoice ${i.id}`,
+        });
+        entries.push({
+          session_id: i.id, purchase_id: purchase.id, client_id: purchase.client_id,
+          action: error ? "skipped" : "updated", reason: error?.message,
+          amount: i.amount_paid / 100, currency: (i.currency ?? "usd").toUpperCase(),
+          customer_email: i.customer_email ?? null, occurred_at: occurredAt,
+        });
+      }
+      if (!res?.has_more || rows.length === 0) break;
+      invoiceStartingAfter = rows[rows.length - 1].id;
+    }
+
+    // Backfill successful PaymentIntents that were not represented by a paid
+    // Checkout Session or invoice. This covers direct/dashboard payments and
+    // delayed payment methods whose checkout initially completed as unpaid.
+    let piStartingAfter: string | null = null;
+    for (let page = 0; page < 20; page++) {
+      const qs = new URLSearchParams({ limit: "100", "created[gte]": String(createdAfter) });
+      if (piStartingAfter) qs.set("starting_after", piStartingAfter);
+      const res: any = await stripeFetch(`/payment_intents?${qs.toString()}`, { apiKey });
+      const rows: any[] = res?.data ?? [];
+      for (const pi of rows) {
+        if (pi.status !== "succeeded" || !(pi.amount_received > 0)) continue;
+        const chargeId = typeof pi.latest_charge === "string"
+          ? pi.latest_charge
+          : (typeof pi.charges?.data?.[0]?.id === "string" ? pi.charges.data[0].id : null);
+        const existing = await existingLedgerByStripeRef(supabase, {
+          external: pi.id, paymentIntent: pi.id, charge: chargeId,
+        });
+        if (existing) continue;
+
+        const purchase = await findPurchaseForStripeObject(supabase, pi, {
+          paymentIntent: pi.id,
+          customer: typeof pi.customer === "string" ? pi.customer : null,
+          email: pi.receipt_email ?? null,
+        });
+        const occurredAt = new Date((pi.created ?? Math.floor(Date.now() / 1000)) * 1000).toISOString();
+        if (!purchase) {
+          entries.push({
+            session_id: pi.id, purchase_id: null, client_id: null, action: "unmapped",
+            amount: pi.amount_received / 100, currency: (pi.currency ?? "usd").toUpperCase(),
+            customer_email: pi.receipt_email ?? null, occurred_at: occurredAt,
+            reason: "Successful Stripe PaymentIntent could not be matched to exactly one JF Effect purchase.",
+          });
+          continue;
+        }
+        const { error } = await supabase.from("payment_ledger").insert({
+          client_id: purchase.client_id,
+          purchase_id: purchase.id,
+          txn_type: "payment",
+          method: "stripe",
+          amount_minor: pi.amount_received,
+          tax_minor: 0,
+          currency: (pi.currency ?? "usd").toUpperCase(),
+          transaction_date: occurredAt.slice(0, 10),
+          received_at: occurredAt,
+          external_reference: pi.id,
+          stripe_payment_intent_id: pi.id,
+          stripe_charge_id: chargeId,
+          stripe_customer_id: typeof pi.customer === "string" ? pi.customer : null,
+          stripe_mode: data.mode,
+          source: "stripe_sync_payment_intent",
+          internal_note: `Stripe account sync — PaymentIntent ${pi.id}`,
+        });
+        entries.push({
+          session_id: pi.id, purchase_id: purchase.id, client_id: purchase.client_id,
+          action: error ? "skipped" : "updated", reason: error?.message,
+          amount: pi.amount_received / 100, currency: (pi.currency ?? "usd").toUpperCase(),
+          customer_email: pi.receipt_email ?? null, occurred_at: occurredAt,
+        });
+      }
+      if (!res?.has_more || rows.length === 0) break;
+      piStartingAfter = rows[rows.length - 1].id;
+    }
+
+    // Backfill refunds as first-class transaction rows so Billing reflects money
+    // leaving Stripe too, not only successful payments.
+    let refundStartingAfter: string | null = null;
+    for (let page = 0; page < 20; page++) {
+      const qs = new URLSearchParams({ limit: "100", "created[gte]": String(createdAfter) });
+      if (refundStartingAfter) qs.set("starting_after", refundStartingAfter);
+      const res: any = await stripeFetch(`/refunds?${qs.toString()}`, { apiKey });
+      const rows: any[] = res?.data ?? [];
+      for (const refund of rows) {
+        if (!["succeeded", "pending"].includes(refund.status ?? "") || !(refund.amount > 0)) continue;
+        const existing = await existingLedgerByStripeRef(supabase, { external: refund.id });
+        if (existing) continue;
+
+        let original: any = null;
+        if (refund.charge) {
+          const { data: byCharge } = await supabase
+            .from("payment_ledger")
+            .select("id,purchase_id,client_id")
+            .eq("stripe_charge_id", refund.charge)
+            .eq("voided", false)
+            .order("received_at", { ascending: false })
+            .limit(1);
+          original = byCharge?.[0] ?? null;
+        }
+        if (!original && refund.payment_intent) {
+          const { data: byPi } = await supabase
+            .from("payment_ledger")
+            .select("id,purchase_id,client_id")
+            .eq("stripe_payment_intent_id", refund.payment_intent)
+            .eq("voided", false)
+            .order("received_at", { ascending: false })
+            .limit(1);
+          original = byPi?.[0] ?? null;
+        }
+        if (!original?.client_id) {
+          entries.push({
+            session_id: refund.id, purchase_id: null, client_id: null, action: "unmapped",
+            amount: refund.amount / 100, currency: (refund.currency ?? "usd").toUpperCase(),
+            occurred_at: new Date(refund.created * 1000).toISOString(),
+            reason: "Stripe refund has no matching payment ledger row yet.",
+          });
+          continue;
+        }
+        const occurredAt = new Date(refund.created * 1000).toISOString();
+        const { error } = await supabase.from("payment_ledger").insert({
+          client_id: original.client_id,
+          purchase_id: original.purchase_id,
+          txn_type: "refund",
+          method: "stripe",
+          amount_minor: refund.amount,
+          tax_minor: 0,
+          currency: (refund.currency ?? "usd").toUpperCase(),
+          transaction_date: occurredAt.slice(0, 10),
+          received_at: occurredAt,
+          external_reference: refund.id,
+          reversal_of: original.id,
+          stripe_payment_intent_id: refund.payment_intent ?? null,
+          stripe_charge_id: refund.charge ?? null,
+          stripe_mode: data.mode,
+          source: "stripe_sync_refund",
+          internal_note: `Stripe account sync — refund ${refund.id}`,
+        });
+        entries.push({
+          session_id: refund.id, purchase_id: original.purchase_id ?? null, client_id: original.client_id,
+          action: error ? "skipped" : "updated", reason: error?.message,
+          amount: refund.amount / 100, currency: (refund.currency ?? "usd").toUpperCase(),
+          occurred_at: occurredAt,
+        });
+      }
+      if (!res?.has_more || rows.length === 0) break;
+      refundStartingAfter = rows[rows.length - 1].id;
     }
 
     const counts = {
