@@ -8,8 +8,8 @@
  * rows if we ever expose it to them (we currently only query from admin UI).
  */
 
-export type TransactionSource = "client" | "membership";
-export type TransactionSubjectKind = "client" | "member";
+export type TransactionSource = "client" | "membership" | "stripe";
+export type TransactionSubjectKind = "client" | "member" | "stripe";
 
 export type AdminTransactionRow = {
   id: string;
