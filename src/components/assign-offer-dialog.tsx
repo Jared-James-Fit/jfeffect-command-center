@@ -23,6 +23,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { createAgreement } from "@/lib/agreements.functions";
 import { createCheckoutSessionForAssignment } from "@/lib/stripe-checkout.functions";
 import { createPaymentShareLink } from "@/lib/payment-share.functions";
+import { getShareablePaymentUrl } from "@/components/payments/copy-payment-link-button";
 import { sendPaymentLinkEmail } from "@/lib/payments.functions";
 import { runJob } from "@/lib/progress-jobs";
 import { autoCalculatePurchaseTermDates } from "@/lib/purchase-term-dates.functions";
@@ -220,7 +221,7 @@ export function AssignOfferDialog({ offer, onClose, fixedClientId }: { offer: an
       const { data: existingRows } = await supabase
         .from("purchase_records")
         .select(
-          "id, client_id, offer_id, payment_status, amount_paid, amount_paid_cents, stripe_subscription_id, stripe_payment_intent_id, stripe_checkout_session_id, created_at",
+          "id, client_id, offer_id, payment_status, amount_paid, amount_paid_cents, stripe_subscription_id, stripe_payment_intent_id, stripe_checkout_session_id, archived_at, created_at",
         )
         .eq("client_id", clientId)
         .eq("offer_id", offer.id);
@@ -264,23 +265,22 @@ export function AssignOfferDialog({ offer, onClose, fixedClientId }: { offer: an
 
       let generatedUrl: string | null = null;
       if (mode === "payment_request" && purchase?.id) {
-        const res = await createCheckoutFn({
-          data: { purchaseRecordId: purchase.id, discountCodeId, origin: window.location.origin },
-        });
-        generatedUrl = res.url;
-        setStripeUrl(res.url);
-        // Give the admin a SHORT, iMessage-safe JF Effect link — the raw
-        // Stripe Checkout URL gets split by iMessage's link detector.
-        let shareUrl = res.url as string;
-        try {
-          const minted: any = await shareLinkFn({
-            data: { purchaseRecordId: purchase.id, origin: window.location.origin },
-          });
-          if (minted?.shareUrl) shareUrl = minted.shareUrl;
-        } catch { /* fall back to the canonical Stripe URL */ }
-        setCheckoutUrl(shareUrl);
-        try { await navigator.clipboard.writeText(shareUrl); } catch {}
-        job.completeStep(2); // Create checkout session
+        // Resolve the existing unpaid checkout first. A Checkout Session is
+        // still only a payment request, so retrying the same client + product
+        // must reuse the same purchase and same live checkout whenever possible.
+        // A fresh Stripe session is created only when the existing one is
+        // missing/expired. The helper also returns the short /pay/<token> URL.
+        const paymentLink = await getShareablePaymentUrl(
+          shareLinkFn as any,
+          createCheckoutFn as any,
+          purchase.id,
+          discountCodeId,
+        );
+        generatedUrl = paymentLink.url;
+        setStripeUrl(paymentLink.canonicalUrl ?? paymentLink.url);
+        setCheckoutUrl(paymentLink.url);
+        try { await navigator.clipboard.writeText(paymentLink.url); } catch {}
+        job.completeStep(2); // Resolve or create checkout session
         // Prefer the existing email sender; fall back to copy/paste.
         try {
           const sent: any = await sendLinkFn({ data: { id: purchase.id } });
