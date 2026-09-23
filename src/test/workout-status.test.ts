@@ -80,6 +80,25 @@ describe("workout lifecycle status", () => {
     expect(status.tone).toContain("amber");
   });
 
+  it("keeps a reviewed workout amber when required logs were missing", () => {
+    const status = getWorkoutStatus(
+      item({
+        completion: {
+          id: "finished-incomplete",
+          completed_at: "2026-08-17T12:15:00Z",
+          has_feedback: true,
+          completed_with_missing_logs: true,
+          logging_percentage: 75,
+        },
+      }),
+      TODAY,
+    );
+
+    expect(status.status).toBe("incomplete");
+    expect(status.label).toBe("Incomplete");
+    expect(status.tone).toContain("amber");
+  });
+
   it("turns green-complete once feedback is present", () => {
     const status = getWorkoutStatus(
       item({
