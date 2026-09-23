@@ -30,6 +30,7 @@ export type PurchaseIntentRow = {
 
 const REUSABLE_STATUSES = new Set([
   "draft",
+  "pending",
   "pending payment",
   "payment link sent",
   "not sent",
