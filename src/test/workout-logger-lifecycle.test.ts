@@ -22,24 +22,25 @@ describe("workout logger lifecycle", () => {
     expect(startCalls).toHaveLength(2);
     expect(source).toContain("const markInProgress = async () => {");
     expect(source).toContain("beginSessionOnAction();\n    markInProgress();");
-    expect(source).toContain('async function handleFinishWorkout(completionMethod: "manual" | "automatic" = "manual")');
+    expect(source).toContain('completionMethod: "manual" | "automatic" = "manual"');
   });
 
   it("keeps the final completion write inside the shared finish handler", () => {
     const source = loggerSource();
 
     expect(source).toContain("await completeWorkoutSrv({");
-    expect(source).toContain('async function handleFinishWorkout(completionMethod: "manual" | "automatic" = "manual")');
+    expect(source).toContain('completionMethod: "manual" | "automatic" = "manual"');
     expect(source).toContain("completed_at: nowIso,");
   });
 
-  it("automatically opens the finish/review flow after every prescribed set is confirmed", () => {
+  it("opens the quick review before final completion once every prescribed set is confirmed", () => {
     const source = loggerSource();
 
     expect(source).toContain("const autoFinishReady = useMemo(() => {");
     expect(source).toContain("summary.requiredSets > 0 && summary.loggedSets >= summary.requiredSets");
-    expect(source).toContain('void handleFinishWorkout("automatic")');
-    expect(source).toContain("setAutoOpenReviewAfterFinish(true)");
+    expect(source).toContain("setQuickFinishReviewOpen(true)");
+    expect(source).toContain('handleFinishWorkout("automatic", false)');
+    expect(source).not.toContain('void handleFinishWorkout("automatic")');
   });
 
   it("does not auto-finish previews, coach POV, errored, or offline workouts", () => {
