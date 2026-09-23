@@ -229,8 +229,8 @@ const transformationProof = [
   { name: "Daniel", result: "Lean Cut · Midsection pulled in", image: "https://jaredjamesfit.com/assets/client-daniel-side-DjJtQ64r.png" },
   { name: "Branden", result: "Muscle Build · From skinny to stacked", image: "https://jaredjamesfit.com/assets/client-branden-front-CSvWkc5M.png" },
   { name: "Sarwar", result: "Body Recomp · Major fat loss and muscle gain", image: "https://jaredjamesfit.com/assets/client-sarwar-front-D_QmESQd.png" },
-  { name: "Coach Jared", result: "Long-Term Recomp · Built over years", image: "https://jaredjamesfit.com/assets/client-coach-jared-front-1-Dk4eNuoA.png" },
-  { name: "Tyler", result: "Lean Transformation · Leaner and more athletic", image: "https://jaredjamesfit.com/assets/leveled-up-5-BIqnV8nJ.png" },
+  { name: "Coach Jared", result: "Long-Term Recomp · Built over years", image: "https://jaredjamesfit.com/assets/client-coach-jared-front-1-Dk4eNuoA.png", crop: "object-[center_35%] scale-[1.38]" },
+  { name: "Tyler", result: "Lean Transformation · Leaner and more athletic", image: "https://jaredjamesfit.com/assets/leveled-up-5-BIqnV8nJ.png", crop: "object-[center_35%] scale-[1.38]" },
   { name: "Camryn", result: "Body Recomp · Tightened and toned", image: "https://jaredjamesfit.com/assets/client-camryn-front-eEwinvFm.png" },
   { name: "Erick", result: "Fat Loss Recomp · Leaner and sharper", image: "https://jaredjamesfit.com/assets/client-erick-front-DdH-Vzin.png" },
   { name: "Icah", result: "Fat Loss Transformation · Midsection tightened", image: "https://jaredjamesfit.com/assets/client-icah-front-ERK6G0Of.png" },
@@ -505,7 +505,7 @@ function AboutJaredPage() {
             <div className="flex w-max gap-4">
               {transformationProof.map((item) => (
                 <Card key={item.name} className="w-[78vw] max-w-[340px] shrink-0 overflow-hidden">
-                  <div className="aspect-square overflow-hidden bg-muted"><img src={item.image} alt={`${item.name} JF Effect client transformation`} className="h-full w-full scale-[1.18] object-cover object-top" loading="lazy" /></div>
+                  <div className="aspect-square overflow-hidden bg-muted"><img src={item.image} alt={`${item.name} JF Effect client transformation`} className={`h-full w-full object-cover object-top ${item.crop ?? "scale-[1.18]"}`} loading="lazy" /></div>
                   <div className="p-4">
                     <div className="font-black">{item.name}</div>
                     <div className="mt-1 text-sm leading-relaxed text-muted-foreground">{item.result}</div>
@@ -537,7 +537,7 @@ function AboutJaredPage() {
           <SectionTitle eyebrow="Education + experience" title="Coaching credentials" sub="Formal education backed by years of hands-on coaching and competition." />
           <div className="mx-auto grid max-w-5xl gap-4 md:grid-cols-2">
             {[
-              ["GLPTI Certification", "Professional personal training certification", BadgeCheck],
+              ["GoodLife Personal Training Institute (GLPTI)", "Professional personal training certification", BadgeCheck],
               ["DTS Level 1 Certification", "Darby Training Systems · 2018", ShieldCheck],
               ["ISSA Personal Training Certification", "International Sports Sciences Association · 2023", BadgeCheck],
               ["100+ Clients Coached", "General fitness, body composition, bodybuilding and powerlifting", Users],
