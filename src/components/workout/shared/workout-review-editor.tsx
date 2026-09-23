@@ -151,7 +151,7 @@ type Props = {
   ctx: WorkoutCompletionCtx;
   hasCoach?: boolean;
   initial?: ReviewInitial | null;
-  onSaved?: () => void;
+  onSaved?: () => Promise<void> | void;
   onViewScore?: (rating: number | null) => void;
   actAsClientId?: string | null;
 };
@@ -229,7 +229,19 @@ export function WorkoutReviewEditor({
         },
       });
     },
-    onSuccess: (res: any) => {
+    onSuccess: async (res: any) => {
+      // Some flows use the review itself as the final completion action.
+      // Wait for that parent finalization before showing "Workout complete"
+      // or closing the sheet, so the UI never claims success early.
+      try {
+        await onSaved?.();
+      } catch (e: any) {
+        toast.error("Review saved, but the workout still needs finishing.", {
+          description: e?.message,
+        });
+        return;
+      }
+
       toast.success(res?.edited ? "Review updated." : "Workout complete.");
       // Recovery/sleep answers feed the Training Readiness ring. Invalidate
       // both member and coaching readiness queries so the ring reflects the
@@ -241,7 +253,6 @@ export function WorkoutReviewEditor({
           return typeof k === "string" && (k.startsWith("recovery") || k === "readiness");
         },
       });
-      onSaved?.();
       onViewScore?.(selectedCard?.overallRating ?? null);
       onOpenChange(false);
     },

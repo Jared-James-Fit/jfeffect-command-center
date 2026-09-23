@@ -126,6 +126,10 @@ import { useWorkoutHeartbeat, readHeartbeatTimestamps, clearHeartbeatTimestamps 
 import { computeActiveSeconds } from "@/lib/workout-duration";
 import { WorkoutProgressRing } from "@/components/workout/shared/workout-progress-ring";
 import { CompletedWorkoutActions } from "@/components/workout/shared/completed-workout-actions";
+import {
+  WorkoutReviewEditor,
+  type ReviewInitial,
+} from "@/components/workout/shared/workout-review-editor";
 import { WorkoutStatusBar } from "@/components/workout-day/WorkoutStatusBar";
 import {
   WorkoutTimer,
@@ -1029,7 +1033,7 @@ function WorkoutDay({
   // Scoped by client + day; one row per (client, day) thanks to the Phase 1 unique constraint.
   const { data: existingReview } = useQuery({
     queryKey: ["pl-workout-feedback", dayId, client?.id, adapter?.kind ?? null],
-    enabled: secondaryHydrationReady && !!client?.id && !!completion?.completed_at,
+    enabled: secondaryHydrationReady && !!client?.id && !!completion?.id,
     staleTime: 60_000,
     queryFn: async () => {
       if (adapter) {
@@ -1472,6 +1476,7 @@ function WorkoutDay({
   // exact same form. Consumed once by CompletedWorkoutActions via its
   // autoOpenReview prop.
   const [autoOpenReviewAfterFinish, setAutoOpenReviewAfterFinish] = useState(false);
+  const [quickFinishReviewOpen, setQuickFinishReviewOpen] = useState(false);
   // Notifications can deep-link with ?review=1 to nudge the member to open
   // the shared review sheet on a completed workout.
   const reviewParam = search.review === 1;
@@ -1557,12 +1562,15 @@ function WorkoutDay({
    * the shared review sheet writes the rating, sleep, recovery, and coach
    * notes to pl_workout_feedback / member_workout_reviews as a single UPSERT.
    */
-  async function handleFinishWorkout(completionMethod: "manual" | "automatic" = "manual") {
-    if (!client?.id) return;
+  async function handleFinishWorkout(
+    completionMethod: "manual" | "automatic" = "manual",
+    openReviewAfterFinish = true,
+  ): Promise<boolean> {
+    if (!client?.id) return false;
     if (completion?.completed_at) {
       qc.invalidateQueries({ queryKey: ["pl-day-completion", dayId] });
-      setAutoOpenReviewAfterFinish(true);
-      return;
+      if (openReviewAfterFinish) setAutoOpenReviewAfterFinish(true);
+      return true;
     }
     // flush() now rejects on failure — Finish Workout must still proceed;
     // the save status indicator surfaces the failed meta save for retry.
@@ -1656,7 +1664,7 @@ function WorkoutDay({
       toast.message("Workout saved offline", {
         description: "We'll sync it when you're back online.",
       });
-      return;
+      return true;
     }
 
     const isMember = adapter?.kind === "member";
@@ -1704,7 +1712,7 @@ function WorkoutDay({
       });
     } catch (err: any) {
       toast.error("Could not submit workout", { description: err?.message });
-      return;
+      return false;
     }
 
     if (draftKey) clearLocalDraft(draftKey);
@@ -1733,7 +1741,8 @@ function WorkoutDay({
     }
     setLastSummary(computed);
     recapFromSubmitRef.current = true;
-    setAutoOpenReviewAfterFinish(true);
+    if (openReviewAfterFinish) setAutoOpenReviewAfterFinish(true);
+    return true;
   }
 
   // When every prescribed set has been fully confirmed, remove the extra
@@ -1801,11 +1810,15 @@ function WorkoutDay({
     if (autoFinishAttemptRef.current === key) return;
     autoFinishAttemptRef.current = key;
 
-    // Tiny debounce lets the final set autosave/refetch settle before the
-    // completion summary is persisted.
+    // Let the final set autosave/refetch settle, then go straight to the
+    // 5-second review. The workout remains amber/in-progress until that review
+    // is actually submitted.
     const id = window.setTimeout(() => {
       setFocusMode(false);
-      void handleFinishWorkout("automatic");
+      void (async () => {
+        await markInProgress();
+        setQuickFinishReviewOpen(true);
+      })();
     }, 250);
 
     return () => window.clearTimeout(id);
@@ -1916,6 +1929,18 @@ function WorkoutDay({
     existingReview?.review_submitted_at ??
     existingReview?.created_at
   );
+  const completionLoggingPctRaw = completion?.logging_percentage;
+  const completionLoggingPct =
+    completionLoggingPctRaw == null || completionLoggingPctRaw === ""
+      ? null
+      : Number(completionLoggingPctRaw);
+  const completionIncomplete =
+    completion?.completed_with_missing_logs === true ||
+    (
+      completionLoggingPct != null &&
+      Number.isFinite(completionLoggingPct) &&
+      completionLoggingPct < 100
+    );
 
   const statusBarVisible =
     !readonly &&
@@ -1927,7 +1952,7 @@ function WorkoutDay({
     ? Math.min(100, Math.round((statusSummary.setsDone / statusSummary.setsTotal) * 100))
     : 0;
   const progressStatus: import("@/lib/workout-progress").WorkoutProgressStatus =
-    completion?.completed_at && reviewSubmitted
+    completion?.completed_at && reviewSubmitted && !completionIncomplete
       ? "completed"
       : statusSummary.setsDone > 0
         ? "in_progress"
@@ -2040,20 +2065,33 @@ function WorkoutDay({
             {!readonly && !workoutBodyError && !completion?.completed_at && !rowsIsError && authReady && rowsLoaded && (rows as any[]).length > 0 && (
               <div className="mx-auto max-w-3xl px-4 pb-4">
                 <Card className="p-4">
-                  <ActionButton
-                    className="w-full"
-                    loadingLabel="Saving…"
-                    successLabel="Finish Workout"
-                    successToast="Tap to finish"
-                    icon={<CheckCircle2 className="h-4 w-4" />}
-                    onAction={async () => {
-                      setFocusMode(false);
-                      await handleFinishWorkout();
-                      refresh();
-                    }}
-                  >
-                    Finish Workout
-                  </ActionButton>
+                  {autoFinishReady ? (
+                    <Button
+                      className="w-full bg-amber-500 text-black hover:bg-amber-400"
+                      onClick={() => {
+                        setFocusMode(false);
+                        setQuickFinishReviewOpen(true);
+                      }}
+                    >
+                      <MessageCircle className="mr-2 h-4 w-4" />
+                      Review to Finish
+                    </Button>
+                  ) : (
+                    <ActionButton
+                      className="w-full"
+                      loadingLabel="Saving…"
+                      successLabel="Finish Workout"
+                      successToast="Tap to finish"
+                      icon={<CheckCircle2 className="h-4 w-4" />}
+                      onAction={async () => {
+                        setFocusMode(false);
+                        await handleFinishWorkout();
+                        refresh();
+                      }}
+                    >
+                      Finish Workout
+                    </ActionButton>
+                  )}
                 </Card>
               </div>
             )}
@@ -2167,13 +2205,17 @@ function WorkoutDay({
             <Badge
               variant="outline"
               className={
-                reviewSubmitted
+                reviewSubmitted && !completionIncomplete
                   ? "border-green-500/30 bg-green-500/10 text-green-500"
                   : "border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-300"
               }
             >
               <CheckCircle2 className="mr-1 h-3 w-3" />
-              {reviewSubmitted ? "Completed" : "Review pending"}
+              {completionIncomplete
+                ? "Incomplete"
+                : reviewSubmitted
+                  ? "Completed"
+                  : "Review pending"}
               {completion.actual_duration_min != null && completion.actual_duration_min > 0
                 ? ` · ${formatDurationMin(completion.actual_duration_min)}`
                 : ""}
@@ -2292,19 +2334,29 @@ function WorkoutDay({
              This was the root cause of the Nicolas Galli stuck-state bug. */}
         {!readonly && !workoutBodyError && !completion?.completed_at && !rowsIsError && authReady && rowsLoaded && (rows as any[]).length > 0 && (
           <Card className="p-4">
-            <ActionButton
-              className="w-full"
-              loadingLabel="Saving…"
-              successLabel="Finish Workout"
-              successToast="Tap to finish"
-              icon={<CheckCircle2 className="h-4 w-4" />}
-              onAction={async () => {
-                await handleFinishWorkout();
-                refresh();
-              }}
-            >
-              Finish Workout
-            </ActionButton>
+            {autoFinishReady ? (
+              <Button
+                className="w-full bg-amber-500 text-black hover:bg-amber-400"
+                onClick={() => setQuickFinishReviewOpen(true)}
+              >
+                <MessageCircle className="mr-2 h-4 w-4" />
+                Review to Finish
+              </Button>
+            ) : (
+              <ActionButton
+                className="w-full"
+                loadingLabel="Saving…"
+                successLabel="Finish Workout"
+                successToast="Tap to finish"
+                icon={<CheckCircle2 className="h-4 w-4" />}
+                onAction={async () => {
+                  await handleFinishWorkout();
+                  refresh();
+                }}
+              >
+                Finish Workout
+              </ActionButton>
+            )}
           </Card>
         )}
 
@@ -2351,6 +2403,63 @@ function WorkoutDay({
         )}
         {children}
       </div>
+
+      {!completion?.completed_at && client?.id && autoFinishReady && (
+        <WorkoutReviewEditor
+          open={quickFinishReviewOpen}
+          onOpenChange={setQuickFinishReviewOpen}
+          ctx={
+            adapter?.kind === "member" && (adapter?.ref as any)?.enrollmentId
+              ? {
+                  kind: "member",
+                  enrollmentId: (adapter.ref as any).enrollmentId,
+                  weekIndex: Number(String(dayId).split(":")[0]),
+                  dayIndex: Number(String(dayId).split(":")[1]),
+                }
+              : { kind: "client", dayId, scheduledWorkoutId }
+          }
+          hasCoach
+          initial={
+            existingReview
+              ? ({
+                  overallRating: existingReview.overall_rating ?? null,
+                  sessionRpe: existingReview.session_rpe ?? null,
+                  pain: existingReview.pain ?? false,
+                  painLevel: existingReview.pain_level ?? null,
+                  painArea: existingReview.pain_area ?? null,
+                  painNote: existingReview.pain_note ?? null,
+                  clientNote: existingReview.client_note ?? null,
+                  strengthFeel: existingReview.strength_feel ?? null,
+                  fatigueFeel: existingReview.fatigue_feel ?? null,
+                  hitTarget: existingReview.hit_target ?? null,
+                  recoveryToday: existingReview.recovery_today ?? null,
+                  sleepBucket: existingReview.sleep_bucket ?? null,
+                  sleepNotes: existingReview.sleep_notes ?? null,
+                  editCount: existingReview.review_edit_count ?? 0,
+                  submittedAt:
+                    existingReview.review_submitted_at ??
+                    existingReview.created_at ??
+                    null,
+                } satisfies ReviewInitial)
+              : null
+          }
+          actAsClientId={isImpersonating ? client.id : null}
+          onSaved={async () => {
+            await qc.invalidateQueries({
+              queryKey: ["pl-workout-feedback", dayId, client.id],
+            });
+            const finalized = await handleFinishWorkout("automatic", false);
+            if (!finalized) {
+              throw new Error("Your review saved, but the workout still needs to be finished.");
+            }
+            await Promise.all([
+              qc.invalidateQueries({ queryKey: ["my-workouts", client.id] }),
+              qc.invalidateQueries({ queryKey: ["workouts-experience-client", client.id] }),
+              qc.invalidateQueries({ queryKey: ["pl-day-completion", dayId] }),
+            ]);
+          }}
+        />
+      )}
 
       {lastSummary && (
         <WorkoutSubmissionSummary
