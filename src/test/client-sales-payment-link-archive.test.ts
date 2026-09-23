@@ -40,10 +40,14 @@ describe("client sales payment links and archive controls", () => {
     expect(sales).toContain("Restore sale");
   });
 
-  it("only permits permanent removal for never-paid, never-linked assignments", () => {
-    expect(archive).toContain("purchase.stripe_payment_intent_id || purchase.stripe_subscription_id || purchase.stripe_checkout_session_id");
+  it("allows an unpaid generated checkout to be deleted safely, but never payment history", () => {
+    expect(archive).toContain("purchase.stripe_payment_intent_id || purchase.stripe_subscription_id");
+    expect(archive).not.toContain("purchase.stripe_payment_intent_id || purchase.stripe_subscription_id || purchase.stripe_checkout_session_id");
     expect(archive).toContain('.from("payment_ledger")');
+    expect(archive).toContain("Stripe shows this checkout as completed. Sync the sale instead of deleting it.");
+    expect(archive).toContain("expireUnpaidCheckout(purchase.stripe_checkout_session_id, { requireVerification: true })");
     expect(archive).toContain("This sale has transaction history and cannot be deleted. Archive it instead.");
-    expect(sales).toContain("Remove unpaid sale");
+    expect(sales).toContain("Delete sale");
+    expect(sales).toContain("Any unused client checkout/payment link will be disabled");
   });
 });
