@@ -23,8 +23,9 @@ import { share as nativeShare, canShare } from "@/platform/share";
  */
 export async function getShareablePaymentUrl(
   shareFn: (a: { data: { purchaseRecordId: string; origin: string } }) => Promise<any>,
-  checkoutFn: (a: { data: { purchaseRecordId: string; discountCodeId: null; origin: string } }) => Promise<any>,
+  checkoutFn: (a: { data: { purchaseRecordId: string; discountCodeId: string | null; origin: string } }) => Promise<any>,
   purchaseId: string,
+  discountCodeId: string | null = null,
 ): Promise<{ url: string; kind: string; canonicalUrl: string | null }> {
   const origin = window.location.origin;
   let res = await shareFn({ data: { purchaseRecordId: purchaseId, origin } });
@@ -32,7 +33,7 @@ export async function getShareablePaymentUrl(
 
   if (res.needsFreshCheckout) {
     const checkout = await checkoutFn({
-      data: { purchaseRecordId: purchaseId, discountCodeId: null, origin },
+      data: { purchaseRecordId: purchaseId, discountCodeId, origin },
     });
     if (!checkout?.sessionId || !sanitizeShareUrl(checkout?.url ?? null)) {
       throw new Error("Stripe checkout was not created. Retry the payment link or open the sale details for the exact error.");
