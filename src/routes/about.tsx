@@ -107,10 +107,10 @@ const athleteResults: ResultRow[] = [
 ];
 
 const coachedAthletePhotos = [
-  { name: "Phillip Bennett", achievement: "National Champion · IPF Worlds · Sub-Junior 105 kg", image: "/athletes/phillip-bennett.webp" },
-  { name: "Dwayne Gordon", achievement: "Central Canadian Champion · Open 105 kg", image: "/athletes/dwayne-gordon.webp" },
-  { name: "Frederick Callahan", achievement: "Ontario Provincial Champion 2023 · Junior 74 kg", image: "/athletes/frederick-callahan.webp" },
-  { name: "Elisa Vena", achievement: "Western Championships · Powerlifting competitor", image: "/athletes/elisa-vena.webp" },
+  { name: "Phillip Bennett", achievement: "National Champion · IPF Worlds · Sub-Junior 105 kg", image: "/athletes/phillip-bennett.png" },
+  { name: "Dwayne Gordon", achievement: "Central Canadian Champion · Open 105 kg", image: "/athletes/dwayne-gordon.jpg" },
+  { name: "Frederick Callahan", achievement: "Ontario Provincial Champion 2023 · Junior 74 kg", image: "/athletes/frederick-callahan.jpg" },
+  { name: "Elisa Vena", achievement: "Western Championships · Powerlifting competitor", image: "/athletes/elisa-vena.png" },
 ];
 
 const clientSnapshots = [
@@ -382,7 +382,7 @@ function AboutJaredPage() {
           </div>
           <div className="relative mx-auto w-full max-w-lg">
             <div className="absolute -inset-4 -z-10 rounded-[2rem] bg-primary/10 blur-2xl" />
-            <img src="/athletes/jared-napf-2026.jpg" alt="Jared James representing Canada in international powerlifting competition" className="aspect-[4/5] w-full rounded-3xl object-cover object-center shadow-2xl ring-1 ring-border" loading="eager" />
+            <img src="/athletes/jared-napf-2026-original.jpg" alt="Jared James representing Canada in international powerlifting competition" className="aspect-[4/5] w-full rounded-3xl object-cover object-center shadow-2xl ring-1 ring-border" loading="eager" />
           </div>
         </div>
       </section>
