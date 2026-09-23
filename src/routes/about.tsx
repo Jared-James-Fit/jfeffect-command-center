@@ -107,6 +107,13 @@ const athleteResults: ResultRow[] = [
   { primary: "2025 · Elisa Vena", secondary: "6th Place · Western Canadians · Nanaimo, BC" },
 ];
 
+const coachedAthletePhotos = [
+  { name: "Phillip Bennett", achievement: "National Champion · IPF Worlds · Sub-Junior 105 kg", image: "/athletes/phillip-bennett.webp" },
+  { name: "Dwayne Gordon", achievement: "Central Canadian Champion · Open 105 kg", image: "/athletes/dwayne-gordon.webp" },
+  { name: "Frederick Callahan", achievement: "Ontario Provincial Champion 2023 · Junior 74 kg", image: "/athletes/frederick-callahan.webp" },
+  { name: "Elisa Vena", achievement: "Western Championships · Powerlifting competitor", image: "/athletes/elisa-vena.webp" },
+];
+
 const clientSnapshots = [
   {
     name: "Colby",
@@ -448,6 +455,19 @@ function AboutJaredPage() {
                 <div className="mt-2 text-[11px] text-muted-foreground">{detail}</div>
               </Card>
             ))}
+          </div>
+          <div className="mx-auto mt-6 max-w-5xl overflow-x-auto pb-2 [-webkit-overflow-scrolling:touch]">
+            <div className="flex w-max gap-4">
+              {coachedAthletePhotos.map((athlete) => (
+                <Card key={athlete.name} className="w-[76vw] max-w-[300px] shrink-0 overflow-hidden">
+                  <img src={athlete.image} alt={`${athlete.name} JF Effect coached powerlifting athlete`} className="aspect-square w-full object-cover" loading="lazy" />
+                  <div className="p-4">
+                    <div className="font-black">{athlete.name}</div>
+                    <div className="mt-1 text-sm leading-relaxed text-muted-foreground">{athlete.achievement}</div>
+                  </div>
+                </Card>
+              ))}
+            </div>
           </div>
           <div className="mx-auto mt-4 max-w-5xl">
             <CredentialAccordion title="View coached athlete achievements" summary="Worlds · Nationals · Regionals · provincial titles · records · awards">
