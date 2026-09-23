@@ -412,7 +412,7 @@ function AboutJaredPage() {
 
       <Reveal stagger={2}>
         <Section className="bg-card/30">
-          <SectionTitle eyebrow="Complete competitive record" title="The highlights first. Every receipt underneath." sub="Open any section to see the full list without turning the page into a wall of trophies." />
+          <SectionTitle eyebrow="Jared · Athlete achievements" title="My competitive record." sub="My own championships, records, rankings and federation recognition. Kept separate from the athletes I coach." />
           <div className="mx-auto max-w-5xl space-y-3">
             <CredentialAccordion title="International Championships" summary="2 overall international titles · NAPF + Commonwealth · 2026" defaultOpen>
               <ResultList rows={internationalResults} />
@@ -433,13 +433,14 @@ function AboutJaredPage() {
 
       <Reveal stagger={3}>
         <Section>
-          <SectionTitle eyebrow="Coaching proof" title="Results beyond my own platform." sub="Competitive athletes coached from provincial competition through Canadian Nationals and IPF Worlds." />
-          <div className="mx-auto grid max-w-5xl grid-cols-2 gap-3 lg:grid-cols-4">
+          <SectionTitle eyebrow="Coached athlete achievements" title="Athlete results under JF Effect." sub="Competitive achievements earned by athletes I coach — separate from my own athlete résumé." />
+          <div className="mx-auto grid max-w-5xl grid-cols-2 gap-3 lg:grid-cols-5">
             {[
               ["1", "IPF Worlds athlete", "Costa Rica · 2025"],
               ["3", "National champions", "Canadian Nationals gold"],
               ["11+", "Provincial golds", "MB + ON"],
               ["14+", "Provincial records", "Set + held by coached athletes"],
+              ["1+", "Athlete of the Year", "Federation athlete recognition"],
             ].map(([value, label, detail]) => (
               <Card key={label} className="p-4 text-center">
                 <div className="text-2xl font-black text-primary">{value}</div>
@@ -449,7 +450,7 @@ function AboutJaredPage() {
             ))}
           </div>
           <div className="mx-auto mt-4 max-w-5xl">
-            <CredentialAccordion title="View all athlete results" summary="Worlds · Nationals · Regional championships">
+            <CredentialAccordion title="View coached athlete achievements" summary="Worlds · Nationals · Regionals · provincial titles · records · awards">
               <ResultList rows={athleteResults} />
             </CredentialAccordion>
           </div>
@@ -504,7 +505,7 @@ function AboutJaredPage() {
             <div className="flex w-max gap-4">
               {transformationProof.map((item) => (
                 <Card key={item.name} className="w-[78vw] max-w-[340px] shrink-0 overflow-hidden">
-                  <img src={item.image} alt={`${item.name} JF Effect client transformation`} className="aspect-square w-full object-cover" loading="lazy" />
+                  <div className="aspect-square overflow-hidden bg-muted"><img src={item.image} alt={`${item.name} JF Effect client transformation`} className="h-full w-full scale-[1.18] object-cover object-top" loading="lazy" /></div>
                   <div className="p-4">
                     <div className="font-black">{item.name}</div>
                     <div className="mt-1 text-sm leading-relaxed text-muted-foreground">{item.result}</div>
@@ -518,7 +519,7 @@ function AboutJaredPage() {
               <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                 {multiAngleProof.map(([label, image]) => (
                   <figure key={label} className="overflow-hidden rounded-xl border border-border bg-background">
-                    <img src={image} alt={`${label} transformation comparison`} className="aspect-square w-full object-cover" loading="lazy" />
+                    <div className="aspect-square overflow-hidden bg-muted"><img src={image} alt={`${label} transformation comparison`} className="h-full w-full scale-[1.18] object-cover object-top" loading="lazy" /></div>
                     <figcaption className="p-3 text-xs font-bold">{label}</figcaption>
                   </figure>
                 ))}
