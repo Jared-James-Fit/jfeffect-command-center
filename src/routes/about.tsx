@@ -314,7 +314,6 @@ function ScrollImage({
 }) {
   const ref = useRef<HTMLImageElement>(null);
   const [shouldLoad, setShouldLoad] = useState(eager);
-  const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
     if (eager || shouldLoad) return;
@@ -335,22 +334,17 @@ function ScrollImage({
     return () => observer.disconnect();
   }, [eager, shouldLoad]);
 
-  useEffect(() => {
-    setLoaded(false);
-  }, [src]);
 
   return (
     <img
       ref={ref}
       src={shouldLoad ? src : SCROLL_IMAGE_PLACEHOLDER}
       alt={alt}
-      className={`${className} bg-muted transition-[opacity,filter] duration-700 ease-out ${loaded ? "opacity-100 blur-0" : "opacity-75 blur-[7px] animate-pulse"}`}
+      className={`${className} bg-muted`}
       loading={eager ? "eager" : "lazy"}
       decoding="async"
       fetchPriority={eager ? "high" : "auto"}
-      onLoad={() => {
-        if (shouldLoad) setLoaded(true);
-      }}
+    />
     />
   );
 }
