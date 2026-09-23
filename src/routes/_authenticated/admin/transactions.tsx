@@ -1,5 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
+import { useServerFn } from "@tanstack/react-start";
 import { useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/app-shell";
@@ -30,6 +31,7 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { ledgerStatusTone } from "@/lib/payment-display";
+import { listStripeAccountTransactions } from "@/lib/stripe-sync.functions";
 
 export const Route = createFileRoute("/_authenticated/admin/transactions")({
   component: () => <AdminTransactionsPage />,
@@ -150,28 +152,23 @@ export function AdminTransactionsPage({ embedded = false }: { embedded?: boolean
   const [days, setDays] = useState<string>("90");
   const [selected, setSelected] = useState<AdminTransactionRow | null>(null);
 
-  const { data: ledgerRows = [], isLoading } = useQuery({
-    queryKey: ["admin-transactions", days],
+  const stripeAccountFn = useServerFn(listStripeAccountTransactions);
+  const {
+    data: stripeAccount,
+    isLoading,
+    isError: stripeLoadError,
+  } = useQuery({
+    queryKey: ["admin-transactions-stripe-account", days],
     queryFn: async () => {
-      // Query the unified view. It's not in the generated types, so cast.
-      const client = supabase as unknown as {
-        from: (t: string) => any;
-      };
-      let q = client
-        .from("admin_transactions_v1")
-        .select("*")
-        .order("occurred_at", { ascending: false })
-        .limit(1000);
-      if (days !== "all") {
-        const since = new Date();
-        since.setDate(since.getDate() - Number(days));
-        q = q.gte("occurred_at", since.toISOString());
-      }
-      const { data, error } = await q;
-      if (error) throw error;
-      return (data ?? []) as AdminTransactionRow[];
+      const res: any = await stripeAccountFn({
+        data: { days: days === "all" ? 3650 : Number(days), mode: "live" },
+      });
+      if (!res?.ok) throw new Error(res?.error ?? "Unable to read Stripe account transactions.");
+      return res;
     },
+    staleTime: 30_000,
   });
+  const stripeRows = (stripeAccount?.rows ?? []) as AdminTransactionRow[];
 
   // Awaiting-checkout purchases have no ledger row yet, but admins need to see
   // that a payment request is outstanding. Merge them in as synthetic rows.
@@ -224,10 +221,10 @@ export function AdminTransactionsPage({ embedded = false }: { embedded?: boolean
 
   const data = useMemo(
     () =>
-      [...pendingRows, ...ledgerRows].sort((a, b) =>
+      [...pendingRows, ...stripeRows].sort((a, b) =>
         String(b.occurred_at).localeCompare(String(a.occurred_at)),
       ),
-    [pendingRows, ledgerRows],
+    [pendingRows, stripeRows],
   );
 
   const filtered = useMemo(() => {
@@ -253,25 +250,32 @@ export function AdminTransactionsPage({ embedded = false }: { embedded?: boolean
   const totals = useMemo(() => {
     let paid = 0;
     let refunded = 0;
-    let voidedCount = 0;
     let count = 0;
+    let stripeOnly = 0;
+    const currencies = new Set<string>();
     for (const r of filtered) {
-      if (r.voided) { voidedCount++; continue; }
+      if (r.voided) continue;
       count++;
-      const s = (r.status ?? "").toLowerCase();
-      const t = (r.txn_type ?? "").toLowerCase();
-      if (s === "paid") paid += Number(r.amount ?? 0);
-      if (t === "refund" || t === "partial_refund") refunded += Number(r.amount ?? 0);
+      const st = (r.status ?? "").toLowerCase();
+      const type = (r.txn_type ?? "").toLowerCase();
+      if (r.currency) currencies.add(String(r.currency).toUpperCase());
+      if (st === "paid") paid += Number(r.amount ?? 0);
+      if (type === "refund" || type === "partial_refund") refunded += Number(r.amount ?? 0);
+      if (r.source === "stripe") stripeOnly++;
     }
-    return { paid, refunded, count, voidedCount };
+    const currency = currencies.size === 1 ? Array.from(currencies)[0] : "CAD";
+    return { paid, refunded, count, stripeOnly, currency };
   }, [filtered]);
+
+  const fmtTotal = (amount: number) =>
+    new Intl.NumberFormat(undefined, { style: "currency", currency: totals.currency }).format(amount);
 
   return (
     <>
       {!embedded && (
         <PageHeader
           title="Transactions"
-          subtitle="Every payment across client purchases and memberships, with direct Stripe deep-links."
+          subtitle="Live Stripe account activity, enriched with JF Effect client and product links when available."
         />
       )}
       <div className={embedded ? "p-4 md:p-6 space-y-6" : "p-6 md:p-8 space-y-6"}>
@@ -283,21 +287,16 @@ export function AdminTransactionsPage({ embedded = false }: { embedded?: boolean
           </Card>
           <Card className="p-4">
             <div className="text-xs uppercase tracking-widest text-muted-foreground">Paid · {RANGE_LABEL[days] ?? ""}</div>
-            <div className="mt-1 text-2xl font-semibold text-emerald-500">
-              {new Intl.NumberFormat(undefined, { style: "currency", currency: "USD" }).format(totals.paid)}
-            </div>
+            <div className="mt-1 text-2xl font-semibold text-emerald-500">{fmtTotal(totals.paid)}</div>
           </Card>
           <Card className="p-4">
             <div className="text-xs uppercase tracking-widest text-muted-foreground">Refunded</div>
-            <div className="mt-1 text-2xl font-semibold text-amber-500">
-              {new Intl.NumberFormat(undefined, { style: "currency", currency: "USD" }).format(totals.refunded)}
-            </div>
+            <div className="mt-1 text-2xl font-semibold text-amber-500">{fmtTotal(totals.refunded)}</div>
           </Card>
           <Card className="p-4">
-            <div className="text-xs uppercase tracking-widest text-muted-foreground">Voided</div>
-            <div className="mt-1 text-2xl font-semibold text-muted-foreground">
-              {totals.voidedCount.toLocaleString()} voided
-            </div>
+            <div className="text-xs uppercase tracking-widest text-muted-foreground">Stripe-only</div>
+            <div className="mt-1 text-2xl font-semibold text-primary">{totals.stripeOnly.toLocaleString()}</div>
+            <div className="mt-0.5 text-xs text-muted-foreground">Not linked to an app purchase</div>
           </Card>
         </div>
 
@@ -330,6 +329,7 @@ export function AdminTransactionsPage({ embedded = false }: { embedded?: boolean
                 <SelectItem value="all">All types</SelectItem>
                 <SelectItem value="client">Client purchases</SelectItem>
                 <SelectItem value="membership">Memberships</SelectItem>
+                <SelectItem value="stripe">Stripe-only</SelectItem>
               </SelectContent>
             </Select>
             <Select value={subjectKind} onValueChange={setSubjectKind}>
@@ -338,6 +338,7 @@ export function AdminTransactionsPage({ embedded = false }: { embedded?: boolean
                 <SelectItem value="all">All accounts</SelectItem>
                 <SelectItem value="client">Clients</SelectItem>
                 <SelectItem value="member">Members</SelectItem>
+                <SelectItem value="stripe">Stripe customers</SelectItem>
               </SelectContent>
             </Select>
             <Select value={days} onValueChange={setDays}>
@@ -352,6 +353,12 @@ export function AdminTransactionsPage({ embedded = false }: { embedded?: boolean
             </Select>
           </div>
         </Card>
+
+        {stripeLoadError && (
+          <Card className="border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive">
+            Stripe could not be loaded right now. Refresh this page to retry.
+          </Card>
+        )}
 
         {/* Table */}
         <Card className="overflow-hidden">
@@ -376,9 +383,11 @@ export function AdminTransactionsPage({ embedded = false }: { embedded?: boolean
                 ) : (
                   filtered.map((r) => {
                     const profileHref =
-                      r.subject_kind === "client"
+                      r.subject_id && r.subject_kind === "client"
                         ? `/admin/clients/${r.subject_id}`
-                        : `/admin/members/${r.subject_id}`;
+                        : r.subject_id && r.subject_kind === "member"
+                          ? `/admin/members/${r.subject_id}`
+                          : null;
                     return (
                       <tr
                         key={`${r.source}-${r.id}`}
@@ -389,13 +398,17 @@ export function AdminTransactionsPage({ embedded = false }: { embedded?: boolean
                           {new Date(r.occurred_at).toLocaleDateString()}
                         </td>
                         <td className="px-4 py-2">
-                          <Link
-                            to={profileHref}
-                            className="font-medium hover:underline"
-                            onClick={(e) => e.stopPropagation()}
-                          >
-                            {r.subject_name ?? "Unknown"}
-                          </Link>
+                          {profileHref ? (
+                            <Link
+                              to={profileHref}
+                              className="font-medium hover:underline"
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              {r.subject_name ?? "Unknown"}
+                            </Link>
+                          ) : (
+                            <span className="font-medium">{r.subject_name ?? "Stripe customer"}</span>
+                          )}
                           <div className="text-xs text-muted-foreground">{r.subject_email}</div>
                         </td>
                         <td className="px-4 py-2">
@@ -437,7 +450,7 @@ export function AdminTransactionsPage({ embedded = false }: { embedded?: boolean
         </Card>
 
         <div className="text-xs text-muted-foreground">
-          Showing {filtered.length.toLocaleString()} of {data.length.toLocaleString()} rows. Click any row for details and full Stripe deep-links.
+          Showing {filtered.length.toLocaleString()} of {data.length.toLocaleString()} rows from the live Stripe account plus pending JF Effect payment requests. Stripe-only rows stay visible even when they are not linked to a client purchase.
         </div>
       </div>
 
