@@ -85,9 +85,11 @@ export function TransactionDetailDrawer({
   }).format(txn.amount ?? 0);
 
   const profileHref =
-    txn.subject_kind === "client"
+    txn.subject_id && txn.subject_kind === "client"
       ? `/admin/clients/${txn.subject_id}`
-      : `/admin/members/${txn.subject_id}`;
+      : txn.subject_id && txn.subject_kind === "member"
+        ? `/admin/members/${txn.subject_id}`
+        : null;
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -106,9 +108,13 @@ export function TransactionDetailDrawer({
           <section>
             <h3 className="text-xs uppercase tracking-widest text-muted-foreground mb-2">Who</h3>
             <div className="rounded-lg border border-border bg-card p-3">
-              <Link to={profileHref} onClick={() => onOpenChange(false)} className="font-medium hover:underline">
-                {txn.subject_name ?? "Unknown"}
-              </Link>
+              {profileHref ? (
+                <Link to={profileHref} onClick={() => onOpenChange(false)} className="font-medium hover:underline">
+                  {txn.subject_name ?? "Unknown"}
+                </Link>
+              ) : (
+                <span className="font-medium">{txn.subject_name ?? "Stripe customer"}</span>
+              )}
               <div className="text-xs text-muted-foreground">{txn.subject_email}</div>
               <div className="text-xs text-muted-foreground mt-1 capitalize">{txn.subject_kind}</div>
             </div>
@@ -213,7 +219,7 @@ export function TransactionDetailDrawer({
           )}
 
           {/* Void action — only for client-source ledger rows that aren't already voided */}
-          {txn.source === "client" && txn.status?.toLowerCase() !== "voided" && txn.status?.toLowerCase() !== "refunded" && (
+          {txn.source === "client" && !txn.voided && txn.status?.toLowerCase() !== "voided" && txn.status?.toLowerCase() !== "refunded" && (
             <>
               <Separator />
               <VoidTransactionSection
