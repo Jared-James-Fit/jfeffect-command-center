@@ -23,22 +23,60 @@ async function assertCanManagePurchase(supabase: any, userId: string, purchaseId
   throw new Error("Forbidden");
 }
 
-async function expireUnpaidCheckout(sessionId: string | null | undefined) {
-  if (!sessionId || !process.env.STRIPE_SECRET_KEY) return;
+async function expireUnpaidCheckout(
+  sessionId: string | null | undefined,
+  opts: { requireVerification?: boolean } = {},
+) {
+  if (!sessionId) return { ok: true, status: "none" as const };
+  if (!process.env.STRIPE_SECRET_KEY) {
+    if (opts.requireVerification) {
+      throw new Error("Stripe could not be verified. Retry before deleting this sale.");
+    }
+    return { ok: false, status: "unverified" as const };
+  }
+
   try {
     const lookup = await fetch(`https://api.stripe.com/v1/checkout/sessions/${encodeURIComponent(sessionId)}`, {
       headers: { Authorization: `Bearer ${process.env.STRIPE_SECRET_KEY}` },
     });
-    if (!lookup.ok) return;
+    if (!lookup.ok) {
+      if (opts.requireVerification) {
+        throw new Error("Stripe checkout could not be verified. Sync the sale and try again.");
+      }
+      return { ok: false, status: "unverified" as const };
+    }
+
     const session: any = await lookup.json().catch(() => null);
-    if (!session || session.status !== "open") return;
-    await fetch(`https://api.stripe.com/v1/checkout/sessions/${encodeURIComponent(sessionId)}/expire`, {
-      method: "POST",
-      headers: { Authorization: `Bearer ${process.env.STRIPE_SECRET_KEY}` },
-    }).catch(() => null);
-  } catch {
+    if (!session) {
+      if (opts.requireVerification) throw new Error("Stripe checkout could not be verified.");
+      return { ok: false, status: "unverified" as const };
+    }
+
+    // Never permanently remove a sale if Stripe says the checkout completed or
+    // collected money, even when our webhook/ledger is still catching up.
+    if (session.status === "complete" || session.payment_status === "paid") {
+      throw new Error("Stripe shows this checkout as completed. Sync the sale instead of deleting it.");
+    }
+
+    if (session.status === "open") {
+      const expired = await fetch(
+        `https://api.stripe.com/v1/checkout/sessions/${encodeURIComponent(sessionId)}/expire`,
+        {
+          method: "POST",
+          headers: { Authorization: `Bearer ${process.env.STRIPE_SECRET_KEY}` },
+        },
+      );
+      if (!expired.ok && opts.requireVerification) {
+        throw new Error("The Stripe checkout could not be disabled. Retry before deleting this sale.");
+      }
+    }
+
+    return { ok: true, status: session.status as string };
+  } catch (error) {
+    if (opts.requireVerification) throw error;
     // Archive must still succeed if Stripe is temporarily unavailable. The
     // JF short-link token is revoked below, so the app never serves the stale URL.
+    return { ok: false, status: "unverified" as const };
   }
 }
 
@@ -100,10 +138,11 @@ export const restorePurchaseRecord = createServerFn({ method: "POST" })
   });
 
 /**
- * Permanent removal is intentionally much stricter than archive. It is only
- * for accidental, never-paid assignments. Any Stripe payment/subscription,
- * checkout, or ledger evidence blocks deletion so financial history and
- * client-facing Stripe objects can never be orphaned.
+ * Permanent removal is only for accidental, never-paid assignments.
+ *
+ * A generated client Checkout Session/payment link is NOT payment history by
+ * itself, so an admin can delete that mistaken sale after we verify/expire the
+ * checkout. Actual payments, subscriptions and ledger rows still block delete.
  */
 export const removeUnpaidPurchaseRecord = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
@@ -117,8 +156,8 @@ export const removeUnpaidPurchaseRecord = createServerFn({ method: "POST" })
     if (SETTLED.has(status) || paidAmount > 0) {
       throw new Error("This sale has payment history and cannot be deleted. Archive it instead.");
     }
-    if (purchase.stripe_payment_intent_id || purchase.stripe_subscription_id || purchase.stripe_checkout_session_id) {
-      throw new Error("This sale is already linked to Stripe and cannot be deleted. Archive it instead.");
+    if (purchase.stripe_payment_intent_id || purchase.stripe_subscription_id) {
+      throw new Error("This sale has Stripe payment/subscription history and cannot be deleted. Archive it instead.");
     }
 
     const { count: ledgerCount, error: ledgerErr } = await supabase
@@ -131,6 +170,10 @@ export const removeUnpaidPurchaseRecord = createServerFn({ method: "POST" })
       throw new Error("This sale has transaction history and cannot be deleted. Archive it instead.");
     }
 
+    // A client-specific unpaid Checkout Session is safe to remove only after
+    // Stripe confirms it has not completed and we disable it if still open.
+    await expireUnpaidCheckout(purchase.stripe_checkout_session_id, { requireVerification: true });
+
     await supabase.from("payment_share_links").delete().eq("purchase_record_id", data.id);
     const { error } = await supabase.from("purchase_records").delete().eq("id", data.id);
     if (error) throw new Error(error.message);
@@ -139,8 +182,12 @@ export const removeUnpaidPurchaseRecord = createServerFn({ method: "POST" })
       client_id: purchase.client_id,
       actor_user_id: userId,
       actor_role: actorRole,
-      action: "unpaid_purchase_removed",
-      details: { purchase_id: data.id, offer_name: purchase.offer_name },
+      action: "unpaid_purchase_deleted",
+      details: {
+        purchase_id: data.id,
+        offer_name: purchase.offer_name,
+        disabled_checkout_session: Boolean(purchase.stripe_checkout_session_id),
+      },
     });
     return { ok: true };
   });
