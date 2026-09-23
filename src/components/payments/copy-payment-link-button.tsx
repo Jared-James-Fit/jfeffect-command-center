@@ -39,10 +39,17 @@ export async function getShareablePaymentUrl(
     }
 
     // The checkout function persists the session on THIS purchase. Resolve
-    // again so a stable short /pay/<token> URL is minted for sharing.
-    res = await shareFn({ data: { purchaseRecordId: purchaseId, origin } });
+    // again so a stable short /pay/<token> URL is minted for sharing. Stripe's
+    // read-after-create can be briefly eventually consistent, so use a tiny
+    // bounded retry instead of surfacing a false "not linked" error.
+    const retryDelays = [0, 200, 500, 900];
+    for (const delay of retryDelays) {
+      if (delay) await new Promise((resolve) => window.setTimeout(resolve, delay));
+      res = await shareFn({ data: { purchaseRecordId: purchaseId, origin } });
+      if (!res.needsFreshCheckout) break;
+    }
     if (res.needsFreshCheckout) {
-      throw new Error("Stripe checkout was created but could not be linked to this sale. Retry once; no duplicate sale was created.");
+      throw new Error("The checkout was saved to this sale, but the short share link is still syncing. Wait a moment and tap Share again — the same sale will be reused.");
     }
   }
 
