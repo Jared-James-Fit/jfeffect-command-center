@@ -3,18 +3,16 @@ import { useMemo } from "react";
 import { PageHeader } from "@/components/app-shell";
 import { cn } from "@/lib/utils";
 import { AdminCheckInReviews } from "./check-in-reviews";
-import { AdminLiftVideos } from "./lift-videos";
 import { TrainingIntelPage } from "./training-intelligence";
 import { AdminClientActionRequests } from "./client-action-requests";
 import { ProgressReviewQueue } from "@/components/progress/progress-review-queue";
 import { AdminCoachingSchedules } from "@/components/admin/coaching-schedules";
 import { CoachingManagementBoard } from "@/components/admin/coaching-management-board";
 
-type TabKey = "management" | "check-ins" | "lift-reviews" | "progress" | "training-intel" | "requests" | "schedules";
+type TabKey = "management" | "check-ins" | "progress" | "training-intel" | "requests" | "schedules";
 const TABS: { value: TabKey; label: string }[] = [
   { value: "management", label: "Management" },
   { value: "check-ins", label: "Check-Ins" },
-  { value: "lift-reviews", label: "Lift Reviews" },
   { value: "progress", label: "Progress" },
   { value: "training-intel", label: "Training Intel" },
   { value: "requests", label: "Requests" },
@@ -45,7 +43,7 @@ function CoachingWorkspace() {
   const setTab = (n: TabKey) => navigate({ to: "/admin/coaching", search: { tab: n } as any });
   return (
     <>
-      <PageHeader title="Coaching" subtitle="Check-ins, lift reviews, training intelligence, and client requests." />
+      <PageHeader title="Coaching" subtitle="Check-ins, training intelligence, progress, and client requests." />
       <div className="border-b border-border bg-background/50">
         <div className="-mb-px flex gap-1 overflow-x-auto px-2 md:px-4">
           {TABS.map((t) => {
@@ -62,7 +60,6 @@ function CoachingWorkspace() {
       <div>
         {tab === "management" && <CoachingManagementBoard />}
         {tab === "check-ins" && <AdminCheckInReviews embedded />}
-        {tab === "lift-reviews" && <AdminLiftVideos embedded initialOpen={open} />}
         {tab === "progress" && <ProgressReviewQueue />}
         {tab === "training-intel" && <TrainingIntelPage embedded />}
         {tab === "requests" && <AdminClientActionRequests embedded />}
