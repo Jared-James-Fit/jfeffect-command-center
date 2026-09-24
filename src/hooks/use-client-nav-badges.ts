@@ -36,8 +36,7 @@ export function markNavSeen(userId: string | undefined, route: string) {
 /**
  * Returns badge state per portal route. Only fetches data for clients.
  * Badge rules (kept minimal to avoid notification overload):
- *  - /portal/messages       — unread coach messages (count)
- *  - /portal/lift-videos    — coach feedback/comments on a lift video (dot)
+ *  - /portal/messages       — unread coach messages (count) + lift-review feedback (dot)
  *  - /portal/program        — program/phase updated since client last opened (dot)
  *  - /portal/nutrition-targets — nutrition targets updated since client last opened (dot)
  *  - /portal/check-in       — coach feedback on check-in media, link updated, or due (dot)
@@ -125,7 +124,6 @@ export function useClientNavBadges(): Record<string, NavBadge> {
   // Messages: unread count
   const lastRead = data.state?.client_last_read_at ? new Date(data.state.client_last_read_at).getTime() : 0;
   const unread = (data.msgs ?? []).filter((m: any) => new Date(m.created_at).getTime() > lastRead).length;
-  if (unread > 0) result["/portal/messages"] = { count: unread };
 
   // Lift videos: coach feedback / comments newer than client_last_viewed_at
   let liftDot = false;
@@ -144,7 +142,12 @@ export function useClientNavBadges(): Record<string, NavBadge> {
       if (new Date(c.created_at).getTime() > seen) { liftDot = true; break; }
     }
   }
-  if (liftDot) result["/portal/lift-videos"] = { dot: true };
+  if (unread > 0 || liftDot) {
+    result["/portal/messages"] = {
+      ...(unread > 0 ? { count: unread } : {}),
+      ...(liftDot ? { dot: true } : {}),
+    };
+  }
 
   // Program/phase updates now surface on the Workouts tab
   const programSeen = getLastSeen(user?.id, "/portal/workouts");
