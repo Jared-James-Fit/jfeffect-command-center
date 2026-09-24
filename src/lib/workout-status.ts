@@ -53,7 +53,7 @@ export function getWorkoutStatus(item: WorkoutItem, now: Date = new Date()): {
     if (item.completion?.has_feedback === false) {
       return {
         status: "review_pending",
-        label: "Review pending",
+        label: "Completed · Review pending",
         tone: reviewPendingTone,
         scheduled,
         completedAt,
