@@ -25,7 +25,6 @@ export const adminNav: NavItem[] = [
   { to: "/admin/tasks", label: "Tasks", icon: ListChecks, group: "Core" },
   { to: "/admin/messages", label: "Messages", icon: MessageCircle, group: "Core" },
   { to: "/admin/check-in-reviews", label: "Check-In Reviews", icon: ClipboardList, group: "Core" },
-  { to: "/admin/lift-videos", label: "Lift Reviews", icon: Video, group: "Core" },
   { to: "/admin/training-intelligence", label: "Training Intel", icon: Activity, group: "Core" },
   { to: "/admin/client-action-requests", label: "Action Requests", icon: ClipboardCheck, group: "Core" },
   // COMMUNICATION
@@ -173,7 +172,6 @@ export const clientNav: NavItem[] = [
   { to: "/portal/messages", label: "Messages", icon: MessageCircle },
   { to: "/portal/workouts", label: "Workouts", icon: Activity },
   { to: "/portal/progress", label: "Progress", icon: Camera, keywords: ["progress","photos","videos","bodyweight","measurements","check-in","compare"] },
-  { to: "/portal/lift-videos", label: "Coach Feedback", icon: Video },
   { to: "/portal/nutrition-targets", label: "Nutrition", icon: Apple, keywords: ["nutrition","macros","targets","recipes","meals"] },
   { to: "/portal/check-ins", label: "Check-Ins & Forms", icon: ClipboardCheck },
   { to: "/portal/announcements", label: "Announcements", icon: Megaphone },
