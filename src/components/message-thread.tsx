@@ -2017,6 +2017,19 @@ export function MessageThread({
               }}
             />
 
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => setLiftReviewOpen(true)}
+              disabled={sending || uploading}
+              className="h-9 shrink-0 gap-1 rounded-full px-2.5 text-xs font-semibold text-primary hover:bg-primary/10 hover:text-primary"
+              title={role === "client" ? "Send a lift for review" : "Open this client's lift reviews"}
+            >
+              <Video className="h-4 w-4" />
+              <span>Lift</span>
+            </Button>
+
             {/* Priority selector removed for simplicity. */}
 
             {/* Textarea */}
