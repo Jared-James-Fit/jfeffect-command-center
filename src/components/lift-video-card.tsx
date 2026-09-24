@@ -180,6 +180,7 @@ export function LiftVideoCard({ video, role, userId, onChanged, onEdit, clientNa
   const clientCanEdit = role === "client" && video.uploaded_by === userId && !isReviewed;
   const driveFileId = liftVideoDriveFileId(video);
   const openUrl = liftVideoOpenUrl(video);
+  const isImageMedia = (video.file_type ?? "").startsWith("image/");
   const playablePreviewUrl = signedUrl ?? (video.preview_status === "ready" && video.preview_url && !isDrive(video.preview_url) ? video.preview_url : null);
   const previewReason = playablePreviewUrl
     ? null
@@ -254,7 +255,7 @@ export function LiftVideoCard({ video, role, userId, onChanged, onEdit, clientNa
         <Button asChild className="w-full sm:w-auto">
           <a href={openUrl} target="_blank" rel="noreferrer">
             <ExternalLink className="mr-2 h-4 w-4" />
-            Watch in {driveFileId ? "Drive" : "new tab"} (original quality)
+            Open original {isImageMedia ? "photo" : "video"}
           </a>
         </Button>
       )}
@@ -277,11 +278,11 @@ export function LiftVideoCard({ video, role, userId, onChanged, onEdit, clientNa
           <div className="flex min-h-40 flex-col items-center justify-center gap-3 bg-secondary/30 p-6 text-center text-sm">
             <Loader2 className="h-6 w-6 animate-spin text-primary" />
             <div>
-              <div className="font-medium text-foreground">Video is still uploading…</div>
+              <div className="font-medium text-foreground">Lift media is still uploading…</div>
               <div className="mt-1 text-xs text-muted-foreground">
                 {role === "client"
                   ? "Keep this screen open until upload finishes."
-                  : "Client video has not finished uploading yet."}
+                  : "Client lift media has not finished uploading yet."}
               </div>
             </div>
             {liveUpload?.status === "uploading" && (
@@ -303,6 +304,15 @@ export function LiftVideoCard({ video, role, userId, onChanged, onEdit, clientNa
                 <div className="mt-2 text-xs text-muted-foreground">Re-send this clip from the uploader above to retry.</div>
               )}
             </div>
+          </div>
+        ) : playablePreviewUrl && isImageMedia ? (
+          <div className="flex min-h-40 items-center justify-center bg-black/5 p-2">
+            <img
+              src={playablePreviewUrl}
+              alt={video.exercise || "Lift photo for review"}
+              className="max-h-[70svh] w-full rounded-md object-contain"
+              loading="eager"
+            />
           </div>
         ) : playablePreviewUrl ? (
           <LiftVideoPlayer
@@ -343,7 +353,7 @@ export function LiftVideoCard({ video, role, userId, onChanged, onEdit, clientNa
             </Button>
           </div>
         ) : (
-          <div className="min-h-48 p-6 text-center text-xs text-muted-foreground">Google Drive link missing for this video.</div>
+          <div className="min-h-48 p-6 text-center text-xs text-muted-foreground">Original lift media is missing.</div>
         )}
       </div>
 
