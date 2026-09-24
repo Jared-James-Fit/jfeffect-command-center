@@ -35,27 +35,16 @@ export function getWorkoutStatus(item: WorkoutItem, now: Date = new Date()): {
   );
 
   if (completedAt) {
-    const loggingPctRaw = (item.completion as any)?.logging_percentage;
-    const loggingPct =
-      loggingPctRaw == null || loggingPctRaw === ""
-        ? null
-        : Number(loggingPctRaw);
-    const missingLogs =
-      (item.completion as any)?.completed_with_missing_logs === true ||
-      (loggingPct != null && Number.isFinite(loggingPct) && loggingPct < 100);
-
-    // A workout can be intentionally ended with missing sets. Keep that
-    // visibly amber even after a review so "completed" always means the
-    // training log itself is fully complete.
-    if (missingLogs) {
-      return {
-        status: "incomplete",
-        label: "Incomplete",
-        tone: reviewPendingTone,
-        scheduled,
-        completedAt,
-      };
-    }
+    // Lifecycle completion and logging completeness are separate facts.
+    // Once completed_at exists, the workout itself is finished even when
+    // some prescribed sets were skipped or left unlogged. The completion
+    // row still retains logging_percentage / logging_quality /
+    // completed_with_missing_logs for analytics and workout-detail context;
+    // those fields must never downgrade a finished workout to "Incomplete".
+    //
+    // This matters for real sessions such as meet days, tapers, pivots, or
+    // intentionally skipped accessories where the athlete correctly ends the
+    // workout without logging every prescribed set.
 
     // A workout is not visually "done" for the athlete until the quick
     // post-workout review is submitted. getClientWorkouts attaches
