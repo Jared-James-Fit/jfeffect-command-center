@@ -391,7 +391,7 @@ export function ClientLiftVideoUploader({ clientId, clientName, userId, onSaved 
   }, [clips, activeId]);
 
   const handleSend = async () => {
-    if (clips.length === 0) return toast.error("Add at least one video.");
+    if (clips.length === 0) return toast.error("Add at least one photo or video.");
 
     await runJob({
       title: "Sending to Coach",
@@ -490,15 +490,15 @@ export function ClientLiftVideoUploader({ clientId, clientName, userId, onSaved 
       <div className="rounded-2xl border border-border bg-card p-4 sm:p-5 space-y-4 min-w-0 max-w-full overflow-hidden">
         {/* Header */}
         <div className="space-y-0.5">
-          <div className="text-base font-semibold">Send Lift Video</div>
-          <div className="text-xs text-muted-foreground">Upload or record lifts for Coach Jared to review.</div>
+          <div className="text-base font-semibold">Send Lift for Review</div>
+          <div className="text-xs text-muted-foreground">Send a photo or video and add a quick note for Coach Jared.</div>
         </div>
 
         {/* Hidden inputs */}
         <input
           ref={multiUploadRef}
           type="file"
-          accept="video/mp4,video/quicktime,video/x-m4v,video/*"
+          accept="image/*,video/mp4,video/quicktime,video/x-m4v,video/*"
           multiple
           className="hidden"
           onChange={(e) => { addFiles(e.target.files); if (multiUploadRef.current) multiUploadRef.current.value = ""; }}
@@ -516,11 +516,11 @@ export function ClientLiftVideoUploader({ clientId, clientName, userId, onSaved 
         <div className="grid grid-cols-3 gap-2">
           <Button type="button" variant="outline" size="sm" className="h-10 rounded-xl gap-1.5" onClick={() => openPicker("photos")}>
             <Upload className="h-4 w-4" />
-            <span className="text-xs font-medium">Photos</span>
+            <span className="text-xs font-medium">Photo / Video</span>
           </Button>
           <Button type="button" variant="default" size="sm" className="h-10 rounded-xl gap-1.5" onClick={() => openPicker("record")}>
             <VideoIcon className="h-4 w-4" />
-            <span className="text-xs font-medium">Record Now</span>
+            <span className="text-xs font-medium">Record Video</span>
           </Button>
           <Button type="button" variant={showLinkInput ? "secondary" : "outline"} size="sm" className="h-10 rounded-xl gap-1.5" onClick={() => setShowLinkInput((v) => !v)}>
             <LinkIcon className="h-4 w-4" />
@@ -529,10 +529,10 @@ export function ClientLiftVideoUploader({ clientId, clientName, userId, onSaved 
         </div>
         <div className="rounded-lg border border-border bg-muted/30 px-3 py-2 text-[11px] leading-relaxed text-muted-foreground space-y-1">
           <div>
-            <span className="font-semibold text-foreground">Record Now</span> opens your phone's camera app. If your phone's screen locks mid-recording, the camera app may stop and the clip can be lost.
+            <span className="font-semibold text-foreground">Record Video</span> opens your phone's camera app. If your phone's screen locks mid-recording, the camera app may stop and the clip can be lost.
           </div>
           <div>
-            For longer lifts, <span className="font-semibold text-foreground">record with your normal phone camera</span> and then tap <span className="font-semibold text-foreground">Photos</span> here to upload it. Videos stored in iCloud may take a moment to prepare before this screen opens.
+            For longer lifts, <span className="font-semibold text-foreground">record with your normal phone camera</span> and then tap <span className="font-semibold text-foreground">Photo / Video</span> here to upload it. Videos stored in iCloud may take a moment to prepare before this screen opens.
           </div>
         </div>
 
@@ -576,13 +576,13 @@ export function ClientLiftVideoUploader({ clientId, clientName, userId, onSaved 
               <Upload className={`h-7 w-7 ${isDragging ? "text-primary" : "text-muted-foreground"}`} />
             </div>
             <div className="mt-4 text-base font-semibold text-foreground">
-              {isDragging ? "Drop your video here" : "Drag & drop your lift video"}
+              {isDragging ? "Drop your lift here" : "Drag & drop a lift photo or video"}
             </div>
             <div className="mt-1 text-xs text-muted-foreground">
-              or tap to choose from Photos · MP4 / MOV / video files
+              or tap to choose a photo or video from your phone
             </div>
             <div className="mt-4 inline-flex items-center gap-1.5 rounded-full bg-background/60 px-3 py-1 text-[11px] font-medium text-muted-foreground">
-              <Film className="h-3 w-3" /> No lift videos selected yet
+              <Film className="h-3 w-3" /> No lift media selected yet
             </div>
           </button>
         ) : (
@@ -893,7 +893,7 @@ function SentState({ fileClipCount, onReset }: { fileClipCount: number; onReset:
           Do Not Leave This Screen
         </div>
         <div className="space-y-2 text-sm text-foreground/90">
-          <p>Your video is still uploading.</p>
+          <p>Your lift media is still uploading.</p>
           <p className="text-muted-foreground">
             If you close the app, lock your phone, switch apps, or leave this screen before the upload finishes, the upload may fail.
           </p>
@@ -916,10 +916,10 @@ function SentState({ fileClipCount, onReset }: { fileClipCount: number; onReset:
       </div>
       <div className="text-sm text-muted-foreground">
         {fileClipCount > 0
-          ? "All videos uploaded successfully. Sent to Coach Jared — awaiting review."
+          ? "All lift media uploaded successfully. Sent to Coach Jared — awaiting review."
           : "You'll see feedback here once it's reviewed."}
       </div>
-      <Button className="mt-2" onClick={onReset}>Send another video</Button>
+      <Button className="mt-2" onClick={onReset}>Send another lift</Button>
     </div>
   );
 }
