@@ -38,6 +38,7 @@ export function ComposerPlusMenu({
   onPickCamera,
   onPickPhotos,
   onPickFiles,
+  onLiftReview,
   onPickGif,
   onPickSound,
   onAttach,
@@ -53,6 +54,8 @@ export function ComposerPlusMenu({
   onPickCamera: () => void;
   onPickPhotos: () => void;
   onPickFiles: () => void;
+  /** Direct-message lift review workflow. Opens the shared review/upload sheet. */
+  onLiftReview?: () => void;
   onPickGif?: (g: ChatGif) => void | Promise<void>;
   onPickSound?: (s: ChatSound) => void | Promise<void>;
   /** Admin/coach-only — undefined hides the request tiles. */
@@ -90,6 +93,14 @@ export function ComposerPlusMenu({
       label: "File",
       icon: <FileIcon className="h-6 w-6" />,
       onClick: () => { setOpen(false); onPickFiles(); },
+    },
+    {
+      key: "lift-review",
+      label: role === "client" ? "Lift Review" : "Lift Reviews",
+      icon: <Video className="h-6 w-6" />,
+      onClick: () => { setOpen(false); onLiftReview?.(); },
+      hidden: surface !== "dm" || !onLiftReview,
+      tone: "primary",
     },
     {
       key: "gif",
