@@ -62,6 +62,7 @@ import {
   MessengerCheckinSubmissionCard,
 } from "@/components/messages/messenger-checkin-card";
 import { ensureDueMessengerCheckins } from "@/lib/messenger-checkins.functions";
+import { LiftReviewMessageSheet } from "@/components/messages/lift-review-message-sheet";
 
 function attachIcon(t: MessageAttachment["type"]) {
   if (t === "image") return ImageIcon;
@@ -671,6 +672,7 @@ export function MessageThread({
   const qc = useQueryClient();
   const [body, setBody] = useState("");
   const [attachments, setAttachments] = useState<MessageAttachment[]>([]);
+  const [liftReviewOpen, setLiftReviewOpen] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState<{ name: string; pct: number } | null>(null);
   const uploadAbortRef = useRef<AbortController | null>(null);
@@ -1947,6 +1949,7 @@ export function MessageThread({
               onPickCamera={() => cameraInputRef.current?.click()}
               onPickPhotos={() => photoInputRef.current?.click()}
               onPickFiles={() => fileInputRef.current?.click()}
+              onLiftReview={() => setLiftReviewOpen(true)}
               onInsertText={role === "admin" ? (text) =>
                 setBody((b) => (b ? `${b.replace(/\s+$/, "")} ${text}` : text))
               : undefined}
@@ -2249,6 +2252,15 @@ export function MessageThread({
           })()}
         </SheetContent>
       </Sheet>
+
+      <LiftReviewMessageSheet
+        open={liftReviewOpen}
+        onOpenChange={setLiftReviewOpen}
+        clientId={clientId}
+        role={role}
+        clientName={role === "admin" ? peerName : undefined}
+        clientAvatarPath={role === "admin" ? peerAvatarPath : undefined}
+      />
 
       {/* Single/bulk delete confirmation. */}
       <AlertDialog open={!!confirmDelete} onOpenChange={(o) => { if (!o) setConfirmDelete(null); }}>
