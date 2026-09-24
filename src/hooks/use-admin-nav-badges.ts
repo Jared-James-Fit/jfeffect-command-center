@@ -116,9 +116,12 @@ export function useAdminNavBadgeCounts(enabledOverride?: boolean) {
 export function adminBadgeMap(counts: AdminBadgeCounts | undefined): Record<string, NavBadge> {
   const r: Record<string, NavBadge> = {};
   if (!counts) return r;
-  if (counts.messages > 0) r["/admin/messages"] = { count: counts.messages };
-  if (counts.liftReviews > 0) r["/admin/lift-videos"] = { count: counts.liftReviews };
-  else if (counts.liftUrgent > 0) r["/admin/lift-videos"] = { dot: true };
+  const messageAttention = counts.messages + counts.liftReviews;
+  if (messageAttention > 0) {
+    r["/admin/messages"] = { count: messageAttention };
+  } else if (counts.liftUrgent > 0) {
+    r["/admin/messages"] = { dot: true };
+  }
   if (counts.checkIns > 0) r["/admin/check-ins"] = { count: counts.checkIns };
   if (counts.supportAlerts > 0) r["/admin/support-alerts"] = { count: counts.supportAlerts };
   return r;
