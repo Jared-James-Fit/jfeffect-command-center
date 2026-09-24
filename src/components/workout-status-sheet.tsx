@@ -190,8 +190,8 @@ export function WorkoutStatusSheet({
               <AlertDialogHeader>
                 <AlertDialogTitle>Mark this workout as completed?</AlertDialogTitle>
                 <AlertDialogDescription>
-                  Some sets may still be incomplete. You can mark the workout
-                  completed, but it will stay labelled as partially logged.
+                  Some set logs may still be missing. The workout status will
+                  be Completed; any missing logs remain available in the workout details.
                 </AlertDialogDescription>
               </AlertDialogHeader>
               <AlertDialogFooter>
