@@ -18,7 +18,7 @@ import {
   setConversationStatus, setConversationPriority, PRIORITIES,
   markUnread, markRead,
 } from "@/lib/messages";
-import { Search, ChevronLeft, MoreHorizontal, ExternalLink, Phone, MessageSquare, MailOpen, Mail, Trash2, Archive, Eye } from "lucide-react";
+import { Search, ChevronLeft, MoreHorizontal, ExternalLink, Phone, MessageSquare, MailOpen, Mail, Trash2, Archive, Eye, Video } from "lucide-react";
 import { SwipeableRow } from "@/components/ui/swipeable-row";
 import { toast } from "sonner";
 import { SendSmsDialog } from "@/components/send-sms-dialog";
@@ -121,6 +121,28 @@ export function MessagesInbox({
     },
   });
 
+  const { data: liftReviewItems = [] } = useQuery({
+    queryKey: ["message-lift-review-inbox"],
+    enabled: clients.length > 0,
+    staleTime: 15_000,
+    queryFn: async () => {
+      const { data, error } = await (supabase.from("lift_videos") as any)
+        .select("id, client_id, created_at, updated_at, status, is_urgent")
+        .in("status", ["New Upload", "Awaiting Review", "Watched", "Needs Follow-Up"])
+        .order("updated_at", { ascending: false })
+        .limit(1000);
+      if (error) throw error;
+      return (data ?? []) as Array<{
+        id: string;
+        client_id: string;
+        created_at: string;
+        updated_at: string | null;
+        status: string;
+        is_urgent: boolean | null;
+      }>;
+    },
+  });
+
   // Realtime
   useEffect(() => {
     let pending: ReturnType<typeof setTimeout> | null = null;
@@ -138,6 +160,9 @@ export function MessagesInbox({
       })
       .on("postgres_changes", { event: "*", schema: "public", table: "conversation_state" }, () => {
         scheduleInvalidate(["conversation-states"]);
+      })
+      .on("postgres_changes", { event: "*", schema: "public", table: "lift_videos" }, () => {
+        scheduleInvalidate(["message-lift-review-inbox"]);
       })
       .subscribe();
     return () => {
@@ -168,13 +193,30 @@ export function MessagesInbox({
 
   const stateMap = useMemo(() => new Map(states.map((s) => [s.client_id, s])), [states]);
 
+  const liftReviewsByClient = useMemo(() => {
+    const m = new Map<string, { count: number; latestAt: string; urgent: boolean }>();
+    for (const item of liftReviewItems) {
+      const at = item.updated_at || item.created_at;
+      const current = m.get(item.client_id);
+      if (!current) {
+        m.set(item.client_id, { count: 1, latestAt: at, urgent: !!item.is_urgent });
+      } else {
+        current.count += 1;
+        if (at > current.latestAt) current.latestAt = at;
+        current.urgent = current.urgent || !!item.is_urgent;
+      }
+    }
+    return m;
+  }, [liftReviewItems]);
+
   const conversations = useMemo(() => {
     const items = clients
       .map((c) => {
         const state = stateMap.get(c.id);
         const last = lastByClient.get(c.id);
         const unread = unreadByClient.get(c.id) ?? 0;
-        return { client: c, state, last, unread };
+        const liftReview = liftReviewsByClient.get(c.id) ?? null;
+        return { client: c, state, last, unread, liftReview };
       })
       .filter((it) => {
         if (search) {
@@ -184,8 +226,8 @@ export function MessagesInbox({
         const status = it.state?.status ?? "open";
         const priority = it.state?.priority ?? "Normal";
         switch (filter) {
-          case "Unread": return it.unread > 0;
-          case "Needs Response": return status === "needs_response";
+          case "Unread": return it.unread > 0 || !!it.liftReview;
+          case "Needs Response": return status === "needs_response" || !!it.liftReview;
           case "High Priority": return priority === "High Priority";
           case "Important": return priority === "Important";
           case "Resolved": return status === "resolved";
@@ -194,12 +236,12 @@ export function MessagesInbox({
         }
       })
       .sort((a, b) => {
-        const at = a.last?.created_at ?? "";
-        const bt = b.last?.created_at ?? "";
+        const at = [a.last?.created_at ?? "", a.liftReview?.latestAt ?? ""].sort().pop() ?? "";
+        const bt = [b.last?.created_at ?? "", b.liftReview?.latestAt ?? ""].sort().pop() ?? "";
         return bt.localeCompare(at);
       });
     return items;
-  }, [clients, stateMap, lastByClient, unreadByClient, search, filter]);
+  }, [clients, stateMap, lastByClient, unreadByClient, liftReviewsByClient, search, filter]);
 
   const selected = clients.find((c) => c.id === selectedId);
   const selectedState = selectedId ? stateMap.get(selectedId) : undefined;
@@ -363,7 +405,7 @@ export function MessagesInbox({
         >
           {conversations.length === 0 ? (
             <div className="p-6 text-center text-sm text-muted-foreground">No conversations.</div>
-          ) : conversations.map(({ client, state, last, unread }) => (
+          ) : conversations.map(({ client, state, last, unread, liftReview }) => (
             <SwipeableRow
               key={client.id}
               className="border-b border-border/60"
@@ -421,17 +463,26 @@ export function MessagesInbox({
                   <span className={cn("truncate text-sm", unread > 0 ? "font-bold" : "font-semibold")}>
                     {client.full_name}
                   </span>
-                  {last && (
+                  {(last || liftReview) && (
                     <span className="shrink-0 text-[10px] text-muted-foreground">
-                      {formatDistanceToNow(parseISO(last.created_at), { addSuffix: false })}
+                      {formatDistanceToNow(
+                        parseISO(
+                          (liftReview?.latestAt ?? "") > (last?.created_at ?? "")
+                            ? liftReview!.latestAt
+                            : last!.created_at,
+                        ),
+                        { addSuffix: false },
+                      )}
                     </span>
                   )}
                 </div>
                 <div className="mt-0.5 flex items-center gap-1.5">
-                  <span className={cn("truncate flex-1 text-xs", unread > 0 ? "text-foreground" : "text-muted-foreground")}>
-                    {last
-                      ? (last.sender_role === "admin" ? "You: " : "") + (last.body || "(attachment)")
-                      : "No messages yet"}
+                  <span className={cn("truncate flex-1 text-xs", unread > 0 || liftReview ? "text-foreground" : "text-muted-foreground")}>
+                    {liftReview && liftReview.latestAt >= (last?.created_at ?? "")
+                      ? `Lift review · ${liftReview.count} waiting`
+                      : last
+                        ? (last.sender_role === "admin" ? "You: " : "") + (last.body || "(attachment)")
+                        : "No messages yet"}
                   </span>
                   <UnreadBadge count={unread} />
                 </div>
@@ -439,6 +490,20 @@ export function MessagesInbox({
                   {state?.status === "needs_response" && (
                     <Badge variant="outline" className="border-primary/40 bg-primary/10 text-primary text-[10px]">
                       Needs Response
+                    </Badge>
+                  )}
+                  {liftReview && (
+                    <Badge
+                      variant="outline"
+                      className={cn(
+                        "gap-1 text-[10px]",
+                        liftReview.urgent
+                          ? "border-destructive/40 bg-destructive/10 text-destructive"
+                          : "border-primary/40 bg-primary/10 text-primary",
+                      )}
+                    >
+                      <Video className="h-3 w-3" />
+                      {liftReview.count} Lift {liftReview.count === 1 ? "Review" : "Reviews"}
                     </Badge>
                   )}
                   <PriorityChip priority={state?.priority} />
