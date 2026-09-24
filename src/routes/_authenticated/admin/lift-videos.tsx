@@ -41,7 +41,7 @@ export const Route = createFileRoute("/_authenticated/admin/lift-videos")({
 function LiftVideosRedirect() {
   const navigate = useNavigate();
   useEffect(() => {
-    navigate({ to: "/admin/coaching", search: { tab: "lift-reviews" } as any, replace: true });
+    navigate({ to: "/admin/communication", search: { tab: "messages" } as any, replace: true });
   }, [navigate]);
   return null;
 }
