@@ -37,7 +37,7 @@ export const Route = createFileRoute("/_authenticated/admin/coaching")({
 });
 
 function CoachingWorkspace() {
-  const { tab, open } = Route.useSearch();
+  const { tab } = Route.useSearch();
   const navigate = useNavigate();
   useMemo(() => { try { window.localStorage.setItem(LAST_TAB_KEY, tab); } catch {} }, [tab]);
   const setTab = (n: TabKey) => navigate({ to: "/admin/coaching", search: { tab: n } as any });
