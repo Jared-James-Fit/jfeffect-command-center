@@ -76,7 +76,7 @@ describe("workout lifecycle status", () => {
     );
 
     expect(status.status).toBe("review_pending");
-    expect(status.label).toBe("Review pending");
+    expect(status.label).toBe("Completed · Review pending");
     expect(status.tone).toContain("amber");
   });
 
