@@ -74,9 +74,9 @@ export function WorkoutSubmissionSummary({ open, onOpenChange, summary, workoutT
   return (
     <Dialog open={open} onOpenChange={(v) => { onOpenChange(v); if (!v) onClose?.(); }}>
       <DialogContent
-        className="flex max-h-[92svh] w-[calc(100vw-1.25rem)] max-w-lg flex-col overflow-hidden rounded-3xl border-border/80 p-0 shadow-2xl [&>button]:hidden"
+        className="flex max-h-[88svh] w-[calc(100vw-1rem)] max-w-md flex-col overflow-hidden rounded-[28px] border-border/80 p-0 shadow-2xl [&>button]:hidden"
       >
-        <div className="shrink-0 border-b border-border/70 bg-gradient-to-br from-primary/15 via-primary/5 to-background px-4 pb-3 pt-4 sm:px-5 sm:pt-5">
+        <div className="shrink-0 border-b border-border/70 bg-gradient-to-br from-primary/15 via-primary/5 to-background px-4 pb-3 pt-4 sm:px-5">
           <div className="flex items-start gap-3">
             <div className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-primary/15 text-primary ring-1 ring-primary/15">
               <Trophy className="h-5 w-5" />
@@ -91,18 +91,18 @@ export function WorkoutSubmissionSummary({ open, onOpenChange, summary, workoutT
                   {dateLabel ? ` · ${dateLabel}` : ""}
                 </DialogDescription>
               </DialogHeader>
-              <div className="mt-1.5 text-xs font-semibold leading-snug text-foreground/80">
+              <div className="mt-1 text-[11px] font-semibold leading-snug text-foreground/75">
                 {motivational}
               </div>
             </div>
           </div>
 
           {ratingStars > 0 && (
-            <div className="mt-3 flex items-center gap-1">
+            <div className="mt-2.5 flex items-center gap-1 rounded-full border border-border/70 bg-background/70 px-2.5 py-1.5 w-fit">
               {[1, 2, 3, 4, 5].map((i) => (
                 <Star
                   key={i}
-                  className={`h-4.5 w-4.5 ${i <= ratingStars ? "fill-amber-400 text-amber-400" : "text-muted-foreground/30"}`}
+                  className={`h-4 w-4 ${i <= ratingStars ? "fill-amber-400 text-amber-400" : "text-muted-foreground/25"}`}
                 />
               ))}
               <span className="ml-1 text-[11px] font-bold text-muted-foreground">{ratingStars}/5</span>
@@ -111,14 +111,14 @@ export function WorkoutSubmissionSummary({ open, onOpenChange, summary, workoutT
         </div>
 
         <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-3 sm:px-5">
-          <div className="space-y-3">
+          <div className="space-y-2.5">
             {prList.length > 0 && (
-              <section className="rounded-2xl border border-amber-500/30 bg-amber-500/[0.07] p-3.5">
+              <section className="rounded-2xl border border-amber-500/30 bg-amber-500/[0.07] p-3">
                 <div className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-[0.14em] text-amber-700 dark:text-amber-300">
                   <Trophy className="h-3.5 w-3.5" />
                   Personal records
                 </div>
-                <div className="mt-2 space-y-1.5">
+                <div className="mt-1.5 space-y-1">
                   {prList.slice(0, 5).map((pr) => (
                     <div key={`${pr.exerciseName}-${pr.reps}`} className="text-sm font-bold leading-snug text-foreground">
                       {formatPR(pr)}
@@ -129,12 +129,12 @@ export function WorkoutSubmissionSummary({ open, onOpenChange, summary, workoutT
             )}
 
             {displayTakeaways.length > 0 && (
-              <section className="rounded-2xl border border-border bg-card p-3.5">
+              <section className="rounded-2xl border border-border bg-card p-3">
                 <div className="text-[10px] font-black uppercase tracking-[0.14em] text-muted-foreground">
                   Today's takeaways
                 </div>
-                <div className="mt-2 space-y-2">
-                  {displayTakeaways.slice(0, 4).map((t) => (
+                <div className="mt-1.5 space-y-1.5">
+                  {displayTakeaways.slice(0, 3).map((t) => (
                     <div key={t} className="text-sm leading-snug text-foreground">
                       {t}
                     </div>
@@ -143,56 +143,35 @@ export function WorkoutSubmissionSummary({ open, onOpenChange, summary, workoutT
               </section>
             )}
 
-            <section className="overflow-hidden rounded-2xl border border-border bg-card">
-              <div className="grid grid-cols-2 divide-x divide-border">
-                <MetricHero
-                  label="Workout score"
-                  value={`${summary.score}`}
-                  suffix="/100"
-                  sub={`${summary.completionPct}% completed`}
-                />
-                <MetricHero
-                  label="Est. recovery"
-                  value={recovery.hasData ? `${recovery.score}` : "—"}
-                  suffix={recovery.hasData ? "/100" : ""}
-                  sub={
-                    recovery.hasData
-                      ? recovery.score >= 80 ? "Fresh"
-                        : recovery.score >= 60 ? "Steady"
-                        : recovery.score >= 40 ? "Depleted"
-                        : "Very depleted"
-                      : "Add a review"
-                  }
-                />
-              </div>
+            <div className="grid grid-cols-2 gap-2">
+              <MetricHero
+                label="Workout score"
+                value={`${summary.score}`}
+                suffix="/100"
+                sub={`${summary.completionPct}% completed`}
+              />
+              <MetricHero
+                label="Est. recovery"
+                value={recovery.hasData ? `${recovery.score}` : "—"}
+                suffix={recovery.hasData ? "/100" : ""}
+                sub={
+                  recovery.hasData
+                    ? recovery.score >= 80 ? "Fresh"
+                      : recovery.score >= 60 ? "Steady"
+                      : recovery.score >= 40 ? "Depleted"
+                      : "Very depleted"
+                    : "Add a review"
+                }
+              />
+            </div>
 
-              <div className="grid grid-cols-2 border-t border-border sm:grid-cols-3">
-                <CompactMetric
-                  icon={<Dumbbell className="h-3.5 w-3.5" />}
-                  label="Volume"
-                  value={summary.totalLiftedFmt}
-                />
-                <CompactMetric
-                  icon={<Clock className="h-3.5 w-3.5" />}
-                  label="Duration"
-                  value={durationMin != null && durationMin > 0 ? `${durationMin} min` : "—"}
-                  muted={durationMin == null || durationMin <= 0}
-                  className="border-l border-border"
-                />
-                <CompactMetric
-                  icon={<Flame className="h-3.5 w-3.5" />}
-                  label="Avg RPE"
-                  value={summary.avgRpe != null ? `${summary.avgRpe}` : "—"}
-                  muted={summary.avgRpe == null}
-                  className="col-span-2 border-t border-border sm:col-span-1 sm:border-l sm:border-t-0"
-                />
-              </div>
-            </section>
-
-            <div className="grid grid-cols-3 gap-2">
+            <div className="grid grid-cols-2 gap-2">
+              <MiniStat label="Volume" value={summary.totalLiftedFmt} icon={<Dumbbell className="h-3.5 w-3.5" />} />
+              <MiniStat label="Duration" value={durationMin != null && durationMin > 0 ? `${durationMin} min` : "—"} icon={<Clock className="h-3.5 w-3.5" />} />
               <MiniStat label="Exercises" value={`${summary.exercisesCompleted}/${summary.exercisesTotal}`} icon={<CheckCircle2 className="h-3.5 w-3.5" />} />
               <MiniStat label="Sets" value={`${summary.completedSets}/${summary.prescribedSets}`} icon={<Activity className="h-3.5 w-3.5" />} />
-              <MiniStat label="Reps" value={`${summary.totalReps}`} icon={<Activity className="h-3.5 w-3.5" />} />
+              <MiniStat label="Total reps" value={`${summary.totalReps}`} icon={<Activity className="h-3.5 w-3.5" />} />
+              <MiniStat label="Avg RPE" value={summary.avgRpe != null ? `${summary.avgRpe}` : "—"} icon={<Flame className="h-3.5 w-3.5" />} />
             </div>
 
             {(cardio || summary.missedExercises.length > 0) && (
@@ -254,12 +233,12 @@ function MetricHero({
   sub?: string;
 }) {
   return (
-    <div className="min-w-0 px-3 py-3.5 text-center">
+    <div className="min-w-0 rounded-2xl border border-border bg-card px-3 py-3 text-center">
       <div className="text-[9px] font-black uppercase tracking-[0.14em] text-muted-foreground">
         {label}
       </div>
       <div className="mt-1 flex items-baseline justify-center gap-1">
-        <span className="text-3xl font-black leading-none text-primary">{value}</span>
+        <span className="text-[2rem] font-black leading-none text-primary">{value}</span>
         {suffix && <span className="text-sm font-bold leading-none text-muted-foreground">{suffix}</span>}
       </div>
       {sub && <div className="mt-1 truncate text-[11px] text-muted-foreground">{sub}</div>}
@@ -303,12 +282,12 @@ function MiniStat({
   value: string;
 }) {
   return (
-    <div className="min-w-0 rounded-xl border border-border bg-card px-2.5 py-2.5">
+    <div className="min-w-0 rounded-xl border border-border bg-card px-3 py-2.5">
       <div className="flex items-center gap-1 text-[9px] font-black uppercase tracking-[0.1em] text-muted-foreground">
         <span className="shrink-0">{icon}</span>
         <span className="truncate">{label}</span>
       </div>
-      <div className="mt-0.5 truncate text-lg font-black leading-tight text-foreground">{value}</div>
+      <div className="mt-0.5 truncate text-base font-black leading-tight text-foreground sm:text-lg">{value}</div>
     </div>
   );
 }
