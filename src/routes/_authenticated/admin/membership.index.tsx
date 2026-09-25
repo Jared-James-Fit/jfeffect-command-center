@@ -90,7 +90,7 @@ function MembershipDashboard() {
   };
 
   return (
-    <div className="mx-auto w-full max-w-7xl space-y-6 px-4 md:px-6">
+    <>
       <PageHeader
         title="Membership Admin Dashboard"
         subtitle="JF Membership signups, subscriptions, setup health & content."
@@ -105,7 +105,11 @@ function MembershipDashboard() {
         }
       />
 
-      <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+      <div
+        className="w-full max-w-full space-y-6 overflow-x-hidden p-4 md:p-6"
+        style={{ paddingBottom: "max(env(safe-area-inset-bottom), 6rem)" }}
+      >
+        <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
         <Badge variant="outline" className="border-emerald-500/30 bg-emerald-500/10 text-emerald-300">
           <Sparkles className="mr-1 h-3 w-3" />JF Membership Mode
         </Badge>
@@ -249,7 +253,8 @@ function MembershipDashboard() {
           ) : <div className="text-xs text-muted-foreground">No trials ending in the next 7 days.</div>}
         </Card>
       </section>
-    </div>
+      </div>
+    </>
   );
 }
 
