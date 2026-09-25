@@ -1,6 +1,6 @@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Trophy, Dumbbell, Activity, CheckCircle2, Flame, Clock, Star, ChevronLeft, Heart } from "lucide-react";
+import { Trophy, Dumbbell, Activity, CheckCircle2, Flame, Clock, Star, ChevronLeft, Heart, X, Gauge, Repeat2, CircleX } from "lucide-react";
 import type { WorkoutSummary } from "@/lib/workout-summary";
 import { format } from "date-fns";
 import { computeRecoveryScore } from "@/lib/analytics/recovery-score";
@@ -74,53 +74,68 @@ export function WorkoutSubmissionSummary({ open, onOpenChange, summary, workoutT
   return (
     <Dialog open={open} onOpenChange={(v) => { onOpenChange(v); if (!v) onClose?.(); }}>
       <DialogContent
-        className="flex max-h-[88svh] w-[calc(100vw-1rem)] max-w-md flex-col overflow-hidden rounded-[28px] border-border/80 p-0 shadow-2xl [&>button]:hidden"
+        className="flex max-h-[90svh] w-[calc(100vw-1rem)] max-w-[440px] flex-col overflow-hidden rounded-[24px] border-border/80 bg-background p-0 shadow-2xl [&>button]:hidden"
       >
-        <div className="shrink-0 border-b border-border/70 bg-gradient-to-br from-primary/15 via-primary/5 to-background px-4 pb-3 pt-4 sm:px-5">
+        <header className="shrink-0 border-b border-border/70 bg-gradient-to-b from-primary/[0.09] to-background px-4 pb-3 pt-3.5 sm:px-5">
           <div className="flex items-start gap-3">
-            <div className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-primary/15 text-primary ring-1 ring-primary/15">
+            <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-primary/12 text-primary ring-1 ring-primary/15">
               <Trophy className="h-5 w-5" />
             </div>
+
             <div className="min-w-0 flex-1">
-              <DialogHeader className="space-y-0.5 text-left">
-                <DialogTitle className="text-[1.45rem] font-black leading-tight tracking-tight">
-                  {headline}
-                </DialogTitle>
-                <DialogDescription className="line-clamp-2 text-xs leading-relaxed">
-                  {workoutTitle ?? "Workout"}
-                  {dateLabel ? ` · ${dateLabel}` : ""}
-                </DialogDescription>
-              </DialogHeader>
-              <div className="mt-1 text-[11px] font-semibold leading-snug text-foreground/75">
-                {motivational}
+              <div className="flex items-start justify-between gap-2">
+                <DialogHeader className="min-w-0 space-y-0 text-left">
+                  <DialogTitle className="truncate text-[1.35rem] font-black leading-tight tracking-tight">
+                    {headline}
+                  </DialogTitle>
+                  <DialogDescription className="mt-0.5 line-clamp-1 text-[11px] leading-snug">
+                    {workoutTitle ?? "Workout"}{dateLabel ? ` · ${dateLabel}` : ""}
+                  </DialogDescription>
+                </DialogHeader>
+
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="-mr-1 -mt-1 h-8 w-8 shrink-0 rounded-full text-muted-foreground"
+                  onClick={() => { onOpenChange(false); onClose?.(); }}
+                  aria-label="Close workout summary"
+                >
+                  <X className="h-4 w-4" />
+                </Button>
+              </div>
+
+              <div className="mt-2 flex flex-wrap items-center gap-2">
+                {ratingStars > 0 && (
+                  <div className="flex items-center gap-0.5">
+                    {[1, 2, 3, 4, 5].map((i) => (
+                      <Star
+                        key={i}
+                        className={`h-3.5 w-3.5 ${i <= ratingStars ? "fill-amber-400 text-amber-400" : "text-muted-foreground/20"}`}
+                      />
+                    ))}
+                    <span className="ml-1 text-[10px] font-bold text-muted-foreground">{ratingStars}/5</span>
+                  </div>
+                )}
+                <span className="text-[10px] font-semibold text-foreground/65">
+                  {motivational}
+                </span>
               </div>
             </div>
           </div>
+        </header>
 
-          {ratingStars > 0 && (
-            <div className="mt-2.5 flex items-center gap-1 rounded-full border border-border/70 bg-background/70 px-2.5 py-1.5 w-fit">
-              {[1, 2, 3, 4, 5].map((i) => (
-                <Star
-                  key={i}
-                  className={`h-4 w-4 ${i <= ratingStars ? "fill-amber-400 text-amber-400" : "text-muted-foreground/25"}`}
-                />
-              ))}
-              <span className="ml-1 text-[11px] font-bold text-muted-foreground">{ratingStars}/5</span>
-            </div>
-          )}
-        </div>
-
-        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-3 sm:px-5">
-          <div className="space-y-2.5">
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-3 [scrollbar-width:none] sm:px-5 [&::-webkit-scrollbar]:hidden">
+          <div className="space-y-3">
             {prList.length > 0 && (
-              <section className="rounded-2xl border border-amber-500/30 bg-amber-500/[0.07] p-3">
+              <section className="rounded-2xl border border-amber-500/30 bg-amber-500/[0.06] p-3">
                 <div className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-[0.14em] text-amber-700 dark:text-amber-300">
                   <Trophy className="h-3.5 w-3.5" />
                   Personal records
                 </div>
                 <div className="mt-1.5 space-y-1">
-                  {prList.slice(0, 5).map((pr) => (
-                    <div key={`${pr.exerciseName}-${pr.reps}`} className="text-sm font-bold leading-snug text-foreground">
+                  {prList.slice(0, 4).map((pr) => (
+                    <div key={`${pr.exerciseName}-${pr.reps}`} className="text-[13px] font-bold leading-snug text-foreground">
                       {formatPR(pr)}
                     </div>
                   ))}
@@ -129,13 +144,13 @@ export function WorkoutSubmissionSummary({ open, onOpenChange, summary, workoutT
             )}
 
             {displayTakeaways.length > 0 && (
-              <section className="rounded-2xl border border-border bg-card p-3">
+              <section className="rounded-2xl border border-border/80 bg-card/70 p-3">
                 <div className="text-[10px] font-black uppercase tracking-[0.14em] text-muted-foreground">
                   Today's takeaways
                 </div>
-                <div className="mt-1.5 space-y-1.5">
+                <div className="mt-2 space-y-1.5">
                   {displayTakeaways.slice(0, 3).map((t) => (
-                    <div key={t} className="text-sm leading-snug text-foreground">
+                    <div key={t} className="text-[13px] leading-[1.35] text-foreground">
                       {t}
                     </div>
                   ))}
@@ -145,12 +160,14 @@ export function WorkoutSubmissionSummary({ open, onOpenChange, summary, workoutT
 
             <div className="grid grid-cols-2 gap-2">
               <MetricHero
+                icon={<Gauge className="h-3.5 w-3.5" />}
                 label="Workout score"
                 value={`${summary.score}`}
                 suffix="/100"
-                sub={`${summary.completionPct}% completed`}
+                sub={`${summary.completionPct}% complete`}
               />
               <MetricHero
+                icon={<Heart className="h-3.5 w-3.5" />}
                 label="Est. recovery"
                 value={recovery.hasData ? `${recovery.score}` : "—"}
                 suffix={recovery.hasData ? "/100" : ""}
@@ -165,37 +182,71 @@ export function WorkoutSubmissionSummary({ open, onOpenChange, summary, workoutT
               />
             </div>
 
-            <div className="grid grid-cols-2 gap-2">
-              <MiniStat label="Volume" value={summary.totalLiftedFmt} icon={<Dumbbell className="h-3.5 w-3.5" />} />
-              <MiniStat label="Duration" value={durationMin != null && durationMin > 0 ? `${durationMin} min` : "—"} icon={<Clock className="h-3.5 w-3.5" />} />
-              <MiniStat label="Exercises" value={`${summary.exercisesCompleted}/${summary.exercisesTotal}`} icon={<CheckCircle2 className="h-3.5 w-3.5" />} />
-              <MiniStat label="Sets" value={`${summary.completedSets}/${summary.prescribedSets}`} icon={<Activity className="h-3.5 w-3.5" />} />
-              <MiniStat label="Total reps" value={`${summary.totalReps}`} icon={<Activity className="h-3.5 w-3.5" />} />
-              <MiniStat label="Avg RPE" value={summary.avgRpe != null ? `${summary.avgRpe}` : "—"} icon={<Flame className="h-3.5 w-3.5" />} />
-            </div>
+            <section className="rounded-2xl border border-border/80 bg-card/55 p-3">
+              <div className="mb-2 text-[10px] font-black uppercase tracking-[0.14em] text-muted-foreground">
+                Session stats
+              </div>
+              <div className="grid grid-cols-2 gap-x-3 gap-y-3 sm:grid-cols-3">
+                <CompactStat
+                  icon={<Dumbbell className="h-3.5 w-3.5" />}
+                  label="Volume"
+                  value={summary.totalLiftedFmt}
+                />
+                <CompactStat
+                  icon={<CheckCircle2 className="h-3.5 w-3.5" />}
+                  label="Exercises"
+                  value={`${summary.exercisesCompleted}/${summary.exercisesTotal}`}
+                />
+                <CompactStat
+                  icon={<Activity className="h-3.5 w-3.5" />}
+                  label="Sets"
+                  value={`${summary.completedSets}/${summary.prescribedSets}`}
+                />
+                <CompactStat
+                  icon={<Repeat2 className="h-3.5 w-3.5" />}
+                  label="Reps"
+                  value={`${summary.totalReps}`}
+                />
+                <CompactStat
+                  icon={<Clock className="h-3.5 w-3.5" />}
+                  label="Duration"
+                  value={durationMin != null && durationMin > 0 ? `${durationMin} min` : "—"}
+                />
+                <CompactStat
+                  icon={<Flame className="h-3.5 w-3.5" />}
+                  label="Avg RPE"
+                  value={summary.avgRpe != null ? `${summary.avgRpe}` : "—"}
+                />
+              </div>
+            </section>
 
             {(cardio || summary.missedExercises.length > 0) && (
-              <div className="space-y-2">
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                 {cardio && (
                   <div className="flex items-center gap-2 rounded-xl border border-border bg-card px-3 py-2.5 text-xs">
                     <Heart className="h-4 w-4 shrink-0 text-primary" />
-                    <span className="font-bold">Cardio</span>
-                    <span className="ml-auto font-semibold text-muted-foreground">
-                      {cardio.status === "logged"
-                        ? cardio.minutes && cardio.minutes > 0 ? `Logged · ${cardio.minutes} min` : "Logged"
-                        : cardio.status === "skipped" ? "Skipped" : "Not logged yet"}
-                    </span>
+                    <div className="min-w-0 flex-1">
+                      <div className="font-bold">Cardio</div>
+                      <div className="truncate text-[11px] text-muted-foreground">
+                        {cardio.status === "logged"
+                          ? cardio.minutes && cardio.minutes > 0 ? `Logged · ${cardio.minutes} min` : "Logged"
+                          : cardio.status === "skipped" ? "Skipped" : "Not logged yet"}
+                      </div>
+                    </div>
                   </div>
                 )}
 
                 {summary.missedExercises.length > 0 && (
-                  <div className="rounded-xl border border-amber-500/30 bg-amber-500/[0.07] px-3 py-2.5 text-xs">
-                    <div className="font-bold text-amber-700 dark:text-amber-300">
-                      Skipped / not logged
-                    </div>
-                    <div className="mt-0.5 leading-relaxed text-muted-foreground">
-                      {summary.missedExercises.slice(0, 6).join(", ")}
-                      {summary.missedExercises.length > 6 ? "…" : ""}
+                  <div className="flex items-start gap-2 rounded-xl border border-amber-500/30 bg-amber-500/[0.06] px-3 py-2.5 text-xs">
+                    <CircleX className="mt-0.5 h-4 w-4 shrink-0 text-amber-600 dark:text-amber-300" />
+                    <div className="min-w-0">
+                      <div className="font-bold text-amber-700 dark:text-amber-300">
+                        {summary.missedExercises.length} missed / not logged
+                      </div>
+                      <div className="mt-0.5 line-clamp-2 text-[11px] leading-snug text-muted-foreground">
+                        {summary.missedExercises.slice(0, 4).join(", ")}
+                        {summary.missedExercises.length > 4 ? "…" : ""}
+                      </div>
                     </div>
                   </div>
                 )}
@@ -205,11 +256,11 @@ export function WorkoutSubmissionSummary({ open, onOpenChange, summary, workoutT
         </div>
 
         <DialogFooter
-          className="shrink-0 border-t border-border/70 bg-background/95 px-4 py-3 backdrop-blur sm:px-5"
-          style={{ paddingBottom: "max(env(safe-area-inset-bottom), 0.75rem)" }}
+          className="shrink-0 border-t border-border/70 bg-background/95 px-4 py-2.5 backdrop-blur sm:px-5"
+          style={{ paddingBottom: "max(env(safe-area-inset-bottom), 0.65rem)" }}
         >
           <Button
-            className="h-11 w-full rounded-xl text-sm font-bold"
+            className="h-10 w-full rounded-xl text-sm font-bold"
             onClick={() => { onOpenChange(false); onClose?.(); }}
           >
             <ChevronLeft className="mr-1.5 h-4 w-4" />
@@ -222,31 +273,34 @@ export function WorkoutSubmissionSummary({ open, onOpenChange, summary, workoutT
 }
 
 function MetricHero({
+  icon,
   label,
   value,
   suffix,
   sub,
 }: {
+  icon?: React.ReactNode;
   label: string;
   value: string;
   suffix?: string;
   sub?: string;
 }) {
   return (
-    <div className="min-w-0 rounded-2xl border border-border bg-card px-3 py-3 text-center">
-      <div className="text-[9px] font-black uppercase tracking-[0.14em] text-muted-foreground">
-        {label}
+    <div className="min-w-0 rounded-2xl border border-border/80 bg-card px-3 py-3">
+      <div className="flex items-center gap-1.5 text-[9px] font-black uppercase tracking-[0.12em] text-muted-foreground">
+        {icon}
+        <span className="truncate">{label}</span>
       </div>
-      <div className="mt-1 flex items-baseline justify-center gap-1">
-        <span className="text-[2rem] font-black leading-none text-primary">{value}</span>
-        {suffix && <span className="text-sm font-bold leading-none text-muted-foreground">{suffix}</span>}
+      <div className="mt-1.5 flex min-w-0 items-baseline gap-1">
+        <span className="text-[1.85rem] font-black leading-none text-primary">{value}</span>
+        {suffix && <span className="text-xs font-bold leading-none text-muted-foreground">{suffix}</span>}
       </div>
-      {sub && <div className="mt-1 truncate text-[11px] text-muted-foreground">{sub}</div>}
+      {sub && <div className="mt-1 truncate text-[10px] font-medium text-muted-foreground">{sub}</div>}
     </div>
   );
 }
 
-function MiniStat({
+function CompactStat({
   icon,
   label,
   value,
@@ -256,12 +310,12 @@ function MiniStat({
   value: string;
 }) {
   return (
-    <div className="min-w-0 rounded-xl border border-border bg-card px-3 py-2.5">
+    <div className="min-w-0">
       <div className="flex items-center gap-1 text-[9px] font-black uppercase tracking-[0.1em] text-muted-foreground">
         <span className="shrink-0">{icon}</span>
         <span className="truncate">{label}</span>
       </div>
-      <div className="mt-0.5 truncate text-base font-black leading-tight text-foreground sm:text-lg">{value}</div>
+      <div className="mt-0.5 truncate text-[1.05rem] font-black leading-tight text-foreground">{value}</div>
     </div>
   );
 }
