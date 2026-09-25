@@ -68,12 +68,12 @@ function BillingPage() {
     onError: (e: any) => toast.error(e.message),
   });
 
-  if (isLoading) return <div className="p-6 text-muted-foreground">Loading…</div>;
+  if (isLoading) return <div className="mx-auto w-full max-w-3xl p-6 text-muted-foreground">Loading…</div>;
   const m = data?.member;
   const s = data?.settings;
   const lc = (data as any)?.lifecycle;
 
-  if (!m) return <div className="p-6"><PageHeader title="Billing" /><Card className="p-6 mt-4">No membership on file.</Card></div>;
+  if (!m) return <div className="mx-auto w-full max-w-3xl"><PageHeader title="Billing" /><div className="p-4 md:p-6"><Card className="p-6">No membership on file.</Card></div></div>;
 
   const status = lc?.status ?? m.subscription_status ?? "—";
   const isHold = s?.is_hold;
@@ -89,8 +89,9 @@ function BillingPage() {
   const showCrossAccountLock = !!m.cross_account_locked;
 
   return (
-    <div className="space-y-5 p-4 md:p-6">
+    <div className="mx-auto w-full max-w-3xl pb-safe-bottom">
       <PageHeader title="Billing" subtitle="Manage your JF Membership subscription." />
+      <div className="space-y-5 p-4 md:p-6">
 
       {/* Native: inform user that billing changes must be done on the web */}
       {native && (
@@ -214,6 +215,7 @@ function BillingPage() {
       {!native && (
         <CancelFlow open={cancelOpen} onOpenChange={setCancelOpen} holdPriceDisplay={s?.hold_price_display ?? "$9/month USD"} onDone={() => qc.invalidateQueries({ queryKey: ["my-jf-billing"] })} />
       )}
+      </div>
     </div>
   );
 }
