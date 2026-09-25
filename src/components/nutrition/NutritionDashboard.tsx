@@ -2,7 +2,7 @@ import { type ReactNode } from "react";
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Card } from "@/components/ui/card";
-import { Flame, Beef, Wheat, Cookie, Droplets, Moon, HelpCircle, Calculator } from "lucide-react";
+import { Flame, Beef, Wheat, Cookie, Droplets, Moon, HelpCircle, Calculator, AlertTriangle } from "lucide-react";
 import type { RecipeProfile } from "./RecipeBrowser";
 import { CookbookEntryCard } from "./CookbookSheet";
 import { ensureWaterTarget, formatWater } from "@/lib/water";
@@ -61,7 +61,11 @@ export function NutritionDashboard({
       )}
       <div id="targets" className="scroll-mt-20">
         <SectionErrorBoundary label="Targets">
-          <TargetsStrip targets={targets} userId={userId} />
+          {viewer === "member" && !hasCoachApprovedTargets ? (
+            <SuggestedTargetsSection targets={targets} userId={userId} />
+          ) : (
+            <TargetsStrip targets={targets} userId={userId} />
+          )}
         </SectionErrorBoundary>
       </div>
       <SectionErrorBoundary label="Macro breakdown">
@@ -88,6 +92,62 @@ export function NutritionDashboard({
           <CookbookEntryCard viewer={viewer} />
         </SectionErrorBoundary>
       </div>
+    </div>
+  );
+}
+
+function SuggestedTargetsSection({
+  targets,
+  userId,
+}: {
+  targets?: NutritionTargets;
+  userId?: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const hasSuggestion = Boolean(
+    targets && [targets.calories, targets.protein, targets.carbs, targets.fats].some((v) => v != null),
+  );
+
+  return (
+    <div className="space-y-3">
+      <Card className="border-primary/30 bg-gradient-to-br from-primary/10 to-card p-4">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div className="min-w-0">
+            <div className="flex items-center gap-2 text-sm font-black">
+              <Calculator className="h-4 w-4 text-primary" />
+              Suggested Nutrition Targets
+            </div>
+            <p className="mt-1 text-xs text-muted-foreground">
+              A simple membership estimate you can use as a starting point and adjust based on your results.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setOpen(true)}
+            className="shrink-0 rounded-lg border border-primary/30 bg-primary px-3 py-2 text-xs font-bold text-primary-foreground transition hover:opacity-90"
+          >
+            {hasSuggestion ? "Recalculate" : "Get suggestion"}
+          </button>
+        </div>
+
+        <div className="mt-3 flex items-start gap-2 rounded-lg border border-border/70 bg-background/70 p-3 text-[11px] text-muted-foreground">
+          <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-500" />
+          <p>
+            Suggested targets are general educational estimates for Membership users, not medical advice,
+            a prescription, or individualized nutrition care. Health conditions, medications, pregnancy,
+            training load, recovery, and eating history can change your needs.
+          </p>
+        </div>
+      </Card>
+
+      {hasSuggestion && <TargetsStrip targets={targets} userId={userId} />}
+
+      <MacroCalculatorDialog
+        open={open}
+        onOpenChange={setOpen}
+        viewer="member"
+        hasCoachApprovedTargets={false}
+      />
     </div>
   );
 }
@@ -189,7 +249,7 @@ function QuickActions({
   const [calcOpen, setCalcOpen] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
   return (
-    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+    <div className={viewer === "member" ? "grid grid-cols-1 gap-3" : "grid grid-cols-1 gap-3 sm:grid-cols-2"}>
       <button
         type="button"
         onClick={() => setHelpOpen(true)}
@@ -201,23 +261,27 @@ function QuickActions({
           <div className="text-[11px] text-muted-foreground">FAQ & resources</div>
         </div>
       </button>
-      <button
-        type="button"
-        onClick={() => setCalcOpen(true)}
-        className="flex items-center gap-3 rounded-xl border border-primary/30 bg-gradient-to-br from-primary/10 to-card p-4 text-left transition hover:border-primary active:scale-[0.98]"
-      >
-        <Calculator className="h-6 w-6 text-primary" />
-        <div>
-          <div className="text-sm font-bold leading-tight">Macro Calculator</div>
-          <div className="text-[11px] text-muted-foreground">Calculate your targets</div>
-        </div>
-      </button>
-      <MacroCalculatorDialog
-        open={calcOpen}
-        onOpenChange={setCalcOpen}
-        viewer={viewer}
-        hasCoachApprovedTargets={hasCoachApprovedTargets}
-      />
+      {viewer === "client" && (
+        <>
+          <button
+            type="button"
+            onClick={() => setCalcOpen(true)}
+            className="flex items-center gap-3 rounded-xl border border-primary/30 bg-gradient-to-br from-primary/10 to-card p-4 text-left transition hover:border-primary active:scale-[0.98]"
+          >
+            <Calculator className="h-6 w-6 text-primary" />
+            <div>
+              <div className="text-sm font-bold leading-tight">Macro Calculator</div>
+              <div className="text-[11px] text-muted-foreground">Calculate your targets</div>
+            </div>
+          </button>
+          <MacroCalculatorDialog
+            open={calcOpen}
+            onOpenChange={setCalcOpen}
+            viewer={viewer}
+            hasCoachApprovedTargets={hasCoachApprovedTargets}
+          />
+        </>
+      )}
       <NutritionHelpSheet open={helpOpen} onOpenChange={setHelpOpen} viewer={viewer} />
     </div>
   );
