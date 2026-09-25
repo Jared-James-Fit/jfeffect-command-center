@@ -61,8 +61,9 @@ function AccountPage() {
     }
   };
   return (
-    <div className="mx-auto w-full max-w-3xl space-y-5 px-4 pb-safe-bottom pt-4 md:px-8 md:pt-6">
+    <div className="mx-auto w-full max-w-3xl pb-safe-bottom">
       <PageHeader title="My Account" subtitle="Your membership and access." />
+      <div className="space-y-5 px-4 py-4 md:px-8 md:py-6">
       <Card className="p-6">
         <div className="text-xs uppercase tracking-wider text-muted-foreground">Profile</div>
         <div className="mt-2 font-semibold">{me?.member?.full_name ?? "—"}</div>
@@ -140,6 +141,7 @@ function AccountPage() {
       </Card>
 
       <Button variant="outline" onClick={() => signOut()}>Sign out</Button>
+      </div>
     </div>
   );
 }
