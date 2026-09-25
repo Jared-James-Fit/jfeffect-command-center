@@ -56,6 +56,43 @@ const WEIGHT_CLASS_TAGS: string[] = [
   "76kg", "83kg", "84kg", "84kg+", "93kg", "105kg", "120kg", "120kg+",
 ];
 
+const MEMBERSHIP_PROGRAM_TAG = "membership-app";
+
+function hasMembershipProgramTag(tags: unknown): boolean {
+  return Array.isArray(tags) && tags.some((tag) =>
+    ["membership-app", "membership", "member-program"].includes(String(tag).trim().toLowerCase()),
+  );
+}
+
+function ProgramAudiencePicker({
+  value, onChange,
+}: { value: string; onChange: (next: string) => void }) {
+  const active = hasMembershipProgramTag(tagListFromString(value));
+  return (
+    <div className="space-y-1">
+      <Label className="text-[11px] uppercase tracking-wider text-muted-foreground">
+        Program audience
+      </Label>
+      <div className="flex flex-wrap gap-1.5">
+        <button
+          type="button"
+          onClick={() => onChange(tagsStringWithToggle(value, MEMBERSHIP_PROGRAM_TAG))}
+          className={`rounded-full border px-3 py-1.5 text-[11px] font-semibold transition-colors ${
+            active
+              ? "border-primary bg-primary/10 text-primary"
+              : "border-border text-muted-foreground hover:text-foreground"
+          }`}
+        >
+          Membership App
+        </button>
+        <span className="self-center text-[11px] text-muted-foreground">
+          Use this instead of putting a marker in the program title.
+        </span>
+      </div>
+    </div>
+  );
+}
+
 function tagListFromString(s: string): string[] {
   return s.split(",").map((x) => x.trim()).filter(Boolean);
 }
@@ -167,6 +204,7 @@ const STYLE_LABEL: Record<string, string> = Object.fromEntries(STYLES.map((s) =>
 
 type FilterChip =
   | { kind: "all" }
+  | { kind: "membership" }
   | { kind: "type"; v: TemplateType }
   | { kind: "style"; v: TrainingStyle }
   | { kind: "archived" }
@@ -216,6 +254,9 @@ export function ProgramLibrary({ embedded = false }: { embedded?: boolean } = {}
       rows = rows.filter((t) =>
         (t.tags ?? []).some((tag: string) => String(tag).toLowerCase() === wc),
       );
+    }
+    if (chip.kind === "membership") {
+      rows = rows.filter((t) => hasMembershipProgramTag(t.tags));
     }
     if (chip.kind === "status") {
       const wantReady = chip.v === "ready";
@@ -467,6 +508,7 @@ function FilterChips({ chip, setChip }: { chip: FilterChip; setChip: (c: FilterC
   return (
     <div className="flex flex-wrap gap-1.5">
       <Chip active={chip.kind === "all"} onClick={() => setChip({ kind: "all" })}>All</Chip>
+      <Chip active={chip.kind === "membership"} onClick={() => setChip({ kind: "membership" })}>Membership App</Chip>
       <span className="mx-1 text-muted-foreground">·</span>
       {TEMPLATE_TYPES.map((t) => (
         <Chip key={t.v} active={chip.kind === "type" && chip.v === t.v} onClick={() => setChip({ kind: "type", v: t.v })}>
@@ -524,6 +566,9 @@ function TemplateCard({ tpl, onPreview, onAssign, onShare, onChanged }: { tpl: a
       <div className="flex flex-wrap gap-1 text-[10px]">
         <Badge variant="outline">{TYPE_LABEL[tpl.template_type] ?? tpl.template_type}</Badge>
         <Badge variant="secondary">{STYLE_LABEL[tpl.training_style] ?? tpl.training_style}</Badge>
+        {hasMembershipProgramTag(tpl.tags) && (
+          <Badge className="border-primary/30 bg-primary/10 text-primary" variant="outline">Membership App</Badge>
+        )}
         {tpl.training_focus && <Badge variant="outline">{tpl.training_focus}</Badge>}
         {tpl.status && tpl.status !== "Draft" && <Badge variant="outline">{tpl.status}</Badge>}
         {tpl.archived && <Badge variant="destructive">Archived</Badge>}
@@ -854,6 +899,7 @@ function NewTemplateDialog({ open, onOpenChange, onCreated }: { open: boolean; o
             <Label>Tags (comma-separated)</Label>
             <Input value={form.tags} onChange={(e) => setForm({ ...form, tags: e.target.value })} placeholder="meet-prep, taper, accessories" />
           </div>
+          <ProgramAudiencePicker value={form.tags} onChange={(next) => setForm({ ...form, tags: next })} />
           <WeightClassPicker
             value={form.tags}
             onChange={(next) => setForm({ ...form, tags: next })}
