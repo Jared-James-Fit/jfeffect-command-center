@@ -216,10 +216,18 @@ type LocFilter = "any" | "gym" | "home";
 type DaysFilter = "any" | "1-2" | "3-4" | "5-6" | "7";
 type ExpFilter = "any" | "beginner" | "intermediate" | "advanced";
 
-export function ProgramLibrary({ embedded = false }: { embedded?: boolean } = {}) {
+export function ProgramLibrary({
+  embedded = false,
+  initialAudience = "all",
+}: {
+  embedded?: boolean;
+  initialAudience?: "all" | "membership";
+} = {}) {
   const qc = useQueryClient();
   const [q, setQ] = useState("");
-  const [chip, setChip] = useState<FilterChip>({ kind: "all" });
+  const [chip, setChip] = useState<FilterChip>(
+    initialAudience === "membership" ? { kind: "membership" } : { kind: "all" },
+  );
   const [weightClass, setWeightClass] = useState<string | null>(null);
   const [openNew, setOpenNew] = useState(false);
   const [previewId, setPreviewId] = useState<string | null>(null);
