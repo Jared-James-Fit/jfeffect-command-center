@@ -125,7 +125,7 @@ function MemberWorkouts() {
     : 0;
 
   return (
-    <div className="space-y-4 pb-safe-bottom">
+    <div className="mx-auto w-full max-w-5xl space-y-4 pb-safe-bottom">
       <PageHeader
         title="Workouts"
         subtitle={
