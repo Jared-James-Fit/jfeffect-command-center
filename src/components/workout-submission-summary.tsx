@@ -246,32 +246,6 @@ function MetricHero({
   );
 }
 
-function CompactMetric({
-  icon,
-  label,
-  value,
-  muted,
-  className,
-}: {
-  icon: React.ReactNode;
-  label: string;
-  value: string;
-  muted?: boolean;
-  className?: string;
-}) {
-  return (
-    <div className={`min-w-0 px-3 py-3 ${className ?? ""}`}>
-      <div className="flex items-center gap-1 text-[9px] font-black uppercase tracking-[0.12em] text-muted-foreground">
-        <span className="shrink-0">{icon}</span>
-        <span className="truncate">{label}</span>
-      </div>
-      <div className={`mt-1 truncate text-base font-black leading-tight ${muted ? "text-muted-foreground" : "text-foreground"}`}>
-        {value}
-      </div>
-    </div>
-  );
-}
-
 function MiniStat({
   icon,
   label,
