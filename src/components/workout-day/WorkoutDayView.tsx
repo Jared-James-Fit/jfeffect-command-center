@@ -2138,6 +2138,29 @@ function WorkoutDay({
           </div>
         </div>
       )}
+      {!focusMode && (
+        <div
+          className="pointer-events-none fixed inset-x-0 z-40 px-3 md:hidden"
+          style={{
+            bottom: "calc(var(--bottom-nav-clearance, 96px) + env(safe-area-inset-bottom) + 10px)",
+          }}
+        >
+          <div className="mx-auto flex max-w-3xl justify-start">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => navigate({ to: navigation.backTo })}
+              className="pointer-events-auto h-10 gap-1.5 rounded-full border-border/80 bg-background/95 px-3.5 font-bold shadow-lg backdrop-blur supports-[backdrop-filter]:bg-background/85"
+              aria-label="Back to workouts"
+            >
+              <ArrowLeft className="h-4 w-4" />
+              Workouts
+            </Button>
+          </div>
+        </div>
+      )}
+
       <PageHeader
         backTo={navigation.backTo}
         backLabel="Workouts"
