@@ -39,15 +39,15 @@ function MemberProgress() {
 
   if (!member) {
     return (
-      <>
+      <div className="mx-auto w-full max-w-5xl">
         <PageHeader title="Progress" subtitle="Track your progress." />
-        <div className="p-6"><Card className="p-6 text-center text-sm text-muted-foreground">Loading…</Card></div>
-      </>
+        <div className="p-4 md:p-6"><Card className="p-6 text-center text-sm text-muted-foreground">Loading…</Card></div>
+      </div>
     );
   }
 
   return (
-    <div className="pb-safe-bottom">
+    <div className="mx-auto w-full max-w-5xl pb-safe-bottom">
       <PageHeader title="Progress" subtitle="Photos, videos, weight, and measurements — saved to your account." />
       <ProgressSection
         initialAction={action}
