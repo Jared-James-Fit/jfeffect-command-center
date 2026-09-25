@@ -78,11 +78,11 @@ function SupportPage() {
   };
 
   return (
-    <div className="mx-auto flex h-[calc(100dvh-14.25rem)] min-h-[30rem] w-full max-w-3xl flex-col overflow-hidden border-x border-border/50 bg-background md:my-4 md:h-[calc(100dvh-6rem)] md:min-h-0 md:rounded-2xl md:border">
+    <div className="mx-auto flex h-[calc(100dvh-14.25rem)] w-full max-w-3xl flex-col overflow-hidden border-x border-border/50 bg-background md:my-4 md:h-[calc(100dvh-6rem)] md:min-h-0 md:rounded-2xl md:border">
       <header className="shrink-0 border-b border-border bg-card/95 px-3 py-2.5 backdrop-blur sm:px-4">
         <div className="flex items-center gap-2.5">
           <div className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-primary/10 text-primary">
-            <Headphones className="h-4.5 w-4.5" />
+            <Headphones className="h-4 w-4" />
           </div>
           <div className="min-w-0 flex-1">
             <div className="flex min-w-0 items-center gap-1.5">
