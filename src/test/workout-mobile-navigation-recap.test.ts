@@ -12,6 +12,11 @@ describe("workout mobile navigation and recap UX", () => {
     expect(dayView).toContain("navigate({ to: navigation.backTo })");
   });
 
+  it("keeps completed detail state completed even when logging metadata is partial", () => {
+    expect(dayView).toContain('{reviewSubmitted ? "Completed" : "Completed · Review pending"}');
+    expect(dayView).not.toContain('? "Incomplete"');
+  });
+
   it("keeps the workout recap compact and scannable on mobile", () => {
     expect(recap).toContain("max-h-[88svh]");
     expect(recap).toContain("grid grid-cols-2 gap-2");
