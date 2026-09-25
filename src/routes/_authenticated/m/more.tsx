@@ -99,8 +99,9 @@ function Section({ title, rows }: { title: string; rows: Row[] }) {
 function MorePage() {
   const { signOut } = useAuth();
   return (
-    <div className="mx-auto w-full max-w-3xl space-y-5 px-4 pb-safe-bottom pt-4 md:px-8 md:pt-6">
+    <div className="mx-auto w-full max-w-3xl pb-safe-bottom">
       <PageHeader title="More" subtitle="Manage your membership and account." />
+      <div className="space-y-5 px-4 py-4 md:px-8 md:py-6">
       <Section title="Manage Membership" rows={MANAGE} />
       <Section title="More" rows={MORE_LINKS} />
       <Section title="Account" rows={DANGER} />
@@ -109,6 +110,7 @@ function MorePage() {
           <LogOut className="mr-2 h-4 w-4" />
           Sign out
         </Button>
+      </div>
       </div>
     </div>
   );
