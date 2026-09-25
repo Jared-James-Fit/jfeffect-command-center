@@ -171,10 +171,11 @@ export function PlanLibrary({
   const grouped = effectiveCategory === "all" ? groupBySections(sliced) : null;
 
   return (
-    <div className={cn("space-y-5 pb-24", !hideHeader && "mx-auto w-full max-w-5xl px-4 pt-4 md:px-8 md:pt-6")}>
+    <div className={cn("pb-24", !hideHeader && "mx-auto w-full max-w-5xl")}>
       {!hideHeader && (
         <PageHeader title="Program Library" subtitle="Find a program built around your goals." />
       )}
+      <div className={cn("space-y-5", !hideHeader && "px-4 py-4 md:px-8 md:py-6")}>
 
       <div className="flex items-center gap-1 rounded-md border border-border bg-muted/30 p-0.5 w-fit">
         <button
@@ -383,6 +384,7 @@ export function PlanLibrary({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+      </div>
     </div>
   );
 }
