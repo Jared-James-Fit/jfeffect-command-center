@@ -272,7 +272,7 @@ export const saveCalculatedTargets = createServerFn({ method: "POST" })
           settings_version: 1,
         },
         active: true,
-        pending_review: true,
+        pending_review: false,
       })
       .select("*")
       .single();
