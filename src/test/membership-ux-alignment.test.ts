@@ -7,6 +7,7 @@ const programming = readFileSync("src/routes/_authenticated/admin/programming.ts
 const support = readFileSync("src/routes/_authenticated/m/support.tsx", "utf8");
 const nutrition = readFileSync("src/components/nutrition/NutritionDashboard.tsx", "utf8");
 const calc = readFileSync("src/components/nutrition/MacroCalculatorDialog.tsx", "utf8");
+const macroCalc = calc;
 
 describe("membership UX organization", () => {
   it("keeps membership admin leaves aligned with the main admin layout", () => {
@@ -33,5 +34,12 @@ describe("membership UX organization", () => {
     expect(nutrition).toContain("general educational estimates");
     expect(calc).toContain("Suggested targets only");
     expect(calc).toContain("not medical advice");
+  });
+
+  it("keeps mobile nutrition and support controls unobstructed", () => {
+    expect(macroCalc).toContain('safeTopClose className="h-[95dvh]');
+    expect(macroCalc).toContain('SheetHeader className="py-4 pr-4 pl-28"');
+    expect(support).toContain('h-[calc(100dvh-14.25rem)]');
+    expect(support).toContain('sticky bottom-0 z-20');
   });
 });
