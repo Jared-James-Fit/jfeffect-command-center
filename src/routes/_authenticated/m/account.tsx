@@ -61,7 +61,7 @@ function AccountPage() {
     }
   };
   return (
-    <div className="space-y-6">
+    <div className="mx-auto w-full max-w-3xl space-y-5 px-4 pb-safe-bottom pt-4 md:px-8 md:pt-6">
       <PageHeader title="My Account" subtitle="Your membership and access." />
       <Card className="p-6">
         <div className="text-xs uppercase tracking-wider text-muted-foreground">Profile</div>
