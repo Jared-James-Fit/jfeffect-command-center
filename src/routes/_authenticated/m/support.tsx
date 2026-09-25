@@ -5,13 +5,10 @@ import { useServerFn } from "@tanstack/react-start";
 import { supabase } from "@/integrations/supabase/client";
 import { getMySupportThread, sendSupportMessage, markMyThreadRead, getLiveSupportStatus } from "@/lib/member-support.functions";
 import { formatTicket } from "@/lib/support-ticket";
-import { PageHeader } from "@/components/app-shell";
-import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Send, Info, Clock, Bug, Lightbulb, HelpCircle, MessageCircle, Radio, Ticket } from "lucide-react";
+import { Send, Bug, Lightbulb, HelpCircle, Headphones, Radio, Ticket } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
@@ -20,9 +17,9 @@ export const Route = createFileRoute("/_authenticated/m/support")({ component: S
 type Category = "question" | "bug" | "suggestion";
 
 const CAT_META: Record<Category, { label: string; icon: any; tone: string }> = {
-  question: { label: "Question", icon: HelpCircle, tone: "bg-blue-500/15 text-blue-300 border-blue-500/30" },
-  bug: { label: "Bug report", icon: Bug, tone: "bg-rose-500/15 text-rose-300 border-rose-500/30" },
-  suggestion: { label: "Suggestion", icon: Lightbulb, tone: "bg-amber-500/15 text-amber-300 border-amber-500/30" },
+  question: { label: "Question", icon: HelpCircle, tone: "border-blue-500/30 bg-blue-500/10 text-blue-500" },
+  bug: { label: "Bug", icon: Bug, tone: "border-rose-500/30 bg-rose-500/10 text-rose-500" },
+  suggestion: { label: "Suggestion", icon: Lightbulb, tone: "border-amber-500/30 bg-amber-500/10 text-amber-500" },
 };
 
 function SupportPage() {
@@ -48,27 +45,29 @@ function SupportPage() {
   const endRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    endRef.current?.scrollIntoView({ behavior: "smooth" });
+    endRef.current?.scrollIntoView({ behavior: messages.length > 1 ? "smooth" : "auto" });
     markRead().catch(() => {});
   }, [messages.length]);
 
-  // Realtime
   useEffect(() => {
     if (!thread?.id) return;
     const ch = supabase
       .channel(`m-support-${thread.id}`)
-      .on("postgres_changes", { event: "INSERT", schema: "public", table: "member_support_messages", filter: `thread_id=eq.${thread.id}` }, () => {
-        qc.invalidateQueries({ queryKey: ["m-support"] });
-      })
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "member_support_messages", filter: `thread_id=eq.${thread.id}` },
+        () => qc.invalidateQueries({ queryKey: ["m-support"] }),
+      )
       .subscribe();
     return () => { supabase.removeChannel(ch); };
   }, [thread?.id, qc]);
 
   const submit = async () => {
-    if (!body.trim() || busy) return;
+    const message = body.trim();
+    if (!message || busy) return;
     setBusy(true);
     try {
-      await send({ data: { body: body.trim(), category } });
+      await send({ data: { body: message, category } });
       setBody("");
       await qc.invalidateQueries({ queryKey: ["m-support"] });
     } catch (e: any) {
@@ -79,128 +78,141 @@ function SupportPage() {
   };
 
   return (
-    <div className="mx-auto flex h-[calc(100dvh-7rem)] max-w-3xl flex-col gap-3 px-3 py-4 md:px-6">
-      <PageHeader
-        title="Support"
-        subtitle="Jared's team is here to help with the app, billing, and reports."
-      />
-
-      {thread?.ticket_number != null && (
-        <div className="flex flex-wrap items-center gap-2 text-xs">
-          <Badge variant="outline" className="gap-1 font-mono">
-            <Ticket className="h-3 w-3" /> {formatTicket(thread.ticket_number)}
-          </Badge>
-          <Badge
-            variant="outline"
-            className={cn(
-              "gap-1",
-              liveCount > 0
-                ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-300"
-                : "text-muted-foreground",
-            )}
-          >
-            <Radio className={cn("h-3 w-3", liveCount > 0 && "animate-pulse")} />
-            {liveCount > 0 ? `${liveCount} agent${liveCount === 1 ? "" : "s"} live now` : "No live agents right now"}
-          </Badge>
+    <div className="mx-auto flex h-[calc(100dvh-4.25rem)] w-full max-w-3xl flex-col overflow-hidden border-x border-border/50 bg-background md:my-4 md:h-[calc(100dvh-6rem)] md:rounded-2xl md:border">
+      <header className="flex shrink-0 items-center gap-3 border-b border-border bg-card/95 px-4 py-3 backdrop-blur">
+        <div className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-primary/10 text-primary">
+          <Headphones className="h-5 w-5" />
         </div>
-      )}
-
-      <Card className="border-primary/30 bg-primary/5 p-3 text-xs">
-        <div className="flex items-start gap-2">
-          <Info className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
-          <div className="space-y-1">
-            <div className="font-semibold text-foreground">This is a support channel — not coaching.</div>
-            <p className="text-muted-foreground">
-              Use this to ask questions about the app, report bugs, or share suggestions. Our team monitors it but it is not 1:1 coaching.
-            </p>
-            <p className="flex items-center gap-1.5 text-muted-foreground">
-              <Clock className="h-3 w-3" />
-              Typical response: <span className="font-medium text-foreground">within 24–48 hours</span> (longer on weekends).
-            </p>
-          </div>
-        </div>
-      </Card>
-
-      <Card className="flex flex-1 flex-col overflow-hidden">
-        <div className="flex items-center justify-between gap-2 border-b px-3 py-2 text-xs">
+        <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
-            <MessageCircle className="h-3.5 w-3.5 text-muted-foreground" />
-            <span className="font-semibold">Conversation with Jared's team</span>
+            <h1 className="truncate text-base font-black">JF Effect Support</h1>
+            {thread?.status && (
+              <Badge variant="outline" className="h-5 shrink-0 px-1.5 text-[9px] capitalize">
+                {thread.status}
+              </Badge>
+            )}
           </div>
-          {thread?.status && (
-            <Badge variant="outline" className="capitalize">{thread.status}</Badge>
-          )}
+          <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-muted-foreground">
+            <span>App, account and billing help</span>
+            <span>·</span>
+            <span className={cn("inline-flex items-center gap-1", liveCount > 0 && "text-emerald-500")}>
+              <Radio className={cn("h-2.5 w-2.5", liveCount > 0 && "animate-pulse")} />
+              {liveCount > 0 ? "Team online" : "Usually replies within 24–48h"}
+            </span>
+          </div>
         </div>
+        {thread?.ticket_number != null && (
+          <Badge variant="outline" className="shrink-0 gap-1 font-mono text-[10px]">
+            <Ticket className="h-3 w-3" />
+            {formatTicket(thread.ticket_number)}
+          </Badge>
+        )}
+      </header>
 
-        <div className="flex-1 space-y-2 overflow-y-auto p-3">
-          {messages.length === 0 && (
-            <div className="grid h-full place-items-center text-center text-sm text-muted-foreground">
-              Send your first message — questions, bug reports, or suggestions all welcome.
+      <div className="shrink-0 border-b border-border/60 bg-muted/20 px-4 py-2 text-[11px] text-muted-foreground">
+        Support is for app, billing, account issues and suggestions. Coaching questions belong in your coaching messages.
+      </div>
+
+      <main className="min-h-0 flex-1 space-y-3 overflow-y-auto px-3 py-4 sm:px-4">
+        {messages.length === 0 && (
+          <div className="grid h-full min-h-48 place-items-center px-6 text-center">
+            <div>
+              <Headphones className="mx-auto mb-2 h-7 w-7 text-muted-foreground" />
+              <div className="text-sm font-semibold">How can we help?</div>
+              <div className="mt-1 text-xs text-muted-foreground">
+                Send a message below. Your conversation stays together here just like Messages.
+              </div>
             </div>
-          )}
-          {messages.map((m) => {
-            const isMember = m.sender_role === "member";
-            const cat = (m.category as Category) || "question";
-            const Meta = CAT_META[cat] ?? CAT_META.question;
-            const Icon = Meta.icon;
-            return (
-              <div key={m.id} className={cn("flex", isMember ? "justify-end" : "justify-start")}>
-                <div className={cn("max-w-[85%] space-y-1")}>
-                  {isMember && m.category !== "reply" && (
-                    <Badge variant="outline" className={cn("gap-1 text-[10px]", Meta.tone)}>
-                      <Icon className="h-3 w-3" /> {Meta.label}
-                    </Badge>
-                  )}
-                  {!isMember && (
-                    <div className="text-[10px] font-semibold uppercase tracking-widest text-primary">Jared's team</div>
-                  )}
-                  <div className={cn(
-                    "rounded-lg px-3 py-2 text-sm whitespace-pre-wrap",
+          </div>
+        )}
+
+        {messages.map((m) => {
+          const isMember = m.sender_role === "member";
+          const cat = (m.category as Category) || "question";
+          const Meta = CAT_META[cat] ?? CAT_META.question;
+          const Icon = Meta.icon;
+          return (
+            <div key={m.id} className={cn("flex", isMember ? "justify-end" : "justify-start")}>
+              <div className="max-w-[86%] space-y-1 sm:max-w-[75%]">
+                {!isMember && (
+                  <div className="px-1 text-[10px] font-semibold text-muted-foreground">JF Effect Support</div>
+                )}
+                <div
+                  className={cn(
+                    "rounded-2xl px-3.5 py-2.5 text-sm whitespace-pre-wrap shadow-sm",
                     isMember
-                      ? "bg-primary text-primary-foreground"
-                      : "bg-secondary text-foreground",
-                  )}>
-                    {m.body}
-                  </div>
-                  <div className="text-[10px] text-muted-foreground">
-                    {new Date(m.created_at).toLocaleString()}
-                  </div>
+                      ? "rounded-br-md bg-primary text-primary-foreground"
+                      : "rounded-bl-md border border-border bg-card text-foreground",
+                  )}
+                >
+                  {m.body}
+                </div>
+                <div className={cn("flex items-center gap-1.5 px-1 text-[10px] text-muted-foreground", isMember && "justify-end")}>
+                  {isMember && m.category !== "reply" && (
+                    <span className="inline-flex items-center gap-1">
+                      <Icon className="h-2.5 w-2.5" />
+                      {Meta.label}
+                    </span>
+                  )}
+                  <span>{new Date(m.created_at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}</span>
                 </div>
               </div>
+            </div>
+          );
+        })}
+        <div ref={endRef} />
+      </main>
+
+      <footer
+        className="shrink-0 border-t border-border bg-card/95 px-3 pt-2 backdrop-blur sm:px-4"
+        style={{ paddingBottom: "max(env(safe-area-inset-bottom), 0.75rem)" }}
+      >
+        <div className="mb-2 flex gap-1.5 overflow-x-auto pb-0.5">
+          {(Object.entries(CAT_META) as Array<[Category, (typeof CAT_META)[Category]]>).map(([key, meta]) => {
+            const Icon = meta.icon;
+            const active = category === key;
+            return (
+              <button
+                key={key}
+                type="button"
+                onClick={() => setCategory(key)}
+                className={cn(
+                  "inline-flex h-7 shrink-0 items-center gap-1 rounded-full border px-2.5 text-[10px] font-semibold transition",
+                  active ? meta.tone : "border-border bg-background text-muted-foreground",
+                )}
+              >
+                <Icon className="h-3 w-3" />
+                {meta.label}
+              </button>
             );
           })}
-          <div ref={endRef} />
         </div>
 
-        <div className="border-t p-3 space-y-2">
-          <div className="flex items-center gap-2 text-xs">
-            <span className="text-muted-foreground">Tag this message:</span>
-            <Select value={category} onValueChange={(v) => setCategory(v as Category)}>
-              <SelectTrigger className="h-7 w-40 text-xs"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="question">Question</SelectItem>
-                <SelectItem value="bug">Bug report</SelectItem>
-                <SelectItem value="suggestion">Suggestion</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="flex items-end gap-2">
-            <Textarea
-              rows={2}
-              value={body}
-              onChange={(e) => setBody(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) { e.preventDefault(); submit(); }
-              }}
-              placeholder="Type your message… (Cmd/Ctrl+Enter to send)"
-              className="min-h-[44px] resize-none"
-            />
-            <Button onClick={submit} disabled={busy || !body.trim()} className="h-11">
-              <Send className="h-4 w-4" />
-            </Button>
-          </div>
+        <div className="flex items-end gap-2">
+          <Textarea
+            rows={1}
+            value={body}
+            onChange={(e) => setBody(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
+                e.preventDefault();
+                void submit();
+              }
+            }}
+            placeholder="Message support…"
+            className="max-h-28 min-h-11 resize-none rounded-2xl bg-background"
+          />
+          <Button
+            onClick={() => void submit()}
+            disabled={busy || !body.trim()}
+            size="icon"
+            className="h-11 w-11 shrink-0 rounded-full"
+            aria-label="Send support message"
+          >
+            <Send className="h-4 w-4" />
+          </Button>
         </div>
-      </Card>
+      </footer>
     </div>
   );
 }
