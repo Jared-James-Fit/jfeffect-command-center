@@ -38,7 +38,7 @@ export const Route = createFileRoute("/_authenticated/admin/programming")({
     const audience = raw?.audience === "membership" ? "membership" as const : undefined;
     if (isTab(t)) return { tab: t, audience };
     if (typeof t === "undefined" && typeof window !== "undefined") {
-      try { const s = window.localStorage.getItem(LAST_TAB_KEY); if (isTab(s)) return { tab: s }; } catch {}
+      try { const s = window.localStorage.getItem(LAST_TAB_KEY); if (isTab(s)) return { tab: s, audience }; } catch {}
     }
     return { tab: "programs", audience };
   },
