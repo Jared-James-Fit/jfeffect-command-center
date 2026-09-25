@@ -525,7 +525,7 @@ export function buildMembershipAdminNav(): NavItem[] {
     { to: "/admin/member-plans", label: "Membership Content", icon: Library, group: "Main Menu",
       keywords: ["programs", "workouts", "exercises", "meal plans", "recipes", "resources", "challenges"],
       children: [
-        { to: "/admin/programming", label: "Membership Programs", icon: BookOpen },
+        { to: "/admin/programming?tab=programs&audience=membership", label: "Membership Programs", icon: BookOpen },
         { to: "/admin/program-library", label: "Workout Library", icon: Library },
         { to: "/admin/exercises", label: "Exercise Library", icon: Dumbbell },
         { to: "/admin/nutrition-dashboard", label: "Meal Plans", icon: ChefHat },
