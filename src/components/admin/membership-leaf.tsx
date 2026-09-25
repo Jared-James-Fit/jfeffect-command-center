@@ -4,10 +4,15 @@ import type { ReactNode } from "react";
 
 export function MembershipLeaf({ title, subtitle, children }: { title: string; subtitle?: string; children: ReactNode }) {
   return (
-    <div className="space-y-5">
+    <>
       <PageHeader title={title} subtitle={subtitle} backTo="/admin/membership" backLabel="Membership Dashboard" />
-      {children}
-    </div>
+      <div
+        className="w-full max-w-full space-y-5 overflow-x-hidden p-4 md:p-6"
+        style={{ paddingBottom: "max(env(safe-area-inset-bottom), 6rem)" }}
+      >
+        {children}
+      </div>
+    </>
   );
 }
 
