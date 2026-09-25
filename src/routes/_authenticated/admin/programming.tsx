@@ -33,13 +33,14 @@ const LAST_TAB_KEY = "jf-admin-programming-last-tab";
 const isTab = (v: unknown): v is TabKey => typeof v === "string" && TABS.some((t) => t.value === v);
 
 export const Route = createFileRoute("/_authenticated/admin/programming")({
-  validateSearch: (raw: Record<string, unknown>): { tab: TabKey } => {
+  validateSearch: (raw: Record<string, unknown>): { tab: TabKey; audience?: "membership" } => {
     const t = raw?.tab;
-    if (isTab(t)) return { tab: t };
+    const audience = raw?.audience === "membership" ? "membership" as const : undefined;
+    if (isTab(t)) return { tab: t, audience };
     if (typeof t === "undefined" && typeof window !== "undefined") {
       try { const s = window.localStorage.getItem(LAST_TAB_KEY); if (isTab(s)) return { tab: s }; } catch {}
     }
-    return { tab: "programs" };
+    return { tab: "programs", audience };
   },
   component: ProgrammingWorkspace,
   pendingComponent: ProgrammingSkeleton,
@@ -60,10 +61,13 @@ function ProgrammingSkeleton() {
 }
 
 function ProgrammingWorkspace() {
-  const { tab } = Route.useSearch();
+  const { tab, audience } = Route.useSearch();
   const navigate = useNavigate();
   useMemo(() => { try { window.localStorage.setItem(LAST_TAB_KEY, tab); } catch {} }, [tab]);
-  const setTab = (n: TabKey) => navigate({ to: "/admin/programming", search: { tab: n } as any });
+  const setTab = (n: TabKey) => navigate({
+    to: "/admin/programming",
+    search: { tab: n, ...(audience ? { audience } : {}) } as any,
+  });
   return (
     <>
       <PageHeader title="Programming" subtitle="Programs, exercises, cardio, warm-ups, and recipes." />
@@ -80,7 +84,7 @@ function ProgrammingWorkspace() {
         </div>
       </div>
       <div>
-        {tab === "programs" && <ProgramLibrary embedded />}
+        {tab === "programs" && <ProgramLibrary embedded initialAudience={audience === "membership" ? "membership" : "all"} />}
         {tab === "browse" && <AdminProgramBrowser />}
         {tab === "exercises" && <ExercisesAdmin embedded />}
         {tab === "cardio" && <CardioDashboard embedded />}
