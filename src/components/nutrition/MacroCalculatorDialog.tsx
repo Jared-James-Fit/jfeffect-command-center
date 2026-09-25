@@ -129,7 +129,7 @@ export function MacroCalculatorDialog({
     setSaving(true);
     try {
       await saveFn({ data: { ...computed.input, unitsPreference: units } });
-      toast.success("Targets saved", { description: "Your nutrition targets have been updated." });
+      toast.success("Suggested targets saved", { description: "Your membership estimate is now shown in Nutrition." });
       await queryClient.invalidateQueries({ queryKey: ["m-nutrition-targets"] });
       await queryClient.invalidateQueries({ queryKey: ["water-target"] });
       await queryClient.invalidateQueries({ queryKey: ["m-nutrition-context"] });
@@ -158,10 +158,10 @@ export function MacroCalculatorDialog({
         <div className="sticky top-0 z-10 bg-background border-b">
           <SheetHeader className="p-4">
             <SheetTitle className="flex items-center gap-2">
-              <Calculator className="h-5 w-5 text-primary" /> Macro Calculator
+              <Calculator className="h-5 w-5 text-primary" /> {viewer === "member" ? "Suggested Nutrition Targets" : "Macro Calculator"}
             </SheetTitle>
             <SheetDescription>
-              Estimate calories and macros from your body data and goal.
+              {viewer === "member" ? "Get a general starting-point estimate from your body data and goal." : "Estimate calories and macros from your body data and goal."}
             </SheetDescription>
           </SheetHeader>
         </div>
@@ -174,6 +174,18 @@ export function MacroCalculatorDialog({
               <AlertDescription>
                 Your coach has already set your nutrition targets. You can calculate an estimate,
                 but it will not replace your current plan unless your coach approves it.
+              </AlertDescription>
+            </Alert>
+          )}
+
+          {viewer === "member" && (
+            <Alert>
+              <AlertTriangle className="h-4 w-4" />
+              <AlertTitle>Suggested targets only</AlertTitle>
+              <AlertDescription>
+                Membership nutrition estimates are general educational starting points, not medical advice,
+                a prescription, or individualized care. Your needs can differ based on health, medications,
+                pregnancy, training, recovery, and eating history. If any of those apply, speak with a qualified healthcare professional.
               </AlertDescription>
             </Alert>
           )}
@@ -290,7 +302,7 @@ export function MacroCalculatorDialog({
           {showResults && computed && (
             <>
               <div className="rounded-xl border border-primary/30 bg-gradient-to-br from-primary/10 to-card p-4">
-                <div className="text-[11px] uppercase tracking-widest text-muted-foreground">Suggested daily target</div>
+                <div className="text-[11px] uppercase tracking-widest text-muted-foreground">{viewer === "member" ? "Suggested daily target" : "Estimated daily target"}</div>
                 <div className="mt-1 text-4xl font-black">{computed.result.calories}<span className="ml-1 text-sm font-normal text-muted-foreground">kcal</span></div>
                 <div className="mt-1 text-[11px] text-muted-foreground">
                   Estimated maintenance: {computed.result.tdee} kcal · Goal: {goal} ({intensity})
@@ -322,7 +334,7 @@ export function MacroCalculatorDialog({
                 {viewer === "member" ? (
                   <Button onClick={handleSave} disabled={saving} className="col-span-2">
                     {saving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
-                    Save My Targets
+                    Save Suggested Targets
                   </Button>
                 ) : (
                   <Button asChild className="col-span-2 gap-1.5" onClick={handleSendToCoach}>
