@@ -110,6 +110,17 @@ async function syncSharedTemplatesToLibrary(supabaseAdmin: any) {
   await supabaseAdmin.from("member_plans").insert(rows as any);
 }
 
+const MEMBERSHIP_PROGRAM_TAG = "membership-app";
+
+async function ensureMembershipProgramTag(supabaseAdmin: any, templateId: string, currentTags?: unknown) {
+  const tags = Array.isArray(currentTags) ? currentTags.map((x) => String(x)) : [];
+  if (tags.some((x) => x.toLowerCase() === MEMBERSHIP_PROGRAM_TAG)) return;
+  await supabaseAdmin
+    .from("pl_templates")
+    .update({ tags: [...tags, MEMBERSHIP_PROGRAM_TAG] })
+    .eq("id", templateId);
+}
+
 /* ---------- Admin: linked listing for a program template ---------- */
 
 export const getLinkedLibraryPlan = createServerFn({ method: "POST" })
@@ -163,6 +174,7 @@ export const upsertLibraryListing = createServerFn({ method: "POST" })
     const { data: t, error: te } = await supabaseAdmin
       .from("pl_templates").select("*").eq("id", data.templateId).maybeSingle();
     if (te || !t) throw new Error("Template not found");
+    await ensureMembershipProgramTag(supabaseAdmin, data.templateId, (t as any).tags);
     const payload: any = (t as any).payload ?? { weeks_data: [] };
     const weeks = (t as any).weeks ?? (payload?.weeks_data?.length ?? 4);
     const days  = (t as any).days_per_week ?? (payload?.weeks_data?.[0]?.days?.length ?? 3);
@@ -209,11 +221,16 @@ export const publishLibraryListing = createServerFn({ method: "POST" })
     let templateRevision: number | null = (plan as any).last_published_version ?? null;
     if ((plan as any).source_template_id) {
       const { data: t } = await supabaseAdmin
-        .from("pl_templates").select("payload,payload_revision,weeks,days_per_week")
+        .from("pl_templates").select("payload,payload_revision,weeks,days_per_week,tags")
         .eq("id", (plan as any).source_template_id).maybeSingle();
       if (t) {
         nextPayload = (t as any).payload ?? nextPayload;
         templateRevision = (t as any).payload_revision ?? templateRevision;
+        await ensureMembershipProgramTag(
+          supabaseAdmin,
+          (plan as any).source_template_id,
+          (t as any).tags,
+        );
       }
     }
     const nextVersion = ((plan as any).published_version ?? 0) + 1;
