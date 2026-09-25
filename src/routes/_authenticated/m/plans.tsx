@@ -171,7 +171,7 @@ export function PlanLibrary({
   const grouped = effectiveCategory === "all" ? groupBySections(sliced) : null;
 
   return (
-    <div className="space-y-5 pb-24">
+    <div className={cn("space-y-5 pb-24", !hideHeader && "mx-auto w-full max-w-5xl px-4 pt-4 md:px-8 md:pt-6")}>
       {!hideHeader && (
         <PageHeader title="Program Library" subtitle="Find a program built around your goals." />
       )}
