@@ -99,7 +99,7 @@ function Section({ title, rows }: { title: string; rows: Row[] }) {
 function MorePage() {
   const { signOut } = useAuth();
   return (
-    <div className="space-y-6 pb-safe-bottom">
+    <div className="mx-auto w-full max-w-3xl space-y-5 px-4 pb-safe-bottom pt-4 md:px-8 md:pt-6">
       <PageHeader title="More" subtitle="Manage your membership and account." />
       <Section title="Manage Membership" rows={MANAGE} />
       <Section title="More" rows={MORE_LINKS} />
