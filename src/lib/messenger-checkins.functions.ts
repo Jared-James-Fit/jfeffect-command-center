@@ -254,11 +254,12 @@ export const ensureDueMessengerCheckins = createServerFn({ method: "POST" })
       const taskType = occ.task_type as MessengerCheckinTaskType;
       const today = localDateInTimeZone(occ.client_tz || "UTC");
       const daysUntil = dayDiff(today, occ.due_local_date);
-      // Never backfill old/overdue requests. Weekly check-ins surface one day
-      // before they are due; nutrition reviews surface on the due date.
+      // Never backfill old/overdue requests. Weekly check-ins are due Sunday
+      // night but surface on Friday so clients have the full weekend to submit.
+      // Nutrition reviews still surface on their due date.
       const dueNow =
         taskType === "weekly_checkin"
-          ? daysUntil >= 0 && daysUntil <= 1
+          ? daysUntil >= 0 && daysUntil <= 2
           : daysUntil === 0;
       if (!dueNow) continue;
 
@@ -731,7 +732,13 @@ export const submitMessengerCheckin = createServerFn({ method: "POST" })
         })
         .eq("id", row.occurrence_id);
       try {
-        await ensureNextOccurrence(sb, row.client_id, taskType, new Date());
+        // Seed from just after this occurrence's due time, not from "now".
+        // Otherwise an early Friday submission can recreate another check-in
+        // for the same Sunday.
+        const seedAfter = occurrence?.due_at_utc
+          ? new Date(new Date(occurrence.due_at_utc).getTime() + 1000)
+          : new Date();
+        await ensureNextOccurrence(sb, row.client_id, taskType, seedAfter);
       } catch {
         // Home bootstrap is an idempotent fallback if next-occurrence seeding fails.
       }
