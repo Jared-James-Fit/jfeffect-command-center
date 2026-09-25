@@ -358,7 +358,10 @@ export const completeTaskOccurrence = createServerFn({ method: "POST" })
       .eq("id", data.occurrenceId);
     if (upErr) throw new Error(upErr.message);
 
-    await ensureNextOccurrence(context.supabase, occ.client_id, occ.task_type, new Date());
+    const seedAfter = occ.due_at_utc
+      ? new Date(new Date(occ.due_at_utc).getTime() + 1000)
+      : new Date();
+    await ensureNextOccurrence(context.supabase, occ.client_id, occ.task_type, seedAfter);
     return { ok: true };
   });
 
