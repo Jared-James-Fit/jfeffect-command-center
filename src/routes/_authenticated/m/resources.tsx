@@ -21,8 +21,9 @@ function ResourcesPage() {
   const { data } = useQuery({ queryKey: ["m-resources"], queryFn: () => fetchFn({ data: { kind: "resource" } }) });
   const items: any[] = data?.items ?? [];
   return (
-    <div className="mx-auto w-full max-w-5xl space-y-5 px-4 pb-safe-bottom pt-4 md:px-8 md:pt-6">
+    <div className="mx-auto w-full max-w-5xl pb-safe-bottom">
       <PageHeader title="Resources" subtitle="Guides, PDFs, and videos included in your membership." />
+      <div className="space-y-5 px-4 py-4 md:px-8 md:py-6">
       {items.length === 0 ? (
         <Card className="p-6 text-sm text-muted-foreground">Resource library coming soon.</Card>
       ) : (
@@ -45,6 +46,7 @@ function ResourcesPage() {
           })}
         </div>
       )}
+      </div>
     </div>
   );
 }
