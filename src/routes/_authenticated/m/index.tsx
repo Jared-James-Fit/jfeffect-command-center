@@ -37,11 +37,12 @@ function MemberHome() {
   if (offlineNoCache) return <DashboardOfflineEmpty />;
 
   return (
-    <div className="mx-auto w-full max-w-5xl space-y-5 px-4 pb-safe-bottom pt-4 md:px-8 md:pt-6">
+    <div className="mx-auto w-full max-w-5xl pb-safe-bottom">
       <PageHeader
         title={`Welcome${me?.member?.full_name ? `, ${me.member.full_name.split(" ")[0]}` : ""}`}
         subtitle="Your training at a glance."
       />
+      <div className="space-y-5 px-4 py-4 md:px-8 md:py-6">
       <div className="-mt-3 flex justify-end">
         <DashboardRefreshIndicator />
       </div>
@@ -84,6 +85,7 @@ function MemberHome() {
           </Button>
         </Link>
       </Card>
+      </div>
     </div>
   );
 }
