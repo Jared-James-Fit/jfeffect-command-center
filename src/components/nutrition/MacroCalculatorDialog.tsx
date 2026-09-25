@@ -154,9 +154,9 @@ export function MacroCalculatorDialog({
 
   return (
     <Sheet open={open} onOpenChange={(v) => (v ? onOpenChange(true) : handleClose())}>
-      <SheetContent side="bottom" className="h-[95vh] overflow-y-auto p-0">
+      <SheetContent side="bottom" safeTopClose className="h-[95dvh] overflow-y-auto p-0">
         <div className="sticky top-0 z-10 bg-background border-b">
-          <SheetHeader className="p-4">
+          <SheetHeader className="py-4 pr-4 pl-28">
             <SheetTitle className="flex items-center gap-2">
               <Calculator className="h-5 w-5 text-primary" /> {viewer === "member" ? "Suggested Nutrition Targets" : "Macro Calculator"}
             </SheetTitle>
