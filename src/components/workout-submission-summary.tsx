@@ -78,7 +78,7 @@ export function WorkoutSubmissionSummary({ open, onOpenChange, summary, workoutT
       >
         <header className="shrink-0 border-b border-border/70 bg-gradient-to-b from-primary/[0.09] to-background px-4 pb-3 pt-3.5 sm:px-5">
           <div className="flex items-start gap-3">
-            <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-primary/12 text-primary ring-1 ring-primary/15">
+            <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-primary/[0.12] text-primary ring-1 ring-primary/15">
               <Trophy className="h-5 w-5" />
             </div>
 
@@ -117,7 +117,7 @@ export function WorkoutSubmissionSummary({ open, onOpenChange, summary, workoutT
                     <span className="ml-1 text-[10px] font-bold text-muted-foreground">{ratingStars}/5</span>
                   </div>
                 )}
-                <span className="text-[10px] font-semibold text-foreground/65">
+                <span className="text-[10px] font-semibold text-foreground/[0.65]">
                   {motivational}
                 </span>
               </div>
@@ -182,7 +182,7 @@ export function WorkoutSubmissionSummary({ open, onOpenChange, summary, workoutT
               />
             </div>
 
-            <section className="rounded-2xl border border-border/80 bg-card/55 p-3">
+            <section className="rounded-2xl border border-border/80 bg-card/[0.55] p-3">
               <div className="mb-2 text-[10px] font-black uppercase tracking-[0.14em] text-muted-foreground">
                 Session stats
               </div>
