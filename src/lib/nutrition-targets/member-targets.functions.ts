@@ -64,7 +64,7 @@ export const getActiveMemberTargets = createServerFn({ method: "GET" })
         .eq("member_id", member.id)
         .eq("active", true)
         .maybeSingle();
-      if (data && !(data as any).pending_review) return data;
+      if (data) return data;
     }
     // Fallback: coach/admin-set targets live in `nutrition_targets` (+ `nutrition_target_days`)
     // keyed by the matching `clients.user_id`. Surface those so the member's
@@ -314,7 +314,7 @@ export const saveManualTargets = createServerFn({ method: "POST" })
         fat_g: data.fat_g,
         water_ml: data.water_ml ?? null,
         active: true,
-        pending_review: true,
+        pending_review: false,
       })
       .select("*")
       .single();
