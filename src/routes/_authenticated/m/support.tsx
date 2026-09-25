@@ -78,44 +78,45 @@ function SupportPage() {
   };
 
   return (
-    <div className="mx-auto flex h-[calc(100dvh-4.25rem)] w-full max-w-3xl flex-col overflow-hidden border-x border-border/50 bg-background md:my-4 md:h-[calc(100dvh-6rem)] md:rounded-2xl md:border">
-      <header className="flex shrink-0 items-center gap-3 border-b border-border bg-card/95 px-4 py-3 backdrop-blur">
-        <div className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-primary/10 text-primary">
-          <Headphones className="h-5 w-5" />
-        </div>
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2">
-            <h1 className="truncate text-base font-black">JF Effect Support</h1>
-            {thread?.status && (
-              <Badge variant="outline" className="h-5 shrink-0 px-1.5 text-[9px] capitalize">
-                {thread.status}
-              </Badge>
-            )}
+    <div className="mx-auto flex h-[calc(100dvh-14.25rem)] min-h-[30rem] w-full max-w-3xl flex-col overflow-hidden border-x border-border/50 bg-background md:my-4 md:h-[calc(100dvh-6rem)] md:min-h-0 md:rounded-2xl md:border">
+      <header className="shrink-0 border-b border-border bg-card/95 px-3 py-2.5 backdrop-blur sm:px-4">
+        <div className="flex items-center gap-2.5">
+          <div className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-primary/10 text-primary">
+            <Headphones className="h-4.5 w-4.5" />
           </div>
-          <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-muted-foreground">
-            <span>App, account and billing help</span>
-            <span>·</span>
-            <span className={cn("inline-flex items-center gap-1", liveCount > 0 && "text-emerald-500")}>
-              <Radio className={cn("h-2.5 w-2.5", liveCount > 0 && "animate-pulse")} />
-              {liveCount > 0 ? "Team online" : "Usually replies within 24–48h"}
-            </span>
+          <div className="min-w-0 flex-1">
+            <div className="flex min-w-0 items-center gap-1.5">
+              <h1 className="truncate text-sm font-black sm:text-base">JF Effect Support</h1>
+              {thread?.status && (
+                <Badge variant="outline" className="h-5 shrink-0 px-1.5 text-[9px] capitalize">
+                  {thread.status}
+                </Badge>
+              )}
+            </div>
+            <div className="mt-0.5 flex min-w-0 items-center gap-1.5 text-[10px] text-muted-foreground sm:text-[11px]">
+              <span className={cn("inline-flex shrink-0 items-center gap-1", liveCount > 0 && "text-emerald-500")}>
+                <Radio className={cn("h-2.5 w-2.5", liveCount > 0 && "animate-pulse")} />
+                {liveCount > 0 ? "Team online" : "Replies within 24–48h"}
+              </span>
+              <span>·</span>
+              <span className="truncate">App, billing & account help</span>
+            </div>
           </div>
+          {thread?.ticket_number != null && (
+            <Badge variant="outline" className="shrink-0 gap-1 px-2 font-mono text-[9px] sm:text-[10px]">
+              <Ticket className="h-3 w-3" />
+              {formatTicket(thread.ticket_number)}
+            </Badge>
+          )}
         </div>
-        {thread?.ticket_number != null && (
-          <Badge variant="outline" className="shrink-0 gap-1 font-mono text-[10px]">
-            <Ticket className="h-3 w-3" />
-            {formatTicket(thread.ticket_number)}
-          </Badge>
-        )}
+        <div className="mt-2 rounded-lg bg-muted/35 px-2.5 py-1.5 text-[10px] leading-snug text-muted-foreground">
+          Coaching questions belong in coaching Messages. Use Support for app, billing, account issues and suggestions.
+        </div>
       </header>
 
-      <div className="shrink-0 border-b border-border/60 bg-muted/20 px-4 py-2 text-[11px] text-muted-foreground">
-        Support is for app, billing, account issues and suggestions. Coaching questions belong in your coaching messages.
-      </div>
-
-      <main className="min-h-0 flex-1 space-y-3 overflow-y-auto px-3 py-4 sm:px-4">
+      <main className="min-h-0 flex-1 space-y-3 overflow-y-auto px-3 py-3 sm:px-4">
         {messages.length === 0 && (
-          <div className="grid h-full min-h-48 place-items-center px-6 text-center">
+          <div className="grid h-full min-h-32 place-items-center px-6 py-4 text-center">
             <div>
               <Headphones className="mx-auto mb-2 h-7 w-7 text-muted-foreground" />
               <div className="text-sm font-semibold">How can we help?</div>
@@ -164,7 +165,7 @@ function SupportPage() {
       </main>
 
       <footer
-        className="shrink-0 border-t border-border bg-card/95 px-3 pt-2 backdrop-blur sm:px-4"
+        className="sticky bottom-0 z-20 shrink-0 border-t border-border bg-card/95 px-3 pt-2 backdrop-blur sm:px-4"
         style={{ paddingBottom: "max(env(safe-area-inset-bottom), 0.75rem)" }}
       >
         <div className="mb-2 flex gap-1.5 overflow-x-auto pb-0.5">
