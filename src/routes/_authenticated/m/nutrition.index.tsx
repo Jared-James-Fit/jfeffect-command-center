@@ -1,10 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { Link } from "@tanstack/react-router";
-import { Card } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Calculator } from "lucide-react";
 import { PageHeader } from "@/components/app-shell";
 import { supabase } from "@/integrations/supabase/client";
 import { NutritionDashboard, type NutritionTargets } from "@/components/nutrition/NutritionDashboard";
@@ -59,37 +55,15 @@ function MemberNutrition() {
       }
     : undefined;
 
-  const showSetupCta = !targetsQ.isLoading && !targetsQ.isError && !saved;
-
   return (
-    <>
+    <div className="mx-auto w-full max-w-5xl pb-safe-bottom">
       <PageHeader
         title="Nutrition"
-        subtitle="Targets, recipes, and recovery — all in one place."
+        subtitle="Suggested targets, recipes, and recovery — all in one place."
       />
       <SectionErrorBoundary label="Meal plan">
         <MemberMealPlanPanel />
       </SectionErrorBoundary>
-      {showSetupCta && (
-        <div className="p-4 md:p-6 pb-0">
-          <Card className="flex flex-col items-start gap-3 border-primary/40 bg-gradient-to-br from-primary/10 to-card p-5 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex items-start gap-3">
-              <div className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-primary/15 text-primary">
-                <Calculator className="h-5 w-5" />
-              </div>
-              <div>
-                <div className="font-bold">Set up your nutrition targets</div>
-                <div className="text-xs text-muted-foreground">
-                  A few quick taps — we'll use what we already know about you.
-                </div>
-              </div>
-            </div>
-            <Button asChild className="w-full sm:w-auto">
-              <Link to="/m/nutrition/targets-setup">Calculate My Targets</Link>
-            </Button>
-          </Card>
-        </div>
-      )}
       <SectionErrorBoundary label="Nutrition dashboard" className="mx-4 md:mx-6">
         <NutritionDashboard
           viewer="member"
@@ -102,17 +76,15 @@ function MemberNutrition() {
       {saved && (
         <div className="px-4 md:px-6 -mt-2 mb-4 text-xs text-muted-foreground flex items-center gap-2">
           <span className="rounded-full bg-secondary px-2 py-0.5 uppercase tracking-wide text-[10px] font-semibold">
-            {(saved as any).source === "coach"
-              ? "Set by coach"
-              : (saved as any).source === "manual"
-              ? "Manual"
-              : "Calculated"}
+            {(saved as any).source === "coach" ? "Set by coach" : "Suggested"}
           </span>
-          <Link to="/m/nutrition/targets-manage" className="underline hover:text-foreground">
-            Manage targets
-          </Link>
+          <span>
+            {(saved as any).source === "coach"
+              ? "Coach-set targets are shown above."
+              : "Use Recalculate in Suggested Nutrition Targets whenever you want a fresh estimate."}
+          </span>
         </div>
       )}
-    </>
+    </div>
   );
 }
