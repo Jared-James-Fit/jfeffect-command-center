@@ -1,7 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { PageHeader } from "@/components/app-shell";
+import { MembershipLeaf } from "@/components/admin/membership-leaf";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -66,8 +66,7 @@ function ActionNeededPage() {
   const buckets = data?.buckets ?? {};
 
   return (
-    <div className="space-y-5">
-      <PageHeader title="Action Needed" subtitle="Members who need follow-up to finish setup, billing, or consent." />
+    <MembershipLeaf title="Action Needed" subtitle="Members who need follow-up to finish setup, billing, or consent.">
       {isLoading && <Card className="p-6 text-sm text-muted-foreground">Loading…</Card>}
       {!isLoading && Object.entries(buckets).map(([key, list]: any) => (
         <Card key={key} className="p-4">
@@ -86,6 +85,6 @@ function ActionNeededPage() {
           )}
         </Card>
       ))}
-    </div>
+    </MembershipLeaf>
   );
 }
