@@ -173,6 +173,11 @@ const ReorderExerciseInput = z.object({
   orderedRowIds: z.array(z.string().uuid()).min(1),
 });
 
+const RemoveExerciseInput = z.object({
+  dayId: z.string().uuid(),
+  rowId: z.string().uuid(),
+});
+
 async function assertVisibleDay(supabase: any, dayId: string) {
   // Caller-scoped read intentionally authorizes the day through existing RLS.
   const { data, error } = await supabase
@@ -258,4 +263,35 @@ export const reorderWorkoutExercises = createServerFn({ method: "POST" })
       if (error) throw error;
     }
     return { count: data.orderedRowIds.length };
+  });
+
+
+/**
+ * Remove one prescription row from this workout day only.
+ * This intentionally does not touch sibling days, future weeks, program
+ * templates, or the exercise library. Result/note rows tied to this row are
+ * removed first so the day can be edited safely even without FK cascades.
+ */
+export const removeExerciseFromWorkout = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((data: unknown) => RemoveExerciseInput.parse(data))
+  .handler(async ({ data, context }) => {
+    await assertVisibleDay(context.supabase, data.dayId);
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { data: row, error: rowErr } = await supabaseAdmin
+      .from("pl_exercise_rows")
+      .select("id, day_id")
+      .eq("id", data.rowId)
+      .eq("day_id", data.dayId)
+      .maybeSingle();
+    if (rowErr) throw rowErr;
+    if (!row) throw new Error("Exercise is no longer in this workout");
+
+    const { error: resultsErr } = await supabaseAdmin.from("pl_row_results").delete().eq("row_id", data.rowId);
+    if (resultsErr) throw resultsErr;
+    const { error: notesErr } = await supabaseAdmin.from("pl_exercise_notes").delete().eq("row_id", data.rowId);
+    if (notesErr) throw notesErr;
+    const { error } = await supabaseAdmin.from("pl_exercise_rows").delete().eq("id", data.rowId).eq("day_id", data.dayId);
+    if (error) throw error;
+    return { removedRowId: data.rowId, dayId: data.dayId };
   });
