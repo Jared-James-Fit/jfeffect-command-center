@@ -10,8 +10,8 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { ATHLETE_LEVELS, XP_RULES, levelForXp } from "@/lib/athlete-level";
 import { cn } from "@/lib/utils";
-import { ATHLETE_BADGES, RARITY_STYLE, type AthleteBadge, type BadgeStats } from "@/lib/athlete-badges";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { useBadgeCatalog, useMyAchievements, usePublicAchievements, type AchievementMetrics } from "@/lib/athlete-achievements";
+import { MyAchievementsRow, PublicAchievements } from "@/components/portal/achievements-card";
 import { ArrowLeft } from "lucide-react";
 
 type XpEvent = { id: string; event_type: string; label: string | null; xp: number; occurred_at: string };
@@ -35,11 +35,12 @@ function useXpEvents(clientId: string) {
 
 export function AthleteLevelCard({ clientId }: { clientId: string }) {
   const { data: events = [], isPending } = useXpEvents(clientId);
-  const [open, setOpen] = useState<null | "levels" | "rankings" | "badges">(null);
+  const [open, setOpen] = useState<null | "levels" | "rankings">(null);
   const total = events.reduce((s, e) => s + (e.xp || 0), 0);
   const lvl = levelForXp(total);
   const stats = statsFromEvents(events);
-  const earnedCount = ATHLETE_BADGES.filter((b) => b.earned(stats)).length;
+  const { data: catalog = [] } = useBadgeCatalog();
+  const { data: earned = [] } = useMyAchievements(clientId);
 
   return (
     <>
@@ -65,29 +66,14 @@ export function AthleteLevelCard({ clientId }: { clientId: string }) {
         <div className="mt-1.5 text-xs text-muted-foreground">
           {lvl.next ? `${lvl.remaining.toLocaleString()} XP to ${lvl.next.name}` : "Top level reached — keep building your legacy."}
         </div>
-        <button type="button" onClick={() => setOpen("badges")}
-          className="mt-3 flex w-full items-center justify-between rounded-lg border border-border px-3 py-2 text-left text-xs transition hover:border-primary/40">
-          <span className="flex items-center gap-1.5">
-            <span className="flex -space-x-1">{ATHLETE_BADGES.filter((b) => b.earned(stats)).slice(-4).map((b) => <span key={b.id}>{b.emoji}</span>)}</span>
-            <span className="font-semibold">Badges</span>
-          </span>
-          <span className="text-muted-foreground">{earnedCount}/{ATHLETE_BADGES.length}</span>
-        </button>
+        <MyAchievementsRow catalog={catalog} earned={earned} metrics={stats} />
       </Card>
 
       <Sheet open={open !== null} onOpenChange={(o) => !o && setOpen(null)}>
         <SheetContent side="bottom" className="max-h-[88vh] overflow-y-auto rounded-t-2xl pb-safe-bottom">
           {open === "levels" ? <LevelsView total={lvl.xp} events={events} />
-            : open === "rankings" ? <RankingsView myStats={stats} />
-            : open === "badges" ? (
-              <div className="space-y-4">
-                <SheetHeader className="text-left">
-                  <SheetTitle>Badge Collection</SheetTitle>
-                  <SheetDescription>Tap a badge to see how it's earned. Earned badges are visible to other athletes.</SheetDescription>
-                </SheetHeader>
-                <BadgeGrid stats={stats} showLocked />
-              </div>
-            ) : null}
+            : open === "rankings" ? <RankingsView myStats={stats} myBadgeCount={earned.length} />
+            : null}
         </SheetContent>
       </Sheet>
     </>
@@ -154,49 +140,20 @@ function LevelsView({ total, events }: { total: number; events: XpEvent[] }) {
   );
 }
 
+type BadgeStats = AchievementMetrics;
+
 function statsFromEvents(events: XpEvent[]): BadgeStats {
   const done = events.filter((e) => e.event_type === "workout_completed");
+  const first = done.length ? done[done.length - 1].occurred_at : null;
   return {
     xp: events.reduce((s, e) => s + (e.xp || 0), 0),
-    workoutsCompleted: done.length,
-    workoutsFullyLogged: events.filter((e) => e.event_type === "workout_fully_logged").length,
-    firstWorkoutAt: done.length ? done[done.length - 1].occurred_at : null,
+    workouts_completed: done.length,
+    workouts_fully_logged: events.filter((e) => e.event_type === "workout_fully_logged").length,
+    days_since_first_workout: first ? (Date.now() - new Date(first).getTime()) / 86_400_000 : 0,
   };
 }
 
-export function BadgeGrid({ stats, showLocked }: { stats: BadgeStats; showLocked?: boolean }) {
-  const list = showLocked ? ATHLETE_BADGES : ATHLETE_BADGES.filter((b) => b.earned(stats));
-  if (list.length === 0) return <div className="text-sm text-muted-foreground">No badges yet.</div>;
-  return (
-    <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
-      {list.map((b) => <BadgeTile key={b.id} badge={b} earned={b.earned(stats)} />)}
-    </div>
-  );
-}
-
-function BadgeTile({ badge, earned }: { badge: AthleteBadge; earned: boolean }) {
-  const r = RARITY_STYLE[badge.rarity];
-  return (
-    <Popover>
-      <PopoverTrigger asChild>
-        <button type="button" className={cn("flex min-h-[92px] flex-col items-center justify-center rounded-xl border-2 p-2 text-center transition active:scale-95",
-          earned ? r.ring : "border-dashed border-border opacity-40 grayscale")}>
-          <span className="text-2xl leading-none">{badge.emoji}</span>
-          <span className="mt-1 text-[11px] font-bold leading-tight">{badge.name}</span>
-          <span className={cn("text-[9px] font-semibold uppercase tracking-wider", r.text)}>{r.label}</span>
-        </button>
-      </PopoverTrigger>
-      <PopoverContent className="w-56 text-sm">
-        <div className="font-bold">{badge.emoji} {badge.name}</div>
-        <div className={cn("text-[10px] font-semibold uppercase", r.text)}>{r.label}</div>
-        <p className="mt-1 text-muted-foreground">{badge.description}</p>
-        <p className="mt-1 text-xs font-semibold">{earned ? "Earned" : "Locked"}</p>
-      </PopoverContent>
-    </Popover>
-  );
-}
-
-function CompareView({ clientId, myStats, onBack }: { clientId: string; myStats: BadgeStats; onBack: () => void }) {
+function CompareView({ clientId, myStats, myBadgeCount, onBack }: { clientId: string; myStats: BadgeStats; myBadgeCount: number; onBack: () => void }) {
   const { data: p, isPending } = useQuery({
     queryKey: ["athlete-public-profile", clientId],
     staleTime: 5 * 60_000,
@@ -207,9 +164,7 @@ function CompareView({ clientId, myStats, onBack }: { clientId: string; myStats:
     },
   });
   const theirXp = Number(p?.xp ?? 0);
-  const publicIds = new Set<string>((p?.public_badge_ids ?? []) as string[]);
-  const publicBadges = ATHLETE_BADGES.filter((b) => publicIds.has(b.id));
-  const myBadges = ATHLETE_BADGES.filter((b) => b.earned(myStats));
+  const { data: publicBadges = [] } = usePublicAchievements(clientId);
 
   return (
     <div className="space-y-5">
@@ -225,7 +180,7 @@ function CompareView({ clientId, myStats, onBack }: { clientId: string; myStats:
             <div className="min-w-0">
               <div className="truncate text-lg font-black">{p.display_name}</div>
               <div className="text-xs font-black uppercase tracking-wide text-primary">{levelForXp(theirXp).current.name}</div>
-              <div className="mt-0.5 text-[11px] text-muted-foreground">{theirXp.toLocaleString()} lifetime XP · {publicBadges.length} badges</div>
+              <div className="mt-0.5 text-[11px] text-muted-foreground">{theirXp.toLocaleString()} lifetime XP · {publicBadges.length} achievements</div>
             </div>
           </div>
 
@@ -237,7 +192,7 @@ function CompareView({ clientId, myStats, onBack }: { clientId: string; myStats:
               {[
                 ["Level", levelForXp(myStats.xp).current.name, levelForXp(theirXp).current.name],
                 ["Lifetime XP", myStats.xp.toLocaleString(), theirXp.toLocaleString()],
-                ["Badges", String(myBadges.length), String(publicBadges.length)],
+                ["Badges", String(myBadgeCount), String(publicBadges.length)],
               ].map(([k, a, b]) => (
                 <div key={k} className="grid grid-cols-3 border-t px-3 py-2.5">
                   <span className="text-xs text-muted-foreground">{k}</span>
@@ -248,28 +203,13 @@ function CompareView({ clientId, myStats, onBack }: { clientId: string; myStats:
             </div>
           )}
 
-          <div>
-            <div className="mb-2 flex items-end justify-between">
-              <div>
-                <div className="text-sm font-black">Achievement résumé</div>
-                <div className="text-[11px] text-muted-foreground">Only earned public badges are shared.</div>
-              </div>
-              <span className="text-xs font-bold text-muted-foreground">{publicBadges.length} earned</span>
-            </div>
-            {publicBadges.length === 0 ? (
-              <div className="rounded-2xl border p-4 text-sm text-muted-foreground">No public achievements yet.</div>
-            ) : (
-              <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
-                {publicBadges.map((b) => <BadgeTile key={b.id} badge={b} earned />)}
-              </div>
-            )}
-          </div>
+          <PublicAchievements badges={publicBadges} name={p.display_name} />
         </>
       )}
     </div>
   );
 }
-function RankingsView({ myStats }: { myStats: BadgeStats }) {
+function RankingsView({ myStats, myBadgeCount }: { myStats: BadgeStats; myBadgeCount: number }) {
   const [selected, setSelected] = useState<string | null>(null);
   const { data = [], isPending } = useQuery({
     queryKey: ["athlete-rankings"],
@@ -285,7 +225,7 @@ function RankingsView({ myStats }: { myStats: BadgeStats }) {
   const rest = top.slice(3);
   const me = data.find((r) => r.is_me && r.rank > 10);
 
-  if (selected) return <CompareView clientId={selected} myStats={myStats} onBack={() => setSelected(null)} />;
+  if (selected) return <CompareView clientId={selected} myStats={myStats} myBadgeCount={myBadgeCount} onBack={() => setSelected(null)} />;
 
   return (
     <div className="space-y-4">
@@ -337,7 +277,7 @@ function RankAvatar({ row, size }: { row: RankRow; size: string }) {
 
 function RankLine({ row, onSelect }: { row: RankRow; onSelect: (id: string) => void }) {
   return (
-    <li onClick={() => onSelect(row.client_id)} className={cn("flex cursor-pointer items-center gap-3 px-3 py-2 text-sm hover:bg-muted/40", row.is_me && "bg-primary/10")}>
+    <li role="button" tabIndex={0} onKeyDown={(e) => e.key === "Enter" && onSelect(row.client_id)} onClick={() => onSelect(row.client_id)} className={cn("flex cursor-pointer items-center gap-3 px-3 py-2 text-sm hover:bg-muted/40", row.is_me && "bg-primary/10")}>
       <span className="w-6 text-center font-bold text-muted-foreground">{row.rank}</span>
       <RankAvatar row={row} size="h-8 w-8" />
       <div className="min-w-0 flex-1">
