@@ -59,19 +59,21 @@ export function AthleteLevelCard({ clientId }: { clientId: string }) {
         <div className="mt-1.5 text-xs text-muted-foreground">
           {lvl.next ? `${lvl.remaining.toLocaleString()} XP to ${lvl.next.name}` : "Top level reached — keep building your legacy."}
         </div>
-        <div className="mt-4 space-y-2">
-          <button type="button" onClick={() => setOpen("rankings")} className="flex min-h-14 w-full items-center gap-3 rounded-xl border-2 border-primary/25 bg-primary/5 px-4 py-3 text-left active:scale-[.99]">
-            <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-primary text-primary-foreground"><Trophy className="h-4 w-4" /></span>
-            <span className="min-w-0 flex-1"><span className="block text-sm font-black">View Athlete Rankings</span><span className="block text-[11px] text-muted-foreground">See the JF Athlete XP leaderboard</span></span>
-            <span className="text-xl font-bold text-primary">›</span>
+        <div className="mt-4 overflow-hidden rounded-2xl border bg-muted/20">
+          <button type="button" onClick={() => setOpen("rankings")} className="flex min-h-14 w-full items-center gap-3 border-b px-4 py-3 text-left transition-colors hover:bg-muted/40 active:bg-muted/60">
+            <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary"><Trophy className="h-4 w-4" /></span>
+            <span className="min-w-0 flex-1"><span className="block text-sm font-bold leading-tight">Athlete Rankings</span><span className="mt-0.5 block text-[11px] leading-tight text-muted-foreground">Lifetime XP leaderboard</span></span>
+            <span className="shrink-0 text-xl font-semibold text-primary">›</span>
           </button>
-          <button type="button" onClick={() => setOpen("powerlifting")} className="flex min-h-14 w-full items-center gap-3 rounded-xl border-2 border-primary/25 bg-primary/5 px-4 py-3 text-left active:scale-[.99]">
-            <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-primary text-primary-foreground"><Medal className="h-4 w-4" /></span>
-            <span className="min-w-0 flex-1"><span className="block text-sm font-black">View Powerlifting Records</span><span className="block text-[11px] text-muted-foreground">DOTS, total, squat, bench & deadlift</span></span>
-            <span className="text-xl font-bold text-primary">›</span>
+          <button type="button" onClick={() => setOpen("powerlifting")} className="flex min-h-14 w-full items-center gap-3 border-b px-4 py-3 text-left transition-colors hover:bg-muted/40 active:bg-muted/60">
+            <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary"><Medal className="h-4 w-4" /></span>
+            <span className="min-w-0 flex-1"><span className="block text-sm font-bold leading-tight">Powerlifting Records</span><span className="mt-0.5 block text-[11px] leading-tight text-muted-foreground">DOTS, total & competition PRs</span></span>
+            <span className="shrink-0 text-xl font-semibold text-primary">›</span>
           </button>
-          <button type="button" onClick={() => setOpen("levels")} className="flex min-h-12 w-full items-center justify-between rounded-xl border px-4 py-2.5 text-left active:scale-[.99]">
-            <span className="flex items-center gap-2 text-sm font-bold"><Info className="h-4 w-4 text-primary" /> View Athlete Levels</span><span className="text-lg text-primary">›</span>
+          <button type="button" onClick={() => setOpen("levels")} className="flex min-h-14 w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-muted/40 active:bg-muted/60">
+            <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary"><Info className="h-4 w-4" /></span>
+            <span className="min-w-0 flex-1"><span className="block text-sm font-bold leading-tight">Athlete Levels</span><span className="mt-0.5 block text-[11px] leading-tight text-muted-foreground">See the full progression ladder</span></span>
+            <span className="shrink-0 text-xl font-semibold text-primary">›</span>
           </button>
         </div>
         <MyAchievementsRow catalog={catalog} earned={earned} metrics={stats} />
