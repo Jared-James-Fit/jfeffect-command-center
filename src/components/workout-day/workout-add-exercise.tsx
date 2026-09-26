@@ -53,11 +53,11 @@ export function WorkoutAddExercise({
     },
   });
 
-  const results = useMemo(() => {
+  const results = useMemo<ExerciseLite[]>(() => {
     const q = search.trim();
     if (q.length < 2) return library.slice(0, 30);
     return searchEligibleExercises(library as any, q, { limit: 60 })
-      .map((r: any) => r.exercise as ExerciseLite);
+      .results.map((r: any) => r.exercise as ExerciseLite);
   }, [library, search]);
 
   return (
