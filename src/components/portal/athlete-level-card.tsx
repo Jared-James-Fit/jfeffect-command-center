@@ -35,7 +35,7 @@ function useXpEvents(clientId: string) {
 
 export function AthleteLevelCard({ clientId }: { clientId: string }) {
   const { data: events = [], isPending } = useXpEvents(clientId);
-  const [open, setOpen] = useState<null | "levels" | "rankings">(null);
+  const [open, setOpen] = useState<null | "levels" | "rankings" | "powerlifting">(null);
   const total = events.reduce((s, e) => s + (e.xp || 0), 0);
   const lvl = levelForXp(total);
   const stats = statsFromEvents(events);
@@ -53,19 +53,23 @@ export function AthleteLevelCard({ clientId }: { clientId: string }) {
             </div>
             <div className="text-xs text-muted-foreground">{lvl.xp.toLocaleString()} lifetime XP</div>
           </div>
-          <div className="flex shrink-0 gap-1">
-            <Button variant="ghost" size="sm" className="h-8 px-2" onClick={() => setOpen("rankings")} aria-label="Rankings">
-              <Trophy className="h-4 w-4" />
-            </Button>
-            <Button variant="ghost" size="sm" className="h-8 px-2 text-xs" onClick={() => setOpen("levels")}>
-              <Info className="mr-1 h-4 w-4" /> Levels
-            </Button>
-          </div>
+
         </div>
         <Progress value={lvl.pct} className="mt-3 h-2" />
         <div className="mt-1.5 text-xs text-muted-foreground">
           {lvl.next ? `${lvl.remaining.toLocaleString()} XP to ${lvl.next.name}` : "Top level reached — keep building your legacy."}
         </div>
+        <div className="mt-4 grid grid-cols-2 gap-2">
+          <Button variant="outline" className="h-11 rounded-xl px-2 text-xs font-bold" onClick={() => setOpen("rankings")}>
+            <Trophy className="mr-1.5 h-4 w-4 text-primary" /> Athlete Rankings ›
+          </Button>
+          <Button variant="outline" className="h-11 rounded-xl px-2 text-xs font-bold" onClick={() => setOpen("powerlifting")}>
+            <Medal className="mr-1.5 h-4 w-4 text-primary" /> Powerlifting Records ›
+          </Button>
+        </div>
+        <Button variant="ghost" className="mt-1 h-9 w-full text-xs font-semibold text-muted-foreground" onClick={() => setOpen("levels")}>
+          <Info className="mr-1.5 h-4 w-4" /> View Athlete Levels ›
+        </Button>
         <MyAchievementsRow catalog={catalog} earned={earned} metrics={stats} />
       </Card>
 
