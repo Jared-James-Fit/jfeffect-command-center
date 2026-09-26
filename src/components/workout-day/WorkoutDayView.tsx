@@ -1593,6 +1593,7 @@ function WorkoutDay({
   const recapParam = search.recap === 1;
   const autoOpenedRecapRef = useRef(false);
   const recapFromSubmitRef = useRef(false);
+  const pendingCompletionRecapRef = useRef(false);
 
   // Build a summary from the current rows/results snapshot. Shared by the
   // ?recap=1 deep-link, the post-submit celebration, and the "View Score"
@@ -1667,7 +1668,10 @@ function WorkoutDay({
     if (!client?.id) return false;
     if (completion?.completed_at) {
       qc.invalidateQueries({ queryKey: ["pl-day-completion", dayId] });
-      if (openReviewAfterFinish) setAutoOpenReviewAfterFinish(true);
+      if (openReviewAfterFinish) {
+        pendingCompletionRecapRef.current = true;
+        setAutoOpenReviewAfterFinish(true);
+      }
       return true;
     }
     // flush() now rejects on failure — Finish Workout must still proceed;
@@ -1838,7 +1842,8 @@ function WorkoutDay({
       ]);
     }
     setLastSummary(computed);
-    recapFromSubmitRef.current = true;
+    pendingCompletionRecapRef.current = openReviewAfterFinish;
+    recapFromSubmitRef.current = openReviewAfterFinish;
     if (openReviewAfterFinish) setAutoOpenReviewAfterFinish(true);
     return true;
   }
@@ -2244,7 +2249,7 @@ function WorkoutDay({
                   }}
                   onViewScore={(rating) => {
                     setLastSessionRating(rating);
-                    setTimeout(() => openRecapSummary(), 350);
+                    requestAnimationFrame(() => requestAnimationFrame(openRecapSummary));
                   }}
                   autoOpenReview={autoOpenReviewAfterFinish}
                   onAutoOpenReviewConsumed={() => setAutoOpenReviewAfterFinish(false)}
@@ -2557,7 +2562,7 @@ function WorkoutDay({
             }}
             onViewScore={(rating) => {
               setLastSessionRating(rating);
-              setTimeout(() => openRecapSummary(), 350);
+              requestAnimationFrame(() => requestAnimationFrame(openRecapSummary));
             }}
             autoOpenReview={autoOpenReviewAfterFinish}
             onAutoOpenReviewConsumed={() => setAutoOpenReviewAfterFinish(false)}
