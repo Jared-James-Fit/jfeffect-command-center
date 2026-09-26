@@ -17,6 +17,8 @@ describe("live workout structure editing", () => {
     expect(logger).toContain("Move exercise up");
     expect(logger).toContain("Move exercise down");
     expect(logger).toContain("reorderWorkoutExercises");
+    expect(logger).toContain("moveExerciseTo");
+    expect(logger).toContain("Move to position");
     expect(actions).toContain("orderedRowIds");
   });
 
