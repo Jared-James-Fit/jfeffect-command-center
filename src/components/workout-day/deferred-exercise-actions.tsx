@@ -64,9 +64,11 @@ export function DeferredExerciseHistoryButton({
 export function DeferredExerciseHowToButton({
   exerciseId,
   fallbackName,
+  className,
 }: {
   exerciseId: string | null;
   fallbackName: string;
+  className?: string;
 }) {
   const [requested, setRequested] = useState(false);
 
@@ -76,7 +78,7 @@ export function DeferredExerciseHowToButton({
         size="sm"
         variant="outline"
         onClick={() => setRequested(true)}
-        className="h-7 rounded-full px-2.5 text-xs"
+        className={className ?? "h-7 rounded-full px-2.5 text-xs"}
       >
         <Play className="mr-1 h-3 w-3 fill-current" /> How&nbsp;To
       </Button>
