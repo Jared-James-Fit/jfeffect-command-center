@@ -7,8 +7,9 @@ import {
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Progress } from "@/components/ui/progress";
 import { cn } from "@/lib/utils";
+import { supabase } from "@/integrations/supabase/client";
 import {
-  RARITY_STYLE, featured, progressFor, type AchievementMetrics, type CatalogBadge, type PublicBadge, type Rarity,
+  RARITY_STYLE, RARITY_ORDER, featured, progressFor, type AchievementMetrics, type CatalogBadge, type PublicBadge, type Rarity,
 } from "@/lib/athlete-achievements";
 
 const ICONS: Record<string, LucideIcon> = {
@@ -188,9 +189,11 @@ export function AchievementCelebrations({ clientId, catalog, earned }: {
   const audio=useRef<AudioContext|null>(null);
   useEffect(()=>{(async()=>{
     if(!clientId||!catalog.length||!earned.length)return;
-    const db=supabase as any;
-    const {data:seen}=await db.from("athlete_achievement_views").select("badge_key").eq("client_id",clientId);
-    const seenKeys=new Set((seen??[]).map((x:any)=>x.badge_key));
+    const launchKey=`jf-achievements-launch-v1:${clientId}`;
+    const localKey=`jf-achievements-seen:${clientId}`;
+    // Launch catch-up: deliberately ignore any pre-launch seen state once so every athlete sees all earned badges.
+    const isCatchup=!localStorage.getItem(launchKey);
+    const seenKeys=new Set<string>(isCatchup ? [] : JSON.parse(localStorage.getItem(localKey)||"[]"));
     const byKey=new Map(catalog.map(b=>[b.badge_key,b]));
     const unseen=earned.filter(e=>!seenKeys.has(e.badge_key)).map(e=>{const b=byKey.get(e.badge_key);return b?{...b,earned_at:e.earned_at}:null}).filter(Boolean) as DetailBadge[];
     unseen.sort((a,b)=>RARITY_ORDER[b.rarity]-RARITY_ORDER[a.rarity]||(a.earned_at??"").localeCompare(b.earned_at??""));
@@ -204,8 +207,9 @@ export function AchievementCelebrations({ clientId, catalog, earned }: {
     }catch{}
   };
   const mark=async(b:DetailBadge)=>{const k=`jf-achievements-seen:${clientId}`;const a=new Set<string>(JSON.parse(localStorage.getItem(k)||"[]"));a.add(b.badge_key);localStorage.setItem(k,JSON.stringify([...a]))};
-  const advance=async()=>{const b=queue[index];if(b)await mark(b);ping();if(index<queue.length-1)setIndex(i=>i+1);else setQueue([])};
-  const skip=async()=>{const k=`jf-achievements-seen:${clientId}`;const a=new Set<string>(JSON.parse(localStorage.getItem(k)||"[]"));queue.forEach(b=>a.add(b.badge_key));localStorage.setItem(k,JSON.stringify([...a]));setQueue([])};
+  const advance=async()=>{const b=queue[index];if(b)await mark(b);ping();if(index<queue.length-1)setIndex(i=>i+1);else { finishLaunch(); setQueue([]) }};
+  const finishLaunch=()=>localStorage.setItem(`jf-achievements-launch-v1:${clientId}`,"1");
+  const skip=async()=>{const k=`jf-achievements-seen:${clientId}`;const a=new Set<string>(JSON.parse(localStorage.getItem(k)||"[]"));queue.forEach(b=>a.add(b.badge_key));localStorage.setItem(k,JSON.stringify([...a]));finishLaunch();setQueue([])};
   const b=queue[index]; if(!b)return null; const r=RARITY_STYLE[b.rarity];
   return <div className="fixed inset-0 z-[100] flex items-end justify-center bg-black/45 p-3 backdrop-blur-[2px] sm:items-center" role="dialog" aria-modal="true" aria-label="Achievement unlocked">
     <div className="relative w-full max-w-sm overflow-hidden rounded-3xl border bg-background p-5 text-center shadow-2xl motion-safe:animate-in motion-safe:zoom-in-95 motion-safe:fade-in">
