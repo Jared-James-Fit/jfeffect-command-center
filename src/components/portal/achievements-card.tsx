@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { format } from "date-fns";
 import {
   Award, Calendar, ChartLine, Clock, Crown, Dumbbell, Flag, Flame, Hammer, Lock, Medal, NotebookPen, Shield, Star, Target,
@@ -176,4 +176,49 @@ export function PublicAchievements({ badges, name }: { badges: PublicBadge[]; na
       <DetailSheet badge={detail} onClose={() => setDetail(null)} />
     </div>
   );
+}
+
+
+/** Lightweight, zero-media celebration queue. Uses CSS + WebAudio so it still works in low-data mode. */
+export function AchievementCelebrations({ clientId, catalog, earned }: {
+  clientId: string; catalog: CatalogBadge[]; earned: { badge_key: string; earned_at: string }[];
+}) {
+  const [queue,setQueue]=useState<DetailBadge[]>([]);
+  const [index,setIndex]=useState(0);
+  const audio=useRef<AudioContext|null>(null);
+  useEffect(()=>{(async()=>{
+    if(!clientId||!catalog.length||!earned.length)return;
+    const db=supabase as any;
+    const {data:seen}=await db.from("athlete_achievement_views").select("badge_key").eq("client_id",clientId);
+    const seenKeys=new Set((seen??[]).map((x:any)=>x.badge_key));
+    const byKey=new Map(catalog.map(b=>[b.badge_key,b]));
+    const unseen=earned.filter(e=>!seenKeys.has(e.badge_key)).map(e=>{const b=byKey.get(e.badge_key);return b?{...b,earned_at:e.earned_at}:null}).filter(Boolean) as DetailBadge[];
+    unseen.sort((a,b)=>RARITY_ORDER[b.rarity]-RARITY_ORDER[a.rarity]||(a.earned_at??"").localeCompare(b.earned_at??""));
+    setQueue(unseen);setIndex(0);
+  })()},[clientId,catalog.length,earned.length]);
+  const ping=()=>{
+    try{
+      const C=(window.AudioContext||(window as any).webkitAudioContext); if(!C)return;
+      const ctx=audio.current??new C();audio.current=ctx;
+      [523.25,659.25,783.99].forEach((freq,i)=>{const o=ctx.createOscillator(),g=ctx.createGain();o.frequency.value=freq;o.type="sine";g.gain.setValueAtTime(.0001,ctx.currentTime+i*.07);g.gain.exponentialRampToValueAtTime(.07,ctx.currentTime+i*.07+.015);g.gain.exponentialRampToValueAtTime(.0001,ctx.currentTime+i*.07+.16);o.connect(g);g.connect(ctx.destination);o.start(ctx.currentTime+i*.07);o.stop(ctx.currentTime+i*.07+.18)});
+    }catch{}
+  };
+  const mark=async(b:DetailBadge)=>{const k=`jf-achievements-seen:${clientId}`;const a=new Set<string>(JSON.parse(localStorage.getItem(k)||"[]"));a.add(b.badge_key);localStorage.setItem(k,JSON.stringify([...a]))};
+  const advance=async()=>{const b=queue[index];if(b)await mark(b);ping();if(index<queue.length-1)setIndex(i=>i+1);else setQueue([])};
+  const skip=async()=>{const k=`jf-achievements-seen:${clientId}`;const a=new Set<string>(JSON.parse(localStorage.getItem(k)||"[]"));queue.forEach(b=>a.add(b.badge_key));localStorage.setItem(k,JSON.stringify([...a]));setQueue([])};
+  const b=queue[index]; if(!b)return null; const r=RARITY_STYLE[b.rarity];
+  return <div className="fixed inset-0 z-[100] flex items-end justify-center bg-black/45 p-3 backdrop-blur-[2px] sm:items-center" role="dialog" aria-modal="true" aria-label="Achievement unlocked">
+    <div className="relative w-full max-w-sm overflow-hidden rounded-3xl border bg-background p-5 text-center shadow-2xl motion-safe:animate-in motion-safe:zoom-in-95 motion-safe:fade-in">
+      <div className={cn("pointer-events-none absolute inset-x-0 top-0 h-1",b.rarity==="epic"?"bg-warning":b.rarity==="legendary"?"bg-primary":"bg-primary/70")}/>
+      <div className="text-[10px] font-black uppercase tracking-[.24em] text-muted-foreground">Achievement unlocked</div>
+      <div className="mx-auto mt-4 w-fit motion-safe:animate-bounce"><BadgeIcon icon={b.icon_key} rarity={b.rarity} size="lg"/></div>
+      <div className={cn("mt-3 text-[10px] font-black uppercase tracking-[.2em]",r.text)}>{r.label}</div>
+      <div className="mt-1 text-2xl font-black">{b.name}</div>
+      <div className="mx-auto mt-2 max-w-xs text-sm text-muted-foreground">{b.description}</div>
+      {queue.length>1&&<div className="mt-4 text-xs font-bold text-muted-foreground">{index+1} of {queue.length}</div>}
+      <button type="button" onClick={advance} className="mt-4 min-h-12 w-full rounded-2xl bg-primary px-4 text-sm font-black text-primary-foreground">{index<queue.length-1?"Next achievement":"Awesome"}</button>
+      {queue.length>1&&<button type="button" onClick={skip} className="mt-1 min-h-10 w-full text-xs font-semibold text-muted-foreground">Skip all</button>}
+      <div className="mt-2 text-[9px] text-muted-foreground">Sound plays after you tap · no downloads needed</div>
+    </div>
+  </div>;
 }
