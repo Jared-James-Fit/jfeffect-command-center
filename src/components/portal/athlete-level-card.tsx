@@ -10,8 +10,9 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { ATHLETE_LEVELS, XP_RULES, levelForXp } from "@/lib/athlete-level";
 import { cn } from "@/lib/utils";
-import { ATHLETE_BADGES, RARITY_STYLE, type AthleteBadge, type BadgeStats } from "@/lib/athlete-badges";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { type BadgeStats } from "@/lib/athlete-badges";
+import { AchievementsCard, PublicBadgeStrip } from "@/components/portal/achievements-card";
+
 import { ArrowLeft } from "lucide-react";
 
 type XpEvent = { id: string; event_type: string; label: string | null; xp: number; occurred_at: string };
@@ -35,11 +36,10 @@ function useXpEvents(clientId: string) {
 
 export function AthleteLevelCard({ clientId }: { clientId: string }) {
   const { data: events = [], isPending } = useXpEvents(clientId);
-  const [open, setOpen] = useState<null | "levels" | "rankings" | "badges">(null);
+  const [open, setOpen] = useState<null | "levels" | "rankings">(null);
   const total = events.reduce((s, e) => s + (e.xp || 0), 0);
   const lvl = levelForXp(total);
   const stats = statsFromEvents(events);
-  const earnedCount = ATHLETE_BADGES.filter((b) => b.earned(stats)).length;
 
   return (
     <>
@@ -65,31 +65,16 @@ export function AthleteLevelCard({ clientId }: { clientId: string }) {
         <div className="mt-1.5 text-xs text-muted-foreground">
           {lvl.next ? `${lvl.remaining.toLocaleString()} XP to ${lvl.next.name}` : "Top level reached — keep building your legacy."}
         </div>
-        <button type="button" onClick={() => setOpen("badges")}
-          className="mt-3 flex w-full items-center justify-between rounded-lg border border-border px-3 py-2 text-left text-xs transition hover:border-primary/40">
-          <span className="flex items-center gap-1.5">
-            <span className="flex -space-x-1">{ATHLETE_BADGES.filter((b) => b.earned(stats)).slice(-4).map((b) => <span key={b.id}>{b.emoji}</span>)}</span>
-            <span className="font-semibold">Badges</span>
-          </span>
-          <span className="text-muted-foreground">{earnedCount}/{ATHLETE_BADGES.length}</span>
-        </button>
       </Card>
 
       <Sheet open={open !== null} onOpenChange={(o) => !o && setOpen(null)}>
         <SheetContent side="bottom" className="max-h-[88vh] overflow-y-auto rounded-t-2xl pb-safe-bottom">
           {open === "levels" ? <LevelsView total={lvl.xp} events={events} />
             : open === "rankings" ? <RankingsView myStats={stats} />
-            : open === "badges" ? (
-              <div className="space-y-4">
-                <SheetHeader className="text-left">
-                  <SheetTitle>Badge Collection</SheetTitle>
-                  <SheetDescription>Tap a badge to see how it's earned. Earned badges are visible to other athletes.</SheetDescription>
-                </SheetHeader>
-                <BadgeGrid stats={stats} showLocked />
-              </div>
-            ) : null}
+            : null}
         </SheetContent>
       </Sheet>
+      <AchievementsCard clientId={clientId} stats={stats} />
     </>
   );
 }
@@ -154,7 +139,7 @@ function LevelsView({ total, events }: { total: number; events: XpEvent[] }) {
   );
 }
 
-function statsFromEvents(events: XpEvent[]): BadgeStats {
+export function statsFromEvents(events: XpEvent[]): BadgeStats {
   const done = events.filter((e) => e.event_type === "workout_completed");
   return {
     xp: events.reduce((s, e) => s + (e.xp || 0), 0),
@@ -162,38 +147,6 @@ function statsFromEvents(events: XpEvent[]): BadgeStats {
     workoutsFullyLogged: events.filter((e) => e.event_type === "workout_fully_logged").length,
     firstWorkoutAt: done.length ? done[done.length - 1].occurred_at : null,
   };
-}
-
-export function BadgeGrid({ stats, showLocked }: { stats: BadgeStats; showLocked?: boolean }) {
-  const list = showLocked ? ATHLETE_BADGES : ATHLETE_BADGES.filter((b) => b.earned(stats));
-  if (list.length === 0) return <div className="text-sm text-muted-foreground">No badges yet.</div>;
-  return (
-    <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
-      {list.map((b) => <BadgeTile key={b.id} badge={b} earned={b.earned(stats)} />)}
-    </div>
-  );
-}
-
-function BadgeTile({ badge, earned }: { badge: AthleteBadge; earned: boolean }) {
-  const r = RARITY_STYLE[badge.rarity];
-  return (
-    <Popover>
-      <PopoverTrigger asChild>
-        <button type="button" className={cn("flex min-h-[92px] flex-col items-center justify-center rounded-xl border-2 p-2 text-center transition active:scale-95",
-          earned ? r.ring : "border-dashed border-border opacity-40 grayscale")}>
-          <span className="text-2xl leading-none">{badge.emoji}</span>
-          <span className="mt-1 text-[11px] font-bold leading-tight">{badge.name}</span>
-          <span className={cn("text-[9px] font-semibold uppercase tracking-wider", r.text)}>{r.label}</span>
-        </button>
-      </PopoverTrigger>
-      <PopoverContent className="w-56 text-sm">
-        <div className="font-bold">{badge.emoji} {badge.name}</div>
-        <div className={cn("text-[10px] font-semibold uppercase", r.text)}>{r.label}</div>
-        <p className="mt-1 text-muted-foreground">{badge.description}</p>
-        <p className="mt-1 text-xs font-semibold">{earned ? "Earned" : "Locked"}</p>
-      </PopoverContent>
-    </Popover>
-  );
 }
 
 function CompareView({ clientId, myStats, onBack }: { clientId: string; myStats: BadgeStats; onBack: () => void }) {
@@ -213,7 +166,6 @@ function CompareView({ clientId, myStats, onBack }: { clientId: string; myStats:
   const rows = them ? [
     ["Level", levelForXp(myStats.xp).current.name, levelForXp(them.xp).current.name],
     ["Lifetime XP", myStats.xp.toLocaleString(), them.xp.toLocaleString()],
-    ["Badges", String(ATHLETE_BADGES.filter((b) => b.earned(myStats)).length), String(ATHLETE_BADGES.filter((b) => b.earned(them)).length)],
   ] : [];
   return (
     <div className="space-y-4">
@@ -245,7 +197,7 @@ function CompareView({ clientId, myStats, onBack }: { clientId: string; myStats:
           )}
           <div>
             <div className="mb-2 text-sm font-semibold">Earned badges</div>
-            <BadgeGrid stats={them} />
+            <PublicBadgeStrip clientId={clientId} limit={6} />
           </div>
         </>
       )}
