@@ -35,6 +35,14 @@ export type MessageAttachment = {
   checkin_task_type?: "weekly_checkin" | "nutrition_review";
 };
 
+export type MessageReplyPreview = {
+  sender_role: SenderRole;
+  body: string;
+  attachment_type?: MessageAttachment["type"] | null;
+  attachment_name?: string | null;
+  is_internal_note?: boolean;
+};
+
 export type Message = {
   id: string;
   client_id: string;
@@ -53,6 +61,8 @@ export type Message = {
   transcript_status?: string | null;
   edited_at?: string | null;
   deleted_at?: string | null;
+  reply_to_message_id?: string | null;
+  reply_preview?: MessageReplyPreview | null;
   // Phase 4A delivery tracking (additive, optional for callers).
   delivery_status?: "pending" | "sending" | "sent" | "failed" | "scheduled" | "cancelled";
   delivery_error?: string | null;
@@ -183,6 +193,8 @@ export async function sendMessage(input: {
   messageType?: string;
   isInternalNote?: boolean;
   priority?: string | null;
+  replyToMessageId?: string | null;
+  replyPreview?: MessageReplyPreview | null;
 }) {
   const row: Record<string, unknown> = {
     client_id: input.clientId,
@@ -192,6 +204,8 @@ export async function sendMessage(input: {
     attachments: input.attachments ?? [],
     message_type: input.messageType ?? "General",
     is_internal_note: input.isInternalNote ?? false,
+    reply_to_message_id: input.replyToMessageId ?? null,
+    reply_preview: input.replyPreview ?? null,
   };
   if (input.senderRole === "admin" && input.priority !== undefined) row.priority = input.priority;
   if (input.senderRole === "admin") {
