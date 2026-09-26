@@ -315,13 +315,32 @@ function PowerliftingRecordsView() {
       return (data ?? []) as any[];
     },
   });
+  const { data: roster = [] } = useQuery({
+    queryKey: ["powerlifting-athlete-roster"],
+    staleTime: 5 * 60_000,
+    queryFn: async () => {
+      const { data, error } = await (supabase as any).rpc("get_powerlifting_athlete_roster");
+      if (error) throw error;
+      return (data ?? []) as any[];
+    },
+  });
   const value = (r:any) => tab === "points" ? Number(r.points ?? 0) : Number(r[tab === "total" ? "total_kg" : tab + "_kg"] ?? 0);
   const ordered = [...data].filter((r:any)=>value(r)>0).sort((a:any,b:any)=>value(b)-value(a));
   const seen = new Set<string>();
   const sorted = ordered.filter((r:any)=>{const key=r.athlete_id||r.client_id||String(r.athlete_name||"").toLowerCase();if(seen.has(key))return false;seen.add(key);return true}).slice(0,10);
+  const represented = new Set(data.map((r:any)=>r.athlete_id).filter(Boolean));
+  const awaiting = roster.filter((a:any)=>!represented.has(a.athlete_id));
   return <div className="space-y-4">
     <SheetHeader className="text-left"><SheetTitle>JF Powerlifting Records</SheetTitle><SheetDescription>Best qualifying JF performance per athlete. Multiple meets and weight classes never take multiple ranking spots.</SheetDescription></SheetHeader>
     <div className="grid grid-cols-5 gap-1 rounded-xl bg-muted p-1">{(["points","total","squat","bench","deadlift"] as const).map(t=><button key={t} type="button" onClick={()=>setTab(t)} className={cn("rounded-lg px-1 py-2 text-[11px] font-bold capitalize",tab===t?"bg-background shadow-sm":"text-muted-foreground")}>{t==="points"?"DOTS / GL":t}</button>)}</div>
     {isPending?<div className="py-8 text-center text-sm text-muted-foreground">Loading records…</div>:error?<div className="rounded-xl border border-destructive/30 bg-destructive/5 p-4 text-sm"><div className="font-bold text-destructive">Records could not load</div><div className="mt-1 text-xs text-muted-foreground">Please try again. If this continues, staff can still manage results from Athlete Records.</div></div>:sorted.length===0?<div className="rounded-xl border p-6 text-center text-sm text-muted-foreground">No qualifying JF competition results have been added yet.</div>:<div className="overflow-hidden rounded-2xl border bg-card">{sorted.map((r:any,i)=><div key={r.id} className="flex items-center gap-3 border-b p-3 last:border-0"><div className="w-6 text-center text-sm font-black text-muted-foreground">{i+1}</div><div className="min-w-0 flex-1"><div className="truncate text-sm font-bold">{r.athlete_name}</div><div className="text-[10px] uppercase font-bold text-primary">{r.sex} · {r.competition_level||"competitor"}</div><div className="truncate text-[10px] text-muted-foreground">{r.meet_location||r.meet_name||"Meet"}{r.meet_date?` · ${new Date(r.meet_date+"T00:00:00").getFullYear()}`:""}</div></div><div className="text-right"><div className="text-sm font-black">{tab==="points"?`${Number(r.points).toFixed(2)} ${r.points_system}`:`${Number(r[tab==="total"?"total_kg":tab+"_kg"])} kg`}</div><div className="text-[10px] text-muted-foreground">S {r.squat_kg} · B {r.bench_kg} · D {r.deadlift_kg}</div></div></div>)}</div>}
+    {!isPending && roster.length > 0 && <div className="rounded-2xl border bg-card p-4">
+      <div className="text-xs font-black uppercase tracking-[0.16em] text-muted-foreground">JF Powerlifting Roster</div>
+      <div className="mt-1 text-sm font-semibold">{roster.length} athletes tracked</div>
+      {awaiting.length > 0 && <div className="mt-3 border-t pt-3">
+        <div className="mb-2 text-[11px] font-bold text-muted-foreground">Awaiting qualifying meet data</div>
+        <div className="flex flex-wrap gap-1.5">{awaiting.map((a:any)=><span key={a.athlete_id} className="rounded-full border bg-muted/30 px-2 py-1 text-[10px] font-semibold">{a.athlete_name}</span>)}</div>
+      </div>}
+    </div>}
   </div>;
 }
