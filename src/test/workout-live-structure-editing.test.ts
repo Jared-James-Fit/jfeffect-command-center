@@ -29,4 +29,14 @@ describe("live workout structure editing", () => {
   it("does not mutate membership snapshot structure through client-plan actions", () => {
     expect(logger).toContain('adapter?.kind !== "member"');
   });
+  it("keeps exercise insertion subtle and collapses secondary card actions", () => {
+    expect(picker).toContain('aria-label="Add exercise here"');
+    expect(picker).not.toContain('>\n            Add\n');
+    expect(logger).toContain("More options for");
+    expect(logger).toContain("<MoreHorizontal");
+    expect(logger).toContain("<DropdownMenuSeparator");
+    expect(logger).toContain("Move to position");
+    expect(logger).not.toContain('title="Change exercise order"');
+  });
+
 });
