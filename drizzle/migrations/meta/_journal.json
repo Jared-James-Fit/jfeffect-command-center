@@ -71,6 +71,13 @@
       "when": 1790441792787,
       "tag": "0009_athlete_xp",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1790442185407,
+      "tag": "0010_athlete_public_profile",
+      "breakpoints": true
     }
   ]
 }

@@ -19186,6 +19186,19 @@ export type Database = {
         Args: { _target_id: string }
         Returns: string
       }
+      get_athlete_public_profile: {
+        Args: { _client_id: string }
+        Returns: {
+          avatar_url: string
+          client_id: string
+          display_name: string
+          first_workout_at: string
+          is_me: boolean
+          workouts_completed: number
+          workouts_fully_logged: number
+          xp: number
+        }[]
+      }
       get_athlete_rankings: {
         Args: { _limit?: number }
         Returns: {
