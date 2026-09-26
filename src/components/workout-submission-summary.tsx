@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Trophy, Dumbbell, Activity, CheckCircle2, Flame, Clock, Star, ChevronLeft, Heart, X, Gauge, Repeat2, CircleX, Sparkles } from "lucide-react";
+import { Trophy, Dumbbell, Activity, CheckCircle2, Flame, Clock, Star, ChevronLeft, Heart, X, Repeat2, CircleX, Sparkles } from "lucide-react";
 import type { WorkoutSummary } from "@/lib/workout-summary";
 import { format } from "date-fns";
 import { computeRecoveryScore } from "@/lib/analytics/recovery-score";
@@ -73,11 +73,6 @@ export function WorkoutSubmissionSummary({ open, onOpenChange, summary, workoutT
     : summary.score >= 75 ? "Great work!"
     : summary.score >= 50 ? "Solid effort"
     : "Logged — keep going";
-  const motivational =
-    summary.score >= 90 ? "Elite session. Recover hard — momentum is yours."
-    : summary.score >= 75 ? "Strong work today. Consistency stacks results."
-    : summary.score >= 50 ? "Reps in the bank. Show up again tomorrow."
-    : "Logged is better than skipped. Back at it next session.";
   const takeaways = buildWorkoutTakeaways(summary, prList, cardio ?? null);
   // The star rating on the celebration screen represents session quality.
   // Historically it only showed the client's self-reported `overall_rating`,
@@ -157,7 +152,7 @@ export function WorkoutSubmissionSummary({ open, onOpenChange, summary, workoutT
         <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-3 [scrollbar-width:none] sm:px-5 [&::-webkit-scrollbar]:hidden">
           <div className={`space-y-2.5 transition-all duration-500 ${revealStage >= 2 ? "translate-y-0 opacity-100" : "translate-y-3 opacity-0"}`}>
             {prList.length > 0 && (
-              <section className="rounded-2xl border border-amber-500/30 bg-amber-500/[0.06] p-3">
+              <section className="animate-in zoom-in-95 fade-in slide-in-from-bottom-2 rounded-2xl border border-amber-500/30 bg-amber-500/[0.06] p-3 duration-500">
                 <div className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-[0.14em] text-amber-700 dark:text-amber-300">
                   <Trophy className="h-3.5 w-3.5" />
                   Personal records
@@ -278,38 +273,6 @@ export function WorkoutSubmissionSummary({ open, onOpenChange, summary, workoutT
         </DialogFooter>
       </DialogContent>
     </Dialog>
-  );
-}
-
-function MetricHero({
-  icon,
-  label,
-  value,
-  suffix,
-  sub,
-  compact = false,
-}: {
-  icon?: React.ReactNode;
-  label: string;
-  value: string;
-  suffix?: string;
-  sub?: string;
-  compact?: boolean;
-}) {
-  return (
-    <div className="flex min-w-0 flex-col items-center justify-center px-3 py-3.5 text-center">
-      <div className="flex min-h-4 items-center justify-center gap-1 text-[8px] font-black uppercase tracking-[0.08em] text-muted-foreground">
-        {icon}
-        <span className="truncate">{label}</span>
-      </div>
-      <div className="mt-1.5 flex min-w-0 items-baseline justify-center gap-1 tabular-nums">
-        <span className={`${compact ? "truncate text-[1.05rem] text-foreground" : "text-[1.8rem] text-primary"} font-black leading-none`}>
-          {value}
-        </span>
-        {suffix && <span className="shrink-0 text-[10px] font-bold leading-none text-muted-foreground">{suffix}</span>}
-      </div>
-      {sub && <div className="mt-1.5 w-full truncate text-center text-[9px] font-medium text-muted-foreground">{sub}</div>}
-    </div>
   );
 }
 
