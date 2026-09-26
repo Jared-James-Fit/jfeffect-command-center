@@ -11,7 +11,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { ATHLETE_LEVELS, XP_RULES, levelForXp } from "@/lib/athlete-level";
 import { cn } from "@/lib/utils";
 import { type BadgeStats } from "@/lib/athlete-badges";
-import { AchievementsCard, PublicBadgeStrip, useAthleteAchievements } from "@/components/portal/achievements-card";
+import { AchievementsCard, PublicBadgeStrip } from "@/components/portal/achievements-card";
 
 import { ArrowLeft } from "lucide-react";
 

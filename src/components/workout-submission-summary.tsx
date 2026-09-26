@@ -3,6 +3,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { Button } from "@/components/ui/button";
 import { Trophy, Dumbbell, Activity, CheckCircle2, Flame, Clock, Star, ChevronLeft, Heart, X, Repeat2, CircleX, Sparkles, Medal } from "lucide-react";
 import type { WorkoutSummary } from "@/lib/workout-summary";
+import { NewBadgeCelebration } from "@/components/portal/achievements-card";
 import { format } from "date-fns";
 import { computeRecoveryScore } from "@/lib/analytics/recovery-score";
 import {
@@ -28,10 +29,12 @@ type Props = {
   prs?: SessionPR[];
   /** Prescribed cardio status for the same day, when there is one. */
   cardio?: CardioTakeawayInput;
+  /** Client whose achievements should be checked for a fresh unlock. */
+  clientId?: string | null;
   onClose?: () => void;
 };
 
-export function WorkoutSubmissionSummary({ open, onOpenChange, summary, workoutTitle, durationMin, workoutDate, sessionRating, sessionRpe, pain, prs, cardio, onClose }: Props) {
+export function WorkoutSubmissionSummary({ open, onOpenChange, summary, workoutTitle, durationMin, workoutDate, sessionRating, sessionRpe, pain, prs, cardio, clientId, onClose }: Props) {
   const prList = prs ?? [];
   const [revealStage, setRevealStage] = useState(0);
   const [displayScore, setDisplayScore] = useState(0);
@@ -238,6 +241,8 @@ export function WorkoutSubmissionSummary({ open, onOpenChange, summary, workoutT
                 </div>
               </section>
             )}
+
+            <NewBadgeCelebration clientId={clientId ?? null} />
 
             {cardio && (
               <div className="flex items-center gap-2 rounded-xl border border-border bg-card px-3 py-2.5 text-xs">
