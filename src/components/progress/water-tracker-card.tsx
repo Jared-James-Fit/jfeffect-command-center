@@ -124,13 +124,11 @@ export function WaterTrackerCard({
 
         <div className="space-y-1.5">
           <div className="flex items-baseline justify-between gap-2">
-            <div className="text-2xl font-bold tabular-nums">
+            <div><div className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Drank today</div><div className="text-2xl font-bold tabular-nums">
               {formatWater(summary.total, "L")}
-              <span className="text-sm text-muted-foreground"> of {formatWater(target?.active_ml ?? 3000, "L")}</span>
-            </div>
-            <div className="text-xs text-muted-foreground">{summary.pct}%</div>
+              <span className="text-sm text-muted-foreground"> of {formatWater(target?.active_ml ?? 3000, "L")}</span>\n            </div></div>\n            <div className="text-xs text-muted-foreground">{summary.pct}%</div>
           </div>
-          <Progress value={summary.pct} className="h-2" />
+          <Progress value={summary.pct} className="h-2" />\n          {entries.length > 0 && <button type="button" onClick={() => setHistoryOpen(true)} className="w-full text-left text-xs font-medium text-sky-700 dark:text-sky-300">Today: {entries.length} {entries.length === 1 ? "drink" : "drinks"} logged · View times & history ›</button>}
         </div>
 
         <div className="grid grid-cols-5 gap-1.5">
