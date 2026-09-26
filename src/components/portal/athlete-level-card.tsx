@@ -59,17 +59,21 @@ export function AthleteLevelCard({ clientId }: { clientId: string }) {
         <div className="mt-1.5 text-xs text-muted-foreground">
           {lvl.next ? `${lvl.remaining.toLocaleString()} XP to ${lvl.next.name}` : "Top level reached — keep building your legacy."}
         </div>
-        <div className="mt-4 grid grid-cols-2 gap-2">
-          <Button variant="outline" className="h-11 rounded-xl px-2 text-xs font-bold" onClick={() => setOpen("rankings")}>
-            <Trophy className="mr-1.5 h-4 w-4 text-primary" /> Athlete Rankings ›
-          </Button>
-          <Button variant="outline" className="h-11 rounded-xl px-2 text-xs font-bold" onClick={() => setOpen("powerlifting")}>
-            <Medal className="mr-1.5 h-4 w-4 text-primary" /> Powerlifting Records ›
-          </Button>
+        <div className="mt-4 space-y-2">
+          <button type="button" onClick={() => setOpen("rankings")} className="flex min-h-14 w-full items-center gap-3 rounded-xl border-2 border-primary/25 bg-primary/5 px-4 py-3 text-left active:scale-[.99]">
+            <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-primary text-primary-foreground"><Trophy className="h-4 w-4" /></span>
+            <span className="min-w-0 flex-1"><span className="block text-sm font-black">View Athlete Rankings</span><span className="block text-[11px] text-muted-foreground">See the JF Athlete XP leaderboard</span></span>
+            <span className="text-xl font-bold text-primary">›</span>
+          </button>
+          <button type="button" onClick={() => setOpen("powerlifting")} className="flex min-h-14 w-full items-center gap-3 rounded-xl border-2 border-primary/25 bg-primary/5 px-4 py-3 text-left active:scale-[.99]">
+            <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-primary text-primary-foreground"><Medal className="h-4 w-4" /></span>
+            <span className="min-w-0 flex-1"><span className="block text-sm font-black">View Powerlifting Records</span><span className="block text-[11px] text-muted-foreground">DOTS, total, squat, bench & deadlift</span></span>
+            <span className="text-xl font-bold text-primary">›</span>
+          </button>
+          <button type="button" onClick={() => setOpen("levels")} className="flex min-h-12 w-full items-center justify-between rounded-xl border px-4 py-2.5 text-left active:scale-[.99]">
+            <span className="flex items-center gap-2 text-sm font-bold"><Info className="h-4 w-4 text-primary" /> View Athlete Levels</span><span className="text-lg text-primary">›</span>
+          </button>
         </div>
-        <Button variant="ghost" className="mt-1 h-9 w-full text-xs font-semibold text-muted-foreground" onClick={() => setOpen("levels")}>
-          <Info className="mr-1.5 h-4 w-4" /> View Athlete Levels ›
-        </Button>
         <MyAchievementsRow catalog={catalog} earned={earned} metrics={stats} />
       </Card>
 
