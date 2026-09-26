@@ -203,9 +203,9 @@ export function AchievementCelebrations({ clientId, catalog, earned }: {
       [523.25,659.25,783.99].forEach((freq,i)=>{const o=ctx.createOscillator(),g=ctx.createGain();o.frequency.value=freq;o.type="sine";g.gain.setValueAtTime(.0001,ctx.currentTime+i*.07);g.gain.exponentialRampToValueAtTime(.07,ctx.currentTime+i*.07+.015);g.gain.exponentialRampToValueAtTime(.0001,ctx.currentTime+i*.07+.16);o.connect(g);g.connect(ctx.destination);o.start(ctx.currentTime+i*.07);o.stop(ctx.currentTime+i*.07+.18)});
     }catch{}
   };
-  const mark=async(b:DetailBadge)=>{await (supabase as any).from("athlete_achievement_views").upsert({client_id:clientId,badge_key:b.badge_key,seen_at:new Date().toISOString()},{onConflict:"client_id,badge_key"})};
+  const mark=async(b:DetailBadge)=>{const k=`jf-achievements-seen:${clientId}`;const a=new Set<string>(JSON.parse(localStorage.getItem(k)||"[]"));a.add(b.badge_key);localStorage.setItem(k,JSON.stringify([...a]))};
   const advance=async()=>{const b=queue[index];if(b)await mark(b);ping();if(index<queue.length-1)setIndex(i=>i+1);else setQueue([])};
-  const skip=async()=>{if(queue.length){await (supabase as any).from("athlete_achievement_views").upsert(queue.map(b=>({client_id:clientId,badge_key:b.badge_key,seen_at:new Date().toISOString()})),{onConflict:"client_id,badge_key"})}setQueue([])};
+  const skip=async()=>{const k=`jf-achievements-seen:${clientId}`;const a=new Set<string>(JSON.parse(localStorage.getItem(k)||"[]"));queue.forEach(b=>a.add(b.badge_key));localStorage.setItem(k,JSON.stringify([...a]));setQueue([])};
   const b=queue[index]; if(!b)return null; const r=RARITY_STYLE[b.rarity];
   return <div className="fixed inset-0 z-[100] flex items-end justify-center bg-black/45 p-3 backdrop-blur-[2px] sm:items-center" role="dialog" aria-modal="true" aria-label="Achievement unlocked">
     <div className="relative w-full max-w-sm overflow-hidden rounded-3xl border bg-background p-5 text-center shadow-2xl motion-safe:animate-in motion-safe:zoom-in-95 motion-safe:fade-in">
