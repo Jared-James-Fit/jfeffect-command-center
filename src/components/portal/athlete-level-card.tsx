@@ -298,7 +298,7 @@ function RankLine({ row, onSelect }: { row: RankRow; onSelect: (id: string) => v
 
 function PowerliftingRecordsView() {
   const [tab, setTab] = useState<"points"|"total"|"squat"|"bench"|"deadlift">("points");
-  const { data = [], isPending } = useQuery({
+  const { data = [], isPending, error } = useQuery({
     queryKey: ["powerlifting-rankings"],
     staleTime: 5 * 60_000,
     queryFn: async () => {
