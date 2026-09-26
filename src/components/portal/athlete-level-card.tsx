@@ -76,7 +76,7 @@ export function AthleteLevelCard({ clientId }: { clientId: string }) {
       </Card>
 
       <Sheet open={open === "levels" || open === "rankings"} onOpenChange={(o) => !o && setOpen(null)}>
-        <SheetContent side="bottom" className="max-h-[88vh] overflow-y-auto rounded-t-2xl pb-safe-bottom">
+        <SheetContent side="bottom" className="max-h-[88vh] overflow-y-auto rounded-t-2xl px-5 pb-safe-bottom pt-5">
           {open === "levels" ? <LevelsView total={lvl.xp} events={events} />
             : open === "rankings" ? <RankingsView myStats={stats} myBadgeCount={earned.length} />
             : null}
@@ -256,7 +256,7 @@ function RankingsView({ myStats, myBadgeCount }: { myStats: BadgeStats; myBadgeC
               r ? (
                 <button type="button" onClick={() => setSelected(r.client_id)} key={r.client_id} className={cn("flex flex-col items-center rounded-xl border p-2 text-center",
                   r.rank === 1 ? "border-primary bg-primary/10 pb-4" : "border-border", r.is_me && "ring-2 ring-primary")}>
-                  <Medal className={cn("mb-1 h-5 w-5", r.rank === 1 ? "text-primary" : "text-muted-foreground")} />
+                  <Medal className={cn("mb-1 h-5 w-5", r.rank === 1 ? "text-yellow-500" : r.rank === 2 ? "text-slate-400" : "text-amber-700")} />
                   <RankAvatar row={r} size={r.rank === 1 ? "h-14 w-14" : "h-11 w-11"} />
                   <div className="mt-1 w-full truncate text-xs font-bold">{r.display_name}</div>
                   <div className="text-[10px] uppercase text-primary">{levelForXp(r.xp).current.name}</div>
