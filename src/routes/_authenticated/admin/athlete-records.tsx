@@ -10,6 +10,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Trash2, Trophy } from "lucide-react";
 import { toast } from "sonner";
+import { PowerliftingAthleteProfiles } from "@/components/admin/powerlifting-athlete-profiles";
 
 export const Route = createFileRoute("/_authenticated/admin/athlete-records")({ component: AthleteRecordsAdmin });
 
@@ -23,6 +24,7 @@ function AthleteRecordsAdmin(){
  const save=async()=>{if(!form.athlete_name||!form.bodyweight_kg)return toast.error("Athlete name and bodyweight are required");setSaving(true);try{const payload={...form,client_id:form.client_id||null,bodyweight_kg:Number(form.bodyweight_kg),squat_kg:Number(form.squat_kg||0),bench_kg:Number(form.bench_kg||0),deadlift_kg:Number(form.deadlift_kg||0),points:form.points?Number(form.points):null,meet_date:form.meet_date||null};const {error}=await (supabase as any).from("athlete_powerlifting_results").insert(payload);if(error)throw error;toast.success("Powerlifting result added");setForm(empty);qc.invalidateQueries({queryKey:["athlete-powerlifting-results-admin"]});qc.invalidateQueries({queryKey:["powerlifting-rankings"]})}catch(e:any){toast.error(e.message)}finally{setSaving(false)}};
  const del=async(id:string)=>{const {error}=await (supabase as any).from("athlete_powerlifting_results").delete().eq("id",id);if(error)return toast.error(error.message);toast.success("Result deleted");qc.invalidateQueries({queryKey:["athlete-powerlifting-results-admin"]});};
  return <><PageHeader title="Athlete Records" subtitle="Permanent JF powerlifting records & competition résumé"/><div className="space-y-4 p-3 sm:p-4 md:p-6">
+ <PowerliftingAthleteProfiles clients={clients}/>
  <Card className="p-4"><div className="mb-4"><div className="font-black">Add powerlifting result</div><div className="text-xs text-muted-foreground">Add current or retired JF athletes. Results remain in the all-time records even if they are no longer active clients.</div></div>
  <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
  <Field label="Athlete name"><Input value={form.athlete_name} onChange={e=>set("athlete_name",e.target.value)} placeholder="Full name"/></Field>
