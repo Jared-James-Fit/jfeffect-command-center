@@ -1,6 +1,7 @@
+import { useEffect, useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Trophy, Dumbbell, Activity, CheckCircle2, Flame, Clock, Star, ChevronLeft, Heart, X, Gauge, Repeat2, CircleX } from "lucide-react";
+import { Trophy, Dumbbell, Activity, CheckCircle2, Flame, Clock, Star, ChevronLeft, Heart, X, Gauge, Repeat2, CircleX, Sparkles } from "lucide-react";
 import type { WorkoutSummary } from "@/lib/workout-summary";
 import { format } from "date-fns";
 import { computeRecoveryScore } from "@/lib/analytics/recovery-score";
@@ -32,6 +33,40 @@ type Props = {
 
 export function WorkoutSubmissionSummary({ open, onOpenChange, summary, workoutTitle, durationMin, workoutDate, sessionRating, sessionRpe, pain, prs, cardio, onClose }: Props) {
   const prList = prs ?? [];
+  const [revealStage, setRevealStage] = useState(0);
+  const [displayScore, setDisplayScore] = useState(0);
+
+  useEffect(() => {
+    if (!open) {
+      setRevealStage(0);
+      setDisplayScore(0);
+      return;
+    }
+    setRevealStage(0);
+    setDisplayScore(0);
+    const intro = window.setTimeout(() => setRevealStage(1), 450);
+    const details = window.setTimeout(() => setRevealStage(2), 1450);
+    return () => {
+      window.clearTimeout(intro);
+      window.clearTimeout(details);
+    };
+  }, [open]);
+
+  useEffect(() => {
+    if (!open || revealStage < 1) return;
+    const target = Math.max(0, Math.min(100, summary.score));
+    const started = performance.now();
+    const duration = 700;
+    let frame = 0;
+    const tick = (now: number) => {
+      const progress = Math.min(1, (now - started) / duration);
+      const eased = 1 - Math.pow(1 - progress, 3);
+      setDisplayScore(Math.round(target * eased));
+      if (progress < 1) frame = requestAnimationFrame(tick);
+    };
+    frame = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(frame);
+  }, [open, revealStage, summary.score]);
   const headline =
     prList.length > 0 ? "New PR!"
     : summary.score >= 90 ? "Crushed it!"
