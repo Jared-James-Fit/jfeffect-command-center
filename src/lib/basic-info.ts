@@ -55,8 +55,10 @@ export function isBasicInfoComplete(c: Record<string, any> | null | undefined): 
     return v !== null && v !== undefined && String(v).trim() !== "";
   });
   if (!baseOk) return false;
-  // Intake SBD: either "I don't know" (false) or all three values + unit.
-  return isIntakeLiftsComplete(c);
+  // The Home "Confirm your basic info" checklist is only for contact,
+  // identity and emergency details. Strength/intake answers belong to Goals &
+  // Setup and must not keep this card permanently incomplete.
+  return true;
 }
 
 export function isIntakeLiftsComplete(c: Record<string, any> | null | undefined): boolean {
