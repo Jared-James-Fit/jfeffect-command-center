@@ -193,48 +193,45 @@ export function WorkoutSubmissionSummary({ open, onOpenChange, summary, workoutT
             )}
 
             <section className="overflow-hidden rounded-2xl border border-border/80 bg-card">
-              <div className="grid grid-cols-2 divide-x divide-border/70">
-                <MetricHero
-                  icon={<Gauge className="h-3.5 w-3.5" />}
-                  label="Workout score"
-                  value={`${summary.score}`}
-                  suffix="/100"
-                  sub={`${summary.completionPct}% completed`}
-                />
-                <MetricHero
-                  icon={<Heart className="h-3.5 w-3.5" />}
-                  label="Est. recovery"
-                  value={recovery.hasData ? `${recovery.score}` : "—"}
-                  suffix={recovery.hasData ? "/100" : ""}
-                  sub={
-                    recovery.hasData
-                      ? recovery.score >= 80 ? "Fresh"
-                        : recovery.score >= 60 ? "Steady"
-                        : recovery.score >= 40 ? "Depleted"
-                        : "Very low"
-                      : "Add review"
-                  }
-                />
+              <div className="grid grid-cols-2 divide-x divide-y divide-border/70">
+                <CompactStat icon={<CheckCircle2 className="h-3.5 w-3.5" />} label="Completed" value={`${summary.completionPct}%`} />
+                <CompactStat icon={<Activity className="h-3.5 w-3.5" />} label="Sets" value={`${summary.completedSets}/${summary.prescribedSets}`} />
+                {summary.totalReps > 0 && (
+                  <CompactStat icon={<Repeat2 className="h-3.5 w-3.5" />} label="Reps" value={`${summary.totalReps}`} />
+                )}
+                {durationMin != null && durationMin > 0 && (
+                  <CompactStat icon={<Clock className="h-3.5 w-3.5" />} label="Duration" value={`${durationMin}m`} />
+                )}
+                {summary.avgRpe != null && (
+                  <CompactStat icon={<Flame className="h-3.5 w-3.5" />} label="Avg RPE" value={`${summary.avgRpe}`} />
+                )}
+                {recovery.hasData && (
+                  <CompactStat
+                    icon={<Heart className="h-3.5 w-3.5" />}
+                    label="Recovery"
+                    value={`${recovery.score}/100`}
+                  />
+                )}
               </div>
+              {summary.totalLifted > 0 && (
+                <div className="flex items-center gap-3 border-t border-border/70 px-3.5 py-3">
+                  <Dumbbell className="h-4 w-4 shrink-0 text-primary" />
+                  <div className="min-w-0 flex-1">
+                    <div className="text-[9px] font-black uppercase tracking-[0.12em] text-muted-foreground">Total volume</div>
+                    <div className="mt-0.5 truncate text-xl font-black leading-tight text-foreground">{summary.totalLiftedFmt}</div>
+                  </div>
+                </div>
+              )}
             </section>
 
-            <section className="overflow-hidden rounded-2xl border border-border/80 bg-card/70">
-              <div className="flex items-center gap-3 border-b border-border/70 px-3.5 py-3">
-                <Dumbbell className="h-4 w-4 shrink-0 text-muted-foreground" />
-                <div className="min-w-0 flex-1">
-                  <div className="text-[9px] font-black uppercase tracking-[0.12em] text-muted-foreground">Total volume</div>
-                  <div className="mt-0.5 truncate text-xl font-black leading-tight text-foreground">{summary.totalLiftedFmt}</div>
+            {prList.length === 0 && displayTakeaways.length === 0 && (
+              <section className="rounded-2xl border border-primary/20 bg-primary/[0.05] p-3 text-center">
+                <div className="text-[10px] font-black uppercase tracking-[0.14em] text-primary">Baseline logged</div>
+                <div className="mt-1 text-xs leading-relaxed text-muted-foreground">
+                  Your trends and achievements will build as you log more sessions.
                 </div>
-              </div>
-              <div className="grid grid-cols-2 divide-x divide-y divide-border/70">
-                <CompactStat icon={<CheckCircle2 className="h-3.5 w-3.5" />} label="Exercises" value={`${summary.exercisesCompleted}/${summary.exercisesTotal}`} />
-                <CompactStat icon={<Activity className="h-3.5 w-3.5" />} label="Sets" value={`${summary.completedSets}/${summary.prescribedSets}`} />
-                <CompactStat icon={<Repeat2 className="h-3.5 w-3.5" />} label="Reps" value={`${summary.totalReps}`} />
-                <CompactStat icon={<Clock className="h-3.5 w-3.5" />} label="Duration" value={durationMin != null && durationMin > 0 ? `${durationMin}m` : "—"} />
-                <CompactStat icon={<Flame className="h-3.5 w-3.5" />} label="Avg RPE" value={summary.avgRpe != null ? `${summary.avgRpe}` : "—"} />
-                <CompactStat icon={<CircleX className="h-3.5 w-3.5" />} label="Missed" value={`${summary.missedExercises.length}`} />
-              </div>
-            </section>
+              </section>
+            )}
 
             {cardio && (
               <div className="flex items-center gap-2 rounded-xl border border-border bg-card px-3 py-2.5 text-xs">
