@@ -75,12 +75,19 @@ export function AthleteLevelCard({ clientId }: { clientId: string }) {
         <MyAchievementsRow catalog={catalog} earned={earned} metrics={stats} />
       </Card>
 
-      <Sheet open={open !== null} onOpenChange={(o) => !o && setOpen(null)}>
+      <Sheet open={open === "levels" || open === "rankings"} onOpenChange={(o) => !o && setOpen(null)}>
         <SheetContent side="bottom" className="max-h-[88vh] overflow-y-auto rounded-t-2xl pb-safe-bottom">
           {open === "levels" ? <LevelsView total={lvl.xp} events={events} />
             : open === "rankings" ? <RankingsView myStats={stats} myBadgeCount={earned.length} />
-            : open === "powerlifting" ? <PowerliftingRecordsView />
             : null}
+        </SheetContent>
+      </Sheet>
+
+      <Sheet open={open === "powerlifting"} onOpenChange={(o) => !o && setOpen(null)}>
+        <SheetContent side="bottom" className="max-h-[88vh] overflow-y-auto rounded-t-2xl px-5 pb-safe-bottom pt-5">
+          <div className="min-h-[320px]">
+            <PowerliftingRecordsView />
+          </div>
         </SheetContent>
       </Sheet>
     </>
