@@ -84,7 +84,6 @@ export default defineConfig({
           // the SW install fast (was ~395 files; now <10) and prevents stale
           // chunks from pinning users to old builds.
           globPatterns: [
-            "index.html",
             "manifest.json",
             "favicon.ico",
             "favicon-32.png",
@@ -100,10 +99,10 @@ export default defineConfig({
               urlPattern: ({ request }) => request.mode === "navigate",
               handler: "NetworkFirst",
               options: {
-              cacheName: "jf-html-v2",
+              cacheName: "jf-html-v3",
                 // 3s timeout: on slow mobile connections, fall back to the cached
                 // HTML faster so the app shell appears immediately.
-                networkTimeoutSeconds: 3,
+                networkTimeoutSeconds: 10,
                 expiration: { maxEntries: 32, maxAgeSeconds: 60 * 60 * 24 },
               },
             },
@@ -112,7 +111,7 @@ export default defineConfig({
                 sameOrigin && /\/assets\/.+\.[0-9a-f]{6,}\..+$/i.test(url.pathname),
               handler: "CacheFirst",
               options: {
-                cacheName: "jf-assets-v2",
+                cacheName: "jf-assets-v3",
                 expiration: { maxEntries: 200, maxAgeSeconds: 60 * 60 * 24 * 30 },
               },
             },
@@ -121,7 +120,7 @@ export default defineConfig({
                 sameOrigin && /\.(?:png|jpg|jpeg|webp|svg|gif|ico)$/i.test(url.pathname),
               handler: "StaleWhileRevalidate",
               options: {
-                cacheName: "jf-images-v2",
+                cacheName: "jf-images-v3",
                 expiration: { maxEntries: 200, maxAgeSeconds: 60 * 60 * 24 * 30 },
               },
             },
