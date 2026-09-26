@@ -1849,6 +1849,11 @@ export function MessageThread({
                           ))}
                         </div>
                         <DropdownMenuSeparator />
+                        {!m.id.startsWith("optimistic-") && (
+                          <DropdownMenuItem onClick={() => startReply(m)}>
+                            <Reply className="mr-2 h-4 w-4" /> Reply
+                          </DropdownMenuItem>
+                        )}
                         <DropdownMenuItem
                           onClick={() => { setEditingId(m.id); setEditingBody(m.body); setActionsForId(null); }}
                         >
@@ -1902,6 +1907,10 @@ export function MessageThread({
                             </button>
                           ))}
                         </div>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem onClick={() => startReply(m)}>
+                          <Reply className="mr-2 h-4 w-4" /> Reply
+                        </DropdownMenuItem>
                       </DropdownMenuContent>
                     </DropdownMenu>
                   </div>
@@ -2099,7 +2108,10 @@ export function MessageThread({
                     messageType,
                     isInternalNote: role === "admin" ? internalNote : false,
                     priority: role === "admin" ? priority : undefined,
+                    replyToMessageId: replyingTo?.id ?? null,
+                    replyPreview: replyingTo ? makeReplyPreview(replyingTo) : null,
                   });
+                  setReplyingTo(null);
                   qc.invalidateQueries({ queryKey: ["messages", clientId, role] });
                   try { await markRecent(user.id, g.id); } catch {}
                 } catch (e: any) {
@@ -2128,7 +2140,10 @@ export function MessageThread({
                     messageType,
                     isInternalNote: role === "admin" ? internalNote : false,
                     priority: role === "admin" ? priority : undefined,
+                    replyToMessageId: replyingTo?.id ?? null,
+                    replyPreview: replyingTo ? makeReplyPreview(replyingTo) : null,
                   });
+                  setReplyingTo(null);
                   qc.invalidateQueries({ queryKey: ["messages", clientId, role] });
                   try { await markSoundRecent(user.id, s.id); } catch {}
                 } catch (e: any) {
@@ -2289,6 +2304,7 @@ export function MessageThread({
             const canEdit = m.sender_role === role && !m.deleted_at && (m.body?.length ?? 0) > 0;
             const canDelete = m.sender_role === role && !m.deleted_at;
             const canReact = !m.deleted_at;
+            const canReply = !m.deleted_at && !m.id.startsWith("optimistic-");
             return (
               <>
                 <SheetHeader className="text-left">
@@ -2323,6 +2339,16 @@ export function MessageThread({
                   </div>
                 )}
                 <div className="mt-3 grid gap-1">
+                  {canReply && (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      className="h-12 justify-start text-base"
+                      onClick={() => startReply(m)}
+                    >
+                      <Reply className="mr-3 h-5 w-5" /> Reply
+                    </Button>
+                  )}
                   {canEdit && (
                     <Button
                       type="button" variant="ghost" className="h-12 justify-start text-base"
