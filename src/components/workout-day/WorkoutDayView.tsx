@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, ArrowUp, ArrowDown, ChevronsUpDown, Check, CheckCircle2, Circle, StickyNote, NotebookPen, Info, Maximize2, Minimize2, AlertTriangle, RefreshCw, Send, MessageCircle, ChevronDown, ChevronUp, Zap, Trophy, MoreHorizontal, Undo2, HelpCircle, Loader2 } from "lucide-react";
+import { ArrowLeft, ArrowUp, ArrowDown, ChevronsUpDown, Check, CheckCircle2, Circle, StickyNote, NotebookPen, Info, Maximize2, Minimize2, AlertTriangle, RefreshCw, Send, MessageCircle, ChevronDown, ChevronUp, Zap, Trophy, MoreHorizontal, Undo2, HelpCircle, Loader2, Trash2 } from "lucide-react";
 
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
@@ -74,7 +74,7 @@ import {
 } from "@/components/workout-day/deferred-exercise-actions";
 import { WorkoutToolsProvider, WorkoutToolsButton } from "@/components/workout-tools/workout-tools";
 import { WorkoutAddExercise } from "@/components/workout-day/workout-add-exercise";
-import { addExerciseToWorkout, reorderWorkoutExercises } from "@/lib/quick-swap.functions";
+import { addExerciseToWorkout, reorderWorkoutExercises, removeExerciseFromWorkout } from "@/lib/quick-swap.functions";
 import { convertWeight } from "@/lib/progress-metrics";
 import {
   formatPreviousLiftLoad,
@@ -663,6 +663,7 @@ function WorkoutDay({
 
   const addExerciseSrv = useServerFn(addExerciseToWorkout);
   const reorderExercisesSrv = useServerFn(reorderWorkoutExercises);
+  const removeExerciseSrv = useServerFn(removeExerciseFromWorkout);
   const canEditWorkoutStructure = adapter?.kind !== "member" && /^[0-9a-f-]{36}$/i.test(dayId);
 
   const addExerciseNow = async (
@@ -689,6 +690,27 @@ function WorkoutDay({
       await qc.refetchQueries({ queryKey: ["pl-day-rows", dayId] });
       toast.error(error?.message ?? "Could not add exercise");
       throw error;
+    }
+  };
+
+  const removeExerciseNow = async (rowId: string, exerciseName: string) => {
+    if (!canEditWorkoutStructure) return;
+    const previous = rows as any[];
+    qc.setQueryData(
+      ["pl-day-rows", dayId, adapter?.kind ?? null, adapter?.ref.ownerId ?? null],
+      previous.filter((row) => row.id !== rowId),
+    );
+    try {
+      await removeExerciseSrv({ data: { dayId, rowId } });
+      toast.success(`${exerciseName} removed from this workout`);
+      await qc.invalidateQueries({ queryKey: ["pl-day-rows", dayId] });
+      await qc.invalidateQueries({ queryKey: ["pl-day-results", dayId] });
+    } catch (error: any) {
+      qc.setQueryData(
+        ["pl-day-rows", dayId, adapter?.kind ?? null, adapter?.ref.ownerId ?? null],
+        previous,
+      );
+      toast.error(error?.message ?? "Could not remove exercise");
     }
   };
 
@@ -2415,7 +2437,13 @@ function WorkoutDay({
               </div>
             )}
             {(rows as any[]).map((r, rowIndex) => (
-              <div key={r.id} className="space-y-1.5">
+              <SwipeDeleteExercise
+                key={r.id}
+                enabled={canEditWorkoutStructure && !readonly}
+                exerciseName={r.exercises?.name ?? r.exercise_name_override ?? "Exercise"}
+                onDelete={() => removeExerciseNow(r.id, r.exercises?.name ?? r.exercise_name_override ?? "Exercise")}
+              >
+              <div className="space-y-1.5">
                 {unsupportedRows[r.id] ? (
                   <UnsupportedExerciseCard row={r} />
                 ) : (
@@ -2456,6 +2484,7 @@ function WorkoutDay({
                   />
                 )}
               </div>
+              </SwipeDeleteExercise>
             ))}
           </div>
         </WorkoutLoadBoundary>
@@ -2788,6 +2817,72 @@ function PreviousLiftChip({ data, displayUnit, className }: { data: PreviousLift
       <span className="text-[9px] font-bold uppercase tracking-wider text-sky-700/80 dark:text-sky-300/80">Last time</span>
       <span className="font-semibold tabular-nums text-foreground">{loadStr}{repsStr}</span>
       {when && <span className="text-[10px] text-sky-700/70 dark:text-sky-300/70">· {when}</span>}
+    </div>
+  );
+}
+
+function SwipeDeleteExercise({
+  enabled,
+  exerciseName,
+  onDelete,
+  children,
+}: {
+  enabled: boolean;
+  exerciseName: string;
+  onDelete: () => void;
+  children: React.ReactNode;
+}) {
+  const [offset, setOffset] = useState(0);
+  const [dragging, setDragging] = useState(false);
+  const startX = useRef<number | null>(null);
+  const startOffset = useRef(0);
+  const reveal = 84;
+
+  if (!enabled) return <>{children}</>;
+
+  const begin = (x: number) => {
+    startX.current = x;
+    startOffset.current = offset;
+    setDragging(true);
+  };
+  const move = (x: number) => {
+    if (startX.current == null) return;
+    const delta = x - startX.current;
+    setOffset(Math.max(-reveal, Math.min(0, startOffset.current + delta)));
+  };
+  const end = () => {
+    if (startX.current == null) return;
+    setOffset(offset < -reveal * 0.38 ? -reveal : 0);
+    startX.current = null;
+    setDragging(false);
+  };
+
+  return (
+    <div className="relative overflow-hidden rounded-[1.35rem]">
+      <div className="absolute inset-y-0 right-0 flex w-[84px] items-center justify-center bg-destructive">
+        <button
+          type="button"
+          className="flex h-full w-full flex-col items-center justify-center gap-1 text-xs font-bold text-destructive-foreground"
+          aria-label={`Delete ${exerciseName} from this workout`}
+          onClick={() => { setOffset(0); onDelete(); }}
+        >
+          <Trash2 className="h-5 w-5" />
+          Delete
+        </button>
+      </div>
+      <div
+        className={`relative bg-background touch-pan-y ${dragging ? "" : "transition-transform duration-200 ease-out"}`}
+        style={{ transform: `translate3d(${offset}px,0,0)` }}
+        onTouchStart={(e) => begin(e.touches[0].clientX)}
+        onTouchMove={(e) => move(e.touches[0].clientX)}
+        onTouchEnd={end}
+        onPointerDown={(e) => { if (e.pointerType !== "touch") begin(e.clientX); }}
+        onPointerMove={(e) => { if (e.pointerType !== "touch" && startX.current != null) move(e.clientX); }}
+        onPointerUp={(e) => { if (e.pointerType !== "touch") end(); }}
+        onPointerCancel={end}
+      >
+        {children}
+      </div>
     </div>
   );
 }
