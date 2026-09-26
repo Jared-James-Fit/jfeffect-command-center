@@ -32,10 +32,10 @@ export type AchievementMetrics = {
 export const RARITY_ORDER: Record<Rarity, number> = { common: 0, rare: 1, epic: 2, legendary: 3 };
 
 export const RARITY_STYLE: Record<Rarity, { label: string; ring: string; text: string; glow: string }> = {
-  common: { label: "Common", ring: "border-border", text: "text-muted-foreground", glow: "bg-muted" },
-  rare: { label: "Rare", ring: "border-primary/60", text: "text-primary", glow: "bg-primary/10" },
-  epic: { label: "Epic", ring: "border-warning/70", text: "text-warning", glow: "bg-warning/10" },
-  legendary: { label: "Legendary", ring: "border-primary", text: "text-primary", glow: "bg-primary/20" },
+  common: { label: "Common", ring: "border-slate-400", text: "text-slate-700", glow: "bg-gradient-to-br from-slate-100 to-slate-300 shadow-sm" },
+  rare: { label: "Rare", ring: "border-sky-500", text: "text-sky-700", glow: "bg-gradient-to-br from-sky-100 via-blue-200 to-cyan-300 shadow-md shadow-sky-500/25" },
+  epic: { label: "Epic", ring: "border-violet-500", text: "text-violet-700", glow: "bg-gradient-to-br from-fuchsia-200 via-violet-300 to-indigo-400 shadow-md shadow-violet-500/30" },
+  legendary: { label: "Legendary", ring: "border-amber-500", text: "text-amber-700", glow: "bg-gradient-to-br from-yellow-200 via-amber-300 to-orange-400 shadow-lg shadow-amber-500/35" },
 };
 
 const db = supabase as any;

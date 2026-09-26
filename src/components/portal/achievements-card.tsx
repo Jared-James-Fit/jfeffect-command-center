@@ -23,9 +23,9 @@ export function BadgeIcon({ icon, rarity, locked, size = "md" }: { icon: string;
   const dims = size === "lg" ? "h-20 w-20" : size === "sm" ? "h-8 w-8" : "h-12 w-12";
   const ic = size === "lg" ? "h-9 w-9" : size === "sm" ? "h-4 w-4" : "h-6 w-6";
   return (
-    <span className={cn("flex shrink-0 items-center justify-center rounded-full border-2", dims,
-      locked ? "border-dashed border-border bg-muted/40 text-muted-foreground" : cn(r.ring, r.glow, r.text))}>
-      {locked ? <Lock className={ic} /> : <Icon className={ic} />}
+    <span className={cn("relative flex shrink-0 items-center justify-center rounded-full border-2 transition-transform duration-200", dims,
+      locked ? "border-dashed border-border bg-muted/40 text-muted-foreground" : cn(r.ring, r.glow, r.text, "ring-2 ring-white/70 ring-offset-1"))}>
+      {locked ? <Lock className={ic} /> : <><span className="absolute inset-1 rounded-full bg-white/20" /><Icon className={cn(ic,"relative z-10 drop-shadow-sm")} strokeWidth={2.6} /></>}
     </span>
   );
 }
@@ -77,7 +77,7 @@ function Tile({ b, onClick }: { b: DetailBadge; onClick: () => void }) {
   return (
     <button type="button" onClick={onClick}
       className={cn("flex min-h-[112px] flex-col items-center justify-start gap-1 rounded-xl border p-2 text-center transition active:scale-95",
-        earned ? "border-border bg-card" : "border-dashed border-border/70 opacity-70")}>
+        earned ? cn(r.ring, "bg-card shadow-sm hover:-translate-y-0.5 hover:shadow-md") : "border-dashed border-border/70 opacity-70")}>
       <BadgeIcon icon={b.icon_key} rarity={b.rarity} locked={!earned} />
       <span className="text-[11px] font-bold leading-tight">{b.name}</span>
       {earned ? (
