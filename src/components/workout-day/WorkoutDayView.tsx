@@ -2633,6 +2633,7 @@ function WorkoutDay({
           open={summaryOpen}
           onOpenChange={setSummaryOpen}
           summary={lastSummary}
+          clientId={client?.id ?? null}
           workoutTitle={day?.title ?? null}
           durationMin={
             // For completed workouts use the stored value; for the in-app
