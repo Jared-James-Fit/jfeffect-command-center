@@ -305,7 +305,7 @@ function RankLine({ row, onSelect }: { row: RankRow; onSelect: (id: string) => v
 
 
 function PowerliftingRecordsView() {
-  const [tab, setTab] = useState<"gl"|"dots"|"total"|"squat"|"bench"|"deadlift">("gl");
+  const [tab, setTab] = useState<"gl"|"dots"|"total"|"squat"|"bench"|"deadlift">("total");
   const [division, setDivision] = useState<"overall"|"male"|"female">("overall");
   const { data = [], isPending, error } = useQuery({
     queryKey: ["powerlifting-rankings"], staleTime: 5 * 60_000,
@@ -327,7 +327,7 @@ function PowerliftingRecordsView() {
   return <div className="space-y-4">
     <SheetHeader className="text-left">
       <SheetTitle>JF Powerlifting Records</SheetTitle>
-      <SheetDescription>JF-coached meet records. One athlete, one spot. Tap a category for their best.</SheetDescription>
+      <SheetDescription>Verified JF-coached meet records. One athlete, one spot. Tap a category for their best.</SheetDescription>
     </SheetHeader>
     <div className="grid grid-cols-3 gap-1 rounded-xl bg-muted p-1">{([["overall","Overall"],["male","Men"],["female","Women"]] as const).map(([k,label])=><button key={k} type="button" onClick={()=>setDivision(k)} className={cn("rounded-lg px-2 py-2 text-xs font-bold",division===k?"bg-background text-foreground shadow-sm":"text-muted-foreground")}>{label}</button>)}</div>
     <div className="flex items-center justify-between px-1"><span className="text-[10px] font-black uppercase tracking-[0.16em] text-muted-foreground">Top 10</span><span className="text-[10px] font-semibold text-muted-foreground">{division==="overall"?"Overall":division==="male"?"Men":"Women"} · {tab==="gl"?"GL Points":tab==="dots"?"DOTS":tab[0].toUpperCase()+tab.slice(1)}</span></div>
