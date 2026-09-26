@@ -18898,6 +18898,8 @@ export type Database = {
           priority: string | null
           read_by_admin_at: string | null
           read_by_client_at: string | null
+          reply_preview: Json | null
+          reply_to_message_id: string | null
           scheduled_at: string | null
           scheduled_by: string | null
           scheduled_tz: string | null
@@ -18943,6 +18945,8 @@ export type Database = {
           priority: string | null
           read_by_admin_at: string | null
           read_by_client_at: string | null
+          reply_preview: Json | null
+          reply_to_message_id: string | null
           scheduled_at: string | null
           scheduled_by: string | null
           scheduled_tz: string | null
@@ -18988,6 +18992,8 @@ export type Database = {
           priority: string | null
           read_by_admin_at: string | null
           read_by_client_at: string | null
+          reply_preview: Json | null
+          reply_to_message_id: string | null
           scheduled_at: string | null
           scheduled_by: string | null
           scheduled_tz: string | null
@@ -19240,6 +19246,8 @@ export type Database = {
           priority: string | null
           read_by_admin_at: string | null
           read_by_client_at: string | null
+          reply_preview: Json | null
+          reply_to_message_id: string | null
           scheduled_at: string | null
           scheduled_by: string | null
           scheduled_tz: string | null
