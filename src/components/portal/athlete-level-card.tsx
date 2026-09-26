@@ -224,6 +224,16 @@ function CompareView({ clientId, myStats, myBadgeCount, onBack }: { clientId: st
     </div>
   );
 }
+const LEVEL_COLORS = [
+  "border-rose-400 bg-gradient-to-br from-rose-50 to-pink-100 text-rose-700",
+  "border-orange-400 bg-gradient-to-br from-orange-50 to-amber-100 text-orange-700",
+  "border-emerald-400 bg-gradient-to-br from-emerald-50 to-teal-100 text-emerald-700",
+  "border-sky-400 bg-gradient-to-br from-sky-50 to-cyan-100 text-sky-700",
+  "border-violet-400 bg-gradient-to-br from-violet-50 to-purple-100 text-violet-700",
+  "border-fuchsia-400 bg-gradient-to-br from-fuchsia-50 to-pink-100 text-fuchsia-700",
+];
+const levelColor = (xp:number) => { const n=levelForXp(xp).current.name; const tier=n.includes("LEGEND")?5:n.includes("ELITE")?4:n.includes("ADVANCED")?3:n.includes("TRAINED")?2:n.includes("ROOKIE")?1:0; return LEVEL_COLORS[tier]; };
+
 function RankingsView({ myStats, myBadgeCount }: { myStats: BadgeStats; myBadgeCount: number }) {
   const [selected, setSelected] = useState<string | null>(null);
   const { data = [], isPending } = useQuery({
@@ -255,12 +265,11 @@ function RankingsView({ myStats, myBadgeCount }: { myStats: BadgeStats; myBadgeC
           <div className="grid grid-cols-3 items-end gap-2">
             {[podium[1], podium[0], podium[2]].map((r, i) =>
               r ? (
-                <button type="button" onClick={() => setSelected(r.client_id)} key={r.client_id} className={cn("flex flex-col items-center rounded-xl border p-2 text-center",
-                  r.rank === 1 ? "border-primary bg-primary/10 pb-4" : "border-border", r.is_me && "ring-2 ring-primary")}>
+                <button type="button" onClick={() => setSelected(r.client_id)} key={r.client_id} className={cn("flex flex-col items-center rounded-xl border p-2 text-center shadow-sm transition hover:-translate-y-0.5 hover:shadow-md", levelColor(r.xp), r.rank === 1 && "pb-4 ring-2 ring-amber-300", r.is_me && "ring-2 ring-primary")}>
                   <Medal className={cn("mb-1 h-5 w-5", r.rank === 1 ? "text-yellow-500" : r.rank === 2 ? "text-slate-400" : "text-amber-700")} />
                   <RankAvatar row={r} size={r.rank === 1 ? "h-14 w-14" : "h-11 w-11"} />
                   <div className="mt-1 w-full truncate text-xs font-bold">{r.display_name}</div>
-                  <div className="text-[10px] uppercase text-primary">{levelForXp(r.xp).current.name}</div>
+                  <div className="text-[10px] font-bold uppercase">{levelForXp(r.xp).current.name}</div>
                   <div className="text-[10px] text-muted-foreground">{r.xp.toLocaleString()} XP</div>
                 </button>
               ) : <div key={i} />,
@@ -292,12 +301,12 @@ function RankAvatar({ row, size }: { row: RankRow; size: string }) {
 
 function RankLine({ row, onSelect }: { row: RankRow; onSelect: (id: string) => void }) {
   return (
-    <li role="button" tabIndex={0} onKeyDown={(e) => e.key === "Enter" && onSelect(row.client_id)} onClick={() => onSelect(row.client_id)} className={cn("flex cursor-pointer items-center gap-3 px-3 py-2 text-sm hover:bg-muted/40", row.is_me && "bg-primary/10")}>
+    <li role="button" tabIndex={0} onKeyDown={(e) => e.key === "Enter" && onSelect(row.client_id)} onClick={() => onSelect(row.client_id)} className={cn("flex cursor-pointer items-center gap-3 border-l-4 px-3 py-2 text-sm transition hover:brightness-[0.98]", levelColor(row.xp), row.is_me && "ring-1 ring-inset ring-primary")}>
       <span className="w-6 text-center font-bold text-muted-foreground">{row.rank}</span>
       <RankAvatar row={row} size="h-8 w-8" />
       <div className="min-w-0 flex-1">
         <div className="truncate font-semibold">{row.display_name}{row.is_me ? " (You)" : ""}</div>
-        <div className="text-[10px] uppercase text-primary">{levelForXp(row.xp).current.name}</div>
+        <div className="text-[10px] font-bold uppercase">{levelForXp(row.xp).current.name}</div>
       </div>
       <span className="text-xs text-muted-foreground">{row.xp.toLocaleString()} XP</span>
     </li>
