@@ -17,14 +17,24 @@ const ICONS: Record<string, LucideIcon> = {
   chart: ChartLine, target: Target, medal: Medal, crown: Crown, clock: Clock, star: Star,
 };
 
-export function BadgeIcon({ icon, rarity, locked, size = "md" }: { icon: string; rarity: Rarity; locked?: boolean; size?: "sm" | "md" | "lg" }) {
+const BADGE_PALETTES = [
+  "from-rose-200 via-pink-300 to-red-400 border-rose-500 text-rose-800 shadow-rose-500/30",
+  "from-orange-200 via-amber-300 to-yellow-400 border-orange-500 text-orange-800 shadow-orange-500/30",
+  "from-emerald-200 via-green-300 to-teal-400 border-emerald-500 text-emerald-800 shadow-emerald-500/30",
+  "from-cyan-200 via-sky-300 to-blue-400 border-sky-500 text-blue-800 shadow-sky-500/30",
+  "from-indigo-200 via-violet-300 to-purple-400 border-violet-500 text-violet-800 shadow-violet-500/30",
+  "from-fuchsia-200 via-pink-300 to-purple-400 border-fuchsia-500 text-fuchsia-800 shadow-fuchsia-500/30",
+];
+const paletteFor = (key:string) => BADGE_PALETTES[[...key].reduce((n,c)=>n+c.charCodeAt(0),0)%BADGE_PALETTES.length];
+
+export function BadgeIcon({ icon, rarity, locked, size = "md", badgeKey = icon }: { icon: string; rarity: Rarity; locked?: boolean; size?: "sm" | "md" | "lg"; badgeKey?: string }) {
   const Icon = ICONS[icon] ?? Award;
   const r = RARITY_STYLE[rarity];
   const dims = size === "lg" ? "h-20 w-20" : size === "sm" ? "h-8 w-8" : "h-12 w-12";
   const ic = size === "lg" ? "h-9 w-9" : size === "sm" ? "h-4 w-4" : "h-6 w-6";
   return (
     <span className={cn("relative flex shrink-0 items-center justify-center rounded-full border-2 transition-transform duration-200", dims,
-      locked ? "border-dashed border-border bg-muted/40 text-muted-foreground" : cn(r.ring, r.glow, r.text, "ring-2 ring-white/70 ring-offset-1"))}>
+      locked ? "border-dashed border-border bg-muted/40 text-muted-foreground" : cn("bg-gradient-to-br shadow-lg ring-2 ring-white/80 ring-offset-1", paletteFor(badgeKey), rarity==="legendary"&&"ring-amber-300"))}>
       {locked ? <Lock className={ic} /> : <><span className="absolute inset-1 rounded-full bg-white/20" /><Icon className={cn(ic,"relative z-10 drop-shadow-sm")} strokeWidth={2.6} /></>}
     </span>
   );
@@ -43,7 +53,7 @@ function DetailSheet({ badge, onClose }: { badge: DetailBadge | null; onClose: (
       <SheetContent side="bottom" className="rounded-t-2xl pb-safe-bottom">
         {badge && r && (
           <div className="flex flex-col items-center gap-3 py-2 text-center">
-            <BadgeIcon icon={badge.icon_key} rarity={badge.rarity} locked={!badge.earned_at} size="lg" />
+            <BadgeIcon icon={badge.icon_key} rarity={badge.rarity} locked={!badge.earned_at} size="lg" badgeKey={badge.badge_key} />
             <SheetHeader className="items-center text-center">
               <div className={cn("text-[10px] font-black uppercase tracking-[0.2em]", r.text)}>{r.label} · {badge.category}</div>
               <SheetTitle className="text-xl font-black">{badge.name}</SheetTitle>
@@ -77,8 +87,8 @@ function Tile({ b, onClick }: { b: DetailBadge; onClick: () => void }) {
   return (
     <button type="button" onClick={onClick}
       className={cn("flex min-h-[112px] flex-col items-center justify-start gap-1 rounded-xl border p-2 text-center transition active:scale-95",
-        earned ? cn(r.ring, "bg-card shadow-sm hover:-translate-y-0.5 hover:shadow-md") : "border-dashed border-border/70 opacity-70")}>
-      <BadgeIcon icon={b.icon_key} rarity={b.rarity} locked={!earned} />
+        earned ? cn("bg-card shadow-md hover:-translate-y-0.5 hover:shadow-lg", paletteFor(b.badge_key).split(" ").find(x=>x.startsWith("border-"))) : "border-dashed border-border/70 opacity-70")}>
+      <BadgeIcon icon={b.icon_key} rarity={b.rarity} locked={!earned} badgeKey={b.badge_key} />
       <span className="text-[11px] font-bold leading-tight">{b.name}</span>
       {earned ? (
         <span className={cn("text-[9px] font-semibold uppercase tracking-wider", r.text)}>{r.label}</span>
@@ -110,7 +120,7 @@ export function MyAchievementsRow({ catalog, earned, metrics }: {
         className="mt-3 flex w-full items-center justify-between gap-2 rounded-lg border border-border px-3 py-2 text-left text-xs transition hover:border-primary/40">
         <span className="flex min-w-0 items-center gap-2">
           <span className="flex -space-x-2">
-            {top.length ? top.map((b) => <BadgeIcon key={b.badge_key} icon={b.icon_key} rarity={b.rarity} size="sm" />)
+            {top.length ? top.map((b) => <BadgeIcon key={b.badge_key} icon={b.icon_key} rarity={b.rarity} size="sm" badgeKey={b.badge_key} />)
               : <BadgeIcon icon="award" rarity="common" locked size="sm" />}
           </span>
           <span className="font-semibold">Achievements <span className="font-normal text-muted-foreground">{got.length}/{items.length}</span></span>
