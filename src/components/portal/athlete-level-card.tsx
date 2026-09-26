@@ -41,6 +41,7 @@ export function AthleteLevelCard({ clientId }: { clientId: string }) {
   const stats = statsFromEvents(events);
   const { data: catalog = [] } = useBadgeCatalog();
   const { data: earned = [] } = useMyAchievements(clientId);
+  useState(() => { const h=()=>setOpen("levels"); window.addEventListener("jf-open-athlete-levels",h); return () => window.removeEventListener("jf-open-athlete-levels",h); });
 
   return (
     <>
@@ -68,11 +69,6 @@ export function AthleteLevelCard({ clientId }: { clientId: string }) {
           <button type="button" onClick={() => setOpen("powerlifting")} className="flex min-h-14 w-full items-center gap-3 border-b px-4 py-3 text-left transition-colors hover:bg-muted/40 active:bg-muted/60">
             <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary"><Medal className="h-4 w-4" /></span>
             <span className="min-w-0 flex-1"><span className="block text-sm font-bold leading-tight">Powerlifting Records</span><span className="mt-0.5 block text-[11px] leading-tight text-muted-foreground">DOTS, total & competition PRs</span></span>
-            <span className="shrink-0 text-xl font-semibold text-primary">›</span>
-          </button>
-          <button type="button" onClick={() => setOpen("levels")} className="flex min-h-14 w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-muted/40 active:bg-muted/60">
-            <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary"><Info className="h-4 w-4" /></span>
-            <span className="min-w-0 flex-1"><span className="block text-sm font-bold leading-tight">Athlete Levels</span><span className="mt-0.5 block text-[11px] leading-tight text-muted-foreground">See the full progression ladder</span></span>
             <span className="shrink-0 text-xl font-semibold text-primary">›</span>
           </button>
         </div>
@@ -241,7 +237,7 @@ function RankingsView({ myStats, myBadgeCount }: { myStats: BadgeStats; myBadgeC
     <div className="space-y-4">
       <SheetHeader className="text-left">
         <SheetTitle>JF Athlete Leaderboard</SheetTitle>
-        <SheetDescription>Top 10 by lifetime Athlete XP. Tap an athlete to compare achievements.</SheetDescription>
+        <SheetDescription>Top 10 by lifetime Athlete XP. Tap an athlete to compare achievements.</SheetDescription><Button variant="outline" className="mt-3 h-10 w-full rounded-xl text-xs font-bold" onClick={() => window.dispatchEvent(new CustomEvent("jf-open-athlete-levels"))}><Info className="mr-2 h-4 w-4 text-primary" /> View Athlete Levels ›</Button>
       </SheetHeader>
       {isPending ? (
         <div className="py-8 text-center text-sm text-muted-foreground">Loading…</div>
