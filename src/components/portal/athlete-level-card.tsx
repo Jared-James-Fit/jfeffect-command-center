@@ -45,6 +45,7 @@ export function AthleteLevelCard({ clientId }: { clientId: string }) {
 
   return (
     <>
+      <AchievementCelebrations clientId={clientId} catalog={catalog} earned={earned} />
       <Card className="p-4">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
