@@ -10650,6 +10650,8 @@ export type Database = {
           priority: string | null
           read_by_admin_at: string | null
           read_by_client_at: string | null
+          reply_preview: Json | null
+          reply_to_message_id: string | null
           scheduled_at: string | null
           scheduled_by: string | null
           scheduled_tz: string | null
@@ -10682,6 +10684,8 @@ export type Database = {
           priority?: string | null
           read_by_admin_at?: string | null
           read_by_client_at?: string | null
+          reply_preview?: Json | null
+          reply_to_message_id?: string | null
           scheduled_at?: string | null
           scheduled_by?: string | null
           scheduled_tz?: string | null
@@ -10714,6 +10718,8 @@ export type Database = {
           priority?: string | null
           read_by_admin_at?: string | null
           read_by_client_at?: string | null
+          reply_preview?: Json | null
+          reply_to_message_id?: string | null
           scheduled_at?: string | null
           scheduled_by?: string | null
           scheduled_tz?: string | null
@@ -10730,6 +10736,13 @@ export type Database = {
             columns: ["client_id"]
             isOneToOne: false
             referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "messages_reply_to_message_id_fkey"
+            columns: ["reply_to_message_id"]
+            isOneToOne: false
+            referencedRelation: "messages"
             referencedColumns: ["id"]
           },
         ]
