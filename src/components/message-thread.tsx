@@ -10,7 +10,7 @@ import {
   listReactions, toggleReaction, REACTION_EMOJIS,
   listOlderMessages,
   type Message, type MessageAttachment, type SenderRole, type ConversationState,
-  type MessageReaction,
+  type MessageReaction, type MessageReplyPreview,
 } from "@/lib/messages";
 import type { SharedAttachment } from "@/components/chat-shared";
 import { transcribeVoiceMessage } from "@/lib/voice-transcribe.functions";
@@ -49,7 +49,7 @@ import {
   Paperclip, Send, X, FileText, Image as ImageIcon, Video, Link as LinkIcon, ExternalLink,
   Mic, Trash2, Play, Pause, Camera, File as FileIcon, Flag, AlertCircle, AlertTriangle,
   Gauge, Download, ChevronDown, ChevronUp, Square, Loader2, MoreHorizontal, Pencil, Check,
-  CheckCircle2, Circle, CheckSquare, Copy,
+  CheckCircle2, Circle, CheckSquare, Copy, Reply,
 } from "lucide-react";
 import { format, parseISO, isToday, isYesterday } from "date-fns";
 import { runJob } from "@/lib/progress-jobs";
@@ -78,6 +78,25 @@ function fmtTime(iso: string) {
   if (isToday(d)) return format(d, "h:mm a");
   if (isYesterday(d)) return `Yesterday ${format(d, "h:mm a")}`;
   return format(d, "MMM d, h:mm a");
+}
+
+function makeReplyPreview(message: Message): MessageReplyPreview {
+  const first = message.attachments?.[0];
+  return {
+    sender_role: message.sender_role,
+    body: (message.body || "").trim().slice(0, 260),
+    attachment_type: first?.type ?? null,
+    attachment_name: first?.name ?? null,
+    is_internal_note: !!message.is_internal_note,
+  };
+}
+
+function replyPreviewText(preview?: MessageReplyPreview | null) {
+  if (!preview) return "Original message";
+  if (preview.body) return preview.body;
+  if (preview.attachment_name) return preview.attachment_name;
+  if (preview.attachment_type) return `${preview.attachment_type.charAt(0).toUpperCase()}${preview.attachment_type.slice(1)} attachment`;
+  return "Attachment";
 }
 
 const LINK_RE = /\bhttps?:\/\/[^\s)]+/gi;
@@ -672,6 +691,9 @@ export function MessageThread({
   const qc = useQueryClient();
   const [body, setBody] = useState("");
   const [attachments, setAttachments] = useState<MessageAttachment[]>([]);
+  const [replyingTo, setReplyingTo] = useState<Message | null>(null);
+  const [flashMessageId, setFlashMessageId] = useState<string | null>(null);
+  const composerRef = useRef<HTMLTextAreaElement | null>(null);
   const [liftReviewOpen, setLiftReviewOpen] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState<{ name: string; pct: number } | null>(null);
@@ -698,7 +720,7 @@ export function MessageThread({
   const ensureCheckinsFn = useServerFn(ensureDueMessengerCheckins);
   // Defer PWA updates while there's an in-flight composer draft. No unload prompt
   // — chat threads navigate freely and the draft is short-lived.
-  useUnsavedWarning(body.trim().length > 0 || sending || uploading, { warnOnUnload: false });
+  useUnsavedWarning(body.trim().length > 0 || !!replyingTo || sending || uploading, { warnOnUnload: false });
   const [preview, setPreview] = useState<{
     blob: Blob; url: string; duration: number; peaks: number[];
   } | null>(null);
@@ -767,6 +789,8 @@ export function MessageThread({
   // Reset the older-messages buffer when switching conversations or roles.
   useEffect(() => {
     setOlderMessages([]);
+    setReplyingTo(null);
+    setFlashMessageId(null);
   }, [clientId, role]);
 
   const allMessages = useMemo(() => {
@@ -1122,6 +1146,28 @@ export function MessageThread({
     initialUnreadFirstIdRef.current = null;
   }, [clientId]);
 
+  const startReply = (message: Message) => {
+    if (message.deleted_at || message.id.startsWith("optimistic-")) return;
+    setReplyingTo(message);
+    setSheetForId(null);
+    setActionsForId(null);
+    requestAnimationFrame(() => composerRef.current?.focus());
+  };
+
+  const jumpToReplySource = (messageId?: string | null) => {
+    if (!messageId) return;
+    const node = document.getElementById(`message-${messageId}`);
+    if (!node) {
+      toast.message("Original message is outside the loaded history.");
+      return;
+    }
+    node.scrollIntoView({ behavior: "smooth", block: "center" });
+    setFlashMessageId(messageId);
+    window.setTimeout(() => {
+      setFlashMessageId((current) => current === messageId ? null : current);
+    }, 1400);
+  };
+
   // ---------- Long-press + selection helpers ----------
   const startLongPress = (id: string, x: number, y: number) => {
     if (longPressRef.current?.t) clearTimeout(longPressRef.current.t);
@@ -1318,6 +1364,10 @@ export function MessageThread({
     const text = (opts?.body ?? body).trim();
     const atts = [...attachments, ...(opts?.extraAttachments ?? [])];
     if (!text && atts.length === 0) return null;
+    const replyTarget = replyingTo && !replyingTo.deleted_at && !replyingTo.id.startsWith("optimistic-")
+      ? replyingTo
+      : null;
+    const replyPreview = replyTarget ? makeReplyPreview(replyTarget) : null;
     
     // Direct send — no ProgressDrawer popup for simple messages.
     // The button spinner (Loader2) provides sufficient feedback.
@@ -1351,11 +1401,14 @@ export function MessageThread({
       read_by_client_at: role === "client" ? nowIso : null,
       created_at: nowIso,
       updated_at: nowIso,
+      reply_to_message_id: replyTarget?.id ?? null,
+      reply_preview: replyPreview,
       delivery_status: "sending",
     };
     qc.setQueryData<Message[]>(key, (prev) => [...(prev ?? []), optimistic]);
     setBody("");
     setAttachments([]);
+    setReplyingTo(null);
     setInternalNote(false);
     broadcastTyping(true);
     try {
@@ -1368,6 +1421,8 @@ export function MessageThread({
         messageType,
         isInternalNote: role === "admin" ? internalNote : false,
         priority: role === "admin" ? priority : undefined,
+        replyToMessageId: replyTarget?.id ?? null,
+        replyPreview,
       });
       // Swap the optimistic row for the persisted row (dedupe if realtime
       // already delivered it via INSERT).
@@ -1385,6 +1440,7 @@ export function MessageThread({
           ? { ...m, delivery_status: "failed" as const, delivery_error: e?.message ?? "Failed to send" }
           : m),
       );
+      if (replyTarget) setReplyingTo(replyTarget);
       toast.error(e?.message ?? "Failed to send");
       return null;
     }
@@ -1471,8 +1527,10 @@ export function MessageThread({
                 </div>
               )}
               <div
+              id={`message-${m.id}`}
               className={cn(
-                "relative flex w-full min-w-0 items-end gap-2 will-change-transform",
+                "relative flex w-full min-w-0 items-end gap-2 will-change-transform rounded-2xl transition-[background-color,box-shadow] duration-500",
+                flashMessageId === m.id && "bg-primary/10 ring-2 ring-primary/25 ring-offset-2 ring-offset-background",
                 mine ? "justify-end" : "justify-start",
                 selectionMode && "cursor-pointer",
                 (() => {
@@ -1586,6 +1644,42 @@ export function MessageThread({
                   }
                 }}
               >
+                {!isDeleted && m.reply_to_message_id && m.reply_preview && (
+                  <button
+                    type="button"
+                    data-no-doubletap
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      jumpToReplySource(m.reply_to_message_id);
+                    }}
+                    className={cn(
+                      "mb-2 block w-full rounded-xl border-l-2 px-2.5 py-2 text-left transition",
+                      mine
+                        ? "border-primary-foreground/60 bg-primary-foreground/10 hover:bg-primary-foreground/15"
+                        : "border-primary/60 bg-background/55 hover:bg-background/80",
+                    )}
+                    title="Jump to original message"
+                  >
+                    <div className={cn(
+                      "mb-0.5 text-[10px] font-bold",
+                      mine ? "text-primary-foreground/80" : "text-primary",
+                    )}>
+                      {m.reply_preview.sender_role === role
+                        ? "You"
+                        : m.reply_preview.is_internal_note
+                          ? "Internal note"
+                          : role === "admin"
+                            ? peerName ?? "Client"
+                            : "Coach Jared"}
+                    </div>
+                    <div className={cn(
+                      "line-clamp-2 text-xs leading-snug",
+                      mine ? "text-primary-foreground/80" : "text-muted-foreground",
+                    )}>
+                      {replyPreviewText(m.reply_preview)}
+                    </div>
+                  </button>
+                )}
                 {m.is_internal_note && (
                   <div className="mb-1 text-[10px] font-bold uppercase tracking-widest text-warning">Internal Coach Note</div>
                 )}
@@ -1852,6 +1946,34 @@ export function MessageThread({
       >
         {/* Quick replies removed — keeping the composer minimal. */}
 
+        {replyingTo && (
+          <div className="flex items-center gap-2 rounded-xl border border-primary/20 bg-primary/5 px-3 py-2">
+            <Reply className="h-4 w-4 shrink-0 text-primary" />
+            <div className="min-w-0 flex-1 border-l-2 border-primary/50 pl-2">
+              <div className="text-[10px] font-bold text-primary">
+                Replying to {replyingTo.sender_role === role
+                  ? "your message"
+                  : role === "admin"
+                    ? peerName ?? "client"
+                    : "Coach Jared"}
+              </div>
+              <div className="truncate text-xs text-muted-foreground">
+                {replyPreviewText(makeReplyPreview(replyingTo))}
+              </div>
+            </div>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7 shrink-0 rounded-full"
+              onClick={() => setReplyingTo(null)}
+              aria-label="Cancel reply"
+            >
+              <X className="h-4 w-4" />
+            </Button>
+          </div>
+        )}
+
         {uploadProgress && (
           <div className="flex items-center gap-2 rounded-xl border border-primary/20 bg-primary/5 px-3 py-2 text-xs">
             <div className="min-w-0 flex-1">
@@ -2034,6 +2156,7 @@ export function MessageThread({
 
             {/* Textarea */}
             <Textarea
+              ref={composerRef}
               value={body}
               onChange={(e) => {
                 setBody(e.target.value);
