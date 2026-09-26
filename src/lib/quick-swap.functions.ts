@@ -162,3 +162,100 @@ export const applySwap = createServerFn({ method: "POST" })
     if (error) throw error;
     return { updatedRowIds: (updated ?? []).map((r: any) => r.id), count: (updated ?? []).length };
   });
+
+const AddExerciseInput = z.object({
+  dayId: z.string().uuid(),
+  exerciseId: z.string().uuid(),
+});
+
+const ReorderExerciseInput = z.object({
+  dayId: z.string().uuid(),
+  orderedRowIds: z.array(z.string().uuid()).min(1),
+});
+
+async function assertVisibleDay(supabase: any, dayId: string) {
+  // Caller-scoped read intentionally authorizes the day through existing RLS.
+  const { data, error } = await supabase
+    .from("pl_days")
+    .select("id")
+    .eq("id", dayId)
+    .maybeSingle();
+  if (error) throw error;
+  if (!data) throw new Error("Workout not found");
+}
+
+/**
+ * Client/coach quick-edit helpers for an in-progress workout. The caller must
+ * already be able to read the day through RLS; only the write itself escalates
+ * because trainee RLS intentionally keeps prescription rows read-only.
+ */
+export const addExerciseToWorkout = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((data: unknown) => AddExerciseInput.parse(data))
+  .handler(async ({ data, context }) => {
+    await assertVisibleDay(context.supabase, data.dayId);
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+
+    const { data: ex, error: exErr } = await supabaseAdmin
+      .from("exercises")
+      .select("id, default_measurement_type")
+      .eq("id", data.exerciseId)
+      .eq("archived", false)
+      .maybeSingle();
+    if (exErr) throw exErr;
+    if (!ex) throw new Error("Exercise not found");
+
+    const { data: existing, error: rowsErr } = await supabaseAdmin
+      .from("pl_exercise_rows")
+      .select("sort_order")
+      .eq("day_id", data.dayId)
+      .order("sort_order", { ascending: false })
+      .limit(1);
+    if (rowsErr) throw rowsErr;
+    const nextOrder = Number(existing?.[0]?.sort_order ?? -1) + 1;
+    const isTime = (ex as any).default_measurement_type === "time";
+
+    const { data: row, error } = await supabaseAdmin
+      .from("pl_exercise_rows")
+      .insert({
+        day_id: data.dayId,
+        exercise_id: data.exerciseId,
+        sort_order: nextOrder,
+        sets: 1,
+        reps_text: isTime ? null : "8–12",
+        measurement_type: isTime ? "time" : "reps",
+        tracking_type: isTime ? "time" : "reps_weight",
+        time_profile: "accessory_compound",
+      })
+      .select("id")
+      .single();
+    if (error) throw error;
+    return { rowId: row.id };
+  });
+
+export const reorderWorkoutExercises = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((data: unknown) => ReorderExerciseInput.parse(data))
+  .handler(async ({ data, context }) => {
+    await assertVisibleDay(context.supabase, data.dayId);
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { data: rows, error: readErr } = await supabaseAdmin
+      .from("pl_exercise_rows")
+      .select("id")
+      .eq("day_id", data.dayId);
+    if (readErr) throw readErr;
+    const actual = new Set((rows ?? []).map((r: any) => r.id));
+    if (data.orderedRowIds.length !== actual.size || data.orderedRowIds.some((id) => !actual.has(id))) {
+      throw new Error("Workout order changed. Refresh and try again.");
+    }
+
+    for (let i = 0; i < data.orderedRowIds.length; i += 1) {
+      const { error } = await supabaseAdmin
+        .from("pl_exercise_rows")
+        .update({ sort_order: i })
+        .eq("id", data.orderedRowIds[i])
+        .eq("day_id", data.dayId);
+      if (error) throw error;
+    }
+    return { count: data.orderedRowIds.length };
+  });
