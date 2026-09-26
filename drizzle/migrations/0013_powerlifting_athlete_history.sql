@@ -48,3 +48,17 @@ language sql stable security definer set search_path=public as $$
  order by r.points desc nulls last,r.total_kg desc;
 $$;
 grant execute on function public.get_powerlifting_rankings() to authenticated;
+
+
+create or replace function public.attach_powerlifting_athlete() returns trigger language plpgsql set search_path=public as $$
+begin
+ if new.athlete_id is null then
+   select a.id into new.athlete_id from public.powerlifting_athletes a
+   where (new.client_id is not null and a.client_id=new.client_id)
+      or (new.client_id is null and a.client_id is null and lower(a.athlete_name)=lower(new.athlete_name) and a.sex=new.sex)
+   order by (a.client_id is not null) desc limit 1;
+ end if;
+ return new;
+end $$;
+drop trigger if exists attach_powerlifting_athlete_trigger on public.athlete_powerlifting_results;
+create trigger attach_powerlifting_athlete_trigger before insert or update on public.athlete_powerlifting_results for each row execute function public.attach_powerlifting_athlete();
