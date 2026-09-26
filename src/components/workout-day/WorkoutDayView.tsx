@@ -3311,8 +3311,6 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
           </div>
         )}
       </div>
-        )}
-      </div>
 
       {/* Utility row — cues + help grouped on the left, Rest takes the premium
           right-side slot immediately above the set table (repeated loop). */}
