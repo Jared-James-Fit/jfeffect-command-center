@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, ArrowUp, ArrowDown, Check, CheckCircle2, Circle, StickyNote, NotebookPen, Info, Maximize2, Minimize2, AlertTriangle, RefreshCw, Send, MessageCircle, ChevronDown, ChevronUp, Zap, Trophy, MoreHorizontal, Undo2, HelpCircle, Loader2 } from "lucide-react";
+import { ArrowLeft, ArrowUp, ArrowDown, ChevronsUpDown, Check, CheckCircle2, Circle, StickyNote, NotebookPen, Info, Maximize2, Minimize2, AlertTriangle, RefreshCw, Send, MessageCircle, ChevronDown, ChevronUp, Zap, Trophy, MoreHorizontal, Undo2, HelpCircle, Loader2 } from "lucide-react";
 
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
@@ -691,6 +691,29 @@ function WorkoutDay({
     try {
       await reorderExercisesSrv({ data: { dayId, orderedRowIds: ordered } });
       await qc.refetchQueries({ queryKey: ["pl-day-rows", dayId] });
+    } catch (error: any) {
+      await qc.refetchQueries({ queryKey: ["pl-day-rows", dayId] });
+      toast.error(error?.message ?? "Could not move exercise");
+    }
+  };
+
+  const moveExerciseTo = async (rowId: string, position: number) => {
+    if (!canEditWorkoutStructure) return;
+    const current = (rows as any[]).map((row) => row.id as string);
+    const from = current.indexOf(rowId);
+    const to = Math.max(0, Math.min(current.length - 1, position - 1));
+    if (from < 0 || from === to) return;
+    const ordered = [...current];
+    const [moved] = ordered.splice(from, 1);
+    ordered.splice(to, 0, moved);
+    qc.setQueryData(
+      ["pl-day-rows", dayId, adapter?.kind ?? null, adapter?.ref.ownerId ?? null],
+      ordered.map((id) => (rows as any[]).find((row) => row.id === id)),
+    );
+    try {
+      await reorderExercisesSrv({ data: { dayId, orderedRowIds: ordered } });
+      await qc.refetchQueries({ queryKey: ["pl-day-rows", dayId] });
+      toast.success(`Moved to exercise ${to + 1}`);
     } catch (error: any) {
       await qc.refetchQueries({ queryKey: ["pl-day-rows", dayId] });
       toast.error(error?.message ?? "Could not move exercise");
@@ -2392,8 +2415,11 @@ function WorkoutDay({
                 swapContext={swapContextForRow(adapter, dayId, r.id)}
                 canMoveUp={canEditWorkoutStructure && rowIndex > 0}
                 canMoveDown={canEditWorkoutStructure && rowIndex < (rows as any[]).length - 1}
+                movePosition={canEditWorkoutStructure ? rowIndex + 1 : undefined}
+                moveCount={canEditWorkoutStructure ? (rows as any[]).length : undefined}
                 onMoveUp={() => void moveExerciseNow(r.id, -1)}
                 onMoveDown={() => void moveExerciseNow(r.id, 1)}
+                onMoveTo={(position) => void moveExerciseTo(r.id, position)}
               />
               )
             ))}
@@ -2732,7 +2758,7 @@ function PreviousLiftChip({ data, displayUnit, className }: { data: PreviousLift
   );
 }
 
-function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, existingResults, previousLift = null, repMaxBests = null, assistedBests = null, existingNote, notesLoading = false, readonly = false, unit = "kg", onUnitChange, focusMode = false, onChange, onNoteChange, purposeLabel = null, swapContext = undefined, canMoveUp = false, canMoveDown = false, onMoveUp, onMoveDown }: { row: any; dayId: string; dayTitle: string; dayIndex?: number | null; clientId: string | undefined; blockId?: string | null; existingResults: any[]; previousLift?: PreviousLift | null; repMaxBests?: Map<number, PreviousLiftLog> | null; assistedBests?: Map<number, PreviousLiftLog> | null; existingNote?: any; notesLoading?: boolean; readonly?: boolean; unit?: "kg" | "lb"; onUnitChange?: (u: "kg" | "lb") => void; focusMode?: boolean; onChange: () => void; onNoteChange: () => void; purposeLabel?: string | null; swapContext?: { kind: "client" } | { kind: "member"; enrollmentId: string; weekIndex: number; dayIndex: number; exerciseIndex: number } | undefined; canMoveUp?: boolean; canMoveDown?: boolean; onMoveUp?: () => void; onMoveDown?: () => void }) {
+function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, existingResults, previousLift = null, repMaxBests = null, assistedBests = null, existingNote, notesLoading = false, readonly = false, unit = "kg", onUnitChange, focusMode = false, onChange, onNoteChange, purposeLabel = null, swapContext = undefined, canMoveUp = false, canMoveDown = false, movePosition, moveCount, onMoveUp, onMoveDown, onMoveTo }: { row: any; dayId: string; dayTitle: string; dayIndex?: number | null; clientId: string | undefined; blockId?: string | null; existingResults: any[]; previousLift?: PreviousLift | null; repMaxBests?: Map<number, PreviousLiftLog> | null; assistedBests?: Map<number, PreviousLiftLog> | null; existingNote?: any; notesLoading?: boolean; readonly?: boolean; unit?: "kg" | "lb"; onUnitChange?: (u: "kg" | "lb") => void; focusMode?: boolean; onChange: () => void; onNoteChange: () => void; purposeLabel?: string | null; swapContext?: { kind: "client" } | { kind: "member"; enrollmentId: string; weekIndex: number; dayIndex: number; exerciseIndex: number } | undefined; canMoveUp?: boolean; canMoveDown?: boolean; movePosition?: number; moveCount?: number; onMoveUp?: () => void; onMoveDown?: () => void; onMoveTo?: (position: number) => void }) {
   const adapter = useOptionalAdapter();
   const name = row.exercises?.name ?? row.exercise_name_override ?? "Exercise";
   const exercise = row.exercises ?? null;
@@ -3252,29 +3278,39 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
           difficulty={(exercise as any)?.difficulty ?? null}
           swapContext={swapContext}
         />
-        {(canMoveUp || canMoveDown) && (
+        {(canMoveUp || canMoveDown || (moveCount ?? 0) > 1) && (
           <div className="inline-flex overflow-hidden rounded-full border border-border bg-background">
-            <button
-              type="button"
-              onClick={onMoveUp}
-              disabled={!canMoveUp}
+            <button type="button" onClick={onMoveUp} disabled={!canMoveUp}
               className="grid h-7 w-8 place-items-center text-muted-foreground transition hover:bg-muted hover:text-foreground disabled:opacity-25"
-              aria-label={`Move ${name} up`}
-              title="Move exercise up"
-            >
+              aria-label={`Move ${name} up`} title="Move exercise up">
               <ArrowUp className="h-3.5 w-3.5" />
             </button>
-            <button
-              type="button"
-              onClick={onMoveDown}
-              disabled={!canMoveDown}
-              className="grid h-7 w-8 place-items-center border-l border-border text-muted-foreground transition hover:bg-muted hover:text-foreground disabled:opacity-25"
-              aria-label={`Move ${name} down`}
-              title="Move exercise down"
-            >
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button type="button"
+                  className="inline-flex h-7 items-center gap-1 border-x border-border px-2 text-[10px] font-bold text-muted-foreground hover:bg-muted hover:text-foreground"
+                  aria-label={`Move ${name} to another position`} title="Change exercise order">
+                  <ChevronsUpDown className="h-3 w-3" />
+                  {movePosition}/{moveCount}
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start" className="max-h-64 min-w-36 overflow-y-auto">
+                {Array.from({ length: moveCount ?? 0 }, (_, i) => i + 1).map((position) => (
+                  <DropdownMenuItem key={position} disabled={position === movePosition}
+                    onSelect={() => onMoveTo?.(position)} className="text-xs font-semibold">
+                    {position === movePosition ? `Position ${position} · Current` : `Move to position ${position}`}
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+            <button type="button" onClick={onMoveDown} disabled={!canMoveDown}
+              className="grid h-7 w-8 place-items-center text-muted-foreground transition hover:bg-muted hover:text-foreground disabled:opacity-25"
+              aria-label={`Move ${name} down`} title="Move exercise down">
               <ArrowDown className="h-3.5 w-3.5" />
             </button>
           </div>
+        )}
+      </div>
         )}
       </div>
 
