@@ -326,7 +326,7 @@ function PowerliftingRecordsView() {
   return <div className="space-y-4">
     <SheetHeader className="text-left">
       <SheetTitle>JF Powerlifting Records</SheetTitle>
-      <SheetDescription>See the best competition results achieved while each athlete was coached by JF. One athlete can only hold one spot on each leaderboard. Use GL Points first for strength relative to bodyweight, or switch to DOTS, Total, Squat, Bench or Deadlift.</SheetDescription>
+      <SheetDescription>JF-coached meet records. One athlete, one spot. Tap a category for their best.</SheetDescription>
     </SheetHeader>
     <div className="grid grid-cols-3 gap-1 rounded-xl bg-muted p-1 sm:grid-cols-6">{tabs.map(([k,label])=><button key={k} type="button" onClick={()=>setTab(k)} className={cn("rounded-lg px-2 py-2 text-[11px] font-bold",tab===k?"bg-background shadow-sm":"text-muted-foreground")}>{label}</button>)}</div>
     {(tab==="gl"||tab==="dots")&&<div className="rounded-xl border bg-muted/20 px-3 py-2 text-xs text-muted-foreground"><b className="text-foreground">{tab==="gl"?"GL Points":"DOTS"}:</b> a bodyweight-adjusted score used to compare powerlifting performances across different bodyweights. Higher is better.</div>}
