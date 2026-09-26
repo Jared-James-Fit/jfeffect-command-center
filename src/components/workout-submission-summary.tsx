@@ -74,9 +74,12 @@ export function WorkoutSubmissionSummary({ open, onOpenChange, summary, workoutT
   return (
     <Dialog open={open} onOpenChange={(v) => { onOpenChange(v); if (!v) onClose?.(); }}>
       <DialogContent
-        className="flex max-h-[90svh] w-[calc(100vw-1rem)] max-w-[440px] flex-col overflow-hidden rounded-[24px] border-border/80 bg-background p-0 shadow-2xl [&>button]:hidden"
+        className="bottom-0 top-auto flex w-full max-w-none translate-x-[-50%] translate-y-0 flex-col overflow-hidden rounded-b-none rounded-t-[28px] border-border/80 bg-background p-0 shadow-2xl sm:bottom-auto sm:top-1/2 sm:max-w-[460px] sm:-translate-y-1/2 sm:rounded-[24px] [&>button]:hidden"
+        style={{ maxHeight: "calc(100svh - max(env(safe-area-inset-top), 0.5rem))" }}
       >
-        <header className="shrink-0 border-b border-border/70 bg-gradient-to-b from-primary/[0.09] to-background px-4 pb-3 pt-3.5 sm:px-5">
+        <header className="shrink-0 border-b border-border/70 bg-gradient-to-b from-primary/[0.09] to-background px-4 pb-3 pt-3 sm:px-5 sm:pt-4">
+          <div className="mx-auto mb-2 h-1 w-10 rounded-full bg-muted-foreground/20 sm:hidden" />
+
           <div className="flex items-start gap-3">
             <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-primary/[0.12] text-primary ring-1 ring-primary/15">
               <Trophy className="h-5 w-5" />
@@ -85,10 +88,10 @@ export function WorkoutSubmissionSummary({ open, onOpenChange, summary, workoutT
             <div className="min-w-0 flex-1">
               <div className="flex items-start justify-between gap-2">
                 <DialogHeader className="min-w-0 space-y-0 text-left">
-                  <DialogTitle className="truncate text-[1.35rem] font-black leading-tight tracking-tight">
+                  <DialogTitle className="text-[1.35rem] font-black leading-none tracking-tight sm:text-[1.45rem]">
                     {headline}
                   </DialogTitle>
-                  <DialogDescription className="mt-0.5 line-clamp-1 text-[11px] leading-snug">
+                  <DialogDescription className="mt-1 line-clamp-1 text-[11px] leading-snug">
                     {workoutTitle ?? "Workout"}{dateLabel ? ` · ${dateLabel}` : ""}
                   </DialogDescription>
                 </DialogHeader>
@@ -105,9 +108,9 @@ export function WorkoutSubmissionSummary({ open, onOpenChange, summary, workoutT
                 </Button>
               </div>
 
-              <div className="mt-2 flex flex-wrap items-center gap-2">
+              <div className="mt-2 flex min-w-0 items-center gap-2">
                 {ratingStars > 0 && (
-                  <div className="flex items-center gap-0.5">
+                  <div className="flex shrink-0 items-center gap-0.5">
                     {[1, 2, 3, 4, 5].map((i) => (
                       <Star
                         key={i}
@@ -117,7 +120,7 @@ export function WorkoutSubmissionSummary({ open, onOpenChange, summary, workoutT
                     <span className="ml-1 text-[10px] font-bold text-muted-foreground">{ratingStars}/5</span>
                   </div>
                 )}
-                <span className="text-[10px] font-semibold text-foreground/[0.65]">
+                <span className="min-w-0 truncate text-[10px] font-semibold text-foreground/60">
                   {motivational}
                 </span>
               </div>
@@ -134,11 +137,16 @@ export function WorkoutSubmissionSummary({ open, onOpenChange, summary, workoutT
                   Personal records
                 </div>
                 <div className="mt-1.5 space-y-1">
-                  {prList.slice(0, 4).map((pr) => (
+                  {prList.slice(0, 3).map((pr) => (
                     <div key={`${pr.exerciseName}-${pr.reps}`} className="text-[13px] font-bold leading-snug text-foreground">
                       {formatPR(pr)}
                     </div>
                   ))}
+                  {prList.length > 3 && (
+                    <div className="text-[11px] font-semibold text-muted-foreground">
+                      +{prList.length - 3} more PR{prList.length - 3 === 1 ? "" : "s"}
+                    </div>
+                  )}
                 </div>
               </section>
             )}
@@ -148,9 +156,9 @@ export function WorkoutSubmissionSummary({ open, onOpenChange, summary, workoutT
                 <div className="text-[10px] font-black uppercase tracking-[0.14em] text-muted-foreground">
                   Today's takeaways
                 </div>
-                <div className="mt-2 space-y-1.5">
-                  {displayTakeaways.slice(0, 3).map((t) => (
-                    <div key={t} className="text-[13px] leading-[1.35] text-foreground">
+                <div className="mt-1.5 space-y-1">
+                  {displayTakeaways.slice(0, 2).map((t) => (
+                    <div key={t} className="text-[12px] leading-[1.35] text-foreground">
                       {t}
                     </div>
                   ))}
@@ -158,17 +166,17 @@ export function WorkoutSubmissionSummary({ open, onOpenChange, summary, workoutT
               </section>
             )}
 
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-3 gap-2">
               <MetricHero
                 icon={<Gauge className="h-3.5 w-3.5" />}
-                label="Workout score"
+                label="Score"
                 value={`${summary.score}`}
                 suffix="/100"
-                sub={`${summary.completionPct}% complete`}
+                sub={`${summary.completionPct}% done`}
               />
               <MetricHero
                 icon={<Heart className="h-3.5 w-3.5" />}
-                label="Est. recovery"
+                label="Recovery"
                 value={recovery.hasData ? `${recovery.score}` : "—"}
                 suffix={recovery.hasData ? "/100" : ""}
                 sub={
@@ -176,22 +184,20 @@ export function WorkoutSubmissionSummary({ open, onOpenChange, summary, workoutT
                     ? recovery.score >= 80 ? "Fresh"
                       : recovery.score >= 60 ? "Steady"
                       : recovery.score >= 40 ? "Depleted"
-                      : "Very depleted"
-                    : "Add a review"
+                      : "Very low"
+                    : "Add review"
                 }
+              />
+              <MetricHero
+                icon={<Dumbbell className="h-3.5 w-3.5" />}
+                label="Volume"
+                value={summary.totalLiftedFmt}
+                compact
               />
             </div>
 
-            <section className="rounded-2xl border border-border/80 bg-card/[0.55] p-3">
-              <div className="mb-2 text-[10px] font-black uppercase tracking-[0.14em] text-muted-foreground">
-                Session stats
-              </div>
-              <div className="grid grid-cols-2 gap-x-3 gap-y-3 sm:grid-cols-3">
-                <CompactStat
-                  icon={<Dumbbell className="h-3.5 w-3.5" />}
-                  label="Volume"
-                  value={summary.totalLiftedFmt}
-                />
+            <section className="overflow-hidden rounded-2xl border border-border/80 bg-card/60">
+              <div className="grid grid-cols-2 divide-x divide-y divide-border/70">
                 <CompactStat
                   icon={<CheckCircle2 className="h-3.5 w-3.5" />}
                   label="Exercises"
@@ -212,44 +218,49 @@ export function WorkoutSubmissionSummary({ open, onOpenChange, summary, workoutT
                   label="Duration"
                   value={durationMin != null && durationMin > 0 ? `${durationMin} min` : "—"}
                 />
-                <CompactStat
-                  icon={<Flame className="h-3.5 w-3.5" />}
-                  label="Avg RPE"
-                  value={summary.avgRpe != null ? `${summary.avgRpe}` : "—"}
-                />
+              </div>
+
+              <div className="flex items-center gap-2 border-t border-border/70 px-3 py-2.5 text-[11px]">
+                <div className="flex min-w-0 flex-1 items-center gap-1.5">
+                  <Flame className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                  <span className="text-muted-foreground">Avg RPE</span>
+                  <span className="font-black text-foreground">{summary.avgRpe != null ? summary.avgRpe : "—"}</span>
+                </div>
+                <div className="h-4 w-px bg-border" />
+                <div className="flex min-w-0 flex-1 items-center justify-end gap-1.5">
+                  <CircleX className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                  <span className="text-muted-foreground">Missed</span>
+                  <span className="font-black text-foreground">{summary.missedExercises.length}</span>
+                </div>
               </div>
             </section>
 
-            {(cardio || summary.missedExercises.length > 0) && (
-              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                {cardio && (
-                  <div className="flex items-center gap-2 rounded-xl border border-border bg-card px-3 py-2.5 text-xs">
-                    <Heart className="h-4 w-4 shrink-0 text-primary" />
-                    <div className="min-w-0 flex-1">
-                      <div className="font-bold">Cardio</div>
-                      <div className="truncate text-[11px] text-muted-foreground">
-                        {cardio.status === "logged"
-                          ? cardio.minutes && cardio.minutes > 0 ? `Logged · ${cardio.minutes} min` : "Logged"
-                          : cardio.status === "skipped" ? "Skipped" : "Not logged yet"}
-                      </div>
-                    </div>
+            {cardio && (
+              <div className="flex items-center gap-2 rounded-xl border border-border bg-card px-3 py-2.5 text-xs">
+                <Heart className="h-4 w-4 shrink-0 text-primary" />
+                <div className="min-w-0 flex-1">
+                  <div className="font-bold">Cardio</div>
+                  <div className="truncate text-[11px] text-muted-foreground">
+                    {cardio.status === "logged"
+                      ? cardio.minutes && cardio.minutes > 0 ? `Logged · ${cardio.minutes} min` : "Logged"
+                      : cardio.status === "skipped" ? "Skipped" : "Not logged yet"}
                   </div>
-                )}
+                </div>
+              </div>
+            )}
 
-                {summary.missedExercises.length > 0 && (
-                  <div className="flex items-start gap-2 rounded-xl border border-amber-500/30 bg-amber-500/[0.06] px-3 py-2.5 text-xs">
-                    <CircleX className="mt-0.5 h-4 w-4 shrink-0 text-amber-600 dark:text-amber-300" />
-                    <div className="min-w-0">
-                      <div className="font-bold text-amber-700 dark:text-amber-300">
-                        {summary.missedExercises.length} missed / not logged
-                      </div>
-                      <div className="mt-0.5 line-clamp-2 text-[11px] leading-snug text-muted-foreground">
-                        {summary.missedExercises.slice(0, 4).join(", ")}
-                        {summary.missedExercises.length > 4 ? "…" : ""}
-                      </div>
-                    </div>
+            {summary.missedExercises.length > 0 && (
+              <div className="flex items-start gap-2 rounded-xl border border-amber-500/30 bg-amber-500/[0.06] px-3 py-2.5 text-xs">
+                <CircleX className="mt-0.5 h-4 w-4 shrink-0 text-amber-600 dark:text-amber-300" />
+                <div className="min-w-0">
+                  <div className="font-bold text-amber-700 dark:text-amber-300">
+                    {summary.missedExercises.length} missed / not logged
                   </div>
-                )}
+                  <div className="mt-0.5 line-clamp-2 text-[11px] leading-snug text-muted-foreground">
+                    {summary.missedExercises.slice(0, 4).join(", ")}
+                    {summary.missedExercises.length > 4 ? "…" : ""}
+                  </div>
+                </div>
               </div>
             )}
           </div>
@@ -260,7 +271,7 @@ export function WorkoutSubmissionSummary({ open, onOpenChange, summary, workoutT
           style={{ paddingBottom: "max(env(safe-area-inset-bottom), 0.65rem)" }}
         >
           <Button
-            className="h-10 w-full rounded-xl text-sm font-bold"
+            className="h-11 w-full rounded-xl text-sm font-bold"
             onClick={() => { onOpenChange(false); onClose?.(); }}
           >
             <ChevronLeft className="mr-1.5 h-4 w-4" />
@@ -271,6 +282,7 @@ export function WorkoutSubmissionSummary({ open, onOpenChange, summary, workoutT
     </Dialog>
   );
 }
+}
 
 function MetricHero({
   icon,
@@ -278,24 +290,28 @@ function MetricHero({
   value,
   suffix,
   sub,
+  compact = false,
 }: {
   icon?: React.ReactNode;
   label: string;
   value: string;
   suffix?: string;
   sub?: string;
+  compact?: boolean;
 }) {
   return (
-    <div className="min-w-0 rounded-2xl border border-border/80 bg-card px-3 py-3">
-      <div className="flex items-center gap-1.5 text-[9px] font-black uppercase tracking-[0.12em] text-muted-foreground">
+    <div className="min-w-0 rounded-2xl border border-border/80 bg-card px-2.5 py-3">
+      <div className="flex items-center gap-1 text-[8px] font-black uppercase tracking-[0.1em] text-muted-foreground">
         {icon}
         <span className="truncate">{label}</span>
       </div>
-      <div className="mt-1.5 flex min-w-0 items-baseline gap-1">
-        <span className="text-[1.85rem] font-black leading-none text-primary">{value}</span>
-        {suffix && <span className="text-xs font-bold leading-none text-muted-foreground">{suffix}</span>}
+      <div className="mt-1.5 flex min-w-0 items-baseline gap-0.5">
+        <span className={`${compact ? "truncate text-[1.05rem]" : "text-[1.55rem]"} font-black leading-none text-primary`}>
+          {value}
+        </span>
+        {suffix && <span className="shrink-0 text-[10px] font-bold leading-none text-muted-foreground">{suffix}</span>}
       </div>
-      {sub && <div className="mt-1 truncate text-[10px] font-medium text-muted-foreground">{sub}</div>}
+      {sub && <div className="mt-1 truncate text-[9px] font-medium text-muted-foreground">{sub}</div>}
     </div>
   );
 }
@@ -310,12 +326,12 @@ function CompactStat({
   value: string;
 }) {
   return (
-    <div className="min-w-0">
+    <div className="min-w-0 px-3 py-2.5">
       <div className="flex items-center gap-1 text-[9px] font-black uppercase tracking-[0.1em] text-muted-foreground">
         <span className="shrink-0">{icon}</span>
         <span className="truncate">{label}</span>
       </div>
-      <div className="mt-0.5 truncate text-[1.05rem] font-black leading-tight text-foreground">{value}</div>
+      <div className="mt-0.5 truncate text-[1rem] font-black leading-tight text-foreground">{value}</div>
     </div>
   );
 }
