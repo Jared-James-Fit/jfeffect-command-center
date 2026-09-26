@@ -112,53 +112,50 @@ export function WorkoutSubmissionSummary({ open, onOpenChange, summary, workoutT
         className="bottom-0 top-auto flex w-full max-w-none translate-x-[-50%] translate-y-0 flex-col overflow-hidden rounded-b-none rounded-t-[24px] border-border/80 bg-background p-0 shadow-2xl sm:bottom-auto sm:top-1/2 sm:max-w-[520px] sm:-translate-y-1/2 sm:rounded-[24px] [&>button]:hidden"
         style={{ maxHeight: "min(94svh, 800px)" }}
       >
-        <header className="shrink-0 border-b border-border/70 bg-gradient-to-b from-primary/[0.08] to-background px-4 pb-3 pt-2.5 sm:px-5">
-          <div className="mx-auto mb-2.5 h-1 w-9 rounded-full bg-muted-foreground/20 sm:hidden" />
+        <header className="relative shrink-0 overflow-hidden border-b border-border/70 bg-gradient-to-b from-primary/[0.12] via-primary/[0.04] to-background px-4 pb-4 pt-3 sm:px-5">
+          <div className="mx-auto mb-2 h-1 w-9 rounded-full bg-muted-foreground/20 sm:hidden" />
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="absolute right-3 top-3 z-10 h-9 w-9 rounded-full text-muted-foreground"
+            onClick={() => { onOpenChange(false); onClose?.(); }}
+            aria-label="Close workout summary"
+          >
+            <X className="h-4 w-4" />
+          </Button>
 
-          <div className="flex items-center gap-3">
-            <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-primary/[0.12] text-primary">
-              <Trophy className="h-5 w-5" />
+          <div className={`flex flex-col items-center text-center transition-all duration-500 ${revealStage >= 1 ? "translate-y-0 opacity-100" : "translate-y-2 opacity-0"}`}>
+            <div className="relative grid h-14 w-14 place-items-center rounded-full bg-primary text-primary-foreground shadow-lg">
+              <CheckCircle2 className="h-7 w-7" />
+              {revealStage >= 2 && <Sparkles className="absolute -right-2 -top-1 h-5 w-5 animate-pulse text-primary" />}
             </div>
-            <DialogHeader className="min-w-0 flex-1 space-y-0 text-left">
-              <DialogTitle className="text-xl font-black leading-tight tracking-tight sm:text-[1.35rem]">
-                {headline}
-              </DialogTitle>
-              <DialogDescription className="mt-0.5 line-clamp-1 text-[11px]">
+            <div className="mt-2 text-[10px] font-black uppercase tracking-[0.22em] text-primary">Workout complete</div>
+            <DialogHeader className="mt-1 space-y-0 text-center">
+              <DialogTitle className="text-2xl font-black leading-tight tracking-tight">{headline}</DialogTitle>
+              <DialogDescription className="mt-1 text-[11px]">
                 {workoutTitle ?? "Workout"}{dateLabel ? ` · ${dateLabel}` : ""}
               </DialogDescription>
             </DialogHeader>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              className="h-9 w-9 shrink-0 rounded-full text-muted-foreground"
-              onClick={() => { onOpenChange(false); onClose?.(); }}
-              aria-label="Close workout summary"
-            >
-              <X className="h-4 w-4" />
-            </Button>
-          </div>
 
-          <div className="mt-2.5 flex items-center justify-between gap-3">
-            {ratingStars > 0 && (
-              <div className="flex shrink-0 items-center gap-0.5">
+            <div className="mt-3 flex items-end justify-center gap-1 tabular-nums">
+              <span className="text-5xl font-black leading-none text-primary">{displayScore}</span>
+              <span className="pb-1 text-xs font-bold text-muted-foreground">/100</span>
+            </div>
+            <div className="mt-1 text-[10px] font-black uppercase tracking-[0.14em] text-muted-foreground">Workout score</div>
+
+            {ratingStars > 0 && revealStage >= 2 && (
+              <div className="mt-2 flex items-center gap-0.5 animate-in fade-in zoom-in-95 duration-500">
                 {[1, 2, 3, 4, 5].map((i) => (
-                  <Star
-                    key={i}
-                    className={`h-3.5 w-3.5 ${i <= ratingStars ? "fill-amber-400 text-amber-400" : "text-muted-foreground/20"}`}
-                  />
+                  <Star key={i} className={`h-3.5 w-3.5 ${i <= ratingStars ? "fill-amber-400 text-amber-400" : "text-muted-foreground/20"}`} />
                 ))}
-                <span className="ml-1 text-[10px] font-bold text-muted-foreground">{ratingStars}/5</span>
               </div>
             )}
-            <span className="min-w-0 truncate text-right text-[10px] font-semibold text-foreground/60">
-              {motivational}
-            </span>
           </div>
         </header>
 
         <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-3 [scrollbar-width:none] sm:px-5 [&::-webkit-scrollbar]:hidden">
-          <div className="space-y-2.5">
+          <div className={`space-y-2.5 transition-all duration-500 ${revealStage >= 2 ? "translate-y-0 opacity-100" : "translate-y-3 opacity-0"}`}>
             {prList.length > 0 && (
               <section className="rounded-2xl border border-amber-500/30 bg-amber-500/[0.06] p-3">
                 <div className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-[0.14em] text-amber-700 dark:text-amber-300">
