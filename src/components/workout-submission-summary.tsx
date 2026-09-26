@@ -74,8 +74,8 @@ export function WorkoutSubmissionSummary({ open, onOpenChange, summary, workoutT
   return (
     <Dialog open={open} onOpenChange={(v) => { onOpenChange(v); if (!v) onClose?.(); }}>
       <DialogContent
-        className="bottom-0 top-auto flex w-full max-w-none translate-x-[-50%] translate-y-0 flex-col overflow-hidden rounded-b-none rounded-t-[24px] border-border/80 bg-background p-0 shadow-2xl sm:bottom-auto sm:top-1/2 sm:max-w-[500px] sm:-translate-y-1/2 sm:rounded-[24px] [&>button]:hidden"
-        style={{ maxHeight: "min(92svh, 760px)" }}
+        className="bottom-0 top-auto flex w-full max-w-none translate-x-[-50%] translate-y-0 flex-col overflow-hidden rounded-b-none rounded-t-[24px] border-border/80 bg-background p-0 shadow-2xl sm:bottom-auto sm:top-1/2 sm:max-w-[520px] sm:-translate-y-1/2 sm:rounded-[24px] [&>button]:hidden"
+        style={{ maxHeight: "min(94svh, 800px)" }}
       >
         <header className="shrink-0 border-b border-border/70 bg-gradient-to-b from-primary/[0.08] to-background px-4 pb-3 pt-2.5 sm:px-5">
           <div className="mx-auto mb-2.5 h-1 w-9 rounded-full bg-muted-foreground/20 sm:hidden" />
@@ -194,7 +194,7 @@ export function WorkoutSubmissionSummary({ open, onOpenChange, summary, workoutT
                   <div className="mt-0.5 truncate text-xl font-black leading-tight text-foreground">{summary.totalLiftedFmt}</div>
                 </div>
               </div>
-              <div className="grid grid-cols-3 divide-x divide-y divide-border/70">
+              <div className="grid grid-cols-2 divide-x divide-y divide-border/70">
                 <CompactStat icon={<CheckCircle2 className="h-3.5 w-3.5" />} label="Exercises" value={`${summary.exercisesCompleted}/${summary.exercisesTotal}`} />
                 <CompactStat icon={<Activity className="h-3.5 w-3.5" />} label="Sets" value={`${summary.completedSets}/${summary.prescribedSets}`} />
                 <CompactStat icon={<Repeat2 className="h-3.5 w-3.5" />} label="Reps" value={`${summary.totalReps}`} />
@@ -268,18 +268,18 @@ function MetricHero({
   compact?: boolean;
 }) {
   return (
-    <div className="min-w-0 px-3.5 py-3">
-      <div className="flex items-center justify-center gap-1 text-[8px] font-black uppercase tracking-[0.08em] text-muted-foreground">
+    <div className="flex min-w-0 flex-col items-center justify-center px-3 py-3.5 text-center">
+      <div className="flex min-h-4 items-center justify-center gap-1 text-[8px] font-black uppercase tracking-[0.08em] text-muted-foreground">
         {icon}
         <span className="truncate">{label}</span>
       </div>
-      <div className="mt-1.5 flex min-w-0 items-baseline gap-0.5">
+      <div className="mt-1.5 flex min-w-0 items-baseline justify-center gap-1 tabular-nums">
         <span className={`${compact ? "truncate text-[1.05rem] text-foreground" : "text-[1.8rem] text-primary"} font-black leading-none`}>
           {value}
         </span>
         {suffix && <span className="shrink-0 text-[10px] font-bold leading-none text-muted-foreground">{suffix}</span>}
       </div>
-      {sub && <div className="mt-1 truncate text-[9px] font-medium text-muted-foreground">{sub}</div>}
+      {sub && <div className="mt-1.5 w-full truncate text-center text-[9px] font-medium text-muted-foreground">{sub}</div>}
     </div>
   );
 }
@@ -294,12 +294,12 @@ function CompactStat({
   value: string;
 }) {
   return (
-    <div className="min-w-0 px-3 py-2.5 text-center">
-      <div className="flex items-center gap-1 text-[9px] font-black uppercase tracking-[0.1em] text-muted-foreground">
+    <div className="flex min-w-0 flex-col items-center justify-center px-2.5 py-3 text-center">
+      <div className="flex items-center justify-center gap-1 text-[9px] font-black uppercase tracking-[0.08em] text-muted-foreground">
         <span className="shrink-0">{icon}</span>
         <span className="truncate">{label}</span>
       </div>
-      <div className="mt-1 truncate text-[1rem] font-black leading-tight text-foreground">{value}</div>
+      <div className="mt-1 w-full truncate text-center text-[1rem] font-black leading-tight tabular-nums text-foreground">{value}</div>
     </div>
   );
 }
