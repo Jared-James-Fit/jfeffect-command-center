@@ -5,6 +5,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { searchEligibleExercises } from "@/lib/exercise-search";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { cn } from "@/lib/utils";
 import {
   Sheet,
   SheetContent,
@@ -24,9 +25,13 @@ type ExerciseLite = {
 export function WorkoutAddExercise({
   onAdd,
   disabled = false,
+  subtle = false,
+  className,
 }: {
   onAdd: (exercise: ExerciseLite) => Promise<void>;
   disabled?: boolean;
+  subtle?: boolean;
+  className?: string;
 }) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
@@ -57,21 +62,37 @@ export function WorkoutAddExercise({
 
   return (
     <>
-      <Button
-        type="button"
-        variant="outline"
-        className="h-10 w-full rounded-xl border-dashed border-primary/40 bg-primary/5 font-bold text-primary"
-        disabled={disabled}
-        onClick={() => setOpen(true)}
-      >
-        <Plus className="mr-2 h-4 w-4" /> Add exercise
-      </Button>
+      {subtle ? (
+        <div className={cn("flex items-center gap-2 py-0.5", className)}>
+          <span className="h-px flex-1 bg-border/60" aria-hidden />
+          <button
+            type="button"
+            disabled={disabled}
+            onClick={() => setOpen(true)}
+            className="inline-flex h-7 shrink-0 items-center gap-1 rounded-full px-2.5 text-[11px] font-semibold text-muted-foreground transition hover:bg-primary/5 hover:text-primary active:scale-[0.98] disabled:pointer-events-none disabled:opacity-40"
+          >
+            <Plus className="h-3 w-3" />
+            Add exercise
+          </button>
+          <span className="h-px flex-1 bg-border/60" aria-hidden />
+        </div>
+      ) : (
+        <Button
+          type="button"
+          variant="outline"
+          className={cn("h-10 w-full rounded-xl border-dashed border-primary/40 bg-primary/5 font-bold text-primary", className)}
+          disabled={disabled}
+          onClick={() => setOpen(true)}
+        >
+          <Plus className="mr-2 h-4 w-4" /> Add exercise
+        </Button>
+      )}
 
       <Sheet open={open} onOpenChange={setOpen}>
         <SheetContent side="bottom" hideCloseButton className="flex max-h-[88dvh] flex-col gap-0 overflow-hidden p-0">
           <SheetHeader className="shrink-0 border-b border-border px-4 py-4 text-left">
             <SheetTitle>Add exercise</SheetTitle>
-            <SheetDescription>Add it to this workout now. You can move it up or down after adding.</SheetDescription>
+            <SheetDescription>Add it here without leaving the workout.</SheetDescription>
             <div className="relative mt-2">
               <Search className="pointer-events-none absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
               <Input
