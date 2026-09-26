@@ -317,8 +317,8 @@ function PowerliftingRecordsView() {
     queryFn: async () => { const { data, error } = await (supabase as any).rpc("get_powerlifting_athlete_roster"); if (error) throw error; return (data ?? []) as any[]; },
   });
   const pointSystem = (r:any) => String(r.points_system||"").toUpperCase();
-  const value = (r:any) => tab==="gl"||tab==="dots" ? Number(r.points??0) : Number(r[tab==="total"?"total_kg":tab+"_kg"]??0);
-  const eligible = data.filter((r:any)=> (division==="overall" || String(r.sex).toLowerCase()===division) && (tab==="gl" ? pointSystem(r)==="GL" : tab==="dots" ? pointSystem(r)==="DOTS" : true));
+  const value = (r:any) => tab==="gl" ? Number(r.gl_points??0) : tab==="dots" ? Number(r.dots_points??0) : Number(r[tab==="total"?"total_kg":tab+"_kg"]??0);
+  const eligible = data.filter((r:any)=> String(r.sex).toLowerCase()===division);
   const ordered=[...eligible].filter((r:any)=>value(r)>0).sort((a:any,b:any)=>value(b)-value(a));
   const seen=new Set<string>();
   const sorted=ordered.filter((r:any)=>{const key=r.athlete_id||r.client_id||String(r.athlete_name||"").toLowerCase();if(seen.has(key))return false;seen.add(key);return true}).slice(0,10);
