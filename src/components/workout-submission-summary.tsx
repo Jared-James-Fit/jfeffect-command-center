@@ -1,6 +1,7 @@
+import { useEffect, useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Trophy, Dumbbell, Activity, CheckCircle2, Flame, Clock, Star, ChevronLeft, Heart, X, Gauge, Repeat2, CircleX } from "lucide-react";
+import { Trophy, Dumbbell, Activity, CheckCircle2, Flame, Clock, Star, ChevronLeft, Heart, X, Repeat2, CircleX, Sparkles } from "lucide-react";
 import type { WorkoutSummary } from "@/lib/workout-summary";
 import { format } from "date-fns";
 import { computeRecoveryScore } from "@/lib/analytics/recovery-score";
@@ -32,17 +33,46 @@ type Props = {
 
 export function WorkoutSubmissionSummary({ open, onOpenChange, summary, workoutTitle, durationMin, workoutDate, sessionRating, sessionRpe, pain, prs, cardio, onClose }: Props) {
   const prList = prs ?? [];
+  const [revealStage, setRevealStage] = useState(0);
+  const [displayScore, setDisplayScore] = useState(0);
+
+  useEffect(() => {
+    if (!open) {
+      setRevealStage(0);
+      setDisplayScore(0);
+      return;
+    }
+    setRevealStage(0);
+    setDisplayScore(0);
+    const intro = window.setTimeout(() => setRevealStage(1), 450);
+    const details = window.setTimeout(() => setRevealStage(2), 1450);
+    return () => {
+      window.clearTimeout(intro);
+      window.clearTimeout(details);
+    };
+  }, [open]);
+
+  useEffect(() => {
+    if (!open || revealStage < 1) return;
+    const target = Math.max(0, Math.min(100, summary.score));
+    const started = performance.now();
+    const duration = 700;
+    let frame = 0;
+    const tick = (now: number) => {
+      const progress = Math.min(1, (now - started) / duration);
+      const eased = 1 - Math.pow(1 - progress, 3);
+      setDisplayScore(Math.round(target * eased));
+      if (progress < 1) frame = requestAnimationFrame(tick);
+    };
+    frame = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(frame);
+  }, [open, revealStage, summary.score]);
   const headline =
     prList.length > 0 ? "New PR!"
     : summary.score >= 90 ? "Crushed it!"
     : summary.score >= 75 ? "Great work!"
     : summary.score >= 50 ? "Solid effort"
     : "Logged — keep going";
-  const motivational =
-    summary.score >= 90 ? "Elite session. Recover hard — momentum is yours."
-    : summary.score >= 75 ? "Strong work today. Consistency stacks results."
-    : summary.score >= 50 ? "Reps in the bank. Show up again tomorrow."
-    : "Logged is better than skipped. Back at it next session.";
   const takeaways = buildWorkoutTakeaways(summary, prList, cardio ?? null);
   // The star rating on the celebration screen represents session quality.
   // Historically it only showed the client's self-reported `overall_rating`,
@@ -77,55 +107,52 @@ export function WorkoutSubmissionSummary({ open, onOpenChange, summary, workoutT
         className="bottom-0 top-auto flex w-full max-w-none translate-x-[-50%] translate-y-0 flex-col overflow-hidden rounded-b-none rounded-t-[24px] border-border/80 bg-background p-0 shadow-2xl sm:bottom-auto sm:top-1/2 sm:max-w-[520px] sm:-translate-y-1/2 sm:rounded-[24px] [&>button]:hidden"
         style={{ maxHeight: "min(94svh, 800px)" }}
       >
-        <header className="shrink-0 border-b border-border/70 bg-gradient-to-b from-primary/[0.08] to-background px-4 pb-3 pt-2.5 sm:px-5">
-          <div className="mx-auto mb-2.5 h-1 w-9 rounded-full bg-muted-foreground/20 sm:hidden" />
+        <header className="relative shrink-0 overflow-hidden border-b border-border/70 bg-gradient-to-b from-primary/[0.12] via-primary/[0.04] to-background px-4 pb-4 pt-3 sm:px-5">
+          <div className="mx-auto mb-2 h-1 w-9 rounded-full bg-muted-foreground/20 sm:hidden" />
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="absolute right-3 top-3 z-10 h-9 w-9 rounded-full text-muted-foreground"
+            onClick={() => { onOpenChange(false); onClose?.(); }}
+            aria-label="Close workout summary"
+          >
+            <X className="h-4 w-4" />
+          </Button>
 
-          <div className="flex items-center gap-3">
-            <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-primary/[0.12] text-primary">
-              <Trophy className="h-5 w-5" />
+          <div className={`flex flex-col items-center text-center transition-all duration-500 ${revealStage >= 1 ? "translate-y-0 opacity-100" : "translate-y-2 opacity-0"}`}>
+            <div className="relative grid h-14 w-14 place-items-center rounded-full bg-primary text-primary-foreground shadow-lg">
+              <CheckCircle2 className="h-7 w-7" />
+              {revealStage >= 2 && <Sparkles className="absolute -right-2 -top-1 h-5 w-5 animate-pulse text-primary" />}
             </div>
-            <DialogHeader className="min-w-0 flex-1 space-y-0 text-left">
-              <DialogTitle className="text-xl font-black leading-tight tracking-tight sm:text-[1.35rem]">
-                {headline}
-              </DialogTitle>
-              <DialogDescription className="mt-0.5 line-clamp-1 text-[11px]">
+            <div className="mt-2 text-[10px] font-black uppercase tracking-[0.22em] text-primary">Workout complete</div>
+            <DialogHeader className="mt-1 space-y-0 text-center">
+              <DialogTitle className="text-2xl font-black leading-tight tracking-tight">{headline}</DialogTitle>
+              <DialogDescription className="mt-1 text-[11px]">
                 {workoutTitle ?? "Workout"}{dateLabel ? ` · ${dateLabel}` : ""}
               </DialogDescription>
             </DialogHeader>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              className="h-9 w-9 shrink-0 rounded-full text-muted-foreground"
-              onClick={() => { onOpenChange(false); onClose?.(); }}
-              aria-label="Close workout summary"
-            >
-              <X className="h-4 w-4" />
-            </Button>
-          </div>
 
-          <div className="mt-2.5 flex items-center justify-between gap-3">
-            {ratingStars > 0 && (
-              <div className="flex shrink-0 items-center gap-0.5">
+            <div className="mt-3 flex items-end justify-center gap-1 tabular-nums">
+              <span className="text-5xl font-black leading-none text-primary">{displayScore}</span>
+              <span className="pb-1 text-xs font-bold text-muted-foreground">/100</span>
+            </div>
+            <div className="mt-1 text-[10px] font-black uppercase tracking-[0.14em] text-muted-foreground">Workout score</div>
+
+            {ratingStars > 0 && revealStage >= 2 && (
+              <div className="mt-2 flex items-center gap-0.5 animate-in fade-in zoom-in-95 duration-500">
                 {[1, 2, 3, 4, 5].map((i) => (
-                  <Star
-                    key={i}
-                    className={`h-3.5 w-3.5 ${i <= ratingStars ? "fill-amber-400 text-amber-400" : "text-muted-foreground/20"}`}
-                  />
+                  <Star key={i} className={`h-3.5 w-3.5 ${i <= ratingStars ? "fill-amber-400 text-amber-400" : "text-muted-foreground/20"}`} />
                 ))}
-                <span className="ml-1 text-[10px] font-bold text-muted-foreground">{ratingStars}/5</span>
               </div>
             )}
-            <span className="min-w-0 truncate text-right text-[10px] font-semibold text-foreground/60">
-              {motivational}
-            </span>
           </div>
         </header>
 
         <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-3 [scrollbar-width:none] sm:px-5 [&::-webkit-scrollbar]:hidden">
-          <div className="space-y-2.5">
+          <div className={`space-y-2.5 transition-all duration-500 ${revealStage >= 2 ? "translate-y-0 opacity-100" : "translate-y-3 opacity-0"}`}>
             {prList.length > 0 && (
-              <section className="rounded-2xl border border-amber-500/30 bg-amber-500/[0.06] p-3">
+              <section className="animate-in zoom-in-95 fade-in slide-in-from-bottom-2 rounded-2xl border border-amber-500/30 bg-amber-500/[0.06] p-3 duration-500">
                 <div className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-[0.14em] text-amber-700 dark:text-amber-300">
                   <Trophy className="h-3.5 w-3.5" />
                   Personal records
@@ -161,48 +188,45 @@ export function WorkoutSubmissionSummary({ open, onOpenChange, summary, workoutT
             )}
 
             <section className="overflow-hidden rounded-2xl border border-border/80 bg-card">
-              <div className="grid grid-cols-2 divide-x divide-border/70">
-                <MetricHero
-                  icon={<Gauge className="h-3.5 w-3.5" />}
-                  label="Workout score"
-                  value={`${summary.score}`}
-                  suffix="/100"
-                  sub={`${summary.completionPct}% completed`}
-                />
-                <MetricHero
-                  icon={<Heart className="h-3.5 w-3.5" />}
-                  label="Est. recovery"
-                  value={recovery.hasData ? `${recovery.score}` : "—"}
-                  suffix={recovery.hasData ? "/100" : ""}
-                  sub={
-                    recovery.hasData
-                      ? recovery.score >= 80 ? "Fresh"
-                        : recovery.score >= 60 ? "Steady"
-                        : recovery.score >= 40 ? "Depleted"
-                        : "Very low"
-                      : "Add review"
-                  }
-                />
+              <div className="grid grid-cols-2 divide-x divide-y divide-border/70">
+                <CompactStat icon={<CheckCircle2 className="h-3.5 w-3.5" />} label="Completed" value={`${summary.completionPct}%`} />
+                <CompactStat icon={<Activity className="h-3.5 w-3.5" />} label="Sets" value={`${summary.completedSets}/${summary.prescribedSets}`} />
+                {summary.totalReps > 0 && (
+                  <CompactStat icon={<Repeat2 className="h-3.5 w-3.5" />} label="Reps" value={`${summary.totalReps}`} />
+                )}
+                {durationMin != null && durationMin > 0 && (
+                  <CompactStat icon={<Clock className="h-3.5 w-3.5" />} label="Duration" value={`${durationMin}m`} />
+                )}
+                {summary.avgRpe != null && (
+                  <CompactStat icon={<Flame className="h-3.5 w-3.5" />} label="Avg RPE" value={`${summary.avgRpe}`} />
+                )}
+                {recovery.hasData && (
+                  <CompactStat
+                    icon={<Heart className="h-3.5 w-3.5" />}
+                    label="Recovery"
+                    value={`${recovery.score}/100`}
+                  />
+                )}
               </div>
+              {summary.totalLifted > 0 && (
+                <div className="flex items-center gap-3 border-t border-border/70 px-3.5 py-3">
+                  <Dumbbell className="h-4 w-4 shrink-0 text-primary" />
+                  <div className="min-w-0 flex-1">
+                    <div className="text-[9px] font-black uppercase tracking-[0.12em] text-muted-foreground">Total volume</div>
+                    <div className="mt-0.5 truncate text-xl font-black leading-tight text-foreground">{summary.totalLiftedFmt}</div>
+                  </div>
+                </div>
+              )}
             </section>
 
-            <section className="overflow-hidden rounded-2xl border border-border/80 bg-card/70">
-              <div className="flex items-center gap-3 border-b border-border/70 px-3.5 py-3">
-                <Dumbbell className="h-4 w-4 shrink-0 text-muted-foreground" />
-                <div className="min-w-0 flex-1">
-                  <div className="text-[9px] font-black uppercase tracking-[0.12em] text-muted-foreground">Total volume</div>
-                  <div className="mt-0.5 truncate text-xl font-black leading-tight text-foreground">{summary.totalLiftedFmt}</div>
+            {prList.length === 0 && displayTakeaways.length === 0 && (
+              <section className="rounded-2xl border border-primary/20 bg-primary/[0.05] p-3 text-center">
+                <div className="text-[10px] font-black uppercase tracking-[0.14em] text-primary">Baseline logged</div>
+                <div className="mt-1 text-xs leading-relaxed text-muted-foreground">
+                  Your trends and achievements will build as you log more sessions.
                 </div>
-              </div>
-              <div className="grid grid-cols-2 divide-x divide-y divide-border/70">
-                <CompactStat icon={<CheckCircle2 className="h-3.5 w-3.5" />} label="Exercises" value={`${summary.exercisesCompleted}/${summary.exercisesTotal}`} />
-                <CompactStat icon={<Activity className="h-3.5 w-3.5" />} label="Sets" value={`${summary.completedSets}/${summary.prescribedSets}`} />
-                <CompactStat icon={<Repeat2 className="h-3.5 w-3.5" />} label="Reps" value={`${summary.totalReps}`} />
-                <CompactStat icon={<Clock className="h-3.5 w-3.5" />} label="Duration" value={durationMin != null && durationMin > 0 ? `${durationMin}m` : "—"} />
-                <CompactStat icon={<Flame className="h-3.5 w-3.5" />} label="Avg RPE" value={summary.avgRpe != null ? `${summary.avgRpe}` : "—"} />
-                <CompactStat icon={<CircleX className="h-3.5 w-3.5" />} label="Missed" value={`${summary.missedExercises.length}`} />
-              </div>
-            </section>
+              </section>
+            )}
 
             {cardio && (
               <div className="flex items-center gap-2 rounded-xl border border-border bg-card px-3 py-2.5 text-xs">
@@ -249,38 +273,6 @@ export function WorkoutSubmissionSummary({ open, onOpenChange, summary, workoutT
         </DialogFooter>
       </DialogContent>
     </Dialog>
-  );
-}
-
-function MetricHero({
-  icon,
-  label,
-  value,
-  suffix,
-  sub,
-  compact = false,
-}: {
-  icon?: React.ReactNode;
-  label: string;
-  value: string;
-  suffix?: string;
-  sub?: string;
-  compact?: boolean;
-}) {
-  return (
-    <div className="flex min-w-0 flex-col items-center justify-center px-3 py-3.5 text-center">
-      <div className="flex min-h-4 items-center justify-center gap-1 text-[8px] font-black uppercase tracking-[0.08em] text-muted-foreground">
-        {icon}
-        <span className="truncate">{label}</span>
-      </div>
-      <div className="mt-1.5 flex min-w-0 items-baseline justify-center gap-1 tabular-nums">
-        <span className={`${compact ? "truncate text-[1.05rem] text-foreground" : "text-[1.8rem] text-primary"} font-black leading-none`}>
-          {value}
-        </span>
-        {suffix && <span className="shrink-0 text-[10px] font-bold leading-none text-muted-foreground">{suffix}</span>}
-      </div>
-      {sub && <div className="mt-1.5 w-full truncate text-center text-[9px] font-medium text-muted-foreground">{sub}</div>}
-    </div>
   );
 }
 
