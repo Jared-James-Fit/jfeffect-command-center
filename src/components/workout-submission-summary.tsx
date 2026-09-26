@@ -282,7 +282,6 @@ export function WorkoutSubmissionSummary({ open, onOpenChange, summary, workoutT
     </Dialog>
   );
 }
-}
 
 function MetricHero({
   icon,
@@ -306,7 +305,7 @@ function MetricHero({
         <span className="truncate">{label}</span>
       </div>
       <div className="mt-1.5 flex min-w-0 items-baseline gap-0.5">
-        <span className={`${compact ? "truncate text-[1.05rem]" : "text-[1.55rem]"} font-black leading-none text-primary`}>
+        <span className={`${compact ? "truncate text-[1.05rem] text-foreground" : "text-[1.55rem] text-primary"} font-black leading-none`}>
           {value}
         </span>
         {suffix && <span className="shrink-0 text-[10px] font-bold leading-none text-muted-foreground">{suffix}</span>}
