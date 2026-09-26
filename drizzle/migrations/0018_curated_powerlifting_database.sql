@@ -1,0 +1,20 @@
+-- Curated JF powerlifting database: permanent athlete rules + multiple coaching periods.
+alter table public.powerlifting_athletes add column if not exists status text not null default 'active';
+alter table public.powerlifting_athletes add column if not exists admin_notes text;
+alter table public.powerlifting_athletes add column if not exists tracking_notes text;
+alter table public.powerlifting_athletes add column if not exists last_reviewed_at timestamptz;
+create table if not exists public.powerlifting_coaching_periods(id uuid primary key default gen_random_uuid(),athlete_id uuid not null references public.powerlifting_athletes(id) on delete cascade,start_date date,end_date date,notes text,created_at timestamptz not null default now(),updated_at timestamptz not null default now());
+create index if not exists powerlifting_periods_athlete_idx on public.powerlifting_coaching_periods(athlete_id);
+alter table public.powerlifting_coaching_periods enable row level security;
+drop policy if exists "Authenticated read coaching periods" on public.powerlifting_coaching_periods;
+create policy "Authenticated read coaching periods" on public.powerlifting_coaching_periods for select to authenticated using (true);
+drop policy if exists "Admin manages coaching periods" on public.powerlifting_coaching_periods;
+create policy "Admin manages coaching periods" on public.powerlifting_coaching_periods for all to authenticated using (public.has_role(auth.uid(),'admin')) with check (public.has_role(auth.uid(),'admin'));
+grant select,insert,update,delete on public.powerlifting_coaching_periods to authenticated;
+insert into public.powerlifting_coaching_periods(athlete_id,start_date,end_date,notes) select id,jf_start_date,jf_end_date,tracking_notes from public.powerlifting_athletes a where not exists(select 1 from public.powerlifting_coaching_periods p where p.athlete_id=a.id);
+drop function if exists public.get_powerlifting_rankings();
+create function public.get_powerlifting_rankings() returns table(id uuid,athlete_id uuid,client_id uuid,athlete_name text,sex text,bodyweight_kg numeric,squat_kg numeric,bench_kg numeric,deadlift_kg numeric,total_kg numeric,points numeric,points_system text,meet_name text,meet_location text,meet_date date,competition_level text,weight_class_kg text,federation text) language sql stable security definer set search_path=public as $$ select r.id,r.athlete_id,r.client_id,r.athlete_name,r.sex,r.bodyweight_kg,r.squat_kg,r.bench_kg,r.deadlift_kg,r.total_kg,r.points,r.points_system,r.meet_name,r.meet_location,r.meet_date,r.competition_level,r.weight_class_kg,r.federation from public.athlete_powerlifting_results r where auth.uid() is not null and exists(select 1 from public.powerlifting_coaching_periods p where p.athlete_id=r.athlete_id and (p.start_date is null or r.meet_date>=p.start_date) and (p.end_date is null or r.meet_date<=p.end_date)) order by r.points desc nulls last,r.total_kg desc; $$;
+grant execute on function public.get_powerlifting_rankings() to authenticated;
+drop function if exists public.get_powerlifting_athlete_roster();
+create function public.get_powerlifting_athlete_roster() returns table(athlete_id uuid,client_id uuid,athlete_name text,sex text,status text,openpowerlifting_url text,country_filter text,tracking_notes text,last_reviewed_at timestamptz,result_count bigint) language sql stable security definer set search_path=public as $$ select a.id,a.client_id,a.athlete_name,a.sex,a.status,a.openpowerlifting_url,a.country_filter,a.tracking_notes,a.last_reviewed_at,count(r.id) from public.powerlifting_athletes a left join public.athlete_powerlifting_results r on r.athlete_id=a.id where auth.uid() is not null group by a.id order by a.athlete_name; $$;
+grant execute on function public.get_powerlifting_athlete_roster() to authenticated;
