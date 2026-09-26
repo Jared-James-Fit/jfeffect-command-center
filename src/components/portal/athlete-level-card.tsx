@@ -206,53 +206,69 @@ function CompareView({ clientId, myStats, onBack }: { clientId: string; myStats:
       return ((data ?? [])[0] ?? null) as any;
     },
   });
-  const them: BadgeStats | null = p ? {
-    xp: Number(p.xp), workoutsCompleted: Number(p.workouts_completed),
-    workoutsFullyLogged: Number(p.workouts_fully_logged), firstWorkoutAt: p.first_workout_at,
-  } : null;
-  const rows = them ? [
-    ["Level", levelForXp(myStats.xp).current.name, levelForXp(them.xp).current.name],
-    ["Lifetime XP", myStats.xp.toLocaleString(), them.xp.toLocaleString()],
-    ["Badges", String(ATHLETE_BADGES.filter((b) => b.earned(myStats)).length), String(ATHLETE_BADGES.filter((b) => b.earned(them)).length)],
-  ] : [];
+  const theirXp = Number(p?.xp ?? 0);
+  const publicIds = new Set<string>((p?.public_badge_ids ?? []) as string[]);
+  const publicBadges = ATHLETE_BADGES.filter((b) => publicIds.has(b.id));
+  const myBadges = ATHLETE_BADGES.filter((b) => b.earned(myStats));
+
   return (
-    <div className="space-y-4">
-      <button type="button" onClick={onBack} className="flex items-center gap-1 text-xs text-muted-foreground"><ArrowLeft className="h-3.5 w-3.5" /> Rankings</button>
-      {isPending ? <div className="py-8 text-center text-sm text-muted-foreground">Loading…</div> : !p || !them ? (
+    <div className="space-y-5">
+      <button type="button" onClick={onBack} className="flex min-h-10 items-center gap-1 text-xs font-semibold text-muted-foreground">
+        <ArrowLeft className="h-3.5 w-3.5" /> Rankings
+      </button>
+      {isPending ? <div className="py-8 text-center text-sm text-muted-foreground">Loading…</div> : !p ? (
         <div className="py-8 text-center text-sm text-muted-foreground">Athlete not available.</div>
       ) : (
         <>
-          <div className="flex items-center gap-3">
-            <RankAvatar row={{ client_id: p.client_id, display_name: p.display_name, avatar_url: p.avatar_url, xp: them.xp, rank: 0, is_me: p.is_me }} size="h-14 w-14" />
-            <div>
-              <div className="text-lg font-black">{p.display_name}</div>
-              <div className="text-xs font-bold uppercase text-primary">{levelForXp(them.xp).current.name}</div>
+          <div className="flex items-center gap-3 rounded-2xl border bg-card p-4">
+            <RankAvatar row={{ client_id: p.client_id, display_name: p.display_name, avatar_url: p.avatar_url, xp: theirXp, rank: 0, is_me: p.is_me }} size="h-14 w-14" />
+            <div className="min-w-0">
+              <div className="truncate text-lg font-black">{p.display_name}</div>
+              <div className="text-xs font-black uppercase tracking-wide text-primary">{levelForXp(theirXp).current.name}</div>
+              <div className="mt-0.5 text-[11px] text-muted-foreground">{theirXp.toLocaleString()} lifetime XP · {publicBadges.length} badges</div>
             </div>
           </div>
+
           {!p.is_me && (
-            <div className="overflow-hidden rounded-xl border text-sm">
-              <div className="grid grid-cols-3 bg-muted/40 px-3 py-1.5 text-[10px] font-semibold uppercase text-muted-foreground">
-                <span /><span className="text-center">You</span><span className="text-center">{p.display_name}</span>
+            <div className="overflow-hidden rounded-2xl border bg-card text-sm">
+              <div className="grid grid-cols-3 bg-muted/40 px-3 py-2 text-[10px] font-black uppercase tracking-wider text-muted-foreground">
+                <span /><span className="text-center">You</span><span className="truncate text-center">{p.display_name}</span>
               </div>
-              {rows.map(([k, a, b]) => (
-                <div key={k} className="grid grid-cols-3 border-t px-3 py-2">
-                  <span className="text-muted-foreground">{k}</span>
-                  <span className="text-center font-bold">{a}</span>
-                  <span className="text-center font-bold">{b}</span>
+              {[
+                ["Level", levelForXp(myStats.xp).current.name, levelForXp(theirXp).current.name],
+                ["Lifetime XP", myStats.xp.toLocaleString(), theirXp.toLocaleString()],
+                ["Badges", String(myBadges.length), String(publicBadges.length)],
+              ].map(([k, a, b]) => (
+                <div key={k} className="grid grid-cols-3 border-t px-3 py-2.5">
+                  <span className="text-xs text-muted-foreground">{k}</span>
+                  <span className="text-center text-xs font-bold">{a}</span>
+                  <span className="text-center text-xs font-bold">{b}</span>
                 </div>
               ))}
             </div>
           )}
+
           <div>
-            <div className="mb-2 text-sm font-semibold">Earned badges</div>
-            <BadgeGrid stats={them} />
+            <div className="mb-2 flex items-end justify-between">
+              <div>
+                <div className="text-sm font-black">Achievement résumé</div>
+                <div className="text-[11px] text-muted-foreground">Only earned public badges are shared.</div>
+              </div>
+              <span className="text-xs font-bold text-muted-foreground">{publicBadges.length} earned</span>
+            </div>
+            {publicBadges.length === 0 ? (
+              <div className="rounded-2xl border p-4 text-sm text-muted-foreground">No public achievements yet.</div>
+            ) : (
+              <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
+                {publicBadges.map((b) => <BadgeTile key={b.id} badge={b} earned />)}
+              </div>
+            )}
           </div>
         </>
       )}
     </div>
   );
 }
-
 function RankingsView({ myStats }: { myStats: BadgeStats }) {
   const [selected, setSelected] = useState<string | null>(null);
   const { data = [], isPending } = useQuery({
