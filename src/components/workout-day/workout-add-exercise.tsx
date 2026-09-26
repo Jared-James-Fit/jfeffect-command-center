@@ -72,7 +72,7 @@ export function WorkoutAddExercise({
             className="inline-flex h-7 shrink-0 items-center gap-1 rounded-full px-2.5 text-[11px] font-semibold text-muted-foreground transition hover:bg-primary/5 hover:text-primary active:scale-[0.98] disabled:pointer-events-none disabled:opacity-40"
           >
             <Plus className="h-3 w-3" />
-            Add exercise
+            Add
           </button>
           <span className="h-px flex-1 bg-border/60" aria-hidden />
         </div>
