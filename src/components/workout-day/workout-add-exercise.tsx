@@ -63,18 +63,19 @@ export function WorkoutAddExercise({
   return (
     <>
       {subtle ? (
-        <div className={cn("flex items-center gap-2 py-0.5", className)}>
-          <span className="h-px flex-1 bg-border/60" aria-hidden />
+        <div className={cn("flex items-center gap-2 py-1", className)}>
+          <span className="h-px flex-1 bg-border/45" aria-hidden />
           <button
             type="button"
             disabled={disabled}
             onClick={() => setOpen(true)}
-            className="inline-flex h-7 shrink-0 items-center gap-1 rounded-full px-2.5 text-[11px] font-semibold text-muted-foreground transition hover:bg-primary/5 hover:text-primary active:scale-[0.98] disabled:pointer-events-none disabled:opacity-40"
+            className="group grid h-7 w-7 shrink-0 place-items-center rounded-full border border-border/70 bg-background text-muted-foreground shadow-sm transition hover:border-primary/40 hover:bg-primary/5 hover:text-primary active:scale-95 disabled:pointer-events-none disabled:opacity-40"
+            aria-label="Add exercise here"
+            title="Add exercise here"
           >
-            <Plus className="h-3 w-3" />
-            Add
+            <Plus className="h-3.5 w-3.5 transition-transform group-hover:scale-110" />
           </button>
-          <span className="h-px flex-1 bg-border/60" aria-hidden />
+          <span className="h-px flex-1 bg-border/45" aria-hidden />
         </div>
       ) : (
         <Button
