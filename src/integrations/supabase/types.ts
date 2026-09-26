@@ -942,6 +942,93 @@ export type Database = {
           },
         ]
       }
+      athlete_achievements: {
+        Row: {
+          badge_key: string
+          client_id: string
+          created_at: string
+          earned_at: string
+          id: string
+        }
+        Insert: {
+          badge_key: string
+          client_id: string
+          created_at?: string
+          earned_at?: string
+          id?: string
+        }
+        Update: {
+          badge_key?: string
+          client_id?: string
+          created_at?: string
+          earned_at?: string
+          id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "athlete_achievements_badge_key_fkey"
+            columns: ["badge_key"]
+            isOneToOne: false
+            referencedRelation: "athlete_badge_catalog"
+            referencedColumns: ["badge_key"]
+          },
+          {
+            foreignKeyName: "athlete_achievements_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      athlete_badge_catalog: {
+        Row: {
+          badge_key: string
+          category: string
+          created_at: string
+          description: string
+          icon_key: string
+          is_active: boolean
+          is_public: boolean
+          metric: string
+          name: string
+          rarity: string
+          requirement: string
+          sort_order: number
+          threshold: number
+        }
+        Insert: {
+          badge_key: string
+          category: string
+          created_at?: string
+          description: string
+          icon_key: string
+          is_active?: boolean
+          is_public?: boolean
+          metric: string
+          name: string
+          rarity: string
+          requirement: string
+          sort_order?: number
+          threshold: number
+        }
+        Update: {
+          badge_key?: string
+          category?: string
+          created_at?: string
+          description?: string
+          icon_key?: string
+          is_active?: boolean
+          is_public?: boolean
+          metric?: string
+          name?: string
+          rarity?: string
+          requirement?: string
+          sort_order?: number
+          threshold?: number
+        }
+        Relationships: []
+      }
       athlete_xp_events: {
         Row: {
           client_id: string
@@ -19186,6 +19273,19 @@ export type Database = {
         Args: { _target_id: string }
         Returns: string
       }
+      get_athlete_public_badges: {
+        Args: { _client_id: string }
+        Returns: {
+          badge_key: string
+          category: string
+          description: string
+          earned_at: string
+          icon_key: string
+          name: string
+          rarity: string
+          requirement: string
+        }[]
+      }
       get_athlete_public_profile: {
         Args: { _client_id: string }
         Returns: {
@@ -19705,6 +19805,10 @@ export type Database = {
           transferred: number
           used: number
         }[]
+      }
+      sync_athlete_achievements: {
+        Args: { _client_id: string }
+        Returns: undefined
       }
       user_can_access_progress: {
         Args: { _target_user: string }

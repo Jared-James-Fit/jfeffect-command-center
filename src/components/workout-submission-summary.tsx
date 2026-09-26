@@ -1,3 +1,4 @@
+import { NewAchievementReveal } from "@/components/portal/new-achievement-reveal";
 import { useEffect, useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -152,6 +153,7 @@ export function WorkoutSubmissionSummary({ open, onOpenChange, summary, workoutT
 
         <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-3 [scrollbar-width:none] sm:px-5 [&::-webkit-scrollbar]:hidden">
           <div className={`space-y-2.5 transition-all duration-500 ${revealStage >= 2 ? "translate-y-0 opacity-100" : "translate-y-3 opacity-0"}`}>
+            <NewAchievementReveal open={open} />
             {prList.length > 0 && (
               <section className="relative overflow-hidden animate-in zoom-in-90 fade-in slide-in-from-bottom-3 rounded-2xl border-2 border-amber-500/40 bg-gradient-to-br from-amber-500/[0.14] via-amber-500/[0.06] to-background p-4 shadow-sm duration-700">
                 <Sparkles className="absolute right-3 top-3 h-5 w-5 animate-pulse text-amber-500" />
