@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Trophy, Dumbbell, Activity, CheckCircle2, Flame, Clock, Star, ChevronLeft, Heart, X, Repeat2, CircleX, Sparkles } from "lucide-react";
+import { Trophy, Dumbbell, Activity, CheckCircle2, Flame, Clock, Star, ChevronLeft, Heart, X, Repeat2, CircleX, Sparkles, Medal } from "lucide-react";
 import type { WorkoutSummary } from "@/lib/workout-summary";
 import { format } from "date-fns";
 import { computeRecoveryScore } from "@/lib/analytics/recovery-score";
@@ -67,8 +67,9 @@ export function WorkoutSubmissionSummary({ open, onOpenChange, summary, workoutT
     frame = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(frame);
   }, [open, revealStage, summary.score]);
+  const hasAchievement = prList.length > 0 || summary.score >= 90 || summary.completionPct === 100;
   const headline =
-    prList.length > 0 ? "New PR!"
+    prList.length > 0 ? (prList.length === 1 ? "NEW PR!" : `${prList.length} NEW PRs!`)
     : summary.score >= 90 ? "Crushed it!"
     : summary.score >= 75 ? "Great work!"
     : summary.score >= 50 ? "Solid effort"
@@ -121,8 +122,8 @@ export function WorkoutSubmissionSummary({ open, onOpenChange, summary, workoutT
           </Button>
 
           <div className={`flex flex-col items-center text-center transition-all duration-500 ${revealStage >= 1 ? "translate-y-0 opacity-100" : "translate-y-2 opacity-0"}`}>
-            <div className="relative grid h-14 w-14 place-items-center rounded-full bg-primary text-primary-foreground shadow-lg">
-              <CheckCircle2 className="h-7 w-7" />
+            <div className={`relative grid h-14 w-14 place-items-center rounded-full shadow-lg ${prList.length > 0 ? "bg-amber-500 text-white ring-4 ring-amber-500/15" : "bg-primary text-primary-foreground"}`}>
+              {prList.length > 0 ? <Trophy className="h-7 w-7 animate-in zoom-in spin-in-6 duration-500" /> : <CheckCircle2 className="h-7 w-7" />}
               {revealStage >= 2 && <Sparkles className="absolute -right-2 -top-1 h-5 w-5 animate-pulse text-primary" />}
             </div>
             <div className="mt-2 text-[10px] font-black uppercase tracking-[0.22em] text-primary">Workout complete</div>
@@ -152,10 +153,20 @@ export function WorkoutSubmissionSummary({ open, onOpenChange, summary, workoutT
         <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-3 [scrollbar-width:none] sm:px-5 [&::-webkit-scrollbar]:hidden">
           <div className={`space-y-2.5 transition-all duration-500 ${revealStage >= 2 ? "translate-y-0 opacity-100" : "translate-y-3 opacity-0"}`}>
             {prList.length > 0 && (
-              <section className="animate-in zoom-in-95 fade-in slide-in-from-bottom-2 rounded-2xl border border-amber-500/30 bg-amber-500/[0.06] p-3 duration-500">
+              <section className="relative overflow-hidden animate-in zoom-in-90 fade-in slide-in-from-bottom-3 rounded-2xl border-2 border-amber-500/40 bg-gradient-to-br from-amber-500/[0.14] via-amber-500/[0.06] to-background p-4 shadow-sm duration-700">
+                <Sparkles className="absolute right-3 top-3 h-5 w-5 animate-pulse text-amber-500" />
+                <div className="mb-2 flex items-center gap-2">
+                  <div className="grid h-9 w-9 place-items-center rounded-full bg-amber-500 text-white shadow-md">
+                    <Medal className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <div className="text-[9px] font-black uppercase tracking-[0.18em] text-amber-700 dark:text-amber-300">Achievement unlocked</div>
+                    <div className="text-base font-black leading-tight text-foreground">{prList.length === 1 ? "New personal record" : `${prList.length} personal records`}</div>
+                  </div>
+                </div>
                 <div className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-[0.14em] text-amber-700 dark:text-amber-300">
                   <Trophy className="h-3.5 w-3.5" />
-                  Personal records
+                  PR breakdown
                 </div>
                 <div className="mt-1.5 space-y-1">
                   {prList.slice(0, 3).map((pr) => (
