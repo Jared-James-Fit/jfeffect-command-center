@@ -79,6 +79,7 @@ export function AthleteLevelCard({ clientId }: { clientId: string }) {
         <SheetContent side="bottom" className="max-h-[88vh] overflow-y-auto rounded-t-2xl pb-safe-bottom">
           {open === "levels" ? <LevelsView total={lvl.xp} events={events} />
             : open === "rankings" ? <RankingsView myStats={stats} myBadgeCount={earned.length} />
+            : open === "powerlifting" ? <PowerliftingRecordsView />
             : null}
         </SheetContent>
       </Sheet>
