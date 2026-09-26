@@ -1147,11 +1147,12 @@ export function MessageThread({
   }, [clientId]);
 
   const startReply = (message: Message) => {
-    if (message.deleted_at || message.id.startsWith("optimistic-")) return;
+    if (message.deleted_at || message.is_internal_note || message.id.startsWith("optimistic-")) return;
     setReplyingTo(message);
     setSheetForId(null);
     setActionsForId(null);
-    requestAnimationFrame(() => composerRef.current?.focus());
+    // Wait for the mobile action sheet to release focus before opening the keyboard.
+    window.setTimeout(() => composerRef.current?.focus(), 120);
   };
 
   const jumpToReplySource = (messageId?: string | null) => {
@@ -1364,7 +1365,7 @@ export function MessageThread({
     const text = (opts?.body ?? body).trim();
     const atts = [...attachments, ...(opts?.extraAttachments ?? [])];
     if (!text && atts.length === 0) return null;
-    const replyTarget = replyingTo && !replyingTo.deleted_at && !replyingTo.id.startsWith("optimistic-")
+    const replyTarget = replyingTo && !replyingTo.deleted_at && !replyingTo.is_internal_note && !replyingTo.id.startsWith("optimistic-")
       ? replyingTo
       : null;
     const replyPreview = replyTarget ? makeReplyPreview(replyTarget) : null;
@@ -1849,7 +1850,7 @@ export function MessageThread({
                           ))}
                         </div>
                         <DropdownMenuSeparator />
-                        {!m.id.startsWith("optimistic-") && (
+                        {!m.is_internal_note && !m.id.startsWith("optimistic-") && (
                           <DropdownMenuItem onClick={() => startReply(m)}>
                             <Reply className="mr-2 h-4 w-4" /> Reply
                           </DropdownMenuItem>
@@ -2206,7 +2207,7 @@ export function MessageThread({
             {/* Voice or Send */}
             {body.trim() || attachments.length > 0 ? (
               <>
-              {role === "admin" && body.trim() && attachments.length === 0 && (
+              {role === "admin" && body.trim() && attachments.length === 0 && !replyingTo && (
                 <ScheduleButton
                   clientId={clientId}
                   body={body}
@@ -2304,7 +2305,7 @@ export function MessageThread({
             const canEdit = m.sender_role === role && !m.deleted_at && (m.body?.length ?? 0) > 0;
             const canDelete = m.sender_role === role && !m.deleted_at;
             const canReact = !m.deleted_at;
-            const canReply = !m.deleted_at && !m.id.startsWith("optimistic-");
+            const canReply = !m.deleted_at && !m.is_internal_note && !m.id.startsWith("optimistic-");
             return (
               <>
                 <SheetHeader className="text-left">
