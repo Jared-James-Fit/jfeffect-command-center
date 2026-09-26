@@ -3292,74 +3292,84 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
         </div>
       )}
       {row.notes && <ExerciseNotesBlock notes={row.notes} />}
-      {/* Row 3 — compact pill tool row (secondary controls: lighter weight) */}
-      <div className="mt-2 flex flex-wrap items-center gap-1 opacity-70 hover:opacity-100 transition-opacity">
-        {hasGuide && <DeferredExerciseHowToButton exerciseId={exerciseId} fallbackName={name} />}
-        <Button size="sm" variant={hasNote ? "default" : "outline"} onClick={() => setNotesOpen(true)} className="h-7 rounded-full px-2.5 text-xs">
-          <StickyNote className="mr-1 h-3 w-3" /> Notes
-        </Button>
-        {/* Generic scratchpad aids (Tally / Stopwatch / Timer). Entirely
-            separate from the prescribed Rest timer below — nothing here
-            writes workout data. */}
-        {!readonly && <WorkoutToolsButton context={name} />}
-        <DeferredQuickSwapButton
-          rowId={row.id}
-          exerciseId={exerciseId}
-          exerciseName={name}
-          muscleGroup={exercise?.muscle_group ?? null}
-          category={exercise?.category ?? null}
-          equipment={(exercise as any)?.equipment ?? null}
-          difficulty={(exercise as any)?.difficulty ?? null}
-          swapContext={swapContext}
-        />
-        {(canMoveUp || canMoveDown || (moveCount ?? 0) > 1) && (
-          <div className="inline-flex overflow-hidden rounded-full border border-border bg-background">
-            <button type="button" onClick={onMoveUp} disabled={!canMoveUp}
-              className="grid h-7 w-8 place-items-center text-muted-foreground transition hover:bg-muted hover:text-foreground disabled:opacity-25"
-              aria-label={`Move ${name} up`} title="Move exercise up">
-              <ArrowUp className="h-3.5 w-3.5" />
-            </button>
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <button type="button"
-                  className="inline-flex h-7 items-center gap-1 border-x border-border px-2 text-[10px] font-bold text-muted-foreground hover:bg-muted hover:text-foreground"
-                  aria-label={`Move ${name} to another position`} title="Change exercise order">
-                  <ChevronsUpDown className="h-3 w-3" />
-                  {movePosition}/{moveCount}
-                </button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="start" className="max-h-64 min-w-36 overflow-y-auto">
-                {Array.from({ length: moveCount ?? 0 }, (_, i) => i + 1).map((position) => (
-                  <DropdownMenuItem key={position} disabled={position === movePosition}
-                    onSelect={() => onMoveTo?.(position)} className="text-xs font-semibold">
-                    {position === movePosition ? `Position ${position} · Current` : `Move to position ${position}`}
+      {/* Keep the logger visually focused on logging. Rest stays one-tap;
+          everything else lives behind one compact overflow menu. */}
+      <div className="mt-2 flex items-center gap-2">
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button
+              type="button"
+              size="sm"
+              variant="ghost"
+              className="h-8 rounded-full px-2.5 text-xs font-semibold text-muted-foreground hover:bg-muted hover:text-foreground"
+              aria-label={`More options for ${name}`}
+            >
+              <MoreHorizontal className="mr-1 h-4 w-4" />
+              More
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start" className="min-w-48">
+            {hasGuide && (
+              <DropdownMenuItem asChild>
+                <DeferredExerciseHowToButton exerciseId={exerciseId} fallbackName={name} />
+              </DropdownMenuItem>
+            )}
+            <DropdownMenuItem onSelect={() => setNotesOpen(true)}>
+              <StickyNote className="mr-2 h-4 w-4" />
+              {hasNote ? "View notes" : "Notes"}
+            </DropdownMenuItem>
+            {cues && (
+              <DropdownMenuItem onSelect={() => setCuesOpen((v) => !v)}>
+                {cuesOpen ? <ChevronUp className="mr-2 h-4 w-4" /> : <ChevronDown className="mr-2 h-4 w-4" />}
+                {cuesOpen ? "Hide cues" : "Show cues"}
+              </DropdownMenuItem>
+            )}
+            <DropdownMenuItem asChild>
+              <TrainingHelpButton size="sm" variant="ghost" className="h-8 w-full justify-start px-2 text-sm font-normal" />
+            </DropdownMenuItem>
+            {!readonly && (
+              <DropdownMenuItem asChild>
+                <WorkoutToolsButton context={name} />
+              </DropdownMenuItem>
+            )}
+            <DropdownMenuSeparator />
+            <DropdownMenuItem asChild>
+              <DeferredQuickSwapButton
+                rowId={row.id}
+                exerciseId={exerciseId}
+                exerciseName={name}
+                muscleGroup={exercise?.muscle_group ?? null}
+                category={exercise?.category ?? null}
+                equipment={(exercise as any)?.equipment ?? null}
+                difficulty={(exercise as any)?.difficulty ?? null}
+                swapContext={swapContext}
+              />
+            </DropdownMenuItem>
+            {(canMoveUp || canMoveDown || (moveCount ?? 0) > 1) && (
+              <>
+                <DropdownMenuSeparator />
+                {canMoveUp && (
+                  <DropdownMenuItem onSelect={onMoveUp}>
+                    <ArrowUp className="mr-2 h-4 w-4" /> Move up
                   </DropdownMenuItem>
-                ))}
-              </DropdownMenuContent>
-            </DropdownMenu>
-            <button type="button" onClick={onMoveDown} disabled={!canMoveDown}
-              className="grid h-7 w-8 place-items-center text-muted-foreground transition hover:bg-muted hover:text-foreground disabled:opacity-25"
-              aria-label={`Move ${name} down`} title="Move exercise down">
-              <ArrowDown className="h-3.5 w-3.5" />
-            </button>
-          </div>
-        )}
-      </div>
-
-      {/* Utility row — cues + help grouped on the left, Rest takes the premium
-          right-side slot immediately above the set table (repeated loop). */}
-      <div className="mt-1.5 flex items-center gap-1">
-        {cues && (
-          <button
-            type="button"
-            onClick={() => setCuesOpen((v) => !v)}
-            className="inline-flex h-8 items-center gap-1 px-1 text-[11px] font-medium text-muted-foreground transition hover:text-foreground"
-          >
-            {cuesOpen ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
-            {cuesOpen ? "Hide cues" : "Show cues"}
-          </button>
-        )}
-        <TrainingHelpButton size="sm" variant="ghost" className="h-8 px-1.5 text-[11px] text-muted-foreground hover:text-foreground" />
+                )}
+                {(moveCount ?? 0) > 1 && Array.from({ length: moveCount ?? 0 }, (_, i) => i + 1)
+                  .filter((position) => position !== movePosition)
+                  .map((position) => (
+                    <DropdownMenuItem key={position} onSelect={() => onMoveTo?.(position)}>
+                      <ChevronsUpDown className="mr-2 h-4 w-4" />
+                      Move to position {position}
+                    </DropdownMenuItem>
+                  ))}
+                {canMoveDown && (
+                  <DropdownMenuItem onSelect={onMoveDown}>
+                    <ArrowDown className="mr-2 h-4 w-4" /> Move down
+                  </DropdownMenuItem>
+                )}
+              </>
+            )}
+          </DropdownMenuContent>
+        </DropdownMenu>
         {(exerciseId || name) && (
           <RestTimerButton
             seconds={effectiveRest ?? null}
