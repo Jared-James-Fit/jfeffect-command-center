@@ -170,27 +170,28 @@ export async function listWaterForDate(userId: string, dateISO: string): Promise
 export async function listWaterHistory(
   userId: string,
   days = 30,
-): Promise<{ date: string; total_ml: number; entries: number }[]> {
+): Promise<{ date: string; total_ml: number; entries: number; logs: WaterEntry[] }[]> {
   const since = new Date();
   since.setDate(since.getDate() - days);
   const sinceISO = since.toISOString().slice(0, 10);
   const { data, error } = await supabase
     .from("progress_water_entries")
-    .select("entry_date, amount_ml")
+    .select("id, entry_date, entry_at, amount_ml, source, note")
     .eq("user_id", userId)
     .gte("entry_date", sinceISO)
     .order("entry_date", { ascending: false });
   if (error) throw error;
-  const map = new Map<string, { total: number; n: number }>();
-  for (const r of (data ?? []) as { entry_date: string; amount_ml: number }[]) {
-    const cur = map.get(r.entry_date) ?? { total: 0, n: 0 };
+  const map = new Map<string, { total: number; n: number; logs: WaterEntry[] }>();
+  for (const r of (data ?? []) as WaterEntry[]) {
+    const cur = map.get(r.entry_date) ?? { total: 0, n: 0, logs: [] };
     cur.total += r.amount_ml;
     cur.n += 1;
+    cur.logs.push(r);
     map.set(r.entry_date, cur);
   }
   return Array.from(map.entries())
     .sort((a, b) => b[0].localeCompare(a[0]))
-    .map(([date, v]) => ({ date, total_ml: v.total, entries: v.n }));
+    .map(([date, v]) => ({ date, total_ml: v.total, entries: v.n, logs: v.logs.sort((a,b)=>b.entry_at.localeCompare(a.entry_at)) }));
 }
 
 export async function addWaterEntry(args: {

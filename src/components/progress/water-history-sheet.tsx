@@ -75,6 +75,15 @@ export function WaterHistorySheet({
                     <span className="text-muted-foreground">{pct}%</span>
                   </div>
                   <Progress value={pct} className="mt-1.5 h-1.5" />
+                  <div className="mt-3 border-t pt-2">
+                    <div className="mb-1.5 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">{d.entries} {d.entries === 1 ? "drink" : "drinks"} logged</div>
+                    <div className="space-y-1.5">{d.logs.map((log) => (
+                      <div key={log.id} className="flex items-center justify-between rounded-lg bg-secondary/50 px-2.5 py-2">
+                        <span className="text-xs font-semibold tabular-nums">{formatWater(log.amount_ml, "L")}</span>
+                        <span className="text-xs text-muted-foreground">{format(new Date(log.entry_at), "h:mm a")}</span>
+                      </div>
+                    ))}</div>
+                  </div>
                 </div>
               );
             })
