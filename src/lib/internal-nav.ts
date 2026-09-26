@@ -100,6 +100,8 @@ const REGISTRY: Entry[] = [
     visibleTo: ["admin", "coach", "assistant_coach"] },
   { to: "/admin/training-intelligence", label: "Training Intel", icon: Activity, group: "Clients",
     visibleTo: ["admin", "coach", "assistant_coach"] },
+  { to: "/admin/athlete-records", label: "Athlete Records", icon: Trophy, group: "Clients",
+    visibleTo: ["admin", "coach"], keywords: ["rankings", "powerlifting", "dots", "gl points", "squat", "bench", "deadlift", "records", "competition level"] },
   { to: "/admin/coaching", label: "Coaching Hub", icon: ClipboardList, group: "Clients",
     visibleTo: ["admin", "coach", "assistant_coach"], section: "Legacy Hubs",
     keywords: ["coaching", "check-ins", "training intelligence", "action requests"] },
