@@ -21,6 +21,7 @@ import { HomeWaterCard } from "@/components/home/home-water-card";
 import { BodyweightSummaryCard } from "@/components/portal/bodyweight-summary-card";
 import { SessionsCard } from "@/components/portal/sessions-card";
 import { SetupChecklistBanner } from "@/components/portal/setup-checklist-banner";
+import { AthleteLevelCard } from "@/components/portal/athlete-level-card";
 import { useEffect, useState } from "react";
 import { listMyPortalAppointments } from "@/lib/appointments.functions";
 import { useServerFn } from "@tanstack/react-start";
@@ -278,6 +279,13 @@ function PortalHome() {
             <UpcomingScheduleCard clientId={client.id} />
           </SectionErrorBoundary>
         )}
+
+        {client?.id && (
+          <SectionErrorBoundary label="Athlete level">
+            <AthleteLevelCard clientId={client.id} />
+          </SectionErrorBoundary>
+        )}
+
 
 
         {/* 2 — Bodyweight tracker (syncs with Progress > Weight tracker) */}

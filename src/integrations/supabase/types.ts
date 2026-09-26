@@ -942,6 +942,56 @@ export type Database = {
           },
         ]
       }
+      athlete_xp_events: {
+        Row: {
+          client_id: string
+          created_at: string
+          event_type: string
+          id: string
+          label: string | null
+          metadata: Json
+          occurred_at: string
+          source_id: string | null
+          source_key: string
+          source_table: string | null
+          xp: number
+        }
+        Insert: {
+          client_id: string
+          created_at?: string
+          event_type: string
+          id?: string
+          label?: string | null
+          metadata?: Json
+          occurred_at?: string
+          source_id?: string | null
+          source_key: string
+          source_table?: string | null
+          xp: number
+        }
+        Update: {
+          client_id?: string
+          created_at?: string
+          event_type?: string
+          id?: string
+          label?: string | null
+          metadata?: Json
+          occurred_at?: string
+          source_id?: string | null
+          source_key?: string
+          source_table?: string | null
+          xp?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "athlete_xp_events_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       billing_audit_log: {
         Row: {
           admin_id: string | null
@@ -18898,6 +18948,8 @@ export type Database = {
           priority: string | null
           read_by_admin_at: string | null
           read_by_client_at: string | null
+          reply_preview: Json | null
+          reply_to_message_id: string | null
           scheduled_at: string | null
           scheduled_by: string | null
           scheduled_tz: string | null
@@ -18943,6 +18995,8 @@ export type Database = {
           priority: string | null
           read_by_admin_at: string | null
           read_by_client_at: string | null
+          reply_preview: Json | null
+          reply_to_message_id: string | null
           scheduled_at: string | null
           scheduled_by: string | null
           scheduled_tz: string | null
@@ -18988,6 +19042,8 @@ export type Database = {
           priority: string | null
           read_by_admin_at: string | null
           read_by_client_at: string | null
+          reply_preview: Json | null
+          reply_to_message_id: string | null
           scheduled_at: string | null
           scheduled_by: string | null
           scheduled_tz: string | null
@@ -19130,6 +19186,17 @@ export type Database = {
         Args: { _target_id: string }
         Returns: string
       }
+      get_athlete_rankings: {
+        Args: { _limit?: number }
+        Returns: {
+          avatar_url: string
+          client_id: string
+          display_name: string
+          is_me: boolean
+          rank: number
+          xp: number
+        }[]
+      }
       get_group_member_profiles: {
         Args: { _group_id: string }
         Returns: {
@@ -19240,6 +19307,8 @@ export type Database = {
           priority: string | null
           read_by_admin_at: string | null
           read_by_client_at: string | null
+          reply_preview: Json | null
+          reply_to_message_id: string | null
           scheduled_at: string | null
           scheduled_by: string | null
           scheduled_tz: string | null

@@ -64,6 +64,13 @@
       "when": 1789443086986,
       "tag": "0008_pl_end_block_early_atomic",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1790441792787,
+      "tag": "0009_athlete_xp",
+      "breakpoints": true
     }
   ]
 }
