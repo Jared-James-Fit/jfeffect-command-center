@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, ArrowUp, ArrowDown, ChevronsUpDown, Check, CheckCircle2, Circle, StickyNote, NotebookPen, Info, Maximize2, Minimize2, AlertTriangle, RefreshCw, Send, MessageCircle, ChevronDown, ChevronUp, Zap, Trophy, MoreHorizontal, Undo2, HelpCircle, Loader2, Trash2 } from "lucide-react";
+import { ArrowLeft, ArrowUp, ArrowDown, ChevronsUpDown, Check, CheckCircle2, Circle, StickyNote, NotebookPen, Info, Maximize2, Minimize2, AlertTriangle, RefreshCw, Send, MessageCircle, ChevronDown, ChevronUp, Zap, Trophy, MoreHorizontal, Undo2, HelpCircle, Loader2, Trash2, GripVertical } from "lucide-react";
 
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
@@ -3387,40 +3387,47 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
         </div>
       )}
       {row.notes && <ExerciseNotesBlock notes={row.notes} />}
-      {/* Keep the logger visually focused on logging. Rest stays one-tap;
-          everything else lives behind one compact overflow menu. */}
-      <div className="mt-2 flex items-center gap-2">
+      {/* Logging actions: keep the common actions visible and quiet.
+          Structural editing is isolated behind one compact reorder control. */}
+      <div className="mt-2 flex items-center gap-1.5">
+        {hasGuide && (
+          <DeferredExerciseHowToButton
+            exerciseId={exerciseId}
+            fallbackName={name}
+            className="h-8 rounded-full px-2.5 text-xs"
+          />
+        )}
+        <Button
+          type="button"
+          size="sm"
+          variant="ghost"
+          className="h-8 rounded-full px-2.5 text-xs font-medium text-muted-foreground"
+          onClick={() => setNotesOpen(true)}
+        >
+          <StickyNote className="mr-1.5 h-3.5 w-3.5" />
+          {hasNote ? "Notes" : "Note"}
+        </Button>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button
               type="button"
               size="sm"
               variant="ghost"
-              className="h-8 rounded-full px-2.5 text-xs font-semibold text-muted-foreground hover:bg-muted hover:text-foreground"
+              className="h-8 w-8 rounded-full p-0 text-muted-foreground"
               aria-label={`More options for ${name}`}
             >
-              <MoreHorizontal className="mr-1 h-4 w-4" />
-              More
+              <MoreHorizontal className="h-4 w-4" />
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="start" className="min-w-48">
-            {hasGuide && (
-              <DropdownMenuItem asChild>
-                <DeferredExerciseHowToButton exerciseId={exerciseId} fallbackName={name} />
-              </DropdownMenuItem>
-            )}
-            <DropdownMenuItem onSelect={() => setNotesOpen(true)}>
-              <StickyNote className="mr-2 h-4 w-4" />
-              {hasNote ? "View notes" : "Notes"}
-            </DropdownMenuItem>
+          <DropdownMenuContent align="start" className="w-52 rounded-xl p-1.5">
             {cues && (
-              <DropdownMenuItem onSelect={() => setCuesOpen((v) => !v)}>
+              <DropdownMenuItem onSelect={() => setCuesOpen((v) => !v)} className="rounded-lg">
                 {cuesOpen ? <ChevronUp className="mr-2 h-4 w-4" /> : <ChevronDown className="mr-2 h-4 w-4" />}
                 {cuesOpen ? "Hide cues" : "Show cues"}
               </DropdownMenuItem>
             )}
             <DropdownMenuItem asChild>
-              <TrainingHelpButton size="sm" variant="ghost" className="h-8 w-full justify-start px-2 text-sm font-normal" />
+              <TrainingHelpButton size="sm" variant="ghost" className="h-9 w-full justify-start rounded-lg px-2 text-sm font-normal" />
             </DropdownMenuItem>
             {!readonly && (
               <DropdownMenuItem asChild>
@@ -3440,31 +3447,54 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
                 swapContext={swapContext}
               />
             </DropdownMenuItem>
-            {(canMoveUp || canMoveDown || (moveCount ?? 0) > 1) && (
-              <>
-                <DropdownMenuSeparator />
-                {canMoveUp && (
-                  <DropdownMenuItem onSelect={onMoveUp}>
-                    <ArrowUp className="mr-2 h-4 w-4" /> Move up
-                  </DropdownMenuItem>
-                )}
-                {(moveCount ?? 0) > 1 && Array.from({ length: moveCount ?? 0 }, (_, i) => i + 1)
-                  .filter((position) => position !== movePosition)
-                  .map((position) => (
-                    <DropdownMenuItem key={position} onSelect={() => onMoveTo?.(position)}>
-                      <ChevronsUpDown className="mr-2 h-4 w-4" />
-                      Move to position {position}
-                    </DropdownMenuItem>
-                  ))}
-                {canMoveDown && (
-                  <DropdownMenuItem onSelect={onMoveDown}>
-                    <ArrowDown className="mr-2 h-4 w-4" /> Move down
-                  </DropdownMenuItem>
-                )}
-              </>
-            )}
           </DropdownMenuContent>
         </DropdownMenu>
+        {(canMoveUp || canMoveDown || (moveCount ?? 0) > 1) && (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                className="h-8 w-8 rounded-full p-0 text-muted-foreground"
+                aria-label={`Reorder ${name}`}
+              >
+                <GripVertical className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="w-56 rounded-xl p-1.5">
+              <div className="px-2 py-1.5 text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+                Exercise {movePosition} of {moveCount}
+              </div>
+              <div className="grid grid-cols-2 gap-1">
+                <DropdownMenuItem disabled={!canMoveUp} onSelect={onMoveUp} className="rounded-lg justify-center">
+                  <ArrowUp className="mr-1.5 h-4 w-4" /> Up
+                </DropdownMenuItem>
+                <DropdownMenuItem disabled={!canMoveDown} onSelect={onMoveDown} className="rounded-lg justify-center">
+                  <ArrowDown className="mr-1.5 h-4 w-4" /> Down
+                </DropdownMenuItem>
+              </div>
+              {(moveCount ?? 0) > 2 && (
+                <>
+                  <DropdownMenuSeparator />
+                  <div className="px-2 py-1 text-xs text-muted-foreground">Move directly to</div>
+                  <div className="grid grid-cols-4 gap-1 p-1">
+                    {Array.from({ length: moveCount ?? 0 }, (_, i) => i + 1).map((position) => (
+                      <DropdownMenuItem
+                        key={position}
+                        disabled={position === movePosition}
+                        onSelect={() => onMoveTo?.(position)}
+                        className="h-9 justify-center rounded-lg p-0 font-semibold"
+                      >
+                        {position}
+                      </DropdownMenuItem>
+                    ))}
+                  </div>
+                </>
+              )}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        )}
         {(exerciseId || name) && (
           <RestTimerButton
             seconds={effectiveRest ?? null}
