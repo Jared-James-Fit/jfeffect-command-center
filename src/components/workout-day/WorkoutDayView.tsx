@@ -665,13 +665,28 @@ function WorkoutDay({
   const reorderExercisesSrv = useServerFn(reorderWorkoutExercises);
   const canEditWorkoutStructure = adapter?.kind !== "member" && /^[0-9a-f-]{36}$/i.test(dayId);
 
-  const addExerciseNow = async (exercise: { id: string; name: string }) => {
+  const addExerciseNow = async (
+    exercise: { id: string; name: string },
+    insertAt = (rows as any[]).length,
+  ) => {
     if (!canEditWorkoutStructure) return;
     try {
-      await addExerciseSrv({ data: { dayId, exerciseId: exercise.id } });
+      const created = await addExerciseSrv({ data: { dayId, exerciseId: exercise.id } });
+      const ordered = (rows as any[]).map((row) => row.id as string);
+      const target = Math.max(0, Math.min(ordered.length, insertAt));
+      ordered.splice(target, 0, created.rowId);
+
+      // The server appends new rows safely. If the client tapped an inline
+      // insertion point, immediately normalize the canonical order so the
+      // exercise lands exactly where the + control was tapped.
+      if (target < ordered.length - 1) {
+        await reorderExercisesSrv({ data: { dayId, orderedRowIds: ordered } });
+      }
+
       await qc.refetchQueries({ queryKey: ["pl-day-rows", dayId] });
       toast.success(`${exercise.name} added`);
     } catch (error: any) {
+      await qc.refetchQueries({ queryKey: ["pl-day-rows", dayId] });
       toast.error(error?.message ?? "Could not add exercise");
       throw error;
     }
@@ -2086,41 +2101,52 @@ function WorkoutDay({
                   ])}
                 />
               ) : null}
-              {canEditWorkoutStructure && rowsLoaded && (
-                <WorkoutAddExercise onAdd={addExerciseNow} disabled={rowsFetching} />
+              {canEditWorkoutStructure && rowsLoaded && (rows as any[]).length === 0 && (
+                <WorkoutAddExercise onAdd={(exercise) => addExerciseNow(exercise, 0)} disabled={rowsFetching} />
               )}
               {(rows as any[]).map((r, rowIndex) => (
-                unsupportedRows[r.id] ? (
-                  <UnsupportedExerciseCard key={r.id} row={r} />
-                ) : (
-                <ExerciseBlock
-                  key={r.id}
-                  row={r}
-                  dayId={dayId}
-                  dayTitle={cleanDayTitle(day.title, day.day_index)}
-                  dayIndex={day?.day_index ?? null}
-                  clientId={client?.id}
-                  previousLift={previousLiftByRow.get(r.id) ?? null}
-                  repMaxBests={repMaxBestsByRow.get(r.id) ?? null}
-                  assistedBests={assistedBestsByRow.get(r.id) ?? null}
-                  blockId={blockId}
-                  existingResults={(results as any[]).filter((x) => x.row_id === r.id)}
-                  existingNote={notesByRowId.get(r.id)}
-                  notesLoading={notesLoading}
-                  readonly={readonly}
-                  unit={unitForRow(r)}
-                  onUnitChange={(u) => setExerciseUnit(r.exercises?.id ?? null, r.id, u)}
-                  focusMode
-                  onChange={refresh}
-                  onNoteChange={refreshNotes}
-                  purposeLabel={purposeLabelById.get(r.id) ?? null}
-                  swapContext={swapContextForRow(adapter, dayId, r.id)}
-                  canMoveUp={canEditWorkoutStructure && rowIndex > 0}
-                  canMoveDown={canEditWorkoutStructure && rowIndex < (rows as any[]).length - 1}
-                  onMoveUp={() => void moveExerciseNow(r.id, -1)}
-                  onMoveDown={() => void moveExerciseNow(r.id, 1)}
-                />
-                )
+                <div key={r.id} className="space-y-1.5">
+                  {unsupportedRows[r.id] ? (
+                    <UnsupportedExerciseCard row={r} />
+                  ) : (
+                    <ExerciseBlock
+                      row={r}
+                      dayId={dayId}
+                      dayTitle={cleanDayTitle(day.title, day.day_index)}
+                      dayIndex={day?.day_index ?? null}
+                      clientId={client?.id}
+                      previousLift={previousLiftByRow.get(r.id) ?? null}
+                      repMaxBests={repMaxBestsByRow.get(r.id) ?? null}
+                      assistedBests={assistedBestsByRow.get(r.id) ?? null}
+                      blockId={blockId}
+                      existingResults={(results as any[]).filter((x) => x.row_id === r.id)}
+                      existingNote={notesByRowId.get(r.id)}
+                      notesLoading={notesLoading}
+                      readonly={readonly}
+                      unit={unitForRow(r)}
+                      onUnitChange={(u) => setExerciseUnit(r.exercises?.id ?? null, r.id, u)}
+                      focusMode
+                      onChange={refresh}
+                      onNoteChange={refreshNotes}
+                      purposeLabel={purposeLabelById.get(r.id) ?? null}
+                      swapContext={swapContextForRow(adapter, dayId, r.id)}
+                      canMoveUp={canEditWorkoutStructure && rowIndex > 0}
+                      canMoveDown={canEditWorkoutStructure && rowIndex < (rows as any[]).length - 1}
+                      movePosition={canEditWorkoutStructure ? rowIndex + 1 : undefined}
+                      moveCount={canEditWorkoutStructure ? (rows as any[]).length : undefined}
+                      onMoveUp={() => void moveExerciseNow(r.id, -1)}
+                      onMoveDown={() => void moveExerciseNow(r.id, 1)}
+                      onMoveTo={(position) => void moveExerciseTo(r.id, position)}
+                    />
+                  )}
+                  {canEditWorkoutStructure && (
+                    <WorkoutAddExercise
+                      subtle
+                      onAdd={(exercise) => addExerciseNow(exercise, rowIndex + 1)}
+                      disabled={rowsFetching}
+                    />
+                  )}
+                </div>
               ))}
               </div>
             </WorkoutLoadBoundary>
@@ -2383,45 +2409,53 @@ function WorkoutDay({
                 ])}
               />
             ) : null}
-            {canEditWorkoutStructure && rowsLoaded && (
+            {canEditWorkoutStructure && rowsLoaded && (rows as any[]).length === 0 && (
               <div className="lg:col-span-2">
-                <WorkoutAddExercise onAdd={addExerciseNow} disabled={rowsFetching} />
+                <WorkoutAddExercise onAdd={(exercise) => addExerciseNow(exercise, 0)} disabled={rowsFetching} />
               </div>
             )}
             {(rows as any[]).map((r, rowIndex) => (
-              unsupportedRows[r.id] ? (
-                <UnsupportedExerciseCard key={r.id} row={r} />
-              ) : (
-              <ExerciseBlock
-                key={r.id}
-                row={r}
-                dayId={dayId}
-                dayTitle={cleanDayTitle(day.title, day.day_index)}
-                dayIndex={day?.day_index ?? null}
-                clientId={client?.id}
-                previousLift={previousLiftByRow.get(r.id) ?? null}
-                repMaxBests={repMaxBestsByRow.get(r.id) ?? null}
-                  assistedBests={assistedBestsByRow.get(r.id) ?? null}
-                blockId={blockId}
-                existingResults={(results as any[]).filter((x) => x.row_id === r.id)}
-                existingNote={notesByRowId.get(r.id)}
-                notesLoading={notesLoading}
-                readonly={readonly}
-                unit={unitForRow(r)}
-                onUnitChange={(u) => setExerciseUnit(r.exercises?.id ?? null, r.id, u)}
-                onChange={refresh}
-                onNoteChange={refreshNotes}
-                purposeLabel={purposeLabelById.get(r.id) ?? null}
-                swapContext={swapContextForRow(adapter, dayId, r.id)}
-                canMoveUp={canEditWorkoutStructure && rowIndex > 0}
-                canMoveDown={canEditWorkoutStructure && rowIndex < (rows as any[]).length - 1}
-                movePosition={canEditWorkoutStructure ? rowIndex + 1 : undefined}
-                moveCount={canEditWorkoutStructure ? (rows as any[]).length : undefined}
-                onMoveUp={() => void moveExerciseNow(r.id, -1)}
-                onMoveDown={() => void moveExerciseNow(r.id, 1)}
-                onMoveTo={(position) => void moveExerciseTo(r.id, position)}
-              />
-              )
+              <div key={r.id} className="space-y-1.5">
+                {unsupportedRows[r.id] ? (
+                  <UnsupportedExerciseCard row={r} />
+                ) : (
+                  <ExerciseBlock
+                    row={r}
+                    dayId={dayId}
+                    dayTitle={cleanDayTitle(day.title, day.day_index)}
+                    dayIndex={day?.day_index ?? null}
+                    clientId={client?.id}
+                    previousLift={previousLiftByRow.get(r.id) ?? null}
+                    repMaxBests={repMaxBestsByRow.get(r.id) ?? null}
+                    assistedBests={assistedBestsByRow.get(r.id) ?? null}
+                    blockId={blockId}
+                    existingResults={(results as any[]).filter((x) => x.row_id === r.id)}
+                    existingNote={notesByRowId.get(r.id)}
+                    notesLoading={notesLoading}
+                    readonly={readonly}
+                    unit={unitForRow(r)}
+                    onUnitChange={(u) => setExerciseUnit(r.exercises?.id ?? null, r.id, u)}
+                    onChange={refresh}
+                    onNoteChange={refreshNotes}
+                    purposeLabel={purposeLabelById.get(r.id) ?? null}
+                    swapContext={swapContextForRow(adapter, dayId, r.id)}
+                    canMoveUp={canEditWorkoutStructure && rowIndex > 0}
+                    canMoveDown={canEditWorkoutStructure && rowIndex < (rows as any[]).length - 1}
+                    movePosition={canEditWorkoutStructure ? rowIndex + 1 : undefined}
+                    moveCount={canEditWorkoutStructure ? (rows as any[]).length : undefined}
+                    onMoveUp={() => void moveExerciseNow(r.id, -1)}
+                    onMoveDown={() => void moveExerciseNow(r.id, 1)}
+                    onMoveTo={(position) => void moveExerciseTo(r.id, position)}
+                  />
+                )}
+                {canEditWorkoutStructure && (
+                  <WorkoutAddExercise
+                    subtle
+                    onAdd={(exercise) => addExerciseNow(exercise, rowIndex + 1)}
+                    disabled={rowsFetching}
+                  />
+                )}
+              </div>
             ))}
           </div>
         </WorkoutLoadBoundary>
