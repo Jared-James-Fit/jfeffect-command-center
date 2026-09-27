@@ -70,13 +70,20 @@ export function registerServiceWorker() {
         status = "offline-ready";
         notify();
       },
-      onRegisteredSW() {
+      onRegisteredSW(_swUrl, registration) {
         if (status === "idle") status = "ready";
         notify();
+        // Check for a fresh production bundle whenever the installed PWA resumes.
+        // iOS can keep a standalone PWA process alive for hours, otherwise leaving
+        // the old JS mounted even after a new worker has activated.
+        const check = () => { if (document.visibilityState === "visible") void registration?.update(); };
+        document.addEventListener("visibilitychange", check);
+        window.setInterval(check, 60_000);
       },
     });
     triggerUpdate = async () => {
       await updateSW(true);
+      window.location.reload();
     };
   }).catch(() => {
     // SW chunk missing or blocked — fall through silently.
