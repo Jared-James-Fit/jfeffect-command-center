@@ -100,7 +100,15 @@ export default defineConfig({
           // Do not runtime-cache the app shell or JS/CSS. Lovable hosting is the
           // source of truth for every launch, so installed iOS PWAs cannot remain
           // pinned to an older deployment. Static images may still be browser-cached.
-          runtimeCaching: [],
+          runtimeCaching: [
+            // Minimal no-op-safe rule so Workbox always has a valid config;
+            // only same-origin app icons, never JS/CSS/HTML.
+            {
+              urlPattern: ({ url }) => /\/(icon-[^/]*|apple-touch-icon|favicon[^/]*)\.(png|ico)$/.test(url.pathname),
+              handler: "StaleWhileRevalidate",
+              options: { cacheName: "jf-app-icons" },
+            },
+          ],
         },
       }),
     ],
