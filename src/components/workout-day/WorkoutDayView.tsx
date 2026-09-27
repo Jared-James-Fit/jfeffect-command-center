@@ -2624,6 +2624,17 @@ function WorkoutDay({
               qc.invalidateQueries({ queryKey: ["workouts-experience-client", client.id] }),
               qc.invalidateQueries({ queryKey: ["pl-day-completion", dayId] }),
             ]);
+            // The review is the final completion action. Build the recap from
+            // the already-present row/result snapshot and open it immediately;
+            // do not wait for the completion query to re-render the page.
+            const displayUnit: "kg" | "lb" =
+              ((client as any)?.preferred_weight_unit === "kg" ? "kg" : "lb");
+            setLastSummary(computeWorkoutSummary(rows as any[], results as any[], {
+              displayUnit,
+              hasNote: !!completion?.client_notes,
+            }));
+            recapFromSubmitRef.current = true;
+            requestAnimationFrame(() => requestAnimationFrame(() => setSummaryOpen(true)));
           }}
         />
       )}
