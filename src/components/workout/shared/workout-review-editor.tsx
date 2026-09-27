@@ -295,6 +295,8 @@ export function WorkoutReviewEditor({
         side="bottom"
         hideCloseButton
         className="z-[70] flex max-h-[92svh] flex-col rounded-t-3xl p-0"
+        onInteractOutside={(e) => { if (busy) e.preventDefault(); }}
+        onEscapeKeyDown={(e) => { if (busy) e.preventDefault(); }}
       >
         {/* Sticky header — Back pill top-left, then a title/subtitle stack.
             Structured as two rows inside a single header block so the Back
@@ -307,7 +309,8 @@ export function WorkoutReviewEditor({
           <div className="flex items-center px-3 pt-2 sm:px-4">
             <button
               type="button"
-              onClick={() => onOpenChange(false)}
+              onClick={() => safeOpenChange(false)}
+              disabled={busy}
               aria-label="Back"
               className="inline-flex h-9 items-center gap-0.5 rounded-full px-2 -ml-1 text-sm font-semibold text-foreground transition hover:bg-secondary focus:outline-none focus:ring-2 focus:ring-ring"
             >
@@ -520,16 +523,17 @@ export function WorkoutReviewEditor({
           className="flex-row gap-2 border-t bg-background/95 px-5 py-3 backdrop-blur sm:flex-row"
           style={{ paddingBottom: "calc(env(safe-area-inset-bottom) + 0.75rem)" }}
         >
-          <Button variant="ghost" className="flex-1" onClick={() => onOpenChange(false)} disabled={mutation.isPending}>
+          <Button variant="ghost" className="flex-1" onClick={() => safeOpenChange(false)} disabled={busy}>
             Close
           </Button>
           <Button
             className="flex-1"
-            onClick={() => mutation.mutate()}
-            disabled={!status || mutation.isPending}
+            onClick={handleSubmit}
+            disabled={!status || busy}
+            aria-busy={busy}
           >
-            {mutation.isPending && <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />}
-            {isEdit ? "Save changes" : "Done"}
+            {busy && <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />}
+            {busy ? "Saving…" : isEdit ? "Save changes" : "Done"}
           </Button>
         </SheetFooter>
       </SheetContent>
