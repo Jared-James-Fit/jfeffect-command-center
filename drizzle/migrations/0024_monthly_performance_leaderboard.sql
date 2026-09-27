@@ -19,12 +19,20 @@ language sql stable security definer set search_path=public as $
     from public.clients c left join public.profiles p on p.id=c.user_id
     where coalesce(c.archived,false)=false and c.archived_at is null and coalesce(c.status,'')<>'Archived'
   ),
+  bodyweight_sources as (
+    select pb.user_id,pb.weight_value,pb.weight_unit,pb.logged_date,pb.created_at
+    from public.progress_bodyweight pb
+    where pb.weight_value is not null and pb.weight_value>0
+    union all
+    select c.user_id,pm.bodyweight,coalesce(pm.bodyweight_unit,'lb'),pm.entry_date,pm.created_at
+    from public.progress_metrics pm join public.clients c on c.id=pm.client_id
+    where pm.bodyweight is not null and pm.bodyweight>0
+  ),
   current_bw as (
     select distinct on (b.user_id) b.user_id,
       case when lower(b.weight_unit)='lb' then b.weight_value*0.45359237 else b.weight_value end weight_kg,
       b.weight_value,b.weight_unit,b.logged_date
-    from public.progress_bodyweight b
-    where b.weight_value is not null and b.weight_value>0
+    from bodyweight_sources b
     order by b.user_id,b.logged_date desc,b.created_at desc
   ),
   prior_bw as (
