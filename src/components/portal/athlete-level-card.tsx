@@ -33,9 +33,9 @@ function useXpEvents(clientId: string) {
   });
 }
 
-export function AthleteLevelCard({ clientId }: { clientId: string }) {
+export function AthleteLevelCard({ clientId, defaultView = null }: { clientId: string; defaultView?: null | "rankings" }) {
   const { data: events = [], isPending } = useXpEvents(clientId);
-  const [open, setOpen] = useState<null | "levels" | "rankings" | "powerlifting">(null);
+  const [open, setOpen] = useState<null | "levels" | "rankings" | "powerlifting">(defaultView);
   const total = events.reduce((s, e) => s + (e.xp || 0), 0);
   const lvl = levelForXp(total);
   const stats = statsFromEvents(events);
