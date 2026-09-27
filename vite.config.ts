@@ -83,6 +83,9 @@ export default defineConfig({
           // lazily on first use by the runtimeCaching rules below. This keeps
           // the SW install fast (was ~395 files; now <10) and prevents stale
           // chunks from pinning users to old builds.
+          // Glob from /public: the build output isn't populated with public
+          // files yet when the service worker is generated.
+          globDirectory: fileURLToPath(new URL("./public", import.meta.url)),
           globPatterns: [
             "manifest.json",
             "favicon.ico",
