@@ -78,6 +78,13 @@
       "when": 1790442185407,
       "tag": "0010_athlete_public_profile",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1790548859512,
+      "tag": "0011_logging_level_expansion",
+      "breakpoints": true
     }
   ]
 }
