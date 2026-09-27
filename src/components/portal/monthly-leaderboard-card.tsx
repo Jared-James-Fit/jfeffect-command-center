@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { createPortal } from "react-dom";
 import { useQuery } from "@tanstack/react-query";
 import { format } from "date-fns";
 import { Trophy, Medal, ChevronRight, Scale } from "lucide-react";
@@ -7,7 +8,6 @@ import { combinedBodyweightQueryKey, getCombinedBodyweightSeries } from "@/lib/b
 import { Card } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Progress } from "@/components/ui/progress";
-import { AthleteLevelCard } from "@/components/portal/athlete-level-card";
 
 type Row = { client_id:string; display_name:string; avatar_url:string|null; monthly_xp:number; rank:number|null; is_me:boolean; qualified:boolean; bodyweight_value:number|null; bodyweight_unit:string|null };
 
@@ -43,13 +43,13 @@ export function MonthlyLeaderboardCard({ clientId, userId }: { clientId:string; 
         <div className="mt-3 text-center text-xs font-black text-primary">VIEW TOP 15 ›</div>
       </button>
     </Card>
-    {open && <LeaderboardOverlay onClose={()=>setOpen(false)} rows={data} loading={isPending}/>}
+    {open && typeof document !== "undefined" ? createPortal(<LeaderboardOverlay onClose={()=>setOpen(false)} rows={data} loading={isPending}/>, document.body) : null}
   </>;
 }
 
 function LeaderboardOverlay({onClose,rows,loading}:{onClose:()=>void;rows:Row[];loading:boolean}) {
   const ranked=rows.filter(r=>r.qualified && r.rank!=null).sort((a,b)=>Number(a.rank)-Number(b.rank)).slice(0,15);
-  return <div className="fixed inset-0 z-[70] bg-background">
+  return <div role="dialog" aria-modal="true" className="fixed inset-0 z-[9999] bg-background">
     <div className="mx-auto h-full max-w-2xl overflow-y-auto px-4 pb-24 pt-safe-top">
       <div className="sticky top-0 z-10 -mx-4 flex items-center gap-3 border-b bg-background/95 px-4 py-3 backdrop-blur">
         <button type="button" onClick={onClose} className="min-h-11 rounded-xl border bg-card px-4 text-sm font-bold">← Back</button>
