@@ -942,6 +942,39 @@ export type Database = {
           },
         ]
       }
+      athlete_achievement_views: {
+        Row: {
+          badge_key: string
+          client_id: string
+          seen_at: string
+        }
+        Insert: {
+          badge_key: string
+          client_id: string
+          seen_at?: string
+        }
+        Update: {
+          badge_key?: string
+          client_id?: string
+          seen_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "athlete_achievement_views_badge_key_fkey"
+            columns: ["badge_key"]
+            isOneToOne: false
+            referencedRelation: "athlete_badge_catalog"
+            referencedColumns: ["badge_key"]
+          },
+          {
+            foreignKeyName: "athlete_achievement_views_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       athlete_achievements: {
         Row: {
           badge_key: string
@@ -1028,6 +1061,105 @@ export type Database = {
           threshold?: number
         }
         Relationships: []
+      }
+      athlete_powerlifting_results: {
+        Row: {
+          athlete_id: string | null
+          athlete_name: string
+          bench_kg: number
+          bodyweight_kg: number
+          client_id: string | null
+          competition_level: string | null
+          created_at: string
+          deadlift_kg: number
+          dots_points: number | null
+          federation: string | null
+          gl_points: number | null
+          id: string
+          meet_date: string | null
+          meet_location: string | null
+          meet_name: string | null
+          notes: string | null
+          points: number | null
+          points_system: string
+          sex: string
+          source: string
+          source_key: string | null
+          squat_kg: number
+          total_kg: number | null
+          updated_at: string
+          weight_class_kg: string | null
+        }
+        Insert: {
+          athlete_id?: string | null
+          athlete_name: string
+          bench_kg?: number
+          bodyweight_kg: number
+          client_id?: string | null
+          competition_level?: string | null
+          created_at?: string
+          deadlift_kg?: number
+          dots_points?: number | null
+          federation?: string | null
+          gl_points?: number | null
+          id?: string
+          meet_date?: string | null
+          meet_location?: string | null
+          meet_name?: string | null
+          notes?: string | null
+          points?: number | null
+          points_system?: string
+          sex: string
+          source?: string
+          source_key?: string | null
+          squat_kg?: number
+          total_kg?: number | null
+          updated_at?: string
+          weight_class_kg?: string | null
+        }
+        Update: {
+          athlete_id?: string | null
+          athlete_name?: string
+          bench_kg?: number
+          bodyweight_kg?: number
+          client_id?: string | null
+          competition_level?: string | null
+          created_at?: string
+          deadlift_kg?: number
+          dots_points?: number | null
+          federation?: string | null
+          gl_points?: number | null
+          id?: string
+          meet_date?: string | null
+          meet_location?: string | null
+          meet_name?: string | null
+          notes?: string | null
+          points?: number | null
+          points_system?: string
+          sex?: string
+          source?: string
+          source_key?: string | null
+          squat_kg?: number
+          total_kg?: number | null
+          updated_at?: string
+          weight_class_kg?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "athlete_powerlifting_results_athlete_id_fkey"
+            columns: ["athlete_id"]
+            isOneToOne: false
+            referencedRelation: "powerlifting_athletes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "athlete_powerlifting_results_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       athlete_xp_events: {
         Row: {
@@ -15327,6 +15459,109 @@ export type Database = {
           },
         ]
       }
+      powerlifting_athletes: {
+        Row: {
+          admin_notes: string | null
+          arenapl_url: string | null
+          athlete_name: string
+          auto_sync: boolean
+          client_id: string | null
+          country_filter: string | null
+          created_at: string
+          id: string
+          jf_end_date: string | null
+          jf_start_date: string | null
+          last_reviewed_at: string | null
+          openpowerlifting_url: string | null
+          sex: string
+          status: string
+          tracking_notes: string | null
+          updated_at: string
+        }
+        Insert: {
+          admin_notes?: string | null
+          arenapl_url?: string | null
+          athlete_name: string
+          auto_sync?: boolean
+          client_id?: string | null
+          country_filter?: string | null
+          created_at?: string
+          id?: string
+          jf_end_date?: string | null
+          jf_start_date?: string | null
+          last_reviewed_at?: string | null
+          openpowerlifting_url?: string | null
+          sex: string
+          status?: string
+          tracking_notes?: string | null
+          updated_at?: string
+        }
+        Update: {
+          admin_notes?: string | null
+          arenapl_url?: string | null
+          athlete_name?: string
+          auto_sync?: boolean
+          client_id?: string | null
+          country_filter?: string | null
+          created_at?: string
+          id?: string
+          jf_end_date?: string | null
+          jf_start_date?: string | null
+          last_reviewed_at?: string | null
+          openpowerlifting_url?: string | null
+          sex?: string
+          status?: string
+          tracking_notes?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "powerlifting_athletes_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: true
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      powerlifting_coaching_periods: {
+        Row: {
+          athlete_id: string
+          created_at: string
+          end_date: string | null
+          id: string
+          notes: string | null
+          start_date: string | null
+          updated_at: string
+        }
+        Insert: {
+          athlete_id: string
+          created_at?: string
+          end_date?: string | null
+          id?: string
+          notes?: string | null
+          start_date?: string | null
+          updated_at?: string
+        }
+        Update: {
+          athlete_id?: string
+          created_at?: string
+          end_date?: string | null
+          id?: string
+          notes?: string | null
+          start_date?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "powerlifting_coaching_periods_athlete_id_fkey"
+            columns: ["athlete_id"]
+            isOneToOne: false
+            referencedRelation: "powerlifting_athletes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       processed_stripe_events: {
         Row: {
           created_at: string
@@ -19330,6 +19565,24 @@ export type Database = {
           schedule: string
         }[]
       }
+      get_monthly_athlete_rankings: {
+        Args: { _limit?: number }
+        Returns: {
+          avatar_url: string
+          bodyweight_logged_at: string
+          bodyweight_unit: string
+          bodyweight_value: number
+          client_id: string
+          display_name: string
+          fully_logged: number
+          is_me: boolean
+          monthly_xp: number
+          qualified: boolean
+          rank: number
+          strength_score: number
+          workouts_completed: number
+        }[]
+      }
       get_my_referral_attribution: {
         Args: never
         Returns: {
@@ -19341,6 +19594,47 @@ export type Database = {
           referral_discount_cents: number
           refund_status: string
           subscription_status: string
+        }[]
+      }
+      get_powerlifting_athlete_roster: {
+        Args: never
+        Returns: {
+          athlete_id: string
+          athlete_name: string
+          client_id: string
+          country_filter: string
+          last_reviewed_at: string
+          openpowerlifting_url: string
+          result_count: number
+          sex: string
+          status: string
+          tracking_notes: string
+        }[]
+      }
+      get_powerlifting_rankings: {
+        Args: never
+        Returns: {
+          arenapl_url: string
+          athlete_id: string
+          athlete_name: string
+          bench_kg: number
+          bodyweight_kg: number
+          client_id: string
+          competition_level: string
+          deadlift_kg: number
+          dots_points: number
+          federation: string
+          gl_points: number
+          id: string
+          meet_date: string
+          meet_location: string
+          meet_name: string
+          points: number
+          points_system: string
+          sex: string
+          squat_kg: number
+          total_kg: number
+          weight_class_kg: string
         }[]
       }
       grant_sessions_due_today: { Args: never; Returns: number }

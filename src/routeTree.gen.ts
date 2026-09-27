@@ -55,6 +55,7 @@ import { Route as AuthenticatedAdminAppointmentsRouteImport } from './routes/_au
 import { Route as AuthenticatedAdminApprovalsRouteImport } from './routes/_authenticated/admin/approvals'
 import { Route as AuthenticatedAdminAppsRouteImport } from './routes/_authenticated/admin/apps'
 import { Route as AuthenticatedAdminArchivesRouteImport } from './routes/_authenticated/admin/archives'
+import { Route as AuthenticatedAdminAthleteRecordsRouteImport } from './routes/_authenticated/admin/athlete-records'
 import { Route as AuthenticatedAdminAutomationsRouteImport } from './routes/_authenticated/admin/automations'
 import { Route as AuthenticatedAdminBillingSourcesRouteImport } from './routes/_authenticated/admin/billing-sources'
 import { Route as AuthenticatedAdminBookingLinksRouteImport } from './routes/_authenticated/admin/booking-links'
@@ -526,6 +527,12 @@ const AuthenticatedAdminArchivesRoute =
   AuthenticatedAdminArchivesRouteImport.update({
     id: '/archives',
     path: '/archives',
+    getParentRoute: () => AuthenticatedAdminRouteRoute,
+  } as any)
+const AuthenticatedAdminAthleteRecordsRoute =
+  AuthenticatedAdminAthleteRecordsRouteImport.update({
+    id: '/athlete-records',
+    path: '/athlete-records',
     getParentRoute: () => AuthenticatedAdminRouteRoute,
   } as any)
 const AuthenticatedAdminAutomationsRoute =
@@ -1963,6 +1970,7 @@ export interface FileRoutesByFullPath {
   '/admin/approvals': typeof AuthenticatedAdminApprovalsRoute
   '/admin/apps': typeof AuthenticatedAdminAppsRoute
   '/admin/archives': typeof AuthenticatedAdminArchivesRoute
+  '/admin/athlete-records': typeof AuthenticatedAdminAthleteRecordsRoute
   '/admin/automations': typeof AuthenticatedAdminAutomationsRoute
   '/admin/billing-sources': typeof AuthenticatedAdminBillingSourcesRoute
   '/admin/booking-links': typeof AuthenticatedAdminBookingLinksRoute
@@ -2242,6 +2250,7 @@ export interface FileRoutesByTo {
   '/admin/approvals': typeof AuthenticatedAdminApprovalsRoute
   '/admin/apps': typeof AuthenticatedAdminAppsRoute
   '/admin/archives': typeof AuthenticatedAdminArchivesRoute
+  '/admin/athlete-records': typeof AuthenticatedAdminAthleteRecordsRoute
   '/admin/automations': typeof AuthenticatedAdminAutomationsRoute
   '/admin/billing-sources': typeof AuthenticatedAdminBillingSourcesRoute
   '/admin/booking-links': typeof AuthenticatedAdminBookingLinksRoute
@@ -2526,6 +2535,7 @@ export interface FileRoutesById {
   '/_authenticated/admin/approvals': typeof AuthenticatedAdminApprovalsRoute
   '/_authenticated/admin/apps': typeof AuthenticatedAdminAppsRoute
   '/_authenticated/admin/archives': typeof AuthenticatedAdminArchivesRoute
+  '/_authenticated/admin/athlete-records': typeof AuthenticatedAdminAthleteRecordsRoute
   '/_authenticated/admin/automations': typeof AuthenticatedAdminAutomationsRoute
   '/_authenticated/admin/billing-sources': typeof AuthenticatedAdminBillingSourcesRoute
   '/_authenticated/admin/booking-links': typeof AuthenticatedAdminBookingLinksRoute
@@ -2811,6 +2821,7 @@ export interface FileRouteTypes {
     | '/admin/approvals'
     | '/admin/apps'
     | '/admin/archives'
+    | '/admin/athlete-records'
     | '/admin/automations'
     | '/admin/billing-sources'
     | '/admin/booking-links'
@@ -3090,6 +3101,7 @@ export interface FileRouteTypes {
     | '/admin/approvals'
     | '/admin/apps'
     | '/admin/archives'
+    | '/admin/athlete-records'
     | '/admin/automations'
     | '/admin/billing-sources'
     | '/admin/booking-links'
@@ -3373,6 +3385,7 @@ export interface FileRouteTypes {
     | '/_authenticated/admin/approvals'
     | '/_authenticated/admin/apps'
     | '/_authenticated/admin/archives'
+    | '/_authenticated/admin/athlete-records'
     | '/_authenticated/admin/automations'
     | '/_authenticated/admin/billing-sources'
     | '/_authenticated/admin/booking-links'
@@ -3993,6 +4006,13 @@ declare module '@tanstack/react-router' {
       path: '/archives'
       fullPath: '/admin/archives'
       preLoaderRoute: typeof AuthenticatedAdminArchivesRouteImport
+      parentRoute: typeof AuthenticatedAdminRouteRoute
+    }
+    '/_authenticated/admin/athlete-records': {
+      id: '/_authenticated/admin/athlete-records'
+      path: '/athlete-records'
+      fullPath: '/admin/athlete-records'
+      preLoaderRoute: typeof AuthenticatedAdminAthleteRecordsRouteImport
       parentRoute: typeof AuthenticatedAdminRouteRoute
     }
     '/_authenticated/admin/automations': {
@@ -5814,6 +5834,7 @@ interface AuthenticatedAdminRouteRouteChildren {
   AuthenticatedAdminApprovalsRoute: typeof AuthenticatedAdminApprovalsRoute
   AuthenticatedAdminAppsRoute: typeof AuthenticatedAdminAppsRoute
   AuthenticatedAdminArchivesRoute: typeof AuthenticatedAdminArchivesRoute
+  AuthenticatedAdminAthleteRecordsRoute: typeof AuthenticatedAdminAthleteRecordsRoute
   AuthenticatedAdminAutomationsRoute: typeof AuthenticatedAdminAutomationsRoute
   AuthenticatedAdminBillingSourcesRoute: typeof AuthenticatedAdminBillingSourcesRoute
   AuthenticatedAdminBookingLinksRoute: typeof AuthenticatedAdminBookingLinksRoute
@@ -5926,6 +5947,8 @@ const AuthenticatedAdminRouteRouteChildren: AuthenticatedAdminRouteRouteChildren
     AuthenticatedAdminApprovalsRoute: AuthenticatedAdminApprovalsRoute,
     AuthenticatedAdminAppsRoute: AuthenticatedAdminAppsRoute,
     AuthenticatedAdminArchivesRoute: AuthenticatedAdminArchivesRoute,
+    AuthenticatedAdminAthleteRecordsRoute:
+      AuthenticatedAdminAthleteRecordsRoute,
     AuthenticatedAdminAutomationsRoute: AuthenticatedAdminAutomationsRoute,
     AuthenticatedAdminBillingSourcesRoute:
       AuthenticatedAdminBillingSourcesRoute,
