@@ -64,7 +64,7 @@ export function AthleteLevelCard({ clientId }: { clientId: string }) {
         <div className="mt-4 overflow-hidden rounded-2xl border bg-muted/20">
           <button type="button" onClick={() => setOpen("rankings")} className="flex min-h-14 w-full items-center gap-3 border-b px-4 py-3 text-left transition-colors hover:bg-muted/40 active:bg-muted/60">
             <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary"><Trophy className="h-4 w-4" /></span>
-            <span className="min-w-0 flex-1"><span className="block text-sm font-bold leading-tight">Athlete Rankings</span><span className="mt-0.5 block text-[11px] leading-tight text-muted-foreground">Lifetime XP leaderboard</span></span>
+            <span className="min-w-0 flex-1"><span className="block text-sm font-bold leading-tight">Athlete Rankings</span><span className="mt-0.5 block text-[11px] leading-tight text-muted-foreground">Monthly Top 15 · bodyweight required</span></span>
             <span className="shrink-0 text-xl font-semibold text-primary">›</span>
           </button>
           <button type="button" onClick={() => setOpen("powerlifting")} className="flex min-h-14 w-full items-center gap-3 border-b px-4 py-3 text-left transition-colors hover:bg-muted/40 active:bg-muted/60">
