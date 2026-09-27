@@ -1,6 +1,7 @@
 import { NewAchievementReveal } from "@/components/portal/new-achievement-reveal";
-import { useEffect, useRef, useState } from "react";
+import { memo, useEffect, useMemo, useRef, useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Trophy, Dumbbell, Activity, CheckCircle2, Flame, Clock, Star, ChevronLeft, Heart, X, Repeat2, CircleX, Sparkles, Medal, Share2, Download } from "lucide-react";
 import type { WorkoutSummary } from "@/lib/workout-summary";
@@ -35,18 +36,17 @@ type Props = {
 export function WorkoutSubmissionSummary({ open, onOpenChange, summary, workoutTitle, durationMin, workoutDate, sessionRating, sessionRpe, pain, prs, cardio, onClose }: Props) {
   const prList = prs ?? [];
   const [revealStage, setRevealStage] = useState(0);
-  const [displayScore, setDisplayScore] = useState(0);
   const [sharing, setSharing] = useState(false);
   const shareCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const closedRef = useRef(false);
 
   useEffect(() => {
     if (!open) {
       setRevealStage(0);
-      setDisplayScore(0);
       return;
     }
+    closedRef.current = false;
     setRevealStage(0);
-    setDisplayScore(0);
     const intro = window.setTimeout(() => setRevealStage(1), 450);
     const details = window.setTimeout(() => setRevealStage(2), 1450);
     return () => {
@@ -55,21 +55,14 @@ export function WorkoutSubmissionSummary({ open, onOpenChange, summary, workoutT
     };
   }, [open]);
 
-  useEffect(() => {
-    if (!open || revealStage < 1) return;
-    const target = Math.max(0, Math.min(100, summary.score));
-    const started = performance.now();
-    const duration = 700;
-    let frame = 0;
-    const tick = (now: number) => {
-      const progress = Math.min(1, (now - started) / duration);
-      const eased = 1 - Math.pow(1 - progress, 3);
-      setDisplayScore(Math.round(target * eased));
-      if (progress < 1) frame = requestAnimationFrame(tick);
-    };
-    frame = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(frame);
-  }, [open, revealStage, summary.score]);
+  // Closing is always available and runs exactly once, independent of any
+  // in-flight share/save work.
+  const close = () => {
+    if (closedRef.current) return;
+    closedRef.current = true;
+    onOpenChange(false);
+    onClose?.();
+  };
   const hasAchievement = prList.length > 0 || summary.score >= 90 || summary.completionPct === 100;
   const headline =
     prList.length > 0 ? (prList.length === 1 ? "NEW PR!" : `${prList.length} NEW PRs!`)
@@ -77,7 +70,7 @@ export function WorkoutSubmissionSummary({ open, onOpenChange, summary, workoutT
     : summary.score >= 75 ? "Great work!"
     : summary.score >= 50 ? "Solid effort"
     : "Logged — keep going";
-  const takeaways = buildWorkoutTakeaways(summary, prList, cardio ?? null);
+  const takeaways = useMemo(() => buildWorkoutTakeaways(summary, prList, cardio ?? null), [summary, prs, cardio]);
   // The star rating on the celebration screen represents session quality.
   // Historically it only showed the client's self-reported `overall_rating`,
   // which caused confusing screens like "100/100" alongside "3/5 stars" when
@@ -93,13 +86,13 @@ export function WorkoutSubmissionSummary({ open, onOpenChange, summary, workoutT
     if (!workoutDate) return null;
     try { return format(new Date(workoutDate), "EEE, MMM d, yyyy"); } catch { return null; }
   })();
-  const recovery = computeRecoveryScore({
+  const recovery = useMemo(() => computeRecoveryScore({
     completionPct: summary.completionPct,
     avgRpe: summary.avgRpe ?? null,
     sessionRpe: sessionRpe ?? null,
     overallRating: sessionRating ?? null,
     pain: pain ?? null,
-  });
+  }), [summary, sessionRpe, sessionRating, pain]);
 
   const displayTakeaways = prList.length > 0
     ? takeaways.filter((t) => !/^🏆/.test(t.trim()))
@@ -126,17 +119,40 @@ export function WorkoutSubmissionSummary({ open, onOpenChange, summary, workoutT
     ctx.fillStyle="#71717a";ctx.font="700 27px system-ui";ctx.fillText("BUILT WITH JF EFFECT",540,1770);
     return await new Promise<Blob|null>((res)=>canvas.toBlob(res,"image/png",1));
   };
-  const shareWorkout = async () => {
-    setSharing(true); try { const blob=await buildShareBlob(); if(!blob)return; const file=new File([blob],"jf-effect-workout.png",{type:"image/png"}); if(navigator.share && (!navigator.canShare || navigator.canShare({files:[file]}))){await navigator.share({files:[file],title:"JF Effect workout"});} else {const url=URL.createObjectURL(blob);const a=document.createElement("a");a.href=url;a.download=file.name;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);} } catch(e:any){if(e?.name!=="AbortError") console.warn("Workout share failed",e);} finally {setSharing(false);}
+  const downloadBlob = (blob: Blob, name: string) => {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = name; a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
   };
-  const saveWorkoutImage = async () => {
-    const blob=await buildShareBlob(); if(!blob)return; const file=new File([blob],"jf-effect-workout.png",{type:"image/png"});
-    try { if(navigator.share && (!navigator.canShare || navigator.canShare({files:[file]}))){await navigator.share({files:[file],title:"Save JF Effect workout"});return;} } catch(e:any){if(e?.name==="AbortError")return;}
-    const url=URL.createObjectURL(blob);const a=document.createElement("a");a.href=url;a.download=file.name;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
+  const runImageAction = async (title: string) => {
+    if (sharing) return;
+    setSharing(true);
+    try {
+      const blob = await buildShareBlob();
+      if (!blob) throw new Error("Couldn't create the image");
+      const file = new File([blob], "jf-effect-workout.png", { type: "image/png" });
+      if (navigator.share && (!navigator.canShare || navigator.canShare({ files: [file] }))) {
+        try {
+          await navigator.share({ files: [file], title });
+          return;
+        } catch (e: any) {
+          if (e?.name === "AbortError") return;
+        }
+      }
+      downloadBlob(blob, file.name);
+    } catch (e: any) {
+      console.warn("Workout image failed", e);
+      toast.error("Couldn't create the workout image. You can still close this screen.");
+    } finally {
+      setSharing(false);
+    }
   };
+  const shareWorkout = () => runImageAction("JF Effect workout");
+  const saveWorkoutImage = () => runImageAction("Save JF Effect workout");
 
   return (
-    <Dialog open={open} onOpenChange={(v) => { onOpenChange(v); if (!v) onClose?.(); }}>
+    <Dialog open={open} onOpenChange={(v) => { if (!v) close(); else onOpenChange(v); }}>
       <DialogContent
         className="bottom-0 top-auto flex w-full max-w-none translate-x-[-50%] translate-y-0 flex-col overflow-hidden rounded-b-none rounded-t-[24px] border-border/80 bg-background p-0 shadow-2xl sm:bottom-auto sm:top-1/2 sm:max-w-[520px] sm:-translate-y-1/2 sm:rounded-[24px] [&>button]:hidden"
         style={{ height: "min(96dvh, 820px)", maxHeight: "96dvh" }}
@@ -148,7 +164,7 @@ export function WorkoutSubmissionSummary({ open, onOpenChange, summary, workoutT
             variant="ghost"
             size="icon"
             className="absolute right-3 top-3 z-10 h-9 w-9 rounded-full text-muted-foreground"
-            onClick={() => { onOpenChange(false); onClose?.(); }}
+            onClick={close}
             aria-label="Close workout summary"
           >
             <X className="h-4 w-4" />
@@ -168,7 +184,7 @@ export function WorkoutSubmissionSummary({ open, onOpenChange, summary, workoutT
             </DialogHeader>
 
             <div className="mt-3 flex items-end justify-center gap-1 tabular-nums">
-              <span className="text-5xl font-black leading-none text-primary">{displayScore}</span>
+              <ScoreCounter target={summary.score} run={open && revealStage >= 1} />
               <span className="pb-1 text-xs font-bold text-muted-foreground">/100</span>
             </div>
             <div className="mt-1 text-[10px] font-black uppercase tracking-[0.14em] text-muted-foreground">Workout score</div>
@@ -310,9 +326,9 @@ export function WorkoutSubmissionSummary({ open, onOpenChange, summary, workoutT
         >
           <div className="grid w-full grid-cols-2 gap-2">
             <Button type="button" variant="outline" className="h-10 rounded-xl text-xs font-bold" disabled={sharing} onClick={()=>void shareWorkout()}><Share2 className="mr-1.5 h-4 w-4"/>Share</Button>
-            <Button type="button" variant="outline" className="h-10 rounded-xl text-xs font-bold" onClick={()=>void saveWorkoutImage()}><Download className="mr-1.5 h-4 w-4"/>Save photo</Button>
+            <Button type="button" variant="outline" className="h-10 rounded-xl text-xs font-bold" disabled={sharing} onClick={()=>void saveWorkoutImage()}><Download className="mr-1.5 h-4 w-4"/>Save photo</Button>
           </div>
-          <Button className="mt-2 h-10 w-full rounded-xl text-sm font-bold" onClick={() => { onOpenChange(false); onClose?.(); }}>
+          <Button className="mt-2 h-10 w-full rounded-xl text-sm font-bold" onClick={close}>
             <ChevronLeft className="mr-1.5 h-4 w-4" />Back to workout
           </Button>
         </DialogFooter>
@@ -320,6 +336,35 @@ export function WorkoutSubmissionSummary({ open, onOpenChange, summary, workoutT
     </Dialog>
   );
 }
+
+/**
+ * Isolated score count-up so the per-frame state updates only re-render this
+ * span, not the whole recap (which kept iOS busy during the open transition).
+ */
+const ScoreCounter = memo(function ScoreCounter({ target, run }: { target: number; run: boolean }) {
+  const [displayScore, setDisplayScore] = useState(0);
+  useEffect(() => {
+    if (!run) { setDisplayScore(0); return; }
+    const goal = Math.max(0, Math.min(100, target));
+    if (typeof window !== "undefined" && window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) {
+      setDisplayScore(goal);
+      return;
+    }
+    const started = performance.now();
+    const duration = 700;
+    let frame = 0;
+    let last = -1;
+    const tick = (now: number) => {
+      const progress = Math.min(1, (now - started) / duration);
+      const value = Math.round(goal * (1 - Math.pow(1 - progress, 3)));
+      if (value !== last) { last = value; setDisplayScore(value); }
+      if (progress < 1) frame = requestAnimationFrame(tick);
+    };
+    frame = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(frame);
+  }, [target, run]);
+  return <span className="text-5xl font-black leading-none text-primary">{displayScore}</span>;
+});
 
 function CompactStat({
   icon,
