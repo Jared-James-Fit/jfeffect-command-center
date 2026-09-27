@@ -258,7 +258,7 @@ function RankingsView({ myStats, myBadgeCount }: { myStats: BadgeStats; myBadgeC
             {[podium[1], podium[0], podium[2]].map((r, i) =>
               r ? (
                 <button type="button" onClick={() => setSelected(r.client_id)} key={r.client_id} className={cn("flex flex-col items-center rounded-xl border p-2 text-center shadow-sm transition hover:-translate-y-0.5 hover:shadow-md", levelAccent(r.xp), r.rank === 1 ? "pb-4 bg-amber-50/70 ring-2 ring-amber-300" : r.rank === 2 ? "bg-slate-50/80" : "bg-orange-50/40", r.is_me && "ring-2 ring-primary")}>
-                  <Medal className={cn("mb-1 h-5 w-5", r.rank === 1 ? "text-yellow-500" : r.rank === 2 ? "text-slate-400" : "text-amber-700")} />
+                  <div className="mb-1 flex items-center gap-1"><Medal className={cn("h-5 w-5", r.rank === 1 ? "text-yellow-500" : r.rank === 2 ? "text-slate-400" : "text-amber-700")} /><span className="text-sm font-black text-foreground">#{r.rank}</span></div>
                   <RankAvatar row={r} size={r.rank === 1 ? "h-14 w-14" : "h-11 w-11"} />
                   <div className="mt-1 w-full truncate text-xs font-bold">{r.display_name}</div>
                   <div className="text-[10px] font-bold uppercase text-muted-foreground">{levelForXp(r.xp).current.name}</div>
