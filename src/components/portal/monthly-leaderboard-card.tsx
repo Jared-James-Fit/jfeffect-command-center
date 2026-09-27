@@ -53,10 +53,10 @@ function LeaderboardOverlay({onClose,rows,loading}:{onClose:()=>void;rows:Row[];
   const ranked=rows.filter(r=>r.qualified && r.rank!=null).sort((a,b)=>Number(a.rank)-Number(b.rank)).slice(0,15);
   if(selected) return <AthleteProfileOverlay row={selected} onBack={()=>setSelected(null)} onClose={onClose}/>;
   return <div role="dialog" aria-modal="true" className="fixed inset-0 z-[9999] bg-background">
-    <div className="mx-auto h-full max-w-2xl overflow-y-auto px-4 pb-24 pt-[88px]">
-      <div className="sticky top-0 z-10 -mx-4 flex min-h-[68px] items-center gap-3 border-b bg-background/95 px-4 py-3 backdrop-blur">
-        <button type="button" onClick={onClose} aria-label="Back to home" className="grid h-11 w-11 shrink-0 place-items-center rounded-xl border bg-card shadow-sm"><ArrowLeft className="h-5 w-5"/></button>
-        <div><div className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">${format(new Date(),"MMMM")} Performance League</div><div className="text-lg font-black">JF Monthly Top 15</div></div>
+    <div className="mx-auto h-full max-w-2xl overflow-y-auto px-4 pb-24 pt-[calc(env(safe-area-inset-top)+24px)]">
+      <div className="sticky top-0 z-10 -mx-4 flex min-h-[64px] items-center gap-3 border-b bg-background/95 px-4 py-2 backdrop-blur">
+        <button type="button" onClick={onClose} aria-label="Back to home" className="flex h-11 shrink-0 items-center gap-2 rounded-xl border bg-card px-3 font-bold shadow-sm"><ArrowLeft className="h-5 w-5"/><span>Back</span></button>
+        <div><div className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">{format(new Date(),"MMMM")} Performance League</div><div className="text-lg font-black">JF Monthly Top 15</div></div>
       </div>
       <div className="mt-4 rounded-2xl border bg-muted/20 p-4 text-xs leading-relaxed text-muted-foreground">
         <div className="mb-2 flex items-center gap-2 font-black text-foreground"><Info className="h-4 w-4 text-primary"/>How points work</div>
