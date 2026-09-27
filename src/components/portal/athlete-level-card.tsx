@@ -263,7 +263,7 @@ function RankingsView({ myStats, myBadgeCount }: { myStats: BadgeStats; myBadgeC
       {me && !me.qualified && (
         <div className="rounded-2xl border border-amber-300 bg-amber-50 p-4 text-amber-950">
           <div className="text-sm font-black">Bodyweight required to rank</div>
-          <div className="mt-1 text-xs leading-relaxed">Log your bodyweight once this month to unlock your leaderboard score. Your monthly bodyweight is part of the qualification system so rankings stay fair across athletes of different sizes.</div>
+          <div className="mt-1 text-xs leading-relaxed">Log a bodyweight in the app to unlock your leaderboard score. Your latest entry is always used.</div>
         </div>
       )}
 
@@ -310,7 +310,7 @@ function RankingsView({ myStats, myBadgeCount }: { myStats: BadgeStats; myBadgeC
       )}
 
       <div className="rounded-xl border bg-muted/20 p-3 text-[11px] leading-relaxed text-muted-foreground">
-        <span className="font-bold text-foreground">How scoring works:</span> complete programmed workouts for up to 600 XP, fully log training for up to 150 XP, and earn up to 200 strength XP from bodyweight-normalized e1RM improvements versus your own pre-month history. Only your four best exercise improvements count and each is capped at 50 XP. A monthly bodyweight check earns 50 XP and is required to rank. Total score caps at 1,000, preventing unlimited volume or exercise farming. Lifetime Athlete XP and Powerlifting Records remain separate.
+        <span className="font-bold text-foreground">How scoring works:</span> complete programmed workouts for up to 600 XP, fully log training for up to 150 XP, and earn up to 200 strength XP from bodyweight-normalized e1RM improvements versus your own pre-month history. Only your four best exercise improvements count and each is capped at 50 XP. Having a bodyweight logged earns 50 XP and is required to rank; your latest entry is always used. Total score caps at 1,000, preventing unlimited volume or exercise farming. Lifetime Athlete XP and Powerlifting Records remain separate.
       </div>
     </div>
   );
