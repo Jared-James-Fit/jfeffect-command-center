@@ -229,55 +229,90 @@ const levelAccent = (xp:number) => { const n=levelForXp(xp).current.name; return
 function RankingsView({ myStats, myBadgeCount }: { myStats: BadgeStats; myBadgeCount: number }) {
   const [selected, setSelected] = useState<string | null>(null);
   const { data = [], isPending } = useQuery({
-    queryKey: ["athlete-rankings"],
-    staleTime: 5 * 60_000,
+    queryKey: ["athlete-rankings-monthly"],
+    staleTime: 60_000,
     queryFn: async () => {
-      const { data, error } = await (supabase as any).rpc("get_athlete_rankings", { _limit: 10 });
+      const { data, error } = await (supabase as any).rpc("get_monthly_athlete_rankings", { _limit: 15 });
       if (error) throw error;
-      return ((data ?? []) as any[]).map((r) => ({ ...r, xp: Number(r.xp), rank: Number(r.rank) })) as RankRow[];
+      return ((data ?? []) as any[]).map((r) => ({
+        ...r,
+        xp: Number(r.monthly_xp ?? 0),
+        rank: r.rank == null ? 999 : Number(r.rank),
+        qualified: Boolean(r.qualified),
+        workouts_completed: Number(r.workouts_completed ?? 0),
+        fully_logged: Number(r.fully_logged ?? 0),
+      })) as Array<RankRow & { qualified:boolean; bodyweight_value:number|null; bodyweight_unit:string|null; workouts_completed:number; fully_logged:number }>;
     },
   });
-  const top = data.filter((r) => r.rank <= 10);
-  const podium = top.slice(0, 3);
-  const rest = top.slice(3);
-  const me = data.find((r) => r.is_me && r.rank > 10);
+  const qualified = data.filter((r) => r.qualified && r.rank <= 15);
+  const podium = qualified.slice(0, 3);
+  const rest = qualified.slice(3);
+  const me = data.find((r) => r.is_me);
+  const monthName = format(new Date(), "MMMM");
 
   if (selected) return <CompareView clientId={selected} myStats={myStats} myBadgeCount={myBadgeCount} onBack={() => setSelected(null)} />;
 
   return (
     <div className="space-y-4">
       <SheetHeader className="text-left">
-        <SheetTitle>JF Athlete Leaderboard</SheetTitle>
-        <SheetDescription>Top 10 by lifetime Athlete XP. Tap an athlete to compare achievements.</SheetDescription><Button variant="outline" className="mt-3 h-10 w-full rounded-xl text-xs font-bold" onClick={() => window.dispatchEvent(new CustomEvent("jf-open-athlete-levels"))}><Info className="mr-2 h-4 w-4 text-primary" /> View Athlete Levels ›</Button>
+        <SheetTitle>{monthName} Performance Leaderboard</SheetTitle>
+        <SheetDescription>Top 15 clients this month. Monthly XP resets on the 1st so every client gets a fresh shot.</SheetDescription>
       </SheetHeader>
-      {isPending ? (
-        <div className="py-8 text-center text-sm text-muted-foreground">Loading…</div>
+
+      {me && !me.qualified && (
+        <div className="rounded-2xl border border-amber-300 bg-amber-50 p-4 text-amber-950">
+          <div className="text-sm font-black">Bodyweight required to rank</div>
+          <div className="mt-1 text-xs leading-relaxed">Log your bodyweight once this month to unlock your leaderboard score. Your monthly bodyweight is part of the qualification system so rankings stay fair across athletes of different sizes.</div>
+        </div>
+      )}
+
+      <div className="grid grid-cols-4 gap-2 rounded-2xl border bg-muted/20 p-3 text-center">
+        <div><div className="text-lg font-black">1,000</div><div className="text-[9px] uppercase tracking-wide text-muted-foreground">Max XP</div></div>
+        <div><div className="text-lg font-black">800</div><div className="text-[9px] uppercase tracking-wide text-muted-foreground">Training</div></div>
+        <div><div className="text-lg font-black">150</div><div className="text-[9px] uppercase tracking-wide text-muted-foreground">Full logs</div></div>
+        <div><div className="text-lg font-black">50</div><div className="text-[9px] uppercase tracking-wide text-muted-foreground">BW check</div></div>
+      </div>
+
+      {isPending ? <div className="py-8 text-center text-sm text-muted-foreground">Loading…</div> : qualified.length === 0 ? (
+        <div className="rounded-2xl border border-dashed p-6 text-center text-sm text-muted-foreground">No athletes have qualified for {monthName} yet. Log a bodyweight and complete training to get on the board.</div>
       ) : (
         <>
           <div className="grid grid-cols-3 items-end gap-2">
-            {[podium[1], podium[0], podium[2]].map((r, i) =>
-              r ? (
-                <button type="button" onClick={() => setSelected(r.client_id)} key={r.client_id} className={cn("flex flex-col items-center rounded-xl border p-2 text-center shadow-sm transition hover:-translate-y-0.5 hover:shadow-md", levelAccent(r.xp), r.rank === 1 ? "pb-4 bg-amber-50/70 ring-2 ring-amber-300" : r.rank === 2 ? "bg-slate-50/80" : "bg-orange-50/40", r.is_me && "ring-2 ring-primary")}>
-                  <div className="mb-1 flex flex-col items-center gap-0.5"><Medal className={cn("h-5 w-5", r.rank === 1 ? "text-yellow-500" : r.rank === 2 ? "text-slate-400" : "text-amber-700")} /><span className="text-[11px] font-black uppercase tracking-wide text-foreground">{r.rank === 1 ? "1st" : r.rank === 2 ? "2nd" : "3rd"}</span></div>
-                  <RankAvatar row={r} size={r.rank === 1 ? "h-14 w-14" : "h-11 w-11"} />
-                  <div className="mt-1 w-full truncate text-xs font-bold">{r.display_name}</div>
-                  <div className="text-[10px] font-bold uppercase text-muted-foreground">{levelForXp(r.xp).current.name}</div>
-                  <div className="text-[10px] text-muted-foreground">{r.xp.toLocaleString()} XP</div>
-                </button>
-              ) : <div key={i} />,
-            )}
+            {[podium[1], podium[0], podium[2]].map((r, i) => r ? (
+              <button type="button" onClick={() => setSelected(r.client_id)} key={r.client_id} className={cn("flex flex-col items-center rounded-xl border p-2 text-center shadow-sm transition hover:-translate-y-0.5 hover:shadow-md", r.rank === 1 ? "pb-4 bg-amber-50/70 ring-2 ring-amber-300" : r.rank === 2 ? "bg-slate-50/80" : "bg-orange-50/40", r.is_me && "ring-2 ring-primary")}>
+                <div className="mb-1 flex flex-col items-center gap-0.5"><Medal className={cn("h-5 w-5", r.rank === 1 ? "text-yellow-500" : r.rank === 2 ? "text-slate-400" : "text-amber-700")} /><span className="text-[11px] font-black">{r.rank === 1 ? "1ST" : r.rank === 2 ? "2ND" : "3RD"}</span></div>
+                <RankAvatar row={r} size={r.rank === 1 ? "h-14 w-14" : "h-11 w-11"} />
+                <div className="mt-1 w-full truncate text-xs font-bold">{r.display_name}</div>
+                <div className="text-[10px] text-muted-foreground">{r.bodyweight_value ? `${Number(r.bodyweight_value).toFixed(1)} ${r.bodyweight_unit ?? "lb"}` : ""}</div>
+                <div className="text-xs font-black text-primary">{r.xp.toLocaleString()} XP</div>
+              </button>
+            ) : <div key={i} />)}
           </div>
-          <ul className="divide-y rounded-xl border">
-            {rest.map((r) => <RankLine key={r.client_id} row={r} onSelect={setSelected} />)}
+          <ul className="divide-y overflow-hidden rounded-xl border">
+            {rest.map((r) => (
+              <li key={r.client_id} onClick={() => setSelected(r.client_id)} className={cn("flex cursor-pointer items-center gap-3 px-3 py-2.5 text-sm", r.is_me && "bg-primary/5")}>
+                <span className="w-7 text-center font-black text-muted-foreground">#{r.rank}</span>
+                <RankAvatar row={r} size="h-9 w-9" />
+                <div className="min-w-0 flex-1"><div className="truncate font-bold">{r.display_name}{r.is_me ? " (You)" : ""}</div><div className="text-[10px] text-muted-foreground">{r.workouts_completed} workouts · {r.bodyweight_value ? `${Number(r.bodyweight_value).toFixed(1)} ${r.bodyweight_unit ?? "lb"}` : "BW verified"}</div></div>
+                <span className="text-xs font-black text-primary">{r.xp} XP</span>
+              </li>
+            ))}
           </ul>
-          {me && (
-            <div>
-              <div className="mb-1 text-[10px] uppercase tracking-widest text-muted-foreground">Your rank</div>
-              <ul className="rounded-xl border border-primary"><RankLine row={me} onSelect={setSelected} /></ul>
-            </div>
-          )}
         </>
       )}
+
+      {me?.qualified && (
+        <div className="rounded-2xl border border-primary/30 bg-primary/5 p-4">
+          <div className="flex items-center justify-between"><span className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Your {monthName}</span><span className="text-lg font-black">#{me.rank}</span></div>
+          <div className="mt-1 text-2xl font-black text-primary">{me.xp} <span className="text-sm">XP</span></div>
+          <div className="mt-1 text-xs text-muted-foreground">{me.workouts_completed} workouts completed · {me.fully_logged} fully logged · monthly BW verified</div>
+          <Progress value={Math.min(100, me.xp / 10)} className="mt-3 h-2" />
+        </div>
+      )}
+
+      <div className="rounded-xl border bg-muted/20 p-3 text-[11px] leading-relaxed text-muted-foreground">
+        <span className="font-bold text-foreground">How scoring works:</span> complete programmed workouts to build the core score, fully log your training for bonus XP, and submit a bodyweight every calendar month to qualify. Scores cap at 1,000 so high-volume athletes cannot farm unlimited points. Lifetime Athlete XP and Powerlifting Records remain separate.
+      </div>
     </div>
   );
 }
