@@ -1,8 +1,8 @@
 import { NewAchievementReveal } from "@/components/portal/new-achievement-reveal";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Trophy, Dumbbell, Activity, CheckCircle2, Flame, Clock, Star, ChevronLeft, Heart, X, Repeat2, CircleX, Sparkles, Medal } from "lucide-react";
+import { Trophy, Dumbbell, Activity, CheckCircle2, Flame, Clock, Star, ChevronLeft, Heart, X, Repeat2, CircleX, Sparkles, Medal, Share2, Download } from "lucide-react";
 import type { WorkoutSummary } from "@/lib/workout-summary";
 import { format } from "date-fns";
 import { computeRecoveryScore } from "@/lib/analytics/recovery-score";
@@ -36,6 +36,8 @@ export function WorkoutSubmissionSummary({ open, onOpenChange, summary, workoutT
   const prList = prs ?? [];
   const [revealStage, setRevealStage] = useState(0);
   const [displayScore, setDisplayScore] = useState(0);
+  const [sharing, setSharing] = useState(false);
+  const shareCanvasRef = useRef<HTMLCanvasElement | null>(null);
 
   useEffect(() => {
     if (!open) {
@@ -103,11 +105,41 @@ export function WorkoutSubmissionSummary({ open, onOpenChange, summary, workoutT
     ? takeaways.filter((t) => !/^🏆/.test(t.trim()))
     : takeaways;
 
+  const buildShareBlob = async (): Promise<Blob | null> => {
+    const canvas = shareCanvasRef.current ?? document.createElement("canvas");
+    shareCanvasRef.current = canvas;
+    canvas.width = 1080; canvas.height = 1920;
+    const ctx = canvas.getContext("2d"); if (!ctx) return null;
+    ctx.fillStyle = "#09090b"; ctx.fillRect(0,0,1080,1920);
+    const grad=ctx.createLinearGradient(0,0,1080,1920); grad.addColorStop(0,"#ef3340"); grad.addColorStop(.38,"#171717"); grad.addColorStop(1,"#09090b"); ctx.fillStyle=grad; ctx.globalAlpha=.32; ctx.fillRect(0,0,1080,1920); ctx.globalAlpha=1;
+    try { const img=new Image(); img.src="/logo.png"; await new Promise<void>((res)=>{img.onload=()=>res();img.onerror=()=>res();}); if(img.complete&&img.naturalWidth){const w=220,h=w*(img.naturalHeight/img.naturalWidth);ctx.drawImage(img,430,125,w,h);} } catch {}
+    ctx.textAlign="center"; ctx.fillStyle="#fff"; ctx.font="900 38px system-ui"; ctx.fillText("JF EFFECT",540,390);
+    ctx.fillStyle="#ef3340"; ctx.font="900 34px system-ui"; ctx.fillText("WORKOUT COMPLETE",540,485);
+    ctx.fillStyle="#fff"; ctx.font="900 86px system-ui"; ctx.fillText(headline,540,610);
+    ctx.fillStyle="#fff"; ctx.font="900 250px system-ui"; ctx.fillText(String(summary.score),540,900);
+    ctx.font="800 38px system-ui"; ctx.fillStyle="#a1a1aa"; ctx.fillText("WORKOUT SCORE / 100",540,970);
+    ctx.fillStyle="#fff"; ctx.font="800 42px system-ui"; ctx.fillText((workoutTitle??"Workout").slice(0,38),540,1080);
+    if(dateLabel){ctx.fillStyle="#a1a1aa";ctx.font="600 30px system-ui";ctx.fillText(dateLabel,540,1130);}
+    if(prList[0]){ctx.fillStyle="#f59e0b";ctx.font="900 34px system-ui";ctx.fillText("NEW PERSONAL RECORD",540,1270);ctx.fillStyle="#fff";ctx.font="800 34px system-ui";ctx.fillText(formatPR(prList[0]).slice(0,48),540,1330);}
+    ctx.fillStyle="#fff";ctx.font="800 32px system-ui";ctx.fillText(`${summary.completedSets}/${summary.prescribedSets} SETS COMPLETED`,540,1480);
+    if(summary.totalLifted>0){ctx.fillStyle="#d4d4d8";ctx.font="700 30px system-ui";ctx.fillText(`${summary.totalLiftedFmt} TOTAL VOLUME`,540,1535);}
+    ctx.fillStyle="#71717a";ctx.font="700 27px system-ui";ctx.fillText("BUILT WITH JF EFFECT",540,1770);
+    return await new Promise<Blob|null>((res)=>canvas.toBlob(res,"image/png",1));
+  };
+  const shareWorkout = async () => {
+    setSharing(true); try { const blob=await buildShareBlob(); if(!blob)return; const file=new File([blob],"jf-effect-workout.png",{type:"image/png"}); if(navigator.share && (!navigator.canShare || navigator.canShare({files:[file]}))){await navigator.share({files:[file],title:"JF Effect workout"});} else {const url=URL.createObjectURL(blob);const a=document.createElement("a");a.href=url;a.download=file.name;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);} } catch(e:any){if(e?.name!=="AbortError") console.warn("Workout share failed",e);} finally {setSharing(false);}
+  };
+  const saveWorkoutImage = async () => {
+    const blob=await buildShareBlob(); if(!blob)return; const file=new File([blob],"jf-effect-workout.png",{type:"image/png"});
+    try { if(navigator.share && (!navigator.canShare || navigator.canShare({files:[file]}))){await navigator.share({files:[file],title:"Save JF Effect workout"});return;} } catch(e:any){if(e?.name==="AbortError")return;}
+    const url=URL.createObjectURL(blob);const a=document.createElement("a");a.href=url;a.download=file.name;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
+  };
+
   return (
     <Dialog open={open} onOpenChange={(v) => { onOpenChange(v); if (!v) onClose?.(); }}>
       <DialogContent
         className="bottom-0 top-auto flex w-full max-w-none translate-x-[-50%] translate-y-0 flex-col overflow-hidden rounded-b-none rounded-t-[24px] border-border/80 bg-background p-0 shadow-2xl sm:bottom-auto sm:top-1/2 sm:max-w-[520px] sm:-translate-y-1/2 sm:rounded-[24px] [&>button]:hidden"
-        style={{ maxHeight: "min(94svh, 800px)" }}
+        style={{ height: "min(96dvh, 820px)", maxHeight: "96dvh" }}
       >
         <header className="relative shrink-0 overflow-hidden border-b border-border/70 bg-gradient-to-b from-primary/[0.12] via-primary/[0.04] to-background px-4 pb-4 pt-3 sm:px-5">
           <div className="mx-auto mb-2 h-1 w-9 rounded-full bg-muted-foreground/20 sm:hidden" />
@@ -273,15 +305,15 @@ export function WorkoutSubmissionSummary({ open, onOpenChange, summary, workoutT
         </div>
 
         <DialogFooter
-          className="shrink-0 border-t border-border/70 bg-background/95 px-4 pt-2.5 backdrop-blur sm:px-5"
-          style={{ paddingBottom: "max(env(safe-area-inset-bottom), 0.75rem)" }}
+          className="shrink-0 border-t border-border/70 bg-background/95 px-3 pt-2 backdrop-blur sm:px-5"
+          style={{ paddingBottom: "max(env(safe-area-inset-bottom), 0.5rem)" }}
         >
-          <Button
-            className="h-11 w-full rounded-xl text-sm font-bold"
-            onClick={() => { onOpenChange(false); onClose?.(); }}
-          >
-            <ChevronLeft className="mr-1.5 h-4 w-4" />
-            Back to workout
+          <div className="grid w-full grid-cols-2 gap-2">
+            <Button type="button" variant="outline" className="h-10 rounded-xl text-xs font-bold" disabled={sharing} onClick={()=>void shareWorkout()}><Share2 className="mr-1.5 h-4 w-4"/>Share</Button>
+            <Button type="button" variant="outline" className="h-10 rounded-xl text-xs font-bold" onClick={()=>void saveWorkoutImage()}><Download className="mr-1.5 h-4 w-4"/>Save photo</Button>
+          </div>
+          <Button className="mt-2 h-10 w-full rounded-xl text-sm font-bold" onClick={() => { onOpenChange(false); onClose?.(); }}>
+            <ChevronLeft className="mr-1.5 h-4 w-4" />Back to workout
           </Button>
         </DialogFooter>
       </DialogContent>
