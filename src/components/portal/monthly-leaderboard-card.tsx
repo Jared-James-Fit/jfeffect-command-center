@@ -9,7 +9,8 @@ import { combinedBodyweightQueryKey, getCombinedBodyweightSeries } from "@/lib/b
 import { Card } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Progress } from "@/components/ui/progress";
-import { usePublicAchievements, PublicAchievements } from "@/components/portal/achievements-card";
+import { PublicAchievements } from "@/components/portal/achievements-card";
+import { usePublicAchievements } from "@/lib/athlete-achievements";
 
 type Row = { client_id:string; display_name:string; avatar_url:string|null; monthly_xp:number; rank:number|null; is_me:boolean; qualified:boolean; bodyweight_value:number|null; bodyweight_unit:string|null };
 
