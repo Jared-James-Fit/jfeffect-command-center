@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { Droplet, Plus, History, Undo2 } from "lucide-react";
 import { toast } from "sonner";
+import { format } from "date-fns";
 import {
   addWaterEntry, deleteWaterEntry, ensureWaterTarget, formatWater, listWaterForDate,
   summarizeToday, todayLocalISO,
@@ -53,6 +54,7 @@ export function HomeWaterCard({ userId, currentUserId, surface }: Props) {
     try {
       await addWaterEntry({ userId, amountMl: ml, source: "quick_add", createdByUserId: currentUserId });
       qc.invalidateQueries({ queryKey: ["water-today", userId] });
+      qc.invalidateQueries({ queryKey: ["water-history", userId] });
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Couldn't log water");
     }
@@ -64,6 +66,7 @@ export function HomeWaterCard({ userId, currentUserId, surface }: Props) {
     try {
       await deleteWaterEntry(lastEntry.id);
       qc.invalidateQueries({ queryKey: ["water-today", userId] });
+      qc.invalidateQueries({ queryKey: ["water-history", userId] });
       toast.success(`Removed ${formatWater(lastEntry.amount_ml, "ml")}`);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Couldn't undo");
@@ -113,6 +116,32 @@ export function HomeWaterCard({ userId, currentUserId, surface }: Props) {
           </Button>
         ))}
       </div>
+
+      {entries.length > 0 && (
+        <div className="mt-4 rounded-xl border bg-secondary/25 p-3">
+          <div className="mb-2 flex items-center justify-between">
+            <span className="text-xs font-bold">Today’s drink history</span>
+            <span className="text-[11px] text-muted-foreground">{entries.length} {entries.length === 1 ? "drink" : "drinks"}</span>
+          </div>
+          <div className="space-y-1.5">
+            {entries.map((entry) => (
+              <div key={entry.id} className="flex items-center justify-between rounded-lg bg-background/80 px-3 py-2">
+                <span className="text-sm font-semibold tabular-nums">{formatWater(entry.amount_ml, "ml")}</span>
+                <span className="text-xs font-medium tabular-nums text-muted-foreground">
+                  {format(new Date(entry.entry_at), "h:mm:ss a")}
+                </span>
+              </div>
+            ))}
+          </div>
+          <Link
+            to={historyHref}
+            search={{ action: "history" } as never}
+            className="mt-2 inline-flex w-full items-center justify-center gap-1 rounded-md py-2 text-xs font-semibold text-sky-700 hover:bg-sky-500/10 dark:text-sky-300"
+          >
+            <History className="h-3.5 w-3.5" /> View full history
+          </Link>
+        </div>
+      )}
 
       <Button
         variant="ghost"
