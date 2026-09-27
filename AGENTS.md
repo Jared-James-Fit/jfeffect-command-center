@@ -1,0 +1,2 @@
+- Logging Level points are awarded only by DB triggers into `athlete_xp_events` with unique per-record/day/week `source_key`s — why: idempotent, no client-side farming, history backfillable.
+- Achievement "seen" state lives in `athlete_achievement_views` (server-side), never localStorage — why: reveals must not replay across devices.
