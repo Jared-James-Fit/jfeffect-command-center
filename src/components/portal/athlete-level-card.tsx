@@ -49,7 +49,7 @@ export function AthleteLevelCard({ clientId, defaultView = null }: { clientId: s
       <Card className="p-4">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <div className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">Athlete Level</div>
+            <div className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">JF Athlete Rank</div>
             <div className="mt-0.5 text-2xl font-black uppercase tracking-tight text-primary">
               {isPending ? "—" : lvl.current.name}
             </div>
@@ -62,14 +62,14 @@ export function AthleteLevelCard({ clientId, defaultView = null }: { clientId: s
           {lvl.next ? `${lvl.remaining.toLocaleString()} XP to ${lvl.next.name}` : "Top level reached — keep building your legacy."}
         </div>
         <div className="mt-4 overflow-hidden rounded-2xl border bg-muted/20">
-          <button type="button" onClick={() => setOpen("rankings")} className="flex min-h-14 w-full items-center gap-3 border-b px-4 py-3 text-left transition-colors hover:bg-muted/40 active:bg-muted/60">
+          <button type="button" onClick={() => setOpen("levels")} className="flex min-h-14 w-full items-center gap-3 border-b px-4 py-3 text-left transition-colors hover:bg-muted/40 active:bg-muted/60">
             <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary"><Trophy className="h-4 w-4" /></span>
-            <span className="min-w-0 flex-1"><span className="block text-sm font-bold leading-tight">Athlete Rankings</span><span className="mt-0.5 block text-[11px] leading-tight text-muted-foreground">Monthly Top 15 · bodyweight required</span></span>
+            <span className="min-w-0 flex-1"><span className="block text-sm font-bold leading-tight">Rank Ladder</span><span className="mt-0.5 block text-[11px] leading-tight text-muted-foreground">See every lifetime rank & how to level up</span></span>
             <span className="shrink-0 text-xl font-semibold text-primary">›</span>
           </button>
           <button type="button" onClick={() => setOpen("powerlifting")} className="flex min-h-14 w-full items-center gap-3 border-b px-4 py-3 text-left transition-colors hover:bg-muted/40 active:bg-muted/60">
             <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary"><Medal className="h-4 w-4" /></span>
-            <span className="min-w-0 flex-1"><span className="block text-sm font-bold leading-tight">Powerlifting Records</span><span className="mt-0.5 block text-[11px] leading-tight text-muted-foreground">DOTS, total & competition PRs</span></span>
+            <span className="min-w-0 flex-1"><span className="block text-sm font-bold leading-tight">Strength Records</span><span className="mt-0.5 block text-[11px] leading-tight text-muted-foreground">Powerlifting totals, DOTS & competition PRs</span></span>
             <span className="shrink-0 text-xl font-semibold text-primary">›</span>
           </button>
         </div>
@@ -100,8 +100,8 @@ function LevelsView({ total, events }: { total: number; events: XpEvent[] }) {
   return (
     <div className="space-y-5">
       <SheetHeader className="text-left">
-        <SheetTitle>Athlete Levels</SheetTitle>
-        <SheetDescription>Lifetime progression. Your level never goes down.</SheetDescription>
+        <SheetTitle>JF Rank Ladder</SheetTitle>
+        <SheetDescription>Your permanent athlete rank. Earn lifetime XP, climb the ladder, and never lose your level.</SheetDescription>
       </SheetHeader>
       <ul className="space-y-1.5">
         {[...ATHLETE_LEVELS].reverse().map((l) => {
@@ -256,8 +256,8 @@ function RankingsView({ myStats, myBadgeCount }: { myStats: BadgeStats; myBadgeC
   return (
     <div className="space-y-4">
       <SheetHeader className="text-left">
-        <SheetTitle>{monthName} Performance Leaderboard</SheetTitle>
-        <SheetDescription>Top 15 clients this month. Monthly XP resets on the 1st so every client gets a fresh shot.</SheetDescription>
+        <SheetTitle>{monthName} Performance League</SheetTitle>
+        <SheetDescription>Monthly competition. Chase the Top 15, compare athletes, and take your spot before the board resets on the 1st.</SheetDescription>
       </SheetHeader>
 
       {me && !me.qualified && (
