@@ -1575,6 +1575,13 @@ function WorkoutDay({
   // autoOpenReview prop.
   const [autoOpenReviewAfterFinish, setAutoOpenReviewAfterFinish] = useState(false);
   const [quickFinishReviewOpen, setQuickFinishReviewOpen] = useState(false);
+  // Keep the finish-review sheet mounted once it has been opened so that the
+  // workout flipping to "completed" mid-close can't unmount it during its
+  // exit animation (which strands the body scroll lock on iOS).
+  const [keepQuickFinishMounted, setKeepQuickFinishMounted] = useState(false);
+  useEffect(() => {
+    if (quickFinishReviewOpen) setKeepQuickFinishMounted(true);
+  }, [quickFinishReviewOpen]);
   // Notifications can deep-link with ?review=1 to nudge the member to open
   // the shared review sheet on a completed workout.
   const reviewParam = search.review === 1;
@@ -1593,6 +1600,16 @@ function WorkoutDay({
   const recapParam = search.recap === 1;
   const autoOpenedRecapRef = useRef(false);
   const recapFromSubmitRef = useRef(false);
+  // Opens the recap dialog once any previous sheet has closed. Clears any
+  // scroll/pointer lock a just-closed Radix sheet may have left on <body>
+  // (iOS PWA "frozen screen") before the dialog mounts.
+  const showSummaryDialog = () => {
+    try {
+      document.body.style.pointerEvents = "";
+      document.body.style.overflow = "";
+    } catch {}
+    setSummaryOpen(true);
+  };
   const pendingCompletionRecapRef = useRef(false);
 
   // Build a summary from the current rows/results snapshot. Shared by the
@@ -1611,7 +1628,7 @@ function WorkoutDay({
     );
     setLastSummary(computed);
     recapFromSubmitRef.current = false;
-    setSummaryOpen(true);
+    showSummaryDialog();
   };
 
   useEffect(() => {
@@ -2249,7 +2266,7 @@ function WorkoutDay({
                   }}
                   onViewScore={(rating) => {
                     setLastSessionRating(rating);
-                    requestAnimationFrame(() => requestAnimationFrame(openRecapSummary));
+                    openRecapSummary();
                   }}
                   autoOpenReview={autoOpenReviewAfterFinish}
                   onAutoOpenReviewConsumed={() => setAutoOpenReviewAfterFinish(false)}
@@ -2562,7 +2579,7 @@ function WorkoutDay({
             }}
             onViewScore={(rating) => {
               setLastSessionRating(rating);
-              requestAnimationFrame(() => requestAnimationFrame(openRecapSummary));
+              openRecapSummary();
             }}
             autoOpenReview={autoOpenReviewAfterFinish}
             onAutoOpenReviewConsumed={() => setAutoOpenReviewAfterFinish(false)}
@@ -2571,7 +2588,7 @@ function WorkoutDay({
         {children}
       </div>
 
-      {!completion?.completed_at && client?.id && autoFinishReady && (
+      {client?.id && (keepQuickFinishMounted || (!completion?.completed_at && autoFinishReady)) && (
         <WorkoutReviewEditor
           open={quickFinishReviewOpen}
           onOpenChange={setQuickFinishReviewOpen}
@@ -2634,7 +2651,11 @@ function WorkoutDay({
               hasNote: !!completion?.client_notes,
             }));
             recapFromSubmitRef.current = true;
-            requestAnimationFrame(() => requestAnimationFrame(() => setSummaryOpen(true)));
+          }}
+          onViewScore={(rating) => {
+            // Called by the editor only after its sheet has fully closed.
+            setLastSessionRating(rating);
+            showSummaryDialog();
           }}
         />
       )}

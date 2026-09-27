@@ -16,7 +16,7 @@
  *   strength_feel, fatigue_feel, hit_target: preserved in DB, hidden from UI.
  *   Historical submissions remain fully intact.
  */
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import {
@@ -203,10 +203,17 @@ export function WorkoutReviewEditor({
 
   const selectedCard = STATUS_CARDS.find((c) => c.key === status) ?? null;
   const showNotes = status === "minor" || status === "attention";
+  // Synchronous in-flight guard: React state (isPending) lags a render, so a
+  // fast double-tap on iOS could fire two submits before the button disables.
+  const inFlightRef = useRef(false);
+  const handoffTimerRef = useRef<number | null>(null);
+  useEffect(() => () => {
+    if (handoffTimerRef.current) window.clearTimeout(handoffTimerRef.current);
+  }, []);
   const mutation = useMutation({
     mutationFn: async () => {
       if (!selectedCard) throw new Error("Please select a workout status");
-      return submit({
+      const res = await submit({
         data: {
           ...ctx,
           overallRating: selectedCard.overallRating,
@@ -228,24 +235,21 @@ export function WorkoutReviewEditor({
           actAsClientId: actAsClientId ?? null,
         },
       });
-    },
-    onSuccess: async (res: any) => {
-      // Some flows use the review itself as the final completion action.
-      // Wait for that parent finalization before showing "Workout complete"
-      // or closing the sheet, so the UI never claims success early.
+      // Parent finalization (e.g. finishing the workout + preparing the recap
+      // data) runs inside the mutation so the button stays in its loading
+      // state until everything the recap needs is ready.
       try {
         await onSaved?.();
       } catch (e: any) {
-        toast.error("Review saved, but the workout still needs finishing.", {
-          description: e?.message,
-        });
-        return;
+        const err = new Error(e?.message || "Review saved, but the workout still needs finishing.");
+        (err as any).reviewSaved = true;
+        throw err;
       }
-
+      return res;
+    },
+    onSuccess: (res: any) => {
       toast.success(res?.edited ? "Review updated." : "Workout complete.");
-      // Recovery/sleep answers feed the Training Readiness ring. Invalidate
-      // both member and coaching readiness queries so the ring reflects the
-      // just-saved (or edited/cleared) Recovery value immediately.
+      // Recovery/sleep answers feed the Training Readiness ring.
       qc.invalidateQueries({ queryKey: ["training-readiness"] });
       qc.invalidateQueries({
         predicate: (q) => {
@@ -253,20 +257,46 @@ export function WorkoutReviewEditor({
           return typeof k === "string" && (k.startsWith("recovery") || k === "readiness");
         },
       });
-      onViewScore?.(selectedCard?.overallRating ?? null);
+      const rating = selectedCard?.overallRating ?? null;
+      // Close the sheet FIRST, then open the recap after the close animation
+      // finishes. Overlapping a closing Sheet with an opening Dialog is what
+      // left iOS with a stuck scroll lock / pointer-events:none ("frozen").
       onOpenChange(false);
+      if (onViewScore) {
+        handoffTimerRef.current = window.setTimeout(() => {
+          handoffTimerRef.current = null;
+          onViewScore(rating);
+        }, 320);
+      }
     },
-    onError: (e: any) => toast.error(e?.message || "Couldn't save review"),
+    onError: (e: any) =>
+      e?.reviewSaved
+        ? toast.error("Review saved, but the workout still needs finishing.", { description: e?.message })
+        : toast.error(e?.message || "Couldn't save review"),
+    onSettled: () => {
+      inFlightRef.current = false;
+    },
   });
 
-  const canSubmit = status !== null && !mutation.isPending;
+  const handleSubmit = () => {
+    if (inFlightRef.current || mutation.isPending || !status) return;
+    inFlightRef.current = true;
+    mutation.mutate();
+  };
+  const busy = mutation.isPending;
+  const safeOpenChange = (v: boolean) => {
+    if (!v && busy) return; // never dismiss mid-save
+    onOpenChange(v);
+  };
 
   return (
-    <Sheet open={open} onOpenChange={onOpenChange}>
+    <Sheet open={open} onOpenChange={safeOpenChange}>
       <SheetContent
         side="bottom"
         hideCloseButton
         className="z-[70] flex max-h-[92svh] flex-col rounded-t-3xl p-0"
+        onInteractOutside={(e) => { if (busy) e.preventDefault(); }}
+        onEscapeKeyDown={(e) => { if (busy) e.preventDefault(); }}
       >
         {/* Sticky header — Back pill top-left, then a title/subtitle stack.
             Structured as two rows inside a single header block so the Back
@@ -279,7 +309,8 @@ export function WorkoutReviewEditor({
           <div className="flex items-center px-3 pt-2 sm:px-4">
             <button
               type="button"
-              onClick={() => onOpenChange(false)}
+              onClick={() => safeOpenChange(false)}
+              disabled={busy}
               aria-label="Back"
               className="inline-flex h-9 items-center gap-0.5 rounded-full px-2 -ml-1 text-sm font-semibold text-foreground transition hover:bg-secondary focus:outline-none focus:ring-2 focus:ring-ring"
             >
@@ -492,16 +523,17 @@ export function WorkoutReviewEditor({
           className="flex-row gap-2 border-t bg-background/95 px-5 py-3 backdrop-blur sm:flex-row"
           style={{ paddingBottom: "calc(env(safe-area-inset-bottom) + 0.75rem)" }}
         >
-          <Button variant="ghost" className="flex-1" onClick={() => onOpenChange(false)} disabled={mutation.isPending}>
+          <Button variant="ghost" className="flex-1" onClick={() => safeOpenChange(false)} disabled={busy}>
             Close
           </Button>
           <Button
             className="flex-1"
-            onClick={() => mutation.mutate()}
-            disabled={!status || mutation.isPending}
+            onClick={handleSubmit}
+            disabled={!status || busy}
+            aria-busy={busy}
           >
-            {mutation.isPending && <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />}
-            {isEdit ? "Save changes" : "Done"}
+            {busy && <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />}
+            {busy ? "Saving…" : isEdit ? "Save changes" : "Done"}
           </Button>
         </SheetFooter>
       </SheetContent>
