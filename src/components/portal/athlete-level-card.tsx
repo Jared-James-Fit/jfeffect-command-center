@@ -45,26 +45,27 @@ export function AthleteLevelCard({ clientId, defaultView = null }: { clientId: s
 
   return (
     <>
-      <AchievementCelebrations clientId={clientId} catalog={catalog} earned={earned} />
+      <AchievementCelebrations clientId={clientId} catalog={catalog} />
       <Card className="p-4">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <div className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">Training Level</div>
+            <div className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">Logging Level</div>
             <div className="mt-0.5 text-2xl font-black uppercase tracking-tight text-primary">
               {isPending ? "—" : lvl.current.name}
             </div>
-            <div className="text-xs text-muted-foreground">{lvl.xp.toLocaleString()} lifetime XP</div>
+            <div className="text-xs text-muted-foreground">{lvl.xp.toLocaleString()} lifetime points</div>
           </div>
 
         </div>
         <Progress value={lvl.pct} className="mt-3 h-2" />
         <div className="mt-1.5 text-xs text-muted-foreground">
-          {lvl.next ? `${lvl.remaining.toLocaleString()} XP to ${lvl.next.name}` : "Top level reached — keep building your legacy."}
+          {lvl.next ? `${lvl.remaining.toLocaleString()} points to ${lvl.next.name}` : "Top level reached — keep building your legacy."}
         </div>
+        <p className="mt-2 text-[11px] leading-snug text-muted-foreground">Your level reflects how consistently and completely you track your journey.</p>
         <div className="mt-4 overflow-hidden rounded-2xl border bg-muted/20">
           <button type="button" onClick={() => setOpen("levels")} className="flex min-h-14 w-full items-center gap-3 border-b px-4 py-3 text-left transition-colors hover:bg-muted/40 active:bg-muted/60">
             <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary"><Trophy className="h-4 w-4" /></span>
-            <span className="min-w-0 flex-1"><span className="block text-sm font-bold leading-tight">Training Levels</span><span className="mt-0.5 block text-[11px] leading-tight text-muted-foreground">See every level & what it takes to reach the next one</span></span>
+            <span className="min-w-0 flex-1"><span className="block text-sm font-bold leading-tight">Logging Levels & Milestones</span><span className="mt-0.5 block text-[11px] leading-tight text-muted-foreground">Track more. Build your history. Level up.</span></span>
             <span className="shrink-0 text-xl font-semibold text-primary">›</span>
           </button>
           <button type="button" onClick={() => setOpen("powerlifting")} className="flex min-h-14 w-full items-center gap-3 border-b px-4 py-3 text-left transition-colors hover:bg-muted/40 active:bg-muted/60">
@@ -100,9 +101,22 @@ function LevelsView({ total, events }: { total: number; events: XpEvent[] }) {
   return (
     <div className="space-y-5">
       <SheetHeader className="text-left">
-        <SheetTitle>Training Levels</SheetTitle>
-        <SheetDescription>Your permanent training level based on lifetime XP. See what it takes to reach every level.</SheetDescription>
+        <SheetTitle>Logging Levels & Milestones</SheetTitle>
+        <SheetDescription>Your Logging Level reflects how consistently and completely you track your journey. It never goes down.</SheetDescription>
       </SheetHeader>
+      <div className="grid grid-cols-4 gap-1.5 text-center">
+        {["Train", "Log", "Earn points", "Level up"].map((t, i) => (
+          <div key={t} className="rounded-xl border bg-muted/30 px-1 py-2">
+            <div className="text-[10px] font-black text-primary">{i + 1}</div>
+            <div className="text-[11px] font-bold leading-tight">{t}</div>
+          </div>
+        ))}
+      </div>
+      <div className="rounded-xl border border-primary/30 bg-primary/5 p-3">
+        <div className="flex items-baseline justify-between"><span className="text-sm font-black uppercase">{lvl.current.name}</span><span className="text-xs text-muted-foreground">{lvl.xp.toLocaleString()} pts</span></div>
+        <Progress value={lvl.pct} className="mt-2 h-2" />
+        <div className="mt-1 text-[11px] text-muted-foreground">{lvl.next ? `${lvl.remaining.toLocaleString()} points to ${lvl.next.name}` : "Top level reached."}</div>
+      </div>
       <ul className="space-y-1.5">
         {[...ATHLETE_LEVELS].reverse().map((l) => {
           const here = l.index === lvl.current.index;
@@ -114,29 +128,30 @@ function LevelsView({ total, events }: { total: number; events: XpEvent[] }) {
                 <span className="font-bold uppercase">{l.name}</span>
                 {here && <span className="rounded-full bg-primary px-2 py-0.5 text-[10px] font-bold text-primary-foreground">YOU'RE HERE</span>}
               </div>
-              <span className="text-xs text-muted-foreground">{l.min.toLocaleString()} XP</span>
+              <span className="text-xs text-muted-foreground">{l.min.toLocaleString()} pts</span>
             </li>
           );
         })}
       </ul>
       <div>
-        <div className="mb-2 text-sm font-semibold">How to earn XP</div>
+        <div className="mb-2 text-sm font-semibold">How to earn points</div>
         <ul className="space-y-1.5 text-sm">
           {XP_RULES.map((r) => (
-            <li key={r.label} className="flex items-center justify-between">
-              <span className="text-muted-foreground">{r.label}</span>
-              <span className="font-bold text-primary">+{r.xp}</span>
+            <li key={r.label} className="flex items-center justify-between gap-2">
+              <span className="text-muted-foreground">{r.label}{r.cap && <span className="ml-1 text-[10px]">({r.cap})</span>}</span>
+              <span className="shrink-0 font-bold text-primary">+{r.xp}</span>
             </li>
           ))}
         </ul>
+        <p className="mt-2 text-[11px] text-muted-foreground">Editing a record never earns extra points. Monthly Performance League and Powerlifting Records are scored separately.</p>
       </div>
       <div>
-        <div className="mb-2 text-sm font-semibold">XP History</div>
+        <div className="mb-2 text-sm font-semibold">Points history</div>
         {events.length === 0 ? (
-          <div className="text-sm text-muted-foreground">Finish a workout to earn your first XP.</div>
+          <div className="text-sm text-muted-foreground">Finish a workout or log something to earn your first points.</div>
         ) : (
           <ul className="divide-y text-sm">
-            {events.slice(0, 20).map((e) => (
+            {events.slice(0, 25).map((e) => (
               <li key={e.id} className="flex items-center justify-between py-2">
                 <div className="flex items-center gap-2">
                   <Zap className="h-3.5 w-3.5 text-primary" />
@@ -160,7 +175,16 @@ type BadgeStats = AchievementMetrics;
 function statsFromEvents(events: XpEvent[]): BadgeStats {
   const done = events.filter((e) => e.event_type === "workout_completed");
   const first = done.length ? done[done.length - 1].occurred_at : null;
+  const counts: Record<string, number> = {};
+  const weeks = new Set<string>();
+  for (const e of events) {
+    counts[e.event_type] = (counts[e.event_type] ?? 0) + 1;
+    const d = new Date(e.occurred_at); const day = (d.getUTCDay() + 6) % 7;
+    weeks.add(new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() - day)).toISOString().slice(0, 10));
+  }
   return {
+    events: counts,
+    tracking_weeks: weeks.size,
     xp: events.reduce((s, e) => s + (e.xp || 0), 0),
     workouts_completed: done.length,
     workouts_fully_logged: events.filter((e) => e.event_type === "workout_fully_logged").length,
@@ -195,7 +219,7 @@ function CompareView({ clientId, myStats, myBadgeCount, onBack }: { clientId: st
             <div className="min-w-0">
               <div className="truncate text-lg font-black">{p.display_name}</div>
               <div className="text-xs font-black uppercase tracking-wide text-primary">{levelForXp(theirXp).current.name}</div>
-              <div className="mt-0.5 text-[11px] text-muted-foreground">{theirXp.toLocaleString()} lifetime XP · {publicBadges.length} achievements</div>
+              <div className="mt-0.5 text-[11px] text-muted-foreground">{theirXp.toLocaleString()} lifetime points · {publicBadges.length} milestones</div>
             </div>
           </div>
 
@@ -206,7 +230,7 @@ function CompareView({ clientId, myStats, myBadgeCount, onBack }: { clientId: st
               </div>
               {[
                 ["Level", levelForXp(myStats.xp).current.name, levelForXp(theirXp).current.name],
-                ["Lifetime XP", myStats.xp.toLocaleString(), theirXp.toLocaleString()],
+                ["Lifetime points", myStats.xp.toLocaleString(), theirXp.toLocaleString()],
                 ["Badges", String(myBadgeCount), String(publicBadges.length)],
               ].map(([k, a, b]) => (
                 <div key={k} className="grid grid-cols-3 border-t px-3 py-2.5">
@@ -310,7 +334,7 @@ function RankingsView({ myStats, myBadgeCount }: { myStats: BadgeStats; myBadgeC
       )}
 
       <div className="rounded-xl border bg-muted/20 p-3 text-[11px] leading-relaxed text-muted-foreground">
-        <span className="font-bold text-foreground">How scoring works:</span> complete programmed workouts for up to 600 XP, fully log training for up to 150 XP, and earn up to 200 strength XP from bodyweight-normalized e1RM improvements versus your own pre-month history. Only your four best exercise improvements count and each is capped at 50 XP. Having a bodyweight logged earns 50 XP and is required to rank; your latest entry is always used. Total score caps at 1,000, preventing unlimited volume or exercise farming. Lifetime Training Level XP and Powerlifting Records remain separate.
+        <span className="font-bold text-foreground">How scoring works:</span> complete programmed workouts for up to 600 XP, fully log training for up to 150 XP, and earn up to 200 strength XP from bodyweight-normalized e1RM improvements versus your own pre-month history. Only your four best exercise improvements count and each is capped at 50 XP. Having a bodyweight logged earns 50 XP and is required to rank; your latest entry is always used. Total score caps at 1,000, preventing unlimited volume or exercise farming. Lifetime Logging Level points and Powerlifting Records remain separate.
       </div>
     </div>
   );
