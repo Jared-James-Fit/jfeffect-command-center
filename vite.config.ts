@@ -83,6 +83,9 @@ export default defineConfig({
           // lazily on first use by the runtimeCaching rules below. This keeps
           // the SW install fast (was ~395 files; now <10) and prevents stale
           // chunks from pinning users to old builds.
+          // App-shell icons live in /public; point Workbox there so the glob
+          // match doesn't depend on build-output copy order.
+          globDirectory: path.resolve(__dirname, "public"),
           globPatterns: [
             "manifest.json",
             "favicon.ico",
