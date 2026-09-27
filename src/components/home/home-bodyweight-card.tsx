@@ -108,6 +108,7 @@ export function HomeBodyweightCard({ userId, defaultUnit = "lb" }: Props) {
       // finishes so we don't jank the closing transition with a re-render.
       window.setTimeout(() => {
         qc.invalidateQueries({ queryKey: combinedBodyweightQueryKey(userId) });
+        qc.invalidateQueries({ queryKey: ["athlete-rankings-monthly"] });
       }, 280);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Couldn't save weight");
