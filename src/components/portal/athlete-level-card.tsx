@@ -49,7 +49,7 @@ export function AthleteLevelCard({ clientId, defaultView = null }: { clientId: s
       <Card className="p-4">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <div className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">JF Athlete Rank</div>
+            <div className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">Training Level</div>
             <div className="mt-0.5 text-2xl font-black uppercase tracking-tight text-primary">
               {isPending ? "—" : lvl.current.name}
             </div>
@@ -64,12 +64,12 @@ export function AthleteLevelCard({ clientId, defaultView = null }: { clientId: s
         <div className="mt-4 overflow-hidden rounded-2xl border bg-muted/20">
           <button type="button" onClick={() => setOpen("levels")} className="flex min-h-14 w-full items-center gap-3 border-b px-4 py-3 text-left transition-colors hover:bg-muted/40 active:bg-muted/60">
             <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary"><Trophy className="h-4 w-4" /></span>
-            <span className="min-w-0 flex-1"><span className="block text-sm font-bold leading-tight">Rank Ladder</span><span className="mt-0.5 block text-[11px] leading-tight text-muted-foreground">See every lifetime rank & how to level up</span></span>
+            <span className="min-w-0 flex-1"><span className="block text-sm font-bold leading-tight">Training Levels</span><span className="mt-0.5 block text-[11px] leading-tight text-muted-foreground">See every level & what it takes to reach the next one</span></span>
             <span className="shrink-0 text-xl font-semibold text-primary">›</span>
           </button>
           <button type="button" onClick={() => setOpen("powerlifting")} className="flex min-h-14 w-full items-center gap-3 border-b px-4 py-3 text-left transition-colors hover:bg-muted/40 active:bg-muted/60">
             <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary"><Medal className="h-4 w-4" /></span>
-            <span className="min-w-0 flex-1"><span className="block text-sm font-bold leading-tight">Strength Records</span><span className="mt-0.5 block text-[11px] leading-tight text-muted-foreground">Powerlifting totals, DOTS & competition PRs</span></span>
+            <span className="min-w-0 flex-1"><span className="block text-sm font-bold leading-tight">Powerlifting Records</span><span className="mt-0.5 block text-[11px] leading-tight text-muted-foreground">Competition squat, bench, deadlift, total & points</span></span>
             <span className="shrink-0 text-xl font-semibold text-primary">›</span>
           </button>
         </div>
@@ -100,8 +100,8 @@ function LevelsView({ total, events }: { total: number; events: XpEvent[] }) {
   return (
     <div className="space-y-5">
       <SheetHeader className="text-left">
-        <SheetTitle>JF Rank Ladder</SheetTitle>
-        <SheetDescription>Your permanent athlete rank. Earn lifetime XP, climb the ladder, and never lose your level.</SheetDescription>
+        <SheetTitle>Training Levels</SheetTitle>
+        <SheetDescription>Your permanent training level based on lifetime XP. See what it takes to reach every level.</SheetDescription>
       </SheetHeader>
       <ul className="space-y-1.5">
         {[...ATHLETE_LEVELS].reverse().map((l) => {
@@ -310,7 +310,7 @@ function RankingsView({ myStats, myBadgeCount }: { myStats: BadgeStats; myBadgeC
       )}
 
       <div className="rounded-xl border bg-muted/20 p-3 text-[11px] leading-relaxed text-muted-foreground">
-        <span className="font-bold text-foreground">How scoring works:</span> complete programmed workouts for up to 600 XP, fully log training for up to 150 XP, and earn up to 200 strength XP from bodyweight-normalized e1RM improvements versus your own pre-month history. Only your four best exercise improvements count and each is capped at 50 XP. Having a bodyweight logged earns 50 XP and is required to rank; your latest entry is always used. Total score caps at 1,000, preventing unlimited volume or exercise farming. Lifetime Athlete XP and Powerlifting Records remain separate.
+        <span className="font-bold text-foreground">How scoring works:</span> complete programmed workouts for up to 600 XP, fully log training for up to 150 XP, and earn up to 200 strength XP from bodyweight-normalized e1RM improvements versus your own pre-month history. Only your four best exercise improvements count and each is capped at 50 XP. Having a bodyweight logged earns 50 XP and is required to rank; your latest entry is always used. Total score caps at 1,000, preventing unlimited volume or exercise farming. Lifetime Training Level XP and Powerlifting Records remain separate.
       </div>
     </div>
   );
