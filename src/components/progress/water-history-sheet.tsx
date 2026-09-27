@@ -1,104 +1,22 @@
-import { useMemo } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useMemo, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { format, parseISO } from "date-fns";
-import {
-  Dialog, DialogContent, DialogHeader, DialogTitle,
-} from "@/components/ui/dialog";
+import { CalendarDays, List, Trash2 } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
-import { formatWater, listWaterHistory } from "@/lib/water";
+import { Button } from "@/components/ui/button";
+import { Calendar } from "@/components/ui/calendar";
+import { formatWater, listWaterHistory, deleteWaterEntry } from "@/lib/water";
+import { toast } from "sonner";
 
-export function WaterHistorySheet({
-  open, onOpenChange, userId, targetMl,
-}: {
-  open: boolean;
-  onOpenChange: (v: boolean) => void;
-  userId: string;
-  targetMl: number;
-}) {
-  const { data: days = [] } = useQuery({
-    queryKey: ["water-history", userId],
-    enabled: open && !!userId,
-    queryFn: () => listWaterHistory(userId, 30),
-    staleTime: 30_000,
-  });
-
-  const stats = useMemo(() => {
-    if (!days.length) return null;
-    const last7 = days.slice(0, 7);
-    const avg7 = Math.round(last7.reduce((s, d) => s + d.total_ml, 0) / last7.length);
-    const reached = last7.filter((d) => d.total_ml >= targetMl).length;
-    let streak = 0;
-    for (const d of days) {
-      if (d.total_ml >= targetMl) streak += 1;
-      else break;
-    }
-    return { avg7, reachedLast7: reached, streak };
-  }, [days, targetMl]);
-
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md max-h-[80vh] overflow-hidden flex flex-col">
-        <DialogHeader><DialogTitle>Water history</DialogTitle></DialogHeader>
-        {stats && (
-          <div className="grid grid-cols-3 gap-2 text-center">
-            <Stat label="7-day avg" value={formatWater(stats.avg7, "L")} />
-            <Stat label="Hit target" value={`${stats.reachedLast7}/7`} />
-            <Stat label="Streak" value={`${stats.streak}d`} />
-          </div>
-        )}
-        <div className="mt-2 space-y-2 overflow-y-auto pr-1">
-          {days.length === 0 ? (
-            <div className="rounded-md border border-dashed border-border p-6 text-center text-sm text-muted-foreground">
-              No water logged in the last 30 days.
-            </div>
-          ) : (
-            days.map((d) => {
-              const pct = Math.min(100, Math.round((d.total_ml / targetMl) * 100));
-              const reached = d.total_ml >= targetMl;
-              return (
-                <div key={d.date} className="rounded-md border border-border bg-card p-3">
-                  <div className="mb-1 flex items-center justify-between gap-2">
-                    <span className="text-sm font-semibold">
-                      {format(parseISO(d.date), "EEE, MMM d")}
-                    </span>
-                    {reached ? (
-                      <Badge variant="secondary" className="text-[10px]">Target reached</Badge>
-                    ) : (
-                      <span className="text-[10px] text-muted-foreground">In progress</span>
-                    )}
-                  </div>
-                  <div className="flex items-baseline justify-between gap-2 text-xs">
-                    <span className="font-semibold tabular-nums">
-                      {formatWater(d.total_ml, "L")} <span className="text-muted-foreground">of {formatWater(targetMl, "L")}</span>
-                    </span>
-                    <span className="text-muted-foreground">{pct}%</span>
-                  </div>
-                  <Progress value={pct} className="mt-1.5 h-1.5" />
-                  <div className="mt-3 border-t pt-2">
-                    <div className="mb-1.5 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">{d.entries} {d.entries === 1 ? "drink" : "drinks"} logged</div>
-                    <div className="space-y-1.5">{d.logs.map((log) => (
-                      <div key={log.id} className="flex items-center justify-between rounded-lg bg-secondary/50 px-2.5 py-2">
-                        <span className="text-xs font-semibold tabular-nums">{formatWater(log.amount_ml, "L")}</span>
-                        <span className="text-xs text-muted-foreground">{format(new Date(log.entry_at), "h:mm a")}</span>
-                      </div>
-                    ))}</div>
-                  </div>
-                </div>
-              );
-            })
-          )}
-        </div>
-      </DialogContent>
-    </Dialog>
-  );
+export function WaterHistorySheet({ open, onOpenChange, userId, targetMl }: { open:boolean; onOpenChange:(v:boolean)=>void; userId:string; targetMl:number }) {
+  const qc=useQueryClient(); const [view,setView]=useState<"history"|"calendar">("history"); const [selected,setSelected]=useState<Date|undefined>(); const [deleting,setDeleting]=useState<string|null>(null);
+  const {data:days=[]}=useQuery({queryKey:["water-history",userId,"all"],enabled:open&&!!userId,queryFn:()=>listWaterHistory(userId,3650),staleTime:30_000});
+  const stats=useMemo(()=>{if(!days.length)return null;const last7=days.slice(0,7),avg7=Math.round(last7.reduce((s,d)=>s+d.total_ml,0)/last7.length),reached=last7.filter(d=>d.total_ml>=targetMl).length;let streak=0;for(const d of days){if(d.total_ml>=targetMl)streak++;else break}return{avg7,reachedLast7:reached,streak}},[days,targetMl]);
+  const dayMap=useMemo(()=>new Map(days.map(d=>[d.date,d])),[days]); const selectedDay=selected?dayMap.get(format(selected,"yyyy-MM-dd")):undefined;
+  async function remove(id:string){setDeleting(id);try{await deleteWaterEntry(id);await Promise.all([qc.invalidateQueries({queryKey:["water-history",userId]}),qc.invalidateQueries({queryKey:["water-today",userId]})]);toast.success("Water entry deleted")}catch(e){toast.error(e instanceof Error?e.message:"Couldn't delete entry")}finally{setDeleting(null)}}
+  const DayCard=({d}:{d:(typeof days)[number]})=>{const pct=Math.min(100,Math.round(d.total_ml/targetMl*100)),reached=d.total_ml>=targetMl;return <div className="rounded-xl border bg-card p-3"><div className="mb-1 flex items-center justify-between gap-2"><span className="text-sm font-semibold">{format(parseISO(d.date),"EEE, MMM d, yyyy")}</span>{reached?<Badge variant="secondary" className="text-[10px]">Target reached</Badge>:<span className="text-[10px] text-muted-foreground">In progress</span>}</div><div className="flex items-baseline justify-between text-xs"><span className="font-semibold tabular-nums">{formatWater(d.total_ml,"L")} <span className="text-muted-foreground">of {formatWater(targetMl,"L")}</span></span><span className="text-muted-foreground">{pct}%</span></div><Progress value={pct} className="mt-1.5 h-1.5"/><div className="mt-3 space-y-1.5 border-t pt-2"><div className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">{d.entries} {d.entries===1?"drink":"drinks"} logged</div>{d.logs.map(log=><div key={log.id} className="flex items-center gap-2 rounded-lg bg-secondary/50 px-2.5 py-2"><div className="min-w-0 flex-1"><div className="text-xs font-semibold tabular-nums">{formatWater(log.amount_ml,"L")}</div><div className="text-[11px] text-muted-foreground">{format(new Date(log.entry_at),"h:mm a")}</div></div><Button type="button" size="icon" variant="ghost" className="h-9 w-9 shrink-0 text-muted-foreground hover:text-destructive" disabled={deleting===log.id} onClick={()=>remove(log.id)} aria-label="Delete water entry"><Trash2 className="h-4 w-4"/></Button></div>)}</div></div>};
+  return <Dialog open={open} onOpenChange={onOpenChange}><DialogContent className="flex max-h-[85vh] flex-col overflow-hidden sm:max-w-md"><DialogHeader><DialogTitle>Water history</DialogTitle></DialogHeader><div className="grid grid-cols-2 gap-2"><Button variant={view==="history"?"default":"outline"} onClick={()=>setView("history")}><List className="mr-2 h-4 w-4"/>History</Button><Button variant={view==="calendar"?"default":"outline"} onClick={()=>setView("calendar")}><CalendarDays className="mr-2 h-4 w-4"/>Calendar</Button></div>{stats&&<div className="grid grid-cols-3 gap-2 text-center"><Stat label="7-day avg" value={formatWater(stats.avg7,"L")}/><Stat label="Hit target" value={`${stats.reachedLast7}/7`}/><Stat label="Streak" value={`${stats.streak}d`}/></div>}<div className="mt-1 overflow-y-auto pr-1">{view==="history"?<div className="space-y-2">{days.length?days.map(d=><DayCard key={d.date} d={d}/>):<div className="rounded-md border border-dashed p-6 text-center text-sm text-muted-foreground">No water history yet.</div>}</div>:<div className="space-y-3"><div className="rounded-xl border bg-card"><Calendar mode="single" selected={selected} onSelect={setSelected} modifiers={{logged:days.map(d=>parseISO(d.date)),target:days.filter(d=>d.total_ml>=targetMl).map(d=>parseISO(d.date))}} modifiersClassNames={{logged:"font-black underline decoration-sky-500 decoration-2 underline-offset-4",target:"bg-emerald-100 text-emerald-900 rounded-md"}} className="mx-auto"/></div><div className="text-center text-xs text-muted-foreground">Underlined days have water logs. Target days are highlighted.</div>{selectedDay?<DayCard d={selectedDay}/>:selected?<div className="rounded-xl border border-dashed p-5 text-center text-sm text-muted-foreground">No water logged on {format(selected,"MMM d, yyyy")}.</div>:<div className="rounded-xl border border-dashed p-5 text-center text-sm text-muted-foreground">Tap a date to review that day's water.</div>}</div>}</div></DialogContent></Dialog>
 }
-
-function Stat({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded-md border border-border bg-secondary/40 px-2 py-1.5">
-      <div className="text-[10px] uppercase tracking-widest text-muted-foreground">{label}</div>
-      <div className="text-sm font-bold tabular-nums">{value}</div>
-    </div>
-  );
-}
+function Stat({label,value}:{label:string;value:string}){return <div className="rounded-md border bg-secondary/40 px-2 py-1.5"><div className="text-[10px] uppercase tracking-widest text-muted-foreground">{label}</div><div className="text-sm font-bold tabular-nums">{value}</div></div>}

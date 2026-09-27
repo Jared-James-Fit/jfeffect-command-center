@@ -169,7 +169,7 @@ export function WaterTrackerCard({
             <div className="flex items-center gap-1">
               <Button size="sm" variant="ghost" className="h-8 px-2 text-xs"
                       onClick={() => setHistoryOpen(true)}>
-                <History className="mr-1 h-3.5 w-3.5" /> History
+                <History className="mr-1 h-3.5 w-3.5" /> Review history
               </Button>
               <Button size="sm" variant="ghost" className="h-8 px-2 text-xs"
                       onClick={() => setTargetOpen(true)}>
