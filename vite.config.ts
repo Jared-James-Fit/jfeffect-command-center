@@ -94,37 +94,10 @@ export default defineConfig({
             "icon-maskable-192.png",
             "icon-maskable-512.png",
           ],
-          runtimeCaching: [
-            {
-              urlPattern: ({ request }) => request.mode === "navigate",
-              handler: "NetworkFirst",
-              options: {
-              cacheName: "jf-html-v5",
-                // 3s timeout: on slow mobile connections, fall back to the cached
-                // HTML faster so the app shell appears immediately.
-                networkTimeoutSeconds: 10,
-                expiration: { maxEntries: 32, maxAgeSeconds: 60 * 60 * 24 },
-              },
-            },
-            {
-              urlPattern: ({ url, sameOrigin }) =>
-                sameOrigin && /\/assets\/.+\.[0-9a-f]{6,}\..+$/i.test(url.pathname),
-              handler: "CacheFirst",
-              options: {
-                cacheName: "jf-assets-v5",
-                expiration: { maxEntries: 200, maxAgeSeconds: 60 * 60 * 24 * 30 },
-              },
-            },
-            {
-              urlPattern: ({ url, sameOrigin }) =>
-                sameOrigin && /\.(?:png|jpg|jpeg|webp|svg|gif|ico)$/i.test(url.pathname),
-              handler: "StaleWhileRevalidate",
-              options: {
-                cacheName: "jf-images-v5",
-                expiration: { maxEntries: 200, maxAgeSeconds: 60 * 60 * 24 * 30 },
-              },
-            },
-          ],
+          // Do not runtime-cache the app shell or JS/CSS. Lovable hosting is the
+          // source of truth for every launch, so installed iOS PWAs cannot remain
+          // pinned to an older deployment. Static images may still be browser-cached.
+          runtimeCaching: [],
         },
       }),
     ],
