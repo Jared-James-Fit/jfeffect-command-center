@@ -29,19 +29,19 @@ export function MonthlyLeaderboardCard({ clientId, userId }: { clientId:string; 
     <Card className="overflow-hidden">
       <button type="button" onClick={()=>setOpen(true)} className="w-full p-4 text-left transition-colors hover:bg-muted/30 active:bg-muted/50">
         <div className="flex items-start justify-between gap-3">
-          <div><div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.16em] text-muted-foreground"><Trophy className="h-3.5 w-3.5 text-primary"/> {format(new Date(),"MMMM")} Leaderboard</div>
-          <div className="mt-1 text-xl font-black">JF Performance Top 15</div></div>
+          <div><div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.16em] text-muted-foreground"><Trophy className="h-3.5 w-3.5 text-primary"/> {format(new Date(),"MMMM")} Performance League</div>
+          <div className="mt-1 text-xl font-black">JF Monthly Top 15</div></div>
           <ChevronRight className="mt-1 h-5 w-5 shrink-0 text-primary"/>
         </div>
         {isPending ? <div className="mt-4 h-20 animate-pulse rounded-xl bg-muted"/> : me?.qualified ? <>
           <div className="mt-4 flex items-end justify-between rounded-xl border bg-primary/5 p-3">
-            <div><div className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">Your rank</div><div className="text-3xl font-black text-primary">{me?.qualified && me.rank ? `#${me.rank}` : "ENTERED"}</div></div>
+            <div><div className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">League rank</div><div className="text-3xl font-black text-primary">{me?.qualified && me.rank ? `#${me.rank}` : "ENTERED"}</div></div>
             <div className="text-right"><div className="text-xl font-black">{Number(me?.monthly_xp ?? 0).toLocaleString()} XP</div><div className="text-[10px] text-muted-foreground">of 1,000 monthly XP</div></div>
           </div>
           <Progress value={Math.min(100,Number(me?.monthly_xp ?? 0)/10)} className="mt-2 h-2"/>
         </> : <div className="mt-4 flex items-center gap-3 rounded-xl border border-amber-300 bg-amber-50 p-3 text-amber-950"><Scale className="h-5 w-5 shrink-0"/><div><div className="text-xs font-black">Log bodyweight to enter</div><div className="text-[10px]">Add a bodyweight in the app to enter. Your latest logged weight is always used.</div></div></div>}
         {top.length>0 && <div className="mt-4 grid grid-cols-3 gap-2">{top.map(r=><div key={r.client_id} className="min-w-0 rounded-xl border bg-muted/20 p-2 text-center"><div className="mx-auto mb-1 flex items-center justify-center gap-1 text-[10px] font-black"><Medal className="h-3 w-3"/>#{r.rank}</div><Avatar className="mx-auto h-8 w-8"><AvatarImage src={r.avatar_url??undefined}/><AvatarFallback>{r.display_name.slice(0,1)}</AvatarFallback></Avatar><div className="mt-1 truncate text-[10px] font-bold">{r.display_name}</div><div className="text-[9px] font-black text-primary">{r.monthly_xp} XP</div></div>)}</div>}
-        <div className="mt-3 text-center text-xs font-black text-primary">VIEW TOP 15 ›</div>
+        <div className="mt-3 text-center text-xs font-black text-primary">VIEW STANDINGS ›</div>
       </button>
     </Card>
     {open && typeof document !== "undefined" ? createPortal(<LeaderboardOverlay onClose={()=>setOpen(false)} rows={data} loading={isPending}/>, document.body) : null}
@@ -56,7 +56,7 @@ function LeaderboardOverlay({onClose,rows,loading}:{onClose:()=>void;rows:Row[];
     <div className="mx-auto h-full max-w-2xl overflow-y-auto px-4 pb-24 pt-safe-top">
       <div className="sticky top-0 z-10 -mx-4 flex items-center gap-3 border-b bg-background/95 px-4 py-3 backdrop-blur">
         <button type="button" onClick={onClose} aria-label="Back to home" className="grid h-11 w-11 shrink-0 place-items-center rounded-xl border bg-card"><ArrowLeft className="h-5 w-5"/></button>
-        <div><div className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">${format(new Date(),"MMMM")} Leaderboard</div><div className="text-lg font-black">JF Performance Top 15</div></div>
+        <div><div className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">${format(new Date(),"MMMM")} Performance League</div><div className="text-lg font-black">JF Monthly Top 15</div></div>
       </div>
       <div className="mt-4 rounded-2xl border bg-muted/20 p-4 text-xs leading-relaxed text-muted-foreground">
         <div className="mb-2 flex items-center gap-2 font-black text-foreground"><Info className="h-4 w-4 text-primary"/>How points work</div>
