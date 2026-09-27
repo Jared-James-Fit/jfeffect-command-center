@@ -43,11 +43,26 @@ export function MonthlyLeaderboardCard({ clientId, userId }: { clientId:string; 
         <div className="mt-3 text-center text-xs font-black text-primary">VIEW TOP 15 ›</div>
       </button>
     </Card>
-    {open && <div className="hidden"><AthleteLevelCard clientId={clientId} defaultView="rankings"/></div>}
-    {open && <LeaderboardOverlay clientId={clientId} onClose={()=>setOpen(false)}/>}
+    {open && <LeaderboardOverlay onClose={()=>setOpen(false)} rows={data} loading={isPending}/>}
   </>;
 }
 
-function LeaderboardOverlay({clientId,onClose}:{clientId:string;onClose:()=>void}) {
-  return <div className="fixed inset-0 z-[70] bg-background"><div className="mx-auto h-full max-w-2xl overflow-y-auto px-4 pb-safe-bottom pt-safe-top"><button onClick={onClose} className="mb-2 mt-3 min-h-11 rounded-xl border bg-card px-4 text-sm font-bold">← Back</button><AthleteLevelCard clientId={clientId} defaultView="rankings"/></div></div>;
+function LeaderboardOverlay({onClose,rows,loading}:{onClose:()=>void;rows:Row[];loading:boolean}) {
+  const ranked=rows.filter(r=>r.qualified && r.rank!=null).sort((a,b)=>Number(a.rank)-Number(b.rank)).slice(0,15);
+  return <div className="fixed inset-0 z-[70] bg-background">
+    <div className="mx-auto h-full max-w-2xl overflow-y-auto px-4 pb-24 pt-safe-top">
+      <div className="sticky top-0 z-10 -mx-4 flex items-center gap-3 border-b bg-background/95 px-4 py-3 backdrop-blur">
+        <button type="button" onClick={onClose} className="min-h-11 rounded-xl border bg-card px-4 text-sm font-bold">← Back</button>
+        <div><div className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">${format(new Date(),"MMMM")} Leaderboard</div><div className="text-lg font-black">JF Performance Top 15</div></div>
+      </div>
+      <div className="mt-4 rounded-2xl border bg-muted/20 p-3 text-xs text-muted-foreground">Monthly XP resets on the 1st. Latest logged bodyweight is used for eligibility and relative-strength scoring.</div>
+      {loading ? <div className="py-10 text-center text-sm text-muted-foreground">Loading leaderboard…</div> :
+       <div className="mt-4 space-y-2">{ranked.map(r=><div key={r.client_id} className={"flex items-center gap-3 rounded-2xl border p-3 "+(r.is_me?"bg-primary/5 ring-1 ring-primary/30":"bg-card")}>
+         <div className="w-9 text-center text-lg font-black text-primary">#{r.rank}</div>
+         <Avatar className="h-11 w-11"><AvatarImage src={r.avatar_url??undefined}/><AvatarFallback>{(r.display_name||"?").slice(0,1)}</AvatarFallback></Avatar>
+         <div className="min-w-0 flex-1"><div className="truncate font-bold">{r.display_name}{r.is_me?" (You)":""}</div><div className="text-[11px] text-muted-foreground">{r.bodyweight_value?Number(r.bodyweight_value).toFixed(1)+" "+(r.bodyweight_unit??"lb"):"Bodyweight verified"}</div></div>
+         <div className="text-right"><div className="font-black text-primary">{Number(r.monthly_xp??0).toLocaleString()} XP</div><div className="text-[10px] text-muted-foreground">of 1,000</div></div>
+       </div>)}</div>}
+    </div>
+  </div>;
 }
