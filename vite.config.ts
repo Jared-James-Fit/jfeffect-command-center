@@ -99,7 +99,7 @@ export default defineConfig({
               urlPattern: ({ request }) => request.mode === "navigate",
               handler: "NetworkFirst",
               options: {
-              cacheName: "jf-html-v4",
+              cacheName: "jf-html-v5",
                 // 3s timeout: on slow mobile connections, fall back to the cached
                 // HTML faster so the app shell appears immediately.
                 networkTimeoutSeconds: 10,
@@ -111,7 +111,7 @@ export default defineConfig({
                 sameOrigin && /\/assets\/.+\.[0-9a-f]{6,}\..+$/i.test(url.pathname),
               handler: "CacheFirst",
               options: {
-                cacheName: "jf-assets-v4",
+                cacheName: "jf-assets-v5",
                 expiration: { maxEntries: 200, maxAgeSeconds: 60 * 60 * 24 * 30 },
               },
             },
@@ -120,7 +120,7 @@ export default defineConfig({
                 sameOrigin && /\.(?:png|jpg|jpeg|webp|svg|gif|ico)$/i.test(url.pathname),
               handler: "StaleWhileRevalidate",
               options: {
-                cacheName: "jf-images-v4",
+                cacheName: "jf-images-v5",
                 expiration: { maxEntries: 200, maxAgeSeconds: 60 * 60 * 24 * 30 },
               },
             },
