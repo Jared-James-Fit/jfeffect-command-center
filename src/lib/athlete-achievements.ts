@@ -12,6 +12,7 @@ export type CatalogBadge = {
   description: string;
   requirement: string;
   metric: string;
+  event_type?: string | null;
   threshold: number;
   sort_order: number;
   is_public: boolean;
@@ -27,6 +28,9 @@ export type AchievementMetrics = {
   workouts_fully_logged: number;
   xp: number;
   days_since_first_workout: number;
+  tracking_weeks: number;
+  /** Count of point events per event_type (own data only). */
+  events: Record<string, number>;
 };
 
 export const RARITY_ORDER: Record<Rarity, number> = { common: 0, rare: 1, epic: 2, legendary: 3 };
@@ -47,7 +51,7 @@ export function useBadgeCatalog() {
     queryFn: async () => {
       const { data, error } = await db
         .from("athlete_badge_catalog")
-        .select("badge_key,name,category,icon_key,rarity,description,requirement,metric,threshold,sort_order,is_public")
+        .select("badge_key,name,category,icon_key,rarity,description,requirement,metric,event_type,threshold,sort_order,is_public")
         .eq("is_active", true)
         .order("sort_order");
       if (error) throw error;
@@ -91,7 +95,50 @@ export function featured<T extends { rarity: Rarity; earned_at?: string }>(list:
     .slice(0, n);
 }
 
+/** Legacy badges have fixed past cutoffs — no progress, can't be earned any more. */
+export const isLegacyBadge = (b: { metric?: string }) => b.metric === "legacy_og" || b.metric === "legacy_founding";
+
 export function progressFor(badge: CatalogBadge, m: AchievementMetrics) {
-  const value = Math.floor((m as any)[badge.metric] ?? 0);
+  const raw = badge.metric === "event_count"
+    ? m.events[badge.event_type ?? ""] ?? 0
+    : isLegacyBadge(badge) ? 0 : (m as any)[badge.metric] ?? 0;
+  const value = Math.floor(raw);
   return { value: Math.min(value, badge.threshold), pct: Math.min(100, Math.round((value / badge.threshold) * 100)) };
+}
+
+export type UnseenAchievement = CatalogBadge & { earned_at: string };
+
+/**
+ * Own earned achievements that have not yet been acknowledged. "Seen" state
+ * lives server-side (athlete_achievement_views) so it syncs across devices.
+ */
+export function useUnseenAchievements(clientId: string | null | undefined, catalog: CatalogBadge[]) {
+  return useQuery({
+    queryKey: ["athlete-achievements-unseen", clientId],
+    enabled: !!clientId && catalog.length > 0,
+    staleTime: 60_000,
+    queryFn: async () => {
+      const [earned, seen] = await Promise.all([
+        db.from("athlete_achievements").select("badge_key,earned_at").eq("client_id", clientId),
+        db.from("athlete_achievement_views").select("badge_key").eq("client_id", clientId),
+      ]);
+      if (earned.error) throw earned.error;
+      if (seen.error) throw seen.error;
+      const seenKeys = new Set(((seen.data ?? []) as { badge_key: string }[]).map((r) => r.badge_key));
+      const byKey = new Map(catalog.map((b) => [b.badge_key, b]));
+      return ((earned.data ?? []) as EarnedBadge[])
+        .filter((e) => !seenKeys.has(e.badge_key) && byKey.has(e.badge_key))
+        .map((e) => ({ ...byKey.get(e.badge_key)!, earned_at: e.earned_at }))
+        // Deterministic order: oldest earned first, rarest last as the finale.
+        .sort((a, b) => RARITY_ORDER[a.rarity] - RARITY_ORDER[b.rarity] || a.earned_at.localeCompare(b.earned_at) || a.sort_order - b.sort_order) as UnseenAchievement[];
+    },
+  });
+}
+
+/** Record that the athlete was shown these achievements. Idempotent. */
+export async function markAchievementsSeen(clientId: string, badgeKeys: string[]) {
+  if (!clientId || badgeKeys.length === 0) return;
+  const rows = badgeKeys.map((badge_key) => ({ client_id: clientId, badge_key }));
+  const { error } = await db.from("athlete_achievement_views").upsert(rows, { onConflict: "client_id,badge_key", ignoreDuplicates: true });
+  if (error) throw error;
 }
