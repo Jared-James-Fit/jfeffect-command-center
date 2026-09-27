@@ -1,5 +1,5 @@
 -- Monthly JF Performance Leaderboard.
--- Qualification requires a bodyweight logged during the current calendar month.
+-- Qualification requires any bodyweight log; scoring always uses the athlete's most recent bodyweight entry.
 -- Monthly score intentionally rewards execution for every client; powerlifting-specific
 -- records remain a separate board so lifestyle clients are not structurally excluded.
 create or replace function public.get_monthly_athlete_rankings(_limit integer default 15)
@@ -23,8 +23,8 @@ language sql stable security definer set search_path=public as $
     select distinct on (b.user_id) b.user_id,
       case when lower(b.weight_unit)='lb' then b.weight_value*0.45359237 else b.weight_value end weight_kg,
       b.weight_value,b.weight_unit,b.logged_date
-    from public.progress_bodyweight b,month_bounds m
-    where b.logged_date>=m.start_at::date and b.logged_date<m.end_at::date
+    from public.progress_bodyweight b
+    where b.weight_value is not null and b.weight_value>0
     order by b.user_id,b.logged_date desc,b.created_at desc
   ),
   prior_bw as (
