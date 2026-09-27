@@ -12,9 +12,19 @@ export const ATHLETE_LEVELS: AthleteLevel[] = THRESHOLDS.map((min, index) => {
   return { index, tier, division, name: `${tier} ${division}`, min };
 });
 
+/** Point rules — mirrors the database triggers (source of truth). */
 export const XP_RULES = [
-  { label: "Complete a scheduled workout", xp: 100 },
-  { label: "Fully log every set in a workout", xp: 20 },
+  { label: "Complete a programmed workout", xp: 100, cap: null },
+  { label: "Weekly check-in", xp: 75, cap: "1 per week" },
+  { label: "Progress video check-in", xp: 60, cap: "1 per week" },
+  { label: "Progress photo check-in", xp: 50, cap: "1 per week" },
+  { label: "Send a lift video for review", xp: 25, cap: "1 per day" },
+  { label: "Fully log every set in a workout", xp: 20, cap: null },
+  { label: "Log body measurements", xp: 20, cap: "1 per week" },
+  { label: "Submit a workout review", xp: 15, cap: "1 per workout" },
+  { label: "Hit your water target", xp: 5, cap: "1 per day" },
+  { label: "Log bodyweight", xp: 5, cap: "1 per day" },
+  { label: "Log water", xp: 2, cap: "1 per day" },
 ];
 
 export function levelForXp(xp: number) {

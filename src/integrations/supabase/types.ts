@@ -1020,6 +1020,7 @@ export type Database = {
           category: string
           created_at: string
           description: string
+          event_type: string | null
           icon_key: string
           is_active: boolean
           is_public: boolean
@@ -1035,6 +1036,7 @@ export type Database = {
           category: string
           created_at?: string
           description: string
+          event_type?: string | null
           icon_key: string
           is_active?: boolean
           is_public?: boolean
@@ -1050,6 +1052,7 @@ export type Database = {
           category?: string
           created_at?: string
           description?: string
+          event_type?: string | null
           icon_key?: string
           is_active?: boolean
           is_public?: boolean
@@ -19240,6 +19243,19 @@ export type Database = {
         Args: { _member_id: string }
         Returns: number
       }
+      award_athlete_xp: {
+        Args: {
+          _at: string
+          _client: string
+          _key: string
+          _label: string
+          _src_id: string
+          _src_table: string
+          _type: string
+          _xp: number
+        }
+        Returns: undefined
+      }
       can_access_chat_presence: { Args: { _topic: string }; Returns: boolean }
       can_access_group_presence: { Args: { _topic: string }; Returns: boolean }
       can_manage_group: {
@@ -20121,6 +20137,7 @@ export type Database = {
         Args: { _codes: string[]; _customer_id?: string; _product_id?: string }
         Returns: Json
       }
+      xp_client_for_user: { Args: { _uid: string }; Returns: string }
     }
     Enums: {
       access_source_type:

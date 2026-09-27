@@ -1,10 +1,11 @@
-import { useQuery } from "@tanstack/react-query";
+import { useEffect } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { BadgeIcon } from "@/components/portal/achievements-card";
-import { RARITY_STYLE, type Rarity } from "@/lib/athlete-achievements";
+import { RARITY_STYLE, markAchievementsSeen, type Rarity } from "@/lib/athlete-achievements";
 import { cn } from "@/lib/utils";
 
-type Row = { badge_key: string; athlete_badge_catalog: { name: string; icon_key: string; rarity: Rarity; description: string } | null };
+type Row = { badge_key: string; client_id: string; athlete_badge_catalog: { name: string; icon_key: string; rarity: Rarity; description: string } | null };
 
 /** Shows achievements the signed-in athlete unlocked in the last few minutes. RLS limits rows to their own. */
 export function NewAchievementReveal({ open }: { open: boolean }) {
@@ -17,7 +18,7 @@ export function NewAchievementReveal({ open }: { open: boolean }) {
       const since = new Date(Date.now() - 10 * 60_000).toISOString();
       const { data, error } = await (supabase as any)
         .from("athlete_achievements")
-        .select("badge_key, athlete_badge_catalog(name, icon_key, rarity, description)")
+        .select("badge_key, client_id, athlete_badge_catalog(name, icon_key, rarity, description)")
         .gte("created_at", since)
         .limit(3);
       if (error) return [];
@@ -25,11 +26,20 @@ export function NewAchievementReveal({ open }: { open: boolean }) {
     },
   });
   const rows = data.filter((r) => r.athlete_badge_catalog);
+  const qc = useQueryClient();
+  // Shown here in the recap → acknowledged, so the home reveal won't repeat them.
+  const shownKey = rows.map((r) => r.badge_key).join(",");
+  useEffect(() => {
+    if (!rows.length) return;
+    markAchievementsSeen(rows[0].client_id, rows.map((r) => r.badge_key))
+      .then(() => qc.invalidateQueries({ queryKey: ["athlete-achievements-unseen"] }))
+      .catch(() => {});
+  }, [shownKey]);
   if (!rows.length) return null;
   return (
     <section className="animate-in zoom-in-95 fade-in rounded-2xl border-2 border-primary/40 bg-primary/5 p-3 duration-700">
       <div className="mb-2 text-[9px] font-black uppercase tracking-[0.18em] text-primary">
-        {rows.length === 1 ? "New achievement unlocked" : `${rows.length} achievements unlocked`}
+        {rows.length === 1 ? "New milestone unlocked" : `${rows.length} milestones unlocked`}
       </div>
       <div className="space-y-2">
         {rows.map((r) => {
