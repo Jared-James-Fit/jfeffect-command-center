@@ -17,10 +17,10 @@ export function MonthlyLeaderboardCard({ clientId, userId }: { clientId:string; 
   const { data = [], isPending } = useQuery({
     queryKey:["athlete-rankings-monthly"],
     staleTime:60_000,
-    queryFn:async()=>{ const {data,error}=await (supabase as any).rpc("get_monthly_athlete_rankings",{_limit:15}); if(error) throw error; return (data??[]) as Row[]; }
+    queryFn:async()=>{ const {data,error}=await (supabase as any).rpc("get_monthly_athlete_rankings",{_limit:50}); if(error) throw error; return (data??[]) as Row[]; }
   });
   const ranked=data.filter(r=>r.qualified && r.rank!=null).sort((a,b)=>Number(a.rank)-Number(b.rank));
-  const me=data.find(r=>r.is_me);
+  const me=data.find(r=>r.client_id===clientId) ?? data.find(r=>r.is_me);
   const { data: localBodyweights = [] } = useQuery({ queryKey: combinedBodyweightQueryKey(userId), enabled: !!userId, queryFn: () => getCombinedBodyweightSeries(userId, 200) });
   const latestLocalWeight = localBodyweights.length ? localBodyweights[localBodyweights.length - 1] : null;
   const locallyQualified = !!latestLocalWeight;
