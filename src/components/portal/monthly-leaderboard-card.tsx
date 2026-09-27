@@ -16,7 +16,7 @@ type Row = { client_id:string; display_name:string; avatar_url:string|null; mont
 
 export function MonthlyLeaderboardCard({ clientId, userId }: { clientId:string; userId:string }) {
   const [open, setOpen] = useState(false);
-  const { data = [], isPending } = useQuery({
+  const { data: roleRows = [] } = useQuery({\n    queryKey:["current-user-roles", userId],\n    enabled:!!userId,\n    queryFn:async()=>{ const {data,error}=await (supabase as any).from("user_roles").select("role").eq("user_id",userId); if(error) throw error; return data ?? []; }\n  });\n  const isAdmin = roleRows.some((r:any)=>r.role === "admin");\n  const { data = [], isPending } = useQuery({
     queryKey:["athlete-rankings-monthly"],
     staleTime:60_000,
     queryFn:async()=>{ const {data,error}=await (supabase as any).rpc("get_monthly_athlete_rankings",{_limit:50}); if(error) throw error; return (data??[]) as Row[]; }
@@ -32,7 +32,7 @@ export function MonthlyLeaderboardCard({ clientId, userId }: { clientId:string; 
       <button type="button" onClick={()=>setOpen(true)} className="w-full p-4 text-left transition-colors hover:bg-muted/30 active:bg-muted/50">
         <div className="flex items-start justify-between gap-3">
           <div><div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.16em] text-muted-foreground"><Trophy className="h-3.5 w-3.5 text-primary"/> {format(new Date(),"MMMM")} Performance League</div>
-          <div className="mt-1 text-xl font-black">JF Monthly Top 15</div></div>
+          <div className="mt-1 text-xl font-black">JF Monthly Top 10</div></div>
           <ChevronRight className="mt-1 h-5 w-5 shrink-0 text-primary"/>
         </div>
         {isPending ? <div className="mt-4 h-20 animate-pulse rounded-xl bg-muted"/> : me?.qualified ? <>
@@ -46,19 +46,19 @@ export function MonthlyLeaderboardCard({ clientId, userId }: { clientId:string; 
         <div className="mt-3 text-center text-xs font-black text-primary">VIEW STANDINGS ›</div>
       </button>
     </Card>
-    {open && typeof document !== "undefined" ? createPortal(<LeaderboardOverlay onClose={()=>setOpen(false)} rows={data} loading={isPending}/>, document.body) : null}
+    {open && typeof document !== "undefined" ? createPortal(<LeaderboardOverlay onClose={()=>setOpen(false)} rows={data} loading={isPending} isAdmin={isAdmin}/>, document.body) : null}
   </>;
 }
 
-function LeaderboardOverlay({onClose,rows,loading}:{onClose:()=>void;rows:Row[];loading:boolean}) {
+function LeaderboardOverlay({onClose,rows,loading,isAdmin}:{onClose:()=>void;rows:Row[];loading:boolean;isAdmin:boolean}) {
   const [selected,setSelected]=useState<Row|null>(null);
-  const ranked=rows.filter(r=>r.qualified && r.rank!=null).sort((a,b)=>Number(a.rank)-Number(b.rank)).slice(0,15);
+  const ranked=rows.filter(r=>r.qualified && r.rank!=null).sort((a,b)=>Number(a.rank)-Number(b.rank)).slice(0,isAdmin ? undefined : 10);
   if(selected) return <AthleteProfileOverlay row={selected} onBack={()=>setSelected(null)} onClose={onClose}/>;
   return <div role="dialog" aria-modal="true" className="fixed inset-0 z-[9999] bg-background">
     <div className="mx-auto h-full max-w-2xl overflow-y-auto px-4 pb-24 pt-[max(5.5rem,calc(env(safe-area-inset-top)+1.5rem))]">
       <div className="sticky top-0 z-10 -mx-4 flex min-h-[64px] items-center gap-3 border-b bg-background/95 px-4 py-2 backdrop-blur">
         <button type="button" onClick={onClose} aria-label="Back to home" className="flex h-11 shrink-0 items-center gap-2 rounded-xl border bg-card px-3 font-bold shadow-sm"><ArrowLeft className="h-5 w-5"/><span>Back</span></button>
-        <div><div className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">{format(new Date(),"MMMM")} Performance League</div><div className="text-lg font-black">JF Monthly Top 15</div></div>
+        <div><div className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">{format(new Date(),"MMMM")} Performance League</div><div className="text-lg font-black">JF Monthly Top 10</div></div>
       </div>
       <div className="mt-4 rounded-2xl border bg-muted/20 p-4 text-xs leading-relaxed text-muted-foreground">
         <div className="mb-2 flex items-center gap-2 font-black text-foreground"><Info className="h-4 w-4 text-primary"/>How points work</div>
@@ -72,7 +72,7 @@ function LeaderboardOverlay({onClose,rows,loading}:{onClose:()=>void;rows:Row[];
          <div className="min-w-0 flex-1"><div className="flex items-center gap-1.5"><div className="truncate font-bold">{r.display_name}{r.is_me?" (You)":""}</div><ChevronRight className="h-4 w-4 shrink-0 text-primary"/></div><div className="text-[11px] text-muted-foreground">{r.bodyweight_value?Number(r.bodyweight_value).toFixed(1)+" "+(r.bodyweight_unit??"lb"):"Bodyweight verified"} · Tap for profile</div></div>
          <div className="text-right"><div className="font-black text-primary">{Number(r.monthly_xp??0).toLocaleString()} XP</div><div className="text-[10px] text-muted-foreground">of 1,000</div></div>
        </button>)}</div>}
-      <div className="mt-3 text-center text-[11px] text-muted-foreground">Tap an athlete to view their profile and achievements.</div>
+      <div className="mt-3 text-center text-[11px] text-muted-foreground">{isAdmin ? "Admin view · Full ranked list" : "Top 10 · Tap an athlete to view their profile and achievements."}</div>
     </div>
   </div>;
 }
