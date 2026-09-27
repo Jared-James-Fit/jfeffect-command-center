@@ -22,6 +22,7 @@ import { BodyweightSummaryCard } from "@/components/portal/bodyweight-summary-ca
 import { SessionsCard } from "@/components/portal/sessions-card";
 import { SetupChecklistBanner } from "@/components/portal/setup-checklist-banner";
 import { AthleteLevelCard } from "@/components/portal/athlete-level-card";
+import { MonthlyLeaderboardCard } from "@/components/portal/monthly-leaderboard-card";
 import { useEffect, useState } from "react";
 import { listMyPortalAppointments } from "@/lib/appointments.functions";
 import { useServerFn } from "@tanstack/react-start";
@@ -283,6 +284,12 @@ function PortalHome() {
         {client?.id && (
           <SectionErrorBoundary label="Athlete level">
             <AthleteLevelCard clientId={client.id} />
+          </SectionErrorBoundary>
+        )}
+
+        {client?.id && (
+          <SectionErrorBoundary label="Monthly leaderboard">
+            <MonthlyLeaderboardCard clientId={client.id} />
           </SectionErrorBoundary>
         )}
 
