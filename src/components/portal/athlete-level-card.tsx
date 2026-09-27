@@ -241,7 +241,8 @@ function RankingsView({ myStats, myBadgeCount }: { myStats: BadgeStats; myBadgeC
         qualified: Boolean(r.qualified),
         workouts_completed: Number(r.workouts_completed ?? 0),
         fully_logged: Number(r.fully_logged ?? 0),
-      })) as Array<RankRow & { qualified:boolean; bodyweight_value:number|null; bodyweight_unit:string|null; workouts_completed:number; fully_logged:number }>;
+        strength_score: Number(r.strength_score ?? 0),
+      })) as Array<RankRow & { qualified:boolean; bodyweight_value:number|null; bodyweight_unit:string|null; workouts_completed:number; fully_logged:number; strength_score:number }>;
     },
   });
   const qualified = data.filter((r) => r.qualified && r.rank <= 15);
@@ -268,9 +269,7 @@ function RankingsView({ myStats, myBadgeCount }: { myStats: BadgeStats; myBadgeC
 
       <div className="grid grid-cols-4 gap-2 rounded-2xl border bg-muted/20 p-3 text-center">
         <div><div className="text-lg font-black">1,000</div><div className="text-[9px] uppercase tracking-wide text-muted-foreground">Max XP</div></div>
-        <div><div className="text-lg font-black">800</div><div className="text-[9px] uppercase tracking-wide text-muted-foreground">Training</div></div>
-        <div><div className="text-lg font-black">150</div><div className="text-[9px] uppercase tracking-wide text-muted-foreground">Full logs</div></div>
-        <div><div className="text-lg font-black">50</div><div className="text-[9px] uppercase tracking-wide text-muted-foreground">BW check</div></div>
+        <div><div className="text-lg font-black">600</div><div className="text-[9px] uppercase tracking-wide text-muted-foreground">Training</div></div>\n        <div><div className="text-lg font-black">200</div><div className="text-[9px] uppercase tracking-wide text-muted-foreground">Strength</div></div>\n        <div><div className="text-lg font-black">200</div><div className="text-[9px] uppercase tracking-wide text-muted-foreground">Logs + BW</div></div>
       </div>
 
       {isPending ? <div className="py-8 text-center text-sm text-muted-foreground">Loading…</div> : qualified.length === 0 ? (
@@ -305,13 +304,13 @@ function RankingsView({ myStats, myBadgeCount }: { myStats: BadgeStats; myBadgeC
         <div className="rounded-2xl border border-primary/30 bg-primary/5 p-4">
           <div className="flex items-center justify-between"><span className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Your {monthName}</span><span className="text-lg font-black">#{me.rank}</span></div>
           <div className="mt-1 text-2xl font-black text-primary">{me.xp} <span className="text-sm">XP</span></div>
-          <div className="mt-1 text-xs text-muted-foreground">{me.workouts_completed} workouts completed · {me.fully_logged} fully logged · monthly BW verified</div>
+          <div className="mt-1 text-xs text-muted-foreground">{me.workouts_completed} workouts · {me.fully_logged} fully logged · {me.strength_score} strength XP · BW verified</div>
           <Progress value={Math.min(100, me.xp / 10)} className="mt-3 h-2" />
         </div>
       )}
 
       <div className="rounded-xl border bg-muted/20 p-3 text-[11px] leading-relaxed text-muted-foreground">
-        <span className="font-bold text-foreground">How scoring works:</span> complete programmed workouts to build the core score, fully log your training for bonus XP, and submit a bodyweight every calendar month to qualify. Scores cap at 1,000 so high-volume athletes cannot farm unlimited points. Lifetime Athlete XP and Powerlifting Records remain separate.
+        <span className="font-bold text-foreground">How scoring works:</span> complete programmed workouts for up to 600 XP, fully log training for up to 150 XP, and earn up to 200 strength XP from bodyweight-normalized e1RM improvements versus your own pre-month history. Only your four best exercise improvements count and each is capped at 50 XP. A monthly bodyweight check earns 50 XP and is required to rank. Total score caps at 1,000, preventing unlimited volume or exercise farming. Lifetime Athlete XP and Powerlifting Records remain separate.
       </div>
     </div>
   );
