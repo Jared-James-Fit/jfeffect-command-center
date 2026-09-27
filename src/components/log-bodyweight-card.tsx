@@ -104,6 +104,8 @@ export function LogBodyweightCard({ clientId, defaultUnit = "lb" }: Props) {
       setJustSaved(true);
       window.setTimeout(() => setJustSaved(false), 1400);
       qc.invalidateQueries({ queryKey: bodyweightQueryKey(user.id) });
+      qc.invalidateQueries({ queryKey: ["combined-bodyweight", user.id] });
+      qc.invalidateQueries({ queryKey: ["athlete-rankings-monthly"] });
     } finally {
       setSaving(false);
     }
