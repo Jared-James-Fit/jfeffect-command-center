@@ -89,6 +89,17 @@ function LeaderboardOverlay({onClose,rows,loading,isAdmin}:{onClose:()=>void;row
 
 function AthleteProfileOverlay({row,onBack,onClose}:{row:Row;onBack:()=>void;onClose:()=>void}) {
   const {data:badges=[]}=usePublicAchievements(row.client_id);
+  const { data: xpEvents = [] } = useQuery({
+    queryKey: ["athlete-xp-public", row.client_id],
+    staleTime: 60_000,
+    queryFn: async () => {
+      const { data, error } = await (supabase as any).from("athlete_xp_events").select("xp").eq("client_id", row.client_id);
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+  const loggingXp = xpEvents.reduce((sum: number, event: any) => sum + Number(event?.xp ?? 0), 0);
+  const loggingLevel = levelForXp(loggingXp).current;
   return <div role="dialog" aria-modal="true" className="fixed inset-0 z-[9999] bg-background"><div className="mx-auto h-full max-w-2xl overflow-y-auto px-4 pb-24 pt-[max(5.5rem,calc(env(safe-area-inset-top)+1.5rem))]">
     <div className="sticky top-0 z-10 -mx-4 flex min-h-[68px] items-center gap-3 border-b bg-background/95 px-4 py-3 backdrop-blur"><button type="button" onClick={onBack} className="flex h-11 items-center gap-2 rounded-xl border bg-card px-3 font-bold shadow-sm"><ArrowLeft className="h-5 w-5"/><span>Back</span></button><div className="min-w-0 flex-1"><div className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Athlete profile</div><div className="truncate text-lg font-black">{row.display_name}</div></div><button type="button" onClick={onClose} className="text-xs font-bold text-primary">Home</button></div>
     <div className="mt-4 flex items-center gap-4 rounded-2xl border bg-card p-4"><Avatar className="h-16 w-16"><AvatarImage src={row.avatar_url??undefined}/><AvatarFallback className="text-xl font-black">{(row.display_name||"?").slice(0,1)}</AvatarFallback></Avatar><div><div className="text-xl font-black">{row.display_name}</div><div className="font-black text-primary">#{row.rank} · {rating(row).toFixed(1)} Performance Score</div><div className="text-xs text-muted-foreground">{row.bodyweight_value?Number(row.bodyweight_value).toFixed(1)+" "+(row.bodyweight_unit??"lb"):"Bodyweight verified"} · {badges.length} achievements</div></div></div>
