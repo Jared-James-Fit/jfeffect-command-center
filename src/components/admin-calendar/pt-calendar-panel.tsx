@@ -282,9 +282,9 @@ export function PtCalendarPanel() {
 
   return (
     <>
-      <PageHeader title="PT Calendar" subtitle="Manage personal training sessions, outcomes, and sessions." actions={
+      <PageHeader title="1:1 Calendar" subtitle="Quickly book and manage training sessions and meetings." actions={
         <Button size="sm" className="bg-gradient-primary font-bold uppercase" onClick={() => { setEditing(null); setCardFor(null); setOpen(true); }}>
-          <Plus className="mr-2 h-4 w-4" /> Book Session
+          <Plus className="mr-2 h-4 w-4" /> Quick Book
         </Button>
       } />
       <div className="p-3 sm:p-6 md:p-8 space-y-4">
