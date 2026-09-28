@@ -2966,7 +2966,41 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
   // Leg Press). HowToSheet already handles the no-video case with "Video coming soon."
   const hasGuide = true;
   const cues = exercise?.cues ?? null;
-  const setCount = Math.max(1, row.sets ?? 1);
+  const [sessionSetCount, setSessionSetCount] = useState(() => Math.max(1, Number(row.sets) || 1));
+  useEffect(() => { setSessionSetCount(Math.max(1, Number(row.sets) || 1)); }, [row.id, row.sets]);
+  const setCount = sessionSetCount;
+
+  const changeSetCount = async (nextCount: number) => {
+    if (readonly || adapter?.kind === "member" || !clientId) return;
+    const next = Math.max(1, Math.min(20, nextCount));
+    if (next === setCount) return;
+    if (next < setCount) {
+      const removing = existingResults.find((x: any) => x.set_index === setCount);
+      const detail = removing?.completed_at ? " This set has logged data." : "";
+      if (!window.confirm(`Remove set ${setCount} from ${name}?${detail} This can't be undone.`)) return;
+    }
+    const previous = setCount;
+    setSessionSetCount(next);
+    try {
+      const { error: rowError } = await sb.from("pl_exercise_rows").update({ sets: next }).eq("id", row.id);
+      if (rowError) throw rowError;
+      if (next < previous) {
+        const { error: resultError } = await sb.from("pl_row_results")
+          .delete()
+          .eq("row_id", row.id)
+          .eq("client_id", clientId)
+          .gt("set_index", next);
+        if (resultError) throw resultError;
+      }
+      await qc.invalidateQueries({ queryKey: ["pl-day-rows", dayId] });
+      await qc.invalidateQueries({ queryKey: ["pl-day-results", dayId] });
+      onChange();
+      toast.success(next > previous ? "Set added" : "Set removed");
+    } catch (error: any) {
+      setSessionSetCount(previous);
+      toast.error(error?.message ?? "Could not update sets");
+    }
+  };
   // Tracking type resolution priority:
   //   1. Explicit row.tracking_type (set by coach in the builder)
   //   2. row.measurement_type (legacy field, same table)
@@ -3734,6 +3768,16 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
             />
           );
         })}
+        {!readonly && adapter?.kind !== "member" && (
+          <div className="flex items-center justify-center gap-2 border-t bg-background px-3 py-2">
+            <Button type="button" variant="ghost" size="sm" className="h-9 rounded-full px-3 text-xs font-semibold text-muted-foreground" onClick={() => void changeSetCount(setCount - 1)} disabled={setCount <= 1} aria-label={`Remove last set from ${name}`}>
+              <Trash2 className="mr-1.5 h-3.5 w-3.5" /> Remove set
+            </Button>
+            <Button type="button" variant="outline" size="sm" className="h-9 rounded-full px-4 text-xs font-semibold" onClick={() => void changeSetCount(setCount + 1)} disabled={setCount >= 20} aria-label={`Add set to ${name}`}>
+              <span className="mr-1.5 text-base leading-none">+</span> Add set
+            </Button>
+          </div>
+        )}
       </div>
       <ExerciseNotesSheet
         open={notesOpen}
