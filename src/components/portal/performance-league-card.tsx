@@ -36,19 +36,20 @@ export function PerformanceLeagueCard({ clientId, userId }: { clientId:string; u
   return <>
     <Card className="overflow-hidden">
       <button type="button" onClick={()=>setOpen(true)} className="w-full p-4 text-left transition-colors hover:bg-muted/30 active:bg-muted/50">
-        <div className="flex items-start justify-between gap-3">
-          <div><div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.16em] text-muted-foreground"><Trophy className="h-3.5 w-3.5 text-primary"/> {format(new Date(),"MMMM")} Performance League</div>
-          <div className="mt-1 text-xl font-black">JF Performance League</div><div className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Top 10</div></div>
-          <ChevronRight className="mt-1 h-5 w-5 shrink-0 text-primary"/>
-        </div>
-        {isPending ? <div className="mt-4 h-20 animate-pulse rounded-xl bg-muted"/> : me?.qualified ? <>
-          <div className="mt-4 flex items-end justify-between rounded-xl border bg-primary/5 p-3">
-            <div><div className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">League rank</div><div className="text-3xl font-black text-primary">{me?.qualified && me.rank ? `#${me.rank}` : "ENTERED"}</div></div>
-            <div className="text-right"><div className="text-xl font-black">{rating(me).toFixed(1)}</div><div className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">Performance Score</div></div>
+        <div className="flex items-center gap-3">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary"><Trophy className="h-5 w-5"/></div>
+          <div className="min-w-0 flex-1">
+            <div className="text-[10px] font-black uppercase tracking-[0.16em] text-muted-foreground">{format(new Date(),"MMMM")} · Performance League</div>
+            <div className="mt-0.5 truncate text-lg font-black">JF Performance League</div>
           </div>
-        </> : <div className="mt-4 flex items-center gap-3 rounded-xl border border-amber-300 bg-amber-50 p-3 text-amber-950"><Scale className="h-5 w-5 shrink-0"/><div><div className="text-xs font-black">Log bodyweight to enter</div><div className="text-[10px]">Add a bodyweight in the app to enter. Your latest logged weight is always used.</div></div></div>}
-        {top.length>0 && <div className="mt-4 grid grid-cols-3 gap-2">{top.map(r=><div key={r.client_id} className="min-w-0 rounded-xl border bg-muted/20 p-2 text-center"><div className="mx-auto mb-1 flex items-center justify-center gap-1 text-[10px] font-black"><Medal className="h-3 w-3"/>#{r.rank}</div><Avatar className="mx-auto h-8 w-8"><AvatarImage src={r.avatar_url??undefined}/><AvatarFallback>{r.display_name.slice(0,1)}</AvatarFallback></Avatar><div className="mt-1 truncate text-[10px] font-bold">{r.display_name}</div><div className="text-[9px] font-black text-primary">{rating(r).toFixed(1)}</div></div>)}</div>}
-        <div className="mt-3 text-center text-xs font-black text-primary">VIEW STANDINGS ›</div>
+          {isPending ? <div className="h-8 w-20 animate-pulse rounded-lg bg-muted"/> : me?.qualified ? <div className="shrink-0 text-right">
+            <div className="text-lg font-black leading-none text-primary">{me.rank ? `#${me.rank}` : "—"}</div>
+            <div className="mt-1 text-xs font-black leading-none">{rating(me).toFixed(1)}</div>
+          </div> : null}
+          <ChevronRight className="h-5 w-5 shrink-0 text-primary"/>
+        </div>
+        {!isPending && !me?.qualified && <div className="mt-3 flex items-center gap-2 rounded-xl bg-amber-50 px-3 py-2 text-amber-950"><Scale className="h-4 w-4 shrink-0"/><div className="text-[11px] font-bold">Log bodyweight to enter the league</div></div>}
+        {!isPending && me?.qualified && <div className="mt-2 flex items-center justify-between pl-[52px] text-[10px] font-bold uppercase tracking-wide text-muted-foreground"><span>Your rank</span><span>Score</span></div>}
       </button>
     </Card>
     {open && typeof document !== "undefined" ? createPortal(<LeaderboardOverlay onClose={()=>setOpen(false)} rows={data} loading={isPending} isAdmin={isAdmin}/>, document.body) : null}
