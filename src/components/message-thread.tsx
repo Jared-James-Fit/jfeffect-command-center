@@ -359,7 +359,8 @@ function AudioAttachment({
 
   if (!src) return <div className="text-xs opacity-70">Loading voice message…</div>;
 
-  const safeProgress = duration > 0 ? Math.min(progress, duration) : progress;\n  const ratio = duration > 0 ? safeProgress / duration : 0;
+  const safeProgress = duration > 0 ? Math.min(progress, duration) : progress;
+  const ratio = duration > 0 ? safeProgress / duration : 0;
   const txStatus = message?.transcript_status;
   const txText = message?.transcript;
 
@@ -449,7 +450,8 @@ function AudioAttachment({
       )}
       <audio
         ref={ref} src={src} preload="metadata" playsInline
-        onLoadedMetadata={(e) => { const d = e.currentTarget.duration; if (isFinite(d) && d > 0) setDuration(d); }}\n        onDurationChange={(e) => { const d = e.currentTarget.duration; if (isFinite(d) && d > 0) setDuration(d); }}
+        onLoadedMetadata={(e) => { const d = e.currentTarget.duration; if (isFinite(d) && d > 0) setDuration(d); }}
+        onDurationChange={(e) => { const d = e.currentTarget.duration; if (isFinite(d) && d > 0) setDuration(d); }}
         onCanPlay={() => setPlayError(false)}
         onTimeUpdate={(e) => setProgress(e.currentTarget.currentTime)}
         onPause={() => setPlaying(false)}
