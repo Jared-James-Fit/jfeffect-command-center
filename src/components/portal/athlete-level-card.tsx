@@ -11,7 +11,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { ATHLETE_LEVELS, XP_RULES, levelForXp } from "@/lib/athlete-level";
 import { cn } from "@/lib/utils";
 import { useBadgeCatalog, useMyAchievements, usePublicAchievements, type AchievementMetrics } from "@/lib/athlete-achievements";
-import { AchievementCelebrations, PublicAchievements } from "@/components/portal/achievements-card";
+import { AchievementCelebrations, MyAchievementsRow, PublicAchievements } from "@/components/portal/achievements-card";
 import { ArrowLeft } from "lucide-react";
 
 type XpEvent = { id: string; event_type: string; label: string | null; xp: number; occurred_at: string };
@@ -83,7 +83,7 @@ export function AthleteLevelCard({ clientId, defaultView = null }: { clientId: s
         </button>
 
         <div className="grid grid-cols-2 border-t">
-          <button type="button" onClick={() => setOpen("levels")} className="flex min-w-0 items-center gap-2.5 px-5 py-3.5 text-left transition-colors active:bg-muted/30"><Trophy className="h-4 w-4 shrink-0 text-primary"/><span className="min-w-0"><span className="block truncate text-xs font-semibold">Milestones <span className="font-normal text-muted-foreground">{earned.length}/{catalog.length}</span></span><span className="block truncate text-[10px] text-muted-foreground">{lvl.xp.toLocaleString()} achievement pts</span></span></button>
+          <div className="px-3 py-2 [&>button]:mt-0 [&>button]:border-0 [&>button]:px-1 [&>button]:py-1"><MyAchievementsRow catalog={catalog} earned={earned} metrics={stats} /></div>
           <button type="button" onClick={() => setOpen("powerlifting")} className="flex min-w-0 items-center gap-2.5 border-l px-5 py-3.5 text-left transition-colors active:bg-muted/30"><Medal className="h-4 w-4 shrink-0 text-primary"/><span className="truncate text-xs font-semibold">Powerlifting Records</span></button>
         </div>
       </Card>
