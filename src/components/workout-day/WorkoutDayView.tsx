@@ -2970,35 +2970,64 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
   useEffect(() => { setSessionSetCount(Math.max(1, Number(row.sets) || 1)); }, [row.id, row.sets]);
   const setCount = sessionSetCount;
 
-  const changeSetCount = async (nextCount: number) => {
-    if (readonly || adapter?.kind === "member" || !clientId) return;
-    const next = Math.max(1, Math.min(20, nextCount));
-    if (next === setCount) return;
-    if (next < setCount) {
-      const removing = existingResults.find((x: any) => x.set_index === setCount);
-      const detail = removing?.completed_at ? " This set has logged data." : "";
-      if (!window.confirm(`Remove set ${setCount} from ${name}?${detail} This can't be undone.`)) return;
-    }
+  const addSet = async () => {
+    if (readonly || adapter?.kind === "member" || !clientId || setCount >= 20) return;
     const previous = setCount;
+    const next = previous + 1;
     setSessionSetCount(next);
     try {
+      const { error } = await sb.from("pl_exercise_rows").update({ sets: next }).eq("id", row.id);
+      if (error) throw error;
+      await qc.invalidateQueries({ queryKey: ["pl-day-rows", dayId] });
+      onChange();
+      toast.success(`Set ${next} added`);
+    } catch (error: any) {
+      setSessionSetCount(previous);
+      toast.error(error?.message ?? "Could not add set");
+    }
+  };
+
+  const removeSet = async (setIndex: number) => {
+    if (readonly || adapter?.kind === "member" || !clientId || setCount <= 1) return;
+    const removing = existingResults.find((x: any) => x.set_index === setIndex);
+    const detail = removing?.completed_at || removing
+      ? " This set has logged data and it will be deleted."
+      : "";
+    if (!window.confirm(`Remove set ${setIndex} from ${name}?${detail} This can't be undone.`)) return;
+
+    const previous = setCount;
+    const next = previous - 1;
+    setSessionSetCount(next);
+    try {
+      // Delete the selected set, then shift every later result up one position
+      // so visible set numbering stays contiguous.
+      const { error: deleteError } = await sb.from("pl_row_results")
+        .delete()
+        .eq("row_id", row.id)
+        .eq("client_id", clientId)
+        .eq("set_index", setIndex);
+      if (deleteError) throw deleteError;
+
+      const later = existingResults
+        .filter((x: any) => Number(x.set_index) > setIndex)
+        .sort((a: any, b: any) => Number(a.set_index) - Number(b.set_index));
+      for (const result of later) {
+        const { error: shiftError } = await sb.from("pl_row_results")
+          .update({ set_index: Number(result.set_index) - 1 })
+          .eq("id", result.id);
+        if (shiftError) throw shiftError;
+      }
+
       const { error: rowError } = await sb.from("pl_exercise_rows").update({ sets: next }).eq("id", row.id);
       if (rowError) throw rowError;
-      if (next < previous) {
-        const { error: resultError } = await sb.from("pl_row_results")
-          .delete()
-          .eq("row_id", row.id)
-          .eq("client_id", clientId)
-          .gt("set_index", next);
-        if (resultError) throw resultError;
-      }
       await qc.invalidateQueries({ queryKey: ["pl-day-rows", dayId] });
       await qc.invalidateQueries({ queryKey: ["pl-day-results", dayId] });
       onChange();
-      toast.success(next > previous ? "Set added" : "Set removed");
+      toast.success(`Set ${setIndex} removed`);
     } catch (error: any) {
       setSessionSetCount(previous);
-      toast.error(error?.message ?? "Could not update sets");
+      await qc.invalidateQueries({ queryKey: ["pl-day-results", dayId] });
+      toast.error(error?.message ?? "Could not remove set");
     }
   };
   // Tracking type resolution priority:
@@ -3817,37 +3846,23 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
               focusMode={focusMode}
               onChange={onChange}
               onSetCompleted={bumpRestTimer}
+              onRemoveSet={!readonly && adapter?.kind !== "member" && setCount > 1 ? removeSet : undefined}
             />
           );
         })}
         {!readonly && adapter?.kind !== "member" && (
-          <div className="flex items-center justify-between border-t border-builder-card-border bg-background/95 px-2.5 py-2">
+          <div className="flex justify-center border-t border-builder-card-border bg-background/80 py-1.5">
             <Button
               type="button"
               variant="ghost"
               size="sm"
-              className="h-10 min-w-10 rounded-full px-3 text-xs font-semibold text-muted-foreground"
-              onClick={() => void changeSetCount(setCount - 1)}
-              disabled={setCount <= 1}
-              aria-label={`Remove last set from ${name}`}
-            >
-              <span className="mr-1.5 text-lg font-medium leading-none">−</span>
-              Remove
-            </Button>
-            <span className="select-none text-[11px] font-semibold tabular-nums text-muted-foreground">
-              {setCount} {setCount === 1 ? "set" : "sets"}
-            </span>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="h-10 min-w-10 rounded-full px-3.5 text-xs font-semibold shadow-none"
-              onClick={() => void changeSetCount(setCount + 1)}
+              className="h-8 rounded-full px-3 text-[11px] font-semibold text-muted-foreground"
+              onClick={() => void addSet()}
               disabled={setCount >= 20}
               aria-label={`Add set to ${name}`}
             >
-              <span className="mr-1.5 text-lg font-medium leading-none">+</span>
-              Add
+              <span className="mr-1 text-base font-medium leading-none">+</span>
+              Add set
             </Button>
           </div>
         )}
@@ -4124,6 +4139,7 @@ function SetRow({
   setCount, showReps = true, showTimer = false, showVelocity = false, gridTemplate, prescribedDurationSeconds = null,
   onTimerTargetChange,
   onTimerCascade,
+  onRemoveSet,
 }: {
   rowId: string;
   workoutId?: string | null;
@@ -4190,6 +4206,8 @@ function SetRow({
   focusMode?: boolean;
   onChange: () => void;
   onSetCompleted?: (setIndex: number) => void;
+  /** Removes this exact set after parent confirmation; later sets shift up. */
+  onRemoveSet?: (setIndex: number) => void | Promise<void>;
 }) {
   const { user } = useAuth();
   const { isImpersonating, client: povClient } = useClientImpersonation();
