@@ -1,14 +1,19 @@
+import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Droplet, Plus, History, Undo2 } from "lucide-react";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import {
   addWaterEntry, deleteWaterEntry, ensureWaterTarget, formatWater, listWaterForDate,
-  summarizeToday, todayLocalISO,
+  summarizeToday, todayLocalISO, lToMl, ozToMl,
 } from "@/lib/water";
 
 type Surface = "portal" | "member";
@@ -33,6 +38,7 @@ const QUICK_ADDS = [
 export function HomeWaterCard({ userId, currentUserId, surface }: Props) {
   const today = todayLocalISO();
   const qc = useQueryClient();
+  const [customOpen, setCustomOpen] = useState(false);
 
   const { data: target } = useQuery({
     queryKey: ["water-target", userId],
@@ -76,6 +82,7 @@ export function HomeWaterCard({ userId, currentUserId, surface }: Props) {
   const historyHref = surface === "portal" ? "/portal/progress" : "/m/progress";
 
   return (
+    <>
     <Card className="border-border bg-card p-5">
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-2">
@@ -104,17 +111,24 @@ export function HomeWaterCard({ userId, currentUserId, surface }: Props) {
       </div>
       <Progress value={summary.pct} className="mt-3 h-2.5" />
 
-      <div className="mt-4 grid grid-cols-3 gap-2">
+      <div className="mt-4 grid grid-cols-4 gap-2">
         {QUICK_ADDS.map((q) => (
           <Button
             key={q.ml}
             variant="secondary"
-            className="h-12 text-sm font-bold"
+            className="h-11 min-w-0 px-2 text-xs font-bold"
             onClick={() => quickAdd(q.ml)}
           >
-            <Plus className="mr-1 h-4 w-4" />{q.label}
+            <Plus className="mr-0.5 h-3.5 w-3.5 shrink-0" />{q.label}
           </Button>
         ))}
+        <Button
+          variant="outline"
+          className="h-11 min-w-0 px-2 text-xs font-bold"
+          onClick={() => setCustomOpen(true)}
+        >
+          <Plus className="mr-0.5 h-3.5 w-3.5 shrink-0" />Custom
+        </Button>
       </div>
 
       {entries.length > 0 && (
@@ -154,5 +168,69 @@ export function HomeWaterCard({ userId, currentUserId, surface }: Props) {
         {lastEntry ? `Undo last (−${formatWater(lastEntry.amount_ml, "ml")})` : "Nothing to undo"}
       </Button>
     </Card>
+    <HomeCustomWaterDialog
+      open={customOpen}
+      onOpenChange={setCustomOpen}
+      onConfirm={(ml) => quickAdd(ml)}
+    />
+    </>
+  );
+}
+
+function HomeCustomWaterDialog({
+  open, onOpenChange, onConfirm,
+}: {
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+  onConfirm: (amountMl: number) => void | Promise<void>;
+}) {
+  const [amount, setAmount] = useState("");
+  const [unit, setUnit] = useState<"ml" | "L" | "oz">("ml");
+
+  function submit() {
+    const n = Number(amount);
+    if (!amount || !Number.isFinite(n) || n <= 0) return;
+    const ml = unit === "ml" ? Math.round(n) : unit === "L" ? lToMl(n) : ozToMl(n);
+    void onConfirm(ml);
+    setAmount("");
+    onOpenChange(false);
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="w-[calc(100vw-2rem)] max-w-sm rounded-2xl">
+        <DialogHeader><DialogTitle>Custom water amount</DialogTitle></DialogHeader>
+        <div className="grid grid-cols-[1fr_88px] gap-2">
+          <div>
+            <Label className="text-xs text-muted-foreground">Amount</Label>
+            <Input
+              type="number"
+              inputMode="decimal"
+              autoFocus
+              value={amount}
+              onChange={(e) => setAmount(e.target.value)}
+              className="h-11 text-base"
+              placeholder={unit === "ml" ? "e.g. 600" : unit === "L" ? "e.g. 0.6" : "e.g. 20"}
+              onKeyDown={(e) => { if (e.key === "Enter") submit(); }}
+            />
+          </div>
+          <div>
+            <Label className="text-xs text-muted-foreground">Unit</Label>
+            <Select value={unit} onValueChange={(v) => setUnit(v as "ml" | "L" | "oz")}>
+              <SelectTrigger className="h-11"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="ml">mL</SelectItem>
+                <SelectItem value="L">L</SelectItem>
+                <SelectItem value="oz">oz</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+        <DialogFooter className="grid grid-cols-2 gap-2 sm:grid-cols-2">
+          <Button className="h-11 rounded-xl" variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
+          <Button className="h-11 rounded-xl font-bold" disabled={!amount || Number(amount) <= 0} onClick={submit}>Add water</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
