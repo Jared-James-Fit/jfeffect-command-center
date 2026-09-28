@@ -83,7 +83,7 @@ export function AthleteLevelCard({ clientId, defaultView = null }: { clientId: s
         </button>
 
         <div className="grid grid-cols-2 border-t">
-          <button type="button" onClick={() => setOpen("levels")} className="flex min-w-0 items-center gap-2.5 px-5 py-3.5 text-left transition-colors active:bg-muted/30"><Trophy className="h-4 w-4 shrink-0 text-primary"/><span className="truncate text-xs font-semibold">Milestones <span className="font-normal text-muted-foreground">{earned.length}/{catalog.length}</span></span></button>
+          <button type="button" onClick={() => setOpen("levels")} className="flex min-w-0 items-center gap-2.5 px-5 py-3.5 text-left transition-colors active:bg-muted/30"><Trophy className="h-4 w-4 shrink-0 text-primary"/><span className="min-w-0"><span className="block truncate text-xs font-semibold">Milestones <span className="font-normal text-muted-foreground">{earned.length}/{catalog.length}</span></span><span className="block truncate text-[10px] text-muted-foreground">{lvl.xp.toLocaleString()} achievement pts</span></span></button>
           <button type="button" onClick={() => setOpen("powerlifting")} className="flex min-w-0 items-center gap-2.5 border-l px-5 py-3.5 text-left transition-colors active:bg-muted/30"><Medal className="h-4 w-4 shrink-0 text-primary"/><span className="truncate text-xs font-semibold">Powerlifting Records</span></button>
         </div>
       </Card>
