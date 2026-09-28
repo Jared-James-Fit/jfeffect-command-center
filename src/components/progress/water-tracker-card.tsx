@@ -131,13 +131,13 @@ export function WaterTrackerCard({
           <Progress value={summary.pct} className="h-2" />\n          {entries.length > 0 && <button type="button" onClick={() => setHistoryOpen(true)} className="w-full text-left text-xs font-medium text-sky-700 dark:text-sky-300">Today: {entries.length} {entries.length === 1 ? "drink" : "drinks"} logged · View times & history ›</button>}
         </div>
 
-        <div className="grid grid-cols-5 gap-1.5">
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
           {QUICK_ADD_ML.map((ml) => (
             <Button
               key={ml}
               size="sm"
               variant="secondary"
-              className="h-11 px-2 text-xs font-semibold"
+              className="h-12 rounded-xl px-3 text-sm font-bold tabular-nums"
               disabled={busy}
               onClick={() => add(ml)}
             >
@@ -147,11 +147,11 @@ export function WaterTrackerCard({
           <Button
             size="sm"
             variant="outline"
-            className="h-11 px-2 text-xs font-semibold"
+            className="h-12 rounded-xl px-3 text-sm font-bold sm:col-auto"
             disabled={busy}
             onClick={() => setCustomOpen(true)}
           >
-            <Plus className="h-3.5 w-3.5" />
+            <Plus className="mr-1 h-4 w-4" /> Custom
           </Button>
         </div>
 
@@ -210,7 +210,7 @@ function CustomAmountDialog({
   onConfirm: (amountMl: number) => void;
 }) {
   const [amount, setAmount] = useState("");
-  const [unit, setUnit] = useState<"ml" | "L" | "oz">("L");
+  const [unit, setUnit] = useState<"ml" | "L" | "oz">("ml");
 
   function submit() {
     const n = Number(amount);
@@ -223,8 +223,15 @@ function CustomAmountDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-sm">
-        <DialogHeader><DialogTitle>Add water</DialogTitle></DialogHeader>
+      <DialogContent className="w-[calc(100vw-2rem)] max-w-sm rounded-2xl">
+        <DialogHeader><DialogTitle>Custom water amount</DialogTitle></DialogHeader>
+        <div className="grid grid-cols-3 gap-2">
+          {[250, 500, 750].map((ml) => (
+            <Button key={ml} type="button" variant="secondary" className="h-11 rounded-xl font-bold" onClick={() => { setUnit("ml"); setAmount(String(ml)); }}>
+              {ml} mL
+            </Button>
+          ))}
+        </div>
         <div className="grid grid-cols-[1fr_90px] gap-2">
           <div>
             <Label className="text-xs text-muted-foreground">Amount</Label>
@@ -234,13 +241,15 @@ function CustomAmountDialog({
               autoFocus
               value={amount}
               onChange={(e) => setAmount(e.target.value)}
-              placeholder={unit === "ml" ? "e.g. 300" : unit === "L" ? "e.g. 0.5" : "e.g. 12"}
+              className="h-11 text-base"
+              placeholder={unit === "ml" ? "e.g. 600" : unit === "L" ? "e.g. 0.6" : "e.g. 20"}
+              onKeyDown={(e) => { if (e.key === "Enter") submit(); }}
             />
           </div>
           <div>
             <Label className="text-xs text-muted-foreground">Unit</Label>
             <Select value={unit} onValueChange={(v) => setUnit(v as "ml" | "L" | "oz")}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectTrigger className="h-11"><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="L">L</SelectItem>
                 <SelectItem value="ml">mL</SelectItem>
@@ -249,9 +258,9 @@ function CustomAmountDialog({
             </Select>
           </div>
         </div>
-        <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
-          <Button onClick={submit}>Add</Button>
+        <DialogFooter className="grid grid-cols-2 gap-2 sm:grid-cols-2">
+          <Button className="h-12 rounded-xl" variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
+          <Button className="h-12 rounded-xl font-bold" disabled={!amount || Number(amount) <= 0} onClick={submit}>Add water</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
