@@ -22,6 +22,8 @@ import { BodyweightSummaryCard } from "@/components/portal/bodyweight-summary-ca
 import { SessionsCard } from "@/components/portal/sessions-card";
 import { SetupChecklistBanner } from "@/components/portal/setup-checklist-banner";
 import { AthleteLevelCard } from "@/components/portal/athlete-level-card";
+import { MissingBodyweightPrompt } from "@/components/portal/missing-bodyweight-prompt";
+import { PerformanceLeagueCard } from "@/components/portal/performance-league-card";
 import { useEffect, useState } from "react";
 import { listMyPortalAppointments } from "@/lib/appointments.functions";
 import { useServerFn } from "@tanstack/react-start";
@@ -242,6 +244,7 @@ function PortalHome() {
     <>
       {/* Background gates / popups — keep wired exactly as before. */}
       {client?.id && <ClientActionRequestModal clientId={client.id} />}
+      {client?.id && portalUserId && <MissingBodyweightPrompt userId={portalUserId} />}
       {client?.id && (
         <HomeScreenSetupCard
           clientId={client.id}
@@ -283,6 +286,12 @@ function PortalHome() {
         {client?.id && (
           <SectionErrorBoundary label="Athlete level">
             <AthleteLevelCard clientId={client.id} />
+          </SectionErrorBoundary>
+        )}
+
+        {client?.id && (
+          <SectionErrorBoundary label="Monthly leaderboard">
+            <PerformanceLeagueCard clientId={client.id} userId={portalUserId ?? ""} />
           </SectionErrorBoundary>
         )}
 
@@ -672,5 +681,3 @@ function ManageAccordion({ clientId }: { clientId: string }) {
     </ul>
   );
 }
-
-// Emergency production sync marker 2026-09-28T20:42
