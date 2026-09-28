@@ -37,7 +37,8 @@ function useXpEvents(clientId: string) {
 
 export function AthleteLevelCard({ clientId, defaultView = null }: { clientId: string; defaultView?: null | "rankings" }) {
   const { data: events = [], isPending } = useXpEvents(clientId);
-  const [open, setOpen] = useState<null | "levels" | "rankings" | "powerlifting">(defaultView);\n  const [selectedLeagueAthlete, setSelectedLeagueAthlete] = useState<string | null>(null);
+  const [open, setOpen] = useState<null | "levels" | "rankings" | "powerlifting">(defaultView);
+  const [selectedLeagueAthlete, setSelectedLeagueAthlete] = useState<string | null>(null);
   const total = events.reduce((s, e) => s + (e.xp || 0), 0);
   const lvl = levelForXp(total);
   const stats = statsFromEvents(events);
@@ -102,6 +103,9 @@ export function AthleteLevelCard({ clientId, defaultView = null }: { clientId: s
             })}
           </div>
         )}
+        <button type="button" onClick={() => { setSelectedLeagueAthlete(null); setOpen("rankings"); }} className="flex w-full items-center justify-center gap-1 border-t px-4 py-2.5 text-xs font-bold text-primary transition-colors active:bg-muted/40">
+          View Top 10 <ChevronRight className="h-3.5 w-3.5" />
+        </button>
       </Card>
 
       <Card className="overflow-hidden">
@@ -296,8 +300,12 @@ function CompareView({ clientId, myStats, myBadgeCount, onBack }: { clientId: st
 }
 const levelAccent = (xp:number) => { const n=levelForXp(xp).current.name; return n.includes("LEGEND")?"border-amber-400":n.includes("ELITE")?"border-violet-400":n.includes("ADVANCED")?"border-sky-400":n.includes("TRAINED")?"border-emerald-400":"border-slate-300"; };
 
-function RankingsView({ myStats, myBadgeCount }: { myStats: BadgeStats; myBadgeCount: number }) {
-  const [selected, setSelected] = useState<string | null>(null);
+function RankingsView({ myStats, myBadgeCount, selected, onSelectedChange }: {
+  myStats: BadgeStats;
+  myBadgeCount: number;
+  selected: string | null;
+  onSelectedChange: (id: string | null) => void;
+}) {
   const { data = [], isPending } = useQuery({
     queryKey: ["athlete-rankings-monthly"],
     staleTime: 60_000,
@@ -375,7 +383,7 @@ function RankingsView({ myStats, myBadgeCount }: { myStats: BadgeStats; myBadgeC
           <div className="flex items-center justify-between"><span className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Your {monthName}</span><span className="text-lg font-black">#{me.rank}</span></div>
           <div className="mt-1 text-2xl font-black text-primary">{(Number(me.xp ?? 0) / 1000).toFixed(1)} <span className="text-sm">pts</span></div>
           <div className="mt-1 text-xs text-muted-foreground">{me.workouts_completed} workouts · {me.fully_logged} fully logged · {Number(me.strength_score ?? 0).toFixed(1)} performance pts · BW verified</div>
-          <Progress value={Math.min(100, me.xp / 10)} className="mt-3 h-2" />
+          <Progress value={Math.min(100, (Number(me.xp ?? 0) / 1000) / 1.1)} className="mt-3 h-2" />
         </div>
       )}
 
