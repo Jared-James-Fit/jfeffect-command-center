@@ -3,7 +3,7 @@ import { useState } from "react";
 import { createPortal } from "react-dom";
 import { useQuery } from "@tanstack/react-query";
 import { format } from "date-fns";
-import { Trophy, Medal, ChevronRight, Scale, ArrowLeft, Info } from "lucide-react";
+import { Trophy, ChevronRight, Scale, ArrowLeft, Info } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { combinedBodyweightQueryKey, getCombinedBodyweightSeries } from "@/lib/bodyweight";
 import { Card } from "@/components/ui/card";
@@ -27,12 +27,9 @@ export function PerformanceLeagueCard({ clientId, userId }: { clientId:string; u
     staleTime:60_000,
     queryFn:async()=>{ const {data,error}=await (supabase as any).rpc("get_monthly_athlete_rankings",{_limit:50}); if(error) throw error; return (data??[]) as Row[]; }
   });
-  const ranked=data.filter(r=>r.qualified && r.rank!=null).sort((a,b)=>Number(a.rank)-Number(b.rank));
   const me=data.find(r=>r.client_id===clientId) ?? data.find(r=>r.is_me);
   const { data: localBodyweights = [] } = useQuery({ queryKey: combinedBodyweightQueryKey(userId), enabled: !!userId, queryFn: () => getCombinedBodyweightSeries(userId, 200) });
   const latestLocalWeight = localBodyweights.length ? localBodyweights[localBodyweights.length - 1] : null;
-  const locallyQualified = !!latestLocalWeight;
-  const top=ranked.slice(0,3);
   return <>
     <Card className="overflow-hidden">
       <button type="button" onClick={()=>setOpen(true)} className="w-full p-4 text-left transition-colors hover:bg-muted/30 active:bg-muted/50">
@@ -42,14 +39,20 @@ export function PerformanceLeagueCard({ clientId, userId }: { clientId:string; u
             <div className="text-[10px] font-black uppercase tracking-[0.16em] text-muted-foreground">{format(new Date(),"MMMM")} · Performance League</div>
             <div className="mt-0.5 truncate text-lg font-black">JF Performance League</div>
           </div>
-          {isPending ? <div className="h-8 w-20 animate-pulse rounded-lg bg-muted"/> : me?.qualified ? <div className="shrink-0 text-right">
-            <div className="text-lg font-black leading-none text-primary">{me.rank ? `#${me.rank}` : "—"}</div>
-            <div className="mt-1 text-xs font-black leading-none">{rating(me).toFixed(1)}</div>
+          {isPending ? <div className="h-8 w-20 animate-pulse rounded-lg bg-muted"/> : me?.qualified ? <div className="flex shrink-0 items-center gap-3">
+            <div className="text-right">
+              <div className="text-[9px] font-bold uppercase tracking-wide text-muted-foreground">Rank</div>
+              <div className="text-lg font-black leading-none text-primary">{me.rank ? `#${me.rank}` : "—"}</div>
+            </div>
+            <div className="h-8 w-px bg-border"/>
+            <div className="text-right">
+              <div className="text-[9px] font-bold uppercase tracking-wide text-muted-foreground">Score</div>
+              <div className="text-lg font-black leading-none">{rating(me).toFixed(1)}</div>
+            </div>
           </div> : null}
           <ChevronRight className="h-5 w-5 shrink-0 text-primary"/>
         </div>
         {!isPending && !me?.qualified && <div className="mt-3 flex items-center gap-2 rounded-xl bg-amber-50 px-3 py-2 text-amber-950"><Scale className="h-4 w-4 shrink-0"/><div className="text-[11px] font-bold">Log bodyweight to enter the league</div></div>}
-        {!isPending && me?.qualified && <div className="mt-2 flex items-center justify-between pl-[52px] text-[10px] font-bold uppercase tracking-wide text-muted-foreground"><span>Your rank</span><span>Score</span></div>}
       </button>
     </Card>
     {open && typeof document !== "undefined" ? createPortal(<LeaderboardOverlay onClose={()=>setOpen(false)} rows={data} loading={isPending} isAdmin={isAdmin}/>, document.body) : null}
