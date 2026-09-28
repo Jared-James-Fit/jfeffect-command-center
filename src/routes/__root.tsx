@@ -395,7 +395,7 @@ function RootComponent() {
             {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
             <Outlet />
             <RouteTracker />
-            <Toaster position="top-right" theme="dark" richColors />
+            <Toaster position="top-right" theme="dark" richColors offset={{ top: "calc(env(safe-area-inset-top, 0px) + 72px)", right: "16px" }} mobileOffset={{ top: "calc(env(safe-area-inset-top, 0px) + 72px)", right: "16px", left: "16px" }} />
             <ProgressDrawer />
             <GlobalHighlight />
             <OnlineOfflineBanner />
