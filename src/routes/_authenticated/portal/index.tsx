@@ -23,7 +23,6 @@ import { SessionsCard } from "@/components/portal/sessions-card";
 import { SetupChecklistBanner } from "@/components/portal/setup-checklist-banner";
 import { AthleteLevelCard } from "@/components/portal/athlete-level-card";
 import { MissingBodyweightPrompt } from "@/components/portal/missing-bodyweight-prompt";
-import { PerformanceLeagueCard } from "@/components/portal/performance-league-card";
 import { useEffect, useState } from "react";
 import { listMyPortalAppointments } from "@/lib/appointments.functions";
 import { useServerFn } from "@tanstack/react-start";
@@ -288,14 +287,6 @@ function PortalHome() {
             <AthleteLevelCard clientId={client.id} />
           </SectionErrorBoundary>
         )}
-
-        {client?.id && (
-          <SectionErrorBoundary label="Monthly leaderboard">
-            <PerformanceLeagueCard clientId={client.id} userId={portalUserId ?? ""} />
-          </SectionErrorBoundary>
-        )}
-
-
 
         {/* 2 — Bodyweight tracker (syncs with Progress > Weight tracker) */}
         {client?.id ? (
