@@ -114,7 +114,7 @@ import { toLocalISO, todayLocalISO } from "@/lib/today";
 import { WorkoutTimerSheet, QuickConfirmDuration, type TimerCompletionPayload } from "@/components/workout-timer-sheet";
 import { formatDuration } from "@/lib/duration";
 import {
-  getTimerTarget, setTimerTarget, getRowInputs, setRowInputs, type RowInputOverrides,
+  getTimerTarget, setTimerTarget, getRowInputs, setRowInputs, getVelocityDefault, setVelocityDefault, type RowInputOverrides,
 } from "@/lib/log-as-override";
 import { Timer } from "lucide-react";
 import type { WorkoutContextAdapter } from "@/lib/workout-context";
@@ -3042,12 +3042,13 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
   const showReps = inputOverrides.reps ?? prescribedInputs.reps;
   const showTimer = inputOverrides.timer ?? prescribedInputs.timer;
   const showWeight = inputOverrides.weight ?? prescribedInputs.weight;
+  const showVelocity = inputOverrides.velocity ?? getVelocityDefault();
   const toggleInput = (field: keyof RowInputOverrides) => {
-    const current = { reps: showReps, weight: showWeight, timer: showTimer }[field];
+    const current = { reps: showReps, weight: showWeight, timer: showTimer, velocity: showVelocity }[field];
     const next: RowInputOverrides = { ...inputOverrides, [field]: !current };
     // Never allow a row with no logging input at all.
-    const resolved = { reps: showReps, weight: showWeight, timer: showTimer, [field]: !current } as Record<string, boolean>;
-    if (!resolved.reps && !resolved.weight && !resolved.timer) return;
+    const resolved = { reps: showReps, weight: showWeight, timer: showTimer, velocity: showVelocity, [field]: !current } as Record<string, boolean>;
+    if (!resolved.reps && !resolved.weight && !resolved.timer && !resolved.velocity) return;
     setInputOverridesState(next);
     setRowInputs(row.id, next);
   };
@@ -3080,6 +3081,7 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
     focusMode ? "36px" : "28px",
     showReps ? "1fr" : null,
     showTimer ? "1fr" : null,
+    showVelocity ? "1fr" : null,
     "1fr",
     !hideWeight ? "1.3fr" : null,
     focusMode ? "52px" : "44px",
@@ -3684,6 +3686,7 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
                 ["reps", "Reps", showReps],
                 ["weight", "Weight", showWeight],
                 ["timer", "Timer", showTimer],
+                ["velocity", "Velocity (m/s)", showVelocity],
               ] as const).map(([field, label, on]) => (
                 <DropdownMenuItem
                   key={field}
@@ -3696,6 +3699,23 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
                   {label}
                 </DropdownMenuItem>
               ))}
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                onSelect={(e) => {
+                  e.preventDefault();
+                  const next = !getVelocityDefault();
+                  setVelocityDefault(next);
+                  if (next && !showVelocity) {
+                    const updated = { ...inputOverrides, velocity: true };
+                    setInputOverridesState(updated);
+                    setRowInputs(row.id, updated);
+                  }
+                  toast.success(next ? "Velocity will open by default" : "Velocity default turned off");
+                }}
+                className="text-xs font-semibold"
+              >
+                Velocity default: {getVelocityDefault() ? "On" : "Off"}
+              </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
@@ -3712,6 +3732,7 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
           <span>Set</span>
           {showReps && <span>Reps</span>}
           {showTimer && <span>Time</span>}
+          {showVelocity && <span title="Mean concentric velocity">Vel</span>}
           <span>{showRir ? "RIR" : "RPE"}</span>
           {!hideWeight && <span className="truncate">{loadColumnLabel(rowLoadType, activeUnit)}</span>}
           <span className="text-right">Status</span>
@@ -3736,6 +3757,7 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
               gridTemplate={gridTemplate}
               showReps={showReps}
               showTimer={showTimer}
+              showVelocity={showVelocity}
               prescribedDurationSeconds={effectivePrescribedDurationSec}
               onTimerTargetChange={pickTimerTarget}
               onTimerCascade={cascadeTimerFromSet}
