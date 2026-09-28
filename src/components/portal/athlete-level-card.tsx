@@ -56,24 +56,35 @@ export function AthleteLevelCard({ clientId, defaultView = null }: { clientId: s
     <>
       <AchievementCelebrations clientId={clientId} catalog={catalog} />
       <Card className="overflow-hidden">
-        <div className="p-4">
-          <button type="button" onClick={() => setOpen("rankings")} className="flex w-full items-center gap-3 text-left">
-            <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary"><Trophy className="h-5 w-5"/></span>
-            <span className="min-w-0 flex-1"><span className="block text-[10px] font-black uppercase tracking-widest text-muted-foreground">{format(new Date(),"MMMM")} Performance League</span><span className="block text-base font-black">Top 10 · Live standings</span></span>
-            {!leaguePending && leagueMe?.qualified && <span className="shrink-0 text-right"><span className="block text-[9px] font-bold uppercase tracking-wide text-muted-foreground">Your place</span><span className="block text-base font-black"><b className="text-primary">#{leagueMe.rank}</b> · {leagueScore(leagueMe).toFixed(1)}</span></span>}
-            <ChevronRight className="h-5 w-5 shrink-0 text-primary"/>
+        <div className="px-5 pb-4 pt-5">
+          <button type="button" onClick={() => setOpen("rankings")} className="flex w-full items-start gap-3 text-left">
+            <span className="min-w-0 flex-1">
+              <span className="block text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">{format(new Date(),"MMMM")} Performance League</span>
+              <span className="mt-1 block text-xl font-bold tracking-tight">Top 10 <span className="font-medium text-muted-foreground">· Live</span></span>
+            </span>
+            {!leaguePending && leagueMe?.qualified && <span className="shrink-0 text-right">
+              <span className="block text-[10px] font-medium text-muted-foreground">Your place</span>
+              <span className="block text-lg font-bold tracking-tight"><b className="text-primary">#{leagueMe.rank}</b> <span className="font-medium text-muted-foreground">·</span> {leagueScore(leagueMe).toFixed(1)}</span>
+            </span>}
+            <ChevronRight className="mt-3 h-4 w-4 shrink-0 text-muted-foreground"/>
           </button>
-          {!leaguePending && !leagueMe?.qualified && <div className="mt-3 flex items-center gap-2 rounded-xl bg-amber-50 px-3 py-2 text-amber-950"><Scale className="h-4 w-4"/><span className="text-[11px] font-bold">Log bodyweight to enter the league</span></div>}
-          {leagueTop.length>0 && <div className="mt-3 grid grid-cols-3 gap-2">{leagueTop.map(r=>{const place=Number(r.rank);const medal=place===1?"🥇":place===2?"🥈":"🥉";return <button type="button" onClick={()=>setOpen("rankings")} key={r.client_id} className="min-w-0 rounded-xl border bg-card px-2 py-2.5 text-center transition-colors active:bg-muted/50"><div className="text-lg leading-none">{medal}</div><div className="mt-1 text-[9px] font-black uppercase tracking-wide text-muted-foreground">Current #{place}</div><div className="mt-0.5 truncate text-[11px] font-bold">{r.display_name}</div><div className="text-[11px] font-black text-primary">{leagueScore(r).toFixed(1)}</div></button>})}</div>}
-          <div className="mt-2 text-center text-[9px] font-semibold text-muted-foreground">Live monthly standings · scores update as athletes earn points.</div>
+
+          {!leaguePending && !leagueMe?.qualified && <div className="mt-3 flex items-center gap-2 rounded-xl bg-muted/50 px-3 py-2"><Scale className="h-4 w-4 text-muted-foreground"/><span className="text-[11px] font-medium">Log bodyweight to enter the league</span></div>}
+
+          {leagueTop.length>0 && <div className="mt-4 grid grid-cols-3">{leagueTop.map((r,i)=>{const place=Number(r.rank);const medal=place===1?"🥇":place===2?"🥈":"🥉";return <button type="button" onClick={()=>setOpen("rankings")} key={r.client_id} className={"min-w-0 px-2 py-1.5 text-center transition-opacity active:opacity-60 "+(i>0?"border-l":"")}><div className="text-xl leading-none">{medal}</div><div className="mt-2 truncate text-xs font-semibold">{r.display_name}</div><div className="mt-0.5 text-xs font-semibold text-muted-foreground">{leagueScore(r).toFixed(1)}</div></button>})}</div>}
         </div>
-        <button type="button" onClick={() => setOpen("levels")} className="flex w-full items-center gap-3 border-t px-4 py-3 text-left transition-colors active:bg-muted/50">
-          <span className="min-w-0 flex-1"><span className="flex items-baseline gap-2"><span className="text-sm font-black uppercase text-primary">{isPending ? "—" : lvl.current.name}</span><span className="text-[10px] text-muted-foreground">{lvl.xp.toLocaleString()} lifetime pts</span></span><span className="mt-1 block"><Progress value={lvl.pct} className="h-1.5" /></span><span className="mt-1 block text-[9px] text-muted-foreground">{lvl.next ? lvl.remaining.toLocaleString() + " points to " + lvl.next.name : "Top logging level reached"}</span></span>
-          <span className="shrink-0 text-[10px] font-bold uppercase tracking-wide text-muted-foreground">Logging level</span><ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground"/>
+
+        <button type="button" onClick={() => setOpen("levels")} className="flex w-full items-center gap-4 border-t px-5 py-3.5 text-left transition-colors active:bg-muted/30">
+          <span className="min-w-0 flex-1">
+            <span className="flex items-center justify-between gap-3"><span className="text-sm font-bold uppercase tracking-tight">{isPending ? "—" : lvl.current.name}</span><span className="text-[11px] text-muted-foreground">{lvl.next ? lvl.remaining.toLocaleString()+" pts to "+lvl.next.name : "Top level"}</span></span>
+            <Progress value={lvl.pct} className="mt-2 h-1" />
+          </span>
+          <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground"/>
         </button>
+
         <div className="grid grid-cols-2 border-t">
-          <button type="button" onClick={() => setOpen("levels")} className="flex min-w-0 items-center gap-2 px-4 py-3 text-left transition-colors active:bg-muted/50"><Trophy className="h-4 w-4 shrink-0 text-primary"/><span className="truncate text-[11px] font-bold">Milestones <span className="font-normal text-muted-foreground">{earned.length}/{catalog.length}</span></span></button>
-          <button type="button" onClick={() => setOpen("powerlifting")} className="flex min-w-0 items-center gap-2 border-l px-4 py-3 text-left transition-colors active:bg-muted/50"><Medal className="h-4 w-4 shrink-0 text-primary"/><span className="truncate text-[11px] font-bold">Powerlifting Records</span></button>
+          <button type="button" onClick={() => setOpen("levels")} className="flex min-w-0 items-center gap-2.5 px-5 py-3.5 text-left transition-colors active:bg-muted/30"><Trophy className="h-4 w-4 shrink-0 text-primary"/><span className="truncate text-xs font-semibold">Milestones <span className="font-normal text-muted-foreground">{earned.length}/{catalog.length}</span></span></button>
+          <button type="button" onClick={() => setOpen("powerlifting")} className="flex min-w-0 items-center gap-2.5 border-l px-5 py-3.5 text-left transition-colors active:bg-muted/30"><Medal className="h-4 w-4 shrink-0 text-primary"/><span className="truncate text-xs font-semibold">Powerlifting Records</span></button>
         </div>
       </Card>
 
