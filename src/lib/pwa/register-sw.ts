@@ -58,7 +58,12 @@ export function registerServiceWorker() {
     return;
   }
 
-  // Clear legacy JF runtime caches left by older builds before registering the current worker.\n  if ("caches" in window) {\n    void caches.keys().then((keys) => Promise.allSettled(keys.filter((k) => k.startsWith("jf-")).map((k) => caches.delete(k))));\n  }\n\n  // Dynamic import keeps the virtual module out of SSR / Lovable preview bundles.
+  // Clear legacy JF runtime caches left by older builds before registering the current worker.
+  if ("caches" in window) {
+    void caches.keys().then((keys) => Promise.allSettled(keys.filter((k) => k.startsWith("jf-")).map((k) => caches.delete(k))));
+  }
+
+  // Dynamic import keeps the virtual module out of SSR / Lovable preview bundles.
   import("virtual:pwa-register").then(({ registerSW }) => {
     const updateSW = registerSW({
       immediate: true,
