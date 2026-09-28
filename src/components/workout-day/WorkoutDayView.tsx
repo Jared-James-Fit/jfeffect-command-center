@@ -4550,7 +4550,7 @@ function SetRow({
     onSave: async ({ load, reps, rpe, velocity, unit, bw, loadType }) => {
       if (readonly) return;
       if (!clientId) return;
-      if (!load && !reps && !rpe && !bw && !existing) return;
+      if (!load && !reps && !rpe && !velocity && !bw && !existing) return;
       // Auto-start the Workout Session clock on the first meaningful log.
       beginWorkoutSession(workoutId ?? null);
       // Validate numerics; silently skip persistence for invalid values (input stays).
