@@ -57,7 +57,7 @@ export function setTimerTarget(rowId: string, seconds: number | null) {
  * back to the coach's prescription — this only records explicit client
  * choices made through the input-type dropdown.
  */
-export type RowInputOverrides = { reps?: boolean; weight?: boolean; timer?: boolean };
+export type RowInputOverrides = { reps?: boolean; weight?: boolean; timer?: boolean; velocity?: boolean };
 
 export function getRowInputs(rowId: string): RowInputOverrides {
   const raw = safeGet(INPUTS_KEY(rowId));
@@ -75,5 +75,15 @@ export function setRowInputs(rowId: string, inputs: RowInputOverrides) {
   if (typeof inputs.reps === "boolean") clean.reps = inputs.reps;
   if (typeof inputs.weight === "boolean") clean.weight = inputs.weight;
   if (typeof inputs.timer === "boolean") clean.timer = inputs.timer;
+  if (typeof inputs.velocity === "boolean") clean.velocity = inputs.velocity;
   safeSet(INPUTS_KEY(rowId), Object.keys(clean).length ? JSON.stringify(clean) : null);
+}
+
+
+const VELOCITY_DEFAULT_KEY = "jf.inputs.velocity.default";
+export function getVelocityDefault(): boolean {
+  return safeGet(VELOCITY_DEFAULT_KEY) === "1";
+}
+export function setVelocityDefault(enabled: boolean) {
+  safeSet(VELOCITY_DEFAULT_KEY, enabled ? "1" : null);
 }
