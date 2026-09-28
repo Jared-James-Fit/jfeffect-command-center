@@ -291,7 +291,7 @@ function PortalHome() {
 
         {client?.id && (
           <SectionErrorBoundary label="Monthly leaderboard">
-            <MonthlyLeaderboardCard clientId={client.id} userId={portalUserId ?? ""} />
+            <PerformanceLeagueCard clientId={client.id} userId={portalUserId ?? ""} />
           </SectionErrorBoundary>
         )}
 
