@@ -127,15 +127,15 @@ export function MyAchievementsRow({ catalog, earned, metrics }: {
   return (
     <>
       <button type="button" onClick={() => setOpen(true)}
-        className="mt-3 flex w-full items-center justify-between gap-2 rounded-lg border border-border px-3 py-2 text-left text-xs transition hover:border-primary/40">
-        <span className="flex min-w-0 items-center gap-2">
-          <span className="flex -space-x-2">
-            {top.length ? top.map((b) => <BadgeIcon key={b.badge_key} icon={b.icon_key} rarity={b.rarity} size="sm" badgeKey={b.badge_key} />)
-              : <BadgeIcon icon="award" rarity="common" locked size="sm" />}
-          </span>
-          <span className="font-semibold">Milestones <span className="font-normal text-muted-foreground">{got.length}/{items.length}</span></span>
+        className="mt-3 flex w-full min-w-0 items-center gap-2 rounded-lg border border-border px-3 py-2 text-left text-xs transition hover:border-primary/40">
+        <span className="flex shrink-0 -space-x-2">
+          {top.length ? top.map((b) => <BadgeIcon key={b.badge_key} icon={b.icon_key} rarity={b.rarity} size="sm" badgeKey={b.badge_key} />)
+            : <BadgeIcon icon="award" rarity="common" locked size="sm" />}
         </span>
-        <span className="shrink-0 font-semibold text-primary">View</span>
+        <span className="min-w-0 flex-1">
+          <span className="block truncate font-semibold">Milestones</span>
+          <span className="block text-[10px] text-muted-foreground">{got.length}/{items.length}</span>
+        </span>
       </button>
 
       <Sheet open={open} onOpenChange={setOpen}>
