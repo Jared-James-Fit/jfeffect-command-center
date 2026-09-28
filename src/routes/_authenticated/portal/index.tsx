@@ -23,7 +23,7 @@ import { SessionsCard } from "@/components/portal/sessions-card";
 import { SetupChecklistBanner } from "@/components/portal/setup-checklist-banner";
 import { AthleteLevelCard } from "@/components/portal/athlete-level-card";
 import { MissingBodyweightPrompt } from "@/components/portal/missing-bodyweight-prompt";
-import { MonthlyLeaderboardCard } from "@/components/portal/monthly-leaderboard-card";
+import { PerformanceLeagueCard } from "@/components/portal/performance-league-card";
 import { useEffect, useState } from "react";
 import { listMyPortalAppointments } from "@/lib/appointments.functions";
 import { useServerFn } from "@tanstack/react-start";
