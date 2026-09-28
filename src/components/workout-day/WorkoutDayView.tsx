@@ -3791,8 +3791,8 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
           <span>Set</span>
           {showReps && <span>Reps</span>}
           {showTimer && <span>Time</span>}
-          {showVelocity && <span title="Mean concentric velocity">Vel</span>}
           <span>{showRir ? "RIR" : "RPE"}</span>
+          {showVelocity && <span title="Mean concentric velocity">Vel</span>}
           {!hideWeight && <span className="truncate">{loadColumnLabel(rowLoadType, activeUnit)}</span>}
           <span className="text-right">Status</span>
         </div>
