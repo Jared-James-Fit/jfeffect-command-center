@@ -1,6 +1,7 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "@tanstack/react-router";
 import { isChunkLoadError, attemptChunkReload } from "@/lib/chunk-recovery";
+import { reportLovableError } from "@/lib/lovable-error-reporting";
 
 type Props = {
   error: Error;
@@ -22,8 +23,24 @@ const MAX_AUTO_RETRIES = 2;
  */
 export function RouterErrorFallback({ error, reset }: Props) {
   const router = useRouter();
-  const [retryCount, setRetryCount] = useState(0);
+  const retryKey = useMemo(() => {
+    const route = typeof window !== "undefined" ? window.location.pathname : "unknown";
+    const message = error?.message ?? String(error);
+    return `jf:route-error-retries:${route}:${message.slice(0, 120)}`;
+  }, [error]);
+  const [retryCount, setRetryCount] = useState(() => {
+    if (typeof window === "undefined") return 0;
+    try { return Number(window.sessionStorage.getItem(retryKey) ?? "0") || 0; }
+    catch { return 0; }
+  });
   const chunkError = isChunkLoadError(error);
+
+  useEffect(() => {
+    reportLovableError(error, {
+      boundary: "router_error_fallback",
+      retryCount,
+    });
+  }, [error, retryCount]);
 
   useEffect(() => {
     if (!chunkError) return;
@@ -42,12 +59,14 @@ export function RouterErrorFallback({ error, reset }: Props) {
     // eslint-disable-next-line no-console
     console.error("[router-error]", error);
     const id = window.setTimeout(() => {
-      setRetryCount((c) => c + 1);
+      const next = retryCount + 1;
+      try { window.sessionStorage.setItem(retryKey, String(next)); } catch {}
+      setRetryCount(next);
       void router.invalidate().then(() => reset());
     }, 600 * (retryCount + 1));
     return () => window.clearTimeout(id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [retryCount, chunkError]);
+  }, [retryCount, chunkError, retryKey]);
 
   if (chunkError) {
     return (
