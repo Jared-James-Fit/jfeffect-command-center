@@ -11,7 +11,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { ATHLETE_LEVELS, XP_RULES, levelForXp } from "@/lib/athlete-level";
 import { cn } from "@/lib/utils";
 import { useBadgeCatalog, useMyAchievements, usePublicAchievements, type AchievementMetrics } from "@/lib/athlete-achievements";
-import { AchievementCelebrations, PublicAchievements } from "@/components/portal/achievements-card";
+import { AchievementCelebrations, MyAchievementsRow, PublicAchievements } from "@/components/portal/achievements-card";
 import { ArrowLeft } from "lucide-react";
 
 type XpEvent = { id: string; event_type: string; label: string | null; xp: number; occurred_at: string };
@@ -38,6 +38,7 @@ function useXpEvents(clientId: string) {
 export function AthleteLevelCard({ clientId, defaultView = null }: { clientId: string; defaultView?: null | "rankings" }) {
   const { data: events = [], isPending } = useXpEvents(clientId);
   const [open, setOpen] = useState<null | "levels" | "rankings" | "powerlifting">(defaultView);
+  const [selectedLeagueAthlete, setSelectedLeagueAthlete] = useState<string | null>(null);
   const total = events.reduce((s, e) => s + (e.xp || 0), 0);
   const lvl = levelForXp(total);
   const stats = statsFromEvents(events);
@@ -56,31 +57,80 @@ export function AthleteLevelCard({ clientId, defaultView = null }: { clientId: s
     <>
       <AchievementCelebrations clientId={clientId} catalog={catalog} />
       <Card className="overflow-hidden">
-        <div className="p-4">
-          <button type="button" onClick={() => setOpen("rankings")} className="flex w-full items-center gap-3 text-left">
-            <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary"><Trophy className="h-5 w-5"/></span>
-            <span className="min-w-0 flex-1"><span className="block text-[10px] font-black uppercase tracking-widest text-muted-foreground">{format(new Date(),"MMMM")} Performance League</span><span className="block text-base font-black">Top 10 · Live standings</span></span>
-            {!leaguePending && leagueMe?.qualified && <span className="shrink-0 text-right"><span className="block text-[9px] font-bold uppercase tracking-wide text-muted-foreground">Your place</span><span className="block text-base font-black"><b className="text-primary">#{leagueMe.rank}</b> · {leagueScore(leagueMe).toFixed(1)}</span></span>}
-            <ChevronRight className="h-5 w-5 shrink-0 text-primary"/>
-          </button>
-          {!leaguePending && !leagueMe?.qualified && <div className="mt-3 flex items-center gap-2 rounded-xl bg-amber-50 px-3 py-2 text-amber-950"><Scale className="h-4 w-4"/><span className="text-[11px] font-bold">Log bodyweight to enter the league</span></div>}
-          {leagueTop.length>0 && <div className="mt-3 grid grid-cols-3 gap-2">{leagueTop.map(r=>{const place=Number(r.rank);const medal=place===1?"🥇":place===2?"🥈":"🥉";return <button type="button" onClick={()=>setOpen("rankings")} key={r.client_id} className="min-w-0 rounded-xl border bg-card px-2 py-2.5 text-center transition-colors active:bg-muted/50"><div className="text-lg leading-none">{medal}</div><div className="mt-1 text-[9px] font-black uppercase tracking-wide text-muted-foreground">Current #{place}</div><div className="mt-0.5 truncate text-[11px] font-bold">{r.display_name}</div><div className="text-[11px] font-black text-primary">{leagueScore(r).toFixed(1)}</div></button>})}</div>}
-          <div className="mt-2 text-center text-[9px] font-semibold text-muted-foreground">Live monthly standings · scores update as athletes earn points.</div>
-        </div>
-        <button type="button" onClick={() => setOpen("levels")} className="flex w-full items-center gap-3 border-t px-4 py-3 text-left transition-colors active:bg-muted/50">
-          <span className="min-w-0 flex-1"><span className="flex items-baseline gap-2"><span className="text-sm font-black uppercase text-primary">{isPending ? "—" : lvl.current.name}</span><span className="text-[10px] text-muted-foreground">{lvl.xp.toLocaleString()} lifetime pts</span></span><span className="mt-1 block"><Progress value={lvl.pct} className="h-1.5" /></span><span className="mt-1 block text-[9px] text-muted-foreground">{lvl.next ? lvl.remaining.toLocaleString() + " points to " + lvl.next.name : "Top logging level reached"}</span></span>
-          <span className="shrink-0 text-[10px] font-bold uppercase tracking-wide text-muted-foreground">Logging level</span><ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground"/>
+        <button
+          type="button"
+          onClick={() => { setSelectedLeagueAthlete(null); setOpen("rankings"); }}
+          className="flex w-full items-start gap-3 px-5 pb-3 pt-5 text-left transition-colors active:bg-muted/30"
+        >
+          <span className="min-w-0 flex-1">
+            <span className="block text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">{format(new Date(),"MMMM")} Performance League</span>
+            <span className="mt-1 block text-xl font-bold tracking-tight">Top 10 <span className="font-medium text-muted-foreground">· Live</span></span>
+          </span>
+          {!leaguePending && leagueMe?.qualified && <span className="shrink-0 text-right">
+            <span className="block text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Your rank</span>
+            <span className="block text-lg font-bold leading-tight"><b className="text-primary">#{leagueMe.rank}</b></span>
+            <span className="block text-xs font-bold text-muted-foreground">{leagueScore(leagueMe).toFixed(1)} pts</span>
+          </span>}
+          <ChevronRight className="mt-3 h-4 w-4 shrink-0 text-muted-foreground"/>
         </button>
+
+        {!leaguePending && !leagueMe?.qualified && (
+          <button type="button" onClick={() => { setSelectedLeagueAthlete(null); setOpen("rankings"); }} className="mx-5 mb-3 flex w-[calc(100%-2.5rem)] items-center gap-2 rounded-xl bg-muted/50 px-3 py-2 text-left">
+            <Scale className="h-4 w-4 text-muted-foreground"/>
+            <span className="text-[11px] font-medium">Log bodyweight to enter the league</span>
+          </button>
+        )}
+
+        {leagueTop.length > 0 && (
+          <div className="grid grid-cols-3 border-t">
+            {leagueTop.map((r) => {
+              const place=Number(r.rank);
+              const medal=place===1?"🥇":place===2?"🥈":"🥉";
+              const ordinal=place===1?"1st":place===2?"2nd":"3rd";
+              return (
+                <button
+                  type="button"
+                  onClick={() => { setSelectedLeagueAthlete(r.client_id); setOpen("rankings"); }}
+                  key={r.client_id}
+                  className="min-w-0 border-r px-2 py-3 text-center transition-colors last:border-r-0 active:bg-muted/40"
+                >
+                  <div className="text-lg leading-none">{medal}</div>
+                  <div className="mt-1 text-[10px] font-black uppercase tracking-wide text-muted-foreground">{ordinal}</div>
+                  <div className="mt-1 truncate text-xs font-semibold">{r.display_name}</div>
+                  <div className="mt-0.5 text-[11px] font-bold text-primary">{leagueScore(r).toFixed(1)} pts</div>
+                </button>
+              );
+            })}
+          </div>
+        )}
+        <button type="button" onClick={() => { setSelectedLeagueAthlete(null); setOpen("rankings"); }} className="flex w-full items-center justify-center gap-1 border-t px-4 py-2.5 text-xs font-bold text-primary transition-colors active:bg-muted/40">
+          View Top 10 <ChevronRight className="h-3.5 w-3.5" />
+        </button>
+      </Card>
+
+      <Card className="overflow-hidden">
+        <button type="button" onClick={() => setOpen("levels")} className="flex w-full items-center gap-4 px-5 py-4 text-left transition-colors active:bg-muted/30">
+          <span className="min-w-0 flex-1">
+            <span className="block text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">Logging Level</span>
+            <span className="mt-0.5 flex items-center justify-between gap-3">
+              <span className="text-base font-bold uppercase tracking-tight">{isPending ? "—" : lvl.current.name}</span>
+              <span className="text-[11px] text-muted-foreground">{lvl.next ? Number(lvl.remaining ?? 0).toLocaleString()+" pts to "+lvl.next.name : "Top level"}</span>
+            </span>
+            <Progress value={Number(lvl.pct ?? 0)} className="mt-2 h-1" />
+          </span>
+          <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground"/>
+        </button>
+
         <div className="grid grid-cols-2 border-t">
-          <button type="button" onClick={() => setOpen("levels")} className="flex min-w-0 items-center gap-2 px-4 py-3 text-left transition-colors active:bg-muted/50"><Trophy className="h-4 w-4 shrink-0 text-primary"/><span className="truncate text-[11px] font-bold">Milestones <span className="font-normal text-muted-foreground">{earned.length}/{catalog.length}</span></span></button>
-          <button type="button" onClick={() => setOpen("powerlifting")} className="flex min-w-0 items-center gap-2 border-l px-4 py-3 text-left transition-colors active:bg-muted/50"><Medal className="h-4 w-4 shrink-0 text-primary"/><span className="truncate text-[11px] font-bold">Powerlifting Records</span></button>
+          <div className="min-w-0 px-3 py-2 [&>button]:mt-0 [&>button]:border-0 [&>button]:px-1 [&>button]:py-1"><MyAchievementsRow catalog={catalog} earned={earned} metrics={stats} /></div>
+          <button type="button" onClick={() => setOpen("powerlifting")} className="flex min-w-0 items-center gap-2 border-l px-3 py-3.5 text-left transition-colors active:bg-muted/30"><Medal className="h-4 w-4 shrink-0 text-primary"/><span className="truncate text-xs font-semibold">Powerlifting Records</span><ChevronRight className="ml-auto h-3.5 w-3.5 shrink-0 text-muted-foreground"/></button>
         </div>
       </Card>
 
-      <Sheet open={open === "levels" || open === "rankings"} onOpenChange={(o) => !o && setOpen(null)}>
-        <SheetContent side="bottom" className="max-h-[88vh] overflow-y-auto rounded-t-2xl px-5 pb-safe-bottom pt-5">
-          {open === "levels" ? <LevelsView total={lvl.xp} events={events} />
-            : open === "rankings" ? <RankingsView myStats={stats} myBadgeCount={earned.length} />
+      <Sheet open={open === "levels" || open === "rankings"} onOpenChange={(o) => { if (!o) { setOpen(null); setSelectedLeagueAthlete(null); } }}>
+        <SheetContent side="bottom" hideCloseButton={open === "rankings" && !!selectedLeagueAthlete} className="max-h-[88vh] overflow-y-auto rounded-t-2xl px-5 pb-safe-bottom pt-5">
+          {open === "levels" ? <LevelsView total={total} events={events} />
+            : open === "rankings" ? <RankingsView myStats={stats} myBadgeCount={earned.length} selected={selectedLeagueAthlete} onSelectedChange={setSelectedLeagueAthlete} />
             : null}
         </SheetContent>
       </Sheet>
@@ -101,8 +151,8 @@ function LevelsView({ total, events }: { total: number; events: XpEvent[] }) {
   return (
     <div className="space-y-5">
       <SheetHeader className="text-left">
-        <SheetTitle>Logging Levels & Milestones</SheetTitle>
-        <SheetDescription>Your Logging Level reflects how consistently and completely you track your journey. It never goes down.</SheetDescription>
+        <SheetTitle>Logging Levels</SheetTitle>
+        <SheetDescription>Your Logging Level reflects how consistently and completely you track your journey. Milestones are managed separately.</SheetDescription>
       </SheetHeader>
       <div className="grid grid-cols-4 gap-1.5 text-center">
         {["Train", "Log", "Earn points", "Level up"].map((t, i) => (
@@ -113,9 +163,9 @@ function LevelsView({ total, events }: { total: number; events: XpEvent[] }) {
         ))}
       </div>
       <div className="rounded-xl border border-primary/30 bg-primary/5 p-3">
-        <div className="flex items-baseline justify-between"><span className="text-sm font-black uppercase">{lvl.current.name}</span><span className="text-xs text-muted-foreground">{lvl.xp.toLocaleString()} pts</span></div>
+        <div className="flex items-baseline justify-between"><span className="text-sm font-black uppercase">{lvl.current.name}</span><span className="text-xs text-muted-foreground">{Number(lvl.xp ?? 0).toLocaleString()} pts</span></div>
         <Progress value={lvl.pct} className="mt-2 h-2" />
-        <div className="mt-1 text-[11px] text-muted-foreground">{lvl.next ? `${lvl.remaining.toLocaleString()} points to ${lvl.next.name}` : "Top level reached."}</div>
+        <div className="mt-1 text-[11px] text-muted-foreground">{lvl.next ? `${Number(lvl.remaining ?? 0).toLocaleString()} points to ${lvl.next.name}` : "Top level reached."}</div>
       </div>
       <ul className="space-y-1.5">
         {[...ATHLETE_LEVELS].reverse().map((l) => {
@@ -128,7 +178,7 @@ function LevelsView({ total, events }: { total: number; events: XpEvent[] }) {
                 <span className="font-bold uppercase">{l.name}</span>
                 {here && <span className="rounded-full bg-primary px-2 py-0.5 text-[10px] font-bold text-primary-foreground">YOU'RE HERE</span>}
               </div>
-              <span className="text-xs text-muted-foreground">{l.min.toLocaleString()} pts</span>
+              <span className="text-xs text-muted-foreground">{Number(l.min ?? 0).toLocaleString()} pts</span>
             </li>
           );
         })}
@@ -218,8 +268,8 @@ function CompareView({ clientId, myStats, myBadgeCount, onBack }: { clientId: st
             <RankAvatar row={{ client_id: p.client_id, display_name: p.display_name, avatar_url: p.avatar_url, xp: theirXp, rank: 0, is_me: p.is_me }} size="h-14 w-14" />
             <div className="min-w-0">
               <div className="truncate text-lg font-black">{p.display_name}</div>
-              <div className="text-xs font-black uppercase tracking-wide text-primary">{levelForXp(theirXp).current.name}</div>
-              <div className="mt-0.5 text-[11px] text-muted-foreground">{theirXp.toLocaleString()} lifetime points · {publicBadges.length} milestones</div>
+              <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Logging level</div><div className="text-sm font-black uppercase tracking-wide text-primary">{levelForXp(theirXp).current.name}</div>
+              <div className="mt-0.5 text-[11px] text-muted-foreground">{Number(theirXp ?? 0).toLocaleString()} lifetime points · {publicBadges.length} milestones</div>
             </div>
           </div>
 
@@ -230,7 +280,7 @@ function CompareView({ clientId, myStats, myBadgeCount, onBack }: { clientId: st
               </div>
               {[
                 ["Level", levelForXp(myStats.xp).current.name, levelForXp(theirXp).current.name],
-                ["Lifetime points", myStats.xp.toLocaleString(), theirXp.toLocaleString()],
+                ["Lifetime points", Number(myStats?.xp ?? 0).toLocaleString(), Number(theirXp ?? 0).toLocaleString()],
                 ["Badges", String(myBadgeCount), String(publicBadges.length)],
               ].map(([k, a, b]) => (
                 <div key={k} className="grid grid-cols-3 border-t px-3 py-2.5">
@@ -250,13 +300,17 @@ function CompareView({ clientId, myStats, myBadgeCount, onBack }: { clientId: st
 }
 const levelAccent = (xp:number) => { const n=levelForXp(xp).current.name; return n.includes("LEGEND")?"border-amber-400":n.includes("ELITE")?"border-violet-400":n.includes("ADVANCED")?"border-sky-400":n.includes("TRAINED")?"border-emerald-400":"border-slate-300"; };
 
-function RankingsView({ myStats, myBadgeCount }: { myStats: BadgeStats; myBadgeCount: number }) {
-  const [selected, setSelected] = useState<string | null>(null);
+function RankingsView({ myStats, myBadgeCount, selected, onSelectedChange }: {
+  myStats: BadgeStats;
+  myBadgeCount: number;
+  selected: string | null;
+  onSelectedChange: (id: string | null) => void;
+}) {
   const { data = [], isPending } = useQuery({
     queryKey: ["athlete-rankings-monthly"],
     staleTime: 60_000,
     queryFn: async () => {
-      const { data, error } = await (supabase as any).rpc("get_monthly_athlete_rankings", { _limit: 15 });
+      const { data, error } = await (supabase as any).rpc("get_monthly_athlete_rankings", { _limit: 10 });
       if (error) throw error;
       return ((data ?? []) as any[]).map((r) => ({
         ...r,
@@ -265,23 +319,23 @@ function RankingsView({ myStats, myBadgeCount }: { myStats: BadgeStats; myBadgeC
         qualified: Boolean(r.qualified),
         workouts_completed: Number(r.workouts_completed ?? 0),
         fully_logged: Number(r.fully_logged ?? 0),
-        strength_score: Number(r.strength_score ?? 0),
+        strength_score: Number(r.strength_score ?? 0) / 1000,
       })) as Array<RankRow & { qualified:boolean; bodyweight_value:number|null; bodyweight_unit:string|null; workouts_completed:number; fully_logged:number; strength_score:number }>;
     },
   });
-  const qualified = data.filter((r) => r.qualified && r.rank <= 15);
+  const qualified = data.filter((r) => r.qualified && r.rank <= 10);
   const podium = qualified.slice(0, 3);
   const rest = qualified.slice(3);
   const me = data.find((r) => r.is_me);
   const monthName = format(new Date(), "MMMM");
 
-  if (selected) return <CompareView clientId={selected} myStats={myStats} myBadgeCount={myBadgeCount} onBack={() => setSelected(null)} />;
+  if (selected) return <CompareView clientId={selected} myStats={myStats} myBadgeCount={myBadgeCount} onBack={() => onSelectedChange(null)} />;
 
   return (
     <div className="space-y-4">
       <SheetHeader className="text-left">
         <SheetTitle>{monthName} Performance League</SheetTitle>
-        <SheetDescription>Monthly competition. Chase the Top 15, compare athletes, and take your spot before the board resets on the 1st.</SheetDescription>
+        <SheetDescription>Monthly performance points. Top 10 resets on the 1st. Tap any athlete to view their public profile.</SheetDescription>
       </SheetHeader>
 
       {me && !me.qualified && (
@@ -291,9 +345,9 @@ function RankingsView({ myStats, myBadgeCount }: { myStats: BadgeStats; myBadgeC
         </div>
       )}
 
-      <div className="grid grid-cols-4 gap-2 rounded-2xl border bg-muted/20 p-3 text-center">
-        <div><div className="text-lg font-black">1,000</div><div className="text-[9px] uppercase tracking-wide text-muted-foreground">Max XP</div></div>
-        <div><div className="text-lg font-black">600</div><div className="text-[9px] uppercase tracking-wide text-muted-foreground">Training</div></div>\n        <div><div className="text-lg font-black">200</div><div className="text-[9px] uppercase tracking-wide text-muted-foreground">Strength</div></div>\n        <div><div className="text-lg font-black">200</div><div className="text-[9px] uppercase tracking-wide text-muted-foreground">Logs + BW</div></div>
+      <div className="rounded-2xl border bg-muted/20 p-3">
+        <div className="text-xs font-black">Up to 110 performance points</div>
+        <div className="mt-1 text-[11px] leading-relaxed text-muted-foreground">Training 40 · Complete logging 25 · Performance improvement 25 · Bodyweight logging 10 · Performance bonus 10</div>
       </div>
 
       {isPending ? <div className="py-8 text-center text-sm text-muted-foreground">Loading…</div> : qualified.length === 0 ? (
@@ -302,22 +356,22 @@ function RankingsView({ myStats, myBadgeCount }: { myStats: BadgeStats; myBadgeC
         <>
           <div className="grid grid-cols-3 items-end gap-2">
             {[podium[1], podium[0], podium[2]].map((r, i) => r ? (
-              <button type="button" onClick={() => setSelected(r.client_id)} key={r.client_id} className={cn("flex flex-col items-center rounded-xl border p-2 text-center shadow-sm transition hover:-translate-y-0.5 hover:shadow-md", r.rank === 1 ? "pb-4 bg-amber-50/70 ring-2 ring-amber-300" : r.rank === 2 ? "bg-slate-50/80" : "bg-orange-50/40", r.is_me && "ring-2 ring-primary")}>
+              <button type="button" onClick={() => onSelectedChange(r.client_id)} key={r.client_id} className={cn("flex flex-col items-center rounded-xl border p-2 text-center shadow-sm transition hover:-translate-y-0.5 hover:shadow-md", r.rank === 1 ? "pb-4 bg-amber-50/70 ring-2 ring-amber-300" : r.rank === 2 ? "bg-slate-50/80" : "bg-orange-50/40", r.is_me && "ring-2 ring-primary")}>
                 <div className="mb-1 flex flex-col items-center gap-0.5"><Medal className={cn("h-5 w-5", r.rank === 1 ? "text-yellow-500" : r.rank === 2 ? "text-slate-400" : "text-amber-700")} /><span className="text-[11px] font-black">{r.rank === 1 ? "1ST" : r.rank === 2 ? "2ND" : "3RD"}</span></div>
                 <RankAvatar row={r} size={r.rank === 1 ? "h-14 w-14" : "h-11 w-11"} />
                 <div className="mt-1 w-full truncate text-xs font-bold">{r.display_name}</div>
                 <div className="text-[10px] text-muted-foreground">{r.bodyweight_value ? `${Number(r.bodyweight_value).toFixed(1)} ${r.bodyweight_unit ?? "lb"}` : ""}</div>
-                <div className="text-xs font-black text-primary">{r.xp.toLocaleString()} XP</div>
+                <div className="text-xs font-black text-primary">{(Number(r.xp ?? 0) / 1000).toFixed(1)} pts</div>
               </button>
             ) : <div key={i} />)}
           </div>
           <ul className="divide-y overflow-hidden rounded-xl border">
             {rest.map((r) => (
-              <li key={r.client_id} onClick={() => setSelected(r.client_id)} className={cn("flex cursor-pointer items-center gap-3 px-3 py-2.5 text-sm", r.is_me && "bg-primary/5")}>
+              <li key={r.client_id} onClick={() => onSelectedChange(r.client_id)} className={cn("flex cursor-pointer items-center gap-3 px-3 py-2.5 text-sm", r.is_me && "bg-primary/5")}>
                 <span className="w-7 text-center font-black text-muted-foreground">#{r.rank}</span>
                 <RankAvatar row={r} size="h-9 w-9" />
                 <div className="min-w-0 flex-1"><div className="truncate font-bold">{r.display_name}{r.is_me ? " (You)" : ""}</div><div className="text-[10px] text-muted-foreground">{r.workouts_completed} workouts · {r.bodyweight_value ? `${Number(r.bodyweight_value).toFixed(1)} ${r.bodyweight_unit ?? "lb"}` : "BW verified"}</div></div>
-                <span className="text-xs font-black text-primary">{r.xp} XP</span>
+                <span className="text-xs font-black text-primary">{(Number(r.xp ?? 0) / 1000).toFixed(1)} pts</span>
               </li>
             ))}
           </ul>
@@ -327,14 +381,14 @@ function RankingsView({ myStats, myBadgeCount }: { myStats: BadgeStats; myBadgeC
       {me?.qualified && (
         <div className="rounded-2xl border border-primary/30 bg-primary/5 p-4">
           <div className="flex items-center justify-between"><span className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Your {monthName}</span><span className="text-lg font-black">#{me.rank}</span></div>
-          <div className="mt-1 text-2xl font-black text-primary">{me.xp} <span className="text-sm">XP</span></div>
-          <div className="mt-1 text-xs text-muted-foreground">{me.workouts_completed} workouts · {me.fully_logged} fully logged · {me.strength_score} strength XP · BW verified</div>
-          <Progress value={Math.min(100, me.xp / 10)} className="mt-3 h-2" />
+          <div className="mt-1 text-2xl font-black text-primary">{(Number(me.xp ?? 0) / 1000).toFixed(1)} <span className="text-sm">pts</span></div>
+          <div className="mt-1 text-xs text-muted-foreground">{me.workouts_completed} workouts · {me.fully_logged} fully logged · {Number(me.strength_score ?? 0).toFixed(1)} performance pts · BW verified</div>
+          <Progress value={Math.min(100, (Number(me.xp ?? 0) / 1000) / 1.1)} className="mt-3 h-2" />
         </div>
       )}
 
       <div className="rounded-xl border bg-muted/20 p-3 text-[11px] leading-relaxed text-muted-foreground">
-        <span className="font-bold text-foreground">How scoring works:</span> complete programmed workouts for up to 600 XP, fully log training for up to 150 XP, and earn up to 200 strength XP from bodyweight-normalized e1RM improvements versus your own pre-month history. Only your four best exercise improvements count and each is capped at 50 XP. Having a bodyweight logged earns 50 XP and is required to rank; your latest entry is always used. Total score caps at 1,000, preventing unlimited volume or exercise farming. Lifetime Logging Level points and Powerlifting Records remain separate.
+        <span className="font-bold text-foreground">How scoring works:</span> earn up to 40 points from programmed workouts, 25 from fully logged training, 25 from your best bodyweight-normalized performance improvements, and 10 from bodyweight logging. Strong performance can add up to a 10-point bonus, for a maximum of 110. Your Logging Level and Powerlifting Records are separate systems.
       </div>
     </div>
   );
@@ -358,7 +412,7 @@ function RankLine({ row, onSelect }: { row: RankRow; onSelect: (id: string) => v
         <div className="truncate font-semibold">{row.display_name}{row.is_me ? " (You)" : ""}</div>
         <div className="text-[10px] font-bold uppercase text-muted-foreground">{levelForXp(row.xp).current.name}</div>
       </div>
-      <span className="text-xs text-muted-foreground">{row.xp.toLocaleString()} XP</span>
+      <span className="text-xs text-muted-foreground">{Number(row?.xp ?? 0).toLocaleString()} XP</span>
     </li>
   );
 }
