@@ -3,6 +3,28 @@
 // Loaded by the Workbox-generated /sw.js via `importScripts: ['/push-sw.js']`
 // so we share ONE service worker with the offline shell.
 
+// jf-home-hotfix activation refresh:
+// When this worker version activates, refresh already-open window clients so
+// an installed iOS PWA that has kept an old JS runtime alive actually loads
+// the newly published app. Skip an actively-open workout detail route to avoid
+// interrupting a set in progress.
+self.addEventListener('activate', (event) => {
+  event.waitUntil((async () => {
+    try { await self.clients.claim(); } catch {}
+    try {
+      const wins = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+      await Promise.all(wins.map(async (client) => {
+        try {
+          const u = new URL(client.url);
+          if (/\/portal\/workouts\//.test(u.pathname)) return;
+          await client.navigate(client.url);
+        } catch {}
+      }));
+    } catch {}
+  })());
+});
+
+
 self.addEventListener('push', (event) => {
   let payload = {};
   try { payload = event.data ? event.data.json() : {}; } catch { payload = { title: event.data && event.data.text() }; }
