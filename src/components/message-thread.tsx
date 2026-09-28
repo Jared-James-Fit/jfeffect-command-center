@@ -62,7 +62,6 @@ import {
   MessengerCheckinSubmissionCard,
 } from "@/components/messages/messenger-checkin-card";
 import { ensureDueMessengerCheckins } from "@/lib/messenger-checkins.functions";
-import { LiftReviewMessageSheet } from "@/components/messages/lift-review-message-sheet";
 
 function attachIcon(t: MessageAttachment["type"]) {
   if (t === "image") return ImageIcon;
@@ -694,7 +693,6 @@ export function MessageThread({
   const [replyingTo, setReplyingTo] = useState<Message | null>(null);
   const [flashMessageId, setFlashMessageId] = useState<string | null>(null);
   const composerRef = useRef<HTMLTextAreaElement | null>(null);
-  const [liftReviewOpen, setLiftReviewOpen] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState<{ name: string; pct: number } | null>(null);
   const uploadAbortRef = useRef<AbortController | null>(null);
@@ -1257,8 +1255,8 @@ export function MessageThread({
     if (!files || !files.length) return;
     const selected = Array.from(files);
     const valid = selected.filter((f) => {
-      if (f.size > 50 * 1024 * 1024) {
-        toast.error(`${f.name} is over 50MB`);
+      if (f.size > 500 * 1024 * 1024) {
+        toast.error(`${f.name} is over 500MB`);
         return false;
       }
       return true;
@@ -2081,7 +2079,6 @@ export function MessageThread({
               onPickCamera={() => cameraInputRef.current?.click()}
               onPickPhotos={() => photoInputRef.current?.click()}
               onPickFiles={() => fileInputRef.current?.click()}
-              onLiftReview={() => setLiftReviewOpen(true)}
               onInsertText={role === "admin" ? (text) =>
                 setBody((b) => (b ? `${b.replace(/\s+$/, "")} ${text}` : text))
               : undefined}
@@ -2155,18 +2152,6 @@ export function MessageThread({
               }}
             />
 
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              onClick={() => setLiftReviewOpen(true)}
-              disabled={sending || uploading}
-              className="h-9 shrink-0 gap-1 rounded-full px-2.5 text-xs font-semibold text-primary hover:bg-primary/10 hover:text-primary"
-              title={role === "client" ? "Send a lift for review" : "Open this client's lift reviews"}
-            >
-              <Video className="h-4 w-4" />
-              <span>Lift</span>
-            </Button>
 
             {/* Priority selector removed for simplicity. */}
 
@@ -2416,14 +2401,6 @@ export function MessageThread({
         </SheetContent>
       </Sheet>
 
-      <LiftReviewMessageSheet
-        open={liftReviewOpen}
-        onOpenChange={setLiftReviewOpen}
-        clientId={clientId}
-        role={role}
-        clientName={role === "admin" ? peerName : undefined}
-        clientAvatarPath={role === "admin" ? peerAvatarPath : undefined}
-      />
 
       {/* Single/bulk delete confirmation. */}
       <AlertDialog open={!!confirmDelete} onOpenChange={(o) => { if (!o) setConfirmDelete(null); }}>
