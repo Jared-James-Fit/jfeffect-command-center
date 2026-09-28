@@ -1,4 +1,4 @@
-// Production deploy marker: 2026-09-27 current-source rebuild
+// Production deploy marker: 2026-09-28 performance-rating rebuild
 import { useState } from "react";
 import { createPortal } from "react-dom";
 import { useQuery } from "@tanstack/react-query";
