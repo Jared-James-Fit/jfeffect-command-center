@@ -5267,6 +5267,17 @@ function SetRow({
         ) : (
           isConfirmed && <CheckCircle2 className="h-4 w-4 text-green-500" />
         )}
+        {onRemoveSet && (
+          <button
+            type="button"
+            onClick={() => void onRemoveSet(setIndex)}
+            title={`Remove set ${setIndex}`}
+            aria-label={`Remove set ${setIndex}`}
+            className="inline-flex h-7 w-7 items-center justify-center rounded-full text-muted-foreground/60 transition-colors hover:bg-destructive/10 hover:text-destructive"
+          >
+            <span className="text-base font-medium leading-none">−</span>
+          </button>
+        )}
       </div>
     </div>
     {/* Exact rep-max PR badge — small, inline, never interrupts logging */}
