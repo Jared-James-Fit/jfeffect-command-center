@@ -31,6 +31,7 @@ export type GraphDotPoint = {
   est_1rm: number;
   rpe?: string | null;
   rir?: string | null;
+  velocity_mps?: number | null;
   exercise_note?: string | null;
   duration_seconds?: number | null;
   set_index: number;
@@ -143,11 +144,12 @@ export function GraphDotDetail({ point, clientId, onClose, canOpenLog = false }:
 
         <div className="space-y-4 pt-4">
           {/* ── Core set data ── */}
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <div className={`grid grid-cols-2 gap-3 ${point.velocity_mps != null ? "sm:grid-cols-5" : "sm:grid-cols-4"}`}>
             <StatCard label="Weight" value={`${fmtNum(displayLoad)} ${displayUnit}`} />
             <StatCard label="Reps" value={String(point.reps)} />
             <StatCard label="Volume" value={`${fmtNum(volume)} ${displayUnit}`} />
             <StatCard label="Est 1RM" value={`${fmtNum(point.est_1rm)} ${displayUnit}`} highlight />
+            {point.velocity_mps != null && <StatCard label="Mean velocity" value={`${Number(point.velocity_mps).toFixed(2)} m/s`} />}
           </div>
 
           {/* ── RPE / RIR ── */}
