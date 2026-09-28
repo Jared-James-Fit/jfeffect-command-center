@@ -297,6 +297,36 @@ function AudioAttachment({
   const [duration, setDuration] = useState(att.duration ?? 0);
   const [rate, setRate] = useState(1);
   const [showTx, setShowTx] = useState(false);
+  const [playError, setPlayError] = useState(false);
+
+  const playOutLoud = async () => {
+    const a = ref.current;
+    if (!a) return;
+    setPlayError(false);
+    try {
+      // iOS can leave the PWA audio session in record/receiver mode after
+      // getUserMedia(). Force normal media playback before every voice memo.
+      const audioSession = (navigator as any).audioSession;
+      if (audioSession && "type" in audioSession) audioSession.type = "playback";
+    } catch {}
+    a.muted = false;
+    a.volume = 1;
+    a.playbackRate = rate;
+    try {
+      await a.play();
+    } catch {
+      // Signed URLs are long lived, but an audio element can still hold a stale
+      // failed resource. Reload once from the current URL inside the user tap.
+      try {
+        a.load();
+        await a.play();
+      } catch {
+        setPlaying(false);
+        setPlayError(true);
+        toast.error("Voice message couldn't play. Try again.");
+      }
+    }
+  };
 
   const peaks = useMemo(
     () => (att.peaks && att.peaks.length ? att.peaks : fakePeaks(48, (att.duration ?? 1) * 13 + (att.size ?? 1))),
@@ -323,19 +353,7 @@ function AudioAttachment({
           onClick={() => {
             const a = ref.current; if (!a) return;
             if (a.paused) {
-              // iOS/PWA can leave the audio session in microphone/voice mode
-              // after recording, which routes playback to the quiet receiver.
-              // Explicitly return to media playback before starting a memo.
-              try {
-                const audioSession = (navigator as any).audioSession;
-                if (audioSession && "type" in audioSession) audioSession.type = "playback";
-              } catch {}
-              a.muted = false;
-              a.volume = 1;
-              void a.play().catch(() => {
-                setPlaying(false);
-                toast.error("Voice message couldn't play. Tap again to retry.");
-              });
+              void playOutLoud();
             } else {
               a.pause();
               setPlaying(false);
@@ -400,13 +418,20 @@ function AudioAttachment({
         </div>
       )}
 
+      {playError && (
+        <button type="button" onClick={() => void playOutLoud()} className="mt-1.5 text-[10px] font-semibold underline underline-offset-2">
+          Retry audio
+        </button>
+      )}
       <audio
-        ref={ref} src={src} preload="metadata"
-        onLoadedMetadata={(e) => { const d = (e.currentTarget.duration); if (isFinite(d)) setDuration(d); }}
+        ref={ref} src={src} preload="metadata" playsInline
+        onLoadedMetadata={(e) => { const d = e.currentTarget.duration; if (isFinite(d)) setDuration(d); }}
+        onCanPlay={() => setPlayError(false)}
         onTimeUpdate={(e) => setProgress(e.currentTarget.currentTime)}
         onPause={() => setPlaying(false)}
-        onPlay={() => setPlaying(true)}
+        onPlay={() => { setPlaying(true); setPlayError(false); }}
         onEnded={() => { setPlaying(false); setProgress(0); }}
+        onError={() => { setPlaying(false); setPlayError(true); }}
       />
     </div>
   );
@@ -551,8 +576,12 @@ function useVoiceRecorder() {
   const start = async () => {
     if (!navigator.mediaDevices?.getUserMedia) throw new Error("Recording not supported on this device.");
     const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    const mime = MediaRecorder.isTypeSupported("audio/webm") ? "audio/webm"
-      : MediaRecorder.isTypeSupported("audio/mp4") ? "audio/mp4" : "";
+    const isiOSWebKit = /iP(?:hone|ad|od)/.test(navigator.userAgent)
+      || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+    const mimeCandidates = isiOSWebKit
+      ? ["audio/mp4;codecs=mp4a.40.2", "audio/mp4", "audio/webm;codecs=opus", "audio/webm"]
+      : ["audio/webm;codecs=opus", "audio/webm", "audio/mp4;codecs=mp4a.40.2", "audio/mp4"];
+    const mime = mimeCandidates.find((candidate) => MediaRecorder.isTypeSupported(candidate)) ?? "";
     const mr = new MediaRecorder(stream, mime ? { mimeType: mime } : undefined);
     chunksRef.current = [];
     mr.ondataavailable = (e) => { if (e.data.size > 0) chunksRef.current.push(e.data); };
@@ -2066,7 +2095,15 @@ export function MessageThread({
               className="h-9 w-9 shrink-0 rounded-full"
               onClick={() => {
                 const a = previewAudioRef.current; if (!a) return;
-                if (a.paused) { a.play(); setPreviewPlaying(true); } else { a.pause(); setPreviewPlaying(false); }
+                if (a.paused) {
+                  try {
+                    const audioSession = (navigator as any).audioSession;
+                    if (audioSession && "type" in audioSession) audioSession.type = "playback";
+                  } catch {}
+                  a.muted = false;
+                  a.volume = 1;
+                  void a.play().catch(() => toast.error("Preview couldn't play. Try recording again."));
+                } else { a.pause(); setPreviewPlaying(false); }
               }}
             >
               {previewPlaying ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4 translate-x-[1px]" />}
