@@ -1255,10 +1255,6 @@ export function MessageThread({
     if (!files || !files.length) return;
     const selected = Array.from(files);
     const valid = selected.filter((f) => {
-      if (f.size > 500 * 1024 * 1024) {
-        toast.error(`${f.name} is over 500MB`);
-        return false;
-      }
       return true;
     });
     if (!valid.length) return;
