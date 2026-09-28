@@ -53,6 +53,9 @@ export default defineConfig({
       VitePWA({
         // Manifest is hand-managed in public/manifest.json; only generate the SW here.
         registerType: "autoUpdate",
+        // Force a distinct SW URL after this production rebuild so installed iOS PWAs
+        // cannot keep serving the pre-Performance-Rating shell.
+        scope: "/",
         injectRegister: null, // the guarded wrapper is the only registrar
         filename: "sw.js",
         strategies: "generateSW",
