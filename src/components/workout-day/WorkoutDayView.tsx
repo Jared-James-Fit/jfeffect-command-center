@@ -1395,6 +1395,33 @@ function WorkoutDay({
     return resolvedUnitMap[`row:${r.id}`] ?? unit;
   };
 
+  // Percentage backoffs based on a top set become useful only after the athlete
+  // actually enters that top-set load. Resolve the nearest matching exercise
+  // above this row and feed its logged load into the backoff card.
+  const topSetBasisForRow = (r: any, rowIndex: number): { value: number; unit: WUnit } | null => {
+    if (r.percentage_basis !== "top_set" || !r.percentage) return null;
+    const allRows = rows as any[];
+    let source: any = null;
+    if (r.basis_row_id) source = allRows.find((x) => x.id === r.basis_row_id) ?? null;
+    if (!source) {
+      for (let i = rowIndex - 1; i >= 0; i--) {
+        const candidate = allRows[i];
+        const sameExercise =
+          (r.exercise_id && candidate.exercise_id === r.exercise_id) ||
+          (!r.exercise_id && candidate.exercise_name_override === r.exercise_name_override);
+        if (sameExercise) { source = candidate; break; }
+      }
+    }
+    if (!source) return null;
+    const sourceResults = (results as any[]).filter((x) => x.row_id === source.id);
+    const numeric = sourceResults
+      .filter((x) => x.actual_load != null && Number.isFinite(Number(x.actual_load)) && Number(x.actual_load) > 0)
+      .sort((a, b) => Number(b.actual_load) - Number(a.actual_load))[0];
+    if (!numeric) return null;
+    const sourceUnit: WUnit = numeric.actual_load_unit === "lb" ? "lb" : "kg";
+    return { value: Number(numeric.actual_load), unit: sourceUnit };
+  };
+
   // Focus / full-screen logging mode.
   const [focusMode, setFocusMode] = useState(false);
   // The exercise logger is isolated by WorkoutLoadBoundary while Finish Workout
@@ -2903,7 +2930,7 @@ function SwipeDeleteExercise({
   );
 }
 
-function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, existingResults, previousLift = null, repMaxBests = null, assistedBests = null, existingNote, notesLoading = false, readonly = false, unit = "kg", onUnitChange, focusMode = false, onChange, onNoteChange, purposeLabel = null, swapContext = undefined, canMoveUp = false, canMoveDown = false, movePosition, moveCount, onMoveUp, onMoveDown, onMoveTo }: { row: any; dayId: string; dayTitle: string; dayIndex?: number | null; clientId: string | undefined; blockId?: string | null; existingResults: any[]; previousLift?: PreviousLift | null; repMaxBests?: Map<number, PreviousLiftLog> | null; assistedBests?: Map<number, PreviousLiftLog> | null; existingNote?: any; notesLoading?: boolean; readonly?: boolean; unit?: "kg" | "lb"; onUnitChange?: (u: "kg" | "lb") => void; focusMode?: boolean; onChange: () => void; onNoteChange: () => void; purposeLabel?: string | null; swapContext?: { kind: "client" } | { kind: "member"; enrollmentId: string; weekIndex: number; dayIndex: number; exerciseIndex: number } | undefined; canMoveUp?: boolean; canMoveDown?: boolean; movePosition?: number; moveCount?: number; onMoveUp?: () => void; onMoveDown?: () => void; onMoveTo?: (position: number) => void }) {
+function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, existingResults, topSetBasis = null, previousLift = null, repMaxBests = null, assistedBests = null, existingNote, notesLoading = false, readonly = false, unit = "kg", onUnitChange, focusMode = false, onChange, onNoteChange, purposeLabel = null, swapContext = undefined, canMoveUp = false, canMoveDown = false, movePosition, moveCount, onMoveUp, onMoveDown, onMoveTo }: { row: any; dayId: string; dayTitle: string; dayIndex?: number | null; clientId: string | undefined; blockId?: string | null; existingResults: any[]; topSetBasis?: { value: number; unit: "kg" | "lb" } | null; previousLift?: PreviousLift | null; repMaxBests?: Map<number, PreviousLiftLog> | null; assistedBests?: Map<number, PreviousLiftLog> | null; existingNote?: any; notesLoading?: boolean; readonly?: boolean; unit?: "kg" | "lb"; onUnitChange?: (u: "kg" | "lb") => void; focusMode?: boolean; onChange: () => void; onNoteChange: () => void; purposeLabel?: string | null; swapContext?: { kind: "client" } | { kind: "member"; enrollmentId: string; weekIndex: number; dayIndex: number; exerciseIndex: number } | undefined; canMoveUp?: boolean; canMoveDown?: boolean; movePosition?: number; moveCount?: number; onMoveUp?: () => void; onMoveDown?: () => void; onMoveTo?: (position: number) => void }) {
   const adapter = useOptionalAdapter();
   const name = row.exercises?.name ?? row.exercise_name_override ?? "Exercise";
   const exercise = row.exercises ?? null;
@@ -3084,11 +3111,22 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
   // 1) coach manual_override exact load   2) computed % weight (rounded)
   // 3) raw load_kg/load_lb prescription   4) null (no safe suggestion).
   // This is "Suggested" only — it never auto-confirms a set.
+  const percentageBackoffWeight: number | null = useMemo(() => {
+    if (row.percentage_basis !== "top_set" || !topSetBasis || !row.percentage) return null;
+    const baseInUnit = topSetBasis.unit === activeUnit
+      ? topSetBasis.value
+      : convertLoad(topSetBasis.value, topSetBasis.unit, activeUnit);
+    const exact = baseInUnit * Number(row.percentage) / 100;
+    const step = weightIncrement(activeUnit);
+    return Math.round(exact / step) * step;
+  }, [row.percentage_basis, row.percentage, topSetBasis?.value, topSetBasis?.unit, activeUnit]);
+
   const suggestedWeight: number | null = useMemo(() => {
     if (row.manual_override) {
       if (activeUnit === "kg" && row.load_kg) return Number(row.load_kg);
       if (activeUnit === "lb" && row.load_lb) return Number(row.load_lb);
     }
+    if (percentageBackoffWeight != null) return percentageBackoffWeight;
     if (computed && computed.status === "ok" && computed.load != null) {
       const inUnit = activeUnit === "kg" ? computed.load : computed.load * 2.2046226218;
       const step = weightIncrement(activeUnit);
@@ -3097,7 +3135,7 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
     if (activeUnit === "kg" && row.load_kg) return Number(row.load_kg);
     if (activeUnit === "lb" && row.load_lb) return Number(row.load_lb);
     return null;
-  }, [row.manual_override, row.load_kg, row.load_lb, computed, activeUnit]);
+  }, [row.manual_override, row.load_kg, row.load_lb, percentageBackoffWeight, computed, activeUnit]);
 
   const repTarget = useMemo(() => parseRepTarget(row.reps_text), [row.reps_text]);
   const rpeTarget = useMemo(() => parseEffortTarget(row.rpe), [row.rpe]);
@@ -3674,6 +3712,7 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
               targetRpe={row.rpe}
               targetRir={row.rir}
               suggestedWeight={suggestedWeight}
+              autoFillSuggestedWeight={row.percentage_basis === "top_set" && percentageBackoffWeight != null}
               lastTimeWeight={activeUnit === "kg" ? (previousLift?.normalizedKg ?? null) : (previousLift?.normalizedLb ?? null)}
               repTarget={repTarget}
               rpeTarget={rpeTarget}
@@ -3953,7 +3992,7 @@ function NoteHistoryItem({ note }: { note: any }) {
 
 function SetRow({
   rowId, workoutId, exerciseId, exerciseName, clientId, setIndex, existing, prevExisting,
-  targetReps, targetRpe, targetRir, suggestedWeight, lastTimeWeight,
+  targetReps, targetRpe, targetRir, suggestedWeight, autoFillSuggestedWeight = false, lastTimeWeight,
   repTarget, rpeTarget, rirTarget,
   repMaxBests = null,
   assistedBests = null,
@@ -3989,6 +4028,7 @@ function SetRow({
   targetRpe?: string | null;
   targetRir?: string | null;
   suggestedWeight?: number | null;
+  autoFillSuggestedWeight?: boolean;
   lastTimeWeight?: number | null;
   repTarget?: RangeTarget;
   rpeTarget?: RangeTarget;
@@ -4043,7 +4083,8 @@ function SetRow({
     const rounded = Math.round(v * 10000) / 10000; // 4 decimal places max
     return fmtNum(rounded);
   };
-  const initialDisplayLoad = fmtLoad(displayLoadInUnit(existing, unit));
+  const existingDisplayLoad = fmtLoad(displayLoadInUnit(existing, unit));
+  const initialDisplayLoad = existingDisplayLoad || (autoFillSuggestedWeight && suggestedWeight != null ? fmtLoad(suggestedWeight) : "");
   const [load, setLoad] = useState(initialDisplayLoad);
   // Timer result for this set (seconds actually performed). Local state keeps
   // the cell responsive; the server value re-hydrates it whenever it changes.
