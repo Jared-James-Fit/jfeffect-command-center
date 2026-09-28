@@ -211,11 +211,14 @@ export function useAutosave<T>({
   }, [doSave]);
 
   // Track value changes and schedule a save only when the caller says it is
-  // safe (`enabled`). Workout rows set enabled=false while an input has focus,
-  // so the save fires after the user stops typing AND leaves the field.
+  // safe (`enabled`). IMPORTANT: the first render can be disabled while a
+  // workout row is still hydrating from the server. That initial disabled
+  // value must NOT become the synced baseline; otherwise the first real edit
+  // (most visibly Set 1) can be swallowed when enabled flips true.
   useEffect(() => {
     pendingValue.current = value;
     if (!lastSavedSet.current) {
+      if (!enabled) return;
       lastSaved.current = value;
       lastSavedSet.current = true;
       return;
@@ -237,18 +240,11 @@ export function useAutosave<T>({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [value, enabled, delay, scheduleSave]);
 
-  // Establish the synced baseline at mount, regardless of `enabled`. This
-  // ensures bulk fills (e.g. "Copy Previous", "Quick Inputs") that flip
-  // `enabled` from false→true with populated values are detected as a
-  // change vs. the empty mount value and trigger a save — instead of being
-  // mistaken for the initial baseline.
-  useEffect(() => {
-    if (!lastSavedSet.current) {
-      lastSaved.current = pendingValue.current;
-      lastSavedSet.current = true;
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  // Do not establish a baseline until the caller is enabled. Workout rows use
+  // enabled=false while server hydration is incomplete; adopting that mount
+  // snapshot as "saved" can erase the distinction between the initial state
+  // and the athlete's first edit. The value effect above establishes the
+  // baseline on the first enabled render, after hydration is safe.
 
   // Reconnect should retry the latest dirty draft; otherwise a temporary
   // offline state can leave the row stuck until the user edits it again.
