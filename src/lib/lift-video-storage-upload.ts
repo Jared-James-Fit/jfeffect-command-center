@@ -60,7 +60,11 @@ export async function uploadLiftFileToStorage(
   // creation handshake is noticeable for tiny phone photos (e.g. 100–500 KB).
   // Use one direct authenticated Storage request for small/medium files and
   // reserve TUS for larger files where resumability matters.
-  const DIRECT_UPLOAD_MAX_BYTES = 6 * 1024 * 1024;
+  // Messenger videos benefit from a single streaming request on normal mobile
+  // connections; TUS adds a create/resume handshake and 6 MB chunk round trips.
+  // Keep resumable uploads for genuinely large files where recovery matters.
+  const DIRECT_UPLOAD_MAX_BYTES =
+    bucket === "message-attachments" ? 40 * 1024 * 1024 : 6 * 1024 * 1024;
   if (args.file.size <= DIRECT_UPLOAD_MAX_BYTES && typeof XMLHttpRequest !== "undefined") {
     await uploadDirectWithProgress({
       bucket,
@@ -88,7 +92,7 @@ export async function uploadLiftFileToStorage(
       },
       uploadDataDuringCreation: true,
       removeFingerprintOnSuccess: true,
-      chunkSize: 6 * 1024 * 1024,
+      chunkSize: bucket === "message-attachments" ? 12 * 1024 * 1024 : 6 * 1024 * 1024,
       metadata: {
         bucketName: bucket,
         objectName: path,
