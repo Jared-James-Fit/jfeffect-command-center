@@ -63,6 +63,19 @@ export function registerServiceWorker() {
     void caches.keys().then((keys) => Promise.allSettled(keys.filter((k) => k.startsWith("jf-")).map((k) => caches.delete(k))));
   }
 
+  // When a newly deployed worker takes control, reload this client once so an
+  // installed iOS PWA cannot keep running the previous JavaScript bundle.
+  // controllerchange only fires when the controlling worker actually changes,
+  // so this does not create a normal reload loop.
+  let reloadingForNewWorker = false;
+  if ("serviceWorker" in navigator) {
+    navigator.serviceWorker.addEventListener("controllerchange", () => {
+      if (reloadingForNewWorker) return;
+      reloadingForNewWorker = true;
+      window.location.reload();
+    });
+  }
+
   // Dynamic import keeps the virtual module out of SSR / Lovable preview bundles.
   import("virtual:pwa-register").then(({ registerSW }) => {
     const updateSW = registerSW({
