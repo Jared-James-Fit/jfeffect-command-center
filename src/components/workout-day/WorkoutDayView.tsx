@@ -4091,7 +4091,7 @@ function SetRow({
   cascade = null,
   onCascadeFromSet,
   readonly = false, unit = "kg", hideWeight = false, focusMode = false, onChange, onSetCompleted,
-  setCount, showReps = true, showTimer = false, gridTemplate, prescribedDurationSeconds = null,
+  setCount, showReps = true, showTimer = false, showVelocity = false, gridTemplate, prescribedDurationSeconds = null,
   onTimerTargetChange,
   onTimerCascade,
 }: {
@@ -4105,6 +4105,8 @@ function SetRow({
   /** Which inputs this row shows — Timer is just another optional column. */
   showReps?: boolean;
   showTimer?: boolean;
+  /** Optional mean concentric velocity (m/s) input. */
+  showVelocity?: boolean;
   /** Shared grid-template-columns string from the exercise card header. */
   gridTemplate?: string;
   prescribedDurationSeconds?: number | null;
@@ -4175,6 +4177,9 @@ function SetRow({
   const existingDisplayLoad = fmtLoad(displayLoadInUnit(existing, unit));
   const initialDisplayLoad = existingDisplayLoad || (autoFillSuggestedWeight && suggestedWeight != null ? fmtLoad(suggestedWeight) : "");
   const [load, setLoad] = useState(initialDisplayLoad);
+  const serverVelocity = (existing as any)?.mean_concentric_velocity_mps != null ? Number((existing as any).mean_concentric_velocity_mps) : null;
+  const [velocity, setVelocity] = useState(serverVelocity != null ? String(serverVelocity) : "");
+  useEffect(() => { setVelocity(serverVelocity != null ? String(serverVelocity) : ""); }, [serverVelocity]);
   // Timer result for this set (seconds actually performed). Local state keeps
   // the cell responsive; the server value re-hydrates it whenever it changes.
   const serverDuration =
@@ -4436,7 +4441,7 @@ function SetRow({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cascade?.token]);
 
-  const value = useMemo(() => ({ load, reps, rpe, unit, bw, loadType }), [load, reps, rpe, unit, bw, loadType]);
+  const value = useMemo(() => ({ load, reps, rpe, velocity, unit, bw, loadType }), [load, reps, rpe, velocity, unit, bw, loadType]);
   // Forward-ref to the autosave handle so effects defined above can call
   // markClean() without a TDZ error.
   const saveRef = useRef<ReturnType<typeof useAutosave<typeof value>> | null>(null);
@@ -4449,7 +4454,7 @@ function SetRow({
     // Unit-only changes are display/preference only. The raw typed load is
     // the saved value, so the set row is dirty only when load/reps/RPE change.
     equals: (a, b) => {
-      if (a.reps !== b.reps || a.rpe !== b.rpe) return false;
+      if (a.reps !== b.reps || a.rpe !== b.rpe || a.velocity !== b.velocity) return false;
       if (a.bw !== b.bw) return false;
       if (a.loadType !== b.loadType) return false;
       return equalDisplayLoads(a, b);
@@ -4466,11 +4471,12 @@ function SetRow({
     // Autosave even while a field remains focused so mobile keyboards / sticky
     // focus cannot leave workout inputs unsaved. The server hydration effect
     // still refuses to overwrite the focused field, so active typing is safe.
-    enabled: !readonly && !!clientId && serverHydrated && (load.length > 0 || reps.length > 0 || rpe.length > 0 || bw || !!existing),
+    enabled: !readonly && !!clientId && serverHydrated && (load.length > 0 || reps.length > 0 || rpe.length > 0 || velocity.length > 0 || bw || !!existing),
     onPermanentFailure: ({ value }) => {
       if (!clientId) return;
       const repsNum = value.reps ? parseInt(value.reps, 10) : null;
       const rpeNum = value.rpe ? Number(value.rpe) : null;
+      const velocityNum = value.velocity ? Number(value.velocity) : null;
       const persistedLoad = value.bw
         ? { value: 0, unit: value.unit }
         : persistedLoadForDisplayValue(value.load, value.unit, existing);
@@ -4505,12 +4511,13 @@ function SetRow({
             actual_reps: repsNum,
             actual_rpe: value.rpe || null,
             actual_rpe_num: rpeNum,
+            mean_concentric_velocity_mps: velocityNum,
             completed_at: completedAt,
           }, adapter, workoutId),
         },
       });
     },
-    onSave: async ({ load, reps, rpe, unit, bw, loadType }) => {
+    onSave: async ({ load, reps, rpe, velocity, unit, bw, loadType }) => {
       if (readonly) return;
       if (!clientId) return;
       if (!load && !reps && !rpe && !bw && !existing) return;
@@ -4520,6 +4527,8 @@ function SetRow({
       const displayLoadNum = bw ? 0 : load ? Number(load) : null;
       const repsNum = reps ? parseInt(reps, 10) : null;
       const rpeNum = rpe ? Number(rpe) : null;
+      const velocityNum = velocity ? Number(velocity) : null;
+      if (velocity && (velocityNum == null || !isFinite(velocityNum) || velocityNum <= 0 || velocityNum > 3.5)) throw new Error("Velocity must be 0.01–3.50 m/s");
       if (load && (displayLoadNum == null || !isFinite(displayLoadNum) || displayLoadNum < 0)) throw new Error("Weight must be a number");
       if (reps && (repsNum == null || !isFinite(repsNum) || repsNum < 0)) throw new Error("Reps must be a whole number");
       if (rpe && (rpeNum == null || !isFinite(rpeNum) || rpeNum < 0 || rpeNum > 10)) throw new Error("RPE must be 0–10");
@@ -4550,6 +4559,7 @@ function SetRow({
         actual_reps: repsNum,
         actual_rpe: rpe || null,
         actual_rpe_num: rpeNum,
+        mean_concentric_velocity_mps: velocityNum,
         completed_at: completedAt,
       }, adapter, workoutId);
       let savedId: string | null = existing?.id ?? null;
@@ -5107,6 +5117,19 @@ function SetRow({
           focusMode={focusMode}
           customPlaceholder={showRir ? "RIR" : "RPE"}
       />
+      {showVelocity && (
+        <Input
+          value={velocity}
+          onChange={(e) => setVelocity(e.target.value.replace(/[^0-9.]/g, "").slice(0, 5))}
+          onBlur={flushSaveAfterEdit}
+          onKeyDown={onEnter}
+          inputMode="decimal"
+          placeholder="m/s"
+          aria-label={`Set ${setIndex} mean concentric velocity in metres per second`}
+          disabled={readonly}
+          className={cn("h-8 px-1.5 text-center text-xs tabular-nums", focusMode && "h-10 text-sm")}
+        />
+      )}
       {!hideWeight && (
       <WeightValueInput
         value={load}
