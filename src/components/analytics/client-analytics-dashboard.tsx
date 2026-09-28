@@ -225,7 +225,7 @@ export function ClientAnalyticsDashboard({
   // "effort" = RPE or RIR (whichever was logged), normalized to a common
   // 0–10 effort scale for chart display; original value is preserved for
   // the tooltip label ("RPE 8" vs "2 RIR").
-  const [chartMetric, setChartMetric] = useState<"est" | "load" | "effort">("est");
+  const [chartMetric, setChartMetric] = useState<"est" | "load" | "effort" | "velocity">("est");
 
   const filteredResults = useMemo(() => {
     const startMs = filter.start.getTime();
@@ -325,6 +325,7 @@ export function ClientAnalyticsDashboard({
         rir: rirRaw != null && Number.isFinite(rirRaw) ? rirRaw : null,
         effort: effortNorm,
         effortSource,
+        velocity: p.velocity_mps != null ? Number(p.velocity_mps) : null,
       };
     });
   }, [activeSeries, conv]);
@@ -671,8 +672,8 @@ export function ClientAnalyticsDashboard({
                   <InfoTip label="About exercise progress" title="Exercise Progress" align="start">
                     Each point is a logged set for the selected exercise. Switch
                     between Est 1RM (estimated one-rep max, Epley formula),
-                    Weight (load on the bar), and Effort (RPE or RIR on a 0–10
-                    scale). Tap a point for full set details — the green dot
+                    Weight, Effort (RPE/RIR), and Velocity when mean concentric
+                    velocity has been logged. Compare velocity at similar loads over time: faster at the same load is a useful readiness/strength signal, not a standalone 1RM prediction. Tap a point for full set details — the green dot
                     marks the current PR.
                   </InfoTip>
                 </h2>
@@ -691,6 +692,11 @@ export function ClientAnalyticsDashboard({
                   <ToggleGroupItem value="effort" className="h-8 px-3 text-[11px] font-bold uppercase data-[state=on]:bg-primary data-[state=on]:text-primary-foreground">
                     Effort
                   </ToggleGroupItem>
+                  {lineData.some((d: any) => d.velocity != null) && (
+                    <ToggleGroupItem value="velocity" className="h-8 px-3 text-[11px] font-bold uppercase data-[state=on]:bg-primary data-[state=on]:text-primary-foreground">
+                      Velocity
+                    </ToggleGroupItem>
+                  )}
                 </ToggleGroup>
               </div>
               <Card className="border-border/80 bg-card p-4">
@@ -783,7 +789,7 @@ export function ClientAnalyticsDashboard({
                               stroke={axisColor}
                               fontSize={11}
                               tickMargin={4}
-                              domain={chartMetric === "effort" ? [0, 10] : ["auto", "auto"]}
+                              domain={chartMetric === "effort" ? [0, 10] : chartMetric === "velocity" ? [0, "auto"] : ["auto", "auto"]}
                               tickFormatter={(v) => fmtNum(v)}
                               width={40}
                             />
@@ -799,6 +805,7 @@ export function ClientAnalyticsDashboard({
                                 const metricLabel =
                                   chartMetric === "est" ? "est 1RM"
                                   : chartMetric === "load" ? "top set"
+                                  : chartMetric === "velocity" ? "mean concentric velocity"
                                   : effortLabel.toLowerCase();
                                 const effortDisplay =
                                   d.effortSource === "RIR"
@@ -808,7 +815,9 @@ export function ClientAnalyticsDashboard({
                                       : "—";
                                 const metricValue = chartMetric === "effort"
                                   ? effortDisplay
-                                  : `${fmtNum(d[chartMetric])} ${displayUnit}`;
+                                  : chartMetric === "velocity"
+                                    ? (d.velocity != null ? `${Number(d.velocity).toFixed(2)} m/s` : "—")
+                                    : `${fmtNum(d[chartMetric])} ${displayUnit}`;
                                 return (
                                   <div className="max-w-[220px] rounded-lg border border-border bg-popover px-3 py-2 text-sm text-popover-foreground shadow-xl">
                                     <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-muted-foreground">
