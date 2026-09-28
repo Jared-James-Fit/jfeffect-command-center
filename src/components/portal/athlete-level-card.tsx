@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { format } from "date-fns";
-import { Info, Trophy, Medal, Zap } from "lucide-react";
+import { Info, Trophy, Medal, Zap, ChevronRight, Scale } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -16,6 +16,8 @@ import { ArrowLeft } from "lucide-react";
 
 type XpEvent = { id: string; event_type: string; label: string | null; xp: number; occurred_at: string };
 type RankRow = { client_id: string; display_name: string; avatar_url: string | null; xp: number; rank: number; is_me: boolean };
+type LeagueRow = { client_id:string; display_name:string; avatar_url:string|null; monthly_xp:number; rank:number|null; is_me:boolean; qualified:boolean };
+const leagueScore=(r?:LeagueRow|null)=>Number(r?.monthly_xp??0)/1000;
 
 function useXpEvents(clientId: string) {
   return useQuery({
@@ -41,40 +43,51 @@ export function AthleteLevelCard({ clientId, defaultView = null }: { clientId: s
   const stats = statsFromEvents(events);
   const { data: catalog = [] } = useBadgeCatalog();
   const { data: earned = [] } = useMyAchievements(clientId);
+  const { data: leagueRows = [], isPending: leaguePending } = useQuery({
+    queryKey:["athlete-rankings-monthly"],
+    staleTime:60_000,
+    queryFn:async()=>{ const {data,error}=await (supabase as any).rpc("get_monthly_athlete_rankings",{_limit:50}); if(error) throw error; return (data??[]) as LeagueRow[]; }
+  });
+  const leagueMe=leagueRows.find(r=>r.client_id===clientId) ?? leagueRows.find(r=>r.is_me);
+  const leagueTop=leagueRows.filter(r=>r.qualified && r.rank!=null).sort((a,b)=>Number(a.rank)-Number(b.rank)).slice(0,3);
   useEffect(() => { const h=()=>setOpen("levels"); window.addEventListener("jf-open-athlete-levels",h); return () => window.removeEventListener("jf-open-athlete-levels",h); }, []);
 
   return (
     <>
       <AchievementCelebrations clientId={clientId} catalog={catalog} />
-      <Card className="p-4">
-        <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0">
-            <div className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">Logging Level</div>
-            <div className="mt-0.5 text-2xl font-black uppercase tracking-tight text-primary">
-              {isPending ? "—" : lvl.current.name}
+      <Card className="overflow-hidden">
+        <div className="p-4">
+          <div className="flex items-end justify-between gap-3">
+            <div className="min-w-0">
+              <div className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">Your Progress</div>
+              <div className="mt-0.5 text-2xl font-black uppercase tracking-tight text-primary">{isPending ? "—" : lvl.current.name}</div>
+              <div className="text-xs text-muted-foreground">{lvl.xp.toLocaleString()} lifetime points{lvl.next ? ` · ${lvl.remaining.toLocaleString()} to ${lvl.next.name}` : ""}</div>
             </div>
-            <div className="text-xs text-muted-foreground">{lvl.xp.toLocaleString()} lifetime points</div>
+            <button type="button" onClick={() => setOpen("levels")} className="shrink-0 text-xs font-black text-primary">LEVELS ›</button>
           </div>
+          <Progress value={lvl.pct} className="mt-3 h-2" />
+          <MyAchievementsRow catalog={catalog} earned={earned} metrics={stats} />
+        </div>
 
-        </div>
-        <Progress value={lvl.pct} className="mt-3 h-2" />
-        <div className="mt-1.5 text-xs text-muted-foreground">
-          {lvl.next ? `${lvl.remaining.toLocaleString()} points to ${lvl.next.name}` : "Top level reached — keep building your legacy."}
-        </div>
-        <p className="mt-2 text-[11px] leading-snug text-muted-foreground">Your level reflects how consistently and completely you track your journey.</p>
-        <div className="mt-4 overflow-hidden rounded-2xl border bg-muted/20">
-          <button type="button" onClick={() => setOpen("levels")} className="flex min-h-14 w-full items-center gap-3 border-b px-4 py-3 text-left transition-colors hover:bg-muted/40 active:bg-muted/60">
-            <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary"><Trophy className="h-4 w-4" /></span>
-            <span className="min-w-0 flex-1"><span className="block text-sm font-bold leading-tight">Logging Levels & Milestones</span><span className="mt-0.5 block text-[11px] leading-tight text-muted-foreground">Track more. Build your history. Level up.</span></span>
-            <span className="shrink-0 text-xl font-semibold text-primary">›</span>
+        <div className="border-t bg-muted/10 p-4">
+          <button type="button" onClick={() => setOpen("rankings")} className="flex w-full items-center gap-3 text-left">
+            <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary"><Trophy className="h-4 w-4"/></span>
+            <span className="min-w-0 flex-1">
+              <span className="block text-[10px] font-black uppercase tracking-widest text-muted-foreground">{format(new Date(),"MMMM")} Performance League · Top 10</span>
+              <span className="block text-sm font-black">JF Performance League</span>
+            </span>
+            {!leaguePending && leagueMe?.qualified && <span className="shrink-0 text-right"><span className="block text-[9px] font-bold uppercase text-muted-foreground">Rank · Score</span><span className="block text-sm font-black"><b className="text-primary">#{leagueMe.rank}</b> · {leagueScore(leagueMe).toFixed(1)}</span></span>}
+            <ChevronRight className="h-5 w-5 shrink-0 text-primary"/>
           </button>
-          <button type="button" onClick={() => setOpen("powerlifting")} className="flex min-h-14 w-full items-center gap-3 border-b px-4 py-3 text-left transition-colors hover:bg-muted/40 active:bg-muted/60">
-            <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary"><Medal className="h-4 w-4" /></span>
-            <span className="min-w-0 flex-1"><span className="block text-sm font-bold leading-tight">Powerlifting Records</span><span className="mt-0.5 block text-[11px] leading-tight text-muted-foreground">Competition squat, bench, deadlift, total & points</span></span>
-            <span className="shrink-0 text-xl font-semibold text-primary">›</span>
-          </button>
+          {!leaguePending && !leagueMe?.qualified && <div className="mt-3 flex items-center gap-2 rounded-xl bg-amber-50 px-3 py-2 text-amber-950"><Scale className="h-4 w-4"/><span className="text-[11px] font-bold">Log bodyweight to enter the league</span></div>}
+          {leagueTop.length>0 && <div className="mt-3 grid grid-cols-3 divide-x rounded-xl border bg-card">{leagueTop.map(r=><button type="button" onClick={()=>setOpen("rankings")} key={r.client_id} className="min-w-0 px-2 py-2 text-center"><div className="text-[9px] font-black uppercase text-muted-foreground">#{r.rank}</div><div className="truncate text-[11px] font-bold">{r.display_name}</div><div className="text-[11px] font-black text-primary">{leagueScore(r).toFixed(1)}</div></button>)}</div>}
         </div>
-        <MyAchievementsRow catalog={catalog} earned={earned} metrics={stats} />
+
+        <button type="button" onClick={() => setOpen("powerlifting")} className="flex w-full items-center gap-3 border-t px-4 py-3 text-left transition-colors hover:bg-muted/30">
+          <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-primary/10 text-primary"><Medal className="h-4 w-4"/></span>
+          <span className="min-w-0 flex-1"><span className="block text-xs font-bold">Powerlifting Records</span><span className="block text-[10px] text-muted-foreground">Competition records & points</span></span>
+          <ChevronRight className="h-4 w-4 text-primary"/>
+        </button>
       </Card>
 
       <Sheet open={open === "levels" || open === "rankings"} onOpenChange={(o) => !o && setOpen(null)}>
