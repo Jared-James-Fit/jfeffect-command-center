@@ -37,21 +37,21 @@ export function PerformanceLeagueCard({ clientId, userId }: { clientId:string; u
         <div className="flex items-center gap-3">
           <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary"><Trophy className="h-5 w-5"/></div>
           <div className="min-w-0 flex-1">
-            <div className="text-[10px] font-black uppercase tracking-[0.16em] text-muted-foreground">{format(new Date(),"MMMM")} · Performance League</div>
-            <div className="mt-0.5 truncate text-lg font-black">JF Performance League</div>
+            <div className="truncate text-[10px] font-black uppercase tracking-[0.12em] text-muted-foreground">{format(new Date(),"MMMM")} · Performance League</div>
+            <div className="mt-0.5 truncate text-sm font-black sm:text-base">JF Performance League</div>
           </div>
-          {isPending ? <div className="h-8 w-20 animate-pulse rounded-lg bg-muted"/> : me?.qualified ? <div className="flex shrink-0 items-center gap-3">
-            <div className="text-right">
-              <div className="text-[9px] font-bold uppercase tracking-wide text-muted-foreground">Rank</div>
-              <div className="text-lg font-black leading-none text-primary">{me.rank ? `#${me.rank}` : "—"}</div>
+          {isPending ? <div className="h-8 w-16 shrink-0 animate-pulse rounded-lg bg-muted"/> : me?.qualified ? <div className="grid shrink-0 grid-cols-[auto_1px_auto] items-center gap-2">
+            <div className="min-w-[34px] text-center">
+              <div className="text-[8px] font-bold uppercase tracking-wide text-muted-foreground">Rank</div>
+              <div className="text-base font-black leading-none text-primary">{me.rank ? `#${me.rank}` : "—"}</div>
             </div>
-            <div className="h-8 w-px bg-border"/>
-            <div className="text-right">
-              <div className="text-[9px] font-bold uppercase tracking-wide text-muted-foreground">Score</div>
-              <div className="text-lg font-black leading-none">{rating(me).toFixed(1)}</div>
+            <div className="h-7 w-px bg-border"/>
+            <div className="min-w-[38px] text-center">
+              <div className="text-[8px] font-bold uppercase tracking-wide text-muted-foreground">Score</div>
+              <div className="text-base font-black leading-none">{rating(me).toFixed(1)}</div>
             </div>
           </div> : null}
-          <ChevronRight className="h-5 w-5 shrink-0 text-primary"/>
+          <ChevronRight className="h-4 w-4 shrink-0 text-primary"/>
         </div>
         {!isPending && !me?.qualified && <div className="mt-3 flex items-center gap-2 rounded-xl bg-amber-50 px-3 py-2 text-amber-950"><Scale className="h-4 w-4 shrink-0"/><div className="text-[11px] font-bold">Log bodyweight to enter the league</div></div>}
       </button>
