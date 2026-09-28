@@ -14,6 +14,7 @@ import { Badge } from "@/components/ui/badge";
 import { ArrowLeft, ExternalLink, Save, Trash2, Mail, Archive, KeyRound, Copy, CheckCircle2, AlertCircle, BellRing, Tag, Dumbbell, MessageSquare, Link2, MoreHorizontal, Apple, DollarSign, LayoutDashboard, IdCard, Target, Phone, Calendar } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { SendBookingLinkDialog } from "@/components/appointments/send-booking-link-dialog";
+import { PtSessionDialog } from "@/components/pt-session-dialog";
 import { SendPasswordResetDialog } from "@/components/account/send-password-reset-dialog";
 import { toast } from "sonner";
 import { useServerFn } from "@tanstack/react-start";
@@ -195,6 +196,7 @@ export function ClientProfileWorkspace({
   const [deleteStep, setDeleteStep] = useState<0 | 1 | 2>(0);
   const [priceCardOpen, setPriceCardOpen] = useState(false);
   const [bookingLinkOpen, setBookingLinkOpen] = useState(false);
+  const [quickBookOpen, setQuickBookOpen] = useState(false);
   const [checkInResponseOpen, setCheckInResponseOpen] = useState(false);
   const inviteFn = useServerFn(inviteClient);
   const deleteFn = useServerFn(deleteClient);
@@ -553,6 +555,7 @@ export function ClientProfileWorkspace({
                 <DropdownMenuItem onSelect={sendReset}><KeyRound className="mr-2 h-4 w-4" />Send password reset</DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuLabel>Scheduling & Offers</DropdownMenuLabel>
+                <DropdownMenuItem onSelect={() => setQuickBookOpen(true)}><Calendar className="mr-2 h-4 w-4" />Book 1:1</DropdownMenuItem>
                 <DropdownMenuItem onSelect={() => setBookingLinkOpen(true)}><Link2 className="mr-2 h-4 w-4" />Send booking link</DropdownMenuItem>
                 <DropdownMenuItem onSelect={() => setPriceCardOpen(true)}><Tag className="mr-2 h-4 w-4" />Assign offer / price card</DropdownMenuItem>
                 {form.drive_folder_link && (
@@ -609,6 +612,7 @@ export function ClientProfileWorkspace({
                 <DropdownMenuItem onSelect={sendReset}><KeyRound className="mr-2 h-4 w-4" />Send password reset</DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuLabel>Scheduling & Offers</DropdownMenuLabel>
+                <DropdownMenuItem onSelect={() => setQuickBookOpen(true)}><Calendar className="mr-2 h-4 w-4" />Book 1:1</DropdownMenuItem>
                 <DropdownMenuItem onSelect={() => setBookingLinkOpen(true)}><Link2 className="mr-2 h-4 w-4" />Send booking link</DropdownMenuItem>
                 <DropdownMenuItem onSelect={() => setPriceCardOpen(true)}><Tag className="mr-2 h-4 w-4" />Assign offer / price card</DropdownMenuItem>
                 {form.drive_folder_link && (
@@ -1344,6 +1348,12 @@ export function ClientProfileWorkspace({
           <PriceCardPickerDialog open={priceCardOpen} onClose={() => setPriceCardOpen(false)} fixedClientId={id} />
         </Suspense>
       ) : null}
+      <PtSessionDialog
+        open={quickBookOpen}
+        onOpenChange={setQuickBookOpen}
+        clientId={id}
+        clients={[{ id, full_name: form.full_name, timezone: form.timezone, default_session_location: form.default_session_location, package_tracking_enabled: form.package_tracking_enabled, sessions_purchased: form.sessions_purchased, sessions_used: form.sessions_used }]}
+      />
       <SendBookingLinkDialog
         open={bookingLinkOpen}
         onOpenChange={setBookingLinkOpen}
