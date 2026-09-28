@@ -16,7 +16,13 @@ type Row = { client_id:string; display_name:string; avatar_url:string|null; mont
 
 export function MonthlyLeaderboardCard({ clientId, userId }: { clientId:string; userId:string }) {
   const [open, setOpen] = useState(false);
-  const { data: roleRows = [] } = useQuery({\n    queryKey:["current-user-roles", userId],\n    enabled:!!userId,\n    queryFn:async()=>{ const {data,error}=await (supabase as any).from("user_roles").select("role").eq("user_id",userId); if(error) throw error; return data ?? []; }\n  });\n  const isAdmin = roleRows.some((r:any)=>r.role === "admin");\n  const { data = [], isPending } = useQuery({
+  const { data: roleRows = [] } = useQuery({
+    queryKey:["current-user-roles", userId],
+    enabled:!!userId,
+    queryFn:async()=>{ const {data,error}=await (supabase as any).from("user_roles").select("role").eq("user_id",userId); if(error) throw error; return data ?? []; }
+  });
+  const isAdmin = roleRows.some((r:any)=>r.role === "admin");
+  const { data = [], isPending } = useQuery({
     queryKey:["athlete-rankings-monthly"],
     staleTime:60_000,
     queryFn:async()=>{ const {data,error}=await (supabase as any).rpc("get_monthly_athlete_rankings",{_limit:50}); if(error) throw error; return (data??[]) as Row[]; }
@@ -62,8 +68,8 @@ function LeaderboardOverlay({onClose,rows,loading,isAdmin}:{onClose:()=>void;row
       </div>
       <div className="mt-4 rounded-2xl border bg-muted/20 p-4 text-xs leading-relaxed text-muted-foreground">
         <div className="mb-2 flex items-center gap-2 font-black text-foreground"><Info className="h-4 w-4 text-primary"/>How points work</div>
-        <div><b>1,000 XP max each month:</b> up to 600 XP from completed programmed workouts, 150 XP for fully logged training, 200 XP from bodyweight-normalized strength improvement, and 50 XP for having a bodyweight logged.</div>
-        <div className="mt-2">Strength compares your estimated 1RM relative to bodyweight against your own previous bests. Your best four exercise improvements count, capped at 50 XP each. This lets different bodyweights and training styles compete without raw strength deciding the board.</div>
+        <div><b>1,000 XP max each month:</b> 400 XP from completed programmed workouts, 100 XP for fully logged training, 450 XP from strength improvement relative to bodyweight, and 50 XP for logging bodyweight.</div>
+        <div className="mt-2"><b>Relative performance is the biggest factor.</b> We compare estimated strength-to-bodyweight against your own previous bests. Your four biggest improvements count, up to about 113 XP each. Train, log every set, and improve relative to your bodyweight to climb the league.</div>
       </div>
       {loading ? <div className="py-10 text-center text-sm text-muted-foreground">Loading leaderboard…</div> :
        <div className="mt-4 space-y-2">{ranked.map(r=><button type="button" onClick={()=>setSelected(r)} key={r.client_id} className={"flex w-full items-center gap-3 rounded-2xl border p-3 text-left transition-colors active:bg-muted/60 "+(r.is_me?"bg-primary/5 ring-1 ring-primary/30":"bg-card")}>
