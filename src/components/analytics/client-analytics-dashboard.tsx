@@ -273,6 +273,7 @@ export function ClientAnalyticsDashboard({
       est_1rm: rawPoint.est_1rm,
       rpe: rawPoint.rpe ?? null,
       rir: rawPoint.rir ?? null,
+      velocity_mps: rawPoint.velocity_mps ?? null,
       exercise_note: rawPoint.exercise_note ?? null,
       duration_seconds: rawPoint.duration_seconds ?? null,
       set_index: rawPoint.set_index ?? idx,
