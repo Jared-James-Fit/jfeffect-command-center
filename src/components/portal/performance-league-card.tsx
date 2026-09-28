@@ -10,6 +10,7 @@ import { Card } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { PublicAchievements } from "@/components/portal/achievements-card";
 import { usePublicAchievements } from "@/lib/athlete-achievements";
+import { levelForXp } from "@/lib/athlete-level";
 
 type Row = { client_id:string; display_name:string; avatar_url:string|null; monthly_xp:number; rank:number|null; is_me:boolean; qualified:boolean; bodyweight_value:number|null; bodyweight_unit:string|null; strength_score?:number; workouts_completed?:number; fully_logged?:number };
 const rating=(r?:Row|null)=>Number(r?.monthly_xp??0)/1000;
@@ -91,7 +92,7 @@ function AthleteProfileOverlay({row,onBack,onClose}:{row:Row;onBack:()=>void;onC
   return <div role="dialog" aria-modal="true" className="fixed inset-0 z-[9999] bg-background"><div className="mx-auto h-full max-w-2xl overflow-y-auto px-4 pb-24 pt-[max(5.5rem,calc(env(safe-area-inset-top)+1.5rem))]">
     <div className="sticky top-0 z-10 -mx-4 flex min-h-[68px] items-center gap-3 border-b bg-background/95 px-4 py-3 backdrop-blur"><button type="button" onClick={onBack} className="flex h-11 items-center gap-2 rounded-xl border bg-card px-3 font-bold shadow-sm"><ArrowLeft className="h-5 w-5"/><span>Back</span></button><div className="min-w-0 flex-1"><div className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Athlete profile</div><div className="truncate text-lg font-black">{row.display_name}</div></div><button type="button" onClick={onClose} className="text-xs font-bold text-primary">Home</button></div>
     <div className="mt-4 flex items-center gap-4 rounded-2xl border bg-card p-4"><Avatar className="h-16 w-16"><AvatarImage src={row.avatar_url??undefined}/><AvatarFallback className="text-xl font-black">{(row.display_name||"?").slice(0,1)}</AvatarFallback></Avatar><div><div className="text-xl font-black">{row.display_name}</div><div className="font-black text-primary">#{row.rank} · {rating(row).toFixed(1)} Performance Score</div><div className="text-xs text-muted-foreground">{row.bodyweight_value?Number(row.bodyweight_value).toFixed(1)+" "+(row.bodyweight_unit??"lb"):"Bodyweight verified"} · {badges.length} achievements</div></div></div>
-    <div className="mt-4"><PublicAchievements badges={badges} name={row.display_name}/></div>
+    <div className="mt-4 grid grid-cols-2 gap-3"><div className="rounded-2xl border bg-card p-4"><div className="text-[10px] font-black uppercase tracking-wider text-muted-foreground">Performance</div><div className="mt-1 text-lg font-black text-primary">{rating(row).toFixed(1)}</div><div className="text-xs text-muted-foreground">Monthly score</div></div><div className="rounded-2xl border bg-card p-4"><div className="text-[10px] font-black uppercase tracking-wider text-muted-foreground">Logging level</div><div className="mt-1 text-lg font-black">{loggingLevel.name}</div><div className="text-xs text-muted-foreground">{loggingXp.toLocaleString()} XP</div></div></div>\n    <div className="mt-4"><PublicAchievements badges={badges} name={row.display_name}/></div>
   </div></div>;
 }
 
