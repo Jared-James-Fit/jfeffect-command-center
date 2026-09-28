@@ -106,7 +106,7 @@ export function ExerciseHistorySheet({
         .from("pl_row_results")
         .select(`
           id, set_index, completed_at, updated_at, created_at,
-          actual_reps, actual_rpe, actual_rpe_num,
+          actual_reps, actual_rpe, actual_rpe_num, mean_concentric_velocity_mps,
           entered_value, entered_unit, normalized_kg, normalized_lb,
           actual_load, actual_load_unit,
           pl_exercise_rows!inner(
@@ -269,7 +269,7 @@ export function ExerciseHistorySheet({
             <History className="h-4 w-4" /> {exerciseName} history
           </SheetTitle>
           <SheetDescription>
-            Past logged sets across all blocks. Each set is shown in the unit it was originally logged.
+            Past logged sets across all blocks. Velocity is mean concentric velocity (m/s), so the same metric is compared session to session.
           </SheetDescription>
         </SheetHeader>
 
@@ -351,18 +351,19 @@ export function ExerciseHistorySheet({
                 </div>
               </div>
               <div className="overflow-hidden rounded-md border border-border">
-                <div className="grid grid-cols-[36px_1fr_56px_56px_24px] gap-2 border-b border-border bg-muted/40 px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                <div className="grid grid-cols-[30px_minmax(64px,1fr)_40px_40px_48px_20px] gap-1.5 border-b border-border bg-muted/40 px-2 py-1 text-[9px] font-bold uppercase tracking-wider text-muted-foreground">
                   <span>Set</span>
                   <span>Load</span>
                   <span>Reps</span>
                   <span>RPE</span>
+                  <span title="Mean concentric velocity">Vel</span>
                   <span></span>
                 </div>
                 {g.sets.map((s: any, i: number) => (
                   <div
                     key={s.id}
                     className={cn(
-                      "grid grid-cols-[36px_1fr_56px_56px_24px] items-center gap-2 border-t border-border/60 px-2 py-1.5 text-xs",
+                      "grid grid-cols-[30px_minmax(64px,1fr)_40px_40px_48px_20px] items-center gap-1.5 border-t border-border/60 px-2 py-1.5 text-xs",
                       s.completed_at && "bg-green-500/5",
                     )}
                   >
@@ -394,6 +395,7 @@ export function ExerciseHistorySheet({
                     </span>
                     <span className="tabular-nums">{s.actual_reps ?? "—"}</span>
                     <span className="tabular-nums">{s.actual_rpe ?? "—"}</span>
+                    <span className="tabular-nums">{s.mean_concentric_velocity_mps != null ? Number(s.mean_concentric_velocity_mps).toFixed(2) : "—"}</span>
                     <span className="text-right">
                       {s.completed_at
                         ? <CheckCircle2 className="ml-auto h-3.5 w-3.5 text-green-500" />
