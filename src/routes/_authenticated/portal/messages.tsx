@@ -87,15 +87,14 @@ function ClientMessages() {
         // notched devices the topbar also has env(safe-area-inset-top) of
         // padding above it. Include that inset here so the fixed messenger
         // starts BELOW the "Client Portal" top bar instead of covering it.
-        top: "calc(var(--vv-top, 0px) + env(safe-area-inset-top) + var(--shell-topbar-h, 0px))",
+        top: "calc(var(--vv-top, 0px) + var(--shell-topbar-h, 0px))",
         height:
-          "calc(var(--vv-h, 100dvh) - env(safe-area-inset-top) - var(--shell-topbar-h, 0px) - var(--bottom-nav-clearance, 0px))",
+          "calc(var(--vv-h, 100dvh) - var(--shell-topbar-h, 0px) - var(--bottom-nav-clearance, 0px))",
       }}
     >
       {/* Slim chat header — coach identity, not a giant page hero */}
       <header
-        className="flex items-center gap-3 border-b border-border bg-card/80 px-4 py-3 backdrop-blur supports-[backdrop-filter]:bg-card/60 md:px-6"
-        style={{ paddingTop: "max(env(safe-area-inset-top), 0.75rem)" }}
+        className="flex items-center gap-2.5 border-b border-border bg-card/80 px-4 py-2 backdrop-blur supports-[backdrop-filter]:bg-card/60 md:px-6"
       >
         <span className="relative shrink-0">
           <UserAvatar
