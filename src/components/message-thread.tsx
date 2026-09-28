@@ -322,7 +322,24 @@ function AudioAttachment({
           className="h-9 w-9 shrink-0 rounded-full p-0"
           onClick={() => {
             const a = ref.current; if (!a) return;
-            if (a.paused) { a.play(); setPlaying(true); } else { a.pause(); setPlaying(false); }
+            if (a.paused) {
+              // iOS/PWA can leave the audio session in microphone/voice mode
+              // after recording, which routes playback to the quiet receiver.
+              // Explicitly return to media playback before starting a memo.
+              try {
+                const audioSession = (navigator as any).audioSession;
+                if (audioSession && "type" in audioSession) audioSession.type = "playback";
+              } catch {}
+              a.muted = false;
+              a.volume = 1;
+              void a.play().catch(() => {
+                setPlaying(false);
+                toast.error("Voice message couldn't play. Tap again to retry.");
+              });
+            } else {
+              a.pause();
+              setPlaying(false);
+            }
           }}
         >
           {playing ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4 translate-x-[1px]" />}
@@ -621,6 +638,11 @@ function useVoiceRecorder() {
       }
     }
     teardownAudioGraph();
+    // Restore normal media playback routing after microphone capture on iOS.
+    try {
+      const audioSession = (navigator as any).audioSession;
+      if (audioSession && "type" in audioSession) audioSession.type = "playback";
+    } catch {}
     return { blob, duration, peaks };
   };
 
@@ -637,6 +659,10 @@ function useVoiceRecorder() {
     liveLevelsRef.current = [];
     setLiveLevels([]);
     teardownAudioGraph();
+    try {
+      const audioSession = (navigator as any).audioSession;
+      if (audioSession && "type" in audioSession) audioSession.type = "playback";
+    } catch {}
     setRecording(false);
     setElapsed(0);
   };
