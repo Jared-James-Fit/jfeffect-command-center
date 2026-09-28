@@ -357,6 +357,83 @@ export function ClientAnalyticsDashboard({
   const activePr = activeSeries?.pr;
   const activeColor = exerciseColor(activeEx, activeSeries?.points?.[0]?.muscle_group);
 
+  // Velocity-based readiness + strength profile. Mean concentric velocity is
+  // only compared within the same exercise. The readiness signal uses prior
+  // sets at the same rep count and nearly the same load; the optional 1RM
+  // projection requires enough singles across multiple loads to fit a personal
+  // load-velocity line instead of using a generic percentage chart.
+  const velocityInsight = useMemo(() => {
+    const points = lineData.filter((p: any) =>
+      p.velocity != null && Number.isFinite(Number(p.velocity)) && Number(p.velocity) > 0 &&
+      Number.isFinite(Number(p.load)) && Number(p.load) > 0
+    );
+    if (!points.length) return null;
+
+    const latest = points[points.length - 1] as any;
+    const prior = points.slice(0, -1) as any[];
+    const increment = displayUnit === "kg" ? 2.5 : 5;
+    const tolerance = Math.max(increment, Number(latest.load) * 0.025);
+    const comparable = prior
+      .filter((p: any) =>
+        p.reps === latest.reps &&
+        Math.abs(Number(p.load) - Number(latest.load)) <= tolerance
+      )
+      .slice(-6);
+
+    let baseline: number | null = null;
+    let deltaPct: number | null = null;
+    let signal: "faster" | "normal" | "slower" | null = null;
+    if (comparable.length >= 2) {
+      baseline = comparable.reduce((s: number, p: any) => s + Number(p.velocity), 0) / comparable.length;
+      deltaPct = baseline > 0 ? ((Number(latest.velocity) - baseline) / baseline) * 100 : null;
+      if (deltaPct != null) signal = deltaPct >= 5 ? "faster" : deltaPct <= -5 ? "slower" : "normal";
+    }
+
+    const family = liftFamily(activeEx);
+    const mvt = family === "squat" ? 0.30 : family === "bench" ? 0.15 : family === "deadlift" ? 0.15 : null;
+    const singles = points.filter((p: any) => p.reps === 1 && Number(p.velocity) >= 0.05 && Number(p.velocity) <= 1.20);
+    const buckets = new Set(singles.map((p: any) => Math.round(Number(p.load) / increment)));
+    let predicted1rm: number | null = null;
+    let r2: number | null = null;
+
+    if (mvt != null && singles.length >= 5 && buckets.size >= 3) {
+      const xs = singles.map((p: any) => Number(p.velocity));
+      const ys = singles.map((p: any) => Number(p.load));
+      const xBar = xs.reduce((a, b) => a + b, 0) / xs.length;
+      const yBar = ys.reduce((a, b) => a + b, 0) / ys.length;
+      const ssX = xs.reduce((s, x) => s + (x - xBar) ** 2, 0);
+      const slope = ssX > 0
+        ? xs.reduce((s, x, i) => s + (x - xBar) * (ys[i] - yBar), 0) / ssX
+        : 0;
+      const intercept = yBar - slope * xBar;
+      const fitted = xs.map((x) => intercept + slope * x);
+      const ssTot = ys.reduce((s, y) => s + (y - yBar) ** 2, 0);
+      const ssRes = ys.reduce((s, y, i) => s + (y - fitted[i]) ** 2, 0);
+      r2 = ssTot > 0 ? Math.max(0, Math.min(1, 1 - ssRes / ssTot)) : null;
+      const projected = intercept + slope * mvt;
+      const observedMax = Math.max(...ys);
+      // Only surface a projection when the athlete's own data forms a sensible
+      // inverse load-velocity relationship and the extrapolation stays modest.
+      if (slope < 0 && r2 != null && r2 >= 0.70 && projected >= observedMax * 0.90 && projected <= observedMax * 1.25) {
+        predicted1rm = projected;
+      }
+    }
+
+    return {
+      latest,
+      comparableCount: comparable.length,
+      baseline,
+      deltaPct,
+      signal,
+      family,
+      mvt,
+      singlesCount: singles.length,
+      distinctLoads: buckets.size,
+      predicted1rm,
+      r2,
+    };
+  }, [lineData, activeEx, displayUnit]);
+
   const exerciseOptions: SearchableOption[] = useMemo(
     () =>
       history.map((h: any) => {
@@ -743,6 +820,54 @@ export function ClientAnalyticsDashboard({
                         {activeSeries.points.length === 1 ? "logged set" : "logged sets"}
                       </div>
                     </div>
+                    {velocityInsight && (
+                      <div className="mb-4 rounded-xl border border-border bg-muted/20 p-3">
+                        <div className="flex flex-wrap items-start justify-between gap-3">
+                          <div>
+                            <div className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">
+                              Velocity readiness
+                            </div>
+                            <div className="mt-1 text-sm font-bold text-foreground">
+                              {velocityInsight.signal === "faster"
+                                ? "Moving faster than your baseline"
+                                : velocityInsight.signal === "slower"
+                                  ? "Moving slower than your baseline"
+                                  : velocityInsight.signal === "normal"
+                                    ? "Right on your normal baseline"
+                                    : "Building your baseline"}
+                            </div>
+                            <div className="mt-0.5 text-xs text-muted-foreground">
+                              Latest: {Number(velocityInsight.latest.velocity).toFixed(2)} m/s at {fmtNum(velocityInsight.latest.load)} {displayUnit} × {velocityInsight.latest.reps}
+                              {velocityInsight.deltaPct != null && velocityInsight.baseline != null
+                                ? ` · ${velocityInsight.deltaPct >= 0 ? "+" : ""}${velocityInsight.deltaPct.toFixed(1)}% vs ${velocityInsight.comparableCount} matched prior sets`
+                                : " · log this same load/reps a few times for a strength-readiness comparison"}
+                            </div>
+                          </div>
+                          {velocityInsight.predicted1rm != null && (
+                            <div className="shrink-0 text-right">
+                              <div className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">
+                                Velocity 1RM estimate
+                              </div>
+                              <div className="text-lg font-black text-foreground">
+                                {fmtNum(velocityInsight.predicted1rm)} {displayUnit}
+                              </div>
+                              <div className="text-[10px] text-muted-foreground">
+                                personal load-velocity profile · R² {velocityInsight.r2?.toFixed(2)}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                        {velocityInsight.predicted1rm == null && velocityInsight.family && (
+                          <div className="mt-2 text-[11px] text-muted-foreground">
+                            1RM profile needs at least 5 velocity-tracked singles across 3+ loads with a clean load-velocity relationship.
+                            Current profile: {velocityInsight.singlesCount} singles · {velocityInsight.distinctLoads} load levels.
+                          </div>
+                        )}
+                        <div className="mt-2 text-[10px] leading-relaxed text-muted-foreground">
+                          Use the same velocity device and setup each time. Mean concentric velocity is most useful here as an athlete-vs-self signal at matched load/reps; it does not replace RPE or competition-specific judgment.
+                        </div>
+                      </div>
+                    )}
                     {lineData.length === 1 ? (
                       <div className="flex h-56 flex-col items-center justify-center rounded-lg border border-dashed border-border/70 bg-background/40 px-6 text-center">
                         <div
