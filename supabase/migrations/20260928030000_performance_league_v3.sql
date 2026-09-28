@@ -1,0 +1,4 @@
+-- JF Performance League v3: simple 100-point base + 10-point performance bonus.
+-- Runtime function is applied directly in production; this migration documents the scoring contract.
+-- Score storage remains monthly_xp for backwards-compatible RPC shape, now score * 1000.
+-- Ranking uses full precision, then Performance > Workouts > Logging > Bodyweight as deterministic tiebreakers.
