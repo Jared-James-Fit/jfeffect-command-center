@@ -83,14 +83,14 @@ export function AthleteLevelCard({ clientId, defaultView = null }: { clientId: s
         </button>
 
         <div className="grid grid-cols-2 border-t">
-          <div className="px-3 py-2 [&>button]:mt-0 [&>button]:border-0 [&>button]:px-1 [&>button]:py-1"><MyAchievementsRow catalog={catalog} earned={earned} metrics={stats} /></div>
-          <button type="button" onClick={() => setOpen("powerlifting")} className="flex min-w-0 items-center gap-2.5 border-l px-5 py-3.5 text-left transition-colors active:bg-muted/30"><Medal className="h-4 w-4 shrink-0 text-primary"/><span className="truncate text-xs font-semibold">Powerlifting Records</span></button>
+          <div className="min-w-0 px-3 py-2 [&>button]:mt-0 [&>button]:border-0 [&>button]:px-1 [&>button]:py-1"><MyAchievementsRow catalog={catalog} earned={earned} metrics={stats} /></div>
+          <button type="button" onClick={() => setOpen("powerlifting")} className="flex min-w-0 items-center gap-2 border-l px-3 py-3.5 text-left transition-colors active:bg-muted/30"><Medal className="h-4 w-4 shrink-0 text-primary"/><span className="truncate text-xs font-semibold">Powerlifting Records</span><ChevronRight className="ml-auto h-3.5 w-3.5 shrink-0 text-muted-foreground"/></button>
         </div>
       </Card>
 
       <Sheet open={open === "levels" || open === "rankings"} onOpenChange={(o) => !o && setOpen(null)}>
         <SheetContent side="bottom" className="max-h-[88vh] overflow-y-auto rounded-t-2xl px-5 pb-safe-bottom pt-5">
-          {open === "levels" ? <LevelsView total={lvl.xp} events={events} />
+          {open === "levels" ? <LevelsView total={total} events={events} />
             : open === "rankings" ? <RankingsView myStats={stats} myBadgeCount={earned.length} />
             : null}
         </SheetContent>
