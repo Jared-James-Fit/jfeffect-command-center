@@ -672,3 +672,5 @@ function ManageAccordion({ clientId }: { clientId: string }) {
     </ul>
   );
 }
+
+// Emergency production sync marker 2026-09-28T20:42
